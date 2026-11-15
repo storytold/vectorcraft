@@ -1431,6 +1431,12 @@ antiAlias	Sharp	シャープ
 	Cut Path at Selected Anchor Points	選択したアンカーポイントでパスをカット
 	Dim Images to:	画像の濃さ:
 	Duplicate Selection	選択項目を複製
+	PSD Import Options	PSD 読み込みオプション
+	Place PSD	PSD を配置
+	Convert Layers to Objects	レイヤーをオブジェクトに変換
+	Import Hidden Layers	非表示レイヤーを読み込む
+	Flatten Layers to a Single Image	レイヤーを 1 つの画像に統合
+	Import Slices	スライスを読み込む
 	DXF Import Options	DXF 読み込みオプション
 	DXF Info	DXF 情報
 	DXF Options	DXF オプション
@@ -5486,6 +5492,49 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the PSD file's layer groups are nested too deeply	PSD ファイルのレイヤーグループの入れ子が深すぎます
 @msg	a layer of the PSD file is too large to read	PSD ファイルのレイヤーが大きすぎて読み込めません
 @msg	the PSD file's layers take more memory to read than allowed	PSD ファイルのレイヤーの読み込みに許容量を超えるメモリーが必要です
+@msg	the file is no longer loaded	ファイルはもう読み込まれていません
+@msg	the layers can't be read ({e}): the file was placed as its merged image	レイヤーを読み込めません（{e}）：ファイルは統合画像として配置されました
+@msg	1 type layer came in as pixels: the text isn't editable	テキストレイヤー 1 個がピクセルとして読み込まれました：テキストは編集できません
+@msg	{n} type layers came in as pixels: the text isn't editable	テキストレイヤー {n} 個がピクセルとして読み込まれました：テキストは編集できません
+@msg	1 adjustment layer was not applied	調整レイヤー 1 個は適用されませんでした
+@msg	{n} adjustment layers were not applied	調整レイヤー {n} 個は適用されませんでした
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	塗りつぶしレイヤー 1 個は描画されませんでした（グラデーションまたはパターンの塗り、読み込めないカラー、またはピクセルを持たないシェイプ）
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	塗りつぶしレイヤー {n} 個は描画されませんでした（グラデーションまたはパターンの塗り、読み込めないカラー、またはピクセルを持たないシェイプ）
+@msg	the layer effects of 1 layer weren't drawn	レイヤー 1 個のレイヤー効果は描画されませんでした
+@msg	the layer effects of {n} layers weren't drawn	レイヤー {n} 個のレイヤー効果は描画されませんでした
+@msg	the vector masks of 1 layer weren't applied	レイヤー 1 個のベクトルマスクは適用されませんでした
+@msg	the vector masks of {n} layers weren't applied	レイヤー {n} 個のベクトルマスクは適用されませんでした
+@msg	the knockout of 1 layer wasn't applied	レイヤー 1 個のノックアウトは適用されませんでした
+@msg	the knockout of {n} layers wasn't applied	レイヤー {n} 個のノックアウトは適用されませんでした
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	レイヤー 1 個を除外しました（非表示のレイヤーと、それにクリップされたレイヤー）
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	レイヤー {n} 個を除外しました（非表示のレイヤーと、それにクリップされたレイヤー）
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	描画されなかった塗りつぶしレイヤーにクリップされたレイヤー 1 個を除外しました
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	描画されなかった塗りつぶしレイヤーにクリップされたレイヤー {n} 個を除外しました
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	VectorCraft にない描画モード（{modes}）のレイヤーは下のレイヤーと統合されました
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	VectorCraft にない描画モードのレイヤー 1 個は通常として読み込まれました：統合には許容量を超えるメモリが必要です
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	VectorCraft にない描画モードのレイヤー {n} 個は通常として読み込まれました：統合には許容量を超えるメモリが必要です
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	下のレイヤーにクリップされたレイヤー 1 個はクリップなしで読み込まれました：統合には許容量を超えるメモリが必要です
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	下のレイヤーにクリップされたレイヤー {n} 個はクリップなしで読み込まれました：統合には許容量を超えるメモリが必要です
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers は layers: true で配置する PSD ファイルに適用されます
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices：リンクした PSD ファイルはフラットな画像として配置されます。スライスと一緒に埋め込むには link: false を指定してください
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers：リンクした PSD ファイルはフラットな画像として配置されます。link を省略するか link: false を指定してください
+@msg	the slices can't be read ({e}) and were left out	スライスを読み込めないため（{e}）、除外しました
+@msg	1 slice lies outside the canvas or has no size and was left out	スライス 1 個がカンバスの外にあるかサイズがないため、除外しました
+@msg	{n} slices lie outside the canvas or have no size and were left out	スライス {n} 個がカンバスの外にあるかサイズがないため、除外しました
+@msg	1 slice would lie outside the canvas and was left out	スライス 1 個がカンバスの外に出るため、除外しました
+@msg	{n} slices would lie outside the canvas and were left out	スライス {n} 個がカンバスの外に出るため、除外しました
+@msg	the slices' descriptor holds too many values	スライスの記述子に含まれる値が多すぎます
+@msg	the slices' descriptor has a version other than 16	スライスの記述子のバージョンが 16 ではありません
+@msg	the slices are stored in version {v}, which isn't read	スライスは読み込まないバージョン {v} で保存されています
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	ファイルのスライスは {count} 個で、読み込む {MAX_SLICES} 個を超えています
+@msg	the slices' descriptor has no list of slices	スライスの記述子にスライスのリストがありません
+@msg	the slices' descriptor lists something other than a slice	スライスの記述子にスライス以外のものがあります
+@msg	a slice in the slices' descriptor has no bounds	スライスの記述子のスライスに境界がありません
+@msg	a slice's bounds in the slices' descriptor aren't numbers	スライスの記述子のスライスの境界が数値ではありません
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	スライスのテキストが読み込む {MAX_TEXT} 文字を超えています
+@msg	the slices' descriptor nests too deep	スライスの記述子の入れ子が深すぎます
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	スライスの記述子に不明な種類の参照があります（{_1}）
+@msg	the slices' descriptor has a value of an unknown type ({_1})	スライスの記述子に不明な型の値があります（{_1}）
 @msg	the layers can't be read ({e}): the file opened as its merged image	レイヤーを読み込めません（{e}）：ファイルは統合画像として開かれました
 @msg	{depth}-bit PSD files in this colour mode can't be read	このカラーモードの {depth} bit PSD ファイルは読み込めません
 @msg	the PSD file is cut short	PSD ファイルが途中で切れています

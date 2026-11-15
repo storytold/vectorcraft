@@ -2847,6 +2847,12 @@ digits	Malayalam	Malayalam
 	Units:	Eenheden:
 	Use Typographer's Quotes	Typografische aanhalingstekens gebruiken
 	Center Artwork	Artwork centreren
+	PSD Import Options	PSD-importopties
+	Place PSD	PSD plaatsen
+	Convert Layers to Objects	Lagen omzetten in objecten
+	Import Hidden Layers	Verborgen lagen importeren
+	Flatten Layers to a Single Image	Lagen afvlakken tot één afbeelding
+	Import Slices	Slices importeren
 	DXF Import Options	DXF-importopties
 	Layout:	Indeling:
 	Merge Layers	Lagen samenvoegen
@@ -5662,6 +5668,49 @@ imageTrace	Outline	Contour
 @msg	the PSD file's layer groups are nested too deeply	de laaggroepen van het PSD-bestand zijn te diep genest
 @msg	a layer of the PSD file is too large to read	een laag van het PSD-bestand is te groot om te lezen
 @msg	the PSD file's layers take more memory to read than allowed	de lagen van het PSD-bestand hebben meer geheugen nodig om te lezen dan toegestaan
+@msg	the file is no longer loaded	het bestand is niet meer geladen
+@msg	the layers can't be read ({e}): the file was placed as its merged image	de lagen kunnen niet worden gelezen ({e}): het bestand is geplaatst als zijn samengevoegde afbeelding
+@msg	1 type layer came in as pixels: the text isn't editable	1 tekstlaag is als pixels binnengekomen: de tekst is niet bewerkbaar
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} tekstlagen zijn als pixels binnengekomen: de tekst is niet bewerkbaar
+@msg	1 adjustment layer was not applied	1 aanpassingslaag is niet toegepast
+@msg	{n} adjustment layers were not applied	{n} aanpassingslagen zijn niet toegepast
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 vullaag is niet getekend (een verloop- of patroonvulling, een kleur die niet kan worden gelezen, of een vorm die geen pixels opslaat)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} vullagen zijn niet getekend (een verloop- of patroonvulling, een kleur die niet kan worden gelezen, of een vorm die geen pixels opslaat)
+@msg	the layer effects of 1 layer weren't drawn	de laageffecten van 1 laag zijn niet getekend
+@msg	the layer effects of {n} layers weren't drawn	de laageffecten van {n} lagen zijn niet getekend
+@msg	the vector masks of 1 layer weren't applied	de vectormaskers van 1 laag zijn niet toegepast
+@msg	the vector masks of {n} layers weren't applied	de vectormaskers van {n} lagen zijn niet toegepast
+@msg	the knockout of 1 layer wasn't applied	de uitsparing van 1 laag is niet toegepast
+@msg	the knockout of {n} layers wasn't applied	de uitsparing van {n} lagen is niet toegepast
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 laag is weggelaten (verborgen lagen en de lagen die erop zijn uitgeknipt)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} lagen zijn weggelaten (verborgen lagen en de lagen die erop zijn uitgeknipt)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 laag die is uitgeknipt op een vullaag die niet is getekend, is weggelaten
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} lagen die zijn uitgeknipt op vullagen die niet zijn getekend, zijn weggelaten
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	lagen in overvloeimodi die VectorCraft niet heeft ({modes}) zijn samengevoegd met de lagen eronder
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 laag in een overvloeimodus die VectorCraft niet heeft, is als Normaal binnengekomen: het samenvoegen vraagt meer geheugen dan toegestaan
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} lagen in overvloeimodi die VectorCraft niet heeft, zijn als Normaal binnengekomen: het samenvoegen vraagt meer geheugen dan toegestaan
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 laag die is uitgeknipt op de laag eronder, is niet uitgeknipt binnengekomen: het samenvoegen vraagt meer geheugen dan toegestaan
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} lagen die zijn uitgeknipt op de laag eronder, zijn niet uitgeknipt binnengekomen: het samenvoegen vraagt meer geheugen dan toegestaan
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers geldt voor een PSD-bestand dat met layers: true wordt geplaatst
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: een gekoppeld PSD-bestand wordt als zijn platte afbeelding geplaatst; geef link: false om het met zijn slices in te sluiten
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: een gekoppeld PSD-bestand wordt als zijn platte afbeelding geplaatst; laat link weg of geef link: false
+@msg	the slices can't be read ({e}) and were left out	de slices kunnen niet worden gelezen ({e}) en zijn weggelaten
+@msg	1 slice lies outside the canvas or has no size and was left out	1 slice ligt buiten het canvas of heeft geen grootte en is weggelaten
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} slices liggen buiten het canvas of hebben geen grootte en zijn weggelaten
+@msg	1 slice would lie outside the canvas and was left out	1 slice zou buiten het canvas liggen en is weggelaten
+@msg	{n} slices would lie outside the canvas and were left out	{n} slices zouden buiten het canvas liggen en zijn weggelaten
+@msg	the slices' descriptor holds too many values	de descriptor van de slices bevat te veel waarden
+@msg	the slices' descriptor has a version other than 16	de descriptor van de slices heeft een andere versie dan 16
+@msg	the slices are stored in version {v}, which isn't read	de slices zijn opgeslagen in versie {v}, die niet wordt gelezen
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	het bestand heeft {count} slices, meer dan de {MAX_SLICES} die worden gelezen
+@msg	the slices' descriptor has no list of slices	de descriptor van de slices heeft geen lijst met slices
+@msg	the slices' descriptor lists something other than a slice	de descriptor van de slices vermeldt iets anders dan een slice
+@msg	a slice in the slices' descriptor has no bounds	een slice in de descriptor van de slices heeft geen grenzen
+@msg	a slice's bounds in the slices' descriptor aren't numbers	de grenzen van een slice in de descriptor van de slices zijn geen getallen
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	een tekst in de slices heeft meer dan de {MAX_TEXT} tekens die worden gelezen
+@msg	the slices' descriptor nests too deep	de descriptor van de slices is te diep genest
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	de descriptor van de slices heeft een verwijzing van een onbekende soort ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	de descriptor van de slices heeft een waarde van een onbekend type ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	de lagen kunnen niet worden gelezen ({e}): het bestand is geopend als zijn samengevoegde afbeelding
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bits PSD-bestanden in deze kleurmodus kunnen niet worden gelezen
 @msg	the PSD file is cut short	het PSD-bestand is afgekapt

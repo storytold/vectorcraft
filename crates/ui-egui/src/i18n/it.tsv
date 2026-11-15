@@ -971,6 +971,12 @@ font-technology	Variable	Variabili
 	Duplicate Symbol	Duplica simbolo
 	Duplicate {kind} Style	Duplica stile {kind}
 	Dutch	Olandese
+	PSD Import Options	Opzioni di importazione PSD
+	Place PSD	Inserisci PSD
+	Convert Layers to Objects	Converti livelli in oggetti
+	Import Hidden Layers	Importa livelli nascosti
+	Flatten Layers to a Single Image	Appiattisci livelli in un’unica immagine
+	Import Slices	Importa sezioni
 	DXF Import Options	Opzioni di importazione DXF
 	DXF Info	Informazioni DXF
 	DXF Options	Opzioni DXF
@@ -5444,6 +5450,49 @@ axis	Both	Entrambi
 @msg	the PSD file's layer groups are nested too deeply	i gruppi di livelli del file PSD sono annidati troppo in profondità
 @msg	a layer of the PSD file is too large to read	un livello del file PSD è troppo grande per essere letto
 @msg	the PSD file's layers take more memory to read than allowed	i livelli del file PSD richiedono più memoria del consentito per essere letti
+@msg	the file is no longer loaded	il file non è più caricato
+@msg	the layers can't be read ({e}): the file was placed as its merged image	i livelli non possono essere letti ({e}): il file è stato inserito come immagine unita
+@msg	1 type layer came in as pixels: the text isn't editable	1 livello di testo è stato importato come pixel: il testo non è modificabile
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} livelli di testo sono stati importati come pixel: il testo non è modificabile
+@msg	1 adjustment layer was not applied	1 livello di regolazione non è stato applicato
+@msg	{n} adjustment layers were not applied	{n} livelli di regolazione non sono stati applicati
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 livello di riempimento non è stato disegnato (un riempimento con sfumatura o pattern, un colore che non può essere letto o una forma che non contiene pixel)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} livelli di riempimento non sono stati disegnati (un riempimento con sfumatura o pattern, un colore che non può essere letto o una forma che non contiene pixel)
+@msg	the layer effects of 1 layer weren't drawn	gli effetti di livello di 1 livello non sono stati disegnati
+@msg	the layer effects of {n} layers weren't drawn	gli effetti di livello di {n} livelli non sono stati disegnati
+@msg	the vector masks of 1 layer weren't applied	le maschere vettoriali di 1 livello non sono state applicate
+@msg	the vector masks of {n} layers weren't applied	le maschere vettoriali di {n} livelli non sono state applicate
+@msg	the knockout of 1 layer wasn't applied	la foratura di 1 livello non è stata applicata
+@msg	the knockout of {n} layers wasn't applied	la foratura di {n} livelli non è stata applicata
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 livello è stato escluso (livelli nascosti e i livelli ritagliati su di essi)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} livelli sono stati esclusi (livelli nascosti e i livelli ritagliati su di essi)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 livello ritagliato su un livello di riempimento non disegnato è stato escluso
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} livelli ritagliati su livelli di riempimento non disegnati sono stati esclusi
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	i livelli in metodi di fusione che VectorCraft non ha ({modes}) sono stati uniti ai livelli sottostanti
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 livello in un metodo di fusione che VectorCraft non ha è stato importato come Normale: l’unione richiede più memoria di quella consentita
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} livelli in metodi di fusione che VectorCraft non ha sono stati importati come Normale: l’unione richiede più memoria di quella consentita
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 livello ritagliato sul livello sottostante è stato importato senza ritaglio: l’unione richiede più memoria di quella consentita
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} livelli ritagliati sul livello sottostante sono stati importati senza ritaglio: l’unione richiede più memoria di quella consentita
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers vale per un file PSD inserito con layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: un file PSD collegato viene inserito come immagine appiattita; indica link: false per incorporarlo con le sue sezioni
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: un file PSD collegato viene inserito come immagine appiattita; ometti link o indica link: false
+@msg	the slices can't be read ({e}) and were left out	le sezioni non possono essere lette ({e}) e sono state escluse
+@msg	1 slice lies outside the canvas or has no size and was left out	1 sezione si trova fuori dall’area di lavoro o non ha dimensioni ed è stata esclusa
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} sezioni si trovano fuori dall’area di lavoro o non hanno dimensioni e sono state escluse
+@msg	1 slice would lie outside the canvas and was left out	1 sezione si troverebbe fuori dall’area di lavoro ed è stata esclusa
+@msg	{n} slices would lie outside the canvas and were left out	{n} sezioni si troverebbero fuori dall’area di lavoro e sono state escluse
+@msg	the slices' descriptor holds too many values	il descrittore delle sezioni contiene troppi valori
+@msg	the slices' descriptor has a version other than 16	il descrittore delle sezioni ha una versione diversa da 16
+@msg	the slices are stored in version {v}, which isn't read	le sezioni sono salvate nella versione {v}, che non viene letta
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	il file ha {count} sezioni, più delle {MAX_SLICES} lette
+@msg	the slices' descriptor has no list of slices	il descrittore delle sezioni non ha un elenco di sezioni
+@msg	the slices' descriptor lists something other than a slice	il descrittore delle sezioni elenca qualcosa che non è una sezione
+@msg	a slice in the slices' descriptor has no bounds	una sezione nel descrittore delle sezioni non ha limiti
+@msg	a slice's bounds in the slices' descriptor aren't numbers	i limiti di una sezione nel descrittore delle sezioni non sono numeri
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	un testo nelle sezioni ha più dei {MAX_TEXT} caratteri letti
+@msg	the slices' descriptor nests too deep	il descrittore delle sezioni è annidato troppo in profondità
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	il descrittore delle sezioni ha un riferimento di un genere sconosciuto ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	il descrittore delle sezioni ha un valore di un tipo sconosciuto ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	i livelli non possono essere letti ({e}): il file è stato aperto come immagine unita
 @msg	{depth}-bit PSD files in this colour mode can't be read	i file PSD a {depth} bit in questo metodo colore non possono essere letti
 @msg	the PSD file is cut short	il file PSD è troncato

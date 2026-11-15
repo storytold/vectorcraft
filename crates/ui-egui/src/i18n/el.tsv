@@ -919,6 +919,12 @@ font-technology	Variable	Μεταβλητές
 	Duplicate Swatch	Δημιουργία αντιγράφου δείγματος χρώματος
 	Duplicate Symbol	Δημιουργία αντιγράφου συμβόλου
 	Duplicate {kind} Style	Δημιουργία αντιγράφου στυλ {kind}
+	PSD Import Options	Επιλογές εισαγωγής PSD
+	Place PSD	Τοποθέτηση PSD
+	Convert Layers to Objects	Μετατροπή επιπέδων σε αντικείμενα
+	Import Hidden Layers	Εισαγωγή κρυφών επιπέδων
+	Flatten Layers to a Single Image	Ισοπέδωση επιπέδων σε μία εικόνα
+	Import Slices	Εισαγωγή τομών
 	DXF Import Options	Επιλογές εισαγωγής DXF
 	DXF Info	Πληροφορίες DXF
 	DXF Options	Επιλογές DXF
@@ -5370,6 +5376,49 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	the PSD file's layer groups are nested too deeply	οι ομάδες επιπέδων του αρχείου PSD είναι ένθετες σε υπερβολικό βάθος
 @msg	a layer of the PSD file is too large to read	ένα επίπεδο του αρχείου PSD είναι πολύ μεγάλο για ανάγνωση
 @msg	the PSD file's layers take more memory to read than allowed	τα επίπεδα του αρχείου PSD χρειάζονται περισσότερη μνήμη για ανάγνωση από όση επιτρέπεται
+@msg	the file is no longer loaded	το αρχείο δεν είναι πλέον φορτωμένο
+@msg	the layers can't be read ({e}): the file was placed as its merged image	τα επίπεδα δεν μπορούν να διαβαστούν ({e}): το αρχείο τοποθετήθηκε ως η συγχωνευμένη εικόνα του
+@msg	1 type layer came in as pixels: the text isn't editable	1 επίπεδο κειμένου εισήχθη ως pixel: το κείμενο δεν είναι επεξεργάσιμο
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} επίπεδα κειμένου εισήχθησαν ως pixel: το κείμενο δεν είναι επεξεργάσιμο
+@msg	1 adjustment layer was not applied	1 επίπεδο προσαρμογής δεν εφαρμόστηκε
+@msg	{n} adjustment layers were not applied	{n} επίπεδα προσαρμογής δεν εφαρμόστηκαν
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 επίπεδο γεμίσματος δεν σχεδιάστηκε (γέμισμα διαβάθμισης ή μοτίβου, χρώμα που δεν μπορεί να διαβαστεί ή σχήμα που δεν αποθηκεύει pixel)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} επίπεδα γεμίσματος δεν σχεδιάστηκαν (γέμισμα διαβάθμισης ή μοτίβου, χρώμα που δεν μπορεί να διαβαστεί ή σχήμα που δεν αποθηκεύει pixel)
+@msg	the layer effects of 1 layer weren't drawn	τα εφέ επιπέδου 1 επιπέδου δεν σχεδιάστηκαν
+@msg	the layer effects of {n} layers weren't drawn	τα εφέ επιπέδου {n} επιπέδων δεν σχεδιάστηκαν
+@msg	the vector masks of 1 layer weren't applied	οι διανυσματικές μάσκες 1 επιπέδου δεν εφαρμόστηκαν
+@msg	the vector masks of {n} layers weren't applied	οι διανυσματικές μάσκες {n} επιπέδων δεν εφαρμόστηκαν
+@msg	the knockout of 1 layer wasn't applied	η εκκένωση 1 επιπέδου δεν εφαρμόστηκε
+@msg	the knockout of {n} layers wasn't applied	η εκκένωση {n} επιπέδων δεν εφαρμόστηκε
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 επίπεδο παραλείφθηκε (κρυφά επίπεδα και τα επίπεδα που αποκόπτονται σε αυτά)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} επίπεδα παραλείφθηκαν (κρυφά επίπεδα και τα επίπεδα που αποκόπτονται σε αυτά)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 επίπεδο που αποκόπτεται σε επίπεδο γεμίσματος που δεν σχεδιάστηκε παραλείφθηκε
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} επίπεδα που αποκόπτονται σε επίπεδα γεμίσματος που δεν σχεδιάστηκαν παραλείφθηκαν
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	τα επίπεδα σε λειτουργίες ανάμειξης που δεν έχει το VectorCraft ({modes}) συγχωνεύτηκαν με τα επίπεδα από κάτω τους
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 επίπεδο σε λειτουργία ανάμειξης που δεν έχει το VectorCraft εισήχθη ως Κανονική: η συγχώνευση χρειάζεται περισσότερη μνήμη από όση επιτρέπεται
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} επίπεδα σε λειτουργίες ανάμειξης που δεν έχει το VectorCraft εισήχθησαν ως Κανονική: η συγχώνευση χρειάζεται περισσότερη μνήμη από όση επιτρέπεται
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 επίπεδο που αποκόπτεται στο επίπεδο από κάτω εισήχθη χωρίς αποκοπή: η συγχώνευση χρειάζεται περισσότερη μνήμη από όση επιτρέπεται
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} επίπεδα που αποκόπτονται στο επίπεδο από κάτω εισήχθησαν χωρίς αποκοπή: η συγχώνευση χρειάζεται περισσότερη μνήμη από όση επιτρέπεται
+@msg	hiddenLayers applies to a PSD file placed with layers: true	το hiddenLayers ισχύει για αρχείο PSD που τοποθετείται με layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: ένα συνδεδεμένο αρχείο PSD τοποθετείται ως η επίπεδη εικόνα του· δώστε link: false για να ενσωματωθεί με τις τομές του
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: ένα συνδεδεμένο αρχείο PSD τοποθετείται ως η επίπεδη εικόνα του· παραλείψτε το link ή δώστε link: false
+@msg	the slices can't be read ({e}) and were left out	οι τομές δεν μπορούν να διαβαστούν ({e}) και παραλείφθηκαν
+@msg	1 slice lies outside the canvas or has no size and was left out	1 τομή βρίσκεται έξω από τον καμβά ή δεν έχει μέγεθος και παραλείφθηκε
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} τομές βρίσκονται έξω από τον καμβά ή δεν έχουν μέγεθος και παραλείφθηκαν
+@msg	1 slice would lie outside the canvas and was left out	1 τομή θα βρισκόταν έξω από τον καμβά και παραλείφθηκε
+@msg	{n} slices would lie outside the canvas and were left out	{n} τομές θα βρίσκονταν έξω από τον καμβά και παραλείφθηκαν
+@msg	the slices' descriptor holds too many values	ο περιγραφέας των τομών περιέχει πάρα πολλές τιμές
+@msg	the slices' descriptor has a version other than 16	ο περιγραφέας των τομών έχει έκδοση διαφορετική από 16
+@msg	the slices are stored in version {v}, which isn't read	οι τομές είναι αποθηκευμένες στην έκδοση {v}, η οποία δεν διαβάζεται
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	το αρχείο έχει {count} τομές, περισσότερες από τις {MAX_SLICES} που διαβάζονται
+@msg	the slices' descriptor has no list of slices	ο περιγραφέας των τομών δεν έχει λίστα τομών
+@msg	the slices' descriptor lists something other than a slice	ο περιγραφέας των τομών απαριθμεί κάτι άλλο από τομή
+@msg	a slice in the slices' descriptor has no bounds	μια τομή στον περιγραφέα των τομών δεν έχει όρια
+@msg	a slice's bounds in the slices' descriptor aren't numbers	τα όρια μιας τομής στον περιγραφέα των τομών δεν είναι αριθμοί
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	ένα κείμενο στις τομές έχει περισσότερους από τους {MAX_TEXT} χαρακτήρες που διαβάζονται
+@msg	the slices' descriptor nests too deep	ο περιγραφέας των τομών είναι εμφωλευμένος πολύ βαθιά
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	ο περιγραφέας των τομών έχει αναφορά άγνωστου είδους ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	ο περιγραφέας των τομών έχει τιμή άγνωστου τύπου ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	τα επίπεδα δεν μπορούν να διαβαστούν ({e}): το αρχείο άνοιξε ως η συγχωνευμένη εικόνα του
 @msg	{depth}-bit PSD files in this colour mode can't be read	τα αρχεία PSD {depth} bit δεν διαβάζονται σε αυτήν τη λειτουργία χρώματος
 @msg	the PSD file is cut short	το αρχείο PSD είναι περικομμένο

@@ -950,6 +950,12 @@ font-technology	Variable	Variabel
 	Duplicate Symbol	Symbol duplizieren
 	Duplicate {kind} Style	{kind}format duplizieren
 	Dutch	Niederländisch
+	PSD Import Options	PSD-Importoptionen
+	Place PSD	PSD platzieren
+	Convert Layers to Objects	Ebenen in Objekte umwandeln
+	Import Hidden Layers	Ausgeblendete Ebenen importieren
+	Flatten Layers to a Single Image	Ebenen auf ein einzelnes Bild reduzieren
+	Import Slices	Slices importieren
 	DXF Import Options	DXF-Importoptionen
 	DXF Info	DXF-Informationen
 	DXF Options	DXF-Optionen
@@ -5429,6 +5435,49 @@ theme	Appearance	Erscheinungsbild
 @msg	the PSD file's layer groups are nested too deeply	die Ebenengruppen der PSD-Datei sind zu tief verschachtelt
 @msg	a layer of the PSD file is too large to read	eine Ebene der PSD-Datei ist zu groß zum Lesen
 @msg	the PSD file's layers take more memory to read than allowed	die Ebenen der PSD-Datei brauchen zum Lesen mehr Speicher als erlaubt
+@msg	the file is no longer loaded	die Datei ist nicht mehr geladen
+@msg	the layers can't be read ({e}): the file was placed as its merged image	die Ebenen können nicht gelesen werden ({e}): die Datei wurde als ihr zusammengefügtes Bild platziert
+@msg	1 type layer came in as pixels: the text isn't editable	1 Textebene wurde als Pixel übernommen: der Text ist nicht bearbeitbar
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} Textebenen wurden als Pixel übernommen: der Text ist nicht bearbeitbar
+@msg	1 adjustment layer was not applied	1 Einstellungsebene wurde nicht angewendet
+@msg	{n} adjustment layers were not applied	{n} Einstellungsebenen wurden nicht angewendet
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 Füllebene wurde nicht gezeichnet (eine Verlaufs- oder Musterfüllung, eine Farbe, die nicht gelesen werden kann, oder eine Form ohne gespeicherte Pixel)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} Füllebenen wurden nicht gezeichnet (eine Verlaufs- oder Musterfüllung, eine Farbe, die nicht gelesen werden kann, oder eine Form ohne gespeicherte Pixel)
+@msg	the layer effects of 1 layer weren't drawn	die Ebeneneffekte von 1 Ebene wurden nicht gezeichnet
+@msg	the layer effects of {n} layers weren't drawn	die Ebeneneffekte von {n} Ebenen wurden nicht gezeichnet
+@msg	the vector masks of 1 layer weren't applied	die Vektormasken von 1 Ebene wurden nicht angewendet
+@msg	the vector masks of {n} layers weren't applied	die Vektormasken von {n} Ebenen wurden nicht angewendet
+@msg	the knockout of 1 layer wasn't applied	die Aussparung von 1 Ebene wurde nicht angewendet
+@msg	the knockout of {n} layers wasn't applied	die Aussparung von {n} Ebenen wurde nicht angewendet
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 Ebene wurde weggelassen (ausgeblendete Ebenen und die auf sie beschnittenen Ebenen)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} Ebenen wurden weggelassen (ausgeblendete Ebenen und die auf sie beschnittenen Ebenen)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 Ebene, die auf eine nicht gezeichnete Füllebene beschnitten ist, wurde weggelassen
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} Ebenen, die auf nicht gezeichnete Füllebenen beschnitten sind, wurden weggelassen
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	Ebenen in Füllmethoden, die VectorCraft nicht hat ({modes}), wurden mit den Ebenen darunter zusammengefügt
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 Ebene in einer Füllmethode, die VectorCraft nicht hat, wurde als Normal übernommen: das Zusammenfügen braucht mehr Speicher als erlaubt
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} Ebenen in Füllmethoden, die VectorCraft nicht hat, wurden als Normal übernommen: das Zusammenfügen braucht mehr Speicher als erlaubt
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 Ebene, die auf die Ebene darunter beschnitten ist, wurde unbeschnitten übernommen: das Zusammenfügen braucht mehr Speicher als erlaubt
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} Ebenen, die auf die Ebene darunter beschnitten sind, wurden unbeschnitten übernommen: das Zusammenfügen braucht mehr Speicher als erlaubt
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers gilt für eine PSD-Datei, die mit layers: true platziert wird
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: eine verknüpfte PSD-Datei wird als ihr flaches Bild platziert; geben Sie link: false an, um sie mit ihren Slices einzubetten
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: eine verknüpfte PSD-Datei wird als ihr flaches Bild platziert; lassen Sie link weg oder geben Sie link: false an
+@msg	the slices can't be read ({e}) and were left out	die Slices können nicht gelesen werden ({e}) und wurden weggelassen
+@msg	1 slice lies outside the canvas or has no size and was left out	1 Slice liegt außerhalb der Arbeitsfläche oder hat keine Größe und wurde weggelassen
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} Slices liegen außerhalb der Arbeitsfläche oder haben keine Größe und wurden weggelassen
+@msg	1 slice would lie outside the canvas and was left out	1 Slice würde außerhalb der Arbeitsfläche liegen und wurde weggelassen
+@msg	{n} slices would lie outside the canvas and were left out	{n} Slices würden außerhalb der Arbeitsfläche liegen und wurden weggelassen
+@msg	the slices' descriptor holds too many values	der Deskriptor der Slices enthält zu viele Werte
+@msg	the slices' descriptor has a version other than 16	der Deskriptor der Slices hat eine andere Version als 16
+@msg	the slices are stored in version {v}, which isn't read	die Slices sind in Version {v} gespeichert, die nicht gelesen wird
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	die Datei hat {count} Slices, mehr als die {MAX_SLICES}, die gelesen werden
+@msg	the slices' descriptor has no list of slices	der Deskriptor der Slices hat keine Liste der Slices
+@msg	the slices' descriptor lists something other than a slice	der Deskriptor der Slices führt etwas anderes als ein Slice auf
+@msg	a slice in the slices' descriptor has no bounds	ein Slice im Deskriptor der Slices hat keine Begrenzung
+@msg	a slice's bounds in the slices' descriptor aren't numbers	die Begrenzung eines Slices im Deskriptor der Slices besteht nicht aus Zahlen
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	ein Text in den Slices hat mehr als die {MAX_TEXT} Zeichen, die gelesen werden
+@msg	the slices' descriptor nests too deep	der Deskriptor der Slices ist zu tief verschachtelt
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	der Deskriptor der Slices hat einen Verweis unbekannter Art ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	der Deskriptor der Slices hat einen Wert unbekannten Typs ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	die Ebenen können nicht gelesen werden ({e}): die Datei wurde als ihr zusammengefügtes Bild geöffnet
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-Bit-PSD-Dateien in diesem Farbmodus können nicht gelesen werden
 @msg	the JPEG XL file is cut short	die JPEG-XL-Datei ist unvollständig

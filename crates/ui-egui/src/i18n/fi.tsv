@@ -2497,6 +2497,12 @@ digits	Malayalam	Malajalam
 	Units:	Yksiköt:
 	Use Typographer's Quotes	Käytä typografisia lainausmerkkejä
 	Center Artwork	Keskitä kuvitus
+	PSD Import Options	PSD-tuonnin asetukset
+	Place PSD	Sijoita PSD
+	Convert Layers to Objects	Muunna tasot objekteiksi
+	Import Hidden Layers	Tuo piilotetut tasot
+	Flatten Layers to a Single Image	Litistä tasot yhdeksi kuvaksi
+	Import Slices	Tuo siivut
 	DXF Import Options	DXF-tuonnin asetukset
 	Layout:	Asettelu:
 	Merge Layers	Yhdistä tasot
@@ -5597,6 +5603,49 @@ imageTrace	Outline	Ääriviiva
 @msg	the PSD file's layer groups are nested too deeply	tämän PSD-tiedoston tasoryhmät ovat sisäkkäin liian syvällä
 @msg	a layer of the PSD file is too large to read	tämän PSD-tiedoston taso on liian suuri luettavaksi
 @msg	the PSD file's layers take more memory to read than allowed	tämän PSD-tiedoston tasojen lukeminen vaatii enemmän muistia kuin sallitaan
+@msg	the file is no longer loaded	tiedosto ei ole enää ladattuna
+@msg	the layers can't be read ({e}): the file was placed as its merged image	tasoja ei voi lukea ({e}): tiedosto sijoitettiin yhdistettynä kuvanaan
+@msg	1 type layer came in as pixels: the text isn't editable	1 tekstitaso tuotiin pikseleinä: tekstiä ei voi muokata
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} tekstitasoa tuotiin pikseleinä: tekstiä ei voi muokata
+@msg	1 adjustment layer was not applied	1 säätötasoa ei käytetty
+@msg	{n} adjustment layers were not applied	{n} säätötasoa ei käytetty
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 täyttötasoa ei piirretty (liukuväri- tai kuviotäyttö, väri, jota ei voi lukea, tai muoto, joka ei tallenna pikseleitä)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} täyttötasoa ei piirretty (liukuväri- tai kuviotäyttö, väri, jota ei voi lukea, tai muoto, joka ei tallenna pikseleitä)
+@msg	the layer effects of 1 layer weren't drawn	1 tason tasotehosteita ei piirretty
+@msg	the layer effects of {n} layers weren't drawn	{n} tason tasotehosteita ei piirretty
+@msg	the vector masks of 1 layer weren't applied	1 tason vektorimaskeja ei käytetty
+@msg	the vector masks of {n} layers weren't applied	{n} tason vektorimaskeja ei käytetty
+@msg	the knockout of 1 layer wasn't applied	1 tason poistoa ei käytetty
+@msg	the knockout of {n} layers wasn't applied	{n} tason poistoa ei käytetty
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 taso jätettiin pois (piilotetut tasot ja niihin leikatut tasot)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} tasoa jätettiin pois (piilotetut tasot ja niihin leikatut tasot)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 taso, joka on leikattu piirtämättä jääneeseen täyttötasoon, jätettiin pois
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} tasoa, jotka on leikattu piirtämättä jääneisiin täyttötasoihin, jätettiin pois
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	tasot sekoitustiloissa, joita VectorCraftissa ei ole ({modes}), yhdistettiin alla oleviin tasoihin
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 taso sekoitustilassa, jota VectorCraftissa ei ole, tuotiin Normaali-tilassa: yhdistäminen vaatii sallittua enemmän muistia
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} tasoa sekoitustiloissa, joita VectorCraftissa ei ole, tuotiin Normaali-tilassa: yhdistäminen vaatii sallittua enemmän muistia
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 alla olevaan tasoon leikattu taso tuotiin leikkaamattomana: yhdistäminen vaatii sallittua enemmän muistia
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} alla olevaan tasoon leikattua tasoa tuotiin leikkaamattomina: yhdistäminen vaatii sallittua enemmän muistia
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers koskee PSD-tiedostoa, joka sijoitetaan asetuksella layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: linkitetty PSD-tiedosto sijoitetaan litteänä kuvanaan; anna link: false, jotta se upotetaan siivuineen
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: linkitetty PSD-tiedosto sijoitetaan litteänä kuvanaan; jätä link pois tai anna link: false
+@msg	the slices can't be read ({e}) and were left out	siivuja ei voi lukea ({e}), ja ne jätettiin pois
+@msg	1 slice lies outside the canvas or has no size and was left out	1 siivu on kankaan ulkopuolella tai sillä ei ole kokoa, ja se jätettiin pois
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} siivua on kankaan ulkopuolella tai niillä ei ole kokoa, ja ne jätettiin pois
+@msg	1 slice would lie outside the canvas and was left out	1 siivu olisi kankaan ulkopuolella, ja se jätettiin pois
+@msg	{n} slices would lie outside the canvas and were left out	{n} siivua olisi kankaan ulkopuolella, ja ne jätettiin pois
+@msg	the slices' descriptor holds too many values	siivujen kuvaajassa on liian monta arvoa
+@msg	the slices' descriptor has a version other than 16	siivujen kuvaajan versio on muu kuin 16
+@msg	the slices are stored in version {v}, which isn't read	siivut on tallennettu versiossa {v}, jota ei lueta
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	tiedostossa on {count} siivua, enemmän kuin luettavat {MAX_SLICES}
+@msg	the slices' descriptor has no list of slices	siivujen kuvaajassa ei ole siivuluetteloa
+@msg	the slices' descriptor lists something other than a slice	siivujen kuvaaja luettelee jotain muuta kuin siivun
+@msg	a slice in the slices' descriptor has no bounds	siivujen kuvaajan siivulla ei ole rajoja
+@msg	a slice's bounds in the slices' descriptor aren't numbers	siivujen kuvaajan siivun rajat eivät ole lukuja
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	siivujen tekstissä on enemmän kuin luettavat {MAX_TEXT} merkkiä
+@msg	the slices' descriptor nests too deep	siivujen kuvaaja on sisäkkäin liian syvälle
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	siivujen kuvaajassa on tuntematonta lajia oleva viittaus ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	siivujen kuvaajassa on tuntematonta tyyppiä oleva arvo ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	tasoja ei voi lukea ({e}): tiedosto avattiin yhdistettynä kuvanaan
 @msg	{depth}-bit PSD files in this colour mode can't be read	tässä väritilassa olevia {depth}-bittisiä PSD-tiedostoja ei voi lukea
 @msg	the PSD file is cut short	tämä PSD-tiedosto on katkennut

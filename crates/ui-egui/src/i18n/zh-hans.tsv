@@ -903,6 +903,12 @@ antiAlias	Sharp	锐利
 	Duplicate Symbol	复制符号
 	Duplicate {kind} Style	制作{kind}样式的副本
 	Dutch	荷兰语
+	PSD Import Options	PSD 导入选项
+	Place PSD	置入 PSD
+	Convert Layers to Objects	将图层转换为对象
+	Import Hidden Layers	导入隐藏图层
+	Flatten Layers to a Single Image	将图层拼合为单个图像
+	Import Slices	导入切片
 	DXF Import Options	DXF 导入选项
 	DXF Info	DXF 信息
 	DXF Options	DXF 选项
@@ -5160,6 +5166,49 @@ imageTrace	Outline	轮廓
 @msg	the PSD file's layer groups are nested too deeply	PSD 文件的图层组嵌套过深
 @msg	a layer of the PSD file is too large to read	PSD 文件的某个图层过大，无法读取
 @msg	the PSD file's layers take more memory to read than allowed	读取 PSD 文件的图层所需内存超过允许值
+@msg	the file is no longer loaded	文件已不再载入
+@msg	the layers can't be read ({e}): the file was placed as its merged image	无法读取图层 ({e})：文件已作为合并图像置入
+@msg	1 type layer came in as pixels: the text isn't editable	1 个文字图层以像素形式导入：文字不可编辑
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} 个文字图层以像素形式导入：文字不可编辑
+@msg	1 adjustment layer was not applied	未应用 1 个调整图层
+@msg	{n} adjustment layers were not applied	未应用 {n} 个调整图层
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	未绘制 1 个填充图层（渐变或图案填充、无法读取的颜色，或不存储像素的形状）
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	未绘制 {n} 个填充图层（渐变或图案填充、无法读取的颜色，或不存储像素的形状）
+@msg	the layer effects of 1 layer weren't drawn	未绘制 1 个图层的图层效果
+@msg	the layer effects of {n} layers weren't drawn	未绘制 {n} 个图层的图层效果
+@msg	the vector masks of 1 layer weren't applied	未应用 1 个图层的矢量蒙版
+@msg	the vector masks of {n} layers weren't applied	未应用 {n} 个图层的矢量蒙版
+@msg	the knockout of 1 layer wasn't applied	未应用 1 个图层的挖空
+@msg	the knockout of {n} layers wasn't applied	未应用 {n} 个图层的挖空
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	已略去 1 个图层（隐藏的图层以及剪切到这些图层的图层）
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	已略去 {n} 个图层（隐藏的图层以及剪切到这些图层的图层）
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	已略去 1 个剪切到未绘制填充图层的图层
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	已略去 {n} 个剪切到未绘制填充图层的图层
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	使用 VectorCraft 没有的混合模式 ({modes}) 的图层已与其下方的图层合并
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 个使用 VectorCraft 没有的混合模式的图层以正常模式导入：合并需要的内存超出允许范围
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} 个使用 VectorCraft 没有的混合模式的图层以正常模式导入：合并需要的内存超出允许范围
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 个剪切到下方图层的图层未经剪切导入：合并需要的内存超出允许范围
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} 个剪切到下方图层的图层未经剪切导入：合并需要的内存超出允许范围
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers 适用于以 layers: true 置入的 PSD 文件
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices：链接的 PSD 文件以拼合图像置入；指定 link: false 可将其连同切片一起嵌入
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers：链接的 PSD 文件以拼合图像置入；请省略 link 或指定 link: false
+@msg	the slices can't be read ({e}) and were left out	无法读取切片 ({e})，已略去
+@msg	1 slice lies outside the canvas or has no size and was left out	1 个切片位于画布之外或没有尺寸，已略去
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} 个切片位于画布之外或没有尺寸，已略去
+@msg	1 slice would lie outside the canvas and was left out	1 个切片会位于画布之外，已略去
+@msg	{n} slices would lie outside the canvas and were left out	{n} 个切片会位于画布之外，已略去
+@msg	the slices' descriptor holds too many values	切片的描述符包含的值过多
+@msg	the slices' descriptor has a version other than 16	切片的描述符版本不是 16
+@msg	the slices are stored in version {v}, which isn't read	切片以不读取的版本 {v} 存储
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	文件有 {count} 个切片，超过读取的 {MAX_SLICES} 个
+@msg	the slices' descriptor has no list of slices	切片的描述符没有切片列表
+@msg	the slices' descriptor lists something other than a slice	切片的描述符列出了切片以外的内容
+@msg	a slice in the slices' descriptor has no bounds	切片描述符中的一个切片没有边界
+@msg	a slice's bounds in the slices' descriptor aren't numbers	切片描述符中一个切片的边界不是数字
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	切片中的一段文字超过读取的 {MAX_TEXT} 个字符
+@msg	the slices' descriptor nests too deep	切片的描述符嵌套过深
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	切片的描述符含有未知种类的引用 ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	切片的描述符含有未知类型的值 ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	无法读取图层 ({e})：文件已作为合并图像打开
 @msg	{depth}-bit PSD files in this colour mode can't be read	无法读取此颜色模式下的 {depth} 位 PSD 文件
 @msg	the PSD file is cut short	PSD 文件不完整

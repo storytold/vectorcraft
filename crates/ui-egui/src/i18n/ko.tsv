@@ -1421,6 +1421,12 @@ antiAlias	Sharp	날카롭게
 	Cut Path at Selected Anchor Points	선택한 앵커 포인트에서 패스 자르기
 	Dim Images to:	이미지 흐리게:
 	Duplicate Selection	선택 항목 복제
+	PSD Import Options	PSD 가져오기 옵션
+	Place PSD	PSD 가져오기
+	Convert Layers to Objects	레이어를 오브젝트로 변환
+	Import Hidden Layers	숨겨진 레이어 가져오기
+	Flatten Layers to a Single Image	레이어를 단일 이미지로 병합
+	Import Slices	분할 영역 가져오기
 	DXF Import Options	DXF 가져오기 옵션
 	DXF Info	DXF 정보
 	DXF Options	DXF 옵션
@@ -5413,6 +5419,49 @@ theme	Appearance	외관
 @msg	the PSD file's layer groups are nested too deeply	PSD 파일의 레이어 그룹이 너무 깊이 중첩되어 있습니다
 @msg	a layer of the PSD file is too large to read	PSD 파일의 레이어가 너무 커서 읽을 수 없습니다
 @msg	the PSD file's layers take more memory to read than allowed	PSD 파일의 레이어를 읽는 데 허용된 것보다 많은 메모리가 필요합니다
+@msg	the file is no longer loaded	파일이 더 이상 로드되어 있지 않습니다
+@msg	the layers can't be read ({e}): the file was placed as its merged image	레이어를 읽을 수 없습니다({e}): 파일이 병합된 이미지로 가져와졌습니다
+@msg	1 type layer came in as pixels: the text isn't editable	문자 레이어 1개가 픽셀로 들어왔습니다: 텍스트를 편집할 수 없습니다
+@msg	{n} type layers came in as pixels: the text isn't editable	문자 레이어 {n}개가 픽셀로 들어왔습니다: 텍스트를 편집할 수 없습니다
+@msg	1 adjustment layer was not applied	조정 레이어 1개가 적용되지 않았습니다
+@msg	{n} adjustment layers were not applied	조정 레이어 {n}개가 적용되지 않았습니다
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	칠 레이어 1개가 그려지지 않았습니다(그레이디언트 또는 패턴 칠, 읽을 수 없는 색상, 또는 픽셀을 저장하지 않는 모양)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	칠 레이어 {n}개가 그려지지 않았습니다(그레이디언트 또는 패턴 칠, 읽을 수 없는 색상, 또는 픽셀을 저장하지 않는 모양)
+@msg	the layer effects of 1 layer weren't drawn	레이어 1개의 레이어 효과가 그려지지 않았습니다
+@msg	the layer effects of {n} layers weren't drawn	레이어 {n}개의 레이어 효과가 그려지지 않았습니다
+@msg	the vector masks of 1 layer weren't applied	레이어 1개의 벡터 마스크가 적용되지 않았습니다
+@msg	the vector masks of {n} layers weren't applied	레이어 {n}개의 벡터 마스크가 적용되지 않았습니다
+@msg	the knockout of 1 layer wasn't applied	레이어 1개의 녹아웃이 적용되지 않았습니다
+@msg	the knockout of {n} layers wasn't applied	레이어 {n}개의 녹아웃이 적용되지 않았습니다
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	레이어 1개를 제외했습니다(숨겨진 레이어와 그에 클리핑된 레이어)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	레이어 {n}개를 제외했습니다(숨겨진 레이어와 그에 클리핑된 레이어)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	그려지지 않은 칠 레이어에 클리핑된 레이어 1개를 제외했습니다
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	그려지지 않은 칠 레이어에 클리핑된 레이어 {n}개를 제외했습니다
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	VectorCraft에 없는 혼합 모드({modes})의 레이어를 아래 레이어와 병합했습니다
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	VectorCraft에 없는 혼합 모드의 레이어 1개가 표준으로 들어왔습니다: 병합에 허용된 것보다 많은 메모리가 필요합니다
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	VectorCraft에 없는 혼합 모드의 레이어 {n}개가 표준으로 들어왔습니다: 병합에 허용된 것보다 많은 메모리가 필요합니다
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	아래 레이어에 클리핑된 레이어 1개가 클리핑 없이 들어왔습니다: 병합에 허용된 것보다 많은 메모리가 필요합니다
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	아래 레이어에 클리핑된 레이어 {n}개가 클리핑 없이 들어왔습니다: 병합에 허용된 것보다 많은 메모리가 필요합니다
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers는 layers: true로 가져오는 PSD 파일에 적용됩니다
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: 연결된 PSD 파일은 평면 이미지로 가져옵니다. 분할 영역과 함께 포함하려면 link: false를 지정하세요
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: 연결된 PSD 파일은 평면 이미지로 가져옵니다. link를 생략하거나 link: false를 지정하세요
+@msg	the slices can't be read ({e}) and were left out	분할 영역을 읽을 수 없어({e}) 제외했습니다
+@msg	1 slice lies outside the canvas or has no size and was left out	분할 영역 1개가 캔버스 밖에 있거나 크기가 없어 제외했습니다
+@msg	{n} slices lie outside the canvas or have no size and were left out	분할 영역 {n}개가 캔버스 밖에 있거나 크기가 없어 제외했습니다
+@msg	1 slice would lie outside the canvas and was left out	분할 영역 1개가 캔버스 밖에 놓이게 되어 제외했습니다
+@msg	{n} slices would lie outside the canvas and were left out	분할 영역 {n}개가 캔버스 밖에 놓이게 되어 제외했습니다
+@msg	the slices' descriptor holds too many values	분할 영역 설명자에 값이 너무 많습니다
+@msg	the slices' descriptor has a version other than 16	분할 영역 설명자의 버전이 16이 아닙니다
+@msg	the slices are stored in version {v}, which isn't read	분할 영역이 읽지 않는 버전 {v}(으)로 저장되어 있습니다
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	파일의 분할 영역이 {count}개로, 읽는 {MAX_SLICES}개보다 많습니다
+@msg	the slices' descriptor has no list of slices	분할 영역 설명자에 분할 영역 목록이 없습니다
+@msg	the slices' descriptor lists something other than a slice	분할 영역 설명자에 분할 영역이 아닌 항목이 있습니다
+@msg	a slice in the slices' descriptor has no bounds	분할 영역 설명자의 분할 영역에 경계가 없습니다
+@msg	a slice's bounds in the slices' descriptor aren't numbers	분할 영역 설명자의 분할 영역 경계가 숫자가 아닙니다
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	분할 영역의 텍스트가 읽는 {MAX_TEXT}자를 넘습니다
+@msg	the slices' descriptor nests too deep	분할 영역 설명자가 너무 깊게 중첩되어 있습니다
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	분할 영역 설명자에 알 수 없는 종류의 참조가 있습니다({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	분할 영역 설명자에 알 수 없는 유형의 값이 있습니다({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	레이어를 읽을 수 없습니다({e}): 파일이 병합된 이미지로 열렸습니다
 @msg	{depth}-bit PSD files in this colour mode can't be read	이 색상 모드의 {depth}비트 PSD 파일은 읽을 수 없습니다
 @msg	the PSD file is cut short	PSD 파일이 잘려 있습니다

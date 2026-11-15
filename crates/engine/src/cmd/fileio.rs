@@ -95,7 +95,7 @@ pub use native::with_compression_pref;
 pub(crate) use pdfimport::opened_page_document;
 pub use pdfimport::{LoadOptions, page_document};
 pub(crate) use psdlayers::import_active as psd_layers;
-pub use psdlayers::{PsdInfo, info as psd_info};
+pub use psdlayers::{LAYER_WARNINGS as PSD_LAYER_WARNINGS, MERGED_WARNING as PSD_MERGED_WARNING, PsdInfo, info as psd_info};
 pub(crate) use psdslices::over as psd_slices;
 pub(crate) use save::job_for;
 pub(crate) use save::save as save_document;

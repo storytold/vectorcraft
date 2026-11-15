@@ -950,6 +950,12 @@ font-technology	Variable	Variabla
 	Duplicate Symbol	Duplicera symbol
 	Duplicate {kind} Style	Duplicera {kind}-stil
 	Dutch	Nederländska
+	PSD Import Options	Importalternativ för PSD
+	Place PSD	Placera PSD
+	Convert Layers to Objects	Konvertera lager till objekt
+	Import Hidden Layers	Importera dolda lager
+	Flatten Layers to a Single Image	Platta till lager till en enda bild
+	Import Slices	Importera skivor
 	DXF Import Options	Importalternativ för DXF
 	DXF Info	DXF-info
 	DXF Options	DXF-alternativ
@@ -5313,6 +5319,49 @@ axis	Both	Båda
 @msg	the PSD file's layer groups are nested too deeply	PSD-filens lagergrupper är kapslade för djupt
 @msg	a layer of the PSD file is too large to read	ett lager i PSD-filen är för stort för att läsas
 @msg	the PSD file's layers take more memory to read than allowed	PSD-filens lager kräver mer minne för att läsas än vad som tillåts
+@msg	the file is no longer loaded	filen är inte längre inläst
+@msg	the layers can't be read ({e}): the file was placed as its merged image	lagren kan inte läsas ({e}): filen placerades som sin sammanslagna bild
+@msg	1 type layer came in as pixels: the text isn't editable	1 textlager kom in som pixlar: texten går inte att redigera
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} textlager kom in som pixlar: texten går inte att redigera
+@msg	1 adjustment layer was not applied	1 justeringslager tillämpades inte
+@msg	{n} adjustment layers were not applied	{n} justeringslager tillämpades inte
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 fyllningslager ritades inte (en övertonings- eller mönsterfyllning, en färg som inte kan läsas eller en form som inte lagrar några pixlar)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} fyllningslager ritades inte (en övertonings- eller mönsterfyllning, en färg som inte kan läsas eller en form som inte lagrar några pixlar)
+@msg	the layer effects of 1 layer weren't drawn	lagereffekterna för 1 lager ritades inte
+@msg	the layer effects of {n} layers weren't drawn	lagereffekterna för {n} lager ritades inte
+@msg	the vector masks of 1 layer weren't applied	vektormaskerna för 1 lager tillämpades inte
+@msg	the vector masks of {n} layers weren't applied	vektormaskerna för {n} lager tillämpades inte
+@msg	the knockout of 1 layer wasn't applied	utsparningen för 1 lager tillämpades inte
+@msg	the knockout of {n} layers wasn't applied	utsparningen för {n} lager tillämpades inte
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 lager utelämnades (dolda lager och de lager som är urklippta mot dem)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} lager utelämnades (dolda lager och de lager som är urklippta mot dem)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 lager urklippt mot ett fyllningslager som inte ritades utelämnades
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} lager urklippta mot fyllningslager som inte ritades utelämnades
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	lager i blandningslägen som VectorCraft inte har ({modes}) slogs samman med lagren under dem
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 lager i ett blandningsläge som VectorCraft inte har kom in som Normal: sammanslagningen kräver mer minne än tillåtet
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} lager i blandningslägen som VectorCraft inte har kom in som Normal: sammanslagningen kräver mer minne än tillåtet
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 lager urklippt mot lagret under kom in utan urklipp: sammanslagningen kräver mer minne än tillåtet
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} lager urklippta mot lagret under kom in utan urklipp: sammanslagningen kräver mer minne än tillåtet
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers gäller en PSD-fil som placeras med layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: en länkad PSD-fil placeras som sin platta bild; ange link: false för att bädda in den med dess skivor
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: en länkad PSD-fil placeras som sin platta bild; utelämna link eller ange link: false
+@msg	the slices can't be read ({e}) and were left out	skivorna kan inte läsas ({e}) och utelämnades
+@msg	1 slice lies outside the canvas or has no size and was left out	1 skiva ligger utanför arbetsytan eller saknar storlek och utelämnades
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} skivor ligger utanför arbetsytan eller saknar storlek och utelämnades
+@msg	1 slice would lie outside the canvas and was left out	1 skiva skulle ligga utanför arbetsytan och utelämnades
+@msg	{n} slices would lie outside the canvas and were left out	{n} skivor skulle ligga utanför arbetsytan och utelämnades
+@msg	the slices' descriptor holds too many values	skivornas deskriptor innehåller för många värden
+@msg	the slices' descriptor has a version other than 16	skivornas deskriptor har en annan version än 16
+@msg	the slices are stored in version {v}, which isn't read	skivorna är sparade i version {v}, som inte läses
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	filen har {count} skivor, fler än de {MAX_SLICES} som läses
+@msg	the slices' descriptor has no list of slices	skivornas deskriptor har ingen lista över skivor
+@msg	the slices' descriptor lists something other than a slice	skivornas deskriptor listar något annat än en skiva
+@msg	a slice in the slices' descriptor has no bounds	en skiva i skivornas deskriptor saknar gränser
+@msg	a slice's bounds in the slices' descriptor aren't numbers	gränserna för en skiva i skivornas deskriptor är inte tal
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	en text i skivorna har fler än de {MAX_TEXT} tecken som läses
+@msg	the slices' descriptor nests too deep	skivornas deskriptor är kapslad för djupt
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	skivornas deskriptor har en referens av okänt slag ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	skivornas deskriptor har ett värde av okänd typ ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	lagren kan inte läsas ({e}): filen öppnades som sin sammanslagna bild
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bitars PSD-filer i det här färgläget kan inte läsas
 @msg	the PSD file is cut short	PSD-filen är avkortad

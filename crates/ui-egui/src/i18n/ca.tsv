@@ -1396,6 +1396,12 @@ antiAlias	Sharp	Nítid
 	Duplication	Duplicació
 	Dutch	Neerlandès
 	DWG (use DXF)	DWG (feu servir DXF)
+	PSD Import Options	Opcions d’importació de PSD
+	Place PSD	Col·loca un PSD
+	Convert Layers to Objects	Converteix les capes en objectes
+	Import Hidden Layers	Importa les capes amagades
+	Flatten Layers to a Single Image	Aplana les capes en una sola imatge
+	Import Slices	Importa els talls
 	DXF Import Options	Opcions d’importació de DXF
 	DXF Info	Informació del DXF
 	DXF Options	Opcions del DXF
@@ -6617,6 +6623,49 @@ digits	Malayalam	Malaiàlam
 @msg	the PSD file's layer groups are nested too deeply	els grups de capes del fitxer PSD estan imbricats massa profundament
 @msg	a layer of the PSD file is too large to read	una capa del fitxer PSD és massa gran per llegir-la
 @msg	the PSD file's layers take more memory to read than allowed	les capes del fitxer PSD necessiten més memòria de la permesa per llegir-les
+@msg	the file is no longer loaded	el fitxer ja no està carregat
+@msg	the layers can't be read ({e}): the file was placed as its merged image	no es poden llegir les capes ({e}): el fitxer s’ha col·locat com a imatge combinada
+@msg	1 type layer came in as pixels: the text isn't editable	1 capa de text s’ha importat com a píxels: el text no és editable
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} capes de text s’han importat com a píxels: el text no és editable
+@msg	1 adjustment layer was not applied	no s’ha aplicat 1 capa d’ajust
+@msg	{n} adjustment layers were not applied	no s’han aplicat {n} capes d’ajust
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	no s’ha dibuixat 1 capa d’emplenament (un emplenament de degradat o de motiu, un color que no es pot llegir o una forma que no desa píxels)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	no s’han dibuixat {n} capes d’emplenament (un emplenament de degradat o de motiu, un color que no es pot llegir o una forma que no desa píxels)
+@msg	the layer effects of 1 layer weren't drawn	no s’han dibuixat els efectes de capa d’1 capa
+@msg	the layer effects of {n} layers weren't drawn	no s’han dibuixat els efectes de capa de {n} capes
+@msg	the vector masks of 1 layer weren't applied	no s’han aplicat les màscares vectorials d’1 capa
+@msg	the vector masks of {n} layers weren't applied	no s’han aplicat les màscares vectorials de {n} capes
+@msg	the knockout of 1 layer wasn't applied	no s’ha aplicat el buidatge d’1 capa
+@msg	the knockout of {n} layers wasn't applied	no s’ha aplicat el buidatge de {n} capes
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	s’ha omès 1 capa (capes amagades i les capes retallades a elles)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	s’han omès {n} capes (capes amagades i les capes retallades a elles)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	s’ha omès 1 capa retallada a una capa d’emplenament que no s’ha dibuixat
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	s’han omès {n} capes retallades a capes d’emplenament que no s’han dibuixat
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	les capes en modes de fusió que VectorCraft no té ({modes}) s’han combinat amb les capes de sota
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 capa en un mode de fusió que VectorCraft no té s’ha importat com a Normal: la combinació necessita més memòria de la permesa
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} capes en modes de fusió que VectorCraft no té s’han importat com a Normal: la combinació necessita més memòria de la permesa
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 capa retallada a la capa de sota s’ha importat sense retallar: la combinació necessita més memòria de la permesa
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} capes retallades a la capa de sota s’han importat sense retallar: la combinació necessita més memòria de la permesa
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers s’aplica a un fitxer PSD col·locat amb layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: un fitxer PSD enllaçat es col·loca com a imatge aplanada; indiqueu link: false per incrustar-lo amb els seus talls
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: un fitxer PSD enllaçat es col·loca com a imatge aplanada; ometeu link o indiqueu link: false
+@msg	the slices can't be read ({e}) and were left out	no es poden llegir els talls ({e}) i s’han omès
+@msg	1 slice lies outside the canvas or has no size and was left out	1 tall és fora del llenç o no té mida i s’ha omès
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} talls són fora del llenç o no tenen mida i s’han omès
+@msg	1 slice would lie outside the canvas and was left out	1 tall quedaria fora del llenç i s’ha omès
+@msg	{n} slices would lie outside the canvas and were left out	{n} talls quedarien fora del llenç i s’han omès
+@msg	the slices' descriptor holds too many values	el descriptor dels talls conté massa valors
+@msg	the slices' descriptor has a version other than 16	el descriptor dels talls té una versió diferent de 16
+@msg	the slices are stored in version {v}, which isn't read	els talls estan desats a la versió {v}, que no es llegeix
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	el fitxer té {count} talls, més dels {MAX_SLICES} que es llegeixen
+@msg	the slices' descriptor has no list of slices	el descriptor dels talls no té cap llista de talls
+@msg	the slices' descriptor lists something other than a slice	el descriptor dels talls enumera una cosa que no és un tall
+@msg	a slice in the slices' descriptor has no bounds	un tall del descriptor dels talls no té límits
+@msg	a slice's bounds in the slices' descriptor aren't numbers	els límits d’un tall del descriptor dels talls no són nombres
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	un text dels talls té més dels {MAX_TEXT} caràcters que es llegeixen
+@msg	the slices' descriptor nests too deep	el descriptor dels talls està imbricat massa a fons
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	el descriptor dels talls té una referència d’un tipus desconegut ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	el descriptor dels talls té un valor d’un tipus desconegut ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	no es poden llegir les capes ({e}): el fitxer s’ha obert com a imatge combinada
 @msg	zone must be a string	zone ha de ser una cadena
 @msg	zone must be tab, center, left, right, top or bottom	zone ha de ser tab, center, left, right, top o bottom

@@ -451,6 +451,79 @@ fn objects_on_path_detach_strings_are_in_complete_catalogs() {
     }
 }
 
+/// The PSD Import Options dialog's labels, and the warnings and errors of opening and placing a
+/// PSD or PSB file with its layers and slices: each complete catalog translates every one, keeping
+/// its numbers, and translates a reason given inside one.
+#[test]
+fn psd_import_strings_are_in_complete_catalogs() {
+    use crate::io::opened_with_notes;
+    use vectorcraft_engine::cmd::fileio::{PSD_LAYER_WARNINGS, PSD_MERGED_WARNING};
+    let labels =
+        ["Place PSD", "PSD Import Options", "Convert Layers to Objects", "Import Hidden Layers", "Flatten Layers to a Single Image", "Import Slices"];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in labels {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let (nested, damaged) = ("the slices' descriptor nests too deep", "the PSD file's layer records are damaged");
+    let unread_slices = "the slices can't be read (the slices' descriptor nests too deep) and were left out";
+    let unread_layers = "the layers can't be read (the PSD file's layer records are damaged): the file was placed as its merged image";
+    let merged = PSD_MERGED_WARNING.replace("{modes}", "Hue, Luminosity");
+    let (one, many) = PSD_LAYER_WARNINGS[1];
+    let (one, many) = (one.to_string(), many.replace("{n}", "3"));
+    let mut shown: Vec<String> = PSD_LAYER_WARNINGS.iter().flat_map(|(one, many)| [one.to_string(), many.replace("{n}", "3")]).collect();
+    shown.push(merged.clone());
+    shown.extend(
+        [
+            "the file is no longer loaded",
+            unread_layers,
+            "hiddenLayers applies to a PSD file placed with layers: true",
+            "importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices",
+            "layers: a linked PSD file is placed as its flat image; leave link out or give link: false",
+            unread_slices,
+            "1 slice lies outside the canvas or has no size and was left out",
+            "3 slices lie outside the canvas or have no size and were left out",
+            "1 slice would lie outside the canvas and was left out",
+            "3 slices would lie outside the canvas and were left out",
+            "the slices' descriptor holds too many values",
+            "the slices' descriptor has a version other than 16",
+            "the slices are stored in version 9, which isn't read",
+            "the file has 10001 slices, more than the 10000 read",
+            "the slices' descriptor has no list of slices",
+            "the slices' descriptor lists something other than a slice",
+            "a slice in the slices' descriptor has no bounds",
+            "a slice's bounds in the slices' descriptor aren't numbers",
+            "a text in the slices has more than the 65536 characters read",
+            nested,
+            "the slices' descriptor has a reference of an unknown kind (abcd)",
+            "the slices' descriptor has a value of an unknown type (abcd)",
+        ]
+        .map(String::from),
+    );
+    let numbers = |s: &str| s.split(|c: char| !c.is_ascii_digit()).filter(|n| !n.is_empty()).map(String::from).collect::<Vec<_>>();
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for s in &shown {
+            let tr = message(lang, s);
+            assert_ne!(&tr, s, "{code}");
+            for n in numbers(s) {
+                assert!(tr.contains(&n), "{code}: {tr} lost {n}");
+            }
+        }
+        for (s, inner) in [(unread_slices, nested), (unread_layers, damaged)] {
+            assert!(!message(lang, s).contains(inner), "{code}: {s}");
+        }
+        assert!(message(lang, &merged).contains("Hue, Luminosity"), "{code}");
+        assert!(message(lang, &opened_with_notes(1, &one)).ends_with(&message(lang, &one)), "{code}");
+    }
+    assert_eq!(message(de(), &many), "3 Einstellungsebenen wurden nicht angewendet");
+    assert_eq!(message(de(), &opened_with_notes(1, &one)), "Mit 1 Hinweis geöffnet: 1 Einstellungsebene wurde nicht angewendet");
+    assert_eq!(
+        message(de(), unread_slices),
+        "die Slices können nicht gelesen werden (der Deskriptor der Slices ist zu tief verschachtelt) und wurden weggelassen"
+    );
+}
+
 /// The Window › Brush Libraries menu, built from the built-in library table, names each library.
 #[test]
 fn built_in_brush_library_names_are_in_complete_catalogs() {

@@ -2285,6 +2285,12 @@ digits	Malayalam	Malayalam
 	Units:	Satuan:
 	Use Typographer's Quotes	Gunakan tanda kutip tipografis
 	Center Artwork	Pusatkan karya seni
+	PSD Import Options	Opsi impor PSD
+	Place PSD	Tempatkan PSD
+	Convert Layers to Objects	Ubah lapisan menjadi objek
+	Import Hidden Layers	Impor lapisan tersembunyi
+	Flatten Layers to a Single Image	Ratakan lapisan menjadi satu gambar
+	Import Slices	Impor slice
 	DXF Import Options	Opsi impor DXF
 	Layout:	Tata letak:
 	Merge Layers	Gabungkan lapisan

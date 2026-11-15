@@ -961,6 +961,12 @@ font-technology	Variable	Вариативные
 	Duplicate Symbol	Дублировать символ
 	Duplicate {kind} Style	Дублировать стиль {kind}
 	Dutch	Нидерландский
+	PSD Import Options	Параметры импорта PSD
+	Place PSD	Поместить PSD
+	Convert Layers to Objects	Преобразовать слои в объекты
+	Import Hidden Layers	Импортировать скрытые слои
+	Flatten Layers to a Single Image	Свести слои в одно изображение
+	Import Slices	Импортировать фрагменты
 	DXF Import Options	Параметры импорта DXF
 	DXF Info	Сведения о DXF
 	DXF Options	Параметры DXF
@@ -5444,6 +5450,49 @@ axis	Both	Оба
 @msg	the PSD file's layer groups are nested too deeply	группы слоёв файла PSD вложены слишком глубоко
 @msg	a layer of the PSD file is too large to read	слой файла PSD слишком велик для чтения
 @msg	the PSD file's layers take more memory to read than allowed	для чтения слоёв файла PSD нужно больше памяти, чем разрешено
+@msg	the file is no longer loaded	файл больше не загружен
+@msg	the layers can't be read ({e}): the file was placed as its merged image	не удаётся прочитать слои ({e}): файл помещён как сведённое изображение
+@msg	1 type layer came in as pixels: the text isn't editable	1 текстовый слой импортирован как пиксели: текст нельзя редактировать
+@msg	{n} type layers came in as pixels: the text isn't editable	текстовых слоёв, импортированных как пиксели: {n}; текст нельзя редактировать
+@msg	1 adjustment layer was not applied	1 корректирующий слой не применён
+@msg	{n} adjustment layers were not applied	не применено корректирующих слоёв: {n}
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 слой-заливка не отрисован (градиентная или узорная заливка, цвет, который не удаётся прочитать, или фигура без сохранённых пикселей)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	не отрисовано слоёв-заливок: {n} (градиентная или узорная заливка, цвет, который не удаётся прочитать, или фигура без сохранённых пикселей)
+@msg	the layer effects of 1 layer weren't drawn	эффекты слоя для 1 слоя не отрисованы
+@msg	the layer effects of {n} layers weren't drawn	эффекты слоёв не отрисованы; число слоёв: {n}
+@msg	the vector masks of 1 layer weren't applied	векторные маски 1 слоя не применены
+@msg	the vector masks of {n} layers weren't applied	векторные маски слоёв не применены; число слоёв: {n}
+@msg	the knockout of 1 layer wasn't applied	выбивка 1 слоя не применена
+@msg	the knockout of {n} layers wasn't applied	выбивка слоёв не применена; число слоёв: {n}
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 слой пропущен (скрытые слои и обрезанные по ним слои)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	пропущено слоёв: {n} (скрытые слои и обрезанные по ним слои)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 слой, обрезанный по неотрисованному слою-заливке, пропущен
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	пропущено слоёв, обрезанных по неотрисованным слоям-заливкам: {n}
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	слои в режимах наложения, которых нет в VectorCraft ({modes}), сведены со слоями под ними
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 слой в режиме наложения, которого нет в VectorCraft, импортирован как Обычный: для сведения нужно больше памяти, чем разрешено
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	слоёв в режимах наложения, которых нет в VectorCraft, импортировано как Обычный: {n}; для сведения нужно больше памяти, чем разрешено
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 слой, обрезанный по нижнему слою, импортирован без обрезки: для сведения нужно больше памяти, чем разрешено
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	слоёв, обрезанных по нижнему слою и импортированных без обрезки: {n}; для сведения нужно больше памяти, чем разрешено
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers относится к PSD-файлу, помещаемому с layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: связанный PSD-файл помещается как плоское изображение; укажите link: false, чтобы внедрить его с фрагментами
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: связанный PSD-файл помещается как плоское изображение; не указывайте link или укажите link: false
+@msg	the slices can't be read ({e}) and were left out	не удаётся прочитать фрагменты ({e}), они пропущены
+@msg	1 slice lies outside the canvas or has no size and was left out	1 фрагмент лежит вне холста или не имеет размера и пропущен
+@msg	{n} slices lie outside the canvas or have no size and were left out	пропущено фрагментов вне холста или без размера: {n}
+@msg	1 slice would lie outside the canvas and was left out	1 фрагмент оказался бы вне холста и пропущен
+@msg	{n} slices would lie outside the canvas and were left out	пропущено фрагментов, которые оказались бы вне холста: {n}
+@msg	the slices' descriptor holds too many values	дескриптор фрагментов содержит слишком много значений
+@msg	the slices' descriptor has a version other than 16	версия дескриптора фрагментов отличается от 16
+@msg	the slices are stored in version {v}, which isn't read	фрагменты сохранены в версии {v}, которая не читается
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	фрагментов в файле: {count}, больше читаемых {MAX_SLICES}
+@msg	the slices' descriptor has no list of slices	в дескрипторе фрагментов нет списка фрагментов
+@msg	the slices' descriptor lists something other than a slice	дескриптор фрагментов перечисляет что-то, кроме фрагмента
+@msg	a slice in the slices' descriptor has no bounds	у фрагмента в дескрипторе фрагментов нет границ
+@msg	a slice's bounds in the slices' descriptor aren't numbers	границы фрагмента в дескрипторе фрагментов не являются числами
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	текст во фрагментах длиннее читаемых {MAX_TEXT} символов
+@msg	the slices' descriptor nests too deep	дескриптор фрагментов вложен слишком глубоко
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	в дескрипторе фрагментов есть ссылка неизвестного вида ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	в дескрипторе фрагментов есть значение неизвестного типа ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	не удаётся прочитать слои ({e}): файл открыт как сведённое изображение
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-битные файлы PSD в этом цветовом режиме не читаются
 @msg	the PSD file is cut short	файл PSD обрезан

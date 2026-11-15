@@ -2538,6 +2538,12 @@ digits	Malayalam	Malajálamské
 	Units:	Jednotky:
 	Use Typographer's Quotes	Používat typografické uvozovky
 	Center Artwork	Vystředit kresbu
+	PSD Import Options	Možnosti importu PSD
+	Place PSD	Umístit PSD
+	Convert Layers to Objects	Převést vrstvy na objekty
+	Import Hidden Layers	Importovat skryté vrstvy
+	Flatten Layers to a Single Image	Sloučit vrstvy do jednoho obrazu
+	Import Slices	Importovat řezy
 	DXF Import Options	Možnosti importu DXF
 	Layout:	Rozvržení:
 	Merge Layers	Sloučit vrstvy
@@ -5684,6 +5690,49 @@ imageTrace	Outline	Obrys
 @msg	the PSD file's layer groups are nested too deeply	skupiny vrstev souboru PSD jsou vnořené příliš hluboko
 @msg	a layer of the PSD file is too large to read	vrstva souboru PSD je příliš velká na přečtení
 @msg	the PSD file's layers take more memory to read than allowed	vrstvy souboru PSD potřebují ke čtení víc paměti, než je povoleno
+@msg	the file is no longer loaded	soubor už není načtený
+@msg	the layers can't be read ({e}): the file was placed as its merged image	vrstvy nelze přečíst ({e}): soubor byl umístěn jako sloučený obraz
+@msg	1 type layer came in as pixels: the text isn't editable	1 textová vrstva byla načtena jako pixely: text nelze upravovat
+@msg	{n} type layers came in as pixels: the text isn't editable	textové vrstvy načtené jako pixely: {n}; text nelze upravovat
+@msg	1 adjustment layer was not applied	1 vrstva úprav nebyla použita
+@msg	{n} adjustment layers were not applied	nepoužité vrstvy úprav: {n}
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 vrstva výplně nebyla vykreslena (přechodová nebo vzorková výplň, barva, kterou nelze přečíst, nebo tvar bez uložených pixelů)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	nevykreslené vrstvy výplně: {n} (přechodová nebo vzorková výplň, barva, kterou nelze přečíst, nebo tvar bez uložených pixelů)
+@msg	the layer effects of 1 layer weren't drawn	efekty vrstvy u 1 vrstvy nebyly vykresleny
+@msg	the layer effects of {n} layers weren't drawn	efekty vrstev nebyly vykresleny; počet vrstev: {n}
+@msg	the vector masks of 1 layer weren't applied	vektorové masky 1 vrstvy nebyly použity
+@msg	the vector masks of {n} layers weren't applied	vektorové masky vrstev nebyly použity; počet vrstev: {n}
+@msg	the knockout of 1 layer wasn't applied	vykrojení 1 vrstvy nebylo použito
+@msg	the knockout of {n} layers wasn't applied	vykrojení vrstev nebylo použito; počet vrstev: {n}
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 vrstva byla vynechána (skryté vrstvy a vrstvy k nim oříznuté)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	vynechané vrstvy: {n} (skryté vrstvy a vrstvy k nim oříznuté)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 vrstva oříznutá k nevykreslené vrstvě výplně byla vynechána
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	vynechané vrstvy oříznuté k nevykresleným vrstvám výplně: {n}
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	vrstvy v režimech prolnutí, které VectorCraft nemá ({modes}), byly sloučeny s vrstvami pod nimi
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 vrstva v režimu prolnutí, který VectorCraft nemá, byla načtena jako Normální: sloučení potřebuje víc paměti, než je povoleno
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	vrstvy v režimech prolnutí, které VectorCraft nemá, načtené jako Normální: {n}; sloučení potřebuje víc paměti, než je povoleno
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 vrstva oříznutá k vrstvě pod ní byla načtena bez oříznutí: sloučení potřebuje víc paměti, než je povoleno
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	vrstvy oříznuté k vrstvě pod nimi načtené bez oříznutí: {n}; sloučení potřebuje víc paměti, než je povoleno
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers platí pro soubor PSD umístěný s layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: propojený soubor PSD se umístí jako plochý obraz; zadejte link: false, aby se vložil i s řezy
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: propojený soubor PSD se umístí jako plochý obraz; vynechte link nebo zadejte link: false
+@msg	the slices can't be read ({e}) and were left out	řezy nelze přečíst ({e}) a byly vynechány
+@msg	1 slice lies outside the canvas or has no size and was left out	1 řez leží mimo plátno nebo nemá velikost a byl vynechán
+@msg	{n} slices lie outside the canvas or have no size and were left out	vynechané řezy, které leží mimo plátno nebo nemají velikost: {n}
+@msg	1 slice would lie outside the canvas and was left out	1 řez by ležel mimo plátno a byl vynechán
+@msg	{n} slices would lie outside the canvas and were left out	vynechané řezy, které by ležely mimo plátno: {n}
+@msg	the slices' descriptor holds too many values	deskriptor řezů obsahuje příliš mnoho hodnot
+@msg	the slices' descriptor has a version other than 16	deskriptor řezů má jinou verzi než 16
+@msg	the slices are stored in version {v}, which isn't read	řezy jsou uložené ve verzi {v}, která se nečte
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	počet řezů v souboru je {count}, víc než čtených {MAX_SLICES}
+@msg	the slices' descriptor has no list of slices	deskriptor řezů nemá seznam řezů
+@msg	the slices' descriptor lists something other than a slice	deskriptor řezů uvádí něco jiného než řez
+@msg	a slice in the slices' descriptor has no bounds	řez v deskriptoru řezů nemá hranice
+@msg	a slice's bounds in the slices' descriptor aren't numbers	hranice řezu v deskriptoru řezů nejsou čísla
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	text v řezech má víc než čtených {MAX_TEXT} znaků
+@msg	the slices' descriptor nests too deep	deskriptor řezů je vnořený příliš hluboko
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	deskriptor řezů má odkaz neznámého druhu ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	deskriptor řezů má hodnotu neznámého typu ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	vrstvy nelze přečíst ({e}): soubor se otevřel jako sloučený obraz
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}bitové soubory PSD v tomto barevném režimu nelze přečíst
 @msg	the PSD file is cut short	soubor PSD je useknutý

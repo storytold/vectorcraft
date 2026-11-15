@@ -1250,6 +1250,12 @@ font-technology	Variable	Változó
 	Duplication	Kettőzés
 	Dutch	Holland
 	DWG (use DXF)	DWG (használd a DXF-et)
+	PSD Import Options	PSD-importálás beállításai
+	Place PSD	PSD elhelyezése
+	Convert Layers to Objects	Rétegek átalakítása objektumokká
+	Import Hidden Layers	Rejtett rétegek importálása
+	Flatten Layers to a Single Image	Rétegek egyetlen képpé simítása
+	Import Slices	Szeletek importálása
 	DXF Import Options	DXF-importálás beállításai
 	DXF Info	DXF-adatok
 	DXF Options	DXF-beállítások
@@ -6012,6 +6018,49 @@ imageTrace	Outline	Körvonal
 @msg	the PSD file's layer groups are nested too deeply	a PSD-fájl rétegcsoportjai túl mélyen vannak egymásba ágyazva
 @msg	a layer of the PSD file is too large to read	a PSD-fájl egyik rétege túl nagy a beolvasáshoz
 @msg	the PSD file's layers take more memory to read than allowed	a PSD-fájl rétegeinek beolvasása több memóriát igényel a megengedettnél
+@msg	the file is no longer loaded	a fájl már nincs betöltve
+@msg	the layers can't be read ({e}): the file was placed as its merged image	a rétegek nem olvashatók ({e}): a fájl az egyesített képeként lett elhelyezve
+@msg	1 type layer came in as pixels: the text isn't editable	1 szövegréteg képpontokként érkezett: a szöveg nem szerkeszthető
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} szövegréteg képpontokként érkezett: a szöveg nem szerkeszthető
+@msg	1 adjustment layer was not applied	1 korrekciós réteg nem lett alkalmazva
+@msg	{n} adjustment layers were not applied	{n} korrekciós réteg nem lett alkalmazva
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 kitöltőréteg nem lett megrajzolva (színátmenetes vagy mintás kitöltés, nem olvasható szín, vagy képpontokat nem tároló alakzat)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} kitöltőréteg nem lett megrajzolva (színátmenetes vagy mintás kitöltés, nem olvasható szín, vagy képpontokat nem tároló alakzat)
+@msg	the layer effects of 1 layer weren't drawn	1 réteg rétegeffektusai nem lettek megrajzolva
+@msg	the layer effects of {n} layers weren't drawn	{n} réteg rétegeffektusai nem lettek megrajzolva
+@msg	the vector masks of 1 layer weren't applied	1 réteg vektoros maszkjai nem lettek alkalmazva
+@msg	the vector masks of {n} layers weren't applied	{n} réteg vektoros maszkjai nem lettek alkalmazva
+@msg	the knockout of 1 layer wasn't applied	1 réteg kiütése nem lett alkalmazva
+@msg	the knockout of {n} layers wasn't applied	{n} réteg kiütése nem lett alkalmazva
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 réteg kimaradt (rejtett rétegek és a hozzájuk vágott rétegek)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} réteg kimaradt (rejtett rétegek és a hozzájuk vágott rétegek)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	kimaradt 1 réteg, amely egy meg nem rajzolt kitöltőréteghez van vágva
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	kimaradt {n} réteg, amely meg nem rajzolt kitöltőrétegekhez van vágva
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	a VectorCraftban nem létező keverési módú rétegek ({modes}) egyesítve lettek az alattuk lévő rétegekkel
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 réteg a VectorCraftban nem létező keverési módban Normál módban érkezett: az egyesítéshez több memória kell a megengedettnél
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} réteg a VectorCraftban nem létező keverési módokban Normál módban érkezett: az egyesítéshez több memória kell a megengedettnél
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 alatta lévő réteghez vágott réteg vágás nélkül érkezett: az egyesítéshez több memória kell a megengedettnél
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} alatta lévő réteghez vágott réteg vágás nélkül érkezett: az egyesítéshez több memória kell a megengedettnél
+@msg	hiddenLayers applies to a PSD file placed with layers: true	a hiddenLayers a layers: true beállítással elhelyezett PSD-fájlra vonatkozik
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: a csatolt PSD-fájl a lapos képeként kerül elhelyezésre; adja meg a link: false beállítást, hogy a szeleteivel együtt legyen beágyazva
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: a csatolt PSD-fájl a lapos képeként kerül elhelyezésre; hagyja el a link beállítást, vagy adja meg: link: false
+@msg	the slices can't be read ({e}) and were left out	a szeletek nem olvashatók ({e}), ezért kimaradtak
+@msg	1 slice lies outside the canvas or has no size and was left out	1 szelet a vásznon kívül esik vagy nincs mérete, ezért kimaradt
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} szelet a vásznon kívül esik vagy nincs mérete, ezért kimaradt
+@msg	1 slice would lie outside the canvas and was left out	1 szelet a vásznon kívül esne, ezért kimaradt
+@msg	{n} slices would lie outside the canvas and were left out	{n} szelet a vásznon kívül esne, ezért kimaradt
+@msg	the slices' descriptor holds too many values	a szeletek leírója túl sok értéket tartalmaz
+@msg	the slices' descriptor has a version other than 16	a szeletek leírójának verziója nem 16
+@msg	the slices are stored in version {v}, which isn't read	a szeletek {v} verzióban vannak tárolva, amely nem olvasható
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	a fájlban {count} szelet van, több a beolvasott {MAX_SLICES} darabnál
+@msg	the slices' descriptor has no list of slices	a szeletek leírójában nincs szeletlista
+@msg	the slices' descriptor lists something other than a slice	a szeletek leírója szeleten kívül mást is felsorol
+@msg	a slice in the slices' descriptor has no bounds	a szeletek leírójában egy szeletnek nincsenek határai
+@msg	a slice's bounds in the slices' descriptor aren't numbers	a szeletek leírójában egy szelet határai nem számok
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	a szeletek egyik szövege hosszabb a beolvasott {MAX_TEXT} karakternél
+@msg	the slices' descriptor nests too deep	a szeletek leírója túl mélyen van egymásba ágyazva
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	a szeletek leírójában ismeretlen fajtájú hivatkozás van ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	a szeletek leírójában ismeretlen típusú érték van ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	a rétegek nem olvashatók ({e}): a fájl az egyesített képeként nyílt meg
 @msg	zone must be a string	a zone értéke szöveg lehet
 @msg	zone must be tab, center, left, right, top or bottom	a zone értéke tab, center, left, right, top vagy bottom lehet

@@ -1140,6 +1140,12 @@ font-technology	Variable	Biến thiên
 	Duplicate {kind} Style	Nhân bản kiểu {kind}
 	Duplication	Nhân bản
 	Dutch	Tiếng Hà Lan
+	PSD Import Options	Tùy chọn nhập PSD
+	Place PSD	Đặt PSD
+	Convert Layers to Objects	Chuyển các lớp thành đối tượng
+	Import Hidden Layers	Nhập các lớp ẩn
+	Flatten Layers to a Single Image	Làm phẳng các lớp thành một ảnh
+	Import Slices	Nhập lát cắt
 	DXF Import Options	Tùy chọn nhập DXF
 	DXF Info	Thông tin DXF
 	DXF Options	Tùy chọn DXF
@@ -5763,6 +5769,49 @@ theme	Appearance	Giao diện
 @msg	the PSD file's layer groups are nested too deeply	các nhóm lớp của tệp PSD lồng nhau quá sâu
 @msg	a layer of the PSD file is too large to read	một lớp của tệp PSD quá lớn để đọc
 @msg	the PSD file's layers take more memory to read than allowed	các lớp của tệp PSD cần nhiều bộ nhớ để đọc hơn mức cho phép
+@msg	the file is no longer loaded	tệp không còn được tải
+@msg	the layers can't be read ({e}): the file was placed as its merged image	không thể đọc các lớp ({e}): tệp được đặt dưới dạng ảnh đã gộp
+@msg	1 type layer came in as pixels: the text isn't editable	1 lớp văn bản được nhập dưới dạng điểm ảnh: không thể sửa văn bản
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} lớp văn bản được nhập dưới dạng điểm ảnh: không thể sửa văn bản
+@msg	1 adjustment layer was not applied	1 lớp điều chỉnh không được áp dụng
+@msg	{n} adjustment layers were not applied	{n} lớp điều chỉnh không được áp dụng
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 lớp tô không được vẽ (tô chuyển sắc hoặc mẫu, màu không đọc được, hoặc hình không lưu điểm ảnh nào)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} lớp tô không được vẽ (tô chuyển sắc hoặc mẫu, màu không đọc được, hoặc hình không lưu điểm ảnh nào)
+@msg	the layer effects of 1 layer weren't drawn	hiệu ứng lớp của 1 lớp không được vẽ
+@msg	the layer effects of {n} layers weren't drawn	hiệu ứng lớp của {n} lớp không được vẽ
+@msg	the vector masks of 1 layer weren't applied	mặt nạ vectơ của 1 lớp không được áp dụng
+@msg	the vector masks of {n} layers weren't applied	mặt nạ vectơ của {n} lớp không được áp dụng
+@msg	the knockout of 1 layer wasn't applied	phần đục lỗ của 1 lớp không được áp dụng
+@msg	the knockout of {n} layers wasn't applied	phần đục lỗ của {n} lớp không được áp dụng
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 lớp bị bỏ qua (các lớp ẩn và các lớp được cắt theo chúng)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} lớp bị bỏ qua (các lớp ẩn và các lớp được cắt theo chúng)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 lớp được cắt theo một lớp tô không được vẽ đã bị bỏ qua
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} lớp được cắt theo các lớp tô không được vẽ đã bị bỏ qua
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	các lớp ở chế độ hòa trộn mà VectorCraft không có ({modes}) đã được gộp với các lớp bên dưới
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 lớp ở chế độ hòa trộn mà VectorCraft không có được nhập dưới dạng Thường: việc gộp cần nhiều bộ nhớ hơn mức cho phép
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} lớp ở các chế độ hòa trộn mà VectorCraft không có được nhập dưới dạng Thường: việc gộp cần nhiều bộ nhớ hơn mức cho phép
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 lớp được cắt theo lớp bên dưới được nhập mà không cắt: việc gộp cần nhiều bộ nhớ hơn mức cho phép
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} lớp được cắt theo lớp bên dưới được nhập mà không cắt: việc gộp cần nhiều bộ nhớ hơn mức cho phép
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers áp dụng cho tệp PSD được đặt với layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: tệp PSD được liên kết được đặt dưới dạng ảnh phẳng; hãy đặt link: false để nhúng tệp cùng các lát cắt
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: tệp PSD được liên kết được đặt dưới dạng ảnh phẳng; hãy bỏ link hoặc đặt link: false
+@msg	the slices can't be read ({e}) and were left out	không thể đọc các lát cắt ({e}) và chúng đã bị bỏ qua
+@msg	1 slice lies outside the canvas or has no size and was left out	1 lát cắt nằm ngoài khung vẽ hoặc không có kích thước và đã bị bỏ qua
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} lát cắt nằm ngoài khung vẽ hoặc không có kích thước và đã bị bỏ qua
+@msg	1 slice would lie outside the canvas and was left out	1 lát cắt sẽ nằm ngoài khung vẽ và đã bị bỏ qua
+@msg	{n} slices would lie outside the canvas and were left out	{n} lát cắt sẽ nằm ngoài khung vẽ và đã bị bỏ qua
+@msg	the slices' descriptor holds too many values	bộ mô tả của các lát cắt chứa quá nhiều giá trị
+@msg	the slices' descriptor has a version other than 16	bộ mô tả của các lát cắt có phiên bản khác 16
+@msg	the slices are stored in version {v}, which isn't read	các lát cắt được lưu ở phiên bản {v}, phiên bản này không được đọc
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	tệp có {count} lát cắt, nhiều hơn {MAX_SLICES} lát cắt được đọc
+@msg	the slices' descriptor has no list of slices	bộ mô tả của các lát cắt không có danh sách lát cắt
+@msg	the slices' descriptor lists something other than a slice	bộ mô tả của các lát cắt liệt kê thứ khác ngoài lát cắt
+@msg	a slice in the slices' descriptor has no bounds	một lát cắt trong bộ mô tả của các lát cắt không có giới hạn
+@msg	a slice's bounds in the slices' descriptor aren't numbers	giới hạn của một lát cắt trong bộ mô tả của các lát cắt không phải là số
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	một văn bản trong các lát cắt dài hơn {MAX_TEXT} ký tự được đọc
+@msg	the slices' descriptor nests too deep	bộ mô tả của các lát cắt lồng nhau quá sâu
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	bộ mô tả của các lát cắt có tham chiếu thuộc loại không xác định ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	bộ mô tả của các lát cắt có giá trị thuộc kiểu không xác định ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	không thể đọc các lớp ({e}): tệp được mở dưới dạng ảnh đã gộp
 @msg	zone must be a string	zone phải là chuỗi
 @msg	zone must be tab, center, left, right, top or bottom	zone phải là tab, center, left, right, top hoặc bottom

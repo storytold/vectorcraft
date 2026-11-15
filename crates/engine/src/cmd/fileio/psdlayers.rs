@@ -684,57 +684,64 @@ struct Counts {
     clipped_out: usize,
 }
 
-/// `n` things: "1 layer was", "2 layers were".
-fn count(n: usize, one: &str, many: &str) -> String {
-    if n == 1 { format!("1 {one} was") } else { format!("{n} {many} were") }
+/// Adds the warning for `n` things to `out`: `one` when `n` is 1, `many` with the count in place
+/// of `{n}` when it is more, none when it is 0. Each form is a whole sentence, the key of its own
+/// catalog row.
+fn note(out: &mut Vec<String>, n: usize, (one, many): (&str, &str)) {
+    match n {
+        0 => {}
+        1 => out.push(one.to_string()),
+        n => out.push(many.replace("{n}", &n.to_string())),
+    }
 }
+
+/// The layer warnings in English, the form for one layer and the form for more, in the order a
+/// file's warnings list them.
+pub const LAYER_WARNINGS: [(&str, &str); 10] = [
+    ("1 type layer came in as pixels: the text isn't editable", "{n} type layers came in as pixels: the text isn't editable"),
+    ("1 adjustment layer was not applied", "{n} adjustment layers were not applied"),
+    (
+        "1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)",
+        "{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)",
+    ),
+    ("the layer effects of 1 layer weren't drawn", "the layer effects of {n} layers weren't drawn"),
+    ("the vector masks of 1 layer weren't applied", "the vector masks of {n} layers weren't applied"),
+    ("the knockout of 1 layer wasn't applied", "the knockout of {n} layers wasn't applied"),
+    (
+        "1 layer was left out (hidden layers and the layers clipped to them)",
+        "{n} layers were left out (hidden layers and the layers clipped to them)",
+    ),
+    ("1 layer clipped to a fill layer that wasn't drawn was left out", "{n} layers clipped to fill layers that weren't drawn were left out"),
+    (
+        "1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed",
+        "{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed",
+    ),
+    (
+        "1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed",
+        "{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed",
+    ),
+];
+
+/// The warning for layers merged with the layers below them, `{modes}` the blend modes' names.
+pub const MERGED_WARNING: &str = "layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them";
 
 impl Notes {
     fn warnings(self) -> Vec<String> {
+        let [types, adjustments, fills, effects, masks, knockouts, hidden, clipped_out, unmerged, unclipped] = LAYER_WARNINGS;
         let mut out = vec![];
-        if self.types > 0 {
-            let n = if self.types == 1 { "1 type layer".to_string() } else { format!("{} type layers", self.types) };
-            out.push(format!("{n} came in as pixels: the text isn't editable"));
-        }
-        if self.adjustments > 0 {
-            out.push(format!("{} not applied", count(self.adjustments, "adjustment layer", "adjustment layers")));
-        }
-        if self.fills > 0 {
-            out.push(format!(
-                "{} not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)",
-                count(self.fills, "fill layer", "fill layers")
-            ));
-        }
-        let layers = |n: usize| if n == 1 { "1 layer".to_string() } else { format!("{n} layers") };
-        if self.effects > 0 {
-            out.push(format!("the layer effects of {} weren't drawn", layers(self.effects)));
-        }
-        if self.vector_masks > 0 {
-            out.push(format!("the vector masks of {} weren't applied", layers(self.vector_masks)));
-        }
-        if self.knockouts > 0 {
-            out.push(format!("the knockout of {} wasn't applied", layers(self.knockouts)));
-        }
-        if self.hidden > 0 {
-            out.push(format!("{} left out (hidden layers and the layers clipped to them)", count(self.hidden, "layer", "layers")));
-        }
-        if self.clipped_out == 1 {
-            out.push("1 layer clipped to a fill layer that wasn't drawn was left out".into());
-        } else if self.clipped_out > 1 {
-            out.push(format!("{} layers clipped to fill layers that weren't drawn were left out", self.clipped_out));
-        }
+        note(&mut out, self.types, types);
+        note(&mut out, self.adjustments, adjustments);
+        note(&mut out, self.fills, fills);
+        note(&mut out, self.effects, effects);
+        note(&mut out, self.vector_masks, masks);
+        note(&mut out, self.knockouts, knockouts);
+        note(&mut out, self.hidden, hidden);
+        note(&mut out, self.clipped_out, clipped_out);
         if !self.merged.is_empty() {
-            out.push(format!("layers in blend modes VectorCraft doesn't have ({}) were merged with the layers below them", self.merged.join(", ")));
+            out.push(MERGED_WARNING.replace("{modes}", &self.merged.join(", ")));
         }
-        if self.unmerged > 0 {
-            out.push(format!(
-                "{} in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed",
-                layers(self.unmerged)
-            ));
-        }
-        if self.unclipped > 0 {
-            out.push(format!("{} clipped to the layer below came in unclipped: the merge needs more memory than allowed", layers(self.unclipped)));
-        }
+        note(&mut out, self.unmerged, unmerged);
+        note(&mut out, self.unclipped, unclipped);
         out
     }
 

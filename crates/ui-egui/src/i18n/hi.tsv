@@ -1565,6 +1565,12 @@ antiAlias	Sharp	शार्प
 	Duplication	डुप्लीकेशन
 	Dutch	डच
 	DWG (use DXF)	DWG (DXF का उपयोग करें)
+	PSD Import Options	PSD आयात ऑप्शन्स
+	Place PSD	PSD प्लेस करें
+	Convert Layers to Objects	लेयर्स को ऑब्जेक्ट में बदलें
+	Import Hidden Layers	छिपी लेयर्स आयात करें
+	Flatten Layers to a Single Image	लेयर्स को एक इमेज में फ़्लैट करें
+	Import Slices	स्लाइस आयात करें
 	DXF Import Options	DXF आयात ऑप्शन्स
 	DXF Info	DXF जानकारी
 	DXF Options	DXF ऑप्शन्स
@@ -8738,6 +8744,49 @@ antiAlias	Sharp	शार्प
 @msg	the PSD file's layer groups are nested too deeply	PSD फ़ाइल के लेयर समूह बहुत गहराई तक नेस्ट किए गए हैं
 @msg	a layer of the PSD file is too large to read	PSD फ़ाइल की एक लेयर पढ़ने के लिए बहुत बड़ी है
 @msg	the PSD file's layers take more memory to read than allowed	PSD फ़ाइल की लेयर पढ़ने के लिए अनुमति से अधिक मेमोरी चाहिए
+@msg	the file is no longer loaded	फ़ाइल अब लोड नहीं है
+@msg	the layers can't be read ({e}): the file was placed as its merged image	लेयर पढ़ी नहीं जा सकतीं ({e}): फ़ाइल अपनी मर्ज की गई इमेज के रूप में प्लेस की गई
+@msg	1 type layer came in as pixels: the text isn't editable	1 टाइप लेयर पिक्सेल के रूप में आई: टेक्स्ट एडिट नहीं किया जा सकता
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} टाइप लेयर पिक्सेल के रूप में आईं: टेक्स्ट एडिट नहीं किया जा सकता
+@msg	1 adjustment layer was not applied	1 एडजस्टमेंट लेयर लागू नहीं हुई
+@msg	{n} adjustment layers were not applied	{n} एडजस्टमेंट लेयर लागू नहीं हुईं
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 फ़िल लेयर ड्रॉ नहीं हुई (ग्रेडिएंट या पैटर्न फ़िल, ऐसा रंग जो पढ़ा नहीं जा सकता, या ऐसी आकृति जो कोई पिक्सेल नहीं रखती)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} फ़िल लेयर ड्रॉ नहीं हुईं (ग्रेडिएंट या पैटर्न फ़िल, ऐसा रंग जो पढ़ा नहीं जा सकता, या ऐसी आकृति जो कोई पिक्सेल नहीं रखती)
+@msg	the layer effects of 1 layer weren't drawn	1 लेयर के लेयर इफ़ेक्ट ड्रॉ नहीं हुए
+@msg	the layer effects of {n} layers weren't drawn	{n} लेयर के लेयर इफ़ेक्ट ड्रॉ नहीं हुए
+@msg	the vector masks of 1 layer weren't applied	1 लेयर के वेक्टर मास्क लागू नहीं हुए
+@msg	the vector masks of {n} layers weren't applied	{n} लेयर के वेक्टर मास्क लागू नहीं हुए
+@msg	the knockout of 1 layer wasn't applied	1 लेयर का नॉकआउट लागू नहीं हुआ
+@msg	the knockout of {n} layers wasn't applied	{n} लेयर का नॉकआउट लागू नहीं हुआ
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 लेयर छोड़ दी गई (छिपी लेयर और उन पर क्लिप की गई लेयर)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} लेयर छोड़ दी गईं (छिपी लेयर और उन पर क्लिप की गई लेयर)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	ड्रॉ न हुई फ़िल लेयर पर क्लिप की गई 1 लेयर छोड़ दी गई
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	ड्रॉ न हुई फ़िल लेयर पर क्लिप की गई {n} लेयर छोड़ दी गईं
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	उन ब्लेंड मोड की लेयर जो VectorCraft में नहीं हैं ({modes}), अपने नीचे की लेयर के साथ मर्ज कर दी गईं
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	ऐसे ब्लेंड मोड की 1 लेयर जो VectorCraft में नहीं है, सामान्य के रूप में आई: मर्ज करने के लिए अनुमति से अधिक मेमोरी चाहिए
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	ऐसे ब्लेंड मोड की {n} लेयर जो VectorCraft में नहीं हैं, सामान्य के रूप में आईं: मर्ज करने के लिए अनुमति से अधिक मेमोरी चाहिए
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	नीचे की लेयर पर क्लिप की गई 1 लेयर बिना क्लिप के आई: मर्ज करने के लिए अनुमति से अधिक मेमोरी चाहिए
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	नीचे की लेयर पर क्लिप की गई {n} लेयर बिना क्लिप के आईं: मर्ज करने के लिए अनुमति से अधिक मेमोरी चाहिए
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers उस PSD फ़ाइल पर लागू होता है जो layers: true के साथ प्लेस की जाती है
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: लिंक की गई PSD फ़ाइल अपनी फ़्लैट इमेज के रूप में प्लेस होती है; उसे उसकी स्लाइस के साथ एम्बेड करने के लिए link: false दें
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: लिंक की गई PSD फ़ाइल अपनी फ़्लैट इमेज के रूप में प्लेस होती है; link छोड़ दें या link: false दें
+@msg	the slices can't be read ({e}) and were left out	स्लाइस पढ़ी नहीं जा सकतीं ({e}) और छोड़ दी गईं
+@msg	1 slice lies outside the canvas or has no size and was left out	1 स्लाइस कैनवस के बाहर है या उसका कोई आकार नहीं है और छोड़ दी गई
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} स्लाइस कैनवस के बाहर हैं या उनका कोई आकार नहीं है और छोड़ दी गईं
+@msg	1 slice would lie outside the canvas and was left out	1 स्लाइस कैनवस के बाहर पड़ती और छोड़ दी गई
+@msg	{n} slices would lie outside the canvas and were left out	{n} स्लाइस कैनवस के बाहर पड़तीं और छोड़ दी गईं
+@msg	the slices' descriptor holds too many values	स्लाइस के डिस्क्रिप्टर में बहुत अधिक मान हैं
+@msg	the slices' descriptor has a version other than 16	स्लाइस के डिस्क्रिप्टर का संस्करण 16 नहीं है
+@msg	the slices are stored in version {v}, which isn't read	स्लाइस संस्करण {v} में सहेजी गई हैं, जो पढ़ा नहीं जाता
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	फ़ाइल में {count} स्लाइस हैं, पढ़ी जाने वाली {MAX_SLICES} से अधिक
+@msg	the slices' descriptor has no list of slices	स्लाइस के डिस्क्रिप्टर में स्लाइस की कोई सूची नहीं है
+@msg	the slices' descriptor lists something other than a slice	स्लाइस का डिस्क्रिप्टर स्लाइस के अलावा कुछ और सूचीबद्ध करता है
+@msg	a slice in the slices' descriptor has no bounds	स्लाइस के डिस्क्रिप्टर में एक स्लाइस की कोई सीमा नहीं है
+@msg	a slice's bounds in the slices' descriptor aren't numbers	स्लाइस के डिस्क्रिप्टर में एक स्लाइस की सीमाएँ संख्याएँ नहीं हैं
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	स्लाइस के एक टेक्स्ट में पढ़े जाने वाले {MAX_TEXT} अक्षरों से अधिक हैं
+@msg	the slices' descriptor nests too deep	स्लाइस का डिस्क्रिप्टर बहुत गहराई तक नेस्ट है
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	स्लाइस के डिस्क्रिप्टर में अज्ञात प्रकार का संदर्भ है ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	स्लाइस के डिस्क्रिप्टर में अज्ञात टाइप का मान है ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	लेयर पढ़ी नहीं जा सकतीं ({e}): फ़ाइल अपनी मर्ज की गई इमेज के रूप में खुली
 @msg	zone must be a string	zone एक स्ट्रिंग होनी चाहिए
 @msg	zone must be tab, center, left, right, top or bottom	zone को tab, center, left, right, top या bottom होना चाहिए

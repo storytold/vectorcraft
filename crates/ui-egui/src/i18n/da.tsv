@@ -2951,6 +2951,12 @@ digits	Malayalam	Malayalam
 	Units:	Enheder:
 	Use Typographer's Quotes	Brug typografiske anførselstegn
 	Center Artwork	Centrér grafik
+	PSD Import Options	PSD-importindstillinger
+	Place PSD	Placér PSD
+	Convert Layers to Objects	Konvertér lag til objekter
+	Import Hidden Layers	Importér skjulte lag
+	Flatten Layers to a Single Image	Fladgør lag til ét billede
+	Import Slices	Importér udsnit
 	DXF Import Options	DXF-importindstillinger
 	Layout:	Layout:
 	Merge Layers	Flet lag
@@ -5765,6 +5771,49 @@ imageTrace	Outline	Kontur
 @msg	the PSD file's layer groups are nested too deeply	PSD-filens laggrupper er indlejret for dybt
 @msg	a layer of the PSD file is too large to read	et lag i PSD-filen er for stort til at læse
 @msg	the PSD file's layers take more memory to read than allowed	PSD-filens lag kræver mere hukommelse at læse end tilladt
+@msg	the file is no longer loaded	filen er ikke længere indlæst
+@msg	the layers can't be read ({e}): the file was placed as its merged image	lagene kan ikke læses ({e}): filen blev placeret som sit samlede billede
+@msg	1 type layer came in as pixels: the text isn't editable	1 tekstlag kom ind som pixels: teksten kan ikke redigeres
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} tekstlag kom ind som pixels: teksten kan ikke redigeres
+@msg	1 adjustment layer was not applied	1 justeringslag blev ikke anvendt
+@msg	{n} adjustment layers were not applied	{n} justeringslag blev ikke anvendt
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 fyldlag blev ikke tegnet (et forløbs- eller mønsterfyld, en farve, der ikke kan læses, eller en figur, der ikke gemmer pixels)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} fyldlag blev ikke tegnet (et forløbs- eller mønsterfyld, en farve, der ikke kan læses, eller en figur, der ikke gemmer pixels)
+@msg	the layer effects of 1 layer weren't drawn	lageffekterne for 1 lag blev ikke tegnet
+@msg	the layer effects of {n} layers weren't drawn	lageffekterne for {n} lag blev ikke tegnet
+@msg	the vector masks of 1 layer weren't applied	vektormaskerne for 1 lag blev ikke anvendt
+@msg	the vector masks of {n} layers weren't applied	vektormaskerne for {n} lag blev ikke anvendt
+@msg	the knockout of 1 layer wasn't applied	udsparingen for 1 lag blev ikke anvendt
+@msg	the knockout of {n} layers wasn't applied	udsparingen for {n} lag blev ikke anvendt
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 lag blev udeladt (skjulte lag og de lag, der er beskåret til dem)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} lag blev udeladt (skjulte lag og de lag, der er beskåret til dem)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 lag beskåret til et fyldlag, der ikke blev tegnet, blev udeladt
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} lag beskåret til fyldlag, der ikke blev tegnet, blev udeladt
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	lag i blandingstilstande, som VectorCraft ikke har ({modes}), blev flettet med lagene under dem
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 lag i en blandingstilstand, som VectorCraft ikke har, kom ind som Normal: fletningen kræver mere hukommelse end tilladt
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} lag i blandingstilstande, som VectorCraft ikke har, kom ind som Normal: fletningen kræver mere hukommelse end tilladt
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 lag beskåret til laget nedenunder kom ind ubeskåret: fletningen kræver mere hukommelse end tilladt
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} lag beskåret til laget nedenunder kom ind ubeskåret: fletningen kræver mere hukommelse end tilladt
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers gælder for en PSD-fil, der placeres med layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: en sammenkædet PSD-fil placeres som sit flade billede; angiv link: false for at integrere den med dens udsnit
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: en sammenkædet PSD-fil placeres som sit flade billede; udelad link eller angiv link: false
+@msg	the slices can't be read ({e}) and were left out	udsnittene kan ikke læses ({e}) og blev udeladt
+@msg	1 slice lies outside the canvas or has no size and was left out	1 udsnit ligger uden for lærredet eller har ingen størrelse og blev udeladt
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} udsnit ligger uden for lærredet eller har ingen størrelse og blev udeladt
+@msg	1 slice would lie outside the canvas and was left out	1 udsnit ville ligge uden for lærredet og blev udeladt
+@msg	{n} slices would lie outside the canvas and were left out	{n} udsnit ville ligge uden for lærredet og blev udeladt
+@msg	the slices' descriptor holds too many values	udsnittenes deskriptor indeholder for mange værdier
+@msg	the slices' descriptor has a version other than 16	udsnittenes deskriptor har en anden version end 16
+@msg	the slices are stored in version {v}, which isn't read	udsnittene er gemt i version {v}, som ikke læses
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	filen har {count} udsnit, flere end de {MAX_SLICES}, der læses
+@msg	the slices' descriptor has no list of slices	udsnittenes deskriptor har ingen liste over udsnit
+@msg	the slices' descriptor lists something other than a slice	udsnittenes deskriptor angiver noget andet end et udsnit
+@msg	a slice in the slices' descriptor has no bounds	et udsnit i udsnittenes deskriptor har ingen grænser
+@msg	a slice's bounds in the slices' descriptor aren't numbers	et udsnits grænser i udsnittenes deskriptor er ikke tal
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	en tekst i udsnittene har flere end de {MAX_TEXT} tegn, der læses
+@msg	the slices' descriptor nests too deep	udsnittenes deskriptor er indlejret for dybt
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	udsnittenes deskriptor har en reference af en ukendt art ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	udsnittenes deskriptor har en værdi af en ukendt type ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	lagene kan ikke læses ({e}): filen blev åbnet som sit samlede billede
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bit PSD-filer i denne farvetilstand kan ikke læses
 @msg	the PSD file is cut short	PSD-filen er afkortet

@@ -2463,6 +2463,12 @@ digits	Malayalam	Malajalam
 	Units:	Jedinice:
 	Use Typographer's Quotes	Koristi tipografske navodnike
 	Center Artwork	Centriraj crtež
+	PSD Import Options	Opcije uvoza PSD
+	Place PSD	Postavi PSD
+	Convert Layers to Objects	Pretvori slojeve u objekte
+	Import Hidden Layers	Uvezi skrivene slojeve
+	Flatten Layers to a Single Image	Spljošti slojeve u jednu sliku
+	Import Slices	Uvezi isječke
 	DXF Import Options	Opcije uvoza DXF
 	Layout:	Raspored:
 	Merge Layers	Spoji slojeve

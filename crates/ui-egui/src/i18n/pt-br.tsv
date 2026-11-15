@@ -660,6 +660,12 @@ antiAlias	Sharp	Nítido
 	Customize…	Personalizar…
 	Cut	Recortar
 	Cut Path at Selected Anchor Points	Cortar Caminho nos Pontos de Ancoragem Selecionados
+	PSD Import Options	Opções de Importação PSD
+	Place PSD	Colocar PSD
+	Convert Layers to Objects	Converter Camadas em Objetos
+	Import Hidden Layers	Importar Camadas Ocultas
+	Flatten Layers to a Single Image	Achatar Camadas em uma Única Imagem
+	Import Slices	Importar Fatias
 	DXF Import Options	Opções de Importação DXF
 	DXF Info	Informações DXF
 	DXF Options	Opções DXF
@@ -4727,6 +4733,49 @@ axis	Both	Ambos
 @msg	the PSD file's layer groups are nested too deeply	os grupos de camadas do arquivo PSD estão aninhados profundamente demais
 @msg	a layer of the PSD file is too large to read	uma camada do arquivo PSD é grande demais para ser lida
 @msg	the PSD file's layers take more memory to read than allowed	as camadas do arquivo PSD precisam de mais memória do que o permitido para serem lidas
+@msg	the file is no longer loaded	o arquivo não está mais carregado
+@msg	the layers can't be read ({e}): the file was placed as its merged image	as camadas não podem ser lidas ({e}): o arquivo foi colocado como sua imagem mesclada
+@msg	1 type layer came in as pixels: the text isn't editable	1 camada de texto entrou como pixels: o texto não é editável
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} camadas de texto entraram como pixels: o texto não é editável
+@msg	1 adjustment layer was not applied	1 camada de ajuste não foi aplicada
+@msg	{n} adjustment layers were not applied	{n} camadas de ajuste não foram aplicadas
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 camada de preenchimento não foi desenhada (um preenchimento de gradiente ou de padrão, uma cor que não pode ser lida ou uma forma que não guarda pixels)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} camadas de preenchimento não foram desenhadas (um preenchimento de gradiente ou de padrão, uma cor que não pode ser lida ou uma forma que não guarda pixels)
+@msg	the layer effects of 1 layer weren't drawn	os efeitos de camada de 1 camada não foram desenhados
+@msg	the layer effects of {n} layers weren't drawn	os efeitos de camada de {n} camadas não foram desenhados
+@msg	the vector masks of 1 layer weren't applied	as máscaras vetoriais de 1 camada não foram aplicadas
+@msg	the vector masks of {n} layers weren't applied	as máscaras vetoriais de {n} camadas não foram aplicadas
+@msg	the knockout of 1 layer wasn't applied	o vazamento de 1 camada não foi aplicado
+@msg	the knockout of {n} layers wasn't applied	o vazamento de {n} camadas não foi aplicado
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 camada foi omitida (camadas ocultas e as camadas recortadas nelas)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} camadas foram omitidas (camadas ocultas e as camadas recortadas nelas)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 camada recortada em uma camada de preenchimento não desenhada foi omitida
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} camadas recortadas em camadas de preenchimento não desenhadas foram omitidas
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	camadas em modos de mesclagem que o VectorCraft não tem ({modes}) foram mescladas com as camadas abaixo delas
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 camada em um modo de mesclagem que o VectorCraft não tem entrou como Normal: a mesclagem precisa de mais memória do que o permitido
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} camadas em modos de mesclagem que o VectorCraft não tem entraram como Normal: a mesclagem precisa de mais memória do que o permitido
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 camada recortada na camada abaixo entrou sem recorte: a mesclagem precisa de mais memória do que o permitido
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} camadas recortadas na camada abaixo entraram sem recorte: a mesclagem precisa de mais memória do que o permitido
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers se aplica a um arquivo PSD colocado com layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: um arquivo PSD vinculado é colocado como sua imagem achatada; informe link: false para incorporá-lo com suas fatias
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: um arquivo PSD vinculado é colocado como sua imagem achatada; omita link ou informe link: false
+@msg	the slices can't be read ({e}) and were left out	as fatias não podem ser lidas ({e}) e foram omitidas
+@msg	1 slice lies outside the canvas or has no size and was left out	1 fatia fica fora da tela de pintura ou não tem tamanho e foi omitida
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} fatias ficam fora da tela de pintura ou não têm tamanho e foram omitidas
+@msg	1 slice would lie outside the canvas and was left out	1 fatia ficaria fora da tela de pintura e foi omitida
+@msg	{n} slices would lie outside the canvas and were left out	{n} fatias ficariam fora da tela de pintura e foram omitidas
+@msg	the slices' descriptor holds too many values	o descritor das fatias contém valores demais
+@msg	the slices' descriptor has a version other than 16	o descritor das fatias tem uma versão diferente de 16
+@msg	the slices are stored in version {v}, which isn't read	as fatias estão salvas na versão {v}, que não é lida
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	o arquivo tem {count} fatias, mais do que as {MAX_SLICES} lidas
+@msg	the slices' descriptor has no list of slices	o descritor das fatias não tem uma lista de fatias
+@msg	the slices' descriptor lists something other than a slice	o descritor das fatias lista algo que não é uma fatia
+@msg	a slice in the slices' descriptor has no bounds	uma fatia no descritor das fatias não tem limites
+@msg	a slice's bounds in the slices' descriptor aren't numbers	os limites de uma fatia no descritor das fatias não são números
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	um texto nas fatias tem mais do que os {MAX_TEXT} caracteres lidos
+@msg	the slices' descriptor nests too deep	o descritor das fatias está aninhado fundo demais
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	o descritor das fatias tem uma referência de um tipo desconhecido ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	o descritor das fatias tem um valor de um tipo desconhecido ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	as camadas não podem ser lidas ({e}): o arquivo foi aberto como sua imagem mesclada
 @msg	{depth}-bit PSD files in this colour mode can't be read	arquivos PSD de {depth} bits neste modo de cor não podem ser lidos
 @msg	the PSD file is cut short	o arquivo PSD está incompleto

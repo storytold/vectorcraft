@@ -942,6 +942,12 @@ font-technology	Variable	Değişken
 	Duplicate Symbol	Yinelenen Sembol
 	Duplicate {kind} Style	Çoğaltılmış {kind} Stili
 	Dutch	Hollandaca
+	PSD Import Options	PSD İçe Aktarma Seçenekleri
+	Place PSD	PSD Yerleştir
+	Convert Layers to Objects	Katmanları Nesnelere Dönüştür
+	Import Hidden Layers	Gizli Katmanları İçe Aktar
+	Flatten Layers to a Single Image	Katmanları Tek Görüntüde Düzleştir
+	Import Slices	Dilimleri İçe Aktar
 	DXF Import Options	DXF İçe Aktarma Seçenekleri
 	DXF Info	DXF Bilgisi
 	DXF Options	DXF Seçenekleri
@@ -5156,6 +5162,49 @@ axis	Both	Her İkisi
 @msg	the PSD file's layer groups are nested too deeply	PSD dosyasının katman grupları çok derin iç içe geçmiş
 @msg	a layer of the PSD file is too large to read	PSD dosyasının bir katmanı okunamayacak kadar büyük
 @msg	the PSD file's layers take more memory to read than allowed	PSD dosyasının katmanlarını okumak izin verilenden fazla bellek gerektiriyor
+@msg	the file is no longer loaded	dosya artık yüklü değil
+@msg	the layers can't be read ({e}): the file was placed as its merged image	katmanlar okunamıyor ({e}): dosya birleştirilmiş görüntüsü olarak yerleştirildi
+@msg	1 type layer came in as pixels: the text isn't editable	1 metin katmanı piksel olarak geldi: metin düzenlenemez
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} metin katmanı piksel olarak geldi: metin düzenlenemez
+@msg	1 adjustment layer was not applied	1 ayarlama katmanı uygulanmadı
+@msg	{n} adjustment layers were not applied	{n} ayarlama katmanı uygulanmadı
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 dolgu katmanı çizilmedi (degrade veya desen dolgusu, okunamayan bir renk ya da piksel saklamayan bir şekil)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} dolgu katmanı çizilmedi (degrade veya desen dolgusu, okunamayan bir renk ya da piksel saklamayan bir şekil)
+@msg	the layer effects of 1 layer weren't drawn	1 katmanın katman efektleri çizilmedi
+@msg	the layer effects of {n} layers weren't drawn	{n} katmanın katman efektleri çizilmedi
+@msg	the vector masks of 1 layer weren't applied	1 katmanın vektör maskeleri uygulanmadı
+@msg	the vector masks of {n} layers weren't applied	{n} katmanın vektör maskeleri uygulanmadı
+@msg	the knockout of 1 layer wasn't applied	1 katmanın boşaltması uygulanmadı
+@msg	the knockout of {n} layers wasn't applied	{n} katmanın boşaltması uygulanmadı
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 katman dışarıda bırakıldı (gizli katmanlar ve onlara kırpılmış katmanlar)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} katman dışarıda bırakıldı (gizli katmanlar ve onlara kırpılmış katmanlar)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	çizilmeyen bir dolgu katmanına kırpılmış 1 katman dışarıda bırakıldı
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	çizilmeyen dolgu katmanlarına kırpılmış {n} katman dışarıda bırakıldı
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	VectorCraft’ta olmayan karışım modlarındaki katmanlar ({modes}) altlarındaki katmanlarla birleştirildi
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	VectorCraft’ta olmayan bir karışım modundaki 1 katman Normal olarak geldi: birleştirme izin verilenden fazla bellek gerektiriyor
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	VectorCraft’ta olmayan karışım modlarındaki {n} katman Normal olarak geldi: birleştirme izin verilenden fazla bellek gerektiriyor
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	alttaki katmana kırpılmış 1 katman kırpılmadan geldi: birleştirme izin verilenden fazla bellek gerektiriyor
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	alttaki katmana kırpılmış {n} katman kırpılmadan geldi: birleştirme izin verilenden fazla bellek gerektiriyor
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers, layers: true ile yerleştirilen bir PSD dosyası için geçerlidir
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: bağlı bir PSD dosyası düz görüntüsü olarak yerleştirilir; dilimleriyle birlikte gömmek için link: false verin
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: bağlı bir PSD dosyası düz görüntüsü olarak yerleştirilir; link’i belirtmeyin ya da link: false verin
+@msg	the slices can't be read ({e}) and were left out	dilimler okunamıyor ({e}) ve dışarıda bırakıldı
+@msg	1 slice lies outside the canvas or has no size and was left out	1 dilim tuvalin dışında kalıyor ya da boyutu yok ve dışarıda bırakıldı
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} dilim tuvalin dışında kalıyor ya da boyutu yok ve dışarıda bırakıldı
+@msg	1 slice would lie outside the canvas and was left out	1 dilim tuvalin dışında kalacaktı ve dışarıda bırakıldı
+@msg	{n} slices would lie outside the canvas and were left out	{n} dilim tuvalin dışında kalacaktı ve dışarıda bırakıldı
+@msg	the slices' descriptor holds too many values	dilimlerin tanımlayıcısı çok fazla değer içeriyor
+@msg	the slices' descriptor has a version other than 16	dilimlerin tanımlayıcısının sürümü 16 değil
+@msg	the slices are stored in version {v}, which isn't read	dilimler okunmayan {v} sürümünde saklanmış
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	dosyada {count} dilim var, okunan {MAX_SLICES} dilimden fazla
+@msg	the slices' descriptor has no list of slices	dilimlerin tanımlayıcısında dilim listesi yok
+@msg	the slices' descriptor lists something other than a slice	dilimlerin tanımlayıcısı dilim dışında bir şey listeliyor
+@msg	a slice in the slices' descriptor has no bounds	dilimlerin tanımlayıcısındaki bir dilimin sınırları yok
+@msg	a slice's bounds in the slices' descriptor aren't numbers	dilimlerin tanımlayıcısındaki bir dilimin sınırları sayı değil
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	dilimlerdeki bir metin okunan {MAX_TEXT} karakterden uzun
+@msg	the slices' descriptor nests too deep	dilimlerin tanımlayıcısı çok derin iç içe geçmiş
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	dilimlerin tanımlayıcısında bilinmeyen türde bir başvuru var ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	dilimlerin tanımlayıcısında bilinmeyen tipte bir değer var ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	katmanlar okunamıyor ({e}): dosya birleştirilmiş görüntüsü olarak açıldı
 @msg	{depth}-bit PSD files in this colour mode can't be read	Bu renk modunda {depth}-bit PSD dosyaları okunamaz
 @msg	the PSD file is cut short	PSD dosyası kısa kesildi

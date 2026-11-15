@@ -948,6 +948,12 @@ font-technology	Variable	Променливи
 	Duplicate Symbol	Дублиране на символ
 	Duplicate {kind} Style	Дублиране на стил ({kind})
 	Dutch	Нідерландски
+	PSD Import Options	Опции за импортиране на PSD
+	Place PSD	Вмъкване на PSD
+	Convert Layers to Objects	Преобразуване на слоевете в обекти
+	Import Hidden Layers	Импортиране на скритите слоеве
+	Flatten Layers to a Single Image	Сплескване на слоевете в едно изображение
+	Import Slices	Импортиране на отрязаните части
 	DXF Import Options	Опции за импортиране на DXF
 	DXF Info	Информация за DXF
 	DXF Options	Опции за DXF

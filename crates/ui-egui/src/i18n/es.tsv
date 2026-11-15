@@ -963,6 +963,12 @@ font-technology	Variable	Variables
 	Duplicate Symbol	Duplicar símbolo
 	Duplicate {kind} Style	Duplicar estilo de {kind}
 	Dutch	Neerlandés
+	PSD Import Options	Opciones de importación PSD
+	Place PSD	Colocar PSD
+	Convert Layers to Objects	Convertir capas en objetos
+	Import Hidden Layers	Importar capas ocultas
+	Flatten Layers to a Single Image	Acoplar capas en una sola imagen
+	Import Slices	Importar sectores
 	DXF Import Options	Opciones de importación DXF
 	DXF Info	Información DXF
 	DXF Options	Opciones DXF
@@ -5405,6 +5411,49 @@ axis	Both	Ambos
 @msg	the PSD file's layer groups are nested too deeply	los grupos de capas del archivo PSD están anidados a demasiada profundidad
 @msg	a layer of the PSD file is too large to read	una capa del archivo PSD es demasiado grande para leerla
 @msg	the PSD file's layers take more memory to read than allowed	las capas del archivo PSD necesitan más memoria de la permitida para leerlas
+@msg	the file is no longer loaded	el archivo ya no está cargado
+@msg	the layers can't be read ({e}): the file was placed as its merged image	no se pueden leer las capas ({e}): el archivo se colocó como su imagen combinada
+@msg	1 type layer came in as pixels: the text isn't editable	1 capa de texto se importó como píxeles: el texto no es editable
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} capas de texto se importaron como píxeles: el texto no es editable
+@msg	1 adjustment layer was not applied	1 capa de ajuste no se aplicó
+@msg	{n} adjustment layers were not applied	{n} capas de ajuste no se aplicaron
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 capa de relleno no se dibujó (un relleno de degradado o de motivo, un color que no se puede leer o una forma que no guarda píxeles)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} capas de relleno no se dibujaron (un relleno de degradado o de motivo, un color que no se puede leer o una forma que no guarda píxeles)
+@msg	the layer effects of 1 layer weren't drawn	los efectos de capa de 1 capa no se dibujaron
+@msg	the layer effects of {n} layers weren't drawn	los efectos de capa de {n} capas no se dibujaron
+@msg	the vector masks of 1 layer weren't applied	las máscaras vectoriales de 1 capa no se aplicaron
+@msg	the vector masks of {n} layers weren't applied	las máscaras vectoriales de {n} capas no se aplicaron
+@msg	the knockout of 1 layer wasn't applied	el vaciado de 1 capa no se aplicó
+@msg	the knockout of {n} layers wasn't applied	el vaciado de {n} capas no se aplicó
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 capa se omitió (capas ocultas y las capas recortadas a ellas)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} capas se omitieron (capas ocultas y las capas recortadas a ellas)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 capa recortada a una capa de relleno que no se dibujó se omitió
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} capas recortadas a capas de relleno que no se dibujaron se omitieron
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	las capas en modos de fusión que VectorCraft no tiene ({modes}) se combinaron con las capas de debajo
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 capa en un modo de fusión que VectorCraft no tiene se importó como Normal: la combinación necesita más memoria de la permitida
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} capas en modos de fusión que VectorCraft no tiene se importaron como Normal: la combinación necesita más memoria de la permitida
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 capa recortada a la capa de debajo se importó sin recortar: la combinación necesita más memoria de la permitida
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} capas recortadas a la capa de debajo se importaron sin recortar: la combinación necesita más memoria de la permitida
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers se aplica a un archivo PSD colocado con layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: un archivo PSD vinculado se coloca como su imagen acoplada; indique link: false para incrustarlo con sus sectores
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: un archivo PSD vinculado se coloca como su imagen acoplada; omita link o indique link: false
+@msg	the slices can't be read ({e}) and were left out	no se pueden leer los sectores ({e}) y se omitieron
+@msg	1 slice lies outside the canvas or has no size and was left out	1 sector está fuera del lienzo o no tiene tamaño y se omitió
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} sectores están fuera del lienzo o no tienen tamaño y se omitieron
+@msg	1 slice would lie outside the canvas and was left out	1 sector quedaría fuera del lienzo y se omitió
+@msg	{n} slices would lie outside the canvas and were left out	{n} sectores quedarían fuera del lienzo y se omitieron
+@msg	the slices' descriptor holds too many values	el descriptor de los sectores contiene demasiados valores
+@msg	the slices' descriptor has a version other than 16	el descriptor de los sectores tiene una versión distinta de 16
+@msg	the slices are stored in version {v}, which isn't read	los sectores están guardados en la versión {v}, que no se lee
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	el archivo tiene {count} sectores, más que los {MAX_SLICES} que se leen
+@msg	the slices' descriptor has no list of slices	el descriptor de los sectores no tiene una lista de sectores
+@msg	the slices' descriptor lists something other than a slice	el descriptor de los sectores enumera algo que no es un sector
+@msg	a slice in the slices' descriptor has no bounds	un sector del descriptor de los sectores no tiene límites
+@msg	a slice's bounds in the slices' descriptor aren't numbers	los límites de un sector del descriptor de los sectores no son números
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	un texto de los sectores tiene más de los {MAX_TEXT} caracteres que se leen
+@msg	the slices' descriptor nests too deep	el descriptor de los sectores está anidado a demasiada profundidad
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	el descriptor de los sectores tiene una referencia de un tipo desconocido ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	el descriptor de los sectores tiene un valor de un tipo desconocido ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	no se pueden leer las capas ({e}): el archivo se abrió como su imagen combinada
 @msg	{depth}-bit PSD files in this colour mode can't be read	los archivos PSD de {depth} bits en este modo de color no se pueden leer
 @msg	the PSD file is cut short	el archivo PSD está incompleto
