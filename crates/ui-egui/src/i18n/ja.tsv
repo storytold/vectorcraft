@@ -1076,6 +1076,7 @@ digits	Malayalam	マラヤーラム数字
 	Align to Artboard	アートボードに整列
 	Align to Glyph Bounds	字形の境界に整列
 	Align to Key Object	キーオブジェクトに整列
+	Align to Key Anchor	キーアンカーポイントに整列
 	Align to Page	ページに沿う
 	Align to Path	パスに沿う
 	Align to Selection	選択範囲に整列

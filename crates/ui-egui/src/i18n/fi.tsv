@@ -1493,6 +1493,7 @@ lighting	Light	Valo
 	Align to Artboard	Tasaa piirtoalustaan
 	Align to Glyph Bounds	Tasaa merkin rajoihin
 	Align to Key Object	Tasaa avainobjektiin
+	Align to Key Anchor	Tasaa avainankkuripisteeseen
 	Align to Selection	Tasaa valintaan
 	Align To:	Tasaa:
 	Cancel Key Object	Peruuta avainobjekti

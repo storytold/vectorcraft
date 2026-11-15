@@ -2706,6 +2706,15 @@ A click with the Selection tool on a guide selected with objects runs `select.ke
 The key guide goes when it leaves the selection or no object is left selected, and an object key replaces it (and the other way round).
 It returns `{key}`, the key object's id or null, with `guide`, the key guide's index, when a guide is the key.
 `document.inspect` (the `inspect_document` tool) reports the key object as `key`, null without one, and the key guide as `keyGuide`.
+
+`select.key {id, anchor: [subpath, anchor]}` makes an anchor point selected with Direct Selection the key anchor, while at least one other point (or a path selected whole) is selected too.
+`select.anchors` with mode `add` or `toggle` and one point makes that point the key anchor when it selects it; a Shift-click on an anchor with Direct Selection runs it, and a plain click still selects that point alone.
+Aligning to the key, `object.align` moves the other selected points to the key anchor's x or y and the key anchor stays put; a pixel-aligned path is then snapped to the pixel grid, as after any other edit.
+`object.distribute {spacing}` and `object.distributeSpacing {spacing}` keep the key anchor in place and put the other points `spacing` apart, outward from it, in their order along the axis.
+The key anchor goes when it is deselected or deleted, when it is the only point left selected, when `select.key {}` cancels it, and when a key object or key guide replaces it.
+An anchor that is not a selected anchor point (a selected segment's end is not one) is an error, and the key stays as it was.
+The result has `keyAnchor: {id, anchor}` with a key anchor, and `document.inspect` reports it as `keyAnchor`.
+The canvas draws the key anchor as a larger filled square in a frame, and the Align panel and the Control bar then name the Align To choice Align to Key Anchor.
 The `ui.pointer` and `pointer_gesture` replies list it as `key` beside `selection`.
 The command palette lists `select.key` as Cancel Key Object and runs it without an id.
 

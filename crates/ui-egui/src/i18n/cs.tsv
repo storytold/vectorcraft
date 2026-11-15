@@ -1519,6 +1519,7 @@ lighting	Light	Světlo
 	Align to Artboard	Zarovnat k pracovní ploše
 	Align to Glyph Bounds	Zarovnat k hranicím glyfů
 	Align to Key Object	Zarovnat ke klíčovému objektu
+	Align to Key Anchor	Zarovnat ke klíčovému kotevnímu bodu
 	Align to Selection	Zarovnat k výběru
 	Align To:	Zarovnat k:
 	Cancel Key Object	Zrušit klíčový objekt

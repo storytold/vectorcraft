@@ -2035,6 +2035,7 @@ lighting	Light	Lys
 	Align to Artboard	Juster til tegnebræt
 	Align to Glyph Bounds	Juster til glyfafgrænsning
 	Align to Key Object	Juster til nøgleobjekt
+	Align to Key Anchor	Juster til nøgleankerpunkt
 	Align to Selection	Juster til markering
 	Align To:	Juster til:
 	Cancel Key Object	Annullér nøgleobjekt

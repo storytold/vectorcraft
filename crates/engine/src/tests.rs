@@ -86,6 +86,7 @@ mod inline;
 mod interactivity;
 mod intertwine;
 mod journal;
+mod keyanchor;
 mod keyguide;
 mod knockout;
 mod labspots;

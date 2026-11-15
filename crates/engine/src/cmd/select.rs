@@ -81,11 +81,19 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cancel Key Object",
             [],
             None,
-            "{id?: a selected top-level object (not a layer, a compound-path member or an object inside another selected object); one of two or more or the only one with ruler guides selected (the Selection tool: a click on one object of a selection of several, or of one with guides; on the key again: no id), guide?: index (a selected ruler guide, guide.list, with one or more objects selected: the Selection tool's click on a selected guide; Align lines the objects up on it and the guide stays put)} the key object Align aligns to and Distribute Spacing spaces from; without `id` or `guide` it cancels the key, as does a selection that holds only the key and objects inside it (one object, or a group key and its own members) and no ruler guide, or a key guide with no object selected or taken out of the selection; any other id or guide is an error that leaves the key as it was → {key, guide?} (the resulting key object, or null; guide: the key guide, left out without one)",
+            "{id?: a selected top-level object (not a layer, a compound-path member or an object inside another selected object); one of two or more or the only one with ruler guides selected (the Selection tool: a click on one object of a selection of several, or of one with guides; on the key again: no id), guide?: index (a selected ruler guide, guide.list, with one or more objects selected: the Selection tool's click on a selected guide; Align lines the objects up on it and the guide stays put), anchor?: [subpath, anchor] with `id` the path (an anchor point selected with Direct Selection beside at least one other point becomes the key anchor: Align and Distribute move the other points relative to it and it stays put; select.anchors add or toggle of one point makes it the key anchor, as a Shift-click does)} the key object Align aligns to and Distribute Spacing spaces from; without `id` or `guide` it cancels the key, as does a selection that holds only the key and objects inside it (one object, or a group key and its own members) and no ruler guide, or a key guide with no object selected or taken out of the selection, or a key anchor that is deselected, deleted or left as the only selected point; any other id, guide or anchor is an error that leaves the key as it was → {key, guide?, keyAnchor?} (the resulting key object, or null; guide: the key guide, left out without one; keyAnchor: {id, anchor}, left out without one)",
             has_doc,
             key
         ),
-        cmd!("select.anchors", "Select Anchors", [], None, "{id, anchors: [[subpath, anchor]…], mode: \"set\"|\"add\"|\"toggle\"}", has_doc, anchors),
+        cmd!(
+            "select.anchors",
+            "Select Anchors",
+            [],
+            None,
+            "{id, anchors: [[subpath, anchor]…], mode: \"set\"|\"add\"|\"toggle\"}; add or toggle that selects one point makes it the key anchor while another point is selected too (see select.key)",
+            has_doc,
+            anchors
+        ),
         cmd!(
             "select.segments",
             "Select Segments",
@@ -610,6 +618,9 @@ fn key(s: &mut Session, p: &Value) -> Result<Value> {
         }
         None => None,
     };
+    if let Some(v) = p.get("anchor").filter(|v| !v.is_null()) {
+        return key_anchor(s, id, guide, v);
+    }
     if let Some(g) = guide {
         let sel = &s.doc()?.selection;
         if id.is_some() {
@@ -624,6 +635,7 @@ fn key(s: &mut Session, p: &Value) -> Result<Value> {
         }
         s.select(|_, sel| {
             sel.key = None;
+            sel.key_anchor = None;
             sel.key_guide = Some(gid);
         })?;
         return key_result(s);
@@ -640,16 +652,45 @@ fn key(s: &mut Session, p: &Value) -> Result<Value> {
     s.select(|_, sel| {
         sel.key = id;
         sel.key_guide = None;
+        sel.key_anchor = None;
     })?;
     key_result(s)
 }
 
-/// `{key}`, with `guide` when a guide is the key.
+/// `select.key {id, anchor: [subpath, anchor]}`: anchor point `anchor` of path `id`, selected with
+/// Direct Selection beside at least one other point, becomes the key anchor
+/// ([`vectorcraft_doc::Selection::key_anchor`]).
+fn key_anchor(s: &mut Session, id: Option<NodeId>, guide: Option<usize>, v: &Value) -> Result<Value> {
+    const C: &str = "select.key";
+    let r = match checked_refs(Some(&Value::Array(vec![v.clone()])), C)?.as_slice() {
+        [r] => *r,
+        _ => return Err(bad(C, "`anchor` must be a [subpath, anchor] pair")),
+    };
+    if guide.is_some() {
+        return Err(bad(C, "give `anchor` or `guide`, not both"));
+    }
+    let id = id.ok_or_else(|| bad(C, "`anchor` needs `id`, the path the point is on"))?;
+    let sel = &s.doc()?.selection;
+    if sel.segments.contains_key(&id) || !sel.anchors.get(&id).is_some_and(|set| set.contains(&r)) {
+        return Err(bad(C, format!("anchor [{}, {}] of object {id} is not a selected anchor point", r.0, r.1)));
+    }
+    s.select(|_, sel| sel.key_anchor = Some((id, r)))?;
+    if s.doc()?.selection.key_anchor.is_none() {
+        return Err(bad(C, "select another anchor point to align to the key anchor"));
+    }
+    key_result(s)
+}
+
+/// `{key}`, with `guide` when a guide is the key and `keyAnchor` (`{id, anchor}`) when an anchor
+/// point is.
 fn key_result(s: &Session) -> Result<Value> {
     let st = s.doc()?;
     let mut out = json!({ "key": st.selection.key });
     if let Some(g) = st.selection.key_guide.and_then(|id| super::docmenu::guide_indexes(&st.doc, &[id]).first().copied()) {
         out["guide"] = json!(g);
+    }
+    if let Some((id, (si, ai))) = st.selection.key_anchor {
+        out["keyAnchor"] = json!({ "id": id.0, "anchor": [si, ai] });
     }
     Ok(out)
 }
@@ -783,15 +824,23 @@ fn anchors(s: &mut Session, p: &Value) -> Result<Value> {
         if whole && let Some(path) = d.node(id).and_then(|n| n.path_data()) {
             e.extend(path.anchors().map(|(s, i, _)| (s, i)));
         }
+        // One point that add or toggle selects becomes the key anchor (a Shift-click with Direct
+        // Selection); `prune` drops it unless another point is selected too.
+        let single = refs.len() == 1;
+        let mut newest = None;
         for r in refs {
             if mode == "toggle" && e.contains(&r) {
                 e.remove(&r);
-            } else {
-                e.insert(r);
+            } else if e.insert(r) && single {
+                newest = Some(r);
             }
         }
         if e.is_empty() {
             sel.remove(id);
+        } else if mode != "set"
+            && let Some(r) = newest
+        {
+            sel.key_anchor = Some((id, r));
         }
     })?;
     ok()

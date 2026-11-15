@@ -1491,6 +1491,7 @@ lighting	Light	Svjetlo
 	Align to Artboard	Poravnaj s radnom pločom
 	Align to Glyph Bounds	Poravnaj s granicama glifa
 	Align to Key Object	Poravnaj s ključnim objektom
+	Align to Key Anchor	Poravnaj s ključnom sidrenom tačkom
 	Align to Selection	Poravnaj prema odabiru
 	Align To:	Poravnaj s:
 	Cancel Key Object	Otkaži ključni objekat

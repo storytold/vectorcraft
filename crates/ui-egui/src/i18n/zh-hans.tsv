@@ -109,6 +109,7 @@
 	Align to Artboard	对齐画板
 	Align to Glyph Bounds	对齐到字形边界
 	Align to Key Object	对齐关键对象
+	Align to Key Anchor	对齐关键锚点
 	Align to Page	对齐页面
 	Align to Path	对齐路径
 	Align to Selection	对齐选区
