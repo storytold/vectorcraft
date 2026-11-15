@@ -478,8 +478,9 @@ fn a_tabbed_line_ends_at_the_latest_break_that_fits_as_drawn() {
 }
 
 /// A tabbed line measured as drawn hangs a burasagari full stop that overflows only when the stop
-/// is drawn at the line's right end and the line before it fits as drawn with no line-end trim on
-/// its last glyph; otherwise it ends at the latest legal break that fits as drawn.
+/// is drawn at the line's right end (last in the visual order of the line's levels, whatever its
+/// own level) and the line before it fits as drawn with no line-end trim on its last glyph;
+/// otherwise it ends at the latest legal break that fits as drawn.
 #[test]
 fn a_tabbed_burasagari_mark_hangs_only_at_the_drawn_end_of_a_fitting_line() {
     let text = "a \t\u{05D0} 漢。";
@@ -513,8 +514,31 @@ fn a_tabbed_burasagari_mark_hangs_only_at_the_drawn_end_of_a_fitting_line() {
     let mut trimmed = vec![0.0; glyphs.len()];
     trimmed[5] = 2.0;
     assert_eq!(end(&glyphs, &trimmed, Some(&all_fit)), (5, false), "the line before 。 fits only with 漢 trimmed");
-    glyphs[6].level = unicode_bidi::Level::rtl();
-    assert_eq!(end(&glyphs, &[], Some(&all_fit)), (5, false), "。 set right to left is drawn inside the line");
+    let level = |n: u8| unicode_bidi::Level::new(n).unwrap_or_else(|_| panic!("level {n}"));
+    glyphs[6].level = level(2);
+    assert_eq!(end(&glyphs, &[], Some(&all_fit)), (7, false), "。 set left to right in right-to-left text is drawn at the right end");
+    glyphs[6].level = level(1);
+    assert_eq!(end(&glyphs, &[], Some(&all_fit)), (7, false), "。 alone right to left after 漢 is drawn at the right end");
+    glyphs[5].level = level(1);
+    assert_eq!(end(&glyphs, &[], Some(&all_fit)), (5, false), "。 right to left after 漢 in the same run is drawn inside the line");
+    glyphs[6].level = level(2);
+    assert_eq!(end(&glyphs, &[], Some(&all_fit)), (5, false), "。 left to right inside the right-to-left run of 漢 is drawn inside the line");
+}
+
+/// A burasagari full stop that No Break keeps with the character after it does not hang: the line
+/// would end with that character, which is drawn inside the line, so it ends at an earlier break.
+#[test]
+fn a_burasagari_mark_kept_with_the_next_character_does_not_hang() {
+    let text = "漢漢。漢";
+    let specs: Vec<_> = text.char_indices().map(|(byte, ch)| (byte, ch.len_utf8(), 10.0, ch)).collect();
+    let mut glyphs = synthetic_glyphs(&specs);
+    let end = |glyphs: &[SGlyph]| {
+        break_line(text, glyphs, 0, 25.0, &[], 0.0, None, Burasagari::Standard, Kinsoku::Hard, KinsokuShoriType::PushOutOnly, false, false, &[], None)
+    };
+    assert_eq!(end(&glyphs), (3, false), "alone, 。 overflows by 5 pt and hangs");
+    glyphs[2].no_break = true;
+    glyphs[3].no_break = true;
+    assert_eq!(end(&glyphs), (1, false), "kept with the 漢 after it, 。 does not end the line");
 }
 
 /// A line with a tab and right-to-left text pushes a closing bracket out with every Kinsoku Shori
