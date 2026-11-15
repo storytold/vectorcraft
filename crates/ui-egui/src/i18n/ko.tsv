@@ -6398,6 +6398,13 @@ axis	Y Axis	Y축
 	Graphite Pencil	흑연 연필
 	Wax Crayon	왁스 크레용
 	Charcoal Dust	목탄 가루
+
+# Original procedural circuit brushes.
+	Tech Circuit	전자 회로
+	Circuit Trace	회로 배선
+	Bus Lines	버스 배선
+	Terminal Nodes	단자 노드
+
 	Notched Ribbon	노치 리본
 	Double Line	이중선
 	Wave	물결
