@@ -9,13 +9,13 @@ strings and 136 messages for Tamil, fewer than for German (70 and 137) and Itali
 
 - 5,194 rows reuse this project's Tamil in [craft-i18n](https://github.com/storytold/craft-i18n):
   `locales/ta/vectorcraft.tsv` (4,125 rows) and `locales/ta/common.tsv` (924), written by
-  @newsbaba24x7 with AI assistance and partly reviewed by a native speaker, plus 145 rows whose
+  @newsbaba24x7 with AI assistance, plus 145 rows whose
   English the other Tamil Craft catalogs already translate.
 - The other 4,285 rows (mostly status and error messages) are AI-assisted translations from
   the plain meaning of the English, clean room, using VectorCraft's source to tell what each
   string means on screen. No other product's localisation or string table was consulted.
-- Native-speaker review of those rows is pending; coverage tests alone do not establish
-  translation quality.
+- Radhika and Mohan Raj, native speakers, reviewed the catalog in the running app (2026-11-15);
+  coverage tests alone do not establish translation quality.
 
 ## Style
 
