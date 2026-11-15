@@ -25,6 +25,7 @@
 	Edge Brightness	Kantenhelligkeit
 	Smoothness	Glättung
 	Radial Blur…	Radialer Weichzeichner…
+	Blur Center	Mittelpunkt der Weichzeichnung
 	Smart Blur…	Selektiver Weichzeichner…
 	Sharpen	Scharfzeichnen
 	Unsharp Mask…	Unscharf maskieren…
@@ -623,6 +624,7 @@ font-technology	Variable	Variabel
 	Copy All Styles	Alle Stile kopieren
 	Copy Color Value (Hex)	Farbwert kopieren (Hex)
 	Copy Fonts Used in the Document	Im Dokument verwendete Schriften kopieren
+	Copy Info	Informationen kopieren
 	Copy Links	Verknüpfungen kopieren
 	Copy Selected Style	Ausgewählten Stil kopieren
 	Copy to User Defined	In „Benutzerdefiniert“ kopieren
@@ -4315,6 +4317,7 @@ theme	Appearance	Erscheinungsbild
 @msg	there is no script engine named {name}	es gibt keine Skript-Engine namens {name}
 @msg	Running a script	Skript wird ausgeführt
 @msg	Copied the script report	Skriptbericht kopiert
+@msg	Copied the link info	Verknüpfungsinformationen kopiert
 @msg	Corners edits the corners of a path	„Ecken“ bearbeitet die Ecken eines Pfads
 @msg	Couldn't copy to the system clipboard: {e}	In die Systemzwischenablage konnte nicht kopiert werden: {e}
 @msg	Couldn't open {name}: {e}	{name} konnte nicht geöffnet werden: {e}
@@ -8600,6 +8603,7 @@ breakText	Glyphs	Glyphen
 @msg	the RTF file is too large to place as type (at most {_1} MB)	die RTF-Datei ist zu groß, um als Text platziert zu werden (höchstens {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	das SVG wird zu mehr als {0} verschachtelten SVG-Bildern erweitert
 @msg	the SVG expands to more than {0} objects	das SVG wird zu mehr als {0} Objekten erweitert
+@msg	the SVG's style sheets take too long to match	das Abgleichen der Stylesheets des SVG dauert zu lange
 @msg	the SVG's styles expand to more than {0} MB	die Stile des SVG werden auf mehr als {0} MB erweitert
 @msg	the SVG has no drawable objects	das SVG hat keine zeichenbaren Objekte
 @msg	the SVGZ file unpacks to more than {_1} MB	die SVGZ-Datei wird auf mehr als {_1} MB entpackt

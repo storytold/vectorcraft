@@ -3486,6 +3486,7 @@ imageTrace	Outline	Contorno
 	Free Transform	Transformação Livre
 	Perspective Distort	Distorção de Perspectiva
 	Radial Blur…	Desfoque Radial…
+	Blur Center	Centro do Desfoque
 	Smart Blur…	Desfoque Inteligente…
 	Sharpen	Nitidez
 	Unsharp Mask…	Máscara de Nitidez…
@@ -4909,6 +4910,7 @@ axis	Both	Ambos
 	Convert To Outlines	Converter em Contornos
 	Copy All Objects	Copiar Todos os Objetos
 	Copy Fonts Used in the Document	Copiar Fontes Usadas no Documento
+	Copy Info	Copiar Informações
 	Copy Links	Copiar Links
 	Descender	Descendente
 	Flip	Virar
@@ -5428,6 +5430,7 @@ axis	Both	Ambos
 @msg	there is no script engine named {name}	não há nenhum mecanismo de script chamado {name}
 @msg	Running a script	Executando um script
 @msg	Copied the script report	Relatório do script copiado
+@msg	Copied the link info	Informações do link copiadas
 @msg	This shortcut file is in a form VectorCraft can't read.	Este arquivo de atalhos está em um formato que o VectorCraft não consegue ler.
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis deve ser "vertical", "horizontal" ou um ângulo em graus, não `{v}`
 @msg	give corners of the path: anchors where its sides meet at an angle	informe os cantos do caminho: pontos de ancoragem onde os lados se encontram em ângulo
@@ -9098,6 +9101,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	the RTF file is too large to place as type (at most {_1} MB)	o arquivo RTF é grande demais para ser colocado como texto (no máximo {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	o SVG se expande em mais de {0} imagens SVG aninhadas
 @msg	the SVG expands to more than {0} objects	o SVG se expande em mais de {0} objetos
+@msg	the SVG's style sheets take too long to match	a correspondência das folhas de estilo do SVG demora demais
 @msg	the SVG's styles expand to more than {0} MB	os estilos do SVG se expandem para mais de {0} MB
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	o arquivo SVG tem mais de {MAX_IMPORT_BYTES} bytes
 @msg	the SVG has no drawable objects	o SVG não tem objetos desenháveis

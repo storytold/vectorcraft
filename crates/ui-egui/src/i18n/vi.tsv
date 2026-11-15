@@ -739,6 +739,7 @@ font-technology	Variable	Biến thiên
 	Copy Color Value (Hex)	Sao chép giá trị màu (Hex)
 	Copy Fonts Used in the Document	Sao chép phông đã dùng trong tài liệu
 	Copy into the document's folder	Sao chép vào thư mục tài liệu
+	Copy Info	Sao chép thông tin
 	Copy Links	Sao chép liên kết
 	Copy only fonts you own or are licensed to install.	Chỉ sao chép phông chữ bạn sở hữu hoặc có giấy phép cài đặt.
 	Copy Selected Style	Sao chép kiểu đã chọn
@@ -3047,6 +3048,7 @@ mark-style	Japanese	Kiểu Nhật
 	Radial	Hướng tâm
 	Radial Blur	Mờ hướng tâm
 	Radial Blur…	Mờ hướng tâm…
+	Blur Center	Tâm làm mờ
 	Radial Dividers:	Đường chia hướng tâm:
 	Radial Glows	Ánh sáng hướng tâm
 	Organic Fades	Mờ dần tự nhiên
@@ -4858,6 +4860,7 @@ theme	Appearance	Giao diện
 @msg	there is no script engine named {name}	không có bộ máy tập lệnh nào tên {name}
 @msg	Running a script	Đang chạy tập lệnh
 @msg	Copied the script report	Đã sao chép báo cáo script
+@msg	Copied the link info	Đã sao chép thông tin liên kết
 @msg	Corners edits the corners of a path	Corners chỉnh sửa các góc của đường dẫn
 @msg	could not decode image: {0}	không thể giải mã ảnh: {0}
 @msg	Couldn't copy to the system clipboard: {e}	Không thể sao chép vào khay nhớ tạm hệ thống: {e}
@@ -5275,6 +5278,7 @@ theme	Appearance	Giao diện
 @msg	result would exceed the canvas (coordinates out of range)	kết quả sẽ vượt quá vùng vẽ (tọa độ ngoài phạm vi)
 @msg	objects can't be nested more than 32 deep	không thể lồng các đối tượng sâu quá 32 cấp
 @msg	the SVG's elements are nested more than {0} deep	các phần tử SVG lồng nhau sâu quá {0} cấp
+@msg	the SVG's style sheets take too long to match	việc so khớp các biểu định kiểu của SVG mất quá nhiều thời gian
 @msg	the SVG's styles expand to more than {0} MB	các kiểu của SVG khi mở rộng chiếm hơn {0} MB
 @msg	Save for Web: the image is empty	Lưu cho Web: ảnh trống
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Lưu ghi {_1}, không phải {_2}: dùng document.export cho các định dạng khác
