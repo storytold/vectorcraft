@@ -12,6 +12,7 @@ use super::{
 thread_local! {
     static BOX_TESTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static CANDIDATE_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TRACES_ON_THIS_THREAD: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 // ---------- Image Trace ----------
@@ -562,15 +563,20 @@ fn color_groups(cmd: &str, d: &mut Document, items: Vec<Arc<Node>>) -> Result<Ve
     Ok(seams.into_iter().chain(groups).collect())
 }
 
-/// What a trace depends on: the document it is made in, the object traced (an image, or an Image
-/// Trace object traced again), its image, the image's encoded bytes, and the settings it is traced
-/// with. The tracer makes the same paths of the same inputs, so a trace made away from the command
-/// ([`TraceRun`]) stands in for the command's own in the same document.
+/// What a trace depends on: the document it is made in and the content it was reverted to, the
+/// object traced (an image, or an Image Trace object traced again), its image, the image's encoded
+/// bytes, and the settings it is traced with. The tracer makes the same paths of the same inputs,
+/// so a trace made away from the command ([`TraceRun`]) stands in for the command's own in the same
+/// document until File › Revert replaces its content.
 #[derive(Clone, Debug, PartialEq)]
 struct TraceInputs {
     /// The [`DocState::uid`](crate::DocState::uid) of the document traced in. A trace made in one
     /// document never stands in for one in another, however alike their images and settings.
     doc: u64,
+    /// The document's [`DocState::reverts`](crate::DocState::reverts) when the trace was prepared.
+    /// A trace prepared before File › Revert never stands in for one after it, even when the
+    /// restored image, pixels, object and settings are the same.
+    reverts: u64,
     target: NodeId,
     image: Box<ImageObject>,
     /// The settings traced with, as JSON.
@@ -639,7 +645,8 @@ fn prepare(s: &Session, c: &str, p: &Value) -> Result<Prepared> {
     let bytes = Arc::clone(&blob.bytes);
     let library = trace_library(c, s, &mut params)?;
     let traced_with = serde_json::to_value(&params).map_err(|e| EngineError::Other(e.to_string()))?;
-    let inputs = TraceInputs { doc: s.doc()?.uid, target, image, params: traced_with, swatches: params.swatches.clone(), bytes };
+    let st = s.doc()?;
+    let inputs = TraceInputs { doc: st.uid, reverts: st.reverts, target, image, params: traced_with, swatches: params.swatches.clone(), bytes };
     Ok(Prepared { inputs, trace: params, view, params_json, preset_label, library })
 }
 
@@ -655,7 +662,8 @@ pub struct Traced {
 impl Traced {
     /// Hand it to the next run of its command with the same inputs ([`TraceRun::params`]) in the
     /// document it was made in, which applies it as one undo step instead of tracing again. Any
-    /// other trace drops it, a trace in another document included.
+    /// other trace drops it and traces again, a trace in another document included, and so does
+    /// the command after File › Revert replaced the document's content.
     pub fn hand_in(self, s: &mut Session) {
         s.trace_hand_off = Some(self);
     }
@@ -664,6 +672,8 @@ impl Traced {
 /// Decode the image bytes of `inputs` and trace them with `params`, telling `steps` how far it has
 /// got ([`tr::trace_watched`]); [`EngineError::Cancelled`] once `steps` answers `false`.
 fn trace_now(inputs: &TraceInputs, params: &tr::TraceParams, steps: &(dyn Fn(u64, u64) -> bool + Sync)) -> Result<Traced> {
+    #[cfg(test)]
+    TRACES_ON_THIS_THREAD.with(|n| n.set(n.get() + 1));
     // An image over the tracer's size is traced scaled down (the paths are scaled back).
     let raster = tr::Raster::decode_to_fit(&inputs.bytes).map_err(|e| EngineError::Other(e.to_string()))?;
     if !steps(0, 0) {
@@ -848,9 +858,16 @@ impl TraceRun {
     }
 
     /// Does it still apply: would the command trace the same object, image, pixels and settings
-    /// now, in the document it was prepared in?
+    /// now, in the document it was prepared in, with no File › Revert since?
     pub fn current(&self, s: &Session) -> bool {
         prepare(s, self.command, &self.params).is_ok_and(|now| now.inputs == self.prepared.inputs)
+    }
+
+    /// Has File › Revert replaced the content of the document it was prepared in since then? False
+    /// when that document is no longer open.
+    pub fn reverted(&self, s: &Session) -> bool {
+        let TraceInputs { doc, reverts, .. } = self.prepared.inputs;
+        s.documents().iter().any(|st| st.uid == doc && st.reverts != reverts)
     }
 
     /// Decode and trace the image, telling `steps` how far it has got → what it traced, or why it
@@ -858,6 +875,12 @@ impl TraceRun {
     /// document, so it can run on any thread.
     pub fn run(&self, steps: &(dyn Fn(u64, u64) -> bool + Sync)) -> Result<Traced> {
         trace_now(&self.prepared.inputs, &self.prepared.trace, steps)
+    }
+
+    /// How many images this thread has decoded and traced so far.
+    #[cfg(test)]
+    pub(crate) fn traces_on_this_thread() -> usize {
+        TRACES_ON_THIS_THREAD.with(std::cell::Cell::get)
     }
 }
 

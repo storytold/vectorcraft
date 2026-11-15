@@ -1101,6 +1101,35 @@ fn the_place_queue_skips_an_image_whose_pixels_cant_be_read() {
     assert_eq!(b.place_queue_read(read).unwrap(), r);
 }
 
+/// An encrypted PDF stays in the place cursor's queue, read with the session or apart from it, at
+/// a letter page's size with `needsPassword`, so that a click in the app can ask for its password;
+/// headless, a click on it places nothing.
+#[test]
+fn the_place_queue_keeps_an_encrypted_pdf() {
+    use vectorcraft_testkit::pdf::{PdfPage, pdf};
+    let locked = pdf(&[PdfPage::new(100.0, 50.0, "0 g 0 0 10 10 re f")], Some("pw"));
+    let p = json!({"files": [file("locked.pdf", &locked), file("a.png", &png(40, 20, [9, 9, 9, 255], None))], "thumbnail": 8});
+    let (mut a, mut b) = (session(), session());
+    let r = a.execute("file.place.queue", &p).unwrap();
+    assert_eq!((&r["count"], &r["skipped"]), (&json!(2), &json!([])), "{r}");
+    assert_eq!(r["files"][0], json!({"name": "locked.pdf", "format": "pdf", "width": 612.0, "height": 792.0, "needsPassword": true}));
+    assert!(r["files"][1].get("needsPassword").is_none());
+    let read = b.prepare_place_queue(&p).unwrap().read().unwrap();
+    assert_eq!(b.place_queue_read(read).unwrap(), r);
+    let view = ViewInfo::default();
+    assert_eq!(a.tool_options()["name"], "locked.pdf");
+    let _ = a.pointer(&PointerEvent::new(PointerKind::Down, 10.0, 10.0), view);
+    let _ = a.pointer(&PointerEvent::new(PointerKind::Up, 10.0, 10.0), view);
+    assert_eq!((top_children(&a).len(), a.doc().unwrap().history.undo.len()), (0, 0), "nothing placed without the password");
+    // An encrypted PDF with a bad option is refused for the option, not kept.
+    let e = a.execute("file.place.queue", &json!({"files": [file("locked.pdf", &locked)], "page": 0})).unwrap_err().to_string();
+    assert!(e.contains("page must be a whole number from 1"), "{e}");
+    // A PDF that can't be read for another reason is still skipped.
+    let broken = file("broken.pdf", b"%PDF-1.7\nnot a PDF body\n");
+    let r = a.execute("file.place.queue", &json!({"files": [broken, file("b.png", &png(4, 4, [0; 4], None))]})).unwrap();
+    assert_eq!((&r["count"], &r["skipped"][0]["name"]), (&json!(1), &json!("broken.pdf")), "{r}");
+}
+
 /// The place queue's thumbnail of an image is drawn from the pixels its check decoded, so each
 /// image is decoded once.
 #[test]

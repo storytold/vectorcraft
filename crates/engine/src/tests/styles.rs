@@ -325,6 +325,26 @@ fn select_same_appearance_attribute() {
     run(&mut s, "select.set", json!({"ids": [a.0]}));
     run(&mut s, "select.same.appearanceAttribute", json!({"item": (1u64 << 32) + 1}));
     assert_eq!(s.doc().unwrap().selection.objects, vec![a, b]);
+    // Null is the default: the shared effect.
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    run(&mut s, "select.same.appearanceAttribute", json!({"item": null}));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, b]);
+}
+
+/// Select > Same > Appearance Attribute refuses an `item` that is not a whole number and leaves
+/// the selection as it was.
+#[test]
+fn select_same_appearance_attribute_refuses_an_item_that_is_not_a_whole_number() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "effect.apply", json!({"effect": "distort.roughen"}));
+    rect(&mut s, 100.0);
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    for item in [json!("1"), json!(-1), json!(1.5), json!(true), json!([1])] {
+        let e = s.execute("select.same.appearanceAttribute", &json!({"item": item})).unwrap_err().to_string();
+        assert_eq!(e, "invalid parameters for `select.same.appearanceAttribute`: `item` must be a whole number", "{item}");
+        assert_eq!(s.doc().unwrap().selection.objects, vec![a], "{item}");
+    }
 }
 
 /// With a member path of a compound path selected first, Select > Same > Graphic Style and

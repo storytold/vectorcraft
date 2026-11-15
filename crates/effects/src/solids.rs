@@ -324,8 +324,7 @@ fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at:
         reshape_members(n, before, &mut shapes);
         let b = union_bounds(&shapes).ok_or_else(|| format!("{label} requires a group holding a shape with at least two anchors"))?;
         check_profiles(id, p, &shapes, b)?;
-        check_solids(id, p, &shapes)?;
-        return check_cast(id, p, &shapes);
+        return check_solids(id, p, &shapes);
     }
     let (path, rule) = object_profile(n, label)?;
     let anchors = || format!("{label} requires a shape with at least two anchors");
@@ -342,38 +341,68 @@ fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at:
     let b = path.bounds().ok_or_else(anchors)?;
     let shapes = [Profile { path, rule, items, opacity: 1.0, scopes: vec![] }];
     check_profiles(id, p, &shapes, b)?;
-    check_solids(id, p, &shapes)?;
-    check_cast(id, p, &shapes)
+    check_solids(id, p, &shapes)
 }
 
-/// With the shadow of 3D effect `id` with parameters `p` on, an error when the shadow of `shapes`
-/// is past the limits ([`cast_shadow`]). In wireframe mode no shadow is drawn, and none is checked.
-fn check_cast(id: &str, p: &Value, shapes: &[Profile]) -> Result<(), String> {
-    if wireframe::wireframe_params(id, p) {
-        return Ok(());
-    }
-    cast_shadow(id, p, shapes).map(|_| ())
+/// Does 3D effect `id` with parameters `p` cast a shadow: is it Extrude & Bevel, Inflate or Rotate
+/// with Shadows on, shaded? In wireframe mode no shadow is drawn, and none is checked.
+fn casts_shadow(id: &str, p: &Value) -> bool {
+    !is_classic_three_d(id) && shadow::options(p).is_some() && !wireframe::wireframe_params(id, p)
+}
+
+/// Does `item` of a shape with opacity `member` paint anything, and so cast a shadow?
+fn visible(item: &AppearanceItem, member: f32) -> bool {
+    paint_of(item, member).1 > 0.0
 }
 
 /// Do the solids 3D effect `id` with parameters `p` builds from the profiles of `shapes` about `b`
-/// build? Only the profiles no solid of [`check_solids`] is built from are built here: every
-/// shape's for Rotate, and for Extrude & Bevel and Inflate the profile of a shape with no fill,
-/// whose solids are its strokes' outlines or none. A filled shape's profile is its fill's solid,
-/// which [`check_solids`] builds once, about the bounds the effect draws it about.
+/// build? Only the profiles no solid of [`check_solids`] is built from are built here: for Rotate
+/// every shape's, except with its shadow cast that of a shape with a visible fill, whose plane is
+/// the fill's; for Extrude & Bevel and Inflate the profile of a shape with no fill, whose solids
+/// are its strokes' outlines or none. A filled shape's profile is its fill's solid, which
+/// [`check_solids`] builds once, about the bounds the effect draws it about.
 fn check_profiles(id: &str, p: &Value, shapes: &[Profile], b: Rect) -> Result<(), String> {
-    shapes
-        .iter()
-        .filter(|s| is_plane(id) || !s.items.iter().any(|i| matches!(i, AppearanceItem::Fill(_))))
-        .try_for_each(|s| facets(id, &s.path, s.rule, b, p).map(|_| ()))
+    let cast = casts_shadow(id, p);
+    let fill = |s: &Profile| s.items.iter().any(|i| matches!(i, AppearanceItem::Fill(_)) && (!is_plane(id) || visible(i, s.opacity)));
+    shapes.iter().filter(|s| if is_plane(id) { !(cast && fill(s)) } else { !fill(s) }).try_for_each(|s| facets(id, &s.path, s.rule, b, p).map(|_| ()))
 }
 
 /// Do the solids 3D effect `id` with parameters `p` builds from the fills and strokes of `shapes`
-/// fit, each on its own and all of them together ([`built_solids`])? Rotate's planes are not
-/// counted.
+/// fit, each on its own and all of them together ([`built_solids`]), and with its shadow cast, does
+/// the shadow fit? The shadow is cast from the faces those same builds kept ([`cast_built`]), as
+/// [`art_for`] casts it: Extrude & Bevel and Inflate build each solid once, and Rotate builds the
+/// plane of each visible fill and stroke once. Rotate's planes are not counted, and without its
+/// shadow Rotate builds no plane here.
 fn check_solids(id: &str, p: &Value, shapes: &[Profile]) -> Result<(), String> {
-    let Some(b) = union_bounds(shapes).filter(|_| !is_plane(id)) else { return Ok(()) };
+    let Some(b) = union_bounds(shapes) else { return Ok(()) };
+    let cast = casts_shadow(id, p);
+    if is_plane(id) {
+        if !cast {
+            return Ok(());
+        }
+        let mut built = vec![];
+        for s in shapes {
+            for item in &s.items {
+                if !visible(item, s.opacity) {
+                    built.push(None);
+                    continue;
+                }
+                let (area, rule) = region(&s.path, s.rule, item);
+                #[cfg(test)]
+                SOLIDS_BUILT.with(|n| n.set(n.get() + 1));
+                built.push(facets_and_faces(ROTATE, &area, rule, b, p, true)?.1);
+            }
+        }
+        return cast_built(id, p, shapes, built).map(|_| ());
+    }
     let (parts, bounds) = solid_parts(shapes, b);
-    built_solids(id, p, &parts, bounds, MAX_OBJECT_FACES).try_for_each(|r| r.map(|_| ()))
+    if !cast {
+        return built_solids(id, p, &parts, bounds, MAX_OBJECT_FACES).try_for_each(|r| r.map(|_| ()));
+    }
+    let built = built_solids_cast(id, p, &parts, bounds, MAX_OBJECT_FACES, true)
+        .map(|r| r.map(|solid| solid.and_then(|(_, faces)| faces)))
+        .collect::<Result<Vec<_>, String>>()?;
+    cast_built(id, p, shapes, built).map(|_| ())
 }
 
 /// [`profile`], or the error a command reports for object `n`: type with no outlines to build from
@@ -596,7 +625,9 @@ pub fn validate_three_d_params(id: &str, p: &Value) -> Result<(), String> {
 /// blend mode (so overlapping facets don't add up their transparency). Under colored lights a solid
 /// color with smooth facets is one composite of all its facets ([`composites_facets`]) unless
 /// `faces`: then each facet is a face of its own, as in a gradient, so the faces can go in one order
-/// with the faces of other solids.
+/// with the faces of other solids. Under colored lights a gradient with transparent stops is drawn
+/// opaque under one mask of its transparency, placed once on all the facets when it has no
+/// placement of its own ([`crate::lighting::opaque_surface_paint`]).
 fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: BlendMode, colored: bool, faces: bool) -> Node {
     if !faces && composites_facets(&facets, paint, colored) {
         let mut group = crate::lighting::solid_surface(n.id, &facets, paint);
@@ -605,7 +636,7 @@ fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: Ble
         return group;
     }
     // Preserve existing white-light paints and alpha composition exactly.
-    let (opaque, mask) = if colored { crate::lighting::opaque_paint(paint) } else { (paint.clone(), None) };
+    let (opaque, mask) = if colored { crate::lighting::opaque_surface_paint(paint, || facets_bounds(&facets)) } else { (paint.clone(), None) };
     let paint = &opaque;
     let children = facets
         .into_iter()
@@ -640,6 +671,11 @@ fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: Ble
         group.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(coverage, true)));
     }
     group
+}
+
+/// The bounds of every facet of `facets` together (`Rect::ZERO` when none has any).
+pub(crate) fn facets_bounds(facets: &[Facet]) -> Rect {
+    facets.iter().filter_map(|f| f.path().bounds()).reduce(|a, c| a.union(c)).unwrap_or(Rect::ZERO)
 }
 
 /// The width of the stroke of a facet's own paint that closes the seams between `face` and its
@@ -733,7 +769,8 @@ thread_local! {
     /// surfaces count too.
     pub(crate) static SOLIDS_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// How many Extrude & Bevel (Classic included) and Inflate solids [`facets`] and
-    /// [`built_solids`] have built on this thread, for the tests.
+    /// [`built_solids`] have built on this thread, for the tests. The solids built to cast a shadow
+    /// ([`cast_shadow`]) count too.
     static SOLID_GEOMETRY_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -1435,7 +1472,7 @@ fn art_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile]) ->
         return Some((vec![], wireframe::wire_surfaces(n.id, fx, shapes)?));
     }
     let p = crate::merged_params(&fx.id, &fx.params);
-    let cast = !is_classic_three_d(&fx.id) && shadow::options(&p).is_some();
+    let cast = casts_shadow(&fx.id, &p);
     let (art, built) = surfaces_for(doc, n, fx, shapes, cast)?;
     // A shadow past the limits draws the source path, as a solid past them does; commands report
     // the error ([`validate_solid_in`]).
@@ -1474,8 +1511,8 @@ fn cast_shadow<'a>(id: &str, p: &Value, shapes: &'a [Profile]) -> Result<Option<
     let view = view_options(p);
     let mut caster = vectorcraft_three_d::ShadowCaster::new();
     // The faces each solid of visible art added, with its member's scopes and its ink (opacity
-    // and blending mode), in order. A fully transparent fill or stroke (or member) casts nothing
-    // and does not place the plane.
+    // and blending mode), in order. A fill or stroke (or member) that is fully transparent, or whose
+    // opacity is not a finite number, casts nothing and does not place the plane ([`shadow::Ink::casts`]).
     let mut cast: Vec<shadow::Cast> = vec![];
     let ink = |item: &AppearanceItem, member: f32| {
         let (_, opacity, blend) = paint_of(item, member);
@@ -1483,7 +1520,7 @@ fn cast_shadow<'a>(id: &str, p: &Value, shapes: &'a [Profile]) -> Result<Option<
     };
     if id == ROTATE {
         for s in shapes {
-            for item in s.items.iter().filter(|i| ink(i, s.opacity).opacity > 0.0) {
+            for item in s.items.iter().filter(|i| ink(i, s.opacity).casts()) {
                 let (area, rule) = region(&s.path, s.rule, item);
                 #[cfg(test)]
                 SOLIDS_BUILT.with(|n| n.set(n.get() + 1));
@@ -1497,21 +1534,25 @@ fn cast_shadow<'a>(id: &str, p: &Value, shapes: &'a [Profile]) -> Result<Option<
         // Inflate's eye is placed for every shape together, as the solids are.
         let added: Vec<Result<std::ops::Range<usize>, String>> = if id == INFLATE {
             let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _, _)| (area, *rule)).collect();
-            let casts: Vec<bool> = inks.iter().map(|i| i.opacity > 0.0).collect();
+            let casts: Vec<bool> = inks.iter().map(|i| i.casts()).collect();
             #[cfg(test)]
             SOLIDS_BUILT.with(|n| n.set(n.get() + shapes.len()));
+            #[cfg(test)]
+            SOLID_GEOMETRY_BUILT.with(|n| n.set(n.get() + casts.iter().filter(|c| **c).count()));
             caster.inflate(&shapes, &casts, bounds, inflate_options(p), view)
         } else {
             let mut added = vec![];
             for ((_, _, area, rule, _, _), ink) in parts.iter().zip(&inks) {
                 #[cfg(test)]
-                SOLIDS_BUILT.with(|n| n.set(n.get() + usize::from(ink.opacity > 0.0)));
-                added.push(if ink.opacity > 0.0 { caster.extrude(area, *rule, bounds, extrude_options(p), view) } else { Ok(0..0) });
+                SOLIDS_BUILT.with(|n| n.set(n.get() + usize::from(ink.casts())));
+                #[cfg(test)]
+                SOLID_GEOMETRY_BUILT.with(|n| n.set(n.get() + usize::from(ink.casts())));
+                added.push(if ink.casts() { caster.extrude(area, *rule, bounds, extrude_options(p), view) } else { Ok(0..0) });
             }
             added
         };
         for (((item, _, _, _, scopes, _), ink), faces) in parts.iter().zip(inks).zip(added) {
-            if ink.opacity <= 0.0 {
+            if !ink.casts() {
                 continue;
             }
             // A stroke whose own solid is past the limits is left out; past the shadow's limit for
@@ -1529,16 +1570,14 @@ fn cast_shadow<'a>(id: &str, p: &Value, shapes: &'a [Profile]) -> Result<Option<
 
 /// [`cast_shadow`] from `built`, the faces the solids drawn kept ([`surfaces_for`] with its shadow
 /// cast), one entry for each solid in the order they are built: for Rotate each fill and stroke of
-/// each shape, otherwise each part ([`solid_parts`]). A stroke's solid left out of the art (past its
-/// own limits) kept no faces. Its Extrude & Bevel solid is built for the shadow alone, as
-/// [`cast_shadow`] builds it, and when an Inflate solid of visible art kept no faces the whole
-/// shadow is cast as [`cast_shadow`] casts it, since Inflate's solids share one eye.
+/// each shape, otherwise each part ([`solid_parts`]). No solid is built here: an entry with no faces
+/// (a stroke's solid left out of the art, past its own limits) casts nothing, as it draws nothing.
+/// Only `built` of another length than the solids is cast as [`cast_shadow`] casts it.
 fn cast_built<'a>(id: &str, p: &Value, shapes: &'a [Profile], built: Vec<Option<SolidFaces>>) -> Result<Option<Cast<'a>>, String> {
     if id == CLASSIC_EXTRUDE || id == CLASSIC_ROTATE {
         return Ok(None);
     }
     let (Some(settings), Some(b)) = (shadow::options(p), union_bounds(shapes)) else { return Ok(None) };
-    let view = view_options(p);
     let mut caster = vectorcraft_three_d::ShadowCaster::new();
     let mut cast: Vec<shadow::Cast> = vec![];
     let ink = |item: &AppearanceItem, member: f32| {
@@ -1552,42 +1591,25 @@ fn cast_built<'a>(id: &str, p: &Value, shapes: &'a [Profile], built: Vec<Option<
         }
         for ((s, item), kept) in items.into_iter().zip(built) {
             let ink = ink(item, s.opacity);
-            if ink.opacity <= 0.0 {
+            if !ink.casts() {
                 continue;
             }
-            let faces = match kept {
-                Some(kept) => caster.add_solid(kept)?,
-                None => {
-                    let (area, rule) = region(&s.path, s.rule, item);
-                    #[cfg(test)]
-                    SOLIDS_BUILT.with(|n| n.set(n.get() + 1));
-                    caster.plane(&area, rule, b, view)?
-                }
-            };
-            cast.push((s.scopes.as_slice(), ink, faces));
+            let Some(kept) = kept else { continue };
+            cast.push((s.scopes.as_slice(), ink, caster.add_solid(kept)?));
         }
         return Ok(Some((caster, settings, cast)));
     }
-    let (parts, bounds) = solid_parts(shapes, b);
-    let inks: Vec<shadow::Ink> = parts.iter().map(|(item, member, ..)| ink(item, *member)).collect();
-    if parts.len() != built.len() || (id == INFLATE && inks.iter().zip(&built).any(|(ink, kept)| ink.opacity > 0.0 && kept.is_none())) {
+    let (parts, _) = solid_parts(shapes, b);
+    if parts.len() != built.len() {
         return cast_shadow(id, p, shapes);
     }
-    for (((item, _, area, rule, scopes, _), ink), kept) in parts.iter().zip(inks).zip(built) {
-        if ink.opacity <= 0.0 {
-            continue;
-        }
-        let faces = match kept {
-            Some(kept) => caster.add_solid(kept),
-            None => {
-                #[cfg(test)]
-                SOLIDS_BUILT.with(|n| n.set(n.get() + 1));
-                caster.extrude(area, *rule, bounds, extrude_options(p), view)
-            }
-        };
+    for ((item, member, _, _, scopes, _), kept) in parts.iter().zip(built) {
+        let ink = ink(item, *member);
+        // A fully transparent solid, or a stroke's solid left out of the art, casts nothing.
+        let Some(kept) = kept.filter(|_| ink.casts()) else { continue };
         // A stroke whose own solid is past the limits is left out; past the shadow's limit for all
         // the solids together, the shadow is refused.
-        let faces = match faces {
+        let faces = match caster.add_solid(kept) {
             Ok(faces) => faces,
             Err(e) if matches!(item, AppearanceItem::Stroke(_)) && e != vectorcraft_three_d::TOO_COMPLEX_SHADOW => continue,
             Err(e) => return Err(e),

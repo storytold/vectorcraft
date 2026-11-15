@@ -1050,7 +1050,8 @@ font-technology	Variable	可變
 	Every (minutes)	每隔 (分鐘)
 	Every option is at its default.	所有選項皆為預設值。
 	Every option matches {base}.	所有選項皆與{base}相同。
-	Every-line Composer	逐行排版程式
+	Middle Eastern & South Asian Every-line Composer	逐行排版程式（中東與南亞）
+	Standard Every-line Composer	標準逐行排版程式
 	Exact dash lengths	精確虛線長度
 	Exceptions (comma separated)	例外 (以逗號分隔)
 	Exclude	差集
@@ -1387,6 +1388,14 @@ file-filter	Templates	範本
 	Previous Artboard	上一個工作區域
 	Next Artboard	下一個工作區域
 	Last Artboard	最後一個工作區域
+	Status Bar Show	狀態列顯示
+	Artboard Name	工作區域名稱
+	Current Tool	目前工具
+	Date and Time	日期和時間
+	Number of Undos	復原次數
+	Document Color Profile	文件色彩描述檔
+	Undos	復原
+	Redos	重做
 	Go To Link	前往連結
 	GPL palettes keep solid colours only, as RGB.	GPL 調色盤僅保留純色，並以 RGB 儲存。
 	GPU Performance	GPU 效能
@@ -1406,6 +1415,8 @@ file-filter	Templates	範本
 	Graph	圖表
 	Graph Data	圖表資料
 	Graph Type	圖表類型
+	Graph Type…	圖表類型…
+	Graph Data…	圖表資料…
 	Graph Options	圖表選項
 	Left Axis	左軸
 	Right Axis	右軸
@@ -1522,6 +1533,7 @@ file-filter	Templates	範本
 	Show smooth color wheel	顯示平滑色輪
 	Show segmented color wheel	顯示分段色輪
 	Show color bars	顯示顏色條
+	Find the selected colors in the artwork	在圖稿中尋找所選顏色
 	Harmony Sets	色彩調和組
 	Height	高度
 	Height:	高度：
@@ -2428,6 +2440,8 @@ file-filter	Templates	範本
 @msg	give only one of onto, below and above	onto、below 和 above 只能提供其中一個
 @msg	column must be true or a number from 1	column 必須是 true 或從 1 起算的數字
 @msg	unknown panel `{raw}`	未知的面板 `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` 沒有可切換的顯示大小
+@msg	the panels are not shown	面板未顯示
 @msg	panels can't be shown in Presentation Mode	簡報模式下無法顯示面板
 @msg	x and y must both be numbers	x 和 y 都必須是數字
 @msg	Downloaded {what}	已下載 {what}
@@ -2626,6 +2640,7 @@ file-filter	Templates	範本
 @msg	`name` must be the name of a script engine	`name` 必須是指令碼引擎的名稱
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	主指令碼引擎在每次執行時都是新的，從不保留，因此無法捨棄
 @msg	there is no script engine named {name}	沒有名為 {name} 的指令碼引擎
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` 僅適用於沒有人可詢問的執行：在應用程式中，由使用者回答每個對話框
 @msg	Running a script	正在執行指令碼
 @msg	Copied the script report	已複製指令碼報告
 @msg	Copied the link info	已複製連結資訊
@@ -3832,6 +3847,8 @@ font-script	Japanese	漢字
 	Insert Aki Left	在前方插入空白
 	Insert Aki Right	在後方插入空白
 	Tsume	比例間距
+	Adjust Horizontal Diacritic Position	調整變音符號水平位置
+	Adjust Vertical Diacritic Position	調整變音符號垂直位置
 	Character Direction	字元方向
 	Digits	數字
 	Arabic	阿拉伯數字
@@ -4573,7 +4590,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Single Left Quotation Mark	左單引號
 	Single Quotes:	單引號：
 	Single Right Quotation Mark	右單引號
-	Single-line Composer	單行排版程式
+	Middle Eastern & South Asian Single-line Composer	單行排版程式（中東與南亞）
+	Standard Single-line Composer	標準單行排版程式
 	Toggle Line Composer	切換行排版程式
 	Sixth Space	六分之一空格
 	Size	大小
@@ -5655,6 +5673,7 @@ effect	Soft	柔和
 	Change Panel Layout	變更面板配置
 	Close Panel	關閉面板
 	Collapse Panel Group	摺疊面板群組
+	Cycle Display Sizes	切換顯示大小
 	Move Panel	移動面板
 	Group with	群組至
 	Resize panels	調整面板大小
@@ -5678,6 +5697,8 @@ effect	Soft	柔和
 	Step up or down	逐級增減
 	Drag values or labels. Double-click a value to type.	拖曳數值或標籤。按兩下數值即可輸入。
 	Drag rings to rotate. Shift snaps to 15°.	拖曳圓環旋轉。按住 Shift 以 15° 為間距調整。
+	Track cube	旋轉立方體
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	拖曳面、邊或圓環進行旋轉。按住 Shift 繞一個螢幕軸旋轉。
 	Drag the light, or its rings. Shift snaps to 15°.	拖曳光源或圓環。按住 Shift 以 15° 為間距調整。
 lighting	Light	光源
 	Keep visible surfaces only when expanding	展開時僅保留可見表面
@@ -5951,6 +5972,7 @@ lighting	Light	光源
 	Export Data Sets…	匯出資料集…
 	Load Variable Library…	載入變數資料庫…
 	Save Variable Library…	儲存變數資料庫…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	「匯入」讀取副檔名為 .csv、.tsv、.txt 或 .xml 的資料來源檔案
 @msg	a variable library holds text variables, and the document has none	變數資料庫包含文字變數，但文件中沒有文字變數
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	無法將變數 `{name}` 儲存到變數資料庫：請重新命名，使其以字母或 `_` 開頭，且不含空格或 `-`、`_`、`.` 以外的符號
 @msg	{k} has control characters	{k} 包含控制字元
@@ -7476,6 +7498,7 @@ breakText	Glyphs	字符
 @msg	`name` must be a name that is not empty	`name` 必須是不為空的名稱
 @msg	`name` must not be empty	`name` 不能為空
 @msg	`origin` must be [x, y] in points	`origin` 必須是以點為單位的 [x, y]
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` 必須是 [a, b, c, d]，每個值介於 -1000 到 1000 之間，且 a·d - b·c 與 0 的差至少為 0.001
 @msg	`picks` must be an array (got {v})	`picks` 必須是陣列 (收到 {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` 必須包含 1 到 {MAX_PICKS} 個選擇 (收到 {_1})
 @msg	`points` must hold from 2 to 100000 points	`points` 必須包含 2 到 100000 個點
@@ -7854,6 +7877,7 @@ breakText	Glyphs	字符
 @msg	Image Trace failed: {e}	影像描圖失敗：{e}
 @msg	Image Trace finished, but its document was closed	影像描圖已完成，但其文件已關閉
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	影像描圖已完成，但影像或其設定在此期間已變更：請重新描圖
+@msg	Image Trace finished, but its document was reverted: trace it again	影像描圖已完成，但其文件已回復：請重新描圖
 @msg	Invalid dimension offset	尺寸標註位移無效
 @msg	Invalid point	點無效
 @msg	Join: a subpath went missing	連接：有一條子路徑不見了
@@ -8268,7 +8292,7 @@ breakText	Glyphs	字符
 @msg	column: true floats the whole column and takes no onto, above or below	column: true 會讓整欄浮動，不接受 onto、above 或 below
 @msg	command must be a shape.* command	command 必須是 shape.* 指令
 @msg	commands[{i}]: missing `command`	commands[{i}]：未提供 `command`
-@msg	composer must be "singleLine" or "everyLine"	composer 必須是 "singleLine" 或 "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer 必須是 "singleLine"、"everyLine"、"standardSingleLine" 或 "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	複合形狀接受路徑、複合路徑、群組、複合形狀、文字、漸變物件和封套
 @msg	compound {_1} must contain exactly one open path to join	複合路徑 {_1} 必須剛好包含一條可連接的開放路徑
 @msg	connect needs a path other than the one extended	connect 需要延伸路徑以外的另一條路徑
@@ -9226,4 +9250,21 @@ breakText	Glyphs	字符
 @msg	{v} is not an asset id	{v} 不是資產 ID
 @msg	{what} can't be intertwined	{what} 無法交織
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} 連同出血和標記無法容納於紙張
+	Packaging Tools	包裝工具
+	Fold Lines	摺線
+	Make Cut Line	設為切割線
+	Make Crease Line	設為壓痕線
+	Make Partial Cut Line	設為半切線
+	Make Perforation Line	設為打孔線
+	Make Fold Line	設為摺線
+	Role Swatches…	線條類型色票…
+	Role Swatches	線條類型色票
+	Role	線條類型
+	Cut Line	切割線
+	Crease Line	壓痕線
+	Partial Cut Line	半切線
+	Perforation Line	打孔線
+	No objects are selected.	未選取任何物件。
+	Open a document to mark its fold lines.	開啟文件以標記其摺線。
+	Remove Fold Line Role	移除線條類型
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小

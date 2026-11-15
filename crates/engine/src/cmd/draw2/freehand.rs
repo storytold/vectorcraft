@@ -46,7 +46,7 @@ fn fit_freehand(pts: &[Point], tol: f64, closed: bool) -> SubPath {
     let sp = vectorcraft_tools::draw2::catmull_rom(&marked, false);
     if sp.anchors.len() < 3 {
         // Two anchors closed would run back over the line itself.
-        return SubPath::new(sp.anchors, closed && n > 2);
+        return SubPath::of(sp.anchors, closed && n > 2);
     }
     let fitted = po::simplify_with(
         &PathData::single(sp.clone()),
@@ -62,7 +62,7 @@ fn fit_freehand(pts: &[Point], tol: f64, closed: bool) -> SubPath {
             f.h_in = f.p;
         }
     }
-    SubPath::new(anchors, closed)
+    SubPath::of(anchors, closed)
 }
 
 /// The path of a freehand stroke: fitted at `tol` ([`fit_freehand`]), or with no `tol` the points
@@ -133,13 +133,13 @@ fn redraw_section(pd: &PathData, pts: &[Point], tol: Option<f64>, within: f64) -
     *s0 = s1.p;
     let (Some(e0), Some(e1)) = (stroke.last_mut(), sp.anchors.get(end)) else { return None };
     *e0 = e1.p;
-    let fit = stroke_subpath(&stroke, tol, false).anchors;
+    let fit = stroke_subpath(&stroke, tol, false).anchors.into_vec();
     let (Some(f0), Some(f1)) = (fit.first().copied(), fit.last().copied()) else { return None };
     let inner = fit.get(1..fit.len().saturating_sub(1)).unwrap_or_default();
     let (before, after): (Vec<Anchor>, Vec<Anchor>) = if sp.closed {
         ((0..=(start + n - end) % n).filter_map(|k| sp.anchors.get((end + k) % n).copied()).collect(), vec![])
     } else {
-        (sp.anchors.get(..=start)?.to_vec(), sp.anchors.get(end..)?.to_vec())
+        (sp.anchors.get_range(..=start)?, sp.anchors.get_range(end..)?)
     };
     let mut anchors = before;
     if let Some(a) = anchors.last_mut() {
@@ -227,12 +227,18 @@ pub(crate) fn freehand_brushed(s: &mut Session, p: &Value, brush_name: Option<&s
         let Some(p0) = pts.first_mut() else { return Err(bad(C, "needs points")) };
         *p0 = end;
         if pts.len() < 2 {
-            // No stroke to add: the brush alone changes, when it is not the path's already.
+            // No stroke to add: the brush alone changes, when it is not the path's already, and the
+            // path is selected or deselected as a longer continuation leaves it.
             if let Some(name) = brush_name
                 && s.doc()?.doc.node(target).and_then(|n| n.appearance.stroke()).is_some_and(|st| st.brush.as_deref() != Some(name))
             {
-                s.edit("Paintbrush", |d, _| {
+                s.edit("Paintbrush", |d, sel| {
                     set_brush(d, target, name);
+                    if keep_selected {
+                        sel.set([id]);
+                    } else {
+                        sel.remove(id);
+                    }
                     Ok(())
                 })?;
             }
@@ -316,12 +322,12 @@ pub(crate) fn freehand_brushed(s: &mut Session, p: &Value, brush_name: Option<&s
         // outgoing handle.
         let mut other_len = 0.0;
         if let Some((_, _, y, _)) = &connect
-            && let Some((y0, rest)) = y.anchors.split_first()
+            && let Some(y0) = y.anchors.first()
         {
             if let Some(last) = sp.anchors.last_mut() {
                 *last = Anchor::with_handles(y0.p, last.h_in + (y0.p - last.p), y0.h_out);
             }
-            sp.anchors.extend_from_slice(rest);
+            sp.anchors.extend(y.anchors.iter().skip(1));
             other_len = subpath_len(y);
         }
         // What the pen recorded along the path (in the direction it is continued in), followed by

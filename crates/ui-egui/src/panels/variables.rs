@@ -197,6 +197,18 @@ pub(crate) fn delete_active_dataset(app: &mut VectorcraftApp) {
     app.run("dataset.delete", json!({})).ok();
 }
 
+/// The Data Set box: a new name typed over the current data set's renames it with
+/// `dataset.rename`, in one undo step. The same name runs nothing, so no undo step is added; an
+/// empty or taken name is refused, and the status bar says why.
+pub(crate) fn rename_active_dataset(app: &mut VectorcraftApp, from: &str, to: &str) {
+    if from.is_empty() || to.trim() == from {
+        return;
+    }
+    if let Err(e) = app.run("dataset.rename", json!({"name": from, "newName": to})) {
+        app.status(e);
+    }
+}
+
 /// Draw document variables, data sets and their two-row footer of capture and binding controls.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else {
@@ -241,12 +253,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let locked = st.doc.variables.locked;
     let sort = st.variables_sort;
 
-    // The current data set across the top: its name, and the arrows that step through them.
+    // The current data set across the top: its name in a box that renames it, the list that
+    // chooses another, and the arrows that step through them.
     ui.horizontal(|ui| {
         widgets::field_label(ui, tl!("Data Set"));
         let names: Vec<&str> = sets.iter().map(|s| s.name.as_str()).collect();
         let current = active.map(|s| s.name.as_str()).unwrap_or("");
-        let picked = widgets::dropdown_names(ui, "variables-active", current, &names, 160.0);
+        let typed = ui.add_enabled_ui(active.is_some(), |ui| widgets::text_field(ui, "variables-active-name", Some(current), 134.0, 1)).inner;
+        if let Some(to) = typed {
+            rename_active_dataset(app, current, &to);
+        }
+        let picked = widgets::dropdown_names_named(ui, "variables-active", Some(tl!("Data Sets")), "", &names, 26.0);
         if let Some(name) = picked.and_then(|i| names.get(i))
             && *name != current
         {
@@ -413,6 +430,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         delete_active_dataset(app);
     }
     ui.separator();
+    // One file dialog for either kind of data source; the extension picks the reader.
+    if widgets::menu_item(ui, tl!("Import…"), true, false) {
+        crate::picks::button(app, import_data_source);
+    }
     if widgets::menu_item(ui, tl!("Import Data Sets…"), true, false) {
         crate::picks::button(app, import_datasets);
     }
@@ -433,6 +454,23 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if widgets::menu_item(ui, tl!("Select All Bound Objects"), !bound.is_empty(), false) {
         app.run("select.set", json!({"ids": bound})).ok();
+    }
+}
+
+/// Variables panel: Import… opens one file dialog for a CSV, TSV, TXT or XML file and runs
+/// `variable.import` on the chosen file, which reads it by its extension.
+fn import_data_source(app: &mut VectorcraftApp) {
+    let pick = crate::FilePick {
+        filters: vec![
+            crate::FilePick::filter("Data sources", &["csv", "tsv", "txt", "xml"]),
+            crate::FilePick::filter("CSV", &["csv", "tsv", "txt"]),
+            crate::FilePick::filter("XML", &["xml"]),
+        ],
+        ..Default::default()
+    };
+    let Some(path) = crate::picks::open(app, &pick) else { return };
+    if let Err(e) = app.run("variable.import", json!({"path": path})) {
+        app.status(e);
     }
 }
 
@@ -496,6 +534,123 @@ mod tests {
         out.textures_delta.clear();
         let text = crate::tests_labels::painted_text(&mut app, show);
         assert!(text.contains("Name") && text.contains("Data Sets") && text.contains("Data Set 1"), "{text}");
+    }
+
+    /// Frames of the panel with input events, for typing into its Data Set box.
+    struct Driver {
+        ctx: egui::Context,
+        time: f64,
+    }
+
+    impl Driver {
+        fn new() -> Self {
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            crate::theme::install_fonts(&ctx);
+            Self { ctx, time: 0.0 }
+        }
+
+        fn frame(&mut self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
+            self.time += 0.1;
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320.0, 600.0));
+            let input = egui::RawInput { events, time: Some(self.time), screen_rect: Some(screen), ..Default::default() };
+            let mut out = self.ctx.run_ui(input, |ui| show(app, ui));
+            out.textures_delta.clear();
+            out
+        }
+
+        /// The center of the panel's one text box, the Data Set box.
+        fn data_set_box(&mut self, app: &mut VectorcraftApp) -> egui::Pos2 {
+            use egui::accesskit::Role;
+            self.frame(app, vec![]);
+            let out = self.frame(app, vec![]);
+            let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+            let (_, node) = nodes.iter().find(|(_, n)| matches!(n.role(), Role::TextInput | Role::MultilineTextInput)).expect("the Data Set box");
+            let b = node.bounds().expect("bounds");
+            egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5)
+        }
+
+        /// Clicks the Data Set box, replaces its text with `text` and presses Enter.
+        fn type_name(&mut self, app: &mut VectorcraftApp, text: &str) {
+            use egui::{Event, Key, Modifiers, PointerButton};
+            let pos = self.data_set_box(app);
+            let (button, none) = (PointerButton::Primary, Modifiers::default());
+            self.frame(app, vec![Event::PointerMoved(pos), Event::PointerButton { pos, button, pressed: true, modifiers: none }]);
+            self.frame(app, vec![Event::PointerButton { pos, button, pressed: false, modifiers: none }]);
+            let all = Modifiers { ctrl: true, command: true, ..Default::default() };
+            let select_all = Event::Key { key: Key::A, physical_key: None, pressed: true, repeat: false, modifiers: all };
+            self.frame(app, vec![select_all, Event::Text(text.into())]);
+            self.frame(app, vec![Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: none }]);
+            self.frame(app, vec![]);
+        }
+    }
+
+    fn set_names(app: &mut VectorcraftApp) -> Vec<String> {
+        let sets = app.run("dataset.list", json!({})).unwrap();
+        sets["datasets"].as_array().unwrap().iter().map(|d| d["name"].as_str().unwrap_or_default().to_string()).collect()
+    }
+
+    fn undo_steps(app: &VectorcraftApp) -> usize {
+        app.session.active().unwrap().history.undo.len()
+    }
+
+    /// A name typed in the Data Set box and entered renames the current data set in one undo step;
+    /// the list still chooses another data set afterward.
+    #[test]
+    fn the_data_set_box_renames_the_current_data_set() {
+        let mut app = app_with_data();
+        app.session.execute("dataset.capture", &json!({})).unwrap();
+        app.session.execute("dataset.select", &json!({"name": "Data Set 1"})).unwrap();
+        let before = undo_steps(&app);
+        let mut d = Driver::new();
+        d.type_name(&mut app, "Spring");
+        assert_eq!(set_names(&mut app), ["Spring", "Data Set 2"]);
+        assert_eq!(app.session.active().unwrap().doc.variables.active_dataset.as_deref(), Some("Spring"));
+        assert_eq!(undo_steps(&app), before + 1);
+        assert_eq!(app.session.active().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Rename Data Set"));
+        // The new name is what the box shows, and what the list offers with the other row.
+        let text = crate::tests_labels::painted_text(&mut app, show);
+        assert!(text.contains("Spring"), "{text}");
+        app.run("dataset.select", json!({"name": "Data Set 2"})).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.variables.active_dataset.as_deref(), Some("Data Set 2"));
+    }
+
+    /// The same name adds no undo step; an empty name or another data set's name is refused with a
+    /// status message, and the names stay as they were.
+    #[test]
+    fn the_data_set_box_refuses_an_empty_or_taken_name() {
+        let mut app = app_with_data();
+        app.session.execute("dataset.capture", &json!({})).unwrap();
+        app.session.execute("dataset.select", &json!({"name": "Data Set 1"})).unwrap();
+        let before = undo_steps(&app);
+        let mut d = Driver::new();
+        d.type_name(&mut app, "Data Set 1");
+        assert_eq!(undo_steps(&app), before, "the same name runs nothing");
+        assert_eq!(app.ui.status, "");
+        for name in ["Data Set 2", "   "] {
+            app.ui.status.clear();
+            d.type_name(&mut app, name);
+            assert_eq!(set_names(&mut app), ["Data Set 1", "Data Set 2"], "{name:?}");
+            assert_eq!(undo_steps(&app), before, "{name:?}");
+            assert!(!app.ui.status.is_empty(), "{name:?} gives no status message");
+        }
+        assert!(app.ui.status.contains("newName"), "{}", app.ui.status);
+        // Through the helper too: an unchanged or padded name runs nothing.
+        rename_active_dataset(&mut app, "Data Set 1", " Data Set 1 ");
+        assert_eq!(undo_steps(&app), before);
+    }
+
+    /// With no data set the box is disabled, so typing in it renames nothing.
+    #[test]
+    fn the_data_set_box_is_disabled_without_a_data_set() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+        let before = undo_steps(&app);
+        let mut d = Driver::new();
+        d.type_name(&mut app, "Spring");
+        assert!(set_names(&mut app).is_empty());
+        assert_eq!(undo_steps(&app), before);
+        assert_eq!(app.ui.status, "");
     }
 
     /// A click on a column header sorts the list by that column, and a second click on it
@@ -624,6 +779,8 @@ mod tests {
             "Update Data Set",
             "Rename Data Set…",
             "Delete Data Set",
+            "Import…",
+            "Import Data Sets…",
             "Load Variable Library…",
             "Save Variable Library…",
             "Select Bound Object",
