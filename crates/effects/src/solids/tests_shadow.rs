@@ -361,3 +361,16 @@ fn the_check_accepts_the_shadowed_objects_that_draw() {
         assert_eq!(SOLIDS_BUILT.with(std::cell::Cell::get) - start, planes, "Rotate, a stroke at {stroke}");
     }
 }
+
+/// In wireframe mode no shadow is drawn, so the check casts none: with Shadows on, Rotate builds no
+/// plane for a shadow, and Extrude & Bevel and Inflate build each solid once, as with the shadow off.
+#[test]
+fn the_check_casts_no_shadow_in_wireframe_mode() {
+    let n = stroked_square(1, 0.0, 1.0);
+    let wire = json!({"shadow": true, "render": {"mode": "wireframe"}});
+    for (id, solids) in [(ROTATE, 0), (EXTRUDE, 2), (INFLATE, 2)] {
+        let start = SOLIDS_BUILT.with(std::cell::Cell::get);
+        assert_eq!(validate_solid(&n, id, &wire), Ok(()), "{id}");
+        assert_eq!(SOLIDS_BUILT.with(std::cell::Cell::get) - start, solids, "{id}");
+    }
+}
