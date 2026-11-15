@@ -11056,7 +11056,11 @@ that starts with `/version`) without changing anything. Give exactly one of `pat
 the set's name (`set`, else the file's name, else empty), its `version`, and its `actions`, each with its `name` and
 `steps`. A step lists its `name` (the file's `/internalName`), its `label` (the `/localizedName` it is shown with, or
 null when it has none or it is blank), `on` (false when the file sets `/isOn 0`), `params` (how many recorded values it
-has) and its `line`. `unread` lists the tokens the reader skipped, with their lines. The reader stops at 8 MiB, 16 open
+has), `values` and its `line`. `values` lists the step's recorded values in order, each as `{key, type, value, bytes?}`:
+the block's `/key` and `/type` (null when it has none), and its `/value` when that is a whole number, or text in
+parentheses or hexadecimal text that is UTF-8, with `bytes` giving the text's length in bytes; any other value, and text
+that is not UTF-8, is null. Only the first 100,000 recorded values in the set are listed, so a step's `values` can be
+shorter than its `params`. `unread` lists the tokens the reader skipped, with their lines. The reader stops at 8 MiB, 16 open
 blocks, 1,000 actions, 10,000 steps in an action and 100,000 steps in the set, and cuts names at 1,024 bytes. It sets
 `truncated` when it reaches one of these limits, when the text ends inside a block or a value or after a field's name,
 when `/actionCount`, `/eventCount` or a step's `/parameterCount` differs from the actions, steps or recorded values read
@@ -11071,8 +11075,12 @@ label, in English or in the interface language, in any case and without a final 
 that label and that command is directly in a top menu, can be recorded in actions, is what its menu bar item runs with
 no values and opens no dialog (Group, Ungroup). A submenu's items, file and document commands, Paste, Undo, Redo and
 add-on commands are never matched. The step runs with no params, and a step that is off in the file is excluded from
-playback. Other steps are left out, including every step with no label and every step recorded with values (recorded
-menu items too). The reply lists the first 1,000 in `skipped` (`{action, step}`, the step by its label, else its name),
+playback. A Set Selection step, found by its `/internalName` whatever its label, comes in as a Select Object step
+(`select.byNote` with `{note, caseSensitive, wholeWord}`) when it has exactly three recorded values: the note (key
+`text`, 1952807028, of type `ustring`, UTF-8), Whole Word (key `word`, 2003792484) and Case Sensitive (key `case`,
+1667330917), each of type `boolean` and 0 or 1. The note loses its leading and trailing spaces and must then be 1 to
+1,024 bytes long. A Set Selection step with any other values is left out; no option is filled in. Other steps are left
+out, including every other step with no label and every other step recorded with values (recorded menu items too). The reply lists the first 1,000 in `skipped` (`{action, step}`, the step by its label, else its name),
 `leftOut` counts them, and the status bar says how many were left out. An action with no name is called `Action N`, by
 its place in the file. Function keys and colors are not read. A file marked `truncated` is refused, and no set is added.
 Text that starts `/version` and is not an action set gives "not an action set file". Tokens in `unread` do not stop a
