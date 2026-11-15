@@ -3465,6 +3465,7 @@ digits	Malayalam	Malayalam
 	Sixth Space	Spazio di un sesto
 	Size	Dimensione
 	Size Tile to Art	Adatta tassello alla grafica
+	Move Tile with Art	Sposta tassello con la grafica
 	Size/Leading	Dimensione/interlinea
 	Size:	Dimensione:
 	Ridges per segment:	Creste per segmento:
@@ -6437,6 +6438,13 @@ axis	Y Axis	Asse Y
 	Graphite Pencil	Matita di grafite
 	Wax Crayon	Pastello a cera
 	Charcoal Dust	Polvere di carboncino
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuiti tecnologici
+	Circuit Trace	Pista del circuito
+	Bus Lines	Linee del bus
+	Terminal Nodes	Nodi terminali
+
 	Notched Ribbon	Nastro dentellato
 	Double Line	Doppia linea
 	Wave	Onda

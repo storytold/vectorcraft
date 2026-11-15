@@ -3420,6 +3420,7 @@ digits	Malayalam	Malayálam
 	Sixth Space	Sexto de espacio
 	Size	Tamaño
 	Size Tile to Art	Ajustar tamaño del mosaico a la ilustración
+	Move Tile with Art	Mover mosaico con la ilustración
 	Size/Leading	Tamaño/interlineado
 	Size:	Tamaño:
 	Ridges per segment:	Crestas por segmento:
@@ -6756,6 +6757,13 @@ axis	Y Axis	Eje Y
 	Graphite Pencil	Lápiz de grafito
 	Wax Crayon	Cera de colores
 	Charcoal Dust	Polvo de carboncillo
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuitos tecnológicos
+	Circuit Trace	Pista de circuito
+	Bus Lines	Líneas de bus
+	Terminal Nodes	Nodos terminales
+
 	Notched Ribbon	Cinta dentada
 	Double Line	Línea doble
 	Wave	Onda

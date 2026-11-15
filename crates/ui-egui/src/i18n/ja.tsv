@@ -3281,6 +3281,7 @@ mark-style	Japanese	日本式
 	Single-line Composer	1 行ずつ組む
 	Toggle Line Composer	行の組版方式を切り替え
 	Size Tile to Art	タイルをアートワークのサイズに合わせる
+	Move Tile with Art	タイルをアートワークと一緒に移動
 	Size/Leading	サイズ/行送り
 	Size:	サイズ:
 	Ridges per segment:	セグメントごとの山数:
@@ -8309,6 +8310,13 @@ axis	Y Axis	Y 軸
 	Graphite Pencil	黒鉛鉛筆
 	Wax Crayon	ワックスクレヨン
 	Charcoal Dust	木炭の粉
+
+# Original procedural circuit brushes.
+	Tech Circuit	電子回路
+	Circuit Trace	回路配線
+	Bus Lines	バス配線
+	Terminal Nodes	端子ノード
+
 	Notched Ribbon	ノッチリボン
 	Double Line	二重線
 	Wave	波

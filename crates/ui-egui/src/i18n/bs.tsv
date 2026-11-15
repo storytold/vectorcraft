@@ -2103,6 +2103,7 @@ digits	Malayalam	Malajalam
 	Show Swatch Bounds	Prikaži granice uzorka boje
 	Show Tile Edge	Prikaži ivicu pločice
 	Size Tile to Art	Prilagodi pločicu crtežu
+	Move Tile with Art	Pomjeri pločicu s crtežom
 	Tile Type:	Vrsta pločice:
 	Top in Front	Vrh naprijed
 	V Spacing:	Okomiti razmak:
@@ -6307,6 +6308,13 @@ axis	Y Axis	Y osa
 	Graphite Pencil	Grafitna olovka
 	Wax Crayon	Voštana bojica
 	Charcoal Dust	Ugljena prašina
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tehnički sklopovi
+	Circuit Trace	Vod sklopa
+	Bus Lines	Linije sabirnice
+	Terminal Nodes	Priključni čvorovi
+
 	Notched Ribbon	Zarezana traka
 	Double Line	Dvostruka linija
 	Wave	Talas

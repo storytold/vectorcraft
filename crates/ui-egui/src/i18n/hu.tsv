@@ -4069,6 +4069,7 @@ mark-style	Japanese	Japán
 	Sixth Space	Hatodkvirt-szóköz
 	Size	Méret
 	Size Tile to Art	Csempe méretezése a grafikához
+	Move Tile with Art	Csempe mozgatása a grafikával
 	Size/Leading	Méret/sorköz
 	Size:	Méret:
 	Size: {size}  Tracking: {tracking}	Méret: {size}  Betűköz: {tracking}
@@ -6794,6 +6795,13 @@ axis	Y Axis	Y tengely
 	Graphite Pencil	Grafitceruza
 	Wax Crayon	Zsírkréta
 	Charcoal Dust	Szénpor
+
+# Original procedural circuit brushes.
+	Tech Circuit	Műszaki áramkörök
+	Circuit Trace	Vezetősáv
+	Bus Lines	Buszvonalak
+	Terminal Nodes	Csatlakozási pontok
+
 	Notched Ribbon	Csipkézett szalag
 	Double Line	Dupla vonal
 	Wave	Hullám

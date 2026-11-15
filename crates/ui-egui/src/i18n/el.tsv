@@ -3972,6 +3972,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Toggle Line Composer	Εναλλαγή σύνθεσης γραμμών
 	Sixth Space	Διάστημα ενός έκτου
 	Size Tile to Art	Προσαρμογή μεγέθους πλακιδίου στο σχέδιο
+	Move Tile with Art	Μετακίνηση πλακιδίου μαζί με το σχέδιο
 	Size/Leading	Μέγεθος/διάστιχο
 	Ridges per segment:	Ράχες ανά τμήμα:
 	Size: {size}  Tracking: {tracking}	Μέγεθος: {size}  Απόσταση χαρακτήρων: {tracking}
@@ -6765,6 +6766,13 @@ axis	Y Axis	Άξονας Y
 	Graphite Pencil	Μολύβι γραφίτη
 	Wax Crayon	Κηρομπογιά
 	Charcoal Dust	Σκόνη κάρβουνου
+
+# Original procedural circuit brushes.
+	Tech Circuit	Τεχνολογικά κυκλώματα
+	Circuit Trace	Διαδρομή κυκλώματος
+	Bus Lines	Γραμμές διαύλου
+	Terminal Nodes	Τερματικοί κόμβοι
+
 	Notched Ribbon	Οδοντωτή κορδέλα
 	Double Line	Διπλή γραμμή
 	Wave	Κύμα

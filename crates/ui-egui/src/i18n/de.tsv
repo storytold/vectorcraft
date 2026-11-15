@@ -3389,6 +3389,7 @@ digits	Malayalam	Malayalam
 	Sixth Space	Sechstelgeviert-Leerzeichen
 	Size	Größe
 	Size Tile to Art	Kachelgröße an Grafik anpassen
+	Move Tile with Art	Kachel mit Grafik verschieben
 	Size/Leading	Größe/Zeilenabstand
 	Size:	Größe:
 	Ridges per segment:	Zacken pro Segment:
@@ -6403,6 +6404,13 @@ axis	Y Axis	Y-Achse
 	Graphite Pencil	Graphitstift
 	Wax Crayon	Wachsmalstift
 	Charcoal Dust	Kohlestaub
+
+# Original procedural circuit brushes.
+	Tech Circuit	Technische Schaltungen
+	Circuit Trace	Leiterbahn
+	Bus Lines	Busleitungen
+	Terminal Nodes	Anschlussknoten
+
 	Notched Ribbon	Gekerbtes Band
 	Double Line	Doppellinie
 	Wave	Welle

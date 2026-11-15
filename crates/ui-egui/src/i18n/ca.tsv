@@ -3972,6 +3972,13 @@ digits	Malayalam	Malaiàlam
 	Graphite Pencil	Llapis de grafit
 	Wax Crayon	Cera de colors
 	Charcoal Dust	Pols de carbó
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuits tecnològics
+	Circuit Trace	Pista de circuit
+	Bus Lines	Línies de bus
+	Terminal Nodes	Nodes terminals
+
 	Notched Ribbon	Cinta dentada
 	Double Line	Línia doble
 	Wave	Ona
@@ -4342,6 +4349,7 @@ digits	Malayalam	Malaiàlam
 	Sixth Space	Espai de sisena part
 	Size	Mida
 	Size Tile to Art	Ajusta la mida del mosaic a l’art
+	Move Tile with Art	Mou el mosaic amb l’art
 	Size/Leading	Mida/Interlineat
 	Size:	Mida:
 	Size: {size}  Tracking: {tracking}	Mida: {size}  Espaiat: {tracking}

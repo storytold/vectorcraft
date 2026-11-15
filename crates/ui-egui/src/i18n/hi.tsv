@@ -444,6 +444,13 @@ antiAlias	Sharp	शार्प
 	Graphite Pencil	ग्रेफाइट पेंसिल
 	Wax Crayon	मोम क्रेयॉन
 	Charcoal Dust	चारकोल धूल
+
+# Original procedural circuit brushes.
+	Tech Circuit	टेक सर्किट
+	Circuit Trace	सर्किट पथ
+	Bus Lines	बस रेखाएँ
+	Terminal Nodes	टर्मिनल नोड
+
 	Notched Ribbon	नोकदार रिबन
 	Double Line	दोहरी लाइन
 	Wave	लहर
@@ -4689,6 +4696,7 @@ antiAlias	Sharp	शार्प
 	Sixth Space	छठे हिस्से जितना स्पेस
 	Size	आकार
 	Size Tile to Art	आकार टाइल कला के लिए
+	Move Tile with Art	टाइल को कला के साथ ले जाएँ
 	Size:	साइज़:
 	Size: {size}  Tracking: {tracking}	साइज़: {size}  ट्रैकिंग: {tracking}
 	Size/Leading	साइज़/लीडिंग

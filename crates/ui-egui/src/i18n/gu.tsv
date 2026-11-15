@@ -3536,6 +3536,7 @@
 	Sixth Space	છઠ્ઠી જગ્યા
 	Size	કદ
 	Size Tile to Art	ટાઇલનું કદ આર્ટ પ્રમાણે કરો
+	Move Tile with Art	ટાઇલને આર્ટ સાથે ખસેડો
 	Size/Leading	કદ/લીડિંગ
 	Size:	કદ:
 	Size: {size}  Tracking: {tracking}	કદ: {size}  ટ્રેકિંગ: {tracking}
@@ -4503,6 +4504,13 @@ antiAlias	Sharp	શાર્પ
 	Graphite Pencil	ગ્રેફાઇટ પેન્સિલ
 	Wax Crayon	વેક્સ ક્રેયોન
 	Charcoal Dust	ચારકોલનો ભૂકો
+
+# Original procedural circuit brushes.
+	Tech Circuit	ટેક સર્કિટ
+	Circuit Trace	સર્કિટ પથ
+	Bus Lines	બસ રેખાઓ
+	Terminal Nodes	ટર્મિનલ નોડ્સ
+
 	Notched Ribbon	ખાંચાવાળી રિબન
 	Double Line	બેવડી રેખા
 	Wave	તરંગ

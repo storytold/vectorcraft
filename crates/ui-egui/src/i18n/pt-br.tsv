@@ -2892,6 +2892,7 @@ digits	Malayalam	Malaiala
 	Sixth Space	Espaço de Sexto
 	Size	Tamanho
 	Size Tile to Art	Dimensionar Bloco para a Arte
+	Move Tile with Art	Mover Bloco com a Arte
 	Size/Leading	Tamanho/Entrelinhamento
 	Size:	Tamanho:
 	Size: {size}  Tracking: {tracking}	Tamanho: {size}  Rastreamento: {tracking}
@@ -6726,6 +6727,13 @@ axis	Y Axis	Eixo Y
 	Graphite Pencil	Lápis de Grafite
 	Wax Crayon	Giz de Cera
 	Charcoal Dust	Pó de Carvão
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuitos tecnológicos
+	Circuit Trace	Trilha de circuito
+	Bus Lines	Linhas de barramento
+	Terminal Nodes	Nós terminais
+
 	Notched Ribbon	Fita Entalhada
 	Double Line	Linha Dupla
 	Wave	Onda

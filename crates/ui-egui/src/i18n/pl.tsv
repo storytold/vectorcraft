@@ -2052,6 +2052,7 @@ digits	Malayalam	Malajalam
 	Show Swatch Bounds	Pokaż granice próbki
 	Show Tile Edge	Pokaż krawędź kafelka
 	Size Tile to Art	Dopasuj kafelek do kompozycji
+	Move Tile with Art	Przesuwaj kafelek z kompozycją
 	Tile Type:	Typ kafelka:
 	Top in Front	Górny na wierzchu
 	V Spacing:	Odstęp pion.:
@@ -6666,6 +6667,13 @@ axis	Y Axis	Oś Y
 	Graphite Pencil	Ołówek grafitowy
 	Wax Crayon	Kredka woskowa
 	Charcoal Dust	Pył węglowy
+
+# Original procedural circuit brushes.
+	Tech Circuit	Obwody techniczne
+	Circuit Trace	Ścieżka obwodu
+	Bus Lines	Linie magistrali
+	Terminal Nodes	Węzły końcowe
+
 	Notched Ribbon	Wstęga z nacięciami
 	Double Line	Podwójna linia
 	Wave	Fala

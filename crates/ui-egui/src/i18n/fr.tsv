@@ -3412,6 +3412,7 @@ digits	Malayalam	Malayalam
 	Sixth Space	Espace d’un sixième
 	Size	Taille
 	Size Tile to Art	Ajuster le carreau à l’illustration
+	Move Tile with Art	Déplacer le carreau avec l’illustration
 	Size/Leading	Taille/interlignage
 	Size:	Taille :
 	Ridges per segment:	Crêtes par segment :
@@ -6806,6 +6807,13 @@ axis	Y Axis	Axe Y
 	Graphite Pencil	Crayon graphite
 	Wax Crayon	Craie grasse
 	Charcoal Dust	Poussière de fusain
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuits techniques
+	Circuit Trace	Piste de circuit
+	Bus Lines	Lignes de bus
+	Terminal Nodes	Nœuds terminaux
+
 	Notched Ribbon	Ruban cranté
 	Double Line	Double ligne
 	Wave	Vague

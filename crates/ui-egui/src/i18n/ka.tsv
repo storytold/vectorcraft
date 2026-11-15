@@ -1863,6 +1863,7 @@ digits	Malayalam	მალაიალამური
 	Show Swatch Bounds	ფერის ნიმუშის საზღვრების ჩვენება
 	Show Tile Edge	ფილის კიდის ჩვენება
 	Size Tile to Art	ფილის ზომის ნახატზე მორგება
+	Move Tile with Art	ფილის ნახატთან ერთად გადატანა
 	Tile Type:	ფილის ტიპი:
 	Top in Front	ზედა წინ
 	V Spacing:	ვერტ. დაშორება:
@@ -6764,6 +6765,13 @@ axis	Y Axis	Y ღერძი
 	Graphite Pencil	გრაფიტის ფანქარი
 	Wax Crayon	ცვილის ფანქარი
 	Charcoal Dust	ნახშირის მტვერი
+
+# Original procedural circuit brushes.
+	Tech Circuit	ტექნიკური სქემები
+	Circuit Trace	სქემის გამტარი
+	Bus Lines	სალტის ხაზები
+	Terminal Nodes	ტერმინალური კვანძები
+
 	Notched Ribbon	დაკბილული ლენტი
 	Double Line	ორმაგი ხაზი
 	Wave	ტალღა
