@@ -273,6 +273,16 @@ struct CubeDrag {
     lock: Option<usize>,
     /// The settings before the gesture, which Escape puts back.
     fields: serde_json::Map<String, Value>,
+    /// The last pass that drew the cube during the gesture.
+    pass: u64,
+}
+
+impl CubeDrag {
+    /// Was the cube drawn in this pass or the one before? When it was not (its dialog closed, or
+    /// the Rotation tab or the panel was left during the drag), the gesture is over.
+    fn live(&self, pass: u64) -> bool {
+        self.pass.saturating_add(1) >= pass
+    }
 }
 
 fn cube_drag_id() -> Id {
@@ -281,7 +291,8 @@ fn cube_drag_id() -> Id {
 
 /// Is a track cube gesture in progress?
 pub(super) fn cube_dragging(ctx: &egui::Context) -> bool {
-    ctx.data(|m| m.get_temp::<CubeDrag>(cube_drag_id())).is_some()
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data(|m| m.get_temp::<CubeDrag>(cube_drag_id())).is_some_and(|g| g.live(pass))
 }
 
 /// The rotation after the pointer moves from `drag.last` to `p` on a cube about `center`.
@@ -361,24 +372,33 @@ pub(super) fn track_cube(ui: &mut egui::Ui, d: &mut Dialog) {
             // A value being typed ends first; the cube then takes the keyboard focus below.
             ui.ctx().memory_mut(|m| m.stop_text_input());
             let matrix = rotation(now);
-            let drag = CubeDrag { grip: grip_at(matrix, center, origin), matrix, origin, last: origin, lock: None, fields: d.fields.clone() };
+            let pass = ui.ctx().cumulative_pass_nr();
+            let drag = CubeDrag { grip: grip_at(matrix, center, origin), matrix, origin, last: origin, lock: None, fields: d.fields.clone(), pass };
             ui.data_mut(|m| m.insert_temp(cube_drag_id(), drag));
         }
         if enabled && (resp.drag_started() || resp.clicked()) {
             resp.request_focus();
         }
+        let pass = ui.ctx().cumulative_pass_nr();
         let mut drag = ui.data(|m| m.get_temp::<CubeDrag>(cube_drag_id()));
+        if drag.as_ref().is_some_and(|g| !g.live(pass)) {
+            ui.data_mut(|m| m.remove::<CubeDrag>(cube_drag_id()));
+            drag = None;
+        }
         if let Some(current) = &mut drag {
+            current.pass = pass;
             if ui.input_mut(|i| i.consume_key(i.modifiers, egui::Key::Escape)) {
                 d.fields = current.fields.clone();
                 d.fields.remove(super::form::PREVIEWED);
                 ui.data_mut(|m| m.remove::<CubeDrag>(cube_drag_id()));
                 drag = None;
-            } else if let Some(p) = resp.interact_pointer_pos() {
-                let shift = ui.input(|i| i.modifiers.shift);
-                current.matrix = drag_turn(current, p, center, shift);
-                current.last = p;
-                next = Some(angles_of(current.matrix, now));
+            } else {
+                if let Some(p) = resp.interact_pointer_pos() {
+                    let shift = ui.input(|i| i.modifiers.shift);
+                    current.matrix = drag_turn(current, p, center, shift);
+                    current.last = p;
+                    next = Some(angles_of(current.matrix, now));
+                }
                 ui.data_mut(|m| m.insert_temp(cube_drag_id(), current.clone()));
             }
         }
