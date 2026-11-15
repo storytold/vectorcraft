@@ -744,15 +744,30 @@ pub(crate) fn clipping_text_outline(t: &Node) -> Option<Node> {
     Some(Node { visible: t.visible, ..o })
 }
 
+/// Clipping path `clip` of a clip group as a clipping path of the region it clips to
+/// ([`crate::clip_outline`]), with its id, name and visibility. For type that paints, the geometry
+/// effects of its fills and strokes reshape what they paint and leave that region as it is.
+/// `None` when it has nothing to clip by.
+pub(crate) fn clip_region_path(clip: &Node) -> Option<Node> {
+    let (bp, rule) = crate::clip_outline(clip)?;
+    let mut p = Node::path(clip.id, PathData::from_bezpath(&bp), Appearance::default());
+    if let NodeKind::Path { rule: r, clipping, .. } = &mut p.kind {
+        (*r, *clipping) = (rule, true);
+    }
+    p.name = clip.name.clone();
+    p.visible = clip.visible;
+    Some(p)
+}
+
 /// Clip group or clipping layer `n` whose clipping path is type that paints ([`Node::clip_paint`]),
-/// with that type as plain art drawn as the renderer draws it: its outlines clip
-/// ([`clipping_text_outline`]), its fills become art behind the clipped members inside the clip,
+/// with that type as plain art drawn as the renderer draws it: a path of the region it clips to
+/// clips ([`clip_region_path`]), its fills become art behind the clipped members inside the clip,
 /// and its strokes become art over the clip group, outside the clip. Each part is the type's art
 /// with only those fills or strokes ([`as_art`]), its own geometry effects applied. With strokes,
 /// `n` becomes a group with its id, name, visibility and transparency that holds a clip group of
-/// the clipping path, the fills and the members, then the strokes; a clipping layer keeps its
-/// ruler guides last. `None` when `n` does not clip, its clipping path is not type, or the type
-/// paints nothing.
+/// the clipping path, the fills and the members (with `n`'s id), then the strokes; a clipping
+/// layer keeps its ruler guides last ([`painted_clip_inner`] finds that clip group). `None` when
+/// `n` does not clip, its clipping path is not type, or the type paints nothing.
 pub(crate) fn painted_type_clip(doc: Option<&Document>, n: &Node) -> Option<Node> {
     let first = n.children()?.first().filter(|_| n.clips())?;
     if !matches!(first.kind, NodeKind::Text(_)) {
@@ -762,7 +777,7 @@ pub(crate) fn painted_type_clip(doc: Option<&Document>, n: &Node) -> Option<Node
     if paint.fill.is_none() && paint.stroke.is_none() {
         return None;
     }
-    let clip = clipping_text_outline(first)?;
+    let clip = clip_region_path(first)?;
     let fill = paint.fill.and_then(|p| as_art(doc, &p, None));
     let stroke = paint.stroke.and_then(|p| as_art(doc, &p, None));
     let mut m = n.clone();
@@ -794,6 +809,48 @@ pub(crate) fn knockout_inside(m: &mut Node, inner: &mut Node) {
     if m.knockout != vectorcraft_doc::Knockout::Neutral {
         m.knockout = vectorcraft_doc::Knockout::Off;
     }
+}
+
+/// The clip group in `n` when `n` is a group or layer that [`painted_type_clip`] made of a clip
+/// group and its clipping type's strokes: a group that does not clip whose first member is a clip
+/// group with `n`'s id and whose second member has the id of that clip group's clipping path. The
+/// clip group's region is what `n` stands for, as the clip group it was made from: the strokes
+/// paint outside it and add nothing to its outline ([`crate::member_shapes`]) or its bounds
+/// ([`clip_bounds`]).
+pub(crate) fn painted_clip_inner(n: &Node) -> Option<&Node> {
+    if n.clips() || !matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) {
+        return None;
+    }
+    let [inner, stroke, ..] = n.children()?.as_slice() else { return None };
+    let clip = inner.children()?.first()?;
+    (inner.clips() && inner.id == n.id && stroke.id == clip.id && !stroke.clips()).then_some(&**inner)
+}
+
+/// The geometric bounds of `n` ([`Node::geometric_bounds`]) with each group or layer in it that
+/// [`painted_clip_inner`] finds measured as its clip group, so the strokes of a clipping type
+/// outside the clip do not widen them.
+pub(crate) fn clip_bounds(n: &Node) -> Option<Rect> {
+    fn holds(n: &Node) -> bool {
+        painted_clip_inner(n).is_some() || n.children().into_iter().flatten().any(|c| holds(c))
+    }
+    fn unwrap(n: &mut Node) {
+        if let Some(inner) = painted_clip_inner(n) {
+            let mut inner = inner.clone();
+            inner.visible = n.visible;
+            *n = inner;
+        }
+        for c in n.children_mut().into_iter().flatten() {
+            if holds(c) {
+                unwrap(Arc::make_mut(c));
+            }
+        }
+    }
+    if !holds(n) {
+        return n.geometric_bounds();
+    }
+    let mut probe = n.clone();
+    unwrap(&mut probe);
+    probe.geometric_bounds()
 }
 
 /// Replace type anywhere inside `n` by its outlines, as art that keeps the type's look
@@ -1585,7 +1642,7 @@ impl Step<'_> {
         if !groups.is_empty() {
             carry_groups(art, groups, after, &|from, to| crate::Carry::of(&e.id, params, bounds, from, to, seed));
         }
-        let drawn = warped.as_deref().map_or_else(|| art.geometric_bounds(), |w| w.bounds(art));
+        let drawn = warped.as_deref().map_or_else(|| clip_bounds(art), |w| w.bounds(art));
         let whole = (follows && !held).then(|| crate::Carry::of(&e.id, params, bounds, Some(bounds), drawn, seed));
         Ran { kept: !kept_ids.is_empty(), took, masks, short, whole }
     }
@@ -3113,16 +3170,17 @@ impl WarpedImages {
 
     /// The geometric bounds of `art` as it draws after the effects so far: each image this table
     /// lists measured by the pieces the warps and moves it took would cut it into, when the art
-    /// has room for them ([`cut_warped_images`]).
+    /// has room for them ([`cut_warped_images`]). The strokes of clipping type outside its clip
+    /// are left out ([`clip_bounds`]).
     pub(crate) fn bounds(&self, art: &Node) -> Option<Rect> {
         if self.images.is_empty() || !self.fits(art, crate::distort::MAX_COPY_OBJECTS) {
-            return art.geometric_bounds();
+            return clip_bounds(art);
         }
         // The pieces the images would be cut into now: each group of pieces is shown or hidden as
         // its image is, and hidden objects are left out of a layer's bounds.
         let mut probe = art.clone();
         restore_warped_images(&mut probe, self, true);
-        probe.geometric_bounds()
+        clip_bounds(&probe)
     }
 
     /// The geometric bounds of image `n`: when this table lists it, measured by the pieces the

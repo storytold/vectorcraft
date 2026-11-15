@@ -691,6 +691,11 @@ pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRul
         }
     }
     fn members(doc: Option<&Document>, n: &Node, out: &mut Vec<(PathData, FillRule)>) {
+        // A clip group whose clipping type's strokes paint around it is outlined as that clip
+        // group: the strokes outside the clip add nothing.
+        if let Some(inner) = crate::reshape::painted_clip_inner(n) {
+            return members(doc, inner, out);
+        }
         // A clip group shows its members only inside its clipping path: its outline is that
         // region, not the clipped members' own shapes, which may reach far outside it (#7289).
         if n.clips() {
@@ -881,17 +886,14 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     if paint {
         // A clip group whose clipping type paints strokes is now a group of a clip group and those
         // strokes ([`crate::reshape::painted_type_clip`]): its own fills and strokes paint inside
-        // that clip group.
-        let wrapped = n.clips() && !m.clips();
-        let (shapes, bounds) = match m.children().and_then(|ch| ch.first()).filter(|_| wrapped) {
-            Some(inner) => (member_shapes(doc, inner), inner.geometric_bounds()),
-            None => (member_shapes(doc, &m), m.geometric_bounds()),
-        };
+        // that clip group. Such groups among the members are measured as their clip groups.
+        let wrapped = n.clips() && crate::reshape::painted_clip_inner(&m).is_some();
+        let (shapes, bounds) = (member_shapes(doc, &m), crate::reshape::clip_bounds(&m));
         let art =
             |items: &[AppearanceItem]| -> Vec<Arc<Node>> { items.iter().filter_map(|i| item_art(n.id, i, &shapes, bounds)).map(Arc::new).collect() };
         let (below, above) = m.appearance.split_contents();
         let (below, above) = (art(below), art(above));
-        let at = usize::from(n.clips());
+        let at = usize::from(wrapped || m.clips());
         let target = if wrapped { m.children_mut().and_then(|ch| ch.first_mut()).map(Arc::make_mut) } else { Some(&mut m) };
         if let Some(ch) = target.and_then(Node::children_mut) {
             let at = at.min(ch.len());
