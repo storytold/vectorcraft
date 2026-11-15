@@ -77,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reverse Path Direction",
             ["Object", "Path"],
             None,
-            "{ids?|id?, subpath?: usize (reverse only this subpath of each path, 0 included; default: every subpath), reversed?: bool (true: every subpath runs counter-clockwise on screen, false: clockwise, the Attributes panel's Reverse Path Direction On / Off; omitted: flip each path; with subpath, the direction is not read: that subpath is flipped)} the paths in ids or the selection (groups and compound paths: the paths inside), as one undo step; when every subpath of a path turns alike, its strokes' width profiles (sides swapped) and pen pressure, tilt, bearing and rotation turn with it, so they draw as before → {changed: paths}",
+            "{ids?|id?, subpath?: usize (reverse only this subpath of each path, 0 included; default: every subpath), reversed?: bool (true: every subpath runs counter-clockwise on screen, false: clockwise, the Attributes panel's Reverse Path Direction On / Off; omitted: flip each path; with subpath, the direction is not read: that subpath is flipped)} the paths in ids or the selection (groups and compound paths: the paths inside), as one undo step; when every subpath of a path or compound path turns alike, its strokes' width profiles (sides swapped) and pen pressure, tilt, bearing and rotation turn with it, so they draw as before → {changed: paths}",
             has_selected_path,
             reverse
         ),
@@ -458,14 +458,33 @@ fn reverse(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad(C, "select paths"));
     }
+    let flip_of = |path: &PathData| -> Vec<bool> {
+        match subpath {
+            Some(si) => (0..path.subpaths.len()).map(|i| i == si).collect(),
+            None => path.subpaths.iter().map(|sp| want.is_none_or(|ccw| (sp.signed_area() < 0.0) != ccw)).collect(),
+        }
+    };
     let changed = super::overprint::edit_counted(s, "Reverse Path Direction", |d| {
+        // A compound path's own strokes run along its members' subpaths in order, so they turn
+        // with them, read before any member turns.
+        let compounds: BTreeSet<NodeId> = ids.iter().map(|id| compound_or_self(d, *id)).filter(|c| ids.binary_search(c).is_err()).collect();
+        for c in compounds {
+            let Some(NodeKind::Compound { children, .. }) = d.node(c).map(|n| &n.kind) else { continue };
+            let flip: Vec<bool> = children
+                .iter()
+                .filter_map(|m| m.path_data().map(|pd| if ids.binary_search(&m.id).is_ok() { flip_of(pd) } else { vec![false; pd.subpaths.len()] }))
+                .flatten()
+                .collect();
+            if flip.contains(&true)
+                && let Some(n) = d.node_mut(c)
+            {
+                vectorcraft_doc::blend::reverse_stroke_records(n, &flip);
+            }
+        }
         let mut changed = 0;
         for id in &ids {
             let path = path_mut(d, *id)?;
-            let flip: Vec<bool> = match subpath {
-                Some(si) => (0..path.subpaths.len()).map(|i| i == si).collect(),
-                None => path.subpaths.iter().map(|sp| want.is_none_or(|ccw| (sp.signed_area() < 0.0) != ccw)).collect(),
-            };
+            let flip = flip_of(path);
             if !flip.contains(&true) {
                 continue;
             }

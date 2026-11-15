@@ -96,7 +96,7 @@ impl Tool for SlideAnchorTool {
                 // Back where it started: nothing to keep.
                 if t == 0.0 { vec![Action::Cancel] } else { vec![preview, Action::Commit] }
             }
-            PointerKind::DoubleClick => vec![],
+            PointerKind::DoubleClick | PointerKind::TripleClick => vec![],
         }
     }
 
