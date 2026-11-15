@@ -1396,6 +1396,25 @@ fn an_id_argument_cut_short_is_damage() {
     }
 }
 
+/// A fill or outline id that no record has is damage: the shape comes in without that paint. Id 0
+/// without a record is no paint.
+#[test]
+fn a_fill_or_outline_without_its_record_is_damage() {
+    for version in [700, 1100, 1600] {
+        let v = V(version);
+        for kind in [20, 10] {
+            for (id, want) in [(9u32, vec![Warning::Damaged]), (0, vec![])] {
+                let object = synth::object(v, 1, &[(kind, id.to_le_bytes().to_vec()), (30, v.rect(10.0, 10.0, 0.0))], None);
+                let d =
+                    read(&clip_drawing(version, vec![], vec![object]), Limits::default()).unwrap_or_else(|e| panic!("{version} {kind} {id}: {e}"));
+                let s = shapes(&d.pages[0].layers[0].objects);
+                assert!(s.len() == 1 && s[0].fill.is_none() && s[0].outline.is_none(), "{version} {kind} {id}");
+                assert_eq!(d.warnings, want, "{version} {kind} {id}");
+            }
+        }
+    }
+}
+
 /// An object with a lens or transparency (argument 8000) comes in opaque, with the lenses
 /// warning; one without the argument gives no warning.
 #[test]

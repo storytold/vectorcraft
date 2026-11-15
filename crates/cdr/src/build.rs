@@ -693,8 +693,11 @@ impl<'a, 'b> Ctx<'a, 'b> {
         if let Some(f) = self.fills.get(&id) {
             return f.clone();
         }
-        // A record that is there but can't be read is damage; a missing one leaves the shape
-        // without a fill.
+        // A record that is missing or can't be read is damage, and the shape is drawn without a
+        // fill; id 0 without a record is no fill.
+        if id != 0 && !self.fill_chunks.contains_key(&id) {
+            push(self.warn, Warning::Damaged);
+        }
         let read = self.fill_chunks.get(&id).and_then(|b| {
             let read = records::fill(b, &self.p, self.warn);
             if read.is_none() {
@@ -710,6 +713,11 @@ impl<'a, 'b> Ctx<'a, 'b> {
     /// uses it; past them the shape's outline is solid.
     fn outline(&mut self, id: u32) -> Option<Outline> {
         if !self.outlines.contains_key(&id) {
+            // A record that is missing is damage, as one that can't be read is; id 0 without a
+            // record is no outline.
+            if id != 0 && !self.outline_chunks.contains_key(&id) {
+                push(self.warn, Warning::Damaged);
+            }
             let read = self.outline_chunks.get(&id).and_then(|b| {
                 let read = records::outline(b, &self.p, self.warn);
                 if read.is_none() {
