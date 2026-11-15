@@ -24,7 +24,9 @@
 //! from those layers alone, without its page.
 //!
 //! The page is the file's `%%BoundingBox` (`%%HiResBoundingBox` when it has one), the first page
-//! of a PostScript file without one. A file whose program can't be read (an operator the
+//! of a PostScript file without one. A `.ai` in the legacy format ([`import_ai`]) that comes in
+//! through its layers keeps the artboard its header gives, with its art outside it; an EPS comes in
+//! on its page. A file whose program can't be read (an operator the
 //! interpreter doesn't know, an error, a limit reached) or that draws nothing comes in from its
 //! layers when its program has them (a `.ai` in PostScript form whose prolog is named but not
 //! included, as other apps write it), or with its art on one layer when it is in the legacy format
@@ -82,8 +84,6 @@ use graphics::{GState, Out};
 use interp::{Fault, Interp};
 use obj::PsError;
 
-#[cfg(test)]
-pub(crate) use ai::ENVELOPE_DRAWN;
 pub use ai::NameEncoding;
 #[cfg(test)]
 pub(crate) use ai::objects_read;
@@ -92,6 +92,8 @@ pub(crate) use ai::{
     MAX_LISTED, MAX_LISTED_NAME, MAX_SYMBOLS, brush_plugin_name, brushes_kept, envelope_outline, envelope_upright, read_art_style, read_brush_object,
     read_style_list, style_moves_with, symbol_art_member, warp_number,
 };
+#[cfg(test)]
+pub(crate) use ai::{ENVELOPE_DRAWN, ENVELOPE_TYPE_DRAWN};
 pub(crate) use ate::{MAX_BYTES as MAX_TEXT_DOCUMENT, MAX_FRAMES, MAX_SEGMENTS, MAX_STORY, MAX_VALUES as MAX_TEXT_VALUES, record_version};
 pub use native::{AiLayers, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard, is_loss, layered_ai, layered_ai_from};
 pub(crate) use native::{MAX_TEXT, scale_document, scale_symbols};
@@ -279,7 +281,20 @@ pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<
 /// and data sets) read in `names`. The type of the document it gives that is set in families that
 /// aren't available shows in the fallback font, and a warning names them.
 pub fn import_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding) -> Result<Imported, String> {
-    let mut r = read_names(bytes, editing_data, trust, names)?;
+    read_checked(bytes, editing_data, trust, names, false)
+}
+
+/// [`import_names`] for a `.ai` (or `.ait`) in PostScript form: a program in the legacy format
+/// that comes in through its layers keeps the artboard its header gives, with its art outside it,
+/// where an EPS comes in on its page, its art's box. A `.ai` of versions 3 and 4, which doesn't
+/// give its artboard's size, has a US Letter artboard around its template box's center.
+pub fn import_ai(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding) -> Result<Imported, String> {
+    read_checked(bytes, editing_data, trust, names, true)
+}
+
+/// [`import_names`] (a `.ai` when `ai_file`, see [`import_ai`]).
+fn read_checked(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding, ai_file: bool) -> Result<Imported, String> {
+    let mut r = read_names(bytes, editing_data, trust, names, ai_file)?;
     let missing = missing_fonts(&r.document);
     if !missing.is_empty() {
         r.warnings.push(format!("{MISSING_FONTS_NOTE}: {}", missing.join(", ")));
@@ -314,8 +329,8 @@ fn missing_fonts(d: &Document) -> Vec<String> {
     missing
 }
 
-/// [`import_names`] before the type's fonts are checked.
-fn read_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding) -> Result<Imported, String> {
+/// [`import_names`] before the type's fonts are checked (a `.ai` when `ai_file`, see [`import_ai`]).
+fn read_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding, ai_file: bool) -> Result<Imported, String> {
     let ps = program(bytes)?;
     let dsc = Dsc::read(ps);
     // A legacy `.ai` VectorCraft wrote: its prolog prints the art plainly (gradients flat, no
@@ -323,7 +338,7 @@ fn read_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding
     // printed).
     if editing_data
         && dsc.own_legacy
-        && let Some(Ok((document, warnings))) = native::program_alone(ps, dsc.illustrator, names)
+        && let Some(Ok((document, warnings))) = native::program_alone(ps, dsc.illustrator, ai_file, names)
     {
         return Ok(Imported { document, warnings, preview: false });
     }
@@ -343,7 +358,7 @@ fn read_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding
     }
     let drew = !out.drawn.is_empty();
     let why = match (&result, drew) {
-        (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out), trust, dsc.illustrator, names)),
+        (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out), trust, dsc.illustrator, ai_file, names)),
         (Ok(()), true) => return Ok(finish(out)),
         (Ok(()), false) => "it draws nothing VectorCraft's PostScript reader can show".to_string(),
         (Err(e), _) => reason(e, fault.as_ref()),
@@ -351,7 +366,7 @@ fn read_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding
     // A file in the legacy Illustrator format whose program can't be run (a `.ai` that names the
     // prolog defining its operators without including it): its layers, which the program has, or
     // its art on one layer when it has none (Illustrator 3).
-    let why = match editing_data.then(|| native::program_alone(ps, dsc.illustrator, names)).flatten() {
+    let why = match editing_data.then(|| native::program_alone(ps, dsc.illustrator, ai_file, names)).flatten() {
         Some(Ok((document, warnings))) => return Ok(Imported { document, warnings, preview: false }),
         Some(Err(e)) => format!("{why}; its layers couldn't be read either ({e})"),
         None => why,
