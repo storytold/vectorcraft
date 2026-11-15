@@ -2070,6 +2070,8 @@ antiAlias	Sharp	शार्प
 	Global Adjust	वैश्विक समायोजन
 	Global Brush Dimensions	ग्लोबल ब्रश आयाम
 	Global Edit Options	ग्लोबल एडिट ऑप्शन्स
+	Select Similar Objects	समान ऑब्जेक्ट चुनें
+	Select Similar Options	समान चयन विकल्प
 	Global Process Color	ग्लोबल प्रोसेस कलर
 	Global Process Color, CMYK	ग्लोबल प्रोसेस कलर, CMYK
 	Glow Amount	ग्लो मात्रा
@@ -2587,6 +2589,9 @@ antiAlias	Sharp	शार्प
 	Ligatures are off while the text is tracked.	टेक्स्ट पर ट्रैकिंग लागू होने पर लिगेचर ऑफ़ रहते हैं।
 	Light	लाइट
 	Light behind the object	ऑब्जेक्ट के पीछे प्रकाश
+	Move Light to Back	प्रकाश को पीछे ले जाएँ
+	Move Light to Front	प्रकाश को आगे ले जाएँ
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	प्रकाश को हिलाने के लिए उसे खींचें। तीर कुंजियाँ फ़ोकस वाले प्रकाश को हिलाती हैं; Shift के साथ 15° के चरण।
 	Shadows	छायाएँ
 	Distance from Object	ऑब्जेक्ट से दूरी
 	Shadow Bounds	छाया सीमाएँ
@@ -4696,6 +4701,7 @@ antiAlias	Sharp	शार्प
 	Sixth Space	छठे हिस्से जितना स्पेस
 	Size	आकार
 	Size Tile to Art	आकार टाइल कला के लिए
+	Move Tile with Art	टाइल को कला के साथ ले जाएँ
 	Size:	साइज़:
 	Size: {size}  Tracking: {tracking}	साइज़: {size}  ट्रैकिंग: {tracking}
 	Size/Leading	साइज़/लीडिंग
@@ -4979,6 +4985,8 @@ antiAlias	Sharp	शार्प
 	Swap Objects and Sizes	स्वैप ऑब्जेक्ट्स और साइज
 	Swap start and end arrowheads	स्वैप शुरू और अंत तीरहेड्स
 	Swap the selected object for the file, keeping its place and transform	फ़ाइल के लिए सिलेक्टेड ऑब्जेक्ट को स्वैप करें, अपनी जगह को बनाए रखें और परिवर्तित करें
+	Show Import Options	आयात विकल्प दिखाएँ
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	रखने से पहले हर PDF, DXF या टेक्स्ट फ़ाइल के आयात विकल्प पूछें; बंद होने पर पिछली बार चुने गए विकल्प इस्तेमाल करें
 	Swash	स्वॉश
 	Swatch Conflict	स्वॉच विरोध
 	Swatch Conflicts	स्वॉच विरोध
@@ -5573,6 +5581,9 @@ antiAlias	Sharp	शार्प
 	Working CMYK	वर्किंग CMYK
 	Working CMYK (don't tag)	कार्य CMYK (टैग नहीं)
 	Working RGB (don't tag)	कार्य RGB (टैग नहीं)
+	Don't Color Manage This Document	इस दस्तावेज़ का रंग प्रबंधन न करें
+	Working RGB: {name}	कार्य RGB: {name}
+	Working CMYK: {name}	कार्य CMYK: {name}
 	Working RGB	वर्किंग RGB
 	Workspace	वर्कस्पेस
 	Workspace {i}	वर्कस्पेस {i}
@@ -6464,6 +6475,9 @@ antiAlias	Sharp	शार्प
 @msg	automation path rejected: cannot resolve {path}: {e}	स्वचालन पाथ खारिज कर दिया: {path} को हल नहीं कर सकता: {e}
 @msg	automation path rejected: outside the read root {root}: {path}	स्वचालन पाथ खारिज: पढ़ने की जड़ के बाहर {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	स्वचालन पाथ खारिज: पढ़ने की जड़ों के बाहर {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	एक लिंक की गई जावास्क्रिप्ट फ़ाइल पढ़ने की जड़ों के बाहर है
+@msg	the library's file is outside the read roots	लाइब्रेरी की फ़ाइल पढ़ने की जड़ों के बाहर है
+@msg	{file} names more than one linked JavaScript file	{file} एक से अधिक लिंक की गई जावास्क्रिप्ट फ़ाइलों से मेल खाता है
 @msg	automation path rejected: outside the write root {root}: {path}	स्वचालन पाथ खारिज: लिखने की जड़ के बाहर {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	स्वचालन पाथ खारिज: लिखने की जड़ों के बाहर {roots}: {path}
 @msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	स्वचालन पाथ खारिज कर दिया: एक फ़ोल्डर के नीचे माता-पिता traversal जो मौजूद नहीं है: {path}
@@ -7376,6 +7390,7 @@ antiAlias	Sharp	शार्प
 @msg	No line breaks to remove	हटाने के लिए कोई लाइन ब्रेक नहीं
 @msg	No linked files to look for	देखने के लिए कोई लिंक्ड फ़ाइल नहीं
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	लिंक किसी सिंबल, ग्राफ़ डिज़ाइन, पैटर्न या ओपेसिटी मास्क के अंदर है और कैनवास पर इसकी कोई जगह नहीं है
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	ग्राफ़ श्रृंखला में ग्राफ़ डिज़ाइन की कला डिज़ाइन से फिर से बनाई जाती है: इसे बदलने के लिए डिज़ाइन संपादित करें
 @msg	no Live Paint edge near that point	उस बिंदु के पास कोई लाइव पेंट एज नहीं
 @msg	no Live Paint face at that point	उस बिंदु पर कोई लाइव पेंट फेस नहीं
 @msg	no metafile format	कोई मेटाफ़ाइल फ़ॉर्मैट

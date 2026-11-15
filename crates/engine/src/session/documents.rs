@@ -142,6 +142,7 @@ impl Session {
             link_stamps: Default::default(),
             link_scan: None,
             global_edit_options: Default::default(),
+            select_similar: crate::cmd::SIMILAR[0].0,
             keyboard_text: false,
             script_key: None,
             script_engines: crate::script::EnginesKey::new(),
