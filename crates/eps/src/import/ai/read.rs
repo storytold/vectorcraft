@@ -102,8 +102,10 @@
 //!   in the Symbols panel's order. An instance: `/SymbolInstance : (name) /SymbolRef , a b c d tx
 //!   ty /RTransformMatrix ;`, the matrix taking the symbol's art to art space; in a symbol's art,
 //!   it takes it to art space about the canvas point of art space's origin, as a pattern's
-//!   gradients are. Its hide and lock come before it (`Xw`, `A`) and its transparency (`Xy`) after
-//!   it.
+//!   gradients are. Files of versions 10 to 13 write `a b c d tx ty /TransformMatrix` instead,
+//!   the matrix taking the symbol's art to the canvas (y down, art space's origin at the canvas
+//!   point the template box gives); in a symbol's art, it takes the art to that symbol's space.
+//!   Its hide and lock come before it (`Xw`, `A`) and its transparency (`Xy`) after it.
 //!
 //! Sections the reader doesn't need (styles, filters) are skipped; type, instances of symbols it
 //! can't read, fills with a pattern it can't read, placed files without a preview and operators
