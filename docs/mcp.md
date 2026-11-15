@@ -1634,6 +1634,19 @@ preferences (the folder the desktop app uses, so both see the same ones; `VECTOR
   target of `view.proofSetup` simulates the working CMYK space in such a document too. `color.convert`'s
   `outOfGamut` and `deltaE`, `color.gamutCheck`, and the out-of-gamut warning of the Color panel and Color Picker
   check against the assigned CMYK profile, else the working CMYK space; the warning updates when either changes.
+- **Profile Mismatches and Missing Profiles** (`edit.colorSettings {askMismatchOpen, askMismatchPaste,
+  askMissingOpen}`, all off by default and kept in `Color Settings.json`): with `askMismatchOpen` or
+  `askMissingOpen` on, the desktop app's File › Open asks before a document opens when the profile of its color mode
+  is not the working space (use the embedded profile, convert the colors to the working space, or discard the
+  profile) or when it has none (leave it, assign the working space, or assign a profile), starting on what the
+  model's policy does; Cancel leaves the file closed. `document.open` never asks: `profileChoice` (`useEmbedded`,
+  `convert`, `discard`; `leave`, `assignWorking`, `assign` with `assignProfile`) states the answer, else the policy
+  applies, and the reply's `profileChoice` names the answer used. Copy remembers the profiles the colors showed
+  through; pasting them into a document with another RGB or CMYK profile keeps their numbers or converts them, as
+  `profileMismatch` on the paste commands says, else as the model's policy does (`convert` converts, the others keep
+  the numbers; a profile that is not available keeps them). `clipboard.profileMismatch` lists the models that differ, only those whose colors the copied objects
+  use, and with `askMismatchPaste` on the desktop app's Paste asks first. New from Template, File › Revert and a drag
+  between documents follow the policies without asking.
 
 Not remembered: the document, anything else. Nothing is read or written when
 `VECTORCRAFT_NO_PREFS` is set, and a server confined with `--automation-read-root` or

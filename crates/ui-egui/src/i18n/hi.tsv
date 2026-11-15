@@ -889,6 +889,24 @@ antiAlias	Sharp	शार्प
 	Preserve Embedded Profiles	एम्बेड की गई प्रोफ़ाइल बनाए रखें
 	Convert to Working Space	वर्किंग स्पेस में बदलें
 	Preserve Numbers	संख्याएँ बनाए रखें
+	Profile Mismatches:	प्रोफ़ाइल बेमेल:
+	Ask When Opening	खोलते समय पूछें
+	Ask When Pasting	पेस्ट करते समय पूछें
+	Missing Profiles:	अनुपलब्ध प्रोफ़ाइल:
+	Embedded Profile Mismatch	एम्बेड की गई प्रोफ़ाइल बेमेल
+	Missing Profile	प्रोफ़ाइल अनुपलब्ध
+	Paste Profile Mismatch	पेस्ट करते समय प्रोफ़ाइल बेमेल
+	“{name}” is not tagged with a {model} profile.	"{name}" में कोई {model} प्रोफ़ाइल नहीं है।
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	"{name}" में {model} प्रोफ़ाइल "{profile}" है, जो {model} वर्किंग स्पेस "{working}" नहीं है।
+	Use the embedded profile	एम्बेड की गई प्रोफ़ाइल का उपयोग करें
+	Convert the colors to the working space	रंगों को वर्किंग स्पेस में बदलें
+	Discard the embedded profile	एम्बेड की गई प्रोफ़ाइल हटाएं
+	Leave as is	जैसा है वैसा रहने दें
+	Assign the working space	वर्किंग स्पेस असाइन करें
+	Assign profile:	प्रोफ़ाइल असाइन करें:
+	Preserve the color numbers	रंगों की संख्याएँ बनाए रखें
+	Convert to keep the colors' appearance	रंगों का रूप बनाए रखने के लिए बदलें
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	पेस्ट किए गए रंग ऐसे दस्तावेज़ से आए हैं जिसकी {model} प्रोफ़ाइल "{from}" है; इस दस्तावेज़ की "{to}" है।
 	Coarse Dots	मोटे बिंदु
 	Coincidence:	संयोग:
 	Collapse Panel Group	पैनल समूह संक्षिप्त करें

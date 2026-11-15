@@ -5114,6 +5114,24 @@ axis	Both	Her İkisi
 	Preserve Embedded Profiles	Gömülü Profilleri Koru
 	Convert to Working Space	Çalışma Alanına Dönüştür
 	Preserve Numbers	Sayıları Koru
+	Profile Mismatches:	Profil Uyuşmazlıkları:
+	Ask When Opening	Açarken Sor
+	Ask When Pasting	Yapıştırırken Sor
+	Missing Profiles:	Eksik Profiller:
+	Embedded Profile Mismatch	Gömülü Profil Uyuşmazlığı
+	Missing Profile	Eksik Profil
+	Paste Profile Mismatch	Yapıştırma Profili Uyuşmazlığı
+	“{name}” is not tagged with a {model} profile.	“{name}” bir {model} profiline sahip değil.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	“{name}”, {model} çalışma alanı “{working}” olmayan “{profile}” {model} profiline sahip.
+	Use the embedded profile	Gömülü profili kullan
+	Convert the colors to the working space	Renkleri çalışma alanına dönüştür
+	Discard the embedded profile	Gömülü profili at
+	Leave as is	Olduğu gibi bırak
+	Assign the working space	Çalışma alanını ata
+	Assign profile:	Profil ata:
+	Preserve the color numbers	Renk değerlerini koru
+	Convert to keep the colors' appearance	Renklerin görünümünü korumak için dönüştür
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Yapıştırılan renkler {model} profili “{from}” olan bir belgeden geliyor; bu belgeninki “{to}”.
 	Texture	Doku
 	Craquelure…	Küçük çatlak…
 	Grain…	Tahıl…

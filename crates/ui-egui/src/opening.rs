@@ -89,7 +89,9 @@ pub fn start_with(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>, params: 
             .run(|| {
                 vectorcraft_engine::guard::catch_panic(|| {
                     cancel::scope(&raised, None, || {
-                        fileio::read_for_open(&name, &file, Some(name.clone()), &params, update_links, low_res_proxy_eps).map_err(|e| e.to_string())
+                        // A profile question Edit › Color Settings asks waits for the UI thread.
+                        fileio::read_for_open_asking(&name, &file, Some(name.clone()), &params, update_links, low_res_proxy_eps, true)
+                            .map_err(|e| e.to_string())
                     })
                 })
             })
@@ -234,15 +236,13 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
 }
 
-/// Open a file read off the UI thread, as [`crate::io::open_reporting`] opens one read at once.
+/// Open a file read off the UI thread, as [`crate::io::open_reporting`] opens one read at once,
+/// after the profile question Edit › Color Settings asks about it, if any
+/// ([`crate::dialogs::profile_mismatch::open_or_ask`]).
 fn finish(app: &mut VectorcraftApp, path: &str, r: Result<ReadFile, String>) {
-    let opened = r.and_then(|file| fileio::open_read(&mut app.session, file).map_err(|e| e.to_string()));
-    match opened {
-        Ok(r) => {
-            crate::io::opened(app, &r);
-            crate::io::note_recent(app, path);
-        }
-        Err(e) => crate::io::report_open_error(app, &fileio::file_name(path), &e),
+    let opened = r.and_then(|file| crate::dialogs::profile_mismatch::open_or_ask(app, file, Some(path.to_string())));
+    if let Err(e) = opened {
+        crate::io::report_open_error(app, &fileio::file_name(path), &e);
     }
 }
 

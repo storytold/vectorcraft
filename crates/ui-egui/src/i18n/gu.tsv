@@ -476,6 +476,24 @@
 	Preserve Embedded Profiles	એમ્બેડ કરેલી પ્રોફાઇલ જાળવો
 	Convert to Working Space	કાર્યકારી સ્પેસમાં રૂપાંતરિત કરો
 	Preserve Numbers	સંખ્યાઓ જાળવો
+	Profile Mismatches:	પ્રોફાઇલ મેળ ન ખાવા:
+	Ask When Opening	ખોલતી વખતે પૂછો
+	Ask When Pasting	પેસ્ટ કરતી વખતે પૂછો
+	Missing Profiles:	ખૂટતી પ્રોફાઇલ:
+	Embedded Profile Mismatch	એમ્બેડ કરેલી પ્રોફાઇલ મેળ ખાતી નથી
+	Missing Profile	પ્રોફાઇલ ખૂટે છે
+	Paste Profile Mismatch	પેસ્ટ કરતી વખતે પ્રોફાઇલ મેળ ખાતી નથી
+	“{name}” is not tagged with a {model} profile.	“{name}” પાસે કોઈ {model} પ્રોફાઇલ નથી.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	“{name}” પાસે {model} પ્રોફાઇલ “{profile}” છે, જે {model} કાર્યકારી સ્પેસ “{working}” નથી.
+	Use the embedded profile	એમ્બેડ કરેલી પ્રોફાઇલ વાપરો
+	Convert the colors to the working space	રંગોને કાર્યકારી સ્પેસમાં રૂપાંતરિત કરો
+	Discard the embedded profile	એમ્બેડ કરેલી પ્રોફાઇલ કાઢી નાખો
+	Leave as is	જેમ છે તેમ રહેવા દો
+	Assign the working space	કાર્યકારી સ્પેસ સોંપો
+	Assign profile:	પ્રોફાઇલ સોંપો:
+	Preserve the color numbers	રંગોની સંખ્યાઓ જાળવો
+	Convert to keep the colors' appearance	રંગોનો દેખાવ જાળવવા રૂપાંતરિત કરો
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	પેસ્ટ કરેલા રંગો એવા દસ્તાવેજમાંથી આવે છે જેની {model} પ્રોફાઇલ “{from}” છે; આ દસ્તાવેજની “{to}” છે.
 	CSS Properties	CSS ગુણધર્મો
 	Calligraphic Brush	કેલિગ્રાફિક બ્રશ
 	Calligraphic Brush Options	કેલિગ્રાફિક બ્રશ વિકલ્પો

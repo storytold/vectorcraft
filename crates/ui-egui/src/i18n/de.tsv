@@ -5294,6 +5294,24 @@ theme	Appearance	Erscheinungsbild
 	Preserve Embedded Profiles	Eingebettete Profile beibehalten
 	Convert to Working Space	In Arbeitsfarbraum konvertieren
 	Preserve Numbers	Werte beibehalten
+	Profile Mismatches:	Profilabweichungen:
+	Ask When Opening	Beim Öffnen fragen
+	Ask When Pasting	Beim Einfügen fragen
+	Missing Profiles:	Fehlende Profile:
+	Embedded Profile Mismatch	Abweichung vom eingebetteten Profil
+	Missing Profile	Fehlendes Profil
+	Paste Profile Mismatch	Profilabweichung beim Einfügen
+	“{name}” is not tagged with a {model} profile.	„{name}“ ist mit keinem {model}-Profil versehen.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	„{name}“ ist mit dem {model}-Profil „{profile}“ versehen, das nicht der {model}-Arbeitsfarbraum „{working}“ ist.
+	Use the embedded profile	Eingebettetes Profil verwenden
+	Convert the colors to the working space	Farben in den Arbeitsfarbraum konvertieren
+	Discard the embedded profile	Eingebettetes Profil verwerfen
+	Leave as is	Unverändert lassen
+	Assign the working space	Arbeitsfarbraum zuweisen
+	Assign profile:	Profil zuweisen:
+	Preserve the color numbers	Farbwerte beibehalten
+	Convert to keep the colors' appearance	Konvertieren, um das Aussehen der Farben zu erhalten
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Die eingefügten Farben stammen aus einem Dokument mit dem {model}-Profil „{from}“; dieses Dokument hat „{to}“.
 # PSD files.
 @msg	not a PSD file	keine PSD-Datei
 @msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	PSD-Dateien im Mehrkanalmodus können nicht gelesen werden: Speichern Sie die Datei im RGB-, CMYK- oder Graustufenmodus

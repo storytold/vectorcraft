@@ -989,6 +989,24 @@
 	Preserve Embedded Profiles	Zadrži ugrađene profile
 	Convert to Working Space	Pretvori u radni prostor
 	Preserve Numbers	Zadrži brojeve
+	Profile Mismatches:	Neusklađenost profila:
+	Ask When Opening	Pitaj pri otvaranju
+	Ask When Pasting	Pitaj pri lijepljenju
+	Missing Profiles:	Nedostajući profili:
+	Embedded Profile Mismatch	Neusklađenost ugrađenog profila
+	Missing Profile	Nedostaje profil
+	Paste Profile Mismatch	Neusklađenost profila pri lijepljenju
+	“{name}” is not tagged with a {model} profile.	„{name}” nema {model} profil.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	„{name}” ima {model} profil „{profile}”, koji nije {model} radni prostor „{working}”.
+	Use the embedded profile	Koristi ugrađeni profil
+	Convert the colors to the working space	Pretvori boje u radni prostor
+	Discard the embedded profile	Odbaci ugrađeni profil
+	Leave as is	Ostavi kako jeste
+	Assign the working space	Dodijeli radni prostor
+	Assign profile:	Dodijeli profil:
+	Preserve the color numbers	Zadrži brojeve boja
+	Convert to keep the colors' appearance	Pretvori da boje zadrže izgled
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Zalijepljene boje dolaze iz dokumenta čiji je {model} profil „{from}”; profil ovog dokumenta je „{to}”.
 	CMYK	CMYK
 	Texture	Tekstura
 	Craquelure…	Krakelura…

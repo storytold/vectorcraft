@@ -459,6 +459,23 @@ fn policies_parse_and_default_in_saved_settings() {
     assert_eq!((saved["rgbPolicy"].as_str(), saved["cmykPolicy"].as_str()), (Some("preserveEmbedded"), Some("preserveNumbers")));
 }
 
+/// The three Ask boxes are off by default and in settings saved before they existed, and save
+/// under their own keys.
+#[test]
+fn ask_boxes_default_off_and_save() {
+    let old: ColorSettings =
+        serde_json::from_str(r#"{"rgb": "sRGB IEC61966-2.1", "cmyk": "Device CMYK (uncalibrated)", "intent": "perceptual", "bpc": false}"#).unwrap();
+    assert!(!old.ask_mismatch_open && !old.ask_mismatch_paste && !old.ask_missing_open);
+    let st = ColorSettings::default();
+    assert!(!st.ask_mismatch_open && !st.ask_mismatch_paste && !st.ask_missing_open);
+    let saved = serde_json::to_value(ColorSettings { ask_mismatch_paste: true, ..Default::default() }).unwrap();
+    assert_eq!(saved["askMismatchOpen"], false);
+    assert_eq!(saved["askMismatchPaste"], true);
+    assert_eq!(saved["askMissingOpen"], false);
+    let back: ColorSettings = serde_json::from_value(saved).unwrap();
+    assert!(back.ask_mismatch_paste);
+}
+
 /// Convert to Working Space keeps a color's appearance: an RGB color of a wide space converts into
 /// sRGB, and a CMYK color of one CMYK space into another, with numbers that look the same. Grey and
 /// Lab colors stay as they are.

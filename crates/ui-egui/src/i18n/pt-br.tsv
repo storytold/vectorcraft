@@ -3504,6 +3504,24 @@ imageTrace	Outline	Contorno
 	Preserve Embedded Profiles	Preservar perfis incorporados
 	Convert to Working Space	Converter para espaço de trabalho
 	Preserve Numbers	Preservar números
+	Profile Mismatches:	Incompatibilidades de perfil:
+	Ask When Opening	Perguntar ao abrir
+	Ask When Pasting	Perguntar ao colar
+	Missing Profiles:	Perfis ausentes:
+	Embedded Profile Mismatch	Incompatibilidade do perfil incorporado
+	Missing Profile	Perfil ausente
+	Paste Profile Mismatch	Incompatibilidade de perfil ao colar
+	“{name}” is not tagged with a {model} profile.	“{name}” não tem um perfil {model}.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	“{name}” tem o perfil {model} “{profile}”, que não é o espaço de trabalho {model} “{working}”.
+	Use the embedded profile	Usar o perfil incorporado
+	Convert the colors to the working space	Converter as cores para o espaço de trabalho
+	Discard the embedded profile	Descartar o perfil incorporado
+	Leave as is	Deixar como está
+	Assign the working space	Atribuir o espaço de trabalho
+	Assign profile:	Atribuir perfil:
+	Preserve the color numbers	Preservar os valores das cores
+	Convert to keep the colors' appearance	Converter para manter a aparência das cores
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	As cores coladas vêm de um documento com o perfil {model} “{from}”; o deste documento é “{to}”.
 	Texture	Textura
 	Craquelure…	Craquelê…
 	Grain…	Granulação…

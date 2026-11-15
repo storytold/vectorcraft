@@ -185,6 +185,15 @@ pub struct ColorSettings {
     /// The color management policy for CMYK profiles. Settings saved without one take the default.
     #[serde(default)]
     pub cmyk_policy: Policy,
+    /// Profile Mismatches: Ask When Opening. Off by default, as in settings saved without it.
+    #[serde(default)]
+    pub ask_mismatch_open: bool,
+    /// Profile Mismatches: Ask When Pasting.
+    #[serde(default)]
+    pub ask_mismatch_paste: bool,
+    /// Missing Profiles: Ask When Opening.
+    #[serde(default)]
+    pub ask_missing_open: bool,
 }
 
 impl Default for ColorSettings {
@@ -196,6 +205,9 @@ impl Default for ColorSettings {
             bpc: true,
             rgb_policy: Policy::default(),
             cmyk_policy: Policy::default(),
+            ask_mismatch_open: false,
+            ask_mismatch_paste: false,
+            ask_missing_open: false,
         }
     }
 }

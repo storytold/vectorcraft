@@ -5327,6 +5327,24 @@ theme	Appearance	외관
 	Preserve Embedded Profiles	포함된 프로필 유지
 	Convert to Working Space	작업 공간으로 변환
 	Preserve Numbers	숫자 유지
+	Profile Mismatches:	프로필 불일치:
+	Ask When Opening	열 때 묻기
+	Ask When Pasting	붙여넣을 때 묻기
+	Missing Profiles:	누락된 프로필:
+	Embedded Profile Mismatch	포함된 프로필 불일치
+	Missing Profile	프로필 없음
+	Paste Profile Mismatch	붙여넣기 프로필 불일치
+	“{name}” is not tagged with a {model} profile.	“{name}”에 {model} 프로필이 없습니다.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	“{name}”의 {model} 프로필은 “{profile}”이며, {model} 작업 공간 “{working}”이(가) 아닙니다.
+	Use the embedded profile	포함된 프로필 사용
+	Convert the colors to the working space	색상을 작업 공간으로 변환
+	Discard the embedded profile	포함된 프로필 버리기
+	Leave as is	그대로 두기
+	Assign the working space	작업 공간 지정
+	Assign profile:	프로필 지정:
+	Preserve the color numbers	색상 값 유지
+	Convert to keep the colors' appearance	색상의 모양을 유지하도록 변환
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	붙여넣은 색상은 {model} 프로필이 “{from}”인 문서에서 왔습니다. 이 문서의 프로필은 “{to}”입니다.
 	Texture	텍스처
 	Craquelure…	크랙…
 	Grain…	그레인…

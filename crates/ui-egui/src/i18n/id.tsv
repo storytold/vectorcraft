@@ -931,6 +931,24 @@
 	Preserve Embedded Profiles	Pertahankan Profil Tersemat
 	Convert to Working Space	Konversi ke Ruang Kerja
 	Preserve Numbers	Pertahankan Angka
+	Profile Mismatches:	Ketidakcocokan Profil:
+	Ask When Opening	Tanya Saat Membuka
+	Ask When Pasting	Tanya Saat Menempel
+	Missing Profiles:	Profil yang Hilang:
+	Embedded Profile Mismatch	Ketidakcocokan Profil Tersemat
+	Missing Profile	Profil Hilang
+	Paste Profile Mismatch	Ketidakcocokan Profil Saat Menempel
+	“{name}” is not tagged with a {model} profile.	“{name}” tidak memiliki profil {model}.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	“{name}” memiliki profil {model} “{profile}”, yang bukan ruang kerja {model} “{working}”.
+	Use the embedded profile	Gunakan profil tersemat
+	Convert the colors to the working space	Konversi warna ke ruang kerja
+	Discard the embedded profile	Buang profil tersemat
+	Leave as is	Biarkan apa adanya
+	Assign the working space	Tetapkan ruang kerja
+	Assign profile:	Tetapkan profil:
+	Preserve the color numbers	Pertahankan angka warna
+	Convert to keep the colors' appearance	Konversi agar tampilan warna tetap sama
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Warna yang ditempel berasal dari dokumen dengan profil {model} “{from}”; profil dokumen ini “{to}”.
 	CMYK	CMYK
 	Texture	Tekstur
 	Craquelure…	Craquelure…

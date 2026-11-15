@@ -769,6 +769,24 @@ antiAlias	Sharp	Nítid
 	Preserve Embedded Profiles	Conserva els perfils incrustats
 	Convert to Working Space	Converteix a l'espai de treball
 	Preserve Numbers	Conserva els números
+	Profile Mismatches:	Discrepàncies de perfil:
+	Ask When Opening	Pregunta en obrir
+	Ask When Pasting	Pregunta en enganxar
+	Missing Profiles:	Perfils que falten:
+	Embedded Profile Mismatch	Discrepància del perfil incrustat
+	Missing Profile	Falta el perfil
+	Paste Profile Mismatch	Discrepància de perfil en enganxar
+	“{name}” is not tagged with a {model} profile.	“{name}” no té cap perfil {model}.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	“{name}” té el perfil {model} “{profile}”, que no és l’espai de treball {model} “{working}”.
+	Use the embedded profile	Utilitza el perfil incrustat
+	Convert the colors to the working space	Converteix els colors a l’espai de treball
+	Discard the embedded profile	Descarta el perfil incrustat
+	Leave as is	Deixa-ho tal com està
+	Assign the working space	Assigna l’espai de treball
+	Assign profile:	Assigna el perfil:
+	Preserve the color numbers	Conserva els valors dels colors
+	Convert to keep the colors' appearance	Converteix per conservar l’aspecte dels colors
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Els colors enganxats provenen d’un document amb el perfil {model} “{from}”; el d’aquest document és “{to}”.
 	Coarse Dots	Punts gruixuts
 	Collapse Panel Group	Replega el grup de panells
 	Collapse Panels to Icons	Replega els panells a icones

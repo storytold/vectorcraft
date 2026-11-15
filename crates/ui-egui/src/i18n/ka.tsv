@@ -897,6 +897,24 @@
 	Preserve Embedded Profiles	ჩაშენებული პროფილების შენარჩუნება
 	Convert to Working Space	სამუშაო სივრცეში გადაყვანა
 	Preserve Numbers	რიცხვების შენარჩუნება
+	Profile Mismatches:	პროფილების შეუსაბამობა:
+	Ask When Opening	გახსნისას კითხვა
+	Ask When Pasting	ჩასმისას კითხვა
+	Missing Profiles:	დაკარგული პროფილები:
+	Embedded Profile Mismatch	ჩაშენებული პროფილის შეუსაბამობა
+	Missing Profile	პროფილი არ არის
+	Paste Profile Mismatch	პროფილის შეუსაბამობა ჩასმისას
+	“{name}” is not tagged with a {model} profile.	„{name}“-ს არ აქვს {model} პროფილი.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	„{name}“-ს აქვს {model} პროფილი „{profile}“, რომელიც არ არის {model} სამუშაო სივრცე „{working}“.
+	Use the embedded profile	ჩაშენებული პროფილის გამოყენება
+	Convert the colors to the working space	ფერების სამუშაო სივრცეში გადაყვანა
+	Discard the embedded profile	ჩაშენებული პროფილის უგულებელყოფა
+	Leave as is	უცვლელად დატოვება
+	Assign the working space	სამუშაო სივრცის მინიჭება
+	Assign profile:	პროფილის მინიჭება:
+	Preserve the color numbers	ფერების რიცხვების შენარჩუნება
+	Convert to keep the colors' appearance	გადაყვანა ფერების იერსახის შესანარჩუნებლად
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	ჩასმული ფერები მოდის დოკუმენტიდან, რომლის {model} პროფილია „{from}“; ამ დოკუმენტის პროფილია „{to}“.
 	CMYK	CMYK
 	Texture	ტექსტურა
 	Craquelure…	კრაკელიური…

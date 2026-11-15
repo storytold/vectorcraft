@@ -35,7 +35,12 @@ pub fn ask(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<Di
     if params.get("swatchConflict").is_some() {
         return None;
     }
-    let found = app.session.execute("clipboard.conflicts", &json!({})).ok()?;
+    // As the paste brings the swatches, converted from another profile when it converts.
+    let mut q = json!({});
+    if let Some(m) = params.get("profileMismatch") {
+        q["profileMismatch"] = m.clone();
+    }
+    let found = app.session.execute("clipboard.conflicts", &q).ok()?;
     let conflicts = found["swatches"].as_array().filter(|a| !a.is_empty())?.clone();
     let fields = json!({
         "conflicts": conflicts, "index": 0, "choice": "merge", "applyToAll": false, "choices": {},

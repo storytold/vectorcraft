@@ -5359,6 +5359,24 @@ axis	Both	Entrambi
 	Preserve Embedded Profiles	Mantieni profili incorporati
 	Convert to Working Space	Converti nello spazio di lavoro
 	Preserve Numbers	Mantieni valori numerici
+	Profile Mismatches:	Mancata corrispondenza profili:
+	Ask When Opening	Chiedi all'apertura
+	Ask When Pasting	Chiedi quando si incolla
+	Missing Profiles:	Profili mancanti:
+	Embedded Profile Mismatch	Profilo incorporato non corrispondente
+	Missing Profile	Profilo mancante
+	Paste Profile Mismatch	Profilo non corrispondente nell'incollare
+	“{name}” is not tagged with a {model} profile.	“{name}” non ha un profilo {model}.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	“{name}” ha il profilo {model} “{profile}”, che non è lo spazio di lavoro {model} “{working}”.
+	Use the embedded profile	Usa il profilo incorporato
+	Convert the colors to the working space	Converti i colori nello spazio di lavoro
+	Discard the embedded profile	Elimina il profilo incorporato
+	Leave as is	Lascia invariato
+	Assign the working space	Assegna lo spazio di lavoro
+	Assign profile:	Assegna profilo:
+	Preserve the color numbers	Mantieni i valori dei colori
+	Convert to keep the colors' appearance	Converti per mantenere l'aspetto dei colori
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	I colori incollati provengono da un documento con profilo {model} “{from}”; quello di questo documento è “{to}”.
 	Texture	Texture
 	Craquelure…	Craquelé…
 	Grain…	Granulosità…

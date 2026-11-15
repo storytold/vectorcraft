@@ -1008,6 +1008,24 @@
 	Preserve Embedded Profiles	Zachovat vložené profily
 	Convert to Working Space	Převést do pracovního prostoru
 	Preserve Numbers	Zachovat čísla
+	Profile Mismatches:	Nesoulad profilů:
+	Ask When Opening	Ptát se při otevírání
+	Ask When Pasting	Ptát se při vkládání
+	Missing Profiles:	Chybějící profily:
+	Embedded Profile Mismatch	Nesoulad vloženého profilu
+	Missing Profile	Chybějící profil
+	Paste Profile Mismatch	Nesoulad profilu při vkládání
+	“{name}” is not tagged with a {model} profile.	„{name}“ nemá přiřazen profil {model}.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	„{name}“ má profil {model} „{profile}“, který není pracovním prostorem {model} „{working}“.
+	Use the embedded profile	Použít vložený profil
+	Convert the colors to the working space	Převést barvy do pracovního prostoru
+	Discard the embedded profile	Zahodit vložený profil
+	Leave as is	Ponechat beze změny
+	Assign the working space	Přiřadit pracovní prostor
+	Assign profile:	Přiřadit profil:
+	Preserve the color numbers	Zachovat hodnoty barev
+	Convert to keep the colors' appearance	Převést a zachovat vzhled barev
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Vložené barvy pocházejí z dokumentu s profilem {model} „{from}“; tento dokument má „{to}“.
 	CMYK	CMYK
 	Texture	Textura
 	Craquelure…	Krakelování…

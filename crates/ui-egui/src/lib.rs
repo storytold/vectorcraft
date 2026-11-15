@@ -344,6 +344,9 @@ pub struct VectorcraftApp {
     /// The plug-in install the approval dialog asks about, kept out of the dialog's fields, which
     /// `ui.dialog.set` writes.
     pub(crate) pending_plugin_install: Option<dialogs::plugin::PendingInstall>,
+    /// The file File › Open read that waits for the answer to its profile question
+    /// ([`dialogs::profile_mismatch`]), kept out of the dialog's fields.
+    pub(crate) pending_profile_open: Option<dialogs::profile_mismatch::PendingOpen>,
     /// The pen end the canvas saw last and the tool its eraser end stands in for
     /// ([`stylus::sync_eraser_tool`]).
     pub(crate) pen_end: stylus::PenEnd,

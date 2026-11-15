@@ -612,6 +612,24 @@ font-technology	Variable	Biến thiên
 	Preserve Embedded Profiles	Giữ cấu hình nhúng
 	Convert to Working Space	Chuyển sang không gian làm việc
 	Preserve Numbers	Giữ giá trị số
+	Profile Mismatches:	Cấu hình không khớp:
+	Ask When Opening	Hỏi khi mở
+	Ask When Pasting	Hỏi khi dán
+	Missing Profiles:	Cấu hình bị thiếu:
+	Embedded Profile Mismatch	Cấu hình nhúng không khớp
+	Missing Profile	Thiếu cấu hình
+	Paste Profile Mismatch	Cấu hình không khớp khi dán
+	“{name}” is not tagged with a {model} profile.	“{name}” không có cấu hình {model}.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	“{name}” có cấu hình {model} “{profile}”, không phải không gian làm việc {model} “{working}”.
+	Use the embedded profile	Dùng cấu hình nhúng
+	Convert the colors to the working space	Chuyển màu sang không gian làm việc
+	Discard the embedded profile	Bỏ cấu hình nhúng
+	Leave as is	Giữ nguyên
+	Assign the working space	Gán không gian làm việc
+	Assign profile:	Gán cấu hình:
+	Preserve the color numbers	Giữ giá trị số của màu
+	Convert to keep the colors' appearance	Chuyển đổi để giữ diện mạo của màu
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Màu đã dán đến từ tài liệu có cấu hình {model} “{from}”; cấu hình của tài liệu này là “{to}”.
 	Coarse Dots	Chấm thô
 	Collapse Panels to Icons	Thu gọn bảng thành biểu tượng
 	Collapse to Icons	Thu gọn thành biểu tượng

@@ -949,6 +949,24 @@
 	Preserve Embedded Profiles	Zachowaj osadzone profile
 	Convert to Working Space	Konwertuj do przestrzeni roboczej
 	Preserve Numbers	Zachowaj wartości liczbowe
+	Profile Mismatches:	Niezgodność profili:
+	Ask When Opening	Pytaj przy otwieraniu
+	Ask When Pasting	Pytaj przy wklejaniu
+	Missing Profiles:	Brakujące profile:
+	Embedded Profile Mismatch	Niezgodność osadzonego profilu
+	Missing Profile	Brak profilu
+	Paste Profile Mismatch	Niezgodność profilu przy wklejaniu
+	“{name}” is not tagged with a {model} profile.	„{name}” nie ma profilu {model}.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	„{name}” ma profil {model} „{profile}”, który nie jest przestrzenią roboczą {model} „{working}”.
+	Use the embedded profile	Użyj osadzonego profilu
+	Convert the colors to the working space	Konwertuj kolory do przestrzeni roboczej
+	Discard the embedded profile	Odrzuć osadzony profil
+	Leave as is	Pozostaw bez zmian
+	Assign the working space	Przypisz przestrzeń roboczą
+	Assign profile:	Przypisz profil:
+	Preserve the color numbers	Zachowaj wartości kolorów
+	Convert to keep the colors' appearance	Konwertuj, aby zachować wygląd kolorów
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Wklejone kolory pochodzą z dokumentu z profilem {model} „{from}”; profil tego dokumentu to „{to}”.
 	CMYK	CMYK
 	Texture	Tekstura
 	Craquelure…	Spękania…

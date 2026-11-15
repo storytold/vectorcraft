@@ -5218,6 +5218,24 @@ axis	Both	Båda
 	Preserve Embedded Profiles	Behåll inbäddade profiler
 	Convert to Working Space	Konvertera till arbetsfärgrymd
 	Preserve Numbers	Behåll värden
+	Profile Mismatches:	Profilavvikelser:
+	Ask When Opening	Fråga vid öppning
+	Ask When Pasting	Fråga vid inklistring
+	Missing Profiles:	Profiler som saknas:
+	Embedded Profile Mismatch	Avvikande inbäddad profil
+	Missing Profile	Profil saknas
+	Paste Profile Mismatch	Profilavvikelse vid inklistring
+	“{name}” is not tagged with a {model} profile.	”{name}” har ingen {model}-profil.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	”{name}” har {model}-profilen ”{profile}”, som inte är {model}-arbetsfärgrymden ”{working}”.
+	Use the embedded profile	Använd den inbäddade profilen
+	Convert the colors to the working space	Konvertera färgerna till arbetsfärgrymden
+	Discard the embedded profile	Ignorera den inbäddade profilen
+	Leave as is	Lämna som det är
+	Assign the working space	Tilldela arbetsfärgrymden
+	Assign profile:	Tilldela profil:
+	Preserve the color numbers	Behåll färgvärdena
+	Convert to keep the colors' appearance	Konvertera så att färgerna ser likadana ut
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	De inklistrade färgerna kommer från ett dokument med {model}-profilen ”{from}”; det här dokumentets är ”{to}”.
 	Texture	Textur
 	Craquelure…	Krakelering…
 	Grain…	Korn…

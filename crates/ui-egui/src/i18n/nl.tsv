@@ -1449,6 +1449,24 @@
 	Preserve Embedded Profiles	Ingesloten profielen behouden
 	Convert to Working Space	Omzetten naar werkruimte
 	Preserve Numbers	Waarden behouden
+	Profile Mismatches:	Profielverschillen:
+	Ask When Opening	Vragen bij openen
+	Ask When Pasting	Vragen bij plakken
+	Missing Profiles:	Ontbrekende profielen:
+	Embedded Profile Mismatch	Ingesloten profiel komt niet overeen
+	Missing Profile	Ontbrekend profiel
+	Paste Profile Mismatch	Profielverschil bij plakken
+	“{name}” is not tagged with a {model} profile.	„{name}” heeft geen {model}-profiel.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	„{name}” heeft het {model}-profiel „{profile}”, dat niet de {model}-werkruimte „{working}” is.
+	Use the embedded profile	Ingesloten profiel gebruiken
+	Convert the colors to the working space	Kleuren omzetten naar de werkruimte
+	Discard the embedded profile	Ingesloten profiel negeren
+	Leave as is	Laten zoals het is
+	Assign the working space	Werkruimte toewijzen
+	Assign profile:	Profiel toewijzen:
+	Preserve the color numbers	Kleurwaarden behouden
+	Convert to keep the colors' appearance	Omzetten zodat de kleuren er hetzelfde uitzien
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	De geplakte kleuren komen uit een document met het {model}-profiel „{from}”; dat van dit document is „{to}”.
 	CMYK	CMYK
 	Texture	Textuur
 	Craquelure…	Craquelure…

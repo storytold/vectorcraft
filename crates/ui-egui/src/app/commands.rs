@@ -214,6 +214,10 @@ impl VectorcraftApp {
                 Ok(Some(started)) => return Ok(started),
                 Ok(None) => {}
             }
+            // Edit › Color Settings' Ask When Pasting, then any swatch conflict.
+            if let Some(r) = dialogs::profile_mismatch::ask_paste(self, id, &params) {
+                return r;
+            }
             if let Some(r) = dialogs::swatch_conflict::ask(self, id, &params) {
                 return r;
             }

@@ -700,6 +700,24 @@ font-technology	Variable	Változó
 	Preserve Embedded Profiles	Beágyazott profilok megtartása
 	Convert to Working Space	Konvertálás a munkaszíntérbe
 	Preserve Numbers	Számértékek megtartása
+	Profile Mismatches:	Profileltérések:
+	Ask When Opening	Kérdezzen megnyitáskor
+	Ask When Pasting	Kérdezzen beillesztéskor
+	Missing Profiles:	Hiányzó profilok:
+	Embedded Profile Mismatch	Eltérő beágyazott profil
+	Missing Profile	Hiányzó profil
+	Paste Profile Mismatch	Profileltérés beillesztéskor
+	“{name}” is not tagged with a {model} profile.	„{name}” nem rendelkezik {model}-profillal.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	„{name}” {model}-profilja „{profile}”, amely nem a(z) „{working}” {model}-munkaszíntér.
+	Use the embedded profile	A beágyazott profil használata
+	Convert the colors to the working space	A színek konvertálása a munkaszíntérbe
+	Discard the embedded profile	A beágyazott profil elvetése
+	Leave as is	Változatlanul hagyás
+	Assign the working space	A munkaszíntér hozzárendelése
+	Assign profile:	Profil hozzárendelése:
+	Preserve the color numbers	A színértékek megtartása
+	Convert to keep the colors' appearance	Konvertálás a színek megjelenésének megtartásával
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	A beillesztett színek olyan dokumentumból származnak, amelynek {model}-profilja „{from}”; ennek a dokumentumnak „{to}”.
 	Coarse Dots	Durva pontok
 	Collapse Panels to Icons	Panelek ikonná csukása
 	Collapse to Icons	Ikonná csukás

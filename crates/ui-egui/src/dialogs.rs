@@ -96,6 +96,7 @@ pub mod plugin;
 mod png_options;
 pub mod print;
 pub mod print_presets;
+pub mod profile_mismatch;
 mod psd_options;
 pub mod raster_effects;
 pub mod rearrange_artboards;
@@ -382,6 +383,8 @@ registry! {
     ExportAs: ["exportAs"] => export_as::SPEC,
     ImportPdf: [import_pdf::KIND] => import_pdf::SPEC,
     SwatchConflict: [swatch_conflict::KIND] => swatch_conflict::SPEC,
+    ProfileMismatchOpen: [profile_mismatch::OPEN_KIND] => profile_mismatch::OPEN_SPEC,
+    ProfileMismatchPaste: [profile_mismatch::PASTE_KIND] => profile_mismatch::PASTE_SPEC,
     FileInfo: [file_info::KIND] => file_info::SPEC,
     RasterEffectsSettings: [raster_effects::KIND] => raster_effects::SPEC,
     EffectGallery: [effect_gallery::KIND] => effect_gallery::SPEC,
@@ -666,6 +669,12 @@ pub fn cancel(app: &mut VectorcraftApp) {
         if d.kind == swatch_conflict::KIND {
             crate::placing::cancel_swatch_paste(app);
         }
+        if d.kind == profile_mismatch::OPEN_KIND {
+            profile_mismatch::cancel_open(app);
+        }
+        if d.kind == profile_mismatch::PASTE_KIND {
+            crate::placing::cancel_swatch_paste(app);
+        }
         if d.kind == plugin::INSTALL_KIND {
             app.pending_plugin_install = None;
         }
@@ -726,6 +735,7 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 /// time).
 pub(crate) fn settle(app: &mut VectorcraftApp) {
     crate::placing::settle_swatch_paste(app);
+    profile_mismatch::settle(app);
     missing_fonts::requeue_replaced(app);
     missing_fonts::stop_when_closed(app);
     find_links::stop_when_closed(app);

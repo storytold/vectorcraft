@@ -992,6 +992,24 @@
 	Preserve Embedded Profiles	Säilytä upotetut profiilit
 	Convert to Working Space	Muunna työväriavaruuteen
 	Preserve Numbers	Säilytä lukuarvot
+	Profile Mismatches:	Profiilien ristiriidat:
+	Ask When Opening	Kysy avattaessa
+	Ask When Pasting	Kysy liitettäessä
+	Missing Profiles:	Puuttuvat profiilit:
+	Embedded Profile Mismatch	Upotetun profiilin ristiriita
+	Missing Profile	Profiili puuttuu
+	Paste Profile Mismatch	Profiiliristiriita liitettäessä
+	“{name}” is not tagged with a {model} profile.	Kohteella ”{name}” ei ole {model}-profiilia.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	Kohteella ”{name}” on {model}-profiili ”{profile}”, joka ei ole {model}-työväriavaruus ”{working}”.
+	Use the embedded profile	Käytä upotettua profiilia
+	Convert the colors to the working space	Muunna värit työväriavaruuteen
+	Discard the embedded profile	Hylkää upotettu profiili
+	Leave as is	Jätä ennalleen
+	Assign the working space	Määritä työväriavaruus
+	Assign profile:	Määritä profiili:
+	Preserve the color numbers	Säilytä värien lukuarvot
+	Convert to keep the colors' appearance	Muunna ja säilytä värien ulkoasu
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Liitetyt värit ovat asiakirjasta, jonka {model}-profiili on ”{from}”; tämän asiakirjan profiili on ”{to}”.
 	CMYK	CMYK
 	Texture	Tekstuuri
 	Craquelure…	Krakelyyri…

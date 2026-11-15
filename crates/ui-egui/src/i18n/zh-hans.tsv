@@ -5247,6 +5247,24 @@ imageTrace	Outline	轮廓
 	Preserve Embedded Profiles	保留嵌入的配置文件
 	Convert to Working Space	转换为工作空间
 	Preserve Numbers	保留数值
+	Profile Mismatches:	配置文件不匹配：
+	Ask When Opening	打开时询问
+	Ask When Pasting	粘贴时询问
+	Missing Profiles:	缺少配置文件：
+	Embedded Profile Mismatch	嵌入的配置文件不匹配
+	Missing Profile	缺少配置文件
+	Paste Profile Mismatch	粘贴时配置文件不匹配
+	“{name}” is not tagged with a {model} profile.	“{name}”没有 {model} 配置文件。
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	“{name}”的 {model} 配置文件为“{profile}”，不是 {model} 工作空间“{working}”。
+	Use the embedded profile	使用嵌入的配置文件
+	Convert the colors to the working space	将颜色转换为工作空间
+	Discard the embedded profile	放弃嵌入的配置文件
+	Leave as is	保持原样
+	Assign the working space	指定工作空间
+	Assign profile:	指定配置文件：
+	Preserve the color numbers	保留颜色数值
+	Convert to keep the colors' appearance	转换以保持颜色外观
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	粘贴的颜色来自 {model} 配置文件为“{from}”的文档；此文档的配置文件为“{to}”。
 	Art & Illustration	艺术和插画
 	Branding	品牌
 	Film & Video	影片和视频

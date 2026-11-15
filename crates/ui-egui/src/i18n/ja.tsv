@@ -5400,6 +5400,24 @@ swatch	Bright Violet	ビビッドバイオレット
 	Preserve Embedded Profiles	埋め込まれたプロファイルを保持
 	Convert to Working Space	作業用スペースに変換
 	Preserve Numbers	カラー値を保持
+	Profile Mismatches:	プロファイルの不一致:
+	Ask When Opening	開くときに確認
+	Ask When Pasting	ペーストするときに確認
+	Missing Profiles:	プロファイルの欠落:
+	Embedded Profile Mismatch	埋め込まれたプロファイルの不一致
+	Missing Profile	プロファイルの欠落
+	Paste Profile Mismatch	ペースト時のプロファイルの不一致
+	“{name}” is not tagged with a {model} profile.	「{name}」には {model} プロファイルがありません。
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	「{name}」の {model} プロファイルは「{profile}」で、{model} 作業用スペース「{working}」ではありません。
+	Use the embedded profile	埋め込まれたプロファイルを使用
+	Convert the colors to the working space	カラーを作業用スペースに変換
+	Discard the embedded profile	埋め込まれたプロファイルを破棄
+	Leave as is	そのままにする
+	Assign the working space	作業用スペースを割り当て
+	Assign profile:	プロファイルを割り当て:
+	Preserve the color numbers	カラーの数値を保持
+	Convert to keep the colors' appearance	カラーの見た目を保つように変換
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	ペーストしたカラーは {model} プロファイルが「{from}」のドキュメントのものです。このドキュメントのプロファイルは「{to}」です。
 	Texture	テクスチャ
 	Craquelure…	クラッキング…
 	Grain…	粒状…

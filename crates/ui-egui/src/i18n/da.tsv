@@ -1540,6 +1540,24 @@
 	Preserve Embedded Profiles	Bevar indlejrede profiler
 	Convert to Working Space	Konverter til arbejdsfarverum
 	Preserve Numbers	Bevar tal
+	Profile Mismatches:	Profiluoverensstemmelser:
+	Ask When Opening	Spørg ved åbning
+	Ask When Pasting	Spørg ved indsætning
+	Missing Profiles:	Manglende profiler:
+	Embedded Profile Mismatch	Uoverensstemmelse med indlejret profil
+	Missing Profile	Manglende profil
+	Paste Profile Mismatch	Profiluoverensstemmelse ved indsætning
+	“{name}” is not tagged with a {model} profile.	»{name}« har ingen {model}-profil.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	»{name}« har {model}-profilen »{profile}«, som ikke er {model}-arbejdsfarverummet »{working}«.
+	Use the embedded profile	Brug den indlejrede profil
+	Convert the colors to the working space	Konverter farverne til arbejdsfarverummet
+	Discard the embedded profile	Kassér den indlejrede profil
+	Leave as is	Lad være som den er
+	Assign the working space	Tildel arbejdsfarverummet
+	Assign profile:	Tildel profil:
+	Preserve the color numbers	Bevar farveværdierne
+	Convert to keep the colors' appearance	Konverter for at bevare farvernes udseende
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	De indsatte farver kommer fra et dokument med {model}-profilen »{from}«; dette dokuments er »{to}«.
 	CMYK	CMYK
 	Texture	Tekstur
 	Craquelure…	Krakelering…

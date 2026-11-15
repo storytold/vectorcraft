@@ -5007,6 +5007,24 @@ axis	Both	И двете
 	Preserve Embedded Profiles	Запазване на вградените профили
 	Convert to Working Space	Преобразуване в работното пространство
 	Preserve Numbers	Запазване на числата
+	Profile Mismatches:	Несъответствия на профила:
+	Ask When Opening	Питане при отваряне
+	Ask When Pasting	Питане при поставяне
+	Missing Profiles:	Липсващи профили:
+	Embedded Profile Mismatch	Несъответствие с вградения профил
+	Missing Profile	Липсващ профил
+	Paste Profile Mismatch	Несъответствие на профила при поставяне
+	“{name}” is not tagged with a {model} profile.	„{name}“ няма {model} профил.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	„{name}“ има {model} профил „{profile}“, който не е {model} работното пространство „{working}“.
+	Use the embedded profile	Използване на вградения профил
+	Convert the colors to the working space	Преобразуване на цветовете в работното пространство
+	Discard the embedded profile	Отхвърляне на вградения профил
+	Leave as is	Оставяне без промяна
+	Assign the working space	Задаване на работното пространство
+	Assign profile:	Задаване на профил:
+	Preserve the color numbers	Запазване на цветовите стойности
+	Convert to keep the colors' appearance	Преобразуване със запазване на вида на цветовете
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Поставените цветове идват от документ с {model} профил „{from}“; профилът на този документ е „{to}“.
 	Texture	Текстура
 	Craquelure…	Кракелюр…
 	Grain…	Зърнистост…

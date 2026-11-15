@@ -82,7 +82,7 @@ pub(crate) use load::page_or_editing_data;
 pub(crate) use load::source;
 pub use load::{
     Loaded, RasterImage, ReadFile, detect, file_name, load, load_with, open_bytes, open_bytes_with, open_read, open_template, raster_image,
-    read_for_open, texture_image,
+    read_for_open, read_for_open_asking, texture_image,
 };
 pub(crate) use load::{check_files_not_lossy_overwrite, check_not_lossy_overwrite, lossy_source};
 pub use load::{losses_summary, overwrite_losses};

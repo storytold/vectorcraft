@@ -5477,6 +5477,24 @@ axis	Both	兩者
 	Preserve Embedded Profiles	保留內嵌描述檔
 	Convert to Working Space	轉換為工作空間
 	Preserve Numbers	保留數值
+	Profile Mismatches:	描述檔不符：
+	Ask When Opening	開啟時詢問
+	Ask When Pasting	貼上時詢問
+	Missing Profiles:	遺失的描述檔：
+	Embedded Profile Mismatch	內嵌描述檔不符
+	Missing Profile	遺失描述檔
+	Paste Profile Mismatch	貼上時描述檔不符
+	“{name}” is not tagged with a {model} profile.	「{name}」沒有 {model} 描述檔。
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	「{name}」的 {model} 描述檔為「{profile}」，不是 {model} 工作空間「{working}」。
+	Use the embedded profile	使用內嵌描述檔
+	Convert the colors to the working space	將色彩轉換為工作空間
+	Discard the embedded profile	捨棄內嵌描述檔
+	Leave as is	保持原狀
+	Assign the working space	指定工作空間
+	Assign profile:	指定描述檔：
+	Preserve the color numbers	保留色彩數值
+	Convert to keep the colors' appearance	轉換以保持色彩外觀
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	貼上的色彩來自 {model} 描述檔為「{from}」的文件；此文件的描述檔為「{to}」。
 	Texture	紋理
 	Craquelure…	龜裂紋…
 	Grain…	顆粒…

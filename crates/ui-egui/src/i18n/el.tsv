@@ -5260,6 +5260,24 @@ digits	Malayalam	Μαλαγιάλαμ
 	Preserve Embedded Profiles	Διατήρηση ενσωματωμένων προφίλ
 	Convert to Working Space	Μετατροπή στον χώρο εργασίας
 	Preserve Numbers	Διατήρηση αριθμών
+	Profile Mismatches:	Αναντιστοιχίες προφίλ:
+	Ask When Opening	Ερώτηση κατά το άνοιγμα
+	Ask When Pasting	Ερώτηση κατά την επικόλληση
+	Missing Profiles:	Προφίλ που λείπουν:
+	Embedded Profile Mismatch	Αναντιστοιχία ενσωματωμένου προφίλ
+	Missing Profile	Λείπει προφίλ
+	Paste Profile Mismatch	Αναντιστοιχία προφίλ κατά την επικόλληση
+	“{name}” is not tagged with a {model} profile.	Το «{name}» δεν έχει προφίλ {model}.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	Το «{name}» έχει το προφίλ {model} «{profile}», που δεν είναι ο χώρος εργασίας {model} «{working}».
+	Use the embedded profile	Χρήση του ενσωματωμένου προφίλ
+	Convert the colors to the working space	Μετατροπή των χρωμάτων στον χώρο εργασίας
+	Discard the embedded profile	Απόρριψη του ενσωματωμένου προφίλ
+	Leave as is	Διατήρηση ως έχει
+	Assign the working space	Αντιστοίχιση του χώρου εργασίας
+	Assign profile:	Αντιστοίχιση προφίλ:
+	Preserve the color numbers	Διατήρηση των αριθμών των χρωμάτων
+	Convert to keep the colors' appearance	Μετατροπή με διατήρηση της εμφάνισης των χρωμάτων
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Τα χρώματα που επικολλήθηκαν προέρχονται από έγγραφο με προφίλ {model} «{from}»· το προφίλ αυτού του εγγράφου είναι «{to}».
 	System Title Bar	Γραμμή τίτλου συστήματος
 	VectorCraft Title Bar on Every Desktop	Γραμμή τίτλου του VectorCraft σε κάθε επιφάνεια εργασίας
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Όσο είναι ορισμένη, η μεταβλητή περιβάλλοντος VECTORCRAFT_TITLEBAR επιλέγει τη γραμμή τίτλου.
