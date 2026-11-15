@@ -341,7 +341,12 @@ fn the_tile_items_check_the_layout_the_panes_show() {
 
 /// One frame of the application bar with screen-reader nodes on → the nodes.
 fn app_bar_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<egui::accesskit::Node> {
-    let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(1400.0, 800.0));
+    app_bar_frame_in(app, ctx, events, 1400.0)
+}
+
+/// [`app_bar_frame`] on a window `width` points wide.
+fn app_bar_frame_in(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, width: f32) -> Vec<egui::accesskit::Node> {
+    let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(width, 800.0));
     let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| crate::chrome::app_bar(app, ui));
     out.textures_delta.clear();
     out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default()
@@ -393,6 +398,25 @@ fn the_arrange_documents_button_tiles_and_consolidates() {
     click_app_bar(&mut app, &ctx, "Arrange Documents");
     click_app_bar(&mut app, &ctx, "Consolidate All Windows");
     assert!(!app.ui.tiled);
+}
+
+/// As the application bar narrows, Arrange Documents goes before the search icon.
+#[test]
+fn a_narrow_application_bar_keeps_search_before_arrange_documents() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = app_with(3);
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let mut search_alone = false;
+    for width in (200..=1400).rev().step_by(4) {
+        app_bar_frame_in(&mut app, &ctx, vec![], width as f32);
+        let nodes = app_bar_frame_in(&mut app, &ctx, vec![], width as f32);
+        let (arrange, search) = (app_bar_node(&nodes, "Arrange Documents").is_some(), app_bar_node(&nodes, "Search commands and tools").is_some());
+        assert!(search || !arrange, "{width} pt: Arrange Documents shows without the search icon");
+        search_alone |= search && !arrange;
+    }
+    assert!(search_alone, "some width shows the search icon without Arrange Documents");
 }
 
 #[test]

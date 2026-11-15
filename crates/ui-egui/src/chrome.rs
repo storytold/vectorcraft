@@ -84,8 +84,8 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let menus_end = if app.services.native_menu.is_some() { ui.cursor().min.x } else { menus::menu_bar(app, ui) };
             // The right-side group fills the space after the menus from the right; when it runs
             // short, Discord goes first (it is also under Help), then Explore tutorials (also
-            // Window › Learn), then the search icon (the palette stays under its shortcut), then
-            // Arrange Documents (also Window › Arrange), then the workspace switcher narrows.
+            // Window › Learn), then Arrange Documents (also Window › Arrange), then the search icon
+            // (the palette stays under its shortcut), then the workspace switcher narrows.
             let full = ui.max_rect();
             let right_edge = if captions_right > 0.0 { full.right() - captions_right - 10.0 } else { full.right() };
             let right = egui::Rect::from_min_max(egui::pos2(menus_end + 8.0, full.top()), egui::pos2(right_edge, full.bottom()));
@@ -105,15 +105,15 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let ws = ui.painter().layout_no_wrap(ws_name, egui::FontId::proportional(12.0), t.text);
             let ws_w = (ws.size().x + 36.0).clamp(112.0, 190.0);
             let gap = ui.spacing().item_spacing.x;
-            // Arrange Documents, beside the switcher, then the search icon, as in PhotoCraft: each
-            // shown while a minimal switcher fits beside it.
+            // The search icon, as in PhotoCraft, then Arrange Documents between it and the switcher:
+            // each shown while a minimal switcher fits beside it.
             let icon = 28.0;
-            let arrange = switcher && room >= 64.0 + 8.0 + gap + icon;
-            let search = arrange && room >= 64.0 + 8.0 + 2.0 * (gap + icon);
+            let search = switcher && room >= 64.0 + 8.0 + gap + icon;
+            let arrange = search && room >= 64.0 + 8.0 + 2.0 * (gap + icon);
             let icons = f32::from(u8::from(arrange) + u8::from(search));
             let ws_w = ws_w.min(room - 8.0 - icons * (gap + icon)).max(64.0);
             // Explore tutorials, beside the search icon, opens the Learn panel.
-            let learn = search && room >= ws_w + 8.0 + 3.0 * (gap + icon);
+            let learn = arrange && room >= ws_w + 8.0 + 3.0 * (gap + icon);
             let discord = learn && room >= ws_w + 8.0 + 3.0 * (gap + icon) + 10.0 + gap + crate::community::discord_width(ui, false);
             let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
             let ui = &mut rui;
