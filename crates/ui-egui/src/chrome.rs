@@ -24,7 +24,7 @@ pub use control_bar::{
 };
 #[cfg(test)]
 use control_bar::{CONTROL_BAR_FLOAT_AT, ISOLATION_BUTTON};
-pub(crate) use control_bar::{Fit, group_separator, link_reserve};
+pub(crate) use control_bar::{Fit, group_separator, left_out, link_reserve};
 #[cfg(test)]
 use hints::hint_segments;
 pub use hints::{hint_bar, hint_strings};
