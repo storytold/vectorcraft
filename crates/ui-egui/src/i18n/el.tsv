@@ -140,6 +140,7 @@
 	Align to Artboard	Στοίχιση ως προς τον πίνακα σχεδίασης
 	Align to Glyph Bounds	Στοίχιση στα όρια των γλυφών
 	Align to Key Object	Στοίχιση ως προς το βασικό αντικείμενο
+	Align to Key Anchor	Στοίχιση ως προς το βασικό σημείο αγκύρωσης
 	Align to Page	Στοίχιση ως προς τη σελίδα
 	Align to Path	Στοίχιση ως προς τη διαδρομή
 	Align to Selection	Στοίχιση ως προς την επιλογή
@@ -4273,6 +4274,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Kana	Κάνα
 	Numerals	Αριθμοί
 	Scale at Center	Κλιμάκωση από το κέντρο
+	Delete Set	Διαγραφή συνόλου
+	Direct Entry	Άμεση καταχώριση
 	Up/Down:	Πάνω/Κάτω:
 	Left/Right:	Αριστερά/Δεξιά:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko πάνω/κάτω
@@ -5350,6 +5353,11 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	Imported library {name}	Εισήχθη η βιβλιοθήκη {name}
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Πολιτική RGB:
+	CMYK Policy:	Πολιτική CMYK:
+	Preserve Embedded Profiles	Διατήρηση ενσωματωμένων προφίλ
+	Convert to Working Space	Μετατροπή στον χώρο εργασίας
+	Preserve Numbers	Διατήρηση αριθμών
 	System Title Bar	Γραμμή τίτλου συστήματος
 	VectorCraft Title Bar on Every Desktop	Γραμμή τίτλου του VectorCraft σε κάθε επιφάνεια εργασίας
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Όσο είναι ορισμένη, η μεταβλητή περιβάλλοντος VECTORCRAFT_TITLEBAR επιλέγει τη γραμμή τίτλου.
@@ -6126,6 +6134,8 @@ effect	Points	Σημεία
 	Save Variable Library…	Αποθήκευση βιβλιοθήκης μεταβλητών…
 @msg	a variable library holds text variables, and the document has none	μια βιβλιοθήκη μεταβλητών περιέχει μεταβλητές κειμένου και το έγγραφο δεν έχει καμία
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	η μεταβλητή `{name}` δεν μπορεί να αποθηκευτεί σε βιβλιοθήκη μεταβλητών: μετονομάστε την ώστε να ξεκινά με γράμμα ή `_`, χωρίς κενά ή σύμβολα εκτός από `-`, `_` και `.`
+@msg	{k} has control characters	{k} περιέχει χαρακτήρες ελέγχου
+@msg	{k} has control characters or line breaks	{k} περιέχει χαρακτήρες ελέγχου ή αλλαγές γραμμής
 @msg	data set `{name}` holds a control character, which a variable library can't hold	το σύνολο δεδομένων `{name}` περιέχει χαρακτήρα ελέγχου, τον οποίο δεν μπορεί να περιέχει μια βιβλιοθήκη μεταβλητών
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	το σύνολο δεδομένων `{name}` ξεκινά ή τελειώνει με κενό διάστημα, το οποίο δεν μπορεί να περιέχει μια βιβλιοθήκη μεταβλητών
 	Filter	Φίλτρο
@@ -6550,6 +6560,7 @@ axis	Y Axis	Άξονας Y
 @msg	stops must be in order of `offset`	τα σημεία χρώματος πρέπει να είναι ταξινομημένα κατά `offset`
 @msg	the document has no pattern {pattern}	το έγγραφο δεν έχει μοτίβο {pattern}
 @msg	the document has no swatch {n}	το έγγραφο δεν έχει δείγμα χρώματος {n}
+@msg	`plates` requires a stop linked to a spot swatch	το `plates` απαιτεί σημείο χρώματος συνδεδεμένο με δείγμα πλακάτου χρώματος
 @msg	the output	η έξοδος
 @msg	the path has no anchor points	η διαδρομή δεν έχει σημεία αγκύρωσης
 @msg	too many anchor points (limit {MAX_ANCHORS})	πάρα πολλά σημεία αγκύρωσης (όριο {MAX_ANCHORS})

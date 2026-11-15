@@ -613,6 +613,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} show/hide the dock and the floating panels (hiding them closes a panel popped out of the icon column), leaving the toolbar and the Control bar as they are; returns whether the panels show",
     ),
     (
+        "window.panels.peek",
+        "Show Hidden Panels at Edge",
+        "",
+        "{side: left|right|null} while Tab or Shift+Tab hides the panels, show the docked panels on that side of the canvas over its edge, as resting the pointer on that edge of the window for 0.3 s does; they hide again 0.3 s after the pointer moves away from them, and null hides them now. Floating panels, the toolbar and the Control bar stay hidden, and Tab or Shift+Tab shows the panels for good. Fails and changes nothing while the panels show, in Presentation Mode, for any other side, or when no panel is docked on that side; returns the side shown or null",
+    ),
+    (
         "window.panel",
         "Show Panel",
         "",

@@ -160,6 +160,7 @@
 	Align to Artboard	Allinea alla tavola da disegno
 	Align to Glyph Bounds	Allinea ai limiti del glifo
 	Align to Key Object	Allinea all'oggetto chiave
+	Align to Key Anchor	Allinea al punto di ancoraggio chiave
 	Align to Page	Allinea alla pagina
 	Align to Path	Allinea al tracciato
 	Align to Selection	Allinea alla selezione
@@ -3833,6 +3834,8 @@ digits	Malayalam	Malayalam
 	Kana	Kana
 	Numerals	Numeri
 	Scale at Center	Ridimensiona dal centro
+	Delete Set	Elimina set
+	Direct Entry	Immissione diretta
 	Up/Down:	Su/giù:
 	Left/Right:	Sinistra/destra:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko su/giù
@@ -5446,6 +5449,11 @@ axis	Both	Entrambi
 @msg	Imported library {name}	Libreria {name} importata
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Criterio RGB:
+	CMYK Policy:	Criterio CMYK:
+	Preserve Embedded Profiles	Mantieni profili incorporati
+	Convert to Working Space	Converti nello spazio di lavoro
+	Preserve Numbers	Mantieni valori numerici
 	Texture	Texture
 	Craquelure…	Craquelé…
 	Grain…	Granulosità…
@@ -6220,6 +6228,7 @@ axis	Y Axis	Asse Y
 @msg	stops must be in order of `offset`	i cursori colore devono essere in ordine di `offset`
 @msg	the document has no pattern {pattern}	il documento non ha il motivo {pattern}
 @msg	the document has no swatch {n}	il documento non ha il campione {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` richiede un cursore colore collegato a un campione di colore spot
 @msg	the output	l’output
 @msg	the path has no anchor points	il tracciato non ha punti di ancoraggio
 @msg	too many anchor points (limit {MAX_ANCHORS})	troppi punti di ancoraggio (limite {MAX_ANCHORS})
@@ -9035,7 +9044,8 @@ breakText	Glyphs	Glifi
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	i file {kind} non hanno trasparenza, e il file avrebbe {what}: appiattiscila prima (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	le immagini {kind} non possono essere aperte (vedi document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` non è una delle scelte disponibili
-@msg	{k} has control characters{_1}	{k} contiene caratteri di controllo{_1}
+@msg	{k} has control characters	{k} contiene caratteri di controllo
+@msg	{k} has control characters or line breaks	{k} contiene caratteri di controllo o interruzioni di riga
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} è troppo lungo (al massimo {MAX_TEXT} caratteri)
 @msg	{k} must be > 0	{k} deve essere > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} deve essere un numero (pt) o una lunghezza come "210 mm"

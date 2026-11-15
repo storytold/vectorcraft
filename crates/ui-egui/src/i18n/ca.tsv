@@ -242,6 +242,7 @@
 	Align to Artboard	Alinea al tauler
 	Align to Glyph Bounds	Alinea als límits del glif
 	Align to Key Object	Alinea a l’objecte clau
+	Align to Key Anchor	Alinea al punt d’ancoratge clau
 	Align to Page	Alinea a la pàgina
 	Align to Path	Alinea al traçat
 	Align to Selection	Alinea a la selecció
@@ -764,6 +765,11 @@ antiAlias	Sharp	Nítid
 	CMYK Equivalents	Equivalents CMYK
 	CMYK profile in effect	Perfil CMYK en vigor
 	CMYK:	CMYK:
+	RGB Policy:	Política RGB:
+	CMYK Policy:	Política CMYK:
+	Preserve Embedded Profiles	Conserva els perfils incrustats
+	Convert to Working Space	Converteix a l'espai de treball
+	Preserve Numbers	Conserva els números
 	Coarse Dots	Punts gruixuts
 	Collapse Panel Group	Replega el grup de panells
 	Collapse Panels to Icons	Replega els panells a icones
@@ -2477,6 +2483,8 @@ digits	Malayalam	Malaiàlam
 	Save Variable Library…	Desa la biblioteca de variables…
 @msg	a variable library holds text variables, and the document has none	una biblioteca de variables conté variables de text, i el document no en té cap
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variable `{name}` no es pot desar en una biblioteca de variables: canvieu-li el nom perquè comenci amb una lletra o `_`, sense espais ni símbols que no siguin `-`, `_` i `.`
+@msg	{k} has control characters	{k} conté caràcters de control
+@msg	{k} has control characters or line breaks	{k} conté caràcters de control o salts de línia
 @msg	data set `{name}` holds a control character, which a variable library can't hold	el conjunt de dades `{name}` conté un caràcter de control, que una biblioteca de variables no pot contenir
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	el conjunt de dades `{name}` comença o acaba amb un espai en blanc, que una biblioteca de variables no pot contenir
 	Loaded Texture	Textura carregada
@@ -4772,6 +4780,8 @@ digits	Malayalam	Malaiàlam
 	Kana	Kana
 	Numerals	Xifres
 	Scale at Center	Escala des del centre
+	Delete Set	Suprimeix el joc
+	Direct Entry	Entrada directa
 	Up/Down:	Amunt/avall:
 	Left/Right:	Esquerra/dreta:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko amunt/avall
@@ -6712,6 +6722,7 @@ digits	Malayalam	Malaiàlam
 @msg	stops must be in order of `offset`	les parades han d’estar en ordre d’`offset`
 @msg	the document has no pattern {pattern}	el document no té el motiu {pattern}
 @msg	the document has no swatch {n}	el document no té la mostra {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` requereix una parada vinculada a una mostra de color directe
 @msg	the output	la sortida
 @msg	the path has no anchor points	el traçat no té punts d’ancoratge
 @msg	too many anchor points (limit {MAX_ANCHORS})	massa punts d’ancoratge (límit {MAX_ANCHORS})

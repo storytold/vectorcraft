@@ -229,6 +229,7 @@
 	Align to Artboard	Igazítás a rajztáblához
 	Align to Glyph Bounds	Igazítás a glifák határaihoz
 	Align to Key Object	Igazítás a kulcsobjektumhoz
+	Align to Key Anchor	Igazítás a kulcs-horgonyponthoz
 	Align to Page	Igazítás az oldalhoz
 	Align to Path	Igazítás az útvonalhoz
 	Align to Selection	Igazítás a kijelöléshez
@@ -695,6 +696,11 @@ font-technology	Variable	Változó
 	CMYK Equivalents	CMYK-megfelelők
 	CMYK profile in effect	Érvényes CMYK-profil
 	CMYK:	CMYK:
+	RGB Policy:	RGB-házirend:
+	CMYK Policy:	CMYK-házirend:
+	Preserve Embedded Profiles	Beágyazott profilok megtartása
+	Convert to Working Space	Konvertálás a munkaszíntérbe
+	Preserve Numbers	Számértékek megtartása
 	Coarse Dots	Durva pontok
 	Collapse Panels to Icons	Panelek ikonná csukása
 	Collapse to Icons	Ikonná csukás
@@ -4455,6 +4461,8 @@ mark-style	Japanese	Japán
 	Kana	Kana
 	Numerals	Számjegyek
 	Scale at Center	Méretezés középről
+	Delete Set	Készlet törlése
+	Direct Entry	Közvetlen bevitel
 	Up/Down:	Fel/le:
 	Left/Right:	Balra/jobbra:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko fel/le
@@ -6252,6 +6260,8 @@ imageTrace	Outline	Körvonal
 	Save Variable Library…	Változókönyvtár mentése…
 @msg	a variable library holds text variables, and the document has none	a változókönyvtár szöveges változókat tartalmaz, a dokumentumban pedig nincs ilyen
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	a(z) `{name}` változó nem menthető változókönyvtárba: nevezze át úgy, hogy betűvel vagy `_` jellel kezdődjön, szóközök és a `-`, `_` és `.` jeltől eltérő szimbólumok nélkül
+@msg	{k} has control characters	{k} vezérlőkaraktereket tartalmaz
+@msg	{k} has control characters or line breaks	{k} vezérlőkaraktereket vagy sortöréseket tartalmaz
 @msg	data set `{name}` holds a control character, which a variable library can't hold	a(z) `{name}` adatkészlet vezérlőkaraktert tartalmaz, amelyet a változókönyvtár nem tartalmazhat
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	a(z) `{name}` adatkészlet szóközzel kezdődik vagy végződik, amelyet a változókönyvtár nem tartalmazhat
 	Make Graph Dynamic	Diagram dinamikussá tétele
@@ -6577,6 +6587,7 @@ axis	Y Axis	Y tengely
 @msg	stops must be in order of `offset`	a színátmenet-pontok `offset` szerint rendezve legyenek
 @msg	the document has no pattern {pattern}	a dokumentumban nincs {pattern} mintázat
 @msg	the document has no swatch {n}	a dokumentumban nincs {n} színminta
+@msg	`plates` requires a stop linked to a spot swatch	a `plates` direktszín-színmintához kapcsolt színátmenet-pontot igényel
 @msg	the output	a kimenet
 @msg	the path has no anchor points	az útvonalnak nincsenek horgonypontjai
 @msg	too many anchor points (limit {MAX_ANCHORS})	túl sok horgonypont (korlát: {MAX_ANCHORS})

@@ -135,6 +135,7 @@
 	Align to Artboard	An Zeichenfläche ausrichten
 	Align to Glyph Bounds	An Glyphenbegrenzung ausrichten
 	Align to Key Object	An Basisobjekt ausrichten
+	Align to Key Anchor	An Basisankerpunkt ausrichten
 	Align to Page	An Seite ausrichten
 	Align to Path	An Pfad ausrichten
 	Align to Selection	An Auswahl ausrichten
@@ -3738,6 +3739,8 @@ effect	Points	Punkte
 	Kana	Kana
 	Numerals	Ziffern
 	Scale at Center	Von der Mitte aus skalieren
+	Delete Set	Satz löschen
+	Direct Entry	Direkteingabe
 	Up/Down:	Oben/Unten:
 	Left/Right:	Links/Rechts:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko oben/unten
@@ -5378,6 +5381,11 @@ theme	Appearance	Erscheinungsbild
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Die Hauptfarbe wird zur Konturfarbe. Die anderen Farben wandern ebenso weit um den Farbkreis wie die Hauptfarbe und behalten ihre Sättigung und Helligkeit.
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB-Richtlinie:
+	CMYK Policy:	CMYK-Richtlinie:
+	Preserve Embedded Profiles	Eingebettete Profile beibehalten
+	Convert to Working Space	In Arbeitsfarbraum konvertieren
+	Preserve Numbers	Werte beibehalten
 # PSD files.
 @msg	not a PSD file	keine PSD-Datei
 @msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	PSD-Dateien im Mehrkanalmodus können nicht gelesen werden: Speichern Sie die Datei im RGB-, CMYK- oder Graustufenmodus
@@ -6184,6 +6192,7 @@ axis	Y Axis	Y-Achse
 @msg	stops must be in order of `offset`	die Farbstopps müssen nach `offset` geordnet sein
 @msg	the document has no pattern {pattern}	das Dokument hat kein Muster {pattern}
 @msg	the document has no swatch {n}	das Dokument hat kein Farbfeld {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` erfordert einen Farbstopp, der mit einem Volltonfarbfeld verknüpft ist
 @msg	the output	die Ausgabe
 @msg	the path has no anchor points	der Pfad hat keine Ankerpunkte
 @msg	too many anchor points (limit {MAX_ANCHORS})	zu viele Ankerpunkte (Grenze {MAX_ANCHORS})
@@ -8985,7 +8994,8 @@ breakText	Glyphs	Glyphen
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind}-Dateien haben keine Transparenz, und die Datei hätte {what}: Reduzieren Sie sie zuerst (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind}-Bilder können nicht geöffnet werden (siehe document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` ist keine der Auswahlmöglichkeiten
-@msg	{k} has control characters{_1}	{k} enthält Steuerzeichen{_1}
+@msg	{k} has control characters	{k} enthält Steuerzeichen
+@msg	{k} has control characters or line breaks	{k} enthält Steuerzeichen oder Zeilenumbrüche
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} ist zu lang (höchstens {MAX_TEXT} Zeichen)
 @msg	{k} must be > 0	{k} muss > 0 sein
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} muss eine Zahl (pt) oder eine Länge wie „210 mm“ sein

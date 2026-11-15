@@ -989,6 +989,11 @@
 	NTSC Colors	NTSC-värit
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB-käytäntö:
+	CMYK Policy:	CMYK-käytäntö:
+	Preserve Embedded Profiles	Säilytä upotetut profiilit
+	Convert to Working Space	Muunna työväriavaruuteen
+	Preserve Numbers	Säilytä lukuarvot
 	CMYK	CMYK
 	Texture	Tekstuuri
 	Craquelure…	Krakelyyri…
@@ -1494,6 +1499,7 @@ lighting	Light	Valo
 	Align to Artboard	Tasaa piirtoalustaan
 	Align to Glyph Bounds	Tasaa merkin rajoihin
 	Align to Key Object	Tasaa avainobjektiin
+	Align to Key Anchor	Tasaa avainankkuripisteeseen
 	Align to Selection	Tasaa valintaan
 	Align To:	Tasaa:
 	Cancel Key Object	Peruuta avainobjekti
@@ -1685,6 +1691,8 @@ digits	Malayalam	Malajalam
 	Kana	Kana
 	Numerals	Numerot
 	Scale at Center	Skaalaa keskeltä
+	Delete Set	Poista merkistö
+	Direct Entry	Suora syöttö
 	Up/Down:	Ylös/alas:
 	Left/Right:	Vasen/oikea:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko ylös/alas
@@ -6137,6 +6145,8 @@ mark-style	Japanese	Japanilainen
 	Save Variable Library…	Tallenna muuttujakirjasto…
 @msg	a variable library holds text variables, and the document has none	muuttujakirjasto sisältää tekstimuuttujia, eikä asiakirjassa ole yhtään
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	muuttujaa `{name}` ei voi tallentaa muuttujakirjastoon: nimeä se uudelleen niin, että se alkaa kirjaimella tai merkillä `_` eikä sisällä välilyöntejä tai muita symboleja kuin `-`, `_` ja `.`
+@msg	{k} has control characters	{k} sisältää ohjausmerkkejä
+@msg	{k} has control characters or line breaks	{k} sisältää ohjausmerkkejä tai rivinvaihtoja
 @msg	data set `{name}` holds a control character, which a variable library can't hold	tietojoukko `{name}` sisältää ohjausmerkin, jota muuttujakirjasto ei voi sisältää
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	tietojoukko `{name}` alkaa tai päättyy tyhjeeseen, jota muuttujakirjasto ei voi sisältää
 	Filter	Suodata
@@ -6628,6 +6638,7 @@ axis	Y Axis	Y-akseli
 @msg	stops must be in order of `offset`	väripisteiden on oltava `offset`-järjestyksessä
 @msg	the document has no pattern {pattern}	asiakirjassa ei ole kuviota {pattern}
 @msg	the document has no swatch {n}	asiakirjassa ei ole värimallia {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` vaatii väripisteen, joka on linkitetty spottivärin värimalliin
 @msg	the output	tuloste
 @msg	the path has no anchor points	polulla ei ole ankkuripisteitä
 @msg	too many anchor points (limit {MAX_ANCHORS})	liian monta ankkuripistettä (raja {MAX_ANCHORS})
