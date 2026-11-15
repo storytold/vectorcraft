@@ -5011,6 +5011,20 @@ fn pl() -> Lang {
     Lang::from_code("pl").expect("pl registered")
 }
 
+/// Polish translates the dimension commands' errors.
+#[test]
+fn polish_translates_dimension_messages() {
+    for english in [
+        "Choose original artwork, not a dimension's generated paths",
+        "Dimension is locked or hidden",
+        "Dimension mode does not match its source",
+        "Invalid dimension offset",
+        "Invalid point",
+    ] {
+        assert_ne!(message(pl(), english), english);
+    }
+}
+
 #[test]
 fn polish_plurals_have_three_forms() {
     let forms: Vec<usize> = [0, 1, 2, 4, 5, 11, 12, 14, 21, 22, 25, 101, 112, 122].into_iter().map(plural_polish).collect();

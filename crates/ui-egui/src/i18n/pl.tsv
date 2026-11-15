@@ -6084,18 +6084,23 @@ mark-style	Japanese	Japońskie
 	Precision:	Dokładność:
 	Update Dimensions	Aktualizuj wymiary
 @msg	Angles require two straight segments	Kąty wymagają dwóch prostych odcinków
+@msg	Choose original artwork, not a dimension's generated paths	Wybierz oryginalną kompozycję, a nie ścieżki wygenerowane przez wymiar
 @msg	Choose two different points	Wybierz dwa różne punkty
 @msg	Choose two non-parallel straight segments	Wybierz dwa nierównoległe proste odcinki
 @msg	Choose two nonzero angle arms	Wybierz dwa niezerowe ramiona kąta
+@msg	Dimension is locked or hidden	Wymiar jest zablokowany lub ukryty
+@msg	Dimension mode does not match its source	Tryb wymiaru nie odpowiada jego źródłu
 @msg	Dimension point is outside the canvas	Punkt wymiaru leży poza obszarem roboczym
 @msg	Dimension size is outside its supported range	Rozmiar wymiaru jest poza obsługiwanym zakresem
 @msg	First measured segment no longer exists	Pierwszy mierzony odcinek już nie istnieje
 @msg	Invalid dimension distance	Nieprawidłowa odległość wymiaru
 @msg	Invalid dimension font name	Nieprawidłowa nazwa czcionki wymiaru
+@msg	Invalid dimension offset	Nieprawidłowe odsunięcie wymiaru
 @msg	Invalid drawing scale	Nieprawidłowa skala rysunku
 @msg	Invalid real scale	Nieprawidłowa skala rzeczywista
 @msg	Measured anchor no longer exists	Mierzony punkt kontrolny już nie istnieje
 @msg	Invalid measured point	Nieprawidłowy mierzony punkt
+@msg	Invalid point	Nieprawidłowy punkt
 @msg	Measured segment no longer exists	Mierzony odcinek już nie istnieje
 @msg	Non-finite dimension	Wymiar nie jest liczbą skończoną
 @msg	Only linear dimensions are horizontal or vertical	Tylko wymiary liniowe są poziome lub pionowe
