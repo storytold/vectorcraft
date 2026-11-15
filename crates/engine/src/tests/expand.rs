@@ -472,6 +472,39 @@ fn a_click_on_a_shaper_groups_original_shapes_in_the_art_misses_the_instance() {
     assert_eq!(hit_at(&s, 125.0, opt), None, "a click on an original shape");
 }
 
+/// A Shaper group in the symbol's art with a stroke of its own below its Contents row: the
+/// instance's stroke effect moves what that stroke paints, and a click selects the instance where
+/// the canvas draws the moved stroke, not inside the original shapes.
+#[test]
+fn a_click_on_a_shaper_group_with_a_stroke_below_its_contents_selects_the_instance_where_it_draws() {
+    let mut s = session();
+    run(&mut s, "paint.setStroke", json!({"none": true, "ids": []}));
+    for x in [0, 50] {
+        run(&mut s, "paint.setFill", json!({"color": "#ff0000", "ids": []}));
+        run(&mut s, "shape.rectangle", json!({"x": x, "y": 50, "width": 100, "height": 100}));
+    }
+    // The scribble removes the front rectangle's face; the group's stroke outlines both rectangles.
+    let g = NodeId(run(&mut s, "shaper.scribble", json!({"points": [[65, 70], [85, 90], [65, 110], [85, 130]]}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addStroke", json!({"ids": [g.0]}));
+    let stroke = node(&s, g).appearance.items.len() - 1;
+    run(&mut s, "paint.setStroke", json!({"ids": [g.0], "item": stroke, "color": "#0000ff"}));
+    run(&mut s, "stroke.set", json!({"ids": [g.0], "item": stroke, "weight": 4}));
+    run(&mut s, "appearance.moveItem", json!({"ids": [g.0], "from": "contents", "to": stroke + 1}));
+    assert_eq!(node(&s, g).appearance.split_contents().0.len(), stroke + 1, "the group's stroke is below its Contents row");
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Shaped"}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addStroke", json!({"ids": [id.0]}));
+    let row = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    offset_row(&mut s, id, row, 10.0);
+    let r = render(&s);
+    let opt = vectorcraft_doc::hit::HitOptions { tol: 1.0, ..Default::default() };
+    assert!(near(r.pixel(160, 100), BLUE), "the group's stroke moves out by the offset: {:?}", r.pixel(160, 100));
+    assert!(near(r.pixel(125, 100), WHITE), "the original shapes are not drawn: {:?}", r.pixel(125, 100));
+    assert_eq!(hit_at(&s, 160.0, opt), Some(id), "a click on the group's moved stroke");
+    assert_eq!(hit_at(&s, 125.0, opt), None, "a click inside an original shape");
+}
+
 /// Of several fills, only the topmost one's effects reach the art, and only while it is visible.
 #[test]
 fn only_the_topmost_visible_instance_fill_reshapes_the_art() {
