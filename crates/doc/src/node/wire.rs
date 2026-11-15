@@ -57,6 +57,7 @@ impl Serialize for Node {
             is_default(&e.pixel_aligned),
             e.color_mask.is_none(),
             is_default(&e.warp_piece),
+            is_default(&e.clip_pieces),
         ];
         let mut st = s.serialize_struct("Node", skips.iter().filter(|s| !**s).count())?;
         let mut skip = skips.into_iter();
@@ -102,6 +103,7 @@ impl Serialize for Node {
         field!("pixel_aligned", &e.pixel_aligned);
         field!("color_mask", &e.color_mask);
         field!("warp_piece", &e.warp_piece);
+        field!("clip_pieces", &e.clip_pieces);
         st.end()
     }
 }
@@ -249,6 +251,8 @@ pub(super) struct NodeWire {
     color_mask: Option<Box<crate::color_mask::ColorMask>>,
     #[serde(default)]
     warp_piece: bool,
+    #[serde(default)]
+    clip_pieces: bool,
 }
 
 impl From<NodeWire> for Node {
@@ -279,6 +283,7 @@ impl From<NodeWire> for Node {
             pixel_aligned: w.pixel_aligned,
             color_mask: w.color_mask,
             warp_piece: w.warp_piece,
+            clip_pieces: w.clip_pieces,
         };
         Node {
             id: w.id,

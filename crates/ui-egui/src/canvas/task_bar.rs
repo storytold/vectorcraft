@@ -55,6 +55,26 @@ fn selection_tool_with_selection(app: &VectorcraftApp) -> bool {
         && app.session.active().is_some_and(|st| !st.selection.is_empty())
 }
 
+/// The basic shape tools whose Contextual Task Bar shows Edit Path, Fill, Stroke and the selected
+/// shape's properties. The Line Segment tool is not one of them.
+const SHAPE_TOOLS: [&str; 5] = ["rectangle", "roundedRectangle", "ellipse", "polygon", "star"];
+
+/// Whether a basic shape tool is in use with one closed path selected whole, as each of those tools
+/// leaves the shape it draws.
+fn shape_tool_on_shape(app: &VectorcraftApp) -> bool {
+    SHAPE_TOOLS.contains(&app.session.tool_id())
+        && app.session.active().is_some_and(|st| {
+            st.selection.objects.len() == 1
+                && st.selection.anchors.is_empty()
+                && st
+                    .selection
+                    .objects
+                    .first()
+                    .and_then(|id| st.doc.node(*id))
+                    .is_some_and(|n| matches!(&n.kind, NodeKind::Path { path, .. } if path.is_closed()))
+        })
+}
+
 /// Whether the bar shows its blank canvas actions, Draw (Pencil) and Place Image: a selection tool is
 /// in use and the active document has no artwork, only layers and guides.
 fn blank_canvas(app: &VectorcraftApp) -> bool {
@@ -107,7 +127,11 @@ pub(crate) fn task_bar_shows_type(app: &VectorcraftApp) -> bool {
 /// With the Artboard tool it sits under the selected artboards and offers Resize (Artboard
 /// Options), Duplicate, Rearrange All (with two or more artboards) and Export (Export for Screens).
 /// A basic shape selected with the Selection tool shows a Shape Properties button in place of Lock.
-/// Selected type also shows the font family, font style and Font Size controls before its Fill.
+/// While a basic shape tool (Rectangle, Rounded Rectangle, Ellipse, Polygon or Star) has one closed
+/// path selected, as after it draws one, the bar offers Edit Path, Fill and Stroke, and Shape
+/// Properties for a live rectangle, rounded rectangle, ellipse or polygon; with nothing selected, or
+/// any other selection, those tools show no bar. Selected type also shows the font family, font
+/// style and Font Size controls before its Fill.
 /// While a Type tool edits type, or has type selected, the bar shows only those controls and the
 /// Fill. When one row would be wider than the canvas, the font controls take a row of their own,
 /// narrowed to fit it, and the actions wrap onto rows under the handle's ([`bar_layout`]).
@@ -123,7 +147,10 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let typing = type_tool_on_type(app);
     // A blank canvas offers Draw (Pencil) and Place Image, as the same help page describes.
     let blank = !on_artboards && blank_canvas(app);
-    if !(on_artboards || typing || blank || selection_tool_with_selection(app)) {
+    // A basic shape tool with its shape selected offers Edit Path, Fill, Stroke and the shape's
+    // properties, as the same help page describes.
+    let shaping = shape_tool_on_shape(app);
+    if !(on_artboards || typing || blank || shaping || selection_tool_with_selection(app)) {
         return;
     }
     // Selected type has the font controls too, as the help page describes
@@ -153,20 +180,22 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             f.name.as_deref() == Some("Image Trace") && f.children().is_some_and(|c| c.first().is_some_and(|i| matches!(i.kind, NodeKind::Image(_))))
         });
     // A basic shape (a live rectangle, rounded rectangle, ellipse or polygon) selected whole with the
-    // Selection tool: its properties take the place of Lock, as in the reference app
-    // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
+    // Selection tool or a basic shape tool: its properties take the place of Lock, as the help page
+    // describes (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
     use vectorcraft_doc::LiveShape;
     let shape = first
         .filter(|f| {
             n == 1
                 && st.selection.anchors.is_empty()
-                && app.session.tool_id() == "selection"
+                && (app.session.tool_id() == "selection" || shaping)
                 && matches!(&f.kind, NodeKind::Path { live: Some(l), .. }
                     if matches!(**l, LiveShape::Rectangle { .. } | LiveShape::Ellipse { .. } | LiveShape::Polygon { .. }))
         })
         .cloned();
     let mut items: Vec<(&str, &str, &str, serde_json::Value)> = vec![]; // (label, icon, command, params)
     let none = || json!({});
+    // Edit Path: the Direct Selection tool, to edit the path's anchors.
+    let edit_path = || (tl!("Edit Path"), "dc-direct", "tool.select", json!({"tool": "directSelection"}));
     if on_artboards {
         // As in the reference app, the Artboard tool offers to resize, duplicate and export the
         // artboards (<https://community.adobe.com/questions-652/contextual-task-bar-in-illustrator-2025-quick-actions-when-you-need-them-1546580>),
@@ -181,11 +210,12 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         // Draw (Pencil) switches to the Pencil tool; Place Image picks files for the Place dialog.
         items.push((tl!("Draw (Pencil)"), "pencil", "tool.select", json!({"tool": "pencil"})));
         items.push((tl!("Place Image"), "image", "file.place", none()));
+    } else if shaping {
+        // A basic shape tool's one action; its Fill, Stroke and Shape Properties follow as chips.
+        items.push(edit_path());
     } else if !typing {
         // The selection tools' object actions. A Type tool's bar leaves them out, Create Outlines
         // and the type conversions included.
-        // Edit Path: the Direct Selection tool, to edit the path's anchors.
-        let edit_path = || (tl!("Edit Path"), "dc-direct", "tool.select", json!({"tool": "directSelection"}));
         // As in the reference app, an image offers Image Trace, Crop Image and Remove Background, and
         // traced art offers Expand (<https://community.adobe.com/announcements-651/contextual-task-bar-in-illustrator-2025-quick-actions-when-you-need-them-1546580>,
         // <https://community.adobe.com/announcements-651/ai-powered-image-editing-features-in-illustrator-1624061>).
@@ -288,13 +318,18 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let fonts = fonts && room >= crate::panels::character::task_bar_min_room();
     // The selected objects' Fill, Stroke, Recolor Artwork (when they have colours to recolour) and
     // Lock (a basic shape's properties instead), left out with the Artboard tool and on a blank
-    // canvas, which have no selected objects. A Type tool's bar has the Fill alone.
+    // canvas, which have no selected objects. A Type tool's bar has the Fill alone. A basic shape
+    // tool's bar has the Fill, the Stroke and a live shape's Shape Properties.
     let objects = !on_artboards && !blank;
-    let chips: Vec<Chip> =
-        [(objects, Chip::Fill), (objects && !typing, Chip::Stroke), (objects && !typing && colored, Chip::Recolor), (objects && !typing, Chip::Lock)]
-            .into_iter()
-            .filter_map(|(shown, chip)| shown.then_some(chip))
-            .collect();
+    let chips: Vec<Chip> = [
+        (objects, Chip::Fill),
+        (objects && !typing, Chip::Stroke),
+        (objects && !typing && !shaping && colored, Chip::Recolor),
+        (objects && !typing && (!shaping || shape.is_some()), Chip::Lock),
+    ]
+    .into_iter()
+    .filter_map(|(shown, chip)| shown.then_some(chip))
+    .collect();
     let widths: Vec<f32> = items.iter().map(|(label, _, cmd, _)| if icon_only(cmd) { BAR_MORE } else { action_width(ui, label) }).collect();
     let font_w = fonts.then(|| {
         let w = crate::panels::character::TASK_BAR_WIDTHS;

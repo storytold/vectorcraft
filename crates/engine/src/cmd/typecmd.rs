@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Outlines",
             ["Type"],
             Some("Cmd+Shift+O"),
-            "{} convert the selected text to groups of compound paths (one per glyph); the type object's own fills and strokes (not its characters') go on paths of its whole outline, below or above the glyphs as its Characters row places them; a frame of threaded text leaves its thread with the text it shows; a dimension whose label is outlined becomes a plain group of its art → {ids}",
+            "{} convert the selected text to groups of compound paths (one per glyph); the type object's own fills and strokes (not its characters') go on paths of its whole outline, below or above the glyphs as its Characters row places them; the group keeps the object's transparency, opacity mask and effects, once; a frame of threaded text leaves its thread with the text it shows; a dimension whose label is outlined becomes a plain group of its art → {ids}",
             has_selection,
             create_outlines
         ),
@@ -140,7 +140,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", \"salt=2\", …] OpenType (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text; no undo step when no character, paragraph or graph label style changes) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", \"salt=2\", …] OpenType (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off; \"hkna\" is H or V Style, kana in the font's forms for the writing direction, shaped as `vkna` in vertical type, and \"ital\" is Roman Italics, half-width alphanumerics in the font's italic forms, both on or off only), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text; no undo step when no character, paragraph or graph label style changes) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_style
         ),
@@ -739,11 +739,13 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
             if children.is_empty() {
                 continue;
             }
+            // The group takes the object's name, transparency, opacity mask and effects, which
+            // apply to the type as a whole: once, not to each glyph. It is marked as type's
+            // outlines, so geometry effects move its placed gradients with the whole outline, as
+            // they do on the type.
             let gid = d.alloc_id();
-            let mut g = Node::group(gid, children);
-            g.opacity = n.opacity;
-            g.blend = n.blend;
-            g.name = n.name.clone();
+            let mut g = super::flatten::carry(&n, Node::group(gid, children));
+            g.extras_mut().type_outlines = true;
             d.insert(par, idx, g)?;
             out.push(gid);
             if roots.contains(&tid) {
