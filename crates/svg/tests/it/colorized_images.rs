@@ -24,16 +24,10 @@ fn bilevel() -> Vec<u8> {
 }
 
 fn png(img: image::DynamicImage) -> Vec<u8> {
-    let rgba = img.to_rgba8();
-    let raw = craft_image_codecs::Image::from_raw(
-        rgba.width(),
-        rgba.height(),
-        craft_image_codecs::ChannelLayout::Rgba,
-        craft_image_codecs::SampleType::U8,
-        rgba.into_raw(),
-    )
-    .unwrap();
-    craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
+    // Through the image crate, so a gray image stays gray (colorizing reads gray images only).
+    let mut out = Vec::new();
+    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    out
 }
 
 fn document(bytes: Vec<u8>, paint: Option<Paint>) -> Document {

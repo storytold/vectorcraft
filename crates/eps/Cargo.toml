@@ -34,7 +34,7 @@ craft-image-codecs = { workspace = true }
 flate2 = { workspace = true }
 ruzstd = { workspace = true }
 # Images read through `CCITTFaxDecode`.
-craft-stream-codecs = { workspace = true }
+hayro-ccitt = { workspace = true }
 # Live effects' params, as the art styles that name them give them.
 serde_json = { workspace = true }
 # Substring search for PostScript `search`.

@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use craft_stream_codecs::CcittParams;
+use hayro_ccitt::{DecodeSettings, Decoder, DecoderContext, EncodingMode};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::cmyk::{Inks, jpeg_components};
 use vectorcraft_doc::{ImageBlob, ImageObject, Node, NodeId, NodeKind, OpacityMask};

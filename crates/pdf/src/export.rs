@@ -178,7 +178,8 @@ mod tests {
         assert_eq!(decoded.icc, Some(icc));
         assert_eq!(decoded.layout(), ChannelLayout::Gray);
         assert_eq!(decoded.sample_type(), SampleType::U8);
-        let want: Vec<u8> = u16_samples.into_iter().map(|v| (v >> 8) as u8).collect();
+        // Rounded to the nearest 8-bit level, as the 8-bit copy is made.
+        let want: Vec<u8> = u16_samples.into_iter().map(|v| ((u32::from(v) * 255 + 32_767) / 65_535) as u8).collect();
         assert_eq!(decoded.data(), want);
     }
 }

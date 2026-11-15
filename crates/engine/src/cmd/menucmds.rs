@@ -1101,6 +1101,13 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
 /// The image's pixels as RGBA, held to the allowance opening a raster has.
 fn decode_rgba(c: &str, blob: &vectorcraft_doc::ImageBlob) -> Result<image::RgbaImage> {
     // Print rasters run to gigabytes decoded: the same allowance opening them has.
+    // The image's size as RGBA, read from its header, is held to that allowance before anything
+    // is decoded (#1717).
+    if let Some((w, h)) = vectorcraft_doc::header_size(&blob.bytes)
+        && u64::from(w) * u64::from(h) > crate::cmd::fileio::MAX_RASTER_ALLOC / 4
+    {
+        return Err(bad(c, format!("an image of {w} × {h} pixels is too large to draw")));
+    }
     let mut opts = craft_image_codecs::DecodeOptions::default();
     opts.limits.max_pixels = crate::cmd::fileio::MAX_RASTER_ALLOC / 4;
     opts.limits.max_alloc = crate::cmd::fileio::MAX_RASTER_ALLOC;
