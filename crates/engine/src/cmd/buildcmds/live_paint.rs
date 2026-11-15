@@ -1,8 +1,8 @@
 use super::{
     Appearance, AppearanceItem, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId,
-    PathData, Point, Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, ids_json,
-    is_live_paint, json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes,
-    switch_or,
+    PathData, Point, Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite,
+    fit_to_old_edge, ids_json, is_live_paint, json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids,
+    source_nodes, source_shapes, switch_or,
 };
 
 /// `options` as stored on a Live Paint group: none for the defaults.
@@ -85,6 +85,9 @@ pub(super) fn lp_make(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0, "faces": faces, "edges": edges }))
 }
 
+/// How far, in points, the middle of an edge Merge makes may be from the old edge it lies on.
+const ON_OLD_EDGE: f64 = 1e-3;
+
 /// What Merge carries from a face or edge to the part it makes again in its place, another path:
 /// the appearance, visibility, opacity and blending mode. Gradients fitted to the old outline keep
 /// that fit, and the strokes' pen pressure, tilt, bearing and rotation stay behind.
@@ -125,18 +128,11 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
         .ok_or_else(|| EngineError::Other("Live Paint Merge: select a Live Paint group and the paths to add".into()))?;
     check_live_paint_takes(d, roots)?;
     let old = d.node(target).cloned().ok_or(EngineError::NoNode(target))?;
-    // Paint to carry over: (point inside face, paint) for faces that draw, and (point on edge,
-    // paint) for every edge.
+    // Paint to carry over: (point inside face, paint) for faces that draw; edges are matched to the
+    // old edges below.
     let keep_faces: Vec<(Point, Carried)> =
         b::faces(&old).iter().filter(|f| draws(f)).filter_map(|f| Some((po::interior_point(f.path_data()?)?, Carried::of(f)))).collect();
-    let keep_edges: Vec<(Point, Carried)> = b::edges(&old)
-        .iter()
-        .filter_map(|e| {
-            let pd = e.path_data()?;
-            let sp = pd.subpaths.first().filter(|sp| sp.segment_count() > 0)?;
-            Some((kurbo::ParamCurve::eval(&sp.segment(0), 0.5), Carried::of(e)))
-        })
-        .collect();
+    let old_parts = old.clone();
     let mut sources = source_nodes(&old);
     for r in roots {
         if *r != target {
@@ -162,12 +158,24 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
             carried.onto(Arc::make_mut(f));
         }
     }
-    for (pt, carried) in keep_edges {
-        if let Some(eid) = edge_near(&g, pt, 0.5).map(|e| e.id)
-            && let Some(ch) = g.children_mut()
-            && let Some(e) = ch.iter_mut().find(|c| c.id == eid)
-        {
-            carried.onto(Arc::make_mut(e));
+    // Each edge whose middle lies on an old edge, every piece of an edge an added path cuts
+    // included, takes the old edge's paint, with its rows fitted to its part of the old edge.
+    if let Some(ch) = g.children_mut() {
+        for c in ch.iter_mut().filter(|c| c.name.as_deref() == Some(EDGE_NAME)) {
+            let Some(mid) = c
+                .path_data()
+                .and_then(|pd| pd.subpaths.first())
+                .filter(|sp| sp.segment_count() > 0)
+                .map(|sp| kurbo::ParamCurve::eval(&sp.segment(0), 0.5))
+            else {
+                continue;
+            };
+            let Some(was) = edge_near(&old_parts, mid, ON_OLD_EDGE) else { continue };
+            let e = Arc::make_mut(c);
+            Carried::of(was).onto(e);
+            if let Some(outline) = was.path_data() {
+                fit_to_old_edge(e, outline);
+            }
         }
     }
     let mut merged = Beside::replacing(d, roots);
@@ -517,16 +525,17 @@ pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
         Some(gid) => {
             let (fid, targets) = targets_in(&s.doc()?.doc, gid)?;
             let count = targets.len();
-            // Faces that already have the paint stay as they are: when every face has it, nothing
-            // changes and no undo step is recorded.
+            // Faces that already have only the fill the bucket would leave ([`bucket_keeps`]) stay as
+            // they are: when every face does, nothing changes and no undo step is recorded.
             let d = &s.doc()?.doc;
-            let unpainted: Vec<NodeId> = targets.into_iter().filter(|t| d.node(*t).is_none_or(|f| f.appearance.fill_paint() != paint)).collect();
+            let unpainted: Vec<NodeId> =
+                targets.into_iter().filter(|t| d.node(*t).is_none_or(|f| !bucket_keeps(&f.appearance, true, &paint, 0.0))).collect();
             if unpainted.is_empty() {
                 return Ok(json!({ "group": gid.0, "face": fid.0, "count": count }));
             }
             s.edit("Live Paint Bucket", |d, _| {
                 for target in unpainted {
-                    d.node_mut(target).ok_or(EngineError::NoNode(target))?.appearance.set_fill(paint.clone());
+                    bucket_paint(&mut d.node_mut(target).ok_or(EngineError::NoNode(target))?.appearance, true, &paint, 0.0);
                 }
                 Ok((gid, fid, count))
             })?
@@ -536,7 +545,7 @@ pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
             let (fid, targets) = targets_in(d, gid)?;
             let count = targets.len();
             for target in targets {
-                d.node_mut(target).ok_or(EngineError::NoNode(target))?.appearance.set_fill(paint.clone());
+                bucket_paint(&mut d.node_mut(target).ok_or(EngineError::NoNode(target))?.appearance, true, &paint, 0.0);
             }
             Ok((gid, fid, count))
         })?,
@@ -558,6 +567,16 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
     let tol = number_or(p, "tolerance", 4.0, C)?.clamp(0.0, 1000.0);
     let scope = scope_param(p, C)?;
     let like = match_param(p, C, scope != LpScope::One, "\"connected\" or \"samePaint\"")?;
+    let through: Vec<NodeId> = match p.get("through") {
+        None => vec![],
+        Some(_) if scope != LpScope::Connected => return Err(bad(C, "through applies to scope \"connected\"")),
+        Some(v) => {
+            let ids = v.as_array().filter(|ids| ids.len() <= 4096).ok_or_else(|| bad(C, "through must be an array of at most 4096 edge ids"))?;
+            ids.iter()
+                .map(|id| id.as_u64().map(NodeId).ok_or_else(|| bad(C, "through must be an array of at most 4096 edge ids")))
+                .collect::<Result<_>>()?
+        }
+    };
     let (eid, count, changed) = {
         let d = &s.doc()?.doc;
         let n = d.node(g).filter(|n| is_live_paint(n)).ok_or_else(|| bad(C, format!("{g} is not a Live Paint group")))?;
@@ -566,24 +585,16 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
         let like = like.unwrap_or_else(|| b::lp_stroke_paint(start));
         let targets = match scope {
             LpScope::One => vec![eid],
-            LpScope::Connected => b::connected_edges(n, eid, &like),
+            LpScope::Connected => b::connected_edges_through(n, eid, &like, &through),
             LpScope::SamePaint => std::iter::once(eid)
                 .chain(b::edges(n).into_iter().filter(|e| e.visible && e.id != eid && b::lp_stroke_paint(e) == like).map(|e| e.id))
                 .collect(),
         };
         let count = targets.len();
-        // An edge whose shown stroke already has the paint and the width (or that has no shown stroke
-        // and gets none) stays as it is; when every edge does, nothing changes and no undo step is
-        // recorded.
-        let changed: Vec<NodeId> = targets
-            .into_iter()
-            .filter(|t| {
-                d.node(*t).is_none_or(|e| match shown_stroke(e) {
-                    Some(st) => !(st.paint == paint && st.width == width),
-                    None => !paint.is_none(),
-                })
-            })
-            .collect();
+        // An edge that already has only the stroke the bucket would leave ([`bucket_keeps`]) stays
+        // as it is; when every edge does, nothing changes and no undo step is recorded.
+        let changed: Vec<NodeId> =
+            targets.into_iter().filter(|t| d.node(*t).is_none_or(|e| !bucket_keeps(&e.appearance, false, &paint, width))).collect();
         (eid, count, changed)
     };
     if changed.is_empty() {
@@ -591,14 +602,7 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
     }
     s.edit("Live Paint Bucket", |d, _| {
         for target in &changed {
-            let e = d.node_mut(*target).ok_or(EngineError::NoNode(*target))?;
-            match shown_stroke_mut(e) {
-                Some(st) => {
-                    st.paint = paint.clone();
-                    st.width = width;
-                }
-                None => e.appearance.items.push(super::AppearanceItem::Stroke(super::StrokeLayer::new(paint.clone(), width))),
-            }
+            bucket_paint(&mut d.node_mut(*target).ok_or(EngineError::NoNode(*target))?.appearance, false, &paint, width);
         }
         Ok(())
     })?;
@@ -606,22 +610,76 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "group": g.0, "edge": eid.0, "count": count }))
 }
 
-/// The stroke `livePaint.strokeEdge` paints on Live Paint edge `e`: its topmost stroke that is
-/// shown. None when it has no stroke or every stroke is hidden; the command then adds a stroke
-/// above the others.
-fn shown_stroke(e: &Node) -> Option<&super::StrokeLayer> {
-    e.appearance.items.iter().rev().find_map(|i| match i {
-        super::AppearanceItem::Stroke(s) if s.visible => Some(s),
-        _ => None,
-    })
+/// Whether the Live Paint Bucket leaves appearance `a` as it is when it paints its fills (`fill`)
+/// or strokes with `paint` (a stroke at `width`): it has exactly one row of that kind, shown, fully
+/// opaque, blending normally and with the paint (a stroke also with the width, unless the paint is
+/// none), or it has no row of that kind and the paint is none.
+fn bucket_keeps(a: &Appearance, fill: bool, paint: &super::Paint, width: f64) -> bool {
+    let mut rows = a.items.iter().filter(|i| i.is_fill() == fill);
+    match (rows.next(), rows.next()) {
+        (None, _) => paint.is_none(),
+        (Some(row), None) => {
+            row.visible()
+                && row.opacity() == 1.0
+                && row.blend() == vectorcraft_color::BlendMode::Normal
+                && row.paint() == paint
+                && match row {
+                    AppearanceItem::Fill(_) => true,
+                    AppearanceItem::Stroke(st) => paint.is_none() || st.width == width,
+                }
+        }
+        (Some(_), Some(_)) => false,
+    }
 }
 
-/// [`shown_stroke`], to change.
-fn shown_stroke_mut(e: &mut Node) -> Option<&mut super::StrokeLayer> {
-    e.appearance.items.iter_mut().rev().find_map(|i| match i {
-        super::AppearanceItem::Stroke(s) if s.visible => Some(s),
-        _ => None,
-    })
+/// Paint the fills (`fill`) or strokes of appearance `a` with `paint` (a stroke at `width`), as the
+/// Live Paint Bucket does: every row of that kind is replaced by one row, shown, fully opaque and
+/// blending normally, in the place of the topmost row of that kind. The new row keeps the other
+/// settings (a stroke's dashes, caps and arrowheads, a row's effects) of the topmost row of that
+/// kind that is shown, or of the topmost one when every row is hidden. Rows of the other kind stay
+/// as they are. With no row of that kind, a fill is added below the strokes and a stroke above the
+/// fills.
+fn bucket_paint(a: &mut Appearance, fill: bool, paint: &super::Paint, width: f64) {
+    let of_kind = |i: &AppearanceItem| i.is_fill() == fill;
+    let Some(top) = a.items.iter().rposition(of_kind) else {
+        if fill {
+            a.set_fill(paint.clone());
+        } else {
+            a.items.push(AppearanceItem::Stroke(super::StrokeLayer::new(paint.clone(), width)));
+        }
+        return;
+    };
+    let base = a.items.iter().rposition(|i| of_kind(i) && i.visible()).unwrap_or(top);
+    let Some(mut row) = a.items.get(base).cloned() else { return };
+    match &mut row {
+        AppearanceItem::Fill(f) => {
+            f.paint = paint.clone();
+            f.opacity = 1.0;
+            f.blend = vectorcraft_color::BlendMode::Normal;
+            f.visible = true;
+        }
+        AppearanceItem::Stroke(st) => {
+            st.paint = paint.clone();
+            st.width = width;
+            st.opacity = 1.0;
+            st.blend = vectorcraft_color::BlendMode::Normal;
+            st.visible = true;
+        }
+    }
+    let mut row = Some(row);
+    a.items = std::mem::take(&mut a.items)
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, item)| {
+            if i == top {
+                row.take()
+            } else if of_kind(&item) {
+                None
+            } else {
+                Some(item)
+            }
+        })
+        .collect();
 }
 
 /// Every fill and stroke row of face or edge `n`, bottom first, as `livePaint.info` lists them. A

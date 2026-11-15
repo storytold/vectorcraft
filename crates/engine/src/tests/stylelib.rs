@@ -45,6 +45,7 @@ fn builtin_libraries_are_listed_with_original_styles_using_catalogued_effects() 
     assert!(libs.iter().any(|l| l["id"] == "game-hud" && l["name"] == "Game HUD"), "{libs:?}");
     assert!(libs.iter().any(|l| l["id"] == "status-effects" && l["name"] == "Status Effects"), "{libs:?}");
     assert!(libs.iter().any(|l| l["id"] == "textures" && l["name"] == "Textures" && l["count"] == 8), "{libs:?}");
+    assert!(libs.iter().any(|l| l["id"] == "neon-glow" && l["name"] == "Neon & Glow" && l["count"] == 6), "{libs:?}");
     for l in libs {
         let id = l["id"].as_str().unwrap();
         let g = run(&mut s, "graphicStyle.library", json!({"library": id}));
@@ -69,6 +70,9 @@ fn builtin_libraries_are_listed_with_original_styles_using_catalogued_effects() 
     let texture_names: Vec<&str> = textures["styles"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
     let expected = ["Fine Grain", "Canvas Weave", "Burlap Sack", "Cracked Glaze", "Mosaic Floor", "Quilted Squares", "Leaded Glass", "Damp Paper"];
     assert_eq!(texture_names, expected);
+    let neon = run(&mut s, "graphicStyle.library", json!({"library": "neon-glow"}));
+    let neon_names: Vec<&str> = neon["styles"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
+    assert_eq!(neon_names, ["Cyan Neon", "Magenta Laser", "Amber Tube", "Electric Lime", "Pulse Violet", "Cobalt Phosphor"]);
     let id = rect(&mut s, 10.0, 20.0, 40.0, 30.0);
     let r = run(&mut s, "graphicStyle.addFromLibrary", json!({"library": "game-hud", "name": "Mana Glow", "apply": true, "ids": [id.0]}));
     assert_eq!((names(&r["added"]), r["applied"].as_str()), (vec!["Mana Glow"], Some("Mana Glow")));
@@ -417,5 +421,55 @@ fn every_builtin_style_paints_visibly_on_a_rectangle() {
             let painted = (0..img.height).flat_map(|y| (0..img.width).map(move |x| (x, y))).filter(|&(x, y)| img.pixel(x, y) != bare).count();
             assert!(painted > 40, "{} / {} paints {painted} pixels", b.id, g.name);
         }
+    }
+}
+
+#[test]
+fn neon_and_glow_library_adds_and_applies_multi_stroke_styles() {
+    let mut s = session();
+    let list = run(&mut s, "graphicStyle.libraries", json!({}));
+    let libs = list["libraries"].as_array().unwrap();
+    let at = libs.iter().position(|l| l["id"] == "neon-glow").expect("neon-glow listed");
+    assert_eq!(libs[at]["name"], "Neon & Glow");
+    assert_eq!(libs[at]["count"], 6);
+
+    let (_, lib) = cmd::stylelib::library(&s, "neon-glow").unwrap();
+    assert_eq!(lib.len(), 6);
+
+    let want = [
+        ("Cyan Neon", 2, "stylize.dropShadow"),
+        ("Magenta Laser", 2, "stylize.outerGlow"),
+        ("Amber Tube", 2, "stylize.outerGlow"),
+        ("Electric Lime", 2, "stylize.outerGlow"),
+        ("Pulse Violet", 2, "stylize.innerGlow"),
+        ("Cobalt Phosphor", 2, "blur.gaussian"),
+    ];
+
+    for (i, (name, stroke_count, first_effect)) in want.iter().enumerate() {
+        let id = rect(&mut s, 10.0 + 30.0 * i as f64, 15.0, 25.0, 25.0);
+        let before_undo = undo_len(&s);
+        let r = run(&mut s, "graphicStyle.addFromLibrary", json!({"library": "neon-glow", "name": name, "apply": true, "ids": [id.0]}));
+        assert_eq!((names(&r["added"]), r["applied"].as_str()), (vec![*name], Some(*name)));
+        assert_eq!(undo_len(&s), before_undo + 1, "{name}");
+
+        let node = doc(&s).node(id).unwrap();
+        let strokes = node.appearance.items.iter().filter(|it| matches!(it, vectorcraft_doc::AppearanceItem::Stroke(_))).count();
+        assert_eq!(strokes, *stroke_count, "{name}");
+        assert_eq!(node.appearance.effects[0].id, *first_effect, "{name}");
+    }
+
+    // Adding existing style dedupes and creates no new undo step.
+    let before = (undo_len(&s), doc(&s).graphic_styles.len());
+    let r = run(&mut s, "graphicStyle.addFromLibrary", json!({"library": "neon-glow", "name": "Cyan Neon"}));
+    assert_eq!((names(&r["added"]), names(&r["existing"])), (vec![], vec!["Cyan Neon"]));
+    assert_eq!((undo_len(&s), doc(&s).graphic_styles.len()), before);
+
+    // Round-trip through serialize / open
+    let b64 = run(&mut s, "document.serialize", json!({}))["dataBase64"].as_str().unwrap().to_string();
+    run(&mut s, "document.open", json!({"name": "neon.vectorcraft", "dataBase64": b64}));
+    for (name, _, _) in want {
+        let d = doc(&s);
+        let st = d.graphic_style(name).unwrap();
+        assert!(st.same_look(lib.style(name).unwrap()), "{name}");
     }
 }

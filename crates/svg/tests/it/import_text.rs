@@ -300,6 +300,38 @@ fn text_path_becomes_type_on_a_path() {
 }
 
 #[test]
+fn text_path_start_offset_is_scaled_by_the_path_length() {
+    // A path 400 long whose pathLength is 100: a startOffset of 50 lies 200 along it. A
+    // percentage stays a share of the computed length. Huge values of both still give their
+    // ratio. With a pathLength of 0, an offset of 0 stays at the start and any other offset lies
+    // past the end, as does an offset too large to scale on a short path.
+    let d = open(
+        r##"<path id="p" d="M0 100 H400" pathLength="100" fill="none" stroke="black"/>
+        <path id="z" d="M0 200 H400" pathLength="0" fill="none" stroke="black"/>
+        <path id="h" d="M0 300 H400" pathLength="1e308" fill="none" stroke="black"/>
+        <path id="s" d="M0 400 H0.1" pathLength="1e-10" fill="none" stroke="black"/>
+        <text font-size="10"><textPath href="#p" startOffset="50">Half</textPath></text>
+        <text font-size="10"><textPath href="#p" startOffset="25%">Quarter</textPath></text>
+        <text font-size="10"><textPath href="#h" startOffset="5e307">Huge</textPath></text>
+        <text font-size="10"><textPath href="#z" startOffset="0">Zero</textPath></text>
+        <text font-size="10"><textPath href="#z" startOffset="50">Fifty</textPath></text>
+        <text font-size="10"><textPath href="#s" startOffset="1e308">Past</textPath></text>"##,
+    );
+    let t = texts(&d);
+    assert_eq!(t.len(), 6);
+    let start_of = |t: &TextObject| match t.kind {
+        TextKind::OnPath { start, .. } => start,
+        _ => panic!("{:?}", t.kind),
+    };
+    assert!(close(start_of(t[0]), 0.5, 1e-9), "{}", start_of(t[0]));
+    assert!(close(start_of(t[1]), 0.25, 1e-9), "{}", start_of(t[1]));
+    assert!(close(start_of(t[2]), 0.5, 1e-9), "{}", start_of(t[2]));
+    assert_eq!(start_of(t[3]), 0.0);
+    assert_eq!(start_of(t[4]), 1.0);
+    assert_eq!(start_of(t[5]), 1.0);
+}
+
+#[test]
 fn text_on_a_closed_path_wraps_past_the_path_start() {
     // A closed path 400 long: text anchored before its start, or offset past its end, wraps
     // around the path instead of stopping at its start or end.
@@ -335,10 +367,12 @@ fn text_on_a_closed_path_wraps_past_the_path_start() {
     // A negative startOffset, in user units or as a percentage, counts back from the path's end.
     assert!(close(start_of(t[4]), 0.9, 1e-9), "{}", start_of(t[4]));
     assert!(close(start_of(t[5]), 0.9, 1e-9), "{}", start_of(t[5]));
-    // A path of two closed subpaths, and an open path, do not wrap: the text starts at the path's
-    // start or end.
+    // A path of two closed subpaths does not wrap: the text starts at the path's start. An open
+    // path does not wrap either: text anchored before its start starts there
+    // (`text_on_an_open_path_starts_before_the_path`), and text offset past its end starts at
+    // its end.
     assert_eq!(start_of(t[6]), 0.0);
-    assert_eq!(start_of(t[7]), 0.0);
+    assert!(close(start_of(t[7]), -width / 300.0, 1e-6), "{} {width}", start_of(t[7]));
     assert_eq!(start_of(t[8]), 1.0);
 
     // Laid out, the end-anchored text draws every glyph up the left side and ends at the start
@@ -370,6 +404,52 @@ fn text_on_a_closed_path_wraps_past_the_path_start() {
     assert!(lay.overflow);
     assert!(!lay.glyphs.is_empty() && lay.glyphs.len() < 14, "{}", lay.glyphs.len());
     assert!(lay.glyphs.iter().enumerate().all(|(i, g)| g.byte == i), "{:?}", lay.glyphs.iter().map(|g| g.byte).collect::<Vec<_>>());
+}
+
+#[test]
+fn text_on_an_open_path_starts_before_the_path() {
+    // An open path 300 long. Text anchored, or offset, before its start starts that far before it,
+    // and only the characters whose middle is on the path are drawn; the text keeps every character.
+    let d = open(
+        r##"<path id="o" d="M50 50 H150 V150 H50" fill="none" stroke="black"/>
+        <text font-size="20" text-anchor="end"><textPath href="#o">Wave</textPath></text>
+        <text font-size="20" text-anchor="middle"><textPath href="#o">Wave</textPath></text>
+        <text font-size="20"><textPath href="#o" startOffset="-20%">Wave</textPath></text>
+        <text font-size="20"><textPath href="#o">Wave</textPath></text>"##,
+    );
+    let t = texts(&d);
+    assert_eq!(t.len(), 4);
+    let start_of = |t: &TextObject| match t.kind {
+        TextKind::OnPath { start, .. } => start,
+        _ => panic!("{:?}", t.kind),
+    };
+    let whole = layout(FontDb::global(), t[3]);
+    let width: f64 = whole.glyphs.iter().map(|g| g.advance).sum();
+    assert!(width > 0.0 && width < 60.0, "{width}");
+    assert!(close(start_of(t[0]), -width / 300.0, 1e-6), "{} {width}", start_of(t[0]));
+    assert!(close(start_of(t[1]), -width / 600.0, 1e-6), "{} {width}", start_of(t[1]));
+    assert!(close(start_of(t[2]), -0.2, 1e-9), "{}", start_of(t[2]));
+    let drawn = |t: &TextObject| {
+        let lay = layout(FontDb::global(), t);
+        assert!(!lay.overflow && lay.glyphs.len() == 4, "{} {}", lay.overflow, lay.glyphs.len());
+        assert_eq!(t.plain_text(), "Wave");
+        lay.glyphs.iter().map(|g| !g.outline.elements().is_empty()).collect::<Vec<_>>()
+    };
+    // Ending at the path's start: nothing is drawn.
+    assert_eq!(drawn(t[0]), [false; 4]);
+    // Centered on the path's start: the characters whose middle is past the start are drawn, the
+    // last ones of the text.
+    // (A hidden glyph has no advance: the advances are the ones the text takes on the path.)
+    let middle = drawn(t[1]);
+    let mut x = -width / 2.0;
+    for (g, shown) in whole.glyphs.iter().zip(&middle) {
+        assert_eq!(*shown, x + g.advance / 2.0 >= 0.0, "{x} {middle:?}");
+        x += g.advance;
+    }
+    assert!(middle.iter().any(|d| *d) && !middle[0] && middle[3], "{middle:?}");
+    // 60 before the start, more than the text's width: nothing is drawn.
+    assert_eq!(drawn(t[2]), [false; 4]);
+    assert_eq!(drawn(t[3]), [true; 4]);
 }
 
 /// The unit vector along a glyph's baseline.

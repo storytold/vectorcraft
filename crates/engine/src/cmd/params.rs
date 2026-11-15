@@ -369,6 +369,12 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
     {
         return Err(bad(id, "`origin` must be [x, y] in points"));
     }
+    if effect == vectorcraft_render::effects::SVG_FILTER
+        && let Some(axes) = given.get("axes")
+        && vectorcraft_render::effects::svg_filter::valid_axes(axes).is_none()
+    {
+        return Err(bad(id, "`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0"));
+    }
     // Its name is the filter's id.
     if effect == vectorcraft_render::effects::SVG_FILTER && given.contains_key("name") && !given.contains_key("xml") {
         return Err(bad(id, "an SVG filter is named by its id: give `xml` with `name`"));
@@ -424,9 +430,9 @@ fn check_effect_types(id: &str, effect: &str, params: &Value) -> Result<()> {
 /// A value of the type effect `effect` reads for `key`, a parameter its params description names
 /// without a dialog default: the earlier 3D Perspective and light (`perspective`, `lightAzimuth`,
 /// `lightElevation`) and Scribble `variation` are numbers, an Outline Stroke's `width` is a number
-/// and a Gaussian Blur's `linear` is true or false. A Glass or Texturizer `textureImage`, an SVG
-/// filter's `name` and `xml`, a Warp's `version` and the `style` of Crop Marks have checks of their
-/// own; they aren't listed.
+/// and a Gaussian Blur's `linear` is true or false. A Glass, Texturizer or Rough Pastels
+/// `textureImage`, an SVG filter's `name` and `xml`, a Warp's `version` and the `style` of Crop
+/// Marks have checks of their own; they aren't listed.
 pub(crate) fn undefaulted_type(effect: &str, key: &str) -> Option<Value> {
     use vectorcraft_render::effects;
     let number = || Some(Value::from(0.0));
@@ -529,7 +535,6 @@ pub const UNCHECKED: &[&str] = &[
     "assets.settings.set",
     "attributes.info",
     "attributes.set",
-    "brush.freehand",
     "css.export",
     "css.generate",
     "css.selection",

@@ -44,6 +44,8 @@ font-technology	Variable	가변
 	x-Height	x 높이
 	ICF Box	ICF 박스
 	Proportional Metrics	비례 메트릭
+	H or V Style	가로 또는 세로 스타일
+	Roman Italics	로마자 이탤릭
 	Insert Aki Left	앞 아키 삽입
 	Insert Aki Right	뒤 아키 삽입
 	Tsume	츠메
@@ -561,6 +563,7 @@ digits	Malayalam	말라얄람어
 	Rotate (Classic)…	회전(클래식)…
 	Surface	표면
 	Wireframe	와이어프레임
+	Render Settings	렌더링 설정
 	No Shading	셰이딩 없음
 	Plastic	플라스틱
 	Highlight Intensity	하이라이트 강도
@@ -1064,6 +1067,7 @@ digits	Malayalam	말라얄람어
 	Align to Artboard	아트보드에 정렬
 	Align to Glyph Bounds	글리프 경계에 정렬
 	Align to Key Object	키 개체에 정렬
+	Align to Key Anchor	키 앵커 포인트에 정렬
 	Align to Page	페이지에 정렬
 	Align to Path	패스에 정렬
 	Align to Selection	선택 영역에 정렬
@@ -1674,7 +1678,10 @@ antiAlias	Sharp	날카롭게
 	Every (minutes)	간격 (분)
 	Every option is at its default.	모든 옵션이 기본값입니다.
 	Every option matches {base}.	모든 옵션이 {base}와(과) 같습니다.
-	Every-line Composer	전체 줄 컴포저
+	Middle Eastern & South Asian Single-line Composer	한 줄 조판 (중동·남아시아)
+	Middle Eastern & South Asian Every-line Composer	전체 줄 컴포저 (중동·남아시아)
+	Standard Single-line Composer	표준 한 줄 조판
+	Standard Every-line Composer	표준 전체 줄 컴포저
 	Exact dash lengths	정확한 대시 길이
 	Exceptions (comma separated)	예외 (쉼표로 구분)
 	Exclusion	제외
@@ -1871,6 +1878,14 @@ antiAlias	Sharp	날카롭게
 	Previous Artboard	이전 아트보드
 	Next Artboard	다음 아트보드
 	Last Artboard	마지막 아트보드
+	Status Bar Show	상태 표시줄 표시
+	Artboard Name	아트보드 이름
+	Current Tool	현재 도구
+	Date and Time	날짜 및 시간
+	Number of Undos	실행 취소 횟수
+	Document Color Profile	문서 색상 프로파일
+	Undos	실행 취소
+	Redos	다시 실행
 	Gradient Fill: click to apply, drag onto art	그레이디언트 칠: 클릭하여 적용, 아트웍에 끌어 놓기
 	Gradient Mesh	그레이디언트 메시
 	Gradient Tool	그레이디언트 도구
@@ -1930,6 +1945,7 @@ antiAlias	Sharp	날카롭게
 	Highlight Alternate Glyphs	대체 글리프 강조 표시
 	Highlight Rows	행 강조 표시
 	Highlight Variable	가변 요소 강조 표시
+	Sort Variables	가변 요소 정렬
 	Highlight Substituted Fonts	대체된 글꼴 강조 표시
 	Highlight Substituted Glyphs	대체된 글리프 강조 표시
 	Highlight anchors on mouse over	마우스를 올리면 앵커 강조 표시
@@ -2309,6 +2325,7 @@ antiAlias	Sharp	날카롭게
 	Merge Selected	선택 항목 병합
 	Merge Swatches	견본 병합
 	Merge colors into one row	색상을 한 행으로 병합
+	New Row	새 행
 	Mesh Tool	메시 도구
 	Message:	메시지:
 	Metadata:	메타데이터:
@@ -3265,9 +3282,9 @@ mark-style	Japanese	일본식
 	Simulate Colored Paper	색 용지 시뮬레이션
 	Simulate Paper	용지 시뮬레이션
 	Single Quotes:	작은따옴표:
-	Single-line Composer	한 줄 조판
 	Toggle Line Composer	줄 조판 방식 전환
 	Size Tile to Art	타일을 아트웍 크기에 맞춤
+	Move Tile with Art	아트웍과 함께 타일 이동
 	Size/Leading	크기/행간
 	Size:	크기:
 	Ridges per segment:	세그먼트당 융기 수:
@@ -3842,6 +3859,40 @@ file-filter	Templates	템플릿
 	Gradient (. or Shift+.)	그레이디언트 (. 또는 Shift+.)
 	Graph Data	그래프 데이터
 	Graph Type	그래프 유형
+	Graph Options	그래프 옵션
+	Left Axis	왼쪽 축
+	Right Axis	오른쪽 축
+	Category Axis	범주 축
+	Separate Scales	별도 눈금
+	Add Drop Shadow	드롭 섀도 추가
+	Add Legend Across Top	위쪽에 범례 추가
+	First Row in Front	첫 행을 앞에
+	First Column in Front	첫 열을 앞에
+	Legend	범례
+	Column Width	세로 막대 폭
+	Bar Width	가로 막대 폭
+	Cluster Width	묶음 폭
+	Mark Data Points	데이터 요소 표시
+	Connect Data Points	데이터 요소 연결
+	Edge-to-Edge Lines	가장자리 간 선
+	Draw Filled Lines	채워진 선 그리기
+	Tick Values	눈금 값
+	Override Calculated Values	계산된 값 재정의
+	Divisions	구간
+	Tick Marks	눈금 표시
+	Tick Marks per Division	구간당 눈금 표시
+	Draw Tick Marks Between Labels	레이블 사이에 눈금 표시 그리기
+	Add Labels	레이블 추가
+	Maximum must be more than Minimum.	최대값은 최소값보다 커야 합니다.
+	Column Graph	세로 막대 그래프
+	Stacked Column Graph	누적 세로 막대 그래프
+	Bar Graph	가로 막대 그래프
+	Stacked Bar Graph	누적 가로 막대 그래프
+	Line Graph	선 그래프
+	Area Graph	영역 그래프
+	Scatter Graph	분산형 그래프
+	Pie Graph	원형 그래프
+	Radar Graph	방사형 그래프
 	Graph Design	그래프 디자인
 	Graph Marker	그래프 마커
 	New Design	새 디자인
@@ -4043,6 +4094,8 @@ file-filter	Templates	템플릿
 	Superscript	위 첨자
 	Swap Fill and Stroke (Shift+X)	칠과 선 바꾸기 (Shift+X)
 	Swap the selected object for the file, keeping its place and transform	선택한 개체를 파일로 바꾸되 위치와 변형은 유지합니다
+	Show Import Options	가져오기 옵션 표시
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	배치하기 전에 각 PDF, DXF 또는 텍스트 파일의 가져오기 옵션을 묻습니다. 끄면 마지막으로 선택한 옵션을 사용합니다
 	Swatch Libraries Menu	견본 라이브러리 메뉴
 	System Layout	시스템 레이아웃
 	Tabular Lining	고정폭 라이닝
@@ -4060,11 +4113,55 @@ file-filter	Templates	템플릿
 	Composite Fonts	합성 글꼴
 	Export Composite Fonts	합성 글꼴 내보내기
 	Import Composite Fonts	합성 글꼴 가져오기
+@msg	each font must be {name, parts}	각 글꼴은 {name, parts} 형식이어야 합니다
+@msg	unknown key `{k}`; a font takes name and parts	알 수 없는 키 `{k}`: 글꼴에는 name과 parts만 쓸 수 있습니다
+@msg	each font needs a name	각 글꼴에는 이름이 필요합니다
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}`은(는) 합성 글꼴 이름으로 쓸 수 없습니다(1~{COMPOSITE_NAME_MAX}자, 제어 문자 없음)
+@msg	`{name}`: parts must be an object	`{name}`: parts는 객체여야 합니다
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: 알 수 없는 클래스 `{k}`: 클래스는 kanji, kana, punctuation, symbols, roman, numerals입니다
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1}은(는) 객체여야 합니다
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: {_1}에 알 수 없는 키 `{k}`이(가) 있습니다
+@msg	`{name}`: give the kanji part	`{name}`: kanji 부분을 지정하세요
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	문서에는 합성 글꼴을 최대 {COMPOSITE_FONTS_MAX}개까지 둘 수 있습니다
+@msg	two composite fonts are named `{_1}`	이름이 `{_1}`인 합성 글꼴이 두 개 있습니다
+@msg	`{_1}` is the name of an installed font	`{_1}`은(는) 설치된 글꼴의 이름입니다
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2}이(가) 합성 글꼴인 `{font}`(으)로 설정되어 있습니다
+@msg	give fonts: [{name, parts}…]	fonts를 지정하세요: [{name, parts}…]
+@msg	path is empty	path가 비어 있습니다
+@msg	fonts must be a list of composite fonts	fonts는 합성 글꼴 목록이어야 합니다
+@msg	names must be strings	names는 문자열이어야 합니다
+@msg	no composite font named `{n}`	이름이 `{n}`인 합성 글꼴이 없습니다
+@msg	names must be a list of names	names는 이름 목록이어야 합니다
+@msg	no composite fonts to export	내보낼 합성 글꼴이 없습니다
+@msg	not a composite fonts file: {e}	합성 글꼴 파일이 아닙니다: {e}
+@msg	not a composite fonts file: no compositeFonts list	합성 글꼴 파일이 아닙니다: compositeFonts 목록이 없습니다
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	파일에 합성 글꼴이 {COMPOSITE_FONTS_MAX}개보다 많습니다
+@msg	the file is larger than 4 MB	파일이 4MB보다 큽니다
+@msg	dataBase64 is not base64	dataBase64가 base64가 아닙니다
+@msg	give one of path, data or dataBase64	path, data, dataBase64 중 하나를 지정하세요
+@msg	the file holds no composite fonts	파일에 합성 글꼴이 없습니다
+@msg	the file holds two composite fonts named `{_1}`	파일에 이름이 `{_1}`인 합성 글꼴이 두 개 있습니다
+@msg	`{_1}` can't name a composite font	`{_1}`은(는) 합성 글꼴 이름으로 쓸 수 없습니다
+@msg	{k}: give a font	{k}: 글꼴을 지정하세요
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: 글꼴을 지정하세요
+@msg	{k}: size must be {_1} to {_2}%	{k}: size는 {_1}~{_2}%여야 합니다
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size는 {_1}~{_2}%여야 합니다
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline은 {_1}~{_2}%여야 합니다
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline은 {_1}~{_2}%여야 합니다
+@msg	{k}: scale must be {_1} to {_2}%	{k}: 비율은 {_1}~{_2}%여야 합니다
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: 비율은 {_1}~{_2}%여야 합니다
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: 비율을 바꿀 수 있는 것은 kana, roman, numerals뿐입니다
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: 비율을 바꿀 수 있는 것은 kana, roman, numerals뿐입니다
+@msg	{k}: only kana can be scaled at the center	{k}: 가운데를 기준으로 비율을 바꿀 수 있는 것은 kana뿐입니다
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: 가운데를 기준으로 비율을 바꿀 수 있는 것은 kana뿐입니다
+@msg	no composite font	합성 글꼴이 없습니다
 	Delete Font	글꼴 삭제
 	Kanji	한자
 	Kana	가나
 	Numerals	숫자
 	Scale at Center	중심에서 크기 조정
+	Delete Set	집합 삭제
+	Direct Entry	직접 입력
 	Up/Down:	위/아래:
 	Left/Right:	왼쪽/오른쪽:
 	Tate-chu-yoko Up/Down	다테추요코 위/아래
@@ -4108,6 +4205,9 @@ file-filter	Templates	템플릿
 	Windows	Windows
 	Working CMYK (don't tag)	작업용 CMYK (태그 안 함)
 	Working RGB (don't tag)	작업용 RGB (태그 안 함)
+	Don't Color Manage This Document	이 문서에 색상 관리 안 함
+	Working RGB: {name}	작업용 RGB: {name}
+	Working CMYK: {name}	작업용 CMYK: {name}
 	Workspace {i}	작업 영역 {i}
 	Yellow	노랑
 	[Normal Character Style]	[기본 문자 스타일]
@@ -5136,6 +5236,7 @@ theme	Appearance	외관
 @msg	`name` must be the name of a script engine	`name`은(는) 스크립트 엔진의 이름이어야 합니다
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	기본 스크립트 엔진은 실행마다 새로 만들어지고 유지되지 않으므로 삭제할 수 없습니다
 @msg	there is no script engine named {name}	이름이 {name}인 스크립트 엔진이 없습니다
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers`는 물어볼 사람이 없는 실행에만 쓰입니다. 앱에서는 사람이 각 대화 상자에 답합니다
 @msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
 @msg	Copied the link info	링크 정보를 복사했습니다
@@ -5255,6 +5356,7 @@ theme	Appearance	외관
 @msg	every numbered name for {name} is taken in the document's folder	문서 폴더에서 {name}을(를) 위한 번호 이름이 모두 사용 중입니다
 @msg	No linked files to look for	찾을 링크된 파일이 없습니다
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	링크가 심볼, 그래프 디자인, 패턴 또는 불투명 마스크 안에 있어 캔버스에 위치가 없습니다
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	그래프 계열에 있는 그래프 디자인의 아트는 디자인에서 다시 그려집니다: 변경하려면 디자인을 편집하세요
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id`는 단계 참조 {r}이며, `run`과 `command_batch`만 이를 해석합니다
 @msg	`ids` must be an array of object ids, not {v}	`ids`는 {v}이(가) 아니라 개체 id 배열이어야 합니다
 @msg	`colors` must be an array of colors, not {v}	`colors`는 {v}이(가) 아니라 색상 배열이어야 합니다
@@ -5274,6 +5376,7 @@ theme	Appearance	외관
 @msg	automation filesystem access is not granted: write authority is absent: {path}	자동화 파일 시스템 접근이 허용되지 않았습니다: 쓰기 권한이 없습니다: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	자동화 경로가 거부되었습니다: 읽기 루트 {root} 밖입니다: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	자동화 경로가 거부되었습니다: 읽기 루트 {roots} 밖입니다: {path}
+@msg	a linked JavaScript file is outside the read roots	연결된 JavaScript 파일이 읽기 루트 밖에 있습니다
 @msg	automation path rejected: outside the write root {root}: {path}	자동화 경로가 거부되었습니다: 쓰기 루트 {root} 밖입니다: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	자동화 경로가 거부되었습니다: 쓰기 루트 {roots} 밖입니다: {path}
 @msg	automation path rejected: path is empty	자동화 경로가 거부되었습니다: 경로가 비어 있습니다
@@ -5325,6 +5428,11 @@ theme	Appearance	외관
 @msg	Imported library {name}	라이브러리 {name}을(를) 가져왔습니다
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB 정책:
+	CMYK Policy:	CMYK 정책:
+	Preserve Embedded Profiles	포함된 프로필 유지
+	Convert to Working Space	작업 공간으로 변환
+	Preserve Numbers	숫자 유지
 	Texture	텍스처
 	Craquelure…	크랙…
 	Grain…	그레인…
@@ -5449,6 +5557,8 @@ effect	Vertical	세로
 	Step up or down	한 단계 올리기 또는 내리기
 	Drag values or labels. Double-click a value to type.	값이나 레이블을 드래그하세요. 값을 더블클릭하면 입력할 수 있습니다.
 	Drag rings to rotate. Shift snaps to 15°.	링을 드래그해 회전하세요. Shift를 누르면 15°씩 스냅됩니다.
+	Track cube	회전 큐브
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	면, 모서리 또는 링을 드래그해 회전하세요. Shift를 누르면 화면의 한 축을 중심으로 회전합니다.
 	Drag the light, or its rings. Shift snaps to 15°.	조명이나 링을 드래그하세요. Shift를 누르면 15°씩 스냅됩니다.
 lighting	Light	광원
 	Keep visible surfaces only when expanding	확장 시 보이는 표면만 유지
@@ -5593,6 +5703,7 @@ lighting	Light	광원
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	그룹의 칠이나 획에 있는 3D 효과는 내보낼 것을 그리지 않습니다
 @msg	The 3D object is too complex to export	3D 개체가 너무 복잡하여 내보낼 수 없습니다
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	개체에 3D 효과(돌출 및 경사, 회전체, 부풀리기 또는 회전)가 없습니다
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render`는 값이 shaded 또는 wireframe인 `mode`만 있는 객체여야 합니다
 @msg	its 3D effect builds no solid	3D 효과가 입체를 만들지 않습니다
 @msg	bevel must be none or one of {_1}	bevel은 none 또는 {_1} 중 하나여야 합니다
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}은(는) 이 아트로 입체를 만들 수 없습니다. 심볼 인스턴스, 블렌드, 클리핑 그룹에 개체가 너무 많습니다
@@ -5676,6 +5787,9 @@ lighting	Light	광원
 	Softness	부드러움
 	Ambient Light	주변광
 	Light behind the object	개체 뒤의 조명
+	Move Light to Back	조명을 뒤로 이동
+	Move Light to Front	조명을 앞으로 이동
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	조명을 드래그하여 이동합니다. 화살표 키로 포커스된 조명을 이동하고, Shift 키를 누르면 15°씩 이동합니다.
 	Shadows	그림자
 	Distance from Object	개체로부터의 거리
 	Shadow Bounds	그림자 범위
@@ -5757,6 +5871,8 @@ lighting	Light	광원
 	Save Variable Library…	변수 라이브러리 저장…
 @msg	a variable library holds text variables, and the document has none	변수 라이브러리에는 텍스트 변수가 들어가는데 문서에 텍스트 변수가 없습니다
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	변수 `{name}`은(는) 변수 라이브러리에 저장할 수 없습니다: 문자나 `_`로 시작하고 공백이나 `-`, `_`, `.` 이외의 기호가 없도록 이름을 바꾸세요
+@msg	{k} has control characters	{k}에 제어 문자가 있습니다
+@msg	{k} has control characters or line breaks	{k}에 제어 문자 또는 줄 바꿈이 있습니다
 @msg	data set `{name}` holds a control character, which a variable library can't hold	데이터 세트 `{name}`에 변수 라이브러리에 담을 수 없는 제어 문자가 있습니다
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	데이터 세트 `{name}`의 앞이나 뒤에 변수 라이브러리에 담을 수 없는 공백이 있습니다
 	Make Graph Dynamic	그래프를 동적으로 만들기
@@ -6088,6 +6204,7 @@ axis	Y Axis	Y축
 @msg	stops must be in order of `offset`	정지점은 `offset` 순서여야 합니다
 @msg	the document has no pattern {pattern}	문서에 패턴 {pattern}이(가) 없습니다
 @msg	the document has no swatch {n}	문서에 견본 {n}이(가) 없습니다
+@msg	`plates` requires a stop linked to a spot swatch	`plates`에는 별색 견본에 연결된 정지점이 필요합니다
 @msg	the output	출력
 @msg	the path has no anchor points	패스에 앵커 포인트가 없습니다
 @msg	too many anchor points (limit {MAX_ANCHORS})	앵커 포인트가 너무 많습니다(한도 {MAX_ANCHORS})
@@ -6274,6 +6391,8 @@ axis	Y Axis	Y축
 	Create New Set	새 세트 만들기
 	Stop Global Edit	전체 편집 중지
 	Global Edit Options	전체 편집 옵션
+	Select Similar Objects	유사한 개체 선택
+	Select Similar Options	유사 개체 선택 옵션
 	Leave Out of Global Edit	전체 편집에서 제외
 	Match	일치
 	On Artboards	아트보드에서
@@ -6396,6 +6515,13 @@ axis	Y Axis	Y축
 	Graphite Pencil	흑연 연필
 	Wax Crayon	왁스 크레용
 	Charcoal Dust	목탄 가루
+
+# Original procedural circuit brushes.
+	Tech Circuit	전자 회로
+	Circuit Trace	회로 배선
+	Bus Lines	버스 배선
+	Terminal Nodes	단자 노드
+
 	Notched Ribbon	노치 리본
 	Double Line	이중선
 	Wave	물결
@@ -7286,6 +7412,7 @@ breakText	Glyphs	글리프
 @msg	Image Trace failed: {e}	이미지 추적 실패: {e}
 @msg	Image Trace finished, but its document was closed	이미지 추적이 끝났지만 문서가 닫혔습니다
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	이미지 추적이 끝났지만 그 사이에 이미지나 설정이 바뀌었습니다: 다시 추적하세요
+@msg	Image Trace finished, but its document was reverted: trace it again	이미지 추적이 끝났지만 문서가 되돌려졌습니다: 다시 추적하세요
 @msg	Import SVG Filter reads SVG files, not SVGZ	SVG 필터 가져오기는 SVGZ가 아닌 SVG 파일을 읽습니다
 @msg	Invalid dimension offset	잘못된 치수 오프셋
 @msg	Invalid point	잘못된 점
@@ -7459,6 +7586,7 @@ breakText	Glyphs	글리프
 @msg	`names` must be an array of style names	`names`은(는) 스타일 이름의 배열이어야 합니다
 @msg	`new` is a design name, or true	`new`은(는) 디자인 이름 또는 true입니다
 @msg	`origin` must be [x, y] in points	`origin`은(는) 포인트 단위의 [x, y]여야 합니다
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes`은(는) [a, b, c, d]여야 하며, 각 값은 -1000에서 1000 사이이고 a·d - b·c는 0에서 0.001 이상 떨어져야 합니다
 @msg	`path` must be a folder	`path`은(는) 폴더여야 합니다
 @msg	`path` must be a path object	`path`은(는) 패스 개체여야 합니다
 @msg	`picks` must be an array (got {v})	`picks`은(는) 배열이어야 합니다({v} 입력됨)
@@ -7865,7 +7993,7 @@ breakText	Glyphs	글리프
 @msg	column: true floats the whole column and takes no onto, above or below	column: true는 열 전체를 띄우며 onto, above, below와 함께 쓸 수 없습니다
 @msg	command must be a shape.* command	command는 shape.* 명령이어야 합니다
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command`가 없습니다
-@msg	composer must be "singleLine" or "everyLine"	composer는 "singleLine" 또는 "everyLine"이어야 합니다
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer는 "singleLine", "everyLine", "standardSingleLine" 또는 "standardEveryLine"이어야 합니다
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	컴파운드 모양에는 패스, 컴파운드 패스, 그룹, 컴파운드 모양, 문자, 블렌드, 엔벨로프를 넣을 수 있습니다
 @msg	compound {_1} must contain exactly one open path to join	컴파운드 {_1}에는 연결할 열린 패스가 정확히 하나 있어야 합니다
 @msg	connect needs a path other than the one extended	connect에는 연장한 패스가 아닌 다른 패스가 필요합니다
@@ -8861,7 +8989,7 @@ breakText	Glyphs	글리프
 @msg	unexpected resources	예상하지 못한 리소스
 @msg	unknown CMYK profile `{name}`	알 수 없는 CMYK 프로파일 `{name}`
 @msg	unknown File Info field `{k}`	알 수 없는 파일 정보 필드 `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	알 수 없는 OpenType 기능 `{t}`(liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt. 끄려면 앞에 -를 붙이세요. swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt는 대체 글리프 번호를 `tag=N` 형식으로 받으며 N은 0에서 {_1} 사이입니다. 예: `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	알 수 없는 OpenType 기능 `{t}`(liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital. 끄려면 앞에 -를 붙이세요. swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt는 대체 글리프 번호를 `tag=N` 형식으로 받으며 N은 0에서 {_1} 사이입니다. 예: `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	featureChanges의 알 수 없는 OpenType 기능 `{t}`(`features`가 받는 태그를 사용하세요)
 @msg	unknown PDF preset `{name}` (presets: {_1})	알 수 없는 PDF 프리셋 `{name}`(프리셋: {_1})
 @msg	unknown Warp style	알 수 없는 왜곡 스타일

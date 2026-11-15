@@ -6,7 +6,7 @@ use super::{
 };
 use vectorcraft_doc::symbol_overrides::dynamic_art;
 
-fn node_bezpath(n: &Node) -> Option<BezPath> {
+pub(super) fn node_bezpath(n: &Node) -> Option<BezPath> {
     match &n.kind {
         NodeKind::Path { path, .. } => Some(path.to_bezpath()),
         NodeKind::Compound { children, .. } => {
@@ -48,6 +48,34 @@ pub(crate) fn effected_path_carrying(doc: &Document, n: &Node, bp: &BezPath) -> 
     apply_carrying(&n.appearance.effects, bp, &GeomContext { doc: Some(doc), ..GeomContext::of(n) })
 }
 
+/// `n`, a path or compound path whose own Rasterize effect is followed by Transform effects that
+/// move its image ([`effects::rasterize_stage`]), with those Transform effects hidden, and the map
+/// they move the image by ([`effects::stage_map`]): the image is made of that node's art on its
+/// own pixel grid, then drawn through the map. `None` for any other object, when the node without
+/// those Transform effects is drawn through its art ([`has_object_fx`]: a Transform effect that
+/// copies it, Crop Marks, a 3D effect…), and when the art before the Transform effects is empty.
+pub(crate) fn rasterize_stage(doc: &Document, n: &Node) -> Option<(Node, Affine)> {
+    if !has_fx(n) {
+        return None;
+    }
+    let at = effects::rasterize_stage(&n.appearance.effects)?;
+    let mut stage = n.clone();
+    stage.appearance.effects = effects::staged_effects(&n.appearance.effects, &at);
+    if has_object_fx(&stage) {
+        return None;
+    }
+    let g = effected_path(doc, &stage, &node_bezpath(n)?);
+    let map = effects::stage_map(&n.appearance.effects, &at, &vectorcraft_geom::PathData::from_bezpath(&g))?;
+    Some((stage, map))
+}
+
+/// The box `map` ([`rasterize_stage`]) takes `b` to; `None` when it flattens it to a line or a
+/// point, which leaves nothing to draw.
+pub(crate) fn staged_reach(map: Affine, b: Rect) -> Option<Rect> {
+    let det = map.determinant();
+    (det.is_finite() && det.abs() > 1e-12).then(|| map.transform_rect_bbox(b))
+}
+
 pub(super) fn item_effects(item: &AppearanceItem) -> &[Effect] {
     match item {
         AppearanceItem::Fill(f) => &f.effects,
@@ -73,6 +101,11 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
         && let Some(art) = effects::reshape(Some(symbols.document()), n, None)
     {
         return cull_bounds(symbols, &art);
+    }
+    // A Rasterize image moved by the Transform effects after it reaches as far as the map takes
+    // what the art before them reaches, the image included.
+    if let Some((stage, map)) = rasterize_stage(symbols.document(), n) {
+        return staged_reach(map, visual_bounds(symbols, &stage)?);
     }
     let bp = node_bezpath(n)?;
     let ctx = GeomContext { doc: Some(symbols.document()), ..GeomContext::of(n) };
@@ -448,6 +481,9 @@ fn pieces_within(symbols: &SymbolBoxes, art: &Node, depth: usize, budget: &mut u
 pub(crate) fn painted_reach(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     if let Some(art) = effects::crop_marks_art(n) {
         return drawn_bounds(symbols, &art);
+    }
+    if let Some((stage, map)) = rasterize_stage(symbols.document(), n) {
+        return staged_reach(map, painted_reach(symbols, &stage)?);
     }
     let ran = ran(symbols.document(), n);
     let b = drawn_bounds_ran(symbols, n, Some(&ran))?;
