@@ -30,7 +30,11 @@
 //! Remove Color tool removes the color whose marker is clicked; a bar's right-click menu has Remove
 //! Color too. The base color can't be removed. A removed color's row goes, unless it has current
 //! colors and art or a group is open: it then keeps them, with no new color, so that art keeps its
-//! colors and the group's swatch at that place goes. The base color is the one the harmony rules
+//! colors and the group's swatch at that place goes. Under the tools, a button switches both wheels
+//! to hue and brightness (black at the center, full brightness at the edge, at the selected color's
+//! saturation; a marker drag sets hue and brightness, Add Color adds the hue and brightness clicked
+//! at the selected color's saturation, and the slider under the wheel is a Saturation slider) and
+//! back; switching changes no color, and the dialog opens on hue and saturation. The base color is the one the harmony rules
 //! build from, drawn with the larger marker; it stays the base when another color is selected for
 //! the sliders. A right-click on a marker or a color bar offers Set As Base Color, Select Shade (a
 //! grid of the color's hue at 7 saturations by 7 brightnesses; a click moves the marker there as a
@@ -70,7 +74,8 @@
 //! (`{saturation, brightness, temperature, luminosity}` in percent, sent as `recolor.apply`'s
 //! `globalAdjust` in every slider mode), `display` (the Edit tab's `smooth`, `segmented` or `bars`;
 //! unset: `smooth`), `wheelTool` (`add`: the Add Color tool, `remove`: the Remove Color tool;
-//! unset: neither, a click on the wheel selects a marker), `themePicker` (the Color Theme Picker is on), `themePicks` (its picks, as
+//! unset: neither, a click on the wheel selects a marker), `wheelAxes` (`hueBrightness`: the wheels
+//! show hue and brightness; `hueSaturation`, unset or any other value: hue and saturation), `themePicker` (the Color Theme Picker is on), `themePicks` (its picks, as
 //! `recolor.pickTheme`'s `picks`; a new list recolors the rows), `weights` (one per row, as
 //! `recolor.weigh`'s; a new list moves the rows' current colors toward them), `findColors` (Find is
 //! on; it shows the art so on the Assign tab, with art and rows selected). Changing `colors`, a
@@ -1547,12 +1552,27 @@ const DRAG: &str = "__drag";
 /// The field of the Edit tab's wheel tools: `add` (Add Color) or `remove` (Remove Color).
 const WHEEL_TOOL: &str = "wheelTool";
 
-/// The new color the Add Color tool gives a click at hue `h` (degrees) and saturation `s`: at the
-/// brightness of `base` (the selected color, whose brightness the wheel shows; full without one),
-/// the segmented wheel's patch color with `segmented`, in `base`'s model.
-fn added_color(base: Option<Color>, h: f32, s: f32, segmented: bool) -> Color {
-    let v = base.map_or(1.0, |b| b.to_hsb()[2]);
-    let c = if segmented { widgets::segment_color(h, s, v) } else { Color::from_hsb(h, s, v) };
+/// The field of what the Edit tab's wheels show: `hueBrightness` (hue and brightness), or anything
+/// else (hue and saturation).
+const WHEEL_AXES: &str = "wheelAxes";
+
+/// What the Edit tab's wheels show, from [`WHEEL_AXES`].
+fn wheel_axes(d: &Dialog) -> widgets::WheelAxes {
+    if d.str(WHEEL_AXES) == "hueBrightness" { widgets::WheelAxes::HueBrightness } else { widgets::WheelAxes::HueSaturation }
+}
+
+/// The new color the Add Color tool gives a click at hue `h` (degrees) and `t`, the saturation (or
+/// with [`widgets::WheelAxes::HueBrightness`] the brightness) clicked: with the other component of
+/// `base` (the selected color, whose other component the wheel shows; full without one), the segmented
+/// wheel's patch color with `segmented`, in `base`'s model.
+fn added_color(base: Option<Color>, h: f32, t: f32, segmented: bool, axes: widgets::WheelAxes) -> Color {
+    let o = base.map_or(1.0, |b| b.to_hsb()[axes.other()]);
+    let c = if segmented {
+        widgets::segment_color_on(axes, h, t, o)
+    } else {
+        let [h, s, v] = axes.hsb(h, t, o);
+        Color::from_hsb(h, s, v)
+    };
     base.map_or(c, |b| keep_model(b, c))
 }
 
@@ -1765,6 +1785,7 @@ fn choose(
     base: Option<usize>,
     shown: Option<Color>,
     segmented: bool,
+    axes: widgets::WheelAxes,
 ) -> (bool, Option<usize>) {
     match choice {
         MenuChoice::Base(i) => (set_base(rows, i), None),
@@ -1788,7 +1809,7 @@ fn choose(
             None => (false, None),
         },
         MenuChoice::Add([h, s], line) => {
-            let i = add_color(rows, &added_color(shown, h, s, segmented));
+            let i = add_color(rows, &added_color(shown, h, s, segmented, axes));
             if let Some(l) = line {
                 tie_to(rows, l, i);
             }
@@ -1862,6 +1883,7 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
     let mut choice = None;
     let display = d.str("display");
     let tool = d.str(WHEEL_TOOL);
+    let axes = wheel_axes(d);
     // The tools act on either wheel, not on the color bars.
     let on_wheel = display != "bars";
     let mut w = widgets::WheelResponse::default();
@@ -1886,6 +1908,14 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
                     d.fields.insert(WHEEL_TOOL.into(), if on { Value::Null } else { json!(id) });
                 }
             }
+            // What the wheels show: a click switches between hue and saturation, and hue and
+            // brightness. It changes no color.
+            ui.add_space(8.0);
+            let bright = axes == widgets::WheelAxes::HueBrightness;
+            let tip = if bright { tl!("Show saturation and hue on wheel") } else { tl!("Show brightness and hue on wheel") };
+            if widgets::icon_button_enabled(ui, "sun", tip, bright && on_wheel, on_wheel, 24.0).clicked() {
+                d.fields.insert(WHEEL_AXES.into(), json!(if bright { "hueSaturation" } else { "hueBrightness" }));
+            }
         });
         ui.vertical(|ui| match display.as_str() {
             "bars" => {
@@ -1893,7 +1923,7 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
                 changed |= moved;
                 choice = chosen;
             }
-            _ => w = widgets::recolor_wheel(ui, "recolor-wheel", WHEEL, &colors, marked, selected, display == "segmented"),
+            _ => w = widgets::recolor_wheel(ui, "recolor-wheel", WHEEL, &colors, marked, selected, display == "segmented", axes),
         });
     });
     // A right-click on the wheel: a marker's menu, or Add New Color elsewhere. Its target is kept
@@ -1924,7 +1954,7 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
     // drags of this frame are left alone.
     let chosen = choice.is_some();
     if let Some(c) = choice {
-        let (did, picked) = choose(d, rows, c, base, shown, display == "segmented");
+        let (did, picked) = choose(d, rows, c, base, shown, display == "segmented", axes);
         changed |= did;
         pick = picked.map(|i| (i, false));
     }
@@ -1935,9 +1965,9 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
     }
     // A click with a wheel tool adds a color there, or removes the color of the marker clicked.
     let clicked = w.clicked.filter(|_| on_wheel && matches!(tool.as_str(), "add" | "remove"));
-    if let Some((hit, [h, s])) = clicked {
+    if let Some((hit, [h, out])) = clicked {
         if tool == "add" {
-            let c = added_color(shown, h, s, display == "segmented");
+            let c = added_color(shown, h, out, display == "segmented", axes);
             let i = add_color(rows, &c);
             d.fields.insert("__sel".into(), json!([i]));
             d.fields.remove(COMPS);
@@ -2202,12 +2232,35 @@ mod tests {
     #[test]
     fn an_added_color_takes_the_base_colors_brightness_and_model() {
         let near = |a: [f32; 3], b: [f32; 3]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-3);
+        let sat = widgets::WheelAxes::HueSaturation;
         let base = Color::from_hsb(10.0, 0.8, 0.6);
-        assert!(near(added_color(Some(base), 120.0, 0.5, false).to_hsb(), [120.0, 0.5, 0.6]));
-        assert!(near(added_color(None, 200.0, 0.25, false).to_hsb(), [200.0, 0.25, 1.0]));
-        assert!(near(added_color(None, 7.0, 0.95, true).to_hsb(), [0.0, 0.9, 1.0]), "the patch's color");
+        assert!(near(added_color(Some(base), 120.0, 0.5, false, sat).to_hsb(), [120.0, 0.5, 0.6]));
+        assert!(near(added_color(None, 200.0, 0.25, false, sat).to_hsb(), [200.0, 0.25, 1.0]));
+        assert!(near(added_color(None, 7.0, 0.95, true, sat).to_hsb(), [0.0, 0.9, 1.0]), "the patch's color");
         let cmyk = color_value(&json!("cmyk 0 100 100 0")).unwrap();
-        assert!(matches!(added_color(Some(cmyk), 120.0, 0.5, false), Color::Cmyk { .. }));
+        assert!(matches!(added_color(Some(cmyk), 120.0, 0.5, false, sat), Color::Cmyk { .. }));
+    }
+
+    /// On the hue and brightness wheel an added color is the hue and brightness clicked at the base
+    /// color's saturation (full without one), the patch's color on the segmented wheel (its ring is
+    /// a brightness step), in the base color's model. A black base adds a gray of the brightness
+    /// clicked, and the wheel's center is black.
+    #[test]
+    fn an_added_color_on_the_brightness_wheel_takes_the_base_colors_saturation() {
+        let near = |a: [f32; 3], b: [f32; 3]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-3);
+        let bright = widgets::WheelAxes::HueBrightness;
+        let base = Color::from_hsb(10.0, 0.8, 0.6);
+        assert!(near(added_color(Some(base), 120.0, 0.5, false, bright).to_hsb(), [120.0, 0.8, 0.5]));
+        assert!(near(added_color(None, 200.0, 0.25, false, bright).to_hsb(), [200.0, 1.0, 0.25]));
+        assert!(near(added_color(Some(base), 7.0, 0.95, true, bright).to_hsb(), [0.0, 0.8, 0.9]), "the patch's color");
+        assert!(near(added_color(Some(base), 7.0, 0.0, true, bright).to_hsb(), [0.0, 0.8, 0.1]), "the innermost ring");
+        let black = Color::from_hsb(0.0, 0.0, 0.0);
+        let [_, s, v] = added_color(Some(black), 90.0, 0.4, false, bright).to_hsb();
+        assert!(s.abs() < 1e-3 && (v - 0.4).abs() < 1e-3, "a gray: {s} {v}");
+        let [_, _, v] = added_color(Some(base), 33.0, 0.0, false, bright).to_hsb();
+        assert!(v.abs() < 1e-3, "black at the center");
+        let cmyk = color_value(&json!("cmyk 0 100 100 0")).unwrap();
+        assert!(matches!(added_color(Some(cmyk), 120.0, 0.5, false, bright), Color::Cmyk { .. }));
     }
 
     /// With a color group and art, a row without a new color removes its swatch in its place, the
