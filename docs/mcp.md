@@ -10229,7 +10229,7 @@ order of `ids`. A threaded frame's first paragraph is passed over when it contin
 paragraph given the number shows it, and the numbered paragraphs after it at its level count on from it,
 through the frames of threaded type. Deeper levels count from 1 after it, as after any list paragraph, and a paragraph in
 no list still starts the count again. `restartNumbering: false` takes the number away from every paragraph the call
-touches, and they count on from the paragraph before. `startNumber` is a whole number (`5` or `5.0`); 0, a negative
+touches except such a continued first paragraph, and they count on from the paragraph before. `startNumber` is a whole number (`5` or `5.0`); 0, a negative
 number, a fraction, a number past 999999999 and any other type are errors, and giving both keys is an error. A call
 that touches no numbered paragraph, or that gives the number the paragraph already has, changes nothing and records no
 undo step. A call that also puts paragraphs in a numbered list gives the number after the list is set. Return in a

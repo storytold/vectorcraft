@@ -863,7 +863,8 @@ fn a_given_number_carries_through_threaded_frames() {
 }
 
 /// A number given in a threaded frame whose first paragraph continues from the frame before goes
-/// to the next numbered paragraph that begins in that frame, not to the item the earlier frame shows.
+/// to the next numbered paragraph that begins in that frame, not to the item the earlier frame shows,
+/// and `restartNumbering` false there leaves that item's number alone.
 #[test]
 fn a_given_number_skips_the_paragraph_continued_from_the_frame_before() {
     let mut s = Session::new();
@@ -887,6 +888,11 @@ fn a_given_number_skips_the_paragraph_continued_from_the_frame_before() {
     assert_eq!((numbers(&s, a), numbers(&s, b)), (vec!["1.".to_string(), "2.".into()], vec!["3.".to_string()]));
     s.execute("text.setFormat", &json!({"ids": [b], "startNumber": 5})).unwrap();
     assert_eq!((numbers(&s, a), numbers(&s, b)), (vec!["1.".to_string(), "2.".into()], vec!["5.".to_string()]));
+    // The long item, numbered in the first frame, keeps its number when the second frame's are taken away.
+    s.execute("text.setFormat", &json!({"ids": [a], "start": 4, "end": 4, "startNumber": 8})).unwrap();
+    assert_eq!((numbers(&s, a), numbers(&s, b)), (vec!["1.".to_string(), "8.".into()], vec!["5.".to_string()]));
+    s.execute("text.setFormat", &json!({"ids": [b], "restartNumbering": false})).unwrap();
+    assert_eq!((numbers(&s, a), numbers(&s, b)), (vec!["1.".to_string(), "8.".into()], vec!["9.".to_string()]));
 }
 
 /// `startNumber` over several type objects goes to the first numbered paragraph with text among
