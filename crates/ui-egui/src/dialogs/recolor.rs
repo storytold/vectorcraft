@@ -1296,35 +1296,43 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     let room = ui.available_width();
     // Without the room for both side by side (a narrow window), the list goes under the tabs.
     let beside = room >= SPEC.min_width + STORAGE_GAP + STORAGE_W;
+    // The Color Picker that a double-click on a new color or Pick from Swatches asks for opens over
+    // the dialog after the list is drawn, so the window keeps its size while the picker is open.
+    let mut picker = None;
     if !d.bool(GROUP_STORAGE) || !beside {
         ui.vertical(|ui| {
             ui.set_width(room.min(MAIN_W));
-            main(app, ui, d);
-            if d.kind == KIND && d.bool(GROUP_STORAGE) {
+            picker = main(app, ui, d);
+            if d.bool(GROUP_STORAGE) {
                 ui.add_space(6.0);
                 group_storage(app, ui, d, 3.0 * GROUP_ROW_H);
             }
         });
-        return false;
-    }
-    ui.horizontal_top(|ui| {
-        ui.vertical(|ui| {
-            ui.set_width((room - STORAGE_GAP - STORAGE_W).clamp(0.0, MAIN_W));
-            main(app, ui, d);
-        });
-        // A double-click on a new color turns the dialog into the Color Picker.
-        if d.kind == KIND {
+    } else {
+        ui.horizontal_top(|ui| {
+            ui.vertical(|ui| {
+                ui.set_width((room - STORAGE_GAP - STORAGE_W).clamp(0.0, MAIN_W));
+                picker = main(app, ui, d);
+            });
             ui.add_space(STORAGE_GAP);
             ui.vertical(|ui| {
                 ui.set_width(STORAGE_W);
                 group_storage(app, ui, d, TAB_H - 30.0);
             });
-        }
-    });
+        });
+    }
+    if let Some((i, swatches)) = picker
+        && let Some(row) = rows(d).get(i)
+    {
+        let c = to_color(row).or_else(|| from_colors(row).first().copied()).unwrap_or_default();
+        *d = super::color_picker::over_recolor(d, c, i, swatches);
+    }
     false
 }
 
-fn main(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) {
+/// The tabs and the controls under them. Returns the row whose new color a double-click or Pick
+/// from Swatches asked to pick in the Color Picker, with `true` for Pick from Swatches.
+fn main(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> Option<(usize, bool)> {
     sync(app, d);
     sync_theme(app, d);
     sync_weights(app, d);
@@ -1403,12 +1411,7 @@ fn main(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) {
             None => form::preview(app, ui, d, "Recolor Artwork", CMD, apply_params(d)),
         }
     }
-    if let Some((i, swatches)) = pick
-        && let Some(row) = rows(d).get(i)
-    {
-        let c = to_color(row).or_else(|| from_colors(row).first().copied()).unwrap_or_default();
-        *d = super::color_picker::over_recolor(d, c, i, swatches);
-    }
+    pick
 }
 
 /// `d` with row `i`'s new colour set to `c` (the Color Picker's OK), snapped to Limit to Library.
