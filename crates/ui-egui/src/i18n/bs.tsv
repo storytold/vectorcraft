@@ -4457,6 +4457,18 @@ font-technology	Variable	Varijabilni
 	The unit for East Asian type measurements, which no field uses yet.	Jedinica za mjere istočnoazijskog teksta, koju još nijedno polje ne koristi.
 	When on, a number typed without a unit into a field in picas is read in points.	Kad je uključeno, broj unesen bez jedinice u polje u picama čita se u tačkama.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Uz XML ID nazivi objekata prikazuju se kao XML ID u Slojevima, Varijablama i Opcijama sloja.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Priljepljuje crtanje, pomicanje i skaliranje uz podjele mreže, čak i dok je mreža skrivena; dok je uključeno, „Prilijepi uz piksel“ se ne primjenjuje.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Boja vodilica koje nisu odabrane; radna ploča s „Oznakom vodilica“ crta svoje vodilice u boji oznake.
+	Draws guides as solid lines or as dots, including the guides already in the document.	Crta vodilice kao pune linije ili kao tačke, uključujući vodilice koje su već u dokumentu.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	Kad je uključeno, vodilice su zaključane pri pokretanju VectorCrafta; promjena ove opcije ih odmah zaključava ili otključava, a Prikaz › Vodilice › Zaključaj vodilice i dalje mijenja zaključavanje.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	Kad je uključeno, držanje tipke Cmd/Ctrl na početku povlačenja s ravnala pravi vodilicu samo na aktivnoj radnoj ploči, a s alatom radna ploča vodilicu cijelog platna.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	Boja mreže; linije između glavnih linija mreže crtaju se u blijeđoj nijansi te boje.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	Crta mrežu kao linije ili kao tačke duž glavnih linija mreže na svakoj podjeli.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	Razmak između glavnih linija mreže u svakom otvorenom dokumentu i u novim; dokument VectorCrafta otvara se s mrežom s kojom je sačuvan.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	Na koliko dijelova se dijeli svaki glavni kvadrat mreže; „Priljepi uz mrežu“ priljepljuje uz te dijelove, čak i kad zum skriva njihove linije.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	Crta mrežu iza crteža; kad je isključeno, mreža se crta preko njega.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	U pregledu piksela pri zumu od 600% ili više aktivni prikaz pokazuje liniju na rubu svakog piksela dokumenta preko crteža.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Boja ivice pločice i isprekidanih granica uzorka boje koje se prikazuju dok uređujete uzorak.
 	Reset all preferences to their defaults?	Vratiti sve postavke na zadane vrijednosti?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Zadane vrijednosti primjenjuju se kada kliknete U redu u Postavkama. Otkaži tamo zadržava vaše trenutne postavke.
 	Smaller ↔ Larger	Manje ↔ veće

@@ -6165,6 +6165,18 @@ font-technology	Variable	ცვლადი
 	The unit for East Asian type measurements, which no field uses yet.	აღმოსავლეთაზიური ტექსტის ზომების ერთეული, რომელსაც ჯერჯერობით არცერთი ველი არ იყენებს.
 	When on, a number typed without a unit into a field in picas is read in points.	ჩართვისას პიკებში მოცემულ ველში ერთეულის გარეშე აკრეფილი რიცხვი პუნქტებში იკითხება.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID-ის არჩევისას ობიექტების სახელები შრეებში, ცვლადებსა და შრის პარამეტრებში XML ID-ად ჩანს.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	ხატვას, გადაადგილებასა და მასშტაბირებას ბადის დაყოფებზე მიაბამს, მაშინაც კი, როცა ბადე დამალულია; სანამ ჩართულია, პიქსელზე მიბმა არ მოქმედებს.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	არჩეული არ მყოფი დამხმარე ხაზების ფერი; იარლიყიანი სამუშაო დაფა საკუთარ დამხმარე ხაზებს იარლიყის ფერით ხატავს.
+	Draws guides as solid lines or as dots, including the guides already in the document.	დამხმარე ხაზებს უწყვეტი ხაზებით ან წერტილებით ხატავს, დოკუმენტში უკვე არსებულების ჩათვლით.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	ჩართვისას დამხმარე ხაზები VectorCraft-ის გაშვებისას ჩაკეტილია; პარამეტრის შეცვლა მათ მაშინვე კეტავს ან ხსნის, ხოლო ხედი › დამხმარე ხაზები › დამხმარე ხაზების ჩაკეტვა კვლავ ცვლის ჩაკეტვას.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	ჩართვისას სახაზავიდან გადათრევის დაწყებისას დაჭერილი Cmd/Ctrl დამხმარე ხაზს მხოლოდ აქტიურ სამუშაო დაფაზე ქმნის, სამუშაო დაფის ხელსაწყოთი კი მთელი ტილოს ხაზს.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	ბადის ფერი; მთავარ ხაზებს შორის ხაზები მისი უფრო მკრთალი ელფერით იხატება.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	ბადეს ხაზებით ხატავს, ან წერტილებით მთავარი ხაზების გასწვრივ ყოველ დაყოფაზე.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	მთავარ ხაზებს შორის მანძილი ყველა ღია და ახალ დოკუმენტში; VectorCraft-ის დოკუმენტი იმ ბადით იხსნება, რომლითაც შეინახა.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	რამდენ ნაწილად იყოფა ბადის თითოეული მთავარი კვადრატი; ბადეზე მიბმა ამ ნაწილებზე მიაბამს, მაშინაც კი, როცა მასშტაბი მათ ხაზებს მალავს.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	ბადეს ნამუშევრის უკან ხატავს; გამორთვისას ბადე მის ზემოთ იხატება.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	პიქსელების წინასწარ ნახვაში 600%-იან ან მეტ მასშტაბზე აქტიური ხედი ნამუშევრის ზემოთ დოკუმენტის თითოეული პიქსელის კიდეზე ხაზს აჩვენებს.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	ფილის კიდისა და ფერის ნიმუშის წყვეტილი საზღვრების ფერი, რომლებიც პატერნის რედაქტირებისას ჩანს.
 	Reset all preferences to their defaults?	დავაბრუნოთ ყველა პარამეტრი ნაგულისხმევ მნიშვნელობებზე?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	ნაგულისხმევი მნიშვნელობები გამოიყენება, როცა პარამეტრებში OK-ს დააჭერთ. იქ გაუქმება ინარჩუნებს თქვენს მიმდინარე პარამეტრებს.
 	Smaller ↔ Larger	უფრო პატარა ↔ უფრო დიდი

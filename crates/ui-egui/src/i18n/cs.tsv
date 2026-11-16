@@ -4562,6 +4562,18 @@ font-technology	Variable	Variabilní
 	The unit for East Asian type measurements, which no field uses yet.	Jednotka pro míry východoasijského písma, kterou zatím žádné pole nepoužívá.
 	When on, a number typed without a unit into a field in picas is read in points.	Když je zapnuto, číslo zadané bez jednotky do pole v pica se čte v bodech.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	S volbou XML ID se názvy objektů zobrazují jako XML ID ve Vrstvách, Proměnných a Možnostech vrstvy.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Přichytává kreslení, přesouvání a změnu velikosti k dělení mřížky, i když je mřížka skrytá; dokud je zapnuto, Přichytávat k obrazovým bodům se neuplatní.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Barva vodítek, která nejsou vybraná; pracovní plocha se Štítkem vodítek kreslí svá vodítka v barvě štítku.
+	Draws guides as solid lines or as dots, including the guides already in the document.	Kreslí vodítka jako plné čáry nebo jako tečky, včetně vodítek, která už v dokumentu jsou.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	Je-li zapnuto, vodítka jsou při spuštění VectorCraftu zamknutá; změna této volby je hned zamkne nebo odemkne a Zobrazení › Vodítka › Zamknout vodítka zámek dál mění.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	Je-li zapnuto, podržení Cmd/Ctrl na začátku tažení z pravítka vytvoří vodítko jen na aktivní pracovní ploše, nebo s nástrojem Pracovní plocha vodítko celého plátna.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	Barva mřížky; čáry mezi hlavními čarami mřížky se kreslí ve slabším odstínu této barvy.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	Kreslí mřížku jako čáry, nebo jako tečky podél hlavních čar mřížky v každém dělení.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	Vzdálenost mezi hlavními čarami mřížky ve všech otevřených dokumentech i v nových; dokument VectorCraftu se otevře s mřížkou, se kterou byl uložen.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	Na kolik dílů se dělí každý hlavní čtverec mřížky; Přichytávat k mřížce přichytává k těmto dílům, i když jejich čáry při daném zvětšení nejsou vidět.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	Kreslí mřížku za kresbou; je-li vypnuto, kreslí se mřížka přes ni.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	V náhledu obrazových bodů při zvětšení 600 % a více ukazuje aktivní zobrazení přes kresbu čáru na okraji každého obrazového bodu dokumentu.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Barva okraje dlaždice a přerušovaných hranic položky vzorníku, které se ukazují při úpravě vzorku.
 	Reset all preferences to their defaults?	Obnovit všechny předvolby na výchozí hodnoty?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Výchozí hodnoty se použijí po klepnutí na OK v Předvolbách. Zrušit tam zachová vaše současné předvolby.
 	Smaller ↔ Larger	Menší ↔ Větší

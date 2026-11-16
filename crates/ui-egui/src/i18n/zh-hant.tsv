@@ -4280,6 +4280,18 @@ digits	Malayalam	馬來亞拉姆數字
 	The unit for East Asian type measurements, which no field uses yet.	用於東亞文字度量的單位，目前還沒有欄位使用。
 	When on, a number typed without a unit into a field in picas is read in points.	開啟後，在以派卡為單位的欄位中輸入的不含單位數字以點讀取。
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	選擇 XML ID 時，圖層、變數和圖層選項中的物件名稱會顯示為 XML ID。
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	即使格點已隱藏，繪製、移動和縮放仍會靠齊格點的細分；開啟期間，「靠齊像素」不會作用。
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	未選取參考線的顏色；設定了參考線標籤的工作區域會以標籤顏色繪製自己的參考線。
+	Draws guides as solid lines or as dots, including the guides already in the document.	將參考線繪製為實線或點，包括文件中已有的參考線。
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	開啟後，VectorCraft 啟動時參考線為鎖定狀態；變更此選項會立即鎖定或解除鎖定參考線，「檢視 › 參考線 › 鎖定參考線」仍可變更鎖定狀態。
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	開啟後，從尺標開始拖曳時按住 Cmd/Ctrl，只會在作用中的工作區域上建立參考線；使用工作區域工具時則建立貫穿整個畫布的參考線。
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	格點的顏色；主要格線之間的線條會以該顏色較淡的色調繪製。
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	將格點繪製為線條，或在每個細分處沿主要格線繪製為點。
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	所有已開啟文件和新文件中主要格線之間的距離；VectorCraft 文件開啟時會使用儲存時的格點。
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	每個主要格點方格分成幾份；即使縮放使這些線條不顯示，「靠齊格點」仍會靠齊這些分格。
+	Draws the grid behind the artwork; off, the grid is drawn over it.	將格點繪製在圖稿後方；關閉時格點繪製在圖稿上方。
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	在像素預視中縮放至 600% 以上時，作用中的檢視會在圖稿上方沿文件每個像素的邊緣顯示線條。
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	編輯圖樣時顯示的拼貼邊緣和虛線色票邊界的顏色。
 	Reset all preferences to their defaults?	要將所有偏好設定重設為預設值嗎？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在偏好設定中按下確定後才會套用預設值。在那裡按下取消會保留目前的偏好設定。
 	Restore Recovered Documents	還原找回的文件

@@ -4222,6 +4222,18 @@ antiAlias	Sharp	शार्प
 	The unit for East Asian type measurements, which no field uses yet.	पूर्वी एशियाई टाइप के माप की इकाई, जिसका अभी कोई फ़ील्ड उपयोग नहीं करता।
 	When on, a number typed without a unit into a field in picas is read in points.	चालू होने पर, पाइका वाले फ़ील्ड में बिना इकाई के टाइप की गई संख्या पॉइंट्स में पढ़ी जाती है।
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID चुनने पर ऑब्जेक्ट के नाम लेयर्स, वेरिएबल्स और लेयर ऑप्शन्स में XML ID के रूप में दिखते हैं।
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	ग्रिड छिपी होने पर भी ड्रॉ करना, खिसकाना और स्केल करना ग्रिड के उप-विभाजनों पर स्नैप करता है; इसके चालू रहने तक पिक्सेल के लिए स्नैप लागू नहीं होता।
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	उन गाइड्स का रंग जो चयनित नहीं हैं; गाइड लेबल वाला आर्टबोर्ड अपनी गाइड्स लेबल के रंग में बनाता है।
+	Draws guides as solid lines or as dots, including the guides already in the document.	दस्तावेज़ में पहले से मौजूद गाइड्स सहित, गाइड्स को ठोस रेखाओं या बिंदुओं के रूप में बनाता है।
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	इसके चालू होने पर VectorCraft शुरू होते समय गाइड्स लॉक रहती हैं; यह विकल्प बदलने से वे तुरंत लॉक या अनलॉक होती हैं, और व्यू › गाइड्स › गाइड्स लॉक करें अब भी लॉक बदलता है।
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	इसके चालू होने पर रूलर से खींचना शुरू करते समय Cmd/Ctrl दबाए रखने से केवल सक्रिय आर्टबोर्ड पर गाइड बनती है, या आर्टबोर्ड टूल के साथ पूरे कैनवस की गाइड बनती है।
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	ग्रिड का रंग; मुख्य ग्रिडलाइनों के बीच की रेखाएँ उसके हल्के शेड में बनती हैं।
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	ग्रिड को रेखाओं के रूप में, या हर उप-विभाजन पर मुख्य ग्रिडलाइनों के साथ बिंदुओं के रूप में बनाता है।
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	हर खुले दस्तावेज़ और नए दस्तावेज़ों में मुख्य ग्रिडलाइनों के बीच की दूरी; VectorCraft दस्तावेज़ उसी ग्रिड के साथ खुलता है जिसके साथ वह सेव किया गया था।
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	हर मुख्य ग्रिड वर्ग कितने भागों में बँटता है; ज़ूम से उनकी रेखाएँ छिपने पर भी ग्रिड पर स्नैप करें इन भागों पर स्नैप करता है।
+	Draws the grid behind the artwork; off, the grid is drawn over it.	ग्रिड को आर्टवर्क के पीछे बनाता है; बंद होने पर ग्रिड उसके ऊपर बनती है।
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	पिक्सेल प्रीव्यू में 600% या अधिक ज़ूम पर, सक्रिय व्यू आर्टवर्क के ऊपर दस्तावेज़ के हर पिक्सेल के किनारे पर रेखा दिखाता है।
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	पैटर्न संपादित करते समय दिखने वाले टाइल एज और डैश वाली स्वॉच सीमाओं का रंग।
 	Reset all preferences to their defaults?	सभी प्रेफ़रेंसेज़ को उनके डिफ़ॉल्ट पर रीसेट करें?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	डिफ़ॉल्ट तब लागू होते हैं जब आप प्रेफ़रेंसेज़ में ठीक है पर क्लिक करते हैं। वहाँ रद्द करें आपकी मौजूदा प्रेफ़रेंसेज़ बनाए रखता है।
 	Restore Recovered Documents	पुनर्स्थापना डॉक्यूमेंट

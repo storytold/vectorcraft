@@ -3130,6 +3130,18 @@ mark-style	Japanese	日本式
 	The unit for East Asian type measurements, which no field uses yet.	東アジア言語の文字の測定に使う単位で、まだどのフィールドも使っていません。
 	When on, a number typed without a unit into a field in picas is read in points.	オンのとき、パイカのフィールドに単位なしで入力した数値はポイントとして読み取られます。
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID を選ぶと、レイヤー、変数、レイヤーオプションでオブジェクト名が XML ID として表示されます。
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	グリッドが非表示でも、描画、移動、拡大・縮小をグリッドの分割位置にスナップします。オンの間は「ピクセルにスナップ」は働きません。
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	選択されていないガイドの色です。ガイドのラベルを設定したアートボードは、自身のガイドをラベルの色で描きます。
+	Draws guides as solid lines or as dots, including the guides already in the document.	ドキュメントにすでにあるガイドも含め、ガイドを実線または点線で描きます。
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	オンにすると、VectorCraft の起動時にガイドがロックされます。このオプションを変更するとすぐにロックまたはロック解除され、表示 › ガイド › ガイドをロックでも引き続きロックを切り替えられます。
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	オンにすると、定規からドラッグを始めるときに Cmd/Ctrl を押していると、アクティブなアートボードだけのガイドを作成し、アートボードツールではカンバス全体のガイドを作成します。
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	グリッドの色です。主グリッド線の間の線は、この色の薄い色合いで描かれます。
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	グリッドを線で描くか、主グリッド線に沿って各分割位置に点で描きます。
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	開いているすべてのドキュメントと新規ドキュメントでの主グリッド線の間隔です。VectorCraft ドキュメントは保存時のグリッドで開きます。
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	主グリッドの各マスを分割する数です。ズームで線が隠れていても、「グリッドにスナップ」はこの分割位置にスナップします。
+	Draws the grid behind the artwork; off, the grid is drawn over it.	グリッドをアートワークの背面に描きます。オフのときは前面に描きます。
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	ピクセルプレビューで 600% 以上にズームすると、アクティブな表示でアートワークの上に、ドキュメントの各ピクセルの境界に線が表示されます。
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	パターンの編集中に表示されるタイルの境界線と、破線のスウォッチの境界の色です。
 	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	初期値は環境設定で OK をクリックすると適用されます。そこでキャンセルすると現在の環境設定が保たれます。
 	Restored documents open unsaved: save them to keep them.	復元したドキュメントは未保存の状態で開きます。保存して残してください。

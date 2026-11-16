@@ -101,6 +101,34 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ("unitsAsianType", "The unit for East Asian type measurements, which no field uses yet."),
     ("numbersWithoutUnitsArePoints", "When on, a number typed without a unit into a field in picas is read in points."),
     ("identifyObjectsBy", "With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options."),
+    // Guides & Grid
+    (
+        "__snapToGrid",
+        "Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.",
+    ),
+    ("guideColor", "The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead."),
+    ("guideStyle", "Draws guides as solid lines or as dots, including the guides already in the document."),
+    (
+        "lockGuidesByDefault",
+        "With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.",
+    ),
+    (
+        "cmdRulerDragArtboardGuides",
+        "With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.",
+    ),
+    ("gridColor", "The color of the grid; the lines between major gridlines are drawn in a fainter shade of it."),
+    ("gridStyle", "Draws the grid as lines, or as dots along the major gridlines at each subdivision."),
+    (
+        "gridlineEvery",
+        "The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.",
+    ),
+    (
+        "gridSubdivisions",
+        "How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.",
+    ),
+    ("gridsInBack", "Draws the grid behind the artwork; off, the grid is drawn over it."),
+    ("showPixelGrid", "In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork."),
+    ("patternTileEdgeColor", "The color of the tile edge and the dashed swatch bounds shown while you edit a pattern."),
 ];
 
 /// The sentence that describes the setting `key`, in English, or `None` when it has none yet.

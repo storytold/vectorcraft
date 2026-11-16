@@ -3119,6 +3119,18 @@ mark-style	Japanese	일본식
 	The unit for East Asian type measurements, which no field uses yet.	동아시아 문자 측정에 쓰는 단위로, 아직 이 단위를 쓰는 필드는 없습니다.
 	When on, a number typed without a unit into a field in picas is read in points.	켜면 파이카 필드에 단위 없이 입력한 숫자를 포인트로 읽습니다.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID를 고르면 레이어, 변수, 레이어 옵션에서 개체 이름이 XML ID로 표시됩니다.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	격자가 숨겨져 있어도 그리기, 이동, 크기 조절을 격자의 세분 위치에 스냅합니다. 켜져 있는 동안에는 픽셀에 스냅이 적용되지 않습니다.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	선택되지 않은 안내선의 색상입니다. 안내선 레이블이 있는 아트보드는 자신의 안내선을 레이블 색상으로 그립니다.
+	Draws guides as solid lines or as dots, including the guides already in the document.	문서에 이미 있는 안내선을 포함해 안내선을 실선 또는 점으로 그립니다.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	켜면 VectorCraft가 시작될 때 안내선이 잠깁니다. 이 옵션을 바꾸면 즉시 잠기거나 잠금이 풀리며, 보기 › 안내선 › 안내선 잠그기로도 계속 잠금을 바꿀 수 있습니다.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	켜면 눈금자에서 드래그를 시작할 때 Cmd/Ctrl을 누르고 있으면 활성 아트보드에만 안내선을 만들고, 아트보드 도구에서는 캔버스 전체의 안내선을 만듭니다.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	격자의 색상입니다. 주 격자선 사이의 선은 이 색상의 더 옅은 색조로 그려집니다.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	격자를 선으로, 또는 주 격자선을 따라 각 세분 위치에 점으로 그립니다.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	열려 있는 모든 문서와 새 문서의 주 격자선 간격입니다. VectorCraft 문서는 저장할 때의 격자로 열립니다.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	각 주 격자 칸을 나누는 수입니다. 확대/축소로 선이 숨겨져도 격자에 스냅은 이 위치에 스냅합니다.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	격자를 아트워크 뒤에 그립니다. 끄면 격자를 아트워크 위에 그립니다.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	픽셀 미리 보기에서 600% 이상으로 확대하면 활성 보기에서 아트워크 위에 문서의 각 픽셀 경계마다 선이 표시됩니다.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	패턴을 편집하는 동안 표시되는 타일 가장자리와 점선 견본 경계의 색상입니다.
 	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
 	Restored documents open unsaved: save them to keep them.	복원된 문서는 저장되지 않은 상태로 열립니다. 보존하려면 저장하세요.

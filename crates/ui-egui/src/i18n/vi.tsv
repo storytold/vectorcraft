@@ -3460,6 +3460,18 @@ mark-style	Japanese	Kiểu Nhật
 	The unit for East Asian type measurements, which no field uses yet.	Đơn vị cho số đo chữ Đông Á, hiện chưa có trường nào dùng.
 	When on, a number typed without a unit into a field in picas is read in points.	Khi bật, số nhập không có đơn vị vào trường tính bằng pica được đọc theo điểm.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Với XML ID, tên đối tượng hiển thị dưới dạng XML ID trong Các lớp, Biến số và Tùy chọn lớp.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Hút thao tác vẽ, di chuyển và co giãn vào các phân chia của lưới, kể cả khi lưới đang ẩn; khi tùy chọn này bật, Hút vào pixel không có tác dụng.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Màu của các đường căn không được chọn; bảng vẽ có Nhãn đường căn vẽ các đường căn của riêng nó bằng màu của nhãn.
+	Draws guides as solid lines or as dots, including the guides already in the document.	Vẽ đường căn dưới dạng đường liền hoặc chấm, kể cả các đường căn đã có trong tài liệu.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	Khi bật, các đường căn bị khóa lúc VectorCraft khởi động; đổi tùy chọn này sẽ khóa hoặc mở khóa chúng ngay, và Hiển thị › Đường căn › Khóa đường căn vẫn đổi được trạng thái khóa.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	Khi bật, giữ Cmd/Ctrl lúc bắt đầu kéo từ thước sẽ tạo đường căn chỉ trên bảng vẽ đang hoạt động, hoặc đường căn cho toàn bộ khung vẽ khi dùng công cụ Bảng vẽ.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	Màu của lưới; các đường nằm giữa những đường lưới chính được vẽ bằng sắc nhạt hơn của màu đó.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	Vẽ lưới dưới dạng đường, hoặc dưới dạng chấm dọc theo các đường lưới chính tại mỗi phân chia.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	Khoảng cách giữa các đường lưới chính trong mọi tài liệu đang mở và trong tài liệu mới; tài liệu VectorCraft mở ra với lưới đã lưu cùng nó.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	Số phần mà mỗi ô lưới chính được chia thành; Hút vào lưới hút vào các phần này, kể cả khi mức thu phóng ẩn các đường của chúng.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	Vẽ lưới phía sau tác phẩm; khi tắt, lưới được vẽ đè lên tác phẩm.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	Trong Xem trước pixel ở mức thu phóng 600% trở lên, chế độ xem đang hoạt động hiện một đường tại cạnh của mỗi pixel tài liệu, đè lên tác phẩm.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Màu của cạnh ô và đường giới hạn mẫu màu nét đứt hiện ra khi bạn chỉnh sửa họa tiết.
 	Reset all preferences to their defaults?	Đặt lại tất cả tùy chọn về mặc định?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Giá trị mặc định được áp dụng khi bạn nhấn OK trong Tùy chọn. Hủy ở đó giữ nguyên các tùy chọn hiện tại của bạn.
 	Restore Recovered Documents	Khôi phục tài liệu đã phục hồi

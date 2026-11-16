@@ -3042,6 +3042,18 @@ digits	Malayalam	Malayalam
 	The unit for East Asian type measurements, which no field uses yet.	Enheten för mått i östasiatisk text, som inget fält använder ännu.
 	When on, a number typed without a unit into a field in picas is read in points.	När det är på läses ett tal som skrivs utan enhet i ett fält i pica i punkter.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Med XML-id visas objektnamn som XML-id:n i Lager, Variabler och Lageralternativ.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Fäster ritande, flyttning och skalning mot rutnätets underindelningar, även när rutnätet är dolt; medan det är på gäller inte Fäst mot pixel.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Färgen på stödlinjer som inte är markerade; en rityta med en stödlinjeetikett ritar sina egna stödlinjer i etikettens färg.
+	Draws guides as solid lines or as dots, including the guides already in the document.	Ritar stödlinjer som heldragna linjer eller som punkter, även stödlinjer som redan finns i dokumentet.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	När det är på är stödlinjerna låsta när VectorCraft startar; att ändra alternativet låser eller låser upp dem direkt, och Visa › Stödlinjer › Lås stödlinjer ändrar fortfarande låsningen.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	När det är på skapar Cmd/Ctrl, nedtryckt i början av en dragning från en linjal, en stödlinje bara på den aktiva ritytan, eller med ritytsverktyget en stödlinje över hela arbetsytan.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	Rutnätets färg; linjerna mellan huvudlinjerna ritas i en blekare nyans av den.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	Ritar rutnätet som linjer, eller som punkter längs huvudlinjerna vid varje underindelning.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	Avståndet mellan rutnätets huvudlinjer i varje öppet dokument och i nya; ett VectorCraft-dokument öppnas med det rutnät det sparades med.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	Hur många delar varje huvudruta i rutnätet delas i; Fäst mot rutnät fäster mot dessa delar, även när zoomen döljer deras linjer.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	Ritar rutnätet bakom grafiken; av ritas rutnätet ovanpå den.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	I pixelförhandsgranskning vid 600 % zoom eller mer visar den aktiva vyn en linje vid kanten av varje dokumentpixel ovanpå grafiken.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Färgen på rutkanten och de streckade provrutegränserna som visas medan du redigerar ett mönster.
 	Reset all preferences to their defaults?	Återställa alla inställningar till standard?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Standardvärdena verkställs när du klickar på OK i Inställningar. Avbryt där behåller dina nuvarande inställningar.
 	Restore Recovered Documents	Återställ återskapade dokument
