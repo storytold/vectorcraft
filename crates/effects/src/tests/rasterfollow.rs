@@ -1471,3 +1471,44 @@ fn type_with_a_reshaped_fill_keeps_one_shadow_around_its_copies() {
     }));
     assert_eq!(crate::outer_effects(&filled).len(), 2);
 }
+
+/// Type whose own fill's Transform effect makes copies is drawn as its outlines, and each copy
+/// carries the shadow listed before that Transform effect, as a path's copies do: for the fill's
+/// first Transform effect and for one listed after a Transform effect with Transform Patterns on.
+/// Drawn, expanded and baked.
+#[test]
+fn type_carries_its_fills_shadow_on_each_copy() {
+    let filled = |mut n: Node, effects: Vec<Effect>| {
+        n.appearance.items.push(vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer {
+            effects,
+            ..vectorcraft_doc::FillLayer::new(Paint::solid(Color::BLACK))
+        }));
+        n
+    };
+    let copying = vec![shadow(10.0, 0.0, 0.0), transform(json!({"moveH": 100, "copies": 1}))];
+    if !crate::outline_text(&type_node(95, vec![])).is_some_and(|o| paths_in(&o) > 0) {
+        eprintln!("type skipped: built without fonts (enable vectorcraft-text's bundled-fonts to run it)");
+        return;
+    }
+    let later = vec![transform(json!({"patterns": true})), shadow(10.0, 0.0, 0.0), transform(json!({"moveH": 100, "copies": 1}))];
+    for (what, effects) in [("first", copying), ("later", later)] {
+        let n = filled(type_node(95, vec![]), effects);
+        for (how, art) in
+            [("drawn", crate::reshape(None, &n, None)), ("expanded", expand_outlined(None, &n, None)), ("baked", Some(baked(n.clone())))]
+        {
+            let art = art.unwrap_or_else(|| panic!("{what}: {how}"));
+            assert!(near(&shadows_in(&art), &[(10.0, 0.0), (10.0, 0.0)]), "{what}: {how} {:?}", shadows_in(&art));
+            // The two shadows are on two objects 100 pt apart: the type and its copy.
+            let mut lefts = vec![];
+            art.walk(&mut |m| {
+                let lists = std::iter::once(&m.appearance.effects).chain(m.appearance.items.iter().map(|i| i.effects()));
+                let shadows = lists.map(|l| l.iter().filter(|e| e.id == "stylize.dropShadow").count()).sum::<usize>();
+                if let Some(b) = m.geometric_bounds() {
+                    lefts.extend(std::iter::repeat_n(b.x0, shadows));
+                }
+            });
+            lefts.sort_by(f64::total_cmp);
+            assert!(lefts.len() == 2 && (lefts[1] - lefts[0] - 100.0).abs() < 1e-6, "{what}: {how} {lefts:?}");
+        }
+    }
+}
