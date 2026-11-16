@@ -370,7 +370,7 @@ type ClippedLeaf = (Node, Option<Arc<Clip>>);
 
 /// [`pf_leaves`], each with the region the clip groups it is in show it through (#8093). A clip
 /// group's clipping path is not a leaf, and the members of one whose clipping path clips by nothing
-/// are hidden, as on the canvas, and left out.
+/// are hidden, as on the canvas: their region is empty.
 fn clipped_pf_leaves(d: &Document, n: &Node, clip: Option<&Arc<Clip>>, precision: f64, out: &mut Vec<ClippedLeaf>) -> Result<()> {
     let (NodeKind::Group { children, clip: clips } | NodeKind::Layer { children, clip: clips, .. }) = &n.kind else {
         let mut lv = vec![];
@@ -387,12 +387,14 @@ fn clipped_pf_leaves(d: &Document, n: &Node, clip: Option<&Arc<Clip>>, precision
         return children.iter().try_for_each(|c| clipped_pf_leaves(d, c, clip, precision, out));
     }
     let Some((first, rest)) = children.split_first() else { return Ok(()) };
-    let Some((outline, rule)) = vectorcraft_render::effects::clip_outline(first) else { return Ok(()) };
-    let mut region = Clip { path: PathData::from_bezpath(&outline), rule };
+    let mut region = match vectorcraft_render::effects::clip_outline(first) {
+        Some((outline, rule)) => Clip { path: PathData::from_bezpath(&outline), rule },
+        None => Clip { path: PathData::default(), rule: FillRule::NonZero },
+    };
     if has_invalid_coordinates(&region.path) {
         return Err(EngineError::Other("paths contain invalid coordinates".into()));
     }
-    if let Some(outer) = clip {
+    if let Some(outer) = clip.filter(|_| !region.path.is_empty()) {
         let path = po::try_boolean(&region.path, region.rule, &outer.path, outer.rule, BoolOp::Intersect, precision)
             .map_err(|e| EngineError::Other(e.to_string()))?;
         region = Clip { path, rule: FillRule::NonZero };

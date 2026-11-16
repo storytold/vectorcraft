@@ -283,3 +283,29 @@ fn a_hidden_operand_is_an_empty_shape_where_it_changes_the_result() {
         assert!(ps.iter().all(|p| p.0 != Paint::solid(green())), "{op}: the hidden group's style: {ps:?}");
     }
 }
+
+/// A clip group whose clipping path clips by nothing (here an empty group) hides its members, as on
+/// the canvas: they are a hidden operand too, not left out of the selection.
+#[test]
+fn a_clipping_path_that_clips_by_nothing_hides_the_members() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0, red());
+    let b = rect(&mut s, 50.0, 50.0, 100.0, 100.0, blue());
+    let m1 = rect(&mut s, 300.0, 300.0, 100.0, 100.0, green());
+    let m2 = rect(&mut s, 450.0, 300.0, 100.0, 100.0, green());
+    let mask = rect(&mut s, 300.0, 300.0, 300.0, 100.0, green());
+    let g = clip(&mut s, &[m1, m2, mask]);
+    s.edit("empty clipping path", |d, _| {
+        let empty = vectorcraft_doc::Node::group(d.alloc_id(), vec![]);
+        let NodeKind::Group { children, .. } = &mut d.node_mut(g).unwrap().kind else { panic!("not a group") };
+        children[0] = std::sync::Arc::new(empty);
+        Ok(())
+    })
+    .unwrap();
+    select(&mut s, &[a, b, g]);
+    let e = s.execute("object.pathfinder.intersect", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("empty result"), "not the squares' overlap: {e}");
+    select(&mut s, &[g]);
+    let e = s.execute("object.pathfinder.divide", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("clipping masks hide"), "{e}");
+}
