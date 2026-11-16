@@ -1128,6 +1128,40 @@ fn a_drag_released_on_a_floating_windows_title_bar_or_after_escape_changes_nothi
 }
 
 #[test]
+fn a_tab_transfer_whose_source_changed_drops_nothing_in_a_floating_window() {
+    let ctx = egui::Context::default();
+    let mut app = floating_pair(&ctx);
+    app.run("file.new", json!({"width": 400, "height": 300, "name": "Third"})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.select_tool("selection");
+    app_frame(&mut app, &ctx, vec![]);
+    let tab = tab_at(&frame(&mut app, &ctx, vec![]), "Third");
+    grab(&mut app, &ctx, vectorcraft_geom::Point::new(325.0, 255.0));
+    // Held over the third document's tab, the drag becomes a transfer to that document.
+    app_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(tab)]);
+    for _ in 0..60 {
+        if app.session.active_index() == Some(2) {
+            break;
+        }
+        app_frame(&mut app, &ctx, vec![]);
+    }
+    assert_eq!(app.session.active_index(), Some(2), "the tab hover switched documents");
+    let drop = in_noted(&app, (1, 1), vectorcraft_geom::Point::new(200.0, 150.0));
+    app_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(drop)]);
+    // The source changes between frames, as a command from the control channel would change it.
+    app.session.set_active(0);
+    app.session.execute("shape.ellipse", &json!({"x": 20, "y": 20, "width": 30, "height": 30})).unwrap();
+    app.session.set_active(2);
+    let target = app.session.documents()[1].doc.clone();
+    let target_undo = app.session.documents()[1].history.undo.len();
+    app_frame(&mut app, &ctx, vec![button(drop, false)]);
+    app_frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.session.documents()[1].doc, target, "the floating window's document does not take the changed art");
+    assert_eq!(app.session.documents()[1].history.undo.len(), target_undo);
+    assert_eq!(app.session.active_index(), Some(2), "the window does not become current");
+}
+
+#[test]
 fn an_os_windows_pane_is_not_a_place_to_release_art_in_the_main_windows_points() {
     let _host = native_host();
     let ctx = egui::Context::default();
