@@ -3904,11 +3904,11 @@ mark-style	Japanese	Japán
 	Filter Layers Panel Rows	Rétegek panel sorainak szűrése
 @msg	`Custom` stands for changed settings: save the preset under another name	a `Custom` a módosított beállításokat jelöli: mentsd az előbeállítást más néven
 @msg	`{key}` must be an array of these names: {_1}	`{key}`: ezen nevek tömbje kell: {_1}
-	Search commands	Parancsok keresése
 	Search commands and tools	Parancsok és eszközök keresése
 	Search commands and tools…	Parancsok és eszközök keresése…
 	Recent Commands	Legutóbbi parancsok
 	No recent commands	Nincsenek legutóbbi parancsok
+	Search commands	Parancsok keresése
 	Search Commands…	Parancsok keresése…
 	Search Fonts Folder	Keresés betűtípusmappában
 	Searching…	Keresés…

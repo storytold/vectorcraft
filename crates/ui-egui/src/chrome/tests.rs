@@ -161,7 +161,7 @@ fn hints_name_keys_as_the_menus_do() {
 
 /// The widths of the app bar's right-hand group used by the fitting tests.
 fn right_widths(room: f32, safe_mode: bool) -> super::RightWidths {
-    super::RightWidths { room, safe_mode, switcher: 150.0, field: 170.0, icon: 28.0, gap: 8.0, discord: 80.0 }
+    super::RightWidths { room, safe_mode, switcher: 150.0, field: 170.0, icon: 28.0, gap: 8.0, community: 80.0 }
 }
 
 /// What the group shows, in words, with the switcher's width as full, narrower or minimal.
@@ -172,10 +172,10 @@ fn right_stage(g: &super::RightGroup) -> String {
         w if w > super::MIN_SWITCHER => "narrower switcher",
         _ => "minimal switcher",
     };
-    format!("discord {}, learn {}, {:?}, {switcher}", g.discord, g.learn, g.search)
+    format!("community {}, learn {}, {:?}, {switcher}", g.community, g.learn, g.search)
 }
 
-/// As the app bar's room runs short, Discord goes first, then Explore tutorials, then the search
+/// As the app bar's room runs short, the community button goes first, then Explore tutorials, then the search
 /// field becomes the icon, then the workspace switcher narrows to its minimum, then the icon goes.
 /// Whatever shows fits in the room, down to the minimal switcher alone.
 #[test]
@@ -194,34 +194,33 @@ fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
             super::Search::Hidden => 0.0,
         };
         let learn = if g.learn { w.gap + w.icon } else { 0.0 };
-        let discord = if g.discord { 10.0 + w.gap + w.discord } else { 0.0 };
-        let used = g.switcher_w + 8.0 + search + learn + discord;
+        let community = if g.community { 10.0 + w.gap + w.community } else { 0.0 };
+        let used = g.switcher_w + 8.0 + search + learn + community;
         assert!(used <= room || g.switcher_w == super::MIN_SWITCHER && g.search == super::Search::Hidden, "{room}: {g:?} needs {used}");
     }
     assert_eq!(
         stages,
         [
-            "discord true, learn true, Field, full switcher",
-            "discord false, learn true, Field, full switcher",
-            "discord false, learn false, Field, full switcher",
-            "discord false, learn false, Icon, full switcher",
-            "discord false, learn false, Icon, narrower switcher",
-            "discord false, learn false, Icon, minimal switcher",
+            "community true, learn true, Field, full switcher",
+            "community false, learn true, Field, full switcher",
+            "community false, learn false, Field, full switcher",
+            "community false, learn false, Icon, full switcher",
+            "community false, learn false, Icon, narrower switcher",
+            "community false, learn false, Icon, minimal switcher",
             // Once the icon has gone, the switcher takes the room it leaves.
-            "discord false, learn false, Hidden, narrower switcher",
-            "discord false, learn false, Hidden, minimal switcher",
+            "community false, learn false, Hidden, narrower switcher",
+            "community false, learn false, Hidden, minimal switcher",
         ]
     );
     // In Safe Mode the label's width is taken first (not counted in `room`), and the switcher goes
     // when a minimal one does not fit.
     let safe = |room| right_stage(&super::fit_right_group(&right_widths(room, true)));
-    assert_eq!(safe(700.0), "discord true, learn true, Field, full switcher");
-    assert_eq!(safe(72.0), "discord false, learn false, Hidden, minimal switcher");
-    assert_eq!(safe(71.0), "discord false, learn false, Hidden, no switcher");
+    assert_eq!(safe(700.0), "community true, learn true, Field, full switcher");
+    assert_eq!(safe(72.0), "community false, learn false, Hidden, minimal switcher");
+    assert_eq!(safe(71.0), "community false, learn false, Hidden, no switcher");
 }
 
-/// What screen readers call the app bar's search field, before its shortcut, and how the collapsed
-/// icon's name starts.
+/// What screen readers call the app bar's search field, and the icon it becomes, before the shortcut.
 const SEARCH_NAME: &str = "Search commands";
 
 /// A native menu bar that draws nothing.
@@ -429,6 +428,32 @@ fn a_click_on_the_search_field_opens_the_palette() {
         bar.app.ui.dialog = Some(crate::state::Dialog::new("about", json!({})));
         bar.click(at);
         assert!(!bar.app.ui.palette_open, "not over a dialog (icon: {icon})");
+    }
+}
+
+/// The icon a narrow bar shows has the field's screen-reader name, and while a dialog is open screen
+/// readers find the field and the icon disabled.
+#[test]
+fn the_search_icon_has_the_fields_name_and_both_are_disabled_under_a_dialog() {
+    let shortcut = crate::menus::shown_shortcut("Cmd+Shift+/");
+    for icon in [false, true] {
+        let mut bar = AppBar::new(1400.0);
+        if icon {
+            let narrow = (300..1400).rev().step_by(10).find(|w| {
+                bar.width = *w as f32;
+                bar.search().is_some_and(|s| s.rect.width() == 28.0)
+            });
+            assert!(narrow.is_some(), "a narrow bar shows the icon");
+        }
+        let disabled = |bar: &mut AppBar| {
+            bar.frame(vec![]);
+            let nodes = bar.frame(vec![]).0;
+            let node = nodes.iter().find(|n| n.label().is_some_and(|l| l.starts_with(SEARCH_NAME))).expect("the search control shows");
+            (node.label().unwrap_or_default().to_string(), node.is_disabled())
+        };
+        assert_eq!(disabled(&mut bar), (format!("{SEARCH_NAME}  ({shortcut})"), false), "icon: {icon}");
+        bar.app.ui.dialog = Some(crate::state::Dialog::new("about", json!({})));
+        assert_eq!(disabled(&mut bar), (format!("{SEARCH_NAME}  ({shortcut})"), true), "icon: {icon}");
     }
 }
 

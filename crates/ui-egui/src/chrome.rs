@@ -108,9 +108,9 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 field: field.width,
                 icon: BAR_ICON,
                 gap: ui.spacing().item_spacing.x,
-                discord: crate::community::discord_width(ui, false),
+                community: crate::community::discord_width(ui, false),
             });
-            let (switcher, ws_w, learn, discord) = (fit.switcher, fit.switcher_w, fit.learn, fit.discord);
+            let (switcher, ws_w, learn, discord) = (fit.switcher, fit.switcher_w, fit.learn, fit.community);
             let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
             let ui = &mut rui;
             // Workspace switcher: shows the current workspace, opens Window → Workspace.
@@ -136,14 +136,21 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             };
             let tip = with_shortcut(tl!("Search commands and tools"));
             let name = with_shortcut(tl!("Search commands"));
-            let clicked = match fit.search {
-                Search::Field => field.show(ui, &t, &name, &tip, app.ui.palette_open).clicked(),
-                Search::Icon => widgets::icon_button(ui, "search", &tip, app.ui.palette_open, BAR_ICON).clicked(),
-                Search::Hidden => false,
-            };
             // The field and the icon toggle the palette as its shortcut does, and like the shortcut
-            // they do nothing while a dialog is open.
-            if clicked && app.ui.dialog.is_none() {
+            // they do nothing while a dialog is open, so they are drawn disabled then.
+            let enabled = app.ui.dialog.is_none();
+            let open = app.ui.palette_open;
+            let clicked = ui
+                .add_enabled_ui(enabled, |ui| match fit.search {
+                    Search::Field => field.show(ui, &t, &name, &tip, open).clicked(),
+                    Search::Icon => {
+                        let (_, resp) = ui.allocate_exact_size(vec2(BAR_ICON, BAR_ICON), Sense::click());
+                        widgets::paint_icon_button_named(ui, resp, "search", &name, &tip, open).clicked()
+                    }
+                    Search::Hidden => false,
+                })
+                .inner;
+            if clicked && enabled {
                 app.ui.palette_open = !app.ui.palette_open;
                 app.ui.palette_query.clear();
             }
@@ -195,24 +202,33 @@ enum Search {
 struct RightWidths {
     /// The room after the menus, less the Safe Mode label's.
     room: f32,
+    /// Whether the bar shows the Safe Mode label.
     safe_mode: bool,
     /// The workspace switcher's full width.
     switcher: f32,
     /// The search field's width.
     field: f32,
+    /// The side of a square icon button.
     icon: f32,
+    /// The space between two controls.
     gap: f32,
-    discord: f32,
+    /// The community button's width.
+    community: f32,
 }
 
 /// What the right-hand group of the app bar shows.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct RightGroup {
+    /// Whether the workspace switcher shows.
     switcher: bool,
+    /// The workspace switcher's width.
     switcher_w: f32,
+    /// How the search shows.
     search: Search,
+    /// Whether Explore tutorials shows.
     learn: bool,
-    discord: bool,
+    /// Whether the community button shows.
+    community: bool,
 }
 
 /// The right-hand group for the room it has. As the room runs short, the community button goes first
@@ -240,8 +256,8 @@ fn fit_right_group(w: &RightWidths) -> RightGroup {
     let switcher_w = w.switcher.min(room - 8.0 - search_w).max(MIN_SWITCHER);
     let learn_end = switcher_w + 8.0 + search_w + w.gap + w.icon;
     let learn = field && room >= learn_end;
-    let discord = learn && room >= learn_end + 10.0 + w.gap + w.discord;
-    RightGroup { switcher, switcher_w, search, learn, discord }
+    let community = learn && room >= learn_end + 10.0 + w.gap + w.community;
+    RightGroup { switcher, switcher_w, search, learn, community }
 }
 
 /// The app bar's search field: a button drawn as a field. The command palette's popup holds the
