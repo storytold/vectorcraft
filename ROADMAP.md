@@ -24,7 +24,7 @@ blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 
 | | Value | Kind |
 |---|---|---|
-| **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 348/375 wired (92.8%), tools 89/92, Illustrator effects 46/50, Photoshop effects 57/57, 3D 4/4 (initial types, no materials) |
+| **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 717/719 wired (99.7%), tools 89/92, Illustrator effects 46/50, Photoshop effects 57/57, 3D 4/4 (initial types, no materials) |
 | **Feature depth** (weighted by use, scored by behaviour) | **~75%** | estimated |
 | **To beta** | **~170–270 h** one agent · ~50–80 h with 4–6 agents | estimated |
 | **To full parity** | **~360–590 h** one agent · ~95–165 h with 4–6 agents | estimated |
@@ -102,14 +102,14 @@ Weights, evidence and the missing items per area: [target-app-parity.md](docs/ta
 | Arabic | `ar` | none (no right-to-left interface) | 0% |
 | French | `fr` | full | 100% |
 | Portuguese (Brazil) | `pt-br` | full | 100% |
-| Indonesian | `id` | none | 0% |
+| Indonesian | `id` | 6,947 catalog rows; status and error messages partial | most dialogs and tooltips |
 | Japanese | `ja` | full | 100% |
 | German | `de` | full | 98% |
 | Korean | `ko` | full | 100% |
 | Bosnian | `bs` | full (AI-assisted, native review pending) | 100% |
 | Vietnamese | `vi` | full | 100% |
 
-Also shipped: Traditional Chinese (partial, 80%), Bulgarian, Finnish, Greek, Hungarian, Italian, Polish, Russian, Swedish, Ukrainian and Georgian (full), Catalan (full; AI-drafted, native review welcome), Czech (catalog complete; render-site gaps reduced; native review pending).
+Also shipped: Traditional Chinese (partial, 80%), Bulgarian, Finnish, Greek, Hungarian, Italian, Polish, Russian, Swedish, Ukrainian, Georgian, Dutch, Danish and Turkish (full), Catalan (full; AI-drafted, native review welcome), Czech (catalog complete; render-site gaps reduced; native review pending).
 The Georgian catalog has had a native speaker's review; no other catalog has. Details: [localization-parity.md](docs/localization-parity.md).
 
 ## Upcoming

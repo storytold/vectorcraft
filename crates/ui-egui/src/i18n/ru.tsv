@@ -652,6 +652,18 @@ font-technology	Variable	Вариативные
 	Copy Width Point	Копировать точку ширины
 	Copyright	Copyright
 	Copyright Info URL:	URL информации об авторских правах:
+	Save Metadata Template…	Сохранить шаблон метаданных…
+	Import Options	Параметры импорта
+	Clear existing fields and use the template's	Очистить существующие поля и использовать поля шаблона
+	Keep existing fields, but replace those the template has	Сохранить существующие поля, но заменить те, что есть в шаблоне
+	Keep existing fields, but append those the template has	Сохранить существующие поля, но добавить те, что есть в шаблоне
+@msg	the template name can't be empty	имя шаблона не может быть пустым
+@msg	the template name isn't usable as a file name	имя шаблона нельзя использовать как имя файла
+@msg	no metadata templates folder here	здесь нет папки шаблонов метаданных
+@msg	give `name` or `path`, not both	укажите `name` или `path`, но не оба
+@msg	give one of `path`, `name` and `data`	укажите один из параметров `path`, `name` и `data`
+@msg	mode must be replace, keep or append	режим должен быть replace, keep или append
+@msg	the file is not an XMP metadata template	файл не является шаблоном метаданных XMP
 	Copyright Notice:	Уведомление об авторских правах:
 	Copyright Status:	Статус авторских прав:
 	Copyright Symbol	Символ авторского права
@@ -1194,6 +1206,7 @@ font-technology	Variable	Вариативные
 	Highlight Size	Размер блика
 	Blend Steps	Шаги перехода
 	Shading Color	Цвет затенения
+	Black Overprint	Чёрный с наложением
 	Draw Hidden Faces	Рисовать скрытые грани
 	Eyedropper	Пипетка
 	Sample Color from Screen	Взять цвет с экрана
@@ -1442,6 +1455,8 @@ file-filter	Templates	Шаблоны
 	Graph	Диаграмма
 	Graph Data	Данные диаграммы
 	Graph Type	Тип диаграммы
+	Graph Type…	Тип диаграммы…
+	Graph Data…	Данные диаграммы…
 	Graph Options	Параметры диаграммы
 	Left Axis	Левая ось
 	Right Axis	Правая ось
@@ -3057,6 +3072,12 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивный
 	Restore	Восстановить
 	Restore every preference to its default (applied on OK)	Восстановить все настройки по умолчанию (применяется при нажатии ОК)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Единица новых документов встроенных размеров, кроме размеров в пикселях, и открытых файлов без записанной единицы; если выбрать её здесь и нажать ОК, она станет и единицей активного документа.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Толщина обводки, штрихи и зазоры показываются в этой единице, и введённые для них числа читаются в ней.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Размеры текста, интерлиньяж и смещение базовой линии показываются в этой единице, и введённые для них числа читаются в ней.
+	The unit for East Asian type measurements, which no field uses yet.	Единица для размеров восточноазиатского текста, которую пока не использует ни одно поле.
+	When on, a number typed without a unit into a field in picas is read in points.	Если включено, число, введённое без единицы в поле в пиках, читается в пунктах.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	При XML ID имена объектов показываются как XML ID в «Слоях», «Переменных» и «Параметрах слоя».
 	Reset all preferences to their defaults?	Сбросить все настройки до значений по умолчанию?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Значения по умолчанию применяются, когда вы нажимаете ОК в окне «Настройки». Отмена там сохраняет текущие настройки.
 	Restore Recovered Documents	Восстановить восстановленные документы
@@ -3090,6 +3111,7 @@ digits	Malayalam	Малаялам
 	Roman Hanging Punctuation	Римская висячая пунктуация
 	Korean Line Break Anywhere	Перенос корейского текста в любом месте
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Параметры восточноазиатского набора
 	Korean Composition Settings	Параметры корейского набора
 	Rotate	Повернуть
@@ -3698,6 +3720,9 @@ digits	Malayalam	Малаялам
 	Show Import Options	Показывать параметры импорта
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Запрашивать параметры импорта каждого файла PDF, DXF или текстового файла перед помещением; если выключено, используются последние выбранные параметры
 	Stylistic Alternates	Стилистические альтернативы
+	Ligatures	Лигатуры
+	Ornaments	Орнаменты
+	Figures	Цифры
 	Swash	Росчерк
 	Swatch Conflict	Конфликт образцов
 	Swatch Conflicts	Конфликты образцов
@@ -4518,6 +4543,27 @@ axis	Both	Оба
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: диалоговое окно не может открыться внутри обратного вызова встроенной функции, геттера, преобразования или файла, который выполняет $.evalFile; вызовите его из собственного кода скрипта
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: следующий ответ в `answers` предназначен для {_1}, а не для {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: в `answers` не осталось ответа для этого диалогового окна
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	В `answers` остался {n} ответ, который скрипт не использовал|В `answers` осталось {n} ответа, которые скрипт не использовал|В `answers` осталось {n} ответов, которые скрипт не использовал
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} оставил без изменений {n} объект под кистью ({_2}): он изменяет только контуры|{_1} оставил без изменений {n} объекта под кистью ({_2}): он изменяет только контуры|{_1} оставил без изменений {n} объектов под кистью ({_2}): он изменяет только контуры
+liquify-tool	Warp	Инструмент «Деформация»
+liquify-tool	Twirl	Инструмент «Закручивание»
+liquify-tool	Pucker	Инструмент «Сморщивание»
+liquify-tool	Bloat	Инструмент «Раздувание»
+liquify-tool	Scallop	Инструмент «Фестоны»
+liquify-tool	Crystallize	Инструмент «Кристаллизация»
+liquify-tool	Wrinkle	Инструмент «Морщины»
+liquify-kind	graphs	диаграммы
+liquify-kind	type	текст
+liquify-kind	symbols	символы
+liquify-kind	images	изображения
+liquify-kind	meshes	сетки
+liquify-kind	envelopes	оболочки
+liquify-kind	repeats	повторы
+liquify-kind	placed documents	размещённые документы
+liquify-kind	blends	переходы
+liquify-list-two	{0}, {1}	{0} и {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} и {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} слишком велик для скрипта
 @msg	vc.log: the log of this run is full	vc.log: журнал этого запуска заполнен
 @msg	this function's script run has ended	запуск скрипта этой функции завершён
@@ -5172,6 +5218,8 @@ axis	Both	Оба
 @msg	unknown option `{path}.{k}`	неизвестный параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	неизвестные наложения `{o}` (preserve, simulate или discard)
 @msg	unknown panel `{raw}`	неизвестная панель `{raw}`
+@msg	`{panel}` has no display sizes to cycle	у панели `{panel}` нет размеров отображения для переключения
+@msg	the panels are not shown	панели не показаны
 @msg	panels can't be shown in Presentation Mode	в режиме презентации панели показать нельзя
 @msg	unknown preference `{key}`	неизвестная настройка `{key}`
 @msg	Preferences imported.	Настройки импортированы.
@@ -5549,6 +5597,7 @@ axis	Both	Оба
 	Change Panel Layout	Изменить расположение панелей
 	Close Panel	Закрыть панель
 	Collapse Panel Group	Свернуть группу панелей
+	Cycle Display Sizes	Переключить размеры отображения
 	Move Panel	Переместить панель
 	Group with	Сгруппировать с
 	Resize panels	Изменить размер панелей
@@ -5908,6 +5957,7 @@ lighting	Light	Свет
 	Export Data Sets…	Экспортировать наборы данных…
 	Load Variable Library…	Загрузить библиотеку переменных…
 	Save Variable Library…	Сохранить библиотеку переменных…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	«Импорт» читает файл источника данных с расширением .csv, .tsv, .txt или .xml
 @msg	a variable library holds text variables, and the document has none	библиотека переменных содержит текстовые переменные, а в документе их нет
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	переменную `{name}` нельзя сохранить в библиотеке переменных: переименуйте её так, чтобы имя начиналось с буквы или `_` и не содержало пробелов и символов, кроме `-`, `_` и `.`
 @msg	{k} has control characters	{k} содержит управляющие символы

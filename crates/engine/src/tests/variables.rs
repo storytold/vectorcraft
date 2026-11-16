@@ -2420,6 +2420,69 @@ fn a_variable_library_defines_text_variables_and_data_sets() {
     assert_eq!(s.doc().unwrap().doc.variables.datasets.len(), 2);
 }
 
+/// The Variables panel's Import… reads a data source by its extension, in any case: a .csv, .tsv
+/// or .txt file as Import Data Sets… reads it, and an .xml file as Load Variable Library… reads it.
+/// Any other extension, or none, is refused before the file is read.
+#[test]
+fn variable_import_reads_a_data_source_by_its_extension() {
+    let dir = Folder::new("vars-import");
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+
+    for name in ["rows.csv", "rows.TSV", "rows.txt"] {
+        let path = dir.file(name);
+        write(&path, b"Name\nAnn\nBob\n");
+        let r = s.execute("variable.import", &json!({"path": path})).unwrap();
+        assert_eq!((r["format"].clone(), r["names"].clone()), (json!("csv"), json!(["Data Set 1", "Data Set 2"])), "{name}");
+    }
+    s.execute("dataset.select", &json!({"name": "Data Set 2"})).unwrap();
+    assert_eq!(plain(&s, t), "Bob");
+
+    let xml = r#"<variableSets><variableSet><variables><variable varName="Name" trait="textcontent"/></variables><sampleDataSets><sampleDataSet dataSetName="Row 1"><Name><p>Charlie</p></Name></sampleDataSet></sampleDataSets></variableSet></variableSets>"#;
+    let path = dir.file("library.Xml");
+    write(&path, xml.as_bytes());
+    let r = s.execute("variable.import", &json!({"path": path})).unwrap();
+    assert_eq!((r["format"].clone(), r["names"].clone(), r["deleted"].clone()), (json!("xml"), json!(["Row 1"]), json!([])));
+    // The library declares the bound text variable, so its binding stays.
+    s.execute("dataset.select", &json!({"name": "Row 1"})).unwrap();
+    assert_eq!(plain(&s, t), "Charlie");
+
+    // The extension picks the reader: CSV text in an .xml file goes to the library reader, which
+    // refuses it, and a library in a .csv file goes to the CSV reader.
+    let csv_in_xml = dir.file("rows.xml");
+    write(&csv_in_xml, b"Name\nAnn\n");
+    let e = s.execute("variable.import", &json!({"path": csv_in_xml})).unwrap_err().to_string();
+    assert!(e.contains("variable.loadLibrary"), "{e}");
+    let xml_in_csv = dir.file("library.csv");
+    write(&xml_in_csv, xml.as_bytes());
+    let e = s.execute("variable.import", &json!({"path": xml_in_csv})).unwrap_err().to_string();
+    assert!(e.contains("dataset.import"), "{e}");
+
+    // Other extensions, or none, are refused before the file is read, so a missing file gives the
+    // same error; the data sets stay as they were.
+    let refused = "Import reads a data source file ending in .csv, .tsv, .txt or .xml";
+    for (name, exists) in [("rows.json", true), ("rows", true), ("rows.csv.bak", true), ("missing.ai", false)] {
+        let path = dir.file(name);
+        if exists {
+            write(&path, b"Name\nAnn\n");
+        }
+        let e = s.execute("variable.import", &json!({"path": path})).unwrap_err().to_string();
+        assert!(e.contains(refused), "{name}: {e}");
+    }
+    let names: Vec<String> = s.doc().unwrap().doc.variables.datasets.iter().map(|d| d.name.clone()).collect();
+    assert_eq!(names, ["Row 1"]);
+
+    // `path` is required, and the command takes no other parameter.
+    for bad in [json!({}), json!({"path": 3})] {
+        let e = s.execute("variable.import", &bad).unwrap_err().to_string();
+        assert!(e.contains("missing `path`"), "{bad}: {e}");
+    }
+    let e = s.execute("variable.import", &json!({"path": dir.file("rows.csv"), "csv": "Name\nX\n"})).unwrap_err().to_string();
+    assert!(e.contains("unknown parameter `csv`"), "{e}");
+}
+
 /// Load Variable Library replaces the document's variables and data sets: every variable goes with
 /// its bindings and values, a variable of another kind with a library variable's name included,
 /// and every data set goes, the active one included. A text variable the library also declares
@@ -2665,6 +2728,11 @@ fn malformed_variable_libraries_are_refused() {
     let long_graph = format!("<Shown><data><values>{}</values></data></Shown>", row.repeat(2_000));
     let cases = [
         ("not well-formed XML", "<variableSets><variableSet>".to_string()),
+        ("not well-formed XML", ok.replace("<p>x</p>", "<p>A&missing;B</p>")),
+        ("not well-formed XML", ok.replace("</variableSets>", "")),
+        ("not well-formed XML", ok.replace("varName=\"Name\"", "varName=\"Name\" varName=\"Other\"")),
+        ("not well-formed XML", ok.replace("<variable ", "<variable xmlns:a=\"urn:test\" xmlns:b=\"urn:test\" a:id=\"1\" b:id=\"2\" ")),
+        ("missing `varName`", ok.replace("varName=\"Name\"", "xmlns:m=\"urn:metadata\" m:varName=\"Name\"")),
         ("no `variableSets` element", "<svg><variables/></svg>".to_string()),
         ("declares no variables", "<variableSets><variableSet><variables/></variableSet></variableSets>".to_string()),
         ("is declared twice", library(&[("Name", "textcontent"), ("Name", "textcontent")], &[])),
@@ -3543,6 +3611,17 @@ fn variable_sort_orders_the_list_by_each_column() {
         assert_eq!(listed_names(&mut s), reversed, "{by}, descending");
         assert_eq!(s.execute("variable.list", &json!({})).unwrap()["sort"], json!({"by": by, "descending": true}));
     }
+}
+
+#[test]
+fn variable_library_attributes_keep_their_namespace() {
+    let mut s = session();
+    let xml = library(&[("Name", "textcontent")], &[("A", &[("Name", &["x"])])])
+        .replace("varName=\"Name\"", "xmlns:m=\"urn:metadata\" m:varName=\"Other\" varName=\"Name\"");
+    let loaded = s.execute("variable.loadLibrary", &json!({"xml": xml})).unwrap();
+    assert_eq!(loaded["variables"], json!(["Name"]));
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"][0]["values"], json!({"Name": {"text": "x"}}));
 }
 
 /// The sort is panel state: it is not an undo step and does not count as a change to save, and

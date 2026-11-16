@@ -520,6 +520,7 @@
 	Highlight Size	Veličina odsjaja
 	Blend Steps	Koraci prelaza
 	Shading Color	Boja sjenčenja
+	Black Overprint	Crni pretisak
 	Draw Hidden Faces	Crtaj skrivene strane
 	Revolve…	Rotaciono tijelo…
 	Inflate…	Napuhni…
@@ -1015,6 +1016,7 @@
 	Change Panel Layout	Promijeni raspored panela
 	Close Panel	Zatvori panel
 	Collapse Panel Group	Skupi grupu panela
+	Cycle Display Sizes	Mijenjaj veličine prikaza
 	Move Panel	Pomakni panel
 	Group with	Grupiši sa
 	Resize panels	Promijeni veličinu panela
@@ -2035,6 +2037,9 @@ digits	Malayalam	Malajalam
 	Select text to set its OpenType features.	Odaberite tekst da postavite njegove OpenType mogućnosti.
 	Standard Ligatures	Standardne ligature
 	Stylistic Alternates	Stilske alternative
+	Ligatures	Ligature
+	Ornaments	Ornamenti
+	Figures	Brojke
 	Set {n}	Skup {n}
 	Swash	Ukrasni potez
 	Tabular Lining	Tabelarne brojke
@@ -2080,6 +2085,7 @@ digits	Malayalam	Malajalam
 	Roman Hanging Punctuation	Latinična viseća interpunkcija
 	Korean Line Break Anywhere	Prelom korejskog reda bilo gdje
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Postavke istočnoazijske kompozicije
 	Korean Composition Settings	Postavke korejske kompozicije
 	Select a text object to edit its paragraph attributes.	Odaberite tekstualni objekat da uredite njegove atribute pasusa.
@@ -2572,6 +2578,11 @@ digits	Malayalam	Malajalam
 	Author Title:	Titula autora:
 	Author:	Autor:
 	Copyright Info URL:	URL informacija o autorskim pravima:
+	Save Metadata Template…	Sačuvaj predložak metapodataka…
+	Import Options	Opcije uvoza
+	Clear existing fields and use the template's	Obriši postojeća polja i koristi polja iz predloška
+	Keep existing fields, but replace those the template has	Zadrži postojeća polja, ali zamijeni ona koja predložak sadrži
+	Keep existing fields, but append those the template has	Zadrži postojeća polja, ali dodaj ona koja predložak sadrži
 	Copyright Notice:	Obavještenje o autorskim pravima:
 	Copyright Status:	Status autorskih prava:
 	Created:	Kreirano:
@@ -3599,6 +3610,8 @@ theme	Appearance	Izgled
 	Create Graph	Kreiraj grafikon
 	Graph Data	Podaci grafikona
 	Graph Type	Vrsta grafikona
+	Graph Type…	Vrsta grafikona…
+	Graph Data…	Podaci grafikona…
 	Graph Options	Opcije grafikona
 	Left Axis	Lijeva osa
 	Right Axis	Desna osa
@@ -4367,6 +4380,12 @@ font-technology	Variable	Varijabilni
 	Preferences	Postavke
 	Previous	Prethodno
 	Restore every preference to its default (applied on OK)	Vrati svaku postavku na zadanu vrijednost (primjenjuje se na U redu)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Jedinica za nove dokumente ugrađenih veličina, osim onih u pikselima, i za otvorene datoteke bez zapisane jedinice; ako je odaberete ovdje i kliknete U redu, postaje i jedinica aktivnog dokumenta.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Debljine poteza, crtice i razmaci prikazuju se u ovoj jedinici, a brojevi uneseni za njih čitaju se u njoj.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Veličine teksta, prored i pomak osnovne linije prikazuju se u ovoj jedinici, a brojevi uneseni za njih čitaju se u njoj.
+	The unit for East Asian type measurements, which no field uses yet.	Jedinica za mjere istočnoazijskog teksta, koju još nijedno polje ne koristi.
+	When on, a number typed without a unit into a field in picas is read in points.	Kad je uključeno, broj unesen bez jedinice u polje u picama čita se u tačkama.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Uz XML ID nazivi objekata prikazuju se kao XML ID u Slojevima, Varijablama i Opcijama sloja.
 	Reset all preferences to their defaults?	Vratiti sve postavke na zadane vrijednosti?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Zadane vrijednosti primjenjuju se kada kliknete U redu u Postavkama. Otkaži tamo zadržava vaše trenutne postavke.
 	Smaller ↔ Larger	Manje ↔ veće

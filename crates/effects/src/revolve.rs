@@ -297,11 +297,35 @@ fn paint_copies(faces: usize, paint: &Paint) -> usize {
     faces.saturating_mul(4).saturating_mul(paint_bytes(paint))
 }
 
+/// Do Revolve's `options` light its surface with colored lights?
+fn colored(options: &Revolve) -> bool {
+    options.light_color != [1.0; 3] || options.lights.is_some()
+}
+
+/// Do Revolve's `faces` in `paint` lie over an underlay of themselves ([`sealed_run`])? Under
+/// colored lights (`colored`), in a solid color or a gradient, when a face takes a smooth light
+/// ramp ([`crate::lighting::rgb_gradient_art`], [`crate::lighting::gradient_art`],
+/// [`crate::lighting::smooth_paint`]). Not in a gradient with transparent stops: its composed faces
+/// carry its opacity mask, which the underlay does not take ([`crate::lighting::underlay`]).
+fn seals(faces: &[vectorcraft_three_d::Face], paint: &Paint, colored: bool) -> bool {
+    colored
+        && (matches!(paint, Paint::Gradient(_)) || paint.color().is_some())
+        && faces.iter().any(|f| f.rgb_gradient.is_some() || f.light_gradient.is_some())
+        && crate::lighting::opaque_paint(paint).1.is_none()
+}
+
+/// The bytes the copies of `paint` take on Revolve's `faces` ([`paint_copies`]), twice that when the
+/// faces lie over an underlay of themselves ([`seals`]).
+fn surface_copies(faces: &[vectorcraft_three_d::Face], paint: &Paint, colored: bool) -> usize {
+    let copies = paint_copies(faces.len(), paint);
+    if seals(faces, paint, colored) { copies.saturating_mul(2) } else { copies }
+}
+
 /// An error when `path` does not revolve or when its surface in `item`'s paint takes `copies`, the
 /// bytes of an object's paint copies so far, past [`MAX_PAINT_COPIES`].
 fn check_surface(path: &PathData, b: Rect, options: Revolve, item: Option<&AppearanceItem>, copies: &mut usize) -> Result<(), String> {
     let faces = vectorcraft_three_d::revolve(path, b, options)?;
-    *copies = copies.saturating_add(item.map_or(0, |i| paint_copies(faces.len(), &paint_of(i).0)));
+    *copies = copies.saturating_add(item.map_or(0, |i| surface_copies(&faces, &paint_of(i).0, colored(&options))));
     if *copies > MAX_PAINT_COPIES {
         return Err("Revolve paint is too complex for this surface; reduce Segments or simplify the gradient".into());
     }
@@ -439,7 +463,9 @@ fn group_shadow(
 /// with its classic surface, as Extrude & Bevel (Classic) does. Revolve's graphics, with the
 /// symbols of `doc`, are drawn on the faces of the side ([`crate::solids::graphics::surface_parts`]):
 /// a face with a part of a graphic is a group of the face and that part. With `cast`, the sweep
-/// that draws the surface also keeps the faces its shadow is cast from ([`SolidFaces`]).
+/// that draws the surface also keeps the faces its shadow is cast from ([`SolidFaces`]). The last
+/// value is whether the faces go over an underlay of themselves ([`seals`]): the caller seals them
+/// ([`sealed_surface`], [`sealed_runs`]) in the order it draws them.
 #[allow(clippy::too_many_arguments)]
 fn surface(
     doc: Option<&Document>,
@@ -454,7 +480,7 @@ fn surface(
     expand: bool,
     copies: &mut Copies,
     cast: bool,
-) -> Option<(Vec<Drawn>, Node, Option<SolidFaces>)> {
+) -> Option<(Vec<Drawn>, Node, Option<SolidFaces>, bool)> {
     #[cfg(test)]
     crate::solids::SOLIDS_BUILT.with(|n| n.set(n.get() + 1));
     // A loaded file or a profile edited past the limits keeps drawing its source path instead
@@ -474,15 +500,16 @@ fn surface(
         let drawn =
             facets.iter().map(|f| Drawn { depth: f.depth, points: f.contours.first().cloned().unwrap_or_default(), plane: f.plane }).collect();
         let p = merged_params(&fx.id, &fx.params);
-        return Some((drawn, crate::solids::classic::surface(n, facets, &paint, opacity, blend, &p), kept));
+        return Some((drawn, crate::solids::classic::surface(n, facets, &paint, opacity, blend, &p), kept, false));
     }
-    let colored = options.light_color != [1.0; 3] || options.lights.is_some();
+    let colored = colored(&options);
     let (faces, kept) = if cast {
         vectorcraft_three_d::revolve_shadowed(path, b, options).ok().map(|(f, kept)| (f, Some(kept)))?
     } else {
         (vectorcraft_three_d::revolve(path, b, options).ok()?, None)
     };
-    copies.surfaces = copies.surfaces.saturating_add(paint_copies(faces.len(), &paint));
+    let seal = seals(&faces, &paint, colored);
+    copies.surfaces = copies.surfaces.saturating_add(surface_copies(&faces, &paint, colored));
     if copies.surfaces > MAX_PAINT_COPIES {
         return None;
     }
@@ -605,7 +632,62 @@ fn surface(
     let mut group = Node::group(n.id, children);
     group.opacity = opacity;
     group.blend = blend;
-    Some((keys, group, kept))
+    Some((keys, group, kept, seal))
+}
+
+/// Plain `surface` ([`surface`]: a group of its faces) over an underlay of its faces when `seal`
+/// ([`sealed_run`]), keeping the surface's opacity and blending mode.
+fn sealed_surface(id: NodeId, surface: Node, seal: bool) -> Node {
+    let NodeKind::Group { children, clip: false } = &surface.kind else { return surface };
+    let Some(mut out) = seal.then(|| sealed_run(id, children)).flatten() else { return surface };
+    out.opacity = surface.opacity;
+    out.blend = surface.blend;
+    out
+}
+
+/// The faces `run` of one surface, in drawing order, over an underlay of themselves, all clipped
+/// once to the faces' outline, as [`crate::lighting::sealed`] draws them. A face drawn with a part
+/// of a graphic, a group of the face and that part, takes its face's underlay and stays in the
+/// order with its part; the part is cut to its face's outline ([`crate::solids::graphics::surface_parts`]),
+/// so the clip keeps it. `None` when [`crate::lighting::underlay`] does not take the faces.
+fn sealed_run(id: NodeId, run: &[Arc<Node>]) -> Option<Node> {
+    let faces: Vec<Arc<Node>> = run
+        .iter()
+        .map(|face| match &face.kind {
+            NodeKind::Group { children, clip: false } => children.first().cloned(),
+            _ => Some(face.clone()),
+        })
+        .collect::<Option<_>>()?;
+    if faces.is_empty() {
+        return None;
+    }
+    let (clip, mut underlay) = crate::lighting::underlay(id, &faces)?;
+    underlay.extend(run.iter().cloned());
+    Some(Node::new(id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(Node::group(id, underlay))], clip: true }))
+}
+
+/// `faces` in their drawing order, each with the index of its surface. Each run of consecutive
+/// faces of one surface that `seal` takes lies over an underlay of its own faces ([`sealed_run`]),
+/// so no underlay reaches under another surface's faces, as Inflate's surfaces do
+/// (`crate::solids::underlaid_runs`). A run the underlay does not take keeps its faces.
+fn sealed_runs(id: NodeId, faces: Vec<(usize, Arc<Node>)>, seal: impl Fn(usize) -> bool) -> Vec<Arc<Node>> {
+    let mut out = Vec::with_capacity(faces.len());
+    let mut run: Vec<Arc<Node>> = vec![];
+    let mut faces = faces.into_iter().peekable();
+    while let Some((surface, face)) = faces.next() {
+        run.push(face);
+        if faces.peek().is_some_and(|(next, _)| *next == surface) {
+            continue;
+        }
+        match seal(surface).then(|| sealed_run(id, &run)).flatten() {
+            Some(sealed) => {
+                out.push(Arc::new(sealed));
+                run.clear();
+            }
+            None => out.append(&mut run),
+        }
+    }
+    out
 }
 
 /// A face [`surface`] draws: its depth and, for [`crate::solids::surface_order`], its polygon on the
@@ -640,7 +722,8 @@ fn object_surface(
     let b = path.bounds()?;
     let (paint, opacity, blend) = paint_of(item);
     let cast = casts(fx, opacity);
-    surface(doc, n, path, b, rule_options(fx, rule), fx, paint, opacity, blend, expand, copies, cast).map(|(_, art, kept)| (art, kept))
+    surface(doc, n, path, b, rule_options(fx, rule), fx, paint, opacity, blend, expand, copies, cast)
+        .map(|(_, art, kept, seal)| (sealed_surface(n.id, art, seal), kept))
 }
 
 /// The options effect `fx` sweeps the surface of a profile filled with `rule` with: its cut sides
@@ -1066,6 +1149,8 @@ fn group_art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
     let mut surfaces = vec![];
     // The faces each member's surface kept for the shadow, member by member.
     let mut kept = vec![];
+    // Whether each member's faces lie over an underlay of themselves ([`surface`]).
+    let mut seals = vec![];
     let mut opaque = true;
     // The graphics go once, on the side of the member with the longest profile. Without graphics
     // no member is measured for them.
@@ -1084,10 +1169,14 @@ fn group_art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
         let doc = doc.filter(|_| longest == Some(k));
         let cast = casts(fx, opacity * s.opacity);
         let options = Revolve { fill_rule: s.rule, ..options };
-        let (depths, art, faces) = surface(doc, n, &s.path, b, options, fx, paint, opacity, blend, expand, &mut copies, cast)?;
+        let (depths, art, faces, seal) = surface(doc, n, &s.path, b, options, fx, paint, opacity, blend, expand, &mut copies, cast)?;
         surfaces.push((depths, art, s.scopes.as_slice()));
         kept.push(faces);
+        seals.push(seal);
     }
+    // The faces of a member whose surface takes an underlay lie over one, run by run in the one
+    // order of every member's faces ([`sealed_runs`]).
+    let seal = |member: usize| seals.get(member) == Some(&true);
     if surfaces.is_empty() {
         return None;
     }
@@ -1113,7 +1202,7 @@ fn group_art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
         let order = crate::solids::surface_order(faces.iter().map(|(d, ..)| (d.points.as_slice(), d.plane, d.depth)));
         let faces = in_order(faces, &order);
         if opaque {
-            vec![Arc::new(Node::group(n.id, faces.into_iter().map(|(.., face)| face).collect()))]
+            vec![Arc::new(Node::group(n.id, sealed_runs(n.id, faces.into_iter().map(|(_, member, .., face)| (member, face)).collect(), seal)))]
         } else {
             // An opaque member's face goes in the order on its own. The faces of a member with
             // transparency share a run, one group with the opacity and blending mode of its fill or
@@ -1122,6 +1211,8 @@ fn group_art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
             // where one group can't be both behind and in front of another face.
             struct Run<'a> {
                 member: Option<usize>,
+                // The member the faces are of.
+                of: usize,
                 scopes: &'a [Scope],
                 bounds: Rect,
                 faces: Vec<Arc<Node>>,
@@ -1137,12 +1228,12 @@ fn group_art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
                 let paints = opacity > 0.0 && scopes.iter().all(|s| s.opacity > 0.0);
                 let Some(cover) = Coverage::of(&face).filter(|_| paints) else {
                     // A face that paints nothing goes in the order on its own and overlaps nothing.
-                    runs.push(Run { member: None, scopes, bounds: Rect::ZERO, faces: vec![face], cover: vec![], opacity, blend });
+                    runs.push(Run { member: None, of: member, scopes, bounds: Rect::ZERO, faces: vec![face], cover: vec![], opacity, blend });
                     continue;
                 };
                 let masked = masks.get(member).is_some_and(Option::is_some);
                 if opacity >= 1.0 && blend == Default::default() && scopes.is_empty() && !masked {
-                    runs.push(Run { member: None, scopes, bounds: cover.bounds, faces: vec![face], cover: vec![cover], opacity, blend });
+                    runs.push(Run { member: None, of: member, scopes, bounds: cover.bounds, faces: vec![face], cover: vec![cover], opacity, blend });
                     continue;
                 }
                 let mut clear = |r: &Run| {
@@ -1165,24 +1256,49 @@ fn group_art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
                         if let Some(last) = last_run.get_mut(member) {
                             *last = Some(runs.len());
                         }
-                        runs.push(Run { member: Some(member), scopes, bounds: cover.bounds, faces: vec![face], cover: vec![cover], opacity, blend });
+                        runs.push(Run {
+                            member: Some(member),
+                            of: member,
+                            scopes,
+                            bounds: cover.bounds,
+                            faces: vec![face],
+                            cover: vec![cover],
+                            opacity,
+                            blend,
+                        });
                     }
                 }
             }
-            let runs = runs.into_iter().filter_map(|mut r| {
+            // Consecutive faces of opaque members on their own wait in `solo` and go over an
+            // underlay of their member's faces, run by run ([`sealed_runs`]).
+            let mut out: Vec<(&[Scope], Arc<Node>)> = Vec::with_capacity(runs.len());
+            let mut solo: Vec<(usize, Arc<Node>)> = vec![];
+            for mut r in runs {
                 // A face on its own needs a group only for the opacity or blending mode of its fill or stroke.
                 if r.member.is_none() && r.opacity >= 1.0 && r.blend == Default::default() {
-                    return r.faces.pop().map(|face| (r.scopes, face));
+                    let Some(face) = r.faces.pop() else { continue };
+                    if r.scopes.is_empty() && !r.cover.is_empty() {
+                        solo.push((r.of, face));
+                    } else {
+                        out.extend(sealed_runs(n.id, std::mem::take(&mut solo), seal).into_iter().map(|face| (&[][..], face)));
+                        out.push((r.scopes, face));
+                    }
+                    continue;
                 }
-                let mut group = Node::group(n.id, r.faces);
+                out.extend(sealed_runs(n.id, std::mem::take(&mut solo), seal).into_iter().map(|face| (&[][..], face)));
+                let mut group = match r.member.filter(|m| seal(*m)).and_then(|_| sealed_run(n.id, &r.faces)) {
+                    Some(sealed) => sealed,
+                    None => Node::group(n.id, r.faces),
+                };
                 group.opacity = r.opacity;
                 group.blend = r.blend;
                 if let Some(mask) = r.member.and_then(|m| masks.get(m)).cloned().flatten() {
                     group.extras_mut().mask = Some(mask);
                 }
-                Some((r.scopes, Arc::new(group)))
-            });
-            scoped(n.id, runs.collect(), 0)
+                out.push((r.scopes, Arc::new(group)));
+            }
+            out.extend(sealed_runs(n.id, solo, seal).into_iter().map(|face| (&[][..], face)));
+            scoped(n.id, out, 0)
         }
     };
     // One shadow for every member's surface, behind them all.
@@ -1705,6 +1821,156 @@ mod tests {
         assert_eq!(revolve_art(&two), None, "past the budget the source draws");
         let object = painted(3, 0.0, stops * 2);
         assert!(validate_revolve(&object, &json!({})).is_err(), "one object past the budget");
+        // Under a colored light the faces lie over an underlay of themselves, which copies their
+        // paints again: the gradient that fits in white light is past the budget.
+        let lit = json!({"lightColor": "#ff0000"});
+        let object = painted(4, 0.0, stops);
+        assert_eq!(validate_revolve(&object, &json!({})), Ok(()));
+        let refused = validate_revolve(&object, &lit).unwrap_err();
+        assert!(refused.contains("simplify the gradient"), "{refused}");
+        let mut drawn = (*object).clone();
+        drawn.appearance.effects.push(crate::new_effect(REVOLVE, &lit).unwrap());
+        assert_eq!(revolve_art(&drawn), None, "past the budget the source draws");
+    }
+
+    /// Is `u` the underlay [`crate::lighting::underlay`] draws for `face`, a face [`surface`] draws?
+    fn underlies(u: &Node, face: &Node) -> bool {
+        match (&u.kind, &face.kind) {
+            (NodeKind::Path { .. }, NodeKind::Path { .. }) => {
+                u.path_data() == face.path_data()
+                    && u.appearance.items.iter().all(|i| !matches!(i, AppearanceItem::Stroke(s) if s.width != crate::lighting::UNDERLAY_SEAM))
+            }
+            (NodeKind::Group { children: under, clip: true }, NodeKind::Group { children, clip: true }) => {
+                matches!((under.get(1), children.get(1)), (Some(a), Some(b)) if Arc::ptr_eq(a, b))
+            }
+            (_, NodeKind::Group { children, clip: false }) => children.first().is_some_and(|f| underlies(u, f)),
+            _ => false,
+        }
+    }
+
+    /// The runs of faces in `art` that lie over an underlay of themselves ([`sealed_run`]), each
+    /// run's faces in drawing order.
+    pub(super) fn sealed_faces(art: &Node) -> Vec<Vec<Arc<Node>>> {
+        let mut out = vec![];
+        art.walk(&mut |n| {
+            let NodeKind::Group { children, clip: true } = &n.kind else { return };
+            let [clip, inner] = &children[..] else { return };
+            let NodeKind::Group { children: drawn, clip: false } = &inner.kind else { return };
+            let (under, faces) = drawn.split_at(drawn.len() / 2);
+            if clip.path_data().is_some() && !inner.isolate && drawn.len() % 2 == 0 && under.iter().zip(faces).all(|(u, f)| underlies(u, f)) {
+                out.push(faces.to_vec());
+            }
+        });
+        out
+    }
+
+    /// `n`'s surface as [`surface`] draws it before its faces are sealed, and whether they are.
+    fn unsealed(n: &Node) -> (Node, bool) {
+        let path = n.path_data().unwrap();
+        let fx = n.appearance.effects.first().unwrap();
+        let (paint, opacity, blend) = paint_of(n.appearance.items.first().unwrap());
+        let (_, art, _, seal) =
+            surface(None, n, path, path.bounds().unwrap(), fx_options(fx), fx, paint, opacity, blend, false, &mut Copies::default(), false).unwrap();
+        (art, seal)
+    }
+
+    #[test]
+    fn colored_light_faces_lie_over_an_underlay_of_themselves_once_per_surface() {
+        use vectorcraft_doc::color::{BlendMode, Gradient, GradientKind, GradientPaint, GradientStop};
+        let lit = |params: Value, paint: Paint| {
+            let mut n = profile_node();
+            n.appearance = Appearance::basic(paint, Paint::None, 0.0).into();
+            n.appearance.effects.push(crate::new_effect(REVOLVE, &params).unwrap());
+            n
+        };
+        let red = Paint::solid(Color::rgb(0.8, 0.2, 0.1));
+        let ramp = |opacity: f32| {
+            let stops = [Color::WHITE, Color::rgb(0.5, 0.5, 0.5)].into_iter().enumerate();
+            let stops = stops.map(|(i, c)| GradientStop { opacity, ..GradientStop::new(i as f32, c) }).collect();
+            Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))))
+        };
+        let lights = json!([{"color": "#ff8080", "rotation": 120.0}, {"color": "#8080ff", "rotation": -30.0}]);
+        // In white light nothing is sealed.
+        let white = lit(json!({}), red.clone());
+        assert!(!unsealed(&white).1);
+        assert!(sealed_faces(&revolve_art(&white).unwrap()).is_empty());
+        for (name, n) in [
+            ("solid", lit(json!({"lightColor": "#ff0000"}), red.clone())),
+            ("gradient", lit(json!({"lightColor": "#ff0000"}), ramp(1.0))),
+            ("two lights", lit(json!({"lights": lights}), ramp(1.0))),
+            ("edge-on", lit(json!({"lightColor": "#ff0000", "rotationX": -80}), red.clone())),
+        ] {
+            // Every face of the surface, in its order, lies over its underlay, once.
+            let (plain, seal) = unsealed(&n);
+            assert!(seal, "{name}");
+            let faces = plain.children().unwrap().to_vec();
+            assert_eq!(sealed_faces(&revolve_art(&n).unwrap()), vec![faces], "{name}");
+        }
+        // The surface's opacity and blending mode apply once, to the sealed surface.
+        let mut n = lit(json!({"lightColor": "#ff0000"}), ramp(1.0));
+        if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+            f.opacity = 0.5;
+            f.blend = BlendMode::Multiply;
+        }
+        let art = revolve_art(&n).unwrap();
+        assert_eq!(sealed_faces(&art).len(), 1);
+        // Inside the surface only a face's own lit art blends (its light multiplied over its paint).
+        let once = |chain: &Chain| chain.first() == Some(&(0.5, BlendMode::Multiply)) && chain.iter().skip(1).all(|(o, _)| *o == 1.0);
+        let faces = faces_in_order(&art);
+        assert!(faces.iter().all(|(_, chain)| once(chain)), "{:?}", faces.iter().map(|f| &f.1).find(|c| !once(c)));
+        // Faces in a gradient with transparent stops carry its opacity mask, which the underlay
+        // does not take: the surface keeps its faces as they are, and their paints are not
+        // counted twice.
+        let n = lit(json!({"lightColor": "#ff0000"}), ramp(0.6));
+        let (plain, seal) = unsealed(&n);
+        assert!(!seal);
+        assert_eq!(sealed_surface(n.id, plain.clone(), true), plain);
+        assert!(sealed_faces(&revolve_art(&n).unwrap()).is_empty());
+        let path = n.path_data().unwrap();
+        let faces = vectorcraft_three_d::revolve(path, path.bounds().unwrap(), fx_options(&n.appearance.effects[0])).unwrap();
+        assert_eq!(surface_copies(&faces, &ramp(0.6), true), paint_copies(faces.len(), &ramp(0.6)));
+        assert_eq!(surface_copies(&faces, &ramp(1.0), true), 2 * paint_copies(faces.len(), &ramp(1.0)));
+        // Revolve (Classic) takes no colored light, so none of its faces are sealed.
+        assert!(!colored(&classic::options(&json!({"lightColor": "#ff0000"}))));
+    }
+
+    #[test]
+    fn each_members_run_of_faces_lies_over_an_underlay_of_its_own() {
+        // Rings one above the other: their faces alternate in the one order, so each ring's
+        // faces go over underlays run by run, and no run holds faces of both.
+        let ring = |id, y: f64, opacity: f32| {
+            let mut n = (*member(id, 40.0)).clone();
+            if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+                f.opacity = opacity;
+            }
+            if let NodeKind::Path { path, .. } = &mut n.kind {
+                *path = PathData::from_bezpath(&(Affine::translate((0.0, y)) * path.to_bezpath()));
+            }
+            Arc::new(n)
+        };
+        let lit = json!({"segments": 16, "lightColor": "#ff0000"});
+        for opacity in [1.0, 0.5] {
+            let members = vec![ring(1, 0.0, 1.0), ring(2, 200.0, opacity)];
+            let art = revolve_art(&group_with(lit.clone(), members.clone())).unwrap();
+            let runs = sealed_faces(&art);
+            assert!(runs.len() >= 2, "{opacity}: {} runs", runs.len());
+            for run in &runs {
+                let ys: Vec<f64> = run.iter().filter_map(|f| f.visual_bounds()).map(|b| b.center().y).collect();
+                assert!(ys.iter().all(|y| *y < 100.0) || ys.iter().all(|y| *y > 100.0), "{opacity}: a run holds one ring's faces: {ys:?}");
+            }
+            // Each ring's opacity applies once, to its faces and their underlays; inside, only a
+            // face's own lit art blends.
+            let faded = |chain: &Chain| chain.iter().filter(|(o, _)| *o != 1.0).count();
+            let chains: Vec<Chain> = faces_in_order(&art).into_iter().map(|(_, c)| c).collect();
+            assert!(chains.iter().all(|c| faded(c) <= 1 && c.iter().all(|(o, _)| *o == 1.0 || *o == opacity)), "{opacity}");
+            assert_eq!(chains.iter().any(|c| faded(c) == 1), opacity < 1.0, "{opacity}");
+            if opacity == 1.0 {
+                // Opaque rings share one order, and every face in it lies over an underlay.
+                let white = revolve_art(&group_with(json!({"segments": 16}), members)).unwrap();
+                let count = white.children().unwrap()[0].children().unwrap().len();
+                assert_eq!(runs.iter().map(Vec::len).sum::<usize>(), count);
+            }
+        }
     }
 
     #[test]

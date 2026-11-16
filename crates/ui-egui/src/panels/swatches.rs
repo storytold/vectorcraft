@@ -211,6 +211,43 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     body(app, ui, TILE);
 }
 
+/// Item actions target the clicked swatch, independently of the paint or other selected chips.
+fn item_context_menu(app: &mut VectorcraftApp, ui: &Ui, resp: &Response, e: &Entry) {
+    if e.is_folder() {
+        return;
+    }
+    let name = e.name();
+    if resp.secondary_clicked() {
+        let selected = dnd::selection(app, ui);
+        if selected.last().map(String::as_str) != Some(name) {
+            set_pstate(ui.ctx(), "swatch-selected", vec![name.to_string()]);
+            set_pstate(ui.ctx(), "swatch-anchor", name.to_string());
+        }
+    }
+    resp.context_menu(|ui| {
+        // Recheck the document each frame: a swatch can be deleted while its menu is open.
+        let enabled = app.session.active().and_then(|st| st.doc.swatch(name)).is_some_and(|s| !s.is_reserved());
+        let command = if menu_item(ui, tl!("Swatch Options…"), enabled, false) {
+            Some("ui.swatchOptions")
+        } else if menu_item(ui, tl!("Duplicate Swatch"), enabled, false) {
+            Some("swatch.duplicate")
+        } else if menu_item(ui, tl!("Delete Swatch"), enabled, false) {
+            Some("swatch.delete")
+        } else {
+            None
+        };
+        if let Some(command) = command {
+            if command == "swatch.delete" {
+                actions::delete(app, vec![name.to_string()], false);
+            } else {
+                // run reports failures through the app's status message.
+                let _ = app.run(command, json!({"name": name}));
+            }
+            ui.close();
+        }
+    });
+}
+
 /// The panel in a Fill/Stroke chip popover (the Control bar's and Properties'): the same body, its
 /// tiles under their own ids so it can be open beside the panel.
 pub(crate) fn popover(app: &mut VectorcraftApp, ui: &mut Ui) {

@@ -258,18 +258,43 @@ impl Ctx<'_> {
             // of the glyph before it takes no cell of its own: it turns with that glyph (`emit`).
             for i in 0..v.len() {
                 let continues = continues_cluster(i.checked_sub(1).and_then(|p| v.get(p)), v.get(i));
-                let Some(g) = v.get_mut(i).filter(|g| g.adv > 0.0 && !continues && stands_upright(g)) else { continue };
-                let extra = upright_cell(g) - g.face.advance(g.gid) * g.sx;
+                if continues || !v.get(i).is_some_and(stands_upright) {
+                    continue;
+                }
+                // Tsume measured the cluster across its glyphs' widths when it was shaped: an
+                // upright glyph's blank space runs down its cell, so that is taken back first.
+                let measured_down = v.get(i).is_some_and(|g| g.tcy.is_none());
+                if measured_down {
+                    let end = (i + 1..v.len()).find(|&j| !continues_cluster(v.get(j - 1), v.get(j))).unwrap_or(v.len());
+                    let tsume = v.get(end - 1).map_or(0.0, |g| g.tsume);
+                    for g in v.get_mut(i..end).unwrap_or_default() {
+                        g.dx += g.tsume_shift;
+                        g.tsume_shift = 0.0;
+                    }
+                    if let Some(g) = v.get_mut(end - 1) {
+                        g.adv += tsume;
+                        g.tsume = 0.0;
+                    }
+                }
+                let Some(g) = v.get_mut(i).filter(|g| g.adv > 0.0) else { continue };
+                let cell = upright_cell(g);
+                let extra = cell - g.face.advance(g.gid) * g.sx;
                 g.dx += extra * 0.5;
                 g.adv += extra;
                 // Proportional Metrics: `vpal` (and the vertical kerning with it) moves it and
                 // changes its length down the column, in fonts with vertical metrics (else the cell
                 // stays as it is, #966).
+                let mut length = cell;
                 if let Some(a) = g.vpal.filter(|_| g.tcy.is_none() && g.face.vertical_glyph(g.gid).is_some()) {
                     g.dx += a.dx;
                     g.dy += a.dy;
                     g.adv += a.advance;
                     g.proportional = a.proportional;
+                    length += a.advance;
+                }
+                let st = style(g);
+                if measured_down && st.tsume > 0.0 {
+                    self.tighten_upright(g, cell, length, st.size, st.tsume);
                 }
             }
         }
@@ -284,6 +309,25 @@ impl Ctx<'_> {
         if self.system_layout || !self.fractional_widths {
             whole_character_widths(v);
         }
+    }
+
+    /// Tsume `tsume` on upright glyph `g` in vertical type, in type of size `em`, its cell `cell`
+    /// long down the column and `length` long with the Proportional Metrics change to it: its share
+    /// of the blank space above and below what it paints, inside that length, comes out of its
+    /// advance, and it is drawn the share above it earlier, keeping its shape. A combining mark in
+    /// its cluster moves with it. A glyph that paints nothing keeps its place and length.
+    fn tighten_upright(&self, g: &mut SGlyph, cell: f64, length: f64, em: f64, tsume: f64) {
+        let Some(b) = crate::shape::painted_box(self.db, g) else { return };
+        // The glyph turns about the center of its cell, which is `upright_centre` above the
+        // baseline: a point of it in font units (y down) lands that far below the center, down the
+        // column from the top of the cell.
+        let centre = cell * 0.5 + upright_centre(g, cell, em) + g.dy;
+        let (a, z) = (centre + b.y0 * g.sy, centre + b.y1 * g.sy);
+        let Some((above, below)) = crate::shape::tsume_shares((a.min(z), a.max(z)), length, tsume) else { return };
+        g.kern_shift -= above;
+        g.tsume_shift = above;
+        g.adv -= above + below;
+        g.tsume = above + below;
     }
 
     /// Bullets and numbered lists: put marker `text` (the bullet, or the number and its period;
