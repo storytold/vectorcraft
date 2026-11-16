@@ -772,3 +772,33 @@ fn whether_a_blend_has_a_spine_is_saved_and_old_blends_have_one() {
         assert!(!v.no_spine, "{odd}");
     }
 }
+
+#[test]
+fn blend_options_targets_specific_id_when_provided() {
+    let mut s = session();
+    let b1 = make(&mut s, 0.0, json!({"orientation": "path", "spacing": "smooth"}));
+    let b2 = make(&mut s, 100.0, json!({"orientation": "page", "spacing": "steps", "value": 3}));
+
+    // Select both blends
+    sel(&mut s, &[b1, b2]);
+
+    // Apply options with id targeting only b1
+    s.execute("object.blend.options", &json!({"id": b1.0, "spacing": "distance", "value": 15, "ramp": 50, "colorShift": -20})).unwrap();
+
+    let sp1 = spec(&s, b1).1;
+    assert_eq!(sp1.spacing, BlendSpacing::Distance(15.0));
+    assert_eq!(sp1.ease.ramp, 0.5);
+    assert_eq!(sp1.color_shift, -20.0);
+
+    // b2 must remain unchanged
+    let sp2 = spec(&s, b2).1;
+    assert_eq!(sp2.spacing, BlendSpacing::Steps(3));
+    assert_eq!(sp2.orientation, BlendOrientation::AlignToPage);
+    assert_eq!(sp2.ease.ramp, 0.0);
+    assert_eq!(sp2.color_shift, 0.0);
+
+    // Without id, options apply to all selected blends
+    s.execute("object.blend.options", &json!({"orientation": "path"})).unwrap();
+    assert_eq!(spec(&s, b1).1.orientation, BlendOrientation::AlignToPath);
+    assert_eq!(spec(&s, b2).1.orientation, BlendOrientation::AlignToPath);
+}

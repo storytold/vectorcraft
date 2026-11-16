@@ -100,11 +100,14 @@ struct PendingEaseMap {
     drafts: HashMap<String, BlendEaseDraft>,
 }
 
-fn flush_pending(app: &mut VectorcraftApp, draft: &mut BlendEaseDraft) {
+fn flush_pending(app: &mut VectorcraftApp, blend_id: Option<u64>, draft: &mut BlendEaseDraft) {
     if draft.rejected || draft.is_empty() {
         return;
     }
     let mut p = json!({});
+    if let Some(id) = blend_id {
+        p["id"] = json!(id);
+    }
     if let Some(ref et) = draft.easing_type {
         p["easingType"] = json!(et);
     }
@@ -207,7 +210,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
 
     let preview = app.ui.blend_preview;
     if preview && selected {
-        flush_pending(app, &mut draft);
+        flush_pending(app, blend_id, &mut draft);
     }
 
     // Position easing needs a spine to run along: a replaced one, or Align to Path. A blend made
@@ -223,7 +226,11 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
                 && let Some(mode) = modes.get(i)
             {
                 if preview {
-                    app.run("object.blend.options", json!({"easingType": mode})).ok();
+                    let mut param = json!({"easingType": mode});
+                    if let Some(id) = blend_id {
+                        param["id"] = json!(id);
+                    }
+                    app.run("object.blend.options", param).ok();
                 } else {
                     draft.easing_type = Some(mode.to_string());
                     draft.staged_active_easing_type = active_easing.clone();
@@ -244,7 +251,11 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
             let clamped = ramp.clamp(0.0, 100.0);
             if preview {
                 if phase != Live::Idle {
-                    crate::panels::live_run(app, "Blend Options", "object.blend.options", json!({"ramp": clamped}), phase);
+                    let mut param = json!({"ramp": clamped});
+                    if let Some(id) = blend_id {
+                        param["id"] = json!(id);
+                    }
+                    crate::panels::live_run(app, "Blend Options", "object.blend.options", param, phase);
                 }
             } else if resp.changed() {
                 draft.ramp = Some(clamped);
@@ -267,7 +278,11 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
             let clamped = shift.clamp(-100.0, 100.0);
             if preview {
                 if phase != Live::Idle {
-                    crate::panels::live_run(app, "Blend Options", "object.blend.options", json!({"colorShift": clamped}), phase);
+                    let mut param = json!({"colorShift": clamped});
+                    if let Some(id) = blend_id {
+                        param["id"] = json!(id);
+                    }
+                    crate::panels::live_run(app, "Blend Options", "object.blend.options", param, phase);
                 }
             } else if resp.changed() {
                 draft.color_shift = Some(clamped);
@@ -283,7 +298,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
                 app.ui.blend_preview = next;
                 if next && selected {
                     draft.rejected = false;
-                    flush_pending(app, &mut draft);
+                    flush_pending(app, blend_id, &mut draft);
                 }
             }
         });

@@ -422,3 +422,61 @@ fn blend_panel_staged_values_persist_across_selection_and_reconcile_external_edi
     assert_eq!(spec(&app, id_a).ease.kind, vectorcraft_doc::BlendEaseType::OutIn);
     assert_eq!(spec(&app, id_a).ease.ramp, 0.6);
 }
+
+#[test]
+fn staged_preview_applies_only_to_target_blend_when_multiple_selected() {
+    let mut app = app();
+    // Blend A
+    let id_a = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
+
+    // Blend B with distinct options: 4 steps, align to page, ramp 30, colorShift 25
+    let r1 = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let r2 = app.run("shape.rectangle", json!({"x": 150, "y": 50, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [r1, r2]})).unwrap();
+    let id_b = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
+    app.run("object.blend.options", json!({"id": id_b.0, "spacing": "steps", "steps": 4, "orientation": "page", "ramp": 30.0, "colorShift": 25.0}))
+        .unwrap();
+
+    let b_spec_before = spec(&app, id_b);
+    assert_eq!(b_spec_before.spacing, vectorcraft_doc::live::BlendSpacing::Steps(4));
+    assert_eq!(b_spec_before.orientation, vectorcraft_doc::live::BlendOrientation::AlignToPage);
+    assert_eq!(b_spec_before.ease.ramp, 0.3);
+    assert_eq!(b_spec_before.color_shift, 25.0);
+
+    // Select only Blend A
+    app.run("select.set", json!({"ids": [id_a.0]})).unwrap();
+
+    let mut f = Frames::new();
+    // Turn preview OFF
+    f.click_text(&mut app, "Preview");
+    assert!(!app.ui.blend_preview);
+
+    // Stage Ramp on Blend A to 80%
+    let out = f.run(&mut app, vec![]);
+    let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
+    let mut sliders: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Slider).collect();
+    sliders.sort_by(|a, b| a.1.bounds().unwrap().y0.total_cmp(&b.1.bounds().unwrap().y0));
+    let ramp_slider = sliders[0];
+    let b = ramp_slider.1.bounds().unwrap();
+    let at = pos2((b.x0 + 0.8 * (b.x1 - b.x0)) as f32, ((b.y0 + b.y1) * 0.5) as f32);
+    f.click(&mut app, at);
+
+    // Both A and B are now selected
+    app.run("select.set", json!({"ids": [id_a.0, id_b.0]})).unwrap();
+    f.run(&mut app, vec![]);
+
+    // Enable Preview
+    f.click_text(&mut app, "Preview");
+    assert!(app.ui.blend_preview);
+
+    // Verify Blend B retains its original ramp, spacing, orientation, and color shift
+    let b_spec_after = spec(&app, id_b);
+    assert_eq!(b_spec_after.spacing, vectorcraft_doc::live::BlendSpacing::Steps(4));
+    assert_eq!(b_spec_after.orientation, vectorcraft_doc::live::BlendOrientation::AlignToPage);
+    assert_eq!(b_spec_after.ease.ramp, 0.3);
+    assert_eq!(b_spec_after.color_shift, 25.0);
+
+    // Verify Blend A has the staged ramp applied
+    let a_spec_after = spec(&app, id_a);
+    assert_ne!(a_spec_after.ease.ramp, 0.0);
+}

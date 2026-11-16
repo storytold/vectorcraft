@@ -36,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Options…",
             ["Object", "Blend"],
             None,
-            "{spacing?: smooth|steps|distance, value?: n, steps?: n, distance?: pt, orientation?: page|path, smooth?: bool, easingType?: linear|easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct} set the options of the selected blends; easingType chooses the distribution, ramp sets its strength (0..100; 0 = even), colorShift (-100..100; 0 = even) shifts colours independently of shape/position easing (omitted ones keep their value; out of range is an error); with no blend selected, the options new blends start with (spacing and orientation only; a tool setting, not an undo step) → {defaults?: true}",
+            "{id?: id, spacing?: smooth|steps|distance, value?: n, steps?: n, distance?: pt, orientation?: page|path, smooth?: bool, easingType?: linear|easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct} set the options of the selected blends (or the blend `id`); easingType chooses the distribution, ramp sets its strength (0..100; 0 = even), colorShift (-100..100; 0 = even) shifts colours independently of shape/position easing (omitted ones keep their value; out of range is an error); with no blend selected, the options new blends start with (spacing and orientation only; a tool setting, not an undo step) → {defaults?: true}",
             always,
             blend_options
         ),
