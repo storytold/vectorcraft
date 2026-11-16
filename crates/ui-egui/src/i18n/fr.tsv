@@ -3782,7 +3782,6 @@ digits	Malayalam	Malayalam
 	Export Composite Fonts	Exporter des polices composites
 	Import Composite Fonts	Importer des polices composites
 @msg	each font must be {{name, parts}}	chaque police doit être {{name, parts}}
-@msg	each font must be {name, parts}	chaque police doit être {name, parts}
 @msg	unknown key `{k}`; a font takes name and parts	clé inconnue `{k}` ; une police prend name et parts
 @msg	each font needs a name	chaque police doit avoir un nom
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` ne peut pas nommer une police composite (1 à {COMPOSITE_NAME_MAX} caractères, sans caractères de contrôle)
@@ -3796,7 +3795,6 @@ digits	Malayalam	Malayalam
 @msg	`{_1}` is the name of an installed font	`{_1}` est le nom d’une police installée
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}` : {_2} utilise `{font}`, une police composite
 @msg	give fonts: [{{name, parts}}…]	indiquez fonts : [{{name, parts}}…]
-@msg	give fonts: [{name, parts}…]	indiquez fonts : [{name, parts}…]
 @msg	path is empty	path est vide
 @msg	fonts must be a list of composite fonts	fonts doit être une liste de polices composites
 @msg	names must be strings	names doit contenir des chaînes

@@ -4259,7 +4259,6 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Sammensatte skrifttyper
 	Export Composite Fonts	Eksportér sammensatte skrifttyper
 	Import Composite Fonts	Importér sammensatte skrifttyper
-@msg	each font must be {{name, parts}}	hver skrifttype skal være {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	ukendt nøgle `{k}`; en skrifttype tager name og parts
 @msg	each font needs a name	hver skrifttype skal have et navn
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` kan ikke være navnet på en sammensat skrifttype (1 til {COMPOSITE_NAME_MAX} tegn, ingen kontroltegn)
@@ -4272,10 +4271,6 @@ digits	Malayalam	Malayalam
 @msg	two composite fonts are named `{_1}`	to sammensatte skrifttyper hedder `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` er navnet på en installeret skrifttype
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} er sat med `{font}`, en sammensat skrifttype
-@msg	give fonts: [{{name, parts}}…]	angiv fonts: [{{name, parts}}…]
-@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` skal være "document", {{artboards: [index, …]}} eller {{layers: [id, …]}}
-@msg	numbers out of order in {{}} quantifier	tal i forkert rækkefølge i kvantoren {{}}
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	malingen er ikke en friformsgradient (anvend en med paint.editGradient {{kind: "freeform"}})
 @msg	path is empty	path er tom
 @msg	fonts must be a list of composite fonts	fonts skal være en liste med sammensatte skrifttyper
 @msg	names must be strings	names skal være strenge
