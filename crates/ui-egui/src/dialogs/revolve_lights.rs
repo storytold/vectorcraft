@@ -1,6 +1,8 @@
 //! The lighting widget on the 3D and Materials panel's Lighting tab for Extrude & Bevel, Revolve,
-//! Inflate and Rotate: a sphere that shows each of the effect's lights
+//! Inflate and Rotate, and on the Lighting tab of the 3D (Classic) effects in both the panel and the
+//! options dialog: a sphere that shows each of the effect's lights
 //! at its Rotation and Height, a filled sun in front of the object and a hollow one behind it.
+//! The 3D (Classic) effects' lights have no color, so their suns are white.
 //! Dragging a light moves it on its side of the object, a press selects it in the list of lights,
 //! and the button below the sphere moves the selected light to the back or the front of the object.
 //! Each light takes the keyboard focus, where the arrow keys move it, and has a name for screen
@@ -82,15 +84,20 @@ fn round(n: f64) -> f64 {
 }
 
 /// The effect's lights: each light of its list, or its single light, with the effect's defaults for
-/// the settings a light leaves out or the selected effects hold with different values (null).
+/// the settings a light leaves out or the selected effects hold with different values (null). A 3D
+/// (Classic) effect's lights are white whatever color a list light carries, since it shades
+/// without light color.
 pub(crate) fn lights(d: &Dialog) -> Vec<Light> {
-    let defaults = vectorcraft_effects::default_params(&d.str("__effect")).unwrap_or(json!({}));
+    let effect = d.str("__effect");
+    let colored = !vectorcraft_effects::is_classic_three_d(&effect);
+    let defaults = vectorcraft_effects::default_params(&effect).unwrap_or(json!({}));
     let list = explicit_lights(d).cloned().unwrap_or_else(|| vec![light_record(d)]);
     list.iter()
         .map(|light| {
             let value =
                 |key: &str, field: &str| light.get(key).filter(|v| !v.is_null()).or_else(|| defaults.get(field)).cloned().unwrap_or(Value::Null);
-            let [r, g, b] = value("color", "lightColor")
+            let color = if colored { value("color", "lightColor") } else { Value::Null };
+            let [r, g, b] = color
                 .as_str()
                 .filter(|s| s.len() == 7 && s.starts_with('#'))
                 .and_then(vectorcraft_color::Color::from_hex)
@@ -143,10 +150,12 @@ pub(super) fn show(ui: &mut egui::Ui, d: &mut Dialog) {
     let order = (0..lights.len()).filter(|&i| i != current).chain([current]);
     let mut moved = None;
     let enabled = ui.is_enabled();
+    // The panel and a 3D (Classic) options dialog can both show the sphere at once.
+    let panel = d.bool("__panel");
     for index in order {
         let light = lights.get(index).copied().unwrap_or(first);
         let at = center + light.offset() * radius;
-        let id = Id::unique(("three-d-lighting-widget", index));
+        let id = Id::unique(("three-d-lighting-widget", panel, index));
         let response = ui.interact(Rect::from_center_size(at, Vec2::splat((SUN + 4.0) * 2.0)), id, Sense::click_and_drag());
         response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Slider, enabled, light.name(index)));
         // A light the pointer took, or that the keyboard focus reached, becomes the selected light and

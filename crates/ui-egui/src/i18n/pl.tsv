@@ -492,6 +492,7 @@
 	Highlight Size	Rozmiar połysku
 	Blend Steps	Kroki przejścia
 	Shading Color	Kolor cieniowania
+	Black Overprint	Czarny nadruk
 	Draw Hidden Faces	Rysuj ukryte ściany
 	Revolve…	Obrót…
 	Inflate…	Nadmuchanie…
@@ -975,6 +976,7 @@
 	Change Panel Layout	Zmień układ paneli
 	Close Panel	Zamknij panel
 	Collapse Panel Group	Zwiń grupę paneli
+	Cycle Display Sizes	Przełącz rozmiary wyświetlania
 	Move Panel	Przesuń panel
 	Group with	Grupuj z
 	Resize panels	Zmień rozmiar paneli
@@ -1547,6 +1549,8 @@ lighting	Light	Światło
 	Insert Aki Left	Wstaw aki z lewej
 	Insert Aki Right	Wstaw aki z prawej
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Dostosuj poziome położenie znaków diakrytycznych
+	Adjust Vertical Diacritic Position	Dostosuj pionowe położenie znaków diakrytycznych
 	Character Direction	Kierunek znaków
 	Digits	Cyfry
 	Arabic	Arabskie
@@ -2025,6 +2029,9 @@ digits	Malayalam	Malajalam
 	Select text to set its OpenType features.	Zaznacz tekst, aby ustawić jego funkcje OpenType.
 	Standard Ligatures	Ligatury standardowe
 	Stylistic Alternates	Alternatywy stylistyczne
+	Ligatures	Ligatury
+	Ornaments	Ornamenty
+	Figures	Cyfry
 	Swash	Ozdobniki
 	Tabular Lining	Tabelaryczne nowoczesne
 	Tabular Oldstyle	Tabelaryczne nautyczne
@@ -2067,6 +2074,7 @@ digits	Malayalam	Malajalam
 	Roman Hanging Punctuation	Wysunięta interpunkcja łacińska
 	Korean Line Break Anywhere	Koreański podział wiersza w dowolnym miejscu
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Ustawienia składu wschodnioazjatyckiego
 	Korean Composition Settings	Ustawienia składu koreańskiego
 	Select a text object to edit its paragraph attributes.	Zaznacz obiekt tekstowy, aby edytować atrybuty akapitu.
@@ -2560,6 +2568,18 @@ digits	Malayalam	Malajalam
 	Author Title:	Stanowisko autora:
 	Author:	Autor:
 	Copyright Info URL:	URL informacji o prawach autorskich:
+	Save Metadata Template…	Zapisz szablon metadanych…
+	Import Options	Opcje importu
+	Clear existing fields and use the template's	Wyczyść istniejące pola i użyj pól z szablonu
+	Keep existing fields, but replace those the template has	Zachowaj istniejące pola, ale zastąp te, które zawiera szablon
+	Keep existing fields, but append those the template has	Zachowaj istniejące pola, ale dołącz te, które zawiera szablon
+@msg	the template name can't be empty	nazwa szablonu nie może być pusta
+@msg	the template name isn't usable as a file name	nazwy szablonu nie można użyć jako nazwy pliku
+@msg	no metadata templates folder here	brak tu folderu szablonów metadanych
+@msg	give `name` or `path`, not both	podaj `name` albo `path`, nie oba
+@msg	give one of `path`, `name` and `data`	podaj jeden z parametrów `path`, `name` i `data`
+@msg	mode must be replace, keep or append	tryb musi mieć wartość replace, keep lub append
+@msg	the file is not an XMP metadata template	plik nie jest szablonem metadanych XMP
 	Copyright Notice:	Informacja o prawach autorskich:
 	Copyright Status:	Status praw autorskich:
 	Created:	Utworzono:
@@ -2896,6 +2916,7 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Pokaż płynne koło kolorów
 	Show segmented color wheel	Pokaż segmentowe koło kolorów
 	Show color bars	Pokaż paski kolorów
+	Find the selected colors in the artwork	Znajdź zaznaczone kolory w kompozycji
 	Keep this row's colors (exclude)	Zachowaj kolory tego wiersza (wyklucz)
 	Limit to Library:	Ogranicz do biblioteki:
 	Link harmony colors	Połącz kolory harmonii
@@ -3571,6 +3592,8 @@ theme	Appearance	Wygląd
 	Create Graph	Utwórz wykres
 	Graph Data	Dane wykresu
 	Graph Type	Typ wykresu
+	Graph Type…	Typ wykresu…
+	Graph Data…	Dane wykresu…
 	Graph Options	Opcje wykresu
 	Left Axis	Lewa oś
 	Right Axis	Prawa oś
@@ -4293,6 +4316,8 @@ font-technology	Variable	Zmienne
 	Saving	Zapisywanie
 	Saving {}	Zapisywanie {}
 	Search commands and tools…	Szukaj poleceń i narzędzi…
+	Recent Commands	Ostatnie polecenia
+	No recent commands	Brak ostatnich poleceń
 	Dashed Line	Linia przerywana
 	Panel menu	Menu panelu
 	Unembed…	Wyodrębnij…
@@ -4303,6 +4328,12 @@ font-technology	Variable	Zmienne
 	Preferences	Preferencje
 	Previous	Wstecz
 	Restore every preference to its default (applied on OK)	Przywróć domyślne wartości wszystkich preferencji (zastosowane po OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Jednostka nowych dokumentów o wbudowanych rozmiarach, z wyjątkiem rozmiarów w pikselach, oraz otwartych plików bez zapisanej jednostki; wybranie jej tutaj i kliknięcie OK ustawia ją też w aktywnym dokumencie.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Grubości obrysu, kreski i odstępy są wyświetlane w tej jednostce, a liczby wpisane dla nich są w niej odczytywane.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Rozmiary tekstu, interlinia i przesunięcie linii bazowej są wyświetlane w tej jednostce, a liczby wpisane dla nich są w niej odczytywane.
+	The unit for East Asian type measurements, which no field uses yet.	Jednostka miar tekstu wschodnioazjatyckiego, której żadne pole jeszcze nie używa.
+	When on, a number typed without a unit into a field in picas is read in points.	Gdy opcja jest włączona, liczba wpisana bez jednostki w polu w pica jest odczytywana w punktach.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Przy ID XML nazwy obiektów są wyświetlane jako ID XML w Warstwach, Zmiennych i Opcjach warstwy.
 	Reset all preferences to their defaults?	Przywrócić domyślne wartości wszystkich preferencji?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Wartości domyślne zostaną zastosowane po kliknięciu OK w Preferencjach. Anuluj w tym oknie zachowuje bieżące preferencje.
 	Smaller ↔ Larger	Mniejszy ↔ większy
@@ -4580,6 +4611,31 @@ imageTrace	Outline	Kontur
 @msg	$.evalFile requires a file path	$.evalFile wymaga ścieżki pliku
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: limit czasu musi być skończoną liczbą milisekund, 0 lub więcej
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: przyjmuje ścieżkę pliku i limit czasu
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} nie jest zdefiniowane
+@msg	cannot read property '{key}' of {base}	nie można odczytać właściwości '{key}' wartości {base}
+@msg	cannot set property '{key}' of {base}	nie można ustawić właściwości '{key}' wartości {base}
+@msg	cannot read a property of {base}	nie można odczytać właściwości wartości {base}
+@msg	cannot set a property of {base}	nie można ustawić właściwości wartości {base}
+@msg	cannot define property '{key}': {why}	nie można zdefiniować właściwości '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	nie można przypisać do właściwości '{key}': {why}
+@msg	cannot delete property '{key}'	nie można usunąć właściwości '{key}'
+@msg	cannot declare function {ident}	nie można zadeklarować funkcji {ident}
+@msg	invalid assignment target	nieprawidłowy cel przypisania
+@msg	the array's length is read-only	długość tablicy jest tylko do odczytu
+@msg	the property cannot be redefined	właściwości nie można zdefiniować ponownie
+@msg	the object is not extensible	obiektu nie można rozszerzać
+@msg	the length cannot be redefined	długości nie można zdefiniować ponownie
+@msg	it is read-only	jest tylko do odczytu
+@msg	an element cannot be deleted	elementu nie można usunąć
+@msg	it has only a getter	ma tylko getter
+@msg	the value is a primitive	wartość jest prymitywna
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: wiersz {line}, kolumna {column} w {file}: {e} (zgłoszony wyjątek)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: wiersz {line}, kolumna {column}: {e} (zgłoszony wyjątek)
 @msg	{name}: {e} (thrown)	{name}: {e} (zgłoszony wyjątek)
@@ -4620,6 +4676,27 @@ imageTrace	Outline	Kontur
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: okno dialogowe nie może się otworzyć w wywołaniu zwrotnym funkcji wbudowanej, getterze, konwersji ani pliku uruchamianym przez $.evalFile; wywołaj je z własnego kodu skryptu
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: następna odpowiedź w `answers` jest dla {_1}, nie dla {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: w `answers` nie została żadna odpowiedź dla tego okna dialogowego
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` zawiera {n} odpowiedź, której skrypt nie użył|`answers` zawiera {n} odpowiedzi, których skrypt nie użył|`answers` zawiera {n} odpowiedzi, których skrypt nie użył
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} pozostawił {n} obiekt pod pędzlem bez zmian ({_2}): przekształca tylko ścieżki|{_1} pozostawił {n} obiekty pod pędzlem bez zmian ({_2}): przekształca tylko ścieżki|{_1} pozostawił {n} obiektów pod pędzlem bez zmian ({_2}): przekształca tylko ścieżki
+liquify-tool	Warp	Wypaczenie
+liquify-tool	Twirl	Wir
+liquify-tool	Pucker	Ściągnięcie
+liquify-tool	Bloat	Nadmuchanie
+liquify-tool	Scallop	Ząbkowanie
+liquify-tool	Crystallize	Krystalizacja
+liquify-tool	Wrinkle	Marszczenie
+liquify-kind	graphs	wykresy
+liquify-kind	type	tekst
+liquify-kind	symbols	symbole
+liquify-kind	images	obrazy
+liquify-kind	meshes	siatki
+liquify-kind	envelopes	koperty
+liquify-kind	repeats	powtórzenia
+liquify-kind	placed documents	umieszczone dokumenty
+liquify-kind	blends	przejścia
+liquify-list-two	{0}, {1}	{0} i {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} i {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} jest za duży dla skryptu
 @msg	vc.log: the log of this run is full	vc.log: dziennik tego uruchomienia jest pełny
 @msg	this function's script run has ended	uruchomienie skryptu tej funkcji zakończyło się
@@ -5262,6 +5339,8 @@ imageTrace	Outline	Kontur
 @msg	unknown option `{path}.{k}`	nieznana opcja `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	nieznana wartość nadruków `{o}` (preserve, simulate lub discard)
 @msg	unknown panel `{raw}`	nieznany panel `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` nie ma rozmiarów wyświetlania do przełączania
+@msg	the panels are not shown	panele nie są wyświetlane
 @msg	panels can't be shown in Presentation Mode	w trybie prezentacji nie można wyświetlić paneli
 @msg	unknown preference `{key}`	nieznana preferencja `{key}`
 @msg	Preferences imported.	Zaimportowano preferencje.
@@ -6141,6 +6220,7 @@ mark-style	Japanese	Japońskie
 	Export Data Sets…	Eksportuj zestawy danych…
 	Load Variable Library…	Wczytaj bibliotekę zmiennych…
 	Save Variable Library…	Zapisz bibliotekę zmiennych…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	„Importuj” wczytuje plik źródła danych z rozszerzeniem .csv, .tsv, .txt lub .xml
 @msg	a variable library holds text variables, and the document has none	biblioteka zmiennych zawiera zmienne tekstowe, a dokument nie ma żadnej
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	nie można zapisać zmiennej `{name}` w bibliotece zmiennych: zmień jej nazwę tak, aby zaczynała się literą lub `_`, bez spacji i symboli innych niż `-`, `_` i `.`
 @msg	{k} has control characters	{k} zawiera znaki sterujące
@@ -7237,6 +7317,24 @@ breakText	Glyphs	Glify
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Rozszerz kreski na ścieżki
 @msg	select paths with dashed strokes to expand	zaznacz ścieżki z przerywanym konturem do rozszerzenia
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Okrąg styczny…
+	Tangent Circle	Okrąg styczny
+	Circle:	Okrąg:
+@msg	`ids` names an object twice	`ids` wskazuje ten sam obiekt dwa razy
+@msg	select two or three paths or compound paths	zaznacz dwie lub trzy ścieżki lub ścieżki złożone
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` musi wynosić od 0.01 do 1000000 pt
+@msg	two shapes need a `radius`	dwa kształty wymagają `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	trzy kształty same wyznaczają promień: pomiń `radius`
+@msg	`circle` must be from 0 to 64	`circle` musi wynosić od 0 do 64
+@msg	a shape has no outline	kształt nie ma konturu
+@msg	the shapes are too complex: at most 2000 segments in all	kształty są zbyt złożone: łącznie najwyżej 2000 segmentów
+@msg	these shapes take too long to search	wyszukiwanie dla tych kształtów trwa zbyt długo
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	tych kształtów dotyka ponad 64 okręgów: mogą się z nimi stykać wzdłuż całej krzywej
+@msg	no circle touches these shapes	żaden okrąg nie dotyka tych kształtów
+@msg	`circle` is past the last circle found ({found})	`circle` wykracza poza ostatni znaleziony okrąg ({found})
+@msg	object {value} is not a path or compound path	obiekt {value} nie jest ścieżką ani ścieżką złożoną
+@msg	these shapes are too small to measure	te kształty są za małe, aby je zmierzyć
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Narzędzia dokumentu
 	Save a Timestamped Copy	Zapisz kopię z datą i godziną
@@ -9462,3 +9560,20 @@ breakText	Glyphs	Glify
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pikseli to za dużo dla formatu JPEG (najwyżej 65535 pikseli na bok): zmniejsz rozdzielczość
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pikseli to za dużo dla formatu Targa (najwyżej 65535 pikseli na bok): zmniejsz rozdzielczość
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pikseli to za dużo dla formatu PSD (najwyżej {MAX_SIDE} pikseli na bok): zmniejsz rozdzielczość
+	Packaging Tools	Narzędzia do opakowań
+	Fold Lines	Linie zgięcia
+	Make Cut Line	Utwórz linię cięcia
+	Make Crease Line	Utwórz linię bigowania
+	Make Partial Cut Line	Utwórz linię nacięcia
+	Make Perforation Line	Utwórz linię perforacji
+	Make Fold Line	Utwórz linię zgięcia
+	Role Swatches…	Próbki rodzajów linii…
+	Role Swatches	Próbki rodzajów linii
+	Role	Rodzaj linii
+	Cut Line	Linia cięcia
+	Crease Line	Linia bigowania
+	Partial Cut Line	Linia nacięcia
+	Perforation Line	Linia perforacji
+	No objects are selected.	Nie zaznaczono żadnych obiektów.
+	Open a document to mark its fold lines.	Otwórz dokument, aby oznaczyć jego linie zgięcia.
+	Remove Fold Line Role	Usuń rodzaj linii

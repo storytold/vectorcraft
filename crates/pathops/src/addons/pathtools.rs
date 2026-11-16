@@ -5,8 +5,8 @@
 //! where paths cross ([`crossings`]), the stretches between them ([`spans`]), anchors slid along
 //! their path ([`slide`]), touching edges merged ([`shared_edge`]), paths divided into dashes
 //! ([`divide_dashes`]), two circles joined by a smooth bridge ([`smooth_bridge`]) or many circles
-//! joined to their neighbors ([`bridge_many`]) and the
-//! Parametric Shape Tool's shapes ([`shapes`]).
+//! joined to their neighbors ([`bridge_many`]), the Parametric Shape Tool's shapes ([`shapes`]) and
+//! the circles that touch two or three shapes ([`tangent_circles`]).
 
 mod bridge;
 mod crossings;
@@ -15,6 +15,7 @@ mod extend;
 pub mod shapes;
 mod shared_edge;
 mod slide;
+mod tangent_circle;
 #[cfg(test)]
 mod tests;
 mod trim;
@@ -34,6 +35,9 @@ pub use shared_edge::{
     COINCIDENCE, EndSide, Follow, MAX_COINCIDENCE, MergePlan, MergePreview, Stretch, apply_merge, ends_at, merge_preview, stretches_at,
 };
 pub use slide::{MAX_SLIDE, slide_anchor, slide_stops, slide_t_at};
+pub use tangent_circle::{
+    Circle as TangentCircle, MAX_TANGENT_CIRCLE_SEGMENTS, MAX_TANGENT_CIRCLES, TangentCircleError, tangent_circle_segments, tangent_circles,
+};
 pub use trim::{Span, slice, span_at, spans, without_spans};
 
 use crate::fit::{end_tangent, start_tangent};
