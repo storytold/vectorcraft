@@ -564,7 +564,7 @@ impl Reader<'_> {
                     st.cmap = cmap;
                     // The installed face of that PostScript name, as type from a text document
                     // takes it; else the name split into a family and style.
-                    let text = super::super::super::text::named_font(name, None);
+                    let text = super::super::super::text::named_font(name, None, None);
                     let (family, style, version) = text.unwrap_or_else(|| {
                         let (family, style) = super::super::super::text::family_style(name);
                         (family, style, None)
