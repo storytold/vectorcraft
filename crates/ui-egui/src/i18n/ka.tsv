@@ -2874,6 +2874,7 @@
 	VectorCraft Help…	VectorCraft-ის დახმარება…
 	Automatic	ავტომატური
 	Isolate Selected Group	მონიშნული ჯგუფის იზოლირება
+	Isolate Selected Path	მონიშნული ტრაექტორიის იზოლირება
 	Exit Isolation Mode	იზოლაციის რეჟიმიდან გამოსვლა
 	Make Clipping Mask	მომჭრელი ნიღბის შექმნა
 	Release Clipping Mask	მომჭრელი ნიღბის მოხსნა
@@ -3376,6 +3377,8 @@ lighting	Light	სინათლე
 	Lasso Tool	ლასოს ხელსაწყო
 	Enclosing Lasso Tool	შემომსაზღვრელი ლასოს ხელსაწყო
 	Enclosing Lasso	შემომსაზღვრელი ლასო
+	Polygonal Lasso Tool	მრავალკუთხა ლასოს ხელსაწყო
+	Polygonal Lasso	მრავალკუთხა ლასო
 	Line Cut Tool	ხაზით ჭრის ხელსაწყო
 	Line Graph Tool	ხაზოვანი დიაგრამის ხელსაწყო
 	Line Segment Tool	ხაზის სეგმენტის ხელსაწყო
@@ -3451,6 +3454,10 @@ lighting	Light	სინათლე
 	Play Current Selection	მიმდინარე მონიშნულის შესრულება
 	Save Actions…	მოქმედებების შენახვა…
 	Load Actions…	მოქმედებების ჩატვირთვა…
+	Reset Actions	მოქმედებების ჩამოყრა
+	Replace the current actions with the default set?	ჩანაცვლდეს მიმდინარე მოქმედებები ნაგულისხმევი ნაკრებით?
+	Append adds the default set after the current sets instead.	დამატება ამის ნაცვლად ნაგულისხმევ ნაკრებს მიმდინარე ნაკრებების შემდეგ ამატებს.
+	Append	დამატება
 	Reflect Horizontal	ჰორიზონტალურად არეკვლა
 	Rotate 90° CW	90°-ით შემობრუნება საათის ისრის მიმართულებით
 	Set 1	ნაკრები 1
@@ -3670,6 +3677,10 @@ digits	Malayalam	მალაიალამური
 	Em Box	Em-ბლოკი
 	x-Height	x-სიმაღლე
 	ICF Box	ICF-ბლოკი
+	Show Sample	ნიმუშის ჩვენება
+	Hide Sample	ნიმუშის დამალვა
+	Max Ascent/Descent	მაქს. სიმაღლე/სიღრმე
+	Max Ascender	მაქს. ზედა გამონაშვერი
 	Copy Color Value (Hex)	ფერის მნიშვნელობის კოპირება (Hex)
 	Create New Swatch…	ახალი ფერის ნიმუშის შექმნა…
 	Name 40%	სახელი 40%
@@ -4782,6 +4793,11 @@ digits	Malayalam	მალაიალამური
 	Show smooth color wheel	გლუვი ფერთა წრის ჩვენება
 	Show segmented color wheel	სეგმენტირებული ფერთა წრის ჩვენება
 	Show color bars	ფერთა ზოლების ჩვენება
+	Show brightness and hue on wheel	სიკაშკაშისა და ფერის ტონის ჩვენება წრეზე
+	Show saturation and hue on wheel	გაჯერებისა და ფერის ტონის ჩვენება წრეზე
+	Add Color Tool	ფერის დამატების ხელსაწყო
+	Remove Color Tool	ფერის წაშლის ხელსაწყო
+	Remove Color	ფერის წაშლა
 	Find the selected colors in the artwork	არჩეული ფერების პოვნა ნახატში
 	Keep this row's colors (exclude)	ამ სტრიქონის ფერების შენარჩუნება (გამორიცხვა)
 	Limit to Library:	ბიბლიოთეკით შეზღუდვა:
@@ -5351,6 +5367,8 @@ theme	Appearance	იერსახე
 	Find Font Files	შრიფტის ფაილების ძებნა
 	Add Font Files	შრიფტის ფაილების დამატება
 	Font List	შრიფტების სია
+	Show Similar Fonts	მსგავსი შრიფტების ჩვენება
+	Clear Similar Fonts	მსგავსი შრიფტების გასუფთავება
 	Fonts in Document	დოკუმენტის შრიფტები
 	Refresh Font List	შრიფტების სიის განახლება
 	Replace Font	შრიფტის ჩანაცვლება
@@ -5386,6 +5404,7 @@ theme	Appearance	იერსახე
 	Connect Data Points	მონაცემთა წერტილების შეერთება
 	Edge-to-Edge Lines	ხაზები კიდიდან კიდემდე
 	Draw Filled Lines	შევსებული ხაზების დახატვა
+	Line Width	ხაზის სიგანე
 	Tick Values	დანაყოფების მნიშვნელობები
 	Override Calculated Values	გამოთვლილი მნიშვნელობების შეცვლა
 	Divisions	დანაყოფები
@@ -6078,6 +6097,10 @@ font-technology	Variable	ცვლადი
 	Saving	შენახვა
 	Saving {}	ინახება: {}
 	Search commands, tools, panels and effects…	ბრძანებების, ხელსაწყოების, პანელებისა და ეფექტების ძიება…
+	No commands match	შესაბამისი ბრძანება არ არის
+	{pos} of {total}: {name}	{pos} / {total}: {name}
+@plural	{n} result|{n} results	{n} შედეგი
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} შედეგიდან {shown}. გააგრძელეთ აკრეფა მათ შესამცირებლად.
 	Recent Commands	ბოლო ბრძანებები
 	No recent commands	ბოლო ბრძანებები არ არის
 	Dashed Line	ტირეებიანი ხაზი
@@ -6341,6 +6364,7 @@ font-technology	Variable	ცვლადი
 @msg	Divide Objects Below: select exactly one path	ქვედა ობიექტების დაყოფა: მონიშნეთ ზუსტად ერთი ტრაექტორია
 @msg	Downloaded {what}	ჩამოტვირთულია: {what}
 @msg	Expand Appearance: the selection has a basic appearance	იერსახის გაშლა: მონიშნულს საბაზისო იერსახე აქვს
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	ზოგიერთი რასტრული ეფექტი გამოსახულებად არ გადაიქცა: მათ დასჭირდებოდა 1024-ზე მეტი გამოსახულება ან ჯამში 256 მეგაპიქსელი
 @msg	Expand: no brush strokes selected	გაშლა: ფუნჯის შტრიხები მონიშნული არ არის
 @msg	Expand: no gradient fills	გაშლა: გრადიენტული შევსებები არ არის
 @msg	Expand: nothing to expand	გაშლა: გასაშლელი არაფერია
@@ -8061,7 +8085,7 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	Unknown dimension orientation	ზომის უცნობი ორიენტაცია
 @msg	Unknown dimension style	ზომის უცნობი სტილი
 @msg	Unknown unit	უცნობი ერთეული
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	ღია პროფილების წრიული ბოლოების დახურვა. ნაწილობრივი ბრუნვისას ჭრის მხარეები ღია რჩება.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	ღია პროფილების წრიული ბოლოების დახურვა. ნაწილობრივი ბრუნვისას ჭრის მხარეებიც იხურება.
 	Distance	მანძილი
 # Upstream sync 2026-10-16 (2): Smart Blur modes, Layers panel filter, Color panel options, templates, PostScript files.
 	Mode	რეჟიმი
@@ -9558,6 +9582,22 @@ breakText	Glyphs	გლიფები
 	Remove Gaps	ღრეჩოების მოცილება
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ეს ძალიან ბევრ ნაწილს იძლევა (მაქსიმუმ 100000): გაზარდეთ ტირეების სიგრძე
 @msg	select paths, or segments, to divide	აირჩიეთ დასაყოფი ტრაექტორიები ან სეგმენტები
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	საერთო მხებები…
+	Common Tangents	საერთო მხებები
+	Tangents	მხებები
+	Centerline	ცენტრალური ხაზი
+	External	გარე
+	Internal	შიდა
+@msg	select two closed paths	აირჩიეთ ორი დახურული ტრაექტორია
+@msg	a selected path is open	არჩეული ტრაექტორია ღიაა
+@msg	a selected path is not convex	არჩეული ტრაექტორია არ არის ამოზნექილი
+@msg	a selected path has no area	არჩეულ ტრაექტორიას ფართობი არ აქვს
+@msg	a selected path has more than 10000 segments	არჩეულ ტრაექტორიას 10000-ზე მეტი სეგმენტი აქვს
+@msg	the two paths have the same outline	ორივე ტრაექტორიას ერთნაირი კონტური აქვს
+@msg	One path lies inside the other, so they have no common tangents	ერთი ტრაექტორია მეორის შიგნითაა, ამიტომ მათ საერთო მხებები არ აქვთ
+@msg	The paths overlap, so they have no internal tangents	ტრაექტორიები ერთმანეთს ფარავს, ამიტომ მათ შიდა მხებები არ აქვთ
+@msg	One path lies inside the other, so they have no internal tangents	ერთი ტრაექტორია მეორის შიგნითაა, ამიტომ მათ შიდა მხებები არ აქვთ
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	ტირეების ტრაექტორიებად გაშლა
 @msg	select paths with dashed strokes to expand	აირჩიეთ გასაშლელი ტირეებიანი ხაზის კონტურები
@@ -9602,6 +9642,9 @@ breakText	Glyphs	გლიფები
 	Urdu	ურდუ
 	Assamese	ასამური
 	Sanskrit	სანსკრიტი
+	Nepali	ნეპალური
+	Konkani	კონკანი
+	Sindhi	სინდჰური
 	German: Swiss	გერმანული: შვეიცარია
 	Catalan	კატალანური
 	Danish	დანიური
@@ -9652,7 +9695,7 @@ breakText	Glyphs	გლიფები
 @msg	stroke cannot be set on a symbol instance	stroke ვერ დაყენდება სიმბოლოს ეგზემპლარზე
 @msg	fill on a symbol instance must be a solid color or none	სიმბოლოს ეგზემპლარის fill უნდა იყოს ერთფეროვანი ფერი ან none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} ვერ დაყენდება გამოსახულებაზე „ფიგურად გარდაქმნის“ ან „ობიექტის კონტურებად გარდაქმნის“ ეფექტის გარეშე
-@msg	pass newName, registration, exportType, nineSlice and/or type	მიუთითეთ newName, registration, exportType, nineSlice და/ან type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	მიუთითეთ newName, registration, exportType, nineSlice, type და/ან alignToPixelGrid
 	Text Flow	ტექსტის დინება
 	By Rows	სტრიქონების მიხედვით
 	By Columns	სვეტების მიხედვით
@@ -9947,6 +9990,8 @@ font-script	Japanese	იაპონური
 @msg	No bridge of this width fits across the selected art	ამ სიგანის ხიდი მონიშნულ ნახატზე არ ეტევა
 @msg	Some islands could not be joined to the area around the art	ზოგიერთი კუნძული ვერ დაუკავშირდა ნახატის გარშემო არეს
 @msg	`width` must be from {lo} to {hi} pt	`width` უნდა იყოს {lo}-დან {hi} pt-მდე
+@msg	`angle` must be from -180 to 180 degrees	`angle` უნდა იყოს -180-დან 180 გრადუსამდე
+@msg	`roundness` must be from 1 to 100%	`roundness` უნდა იყოს 1-დან 100%-მდე
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` უნდა იყოს მთელი რიცხვი 1-დან {MAX_BRIDGES_PER_ISLAND}-მდე
 	Weed Box and Lines…	ნარჩენის მოსაცილებელი ჩარჩო და ხაზები…
 	Weed Box and Lines	ნარჩენის მოსაცილებელი ჩარჩო და ხაზები
@@ -9979,4 +10024,24 @@ font-script	Japanese	იაპონური
 	No objects are selected.	ობიექტები არ არის მონიშნული.
 	Open a document to mark its fold lines.	გახსენით დოკუმენტი მისი მოკეცვის ხაზების მოსანიშნად.
 	Remove Fold Line Role	ხაზის ტიპის მოხსნა
+	Check	შემოწმება
+	Check Fold Lines	მოკეცვის ხაზების შემოწმება
+@msg	No cut lines are in the selection.	მონიშვნაში ჭრის ხაზები არ არის.
+@msg	No cut lines are in the document.	დოკუმენტში ჭრის ხაზები არ არის.
+@msg	The cut lines do not enclose an area.	ჭრის ხაზები არცერთ არეს არ შემოფარგლავს.
+@msg	A cut line ends without meeting another cut line.	ჭრის ხაზი მთავრდება ისე, რომ სხვა ჭრის ხაზს არ ხვდება.
+@msg	A gap between cut lines was closed.	ჭრის ხაზებს შორის ღრეჩო დაიხურა.
+@msg	The fold lines are too complex to check.	მოკეცვის ხაზები შესამოწმებლად ზედმეტად რთულია.
+@msg	A cut line and a crease lie on top of each other.	ჭრის ხაზი და ბიგის ხაზი ერთმანეთზე დევს.
+@msg	No cut lines are among the given objects.	მითითებულ ობიექტებში ჭრის ხაზები არ არის.
+@msg	Two fold lines lie on top of each other.	მოკეცვის ორი ხაზი ერთმანეთზე დევს.
+@msg	A crease ends inside a panel.	ბიგის ხაზი პანელის შიგნით მთავრდება.
+@msg	A crease does not divide two panels.	ბიგის ხაზი ორ პანელს არ ყოფს.
+@msg	A crease lies outside the cut outline, wholly or in part.	ბიგის ხაზი მთლიანად ან ნაწილობრივ ჭრის კონტურის გარეთაა.
+@msg	The pieces of a hinge are not on one straight line.	ანჯამის ნაწილები ერთ სწორ ხაზზე არ დევს.
+@msg	A gap between cut lines is too narrow to tell apart.	ჭრის ხაზებს შორის ღრეჩო ზედმეტად ვიწროა გასარჩევად.
+@msg	A cut-out area holds other fold lines or another blank.	ამოჭრილი არე სხვა მოკეცვის ხაზებს ან სხვა ნამზადს შეიცავს.
+@msg	A panel is not joined to the rest by a crease.	პანელი დანარჩენს არცერთი ბიგის ხაზით არ უერთდება.
+@msg	A fold line is on a non-printing layer.	მოკეცვის ხაზი არასაბეჭდ შრეზეა.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	პანელები: {panels}, ანჯამები: {hinges}, შეცდომები: {errors}, გაფრთხილებები: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"

@@ -38,7 +38,8 @@ fn doc_with(mut n: Node) -> Document {
 /// The data of the one embedded PNG.
 fn png_of(svg: &str) -> image::RgbaImage {
     let data = svg.split("data:image/png;base64,").nth(1).expect("an embedded PNG").split('"').next().unwrap();
-    image::load_from_memory(&base64_decode(data).unwrap()).unwrap().to_rgba8()
+    let decoded = craft_image_codecs::decode(&base64_decode(data).unwrap()).unwrap();
+    image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap()
 }
 
 #[test]
