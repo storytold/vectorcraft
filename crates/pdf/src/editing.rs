@@ -77,34 +77,50 @@ pub fn editing_with(bytes: &[u8], password: Option<&str>) -> Option<Editing> {
     editing_in(&crate::pages::open(bytes, password).ok()?)
 }
 
-/// The file specification of the editing file among a parsed PDF's attachments, if any, and whether
-/// the attachments may list it: a name tree key names the editing file (set also when its file
-/// specification can't be read), or the name tree has more than [`MAX_NODES`] nodes to search.
-fn editing_file_spec(pdf: &Pdf) -> (Option<Dict<'_>>, bool) {
+/// What the search of a parsed PDF's attachments for the editing file found ([`editing_file_spec`]).
+struct Search<'a> {
+    /// The editing file's file specification, if one was found.
+    spec: Option<Dict<'a>>,
+    /// A name tree key searched names the editing file (set also when its file specification
+    /// can't be read).
+    keyed: bool,
+    /// The name tree has more than [`MAX_NODES`] nodes, so nodes were left unsearched.
+    cut: bool,
+}
+
+/// The search of a parsed PDF's attachments for the editing file.
+fn editing_file_spec(pdf: &Pdf) -> Search<'_> {
     let xref = pdf.xref();
     let Some(tree) = xref
         .get::<Dict<'_>>(xref.root_id())
         .and_then(|catalog| catalog.get::<Dict<'_>>(b"Names"))
         .and_then(|names| names.get::<Dict<'_>>(b"EmbeddedFiles"))
     else {
-        return (None, false);
+        return Search { spec: None, keyed: false, cut: false };
     };
-    let mut maybe = false;
-    let spec = editing_spec(tree, &mut maybe, xref);
-    (spec, maybe)
+    let (mut keyed, mut cut) = (false, false);
+    let spec = editing_spec(tree, &mut keyed, &mut cut, xref);
+    Search { spec, keyed, cut }
 }
 
 /// Does a parsed PDF list the editing file among its attachments, also when [`editing_in`] can't
 /// read it (its file specification, its `EF` dictionary or its `F` or `UF` stream can't be
 /// resolved)? Also true when the name tree is too large to search to its end.
 pub(crate) fn has_editing_file_in(pdf: &Pdf) -> bool {
-    let (spec, maybe) = editing_file_spec(pdf);
-    spec.is_some() || maybe
+    let search = editing_file_spec(pdf);
+    search.spec.is_some() || search.keyed || search.cut
+}
+
+/// Is a parsed PDF's attachment name tree too large to search to its end (more than [`MAX_NODES`]
+/// nodes)? It may then list an editing file that [`editing_in`] doesn't find, besides the one it
+/// reads.
+pub(crate) fn editing_search_cut_in(pdf: &Pdf) -> bool {
+    editing_file_spec(pdf).cut
 }
 
 /// [`editing`] of a parsed PDF.
 pub(crate) fn editing_in(pdf: &Pdf) -> Option<Editing> {
-    let spec = editing_file_spec(pdf).0?;
+    let spec = editing_file_spec(pdf).spec?;
     let files = spec.get::<Dict<'_>>(b"EF")?;
     let stream = files.get::<Stream<'_>>(b"F").or_else(|| files.get::<Stream<'_>>(b"UF"))?;
     let data = stream.decoded().map(|d| d.into_owned()).unwrap_or_default();
@@ -118,18 +134,21 @@ pub(crate) fn editing_in(pdf: &Pdf) -> Option<Editing> {
     Some(Editing { data, intact })
 }
 
-/// The file specification of the editing file in the name tree `tree`, searched in order at any
-/// depth, [`MAX_NODES`] nodes at most. An indirect node is searched once, so a node shared by many
-/// `Kids` arrays is not searched once per path. `maybe` is set when a key searched names the editing
-/// file, or when nodes are left unsearched.
-fn editing_spec<'a>(tree: Dict<'a>, maybe: &mut bool, xref: &'a XRef) -> Option<Dict<'a>> {
+/// The first file specification of the editing file in the name tree `tree`, searched in order at
+/// any depth, [`MAX_NODES`] nodes at most. After the editing file is found, the walk goes on to the
+/// end of the tree, or to the node limit, without reading the nodes' `Names`. An indirect node is
+/// searched once, so a node shared by many `Kids` arrays is not searched once per path. `keyed` is
+/// set when a key searched names the editing file, and `cut` when nodes are left unsearched.
+fn editing_spec<'a>(tree: Dict<'a>, keyed: &mut bool, cut: &mut bool, xref: &'a XRef) -> Option<Dict<'a>> {
     let mut seen = HashSet::<ObjectIdentifier>::new();
     let mut nodes = vec![tree];
+    let mut found = None;
     // Nodes still to be searched, counting the ones waiting in `nodes`.
     let mut left = MAX_NODES - 1;
     while let Some(node) = nodes.pop() {
-        if let Some(spec) = node_spec(&node, maybe, xref) {
-            return Some(spec);
+        // Once the editing file is found, only the `Kids` are read, to learn whether the tree is cut.
+        if found.is_none() {
+            found = node_spec(&node, keyed, xref);
         }
         let Some(kids) = node.get::<Array<'a>>(b"Kids") else { continue };
         // Only a referenced kid can be shared (a direct kid's `obj_id` is the object holding it). The
@@ -143,13 +162,13 @@ fn editing_spec<'a>(tree: Dict<'a>, maybe: &mut bool, xref: &'a XRef) -> Option<
             .take(left.saturating_add(1))
             .collect();
         if kids.len() > left {
-            *maybe = true;
+            *cut = true;
             kids.truncate(left);
         }
         left -= kids.len();
         nodes.extend(kids.into_iter().rev());
     }
-    None
+    found
 }
 
 /// The file specification of the editing file among the name tree node `node`'s own `Names`.

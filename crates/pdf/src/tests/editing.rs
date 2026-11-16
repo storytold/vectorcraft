@@ -311,5 +311,30 @@ fn an_editing_file_deep_in_the_name_tree_is_found() {
     ];
     let opened = open_pdf(&raw_pdf(&objects), None).unwrap();
     assert_eq!(opened.editing(), None);
-    assert!(opened.has_editing_file());
+    assert!(opened.has_editing_file() && opened.editing_search_cut());
+    // One that lists a readable editing file before the nodes left unsearched and another after
+    // them: the first is read, and the search reads as cut short.
+    let leaf = |stream: u32| format!("<< /Names [({EDITING_FILE}) << /Type /Filespec /UF ({EDITING_FILE}) /EF << /F {stream} 0 R >> >>] >>");
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 3 0 R >> >>".to_string(),
+        "<< /Type /Pages /Kids [8 0 R] /Count 1 >>".to_string(),
+        format!("<< /Kids [4 0 R {}5 0 R] >>", "<< /Names [] >> ".repeat(70_000)),
+        leaf(6),
+        leaf(7),
+        "<< /Length 5 >>\nstream\nfirst\nendstream".to_string(),
+        "<< /Length 6 >>\nstream\nsecond\nendstream".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>".to_string(),
+    ];
+    let opened = open_pdf(&raw_pdf(&objects), None).unwrap();
+    assert_eq!(opened.editing().map(|e| e.data).as_deref(), Some(&b"first"[..]));
+    assert!(opened.has_editing_file() && opened.editing_search_cut());
+    // The same, with the nodes past the limit in a subtree after the one holding the first.
+    let mut objects = objects;
+    objects[2] = format!("<< /Kids [4 0 R << /Kids [{}5 0 R] >>] >>", "<< /Names [] >> ".repeat(70_000));
+    let opened = open_pdf(&raw_pdf(&objects), None).unwrap();
+    assert_eq!(opened.editing().map(|e| e.data).as_deref(), Some(&b"first"[..]));
+    assert!(opened.has_editing_file() && opened.editing_search_cut());
+    // A tree searched to its end.
+    let opened = open_pdf(&pdf_with(Some(b"native"), false).bytes, None).unwrap();
+    assert!(opened.editing().is_some() && !opened.editing_search_cut());
 }

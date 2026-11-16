@@ -528,12 +528,52 @@ fn a_confined_package_refuses_a_linked_file_whose_editing_data_cannot_be_read() 
     write(&pdf, &plain);
     assert_eq!(package(&mut s, json!({"folder": out})).unwrap()["links"], 1);
     std::fs::remove_dir_all(&out).unwrap();
+    // A PDF whose attachments are too many to search to their end, with a readable editing file
+    // listed before the ones left unsearched.
+    let cut = attachments_cut_short(&vectorcraft_pdf::editing(&editable).unwrap().data);
+    assert!(vectorcraft_pdf::editing(&cut).is_some(), "the editing data is read");
+    write(&pdf, &cut);
+    refused(&mut s, json!({"folder": out}));
+    refused(&mut s, json!({"relink": false}));
+    assert_eq!(run(&mut s, "file.package", json!({}))["links"], 1, "the person's package");
     // A native document that doesn't load, rewritten or copied as it is.
     let mut s = poster(&native);
     write(&native, b"not a document");
     refused(&mut s, json!({"folder": out}));
     refused(&mut s, json!({"folder": out, "relink": false}));
     assert_eq!(run(&mut s, "file.package", json!({}))["links"], 1, "the person's package");
+}
+
+/// A one-page PDF carrying `native` as its editing file, listed first in an attachment name tree
+/// whose second subtree has 70,000 nodes, more than are searched.
+fn attachments_cut_short(native: &[u8]) -> Vec<u8> {
+    let name = vectorcraft_pdf::EDITING_FILE;
+    let mut stream = format!("<< /Length {} >>\nstream\n", native.len()).into_bytes();
+    stream.extend_from_slice(native);
+    stream.extend_from_slice(b"\nendstream");
+    let objects = [
+        b"<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 3 0 R >> >>".to_vec(),
+        b"<< /Type /Pages /Kids [6 0 R] /Count 1 >>".to_vec(),
+        format!("<< /Kids [4 0 R << /Kids [{}] >>] >>", "<< /Names [] >> ".repeat(70_000)).into_bytes(),
+        format!("<< /Names [({name}) << /Type /Filespec /UF ({name}) /EF << /F 5 0 R >> >>] >>").into_bytes(),
+        stream,
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] >>".to_vec(),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, body) in objects.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        out.extend_from_slice(body);
+        out.extend_from_slice(b"\nendobj\n");
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).as_bytes());
+    for at in &offsets {
+        out.extend_from_slice(format!("{at:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", offsets.len() + 1).as_bytes());
+    out
 }
 
 /// A missing link stored as a path relative to the document names a file inside a confined

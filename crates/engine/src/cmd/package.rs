@@ -122,8 +122,9 @@ enum Carried {
     Readable(Box<Document>),
     /// The file is a native document, or carries one, that can't be read: a damaged native file,
     /// a PDF or `.ai` file that can't be opened without a password or can't be read at all, a PDF
-    /// or `.ai` file listing an editing file whose data can't be resolved, or editing data that
-    /// doesn't read as a native document.
+    /// or `.ai` file listing an editing file whose data can't be resolved, a PDF or `.ai` file
+    /// whose attachments are too many to search to their end, or editing data that doesn't read as
+    /// a native document.
     Unreadable,
 }
 
@@ -137,6 +138,8 @@ fn carried_document(name: &str, bytes: &[u8]) -> Carried {
     if super::place::document::is_pdf(name, bytes) {
         // A PDF that can't be opened may carry editing data all the same.
         return match vectorcraft_pdf::open_pdf(bytes, None) {
+            // Attachments left unsearched may list another editing file, which can't be checked.
+            Ok(opened) if opened.editing_search_cut() => Carried::Unreadable,
             // An editing file listed whose data can't be resolved can't be checked either.
             Ok(opened) => match opened.editing() {
                 Some(e) => read(&e.data),
