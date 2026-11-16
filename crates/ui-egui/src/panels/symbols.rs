@@ -316,7 +316,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             for n in &names {
                 let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click_and_drag());
                 // Dragged onto the canvas, the symbol is placed there.
-                widgets::drag_source(ui, &resp, || PanelDrag::Symbol(n.clone()));
+                drag_symbol(ui, &resp, n, uid);
                 if on(n) {
                     ui.painter().rect_filled(r, 0.0, t.row_selected);
                 } else if resp.hovered() {
@@ -342,7 +342,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.horizontal_wrapped(|ui| {
                 for n in &names {
                     let (r, resp) = ui.allocate_exact_size(vec2(44.0, 44.0), Sense::click_and_drag());
-                    widgets::drag_source(ui, &resp, || PanelDrag::Symbol(n.clone()));
+                    drag_symbol(ui, &resp, n, uid);
                     chip(ui, &doc, &keys, r.shrink(2.0), n);
                     let on = on(n);
                     ui.painter().rect_stroke(
@@ -403,7 +403,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let new = widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Symbol"), false, has_sel, 24.0);
         // A symbol dragged from the panel and dropped on New Symbol is duplicated, with or without
         // art selected.
-        if let Some(name) = symbol_dropped(ui, &new, &names) {
+        if let Some(name) = symbol_dropped(ui, &new, &names, uid) {
             if let Err(e) = app.run("symbol.duplicate", json!({ "name": name })) {
                 app.status(e);
             }
@@ -493,12 +493,25 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-/// The document symbol (one of `names`) dragged from the panel and released on `button` this
-/// frame, if any; `button` is outlined while one is held over it.
-fn symbol_dropped(ui: &Ui, button: &egui::Response, names: &[String]) -> Option<String> {
+/// The panel state key of the document (`uid`) the symbol being dragged from the panel belongs to.
+const DRAG_DOC: &str = "sym-drag-doc";
+
+/// Make `resp` a drag source of the symbol `name` of the document `uid`, and keep `uid` while it
+/// is dragged.
+fn drag_symbol(ui: &Ui, resp: &egui::Response, name: &str, uid: Option<u64>) {
+    if resp.drag_started_by(egui::PointerButton::Primary) {
+        set_pstate(ui.ctx(), DRAG_DOC, uid);
+    }
+    widgets::drag_source(ui, resp, || PanelDrag::Symbol(name.to_string()));
+}
+
+/// The symbol of the active document (`uid`, whose symbols are `names`) dragged from the panel and
+/// released on `button` this frame, if any; `button` is outlined while one is held over it. A
+/// symbol dragged from another document is ignored.
+fn symbol_dropped(ui: &Ui, button: &egui::Response, names: &[String], uid: Option<u64>) -> Option<String> {
     let held = button.dnd_hover_payload::<PanelDrag>()?;
     let PanelDrag::Symbol(name) = &*held else { return None };
-    if !names.contains(name) {
+    if !names.contains(name) || pstate::<Option<u64>>(ui.ctx(), DRAG_DOC) != uid {
         return None;
     }
     widgets::drop_target_outline(ui, button.rect);
@@ -1984,6 +1997,8 @@ mod tests {
         let leaf = instance_of(&app, "Leaf").expect("a Leaf instance");
         let undo = app.session.active().unwrap().history.undo.len();
         let ctx = egui::Context::default();
+        // The payloads are set directly, as if dragged from this document's panel.
+        set_pstate(&ctx, DRAG_DOC, uid(&app));
         let new = button_rect(&ctx, &mut app, "New Symbol");
         let elsewhere = new.center() - vec2(0.0, 60.0);
         let cases = [
@@ -2002,6 +2017,36 @@ mod tests {
             assert_eq!(dialog_kind(&app), None, "{case}");
             egui::DragAndDrop::clear_payload(&ctx);
         }
+    }
+
+    /// A symbol dragged from one document's panel and dropped on New Symbol after another document
+    /// with a symbol of the same name became active is duplicated in neither document, and the
+    /// button is not outlined for it.
+    #[test]
+    fn a_symbol_dragged_from_another_document_is_not_duplicated() {
+        let mut app = leaf_and_dot();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let tile = pos2(26.0, 26.0);
+        frame(&ctx, &mut app, vec![]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
+        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol("Leaf".into())));
+        // While Leaf is held, a new document with a Leaf of its own becomes active.
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+        app.run("symbol.new", json!({"name": "Leaf"})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let new = button_rect(&ctx, &mut app, "New Symbol");
+        let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(new.center())], egui::Modifiers::NONE);
+        assert!(!outlined(&out, new), "not outlined");
+        frame(&ctx, &mut app, vec![button(new.center(), false)]);
+        assert_eq!(symbols(&mut app), ["Leaf"], "no copy in the active document");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "no undo step");
+        assert_eq!(dialog_kind(&app), None);
+        assert!(app.session.set_active(0));
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "no copy in the first document");
     }
 
     /// CPU time of this thread in nanoseconds where the system reports it (Linux), else `None`.
