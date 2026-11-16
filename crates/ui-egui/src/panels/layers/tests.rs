@@ -409,7 +409,7 @@ fn clicking_a_target_circle_targets_the_layer() {
 }
 
 #[test]
-fn dragging_a_target_circle_moves_or_copies_the_appearance_and_the_trash_clears_it() {
+fn dragging_a_target_circle_moves_or_copies_the_appearance() {
     let (mut app, layer, [a, b]) = two_rects();
     app.session.execute("transparency.set", &json!({"ids": [a.0], "opacity": 30})).unwrap();
     let ctx = egui::Context::default();
@@ -421,14 +421,49 @@ fn dragging_a_target_circle_moves_or_copies_the_appearance_and_the_trash_clears_
     // A plain drag onto the layer's circle moves it there.
     drag(&mut app, &ctx, c[1], c[0], false);
     assert!((opacity(&app, layer) - 0.3).abs() < 1e-6 && opacity(&app, b) == 1.0);
-    // Dropped on the trash, the layer's appearance is cleared (and nothing is deleted).
-    let st = app.session.active().unwrap();
-    let count = st.doc.node_count();
+}
+
+/// A target circle dropped on the trash reduces that item's own appearance to its topmost visible
+/// fill and stroke in one undo step, and deletes nothing; dropped again, it changes nothing and
+/// adds no undo step. A layer keeps only the rows it had, and its art is left as it is.
+#[test]
+fn dropping_a_target_circle_on_the_trash_reduces_it_to_basic_appearance() {
+    let (mut app, layer, [a, _]) = two_rects();
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    // [Fill green, Stroke, Fill red, Stroke 5 pt], with an effect on the object.
+    run(&mut app, "appearance.addFill", json!({"ids": [a.0]}));
+    run(&mut app, "appearance.setItem", json!({"ids": [a.0], "index": 0, "color": "#00ff00"}));
+    run(&mut app, "appearance.setItem", json!({"ids": [a.0], "index": 2, "color": "#ff0000"}));
+    run(&mut app, "appearance.addStroke", json!({"ids": [a.0]}));
+    run(&mut app, "appearance.setItem", json!({"ids": [a.0], "index": 3, "weight": 5}));
+    run(&mut app, "effect.apply", json!({"ids": [a.0], "effect": "stylize.dropShadow", "item": null}));
+    let ctx = egui::Context::default();
+    let (c, _) = frame(&mut app, &ctx, vec![], false);
     let trash = trash_pos(&mut app, &ctx);
+    let node = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().clone();
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let (original, count, before) = (node(&app, a), app.session.active().unwrap().doc.node_count(), undo(&app));
+    // The bottom rectangle's circle (rows: the layer, the top rectangle, the bottom one).
+    drag(&mut app, &ctx, c[2], trash, false);
+    let n = node(&app, a);
+    assert!(n.appearance.is_basic(), "{:?}", n.appearance);
+    assert_eq!(n.appearance.items.len(), 2);
+    assert_eq!(n.appearance.fill().unwrap().paint.color().unwrap().to_hex(), "#ff0000");
+    assert_eq!(n.appearance.stroke().unwrap().width, 5.0);
+    assert_eq!((app.session.active().unwrap().doc.node_count(), undo(&app)), (count, before + 1));
+    // Dropped again, nothing changes and no undo step is made.
+    drag(&mut app, &ctx, c[2], trash, false);
+    assert_eq!((node(&app, a), undo(&app)), (n, before + 1));
+    run(&mut app, "edit.undo", json!({}));
+    assert_eq!(node(&app, a), original, "one undo step restores the whole stack");
+    // The layer's own fill stays and its effect goes; the art on it keeps its appearance.
+    run(&mut app, "appearance.addFill", json!({"ids": [layer.0]}));
+    run(&mut app, "effect.apply", json!({"ids": [layer.0], "effect": "stylize.dropShadow", "item": null}));
     drag(&mut app, &ctx, c[0], trash, false);
-    let st = app.session.active().unwrap();
-    assert_eq!(st.doc.node(layer).unwrap().opacity, 1.0);
-    assert_eq!(st.doc.node_count(), count);
+    let l = node(&app, layer);
+    assert_eq!((l.appearance.items.len(), l.appearance.effects.len()), (1, 0), "{:?}", l.appearance);
+    assert!(l.appearance.fill().is_some());
+    assert_eq!(node(&app, a), original);
 }
 
 /// The trash button: the bottom bar's rightmost button.
@@ -1201,9 +1236,41 @@ fn kinds() -> (VectorcraftApp, HashMap<&'static str, NodeId>) {
     ids.insert("guide", guide);
     run(&mut app, "guide.add", json!({"vertical": true, "pos": 50}));
     let mut png = vec![];
-    image::RgbaImage::from_pixel(4, 4, image::Rgba([200, 40, 40, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(4, 4, image::Rgba([200, 40, 40, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let placed = |app: &mut VectorcraftApp, p: serde_json::Value| NodeId(run(app, "file.place", p)["ids"][0].as_u64().unwrap());
     ids.insert("embedded", placed(&mut app, json!({"name": "pic.png", "dataBase64": vectorcraft_format::base64_encode(&png)})));
     // One file for every test that calls this, written by the first.

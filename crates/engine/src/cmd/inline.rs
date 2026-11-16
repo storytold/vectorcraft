@@ -6,6 +6,7 @@ use vectorcraft_doc::text::INLINE_MAX_SCALE;
 use vectorcraft_doc::{Document, InlineArt, NodeId, NodeKind, TextRun};
 use vectorcraft_text::edit;
 
+use super::brushsym::current_symbol;
 use super::typecmd::refresh_bounds;
 use super::{CommandSpec, EngineError, Result, Session, bad, cmd, has_doc, id_param, str_param};
 
@@ -96,14 +97,4 @@ fn insert_inline(s: &mut Session, p: &Value) -> Result<Value> {
         s.set_tool_option("select", &json!({"start": caret, "end": caret}));
     }
     Ok(json!({"id": id.0, "caret": caret}))
-}
-
-/// The Symbols panel's current symbol, else the first one.
-fn current_symbol(d: &Document) -> Option<String> {
-    d.unknown
-        .get("currentSymbol")
-        .and_then(Value::as_str)
-        .filter(|n| d.symbols.iter().any(|s| s.name == *n))
-        .map(str::to_string)
-        .or_else(|| d.symbols.first().map(|s| s.name.clone()))
 }
