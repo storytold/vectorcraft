@@ -3908,6 +3908,266 @@ fn live_paint_bucket_triple_click_fills_every_face_of_the_same_fill() {
     assert_eq!([a, b, c, d].map(|f| fill_of(&s, f)), [green.clone(), green, red.clone(), red]);
 }
 
+/// A triple-click whose first click is released across an edge, in the face it then clicks twice,
+/// matches that face's fill from before the first click: the release painted it too.
+#[test]
+fn live_paint_bucket_triple_click_after_a_release_across_an_edge_matches_the_fill_before() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0, 100.0, 150.0]);
+    let [a, b, c, d] = faces_at(&s, g, &[(25.0, 25.0), (75.0, 25.0), (125.0, 25.0), (175.0, 25.0)])[..] else { panic!("four faces") };
+    let (red, blue) = (Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 201.0, 51.0));
+    paint_parts(&mut s, &all, &Paint::solid(Color::rgb(0.0, 0.0, 0.0)), &[(a, red.clone()), (b, red.clone()), (c, blue.clone()), (d, red.clone())]);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = green.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 45.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 55.0, 25.0), v).unwrap();
+    assert_eq!([a, b].map(|f| fill_of(&s, f)), [green.clone(), green.clone()], "the release across x = 50 fills both faces");
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick, PointerKind::Down, PointerKind::Up, PointerKind::TripleClick] {
+        s.pointer(&PointerEvent::new(kind, 55.0, 25.0), v).unwrap();
+    }
+    assert_eq!([a, b, c, d].map(|f| fill_of(&s, f)), [green.clone(), green.clone(), blue, green]);
+}
+
+/// A triple-click whose third press lands in another face and is released in the face its first
+/// two clicks painted still matches that face's fill from before the first click.
+#[test]
+fn live_paint_bucket_triple_click_released_from_another_face_matches_the_fill_before() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0, 100.0, 150.0]);
+    let [a, b, c, d] = faces_at(&s, g, &[(25.0, 25.0), (75.0, 25.0), (125.0, 25.0), (175.0, 25.0)])[..] else { panic!("four faces") };
+    let (red, blue) = (Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 201.0, 51.0));
+    paint_parts(&mut s, &all, &Paint::solid(Color::rgb(0.0, 0.0, 0.0)), &[(a, red.clone()), (b, red.clone()), (c, blue.clone()), (d, red.clone())]);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = green.clone();
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
+        s.pointer(&PointerEvent::new(kind, 55.0, 25.0), v).unwrap();
+    }
+    s.pointer(&PointerEvent::new(PointerKind::Down, 45.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 55.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::TripleClick, 55.0, 25.0), v).unwrap();
+    assert_eq!([a, b, c, d].map(|f| fill_of(&s, f)), [green.clone(), green.clone(), blue, green]);
+}
+
+/// A triple-click whose first click makes the Live Paint group and is released across an edge, in
+/// the face it then clicks twice, matches the fill that face was made with.
+#[test]
+fn live_paint_bucket_triple_click_after_making_the_group_across_an_edge_matches_the_made_fill() {
+    let mut s = session();
+    let ids: Vec<NodeId> = [0.0, 50.0, 200.0, 300.0].iter().map(|&x| rect(&mut s, x, 0.0, 50.0, 50.0)).collect();
+    let (red, blue) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+    for (id, c) in ids.iter().zip([red, red, blue, red]) {
+        set_fill(&mut s, *id, c);
+    }
+    s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = green.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 45.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 55.0, 25.0), v).unwrap();
+    let g = vectorcraft_tools::builder::live_paint_at(&s.doc().unwrap().doc, Point::new(25.0, 25.0)).expect("the click made a group");
+    let faces = faces_at(&s, g, &[(25.0, 25.0), (75.0, 25.0), (225.0, 25.0), (325.0, 25.0)]);
+    assert_eq!(faces[..2].iter().map(|f| fill_of(&s, *f)).collect::<Vec<_>>(), [green.clone(), green.clone()], "the release fills both faces");
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick, PointerKind::Down, PointerKind::Up, PointerKind::TripleClick] {
+        s.pointer(&PointerEvent::new(kind, 55.0, 25.0), v).unwrap();
+    }
+    assert_eq!(faces.iter().map(|f| fill_of(&s, *f)).collect::<Vec<_>>(), [green.clone(), green.clone(), Paint::solid(blue), green]);
+}
+
+/// When the first click makes the Live Paint group and is released in a face covered by a source
+/// path with no fill in front of a filled one, the face was made with the filled source's fill, as
+/// Make gives it, so the triple-click there matches that fill and not none.
+#[test]
+fn live_paint_bucket_triple_click_after_making_the_group_under_an_unfilled_path_matches_the_made_fill() {
+    let mut s = session();
+    let red = Color::rgb(1.0, 0.0, 0.0);
+    let (a, b, d) = (rect(&mut s, 0.0, 0.0, 50.0, 50.0), rect(&mut s, 50.0, 0.0, 50.0, 50.0), rect(&mut s, 200.0, 0.0, 50.0, 50.0));
+    for id in [a, b, d] {
+        set_fill(&mut s, id, red);
+    }
+    let (c, e) = (rect(&mut s, 60.0, 10.0, 30.0, 30.0), rect(&mut s, 300.0, 0.0, 50.0, 50.0));
+    s.edit("t", |doc, _| {
+        for id in [c, e] {
+            doc.node_mut(id).unwrap().appearance.set_fill(Paint::None);
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0, d.0, c.0, e.0]})).unwrap();
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = green.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 45.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 75.0, 25.0), v).unwrap();
+    let g = vectorcraft_tools::builder::live_paint_at(&s.doc().unwrap().doc, Point::new(25.0, 25.0)).expect("the click made a group");
+    let faces = faces_at(&s, g, &[(75.0, 25.0), (225.0, 25.0), (325.0, 25.0)]);
+    assert_eq!(fill_of(&s, faces[0]), green, "the release fills the face under the unfilled path");
+    assert_eq!([faces[1], faces[2]].map(|f| fill_of(&s, f)), [Paint::solid(red), Paint::None], "Make gave the far faces red and none");
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick, PointerKind::Down, PointerKind::Up, PointerKind::TripleClick] {
+        s.pointer(&PointerEvent::new(kind, 75.0, 25.0), v).unwrap();
+    }
+    assert_eq!([faces[1], faces[2]].map(|f| fill_of(&s, f)), [green, Paint::None], "the triple-click matches the red the face was made with");
+}
+
+/// A triple-click whose first click adds paths to a selected Live Paint group and is released in a
+/// face of that group matches the face's fill, not the edge around it.
+#[test]
+fn live_paint_bucket_triple_click_after_merging_across_an_edge_matches_the_face_fill() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0]);
+    let [a] = faces_at(&s, g, &[(25.0, 25.0)])[..] else { panic!("one face") };
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 51.0, 51.0));
+    paint_parts(&mut s, &all, &Paint::solid(Color::rgb(0.0, 0.0, 0.0)), &[(a, red.clone())]);
+    let (next, far) = (rect(&mut s, 50.0, 0.0, 50.0, 50.0), rect(&mut s, 200.0, 0.0, 50.0, 50.0));
+    set_fill(&mut s, next, Color::rgb(0.0, 0.0, 1.0));
+    set_fill(&mut s, far, Color::rgb(1.0, 0.0, 0.0));
+    s.execute("select.set", &json!({"ids": [g.0, next.0, far.0]})).unwrap();
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = green.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 55.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 45.0, 25.0), v).unwrap();
+    let g = vectorcraft_tools::builder::live_paint_at(&s.doc().unwrap().doc, Point::new(25.0, 25.0)).expect("the click merged the paths");
+    let faces = faces_at(&s, g, &[(25.0, 25.0), (225.0, 25.0)]);
+    assert_eq!(fill_of(&s, faces[0]), green, "the release fills the group's face");
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick, PointerKind::Down, PointerKind::Up, PointerKind::TripleClick] {
+        s.pointer(&PointerEvent::new(kind, 45.0, 25.0), v).unwrap();
+    }
+    assert_eq!(fill_of(&s, faces[1]), green, "the far face had the red the face had");
+}
+
+/// When the first click merges two selected Live Paint groups, a face of the group in front takes
+/// its source path's fill, so a triple-click there after a release across an edge matches that fill
+/// and not the paint the face had before the merge.
+#[test]
+fn live_paint_bucket_triple_click_after_merging_two_groups_matches_the_merged_fill() {
+    let mut s = session();
+    let back = live_squares(&mut s, &[0.0]);
+    let source = rect(&mut s, 100.0, 0.0, 50.0, 50.0);
+    set_fill(&mut s, source, Color::rgb(1.0, 0.0, 0.0));
+    s.execute("select.set", &json!({"ids": [source.0]})).unwrap();
+    let front = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let [f] = faces_at(&s, front, &[(125.0, 25.0)])[..] else { panic!("one face") };
+    let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    paint_parts(&mut s, &[], &Paint::None, &[(f, blue.clone())]);
+    let (next, far) = (rect(&mut s, 150.0, 0.0, 50.0, 50.0), rect(&mut s, 300.0, 0.0, 50.0, 50.0));
+    set_fill(&mut s, next, Color::rgb(1.0, 1.0, 0.0));
+    set_fill(&mut s, far, Color::rgb(1.0, 0.0, 0.0));
+    s.execute("select.set", &json!({"ids": [back.0, front.0, next.0, far.0]})).unwrap();
+    let merged = NodeId(s.execute("livePaint.merge", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let [m] = faces_at(&s, merged, &[(125.0, 25.0)])[..] else { panic!("one face") };
+    assert_eq!(fill_of(&s, m), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "Merge gives the front group's face its source's fill");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [back.0, front.0, next.0, far.0]})).unwrap();
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = green.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 155.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 145.0, 25.0), v).unwrap();
+    let g = vectorcraft_tools::builder::live_paint_at(&s.doc().unwrap().doc, Point::new(125.0, 25.0)).expect("the click merged the groups");
+    let faces = faces_at(&s, g, &[(125.0, 25.0), (325.0, 25.0)]);
+    assert_eq!(fill_of(&s, faces[0]), green, "the release fills the front group's face");
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick, PointerKind::Down, PointerKind::Up, PointerKind::TripleClick] {
+        s.pointer(&PointerEvent::new(kind, 145.0, 25.0), v).unwrap();
+    }
+    assert_eq!(fill_of(&s, faces[1]), green, "the far face had the red the merge gave the face");
+}
+
+/// When the first click merges paths into a selected Live Paint group whose face has an unplaced
+/// gradient, Merge fixes the gradient to the face's fit, so a triple-click there after a release
+/// across an edge matches the fixed gradient: a far face whose source has that same fixed gradient
+/// takes the bucket's paint.
+#[test]
+fn live_paint_bucket_triple_click_after_merging_matches_the_fixed_gradient() {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::BLACK), GradientStop::new(1.0, Color::WHITE)];
+    let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0]);
+    let [f] = faces_at(&s, g, &[(25.0, 25.0)])[..] else { panic!("one face") };
+    paint_parts(&mut s, &[], &Paint::None, &[(f, gradient.clone())]);
+    let (next, far) = (rect(&mut s, 50.0, 0.0, 50.0, 50.0), rect(&mut s, 200.0, 0.0, 50.0, 50.0));
+    set_fill(&mut s, next, Color::rgb(1.0, 1.0, 0.0));
+    s.execute("select.set", &json!({"ids": [g.0, next.0]})).unwrap();
+    let merged = NodeId(s.execute("livePaint.merge", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let [m] = faces_at(&s, merged, &[(25.0, 25.0)])[..] else { panic!("one face") };
+    let fixed = fill_of(&s, m);
+    assert_ne!(fixed, gradient, "Merge fixes the face's gradient to its fit");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.edit("t", |d, _| {
+        d.node_mut(far).unwrap().appearance.set_fill(fixed.clone());
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g.0, next.0, far.0]})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    s.paint.fill = green.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 55.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 45.0, 25.0), v).unwrap();
+    let g = vectorcraft_tools::builder::live_paint_at(&s.doc().unwrap().doc, Point::new(45.0, 25.0)).expect("the click merged the paths");
+    let [far_face] = faces_at(&s, g, &[(225.0, 25.0)])[..] else { panic!("the far face") };
+    assert_eq!(fill_of(&s, far_face), fixed, "the far face keeps its source's fixed gradient");
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick, PointerKind::Down, PointerKind::Up, PointerKind::TripleClick] {
+        s.pointer(&PointerEvent::new(kind, 45.0, 25.0), v).unwrap();
+    }
+    assert_eq!(fill_of(&s, far_face), green, "the far face had the fixed gradient the merge gave the face");
+}
+
+/// When the first click merges a line that splits a painted face of the selected Live Paint group,
+/// Merge keeps the face's paint in one part only and the other part takes its source path's fill;
+/// a triple-click in that other part after a release across an edge matches the source's fill.
+#[test]
+fn live_paint_bucket_triple_click_after_a_merge_splits_a_face_matches_the_part_fill() {
+    let mut s = session();
+    let source = rect(&mut s, 0.0, 0.0, 50.0, 50.0);
+    set_fill(&mut s, source, Color::rgb(1.0, 0.0, 0.0));
+    s.execute("select.set", &json!({"ids": [source.0]})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let [f] = faces_at(&s, g, &[(25.0, 25.0)])[..] else { panic!("one face") };
+    paint_parts(&mut s, &[], &Paint::None, &[(f, Paint::solid(Color::rgb(0.0, 0.0, 1.0)))]);
+    let line = NodeId(s.execute("shape.line", &json!({"x1": 40, "y1": -10, "x2": 40, "y2": 60})).unwrap()["id"].as_u64().unwrap());
+    let next = rect(&mut s, 50.0, 0.0, 50.0, 50.0);
+    set_fill(&mut s, next, Color::rgb(1.0, 1.0, 0.0));
+    let (red_far, blue_far) = (rect(&mut s, 200.0, 0.0, 50.0, 50.0), rect(&mut s, 300.0, 0.0, 50.0, 50.0));
+    set_fill(&mut s, red_far, Color::rgb(1.0, 0.0, 0.0));
+    set_fill(&mut s, blue_far, Color::rgb(0.0, 0.0, 1.0));
+    let ids = json!({"ids": [g.0, line.0, next.0, red_far.0, blue_far.0]});
+    s.execute("select.set", &ids).unwrap();
+    let merged = NodeId(s.execute("livePaint.merge", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let parts = faces_at(&s, merged, &[(20.0, 25.0), (45.0, 25.0)]);
+    assert_eq!(
+        parts.iter().map(|p| fill_of(&s, *p)).collect::<Vec<_>>(),
+        [Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0))],
+        "Merge keeps the paint in the part that holds the face's inside point"
+    );
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &ids).unwrap();
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = green.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 55.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 45.0, 25.0), v).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick, PointerKind::Down, PointerKind::Up, PointerKind::TripleClick] {
+        s.pointer(&PointerEvent::new(kind, 45.0, 25.0), v).unwrap();
+    }
+    let g = vectorcraft_tools::builder::live_paint_at(&s.doc().unwrap().doc, Point::new(45.0, 25.0)).expect("the click merged the paths");
+    let far = faces_at(&s, g, &[(225.0, 25.0), (325.0, 25.0)]);
+    assert_eq!(far.iter().map(|p| fill_of(&s, *p)).collect::<Vec<_>>(), [green, Paint::solid(Color::rgb(0.0, 0.0, 1.0))]);
+}
+
 /// A triple-click whose first click makes the Live Paint group from the selected paths matches the
 /// fill the face was made with.
 #[test]
@@ -3976,6 +4236,153 @@ fn live_paint_bucket_double_and_triple_click_paint_joined_and_same_stroke_edges(
     let r = s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [25, 0], "color": "#00ff00", "scope": "samePaint"})).unwrap();
     assert_eq!(r["count"], outer.len() + apart.len() - 1);
     assert_eq!(node(&s, apart[0]).appearance.stroke_paint(), black);
+}
+
+/// A double-click whose two clicks land on two joined edges paints every edge joined to them that
+/// had their stroke: the edge the first click painted still joins the others.
+#[test]
+fn live_paint_bucket_double_click_across_a_junction_paints_the_joined_edges() {
+    // A square with a line across its middle, cut at x = 30 and x = 70 by two lines from the top: the
+    // middle line's three edges join end to end.
+    let mut s = session();
+    let mut ids = vec![rect(&mut s, 0.0, 0.0, 100.0, 100.0).0];
+    for anchors in [
+        json!([{"x": 0, "y": 50}, {"x": 100, "y": 50}]),
+        json!([{"x": 30, "y": 0}, {"x": 30, "y": 70}]),
+        json!([{"x": 70, "y": 0}, {"x": 70, "y": 70}]),
+    ] {
+        ids.push(s.execute("path.create", &json!({ "anchors": anchors })).unwrap()["id"].as_u64().unwrap());
+    }
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let (black, red) = (Paint::solid(Color::rgb(0.0, 0.0, 0.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 101.0, 101.0));
+    paint_parts(&mut s, &all, &red, &[]);
+    let middle = edges_in(&s, g, Rect::new(-1.0, 49.0, 101.0, 51.0));
+    assert_eq!(middle.len(), 3, "the middle line's three edges");
+    paint_parts(&mut s, &middle, &black, &[]);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.stroke = green.clone();
+    let shift = Mods { shift: true, ..Default::default() };
+    for (kind, x) in
+        [(PointerKind::Down, 50.0), (PointerKind::Up, 50.0), (PointerKind::Down, 85.0), (PointerKind::Up, 85.0), (PointerKind::DoubleClick, 85.0)]
+    {
+        s.pointer(&PointerEvent::new(kind, x, 50.0).with_mods(shift), v).unwrap();
+    }
+    assert_eq!(middle.iter().map(|e| node(&s, *e).appearance.stroke_paint()).collect::<Vec<_>>(), [green.clone(), green.clone(), green]);
+    // `through` takes the group's edge ids, each once, with scope "connected" only; a face's id, an
+    // unknown id or an edge given twice is refused and changes nothing.
+    let face = vectorcraft_tools::builder::faces(&node(&s, g)).first().map(|f| f.id).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let depth = s.doc().unwrap().history.undo.len();
+    for p in [
+        json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": "x"}),
+        json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": [-1]}),
+        json!({"group": g.0, "point": [15, 50], "scope": "samePaint", "through": []}),
+        json!({"group": g.0, "point": [15, 50], "through": []}),
+        json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": [face.0]}),
+        json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": [999_999_999]}),
+        json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": [middle[1].0, middle[1].0]}),
+    ] {
+        assert!(s.execute("livePaint.strokeEdge", &p).is_err(), "{p}");
+    }
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth);
+    let r = s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": [middle[1].0]})).unwrap();
+    assert_eq!(r["count"], 3, "an edge of the group is taken");
+}
+
+/// A double-click whose second press lands on the next joined edge and is released back on the
+/// edge the first click painted (at the end of the line) matches that edge's stroke paint from
+/// before the first click, and the edge the second press painted still joins the edge past it.
+#[test]
+fn live_paint_bucket_double_click_released_back_on_the_first_edge_paints_the_joined_edges() {
+    let mut s = session();
+    let mut ids = vec![rect(&mut s, 0.0, 0.0, 100.0, 100.0).0];
+    for anchors in [
+        json!([{"x": 0, "y": 50}, {"x": 100, "y": 50}]),
+        json!([{"x": 30, "y": 0}, {"x": 30, "y": 70}]),
+        json!([{"x": 70, "y": 0}, {"x": 70, "y": 70}]),
+    ] {
+        ids.push(s.execute("path.create", &json!({ "anchors": anchors })).unwrap()["id"].as_u64().unwrap());
+    }
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let (black, red) = (Paint::solid(Color::rgb(0.0, 0.0, 0.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 101.0, 101.0));
+    paint_parts(&mut s, &all, &red, &[]);
+    let middle = edges_in(&s, g, Rect::new(-1.0, 49.0, 101.0, 51.0));
+    assert_eq!(middle.len(), 3, "the middle line's three edges");
+    paint_parts(&mut s, &middle, &black, &[]);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.stroke = green.clone();
+    let shift = Mods { shift: true, ..Default::default() };
+    for (kind, x) in
+        [(PointerKind::Down, 15.0), (PointerKind::Up, 15.0), (PointerKind::Down, 50.0), (PointerKind::Up, 15.0), (PointerKind::DoubleClick, 15.0)]
+    {
+        s.pointer(&PointerEvent::new(kind, x, 50.0).with_mods(shift), v).unwrap();
+    }
+    assert_eq!(middle.iter().map(|e| node(&s, *e).appearance.stroke_paint()).collect::<Vec<_>>(), [green.clone(), green.clone(), green]);
+}
+
+/// With Paint Fills and Paint Strokes both on, a double-click on an edge after a click that filled
+/// a face whose fill was the edge's stroke paint paints the joined edges: the face is not sent as
+/// an edge to join through.
+#[test]
+fn live_paint_bucket_edge_double_click_after_filling_a_face_paints_the_joined_edges() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0]);
+    let [a, b] = faces_at(&s, g, &[(25.0, 25.0), (75.0, 25.0)])[..] else { panic!("two faces") };
+    let black = Paint::solid(Color::rgb(0.0, 0.0, 0.0));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 101.0, 51.0));
+    paint_parts(&mut s, &all, &black, &[(a, black.clone()), (b, black.clone())]);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.set_tool_option("paintStrokes", &json!(true));
+    s.paint.fill = green.clone();
+    s.paint.stroke = green.clone();
+    for (kind, x) in [(PointerKind::Down, 25.0), (PointerKind::Up, 25.0), (PointerKind::Down, 50.0), (PointerKind::Up, 50.0)] {
+        s.pointer(&PointerEvent::new(kind, x, 25.0), v).unwrap();
+    }
+    assert_eq!(fill_of(&s, a), green, "the first click fills the face");
+    s.pointer(&PointerEvent::new(PointerKind::DoubleClick, 50.0, 25.0), v).unwrap();
+    assert!(all.iter().all(|e| node(&s, *e).appearance.stroke_paint() == green), "every joined edge is painted");
+    assert_eq!(fill_of(&s, b), black);
+}
+
+/// A triple-click whose second press holds Cmd (it goes to the selection tool Cmd lends) matches
+/// the fill the face had before the first click: the lent press counts as one that paints nothing.
+#[test]
+fn live_paint_bucket_triple_click_with_a_cmd_press_between_matches_the_fill_before() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0, 100.0, 150.0]);
+    let [a, b, c, d] = faces_at(&s, g, &[(25.0, 25.0), (75.0, 25.0), (125.0, 25.0), (175.0, 25.0)])[..] else { panic!("four faces") };
+    let (red, blue) = (Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 201.0, 51.0));
+    paint_parts(&mut s, &all, &Paint::solid(Color::rgb(0.0, 0.0, 0.0)), &[(a, red.clone()), (b, red.clone()), (c, blue.clone()), (d, red.clone())]);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = green.clone();
+    let cmd = Mods { cmd: true, ..Default::default() };
+    for (kind, m) in [
+        (PointerKind::Down, Mods::default()),
+        (PointerKind::Up, Mods::default()),
+        (PointerKind::Down, cmd),
+        (PointerKind::Up, cmd),
+        (PointerKind::Down, Mods::default()),
+        (PointerKind::Up, Mods::default()),
+        (PointerKind::TripleClick, Mods::default()),
+    ] {
+        s.pointer(&PointerEvent::new(kind, 25.0, 25.0).with_mods(m), v).unwrap();
+    }
+    assert_eq!(s.tool_id(), "livePaintBucket");
+    assert_eq!([a, b, c, d].map(|f| fill_of(&s, f)), [green.clone(), green.clone(), blue, green]);
 }
 
 /// A `scope` that is not one of the three, a `match` that is not a paint or is given with a scope
@@ -5440,9 +5847,10 @@ fn add_image(s: &mut Session, r: &vectorcraft_trace::Raster, xf: Affine) -> Node
     .unwrap()
 }
 
-/// The traced paths of an Image Trace object: its children but the image and the seam fills.
+/// The traced paths of an Image Trace object: its children but the image and the seam fills'
+/// clip group (a trace makes no other clip group).
 fn traced_paths(n: &Node) -> Vec<Arc<Node>> {
-    n.children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_)) && c.name.as_deref() != Some("Seam Fills")).cloned().collect()
+    n.children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_) | NodeKind::Group { clip: true, .. })).cloned().collect()
 }
 
 #[test]
@@ -6143,7 +6551,12 @@ fn image_trace_abutting_seam_fills_sit_under_the_paths() {
     assert!(matches!(kids[0].kind, NodeKind::Image(_)));
     let group = seams(&n).unwrap();
     assert!(Arc::ptr_eq(&group, &kids[1]), "the seam fills come under the paths");
-    let strokes = group.children().unwrap();
+    assert!(matches!(group.kind, NodeKind::Group { clip: true, .. }), "{group:?}");
+    // The two paths cover the image, so the strokes are clipped to its box.
+    let (clip, strokes) = group.children().unwrap().split_first().unwrap();
+    assert!(matches!(clip.kind, NodeKind::Path { clipping: true, .. }), "{clip:?}");
+    let cb = outline(clip).0.bounds().unwrap();
+    assert!([cb.x0, cb.y0, cb.x1 - 80.0, cb.y1 - 40.0].iter().all(|v| v.abs() < 1e-9), "{cb:?}");
     assert_eq!(strokes.len(), 1);
     assert_eq!(strokes[0].appearance.fill_paint(), Paint::None);
     let AppearanceItem::Stroke(layer) = &strokes[0].appearance.items[0] else { panic!("{:?}", strokes[0].appearance) };
@@ -6161,6 +6574,14 @@ fn image_trace_abutting_seam_fills_sit_under_the_paths() {
     assert_eq!(names.len(), 3, "{names:?}");
     assert_eq!(names[0], "Edges", "{names:?}");
     assert_eq!(n.children().unwrap()[0].id, group.id);
+    // Above a path, the seam fills' group is refused by name, not as an Auto Grouping group.
+    let (mut s, _, r) = made("abutting", "imageTrace.make", false);
+    let g = NodeId(r["id"].as_u64().unwrap());
+    let kids = node(&s, g).children().unwrap().clone();
+    s.execute("object.arrange.bringToFront", &json!({"ids": [kids[1].id.0]})).unwrap();
+    assert_eq!(node(&s, g).children().unwrap().last().map(|c| c.id), Some(kids[1].id));
+    let e = s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap_err().to_string();
+    assert!(e.contains("seam fills") && !e.contains("Auto Grouping"), "{e}");
     let (mut s, img, _) = made("abutting", "imageTrace.make", false);
     assert_eq!(ids(&s.execute("imageTrace.release", &json!({})).unwrap()), vec![img]);
     // Make and Expand by color too.
@@ -6170,13 +6591,126 @@ fn image_trace_abutting_seam_fills_sit_under_the_paths() {
     // Overlapping paths are stacked: no seam fills.
     let (s, _, r) = made("overlapping", "imageTrace.make", false);
     assert!(seams(&node(&s, NodeId(r["id"].as_u64().unwrap()))).is_none());
-    // An image stretched 3× across and squeezed to half height: 1.5 pixels at the larger scale.
+}
+
+/// With white left out, the seam fills are clipped to the image's box within the traced paths'
+/// box, so the expanded trace measures as its paths do, also on a turned image.
+#[test]
+fn image_trace_seam_fills_stay_within_the_traced_paths_box() {
+    let seams = |n: &Node| n.children().unwrap().iter().find(|c| c.name.as_deref() == Some("Seam Fills")).cloned();
+    let band = vectorcraft_trace::Raster::from_fn(24, 16, |x, y| match ((4..12).contains(&y), x < 12) {
+        (false, _) => [255; 4],
+        (true, true) => [200, 30, 30, 255],
+        (true, false) => [30, 30, 200, 255],
+    });
+    for xf in [Affine::IDENTITY, Affine::translate((100.0, 100.0)) * Affine::rotate(0.5)] {
+        let mut s = session();
+        add_image(&mut s, &band, xf);
+        let r = s
+            .execute(
+                "imageTrace.makeAndExpand",
+                &json!({"params": {"mode": "color", "palette": "limited", "colors": 3, "method": "abutting", "ignoreWhite": true}}),
+            )
+            .unwrap();
+        assert_eq!(r["paths"], 2, "{r}");
+        let n = node(&s, NodeId(r["id"].as_u64().unwrap()));
+        let group = seams(&n).unwrap();
+        let clip = &group.children().unwrap()[0];
+        assert!(matches!(clip.kind, NodeKind::Path { clipping: true, .. }), "{clip:?}");
+        let cb = outline(clip).0.bounds().unwrap();
+        let paths = n.children().unwrap()[1..].iter().filter_map(|c| c.geometric_bounds()).reduce(|a, b| a.union(b)).unwrap();
+        assert_eq!(n.geometric_bounds(), Some(paths), "{xf:?}");
+        assert!(cb.x0 >= paths.x0 - 1e-9 && cb.y0 >= paths.y0 - 1e-9 && cb.x1 <= paths.x1 + 1e-9 && cb.y1 <= paths.y1 + 1e-9, "{xf:?}: {cb:?}");
+        if xf == Affine::IDENTITY {
+            assert!([cb.x0, cb.y0 - 4.0, cb.x1 - 24.0, cb.y1 - 12.0].iter().all(|v| v.abs() < 1e-9), "{cb:?}");
+        }
+    }
+}
+
+/// On an image stretched more one way than another, the seam fills are the strokes' outlines in
+/// image pixels, filled: on an image stretched 20× across, the one along a horizontal edge covers
+/// 0.75 image pixels on each side of it, as on an image scaled alike both ways, and does not reach
+/// across the transparent rows above the edge.
+#[test]
+fn image_trace_seam_fills_on_a_stretched_image_stay_near_their_edge() {
+    // Red beside blue, the edge between them anti-aliased, on an image stretched 3× across and
+    // squeezed to half height: the outline is 1.5 pixels (4.5 points) across the vertical edge.
+    let art = vectorcraft_trace::Raster::from_fn(40, 20, |x, _| {
+        let share = (16.4 - f64::from(x)).clamp(0.0, 1.0);
+        let mix = |a: f64, b: f64| (a * share + b * (1.0 - share)).round() as u8;
+        [mix(200.0, 30.0), mix(40.0, 90.0), mix(50.0, 200.0), 255]
+    });
     let mut s = session();
     add_image(&mut s, &art, Affine::scale_non_uniform(3.0, 0.5));
     let r = s.execute("imageTrace.make", &json!({"params": {"mode": "color", "palette": "limited", "colors": 2, "method": "abutting"}})).unwrap();
-    let group = seams(&node(&s, NodeId(r["id"].as_u64().unwrap()))).unwrap();
-    let AppearanceItem::Stroke(layer) = &group.children().unwrap()[0].appearance.items[0] else { panic!("{group:?}") };
-    assert!((layer.width - 4.5).abs() < 1e-9, "{}", layer.width);
+    let n = node(&s, NodeId(r["id"].as_u64().unwrap()));
+    let kids = n.children().unwrap();
+    assert_eq!(kids[1].name.as_deref(), Some("Seam Fills"));
+    let fill = &kids[1].children().unwrap()[1];
+    assert_eq!(fill.appearance.stroke_paint(), Paint::None, "{:?}", fill.appearance);
+    assert_eq!(fill.appearance.fill_paint(), kids[2].appearance.fill_paint(), "the lower path's color");
+    let bb = outline(fill).0.bounds().unwrap();
+    assert!((bb.width() - 4.5).abs() < 0.05 && bb.y0.abs() < 1e-6 && (bb.y1 - 10.0).abs() < 1e-6, "{bb:?}");
+    // Rows 0 to 5 transparent, 5 to 10 red, 10 to 20 blue.
+    let art = vectorcraft_trace::Raster::from_fn(40, 20, |_, y| match y {
+        0..5 => [0, 0, 0, 0],
+        5..10 => [200, 30, 30, 255],
+        _ => [30, 30, 200, 255],
+    });
+    let mut s = session();
+    add_image(&mut s, &art, Affine::scale_non_uniform(20.0, 1.0));
+    let r = s.execute("imageTrace.make", &json!({"params": {"mode": "color", "palette": "limited", "colors": 2, "method": "abutting"}})).unwrap();
+    let n = node(&s, NodeId(r["id"].as_u64().unwrap()));
+    let group = n.children().unwrap().iter().find(|c| c.name.as_deref() == Some("Seam Fills")).cloned().unwrap();
+    let (_, members) = group.children().unwrap().split_first().unwrap();
+    assert!(!members.is_empty(), "{group:?}");
+    for m in members {
+        // What the member covers: its outline, grown by half its stroke's width.
+        let half = m.appearance.items.iter().fold(0.0_f64, |w, it| match it {
+            AppearanceItem::Stroke(l) => w.max(l.width / 2.0),
+            _ => w,
+        });
+        let bb = outline(m).0.bounds().unwrap();
+        let (y0, y1) = (bb.y0 - half, bb.y1 + half);
+        assert!(y0 > 9.25 - 1e-6 && y1 < 10.75 + 1e-6, "covers y {y0} to {y1}: {m:?}");
+    }
+    // Renamed, the group of filled outlines is still the seam fills: Expand by color keeps it under
+    // every color's group.
+    s.execute("layer.setProps", &json!({"id": group.id.0, "name": "Edges"})).unwrap();
+    s.execute("imageTrace.expand", &json!({"id": n.id.0, "byColor": true})).unwrap();
+    assert_eq!(node(&s, n.id).children().unwrap()[0].id, group.id);
+}
+
+/// A trace made before the seam fills were clipped holds them in a group without a clip: Expand by
+/// color keeps that group under every color's group too, named or renamed.
+#[test]
+fn image_trace_expand_by_color_keeps_unclipped_seam_fills() {
+    let art = vectorcraft_trace::Raster::from_fn(40, 20, |x, _| {
+        let share = (16.4 - f64::from(x)).clamp(0.0, 1.0);
+        let mix = |a: f64, b: f64| (a * share + b * (1.0 - share)).round() as u8;
+        [mix(200.0, 30.0), mix(40.0, 90.0), mix(50.0, 200.0), 255]
+    });
+    for name in [Some("Seam Fills"), None] {
+        let mut s = session();
+        add_image(&mut s, &art, Affine::scale(2.0));
+        let r = s.execute("imageTrace.make", &json!({"params": {"mode": "color", "palette": "limited", "colors": 2, "method": "abutting"}})).unwrap();
+        let g = NodeId(r["id"].as_u64().unwrap());
+        // The seam fills as such a trace holds them: the strokes alone, in a plain group.
+        let seams = node(&s, g).children().unwrap()[1].clone();
+        let NodeKind::Group { clip: true, children } = &seams.kind else { panic!("{seams:?}") };
+        let mut legacy = Node::group(seams.id, children[1..].to_vec());
+        legacy.name = name.map(Into::into);
+        s.edit("legacy", |d, _| {
+            let NodeKind::Group { children, .. } = &mut d.node_mut(g).unwrap().kind else { panic!("trace group") };
+            children[1] = Arc::new(legacy);
+            Ok(())
+        })
+        .unwrap();
+        s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap();
+        let kids = node(&s, g).children().unwrap().clone();
+        assert_eq!(kids.len(), 3, "{name:?}: {kids:?}");
+        assert_eq!(kids[0].id, seams.id, "{name:?}");
+    }
 }
 
 /// Expand by color: each color's paths in a group of their own, named by the color, the groups
@@ -7236,6 +7770,51 @@ fn image_trace_views_draw_on_screen_only_and_expand_to_the_result() {
         let shapes: Vec<_> = node(&s, g).children().unwrap().iter().map(|c| (c.path_data().cloned(), c.appearance.clone())).collect();
         assert_eq!(*expanded.get_or_insert_with(|| shapes.clone()), shapes, "{view:?}: expanded");
         s.execute("edit.undo", &json!({})).unwrap();
+    }
+}
+
+/// Outline views draw the traced paths' outlines and leave out an Abutting trace's seam fills
+/// (their clipping box and strokes, or on a stretched image the strokes' filled outlines), renamed
+/// too.
+#[test]
+fn image_trace_outline_view_leaves_out_the_seam_fills() {
+    // Red beside blue in the middle of a transparent 60 × 40 image, placed at 50, 50 and scaled 2×,
+    // or 2× across and 2.5× down.
+    let art = vectorcraft_trace::Raster::from_fn(60, 40, |x, y| match ((10..50).contains(&x) && (10..30).contains(&y), x < 30) {
+        (false, _) => [0, 0, 0, 0],
+        (true, true) => [200, 30, 30, 255],
+        (true, false) => [30, 30, 200, 255],
+    });
+    for (scale, stretched) in [(Affine::scale(2.0), false), (Affine::scale_non_uniform(2.0, 2.5), true)] {
+        let mut s = session();
+        add_image(&mut s, &art, Affine::translate((50.0, 50.0)) * scale);
+        let r = s.execute("imageTrace.make", &json!({"params": {"mode": "color", "palette": "limited", "colors": 2, "method": "abutting"}})).unwrap();
+        let g = NodeId(r["id"].as_u64().unwrap());
+        let seams =
+            node(&s, g).children().unwrap().iter().find(|c| matches!(c.kind, NodeKind::Group { clip: true, .. })).cloned().expect("seam fills");
+        // Strokes, or on the stretched image their outlines, filled.
+        let members = &seams.children().unwrap()[1..];
+        assert!(!members.is_empty());
+        for m in members {
+            let (fill, stroke) = (m.appearance.fill_paint(), m.appearance.stroke_paint());
+            assert_eq!((fill != Paint::None, stroke != Paint::None), (stretched, !stretched), "{scale:?}: {fill:?}, {stroke:?}");
+        }
+        s.execute("imageTrace.setView", &json!({"id": g.0, "view": "outlines"})).unwrap();
+        let screen = render_doc(&s, true);
+        // The image's top edge (y = 50), away from the art: nothing drawn.
+        for x in [60, 110, 160] {
+            assert!(screen.pixel(x, 50)[0] > 245 && screen.pixel(x, 51)[0] > 245, "{scale:?}, x = {x}: {:?}", screen.pixel(x, 50));
+        }
+        // The art's left edge (x = 70) is outlined.
+        assert!((68..=72).any(|x| screen.pixel(x, 90)[0] < 128), "{scale:?}");
+        // Beside the red and blue paths' shared edge (x = 110), inside the seam band (1.5 units
+        // each side on the stretched image) but off the traced outlines (x = 109 and 110): nothing.
+        for x in [108, 111] {
+            assert!(screen.pixel(x, 100)[0] > 245, "{scale:?}, x = {x}: {:?}", screen.pixel(x, 100));
+        }
+        // Renamed, the group is still left out: the view draws as it did.
+        s.execute("layer.setProps", &json!({"id": seams.id.0, "name": "Edges"})).unwrap();
+        assert!(render_doc(&s, true).pixels == screen.pixels, "{scale:?}: renamed seam fills drawn");
     }
 }
 

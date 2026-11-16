@@ -99,7 +99,8 @@ fn a_shared_tool_path_is_drawn_with_the_mesh_kept_while_it_and_the_view_stay() {
     path.line_to((250.0, 160.0));
     let a = std::sync::Arc::new(path.clone());
     let b = std::sync::Arc::new(path.clone());
-    let shared_of = |p: &std::sync::Arc<BezPath>| Overlay::SharedPath { path: std::sync::Arc::clone(p), color: [0x80, 0x80, 0x80], width: 1.0 };
+    let shared_of =
+        |p: &std::sync::Arc<BezPath>| Overlay::SharedPath { path: std::sync::Arc::clone(p), color: [0x80, 0x80, 0x80], width: 1.0, dash: None };
     let first = one(frame(&[shared_of(&a)], 1.0, &mut shared));
     assert!(!first.vertices.is_empty());
     let again = one(frame(&[shared_of(&a)], 1.0, &mut shared));
@@ -143,6 +144,71 @@ fn a_shared_tool_path_is_drawn_with_the_mesh_kept_while_it_and_the_view_stay() {
     half.line_to((5100.0, 5000.0));
     let half = one(frame(&[shared_of(&std::sync::Arc::new(half))], 1.0, &mut shared));
     assert_eq!(*half, *first, "the subpath off the canvas adds no triangles");
+    // A dashed shared path keeps its mesh too, and the place its dashes start is part of it.
+    let dashed_of = |p: &std::sync::Arc<BezPath>, dash: f64| Overlay::SharedPath {
+        path: std::sync::Arc::clone(p),
+        color: [0x80, 0x80, 0x80],
+        width: 1.0,
+        dash: Some(dash),
+    };
+    let dashed = one(frame(&[dashed_of(&a, 0.0)], 1.0, &mut shared));
+    assert!(!dashed.vertices.is_empty() && *dashed != *first, "the dashes leave out parts of the line");
+    assert!(std::sync::Arc::ptr_eq(&dashed, &one(frame(&[dashed_of(&a, 0.0)], 1.0, &mut shared))));
+    let moved = one(frame(&[dashed_of(&a, 2.0)], 1.0, &mut shared));
+    assert!(!std::sync::Arc::ptr_eq(&dashed, &moved) && *dashed != *moved, "dashes that start elsewhere build a new mesh");
+}
+
+/// A line drawn dashed in pieces, each piece's dashes starting as far along the pattern as the
+/// pieces before it are long, shows the dashes the whole line shows dashed in one go, whether a
+/// piece starts within a dash or within a gap, and a pattern started at 0 gives the dashes of
+/// [`Shape::dashed_line`].
+#[test]
+fn a_line_dashed_in_pieces_dashes_as_the_whole_line_does() {
+    // The stretches of x that dashes along the x axis cover, with touching ones joined.
+    let covered = |shapes: &[Shape]| -> Vec<(f32, f32)> {
+        let mut spans: Vec<(f32, f32)> = shapes
+            .iter()
+            .map(|s| {
+                let xs: Vec<f32> = match s {
+                    Shape::LineSegment { points, .. } => points.iter().map(|p| p.x).collect(),
+                    Shape::Path(p) => p.points.iter().map(|p| p.x).collect(),
+                    other => panic!("{other:?}"),
+                };
+                (xs.iter().copied().fold(f32::MAX, f32::min), xs.iter().copied().fold(f32::MIN, f32::max))
+            })
+            .collect();
+        spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut joined: Vec<(f32, f32)> = vec![];
+        for (a, b) in spans {
+            match joined.last_mut() {
+                Some(last) if a - last.1 < 1e-3 => last.1 = last.1.max(b),
+                _ => joined.push((a, b)),
+            }
+        }
+        joined
+    };
+    let s = Stroke::new(1.0, Color32::WHITE);
+    let along = |xs: &[f32]| -> Vec<Pos2> { xs.iter().map(|&x| pos2(x, 10.0)).collect() };
+    let whole = along(&[0.0, 30.0, 61.5, 100.0]);
+    let mut one_go = vec![];
+    overlays::dashes_from(&whole, s, 0.0, &mut one_go);
+    assert_eq!(covered(&one_go), covered(&Shape::dashed_line(&whole, s, 4.0, 3.0)));
+    // Cuts at 50 (within a dash: 50 is 1 past the dash that starts at 49) and at 75 (within a gap).
+    let mut pieces = vec![];
+    overlays::dashes_from(&along(&[0.0, 30.0, 50.0]), s, 0.0, &mut pieces);
+    overlays::dashes_from(&along(&[50.0, 61.5, 75.0]), s, 50.0, &mut pieces);
+    overlays::dashes_from(&along(&[75.0, 100.0]), s, 75.0, &mut pieces);
+    let (want, got) = (covered(&one_go), covered(&pieces));
+    assert_eq!(want.len(), got.len(), "{want:?} {got:?}");
+    assert!(want.iter().zip(&got).all(|(w, g)| (w.0 - g.0).abs() < 1e-3 && (w.1 - g.1).abs() < 1e-3), "{want:?} {got:?}");
+    // Every dash is drawn as line segments with a length, as `Shape::dashed_line` draws them: the
+    // cut first dash, a dash cut on a vertex (at 4) and a line shorter than the rest of a dash too.
+    let mut ends = vec![];
+    overlays::dashes_from(&along(&[0.0, 4.0, 10.0]), s, 0.0, &mut ends);
+    overlays::dashes_from(&along(&[0.0, 1.0, 2.0]), s, 1.0, &mut ends);
+    for shape in one_go.iter().chain(&pieces).chain(&ends) {
+        assert!(matches!(shape, Shape::LineSegment { points: [a, b], .. } if a != b), "{shape:?}");
+    }
 }
 
 #[test]
@@ -775,6 +841,61 @@ fn bucket_modifier_only_hover_updates_the_visible_cursor() {
     assert_eq!(chips(&mut app), 0);
     assert_eq!(shown(&mut app, vec![Event::ModifiersChanged(Modifiers::NONE)]), Some(Cursor::LivePaintBucket));
     assert!(chips(&mut app) > 0);
+}
+
+/// A press between a Live Paint Bucket triple-click's clicks that the view tools take (a
+/// middle-button pan, a pan with Space held) counts as a press that paints nothing: the
+/// triple-click matches the fill the face had before the first click.
+#[test]
+fn bucket_triple_click_with_a_view_tool_press_between_matches_the_fill_before() {
+    use egui::{Event, Modifiers, PointerButton};
+    use vectorcraft_color::{Color, Paint};
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    for case in ["middle", "space"] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let ids: Vec<u64> = [0.0, 50.0, 100.0]
+            .iter()
+            .map(|x| app.session.execute("shape.rectangle", &json!({"x": x, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap())
+            .collect();
+        app.session.execute("select.set", &json!({"ids": ids})).unwrap();
+        let g = app.session.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+        for (x, hex) in [(25, "#ff0000"), (75, "#ff0000"), (125, "#0000ff")] {
+            app.session.execute("livePaint.fill", &json!({"group": g, "point": [x, 125], "color": hex})).unwrap();
+        }
+        app.session.execute("select.none", &json!({})).unwrap();
+        app.select_tool("livePaintBucket");
+        app.session.paint.fill = green.clone();
+        if let Some(v) = app.view_mut() {
+            v.center = Point::new(200.0, 150.0);
+            v.zoom = 1.0;
+            v.fitted = true;
+        }
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let at = xf.to_screen(Point::new(25.0, 125.0));
+        let click = |app: &mut VectorcraftApp, button, pos, modifiers| {
+            let b = |pressed| Event::PointerButton { pos, button, pressed, modifiers };
+            frame(app, &ctx, vec![Event::PointerMoved(pos), b(true)]);
+            frame(app, &ctx, vec![b(false)]);
+        };
+        click(&mut app, PointerButton::Primary, at, Modifiers::NONE);
+        if case == "middle" {
+            click(&mut app, PointerButton::Middle, at, Modifiers::NONE);
+        } else {
+            let space = |pressed| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: Modifiers::NONE };
+            frame(&mut app, &ctx, vec![space(true)]);
+            click(&mut app, PointerButton::Primary, at, Modifiers::NONE);
+            frame(&mut app, &ctx, vec![space(false)]);
+        }
+        click(&mut app, PointerButton::Primary, at, Modifiers::NONE);
+        frame(&mut app, &ctx, vec![]);
+        let group = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(g)).unwrap().clone();
+        let fill = |x: f64| vectorcraft_tools::builder::face_at(&group, Point::new(x, 125.0)).unwrap().appearance.fill_paint();
+        assert_eq!([fill(25.0), fill(75.0)], [green.clone(), green.clone()], "{case}: the faces that were red");
+        assert_eq!(fill(125.0), Paint::solid(Color::from_hex("#0000ff").unwrap()), "{case}: the blue face");
+    }
 }
 
 /// The Image Trace panel's eye-button hold ends when the pointer is released, even when the

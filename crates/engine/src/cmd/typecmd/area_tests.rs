@@ -504,6 +504,62 @@ fn bunri_kinshi_is_set_per_paragraph_and_saved_only_when_on() {
     assert!(!text(&s).para_at(0).bunri_kinshi && !text(&s).para_at(1).bunri_kinshi);
 }
 
+/// Paragraph panel menu › Kurikaeshi Moji Shori: off for new type and for a paragraph saved before
+/// it, and saved only when on; `text.setFormat {kurikaeshiMojiShori}` sets it per paragraph in one
+/// undo step, records nothing when the paragraphs already have the value, refuses a value that is
+/// not true or false, and paragraph styles carry it. The text keeps its repeat marks.
+#[test]
+fn kurikaeshi_moji_shori_is_set_per_paragraph_and_saved_only_when_on() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "size": 20, "text": "時々\nすゝ"})).unwrap()["id"].as_u64().unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    assert!(!text(&s).para_at(0).kurikaeshi_moji_shori, "new type has it off");
+    assert!(serde_json::to_value(text(&s).para_at(0)).unwrap().get("kurikaeshi_moji_shori").is_none());
+    let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
+    assert!(!old.kurikaeshi_moji_shori, "saved before the option: off");
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    // Only the second paragraph.
+    let second = "時々\n".len();
+    s.execute("text.setFormat", &json!({"kurikaeshiMojiShori": true, "start": second, "end": second})).unwrap();
+    assert!(!text(&s).para_at(0).kurikaeshi_moji_shori && text(&s).para_at(1).kurikaeshi_moji_shori);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    assert_eq!(text(&s).plain_text(), "時々\nすゝ", "the text keeps its marks");
+    // The same value again records nothing.
+    s.execute("text.setFormat", &json!({"kurikaeshiMojiShori": true, "start": second, "end": second})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    let saved = serde_json::to_value(text(&s).para_at(1)).unwrap();
+    assert_eq!(saved["kurikaeshi_moji_shori"], true);
+    let back: vectorcraft_doc::ParaStyle = serde_json::from_value(saved).unwrap();
+    assert!(back.kurikaeshi_moji_shori);
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    assert!(!back.para_at(0).kurikaeshi_moji_shori && back.para_at(1).kurikaeshi_moji_shori, "the file keeps it per paragraph");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!text(&s).para_at(1).kurikaeshi_moji_shori);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(text(&s).para_at(1).kurikaeshi_moji_shori);
+    for bad in [json!("yes"), json!(1)] {
+        assert!(s.execute("text.setFormat", &json!({"ids": [id], "kurikaeshiMojiShori": bad, "kinsoku": "none"})).is_err(), "{bad}");
+    }
+    assert!(s.execute("text.setRangeStyle", &json!({"id": id, "kurikaeshiMojiShori": false})).is_err());
+    assert!(
+        text(&s).para_at(1).kurikaeshi_moji_shori && text(&s).para_at(1).kinsoku != vectorcraft_doc::Kinsoku::None,
+        "a refused call changes nothing"
+    );
+    // A paragraph style carries it.
+    s.execute("paraStyle.new", &json!({"name": "Repeats", "attrs": {"kurikaeshi_moji_shori": true}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Repeats", "id": id})).unwrap();
+    assert!(text(&s).para_at(0).kurikaeshi_moji_shori && text(&s).para_at(1).kurikaeshi_moji_shori);
+    s.execute("paraStyle.new", &json!({"name": "Marks", "attrs": {"kurikaeshi_moji_shori": false}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Marks", "id": id})).unwrap();
+    assert!(!text(&s).para_at(0).kurikaeshi_moji_shori && !text(&s).para_at(1).kurikaeshi_moji_shori);
+}
+
 /// Paragraph panel › Insert Kashidas: `text.setFormat {kashida}` sets it per paragraph in one
 /// undo step, the paragraph is saved with it only when it is not None and opens with it, an
 /// unknown value changes nothing, and paragraph styles carry it.
@@ -1918,6 +1974,66 @@ fn tsume_is_a_character_attribute() {
         assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
     }
     assert_eq!(tsume(&s), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step for a refused call");
+}
+
+/// Adjust Horizontal and Vertical Diacritic Position (Character panel, Middle Eastern options):
+/// character attributes in thousandths of an em, 0 by default and saved only when not 0. Both
+/// commands set them in one undo step, setting one leaves the other, a call that gives the values
+/// the text already has records none, and a value that is not a number or lies outside -1000 to
+/// 1000 is refused, naming the key, before anything changes; the native file and a character style
+/// captured from the characters carry them.
+#[test]
+fn diacritic_positions_are_character_attributes() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "بَب"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let moved = |s: &Session| runs(s).iter().map(|r| (r.text.clone(), r.style.diacritic_horizontal, r.style.diacritic_vertical)).collect::<Vec<_>>();
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert!(saved.get("diacriticHorizontal").is_none() && saved.get("diacriticVertical").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"diacriticHorizontal": -150})).unwrap();
+    s.execute("text.setFormat", &json!({"diacriticVertical": 250})).unwrap();
+    assert_eq!(moved(&s), [("بَب".to_string(), -150.0, 250.0)], "setting one leaves the other");
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("text.setFormat", &json!({"diacriticHorizontal": -150, "diacriticVertical": 250})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step without a change");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(moved(&s), [("بَب".to_string(), -150.0, 0.0)], "one undo step");
+    s.execute("edit.redo", &json!({})).unwrap();
+
+    let mark = "بَ".len();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": "ب".len(), "end": mark, "diacriticVertical": -1000})).unwrap();
+    assert_eq!(moved(&s), [("ب".to_string(), -150.0, 250.0), ("\u{064E}".to_string(), -150.0, -1000.0), ("ب".to_string(), -150.0, 250.0)]);
+    let saved = serde_json::to_value(&runs(&s)[1].style).unwrap();
+    assert_eq!((saved["diacriticHorizontal"].clone(), saved["diacriticVertical"].clone()), (json!(-150.0), json!(-1000.0)));
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let reopened: Vec<_> = t.runs.iter().map(|r| (r.text.clone(), r.style.diacritic_horizontal, r.style.diacritic_vertical)).collect();
+    assert_eq!(reopened, moved(&s));
+    let attrs = super::super::textstyles::char_attrs(&runs(&s)[1].style);
+    assert_eq!((attrs["diacriticHorizontal"].clone(), attrs["diacriticVertical"].clone()), (json!(-150.0), json!(-1000.0)));
+
+    let before = moved(&s);
+    let undo = s.doc().unwrap().history.undo.len();
+    for (cmd, p, want) in [
+        ("text.setFormat", json!({"diacriticHorizontal": "50"}), "`diacriticHorizontal` must be a number"),
+        ("text.setFormat", json!({"diacriticVertical": 1000.5}), "`diacriticVertical` must be from -1000 to 1000"),
+        ("text.setRangeStyle", json!({"id": id, "diacriticVertical": true}), "`diacriticVertical` must be a number"),
+        (
+            "text.setRangeStyle",
+            json!({"id": id, "start": 0, "end": mark, "diacriticHorizontal": -1001}),
+            "`diacriticHorizontal` must be from -1000 to 1000",
+        ),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
+    }
+    assert_eq!(moved(&s), before);
     assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step for a refused call");
 }
 

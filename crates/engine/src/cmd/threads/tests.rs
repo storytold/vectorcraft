@@ -2226,3 +2226,57 @@ fn paragraph_indents_check_every_entry_and_skip_a_change_that_changes_nothing() 
     assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
     assert_eq!(text_of(&s.doc().unwrap().doc, NodeId(c)).unwrap().para_at(1).left_indent, 30.0);
 }
+
+/// Kurikaeshi Moji Shori: a frame whose first paragraph continues carries the last character of
+/// that paragraph in the frames before that a repeat mark can stand for, looking past frames that
+/// hold only repeat marks and stopping at the paragraph's start; a frame that starts a paragraph
+/// carries none. Flowing the story and opening a file both set it.
+#[test]
+fn a_continued_frame_carries_the_character_a_repeat_mark_stands_for() {
+    let leads = |texts: &[&str], continues: &[bool]| first_para_leads(&texts.iter().map(|t| t.to_string()).collect::<Vec<_>>(), continues);
+    assert_eq!(leads(&["時", "々す"], &[false, true]), [None, Some('時')]);
+    assert_eq!(leads(&["時", "々", "々"], &[false, true, true]), [None, Some('時'), Some('時')]);
+    assert_eq!(leads(&["時\nか\u{3099}", "ゝ"], &[false, true]), [None, Some('か')]);
+    assert_eq!(leads(&["時\n々", "々"], &[false, true]), [None, None]);
+    assert_eq!(leads(&["時\n", "々"], &[false, false]), [None, None]);
+    assert_eq!(leads(&[], &[]), Vec::<Option<char>>::new());
+    // Opening a file marks the frames as they were saved.
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let mut ids = Vec::new();
+    for (x, text) in [(10, "日時"), (200, "々す")] {
+        let id =
+            s.execute("text.create", &json!({"x": x, "y": 10, "text": text, "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap();
+        ids.push(NodeId(id));
+    }
+    let mut d = (*s.doc().unwrap().doc).clone();
+    d.text_threads = vec![ids.clone()];
+    mark_continued(&mut d);
+    let tb = text_of(&d, ids[1]).unwrap();
+    assert!(tb.first_para_continues);
+    assert_eq!(tb.first_para_lead, Some('時'));
+    // Flowing the story through the frames sets it from the text each frame now holds.
+    reflow(&d.clone(), &mut d);
+    let (ta, tb) = (text_of(&d, ids[0]).unwrap(), text_of(&d, ids[1]).unwrap());
+    assert_eq!([ta.plain_text(), tb.plain_text()].concat(), "日時々す");
+    assert!(tb.first_para_continues);
+    assert_eq!(tb.first_para_lead, vectorcraft_text::repeat_base(&ta.plain_text()));
+}
+
+/// Kurikaeshi Moji Shori: the leads of a thread whose frames hold only repeat marks come from one
+/// pass over the frames, each frame's text gone through once, not once for every frame after it.
+#[test]
+fn continued_frame_leads_go_through_each_frame_once() {
+    let n = 2000;
+    let mut texts = vec!["時".to_string()];
+    texts.extend(std::iter::repeat_n("々\u{2028}".to_string(), n - 1));
+    let continues: Vec<bool> = (0..n).map(|k| k > 0).collect();
+    let before = lead_scans();
+    let leads = first_para_leads(&texts, &continues);
+    assert!(lead_scans() - before <= n, "{} frame texts gone through for {n} frames", lead_scans() - before);
+    assert_eq!(leads.first(), Some(&None));
+    assert!(leads.iter().skip(1).all(|l| *l == Some('時')));
+    // A paragraph break stops the carry, and a frame that starts a paragraph carries nothing.
+    let leads = first_para_leads(&["時".into(), "々\nす".into(), "々".into(), "日".into(), "々".into()], &[false, true, true, false, true]);
+    assert_eq!(leads, [None, Some('時'), Some('す'), None, Some('日')]);
+}

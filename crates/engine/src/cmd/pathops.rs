@@ -318,7 +318,7 @@ pub(crate) fn style_of(n: &Node) -> Style {
 
 /// Leaf shapes (paths, compound paths, text) of a subtree in paint order; guides and clipping
 /// paths are skipped.
-fn leaves(n: &Node, out: &mut Vec<Node>) {
+pub(crate) fn leaves(n: &Node, out: &mut Vec<Node>) {
     each_leaf(n, &mut |l| out.push(l.clone()));
 }
 
