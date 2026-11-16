@@ -18,6 +18,45 @@ use super::{
 /// The most faces [`FontDb::postscript_faces`] gives, and the most families it loads.
 const MAX_POSTSCRIPT_FACES: usize = 16;
 
+/// Keeps `other`'s variable flag in `traits`, and its likeness when it is nearer an upright
+/// Regular.
+fn merge_traits(traits: &mut FontTraits, other: &FontTraits) {
+    traits.variable |= other.variable;
+    if regular_rank(&other.likeness) < regular_rank(&traits.likeness) {
+        traits.likeness = other.likeness;
+    }
+}
+
+/// The traits of the loaded faces of each family, or of `only` that family, keyed by the family's
+/// name in ASCII lowercase: the first face's, with the other faces merged in ([`merge_traits`]).
+fn loaded_traits(faces: &[Arc<FontFace>], only: Option<&str>) -> std::collections::HashMap<String, FontTraits> {
+    let mut found = std::collections::HashMap::<String, FontTraits>::new();
+    for f in faces.iter().filter(|f| only.is_none_or(|o| f.family.eq_ignore_ascii_case(o))) {
+        match found.entry(f.family.to_ascii_lowercase()) {
+            std::collections::hash_map::Entry::Vacant(e) => {
+                e.insert(f.traits);
+            }
+            std::collections::hash_map::Entry::Occupied(mut e) => merge_traits(e.get_mut(), &f.traits),
+        }
+    }
+    found
+}
+
+/// A family's traits from its `loaded` faces with what the scan in `catalog` found for `key` (its
+/// name in ASCII lowercase) merged in, or the scan's alone when none is loaded.
+fn scanned_traits(loaded: Option<FontTraits>, catalog: &Catalog, key: &str) -> FontTraits {
+    let scanned = catalog.get(key).and_then(|c| c.traits);
+    match loaded {
+        None => scanned.unwrap_or_default(),
+        Some(mut traits) => {
+            if let Some(found) = scanned {
+                merge_traits(&mut traits, &found);
+            }
+            traits
+        }
+    }
+}
+
 impl FontDb {
     /// The family's own name and the style for a name given in a document: any of a family's
     /// names (`ヒラギノ角ゴシック` is Hiragino Sans), a legacy family name (`Hiragino Sans W6` with its
@@ -91,35 +130,21 @@ impl FontDb {
         if let Some((base, _)) = self.composite_base(family) {
             return self.family_traits(&base);
         }
-        let loaded = {
-            let faces = self.read_faces();
-            let mut found: Option<FontTraits> = None;
-            for f in faces.iter().filter(|f| f.family.eq_ignore_ascii_case(family)) {
-                match &mut found {
-                    None => found = Some(f.traits),
-                    Some(traits) => {
-                        traits.variable |= f.traits.variable;
-                        if regular_rank(&f.traits.likeness) < regular_rank(&traits.likeness) {
-                            traits.likeness = f.traits.likeness;
-                        }
-                    }
-                }
-            }
-            found
-        };
-        let scanned = |catalog: &Catalog| catalog.get(&family.to_ascii_lowercase()).and_then(|c| c.traits);
+        let key = family.to_ascii_lowercase();
+        let loaded = loaded_traits(&self.read_faces(), Some(family)).remove(&key);
         match loaded {
-            None => scanned(&self.read_catalog()).unwrap_or_default(),
-            Some(mut traits) => {
-                // What the scan found so far, without starting it.
-                if let Some(found) = scanned(&self.catalog.read().unwrap_or_else(std::sync::PoisonError::into_inner)) {
-                    traits.variable |= found.variable;
-                    if regular_rank(&found.likeness) < regular_rank(&traits.likeness) {
-                        traits.likeness = found.likeness;
-                    }
-                }
-                traits
-            }
+            None => scanned_traits(None, &self.read_catalog(), &key),
+            // What the scan found so far, without starting it.
+            Some(_) => scanned_traits(loaded, &self.catalog.read().unwrap_or_else(std::sync::PoisonError::into_inner), &key),
+        }
+    }
+
+    /// The name [`family_traits`](Self::family_traits) takes `family`'s traits by, in ASCII
+    /// lowercase: a composite font's base font's.
+    fn traits_key(&self, family: &str) -> String {
+        match self.composite_base(family) {
+            Some((base, _)) => self.traits_key(&base),
+            None => family.to_ascii_lowercase(),
         }
     }
 
@@ -141,10 +166,20 @@ impl FontDb {
                 2
             }
         };
+        // Every family's traits from one pass over the loaded faces and one look at the scan, as
+        // `family_traits` finds them; composite fonts are resolved before any lock is held.
+        let keys: Vec<String> = families.iter().map(|f| self.traits_key(f)).collect();
+        let loaded = loaded_traits(&self.read_faces(), None);
+        let catalog = if keys.iter().all(|k| loaded.contains_key(k)) {
+            self.catalog.read().unwrap_or_else(std::sync::PoisonError::into_inner)
+        } else {
+            self.read_catalog()
+        };
         let mut keyed: Vec<(bool, f32, &String)> = families
             .iter()
-            .map(|f| {
-                let traits = self.family_traits(f);
+            .zip(&keys)
+            .map(|(f, key)| {
+                let traits = scanned_traits(loaded.get(key).copied(), &catalog, key);
                 let d = if f.eq_ignore_ascii_case(family) {
                     -1.0
                 } else {
