@@ -516,6 +516,16 @@ pub(crate) fn style_attrs(d: &Document, para: bool, name: &str) -> Option<Map<St
     if para { Kind::Para } else { Kind::Char }.attrs(d, name)
 }
 
+/// The fill of `[Normal Character Style]` in `d`: black, or the fill a redefinition gave it. New
+/// type starts in that style ([Character and paragraph styles](https://helpx.adobe.com/illustrator/using/character-paragraph-styles.html):
+/// every character is in it by default; [FAQs on fonts](https://helpx.adobe.com/illustrator/using/fonts-faq.html):
+/// new type's defaults are changed by editing it), so it takes this fill, not the current fill
+/// left from the last shape (#7975).
+pub(crate) fn normal_char_fill(d: &Document) -> vectorcraft_color::Paint {
+    let normal = Kind::Char.attrs(d, NORMAL_CHAR).unwrap_or_default();
+    with_attrs(&CharStyle::default(), &normal, "text.create").map_or_else(|_| CharStyle::default().fill, |st| st.fill)
+}
+
 /// `attrs` in the form `charStyle.new` (`para`: `paraStyle.new`) stores them in `d`, or `None`
 /// when they don't pass its checks.
 pub(crate) fn stored_style_attrs(d: &Document, para: bool, attrs: &Map<String, Value>) -> Option<Map<String, Value>> {

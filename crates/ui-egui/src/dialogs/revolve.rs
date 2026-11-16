@@ -127,7 +127,7 @@ pub(crate) fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) 
     number(ui, d, "offset", tl!("Offset"), (0.0, 100000.0), "", 1, Some(unit));
     ui.horizontal(|ui| {
         let cap = flag(d, "cap", true);
-        let tip = tl!("Close the circular ends of open profiles. Partial sweeps keep their cut sides open.");
+        let tip = tl!("Close the circular ends of open profiles. Partial sweeps also close their cut sides.");
         if widgets::check3_tip(ui, c3("Cap"), cap, true, tip) {
             d.fields.insert("cap".into(), json!(cap != Some(true)));
         }
