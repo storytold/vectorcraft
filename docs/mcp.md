@@ -7345,14 +7345,15 @@ document current, and its tool keeps its state; closing the current document mak
 current, or the one before it when it was the last tab. In the desktop app a modified document comes to the front first,
 to ask whether to save it.
 `window.arrange.tile` (Window › Arrange › Tile) shows every open document in its own pane, edge to edge in the document
-area, in a grid of as many columns as the square root of the number of documents, rounded up, and fits each document to
-its pane; with fewer than two documents open it leaves the view, `tiled` and the layout as they are. It returns
+area, in a grid of as many columns as the square root of the number of windows, rounded up, and fits each document to
+its pane. Each view of a document counts as a window (see `window.newWindow` below). With fewer than two windows open it
+leaves the view, `tiled` and the layout as they are. It returns
 `{tiled, panes, layout}`. `window.arrange.tile {layout}` picks another layout, as the other Tile items of Window ›
 Arrange and of the application bar's Arrange Documents button do: `grid` (the default), `vertical` (Tile All
 Vertically: side by side in one row), `horizontal` (Tile All Horizontally: stacked in one column), and `2up`, `3up`,
-`4up` and `6up`, which show at most that many documents (2-Up and 3-Up side by side, 4-Up two by two, 6-Up three by
-two) and leave the others under their tabs. Those layouts show the first documents in tab order, and the current
-document takes the last pane when it is not among them, so a click on another tab brings that document into the last
+`4up` and `6up`, which show at most that many windows (2-Up and 3-Up side by side, 4-Up two by two, 6-Up three by
+two) and leave the others under their tabs. Those layouts show the first windows in tab order, and the current
+window takes the last pane when it is not among them, so a click on another tab brings that window into the last
 pane. Any other `layout` is an error, and the view stays as it is. The set of layouts and how each one places the panes
 are VectorCraft's own. The current document's pane is the canvas, and a press in another pane makes its document the
 current one. `window.arrange.consolidateAllWindows` (Window › Arrange › Consolidate All Windows, also first in Arrange
