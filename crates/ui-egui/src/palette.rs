@@ -461,8 +461,8 @@ fn nearest_in_view(sel: usize, offset: f32, view: f32, n: usize) -> usize {
     sel.clamp(first, last)
 }
 
-/// The highlighted result, the query it belongs to and the list's scroll offset.
-type Highlight = (usize, String, f32);
+/// The highlighted result, the query it belongs to, the list's scroll offset and the list's height.
+type Highlight = (usize, String, f32, f32);
 
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // The widget that had the keyboard focus when the palette opened takes it back when the palette
@@ -491,7 +491,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // The highlighted result (#1757): Up and Down move it (wrapping), Page Up and Page Down move it
     // by a page, the pointer over a result takes it, and a new query starts again from the first.
     let sel_id = egui::Id::unique("palette-selected");
-    let (mut sel, last_q, mut offset) = ctx.data(|d| d.get_temp::<Highlight>(sel_id)).unwrap_or_default();
+    let (mut sel, last_q, mut offset, last_view) = ctx.data(|d| d.get_temp::<Highlight>(sel_id)).unwrap_or_default();
+    let mut view = last_view;
     let new_query = last_q != q;
     if new_query {
         sel = 0;
@@ -534,7 +535,10 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             let rows = ((room / ROW_HEIGHT).floor().max(1.0) as usize).min(VISIBLE_ROWS);
             sel = moves.apply(sel, n, rows);
             drawn = sel;
-            let view = rows.min(n) as f32 * ROW_HEIGHT;
+            view = rows.min(n) as f32 * ROW_HEIGHT;
+            // When the list's height changes, as when the window is resized, the list scrolls to
+            // keep the highlighted result in view.
+            let resized = (view - last_view).abs() > 0.5;
             // Screen readers stay on the field: its description names the highlighted result and
             // its place among every match, as the footer counts them.
             if let Some(e) = matches.get(sel) {
@@ -548,7 +552,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     // `show_rows` adds the item spacing to each row, and rows touch.
                     ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
                     let mut area = egui::ScrollArea::vertical().id_salt("palette-results").max_height(view).auto_shrink([false, true]);
-                    if new_query || moves.any() {
+                    if new_query || moves.any() || resized {
                         offset = offset_showing(sel, if new_query { 0.0 } else { offset }, view);
                         area = area.vertical_scroll_offset(offset);
                     }
@@ -604,7 +608,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if sel != drawn {
         ctx.request_repaint();
     }
-    ctx.data_mut(|d| d.insert_temp::<Highlight>(sel_id, (sel, q, offset)));
+    ctx.data_mut(|d| d.insert_temp::<Highlight>(sel_id, (sel, q, offset, view)));
     if let Some(id) = run {
         app.ui.palette_open = false;
         run_pick(app, &id);
@@ -1606,6 +1610,29 @@ mod tests {
         assert_eq!(lit.len(), 1, "{lit:?}");
         assert!(lit[0].2 >= f64::from(popup.top()) && lit[0].3 <= f64::from(popup.bottom()), "{lit:?} in {popup:?}");
         assert_eq!(lit[0].0, row_label(entries(&open.ctx, Lang::EN).iter().find(|e| e.id == open.listed()[sel]).unwrap()));
+    }
+
+    /// When the window shrinks so the list shows fewer rows, the list scrolls to keep the
+    /// highlighted result in view, and Enter runs that result.
+    #[test]
+    fn a_shorter_window_keeps_the_highlight_in_view() {
+        let mut open = Open::new("show panel", WINDOW);
+        let listed = open.listed();
+        assert!(listed.len() > VISIBLE_ROWS, "{listed:?}");
+        open.press(egui::Key::ArrowDown, VISIBLE_ROWS - 1);
+        assert_eq!(open.highlighted(), VISIBLE_ROWS - 1);
+        open.size = egui::vec2(800.0, 300.0);
+        let nodes = open.frame(vec![]);
+        assert_eq!(open.highlighted(), VISIBLE_ROWS - 1);
+        let popup = open.popup();
+        let lit: Vec<_> = rows(&nodes).into_iter().filter(|r| r.1).collect();
+        assert_eq!(lit.len(), 1, "{lit:?}");
+        assert!(lit[0].2 >= f64::from(popup.top()) && lit[0].3 <= f64::from(popup.bottom()), "{lit:?} in {popup:?}");
+        let panel = listed[VISIBLE_ROWS - 1].strip_prefix("panel:").expect("a panel's result").to_string();
+        assert!(!crate::panel_docking::showing(&open.app.ui, &panel), "{panel}");
+        open.press(egui::Key::Enter, 1);
+        assert!(!open.app.ui.palette_open);
+        assert!(crate::panel_docking::showing(&open.app.ui, &panel), "{panel}: {}", open.app.ui.status);
     }
 
     /// The pointer moved onto a row highlights that row alone, and the field's description names
