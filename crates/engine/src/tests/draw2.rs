@@ -3219,6 +3219,88 @@ fn split_refuses_a_subpath_anchor_or_segment_that_is_not_a_whole_number() {
     }
 }
 
+/// Give `id` a 4 pt round-capped Inside stroke and, above it, a hidden red copy aligned Outside.
+/// Returns the appearance it now has.
+fn side_strokes(s: &mut Session, id: NodeId) -> vectorcraft_doc::Appearance {
+    use vectorcraft_doc::{AppearanceItem, LineCap, StrokeAlign};
+    s.edit("Side Strokes", |d, _| {
+        let ap = &mut d.node_mut(id).unwrap().appearance;
+        let st = ap.stroke_mut().unwrap();
+        (st.width, st.cap, st.align) = (4.0, LineCap::Round, StrokeAlign::Inside);
+        let mut top = st.clone();
+        (top.align, top.visible, top.paint) =
+            (StrokeAlign::Outside, false, vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)));
+        ap.items.push(AppearanceItem::Stroke(top));
+        Ok(())
+    })
+    .unwrap();
+    appearance(s, id)
+}
+
+fn appearance(s: &Session, id: NodeId) -> vectorcraft_doc::Appearance {
+    (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone()
+}
+
+/// `ap` with every stroke aligned Center and nothing else changed.
+fn centered(ap: &vectorcraft_doc::Appearance) -> vectorcraft_doc::Appearance {
+    let mut ap = ap.clone();
+    for it in &mut ap.items {
+        if let vectorcraft_doc::AppearanceItem::Stroke(st) = it {
+            st.align = vectorcraft_doc::StrokeAlign::Center;
+        }
+    }
+    ap
+}
+
+#[test]
+fn scissors_cut_paths_have_their_strokes_centered() {
+    // The paths a Scissors cut makes keep the source's fill and strokes, every stroke centered,
+    // in the cut's one undo step; redo centers them again.
+    let mut s = session();
+    let r = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let before = side_strokes(&mut s, r);
+    assert_ne!(before, centered(&before));
+    let undo = undo_steps(&s);
+    s.execute("path.split", &json!({"id": r.0, "anchor": 2})).unwrap();
+    assert_eq!(undo_steps(&s), undo + 1);
+    assert!(!path(&s, r).subpaths[0].closed);
+    assert_eq!(appearance(&s, r), centered(&before), "closed path");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(path(&s, r).subpaths[0].closed);
+    assert_eq!(appearance(&s, r), before, "undo");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(appearance(&s, r), centered(&before), "redo");
+    // An open path becomes two, at an anchor or inside a segment, both centered.
+    let anchors = json!([{"x": 100, "y": 300}, {"x": 200, "y": 300}, {"x": 300, "y": 300}]);
+    for at in [json!({"anchor": 1}), json!({"segment": 0, "t": 0.5})] {
+        let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+        let before = side_strokes(&mut s, id);
+        let made = s.execute("path.split", &with(&at, json!({"id": id.0}))).unwrap();
+        let ids: Vec<NodeId> = made["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+        assert_eq!(ids.len(), 2, "{at}");
+        for i in ids {
+            assert_eq!(appearance(&s, i), centered(&before), "{at}: {i:?}");
+        }
+    }
+    // A path of several subpaths keeps one node: its other subpath's strokes are centered too.
+    let id = two_subpaths(&mut s);
+    let before = side_strokes(&mut s, id);
+    s.execute("path.split", &json!({"id": id.0, "anchor": 1})).unwrap();
+    assert_eq!(path(&s, id).subpaths.len(), 3);
+    assert_eq!(appearance(&s, id), centered(&before), "several subpaths");
+    // A cut that fails, at an open path's end point, changes neither the strokes nor the history.
+    let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+    let before = side_strokes(&mut s, id);
+    let undo = undo_steps(&s);
+    assert!(s.execute("path.split", &json!({"id": id.0, "anchor": 0})).is_err());
+    assert_eq!((undo_steps(&s), appearance(&s, id)), (undo, before));
+    // Strokes already centered stay shared with the undo history's copy.
+    let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+    let shared = s.doc().unwrap().doc.node(id).unwrap().appearance.clone();
+    s.execute("path.split", &json!({"id": id.0, "anchor": 1})).unwrap();
+    assert!(vectorcraft_doc::Shared::ptr_eq(&s.doc().unwrap().doc.node(id).unwrap().appearance, &shared));
+}
+
 /// A subpath, anchor or segment of 2^32 + k fails, where k names one that exists, and the document
 /// and the undo history stay as they were. A 32-bit build read the number as k.
 #[test]
@@ -3936,6 +4018,54 @@ fn cut_at_anchors_splits_paths_and_leaves_one_end_selected() {
     let undo = undo_steps(&s);
     assert!(s.execute("path.cutAtAnchors", &json!({})).is_err());
     assert_eq!(undo_steps(&s), undo);
+}
+
+#[test]
+fn cut_at_anchors_paths_have_their_strokes_centered() {
+    // Every path the cut makes keeps the source's fill and strokes, every stroke centered, in one
+    // undo step; a path whose anchors were not selected keeps its strokes.
+    let mut s = session();
+    let anchors = json!([{"x": 100, "y": 100}, {"x": 200, "y": 100}, {"x": 300, "y": 100}, {"x": 400, "y": 100}]);
+    let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+    let open = side_strokes(&mut s, id);
+    let r = rect(&mut s, 500.0, 100.0, 100.0, 100.0);
+    let closed = side_strokes(&mut s, r);
+    let other = rect(&mut s, 100.0, 300.0, 100.0, 100.0);
+    let untouched = side_strokes(&mut s, other);
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1], [0, 2]]})).unwrap();
+    s.execute("select.anchors", &json!({"id": r.0, "anchors": [[0, 2]], "mode": "add"})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.anchors.len(), 2);
+    let undo = undo_steps(&s);
+    let made = s.execute("path.cutAtAnchors", &json!({})).unwrap();
+    let ids: Vec<NodeId> = made["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    assert_eq!(undo_steps(&s), undo + 1);
+    assert_eq!(ids.len(), 4, "three pieces and the opened rectangle");
+    for i in &ids {
+        let want = if *i == r { centered(&closed) } else { centered(&open) };
+        assert_eq!(appearance(&s, *i), want, "{i:?}");
+    }
+    assert_eq!(appearance(&s, other), untouched);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((appearance(&s, id), appearance(&s, r)), (open.clone(), closed.clone()), "undo");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!((appearance(&s, id), appearance(&s, r)), (centered(&open), centered(&closed)), "redo");
+    // A cut member of a compound path: the compound path's strokes, which it shows, are centered.
+    let a = rect(&mut s, 100.0, 450.0, 100.0, 100.0);
+    let b = rect(&mut s, 125.0, 475.0, 50.0, 50.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let compound = s.doc().unwrap().selection.objects[0];
+    let before = side_strokes(&mut s, compound);
+    let members: Vec<NodeId> = match &s.doc().unwrap().doc.node(compound).unwrap().kind {
+        NodeKind::Compound { children, .. } => children.iter().map(|c| c.id).collect(),
+        k => panic!("not a compound path: {k:?}"),
+    };
+    let held = path(&s, members[1]);
+    s.execute("select.anchors", &json!({"id": members[0].0, "anchors": [[0, 2]]})).unwrap();
+    s.execute("path.cutAtAnchors", &json!({})).unwrap();
+    assert!(!path(&s, members[0]).subpaths[0].closed);
+    assert_eq!(path(&s, members[1]), held, "the other member keeps its shape");
+    assert_eq!(appearance(&s, compound), centered(&before), "compound path");
 }
 
 #[test]

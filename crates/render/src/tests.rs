@@ -1686,16 +1686,18 @@ fn tiff_header(w: u32, h: u32) -> Vec<u8> {
 #[test]
 fn an_image_too_large_as_rgba_is_not_decoded() {
     let over = paint::decode_within_allowance(&png_header(23_171, 23_170));
-    assert!(matches!(over, Err(image::ImageError::Limits(_))), "{over:?}");
+    assert!(matches!(over, Err(paint::DecodeError::Limit(_))), "{over:?}");
+    assert!(over.unwrap_err().to_string().starts_with("the image is too large to decode: "));
     let failed = decode_failures();
     assert!(paint::decode_pixmap(&png_header(23_171, 23_170)).is_none());
     assert!(decode_failures() > failed);
     // Within the allowance: decoded, and its missing rows can't be read.
     let within = paint::decode_within_allowance(&png_header(23_170, 23_170));
-    assert!(matches!(within, Err(image::ImageError::Decoding(_))), "{within:?}");
+    assert!(matches!(within, Err(paint::DecodeError::Unreadable(_))), "{within:?}");
+    assert!(within.unwrap_err().to_string().starts_with("the image's pixels can't be read: "));
     // A header whose size as RGBA does not fit in 64 bits gets the same limit error.
     let huge = paint::decode_within_allowance(&tiff_header(1 << 31, 1 << 31));
-    assert!(matches!(huge, Err(image::ImageError::Limits(_))), "{huge:?}");
+    assert!(matches!(huge, Err(paint::DecodeError::Limit(_))), "{huge:?}");
 }
 
 /// A PNG of `w` × `h` noisy pixels cut off halfway through its bytes: its header reads, and its
