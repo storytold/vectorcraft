@@ -5,7 +5,6 @@
 //! filled outlines where the look needs them.
 
 use std::collections::HashMap;
-use std::io::Cursor;
 
 use kurbo::PathEl;
 use vectorcraft_color::Paint;
@@ -1403,35 +1402,37 @@ impl<'a> Scene<'a> {
 
     /// Image `im` as a file in the chosen format, and its size in pixels.
     fn encode_image(&self, im: &ImageObject) -> Result<(DxfImage, (u32, u32)), String> {
+        use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image as CodecImage, SampleType};
         let blob = self.doc.image_blob(im).filter(|b| !b.bytes.is_empty()).ok_or_else(|| "an image has no pixels and was left out".to_string())?;
         // The pixels it converts to (RGBA, 4 bytes each) are read from its header before decoding.
-        let (w, h) = image::ImageReader::new(Cursor::new(blob.bytes.as_slice()))
-            .with_guessed_format()
-            .ok()
-            .and_then(|r| r.into_dimensions().ok())
-            .ok_or_else(|| UNDECODED.to_string())?;
+        let (w, h) = vectorcraft_doc::header_size(&blob.bytes).ok_or_else(|| UNDECODED.to_string())?;
         if u64::from(w) * u64::from(h) > MAX_IMAGE_PIXELS {
             return Err("an image is too large for DXF and was left out".to_string());
         }
-        let img = image::load_from_memory(&blob.bytes).map_err(|_| UNDECODED.to_string())?;
-        let size = (img.width(), img.height());
-        let mut bytes = vec![];
-        let written = match self.o.raster {
-            RasterFormat::Png => img.to_rgba8().write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Png),
+        let decoded = craft_image_codecs::decode(&blob.bytes).map_err(|_| UNDECODED.to_string())?;
+        let size = decoded.dimensions();
+        let mut rgba = decoded.to_rgba8();
+        let bytes = match self.o.raster {
+            RasterFormat::Png => {
+                let img = CodecImage::from_raw(size.0, size.1, ChannelLayout::Rgba, SampleType::U8, rgba)
+                    .map_err(|e| format!("an image could not be written: {e}"))?;
+                craft_image_codecs::encode(&img, Format::Png, &EncodeOptions::default())
+            }
             RasterFormat::Jpeg => {
                 // No alpha in JPEG: transparent pixels over white.
-                let mut rgba = img.to_rgba8();
-                for p in rgba.pixels_mut() {
+                let mut rgb = Vec::with_capacity(rgba.len() / 4 * 3);
+                for p in rgba.as_chunks_mut::<4>().0 {
                     let a = u32::from(p[3]);
-                    for c in 0..3 {
-                        p[c] = ((u32::from(p[c]) * a + 255 * (255 - a)) / 255) as u8;
+                    for c in &p[..3] {
+                        rgb.push(((u32::from(*c) * a + 255 * (255 - a)) / 255) as u8);
                     }
                 }
-                let rgb = image::DynamicImage::ImageRgba8(rgba).to_rgb8();
-                rgb.write_with_encoder(image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 90))
+                let img = CodecImage::from_raw(size.0, size.1, ChannelLayout::Rgb, SampleType::U8, rgb)
+                    .map_err(|e| format!("an image could not be written: {e}"))?;
+                craft_image_codecs::encode(&img, Format::Jpeg, &EncodeOptions { jpeg_quality: 90, ..EncodeOptions::default() })
             }
-        };
-        written.map_err(|e| format!("an image could not be written: {e}"))?;
+        }
+        .map_err(|e| format!("an image could not be written: {e}"))?;
         Ok((DxfImage { name: format!("{}.{}", blob.content_key(), self.o.raster.extension()), bytes }, size))
     }
 }

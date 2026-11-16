@@ -97,7 +97,23 @@ fn pdf_info_lists_pages_boxes_and_a_thumbnail() {
     assert_eq!(p2["boxes"]["trim"], json!([15.0, 15.0, 185.0, 385.0]));
     assert_eq!(p2["boxes"]["media"], json!([0.0, 0.0, 200.0, 400.0]));
     let png = vectorcraft_format::base64_decode(v["thumbnail"].as_str().unwrap()).unwrap();
-    let img = image::load_from_memory(&png).unwrap();
+    let img = craft_image_codecs::decode(&png)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap();
     assert_eq!((img.width(), img.height()), (50, 100), "the art box at 100 px on its longest side");
     assert!(s.execute("document.pdfInfo", &json!({"dataBase64": b64(&bytes), "thumbnail": 4})).is_err());
     // Locked: no pages until the password is given.
@@ -214,7 +230,27 @@ fn pdf_info_refuses_a_thumbnail_size_that_is_not_a_number() {
     assert!(e.contains("`colorMode` must be a string"), "{e}");
     let v = s.execute("document.pdfInfo", &json!({"dataBase64": b64(&bytes), "thumbnail": 1, "thumbnailSize": null})).unwrap();
     let png = vectorcraft_format::base64_decode(v["thumbnail"].as_str().unwrap()).unwrap();
-    assert_eq!(image::load_from_memory(&png).unwrap().width(), 160);
+    assert_eq!(
+        craft_image_codecs::decode(&png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .width(),
+        160
+    );
 }
 
 #[test]
@@ -284,7 +320,23 @@ fn pdf_info_reads_postscript_as_one_page() {
     ] {
         let v = s.execute("document.pdfInfo", &json!({"dataBase64": b64(bytes), "thumbnail": 1, "thumbnailSize": 100})).unwrap();
         let png = vectorcraft_format::base64_decode(v["thumbnail"].as_str().unwrap()).unwrap();
-        let img = image::load_from_memory(&png).unwrap();
+        let img = craft_image_codecs::decode(&png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap();
         assert_eq!(img.width().max(img.height()), 100, "{name}");
         let mut v = v;
         v["thumbnail"] = json!("png");
@@ -314,7 +366,23 @@ fn pdf_info_refuses_a_thumbnail_that_is_not_a_page_number() {
         }
         let v = s.execute("document.pdfInfo", &json!({"dataBase64": b64(bytes), "thumbnail": 1, "thumbnailSize": 64})).unwrap();
         let png = vectorcraft_format::base64_decode(v["thumbnail"].as_str().unwrap()).unwrap();
-        let img = image::load_from_memory(&png).unwrap();
+        let img = craft_image_codecs::decode(&png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap();
         assert_eq!(img.width().max(img.height()), 64, "{pages}");
     }
 }
