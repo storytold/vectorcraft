@@ -421,7 +421,7 @@ fn a_popover_stays_open_for_a_click_on_its_anchor_or_during_a_panel_drag() {
         shown.get()
     };
     let far = Some(pos2(500.0, 350.0));
-    let panel_drag = || Some(PanelDrag::Symbol("s".into()));
+    let panel_drag = || Some(PanelDrag::Symbol { document: 1, name: "s".into() });
     // Whether it is open after: a click elsewhere; a click on its anchor that doesn't toggle it;
     // a panel drag released elsewhere.
     let open = [open_after_click(far, None), open_after_click(None, None), open_after_click(far, panel_drag())];

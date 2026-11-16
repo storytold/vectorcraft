@@ -431,7 +431,7 @@ fn zone_input(ui: &Ui, zone: &Response, d: &Document, ev: &mut Events) {
         PanelDrag::Art(ids) => (None, ids.first().copied()),
         PanelDrag::Appearance(id) => (None, Some(*id)),
         PanelDrag::Paint { .. }
-        | PanelDrag::Symbol(_)
+        | PanelDrag::Symbol { .. }
         | PanelDrag::LibrarySymbol { .. }
         | PanelDrag::Brush { .. }
         | PanelDrag::LibraryBrush { .. }

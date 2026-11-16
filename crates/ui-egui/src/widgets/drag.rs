@@ -23,9 +23,10 @@ pub enum PanelDrag {
     /// (`symbol.new`), the Swatches panel a pattern swatch of a copy (`object.pattern.make`) and the
     /// Brushes panel an Art brush (`brush.new`).
     Art(Vec<vectorcraft_doc::NodeId>),
-    /// A Symbols panel symbol: the canvas places an instance of it centred where it is dropped
-    /// (`symbol.place`).
-    Symbol(String),
+    /// A Symbols panel symbol (`document`: the uid of the document whose panel it was dragged
+    /// from): the canvas places an instance of it centered where it is dropped, adding the symbol
+    /// first when another document is active by then (`symbol.placeFromDocument`).
+    Symbol { document: u64, name: String },
     /// A symbol of a symbol library panel (`name`: its name in `library`): the canvas adds it to the
     /// document's Symbols and places an instance where it is dropped (`symbol.addFromLibrary` with
     /// `place`).

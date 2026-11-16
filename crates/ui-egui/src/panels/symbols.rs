@@ -296,7 +296,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    let Some((doc, keys)) = app.session.active().map(|d| (d.doc.clone(), document_symbols(d))) else { return };
+    let Some((doc, keys, document)) = app.session.active().map(|d| (d.doc.clone(), document_symbols(d), d.uid)) else { return };
     let names: Vec<String> = doc.symbols.iter().map(|s| s.name.clone()).collect();
     let view = app.ui.symbols_view;
     let sel = current(app);
@@ -316,7 +316,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             for n in &names {
                 let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click_and_drag());
                 // Dragged onto the canvas, the symbol is placed there.
-                widgets::drag_source(ui, &resp, || PanelDrag::Symbol(n.clone()));
+                widgets::drag_source(ui, &resp, || PanelDrag::Symbol { document, name: n.clone() });
                 if on(n) {
                     ui.painter().rect_filled(r, 0.0, t.row_selected);
                 } else if resp.hovered() {
@@ -342,7 +342,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.horizontal_wrapped(|ui| {
                 for n in &names {
                     let (r, resp) = ui.allocate_exact_size(vec2(44.0, 44.0), Sense::click_and_drag());
-                    widgets::drag_source(ui, &resp, || PanelDrag::Symbol(n.clone()));
+                    widgets::drag_source(ui, &resp, || PanelDrag::Symbol { document, name: n.clone() });
                     chip(ui, &doc, &keys, r.shrink(2.0), n);
                     let on = on(n);
                     ui.painter().rect_stroke(
@@ -771,13 +771,14 @@ mod tests {
         let doc = &app.session.active().unwrap().doc;
         let first = doc.layers[0].children().unwrap().first().unwrap();
         assert!(matches!(first.kind, NodeKind::SymbolInstance { .. }), "the art became an instance");
-        // Dragging the symbol's tile out of the panel carries the symbol.
+        // Dragging the symbol's tile out of the panel carries the symbol and its document.
         frame(&ctx, &mut app, vec![]);
         let tile = pos2(26.0, 26.0);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
-        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol(names[0].clone())));
+        let document = app.session.active().unwrap().uid;
+        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol { document, name: names[0].clone() }));
     }
 
     /// One headless frame of the panel menu; returns its painted labels.

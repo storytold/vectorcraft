@@ -8812,7 +8812,8 @@ fn a_symbol_dropped_on_the_canvas_is_placed_there() {
     let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
     // Released over empty canvas: an instance centred there.
     let at = xf.to_screen(Point::new(250.0, 180.0));
-    egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Symbol(name.clone()));
+    let document = app.session.active().unwrap().uid;
+    egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Symbol { document, name: name.clone() });
     let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), up]);
     let st = app.session.active().unwrap();
@@ -8821,6 +8822,106 @@ fn a_symbol_dropped_on_the_canvas_is_placed_there() {
     assert!(matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if *symbol == name));
     let c = n.geometric_bounds().unwrap().center();
     assert!((c - xf.to_doc(at)).hypot() < 1e-6, "{c:?}");
+}
+
+/// A new active document with a symbol `name` made from a `w` by `h` rectangle and no art; → its
+/// uid.
+fn document_with_symbol(app: &mut VectorcraftApp, name: &str, w: f64, h: f64) -> u64 {
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": w, "height": h})).unwrap();
+    app.session.execute("symbol.new", &json!({"name": name})).unwrap();
+    app.session.execute("edit.clear", &json!({})).unwrap();
+    app.session.active().unwrap().uid
+}
+
+/// The natural size the active document records for symbol `name`.
+fn symbol_size(app: &VectorcraftApp, name: &str) -> (f64, f64) {
+    let st = app.session.active().unwrap();
+    let size = st.doc.unknown.get(vectorcraft_doc::SYMBOL_SIZES).and_then(|m| m.get(name)).cloned().unwrap();
+    (size[0].as_f64().unwrap(), size[1].as_f64().unwrap())
+}
+
+/// A symbol dragged from one document's Symbols panel and released on the canvas after another
+/// document with a different symbol of the same name became active places the dragged symbol: it
+/// is added under a free name, the other document's symbol is left as it was, the source document
+/// is not changed, and one Undo takes back both the symbol and the instance.
+#[test]
+fn a_symbol_dragged_from_another_document_places_that_documents_symbol() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let source = document_with_symbol(&mut app, "Leaf", 40.0, 20.0);
+    let ctx = egui::Context::default();
+    // While Leaf is held, a document with a Leaf of its own becomes active.
+    egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Symbol { document: source, name: "Leaf".into() });
+    document_with_symbol(&mut app, "Leaf", 10.0, 70.0);
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let undo = app.session.active().unwrap().history.undo.len();
+    let at = xf.to_screen(Point::new(250.0, 180.0));
+    let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), up]);
+    let st = app.session.active().unwrap();
+    assert_eq!(st.doc.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Leaf", "Leaf 2"]);
+    assert_eq!(st.history.undo.len(), undo + 1, "added and placed as one undo step");
+    let placed = st.selection.objects.first().copied().expect("the placed instance is selected");
+    let n = st.doc.node(placed).unwrap();
+    assert!(matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Leaf 2"), "{:?}", n.kind);
+    let b = n.geometric_bounds().unwrap();
+    assert!((b.width() - 40.0).abs() < 1e-6 && (b.height() - 20.0).abs() < 1e-6, "the dragged symbol's size: {b:?}");
+    assert!((b.center() - xf.to_doc(at)).hypot() < 1e-6, "{b:?}");
+    assert_eq!(symbol_size(&app, "Leaf"), (10.0, 70.0), "this document's Leaf is unchanged");
+    app.run("edit.undo", json!({})).unwrap();
+    let st = app.session.active().unwrap();
+    assert_eq!(st.doc.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Leaf"]);
+    assert!(st.doc.node(placed).is_none());
+    assert!(app.session.set_active(0));
+    assert_eq!(app.session.active().unwrap().uid, source);
+    assert_eq!(app.session.active().unwrap().doc.symbols.len(), 1, "the source document is unchanged");
+    assert_eq!(symbol_size(&app, "Leaf"), (40.0, 20.0));
+}
+
+/// A symbol dragged from a document that was closed before the release places nothing, even
+/// where the active document has a symbol of the same name.
+#[test]
+fn a_symbol_whose_document_closed_places_nothing() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let source = document_with_symbol(&mut app, "Leaf", 40.0, 20.0);
+    document_with_symbol(&mut app, "Leaf", 10.0, 70.0);
+    app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    assert!(app.session.documents().iter().all(|d| d.uid != source));
+    let ctx = egui::Context::default();
+    egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Symbol { document: source, name: "Leaf".into() });
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let undo = app.session.active().unwrap().history.undo.len();
+    let at = xf.to_screen(Point::new(250.0, 180.0));
+    let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), up]);
+    let st = app.session.active().unwrap();
+    assert_eq!(st.history.undo.len(), undo, "no edit");
+    assert!(st.selection.objects.is_empty(), "nothing placed");
+}
+
+/// The chip at the pointer shows the dragged symbol from the document it was dragged from after
+/// another document, without a symbol of that name, became active.
+#[test]
+fn the_pointer_chip_of_a_dragged_symbol_shows_its_own_documents_symbol() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let source = document_with_symbol(&mut app, "Leaf", 40.0, 20.0);
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Symbol { document: source, name: "Leaf".into() });
+    let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0)));
+    let run = |events| {
+        let mut out =
+            ctx.run_ui(egui::RawInput { screen_rect, events, ..Default::default() }, |ui| crate::panels::swatches::drag_preview(&app, ui.ctx()));
+        out.textures_delta.clear();
+        out
+    };
+    // The chip's area is drawn from its second frame.
+    run(vec![egui::Event::PointerMoved(pos2(200.0, 150.0))]);
+    let out = run(vec![]);
+    let thumbnail = out.shapes.iter().any(|c| matches!(&c.shape, Shape::Mesh(m) if m.texture_id != egui::TextureId::default()));
+    assert!(thumbnail, "the chip draws the source document's thumbnail of Leaf");
 }
 
 #[test]

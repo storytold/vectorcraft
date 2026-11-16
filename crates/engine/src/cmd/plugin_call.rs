@@ -64,6 +64,7 @@ const DENIED_PREFIXES: &[&str] = &[
     "edit.newDocument",
     "edit.colorSettings",
     "edit.dropSelection",
+    "symbol.placeFromDocument",
     "artboard.copy",
     "artboard.cut",
     "text.rescanFonts",
