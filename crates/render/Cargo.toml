@@ -21,10 +21,9 @@ vello_common = { version = "0.2", default-features = false }
 image = { workspace = true }
 craft-gif = { workspace = true }
 craft-image-codecs = { workspace = true }
+jpeg-encoder = { workspace = true }
 craft-stream-codecs = { workspace = true }
 flate2 = { workspace = true }
-# TIFF LZW compression (MIT OR Apache-2.0).
-weezl = "0.2"
 log = { workspace = true }
 # Combining marks inside a lam-alef cluster (MIT OR Apache-2.0; already used by vectorcraft-text).
 unicode-general-category = "1"
@@ -38,6 +37,8 @@ vello_cpu = { workspace = true, features = ["multithreading"] }
 winsafe = { version = "0.0.29", default-features = false, features = ["kernel"] }
 
 [dev-dependencies]
+# The TIFF LZW writer before craft-stream-codecs, the reference encode/tests_tiff.rs compares it with.
+weezl = "0.2"
 vectorcraft-testkit = { workspace = true }
 # A variable font built in code (no font file is committed).
 vectorcraft-text = { workspace = true, features = ["test-fonts"] }
