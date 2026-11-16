@@ -509,9 +509,15 @@ pub(crate) fn linked_files(d: &Document, base: LinkBase) -> Vec<LinkedFile> {
         .filter(|g| seen.insert(g.link.path.clone()))
         .map(|g| {
             let named = fileio::format_for_name(g.link.name()).or_else(|| fileio::readable_format_for_name(g.link.name()));
-            // A placed EPS or PostScript file's bytes keep their PostScript type whatever its name
-            // (a PostScript `.ai`).
-            let postscript = |b: &ImageBlob| b.mime == super::place::document::POSTSCRIPT && super::place::document::is_postscript(&b.bytes);
+            // A placed document's PostScript bytes are its file's own only when its name is one that
+            // PostScript is read from (`.eps`, `.epsf`, `.ps`, a PostScript `.ai` or `.ait`).
+            let postscript_name = matches!(fileio::extension(g.link.name()).as_str(), "eps" | "epsf" | "ps" | "ai" | "ait");
+            let postscript = |b: &ImageBlob| {
+                g.document.is_some()
+                    && postscript_name
+                    && b.mime == super::place::document::POSTSCRIPT
+                    && super::place::document::is_postscript(&b.bytes)
+            };
             let own = |b: &&ImageBlob| !b.is_proxy() && (named.is_some_and(|f| f.mime == b.mime) || postscript(b));
             let found = locate(&g.link, base);
             let found_path = found.as_ref().map(|f| f.path.clone());
