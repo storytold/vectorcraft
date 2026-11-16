@@ -6676,7 +6676,7 @@ axis	Y Axis	Axe Y
 @msg	`opacity` must be a number	`opacity` doit être un nombre
 @msg	`opacity` must be a number from 0 to 100	`opacity` doit être un nombre compris entre 0 et 100
 @msg	`opacity` must be true or false	`opacity` doit valoir true ou false
-@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	les caractères du texte n’ont pas d’opacité propre : ajoutez un fond ou un contour avec Ajouter un nouveau fond ou Ajouter un nouveau contour dans le panneau Aspect
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	les caractères du texte n’ont pas d’opacité propre : ajoutez un fond ou un contour avec Ajouter un nouveau fond ou Ajouter un nouveau contour dans le panneau Aspect
 @msg	an object selected in a symbol instance has no fill or stroke opacity of its own	un objet sélectionné dans une occurrence de symbole n’a pas d’opacité de fond ou de contour propre
 @msg	no target has that fill or stroke to take the opacity	aucune cible n’a ce fond ou ce contour pour recevoir l’opacité
 @msg	`type` must be "path" or "compound"	`type` doit valoir "path" ou "compound"
