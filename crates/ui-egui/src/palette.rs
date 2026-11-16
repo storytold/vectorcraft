@@ -9,6 +9,7 @@ use crate::theme::Tokens;
 use crate::{VectorcraftApp, menus};
 
 mod search;
+pub(crate) mod words;
 
 /// Engine commands the palette leaves out, each with the UI command of the same name that runs it
 /// the way the panels and menus do: (engine id, UI command id). The Layers panel's Delete
@@ -337,7 +338,10 @@ fn catalog(lang: crate::i18n::Lang, native: bool) -> Catalog {
     let list = build_in(lang, native);
     let shown_homes: Vec<Option<String>> =
         list.iter().map(|e| e.home.as_deref().map(|h| format!("{} › {}", shown_label(lang, h), crate::i18n::tr(lang, e.menu_item)))).collect();
-    let index = search::Index::build(&list, &shown_homes);
+    // A group's row in the `search` context gives its words in `lang`; without one, `tr_ctx` gives
+    // back the group's own English words.
+    let search_row = |key: &str| Some(crate::i18n::tr_ctx(lang, words::CONTEXT, key)).filter(|w| *w != key).map(str::to_string);
+    let index = search::Index::build(&list, &shown_homes, search_row);
     Catalog { list, index, ranked: std::sync::Mutex::new(None) }
 }
 
