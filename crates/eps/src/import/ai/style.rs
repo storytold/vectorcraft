@@ -188,10 +188,11 @@ pub(super) struct ArtStyle {
     /// It would be [`Self::simple`] but for a Stroke Style filter's variable width written as one
     /// centered array ([`centered_widths`]): an object whose drawn look is empty takes it with its profile.
     pub uneven: bool,
-    /// It is several fills and strokes in solid colours or gradients (strokes without a brush),
-    /// each with its own visibility, opacity and blend mode but no effects of its own, under only
-    /// the effects any object takes that don't move the outline: what a path or compound path is
-    /// read with when each gradient is placed as its drawn look has it (`read::ops`' `styled`).
+    /// It is several fills and strokes in solid colours, gradients or patterns (strokes without a
+    /// brush), each with its own visibility, opacity and blend mode but no effects of its own, under
+    /// only the effects any object takes that don't move the outline, and under none when a pattern
+    /// paints: what a path or compound path is read with when each gradient and pattern is placed as
+    /// its drawn look has it (`read::ops`' `styled`).
     pub stacked: bool,
     /// It is one Warp on the whole object, under fills and strokes that paint nothing and have no
     /// effects of their own: what an image is read with when its live warp draws as its drawn look
@@ -1853,9 +1854,15 @@ fn style(filters: &[Filter]) -> ArtStyle {
         && st.plain
         && !st.pathfinder
         && !st.moves_outline()
-        && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Gradient { .. } | StyleItem::Stroke { brush: None, .. }))
+        && st.items.iter().all(|i| {
+            matches!(i, StyleItem::Fill(_) | StyleItem::Gradient { .. } | StyleItem::Pattern { .. } | StyleItem::Stroke { brush: None, .. })
+        })
         && st.looks.iter().all(|l| l.effects.is_empty())
-        && st.effects.iter().all(any_object_takes);
+        && st.effects.iter().all(any_object_takes)
+        // A pattern fill under the object's effects keeps the drawn look, a conservative rule: in
+        // one file a Scribble over a pattern fill drew unlike its look, its tiles placed as the
+        // look's are (why isn't established).
+        && (st.effects.is_empty() || !st.items.iter().any(|i| matches!(i, StyleItem::Pattern { .. })));
     st.image_warp = st.plain
         && matches!(st.effects.as_slice(), [e] if e.id.starts_with("warp."))
         && st.items.iter().all(|i| matches!(i, StyleItem::Fill(p) | StyleItem::Stroke { paint: p, .. } if p.is_none()))

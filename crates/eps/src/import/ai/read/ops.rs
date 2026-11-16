@@ -1065,15 +1065,17 @@ fn tick(vals: &[V]) -> Option<(Affine, Rect, String)> {
 }
 
 /// The gradients and patterns `look` paints with, placed as it draws them, by their swatch's name
-/// (the first of each; a pattern's name after `PATTERN_KEY`).
-fn placed_paints(look: &Node, out: &mut HashMap<String, Paint>, depth: usize) {
+/// (the first of each; a pattern's name after `PATTERN_KEY`). With `fill_patterns`, a pattern only
+/// where the look fills with it: a style's pattern is a fill, so a path's stack takes it from the
+/// look's fills alone (type keeps taking it from either).
+fn placed_paints(look: &Node, out: &mut HashMap<String, Paint>, fill_patterns: bool, depth: usize) {
     if depth > MAX_DEPTH {
         return;
     }
     for item in &look.appearance.items {
         let key = match item.paint() {
             Paint::Gradient(g) => g.swatch.clone(),
-            Paint::Pattern { pattern, .. } => Some(format!("{PATTERN_KEY}{pattern}")),
+            Paint::Pattern { pattern, .. } if item.is_fill() || !fill_patterns => Some(format!("{PATTERN_KEY}{pattern}")),
             _ => None,
         };
         if let Some(key) = key {
@@ -1081,7 +1083,7 @@ fn placed_paints(look: &Node, out: &mut HashMap<String, Paint>, depth: usize) {
         }
     }
     for c in look.children().into_iter().flatten() {
-        placed_paints(c, out, depth + 1);
+        placed_paints(c, out, fill_patterns, depth + 1);
     }
 }
 
@@ -1265,14 +1267,19 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     // A style's gradients are written in a space of the object's bounds that isn't documented; its
     // drawn look has each where the app placed it.
     let mut placed = HashMap::new();
-    placed_paints(look, &mut placed, 0);
+    placed_paints(look, &mut placed, stacked, 0);
     // A stack's gradients are each its own swatch, placed where the drawn look has it: one fitted
-    // to the object's bounds instead could lie elsewhere, so such a stack keeps its drawn look.
+    // to the object's bounds instead could lie elsewhere, so such a stack keeps its drawn look. So
+    // are its patterns, each once (`placed_paints` keeps the first placement of each name).
     if stacked {
-        let mut seen = HashSet::new();
+        let (mut seen, mut seen_patterns) = (HashSet::new(), HashSet::new());
         let placed_apart = st.items.iter().all(|i| match i {
             StyleItem::Gradient { name: Some(n), .. } => seen.insert(n) && placed.contains_key(paints.names.get(Global::Gradient, n)),
             StyleItem::Gradient { name: None, .. } => false,
+            StyleItem::Pattern { name, .. } => {
+                let key = format!("{PATTERN_KEY}{}", paints.names.get(Global::Pattern, name));
+                seen_patterns.insert(key.clone()) && placed.contains_key(&key)
+            }
             _ => true,
         });
         if !placed_apart {

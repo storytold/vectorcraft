@@ -1260,6 +1260,169 @@ fn a_style_pattern_fill_is_placed_as_a_direct_one() {
     }
 }
 
+/// An art style `Stacked` whose stack holds `filters` (basic filters, top first).
+fn stacked_style(filters: &[String]) -> String {
+    format!(
+        "%AI9_BeginArtStyles\n/KnownStyle :\n(Stacked) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n{}\
+         /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n%AI9_EndArtStyles\n",
+        filters.concat()
+    )
+}
+
+/// A fill filter painting with `paint` (operators).
+fn fill_filter(paint: &str) -> String {
+    format!(
+        "/BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n{paint}\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n"
+    )
+}
+
+/// A black stroke filter `width` wide.
+fn stroke_filter(width: f64) -> String {
+    format!(
+        "/BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+         /StrokeStyle : 0 R\n0 0 0 1 0 0 0 XA\n0 J 0 j {width} w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n"
+    )
+}
+
+/// The layers of a file whose object (`own`, on `%_` lines) has the style `Stacked` and the drawn
+/// look `look`.
+fn stacked_object(look: &str, own: &str) -> String {
+    let own: String = own.lines().map(|l| format!("%_{l}\n")).collect();
+    layer(&format!("0 Ae\nu\n{look}U\n{own}1 (Stacked) XW\n"))
+}
+
+/// The pattern placement of `n`'s fill painting with a pattern.
+fn pattern_xf(n: &Node) -> [f64; 6] {
+    n.appearance
+        .items
+        .iter()
+        .find_map(|i| match i.paint() {
+            Paint::Pattern { xf, .. } => Some(xf.as_coeffs()),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no pattern fill: {:?}", n.appearance.items))
+}
+
+/// A path or compound path whose art style fills it with a pattern (as a stack of fills and strokes
+/// can) comes in as itself with that fill, the pattern placed where the drawn look places it (not
+/// where the style's own operands would), among the style's other fills and strokes in their order.
+#[test]
+fn a_path_with_a_style_pattern_fill_comes_in_as_the_path_with_it() {
+    let rect = rect_path(10.0, 20.0, 70.0, 80.0);
+    let hole = rect_path(30.0, 40.0, 50.0, 60.0);
+    // The style's operands and the look's differ: the look's placement is taken.
+    let (style_ops, look_ops) = ("0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0]", "25 30 1.5 .75 30 1 45 10 0 [.8 .1 -.2 1.1 4 -6]");
+    let pattern = fill_filter(&format!("(Dots) {style_ops} p"));
+    let look_xf = |shape: &str| {
+        let direct = read_ok(&format!("{DOTS}{}", layer(&format!("(Dots) {look_ops} p\n{shape}f\n"))));
+        pattern_xf(&art(&direct.doc)[0])
+    };
+    let close = |a: [f64; 6], b: [f64; 6]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-9);
+    // The style's operands alone would place it elsewhere.
+    let style_xf = pattern_xf(&art(&read_ok(&format!("{DOTS}{}", layer(&format!("(Dots) {style_ops} p\n{rect}f\n")))).doc)[0]);
+    assert!(!close(style_xf, look_xf(&rect)), "{style_xf:?}");
+    // A path filled with the pattern alone.
+    let look = format!("(Dots) {look_ops} p\n{rect}f\n");
+    let r = read_ok(&format!("{}{DOTS}{}", stacked_style(std::slice::from_ref(&pattern)), stacked_object(&look, &format!("{rect}n"))));
+    let a = art(&r.doc);
+    assert!(matches!(a.as_slice(), [n] if matches!(n.kind, NodeKind::Path { .. })), "the path: {a:#?} {:?}", r.warnings);
+    assert!(close(pattern_xf(&a[0]), look_xf(&rect)), "{:?} {:?}", pattern_xf(&a[0]), look_xf(&rect));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    // A compound path, the pattern over a solid fill and under a 3 unit stroke.
+    let style = stacked_style(&[stroke_filter(3.0), pattern.clone(), fill_filter("0 1 1 0 1 0 0 Xa")]);
+    let look = format!("{RED}*u\n{rect}f\n{hole}f\n*U\n(Dots) {look_ops} p\n*u\n{rect}f\n{hole}f\n*U\n");
+    let own = format!("*u\n{rect}n\n{hole}n\n*U");
+    let r = read_ok(&format!("{style}{DOTS}{}", stacked_object(&look, &own)));
+    let a = art(&r.doc);
+    assert!(matches!(a.as_slice(), [n] if matches!(n.kind, NodeKind::Compound { .. })), "the compound path: {a:#?} {:?}", r.warnings);
+    let items: Vec<String> = a[0]
+        .appearance
+        .items
+        .iter()
+        .map(|i| match (i, i.paint()) {
+            (AppearanceItem::Fill(_), Paint::Pattern { .. }) => "pattern fill".into(),
+            (AppearanceItem::Fill(_), p) => format!("fill {:?}", p.color()),
+            (AppearanceItem::Stroke(s), _) => format!("stroke {}", s.width),
+        })
+        .collect();
+    assert_eq!(items, [format!("fill {:?}", Some(Color::rgb(1.0, 0.0, 0.0))), "pattern fill".into(), "stroke 3".into()]);
+    assert!(close(pattern_xf(&a[0]), look_xf(&format!("*u\n{rect}f\n{hole}f\n*U\n"))));
+}
+
+/// A stack's pattern fill keeps the drawn look where the look doesn't fill with that pattern: its
+/// placement isn't known. A look that only strokes with it doesn't place the fill either.
+#[test]
+fn a_style_pattern_fill_the_look_doesnt_paint_keeps_the_drawn_look() {
+    let rect = rect_path(10.0, 20.0, 70.0, 80.0);
+    let ops = "0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0]";
+    let pattern = fill_filter(&format!("(Dots) {ops} p"));
+    for (why, look) in
+        [("a look without the pattern", format!("{RED}{rect}f\n")), ("a look that strokes with it", format!("(Dots) {ops} P\n{rect}S\n"))]
+    {
+        let r = read_ok(&format!("{}{DOTS}{}", stacked_style(std::slice::from_ref(&pattern)), stacked_object(&look, &format!("{rect}n"))));
+        let a = art(&r.doc);
+        assert!(matches!(a.as_slice(), [n] if matches!(n.kind, NodeKind::Group { .. })), "{why}: the drawn look: {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{why}: {:?}", r.warnings);
+    }
+}
+
+/// A stack that fills with one pattern twice keeps the drawn look: which of the look's placements is
+/// whose isn't known.
+#[test]
+fn a_stack_with_one_pattern_twice_keeps_the_drawn_look() {
+    let rect = rect_path(10.0, 20.0, 70.0, 80.0);
+    let ops = "0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0]";
+    let pattern = fill_filter(&format!("(Dots) {ops} p"));
+    let look = format!("(Dots) {ops} p\n{rect}f\n(Dots) {ops} p\n{rect}f\n");
+    let r = read_ok(&format!("{}{DOTS}{}", stacked_style(&[pattern.clone(), pattern]), stacked_object(&look, &format!("{rect}n"))));
+    let a = art(&r.doc);
+    assert!(matches!(a.as_slice(), [n] if matches!(n.kind, NodeKind::Group { .. })), "the drawn look: {a:#?}");
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+/// A style's pattern fill under an effect on the object keeps the drawn look, a conservative rule
+/// (in one file a Scribble over a pattern fill drew unlike its look; why isn't established).
+#[test]
+fn a_path_with_a_style_pattern_fill_under_an_effect_keeps_its_drawn_look() {
+    let rect = rect_path(10.0, 20.0, 70.0, 80.0);
+    let hidden = rect.replace('\n', "\n%_");
+    let ops = "0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0]";
+    let shadow = "/BasicFilter :\n(Adobe Drop Shadow) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n2 /Int (blnd) ,\n0.43 /Real (opac) ,\n\
+        37 /Real (dark) ,\n-13 /Real (vert) ,\n11 /Real (horz) ,\n17 /Real (blur) ,\n\
+        /FillStyle : 0 O\n0 0 0 0 0 1 0 Xa\n0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n0 1 Xd\n/Def ;\n (sclr) ,\n0 /Int (csrc) ,\n; /Dict ;\n /Part ,\n";
+    let style = tiled_style("Dots", ops);
+    // After the stack, in the object's chain.
+    let end = ";\n /Part ,\n;\n%AI9_EndArtStyles";
+    assert!(style.contains(end));
+    let style = style.replace(end, &format!(";\n /Part ,\n{shadow};\n%AI9_EndArtStyles"));
+    // The style reads, with its pattern fill and the shadow: what keeps the look is the rule.
+    let st = crate::import::ai::style::art_styles(style.as_bytes());
+    let tiled = &st["Tiled"];
+    assert!(tiled.plain && tiled.effects.len() == 1, "{tiled:?}");
+    let look = format!("0 Ae\nu\n(Dots) {ops} p\n{rect}f\nU\n");
+    let r = read_ok(&format!("{style}{DOTS}{}", layer(&format!("{look}%_{hidden}n\n1 (Tiled) XW\n"))));
+    let a = art(&r.doc);
+    assert!(matches!(a.as_slice(), [n] if matches!(n.kind, NodeKind::Group { .. })), "the drawn look: {a:#?}");
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+/// Type whose style fills it with a pattern takes the placement from its drawn look wherever the look
+/// paints with that pattern, a stroke of it too (as before paths took such styles): the look's
+/// fills-only rule is the path stack's.
+#[test]
+fn type_with_a_style_pattern_fill_takes_a_stroke_only_looks_placement() {
+    let rect = rect_path(10.0, 20.0, 70.0, 80.0);
+    let (style_ops, look_ops) = ("0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0]", "25 30 1.5 .75 30 1 45 10 0 [.8 .1 -.2 1.1 4 -6]");
+    let look = format!("0 Ae\nu\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n(Dots) {look_ops} P\n{rect}S\nU\n");
+    let own = "%_/AI11Text :\n%_0 /FreeUndo ,\n%_0 /FrameIndex ,\n%_0 /StoryIndex ,\n%_;\n";
+    let styled = read_ok(&format!("{}{DOTS}{}", tiled_style("Dots", style_ops), layer(&format!("{look}{own}1 (Tiled) XW\n"))));
+    let stroked = read_ok(&format!("{DOTS}{}", layer(&format!("(Dots) {look_ops} P\n{rect}S\n"))));
+    let Paint::Pattern { xf: got, .. } = fill(&art(&styled.doc)[0]) else { panic!("{:?} {:?}", art(&styled.doc), styled.warnings) };
+    let want = pattern_xf(&art(&stroked.doc)[0]);
+    assert!(got.as_coeffs().iter().zip(want).all(|(g, w)| (g - w).abs() < 1e-9), "{got:?} {want:?}");
+}
+
 /// An art style's pattern fill paints with the pattern under the name it is shown with.
 #[test]
 fn a_style_pattern_fill_paints_with_the_shown_name() {
