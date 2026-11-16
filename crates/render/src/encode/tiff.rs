@@ -192,12 +192,7 @@ pub fn write(img: &Image, l: &Layout) -> Result<Vec<u8>, String> {
         offsets.push(strips.len());
         match l.compression {
             Compression::None => strips.extend_from_slice(strip),
-            Compression::Lzw => {
-                let lzw = weezl::encode::Encoder::with_tiff_size_switch(weezl::BitOrder::Msb, 8)
-                    .encode(strip)
-                    .map_err(|e| format!("TIFF encoding failed: {e}"))?;
-                strips.extend(lzw);
-            }
+            Compression::Lzw => strips.extend(craft_stream_codecs::lzw::encode(strip, true)),
             Compression::PackBits => strip.chunks(row).for_each(|r| packbits(r, &mut strips)),
         }
         // Strips start on a word boundary.
