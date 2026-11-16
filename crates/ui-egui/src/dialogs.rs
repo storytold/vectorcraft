@@ -339,6 +339,7 @@ registry! {
     Replace: [confirm::REPLACE] => confirm::REPLACE_SPEC,
     ReplaceFiles: [confirm::REPLACE_FILES] => confirm::REPLACE_FILES_SPEC,
     ResetPreferences: [confirm::RESET_PREFS] => confirm::RESET_PREFS_SPEC,
+    ResetActions: [confirm::RESET_ACTIONS] => confirm::RESET_ACTIONS_SPEC,
     NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
     GraphData: [graph_data::KIND] => graph_data::SPEC,
