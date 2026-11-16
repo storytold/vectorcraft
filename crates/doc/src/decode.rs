@@ -23,8 +23,9 @@ pub fn decode_image(format: craft_image_codecs::Format, bytes: &[u8], allowance:
 /// `bytes` decoded within `max` bytes, counted as the file's samples and as RGBA (#1717), the
 /// pixels as stored and as the image crate gave them, with the ICC profile the file embeds.
 /// Image blobs read their pixels with it. `Ok(None)` when they would take more than `max` as
-/// samples or as RGBA, or when the decode needs more than `max`. `Err` when the bytes aren't an
-/// image the decoder reads.
+/// samples or as RGBA (the header alone decides; the pixels are not read). `Err` when the bytes
+/// aren't an image the decoder reads, including a file whose header fits the allowance but whose
+/// pixels can't be decoded (a cut-short file, or one the decoder refuses as a decompression bomb).
 pub fn decode_within(bytes: &[u8], max: u64) -> Result<Option<DecodedImage>, craft_image_codecs::CodecError> {
     let format = craft_image_codecs::detect(bytes).ok_or(craft_image_codecs::CodecError::UnknownFormat)?;
     let (w, h, per_pixel) =
@@ -33,11 +34,7 @@ pub fn decode_within(bytes: &[u8], max: u64) -> Result<Option<DecodedImage>, cra
     if pixels.saturating_mul(per_pixel) > max || pixels.saturating_mul(4) > max {
         return Ok(None);
     }
-    match decode_image(format, bytes, max) {
-        Ok(img) => Ok(Some(img)),
-        Err(craft_image_codecs::CodecError::LimitExceeded(_)) => Ok(None),
-        Err(e) => Err(e),
-    }
+    decode_image(format, bytes, max).map(Some)
 }
 
 /// A decoded image as the image crate's: 8- and 16-bit gray, gray and alpha, RGB and RGBA as they
