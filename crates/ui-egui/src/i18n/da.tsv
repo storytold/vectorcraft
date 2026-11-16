@@ -706,6 +706,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	No bridge of this width fits across the selected art	Ingen bro med denne bredde passer hen over den markerede grafik
 @msg	Some islands could not be joined to the area around the art	Nogle øer kunne ikke forbindes med området omkring grafikken
 @msg	`width` must be from {lo} to {hi} pt	`width` skal være fra {lo} til {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` skal være fra -180 til 180 grader
+@msg	`roundness` must be from 1 to 100%	`roundness` skal være fra 1 til 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` skal være et heltal fra 1 til {MAX_BRIDGES_PER_ISLAND}
 
 	File	Filer
