@@ -674,6 +674,12 @@ fn spectrum(ui: &mut Ui, mode: Mode, size: egui::Vec2) -> Option<SpectrumHit> {
 
 /// Draw numeric paint controls, retaining live components while the color and settings match.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
+    show_sized(app, ui, 0.0);
+}
+
+/// Draw the Color panel in a sized dock body; compact mixers use [`show`].
+pub(crate) fn show_sized(app: &mut VectorcraftApp, ui: &mut Ui, height: f32) {
+    let top = ui.next_widget_position().y;
     let t = Tokens::get(ui.ctx());
     let tgt = target(app, ui);
     let color = tgt.color();
@@ -684,7 +690,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let hit = ui
             .horizontal(|ui| {
                 super::proxy(app, ui, 40.0);
-                spectrum(ui, mode, vec2(ui.available_width(), 40.0))
+                spectrum(ui, mode, vec2(ui.available_width(), height.max(40.0)))
             })
             .inner;
         match hit {
@@ -851,7 +857,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     });
     ui.add_space(4.0);
-    match spectrum(ui, mode, vec2(ui.available_width(), 46.0)) {
+    // Measure from the content origin so scrolling moves the ramp without stretching it.
+    let remaining = height - (ui.next_widget_position().y - top);
+    match spectrum(ui, mode, vec2(ui.available_width(), remaining.max(46.0))) {
         Some(SpectrumHit::Pick(c, phase)) => pick(c, phase, &mut new),
         Some(SpectrumHit::Cycle) => set_mode(app, &tgt, mode.next()),
         Some(SpectrumHit::Recolor { invert }) => recolor(app, ui, &tgt, invert, alt),
