@@ -1246,7 +1246,9 @@ fn expand_node_except(
 /// ([`has_seeded`]) expands before its ids change ([`expand_in_place`]), as [`expand_pieces`] does,
 /// and `members` gets what that expansion lists, by the copy's new id. `kept` gets the new id of
 /// each copy of an object `skip` lists, and `out` gets `n` unless `listed` says it is there.
-/// Returns whether `n` changed; any other object stays as it is.
+/// Returns whether `n` changed; any other object stays as it is. `Err`, with `n` as it is, when
+/// such a copy still holds a random Transform effect after the raster budget left part of it as
+/// it is: its new ids would give that effect another seed.
 fn copies_carrying_raster(
     d: &mut Document,
     n: &mut Node,
@@ -1255,15 +1257,19 @@ fn copies_carrying_raster(
     members: &mut std::collections::HashMap<NodeId, Vec<Listed>>,
     (out, listed): (&mut Vec<Listed>, &mut bool),
     raster: &mut RasterBudget,
-) -> bool {
-    if !is_container(n) || effects::outer_effects(n).len() == n.appearance.effects.len() {
-        return false;
+) -> std::result::Result<bool, OverBudget> {
+    if !carries_copies(n) {
+        return Ok(false);
     }
-    let Some(mut m) = effects::evaluate_container(Some(&*d), n) else { return false };
+    let Some(mut m) = effects::evaluate_container(Some(&*d), n) else { return Ok(false) };
     let mut seen = std::collections::HashSet::from([n.id]);
     for c in m.children_mut().into_iter().flatten().filter(|c| !c.is_ruler_guide()) {
         let c = Arc::make_mut(c);
+        let left = raster.left;
         let mut expanded = (has_seeded(c) && repeats_an_id(c, &seen)).then(|| expand_in_place(d, c, brushes, skip, raster));
+        if expanded.is_some() && raster.left > left && has_seeded(c) {
+            return Err(OverBudget);
+        }
         let mut was = vec![];
         if !skip.is_empty() {
             c.walk(&mut |n| was.push(n.id));
@@ -1286,7 +1292,13 @@ fn copies_carrying_raster(
         *listed = true;
     }
     *n = m;
-    true
+    Ok(true)
+}
+
+/// Is `n` a group or layer whose Transform effect's copies each carry the raster effects listed
+/// before it ([`copies_carrying_raster`])?
+fn carries_copies(n: &Node) -> bool {
+    is_container(n) && effects::outer_effects(n).len() != n.appearance.effects.len()
 }
 
 /// [`expand_node`] of `n`, which need not be in `d`: `n` with its appearance expanded, `None` when
@@ -1318,10 +1330,13 @@ fn expanded_node(
         }
         _ => None,
     };
-    // The embedded images before the adjustment, when the raster budget may yet leave `n` as it
-    // is: the recolored copies the adjustment adds then go again.
-    let images_before = (effects::has_adjustment(&n) && !rasterfx::raster_fx(&n).is_empty())
+    // The embedded images before the adjustment and the expansions of the copies
+    // ([`copies_carrying_raster`]), when the raster budget may yet leave `n` as it is: the
+    // recolored copies and the images those add then go again.
+    let images_before = ((effects::has_adjustment(&n) && !rasterfx::raster_fx(&n).is_empty()) || carries_copies(&n))
         .then(|| d.images.keys().cloned().collect::<std::collections::HashSet<_>>());
+    // What the raster budget had left before those expansions: it gets back what they took.
+    let budget_before = (raster.images, raster.pixels);
     if effects::has_adjustment(&n)
         && let Some(m) = effects::adjust_in_document(d, &n, symbol_art)
     {
@@ -1372,14 +1387,19 @@ fn expanded_node(
     // Members of a group or layer that `expand_pieces` or `copies_carrying_raster` expanded, by id,
     // with what their expansion lists.
     let mut members = std::collections::HashMap::new();
-    changed |= copies_carrying_raster(d, &mut n, (brushes, skip), &mut kept, &mut members, (out, &mut listed_n), raster);
+    let copies = copies_carrying_raster(d, &mut n, (brushes, skip), &mut kept, &mut members, (out, &mut listed_n), raster);
     // Raster effects whose image would go past the budget stay: so does the object, with what is
-    // inside it and its color adjustments (a symbol instance stays an instance of its symbol).
-    let Ok(image) = raster_image(d, &n, raster) else {
+    // inside it and its color adjustments (a symbol instance stays an instance of its symbol), and
+    // so does a group or layer whose copies keep a random Transform effect the budget left.
+    let Ok(image) = copies.and_then(|copied| {
+        changed |= copied;
+        raster_image(d, &n, raster)
+    }) else {
         out.truncate(listed_before);
         if let Some(keys) = images_before {
             d.images.retain(|k, _| keys.contains(k));
         }
+        (raster.images, raster.pixels) = budget_before;
         return None;
     };
     let mut v = n.clone();
