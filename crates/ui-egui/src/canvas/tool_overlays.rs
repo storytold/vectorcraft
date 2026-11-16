@@ -535,10 +535,11 @@ pub(super) fn grid_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter, x
     }
 }
 
-/// A selected radial repeat's circle with its radius handle on it, and its instances handle below
-/// it, at the places the Selection tool's hit testing finds them.
+/// A selected radial repeat's circle with its radius handle and its splitter on it, and its
+/// instances handle below it, at the places the Selection tool's hit testing finds them. The
+/// splitter also has a short line across the circle.
 pub(super) fn radial_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
-    use vectorcraft_tools::repeat_radial::{HANDLE_RADIUS, RadialHandles};
+    use vectorcraft_tools::repeat_radial::{HANDLE_RADIUS, RadialHandles, RadialPart};
     if app.session.tool_id() != "selection" || !app.ui.view.bounding_box {
         return;
     }
@@ -552,8 +553,13 @@ pub(super) fn radial_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter,
         p.circle_stroke(c, r, Stroke::new(3.0, t.measure_bg));
         p.circle_stroke(c, r, Stroke::new(1.0, t.selection));
     }
-    for (_, at) in h.parts() {
+    for (part, at) in h.parts() {
         let c = xf.to_screen(at);
+        let across = (c - xf.to_screen(h.center)).normalized() * (HANDLE_RADIUS + 4.0);
+        if part == RadialPart::Splitter && c.is_finite() && across.is_finite() {
+            p.line_segment([c - across, c + across], Stroke::new(3.0, t.measure_bg));
+            p.line_segment([c - across, c + across], Stroke::new(1.5, t.selection));
+        }
         if c.is_finite() {
             p.circle_filled(c, HANDLE_RADIUS, t.measure_bg);
             p.circle_stroke(c, HANDLE_RADIUS, Stroke::new(2.0, t.selection));

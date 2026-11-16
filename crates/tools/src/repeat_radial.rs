@@ -1,8 +1,14 @@
-//! Radial Repeat's on-canvas handles: a handle below the repeat adds or removes instances, and a
-//! handle on the circle the instances sit on sets its radius, as the public "Create radial
-//! repeats" page describes. Drawing and hit testing share the document-space geometry of
+//! Radial Repeat's on-canvas handles: a handle below the repeat adds or removes instances, a
+//! handle on the circle the instances sit on sets its radius, and a splitter on the circle hides
+//! instances at the end of the ring while the others keep their places, as the public "Create
+//! radial repeats" page describes. Drawing and hit testing share the document-space geometry of
 //! [`RadialHandles::of`]; a drag previews the existing Repeat Options command and commits as one
 //! undo step.
+//!
+//! A split ring is kept in the repeat's existing options: `instances` counts the instances shown,
+//! and `endAngle` places them a full ring's step apart from `startAngle` (one step past it for a
+//! single instance). The full ring's slot count is read back from that step, so dragging the
+//! splitter forward shows the hidden instances again.
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, NodeId, NodeKind, OrientedBox, RepeatKind, Selection};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
@@ -10,7 +16,7 @@ use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 use crate::bbox::Handle;
 use crate::{Action, Cursor, Mods, ToolContext};
 
-/// The radius of the instances and radius handles (screen points).
+/// The radius of the instances, radius and splitter handles (screen points).
 pub const HANDLE_RADIUS: f32 = 5.0;
 
 /// How far (screen points) the instances handle sits below the bounding box, clear of its own
@@ -34,6 +40,61 @@ pub enum RadialPart {
     /// On the circle, between the first two instances: drag outward for a larger radius, inward
     /// for a smaller one.
     Radius,
+    /// On the circle, half a step past the last instance shown: drag it back around the circle to
+    /// hide the instances it passes, forward to show them again.
+    Splitter,
+}
+
+/// The full ring a radial repeat's instances sit on.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Ring {
+    /// The instances a full turn holds at the repeat's step.
+    slots: u32,
+    /// Degrees from one instance to the next (negative when the instances run the other way).
+    step: f64,
+}
+
+impl Ring {
+    /// The ring of `instances` laid out from `start` to `end` degrees, when their step fits a
+    /// whole number of times (2 to 1,000, and no fewer than the instances) in a full turn.
+    fn of(instances: u32, start: f64, end: f64) -> Option<Self> {
+        let step = instance_step(instances, end - start);
+        let slots = 360.0 / step.abs();
+        let whole = slots.round();
+        ((slots - whole).abs() < 1e-6 && (2.0..=MAX_INSTANCES).contains(&whole) && whole >= f64::from(instances))
+            .then(|| Self { slots: whole as u32, step: (360.0 / whole).copysign(step) })
+    }
+
+    /// The Repeat Options that show the first `shown` instances of the ring (1 to all of them),
+    /// laid out from `start` degrees.
+    fn options(&self, shown: u32, start: f64) -> Value {
+        let shown = shown.clamp(1, self.slots.max(1));
+        let sweep = if shown == self.slots { 360.0_f64.copysign(self.step) } else { self.step * f64::from(shown.saturating_sub(1).max(1)) };
+        json!({ "instances": shown, "endAngle": start + sweep })
+    }
+
+    /// The instances shown with the splitter `turn` degrees around the ring from the first
+    /// instance: those it has passed, one at least and the full ring at most.
+    fn shown(&self, turn: f64) -> u32 {
+        let k = (turn / self.step.abs()).floor() + 1.0;
+        if k.is_nan() { 1 } else { k.clamp(1.0, f64::from(self.slots)) as u32 }
+    }
+}
+
+/// Degrees between neighboring instances, as `repeat_transforms` spaces `instances` over `sweep`.
+fn instance_step(instances: u32, sweep: f64) -> f64 {
+    let full = (sweep.abs() - 360.0).abs() < 1e-9;
+    if full || instances <= 1 { sweep / f64::from(instances.max(1)) } else { sweep / f64::from(instances - 1) }
+}
+
+/// `v` turned by `deg` degrees as `repeat_transforms` turns the instances.
+fn turned(v: Vec2, deg: f64) -> Vec2 {
+    (Affine::rotate(deg.to_radians()) * v.to_point()).to_vec2()
+}
+
+/// The direction of `v` in counter-clockwise screen degrees.
+fn screen_angle(v: Vec2) -> f64 {
+    (-v.y).atan2(v.x).to_degrees()
 }
 
 /// The controls of a selected radial repeat, in document space.
@@ -48,8 +109,13 @@ pub struct RadialHandles {
     out: Vec2,
     /// Document points of drag for each instance.
     step: f64,
+    start_angle: f64,
+    ring: Option<Ring>,
     pub instances_at: Point,
     pub radius_at: Point,
+    /// Where the splitter is: none when the instances' step does not divide a full turn, for a
+    /// single instance to a turn, or with a radius of 0.
+    pub splitter_at: Option<Point>,
 }
 
 impl RadialHandles {
@@ -78,12 +144,14 @@ impl RadialHandles {
         if d.hypot() < 1e-9 {
             d = Vec2::new(0.0, -1.0);
         }
-        let sweep = end_angle - start_angle;
-        let full = (sweep.abs() - 360.0).abs() < 1e-9;
-        let step = if full || instances == 1 { sweep / f64::from(instances) } else { sweep / f64::from(instances - 1) };
-        // Halfway between the first two instances (opposite the only one of a full turn).
-        let out = (Affine::rotate((start_angle + step / 2.0).to_radians()) * d.normalize().to_point()).to_vec2();
+        let first = turned(d.normalize(), start_angle);
+        let step = instance_step(instances, end_angle - start_angle);
+        // Halfway between the first two instances; opposite a single one.
+        let out = turned(first, if instances == 1 { 180.0 } else { step / 2.0 });
         let radius = radius.max(0.0);
+        let ring = Ring::of(instances, start_angle, end_angle);
+        // Half a step past the last instance shown.
+        let splitter_at = ring.filter(|_| radius > 0.0).map(|r| center + turned(first, r.step * (f64::from(instances) - 0.5)) * radius);
         let frame = match frame {
             Some(f) => aabb(f.corners())?,
             None => n.geometric_bounds_with(&doc.symbol_boxes())?,
@@ -95,15 +163,20 @@ impl RadialHandles {
             radius,
             out,
             step: INSTANCE_STEP / zoom,
+            start_angle,
+            ring,
             instances_at: Point::new(frame.center().x, frame.y1 + HANDLE_GAP / zoom),
             radius_at: center + out * radius,
+            splitter_at: splitter_at.filter(|p| finite(*p)),
         };
         (finite(h.instances_at) && finite(h.radius_at) && h.step.is_finite() && h.step > 0.0).then_some(h)
     }
 
-    /// Both controls with where they are.
-    pub fn parts(&self) -> [(RadialPart, Point); 2] {
-        [(RadialPart::Instances, self.instances_at), (RadialPart::Radius, self.radius_at)]
+    /// The controls with where they are.
+    pub fn parts(&self) -> Vec<(RadialPart, Point)> {
+        let mut parts = vec![(RadialPart::Instances, self.instances_at), (RadialPart::Radius, self.radius_at)];
+        parts.extend(self.splitter_at.map(|at| (RadialPart::Splitter, at)));
+        parts
     }
 
     /// The control under `p` (the nearer within reach) and the repeat's controls, unless a
@@ -120,7 +193,8 @@ impl RadialHandles {
     }
 
     /// The Repeat Options that dragging `part` by `d` (document points) from the press gives;
-    /// none when the drag is too far to measure.
+    /// none when the drag is too far to measure. The splitter's options are those it shows at the
+    /// press.
     fn options(&self, part: RadialPart, d: Vec2) -> Option<Value> {
         match part {
             RadialPart::Instances => {
@@ -133,12 +207,31 @@ impl RadialHandles {
                 let r = ((self.radius + d.dot(self.out)).max(0.0) * 100.0).round() / 100.0;
                 r.is_finite().then(|| json!({ "radius": r }))
             }
+            RadialPart::Splitter => self.ring.map(|r| r.options(self.instances, self.start_angle)),
         }
+    }
+
+    /// Degrees around the ring from the first instance to the splitter, in the direction the
+    /// instances run.
+    fn splitter_turn(&self) -> f64 {
+        self.ring.map_or(0.0, |r| (f64::from(self.instances) - 0.5) * r.step.abs())
+    }
+
+    /// The direction of `p` from the center in degrees, as the instances are turned; none at the
+    /// center.
+    fn bearing(&self, p: Point) -> Option<f64> {
+        let v = p - self.center;
+        (finite(p) && v.hypot() > 1e-9).then(|| v.y.atan2(v.x).to_degrees())
     }
 
     /// The direction (counter-clockwise degrees) in which the radius handle moves the circle out.
     fn out_angle(&self) -> f64 {
-        (-self.out.y).atan2(self.out.x).to_degrees()
+        screen_angle(self.out)
+    }
+
+    /// The direction (counter-clockwise degrees) along the circle at the splitter.
+    fn splitter_angle(&self) -> f64 {
+        self.splitter_at.map_or(0.0, |at| screen_angle(at - self.center) + 90.0)
     }
 }
 
@@ -153,11 +246,12 @@ fn finite(p: Point) -> bool {
 }
 
 /// The resize cursor of `part`, turned with the view: up and down for the instances handle, along
-/// the line from the center for the radius handle.
+/// the line from the center for the radius handle, and along the circle for the splitter.
 fn part_cursor(cx: &ToolContext, h: &RadialHandles, part: RadialPart) -> Cursor {
     match part {
         RadialPart::Instances => crate::select::handle_cursor(Handle::Bottom, -cx.view_angle()),
         RadialPart::Radius => crate::select::handle_cursor(Handle::Right, h.out_angle() - cx.view_angle()),
+        RadialPart::Splitter => crate::select::handle_cursor(Handle::Right, h.splitter_angle() - cx.view_angle()),
     }
 }
 
@@ -176,6 +270,10 @@ pub struct RadialDrag {
     /// The options the press found, and the last ones previewed.
     from: Value,
     last: Option<Value>,
+    /// For the splitter: its degrees around the ring from the first instance, and the pointer's
+    /// last direction from the center.
+    turn: f64,
+    bearing: Option<f64>,
 }
 
 impl RadialDrag {
@@ -185,7 +283,7 @@ impl RadialDrag {
         }
         let (handles, part) = RadialHandles::hit(cx, p)?;
         let from = handles.options(part, Vec2::ZERO)?;
-        Some(Self { handles, part, start: p, from, last: None })
+        Some(Self { handles, part, start: p, from, last: None, turn: handles.splitter_turn(), bearing: handles.bearing(p) })
     }
 
     /// Whether the drag has changed the repeat (and so previews it).
@@ -197,13 +295,30 @@ impl RadialDrag {
         part_cursor(cx, &self.handles, self.part)
     }
 
+    /// The options of the splitter with the pointer at `p`: it follows the pointer around the
+    /// circle, each move counted by the shorter way round.
+    fn split(&mut self, p: Point) -> Option<Value> {
+        let ring = self.handles.ring?;
+        if let Some(b) = self.handles.bearing(p) {
+            if let Some(last) = self.bearing {
+                self.turn += ((b - last + 180.0).rem_euclid(360.0) - 180.0) * ring.step.signum();
+            }
+            self.bearing = Some(b);
+        }
+        Some(ring.options(ring.shown(self.turn), self.handles.start_angle))
+    }
+
     /// Preview the options the pointer at `p` gives, when they change; the first change opens
     /// the undo step.
     pub fn drag(&mut self, p: Point) -> Vec<Action> {
         if !finite(p) {
             return vec![];
         }
-        let Some(v) = self.handles.options(self.part, p - self.start) else { return vec![] };
+        let v = match self.part {
+            RadialPart::Splitter => self.split(p),
+            part => self.handles.options(part, p - self.start),
+        };
+        let Some(v) = v else { return vec![] };
         if self.last.as_ref().unwrap_or(&self.from) == &v {
             return vec![];
         }
@@ -266,13 +381,44 @@ mod tests {
         })
     }
 
+    /// The point on the 100 pt circle about (150, 250) at `deg` degrees clockwise from straight up.
+    fn on_circle(deg: f64) -> Point {
+        let a = deg.to_radians();
+        Point::new(150.0 + 100.0 * a.sin(), 250.0 - 100.0 * a.cos())
+    }
+
+    /// Apply the `instances` and `endAngle` of a preview to the repeat.
+    fn apply(doc: &mut Document, selection: &Selection, v: &Value) {
+        let n = v["instances"].as_u64().unwrap() as u32;
+        let end = v["endAngle"].as_f64().unwrap();
+        set(doc, selection, |i, _, _, e| (*i, *e) = (n, end));
+    }
+
+    /// Where the repeat's instances are, in paint order.
+    fn transforms(doc: &Document, selection: &Selection) -> Vec<Affine> {
+        let NodeKind::Repeat(spec) = &doc.node(selection.objects[0]).unwrap().kind else { panic!("a repeat") };
+        spec.transforms(Some(doc))
+    }
+
+    /// Drag the splitter from `from` to `to` degrees clockwise from straight up, 5° a move, and
+    /// return the last preview.
+    fn sweep(d: &mut RadialDrag, from: f64, to: f64) -> Option<Value> {
+        let mut last = None;
+        let moves = ((to - from).abs() / 5.0).ceil() as i32;
+        for k in 1..=moves {
+            if let Some(v) = preview(&d.drag(on_circle(from + (to - from) * f64::from(k) / f64::from(moves)))) {
+                last = Some(v.clone());
+            }
+        }
+        last
+    }
+
     #[test]
     fn the_handles_sit_below_the_repeat_and_on_its_circle_at_every_zoom() {
         let (doc, selection) = radial();
         // Halfway between the first instance (straight up from the center) and the second, 45°
         // clockwise from it.
-        let half = 22.5_f64.to_radians();
-        let on_circle = Point::new(150.0 + 100.0 * half.sin(), 250.0 - 100.0 * half.cos());
+        let on_circle = on_circle(22.5);
         for zoom in [0.02, 1.0, 4.0] {
             let h = RadialHandles::of(&doc, &selection, None, zoom).unwrap();
             assert!(near(h.instances_at, Point::new(150.0, 400.0 + HANDLE_GAP / zoom)), "{zoom}: {:?}", h.instances_at);
@@ -432,5 +578,107 @@ mod tests {
         assert_eq!(cursor(&c, h.instances_at), Some(Cursor::ResizeV));
         // The radius handle points 22.5° clockwise from straight up: the up-and-down cursor.
         assert_eq!(cursor(&c, h.radius_at), Some(Cursor::ResizeV));
+    }
+
+    #[test]
+    fn the_splitter_sits_half_a_step_past_the_last_instance_shown() {
+        let (mut doc, selection) = radial();
+        // A full ring of eight: between the last instance (315°) and the first.
+        for zoom in [0.02, 1.0, 4.0] {
+            let h = RadialHandles::of(&doc, &selection, None, zoom).unwrap();
+            assert!(near(h.splitter_at.unwrap(), on_circle(337.5)), "{zoom}: {:?}", h.splitter_at);
+            assert!(h.parts().contains(&(RadialPart::Splitter, h.splitter_at.unwrap())));
+        }
+        // Five of the eight shown: past the fifth (180°).
+        set(&mut doc, &selection, |n, _, _, e| (*n, *e) = (5, 180.0));
+        let h = RadialHandles::of(&doc, &selection, None, 1.0).unwrap();
+        assert!(near(h.splitter_at.unwrap(), on_circle(202.5)), "{:?}", h.splitter_at);
+        // The instances running the other way from 90°: three of six, the splitter at -60 - 30.
+        set(&mut doc, &selection, |n, _, a, e| (*n, *a, *e) = (3, 90.0, -30.0));
+        let h = RadialHandles::of(&doc, &selection, None, 1.0).unwrap();
+        assert!(near(h.splitter_at.unwrap(), on_circle(-60.0)), "{:?}", h.splitter_at);
+        // One of the eight shown: half a step past it, and the radius handle opposite it.
+        set(&mut doc, &selection, |n, _, a, e| (*n, *a, *e) = (1, 0.0, 45.0));
+        let h = RadialHandles::of(&doc, &selection, None, 1.0).unwrap();
+        assert!(near(h.splitter_at.unwrap(), on_circle(22.5)), "{:?}", h.splitter_at);
+        assert!(near(h.radius_at, on_circle(180.0)), "{:?}", h.radius_at);
+    }
+
+    #[test]
+    fn no_splitter_where_the_ring_cannot_be_split() {
+        let (mut doc, selection) = radial();
+        // A single instance to a full turn, no turn at all, a step that does not divide a full
+        // turn, and a radius of 0.
+        for (n, end, r) in [(1, 360.0, 100.0), (2, 0.0, 100.0), (3, 100.0, 100.0), (8, 360.0, 0.0), (8, f64::MAX, 100.0)] {
+            set(&mut doc, &selection, |i, rad, _, e| (*i, *rad, *e) = (n, r, end));
+            let h = RadialHandles::of(&doc, &selection, None, 1.0).unwrap();
+            assert_eq!(h.splitter_at, None, "{n} over {end}° at {r}");
+            assert!(!h.parts().iter().any(|(p, _)| *p == RadialPart::Splitter));
+        }
+        // Two instances to a turn can be split.
+        set(&mut doc, &selection, |i, rad, _, e| (*i, *rad, *e) = (2, 100.0, 360.0));
+        assert!(RadialHandles::of(&doc, &selection, None, 1.0).unwrap().splitter_at.is_some());
+    }
+
+    #[test]
+    fn dragging_the_splitter_hides_instances_and_the_others_keep_their_places() {
+        let (mut doc, selection) = radial();
+        let full = transforms(&doc, &selection);
+        assert_eq!(full.len(), 8);
+        let paint = paint();
+        let (v, mut d) = {
+            let c = cx(&doc, &selection, &paint);
+            let h = RadialHandles::of(&doc, &selection, crate::select::selection_box(&c), 1.0).unwrap();
+            let mut d = RadialDrag::hit(&c, h.splitter_at.unwrap(), Mods::default()).unwrap();
+            assert!(cursor(&c, h.splitter_at.unwrap()).is_some());
+            // Back to 320°, short of the last instance: nothing changes.
+            assert_eq!(sweep(&mut d, 337.5, 320.0), None);
+            assert!(!d.adjusting());
+            // Back past the last instance (315°): seven shown, the full ring's step apart.
+            let out = d.drag(on_circle(300.0));
+            assert!(matches!(out.first(), Some(Action::Begin(l)) if l == "Repeat Options"), "{out:?}");
+            let v = preview(&out).unwrap().clone();
+            assert_eq!(v, json!({"instances": 7, "endAngle": 270.0}));
+            (v, d)
+        };
+        apply(&mut doc, &selection, &v);
+        let seven = transforms(&doc, &selection);
+        assert_eq!(seven.len(), 7);
+        for (k, (a, b)) in seven.iter().zip(&full).enumerate() {
+            assert!(a.as_coeffs().iter().zip(b.as_coeffs()).all(|(x, y)| (x - y).abs() < 1e-9), "instance {k} kept its place");
+        }
+        // Further back, past 0°: one shown at least.
+        assert_eq!(sweep(&mut d, 300.0, -200.0), Some(json!({"instances": 1, "endAngle": 45.0})));
+        // Forward again, past the start of the ring: all eight, a full turn.
+        assert_eq!(sweep(&mut d, -200.0, 400.0), Some(json!({"instances": 8, "endAngle": 360.0})));
+        assert!(matches!(d.finish().as_slice(), [Action::Cancel]), "back where it began: no undo step");
+
+        // From the seven shown, forward past 315°: the eighth shows again where it was.
+        let c = cx(&doc, &selection, &paint);
+        let h = RadialHandles::of(&doc, &selection, crate::select::selection_box(&c), 1.0).unwrap();
+        assert!(near(h.splitter_at.unwrap(), on_circle(292.5)));
+        let mut d = RadialDrag::hit(&c, h.splitter_at.unwrap(), Mods::default()).unwrap();
+        let v = sweep(&mut d, 292.5, 330.0).unwrap();
+        assert_eq!(v, json!({"instances": 8, "endAngle": 360.0}));
+        assert!(matches!(d.finish().as_slice(), [Action::Commit]));
+        let mut d = RadialDrag::hit(&c, h.splitter_at.unwrap(), Mods::default()).unwrap();
+        assert!(d.drag(h.center).is_empty(), "the center gives no direction");
+        assert_eq!(sweep(&mut d, 292.5, 250.0), Some(json!({"instances": 6, "endAngle": 225.0})));
+        assert!(matches!(d.cancel().as_slice(), [Action::Cancel]));
+        apply(&mut doc, &selection, &v);
+        assert_eq!(transforms(&doc, &selection), full);
+    }
+
+    #[test]
+    fn the_instances_handle_spreads_a_split_ring_over_the_same_arc() {
+        let (mut doc, selection) = radial();
+        // Seven of eight shown: the handle sets the count alone, as for any partial repeat.
+        set(&mut doc, &selection, |n, _, _, e| (*n, *e) = (7, 270.0));
+        let paint = paint();
+        let c = cx(&doc, &selection, &paint);
+        let h = RadialHandles::of(&doc, &selection, crate::select::selection_box(&c), 1.0).unwrap();
+        let mut d = RadialDrag::hit(&c, h.instances_at, Mods::default()).unwrap();
+        assert_eq!(preview(&d.drag(h.instances_at + Vec2::new(0.0, 32.0))), Some(&json!({"instances": 9})));
+        assert!(matches!(d.finish().as_slice(), [Action::Commit]));
     }
 }
