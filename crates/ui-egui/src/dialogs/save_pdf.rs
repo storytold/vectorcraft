@@ -44,6 +44,61 @@ pub(super) const PRESET_SPEC: DialogSpec = DialogSpec {
     ..DialogSpec::FORM
 };
 
+/// The dialog kind of the confirmation prompt when saving with transparency reduction.
+pub(crate) const CONFIRM_FLATTEN: &str = "confirmFlattenPdf";
+
+pub(crate) const CONFIRM_FLATTEN_SPEC: DialogSpec = DialogSpec {
+    heading: |d| d.str("message"),
+    body: |_, ui, d| {
+        let detail = d.str("detail");
+        if !detail.is_empty() {
+            ui.label(egui::RichText::new(detail).color(Tokens::get(ui.ctx()).text_dim));
+        }
+        false
+    },
+    confirm: confirm_flatten,
+    ok: Some("Continue"),
+    max_width: Some(440.0),
+    ..DialogSpec::FORM
+};
+
+fn confirm_flatten(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let mut parent = super::parent(d).filter(|p| p.kind == KIND).ok_or("the Save PDF dialog is no longer open")?;
+    parent.fields.insert("__confirmed_flatten".into(), json!(true));
+    app.ui.dialog = Some(parent.clone());
+    confirm(app, &parent)
+}
+
+fn ask_confirm_flatten(app: &mut VectorcraftApp, d: &Dialog) {
+    let name = get(d, "flattenerPreset").as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(pdf::DEFAULT_FLATTENER);
+    let preset_opts = FlattenOptions::preset(name)
+        .or_else(|| app.session.prefs.flattener_presets.iter().find(|p| p.name.eq_ignore_ascii_case(name)).map(|p| p.options.clone()))
+        .unwrap_or_default();
+    let line_ppi = preset_opts.line_art_ppi.round() as u32;
+    let grad_ppi = preset_opts.gradient_ppi.round() as u32;
+    let message = tl!("The document contains transparency which will be flattened. Do you want to continue?");
+    let detail = crate::i18n::fmt(
+        tl!(
+            "Transparent objects will be reduced into opaque paths and images at {line_ppi} ppi (line art and text) and {grad_ppi} ppi (gradients and meshes). Reopening the PDF may not restore separate transparent objects."
+        ),
+        &[("line_ppi", &line_ppi.to_string()), ("grad_ppi", &grad_ppi.to_string())],
+    );
+    let under = serde_json::to_value(d).ok();
+    let fields = json!({
+        "message": message,
+        "detail": detail,
+        super::PARENT: under,
+    });
+    app.ui.dialog = Some(Dialog::new(CONFIRM_FLATTEN, fields));
+}
+
+fn doc_has_transparency(doc: &vectorcraft_doc::Document) -> bool {
+    fn check_node(n: &vectorcraft_doc::Node) -> bool {
+        !n.has_default_transparency() || n.shows_transparency() || n.children().into_iter().flatten().any(|c| check_node(c))
+    }
+    doc.layers.iter().any(|l| check_node(l))
+}
+
 /// The preset editor's field holding the name of the saved preset it edits (empty: a new one).
 const EDITING: &str = "__editing";
 /// Save PDF's field holding the name typed for Save Preset… (present while that row shows).
@@ -152,6 +207,13 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         let r = save_preset(app, &mut d);
         app.ui.dialog = Some(d);
         return r;
+    }
+    let flat = choice::<Compatibility>(d, "compatibility") == Some(Compatibility::Pdf13)
+        || choice::<Standard>(d, "standard").is_some_and(Standard::flattens);
+    let has_transparency = app.session.active().is_some_and(|st| doc_has_transparency(&st.doc));
+    if flat && has_transparency && !d.bool("__confirmed_flatten") {
+        ask_confirm_flatten(app, d);
+        return Ok(Value::Null);
     }
     let r = match SaveMode::of(&d.str("__save")) {
         Some(mode) => io::save_pdf(app, mode, params(d)),
@@ -732,7 +794,20 @@ fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             }
         });
     });
-    if !flat {
+    if flat {
+        let name = get(d, "flattenerPreset").as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(pdf::DEFAULT_FLATTENER);
+        let preset_opts = FlattenOptions::preset(name)
+            .or_else(|| app.session.prefs.flattener_presets.iter().find(|p| p.name.eq_ignore_ascii_case(name)).map(|p| p.options.clone()))
+            .unwrap_or_default();
+        let line_ppi = preset_opts.line_art_ppi.round() as u32;
+        let grad_ppi = preset_opts.gradient_ppi.round() as u32;
+        note(
+            ui,
+            &crate::i18n::fmt(
+                tl!("Raster resolution: {line_ppi} ppi line art and text, {grad_ppi} ppi gradient and mesh"),
+                &[("line_ppi", &line_ppi.to_string()), ("grad_ppi", &grad_ppi.to_string())],
+            ),
+        );
         note(ui, tl!("PDF 1.3 files have no transparency: the preset flattens it."));
     }
 }

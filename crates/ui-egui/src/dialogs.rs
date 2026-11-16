@@ -378,6 +378,7 @@ registry! {
     WarichuSettings: [warichu::KIND] => warichu::SPEC,
     CompositeFonts: [composite_fonts::KIND] => composite_fonts::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
+    ConfirmFlattenPdf: [save_pdf::CONFIRM_FLATTEN] => save_pdf::CONFIRM_FLATTEN_SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     JavaScriptFiles: [javascript_files::KIND] => javascript_files::SPEC,
     SvgFilter: [svg_filter::KIND] => svg_filter::SPEC,

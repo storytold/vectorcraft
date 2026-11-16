@@ -507,3 +507,49 @@ fn pdf_1_3_takes_a_flattener_preset_in_advanced() {
     let saved = app.session.prefs.pdf_presets.iter().find(|p| p.name == "Old").unwrap();
     assert_eq!((saved.settings.compatibility, saved.settings.flattener_preset.as_str()), (Compatibility::Pdf13, "Low Resolution"));
 }
+
+#[test]
+fn save_pdf_prompts_confirmation_when_document_has_transparency_and_is_flattened() {
+    let (mut app, written, _) = app();
+    // Add transparent artwork to the document
+    app.run("transparency.set", json!({"opacity": 50})).unwrap();
+
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/transparent.pdf", "compatibility": "1.3"})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, KIND);
+
+    // Clicking Save PDF triggers the confirmFlattenPdf modal prompt
+    super::super::confirm(&mut app).unwrap();
+    let prompt = app.ui.dialog.as_ref().expect("confirm dialog open");
+    assert_eq!(prompt.kind, CONFIRM_FLATTEN);
+    assert!(prompt.str("message").contains("transparency which will be flattened"));
+    assert!(prompt.str("detail").contains("1200 ppi"));
+    assert!(prompt.str("detail").contains("300 ppi"));
+
+    // Cancel on confirmation modal restores the Save PDF dialog
+    crate::dialogs::cancel(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().expect("Save PDF restored").kind, KIND);
+    assert!(written.borrow().is_empty(), "nothing written on cancel");
+
+    // Click Save PDF again, then confirm the prompt
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, CONFIRM_FLATTEN);
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none(), "dialog closed after save");
+    assert_eq!(written.borrow().len(), 1);
+    assert!(written.borrow()[0].1.starts_with(b"%PDF-1.3"));
+}
+
+#[test]
+fn save_pdf_does_not_prompt_when_compatibility_is_not_flattened() {
+    let (mut app, written, _) = app();
+    app.run("transparency.set", json!({"opacity": 50})).unwrap();
+
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/live.pdf", "compatibility": "1.7"})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, KIND);
+
+    // Saving with PDF 1.7 (supports live transparency) does not prompt confirmation
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(written.borrow().len(), 1);
+    assert!(written.borrow()[0].1.starts_with(b"%PDF-1.7"));
+}
