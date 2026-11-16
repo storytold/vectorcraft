@@ -2,6 +2,7 @@
 //! and a warning when missing), SVG images as vector art, nested clips, undisplayed objects as
 //! hidden objects, and reflected or repeated gradients.
 
+use craft_svg::tree::draw::resvg;
 use std::path::{Path, PathBuf};
 
 use vectorcraft_doc::{Document, ImageObject, LinkInfo, Node, NodeKind};
@@ -44,11 +45,15 @@ fn resvg_render(svg: &str, w: u32, h: u32) -> Image {
 }
 
 fn png(w: u32, h: u32) -> Vec<u8> {
-    let mut out = vec![];
-    image::RgbaImage::from_pixel(w, h, image::Rgba([10, 200, 30, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
-        .unwrap();
-    out
+    let img = craft_image_codecs::Image::from_raw(
+        w,
+        h,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        [10u8, 200, 30, 255].repeat((w * h) as usize),
+    )
+    .unwrap();
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
 }
 
 /// A fresh folder for one test's files.

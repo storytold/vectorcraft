@@ -190,6 +190,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     // If an active parameter changed externally since staging, invalidate its staged value
     // so Preview does not overwrite newer on-canvas edits, while retaining unchanged staged parameters.
     let interacting = app.session.in_interaction();
+    let blend_interaction = app.session.active().and_then(|doc| doc.interaction.as_ref()).is_some_and(|it| it.label == "Blend Options");
     if !interacting
         && let Some(ref staged_active) = draft.staged_active_easing_type
         && active_easing.as_ref() != Some(staged_active)
@@ -220,7 +221,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Position easing needs a spine to run along: a replaced one, or Align to Path. A blend made
     // without a spine has none.
     let spined = info["hasSpine"] != false && (info["spine"]["explicit"] == true || info["orientation"] == "path");
-    ui.add_enabled_ui(selected && spined, |ui| {
+    ui.add_enabled_ui(selected && spined && (!interacting || blend_interaction), |ui| {
         let modes = ["linear", "easeIn", "easeOut", "easeInOut", "easeOutIn"];
         let labels = [tl!("Linear"), tl!("Ease In"), tl!("Ease Out"), tl!("Ease In Out"), tl!("Ease Out In")];
         let current_mode = draft.easing_type.as_deref().or(active_easing.as_deref()).unwrap_or(modes[1]);
@@ -229,7 +230,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
             if let Some(i) = widgets::dropdown(ui, "blend-panel-easing", labels[index], &labels, ui.available_width().max(FIELD_W))
                 && let Some(mode) = modes.get(i)
             {
-                if preview {
+                if preview && (!interacting || blend_interaction) {
                     let mut param = json!({"easingType": mode});
                     if let Some(id) = blend_id {
                         param["id"] = json!(id);
@@ -253,7 +254,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
                 Live::Idle
             };
             let clamped = ramp.clamp(0.0, 100.0);
-            if preview {
+            if preview && (!interacting || blend_interaction) {
                 if phase != Live::Idle {
                     let mut param = json!({"ramp": clamped});
                     if let Some(id) = blend_id {
@@ -268,7 +269,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     });
-    ui.add_enabled_ui(selected, |ui| {
+    ui.add_enabled_ui(selected && (!interacting || blend_interaction), |ui| {
         widgets::label_row(ui, tl!("Shift:"), LABEL_W, |ui| {
             let mut shift = draft.color_shift.or(active_shift).unwrap_or(0.0).clamp(-100.0, 100.0);
             let resp =
@@ -281,7 +282,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
                 Live::Idle
             };
             let clamped = shift.clamp(-100.0, 100.0);
-            if preview {
+            if preview && (!interacting || blend_interaction) {
                 if phase != Live::Idle {
                     let mut param = json!({"colorShift": clamped});
                     if let Some(id) = blend_id {
@@ -295,18 +296,20 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
                 draft.rejected = false;
             }
         });
-        ui.horizontal(|ui| {
-            ui.add_space(LABEL_W);
-            let cur_preview = app.ui.blend_preview;
-            if widgets::check(ui, tl!("Preview"), cur_preview, true) {
-                let next = !cur_preview;
-                app.ui.blend_preview = next;
-                if next && selected {
-                    draft.rejected = false;
+    });
+    ui.horizontal(|ui| {
+        ui.add_space(LABEL_W);
+        let cur_preview = app.ui.blend_preview;
+        if widgets::check(ui, tl!("Preview"), cur_preview, true) {
+            let next = !cur_preview;
+            app.ui.blend_preview = next;
+            if next && selected {
+                draft.rejected = false;
+                if !app.session.in_interaction() {
                     flush_pending(app, blend_id, &mut draft);
                 }
             }
-        });
+        }
     });
     if !draft.is_empty() || draft.rejected {
         pending_map.drafts.insert(key, draft);

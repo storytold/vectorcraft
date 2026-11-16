@@ -383,13 +383,65 @@ fn blend_panel_keeps_pending_easing_during_canvas_interaction() {
 
     app.session.begin_interaction("Move").unwrap();
     app.session.preview("object.blend.options", &json!({"ramp": 80})).unwrap();
-    app.ui.blend_preview = true;
-    f.run(&mut app, vec![]);
+    f.click_text(&mut app, "Preview");
+    assert!(app.ui.blend_preview);
+    assert!(app.session.in_interaction(), "enabling Preview must not flush staged edits into an active interaction");
     app.session.cancel_interaction().unwrap();
     f.run(&mut app, vec![]);
 
     let after = app.session.execute("object.blend.info", &json!({})).unwrap()["ramp"].clone();
     assert_ne!(after, before, "the staged easing value is applied after the interaction ends");
+}
+
+#[test]
+fn blend_panel_slider_does_not_join_another_active_interaction() {
+    let mut app = app();
+    app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap();
+    let before = app.session.execute("object.blend.info", &json!({})).unwrap()["ramp"].clone();
+    let mut f = Frames::new();
+
+    app.session.begin_interaction("Move").unwrap();
+    app.session.preview("object.blend.options", &json!({"ramp": 80})).unwrap();
+    let out = f.run(&mut app, vec![]);
+    let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
+    let mut sliders: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Slider).collect();
+    sliders.sort_by(|a, b| a.1.bounds().unwrap().y0.total_cmp(&b.1.bounds().unwrap().y0));
+    let b = sliders[0].1.bounds().unwrap();
+    let at = pos2((b.x0 + 0.3 * (b.x1 - b.x0)) as f32, ((b.y0 + b.y1) * 0.5) as f32);
+    f.click(&mut app, at);
+
+    assert!(app.session.in_interaction(), "the slider release must not commit the Move interaction");
+    assert_eq!(app.session.active().unwrap().interaction.as_ref().unwrap().label, "Move");
+    app.session.cancel_interaction().unwrap();
+    f.run(&mut app, vec![]);
+
+    let after = app.session.execute("object.blend.info", &json!({})).unwrap()["ramp"].clone();
+    assert_eq!(after, before, "canceling the foreign interaction drops its preview and the disabled slider does not stage an edit");
+}
+
+#[test]
+fn blend_panel_does_not_stage_edits_during_a_foreign_interaction() {
+    let mut app = app();
+    app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap();
+    app.ui.blend_preview = false;
+    let mut f = Frames::new();
+
+    app.session.begin_interaction("Move").unwrap();
+    app.session.preview("object.blend.options", &json!({"ramp": 80})).unwrap();
+    let out = f.run(&mut app, vec![]);
+    let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
+    let mut sliders: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Slider).collect();
+    sliders.sort_by(|a, b| a.1.bounds().unwrap().y0.total_cmp(&b.1.bounds().unwrap().y0));
+    let b = sliders[0].1.bounds().unwrap();
+    let at = pos2((b.x0 + 0.3 * (b.x1 - b.x0)) as f32, ((b.y0 + b.y1) * 0.5) as f32);
+    f.click(&mut app, at);
+    assert!(app.session.in_interaction());
+    app.session.cancel_interaction().unwrap();
+    app.run("object.blend.options", json!({"ramp": 80})).unwrap();
+    f.run(&mut app, vec![]); // A canvas edit matching the canceled preview must not be overwritten by a hidden draft.
+    f.click_text(&mut app, "Preview");
+
+    assert_eq!(app.session.execute("object.blend.info", &json!({})).unwrap()["ramp"], 80.0);
 }
 
 #[test]

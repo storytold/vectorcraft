@@ -2676,7 +2676,27 @@ fn pixels(doc: &Document) -> (image::RgbaImage, kurbo::Affine) {
     let a = art(doc);
     let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
     let blob = doc.images.get(&im.key).unwrap();
-    (image::load_from_memory(&blob.bytes).unwrap().to_rgba8(), im.xf)
+    (
+        craft_image_codecs::decode(&blob.bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8(),
+        im.xf,
+    )
 }
 
 /// A 1-bit image's row holds each pixel's channels in turn, one bit each, padded to whole bytes;
@@ -3073,7 +3093,24 @@ fn cmyk_images_keep_their_ink_amounts() {
     assert!(m.clip);
     let NodeKind::Image(mi) = &m.art.kind else { panic!("{:?}", m.art.kind) };
     assert_eq!((mi.width, mi.height, mi.xf), (3, 1, im.xf), "the mask covers the image");
-    let gray = image::load_from_memory(&doc.images[&mi.key].bytes).unwrap().to_luma8();
+    let gray = craft_image_codecs::decode(&doc.images[&mi.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_luma8();
     assert_eq!(gray.into_raw(), [255, 128, 0]);
     // An alpha channel that hides nothing adds no mask.
     let data = [&inks[..], &[255; 3]].concat();
