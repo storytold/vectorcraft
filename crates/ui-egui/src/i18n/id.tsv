@@ -487,6 +487,7 @@
 	Highlight Size	Ukuran kilau
 	Blend Steps	Langkah campuran
 	Shading Color	Warna pengarsiran
+	Black Overprint	Hitam overprint
 	Draw Hidden Faces	Gambar sisi tersembunyi
 	Revolve…	Revolusi…
 	Inflate…	Gelembungkan…
@@ -957,6 +958,7 @@
 	Change Panel Layout	Ubah tata letak panel
 	Close Panel	Tutup panel
 	Collapse Panel Group	Ciutkan grup panel
+	Cycle Display Sizes	Ganti ukuran tampilan
 	Move Panel	Pindahkan panel
 	Group with	Grupkan dengan
 	Resize panels	Ubah ukuran panel
@@ -1534,6 +1536,8 @@ lighting	Light	Cahaya
 	Insert Aki Left	Sisipkan aki kiri
 	Insert Aki Right	Sisipkan aki kanan
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Sesuaikan posisi horizontal diakritik
+	Adjust Vertical Diacritic Position	Sesuaikan posisi vertikal diakritik
 	Character Direction	Arah karakter
 	Digits	Digit
 	Arabic	Arab
@@ -1864,6 +1868,9 @@ digits	Malayalam	Malayalam
 	Select text to set its OpenType features.	Pilih teks untuk mengatur fitur OpenType-nya.
 	Standard Ligatures	Ligatur standar
 	Stylistic Alternates	Alternatif gaya
+	Ligatures	Ligatur
+	Ornaments	Ornamen
+	Figures	Angka
 	Set {n}	Set {n}
 	Swash	Swash
 	Tabular Lining	Lining tabular
@@ -1901,6 +1908,7 @@ digits	Malayalam	Malayalam
 	Roman Hanging Punctuation	Tanda baca gantung Romawi
 	Korean Line Break Anywhere	Putus baris Korea di mana saja
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Pengaturan komposisi Asia Timur
 	Korean Composition Settings	Pengaturan komposisi Korea
 	Select a text object to edit its paragraph attributes.	Pilih objek teks untuk mengedit atribut paragrafnya.
@@ -2388,6 +2396,11 @@ digits	Malayalam	Malayalam
 	Author Title:	Judul penulis:
 	Author:	Penulis:
 	Copyright Info URL:	URL info hak cipta:
+	Save Metadata Template…	Simpan templat metadata…
+	Import Options	Opsi impor
+	Clear existing fields and use the template's	Hapus bidang yang ada dan gunakan bidang templat
+	Keep existing fields, but replace those the template has	Pertahankan bidang yang ada, tetapi ganti bidang yang dimiliki templat
+	Keep existing fields, but append those the template has	Pertahankan bidang yang ada, tetapi tambahkan bidang yang dimiliki templat
 	Copyright Notice:	Pemberitahuan hak cipta:
 	Copyright Status:	Status hak cipta:
 	Created:	Dibuat:
@@ -2718,6 +2731,7 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Tampilkan roda warna halus
 	Show segmented color wheel	Tampilkan roda warna bersegmen
 	Show color bars	Tampilkan bilah warna
+	Find the selected colors in the artwork	Temukan warna yang dipilih di karya seni
 	Harmony Rules	Aturan harmoni
 	Keep this row's colors (exclude)	Pertahankan warna baris ini (kecualikan)
 	Limit to Library:	Batasi ke pustaka:
@@ -3373,6 +3387,8 @@ theme	Appearance	Tampilan
 	Create Graph	Buat grafik
 	Graph Data	Data grafik
 	Graph Type	Jenis grafik
+	Graph Type…	Jenis grafik…
+	Graph Data…	Data grafik…
 	Graph Options	Opsi grafik
 	Left Axis	Sumbu kiri
 	Right Axis	Sumbu kanan
@@ -4110,6 +4126,8 @@ font-technology	Variable	Variabel
 	Saving	Menyimpan
 	Saving {}	Menyimpan {}
 	Search commands and tools…	Cari perintah dan alat…
+	Recent Commands	Perintah terbaru
+	No recent commands	Tidak ada perintah terbaru
 	Dashed Line	Garis putus-putus
 	Panel menu	Menu panel
 	Unembed…	Lepaskan sematan…
@@ -4120,6 +4138,12 @@ font-technology	Variable	Variabel
 	Preferences	Preferensi
 	Previous	Sebelumnya
 	Restore every preference to its default (applied on OK)	Kembalikan semua preferensi ke defaultnya (diterapkan saat OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Satuan untuk dokumen baru dari ukuran bawaan selain ukuran piksel dan untuk file yang dibuka tanpa satuan tercatat; jika Anda memilihnya di sini lalu mengklik OK, satuan dokumen aktif juga menjadi satuan ini.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Ketebalan stroke, putus-putus, dan jarak ditampilkan dalam satuan ini, dan angka yang diketik untuknya dibaca dalam satuan ini.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Ukuran teks, leading, dan pergeseran garis dasar ditampilkan dalam satuan ini, dan angka yang diketik untuknya dibaca dalam satuan ini.
+	The unit for East Asian type measurements, which no field uses yet.	Satuan untuk ukuran teks Asia Timur, yang belum digunakan bidang mana pun.
+	When on, a number typed without a unit into a field in picas is read in points.	Jika aktif, angka yang diketik tanpa satuan di bidang dalam pica dibaca dalam titik.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Dengan ID XML, nama objek ditampilkan sebagai ID XML di Lapisan, Variabel, dan Opsi lapisan.
 	Reset all preferences to their defaults?	Atur ulang semua preferensi ke defaultnya?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Nilai default diterapkan saat Anda mengklik OK di Preferensi. Batal di sana mempertahankan preferensi Anda saat ini.
 	Smaller ↔ Larger	Lebih kecil ↔ Lebih besar
@@ -6744,6 +6768,24 @@ breakText	Glyphs	Glif
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Perluas garis putus menjadi jalur
 @msg	select paths with dashed strokes to expand	pilih jalur dengan stroke putus-putus yang akan diperluas
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Lingkaran singgung…
+	Tangent Circle	Lingkaran singgung
+	Circle:	Lingkaran:
+@msg	`ids` names an object twice	`ids` menyebut satu objek dua kali
+@msg	select two or three paths or compound paths	pilih dua atau tiga jalur atau jalur gabungan
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` harus dari 0.01 sampai 1000000 pt
+@msg	two shapes need a `radius`	dua bentuk memerlukan `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	tiga bentuk menentukan jari-jarinya sendiri: hilangkan `radius`
+@msg	`circle` must be from 0 to 64	`circle` harus dari 0 sampai 64
+@msg	a shape has no outline	sebuah bentuk tidak punya garis luar
+@msg	the shapes are too complex: at most 2000 segments in all	bentuknya terlalu rumit: paling banyak 2000 segmen seluruhnya
+@msg	these shapes take too long to search	pencarian untuk bentuk ini memakan waktu terlalu lama
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	lebih dari 64 lingkaran menyentuh bentuk ini: mungkin menyentuhnya di sepanjang satu kurva utuh
+@msg	no circle touches these shapes	tidak ada lingkaran yang menyentuh bentuk ini
+@msg	`circle` is past the last circle found ({found})	`circle` melewati lingkaran terakhir yang ditemukan ({found})
+@msg	object {value} is not a path or compound path	objek {value} bukan jalur atau jalur gabungan
+@msg	these shapes are too small to measure	bentuk ini terlalu kecil untuk diukur
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Alat dokumen
 	Save a Timestamped Copy	Simpan salinan bercap waktu
@@ -7012,4 +7054,21 @@ breakText	Glyphs	Glif
 	Nest Shapes…	Susun Bentuk…
 	Nest Shapes	Susun Bentuk
 	Roll	Gulungan
+	Packaging Tools	Alat kemasan
+	Fold Lines	Garis lipat
+	Make Cut Line	Jadikan garis potong
+	Make Crease Line	Jadikan garis lekuk
+	Make Partial Cut Line	Jadikan garis potong sebagian
+	Make Perforation Line	Jadikan garis perforasi
+	Make Fold Line	Jadikan garis lipat
+	Role Swatches…	Swatch jenis garis…
+	Role Swatches	Swatch jenis garis
+	Role	Jenis garis
+	Cut Line	Garis potong
+	Crease Line	Garis lekuk
+	Partial Cut Line	Garis potong sebagian
+	Perforation Line	Garis perforasi
+	No objects are selected.	Tidak ada objek yang dipilih.
+	Open a document to mark its fold lines.	Buka dokumen untuk menandai garis lipatnya.
+	Remove Fold Line Role	Hapus jenis garis
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"

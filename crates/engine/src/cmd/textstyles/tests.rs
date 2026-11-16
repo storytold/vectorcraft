@@ -399,6 +399,8 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
         json!({"akiRight": 1000.1}),
         json!({"tsume": -0.1}),
         json!({"tsume": 100.1}),
+        json!({"diacriticHorizontal": -1000.1}),
+        json!({"diacriticVertical": 1000.1}),
     ] {
         let key = attrs.as_object().unwrap().keys().next().unwrap();
         for cmd in ["charStyle.edit", "charStyle.setAttrs", "charStyle.new"] {
@@ -422,7 +424,8 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
             "baseline_shift": -1296.0,
             "tcyUpDown": 1296.0, "tcyLeftRight": -1296.0,
             "akiLeft": 0.0, "akiRight": 1000.0,
-            "tsume": 100.0
+            "tsume": 100.0,
+            "diacriticHorizontal": -1000.0, "diacriticVertical": 1000.0
         }}),
     )
     .unwrap();

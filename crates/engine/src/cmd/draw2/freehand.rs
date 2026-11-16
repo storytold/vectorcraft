@@ -1,6 +1,6 @@
 use super::common::{
-    PenRecord, Sample, brush_region, path_kind, path_mut, path_of, poly_bounds, pressure_region, samples_param, size_pressure, stroke_paint,
-    subpath_len, target_paths, within_input_bound,
+    PenRecord, SIZES, Sample, brush_region, path_kind, path_mut, path_of, poly_bounds, pressure_region, ranged, samples_param, size_pressure,
+    stroke_paint, subpath_len, target_paths, within_input_bound,
 };
 use super::{
     Anchor, Appearance, BTreeSet, BoolOp, Cap, Color, Document, EngineError, FillRule, Join, NewArt, Node, NodeId, NodeKind, Paint, PathData, Point,
@@ -235,12 +235,18 @@ pub(crate) fn freehand_brushed(s: &mut Session, p: &Value, brush_name: Option<&s
         let Some(p0) = pts.first_mut() else { return Err(bad(C, "needs points")) };
         *p0 = end;
         if pts.len() < 2 {
-            // No stroke to add: the brush alone changes, when it is not the path's already.
+            // No stroke to add: the brush alone changes, when it is not the path's already, and the
+            // path is selected or deselected as a longer continuation leaves it.
             if let Some(name) = brush_name
                 && s.doc()?.doc.node(target).and_then(|n| n.appearance.stroke()).is_some_and(|st| st.brush.as_deref() != Some(name))
             {
-                s.edit("Paintbrush", |d, _| {
+                s.edit("Paintbrush", |d, sel| {
                     set_brush(d, target, name);
+                    if keep_selected {
+                        sel.set([id]);
+                    } else {
+                        sel.remove(id);
+                    }
                     Ok(())
                 })?;
             }
@@ -488,10 +494,7 @@ fn adjacent_to_topmost(doc: &Document, touched: &[NodeId], paint: &Paint) -> Vec
 pub(super) fn blob(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.blob";
     let samples = samples_param(p, "points", C)?;
-    let size = number_or(p, "size", 10.0, C)?;
-    if !(size.is_finite() && size > 0.0) {
-        return Err(bad(C, "size must be positive"));
-    }
+    let size = ranged(p, "size", 10.0, SIZES, C)?;
     let angle = number_or(p, "angle", 0.0, C)?;
     if !(-180.0..=180.0).contains(&angle) {
         return Err(bad(C, "`angle` must be from -180 to 180 degrees"));

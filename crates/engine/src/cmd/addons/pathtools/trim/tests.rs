@@ -480,6 +480,129 @@ fn the_tool_trims_on_release_as_one_step_and_escape_drops_a_drag() {
     assert_eq!(steps(&s), n + 2);
 }
 
+/// The ends of each red path the tool shows.
+fn highlighted(s: &mut Session, view: crate::ViewInfo) -> Vec<(Point, Point)> {
+    use vectorcraft_geom::kurbo::ParamCurve;
+    s.overlays(view)
+        .into_iter()
+        .filter_map(|o| match o {
+            vectorcraft_tools::Overlay::Path { path, color, .. } if color == vectorcraft_tools::builder::HIGHLIGHT_RED => {
+                let segs: Vec<_> = path.segments().collect();
+                Some((segs.first()?.start(), segs.last()?.end()))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn hovering_with_the_tool_shows_the_stretch_its_click_removes() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let (h, _, _) = across_and_uprights(&mut s);
+    let hidden = line(&mut s, &[(0.0, 200.0), (300.0, 200.0)], false);
+    set_flags(&mut s, hidden, false, false);
+    let view = crate::ViewInfo { smart_guides: false, ..crate::ViewInfo::default() };
+    s.select_tool("trimAtCrossings", view).unwrap();
+    let n = steps(&s);
+    // Over the middle of the line across: the stretch between the uprights, and nothing changes.
+    s.pointer(&PointerEvent::new(PointerKind::Move, 150.0, 101.0), view).unwrap();
+    let shown = highlighted(&mut s, view);
+    assert!(matches!(shown.as_slice(), [(a, b)] if near(*a, 100.0, 100.0) && near(*b, 200.0, 100.0)), "{shown:?}");
+    assert_eq!(steps(&s), n);
+    // Over the hidden path and over empty canvas: nothing.
+    s.pointer(&PointerEvent::new(PointerKind::Move, 150.0, 200.0), view).unwrap();
+    assert!(highlighted(&mut s, view).is_empty());
+    s.pointer(&PointerEvent::new(PointerKind::Move, 150.0, 250.0), view).unwrap();
+    assert!(highlighted(&mut s, view).is_empty());
+    // A click where the stretch was shown removes exactly it: the line keeps 0 to 100 and 200 to 300.
+    s.pointer(&PointerEvent::new(PointerKind::Move, 150.0, 101.0), view).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 150.0, 101.0), view).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 101.0), view).unwrap();
+    assert_eq!(steps(&s), n + 1);
+    assert!(near(ends(&s, h).0, 0.0, 100.0) && near(ends(&s, h).1, 100.0, 100.0));
+    let rest = stack(&s).into_iter().find(|id| *id != h && path(&s, *id).subpaths.len() == 1 && near(ends(&s, *id).0, 200.0, 100.0));
+    assert!(rest.is_some_and(|id| near(ends(&s, id).1, 300.0, 100.0)));
+    assert!(highlighted(&mut s, view).is_empty(), "the edit drops the highlight");
+}
+
+/// The red paths the tool shows.
+fn red(s: &mut Session, view: crate::ViewInfo) -> Vec<vectorcraft_geom::BezPath> {
+    s.overlays(view)
+        .into_iter()
+        .filter_map(|o| match o {
+            vectorcraft_tools::Overlay::Path { path, color, .. } if color == vectorcraft_tools::builder::HIGHLIGHT_RED => Some(path),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The length of every path in the first layer.
+fn total_length(s: &Session) -> f64 {
+    use vectorcraft_geom::kurbo::ParamCurveArclen;
+    stack(s).into_iter().flat_map(|id| path(s, id).to_bezpath().segments().collect::<Vec<_>>()).map(|seg| seg.arclen(1e-9)).sum()
+}
+
+/// `act` removes exactly the red paths shown before it: the paths lose their length, and nothing
+/// is left on the middle of any of them.
+fn removes_what_was_shown(s: &mut Session, view: crate::ViewInfo, act: &dyn Fn(&mut Session)) {
+    use vectorcraft_geom::kurbo::{ParamCurve, ParamCurveArclen};
+    let shown = red(s, view);
+    assert!(!shown.is_empty());
+    let shown_length: f64 = shown.iter().flat_map(|p| p.segments().collect::<Vec<_>>()).map(|seg| seg.arclen(1e-9)).sum();
+    let before = total_length(s);
+    act(s);
+    assert!((before - total_length(s) - shown_length).abs() < 1e-3, "{before} - {} != {shown_length}", total_length(s));
+    for p in &shown {
+        let segs: Vec<_> = p.segments().collect();
+        let mid = segs[segs.len() / 2].eval(if segs.len() % 2 == 1 { 0.5 } else { 0.0 });
+        let left = stack(s).into_iter().filter_map(|id| path(s, id).nearest(mid)).map(|n| n.4).fold(f64::INFINITY, f64::min);
+        assert!(left > 0.5, "a path is left at {mid:?}");
+    }
+}
+
+#[test]
+fn what_the_tool_shows_before_a_click_or_a_release_is_what_the_command_removes() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let view = crate::ViewInfo { smart_guides: false, ..crate::ViewInfo::default() };
+    let ev = |kind, x, y| PointerEvent::new(kind, x, y);
+    let alt = Mods { alt: true, ..Mods::default() };
+    let setup = || {
+        let mut s = session();
+        s.execute("shape.ellipse", &json!({"x": 100, "y": 50, "width": 200, "height": 100})).unwrap();
+        s.execute("select.none", &json!({})).unwrap();
+        line(&mut s, &[(50.0, 100.0), (350.0, 100.0)], false);
+        // A Z whose first and last sides cross.
+        line(&mut s, &[(0.0, 160.0), (100.0, 260.0), (100.0, 160.0), (0.0, 260.0)], false);
+        s.select_tool("trimAtCrossings", view).unwrap();
+        s
+    };
+    // A click on the ellipse's top, on the line inside it and on the Z's loop.
+    for (x, y) in [(200.0, 51.0), (200.0, 101.0), (101.0, 210.0)] {
+        let mut s = setup();
+        s.pointer(&ev(PointerKind::Move, x, y), view).unwrap();
+        removes_what_was_shown(&mut s, view, &|s| {
+            s.pointer(&ev(PointerKind::Down, x, y), view).unwrap();
+            s.pointer(&ev(PointerKind::Up, x, y), view).unwrap();
+        });
+    }
+    // A rectangle over the ellipse's left side and the line.
+    let mut s = setup();
+    s.pointer(&ev(PointerKind::Down, 90.0, 90.0), view).unwrap();
+    s.pointer(&ev(PointerKind::Drag, 120.0, 110.0), view).unwrap();
+    removes_what_was_shown(&mut s, view, &|s| {
+        s.pointer(&ev(PointerKind::Up, 120.0, 110.0), view).unwrap();
+    });
+    // An Alt line through the ellipse's bottom and the Z's tail.
+    let mut s = setup();
+    s.pointer(&ev(PointerKind::Down, 200.0, 140.0).with_mods(alt), view).unwrap();
+    s.pointer(&ev(PointerKind::Drag, 200.0, 170.0).with_mods(alt), view).unwrap();
+    s.pointer(&ev(PointerKind::Drag, 10.0, 250.0).with_mods(alt), view).unwrap();
+    removes_what_was_shown(&mut s, view, &|s| {
+        s.pointer(&ev(PointerKind::Up, 10.0, 250.0).with_mods(alt), view).unwrap();
+    });
+}
+
 #[test]
 fn a_line_too_long_to_check_against_the_paths_is_refused() {
     let mut s = session();
