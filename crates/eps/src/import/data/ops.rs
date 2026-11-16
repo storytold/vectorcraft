@@ -31,6 +31,7 @@ pub(super) enum Source {
 }
 
 impl Interp<'_> {
+    #[allow(clippy::cognitive_complexity)] // One arm for each file operator, most of them a few lines.
     pub fn data_op(&mut self, op: Op) -> Res {
         use Op::*;
         match op {
@@ -50,23 +51,7 @@ impl Interp<'_> {
             ReadLine => {
                 let s = self.pop_str()?;
                 let Obj::File { stream: f, .. } = self.pop()? else { return ps_err("typecheck", "") };
-                let n = s.len();
-                let mut line = vec![];
-                let mut ended = false;
-                while line.len() < n {
-                    match self.read(&f, 1)?.first() {
-                        Some(b'\n') | None => {
-                            ended = true;
-                            break;
-                        }
-                        Some(b'\r') => {
-                            self.skip_lf(&f);
-                            ended = true;
-                            break;
-                        }
-                        Some(b) => line.push(*b),
-                    }
-                }
+                let (line, ended) = self.read_line(&f, s.len())?;
                 self.fill(s, &line)?;
                 self.push(Obj::Bool(ended))?;
             }
@@ -219,38 +204,71 @@ impl Interp<'_> {
         })
     }
 
-    /// After `readline` consumes CR, consume only an immediately following LF. PostScript
-    /// treats CR/LF as one line ending (PLRM §3.8); raw reads must keep every other byte.
-    /// The preceding `read` has already materialized any pending filter.
-    fn skip_lf(&mut self, f: &Rc<RefCell<Stream>>) {
-        match &mut *f.borrow_mut() {
+    /// Run `scan` over the bytes left in file `f`, in one slice, and consume as many of them as
+    /// it says it used. A file still pending after `materialize` has no bytes left.
+    fn scan<T>(&mut self, f: &Rc<RefCell<Stream>>, scan: impl FnOnce(&[u8]) -> (T, usize)) -> Res<T> {
+        self.materialize(f)?;
+        Ok(match &mut *f.borrow_mut() {
             Stream::Current => {
-                if self.lex.rest().first() == Some(&b'\n') {
-                    self.lex.advance(1);
-                }
+                let (found, used) = scan(self.lex.data());
+                self.lex.advance(used);
+                found
             }
             Stream::Buf { data, pos, .. } => {
-                if data.get(*pos) == Some(&b'\n') {
-                    *pos += 1;
-                }
+                let start = (*pos).min(data.len());
+                let (found, used) = scan(data.get(start..).unwrap_or_default());
+                *pos = start.saturating_add(used).min(data.len());
+                found
             }
-            Stream::Pending { .. } => {}
-        }
+            Stream::Pending { .. } => scan(&[]).0,
+        })
     }
 
-    /// Up to `n` bytes read as hexadecimal digits from `f` (other characters skipped).
-    pub(in super::super) fn read_hex(&mut self, f: &Rc<RefCell<Stream>>, n: usize) -> Res<Vec<u8>> {
-        let mut out = Vec::with_capacity(n);
-        let mut high: Option<u8> = None;
-        while out.len() < n {
-            let Some(&b) = self.read(f, 1)?.first() else { break };
-            let Some(v) = char::from(b).to_digit(16) else { continue };
-            match high.take() {
-                Some(h) => out.push(h << 4 | v as u8),
-                None => high = Some(v as u8),
-            }
+    /// `readline` from `f` into a string of `n` bytes: the line, and whether it ended at a line
+    /// ending or at the end of the data. The line ending is consumed and left out of the line.
+    /// CR LF is one line ending (PLRM §3.8), and a lone CR leaves the byte after it unread. A
+    /// line that fills the string leaves the bytes after it unread, a line ending included.
+    pub(in super::super) fn read_line(&mut self, f: &Rc<RefCell<Stream>>, n: usize) -> Res<(Vec<u8>, bool)> {
+        if n == 0 {
+            return Ok((vec![], false));
         }
-        Ok(out)
+        self.scan(f, |data| {
+            let room = data.get(..n).unwrap_or(data);
+            match room.iter().position(|b| matches!(b, b'\n' | b'\r')) {
+                Some(i) => {
+                    let crlf = room.get(i) == Some(&b'\r') && data.get(i + 1) == Some(&b'\n');
+                    ((room.get(..i).unwrap_or_default().to_vec(), true), i + 1 + usize::from(crlf))
+                }
+                None if room.len() == n => ((room.to_vec(), false), n),
+                None => ((room.to_vec(), true), room.len()),
+            }
+        })
+    }
+
+    /// Up to `n` bytes read as hexadecimal digits from `f` (other characters skipped). The read
+    /// stops at the digit that completes the `n`th byte and leaves what follows unread. A lone
+    /// digit at the end of the data gives no byte.
+    pub(in super::super) fn read_hex(&mut self, f: &Rc<RefCell<Stream>>, n: usize) -> Res<Vec<u8>> {
+        if n == 0 {
+            return Ok(vec![]);
+        }
+        self.scan(f, |data| {
+            let mut out = Vec::with_capacity(n.min(data.len() / 2));
+            let mut high: Option<u8> = None;
+            let mut used = 0;
+            for &b in data {
+                if out.len() == n {
+                    break;
+                }
+                used += 1;
+                let Some(v) = char::from(b).to_digit(16) else { continue };
+                match high.take() {
+                    Some(h) => out.push(h << 4 | v as u8),
+                    None => high = Some(v as u8),
+                }
+            }
+            (out, used)
+        })
     }
 
     /// Skip the whitespace and the `>` that end hexadecimal data in `f`, if a `>` is next: the
