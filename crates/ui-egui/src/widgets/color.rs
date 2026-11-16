@@ -700,17 +700,57 @@ fn wheel_pos(c: Pos2, r: f32, h: f32, s: f32) -> Pos2 {
     c + vec2(a.cos(), -a.sin()) * r * s
 }
 
-/// The hue and saturation wheel at brightness `v`: hue around, saturation outwards.
-fn wheel_shape(c: Pos2, r: f32, v: f32) -> egui::Shape {
+/// Which HSB component the distance from a [`harmony_wheel`]'s center shows; hue is always the
+/// angle.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WheelAxes {
+    /// Saturation outwards (gray at the center), at the selected color's brightness.
+    #[default]
+    HueSaturation,
+    /// Brightness outwards (black at the center), at the selected color's saturation.
+    HueBrightness,
+}
+
+impl WheelAxes {
+    /// The HSB index the distance from the center sets: 1 (saturation) or 2 (brightness).
+    pub fn radial(self) -> usize {
+        match self {
+            WheelAxes::HueSaturation => 1,
+            WheelAxes::HueBrightness => 2,
+        }
+    }
+
+    /// The HSB index of the slider under the wheel: the component the wheel does not show.
+    pub fn other(self) -> usize {
+        3 - self.radial()
+    }
+
+    /// HSB `[h°, s, v]` of hue `h`, `t` for the component the distance from the center shows and
+    /// `o` for the other one.
+    pub fn hsb(self, h: f32, t: f32, o: f32) -> [f32; 3] {
+        match self {
+            WheelAxes::HueSaturation => [h, t, o],
+            WheelAxes::HueBrightness => [h, o, t],
+        }
+    }
+}
+
+/// The wheel of `axes` with `o` for the component it does not show: hue around, the other
+/// component outwards.
+fn wheel_shape(c: Pos2, r: f32, axes: WheelAxes, o: f32) -> egui::Shape {
     const SEG: u32 = 72;
     const RINGS: u32 = 8;
+    let col = |h: f32, t: f32| {
+        let [h, s, v] = axes.hsb(h, t, o);
+        crate::panels::c32(&Color::from_hsb(h, s, v))
+    };
     let mut mesh = egui::Mesh::default();
-    mesh.colored_vertex(c, crate::panels::c32(&Color::from_hsb(0.0, 0.0, v)));
+    mesh.colored_vertex(c, col(0.0, 0.0));
     for ring in 1..=RINGS {
-        let s = ring as f32 / RINGS as f32;
+        let t = ring as f32 / RINGS as f32;
         for k in 0..SEG {
             let h = k as f32 * 360.0 / SEG as f32;
-            mesh.colored_vertex(wheel_pos(c, r, h, s), crate::panels::c32(&Color::from_hsb(h, s, v)));
+            mesh.colored_vertex(wheel_pos(c, r, h, t), col(h, t));
         }
     }
     let at = |ring: u32, k: u32| if ring == 0 { 0 } else { 1 + (ring - 1) * SEG + k % SEG };
@@ -873,23 +913,31 @@ pub fn hue_ring(ui: &mut Ui, id: impl std::hash::Hash, name: &str, size: f32, hu
     out
 }
 
-/// Hue sectors and saturation rings of the [`segmented_wheel`]: patches 15° of hue by 20%
-/// saturation wide, the sectors centered on red at 0°.
+/// Hue sectors and rings of the [`segmented_wheel`]: patches 15° of hue by 20% saturation (or
+/// brightness) wide, the sectors centered on red at 0°.
 const WHEEL_SECTORS: u32 = 24;
 const WHEEL_RINGS: u32 = 5;
 
 /// The color of the [`segmented_wheel`] patch that holds hue `h` (degrees) and saturation `s` (0 to
 /// 1), at brightness `v`: the hue and saturation at the patch's center.
 pub fn segment_color(h: f32, s: f32, v: f32) -> Color {
-    let step = 360.0 / WHEEL_SECTORS as f32;
-    let sector = (h.rem_euclid(360.0) / step).round() % WHEEL_SECTORS as f32;
-    let ring = (s.clamp(0.0, 1.0) * WHEEL_RINGS as f32).floor().min((WHEEL_RINGS - 1) as f32);
-    Color::from_hsb(sector * step, (ring + 0.5) / WHEEL_RINGS as f32, v)
+    segment_color_on(WheelAxes::HueSaturation, h, s, v)
 }
 
-/// The segmented hue and saturation wheel at brightness `v`: a solid patch per hue sector and
-/// saturation ring, in its [`segment_color`].
-fn segmented_wheel_shape(c: Pos2, r: f32, v: f32) -> egui::Shape {
+/// The color of the patch of the [`segmented_wheel`] of `axes` that holds hue `h` (degrees) and `t`
+/// (0 to 1) for the component the wheel shows, with `o` for the other one: the hue and `t` at the
+/// patch's center.
+pub fn segment_color_on(axes: WheelAxes, h: f32, t: f32, o: f32) -> Color {
+    let step = 360.0 / WHEEL_SECTORS as f32;
+    let sector = (h.rem_euclid(360.0) / step).round() % WHEEL_SECTORS as f32;
+    let ring = (t.clamp(0.0, 1.0) * WHEEL_RINGS as f32).floor().min((WHEEL_RINGS - 1) as f32);
+    let [h, s, v] = axes.hsb(sector * step, (ring + 0.5) / WHEEL_RINGS as f32, o);
+    Color::from_hsb(h, s, v)
+}
+
+/// The segmented wheel of `axes` with `o` for the component it does not show: a solid patch per
+/// hue sector and ring, in its [`segment_color_on`].
+fn segmented_wheel_shape(c: Pos2, r: f32, axes: WheelAxes, o: f32) -> egui::Shape {
     // Points along each patch's arcs.
     const ARC: u32 = 4;
     let step = 360.0 / WHEEL_SECTORS as f32;
@@ -898,7 +946,7 @@ fn segmented_wheel_shape(c: Pos2, r: f32, v: f32) -> egui::Shape {
         let (s0, s1) = (ring as f32 / WHEEL_RINGS as f32, (ring + 1) as f32 / WHEEL_RINGS as f32);
         for k in 0..WHEEL_SECTORS {
             let h = k as f32 * step;
-            let col = crate::panels::c32(&segment_color(h, (s0 + s1) / 2.0, v));
+            let col = crate::panels::c32(&segment_color_on(axes, h, (s0 + s1) / 2.0, o));
             let first = mesh.vertices.len() as u32;
             for j in 0..=ARC {
                 let a = h - step / 2.0 + step * j as f32 / ARC as f32;
@@ -920,11 +968,13 @@ fn segmented_wheel_shape(c: Pos2, r: f32, v: f32) -> egui::Shape {
 pub struct WheelResponse {
     /// The colour whose marker was pressed (it becomes the selected one).
     pub pressed: Option<usize>,
-    /// A colour moved by dragging its marker (a new hue and saturation) or, the selected colour,
-    /// the brightness slider (a new brightness): `[h°, s, v]`, `None` where the control kept it.
+    /// A colour moved by dragging its marker (a new hue and saturation, or with
+    /// [`WheelAxes::HueBrightness`] a new hue and brightness) or, the selected colour, the slider
+    /// under the wheel (a new brightness, or saturation): `[h°, s, v]`, `None` where the control
+    /// kept it.
     pub moved: Option<(usize, [Option<f32>; 3])>,
     /// A click on the wheel: the color whose marker is within reach of it (if any), and the hue
-    /// (degrees) and saturation under the pointer (1 for a marker past the wheel's edge).
+    /// (degrees) and the saturation (or brightness) under the pointer (1 past the wheel's edge).
     pub clicked: Option<(Option<usize>, [f32; 2])>,
 }
 
@@ -933,32 +983,40 @@ pub struct WheelResponse {
 /// marker per colour joined to the centre (the selected colour, `base`, larger) and a Brightness
 /// slider for the selected colour below it.
 pub fn harmony_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>) -> WheelResponse {
-    wheel(ui, id, size, colors, base, false)
+    wheel_of(ui, id, size, colors, base, false, WheelAxes::HueSaturation)
 }
 
 /// [`harmony_wheel`] drawn as solid patches (24 hues by 5 saturations, each in its
 /// [`segment_color`]). The markers sit at their colors' own hue and
 /// saturation, and a drag moves them as freely as on the smooth wheel.
 pub fn segmented_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>) -> WheelResponse {
-    wheel(ui, id, size, colors, base, true)
+    wheel_of(ui, id, size, colors, base, true, WheelAxes::HueSaturation)
 }
 
-/// [`harmony_wheel`], or with `segmented` [`segmented_wheel`].
-fn wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>, segmented: bool) -> WheelResponse {
+/// [`harmony_wheel`], or with `segmented` [`segmented_wheel`], showing `axes`. With
+/// [`WheelAxes::HueBrightness`] the distance from the center is brightness (black at the center,
+/// full brightness at the edge, a ring of patches per 20% on the segmented wheel), the wheel is drawn
+/// at the selected colour's saturation (full without one), a marker drag sets hue and brightness,
+/// and the slider under the wheel is a Saturation slider.
+pub fn wheel_of(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>, segmented: bool, axes: WheelAxes) -> WheelResponse {
     let t = Tokens::get(ui.ctx());
     let mut out = WheelResponse::default();
     let base_hsb = base.and_then(|b| colors.get(b)).map(Color::to_hsb);
-    let v = base_hsb.map_or(1.0, |c| c[2]);
+    let (radial, other) = (axes.radial(), axes.other());
+    // The component the wheel does not show: the slider's value, and the wheel's background at it.
+    let o = base_hsb.map_or(1.0, |c| c[other]);
+    // A dark wheel still shows its hues.
+    let shown = if axes == WheelAxes::HueSaturation { o.max(0.15) } else { o };
     ui.horizontal(|ui| {
         ui.add_space(((ui.available_width() - size) / 2.0).max(0.0));
         let (rect, resp) = ui.allocate_exact_size(vec2(size, size), Sense::click_and_drag());
         let (c, r) = (rect.center(), size / 2.0 - 10.0);
         let painter = ui.painter_at(rect);
-        painter.add(if segmented { segmented_wheel_shape(c, r, v.max(0.15)) } else { wheel_shape(c, r, v.max(0.15)) });
+        painter.add(if segmented { segmented_wheel_shape(c, r, axes, shown) } else { wheel_shape(c, r, axes, shown) });
         painter.circle_stroke(c, r, Stroke::new(1.0, t.border));
         let at = |col: &Color| {
-            let [h, s, _] = col.to_hsb();
-            wheel_pos(c, r, h, s)
+            let hsb = col.to_hsb();
+            wheel_pos(c, r, hsb[0], hsb[radial])
         };
         for (i, col) in colors.iter().enumerate() {
             let (p, big) = (at(col), Some(i) == base);
@@ -974,7 +1032,8 @@ fn wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>
             let near = colors.iter().map(at).enumerate().map(|(i, m)| (i, m.distance(p))).filter(|x| x.1 <= 14.0).min_by(|a, b| a.1.total_cmp(&b.1));
             out.pressed = near.map(|x| x.0);
             ui.data_mut(|m| m.insert_temp(drag, out.pressed));
-            // A click inside the wheel, or on a marker, gives the hue and saturation under it.
+            // A click inside the wheel, or on a marker, gives the hue and saturation (or
+            // brightness) under it.
             let dv = p - c;
             if resp.clicked() && (dv.length() <= r || out.pressed.is_some()) {
                 let h = (-dv.y).atan2(dv.x).to_degrees().rem_euclid(360.0);
@@ -986,8 +1045,10 @@ fn wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>
             && i < colors.len()
         {
             let dv = p - c;
-            let h = (-dv.y).atan2(dv.x).to_degrees().rem_euclid(360.0);
-            out.moved = Some((i, [Some(h), Some((dv.length() / r).clamp(0.0, 1.0)), None]));
+            let mut set = [None; 3];
+            set[0] = Some((-dv.y).atan2(dv.x).to_degrees().rem_euclid(360.0));
+            set[radial] = Some((dv.length() / r).clamp(0.0, 1.0));
+            out.moved = Some((i, set));
         }
         let name = if segmented { tl!("Segmented color wheel") } else { tl!("Color wheel") };
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Slider, ui.is_enabled(), name));
@@ -995,15 +1056,19 @@ fn wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>
     ui.add_space(6.0);
     ui.horizontal(|ui| {
         ui.add_space(((ui.available_width() - size - 76.0) / 2.0).max(0.0));
-        ui.add_sized([70.0, 22.0], egui::Label::new(egui::RichText::new(tl!("Brightness")).color(t.text_dim)));
-        // Screen readers get the brightness in percent, as the Color panel's HSB B field shows it.
-        let shown = SliderValue::field((f64::from(v) * 100.0).round(), 0.0..=100.0, "%", 0);
-        if let (Some(b), Some([h, s, _])) = (base, base_hsb)
-            && let (Some(nv), _) = color_slider_valued(ui, (id, "brightness"), tl!("Brightness"), Some(shown), v, size, &|x| {
-                crate::panels::c32(&Color::from_hsb(h, s, x))
+        let (name, key) = if other == 2 { (tl!("Brightness"), "brightness") } else { (tl!("Saturation"), "saturation") };
+        ui.add_sized([70.0, 22.0], egui::Label::new(egui::RichText::new(name).color(t.text_dim)));
+        // Screen readers get the value in percent, as the Color panel's HSB fields show it.
+        let shown = SliderValue::field((f64::from(o) * 100.0).round(), 0.0..=100.0, "%", 0);
+        if let (Some(b), Some(hsb)) = (base, base_hsb)
+            && let (Some(nv), _) = color_slider_valued(ui, (id, key), name, Some(shown), o, size, &|x| {
+                let [h, s, v] = axes.hsb(hsb[0], hsb[radial], x);
+                crate::panels::c32(&Color::from_hsb(h, s, v))
             })
         {
-            out.moved = Some((b, [None, None, Some(nv)]));
+            let mut set = [None; 3];
+            set[other] = Some(nv);
+            out.moved = Some((b, set));
         }
     });
     out
