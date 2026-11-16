@@ -884,6 +884,7 @@
 	Auto Color	Automaattinen väri
 	Automatic	Automaattinen
 	Isolate Selected Group	Eristä valittu ryhmä
+	Isolate Selected Path	Eristä valittu polku
 	Exit Isolation Mode	Poistu eristystilasta
 	Make Clipping Mask	Luo leikkausmaski
 	Release Clipping Mask	Vapauta leikkausmaski
@@ -1302,7 +1303,7 @@ lighting	Light	Valo
 	Name* @ 66.67% (RGB/Preview)	Nimi* @ 66.67% (RGB/esikatselu)
 	No Document	Ei asiakirjaa
 	Press 	Paina 
-	Search commands and tools	Hae komentoja ja työkaluja
+	Search commands, tools, panels and effects	Hae komentoja, työkaluja, paneeleita ja tehosteita
 	Style:	Tyyli:
 	Switch workspace	Vaihda työtilaa
 	Show all open documents	Näytä kaikki avoimet asiakirjat
@@ -1504,6 +1505,10 @@ lighting	Light	Valo
 	Play Current Selection	Toista nykyinen valinta
 	Save Actions…	Tallenna toiminnot…
 	Load Actions…	Lataa toiminnot…
+	Reset Actions	Palauta toiminnot
+	Replace the current actions with the default set?	Korvataanko nykyiset toiminnot oletussarjalla?
+	Append adds the default set after the current sets instead.	Lisää-painike lisää sen sijaan oletussarjan nykyisten sarjojen perään.
+	Append	Lisää
 	Reflect Horizontal	Peilaa vaakasuunnassa
 	Rotate 90° CW	Kierrä 90° myötäpäivään
 	Set 1	Sarja 1
@@ -2956,6 +2961,8 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Näytä liukuva väriympyrä
 	Show segmented color wheel	Näytä segmentoitu väriympyrä
 	Show color bars	Näytä väripalkit
+	Show brightness and hue on wheel	Näytä kirkkaus ja sävy ympyrässä
+	Show saturation and hue on wheel	Näytä kylläisyys ja sävy ympyrässä
 	Add Color Tool	Lisää väri -työkalu
 	Remove Color Tool	Poista väri -työkalu
 	Remove Color	Poista väri
@@ -4405,7 +4412,11 @@ font-technology	Variable	Muuttuvat
 	Saved {path}	Tallennettu {path}
 	Saving	Tallennetaan
 	Saving {}	Tallennetaan {}
-	Search commands and tools…	Hae komentoja ja työkaluja…
+	Search commands, tools, panels and effects…	Hae komentoja, työkaluja, paneeleita ja tehosteita…
+	No commands match	Mikään komento ei vastaa hakua
+	{pos} of {total}: {name}	{pos}/{total}: {name}
+@plural	{n} result|{n} results	{n} tulos|{n} tulosta
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown}/{n} tulosta. Kirjoita lisää rajataksesi tuloksia.|{shown}/{n} tulosta. Kirjoita lisää rajataksesi tuloksia.
 	Recent Commands	Viimeisimmät komennot
 	No recent commands	Ei viimeisimpiä komentoja
 	Dashed Line	Katkoviiva
@@ -6125,6 +6136,25 @@ mark-style	Japanese	Japanilainen
 @msg	a 3D effect on a group's fill or stroke draws nothing	ryhmän täytön tai viivan 3D-tehoste ei piirrä mitään
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ryhmän täytön tai viivan 3D-tehoste ei piirrä mitään vietävää
 @msg	The 3D object is too complex to export	3D-objekti on liian monimutkainen vietäväksi
+@msg	give one <filter> element	anna yksi <filter>-elementti
+@msg	the <filter> element needs an id, the filter's name	<filter>-elementti tarvitsee id:n, suotimen nimen
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG-suotimen id on enintään {MAX_NAME} merkkiä
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> ei ole SVG-suotimen elementti
+@msg	an SVG filter has no event attributes such as {_1}	SVG-suotimessa ei ole tapahtumamääritteitä, kuten {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG-suotimen kuvat ovat PNG-, JPEG-, GIF- tai WebP-muotoisia data:-URL-osoitteita
+@msg	the SVG filter isn't valid XML: {e}	SVG-suodin ei ole kelvollista XML:ää: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulencen numOctaves on enintään {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} on enintään {max}
+@msg	feConvolveMatrix's order	feConvolveMatrixin order
+@msg	feMorphology's radius	feMorphologyn radius
+@msg	a blur's stdDeviation	sumennuksen stdDeviation
+@msg	the SVG filter has no primitives	SVG-suotimessa ei ole primitiivejä
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG-suotimessa on enintään {MAX_PRIMITIVES} primitiiviä
+@msg	the SVG filter is too large once its attributes are written out	SVG-suodin on liian suuri, kun sen määritteet kirjoitetaan auki
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG-suotimen kuvissa on yhteensä enintään {MAX_IMAGE_PIXELS} pikseliä
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG-suodinta ei voi piirtää: tarkista sen primitiivit ja niiden syötteet
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG-suotimen elementit ovat sisäkkäin enintään {MAX_DEPTH} tason syvyydellä
+@msg	an SVG filter is at most {_1} KB	SVG-suodin on enintään {_1} kt
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektilla ei ole 3D-tehostetta (Pursota ja viistä, Pyöräytä, Täytä ilmalla tai Kierrä)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` on oltava objekti, jossa on vain `mode` arvolla shaded tai wireframe
 @msg	its 3D effect builds no solid	sen 3D-tehoste ei muodosta kappaletta
@@ -7572,6 +7602,11 @@ breakText	Glyphs	Merkit
 	Malayalam	Malajalam
 	Odia	Orija
 	Urdu	Urdu
+	Sanskrit	Sanskrit
+	Nepali	Nepali
+	Assamese	Assami
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} ja uudemmat (versio {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Vie kaikki avoimet asiakirjat PDF-muodossa
@@ -8002,4 +8037,24 @@ breakText	Glyphs	Merkit
 	No objects are selected.	Objekteja ei ole valittu.
 	Open a document to mark its fold lines.	Avaa asiakirja, niin voit merkitä sen taittoviivat.
 	Remove Fold Line Role	Poista viivatyyppi
+	Check	Tarkista
+	Check Fold Lines	Tarkista taittoviivat
+@msg	No cut lines are in the selection.	Valinnassa ei ole leikkausviivoja.
+@msg	No cut lines are in the document.	Asiakirjassa ei ole leikkausviivoja.
+@msg	The cut lines do not enclose an area.	Leikkausviivat eivät rajaa aluetta.
+@msg	A cut line ends without meeting another cut line.	Leikkausviiva päättyy kohtaamatta toista leikkausviivaa.
+@msg	A gap between cut lines was closed.	Leikkausviivojen välinen rako suljettiin.
+@msg	The fold lines are too complex to check.	Taittoviivat ovat liian monimutkaisia tarkistettaviksi.
+@msg	A cut line and a crease lie on top of each other.	Leikkausviiva ja nuuttausviiva ovat päällekkäin.
+@msg	No cut lines are among the given objects.	Annetuissa objekteissa ei ole leikkausviivoja.
+@msg	Two fold lines lie on top of each other.	Kaksi taittoviivaa on päällekkäin.
+@msg	A crease ends inside a panel.	Nuuttausviiva päättyy paneelin sisään.
+@msg	A crease does not divide two panels.	Nuuttausviiva ei jaa kahta paneelia.
+@msg	A crease lies outside the cut outline, wholly or in part.	Nuuttausviiva on kokonaan tai osittain leikkausääriviivan ulkopuolella.
+@msg	The pieces of a hinge are not on one straight line.	Saranan osat eivät ole yhdellä suoralla.
+@msg	A gap between cut lines is too narrow to tell apart.	Leikkausviivojen välinen rako on liian kapea erotettavaksi.
+@msg	A cut-out area holds other fold lines or another blank.	Leikattu alue sisältää muita taittoviivoja tai toisen aihion.
+@msg	A panel is not joined to the rest by a crease.	Paneelia ei ole liitetty muihin millään nuuttausviivalla.
+@msg	A fold line is on a non-printing layer.	Taittoviiva on tasolla, jota ei tulosteta.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneelit: {panels}, saranat: {hinges}, virheet: {errors}, varoitukset: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"

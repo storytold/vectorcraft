@@ -950,6 +950,7 @@ digits	Malayalam	マラヤーラム数字
 	Auto Color	自動カラー
 	Automatic	自動
 	Isolate Selected Group	選択したグループを分離
+	Isolate Selected Path	選択したパスを分離
 	Isolate Selected Object	選択したオブジェクトを分離
 	Exit Isolation Mode	分離モードを終了
 	Make Clipping Mask	クリッピングマスクを作成
@@ -1959,6 +1960,8 @@ antiAlias	Sharp	シャープ
 	Show smooth color wheel	滑らかなカラーホイールを表示
 	Show segmented color wheel	分割カラーホイールを表示
 	Show color bars	カラーバーを表示
+	Show brightness and hue on wheel	ホイールに明るさと色相を表示
+	Show saturation and hue on wheel	ホイールに彩度と色相を表示
 	Add Color Tool	カラー追加ツール
 	Remove Color Tool	カラー削除ツール
 	Remove Color	カラーを削除
@@ -2784,6 +2787,10 @@ diagnostics	ui	UI
 	Play Current Selection	選択項目を再生
 	Save Actions…	アクションを保存…
 	Load Actions…	アクションを読み込み…
+	Reset Actions	アクションをリセット
+	Replace the current actions with the default set?	現在のアクションを初期設定のセットで置き換えますか？
+	Append adds the default set after the current sets instead.	「追加」を選ぶと、初期設定のセットを現在のセットの後に追加します。
+	Append	追加
 	Plug-in Info	プラグイン情報
 	Plug-in…	プラグイン…
 	Points	ポイント
@@ -3204,8 +3211,12 @@ mark-style	Japanese	日本式
 	Filter Layers Panel Rows	レイヤーパネルの行をフィルター
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` は変更した設定を表します: プリセットを別の名前で保存してください
 @msg	`{key}` must be an array of these names: {_1}	`{key}` には {_1} の中の名前の配列を指定してください
-	Search commands and tools	コマンドとツールを検索
-	Search commands and tools…	コマンドとツールを検索…
+	Search commands, tools, panels and effects	コマンド、ツール、パネル、効果を検索
+	Search commands, tools, panels and effects…	コマンド、ツール、パネル、効果を検索…
+	No commands match	一致するコマンドはありません
+	{pos} of {total}: {name}	{total} 件中 {pos} 件目: {name}
+@plural	{n} result|{n} results	{n} 件
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} 件中 {shown} 件。続けて入力すると絞り込めます。
 	Recent Commands	最近使ったコマンド
 	No recent commands	最近使ったコマンドはありません
 	Secondary	セカンダリ
@@ -5875,6 +5886,24 @@ lighting	Light	ライト
 @msg	a 3D effect on a group's fill or stroke draws nothing	グループの塗りまたは線にある 3D 効果は何も描画しません
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	グループの塗りまたは線にある 3D 効果には書き出せる描画がありません
 @msg	The 3D object is too complex to export	3D オブジェクトが複雑すぎるため書き出せません
+@msg	the <filter> element needs an id, the filter's name	<filter> 要素には id (フィルターの名前) が必要です
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG フィルターの id は {MAX_NAME} 文字までです
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> は SVG フィルターの要素ではありません
+@msg	an SVG filter has no event attributes such as {_1}	SVG フィルターには {_1} などのイベント属性は使えません
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG フィルターの画像は PNG、JPEG、GIF、WebP の data: URL に限ります
+@msg	the SVG filter isn't valid XML: {e}	SVG フィルターが有効な XML ではありません: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence の numOctaves は {MAX_OCTAVES} までです
+@msg	{what} is at most {max}	{what} は {max} までです
+@msg	feConvolveMatrix's order	feConvolveMatrix の order
+@msg	feMorphology's radius	feMorphology の radius
+@msg	a blur's stdDeviation	ぼかしの stdDeviation
+@msg	the SVG filter has no primitives	SVG フィルターにプリミティブがありません
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG フィルターのプリミティブは {MAX_PRIMITIVES} 個までです
+@msg	the SVG filter is too large once its attributes are written out	属性を書き出すと SVG フィルターが大きくなりすぎます
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG フィルターの画像は合計 {MAX_IMAGE_PIXELS} ピクセルまでです
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG フィルターを描画できません: プリミティブとその入力を確認してください
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG フィルターの要素の入れ子は {MAX_DEPTH} 階層までです
+@msg	an SVG filter is at most {_1} KB	SVG フィルターは {_1} KB までです
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	オブジェクトに 3D 効果 (押し出しとベベル、回転体、膨張、回転) がありません
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` は `mode` だけを持ち、その値が shaded または wireframe のオブジェクトにしてください
 @msg	its 3D effect builds no solid	3D 効果からソリッドが作成されません
@@ -9020,6 +9049,11 @@ breakText	Glyphs	字形
 	Malayalam	マラヤーラム語
 	Odia	オディア語
 	Urdu	ウルドゥー語
+	Sanskrit	サンスクリット語
+	Nepali	ネパール語
+	Assamese	アッサム語
+	Konkani	コンカニ語
+	Sindhi	シンド語
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 以降 (バージョン {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	開いているすべてのドキュメントを PDF として書き出し
@@ -9441,3 +9475,23 @@ breakText	Glyphs	字形
 	No objects are selected.	オブジェクトが選択されていません。
 	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
 	Remove Fold Line Role	線種を解除
+	Check	チェック
+	Check Fold Lines	折り線をチェック
+@msg	No cut lines are in the selection.	選択範囲にカット線がありません。
+@msg	No cut lines are in the document.	ドキュメントにカット線がありません。
+@msg	The cut lines do not enclose an area.	カット線が領域を囲んでいません。
+@msg	A cut line ends without meeting another cut line.	カット線が他のカット線と接しないまま終わっています。
+@msg	A gap between cut lines was closed.	カット線間の隙間を閉じました。
+@msg	The fold lines are too complex to check.	折り線が複雑すぎるためチェックできません。
+@msg	A cut line and a crease lie on top of each other.	カット線と筋入れ線が重なっています。
+@msg	No cut lines are among the given objects.	指定したオブジェクトにカット線がありません。
+@msg	Two fold lines lie on top of each other.	折り線が 2 本重なっています。
+@msg	A crease ends inside a panel.	筋入れ線がパネルの内側で終わっています。
+@msg	A crease does not divide two panels.	筋入れ線が 2 つのパネルを分けていません。
+@msg	A crease lies outside the cut outline, wholly or in part.	筋入れ線の全体または一部がカットの輪郭の外側にあります。
+@msg	The pieces of a hinge are not on one straight line.	ヒンジの各部分が 1 本の直線上にありません。
+@msg	A gap between cut lines is too narrow to tell apart.	カット線間の隙間が狭すぎて区別できません。
+@msg	A cut-out area holds other fold lines or another blank.	切り抜かれた領域に他の折り線または別の展開図があります。
+@msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
+@msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}

@@ -2874,6 +2874,7 @@
 	VectorCraft Help…	VectorCraft-ის დახმარება…
 	Automatic	ავტომატური
 	Isolate Selected Group	მონიშნული ჯგუფის იზოლირება
+	Isolate Selected Path	მონიშნული ტრაექტორიის იზოლირება
 	Exit Isolation Mode	იზოლაციის რეჟიმიდან გამოსვლა
 	Make Clipping Mask	მომჭრელი ნიღბის შექმნა
 	Release Clipping Mask	მომჭრელი ნიღბის მოხსნა
@@ -3269,7 +3270,7 @@ lighting	Light	სინათლე
 	Name* @ 66.67% (RGB/Preview)	სახელი* @ 66.67% (RGB/წინასწარი ნახვა)
 	No Document	დოკუმენტი არ არის
 	Press 	დააჭირეთ 
-	Search commands and tools	ბრძანებებისა და ხელსაწყოების ძიება
+	Search commands, tools, panels and effects	ბრძანებების, ხელსაწყოების, პანელებისა და ეფექტების ძიება
 	Style:	სტილი:
 	Switch workspace	სამუშაო სივრცის გადართვა
 	Show all open documents	ყველა ღია დოკუმენტის ჩვენება
@@ -3453,6 +3454,10 @@ lighting	Light	სინათლე
 	Play Current Selection	მიმდინარე მონიშნულის შესრულება
 	Save Actions…	მოქმედებების შენახვა…
 	Load Actions…	მოქმედებების ჩატვირთვა…
+	Reset Actions	მოქმედებების ჩამოყრა
+	Replace the current actions with the default set?	ჩანაცვლდეს მიმდინარე მოქმედებები ნაგულისხმევი ნაკრებით?
+	Append adds the default set after the current sets instead.	დამატება ამის ნაცვლად ნაგულისხმევ ნაკრებს მიმდინარე ნაკრებების შემდეგ ამატებს.
+	Append	დამატება
 	Reflect Horizontal	ჰორიზონტალურად არეკვლა
 	Rotate 90° CW	90°-ით შემობრუნება საათის ისრის მიმართულებით
 	Set 1	ნაკრები 1
@@ -4788,6 +4793,8 @@ digits	Malayalam	მალაიალამური
 	Show smooth color wheel	გლუვი ფერთა წრის ჩვენება
 	Show segmented color wheel	სეგმენტირებული ფერთა წრის ჩვენება
 	Show color bars	ფერთა ზოლების ჩვენება
+	Show brightness and hue on wheel	სიკაშკაშისა და ფერის ტონის ჩვენება წრეზე
+	Show saturation and hue on wheel	გაჯერებისა და ფერის ტონის ჩვენება წრეზე
 	Add Color Tool	ფერის დამატების ხელსაწყო
 	Remove Color Tool	ფერის წაშლის ხელსაწყო
 	Remove Color	ფერის წაშლა
@@ -6089,7 +6096,11 @@ font-technology	Variable	ცვლადი
 	Saved {path}	შენახულია: {path}
 	Saving	შენახვა
 	Saving {}	ინახება: {}
-	Search commands and tools…	ბრძანებებისა და ხელსაწყოების ძიება…
+	Search commands, tools, panels and effects…	ბრძანებების, ხელსაწყოების, პანელებისა და ეფექტების ძიება…
+	No commands match	შესაბამისი ბრძანება არ არის
+	{pos} of {total}: {name}	{pos} / {total}: {name}
+@plural	{n} result|{n} results	{n} შედეგი
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} შედეგიდან {shown}. გააგრძელეთ აკრეფა მათ შესამცირებლად.
 	Recent Commands	ბოლო ბრძანებები
 	No recent commands	ბოლო ბრძანებები არ არის
 	Dashed Line	ტირეებიანი ხაზი
@@ -7530,6 +7541,9 @@ font-technology	Variable	ცვლადი
 @msg	a 3D effect on a group's fill or stroke draws nothing	ჯგუფის შევსებაზე ან კონტურზე 3D ეფექტი არაფერს ხატავს
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ჯგუფის შევსებაზე ან კონტურზე 3D ეფექტი ექსპორტისთვის არაფერს ხატავს
 @msg	The 3D object is too complex to export	3D ობიექტი ზედმეტად რთულია ექსპორტისთვის
+@msg	feConvolveMatrix's order	feConvolveMatrix-ის order
+@msg	feMorphology's radius	feMorphology-ის radius
+@msg	a blur's stdDeviation	დაბინდვის stdDeviation
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	ობიექტს არ აქვს 3D ეფექტი (ამოწევა და წაკვეთა, ბრუნვა, გაბერვა ან შემობრუნება)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` უნდა იყოს ობიექტი, რომელიც შეიცავს მხოლოდ `mode`-ს, მნიშვნელობით shaded ან wireframe
 @msg	its 3D effect builds no solid	მისი 3D ეფექტი სხეულს არ ქმნის
@@ -9631,6 +9645,9 @@ breakText	Glyphs	გლიფები
 	Urdu	ურდუ
 	Assamese	ასამური
 	Sanskrit	სანსკრიტი
+	Nepali	ნეპალური
+	Konkani	კონკანი
+	Sindhi	სინდჰური
 	German: Swiss	გერმანული: შვეიცარია
 	Catalan	კატალანური
 	Danish	დანიური
@@ -10010,4 +10027,24 @@ font-script	Japanese	იაპონური
 	No objects are selected.	ობიექტები არ არის მონიშნული.
 	Open a document to mark its fold lines.	გახსენით დოკუმენტი მისი მოკეცვის ხაზების მოსანიშნად.
 	Remove Fold Line Role	ხაზის ტიპის მოხსნა
+	Check	შემოწმება
+	Check Fold Lines	მოკეცვის ხაზების შემოწმება
+@msg	No cut lines are in the selection.	მონიშვნაში ჭრის ხაზები არ არის.
+@msg	No cut lines are in the document.	დოკუმენტში ჭრის ხაზები არ არის.
+@msg	The cut lines do not enclose an area.	ჭრის ხაზები არცერთ არეს არ შემოფარგლავს.
+@msg	A cut line ends without meeting another cut line.	ჭრის ხაზი მთავრდება ისე, რომ სხვა ჭრის ხაზს არ ხვდება.
+@msg	A gap between cut lines was closed.	ჭრის ხაზებს შორის ღრეჩო დაიხურა.
+@msg	The fold lines are too complex to check.	მოკეცვის ხაზები შესამოწმებლად ზედმეტად რთულია.
+@msg	A cut line and a crease lie on top of each other.	ჭრის ხაზი და ბიგის ხაზი ერთმანეთზე დევს.
+@msg	No cut lines are among the given objects.	მითითებულ ობიექტებში ჭრის ხაზები არ არის.
+@msg	Two fold lines lie on top of each other.	მოკეცვის ორი ხაზი ერთმანეთზე დევს.
+@msg	A crease ends inside a panel.	ბიგის ხაზი პანელის შიგნით მთავრდება.
+@msg	A crease does not divide two panels.	ბიგის ხაზი ორ პანელს არ ყოფს.
+@msg	A crease lies outside the cut outline, wholly or in part.	ბიგის ხაზი მთლიანად ან ნაწილობრივ ჭრის კონტურის გარეთაა.
+@msg	The pieces of a hinge are not on one straight line.	ანჯამის ნაწილები ერთ სწორ ხაზზე არ დევს.
+@msg	A gap between cut lines is too narrow to tell apart.	ჭრის ხაზებს შორის ღრეჩო ზედმეტად ვიწროა გასარჩევად.
+@msg	A cut-out area holds other fold lines or another blank.	ამოჭრილი არე სხვა მოკეცვის ხაზებს ან სხვა ნამზადს შეიცავს.
+@msg	A panel is not joined to the rest by a crease.	პანელი დანარჩენს არცერთი ბიგის ხაზით არ უერთდება.
+@msg	A fold line is on a non-printing layer.	მოკეცვის ხაზი არასაბეჭდ შრეზეა.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	პანელები: {panels}, ანჯამები: {hinges}, შეცდომები: {errors}, გაფრთხილებები: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"

@@ -1569,6 +1569,8 @@ font-technology	Variable	Variables
 	Show smooth color wheel	Mostrar rueda de color continua
 	Show segmented color wheel	Mostrar rueda de color segmentada
 	Show color bars	Mostrar barras de color
+	Show brightness and hue on wheel	Mostrar brillo y tono en la rueda
+	Show saturation and hue on wheel	Mostrar saturación y tono en la rueda
 	Add Color Tool	Herramienta Añadir color
 	Remove Color Tool	Herramienta Eliminar color
 	Remove Color	Eliminar color
@@ -2660,6 +2662,10 @@ font-technology	Variable	Variables
 	Play Current Selection	Reproducir la selección actual
 	Save Actions…	Guardar acciones…
 	Load Actions…	Cargar acciones…
+	Reset Actions	Restablecer acciones
+	Replace the current actions with the default set?	¿Reemplazar las acciones actuales por el conjunto predeterminado?
+	Append adds the default set after the current sets instead.	Añadir agrega en su lugar el conjunto predeterminado después de los conjuntos actuales.
+	Append	Añadir
 	Plug-in Info	Información del plugin
 	Plug-ins	Plugins
 	Plug-in…	Plugin…
@@ -3284,8 +3290,12 @@ digits	Malayalam	Malayálam
 	Filter Layers Panel Rows	Filtrar filas del panel Capas
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` representa ajustes modificados: guarda el preajuste con otro nombre
 @msg	`{key}` must be an array of these names: {_1}	`{key}` debe ser una lista de estos nombres: {_1}
-	Search commands and tools	Buscar comandos y herramientas
-	Search commands and tools…	Buscar comandos y herramientas…
+	Search commands, tools, panels and effects	Buscar comandos, herramientas, paneles y efectos
+	Search commands, tools, panels and effects…	Buscar comandos, herramientas, paneles y efectos…
+	No commands match	Ningún comando coincide
+	{pos} of {total}: {name}	{pos} de {total}: {name}
+@plural	{n} result|{n} results	{n} resultado|{n} resultados
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Sigue escribiendo para acotarlos.|{shown} de {n} resultados. Sigue escribiendo para acotarlos.
 	Recent Commands	Comandos recientes
 	No recent commands	No hay comandos recientes
 	Search Commands…	Buscar comandos…
@@ -4310,6 +4320,7 @@ imageTrace	Outline	Contorno
 	 to set spacing and orientation	 para definir espaciado y orientación
 	:	:
 	Isolate Selected Group	Aislar grupo seleccionado
+	Isolate Selected Path	Aislar trazado seleccionado
 	Isolate Selected Object	Aislar objeto seleccionado
 	Release Clipping Mask	Soltar máscara de recorte
 	Make Compound Path	Crear trazado compuesto
@@ -6183,6 +6194,25 @@ mark-style	Japanese	Japonesas
 @msg	a 3D effect on a group's fill or stroke draws nothing	un efecto 3D en el relleno o el trazo de un grupo no dibuja nada
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecto 3D en el relleno o el trazo de un grupo no dibuja nada que exportar
 @msg	The 3D object is too complex to export	El objeto 3D es demasiado complejo para exportarlo
+@msg	give one <filter> element	indique un elemento <filter>
+@msg	the <filter> element needs an id, the filter's name	el elemento <filter> necesita un id, el nombre del filtro
+@msg	an SVG filter's id is at most {MAX_NAME} characters	el id de un filtro SVG tiene como máximo {MAX_NAME} caracteres
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> no es un elemento de un filtro SVG
+@msg	an SVG filter has no event attributes such as {_1}	un filtro SVG no tiene atributos de evento como {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	las imágenes de un filtro SVG son URL data: en PNG, JPEG, GIF o WebP
+@msg	the SVG filter isn't valid XML: {e}	el filtro SVG no es XML válido: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves de feTurbulence es como máximo {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} es como máximo {max}
+@msg	feConvolveMatrix's order	order de feConvolveMatrix
+@msg	feMorphology's radius	radius de feMorphology
+@msg	a blur's stdDeviation	stdDeviation de un desenfoque
+@msg	the SVG filter has no primitives	el filtro SVG no tiene primitivas
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	un filtro SVG tiene como máximo {MAX_PRIMITIVES} primitivas
+@msg	the SVG filter is too large once its attributes are written out	el filtro SVG es demasiado grande una vez escritos sus atributos
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	las imágenes de un filtro SVG tienen como máximo {MAX_IMAGE_PIXELS} píxeles en total
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	el filtro SVG no se puede dibujar: compruebe sus primitivas y sus entradas
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	los elementos de un filtro SVG se anidan como máximo {MAX_DEPTH} niveles
+@msg	an SVG filter is at most {_1} KB	un filtro SVG ocupa como máximo {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	el objeto no tiene ningún efecto 3D (Extrusión y biselado, Revolución, Inflar o Rotar)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` debe ser un objeto que solo contenga `mode`, con el valor shaded o wireframe
 @msg	its 3D effect builds no solid	su efecto 3D no construye ningún sólido
@@ -7484,6 +7514,11 @@ breakText	Glyphs	Glifos
 	Malayalam	Malayálam
 	Odia	Oriya
 	Urdu	Urdu
+	Sanskrit	Sánscrito
+	Nepali	Nepalí
+	Assamese	Asamés
+	Konkani	Konkaní
+	Sindhi	Sindi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} y posteriores (versión {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Exportar todos los documentos abiertos como PDF
@@ -7906,4 +7941,24 @@ breakText	Glyphs	Glifos
 	No objects are selected.	No hay objetos seleccionados.
 	Open a document to mark its fold lines.	Abre un documento para marcar sus líneas de plegado.
 	Remove Fold Line Role	Quitar tipo de línea
+	Check	Comprobar
+	Check Fold Lines	Comprobar líneas de plegado
+@msg	No cut lines are in the selection.	No hay líneas de corte en la selección.
+@msg	No cut lines are in the document.	No hay líneas de corte en el documento.
+@msg	The cut lines do not enclose an area.	Las líneas de corte no encierran ningún área.
+@msg	A cut line ends without meeting another cut line.	Una línea de corte termina sin llegar a otra línea de corte.
+@msg	A gap between cut lines was closed.	Se cerró un hueco entre líneas de corte.
+@msg	The fold lines are too complex to check.	Las líneas de plegado son demasiado complejas para comprobarlas.
+@msg	A cut line and a crease lie on top of each other.	Una línea de corte y una de hendido están superpuestas.
+@msg	No cut lines are among the given objects.	No hay líneas de corte entre los objetos indicados.
+@msg	Two fold lines lie on top of each other.	Dos líneas de plegado están superpuestas.
+@msg	A crease ends inside a panel.	Una línea de hendido termina dentro de un panel.
+@msg	A crease does not divide two panels.	Una línea de hendido no separa dos paneles.
+@msg	A crease lies outside the cut outline, wholly or in part.	Una línea de hendido está fuera del contorno de corte, total o parcialmente.
+@msg	The pieces of a hinge are not on one straight line.	Los tramos de una bisagra no están en una sola línea recta.
+@msg	A gap between cut lines is too narrow to tell apart.	Un hueco entre líneas de corte es demasiado estrecho para distinguirlo.
+@msg	A cut-out area holds other fold lines or another blank.	Un área recortada contiene otras líneas de plegado u otro troquelado.
+@msg	A panel is not joined to the rest by a crease.	Un panel no está unido al resto por ninguna línea de hendido.
+@msg	A fold line is on a non-printing layer.	Una línea de plegado está en una capa que no se imprime.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneles: {panels}, bisagras: {hinges}, errores: {errors}, advertencias: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"

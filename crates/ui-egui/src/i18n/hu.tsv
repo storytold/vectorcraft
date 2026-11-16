@@ -1972,6 +1972,8 @@ file-filter	Templates	Sablonok
 	Show smooth color wheel	Folytonos színkör megjelenítése
 	Show segmented color wheel	Szegmentált színkör megjelenítése
 	Show color bars	Színsávok megjelenítése
+	Show brightness and hue on wheel	Fényesség és színárnyalat megjelenítése a színkörön
+	Show saturation and hue on wheel	Telítettség és színárnyalat megjelenítése a színkörön
 	Add Color Tool	Szín hozzáadása eszköz
 	Remove Color Tool	Szín eltávolítása eszköz
 	Remove Color	Szín eltávolítása
@@ -2266,6 +2268,7 @@ file-filter	Templates	Sablonok
 	Isolate Blending	Keverés elkülönítése
 	Isolate Group	Csoport elkülönítése
 	Isolate Selected Group	Kijelölt csoport elkülönítése
+	Isolate Selected Path	Kijelölt útvonal elkülönítése
 	Isolate Selected Object	Kijelölt objektum elkülönítése
 	Italian	Olasz
 	Italic	Dőlt
@@ -3206,6 +3209,10 @@ diagnostics	ui	felület
 	Play Current Selection	Kijelölt művelet lejátszása
 	Save Actions…	Műveletek mentése…
 	Load Actions…	Műveletek betöltése…
+	Reset Actions	Műveletek visszaállítása
+	Replace the current actions with the default set?	Lecseréled az aktuális műveleteket az alapértelmezett készletre?
+	Append adds the default set after the current sets instead.	A Hozzáfűzés ehelyett az aktuális készletek után adja hozzá az alapértelmezett készletet.
+	Append	Hozzáfűzés
 	Plug-in Info	Bővítmény adatai
 	Plug-ins	Bővítmények
 	Plug-in…	Bővítmény…
@@ -3904,8 +3911,12 @@ mark-style	Japanese	Japán
 	Filter Layers Panel Rows	Rétegek panel sorainak szűrése
 @msg	`Custom` stands for changed settings: save the preset under another name	a `Custom` a módosított beállításokat jelöli: mentsd az előbeállítást más néven
 @msg	`{key}` must be an array of these names: {_1}	`{key}`: ezen nevek tömbje kell: {_1}
-	Search commands and tools	Parancsok és eszközök keresése
-	Search commands and tools…	Parancsok és eszközök keresése…
+	Search commands, tools, panels and effects	Parancsok, eszközök, panelek és effektusok keresése
+	Search commands, tools, panels and effects…	Parancsok, eszközök, panelek és effektusok keresése…
+	No commands match	Nincs egyező parancs
+	{pos} of {total}: {name}	{pos}/{total}: {name}
+@plural	{n} result|{n} results	{n} találat
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} találatból {shown} látható. Gépeljen tovább a szűkítéshez.
 	Recent Commands	Legutóbbi parancsok
 	No recent commands	Nincsenek legutóbbi parancsok
 	Search Commands…	Parancsok keresése…
@@ -6201,6 +6212,24 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmit
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmi exportálhatót
 @msg	The 3D object is too complex to export	A 3D objektum túl összetett az exportáláshoz
+@msg	the <filter> element needs an id, the filter's name	a <filter> elemnek id kell, a szűrő neve
+@msg	an SVG filter's id is at most {MAX_NAME} characters	egy SVG-szűrő id-je legfeljebb {MAX_NAME} karakter
+@msg	<{_1}> isn't an element of an SVG filter	a(z) <{_1}> nem SVG-szűrő eleme
+@msg	an SVG filter has no event attributes such as {_1}	egy SVG-szűrőnek nincsenek eseményattribútumai, például {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	egy SVG-szűrő képei PNG, JPEG, GIF vagy WebP formátumú data: URL-ek
+@msg	the SVG filter isn't valid XML: {e}	az SVG-szűrő nem érvényes XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	a feTurbulence numOctaves értéke legfeljebb {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} legfeljebb {max}
+@msg	feConvolveMatrix's order	a feConvolveMatrix order értéke
+@msg	feMorphology's radius	a feMorphology radius értéke
+@msg	a blur's stdDeviation	egy elmosás stdDeviation értéke
+@msg	the SVG filter has no primitives	az SVG-szűrőnek nincsenek primitívjei
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	egy SVG-szűrőnek legfeljebb {MAX_PRIMITIVES} primitívje van
+@msg	the SVG filter is too large once its attributes are written out	az SVG-szűrő túl nagy, miután az attribútumai ki vannak írva
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	egy SVG-szűrő képei összesen legfeljebb {MAX_IMAGE_PIXELS} képpontosak
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	az SVG-szűrő nem rajzolható meg: ellenőrizze a primitívjeit és azok bemeneteit
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	egy SVG-szűrő elemei legfeljebb {MAX_DEPTH} szint mélyen ágyazhatók egymásba
+@msg	an SVG filter is at most {_1} KB	egy SVG-szűrő legfeljebb {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	az objektumnak nincs 3D effektusa (Kihúzás és élletörés, Forgatás tengely körül, Felfújás vagy Elforgatás)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	a `render` csak `mode` mezőt tartalmazó objektum lehet, shaded vagy wireframe értékkel
 @msg	its 3D effect builds no solid	a 3D effektusa nem hoz létre testet
@@ -7499,6 +7528,11 @@ breakText	Glyphs	Glifák
 	Malayalam	Malajálam
 	Odia	Odia
 	Urdu	Urdu
+	Sanskrit	Szanszkrit
+	Nepali	Nepáli
+	Assamese	Asszámi
+	Konkani	Konkani
+	Sindhi	Szindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} és újabb (verzió: {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Az összes megnyitott dokumentum exportálása PDF-ként
@@ -9730,3 +9764,23 @@ breakText	Glyphs	Glifák
 	No objects are selected.	Nincs kijelölt objektum.
 	Open a document to mark its fold lines.	Nyiss meg egy dokumentumot a hajtásvonalai megjelöléséhez.
 	Remove Fold Line Role	Vonaltípus eltávolítása
+	Check	Ellenőrzés
+	Check Fold Lines	Hajtásvonalak ellenőrzése
+@msg	No cut lines are in the selection.	A kijelölésben nincs vágóvonal.
+@msg	No cut lines are in the document.	A dokumentumban nincs vágóvonal.
+@msg	The cut lines do not enclose an area.	A vágóvonalak nem zárnak közre területet.
+@msg	A cut line ends without meeting another cut line.	Egy vágóvonal úgy ér véget, hogy nem találkozik másik vágóvonallal.
+@msg	A gap between cut lines was closed.	A vágóvonalak közötti rés le lett zárva.
+@msg	The fold lines are too complex to check.	A hajtásvonalak túl összetettek az ellenőrzéshez.
+@msg	A cut line and a crease lie on top of each other.	Egy vágóvonal és egy bigvonal egymáson fekszik.
+@msg	No cut lines are among the given objects.	A megadott objektumok között nincs vágóvonal.
+@msg	Two fold lines lie on top of each other.	Két hajtásvonal egymáson fekszik.
+@msg	A crease ends inside a panel.	Egy bigvonal egy panelen belül ér véget.
+@msg	A crease does not divide two panels.	Egy bigvonal nem választ el két panelt.
+@msg	A crease lies outside the cut outline, wholly or in part.	Egy bigvonal teljesen vagy részben a vágási körvonalon kívül van.
+@msg	The pieces of a hinge are not on one straight line.	Egy zsanér részei nem egy egyenesen vannak.
+@msg	A gap between cut lines is too narrow to tell apart.	A vágóvonalak közötti rés túl keskeny a megkülönböztetéshez.
+@msg	A cut-out area holds other fold lines or another blank.	Egy kivágott terület további hajtásvonalakat vagy egy másik kiterítéket tartalmaz.
+@msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
+@msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
