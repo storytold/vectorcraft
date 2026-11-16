@@ -55,13 +55,14 @@ pub(super) fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc
     let m = ui.input(|i| i.modifiers);
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(bar).layout(egui::Layout::right_to_left(egui::Align::Center)));
     let trash = widgets::icon_button(&mut child, "trash-2", tl!("Delete Selection"), false, 24.0);
-    // A target circle dropped on the trash clears that appearance (dragged rows: below). Peek at
-    // the payload's type before taking it: egui's take drops a payload of another type.
+    // A target circle dropped on the trash reduces that appearance to one fill and one stroke
+    // (dragged rows: below). Peek at the payload's type before taking it: egui's take drops a
+    // payload of another type.
     if trash.dnd_hover_payload::<PanelDrag>().is_some()
         && let Some(d) = trash.dnd_release_payload::<PanelDrag>()
         && let PanelDrag::Appearance(id) = *d
     {
-        actions.push(("appearance.clear".into(), json!({"ids": [id.0]})));
+        actions.push(("appearance.reduceToBasic".into(), json!({"ids": [id.0]})));
     } else if trash.clicked() {
         // With no row highlighted, the selected art and ruler guides go.
         if view.rows.is_empty() && app.session.active().is_some_and(|d| d.selection.has_objects_or_guides()) {
