@@ -756,21 +756,61 @@ fn the_place_dialog_links_a_pdf_page_and_embeds_it_with_link_off() {
 }
 
 #[test]
-fn the_place_dialog_does_not_offer_a_postscript_ai_as_a_locked_object() {
+fn the_place_dialog_offers_a_postscript_ai_and_an_eps_file_as_a_locked_object() {
     let mut app = app();
     let ps = b"%!PS-Adobe-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n1 0 0 setrgbcolor 10 10 50 50 rectfill\nshowpage\n%%EOF\n";
     let dir = Folder::new("ui-place-postscript");
-    let path = dir.file("legacy.ai", ps);
-    // file.place embeds a .ai saved without PDF compatibility, even with Link on.
-    let r = app.session.execute("file.place", &json!({"path": path, "link": true})).unwrap();
-    assert_eq!(r["linked"], json!(false), "{r}");
-    let st = app.session.active().unwrap();
-    assert!(!matches!(st.doc.node(st.selection.objects[0]).unwrap().kind, NodeKind::PlacedDocument(_)));
-    // So Link's tooltip does not promise one locked object for it.
+    for name in ["legacy.ai", "legacy.eps", "legacy.ps"] {
+        let path = dir.file(name, ps);
+        // With Link, file.place places a .ai saved without PDF compatibility, an EPS file and a
+        // PostScript file as one locked placed document.
+        let r = app.session.execute("file.place", &json!({"path": path, "link": true})).unwrap();
+        assert_eq!(r["linked"], json!(true), "{name}: {r}");
+        let st = app.session.active().unwrap();
+        assert!(matches!(st.doc.node(st.selection.objects[0]).unwrap().kind, NodeKind::PlacedDocument(_)), "{name}");
+        // So Link's tooltip promises one locked object for it.
+        place_picked(&mut app, &path);
+        let d = app.ui.dialog.as_ref().expect("the Place dialog");
+        assert!(d.bool("__documents") && !d.bool("__others"), "{name}: {:?}", d.fields);
+        assert!(crate::dialogs::place::link_tip(d).contains("locked object"), "{name}");
+        app.ui.dialog = None;
+    }
+    // Where the platform reads part of a file, only the file's start is read to tell.
+    let asked = std::rc::Rc::new(std::cell::Cell::new(0));
+    let seen = asked.clone();
+    app.services.read_head = Some(Box::new(move |p: &str, max: usize| {
+        seen.set(max);
+        std::fs::read(p).map(|b| b[..b.len().min(max)].to_vec()).map_err(|e| e.to_string())
+    }));
+    place_picked(&mut app, &dir.file("headed.eps", ps));
+    assert!(app.ui.dialog.as_ref().expect("the Place dialog").bool("__documents"));
+    assert_eq!(asked.get(), vectorcraft_engine::cmd::place::DCS_HEAD_BYTES + 1);
+    app.ui.dialog = None;
+    // A DCS file is placed as a linked image, from its start alone too: past the start the
+    // PostScript goes on longer than what is read.
+    let mut dcs = b"%!PS-Adobe-2.0 EPSF-1.2\n%%BoundingBox: 0 0 20 10\n%%CyanPlate: pic.C\n%%EndComments\n".to_vec();
+    dcs.resize(vectorcraft_engine::cmd::place::DCS_HEAD_BYTES + 100, b'\n');
+    // The same PostScript behind a binary EPS header (no preview).
+    let mut binary = vec![0xC5, 0xD0, 0xD3, 0xC6];
+    binary.extend(30u32.to_le_bytes());
+    binary.extend((dcs.len() as u32).to_le_bytes());
+    binary.resize(30, 0);
+    binary.extend(&dcs);
+    let files = [("plates.eps", &dcs, true), ("plates.ai", &dcs, true), ("binary.eps", &binary, true), ("binary.eps", &binary, false)];
+    for (name, bytes, head) in files {
+        if !head {
+            app.services.read_head = None;
+        }
+        place_picked(&mut app, &dir.file(name, bytes));
+        let d = app.ui.dialog.as_ref().expect("the Place dialog");
+        assert!(!d.bool("__documents") && d.bool("__others"), "{name}, head {head}: {:?}", d.fields);
+        app.ui.dialog = None;
+    }
+    // A file named .eps that isn't PostScript gets the tooltip for other files.
+    let path = dir.file("notes.eps", b"not PostScript");
     place_picked(&mut app, &path);
     let d = app.ui.dialog.as_ref().expect("the Place dialog");
     assert!(!d.bool("__documents") && d.bool("__others"), "{:?}", d.fields);
-    assert!(!crate::dialogs::place::link_tip(d).contains("locked object"));
 }
 
 /// Tool key `key` as the Control bar's Apply (Enter) and Cancel (Escape) send it.

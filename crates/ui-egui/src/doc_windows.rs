@@ -4,7 +4,9 @@
 //! the main window, it is a window inside the app's window, as floating panels are
 //! ([`crate::panel_docking`]). The current document's window holds the canvas
 //! ([`crate::canvas::show`]); each other window draws its document as a Tile pane does
-//! ([`crate::canvas::pane`]), and a press in it makes its document the current one.
+//! ([`crate::canvas::pane`]), and a press in it makes its document the current one. In a window
+//! inside the app's window, a Selection drag released over that pane drops the dragged artwork into
+//! its document ([`crate::canvas::release_on_noted`]); an OS window's pane does not take it.
 //!
 //! A document tab dragged off the tab strip floats its document in a window under the pointer,
 //! and a document window dragged onto the tab strip by its title bar (an OS window by the tab at
@@ -95,6 +97,10 @@ pub struct Windows {
     known: Vec<u64>,
     /// The documents' views beyond the one each shows ([`views`]).
     pub(crate) views: Views,
+    /// The panes the last frame drew outside Tile that a Selection drag's artwork can be released
+    /// in ([`crate::canvas::note_drop`]): each window's view ([`views::key`]), the part of its pane
+    /// inside its rulers and scroll bars in the main window's points, and the layer it drew in.
+    pub(crate) drops: Vec<((u64, u32), egui::Rect, egui::LayerId)>,
 }
 
 impl Windows {
@@ -325,7 +331,7 @@ pub(crate) fn dock_all(app: &mut VectorcraftApp) {
 /// floats panels by the same rule), and no control channel is attached. With a control channel the
 /// windows stay inside the main window, where `ui.click`, `ui.drag` and `ui.screenshot` reach them
 /// and `canvasRect` is in the main window's coordinates.
-fn native(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
+pub(crate) fn native(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
     if ctx.embed_viewports() || app.control_rx.is_some() {
         return false;
     }
@@ -469,6 +475,8 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             activate = Some(win);
         }
     }
+    // After every canvas, which sets the cursor of the drag it holds.
+    crate::canvas::noted_cursor(app, ctx);
     // The tab strip a dragged window would go back under shows where it lands.
     if let Some(strip) = app.canvas.windows.strip.filter(|_| over_strip) {
         let t = crate::theme::Tokens::get(ctx);
@@ -499,9 +507,10 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
 
 /// Window `win`'s body in `ui`: the canvas for the current window, else (and while `blocked` by a
 /// modal) a pane. The view fits the body again when the body changed size since `fit` and the view
-/// has not moved. → whether a press in the pane asks for its window to become the current one, the
-/// body's rect and the fit after this frame.
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, (win, blocked): (Win, bool), fit: Option<Fit>) -> (bool, egui::Rect, Option<Fit>) {
+/// has not moved. With `drops`, a pane drawn while no modal blocks it is noted as a place a Selection
+/// drag's artwork can be released in ([`crate::canvas::note_drop`]). → whether a press in the pane
+/// asks for its window to become the current one, the body's rect and the fit after this frame.
+fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, (win, blocked): (Win, bool), fit: Option<Fit>, drops: bool) -> (bool, egui::Rect, Option<Fit>) {
     let t = crate::theme::Tokens::get(ui.ctx());
     let rect = ui.available_rect_before_wrap();
     ui.painter().rect_filled(rect, 0.0, t.pasteboard);
@@ -517,7 +526,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, (win, blocked): (Win, bool)
         crate::canvas::show(app, ui);
         false
     } else {
-        crate::canvas::pane(app, ui, win, rect)
+        let pressed = crate::canvas::pane(app, ui, win, rect);
+        if drops && !blocked {
+            crate::canvas::note_drop(app, ui, win, rect);
+        }
+        pressed
     };
     ui.advance_cursor_after_rect(rect);
     let fit = match view(app, win) {
@@ -564,7 +577,8 @@ fn os_window(app: &mut VectorcraftApp, ctx: &egui::Context, w: &DocWindow, (win,
         }
         let tab = crate::chrome::window_tab(app, ui, win);
         let (over_strip, dock) = if blocked { (false, false) } else { drag_tab(app, ui, ((w.uid, w.view), origin), &tab, strip) };
-        let (pressed, rect, fit) = body(app, ui, (win, blocked), w.fit);
+        // The OS window's points are not the main window's: its pane takes no artwork.
+        let (pressed, rect, fit) = body(app, ui, (win, blocked), w.fit, false);
         let activate = pressed || (!blocked && (tab.clicked() || tab.drag_started()));
         // Keys the window's widgets left over run the main window's shortcuts and tool keys, as a
         // floating panel's do.
@@ -649,7 +663,7 @@ fn app_window(app: &mut VectorcraftApp, ctx: &egui::Context, w: &DocWindow, (win
         .frame(frame)
         .open(&mut open)
         .show(ctx, |ui| {
-            let (pressed, r, f) = body(app, ui, (win, blocked), fit);
+            let (pressed, r, f) = body(app, ui, (win, blocked), fit, true);
             (activate, rect, fit) = (pressed, Some(r), f);
         });
     // A press on its title bar or edges, which brings the window to the front, also makes its
