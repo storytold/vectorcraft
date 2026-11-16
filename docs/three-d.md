@@ -110,6 +110,7 @@ object is where the art was.
 | Repeat, Space | The cross-section repeated 1–32 times across the width, with a share (0–90 %) of the width flat between repeats. |
 | Bevel Inside | The bevel carved into the shape (the front face shrinks) instead of added around it (the walls stand outside the art). |
 | Bevel both sides | The back is bevelled too. |
+| Reset | Next to the Bevel heading, in the dialog and the panel. It sets every bevel setting above back to its default (Bevel Shape None, Width and Height 4 pt, Repeat 1, Space 0 %, both checkboxes off) and leaves Depth, Twist, Taper, Cap, the rotation, the lights and the graphics as they are, as the public [3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html) page describes. In the panel it sets them on each selected Extrude & Bevel as one undo step. It is unavailable while every bevel setting is at its default. |
 
 Holes stay holes, with walls of their own. Bevels move each corner along its bisector. A corner the bevel opens (a
 sharp point with the bevel outside, a narrow notch with it inside) whose miter would reach past four times the width is
@@ -190,7 +191,9 @@ The rest is our reading:
   curved surfaces follow this only as closely as their flat facets do. A solid painted with a gradient that has
   transparent stops under a light that is not white is drawn with an opacity mask: its faces keep their places in
   this order, in runs that each carry the mask, and a graphic drawn after one of its faces carries the mask too
-  ([Graphics](#graphics)). A member of a 3D group with its own opacity
+  ([Graphics](#graphics)). Such a gradient, and a gradient with transparent stops under the classic effects'
+  shading, is placed once on the whole solid when it has no placement of its own, so its colors and its
+  transparency line up across the faces. A member of a 3D group with its own opacity
   mask or blending mode draws its fill's and strokes' faces in this order inside that mask or blending mode when
   they are opaque with Normal blending. Otherwise each solid is drawn on its own with its opacity and blending, the
   lower item's first. With a light that is not white, a puffed, shaded Inflate surface in a solid color takes its
@@ -375,8 +378,15 @@ is drawn larger, above the others.
 
 The widget sends the same settings as the Rotation, Height and Light behind the object controls
 (`effect.setParams`); there is no command of its own. The sphere's look, the 0.1° rounding and the arrow keys
-are VectorCraft's own. The options dialogs keep the light rings on the artboard instead, and the Lighting tab
-of Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) has no lighting widget.
+are VectorCraft's own. The options dialogs of Extrude & Bevel, Revolve, Inflate and Rotate keep the light rings
+on the artboard instead.
+
+The Lighting tab of Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) has the same sphere, in
+the options dialog as well as in the panel, while the surface is Diffuse or Plastic, as the archived
+[lighting options](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=272) of
+the classic 3D dialogs describe. Their lights have no color, so every sun is white. The light rings on the
+artboard stay available in the dialog. **Add Light** adds a light at the front center of the sphere (Rotation
+0°, Height 90°), and **Delete Light** removes the selected light and is unavailable while one light is left.
 
 ### Light settings
 

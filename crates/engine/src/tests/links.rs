@@ -2138,3 +2138,141 @@ fn confined_preserve_editing_svg_refuses_a_brush_library_entry_it_cannot_read() 
         confine(roots.as_ref(), || s.execute("document.serialize", &json!({"format": "svg"}))).unwrap();
     }
 }
+
+/// A confined caller's SVG of a placed document whose art links an image: the file draws that art
+/// and names the image's file, so a file outside the read roots refuses it and one inside them is
+/// written. Any output that names no file is written.
+#[test]
+fn confined_svg_output_checks_the_images_of_placed_documents() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-placed-away");
+    let home = Folder::new("svg-placed-home");
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    for (photo, outside) in [(away.file("photo.png"), true), (home.file("photo.png"), false)] {
+        write(&photo, &png(60, 30, RED));
+        let src = home.file("src.vectorcraft");
+        let mut inner = session();
+        place(&mut inner, &photo);
+        save(&mut inner, &src);
+        let mut s = session();
+        place(&mut s, &src);
+        let link = json!({"format": "svg", "images": "link"});
+        assert!(svg_text(&s.execute("document.serialize", &link).unwrap()).contains(&photo), "the file names the placed art's image");
+        for format in ["svg", "svgz"] {
+            for images in ["link", "embed"] {
+                let p = json!({"format": format, "images": images});
+                // Embed writes the pixels the placed file holds.
+                let names = svg_text(&s.execute("document.serialize", &p).unwrap()).contains(&photo);
+                assert_eq!(names, images == "link", "{p}");
+                match confine(roots.as_ref(), || s.execute("document.serialize", &p)) {
+                    Ok(r) => assert!(!outside || !svg_text(&r).contains(&photo), "{p}: {}", svg_text(&r)),
+                    Err(e) => {
+                        assert!(outside && names, "{p}: {e}");
+                        assert!(e.to_string().contains("a linked image file is outside the read roots"), "{p}: {e}");
+                    }
+                }
+            }
+        }
+        if outside {
+            let e = confine(roots.as_ref(), || s.execute("document.serialize", &link)).unwrap_err().to_string();
+            assert!(e.contains("a linked image file is outside the read roots") && !e.contains("photo.png"), "{e}");
+        }
+    }
+}
+
+/// A confined caller's SVG of a symbol holding a visible rectangle and a hidden linked image outside
+/// the read roots: the file leaves the hidden image out of the symbol and is written, unless hidden
+/// layers are kept, which writes the image and refuses the file.
+#[test]
+fn confined_svg_output_leaves_hidden_symbol_art_unchecked() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-symbol-hidden-away");
+    let home = Folder::new("svg-symbol-hidden-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap()["id"].clone();
+    let a = place(&mut s, &photo);
+    s.execute("object.hide", &json!({"ids": [a.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [r, a.0]})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Mixed"})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    for format in ["svg", "svgz"] {
+        let p = json!({"format": format, "images": "link"});
+        assert!(!svg_text(&s.execute("document.serialize", &p).unwrap()).contains(&photo), "{p}");
+        let text = svg_text(&confine(roots.as_ref(), || s.execute("document.serialize", &p)).unwrap());
+        assert!(!text.contains(&photo), "{p}: {text}");
+        let kept = json!({"format": format, "images": "link", "hiddenLayers": true});
+        assert!(svg_text(&s.execute("document.serialize", &kept).unwrap()).contains(&photo), "{kept}");
+        let e = confine(roots.as_ref(), || s.execute("document.serialize", &kept)).unwrap_err().to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{kept}: {e}");
+    }
+}
+
+/// A confined caller's SVG Tiny 1.2 of an object whose opacity mask is a linked image outside the
+/// read roots: the Tiny file leaves the mask out and is written; SVG 1.1 writes the mask and is
+/// refused.
+#[test]
+fn confined_svg_tiny_output_leaves_opacity_mask_images_unchecked() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-tiny-mask-away");
+    let home = Folder::new("svg-tiny-mask-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap()["id"].clone();
+    let a = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [r, a.0]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    for format in ["svg", "svgz"] {
+        let tiny = json!({"format": format, "images": "link", "profile": "tiny12"});
+        assert!(!svg_text(&s.execute("document.serialize", &tiny).unwrap()).contains(&photo), "{tiny}");
+        let text = svg_text(&confine(roots.as_ref(), || s.execute("document.serialize", &tiny)).unwrap());
+        assert!(!text.contains(&photo), "{tiny}: {text}");
+        let full = json!({"format": format, "images": "link"});
+        assert!(svg_text(&s.execute("document.serialize", &full).unwrap()).contains(&photo), "{full}");
+        let e = confine(roots.as_ref(), || s.execute("document.serialize", &full)).unwrap_err().to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{full}: {e}");
+    }
+}
+
+/// A confined caller's SVG of a linked image outside the read roots, without pixels in the
+/// document, under Radial Blur: the file and the clipboard draw the rendered image in its place,
+/// name no file, and are written.
+#[test]
+fn confined_svg_output_checks_the_images_drawn_for_pixel_effects() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-flat-away");
+    let home = Folder::new("svg-flat-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &photo);
+    s.execute("effect.apply", &json!({"effect": "blur.radial", "ids": [a.0], "params": {"amount": 30, "quality": "draft"}})).unwrap();
+    without_pixels(&mut s, a);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let clip =
+        |s: &mut Session| confine(roots.as_ref(), || s.execute("clipboard.exportSvg", &json!({}))).unwrap()["svg"].as_str().unwrap().to_string();
+    assert!(!clip(&mut s).contains(&photo));
+    assert!(confine(roots.as_ref(), || s.clipboard_svg()).is_some_and(|svg| !svg.contains(&photo)));
+    for format in ["svg", "svgz"] {
+        for images in ["link", "embed"] {
+            let p = json!({"format": format, "images": images});
+            let text = svg_text(&confine(roots.as_ref(), || s.execute("document.serialize", &p)).unwrap());
+            assert!(!text.contains(&photo), "{p}: {text}");
+        }
+    }
+    // Without the effect, the image names its file.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("effect.remove", &json!({"index": 0})).unwrap();
+    assert!(s.doc().unwrap().doc.node(a).unwrap().appearance.effects.is_empty());
+    let e = confine(roots.as_ref(), || s.execute("document.serialize", &json!({"format": "svg"}))).unwrap_err().to_string();
+    assert!(e.contains("a linked image file is outside the read roots"), "{e}");
+}

@@ -270,6 +270,33 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             super::fileinfo::file_info
         ),
+        cmd!(
+            "file.info.saveTemplate",
+            "Save Metadata Template…",
+            [],
+            None,
+            "{name?: save into the metadata templates folder as <name>.xmp (a name with characters file systems reject, a dot at either end, or a device name is an error (spaces at either end are dropped); the same name replaces that template), path?: save to this file instead (not both), fields?: {File Info fields as file.info takes them} save these instead of the document's (default: the document's File Info)} write the File Info as an XMP metadata template: title (only one of its own, not Untitled-N), author, authorTitle, description, keywords, rating (1–5), copyrightStatus, copyrightNotice and copyrightUrl, each where it has a value; the dates are left out → {name, path} (with name), {path} (with path), or {data: the XMP text} with neither",
+            has_doc,
+            super::fileinfo::save_template
+        ),
+        cmd!(
+            "file.info.applyTemplate",
+            "Import Metadata Template…",
+            [],
+            None,
+            "{path?: an XMP file, name?: a template of the metadata templates folder by the name or file file.info.templates lists, data?: XMP text (exactly one of the three; at most 8 MB), mode: \"replace\" (clear the author, authorTitle, description, keywords, rating, copyright status, notice and URL, then take the template's; the title stays unless the template has one) | \"keep\" (keep the File Info, and take each field the template has) | \"append\" (keep the File Info, add the template's keywords, and take its other fields only where the File Info has none: a title only over an Untitled-N one, a rating only over 0, a copyright status only over unknown), apply?: true (false: change nothing and return the merged File Info), base?: {File Info fields as file.info takes them} merged into instead of the document's} merge a metadata template into the File Info in one undo step, none when nothing changes; a template value file.info would refuse is left out; a missing file, a file larger than 8 MB or one that is not XMP is an error → the File Info as file.info reports it, with changed: true|false (with apply: false, the merged File Info without changed)",
+            has_doc,
+            super::fileinfo::apply_template
+        ),
+        cmd!(
+            query "file.info.templates",
+            "Metadata Templates",
+            [],
+            None,
+            "{create?: false (true: make the folder when it is missing)} the metadata templates in the metadata templates folder next to the preferences, sorted by name, at most 1,000 → {templates: [{name, file: the file name, path}], folder?: the folder (left out for a request that may not read it, in runs without preferences and on the web, where the list is empty)}",
+            super::always,
+            super::fileinfo::templates
+        ),
     ]
 }
 

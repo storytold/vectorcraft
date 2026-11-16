@@ -654,6 +654,18 @@ font-technology	Variable	Variables
 	Copy to User Defined	Copier dans Défini par l’utilisateur
 	Copy Width Point	Copier le point de largeur
 	Copyright	Copyright
+	Save Metadata Template…	Enregistrer le modèle de métadonnées…
+	Import Options	Options d’importation
+	Clear existing fields and use the template's	Effacer les champs existants et utiliser ceux du modèle
+	Keep existing fields, but replace those the template has	Conserver les champs existants, mais remplacer ceux que contient le modèle
+	Keep existing fields, but append those the template has	Conserver les champs existants, mais ajouter ceux que contient le modèle
+@msg	the template name can't be empty	le nom du modèle ne peut pas être vide
+@msg	the template name isn't usable as a file name	le nom du modèle n'est pas utilisable comme nom de fichier
+@msg	no metadata templates folder here	aucun dossier de modèles de métadonnées ici
+@msg	give `name` or `path`, not both	indiquez `name` ou `path`, pas les deux
+@msg	give one of `path`, `name` and `data`	indiquez un seul des paramètres `path`, `name` et `data`
+@msg	mode must be replace, keep or append	le mode doit être replace, keep ou append
+@msg	the file is not an XMP metadata template	le fichier n’est pas un modèle de métadonnées XMP
 	Copyright Info URL:	URL des informations de copyright :
 	Copyright Notice:	Mention de copyright :
 	Copyright Status:	État du copyright :
@@ -1426,6 +1438,8 @@ font-technology	Variable	Variables
 	Graph	Graphe
 	Graph Data	Données du graphe
 	Graph Type	Type de graphe
+	Graph Type…	Type de graphe…
+	Graph Data…	Données du graphe…
 	Graph Options	Options du graphe
 	Left Axis	Axe gauche
 	Right Axis	Axe droit
@@ -3665,6 +3679,9 @@ digits	Malayalam	Malayalam
 	Show Import Options	Afficher les options d’importation
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Demander les options d’importation de chaque fichier PDF, DXF ou texte avant de le placer, sinon utiliser les dernières options choisies
 	Stylistic Alternates	Variantes stylistiques
+	Ligatures	Ligatures
+	Ornaments	Ornements
+	Figures	Chiffres
 	Swash	Lettres ornées
 	Swatch Conflict	Conflit de nuances
 	Swatch Conflicts	Conflits de nuances
@@ -4477,6 +4494,27 @@ axis	Both	Les deux
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name} : une boîte de dialogue ne peut pas s'ouvrir dans un rappel d'une fonction intégrée, un accesseur, une conversion ou un fichier que $.evalFile exécute ; appelez-la depuis le code du script lui-même
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name} : la réponse suivante de `answers` est pour {_1}, pas pour {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name} : `answers` n'a plus de réponse pour cette boîte de dialogue
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` contient {n} réponse que le script n'a pas utilisée|`answers` contient {n} réponses que le script n'a pas utilisées
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} a laissé {n} objet sous le pinceau sans changement ({_2}) : il ne remodèle que les tracés|{_1} a laissé {n} objets sous le pinceau sans changement ({_2}) : il ne remodèle que les tracés
+liquify-tool	Warp	Déformation
+liquify-tool	Twirl	Tourbillon
+liquify-tool	Pucker	Contraction
+liquify-tool	Bloat	Dilatation
+liquify-tool	Scallop	Feston
+liquify-tool	Crystallize	Cristallisation
+liquify-tool	Wrinkle	Fronces
+liquify-kind	graphs	graphes
+liquify-kind	type	texte
+liquify-kind	symbols	symboles
+liquify-kind	images	images
+liquify-kind	meshes	filets
+liquify-kind	envelopes	enveloppes
+liquify-kind	repeats	répétitions
+liquify-kind	placed documents	documents importés
+liquify-kind	blends	dégradés de formes
+liquify-list-two	{0}, {1}	{0} et {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} et {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} est trop volumineux pour un script
 @msg	vc.log: the log of this run is full	vc.log : le journal de cette exécution est plein
 @msg	this function's script run has ended	l'exécution du script de cette fonction est terminée
@@ -5119,6 +5157,8 @@ axis	Both	Les deux
 @msg	unknown option `{path}.{k}`	option inconnue `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	surimpressions inconnues `{o}` (preserve, simulate ou discard)
 @msg	unknown panel `{raw}`	panneau inconnu `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` n’a pas de tailles d’affichage à parcourir
+@msg	the panels are not shown	les panneaux ne sont pas affichés
 @msg	panels can't be shown in Presentation Mode	les panneaux ne peuvent pas être affichés en mode Présentation
 @msg	unknown preference `{key}`	préférence inconnue `{key}`
 @msg	Preferences imported.	Préférences importées.
@@ -5513,6 +5553,7 @@ effect	Soft	Doux
 	Change Panel Layout	Modifier la disposition des panneaux
 	Close Panel	Fermer le panneau
 	Collapse Panel Group	Réduire le groupe de panneaux
+	Cycle Display Sizes	Parcourir les tailles d’affichage
 	Move Panel	Déplacer le panneau
 	Group with	Regrouper avec
 	Resize panels	Redimensionner les panneaux
@@ -6293,6 +6334,7 @@ theme	Appearance	Apparence
 	Export Data Sets…	Exporter des jeux de données…
 	Load Variable Library…	Charger une bibliothèque de variables…
 	Save Variable Library…	Enregistrer une bibliothèque de variables…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	« Importer » lit un fichier de source de données d’extension .csv, .tsv, .txt ou .xml
 @msg	a variable library holds text variables, and the document has none	une bibliothèque de variables contient des variables de texte, et le document n’en a aucune
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variable `{name}` ne peut pas être enregistrée dans une bibliothèque de variables : renommez-la pour qu’elle commence par une lettre ou `_`, sans espaces ni symboles autres que `-`, `_` et `.`
 @msg	{k} has control characters	{k} contient des caractères de contrôle

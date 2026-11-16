@@ -598,6 +598,7 @@ font-technology	Variable	Biến thiên
 	Close Library	Đóng thư viện
 	Close Panel	Đóng bảng
 	Collapse Panel Group	Thu gọn nhóm bảng
+	Cycle Display Sizes	Chuyển kích thước hiển thị
 	Close Path	Đóng đường dẫn
 	Close paths when ends are within:	Đóng đường dẫn khi hai đầu cách nhau trong:
 	Clumped	Dạng cụm
@@ -753,6 +754,18 @@ font-technology	Variable	Biến thiên
 	Copy Width Point	Sao chép điểm chiều rộng
 	Copyright	Bản quyền
 	Copyright Info URL:	URL thông tin bản quyền:
+	Save Metadata Template…	Lưu mẫu siêu dữ liệu…
+	Import Options	Tùy chọn nhập
+	Clear existing fields and use the template's	Xóa các trường hiện có và dùng các trường của mẫu
+	Keep existing fields, but replace those the template has	Giữ các trường hiện có, nhưng thay thế các trường mà mẫu có
+	Keep existing fields, but append those the template has	Giữ các trường hiện có, nhưng nối thêm các trường mà mẫu có
+@msg	the template name can't be empty	tên mẫu không được để trống
+@msg	the template name isn't usable as a file name	không thể dùng tên mẫu làm tên tệp
+@msg	no metadata templates folder here	không có thư mục mẫu siêu dữ liệu ở đây
+@msg	give `name` or `path`, not both	hãy chỉ định `name` hoặc `path`, không phải cả hai
+@msg	give one of `path`, `name` and `data`	hãy chỉ định một trong `path`, `name` và `data`
+@msg	mode must be replace, keep or append	chế độ phải là replace, keep hoặc append
+@msg	the file is not an XMP metadata template	tệp không phải là mẫu siêu dữ liệu XMP
 	Copyright Notice:	Thông báo bản quyền:
 	Copyright Status:	Trạng thái bản quyền:
 	Copyright Symbol	Ký hiệu bản quyền
@@ -1704,6 +1717,8 @@ file-filter	Templates	Mẫu
 	Chop Design	Cắt thiết kế
 	Scale Design	Co giãn thiết kế
 	Graph Type	Loại biểu đồ
+	Graph Type…	Loại biểu đồ…
+	Graph Data…	Dữ liệu biểu đồ…
 	Graph Options	Tùy chọn biểu đồ
 	Left Axis	Trục trái
 	Right Axis	Trục phải
@@ -4093,6 +4108,9 @@ mark-style	Japanese	Kiểu Nhật
 	Show Import Options	Hiện tùy chọn nhập
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Hỏi tùy chọn nhập của từng tệp PDF, DXF hoặc văn bản trước khi đặt; khi tắt, dùng các tùy chọn đã chọn gần nhất
 	Stylistic Alternates	Ký tự thay thế theo phong cách
+	Ligatures	Chữ ghép
+	Ornaments	Hoa văn
+	Figures	Chữ số
 	Swash	Swash
 	Swatch Conflict	Xung đột mẫu màu
 	Swatch Conflicts	Xung đột mẫu màu
@@ -4964,6 +4982,27 @@ theme	Appearance	Giao diện
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: hộp thoại không thể mở bên trong lệnh gọi lại của hàm dựng sẵn, getter, phép chuyển đổi hoặc tệp mà $.evalFile chạy; hãy gọi nó từ mã của chính tập lệnh
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: câu trả lời tiếp theo trong `answers` dành cho {_1}, không phải {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` không còn câu trả lời nào cho hộp thoại này
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` có {n} câu trả lời mà tập lệnh không dùng
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} giữ nguyên {n} đối tượng dưới cọ ({_2}): chỉ biến dạng đường dẫn
+liquify-tool	Warp	Biến dạng
+liquify-tool	Twirl	Xoáy
+liquify-tool	Pucker	Nhíu
+liquify-tool	Bloat	Phình
+liquify-tool	Scallop	Vỏ sò
+liquify-tool	Crystallize	Kết tinh
+liquify-tool	Wrinkle	Nhăn
+liquify-kind	graphs	biểu đồ
+liquify-kind	type	chữ
+liquify-kind	symbols	ký hiệu
+liquify-kind	images	hình ảnh
+liquify-kind	meshes	lưới
+liquify-kind	envelopes	bao hình
+liquify-kind	repeats	lặp lại
+liquify-kind	placed documents	tài liệu đã đặt
+liquify-kind	blends	hòa trộn
+liquify-list-two	{0}, {1}	{0} và {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} và {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} quá lớn đối với tập lệnh
 @msg	vc.log: the log of this run is full	vc.log: nhật ký của lần chạy này đã đầy
 @msg	this function's script run has ended	lần chạy tập lệnh của hàm này đã kết thúc
@@ -5703,6 +5742,8 @@ theme	Appearance	Giao diện
 @msg	unknown option `{path}.{k}`	tùy chọn không xác định `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	chế độ in đè không xác định `{o}` (preserve, simulate hoặc discard)
 @msg	unknown panel `{raw}`	bảng không xác định `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` không có kích thước hiển thị để chuyển
+@msg	the panels are not shown	các bảng không được hiển thị
 @msg	panels can't be shown in Presentation Mode	không thể hiển thị bảng trong chế độ trình bày
 @msg	unknown parameter `{key}`; did you mean `{near}`?	tham số không xác định `{key}`; ý bạn là `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	tham số không xác định `{key}`; lệnh này không nhận tham số
@@ -5913,6 +5954,7 @@ theme	Appearance	Giao diện
 	Export Data Sets…	Xuất tập dữ liệu…
 	Load Variable Library…	Tải thư viện biến số…
 	Save Variable Library…	Lưu thư viện biến số…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	"Nhập" đọc tệp nguồn dữ liệu có phần mở rộng .csv, .tsv, .txt hoặc .xml
 @msg	a variable library holds text variables, and the document has none	thư viện biến số chứa các biến số văn bản, và tài liệu không có biến số văn bản nào
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	không thể lưu biến số `{name}` vào thư viện biến số: hãy đổi tên để bắt đầu bằng một chữ cái hoặc `_`, không có khoảng trắng hay ký hiệu nào ngoài `-`, `_` và `.`
 @msg	{k} has control characters	{k} chứa ký tự điều khiển
@@ -7200,6 +7242,19 @@ breakText	Glyphs	Glyph
 	Not Aligned to Pixel Grid	Chưa căn theo lưới pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	chỉ đường dẫn và đường dẫn phức mới căn theo lưới pixel được
 @msg	side is left or right, not `{s}`	side là left hoặc right, không phải `{s}`
+@msg	side is left or right, not `{v}`	side là left hoặc right, không phải `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order là số nguyên từ 0 đến {others}, không phải `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (tên một thanh công cụ) phải là chuỗi
+@msg	no toolbar named `{name}`	không có thanh công cụ tên `{name}`
+@msg	toolbar name can't be empty	tên thanh công cụ không được để trống
+@msg	a toolbar name has at most {MAX_NAME} characters	tên thanh công cụ có tối đa {MAX_NAME} ký tự
+@msg	there is already a toolbar named `{name}`	đã có thanh công cụ tên `{name}`
+@msg	there is already a toolbar named `{to}`	đã có thanh công cụ tên `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	một không gian làm việc giữ tối đa {MAX} thanh công cụ
+@msg	name (a toolbar's name) must be a string	name (tên một thanh công cụ) phải là chuỗi
+@msg	name (a toolbar's name) is required	name (tên một thanh công cụ) là bắt buộc
+@msg	to (the new name) is required	to (tên mới) là bắt buộc
+@msg	name must be a toolbar's name	name phải là tên của một thanh công cụ
 	Ignore All	Bỏ qua tất cả
 	Add to Dictionary	Thêm vào từ điển
 	No Suggestions	Không có gợi ý

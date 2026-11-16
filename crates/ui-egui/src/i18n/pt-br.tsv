@@ -590,6 +590,18 @@ antiAlias	Sharp	Nítido
 	Copy to User Defined	Copiar para Definido pelo Usuário
 	Copyright	Direitos Autorais
 	Copyright Info URL:	URL de Informações de Direitos Autorais:
+	Save Metadata Template…	Salvar Modelo de Metadados…
+	Import Options	Opções de Importação
+	Clear existing fields and use the template's	Limpar os campos existentes e usar os do modelo
+	Keep existing fields, but replace those the template has	Manter os campos existentes, mas substituir os que o modelo tiver
+	Keep existing fields, but append those the template has	Manter os campos existentes, mas acrescentar os que o modelo tiver
+@msg	the template name can't be empty	o nome do modelo não pode ficar vazio
+@msg	the template name isn't usable as a file name	o nome do modelo não pode ser usado como nome de arquivo
+@msg	no metadata templates folder here	não há pasta de modelos de metadados aqui
+@msg	give `name` or `path`, not both	informe `name` ou `path`, não ambos
+@msg	give one of `path`, `name` and `data`	informe um de `path`, `name` e `data`
+@msg	mode must be replace, keep or append	o modo deve ser replace, keep ou append
+@msg	the file is not an XMP metadata template	o arquivo não é um modelo de metadados XMP
 	Copyright Notice:	Aviso de Direitos Autorais:
 	Copyright Status:	Status de Direitos Autorais:
 	Copyright Symbol	Símbolo de Direitos Autorais
@@ -1042,6 +1054,7 @@ antiAlias	Sharp	Nítido
 	Export Data Sets…	Exportar Conjuntos de Dados…
 	Load Variable Library…	Carregar Biblioteca de Variáveis…
 	Save Variable Library…	Salvar Biblioteca de Variáveis…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	"Importar" lê um arquivo de fonte de dados com extensão .csv, .tsv, .txt ou .xml
 @msg	a variable library holds text variables, and the document has none	uma biblioteca de variáveis contém variáveis de texto, e o documento não tem nenhuma
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	a variável `{name}` não pode ser salva em uma biblioteca de variáveis: renomeie-a para começar com uma letra ou `_`, sem espaços nem símbolos além de `-`, `_` e `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	o conjunto de dados `{name}` contém um caractere de controle, que uma biblioteca de variáveis não pode conter
@@ -3057,6 +3070,9 @@ digits	Malayalam	Malaiala
 	Swap Fill and Stroke	Trocar Preenchimento e Traçado
 	Swap start and end arrowheads	Trocar pontas de seta inicial e final
 	Stylistic Alternates	Variantes Estilísticas
+	Ligatures	Ligações
+	Ornaments	Ornamentos
+	Figures	Algarismos
 	Swash	Ornamento
 	Swatch Conflict	Conflito de Amostra
 	Swatch Conflicts	Conflitos de Amostra
@@ -3554,6 +3570,7 @@ imageTrace	Outline	Contorno
 	Change Panel Layout	Alterar Layout dos Painéis
 	Close Panel	Fechar Painel
 	Collapse Panel Group	Recolher Grupo de Painéis
+	Cycle Display Sizes	Alternar Tamanhos de Exibição
 	Move Panel	Mover Painel
 	Group with	Agrupar com
 	Resize panels	Redimensionar painéis
@@ -4502,6 +4519,8 @@ axis	Both	Ambos
 @msg	unknown option `{path}.{k}`	opção desconhecida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressões desconhecidas `{o}` (preserve, simulate ou discard)
 @msg	unknown panel `{raw}`	painel desconhecido `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` não tem tamanhos de exibição para alternar
+@msg	the panels are not shown	os painéis não estão sendo exibidos
 @msg	panels can't be shown in Presentation Mode	os painéis não podem ser mostrados no Modo de Apresentação
 @msg	unknown preference `{key}`	preferência desconhecida `{key}`
 @msg	Preferences imported.	Preferências importadas.
@@ -5000,6 +5019,8 @@ axis	Both	Ambos
 	Gradient (. or Shift+.)	Gradiente (. ou Shift+.)
 	Graph Data	Dados do Gráfico
 	Graph Type	Tipo de Gráfico
+	Graph Type…	Tipo de Gráfico…
+	Graph Data…	Dados do Gráfico…
 	Graph Options	Opções do Gráfico
 	Left Axis	Eixo Esquerdo
 	Right Axis	Eixo Direito
@@ -5532,6 +5553,27 @@ axis	Both	Ambos
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: uma caixa de diálogo não pode abrir dentro de um callback de uma função interna, um getter, uma conversão ou um arquivo que $.evalFile executa; chame-a a partir do próprio código do script
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: a próxima resposta em `answers` é para {_1}, não para {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` não tem mais respostas para esta caixa de diálogo
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` contém {n} resposta que o script não usou|`answers` contém {n} respostas que o script não usou
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} deixou {n} objeto sob o pincel sem alteração ({_2}): remodela apenas caminhos|{_1} deixou {n} objetos sob o pincel sem alteração ({_2}): remodela apenas caminhos
+liquify-tool	Warp	Distorcer
+liquify-tool	Twirl	Redemoinho
+liquify-tool	Pucker	Encolher
+liquify-tool	Bloat	Estufar
+liquify-tool	Scallop	Vieira
+liquify-tool	Crystallize	Cristalizar
+liquify-tool	Wrinkle	Rugas
+liquify-kind	graphs	gráficos
+liquify-kind	type	texto
+liquify-kind	symbols	símbolos
+liquify-kind	images	imagens
+liquify-kind	meshes	malhas
+liquify-kind	envelopes	envelopes
+liquify-kind	repeats	repetições
+liquify-kind	placed documents	documentos colocados
+liquify-kind	blends	mesclagens
+liquify-list-two	{0}, {1}	{0} e {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} e {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} é grande demais para um script
 @msg	vc.log: the log of this run is full	vc.log: o registro desta execução está cheio
 @msg	this function's script run has ended	a execução do script desta função terminou

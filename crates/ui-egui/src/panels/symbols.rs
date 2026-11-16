@@ -944,6 +944,26 @@ mod tests {
         assert_eq!(nine, json!([-0.123456789, 1.5, -1.255, -2.75]));
     }
 
+    /// Symbol Options › Align to Pixel Grid is off for a new symbol, OK sends it, and the dialog
+    /// reopens with the symbol's setting.
+    #[test]
+    fn symbol_options_sets_align_to_pixel_grid() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10.3, "y": 10.6, "width": 30, "height": 20})).unwrap();
+        app.run("ui.symbolOptions", json!({})).unwrap();
+        assert!(!app.ui.dialog.as_ref().unwrap().bool("alignToPixelGrid"));
+        app.ui.dialog.as_mut().unwrap().fields.insert("alignToPixelGrid".into(), json!(true));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let name = symbols(&mut app)[0].clone();
+        assert_eq!(app.run("symbol.list", json!({})).unwrap()["symbols"][0]["alignToPixelGrid"], true);
+        app.run("ui.symbolOptions", json!({"edit": true, "name": name})).unwrap();
+        assert!(app.ui.dialog.as_ref().unwrap().bool("alignToPixelGrid"));
+        app.ui.dialog.as_mut().unwrap().fields.insert("alignToPixelGrid".into(), json!(false));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.run("symbol.list", json!({})).unwrap()["symbols"][0]["alignToPixelGrid"], false);
+    }
+
     /// F8 is Symbol Options… (`ui.symbolOptions`) by default, on every platform. Shift+F8 and Cmd+F8
     /// are still the Transform and Info panels' keys, and Cmd+Shift+F8 is still Edit Pattern's. No
     /// other command, tool or panel has F8 by default.

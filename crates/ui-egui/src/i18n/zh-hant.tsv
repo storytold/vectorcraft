@@ -616,6 +616,18 @@ font-technology	Variable	可變
 	Copy Width Point	複製寬度點
 	Copyright	版權
 	Copyright Info URL:	著作權資訊網址：
+	Save Metadata Template…	儲存中繼資料範本…
+	Import Options	匯入選項
+	Clear existing fields and use the template's	清除現有欄位並使用範本的欄位
+	Keep existing fields, but replace those the template has	保留現有欄位，但取代範本中包含的欄位
+	Keep existing fields, but append those the template has	保留現有欄位，但附加範本中包含的欄位
+@msg	the template name can't be empty	範本名稱不能空白
+@msg	the template name isn't usable as a file name	範本名稱無法用作檔案名稱
+@msg	no metadata templates folder here	這裡沒有中繼資料範本資料夾
+@msg	give `name` or `path`, not both	請提供 `name` 或 `path`，不可同時提供
+@msg	give one of `path`, `name` and `data`	請提供 `path`、`name` 和 `data` 其中之一
+@msg	mode must be replace, keep or append	模式必須是 replace、keep 或 append
+@msg	the file is not an XMP metadata template	這個檔案不是 XMP 中繼資料範本
 	Copyright Notice:	著作權聲明：
 	Copyright Status:	著作權狀態：
 	Copyright Symbol	著作權符號
@@ -1415,6 +1427,8 @@ file-filter	Templates	範本
 	Graph	圖表
 	Graph Data	圖表資料
 	Graph Type	圖表類型
+	Graph Type…	圖表類型…
+	Graph Data…	圖表資料…
 	Graph Options	圖表選項
 	Left Axis	左軸
 	Right Axis	右軸
@@ -2445,6 +2459,8 @@ file-filter	Templates	範本
 @msg	give only one of onto, below and above	onto、below 和 above 只能提供其中一個
 @msg	column must be true or a number from 1	column 必須是 true 或從 1 起算的數字
 @msg	unknown panel `{raw}`	未知的面板 `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` 沒有可切換的顯示大小
+@msg	the panels are not shown	面板未顯示
 @msg	panels can't be shown in Presentation Mode	簡報模式下無法顯示面板
 @msg	x and y must both be numbers	x 和 y 都必須是數字
 @msg	Downloaded {what}	已下載 {what}
@@ -2629,6 +2645,27 @@ file-filter	Templates	範本
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}：對話框不能在內建函式的回呼、getter、轉換或 $.evalFile 執行的檔案中開啟；請從指令碼本身的程式碼呼叫
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}：`answers` 中的下一個回答是給 {_1} 的，而不是給 {name} 的
 @msg	{name}: `answers` has no answer left for this dialog	{name}：`answers` 中已沒有此對話框的回答
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` 中有 {n} 個指令碼未使用的回答
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} 未變更筆刷下的 {n} 個物件（{_2}）：它只重塑路徑
+liquify-tool	Warp	彎曲
+liquify-tool	Twirl	旋轉扭曲
+liquify-tool	Pucker	縮攏
+liquify-tool	Bloat	膨脹
+liquify-tool	Scallop	扇形化
+liquify-tool	Crystallize	結晶化
+liquify-tool	Wrinkle	皺摺
+liquify-kind	graphs	圖表
+liquify-kind	type	文字
+liquify-kind	symbols	符號
+liquify-kind	images	影像
+liquify-kind	meshes	網格
+liquify-kind	envelopes	封套
+liquify-kind	repeats	重複
+liquify-kind	placed documents	已置入的文件
+liquify-kind	blends	漸變
+liquify-list-two	{0}, {1}	{0}和{1}
+liquify-list-middle	{0}, {1}	{0}、{1}
+liquify-list-end	{0}, {1}	{0}和{1}
 @msg	vc.document{place} is too large for a script	vc.document{place}對指令碼來說太大
 @msg	vc.log: the log of this run is full	vc.log：本次執行的記錄已滿
 @msg	this function's script run has ended	此函式的指令碼執行已結束
@@ -4795,6 +4832,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Show Import Options	顯示讀入選項
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	置入前詢問每個 PDF、DXF 或文字檔案的讀入選項；關閉時使用上次選擇的選項
 	Stylistic Alternates	風格替代字
+	Ligatures	連字
+	Ornaments	裝飾字
+	Figures	數字
 	Swash	花體字
 	Swatch Conflict	色票衝突
 	Swatch Conflicts	色票衝突
@@ -5676,6 +5716,7 @@ effect	Soft	柔和
 	Change Panel Layout	變更面板配置
 	Close Panel	關閉面板
 	Collapse Panel Group	摺疊面板群組
+	Cycle Display Sizes	切換顯示大小
 	Move Panel	移動面板
 	Group with	群組至
 	Resize panels	調整面板大小
@@ -5974,6 +6015,7 @@ lighting	Light	光源
 	Export Data Sets…	匯出資料集…
 	Load Variable Library…	載入變數資料庫…
 	Save Variable Library…	儲存變數資料庫…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	「匯入」讀取副檔名為 .csv、.tsv、.txt 或 .xml 的資料來源檔案
 @msg	a variable library holds text variables, and the document has none	變數資料庫包含文字變數，但文件中沒有文字變數
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	無法將變數 `{name}` 儲存到變數資料庫：請重新命名，使其以字母或 `_` 開頭，且不含空格或 `-`、`_`、`.` 以外的符號
 @msg	{k} has control characters	{k} 包含控制字元
