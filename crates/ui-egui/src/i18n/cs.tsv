@@ -1191,6 +1191,18 @@ lighting	Light	Světlo
 	Placement Options…	Možnosti umístění…
 	Plug-in…	Zásuvný modul…
 	Preview in Browser	Náhled v prohlížeči
+	Optimize to File Size…	Optimalizovat na velikost souboru…
+	Optimize to File Size	Optimalizovat na velikost souboru
+	Desired File Size:	Požadovaná velikost souboru:
+	Start With:	Začít s:
+	Use:	Použít:
+	Current Settings	Aktuální nastavení
+	Auto Select GIF/JPEG	Automaticky vybrat GIF/JPEG
+	Total of All Slices	Součet všech řezů
+	Each Slice	Každý řez
+	Current Slice	Aktuální řez
+	{size}, within {target}	{size}, v rámci {target}
+	No setting tried fits in {target}; the smallest is {size}	Žádné vyzkoušené nastavení se nevejde do {target}; nejmenší má {size}
 	Printer Setup…	Nastavení tiskárny…
 	Printers	Tiskárny
 	Recent File	Nedávný soubor
@@ -4968,6 +4980,11 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	PDF writer error: {0}	chyba zápisu PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Zabalen {n} soubor do {folder} ({note})|Zabaleny {n} soubory do {folder} ({note})|Zabaleno {n} souborů do {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Náhled v prohlížeči vyžaduje desktopovou aplikaci (webová verze místo toho stahuje soubory)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	zadejte `desiredK`, požadovanou velikost souboru v K (1024 bajtů): číslo větší než 0 a nejvýše 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` je `current` nebo `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` je `allSlices`, `eachSlice` nebo `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` je číslo řezu ze `slice.list`, s `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimalizovat na velikost souboru: není žádný obraz k měření
 @msg	Release Guides: no guides	Uvolnit vodítka: žádná vodítka
 @msg	Release: no layer to put the rectangle in	Uvolnit: chybí vrstva, do které by šel obdélník umístit
 @msg	Replace Spine: select a blend and a path	Nahradit páteř: vyberte prolnutí a cestu

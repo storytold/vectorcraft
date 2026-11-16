@@ -2672,6 +2672,18 @@ diagnostics	ui	Oberfläche
 	Preview:	Vorschau:
 	Preview All Layers	Vorschau aller Ebenen
 	Preview in Browser	Vorschau im Browser
+	Optimize to File Size…	Auf Dateigröße optimieren…
+	Optimize to File Size	Auf Dateigröße optimieren
+	Desired File Size:	Gewünschte Dateigröße:
+	Start With:	Beginnen mit:
+	Use:	Verwenden:
+	Current Settings	Aktuelle Einstellungen
+	Auto Select GIF/JPEG	GIF/JPEG automatisch wählen
+	Total of All Slices	Summe aller Slices
+	Each Slice	Jedes Slice
+	Current Slice	Aktuelles Slice
+	{size}, within {target}	{size}, innerhalb von {target}
+	No setting tried fits in {target}; the smallest is {size}	Keine getestete Einstellung passt in {target}; die kleinste ist {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	„Vorschau im Browser“ erfordert die Desktop-App (im Web werden stattdessen Dateien heruntergeladen)
 	Preview Mode	Vorschaumodus
 	Preview the document as it is now	Vorschau des Dokuments im aktuellen Zustand
@@ -4566,6 +4578,11 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	PDF writer error: {0}	Fehler beim Schreiben der PDF-Datei: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} Datei in {folder} verpackt ({note})|{n} Dateien in {folder} verpackt ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	„Vorschau im Browser“ erfordert die Desktop-App (im Web werden stattdessen Dateien heruntergeladen)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	Geben Sie `desiredK` an, die gewünschte Dateigröße in K (1024 Byte): eine Zahl über 0 und höchstens 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` ist `current` oder `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` ist `allSlices`, `eachSlice` oder `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` ist eine Slice-Nummer aus `slice.list`, mit `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Auf Dateigröße optimieren: Es gibt kein Bild zum Messen
 @msg	Release Guides: no guides	Hilfslinien zurückwandeln: keine Hilfslinien
 @msg	Release: no layer to put the rectangle in	Zurückwandeln: keine Ebene, die das Rechteck aufnehmen könnte
 @msg	Replace Spine: select a blend and a path	Achse ersetzen: Wählen Sie eine Angleichung und einen Pfad aus

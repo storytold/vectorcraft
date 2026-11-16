@@ -3276,6 +3276,18 @@ diagnostics	ui	felület
 	Preview:	Előnézet:
 	Preview All Layers	Összes réteg előnézetben
 	Preview in Browser	Előnézet böngészőben
+	Optimize to File Size…	Optimalizálás fájlméretre…
+	Optimize to File Size	Optimalizálás fájlméretre
+	Desired File Size:	Kívánt fájlméret:
+	Start With:	Kiindulás:
+	Use:	Használat:
+	Current Settings	Jelenlegi beállítások
+	Auto Select GIF/JPEG	GIF/JPEG automatikus kiválasztása
+	Total of All Slices	Az összes szelet együtt
+	Each Slice	Minden szelet
+	Current Slice	Aktuális szelet
+	{size}, within {target}	{size}, belefér ebbe: {target}
+	No setting tried fits in {target}; the smallest is {size}	Egyik kipróbált beállítás sem fér bele ebbe: {target}; a legkisebb {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Az Előnézet böngészőben az asztali alkalmazásban érhető el (a webes változat helyette letölti a fájlokat)
 	Preview Mode	Előnézeti mód
 	Preview the document as it is now	A dokumentum jelenlegi állapotának előnézete
@@ -5788,6 +5800,11 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	plug-in parameters: {0}	bővítmény paraméterei: {0}
 @msg	plug-in trapped: {0}	a bővítmény futása megszakadt: {0}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Az Előnézet böngészőben az asztali alkalmazásban érhető el (a webes változat helyette letölti a fájlokat)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	adja meg a `desiredK` értéket, a kívánt fájlméretet K-ban (1024 bájt): 0-nál nagyobb, legfeljebb 1048576 szám
+@msg	`startWith` is `current` or `auto`	a `startWith` értéke `current` vagy `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	a `use` értéke `allSlices`, `eachSlice` vagy `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	a `slice` egy szeletszám a `slice.list` listából, `use: currentSlice` mellett
+@msg	Optimize to File Size: there is no image to measure	Optimalizálás fájlméretre: nincs mérhető kép
 @msg	print settings are not an object	a nyomtatási beállítások nem objektumot alkotnak
 @msg	printing isn't available here	itt nem lehet nyomtatni
 @msg	range `{s}` is empty	a tartomány üres: `{s}`

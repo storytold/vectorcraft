@@ -3414,6 +3414,18 @@ digits	Malayalam	Malaiàlam
 	Preview (1 inch on the page)	Previsualització (1 polzada a la pàgina)
 	Preview All Layers	Previsualitza totes les capes
 	Preview in Browser	Previsualitza al navegador
+	Optimize to File Size…	Optimitza segons la mida del fitxer…
+	Optimize to File Size	Optimitza segons la mida del fitxer
+	Desired File Size:	Mida de fitxer desitjada:
+	Start With:	Comença amb:
+	Use:	Utilitza:
+	Current Settings	Configuració actual
+	Auto Select GIF/JPEG	Selecció automàtica GIF/JPEG
+	Total of All Slices	Total de tots els talls
+	Each Slice	Cada tall
+	Current Slice	Tall actual
+	{size}, within {target}	{size}, dins de {target}
+	No setting tried fits in {target}; the smallest is {size}	Cap configuració provada no cap a {target}; la més petita és {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	La previsualització al navegador necessita l’aplicació d’escriptori (al web, en canvi, es descarreguen els fitxers)
 	Preview Mode	Mode de previsualització
 	Preview the document as it is now	Previsualitza el document tal com és ara
@@ -6281,6 +6293,11 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	plug-in trapped: {0}	el complement ha quedat atrapat: {0}
 @msg	precision must be from 0.001 to 10 pt	precision ha de ser d’entre 0,001 i 10 pt
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	La previsualització al navegador necessita l’aplicació d’escriptori (a la web es baixen els fitxers)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	indica `desiredK`, la mida de fitxer desitjada en K (1024 bytes): un nombre més gran que 0 i com a màxim 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` és `current` o `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` és `allSlices`, `eachSlice` o `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` és un número de tall de `slice.list`, amb `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimitza segons la mida del fitxer: no hi ha cap imatge per mesurar
 @msg	print settings are not an object	la configuració d’impressió no és un objecte
 @msg	printing isn't available here	la impressió no està disponible aquí
 @msg	range `{s}` is empty	el rang `{s}` és buit

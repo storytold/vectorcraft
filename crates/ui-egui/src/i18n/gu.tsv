@@ -2783,6 +2783,18 @@
 	Preview All Layers	બધા લેયરનું પૂર્વાવલોકન
 	Preview Mode	પૂર્વાવલોકન મોડ
 	Preview in Browser	બ્રાઉઝરમાં પૂર્વાવલોકન
+	Optimize to File Size…	ફાઇલ કદ મુજબ ઑપ્ટિમાઇઝ કરો…
+	Optimize to File Size	ફાઇલ કદ મુજબ ઑપ્ટિમાઇઝ કરો
+	Desired File Size:	ઇચ્છિત ફાઇલ કદ:
+	Start With:	શરૂઆત:
+	Use:	ઉપયોગ:
+	Current Settings	વર્તમાન સેટિંગ્સ
+	Auto Select GIF/JPEG	GIF/JPEG આપમેળે પસંદ કરો
+	Total of All Slices	બધી સ્લાઇસનો કુલ
+	Each Slice	દરેક સ્લાઇસ
+	Current Slice	વર્તમાન સ્લાઇસ
+	{size}, within {target}	{size}, {target} ની અંદર
+	No setting tried fits in {target}; the smallest is {size}	અજમાવેલી કોઈ સેટિંગ {target} માં સમાતી નથી; સૌથી નાની {size} છે
 	Preview the document as it is now	અત્યારે જેમ છે તેમ દસ્તાવેજનું પૂર્વાવલોકન કરો
 	Previous	પાછલું
 	Previous Artboard	પાછલું આર્ટબોર્ડ

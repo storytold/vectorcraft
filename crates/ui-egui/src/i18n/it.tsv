@@ -2753,6 +2753,18 @@ diagnostics	ui	interfaccia
 	Preview:	Anteprima:
 	Preview All Layers	Anteprima di tutti i livelli
 	Preview in Browser	Anteprima nel browser
+	Optimize to File Size…	Ottimizza in base alle dimensioni del file…
+	Optimize to File Size	Ottimizza in base alle dimensioni del file
+	Desired File Size:	Dimensione file desiderata:
+	Start With:	Inizia con:
+	Use:	Usa:
+	Current Settings	Impostazioni correnti
+	Auto Select GIF/JPEG	Selezione automatica GIF/JPEG
+	Total of All Slices	Totale di tutte le sezioni
+	Each Slice	Ogni sezione
+	Current Slice	Sezione corrente
+	{size}, within {target}	{size}, entro {target}
+	No setting tried fits in {target}; the smallest is {size}	Nessuna impostazione provata rientra in {target}; la più piccola è {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Anteprima nel browser richiede l'app desktop (la versione web scarica invece i file)
 	Preview Mode	Modalità anteprima
 	Preview the document as it is now	Visualizza l'anteprima del documento nello stato attuale
@@ -4700,6 +4712,11 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	PDF writer error: {0}	Errore del generatore PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Pacchetto creato con {n} file in {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Anteprima nel browser richiede l'app desktop (sul web i file vengono invece scaricati)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	indica `desiredK`, la dimensione del file desiderata in K (1024 byte): un numero maggiore di 0 e al massimo 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` è `current` o `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` è `allSlices`, `eachSlice` o `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` è un numero di sezione da `slice.list`, con `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Ottimizza in base alle dimensioni del file: non c'è nessuna immagine da misurare
 @msg	Release Guides: no guides	Rilascia guide: nessuna guida
 @msg	Release: no layer to put the rectangle in	Rilascia: nessun livello in cui inserire il rettangolo
 @msg	Replace Spine: select a blend and a path	Sostituisci dorsale: seleziona una fusione e un tracciato

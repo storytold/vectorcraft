@@ -9,7 +9,10 @@
 //! `ui.dialog.set`, or `preset` to load a preset), plus the dialog's own: `__view` (`original`,
 //! `optimized`, `2up`, `4up`), `__zoom` (`fit` or a percentage), `__kbps` (connection speed),
 //! `__color` (the colour table's selected colour, by source), `__presetName` (shown while saving a
-//! preset) and `__hasSlices`. Save… remembers
+//! preset) and `__hasSlices`. Optimize to File Size… (`__optimizeOpen: true`) shows `__optimizeK` (the desired size in K),
+//! `__optimizeStart` (`current`, `auto`) and with slices `__optimizeUse` (`allSlices`,
+//! `eachSlice`, `currentSlice`); `__optimizeGo: true` runs `webExport.optimizeToFileSize` and
+//! takes the settings it finds, and `__optimized` holds its result. Save… remembers
 //! the settings and writes the files (`file.saveForWeb`); Done only remembers them; Preview in
 //! Browser opens the HTML page (`file.saveForWeb.browser`). The previews are what Save writes:
 //! [`webexport::preview_image`], decoded back, cached until the art or a setting changes.
@@ -68,6 +71,11 @@ const MATTES: [&str; 3] = ["none", "white", "black"];
 const MATTE_LABELS: [&str; 4] = ["None", "White", "Black", "Other"];
 /// JPEG quality steps: (label, quality).
 const QUALITIES: [(&str, u8); 5] = [("Low", 10), ("Medium", 30), ("High", 60), ("Very High", 80), ("Maximum", 100)];
+/// Optimize to File Size's Start With (`__optimizeStart`) and Use (`__optimizeUse`) choices.
+const START_WITH: [(&str, &str); 2] = [("current", "Current Settings"), ("auto", "Auto Select GIF/JPEG")];
+const SIZE_USE: [(&str, &str); 3] = [("allSlices", "Total of All Slices"), ("eachSlice", "Each Slice"), ("currentSlice", "Current Slice")];
+/// The fields of Optimize to File Size's rows.
+const OPTIMIZE_FIELDS: [&str; 3] = ["__optimizeK", "__optimizeStart", "__optimizeUse"];
 
 /// Open on the document's active artboard, keeping the other remembered settings.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
@@ -489,6 +497,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if let Err(e) = apply_preset(app, d) {
         app.status(e);
     }
+    if d.fields.remove("__optimizeOpen").is_some_and(|v| v == json!(true)) {
+        open_optimize_rows(app, ui, d);
+    }
+    if d.fields.remove("__optimizeGo").is_some_and(|v| v == json!(true))
+        && let Err(e) = optimize_to_size(app, d)
+    {
+        app.status(e);
+    }
     let settings = settings_of(app, d);
     let mut browser = false;
     ui.horizontal_top(|ui| {
@@ -685,6 +701,7 @@ fn pairs<T: Copy>(all: &[T], key: fn(T) -> &'static str, label: fn(T) -> &'stati
 
 fn side(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
     presets_row(app, ui, d, s);
+    optimize_rows(ui, d, s, &art_key(app));
     widgets::divider(ui);
     egui::ScrollArea::vertical().id_salt("sfw-settings").max_height(PREVIEW_H - 40.0).auto_shrink([false, true]).show(ui, |ui| {
         let choice = |ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, options: &[(&str, &str)]| {
@@ -784,6 +801,130 @@ fn presets_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: O
             Err(e) => app.status(e),
         }
     }
+}
+
+/// The optimized file size of the settings `s`, from the preview cache.
+fn previewed_bytes(ui: &egui::Ui, s: Option<&WebSettings>) -> Option<usize> {
+    let key = s?.to_json().to_string();
+    let cache: Cache = ui.ctx().data(|m| m.get_temp(cache_id()))?;
+    cache.shots.into_iter().find(|(k, _)| *k == key).and_then(|(_, shot)| shot.ok()).and_then(|shot| shot.bytes)
+}
+
+/// Optimize to File Size…: the button opens rows ([`open_optimize_rows`]) for the desired size in
+/// K, Start With and, with slices, Use; OK runs [`optimize_to_size`] and Cancel
+/// closes the rows. A line gives the size it found and whether that is within the desired size
+/// ([`optimized_result`]).
+fn optimize_rows(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>, art: &str) {
+    if d.fields.contains_key("__optimizeK") {
+        widgets::label_row(ui, tl!("Desired File Size:"), LABEL_W, |ui| {
+            let k = d.f64("__optimizeK", 32.0);
+            if let Some(v) = widgets::range_field(ui, "sfw-optimize-k", k, 0.001..=webexport::MAX_DESIRED_K, "K", 3, 100.0) {
+                d.fields.insert("__optimizeK".into(), json!(v));
+            }
+        });
+        form::choice(ui, d, "__optimizeStart", tl!("Start With:"), (LABEL_W, FIELD_W), &START_WITH);
+        if d.bool("__hasSlices") {
+            form::choice(ui, d, "__optimizeUse", tl!("Use:"), (LABEL_W, FIELD_W), &SIZE_USE);
+        }
+        widgets::label_row(ui, "", LABEL_W, |ui| {
+            if widgets::flat_button(ui, tl!("OK"), 64.0).clicked() {
+                d.fields.insert("__optimizeGo".into(), json!(true));
+            }
+            if widgets::flat_button(ui, tl!("Cancel"), 64.0).clicked() {
+                for k in OPTIMIZE_FIELDS {
+                    d.fields.remove(k);
+                }
+            }
+        });
+    } else {
+        widgets::label_row(ui, "", LABEL_W, |ui| {
+            if widgets::flat_button(ui, tl!("Optimize to File Size…"), FIELD_W).clicked() {
+                d.fields.insert("__optimizeOpen".into(), json!(true));
+            }
+        });
+    }
+    if let Some(r) = optimized_result(d, s, art) {
+        let size = size_label(r["bytes"].as_u64().unwrap_or(0) as usize);
+        let target = size_label(r["targetBytes"].as_u64().unwrap_or(0) as usize);
+        let text = if r["achieved"] == json!(true) {
+            crate::i18n::fmt(tl!("{size}, within {target}"), &[("size", &size), ("target", &target)])
+        } else {
+            crate::i18n::fmt(tl!("No setting tried fits in {target}; the smallest is {size}"), &[("size", &size), ("target", &target)])
+        };
+        widgets::label_row(ui, "", LABEL_W, |ui| {
+            widgets::dim_label(ui, &text);
+        });
+    }
+}
+
+/// The last Optimize to File Size result (`__optimized`) while it still holds: the settings are the
+/// ones it found and the art (`art`, from [`art_key`]) is the art it measured.
+pub(super) fn optimized_result<'a>(d: &'a Dialog, s: Option<&WebSettings>, art: &str) -> Option<&'a Value> {
+    d.fields.get("__optimized").filter(|r| r["art"] == json!(art) && s.is_some_and(|s| r["settings"] == s.to_json()))
+}
+
+/// The active document, its revision and its selected objects, which an Optimize to File Size result
+/// was measured on. The selection decides the slices Save writes with `slices: selected` and the
+/// slice Current Slice measures, and a selection made on the canvas leaves the revision as it is.
+pub(super) fn art_key(app: &VectorcraftApp) -> String {
+    app.session.active().map_or_else(String::new, |st| format!("{}:{}:{:?}", st.uid, st.revision, st.selection.objects))
+}
+
+/// `bytes` in K, rounded up to the Desired File Size field's 0.001 K so the size it asks for holds
+/// them.
+pub(super) fn size_k(bytes: usize) -> f64 {
+    bytes.saturating_mul(1000).div_ceil(1024).max(1) as f64 / 1000.0
+}
+
+/// Optimize to File Size… (`__optimizeOpen`): opens the rows with Current Settings and Total of All
+/// Slices, the desired size starting at the size the current settings give what that Use measures:
+/// the image slices' files together when there are slices, else the preview's file (32 K when it
+/// cannot be measured).
+fn open_optimize_rows(app: &mut VectorcraftApp, ui: &egui::Ui, d: &mut Dialog) {
+    let bytes = if d.bool("__hasSlices") {
+        let mut p = params(d);
+        if let Some(o) = p.as_object_mut() {
+            o.insert("desiredK".into(), json!(webexport::MAX_DESIRED_K));
+            o.insert("use".into(), json!("allSlices"));
+        }
+        let r = app.run("webExport.optimizeToFileSize", p).ok();
+        r.filter(|r| r["achieved"] == json!(true)).and_then(|r| r["bytes"].as_u64()).map(|b| b as usize)
+    } else {
+        previewed_bytes(ui, settings_of(app, d).ok().as_ref())
+    };
+    let k = bytes.map_or(32.0, size_k);
+    d.fields.insert("__optimizeK".into(), json!(k));
+    d.fields.insert("__optimizeStart".into(), json!("current"));
+    d.fields.insert("__optimizeUse".into(), json!("allSlices"));
+}
+
+/// Optimize to File Size's OK: `webExport.optimizeToFileSize` with the dialog's settings and the
+/// rows' values; the settings it finds replace the dialog's, the rows close and `__optimized`
+/// keeps the result. An error leaves the settings and the rows as they are.
+pub(super) fn optimize_to_size(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<Value, String> {
+    let mut p = params(d);
+    if let Some(o) = p.as_object_mut() {
+        o.insert("desiredK".into(), d.fields.get("__optimizeK").cloned().unwrap_or(Value::Null));
+        let start = d.str("__optimizeStart");
+        if !start.is_empty() {
+            o.insert("startWith".into(), json!(start));
+        }
+        let scope = d.str("__optimizeUse");
+        if d.bool("__hasSlices") && !scope.is_empty() {
+            o.insert("use".into(), json!(scope));
+        }
+    }
+    let r = app.run("webExport.optimizeToFileSize", p)?;
+    if let Some(found) = r["settings"].as_object() {
+        d.fields.extend(found.clone());
+    }
+    for k in OPTIMIZE_FIELDS {
+        d.fields.remove(k);
+    }
+    let result =
+        json!({ "settings": r["settings"], "bytes": r["bytes"], "targetBytes": r["targetBytes"], "achieved": r["achieved"], "art": art_key(app) });
+    d.fields.insert("__optimized".into(), result);
+    Ok(r)
 }
 
 /// Two checkboxes side by side.

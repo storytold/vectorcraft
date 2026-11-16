@@ -2646,6 +2646,18 @@ font-technology	Variable	Variabla
 	Preview:	Förhandsgranskning:
 	Preview All Layers	Förhandsgranska alla lager
 	Preview in Browser	Förhandsgranska i webbläsare
+	Optimize to File Size…	Optimera till filstorlek…
+	Optimize to File Size	Optimera till filstorlek
+	Desired File Size:	Önskad filstorlek:
+	Start With:	Börja med:
+	Use:	Använd:
+	Current Settings	Aktuella inställningar
+	Auto Select GIF/JPEG	Välj GIF/JPEG automatiskt
+	Total of All Slices	Alla skivor totalt
+	Each Slice	Varje skiva
+	Current Slice	Aktuell skiva
+	{size}, within {target}	{size}, inom {target}
+	No setting tried fits in {target}; the smallest is {size}	Ingen provad inställning ryms i {target}; den minsta är {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Förhandsgranska i webbläsare kräver skrivbordsappen (webbversionen hämtar filerna i stället)
 	Preview Mode	Förhandsgranskningsläge
 	Preview the document as it is now	Förhandsgranska dokumentet som det ser ut nu
@@ -4578,6 +4590,11 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	PDF writer error: {0}	fel i PDF-skrivaren: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Paketerade {n} fil i {folder} ({note})|Paketerade {n} filer i {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Förhandsgranska i webbläsare kräver skrivbordsappen (webbversionen hämtar filer i stället)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	ange `desiredK`, önskad filstorlek i K (1024 byte): ett tal över 0 och högst 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` är `current` eller `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` är `allSlices`, `eachSlice` eller `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` är ett skivnummer från `slice.list`, med `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimera till filstorlek: det finns ingen bild att mäta
 @msg	Release Guides: no guides	Släpp stödlinjer: inga stödlinjer
 @msg	Release: no layer to put the rectangle in	Släpp: inget lager att placera rektangeln i
 @msg	Replace Spine: select a blend and a path	Ersätt ryggrad: markera en blandning och en bana

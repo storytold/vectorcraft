@@ -2703,6 +2703,18 @@ font-technology	Variable	Variables
 	Preview:	Aperçu :
 	Preview All Layers	Aperçu de tous les calques
 	Preview in Browser	Aperçu dans le navigateur
+	Optimize to File Size…	Optimiser selon la taille du fichier…
+	Optimize to File Size	Optimiser selon la taille du fichier
+	Desired File Size:	Taille de fichier souhaitée :
+	Start With:	Commencer par :
+	Use:	Utiliser :
+	Current Settings	Réglages actuels
+	Auto Select GIF/JPEG	Sélection automatique GIF/JPEG
+	Total of All Slices	Total de toutes les tranches
+	Each Slice	Chaque tranche
+	Current Slice	Tranche active
+	{size}, within {target}	{size}, dans la limite de {target}
+	No setting tried fits in {target}; the smallest is {size}	Aucun réglage essayé ne tient dans {target}, le plus petit fait {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	L’aperçu dans le navigateur nécessite l’application de bureau (la version web télécharge les fichiers à la place)
 	Preview Mode	Mode Aperçu
 	Preview the document as it is now	Afficher un aperçu du document dans son état actuel
@@ -4634,6 +4646,11 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	PDF writer error: {0}	Erreur du générateur PDF : {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} fichier assemblé dans {folder} ({note})|{n} fichiers assemblés dans {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Aperçu dans le navigateur nécessite l’application de bureau (la version web télécharge les fichiers à la place)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	indiquez `desiredK`, la taille de fichier souhaitée en K (1024 octets), un nombre supérieur à 0 et au plus 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` vaut `current` ou `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` vaut `allSlices`, `eachSlice` ou `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` est un numéro de tranche de `slice.list`, avec `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimiser selon la taille du fichier, aucune image à mesurer
 @msg	Release Guides: no guides	Annuler les repères : aucun repère
 @msg	Release: no layer to put the rectangle in	Annuler : aucun calque où placer le rectangle
 @msg	Replace Spine: select a blend and a path	Remplacer la dorsale : sélectionnez un dégradé de formes et un tracé

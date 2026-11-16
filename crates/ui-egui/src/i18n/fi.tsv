@@ -1169,6 +1169,18 @@ lighting	Light	Valo
 	Placement Options…	Sijoitusasetukset…
 	Plug-in…	Laajennus…
 	Preview in Browser	Esikatsele selaimessa
+	Optimize to File Size…	Optimoi tiedostokokoon…
+	Optimize to File Size	Optimoi tiedostokokoon
+	Desired File Size:	Haluttu tiedostokoko:
+	Start With:	Aloita:
+	Use:	Käytä:
+	Current Settings	Nykyiset asetukset
+	Auto Select GIF/JPEG	Valitse GIF/JPEG automaattisesti
+	Total of All Slices	Kaikki siivut yhteensä
+	Each Slice	Jokainen siivu
+	Current Slice	Nykyinen siivu
+	{size}, within {target}	{size}, enintään {target}
+	No setting tried fits in {target}; the smallest is {size}	Mikään kokeiltu asetus ei mahdu kokoon {target}; pienin on {size}
 	Printer Setup…	Tulostimen asetukset…
 	Printers	Tulostimet
 	Recent File	Viimeisin tiedosto
@@ -4905,6 +4917,11 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	PDF writer error: {0}	PDF-kirjoittimen virhe: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Paketoitiin {n} tiedosto kansioon {folder} ({note})|Paketoitiin {n} tiedostoa kansioon {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Esikatselu selaimessa vaatii työpöytäsovelluksen (verkkoversio lataa tiedostot sen sijaan)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	anna `desiredK`, haluttu tiedostokoko yksikössä K (1024 tavua): luku, joka on yli 0 ja enintään 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` on `current` tai `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` on `allSlices`, `eachSlice` tai `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` on siivun numero luettelosta `slice.list`, kun `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimoi tiedostokokoon: mitattavaa kuvaa ei ole
 @msg	Release Guides: no guides	Vapauta apuviivat: ei apuviivoja
 @msg	Release: no layer to put the rectangle in	Vapauta: ei tasoa, johon suorakulmion voisi sijoittaa
 @msg	Replace Spine: select a blend and a path	Korvaa selkäranka: valitse sulautus ja polku

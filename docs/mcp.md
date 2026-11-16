@@ -8885,6 +8885,24 @@ file size), `seconds` to download at `kbps` (default 56.6), the size, and for pa
 `source` (the colour the reduction made), so a colour keeps its edits when it is web-shifted or snapped. `slice: n`
 previews one slice; `image: true` adds the file; `warnings` holds the export's warnings.
 
+Optimize to File Size (the dialog's button under Preset) is `webExport.optimizeToFileSize {desiredK, startWith?,
+use?, slice?, …settings}`. It searches for settings whose files fit in `desiredK` K (1 K is 1024 bytes; above 0, at
+most 1048576) and returns them without writing a file or changing the remembered settings: `{targetBytes, achieved,
+bytes, format, settings, trials, images, warnings}`. `startWith: current` (the default) keeps the format and takes the
+highest JPEG quality (1 to the current quality) or the most GIF/PNG-8 colors (2 to the current count) that fit,
+measured by encoding. A lower value can give a larger file, so the search measures up to 6 values spread over the
+range, from the top down, and then narrows the step above the first one that fits. When no value measured fits, GIF
+tries lossy 100 with the most colors that fit. PNG-24 has no
+setting to lower. `startWith: auto` takes GIF for art with transparent pixels or at most 256 colors and JPEG
+otherwise, and for opaque art tries the other format when the first one cannot reach the size. `use: allSlices` (the
+default) measures the image, or the image slices' files together; `eachSlice` measures the largest slice file;
+`currentSlice` measures `slice` (a number from `slice.list`), else the selected image slice, else the first. The
+slices share one setting, so every `use` changes the setting of all of them. The search encodes at most 32 trial
+settings. When none fits, `achieved` is false and `settings` are the smallest trial. A `desiredK` that is missing,
+not a number, 0 or less or above 1048576 is an error, as are an unknown `startWith` or `use` and a `slice` that is
+not a slice number or comes with another `use`. In the dialog, the desired size starts at the size of what Total of All
+Slices measures with the current settings, rounded up to 0.001 K.
+
 Presets: `webExport.presets.list` (built-in ones, then saved ones), `webExport.presets.save {name, newName?, …settings}`,
 `webExport.presets.delete {name}`; any name works as `preset` in the other commands (its settings, then the keys
 given). `webExport.settings {…}` remembers the settings the dialog opens on (`{}` reads them, `reset: true` restores the

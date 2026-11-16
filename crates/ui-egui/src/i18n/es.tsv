@@ -2715,6 +2715,18 @@ font-technology	Variable	Variables
 	Preview:	Vista previa:
 	Preview All Layers	Previsualizar todas las capas
 	Preview in Browser	Previsualizar en el navegador
+	Optimize to File Size…	Optimizar según tamaño de archivo…
+	Optimize to File Size	Optimizar según tamaño de archivo
+	Desired File Size:	Tamaño de archivo deseado:
+	Start With:	Empezar con:
+	Use:	Usar:
+	Current Settings	Ajustes actuales
+	Auto Select GIF/JPEG	Selección automática GIF/JPEG
+	Total of All Slices	Total de todos los sectores
+	Each Slice	Cada sector
+	Current Slice	Sector actual
+	{size}, within {target}	{size}, dentro de {target}
+	No setting tried fits in {target}; the smallest is {size}	Ningún ajuste probado cabe en {target}; el menor es {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Previsualizar en el navegador requiere la aplicación de escritorio (la versión web descarga los archivos)
 	Preview Mode	Modo de vista previa
 	Preview the document as it is now	Previsualizar el documento tal como está ahora
@@ -4672,6 +4684,11 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	PDF writer error: {0}	error del escritor de PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Se empaquetó {n} archivo en {folder} ({note})|Se empaquetaron {n} archivos en {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Previsualizar en el navegador requiere la aplicación de escritorio (la versión web descarga los archivos)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	indica `desiredK`, el tamaño de archivo deseado en K (1024 bytes): un número mayor que 0 y como máximo 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` es `current` o `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` es `allSlices`, `eachSlice` o `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` es un número de sector de `slice.list`, con `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimizar según tamaño de archivo: no hay ninguna imagen que medir
 @msg	Release Guides: no guides	Soltar guías: no hay guías
 @msg	Release: no layer to put the rectangle in	Soltar: no hay ninguna capa donde poner el rectángulo
 @msg	Replace Spine: select a blend and a path	Reemplazar eje: selecciona una fusión y un trazado

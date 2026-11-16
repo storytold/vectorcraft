@@ -656,3 +656,83 @@ fn colour_table_buttons_edit_the_lists() {
     save_for_web::set_table(&mut d, "sort", json!("hue"));
     assert_eq!(d.fields["colorTable"], json!({"locked": [], "webShift": ["#123456"], "sort": "hue"}));
 }
+
+#[test]
+fn optimize_to_file_size_takes_the_settings_that_fit() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-optimize");
+    let (mut app, _) = app(&dir, false);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("jpg"));
+    set(&mut app, "quality", json!(100));
+    frame(&mut app);
+    let full = app.session.execute("document.exportForWeb.preview", &json!({"format": "jpg", "quality": 100})).unwrap()["bytes"].as_u64().unwrap();
+    let field = |app: &VectorcraftApp, k: &str| app.ui.dialog.as_ref().unwrap().fields.get(k).cloned();
+    // A size of 0 is refused: the settings and the rows stay.
+    set(&mut app, "__optimizeK", json!(0));
+    set(&mut app, "__optimizeStart", json!("current"));
+    set(&mut app, "__optimizeGo", json!(true));
+    frame(&mut app);
+    assert_eq!(field(&app, "quality"), Some(json!(100)));
+    assert_eq!(field(&app, "__optimizeK"), Some(json!(0)));
+    assert_eq!((field(&app, "__optimized"), field(&app, "__optimizeGo")), (None, None));
+    // OK takes the settings found and closes the rows.
+    set(&mut app, "__optimizeK", json!(full as f64 * 0.8 / 1024.0));
+    set(&mut app, "__optimizeGo", json!(true));
+    frame(&mut app);
+    let found = field(&app, "__optimized").unwrap();
+    assert_eq!(found["achieved"], json!(true), "{found}");
+    let quality = field(&app, "quality").unwrap().as_u64().unwrap();
+    assert!(quality < 100, "{found}");
+    assert_eq!(field(&app, "__optimizeK"), None);
+    // The result holds for the settings found on the art it measured.
+    let settings = app.session.web_settings(&found["settings"]).unwrap();
+    let shown = |app: &VectorcraftApp| {
+        save_for_web::optimized_result(app.ui.dialog.as_ref().unwrap(), Some(&settings), &save_for_web::art_key(app)).is_some()
+    };
+    assert!(shown(&app));
+    // The result line draws, and Save writes the size found.
+    frame(&mut app);
+    let r = confirm(&mut app).unwrap();
+    let written = std::fs::read(r["path"].as_str().unwrap()).unwrap();
+    assert_eq!(written.len() as u64, found["bytes"].as_u64().unwrap());
+    assert!(written.len() as u64 <= found["targetBytes"].as_u64().unwrap());
+    assert_eq!(app.session.last_web_settings().quality as u64, quality);
+    // A change to the art drops the result.
+    app.run("file.saveForWeb", json!({})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("__optimized".into(), found.clone());
+    assert!(shown(&app));
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 5, "height": 5})).unwrap();
+    assert!(!shown(&app));
+    // So does a change to the selection, which decides the slices Save writes with `slices: selected`,
+    // also one that leaves the revision as it is (a click on the canvas).
+    let mut current = found.clone();
+    current["art"] = json!(save_for_web::art_key(&app));
+    app.ui.dialog.as_mut().unwrap().fields.insert("__optimized".into(), current);
+    assert!(shown(&app));
+    let st = app.session.active_mut().unwrap();
+    assert!(!st.selection.objects.is_empty());
+    st.selection.objects.clear();
+    assert!(!shown(&app));
+}
+
+#[test]
+fn optimize_to_file_size_starts_at_the_size_of_the_slices_files() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-optimize-slices");
+    let (mut app, _) = app(&dir, false);
+    app.run("object.slice.create", json!({"x": 0, "y": 0, "width": 30, "height": 20})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("png24"));
+    frame(&mut app);
+    let slices = app.session.execute("webExport.optimizeToFileSize", &json!({"format": "png24", "desiredK": 1048576})).unwrap();
+    let whole = app.session.execute("document.exportForWeb.preview", &json!({"format": "png24"})).unwrap()["bytes"].as_u64().unwrap();
+    let k = |b: u64| json!(save_for_web::size_k(b as usize));
+    assert_ne!(k(slices["bytes"].as_u64().unwrap()), k(whole), "{slices}");
+    // The size asked for holds the files measured.
+    let b = slices["bytes"].as_u64().unwrap();
+    assert!((save_for_web::size_k(b as usize) * 1024.0).floor() as u64 >= b);
+    set(&mut app, "__optimizeOpen", json!(true));
+    frame(&mut app);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields.get("__optimizeK"), Some(&k(slices["bytes"].as_u64().unwrap())));
+    assert_eq!((d.fields.get("__optimizeUse"), d.fields.get("__optimizeOpen")), (Some(&json!("allSlices")), None));
+}

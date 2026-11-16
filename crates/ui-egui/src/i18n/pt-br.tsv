@@ -2244,6 +2244,18 @@ antiAlias	Sharp	Nítido
 	Preview:	Visualização:
 	Preview Mode	Modo de Visualização
 	Preview in Browser	Visualizar no Navegador
+	Optimize to File Size…	Otimizar para tamanho de arquivo…
+	Optimize to File Size	Otimizar para tamanho de arquivo
+	Desired File Size:	Tamanho de arquivo desejado:
+	Start With:	Começar com:
+	Use:	Usar:
+	Current Settings	Configurações atuais
+	Auto Select GIF/JPEG	Seleção automática GIF/JPEG
+	Total of All Slices	Total de todas as fatias
+	Each Slice	Cada fatia
+	Current Slice	Fatia atual
+	{size}, within {target}	{size}, dentro de {target}
+	No setting tried fits in {target}; the smallest is {size}	Nenhuma configuração testada cabe em {target}; a menor tem {size}
 	Preview the document as it is now	Visualizar o documento como está agora
 	Previous	Anterior
 	Previous Library	Biblioteca Anterior
@@ -3987,6 +3999,11 @@ axis	Both	Ambos
 @msg	PDF writer error: {0}	Erro do gravador de PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} arquivo empacotado em {folder} ({note})|{n} arquivos empacotados em {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Visualizar no navegador exige o aplicativo para desktop (na web, os arquivos são baixados)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	informe `desiredK`, o tamanho de arquivo desejado em K (1024 bytes): um número acima de 0 e no máximo 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` é `current` ou `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` é `allSlices`, `eachSlice` ou `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` é um número de fatia de `slice.list`, com `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Otimizar para tamanho de arquivo: não há imagem para medir
 @msg	Release Guides: no guides	Liberar guias: não há guias
 @msg	Release: no layer to put the rectangle in	Liberar: não há camada para colocar o retângulo
 @msg	Replace Spine: select a blend and a path	Substituir coluna: selecione uma mesclagem e um traçado

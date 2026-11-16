@@ -2487,6 +2487,18 @@ shape	Open	Açık
 	Preview:	Önizleme:
 	Preview All Layers	Tüm Katmanları Önizle
 	Preview in Browser	Tarayıcıda Önizleme
+	Optimize to File Size…	Dosya Boyutuna Göre Optimize Et…
+	Optimize to File Size	Dosya Boyutuna Göre Optimize Et
+	Desired File Size:	İstenen Dosya Boyutu:
+	Start With:	Başlangıç:
+	Use:	Kullan:
+	Current Settings	Geçerli Ayarlar
+	Auto Select GIF/JPEG	GIF/JPEG Otomatik Seç
+	Total of All Slices	Tüm Dilimlerin Toplamı
+	Each Slice	Her Dilim
+	Current Slice	Geçerli Dilim
+	{size}, within {target}	{size}, {target} sınırında
+	No setting tried fits in {target}; the smallest is {size}	Denenen hiçbir ayar {target} içine sığmıyor; en küçüğü {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Tarayıcıdaki önizleme için masaüstü uygulaması gerekir (bunun yerine web, dosyaları indirir)
 	Preview Mode	Önizleme Modu
 	Preview the document as it is now	Belgeyi şu anki haliyle önizleyin
@@ -4411,6 +4423,11 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	PDF writer error: {0}	PDF yazıcı hatası: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} dosya {folder} klasörüne paketlendi ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Tarayıcıdaki önizleme için masaüstü uygulaması gerekir (bunun yerine web, dosyaları indirir)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	`desiredK` değerini verin, K cinsinden istenen dosya boyutu (1024 bayt): 0'dan büyük ve en çok 1048576 olan bir sayı
+@msg	`startWith` is `current` or `auto`	`startWith` değeri `current` veya `auto` olmalıdır
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` değeri `allSlices`, `eachSlice` veya `currentSlice` olmalıdır
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice`, `slice.list` içindeki bir dilim numarasıdır ve `use: currentSlice` ile kullanılır
+@msg	Optimize to File Size: there is no image to measure	Dosya Boyutuna Göre Optimize Et: ölçülecek görüntü yok
 @msg	Release Guides: no guides	Sürüm Kılavuzları: kılavuz yok
 @msg	Release: no layer to put the rectangle in	Serbest bırakma: dikdörtgeni yerleştirecek katman yok
 @msg	Replace Spine: select a blend and a path	Omurgayı Değiştir: bir karışım ve yol seçin

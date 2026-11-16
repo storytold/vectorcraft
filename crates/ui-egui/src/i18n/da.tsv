@@ -3787,6 +3787,18 @@ lighting	Light	Lys
 	Placement Options…	Placeringsindstillinger…
 	Plug-in…	Plug-in…
 	Preview in Browser	Forhåndsvis i browser
+	Optimize to File Size…	Optimer til filstørrelse…
+	Optimize to File Size	Optimer til filstørrelse
+	Desired File Size:	Ønsket filstørrelse:
+	Start With:	Start med:
+	Use:	Brug:
+	Current Settings	Aktuelle indstillinger
+	Auto Select GIF/JPEG	Vælg GIF/JPEG automatisk
+	Total of All Slices	Alle udsnit i alt
+	Each Slice	Hvert udsnit
+	Current Slice	Aktuelt udsnit
+	{size}, within {target}	{size}, inden for {target}
+	No setting tried fits in {target}; the smallest is {size}	Ingen afprøvet indstilling passer i {target}; den mindste er {size}
 	Printer Setup…	Printeropsætning…
 	Printers	Printere
 	Recent File	Seneste fil
@@ -7198,6 +7210,11 @@ imageTrace	Outline	Kontur
 @msg	PDF writer error: {0}	PDF-skriverfejl: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Pakkede {n} fil i {folder} ({note})|Pakkede {n} filer i {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Forhåndsvisning i browser kræver skrivebordsappen (webversionen downloader filer i stedet)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	angiv `desiredK`, den ønskede filstørrelse i K (1024 byte): et tal over 0 og højst 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` er `current` eller `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` er `allSlices`, `eachSlice` eller `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` er et udsnitsnummer fra `slice.list`, med `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimer til filstørrelse: der er intet billede at måle
 @msg	Release Guides: no guides	Frigiv hjælpelinjer: ingen hjælpelinjer
 @msg	Release: no layer to put the rectangle in	Frigiv: intet lag at lægge rektanglet i
 @msg	Replace Spine: select a blend and a path	Erstat rygrad: markér en blanding og en kurve

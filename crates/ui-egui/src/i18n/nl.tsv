@@ -1662,6 +1662,18 @@ lighting	Light	Licht
 	Placement Options…	Plaatsingsopties…
 	Plug-in…	Plug-in…
 	Preview in Browser	Voorbeeld in browser
+	Optimize to File Size…	Optimaliseren naar bestandsgrootte…
+	Optimize to File Size	Optimaliseren naar bestandsgrootte
+	Desired File Size:	Gewenste bestandsgrootte:
+	Start With:	Beginnen met:
+	Use:	Gebruiken:
+	Current Settings	Huidige instellingen
+	Auto Select GIF/JPEG	GIF/JPEG automatisch kiezen
+	Total of All Slices	Totaal van alle slices
+	Each Slice	Elke slice
+	Current Slice	Huidige slice
+	{size}, within {target}	{size}, binnen {target}
+	No setting tried fits in {target}; the smallest is {size}	Geen geprobeerde instelling past in {target}; de kleinste is {size}
 	Printer Setup…	Printerinstellingen…
 	Printers	Printers
 	Recent File	Recent bestand
@@ -5074,6 +5086,11 @@ imageTrace	Outline	Contour
 @msg	PDF writer error: {0}	PDF-schrijffout: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} bestand verpakt in {folder} ({note})|{n} bestanden verpakt in {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Voorvertoning in browser heeft de desktop-app nodig (het web downloadt in plaats daarvan bestanden)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	geef `desiredK`, de gewenste bestandsgrootte in K (1024 bytes): een getal boven 0 en hoogstens 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` is `current` of `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` is `allSlices`, `eachSlice` of `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` is een slicenummer uit `slice.list`, met `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimaliseren naar bestandsgrootte: er is geen afbeelding om te meten
 @msg	Release Guides: no guides	Hulplijnen vrijgeven: geen hulplijnen
 @msg	Release: no layer to put the rectangle in	Vrijgeven: geen laag om de rechthoek in te plaatsen
 @msg	Replace Spine: select a blend and a path	Ruggengraat vervangen: selecteer een mengsel en een pad

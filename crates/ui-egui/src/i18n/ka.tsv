@@ -3143,6 +3143,18 @@ lighting	Light	სინათლე
 	Placement Options…	განთავსების პარამეტრები…
 	Plug-in…	პლაგინი…
 	Preview in Browser	ბრაუზერში ნახვა
+	Optimize to File Size…	ფაილის ზომაზე ოპტიმიზაცია…
+	Optimize to File Size	ფაილის ზომაზე ოპტიმიზაცია
+	Desired File Size:	სასურველი ფაილის ზომა:
+	Start With:	დაწყება:
+	Use:	გამოყენება:
+	Current Settings	მიმდინარე პარამეტრები
+	Auto Select GIF/JPEG	GIF/JPEG-ის ავტომატური არჩევა
+	Total of All Slices	ყველა ნაჭრის ჯამი
+	Each Slice	თითოეული ნაჭერი
+	Current Slice	მიმდინარე ნაჭერი
+	{size}, within {target}	{size}, {target}-ის ფარგლებში
+	No setting tried fits in {target}; the smallest is {size}	არცერთი ნაცადი პარამეტრი არ ეტევა {target}-ში; უმცირესია {size}
 	Printer Setup…	პრინტერის დაყენება…
 	Printers	პრინტერები
 	Recent File	ბოლოს გახსნილი ფაილი
@@ -6390,6 +6402,11 @@ font-technology	Variable	ცვლადი
 @msg	PDF writer error: {0}	PDF-ის ჩამწერის შეცდომა: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	ბრაუზერში წინასწარ ნახვას დესკტოპის აპი სჭირდება (ვებში ფაილები ჩამოიტვირთება)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	მიუთითეთ `desiredK`, სასურველი ფაილის ზომა K-ში (1024 ბაიტი): 0-ზე მეტი და არაუმეტეს 1048576 რიცხვი
+@msg	`startWith` is `current` or `auto`	`startWith` არის `current` ან `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` არის `allSlices`, `eachSlice` ან `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` არის ნაჭრის ნომერი `slice.list`-დან, `use: currentSlice`-თან ერთად
+@msg	Optimize to File Size: there is no image to measure	ფაილის ზომაზე ოპტიმიზაცია: გასაზომი გამოსახულება არ არის
 @msg	Release Guides: no guides	დამხმარე ხაზების მოხსნა: დამხმარე ხაზები არ არის
 @msg	Release: no layer to put the rectangle in	მოხსნა: მართკუთხედის ჩასასმელი შრე არ არის
 @msg	Replace Spine: select a blend and a path	ხერხემლის ჩანაცვლება: მონიშნეთ გადასვლა და ტრაექტორია

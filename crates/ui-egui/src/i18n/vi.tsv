@@ -3067,6 +3067,18 @@ diagnostics	ui	giao diện
 	Preview:	Xem trước:
 	Preview All Layers	Xem trước tất cả lớp
 	Preview in Browser	Xem trước trong trình duyệt
+	Optimize to File Size…	Tối ưu theo kích thước tệp…
+	Optimize to File Size	Tối ưu theo kích thước tệp
+	Desired File Size:	Kích thước tệp mong muốn:
+	Start With:	Bắt đầu với:
+	Use:	Dùng:
+	Current Settings	Cài đặt hiện tại
+	Auto Select GIF/JPEG	Tự chọn GIF/JPEG
+	Total of All Slices	Tổng tất cả lát cắt
+	Each Slice	Mỗi lát cắt
+	Current Slice	Lát cắt hiện tại
+	{size}, within {target}	{size}, trong giới hạn {target}
+	No setting tried fits in {target}; the smallest is {size}	Không cài đặt nào đã thử vừa với {target}; nhỏ nhất là {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Xem trước trong trình duyệt cần ứng dụng máy tính để bàn (web sẽ tải tệp xuống thay thế)
 	Preview Mode	Chế độ xem trước
 	Preview the document as it is now	Xem trước tài liệu như hiện tại
@@ -5474,6 +5486,11 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	plug-in parameters: {0}	tham số plug-in: {0}
 @msg	plug-in trapped: {0}	plug-in bị kẹt: {0}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Xem trước trên trình duyệt cần ứng dụng máy tính (web sẽ tải xuống tệp thay thế)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	hãy cho `desiredK`, kích thước tệp mong muốn tính bằng K (1024 byte): một số lớn hơn 0 và tối đa 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` là `current` hoặc `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` là `allSlices`, `eachSlice` hoặc `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` là số lát cắt từ `slice.list`, đi cùng `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Tối ưu theo kích thước tệp: không có ảnh để đo
 @msg	print settings are not an object	cài đặt in không phải là đối tượng
 @msg	printing isn't available here	in không khả dụng ở đây
 @msg	range `{s}` is empty	phạm vi `{s}` trống

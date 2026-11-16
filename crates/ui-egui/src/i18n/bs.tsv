@@ -1167,6 +1167,18 @@ lighting	Light	Svjetlo
 	Placement Options…	Opcije postavljanja…
 	Plug-in…	Dodatak…
 	Preview in Browser	Pregledaj u pregledniku
+	Optimize to File Size…	Optimiziraj na veličinu datoteke…
+	Optimize to File Size	Optimiziraj na veličinu datoteke
+	Desired File Size:	Željena veličina datoteke:
+	Start With:	Počni sa:
+	Use:	Koristi:
+	Current Settings	Trenutne postavke
+	Auto Select GIF/JPEG	Automatski odaberi GIF/JPEG
+	Total of All Slices	Ukupno svih isječaka
+	Each Slice	Svaki isječak
+	Current Slice	Trenutni isječak
+	{size}, within {target}	{size}, unutar {target}
+	No setting tried fits in {target}; the smallest is {size}	Nijedna isprobana postavka ne stane u {target}; najmanja je {size}
 	Printer Setup…	Podešavanje štampača…
 	Printers	Štampači
 	Recent File	Nedavna datoteka
@@ -4711,6 +4723,11 @@ imageTrace	Outline	Obris
 @msg	PDF writer error: {0}	greška PDF zapisivača: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Upakovano datoteka u {folder}: {n} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Pregledaj u pregledniku zahtijeva desktop aplikaciju (web umjesto toga preuzima datoteke)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	navedite `desiredK`, željenu veličinu datoteke u K (1024 bajta): broj veći od 0 i najviše 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` je `current` ili `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` je `allSlices`, `eachSlice` ili `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` je broj isječka iz `slice.list`, uz `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimiziraj na veličinu datoteke: nema slike za mjerenje
 @msg	Release Guides: no guides	Oslobodi vodilice: nema vodilica
 @msg	Release: no layer to put the rectangle in	Oslobodi: nema sloja u koji bi se stavio pravougaonik
 @msg	Replace Spine: select a blend and a path	Zamijeni kičmu: odaberite stapanje i putanju

@@ -2604,6 +2604,18 @@ diagnostics	ui	界面
 	Preview	预览
 	Preview:	预览：
 	Preview in Browser	在浏览器中预览
+	Optimize to File Size…	优化到文件大小…
+	Optimize to File Size	优化到文件大小
+	Desired File Size:	所需文件大小：
+	Start With:	起始设置：
+	Use:	使用：
+	Current Settings	当前设置
+	Auto Select GIF/JPEG	自动选择 GIF/JPEG
+	Total of All Slices	所有切片总计
+	Each Slice	每个切片
+	Current Slice	当前切片
+	{size}, within {target}	{size}，不超过 {target}
+	No setting tried fits in {target}; the smallest is {size}	尝试过的设置都无法小于 {target}；最小为 {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	在浏览器中预览需要桌面版应用程序 (网页版会改为下载文件)
 	Preview Mode	预览模式
 	Preview the document as it is now	按当前状态预览文档
@@ -4819,6 +4831,11 @@ imageTrace	Outline	轮廓
 @msg	1 hidden object	1 个隐藏的对象
 @msg	{n} hidden objects	{n} 个隐藏的对象
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	“在浏览器中预览”需要桌面应用 (网页版会改为下载文件)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	请给出 `desiredK`，即以 K (1024 字节) 为单位的所需文件大小：大于 0 且不超过 1048576 的数字
+@msg	`startWith` is `current` or `auto`	`startWith` 为 `current` 或 `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` 为 `allSlices`、`eachSlice` 或 `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` 是 `slice.list` 中的切片编号，需配合 `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	优化到文件大小：没有可测量的图像
 @msg	no file system here	此处没有文件系统
 @msg	nothing to preview	没有可预览的内容
 @msg	Saved {n} files beside {path}	已在 {path} 旁保存 {n} 个文件

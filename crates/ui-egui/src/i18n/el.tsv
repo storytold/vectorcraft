@@ -2654,6 +2654,11 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	PDF writer error: {0}	Σφάλμα εγγραφής PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Συσκευάστηκε {n} αρχείο στον φάκελο {folder} ({note})|Συσκευάστηκαν {n} αρχεία στον φάκελο {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Η προεπισκόπηση σε πρόγραμμα περιήγησης απαιτεί την εφαρμογή υπολογιστή (η έκδοση ιστού πραγματοποιεί λήψη αρχείων)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	δώστε `desiredK`, το επιθυμητό μέγεθος αρχείου σε K (1024 byte): αριθμό πάνω από 0 και το πολύ 1048576
+@msg	`startWith` is `current` or `auto`	το `startWith` είναι `current` ή `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	το `use` είναι `allSlices`, `eachSlice` ή `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	το `slice` είναι αριθμός τομής από το `slice.list`, με `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Βελτιστοποίηση σε μέγεθος αρχείου: δεν υπάρχει εικόνα για μέτρηση
 @msg	Release Guides: no guides	Αποδέσμευση οδηγών: δεν υπάρχουν οδηγοί
 @msg	Release: no layer to put the rectangle in	Αποδέσμευση: δεν υπάρχει επίπεδο για να τοποθετηθεί το ορθογώνιο
 @msg	Replace Spine: select a blend and a path	Αντικατάσταση κεντρικής καμπύλης: επιλέξτε ανάμειξη και διαδρομή
@@ -3562,6 +3567,18 @@ theme	Appearance	Εμφάνιση
 	Presets you save with the Save Preset button appear here.	Οι προεπιλογές που αποθηκεύετε με το κουμπί Αποθήκευση προεπιλογής εμφανίζονται εδώ.
 	Preview All Layers	Προεπισκόπηση όλων των επιπέδων
 	Preview in Browser	Προεπισκόπηση στο πρόγραμμα περιήγησης
+	Optimize to File Size…	Βελτιστοποίηση σε μέγεθος αρχείου…
+	Optimize to File Size	Βελτιστοποίηση σε μέγεθος αρχείου
+	Desired File Size:	Επιθυμητό μέγεθος αρχείου:
+	Start With:	Έναρξη με:
+	Use:	Χρήση:
+	Current Settings	Τρέχουσες ρυθμίσεις
+	Auto Select GIF/JPEG	Αυτόματη επιλογή GIF/JPEG
+	Total of All Slices	Σύνολο όλων των τομών
+	Each Slice	Κάθε τομή
+	Current Slice	Τρέχουσα τομή
+	{size}, within {target}	{size}, εντός {target}
+	No setting tried fits in {target}; the smallest is {size}	Καμία ρύθμιση που δοκιμάστηκε δεν χωρά σε {target}· η μικρότερη είναι {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Η προεπισκόπηση στο πρόγραμμα περιήγησης απαιτεί την εφαρμογή υπολογιστή (στο web πραγματοποιείται λήψη αρχείων)
 	Preview Mode	Λειτουργία προεπισκόπησης
 	Preview the document as it is now	Προεπισκόπηση του εγγράφου στην τρέχουσα κατάστασή του

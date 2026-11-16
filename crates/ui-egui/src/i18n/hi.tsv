@@ -3750,6 +3750,18 @@ antiAlias	Sharp	शार्प
 	Preview (1 inch on the page)	प्रीव्यू (1 इंच पृष्ठ पर)
 	Preview All Layers	सभी लेयर्स का प्रीव्यू करें
 	Preview in Browser	ब्राउज़र में प्रीव्यू
+	Optimize to File Size…	फ़ाइल आकार के अनुसार ऑप्टिमाइज़ करें…
+	Optimize to File Size	फ़ाइल आकार के अनुसार ऑप्टिमाइज़ करें
+	Desired File Size:	वांछित फ़ाइल आकार:
+	Start With:	शुरुआत:
+	Use:	उपयोग:
+	Current Settings	वर्तमान सेटिंग्स
+	Auto Select GIF/JPEG	GIF/JPEG स्वचालित रूप से चुनें
+	Total of All Slices	सभी स्लाइस का कुल
+	Each Slice	प्रत्येक स्लाइस
+	Current Slice	वर्तमान स्लाइस
+	{size}, within {target}	{size}, {target} के भीतर
+	No setting tried fits in {target}; the smallest is {size}	आज़माई गई कोई भी सेटिंग {target} में नहीं समाती; सबसे छोटा {size} है
 	Preview in Browser needs the desktop app (the web downloads files instead)	ब्राउज़र में प्रीव्यू डेस्कटॉप ऐप (वेब डाउनलोड फ़ाइलों के बजाय) की जरूरत है
 	Preview Mode	प्रीव्यू मोड
 	Preview the document as it is now	डॉक्यूमेंट का प्रीव्यू करें क्योंकि यह अब है
@@ -8004,6 +8016,11 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	preset must be standard, diffuse, topLeft or right	preset को standard, diffuse, topLeft या right होना चाहिए
 @msg	preset must be the name of a print preset	preset किसी प्रिंट प्रीसेट का नाम होना चाहिए
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	ब्राउज़र में प्रीव्यू डेस्कटॉप ऐप (वेब डाउनलोड फ़ाइलों के बजाय) की जरूरत है
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	`desiredK` दें, K (1024 बाइट) में वांछित फ़ाइल आकार: 0 से बड़ी और अधिकतम 1048576 संख्या
+@msg	`startWith` is `current` or `auto`	`startWith` का मान `current` या `auto` होना चाहिए
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` का मान `allSlices`, `eachSlice` या `currentSlice` होना चाहिए
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice`, `slice.list` से स्लाइस संख्या है, `use: currentSlice` के साथ
+@msg	Optimize to File Size: there is no image to measure	फ़ाइल आकार के अनुसार ऑप्टिमाइज़ करें: मापने के लिए कोई इमेज नहीं है
 @msg	previewMode must be default, pixel or overprint	previewMode को default, pixel या overprint होना चाहिए
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	प्रिंट इंक फिक्स CMYK डॉक्यूमेंट्स पर काम करता है: फ़ाइल चुनें › डॉक्यूमेंट रंग मोड › CMYK कलर फर्स्ट
 @msg	print settings are not an object	प्रिंट सेटिंग एक ऑब्जेक्ट नहीं है

@@ -2442,6 +2442,11 @@ file-filter	Templates	範本
 @msg	1 hidden object	1 個隱藏的物件
 @msg	{n} hidden objects	{n} 個隱藏的物件
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	「在瀏覽器中預覽」需要桌面應用程式 (網頁版會改為下載檔案)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	請提供 `desiredK`，即以 K (1024 位元組) 為單位的所需檔案大小：大於 0 且不超過 1048576 的數字
+@msg	`startWith` is `current` or `auto`	`startWith` 為 `current` 或 `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` 為 `allSlices`、`eachSlice` 或 `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` 是 `slice.list` 中的切片編號，需搭配 `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	最佳化至檔案大小：沒有可測量的影像
 @msg	no file system here	此處沒有檔案系統
 @msg	nothing to preview	沒有可預覽的內容
 @msg	Saved {n} files beside {path}	已在 {path} 旁儲存 {n} 個檔案
@@ -3877,6 +3882,18 @@ diagnostics	ui	介面
 	Preview:	預覽：
 	Preview All Layers	預覽所有圖層
 	Preview in Browser	在瀏覽器中預覽
+	Optimize to File Size…	最佳化至檔案大小…
+	Optimize to File Size	最佳化至檔案大小
+	Desired File Size:	所需檔案大小：
+	Start With:	起始設定：
+	Use:	使用：
+	Current Settings	目前設定
+	Auto Select GIF/JPEG	自動選取 GIF/JPEG
+	Total of All Slices	所有切片總計
+	Each Slice	每個切片
+	Current Slice	目前切片
+	{size}, within {target}	{size}，不超過 {target}
+	No setting tried fits in {target}; the smallest is {size}	嘗試過的設定都無法小於 {target}；最小為 {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	在瀏覽器中預覽需要桌面版應用程式 (網頁版會改為下載檔案)
 	Preview Mode	預覽模式
 	Preview the document as it is now	以目前狀態預覽文件

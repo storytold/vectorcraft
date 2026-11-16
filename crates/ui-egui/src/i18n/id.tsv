@@ -1094,6 +1094,18 @@ lighting	Light	Cahaya
 	Placement Options…	Opsi penempatan…
 	Plug-in…	Plug-in…
 	Preview in Browser	Pratinjau di browser
+	Optimize to File Size…	Optimalkan ke Ukuran File…
+	Optimize to File Size	Optimalkan ke Ukuran File
+	Desired File Size:	Ukuran File yang Diinginkan:
+	Start With:	Mulai Dengan:
+	Use:	Gunakan:
+	Current Settings	Pengaturan Saat Ini
+	Auto Select GIF/JPEG	Pilih Otomatis GIF/JPEG
+	Total of All Slices	Total Semua Slice
+	Each Slice	Setiap Slice
+	Current Slice	Slice Saat Ini
+	{size}, within {target}	{size}, dalam batas {target}
+	No setting tried fits in {target}; the smallest is {size}	Tidak ada pengaturan yang dicoba yang muat dalam {target}; yang terkecil {size}
 	Printer Setup…	Pengaturan printer…
 	Printers	Printer
 	Recent File	File terbaru
@@ -4455,6 +4467,11 @@ imageTrace	Outline	Kontur
 @msg	PDF writer error: {0}	Kesalahan penulis PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Berhasil mengemas {n} file di {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Pratinjau di Peramban memerlukan aplikasi desktop (versi web mengunduh file sebagai gantinya)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	berikan `desiredK`, ukuran file yang diinginkan dalam K (1024 byte): angka di atas 0 dan paling banyak 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` adalah `current` atau `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` adalah `allSlices`, `eachSlice` atau `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` adalah nomor slice dari `slice.list`, dengan `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimalkan ke Ukuran File: tidak ada gambar untuk diukur
 @msg	Release Guides: no guides	Lepaskan panduan: tidak ada panduan
 @msg	Release: no layer to put the rectangle in	Lepaskan: tidak ada lapisan untuk menaruh persegi panjangnya
 @msg	Replace Spine: select a blend and a path	Ganti rangka: pilih satu blend dan satu jalur

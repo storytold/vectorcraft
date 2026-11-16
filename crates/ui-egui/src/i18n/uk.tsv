@@ -2745,6 +2745,18 @@ diagnostics	ui	інтерфейс
 	Preview:	Перегляд:
 	Preview All Layers	Переглянути всі шари
 	Preview in Browser	Переглянути у браузері
+	Optimize to File Size…	Оптимізувати за розміром файлу…
+	Optimize to File Size	Оптимізувати за розміром файлу
+	Desired File Size:	Бажаний розмір файлу:
+	Start With:	Почати з:
+	Use:	Використати:
+	Current Settings	Поточні налаштування
+	Auto Select GIF/JPEG	Автовибір GIF/JPEG
+	Total of All Slices	Сума всіх фрагментів
+	Each Slice	Кожен фрагмент
+	Current Slice	Поточний фрагмент
+	{size}, within {target}	{size}, у межах {target}
+	No setting tried fits in {target}; the smallest is {size}	Жодне випробуване налаштування не вміщується в {target}; найменший розмір {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
 	Preview Mode	Режим перегляду
 	Preview the document as it is now	Переглянути документ у поточному вигляді
@@ -4684,6 +4696,11 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	PDF writer error: {0}	Помилка запису PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Упаковано файли: {n} {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	укажіть `desiredK`, бажаний розмір файлу в K (1024 байти): число більше за 0 і не більше 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` має значення `current` або `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` має значення `allSlices`, `eachSlice` або `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` задає номер фрагмента зі `slice.list`, разом з `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Оптимізувати за розміром файлу: немає зображення для вимірювання
 @msg	Release Guides: no guides	Звільнення напрямних: немає напрямних
 @msg	Release: no layer to put the rectangle in	Звільнення: немає шару для приміщення прямокутника
 @msg	Replace Spine: select a blend and a path	Заміна осі: виділіть перехід і контур

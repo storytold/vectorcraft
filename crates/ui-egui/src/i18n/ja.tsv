@@ -2827,6 +2827,18 @@ diagnostics	ui	UI
 	Preview All Layers	すべてのレイヤーをプレビュー
 	Preview Mode	プレビューモード
 	Preview in Browser	ブラウザーでプレビュー
+	Optimize to File Size…	ファイルサイズに合わせて最適化…
+	Optimize to File Size	ファイルサイズに合わせて最適化
+	Desired File Size:	目標ファイルサイズ:
+	Start With:	開始設定:
+	Use:	対象:
+	Current Settings	現在の設定
+	Auto Select GIF/JPEG	GIF/JPEG を自動選択
+	Total of All Slices	すべてのスライスの合計
+	Each Slice	各スライス
+	Current Slice	現在のスライス
+	{size}, within {target}	{size} ({target} 以内)
+	No setting tried fits in {target}; the smallest is {size}	試したどの設定も {target} に収まりません。最小は {size}
 	Preview the document as it is now	現在のドキュメントをプレビュー
 	Previous	前へ
 	Previous Library	前のライブラリ
@@ -5138,6 +5150,11 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	1 hidden object	非表示のオブジェクト 1 個
 @msg	{n} hidden objects	非表示のオブジェクト {n} 個
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	「ブラウザーでプレビュー」にはデスクトップアプリが必要です (Web 版では代わりにファイルをダウンロードします)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	`desiredK` に目標ファイルサイズを K (1024 バイト) 単位で指定してください: 0 より大きく 1048576 以下の数値
+@msg	`startWith` is `current` or `auto`	`startWith` は `current` または `auto` です
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` は `allSlices`、`eachSlice` または `currentSlice` です
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` は `slice.list` のスライス番号で、`use: currentSlice` と一緒に使います
+@msg	Optimize to File Size: there is no image to measure	ファイルサイズに合わせて最適化: 測定する画像がありません
 @msg	no file system here	この環境にはファイルシステムがありません
 @msg	nothing to preview	プレビューするものがありません
 @msg	Saved {n} files beside {path}	{path} と同じ場所にファイルを {n} 個保存しました
