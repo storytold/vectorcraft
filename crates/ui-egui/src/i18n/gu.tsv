@@ -3096,6 +3096,12 @@
 	Restore	પુનઃસ્થાપિત કરો
 	Restore Recovered Documents	પુનઃપ્રાપ્ત દસ્તાવેજો પુનઃસ્થાપિત કરો
 	Restore every preference to its default (applied on OK)	દરેક પસંદગી તેના ડિફોલ્ટ પર પુનઃસ્થાપિત કરો (ઠીક પર લાગુ થશે)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	પિક્સેલ સિવાયના બિલ્ટ-ઇન કદના નવા દસ્તાવેજો અને કોઈ એકમ ન નોંધતી ખોલેલી ફાઇલો માટેનો એકમ; અહીં તેને પસંદ કરીને ઠીક ક્લિક કરવાથી સક્રિય દસ્તાવેજનો એકમ પણ તે બને છે.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	સ્ટ્રોકની જાડાઈ, ડૅશ અને અંતર આ એકમમાં દેખાય છે, અને તેમના માટે ટાઇપ કરેલી સંખ્યાઓ આ એકમમાં વંચાય છે.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	ટાઇપના કદ, લીડિંગ અને બેઝલાઇન શિફ્ટ આ એકમમાં દેખાય છે, અને તેમના માટે ટાઇપ કરેલી સંખ્યાઓ આ એકમમાં વંચાય છે.
+	The unit for East Asian type measurements, which no field uses yet.	પૂર્વ એશિયાઈ ટાઇપના માપ માટેનો એકમ, જેનો હજી કોઈ ફીલ્ડ ઉપયોગ કરતું નથી.
+	When on, a number typed without a unit into a field in picas is read in points.	ચાલુ હોય ત્યારે, પાઇકામાં હોય તેવા ફીલ્ડમાં એકમ વિના ટાઇપ કરેલી સંખ્યા પોઇન્ટ્સમાં વંચાય છે.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID પસંદ હોય ત્યારે ઑબ્જેક્ટનાં નામ લેયર્સ, વેરિએબલ્સ અને લેયર વિકલ્પોમાં XML ID તરીકે દેખાય છે.
 	Restored documents open unsaved: save them to keep them.	પુનઃસ્થાપિત દસ્તાવેજો અસાચવેલા ખુલશે: તેમને રાખવા માટે સાચવો.
 	Restrict printing, editing and other tasks	છાપકામ, સંપાદન અને અન્ય કાર્યો પર પ્રતિબંધ મૂકો
 	Reticulation…	રેટિક્યુલેશન…

@@ -2975,6 +2975,12 @@ digits	Malayalam	Malayalam
 	Responsive	Responsiv
 	Restore	Återställ
 	Restore every preference to its default (applied on OK)	Återställ alla inställningar till standard (verkställs vid OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Enheten för nya dokument i de inbyggda storlekarna, utom storlekar i pixlar, och för öppnade filer som inte anger någon enhet; om du väljer den här och klickar på OK får även det aktiva dokumentet den enheten.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Konturtjocklekar, streck och mellanrum visas i den här enheten, och tal som skrivs för dem läses i den.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Teckenstorlekar, radavstånd och baslinjeförskjutning visas i den här enheten, och tal som skrivs för dem läses i den.
+	The unit for East Asian type measurements, which no field uses yet.	Enheten för mått i östasiatisk text, som inget fält använder ännu.
+	When on, a number typed without a unit into a field in picas is read in points.	När det är på läses ett tal som skrivs utan enhet i ett fält i pica i punkter.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Med XML-id visas objektnamn som XML-id:n i Lager, Variabler och Lageralternativ.
 	Reset all preferences to their defaults?	Återställa alla inställningar till standard?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Standardvärdena verkställs när du klickar på OK i Inställningar. Avbryt där behåller dina nuvarande inställningar.
 	Restore Recovered Documents	Återställ återskapade dokument
