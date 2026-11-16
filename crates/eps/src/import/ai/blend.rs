@@ -15,11 +15,14 @@
 //!
 //! The reader reads the words after `DCBA` (little endian) this way. Word 1 is the spacing: 0 is
 //! Smooth Color, 1 is Specified Steps and 2 is Specified Distance. For Specified Distance, word 2
-//! is the distance in points, as a 32-bit float. Word 10 is the number of keys, and the words after
-//! it are a record of six words per key that starts with the key's id. For Specified Steps, the
-//! steps between two keys are counted from the steps drawn. The orientation is taken from the steps
-//! drawn: whichever one lays the blend out as they are drawn. A blend whose parts don't agree,
-//! whose spacing isn't one of these, or that doesn't come out as drawn, keeps its drawn steps.
+//! is the distance in points, as a 32-bit float. Word 5 is 0 for Align to Page and, for Align to
+//! Path, a 32-bit float of 8 or more. Word 10 is the number of keys, and the words after it are a
+//! record of six words per key that starts with the key's id. For Specified Steps, the steps
+//! between two keys are counted from the steps drawn. The orientation is the record's when it lays
+//! the blend out as the steps are drawn, else whichever one does (the closest when both do). A blend
+//! with no spine part whose record names its keys in their order has no spine of its own: it runs
+//! straight between its keys' centers. A blend whose parts don't agree, whose spacing isn't one of
+//! these, or that doesn't come out as drawn, keeps its drawn steps.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -66,6 +69,8 @@ pub(super) struct Record {
     pub(super) ids: Vec<String>,
     /// `None`: Specified Steps, whose steps the reader counts from the drawn ones.
     pub(super) spacing: Option<BlendSpacing>,
+    /// The orientation word 5 names, when it names one.
+    pub(super) orientation: Option<BlendOrientation>,
 }
 
 /// A blend's record, or `None` for a record that isn't one or whose spacing isn't read: an
@@ -82,7 +87,18 @@ pub(super) fn record(bytes: &[u8]) -> Option<Record> {
         _ => return None,
     };
     let ids = record_ids(&words)?;
-    Some(Record { ids, spacing })
+    let orientation = words.get(5).and_then(|w| orientation(*w));
+    Some(Record { ids, spacing, orientation })
+}
+
+/// The orientation in a record's word 5: 0 is Align to Page, a 32-bit float of 8 or more Align to
+/// Path; anything else names none.
+fn orientation(bits: u32) -> Option<BlendOrientation> {
+    if bits == 0 {
+        return Some(BlendOrientation::AlignToPage);
+    }
+    let a = f32::from_bits(bits);
+    (a.is_finite() && a >= 8.0).then_some(BlendOrientation::AlignToPath)
 }
 
 /// The distance in a record's word `bits` (a 32-bit float), as the shortest decimal that reads
@@ -131,6 +147,7 @@ pub(super) fn live_blend(edit: &Node, drawn: &Node, record: &Record, roles: &Rol
     if keys.len() < 2 || named.len() != keys.len() || ids.len() != keys.len() {
         return None;
     }
+    let in_order = named.iter().zip(ids).all(|(n, id)| *n == id.as_str());
     named.sort_unstable();
     let mut listed: Vec<&str> = ids.iter().map(String::as_str).collect();
     listed.sort_unstable();
@@ -150,12 +167,20 @@ pub(super) fn live_blend(edit: &Node, drawn: &Node, record: &Record, roles: &Rol
         })
         .collect();
     // A blend whose spine was never edited has none written: its spine is the straight lines
-    // between the keys' centres, in the record's order.
-    let spine = match spine {
-        Some(spine) => spine,
-        None => straight_spine(&keys, ids, roles)?,
+    // between the keys' centers, in the record's order. With the keys in that order it is the
+    // spine of a blend that has none of its own.
+    let (spine, key_anchors) = match spine {
+        Some(spine) => {
+            let anchors = on_spine(&keys, &spine)?;
+            (Some(spine), anchors)
+        }
+        None if in_order => (None, vec![]),
+        None => {
+            let spine = straight_spine(&keys, ids, roles)?;
+            let anchors = on_spine(&keys, &spine)?;
+            (Some(spine), anchors)
+        }
     };
-    let key_anchors = on_spine(&keys, &spine)?;
     let spacing = match record.spacing {
         // Specified Steps: the steps between two keys are the drawn objects that aren't keys,
         // shared out.
@@ -170,26 +195,31 @@ pub(super) fn live_blend(edit: &Node, drawn: &Node, record: &Record, roles: &Rol
     if cost > *budget {
         return None;
     }
-    let spec = BlendSpec { spacing, spine: Some(spine), key_anchors, ..BlendSpec::default() };
+    let spec = BlendSpec { spacing, spine, key_anchors, ..BlendSpec::default() };
     // As many objects as the spacing lays out between each pair of keys (the orientation doesn't
     // change how many), counted before anything is laid out: as many as are drawn.
     if blend_steps(&keys, &spec).into_iter().fold(keys.len(), usize::saturating_add) != drawn.len() {
         return None;
     }
     *budget -= cost;
-    // The drawn steps' centres and paints, once.
-    let drawn: Vec<(Point, Fill)> = drawn.iter().map(|d| Some((centre(d)?, fill(d)))).collect::<Option<_>>()?;
-    // The orientation that lays the steps out as drawn, the closest when both do.
-    [BlendOrientation::AlignToPage, BlendOrientation::AlignToPath]
+    // The drawn steps as the check compares them, once.
+    let drawn: Vec<Drawn> = drawn.iter().map(|d| drawn_as(d)).collect::<Option<_>>()?;
+    // The orientations that lay the steps out as drawn (the check compares the steps' centers, which
+    // turning the steps along the spine leaves in place): the record's when it is one of them and
+    // also lays them out at their drawn sizes and turned as drawn, else the closest.
+    let fits: Vec<(f64, BlendSpec, Vec<Node>)> = [BlendOrientation::AlignToPage, BlendOrientation::AlignToPath]
         .into_iter()
         .filter_map(|orientation| {
             let spec = BlendSpec { orientation, ..spec.clone() };
             let laid = blend_expand(&keys, &spec);
-            let off = how_far(&laid, &drawn)?;
-            Some((off, spec))
+            let off = how_far(&laid, &drawn, false)?;
+            Some((off, spec, laid))
         })
-        .min_by(|a, b| a.0.total_cmp(&b.0))
-        .map(|(_, spec)| NodeKind::Blend { children: keys, spec: Box::new(spec) })
+        .collect();
+    let named = fits.iter().find(|(_, s, laid)| Some(s.orientation) == record.orientation && how_far(laid, &drawn, true).is_some());
+    named
+        .or_else(|| fits.iter().min_by(|a, b| a.0.total_cmp(&b.0)))
+        .map(|(_, spec, _)| NodeKind::Blend { children: keys, spec: Box::new(spec.clone()) })
 }
 
 /// The anchor of `spine`'s first subpath each key's centre sits on (within a point), each a
@@ -225,6 +255,69 @@ fn straight_spine(keys: &[Arc<Node>], ids: &[String], roles: &Roles) -> Option<P
 
 fn centre(n: &Node) -> Option<Point> {
     n.geometric_bounds().map(|b| b.center()).filter(|p| p.x.is_finite() && p.y.is_finite())
+}
+
+/// The most anchors of an object's paths the check compares; an object with more is compared by its
+/// size alone.
+const MAX_MARK_ANCHORS: usize = 64;
+/// The most pairs of objects whose outlines one check compares; the rest are compared by their
+/// sizes alone (the orientation turns every step alike).
+const MAX_OUTLINE_CHECKS: usize = 16;
+
+/// An object as the check compares it.
+#[derive(Clone, Copy, Debug)]
+struct Drawn<'a> {
+    centre: Point,
+    fill: Fill,
+    /// Its width and height.
+    size: Point,
+    /// The object, for its paths' outline ([`outline`]), which turning it moves.
+    node: &'a Node,
+}
+
+/// `n` as the check compares it, or `None` when it has no finite bounds.
+fn drawn_as(n: &Node) -> Option<Drawn<'_>> {
+    let size = n.geometric_bounds().map(|b| Point::new(b.width(), b.height())).filter(|p| p.x.is_finite() && p.y.is_finite())?;
+    Some(Drawn { centre: centre(n)?, fill: fill(n), size, node: n })
+}
+
+/// Every subpath of more than one anchor of the paths in `n` (the members of its groups and compound
+/// paths looked through, at most eight levels down), in any order, when they have at most
+/// [`MAX_MARK_ANCHORS`] anchors together and `n` holds nothing else.
+fn outline(n: &Node) -> Option<PathData> {
+    fn add(n: &Node, depth: usize, out: &mut Vec<SubPath>, anchors: &mut usize) -> Option<()> {
+        match &n.kind {
+            NodeKind::Path { path, .. } => {
+                // A subpath of one anchor has no segment to compare with.
+                for s in path.subpaths.iter().filter(|s| s.anchors.len() > 1) {
+                    *anchors = anchors.saturating_add(s.anchors.len());
+                    if *anchors > MAX_MARK_ANCHORS {
+                        return None;
+                    }
+                    out.push(s.clone());
+                }
+                Some(())
+            }
+            NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } if depth < 8 => {
+                children.iter().try_for_each(|c| add(c, depth + 1, out, anchors))
+            }
+            // Art whose drawing isn't its members (a blend, an envelope, a repeat), and art past
+            // eight levels down: compared by the size alone.
+            _ => None,
+        }
+    }
+    let (mut subpaths, mut anchors) = (vec![], 0);
+    add(n, 0, &mut subpaths, &mut anchors)?;
+    (!subpaths.is_empty()).then(|| PathData::new(subpaths))
+}
+
+/// Do two outlines draw the same line: each anchor of one within `tolerance` of the other's
+/// outline? Where a path starts and how many anchors it has on a straight or curved stretch don't
+/// count.
+fn same_outline(a: &PathData, b: &PathData, tolerance: f64) -> bool {
+    let on =
+        |from: &PathData, to: &PathData| from.subpaths.iter().flat_map(|s| &s.anchors).all(|p| to.nearest(p.p).is_some_and(|(.., d)| d <= tolerance));
+    on(a, b) && on(b, a)
 }
 
 /// An object's fill, as far as the check compares it.
@@ -267,20 +360,40 @@ fn same_fill(a: Fill, b: Fill) -> bool {
 /// farthest, each drawn object matched to a laid one of its own within the tolerance (each laid
 /// one matches one drawn one: the nearest still free; through a grid of cells the tolerance wide,
 /// so each finds its neighbours without looking at them all), when they are as many and each
-/// matches in place and fill; else `None` (also when that matching leaves one out).
-fn how_far(laid: &[Node], drawn: &[(Point, Fill)]) -> Option<f64> {
+/// matches in place and fill, and with `turned` also in width and height and, for the first
+/// [`MAX_OUTLINE_CHECKS`] pairs compared, in the outline of its paths (each within twice the
+/// tolerance), which turning an object changes; else `None` (also when that matching leaves one
+/// out).
+fn how_far(laid: &[Node], drawn: &[Drawn], turned: bool) -> Option<f64> {
     if laid.len() != drawn.len() {
         return None;
     }
     let cell = |p: Point| ((p.x / PLACE_TOLERANCE).floor() as i64, (p.y / PLACE_TOLERANCE).floor() as i64);
-    let laid: Vec<(Point, Fill)> = laid.iter().map(|l| Some((centre(l)?, fill(l)))).collect::<Option<_>>()?;
+    let laid: Vec<Drawn> = laid.iter().map(drawn_as).collect::<Option<_>>()?;
     let mut grid: HashMap<(i64, i64), Vec<usize>> = HashMap::with_capacity(laid.len());
-    for (i, (p, _)) in laid.iter().enumerate() {
-        grid.entry(cell(*p)).or_default().push(i);
+    for (i, l) in laid.iter().enumerate() {
+        grid.entry(cell(l.centre)).or_default().push(i);
     }
+    let close = |a: Point, b: Point| (a.x - b.x).abs() <= 2.0 * PLACE_TOLERANCE && (a.y - b.y).abs() <= 2.0 * PLACE_TOLERANCE;
+    let outlines_checked = std::cell::Cell::new(0usize);
+    let same_turn = |l: &Drawn, d: &Drawn| {
+        if !turned {
+            return true;
+        }
+        if !close(l.size, d.size) || outlines_checked.get() >= MAX_OUTLINE_CHECKS {
+            return close(l.size, d.size);
+        }
+        outlines_checked.set(outlines_checked.get() + 1);
+        match (outline(l.node), outline(d.node)) {
+            (Some(a), Some(b)) => same_outline(&a, &b, 2.0 * PLACE_TOLERANCE),
+            // Too many anchors, or no paths: compared by the size alone.
+            _ => true,
+        }
+    };
     let mut used = vec![false; laid.len()];
     let mut worst: f64 = 0.0;
-    for &(c, f) in drawn {
+    for d in drawn {
+        let (c, f) = (d.centre, d.fill);
         let (cx, cy) = cell(c);
         // Coordinates far out saturate the cells: the neighbours' keys saturate too.
         let (i, near) = (-1i64..=1)
@@ -289,8 +402,8 @@ fn how_far(laid: &[Node], drawn: &[(Point, Fill)]) -> Option<f64> {
             .flatten()
             .filter(|&&i| !used.get(i).copied().unwrap_or(true))
             .filter_map(|&i| laid.get(i).map(|l| (i, l)))
-            .filter(|(_, (p, lf))| (*p - c).hypot() <= PLACE_TOLERANCE && same_fill(*lf, f))
-            .map(|(i, (p, _))| (i, (*p - c).hypot()))
+            .filter(|(_, l)| (l.centre - c).hypot() <= PLACE_TOLERANCE && same_fill(l.fill, f) && same_turn(l, d))
+            .map(|(i, l)| (i, (l.centre - c).hypot()))
             .min_by(|a, b| a.1.total_cmp(&b.1))?;
         if let Some(u) = used.get_mut(i) {
             *u = true;
@@ -364,7 +477,7 @@ mod tests {
         let edit = Node::new(NodeId(1), NodeKind::Group { children: vec![], clip: false });
         let drawn = Node::new(NodeId(2), NodeKind::Group { children: vec![], clip: false });
         let mut budget = 1;
-        let record = Record { ids: vec!["A".into(), "B".into()], spacing: None };
+        let record = Record { ids: vec!["A".into(), "B".into()], spacing: None, orientation: None };
         assert!(live_blend(&edit, &drawn, &record, &Roles::new(), &mut budget).is_none());
         assert_eq!(budget, 1);
     }
@@ -396,7 +509,7 @@ mod tests {
     #[test]
     fn a_blend_takes_from_the_budget_only_when_it_is_laid_out() {
         let (edit, drawn, roles) = two_keys();
-        let steps = Record { ids: vec!["A".into(), "B".into()], spacing: None };
+        let steps = Record { ids: vec!["A".into(), "B".into()], spacing: None, orientation: None };
         let mut budget = 10;
         assert!(matches!(live_blend(&edit, &drawn, &steps, &roles, &mut budget), Some(NodeKind::Blend { .. })));
         assert_eq!(budget, 0);
@@ -417,7 +530,7 @@ mod tests {
         let NodeKind::Group { children, .. } = &drawn.kind else { panic!("a group") };
         let keys_alone = [children[0].clone(), children[4].clone()];
         let drawn = Node::new(NodeId(11), NodeKind::Group { children: keys_alone.to_vec(), clip: false });
-        let far = Record { ids: vec!["A".into(), "B".into()], spacing: Some(BlendSpacing::Distance(150.0)) };
+        let far = Record { ids: vec!["A".into(), "B".into()], spacing: Some(BlendSpacing::Distance(150.0)), orientation: None };
         let mut budget = 10;
         let Some(NodeKind::Blend { spec, .. }) = live_blend(&edit, &drawn, &far, &roles, &mut budget) else { panic!("a live blend") };
         assert_eq!(spec.spacing, BlendSpacing::Distance(150.0));
@@ -425,6 +538,44 @@ mod tests {
         let steps = Record { spacing: None, ..far };
         assert!(live_blend(&edit, &drawn, &steps, &roles, &mut budget).is_none());
         assert_eq!(budget, 6);
+    }
+
+    /// Word 5 names the orientation: 0 Align to Page, a 32-bit float of 8 or more (8 and an angle)
+    /// Align to Path; any other value names none, and a record too short to hold it names none.
+    #[test]
+    fn records_say_their_orientation() {
+        let magic = u32::from_le_bytes(*b"DCBA");
+        let words = |w5: u32| {
+            [magic, 1, 50f32.to_bits(), 0, 3, w5, 'C' as u32, 0, 0, 1, 2, 'A' as u32, 0, 0, u32::MAX, u32::MAX, 0, 'B' as u32, 0, 1f32.to_bits()]
+                .into_iter()
+                .chain([u32::MAX, u32::MAX, 3])
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<u8>>()
+        };
+        let orientation = |w5: u32| record(&words(w5)).map(|r| r.orientation);
+        assert_eq!(orientation(0), Some(Some(BlendOrientation::AlignToPage)));
+        assert_eq!(orientation(8f32.to_bits()), Some(Some(BlendOrientation::AlignToPath)));
+        assert_eq!(orientation(11.141593f32.to_bits()), Some(Some(BlendOrientation::AlignToPath)));
+        for other in [1f32.to_bits(), 7.9f32.to_bits(), (-9f32).to_bits(), f32::NAN.to_bits(), f32::INFINITY.to_bits()] {
+            assert_eq!(orientation(other), Some(None), "{other:#x}");
+        }
+    }
+
+    /// On a level straight spine both orientations lay two squares' steps out alike: the blend takes
+    /// the record's orientation, and Align to Page when the record names none.
+    #[test]
+    fn the_records_orientation_is_kept_where_both_lay_out_alike() {
+        let (edit, drawn, roles) = two_keys();
+        for (named, want) in [
+            (Some(BlendOrientation::AlignToPath), BlendOrientation::AlignToPath),
+            (Some(BlendOrientation::AlignToPage), BlendOrientation::AlignToPage),
+            (None, BlendOrientation::AlignToPage),
+        ] {
+            let record = Record { ids: vec!["A".into(), "B".into()], spacing: None, orientation: named };
+            let mut budget = 10;
+            let Some(NodeKind::Blend { spec, .. }) = live_blend(&edit, &drawn, &record, &roles, &mut budget) else { panic!("a live blend") };
+            assert_eq!(spec.orientation, want, "{named:?}");
+        }
     }
 
     /// Two drawn steps on one laid object don't both match it: each laid object matches one drawn
@@ -435,12 +586,127 @@ mod tests {
             let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(x, 0.0, x + 10.0, 10.0));
             Node::path(NodeId(0), path, Default::default())
         };
+        // `laid` against the objects `drawn` as the check compares them.
+        let check = |laid: &[Node], drawn: &[Node], turned: bool| {
+            let drawn: Vec<Drawn> = drawn.iter().map(|d| drawn_as(d).expect("bounds")).collect();
+            how_far(laid, &drawn, turned)
+        };
         let laid = [square(0.0), square(50.0)];
-        let c = |x: f64| (Point::new(x + 5.0, 5.0), Fill::None);
-        assert!(how_far(&laid, &[c(0.0), c(50.0)]).is_some());
-        assert!(how_far(&laid, &[c(0.0), c(0.1)]).is_none(), "both drawn steps near the first laid one");
+        assert!(check(&laid, &[square(0.0), square(50.0)], true).is_some());
+        assert!(check(&laid, &[square(0.0), square(0.1)], false).is_none(), "both drawn steps near the first laid one");
+        // Sizes and outlines count only when asked for: a wider rectangle with the same center, and
+        // a triangle turned a half turn.
+        let wide = |x: f64| {
+            let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(x - 5.0, 2.5, x + 15.0, 7.5));
+            Node::path(NodeId(0), path, Default::default())
+        };
+        assert!(check(&laid, &[wide(0.0), wide(50.0)], false).is_some());
+        assert!(check(&laid, &[wide(0.0), wide(50.0)], true).is_none());
+        // A triangle turned a half turn has its anchors elsewhere.
+        let polygon = |points: &[Point]| Node::path(NodeId(0), PathData::single(SubPath::polyline(points, true)), Default::default());
+        let triangle = |x: f64, turn: f64| {
+            let mut n = polygon(&[Point::new(x, 0.0), Point::new(x, 10.0), Point::new(x + 10.0, 5.0)]);
+            n.transform(vectorcraft_geom::Affine::rotate_about(turn, Point::new(x + 5.0, 5.0)), false);
+            n
+        };
+        let laid = [triangle(0.0, 0.0), triangle(50.0, 0.0)];
+        let turned = |x: f64| triangle(x, std::f64::consts::PI);
+        assert!(check(&laid, &[turned(0.0), turned(50.0)], false).is_some());
+        assert!(check(&laid, &[turned(0.0), turned(50.0)], true).is_none());
+        // The same triangle drawn from another of its anchors matches.
+        let shifted = |x: f64| polygon(&[Point::new(x + 10.0, 5.0), Point::new(x, 0.0), Point::new(x, 10.0)]);
+        assert!(check(&laid, &[shifted(0.0), shifted(50.0)], true).is_some());
+        // So does the same triangle drawn with another anchor on one of its sides.
+        let split = |x: f64| polygon(&[Point::new(x, 0.0), Point::new(x, 5.0), Point::new(x, 10.0), Point::new(x + 10.0, 5.0)]);
+        assert!(check(&laid, &[split(0.0), split(50.0)], true).is_some());
+        // A compound path matches with its contours in another order, and not turned a half turn.
+        let pair = |x: f64, flip: bool, turn: f64| {
+            let a = SubPath::polyline(&[Point::new(x, 0.0), Point::new(x, 4.0), Point::new(x + 10.0, 2.0)], true);
+            let b = SubPath::polyline(&[Point::new(x, 6.0), Point::new(x, 10.0), Point::new(x + 4.0, 8.0)], true);
+            let subpaths = if flip { vec![b, a] } else { vec![a, b] };
+            let mut n = Node::path(NodeId(0), PathData::new(subpaths), Default::default());
+            n.transform(vectorcraft_geom::Affine::rotate_about(turn, Point::new(x + 5.0, 5.0)), false);
+            n
+        };
+        let laid = [pair(0.0, false, 0.0), pair(50.0, false, 0.0)];
+        assert!(check(&laid, &[pair(0.0, true, 0.0), pair(50.0, true, 0.0)], true).is_some());
+        assert!(check(&laid, &[pair(0.0, true, std::f64::consts::PI), pair(50.0, true, std::f64::consts::PI)], true).is_none());
+        // A lone anchor in a path draws nothing: the same path with one matches itself.
+        let dotted = |x: f64| {
+            let triangle = SubPath::polyline(&[Point::new(x, 0.0), Point::new(x, 10.0), Point::new(x + 10.0, 5.0)], true);
+            let dot = SubPath::polyline(&[Point::new(x + 3.0, 5.0)], false);
+            Node::path(NodeId(0), PathData::new(vec![triangle, dot]), Default::default())
+        };
+        assert!(check(&[dotted(0.0), dotted(50.0)], &[dotted(0.0), dotted(50.0)], true).is_some());
+        // A live blend draws more than its keys: one is compared with its drawn copy by size alone.
+        let blend = |x: f64| {
+            let keys = vec![Arc::new(triangle(x, 0.0)), Arc::new(triangle(x, 0.0))];
+            Node::new(NodeId(0), NodeKind::Blend { children: keys, spec: Box::default() })
+        };
+        let expanded = |x: f64| {
+            let inside = SubPath::polyline(&[Point::new(x + 3.0, 4.0), Point::new(x + 3.0, 6.0)], false);
+            let inside = Node::path(NodeId(0), PathData::single(inside), Default::default());
+            Node::group(NodeId(0), vec![Arc::new(triangle(x, 0.0)), Arc::new(inside)])
+        };
+        assert!(check(&[blend(0.0), blend(50.0)], &[expanded(0.0), expanded(50.0)], true).is_some());
         // Coordinates far out don't overflow the grid.
         let far = [square(1e300), square(-1e300)];
-        let _ = how_far(&far, &[c(1e300), c(-1e300)]);
+        let _ = check(&far, &[square(1e300), square(-1e300)], false);
+    }
+
+    /// Triangles pointing right on a spine running right to left, with their steps drawn pointing
+    /// right: Align to Path would turn each one (keys included) a half turn, which leaves their
+    /// centers and sizes as they are but not their points. A record naming Align to Path doesn't
+    /// make the blend Align to Path.
+    #[test]
+    fn the_records_orientation_must_lay_the_steps_out_turned_as_drawn() {
+        let triangle = |id: u64, x: f64| {
+            let points = [Point::new(x, 0.0), Point::new(x, 10.0), Point::new(x + 20.0, 5.0)];
+            Arc::new(Node::path(NodeId(id), PathData::single(SubPath::polyline(&points, true)), Default::default()))
+        };
+        let spine = vectorcraft_geom::shapes::line(Point::new(110.0, 5.0), Point::new(10.0, 5.0));
+        let spine = Arc::new(Node::path(NodeId(3), spine, Default::default()));
+        let edit = Node::new(NodeId(10), NodeKind::Group { children: vec![triangle(1, 100.0), triangle(2, 0.0), spine], clip: false });
+        let steps = (0..5u32).map(|i| triangle(20 + u64::from(i), 100.0 - f64::from(i) * 25.0)).collect();
+        let drawn = Node::new(NodeId(11), NodeKind::Group { children: steps, clip: false });
+        let roles = Roles::from([
+            (NodeId(1), ("K".to_string(), Some("A".to_string()))),
+            (NodeId(2), ("K".to_string(), Some("B".to_string()))),
+            (NodeId(3), ("S".to_string(), None)),
+        ]);
+        for named in [BlendOrientation::AlignToPath, BlendOrientation::AlignToPage] {
+            let record = Record { ids: vec!["A".into(), "B".into()], spacing: None, orientation: Some(named) };
+            let mut budget = 10;
+            let Some(NodeKind::Blend { spec, .. }) = live_blend(&edit, &drawn, &record, &roles, &mut budget) else { panic!("a live blend") };
+            assert_eq!(spec.orientation, BlendOrientation::AlignToPage, "{named:?}");
+        }
+    }
+
+    /// Rectangles 20 pt wide and 10 pt high on a vertical spine, with their steps drawn upright: Align
+    /// to Path would turn each one (keys included) a quarter turn, which leaves the centers in place
+    /// but not the sizes. A record naming Align to Path doesn't make the blend Align to Path; a
+    /// record naming Align to Page does.
+    #[test]
+    fn the_records_orientation_must_lay_the_steps_out_at_their_drawn_sizes() {
+        let rect = |id: u64, y: f64| {
+            let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, y, 20.0, y + 10.0));
+            Arc::new(Node::path(NodeId(id), path, Default::default()))
+        };
+        let spine = vectorcraft_geom::shapes::line(Point::new(10.0, 5.0), Point::new(10.0, 105.0));
+        let spine = Arc::new(Node::path(NodeId(3), spine, Default::default()));
+        let edit = Node::new(NodeId(10), NodeKind::Group { children: vec![rect(1, 0.0), rect(2, 100.0), spine], clip: false });
+        let steps = (0..5u32).map(|i| rect(20 + u64::from(i), f64::from(i) * 25.0)).collect();
+        let drawn = Node::new(NodeId(11), NodeKind::Group { children: steps, clip: false });
+        let roles = Roles::from([
+            (NodeId(1), ("K".to_string(), Some("A".to_string()))),
+            (NodeId(2), ("K".to_string(), Some("B".to_string()))),
+            (NodeId(3), ("S".to_string(), None)),
+        ]);
+        for named in [BlendOrientation::AlignToPath, BlendOrientation::AlignToPage] {
+            let record = Record { ids: vec!["A".into(), "B".into()], spacing: None, orientation: Some(named) };
+            let mut budget = 10;
+            let Some(NodeKind::Blend { spec, .. }) = live_blend(&edit, &drawn, &record, &roles, &mut budget) else { panic!("a live blend") };
+            assert_eq!(spec.orientation, BlendOrientation::AlignToPage, "{named:?}");
+        }
     }
 }
