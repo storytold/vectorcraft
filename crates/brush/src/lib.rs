@@ -1028,7 +1028,9 @@ pub fn reach(n: &Node) -> f64 {
 /// ([`vectorcraft_doc::SymbolBoxes::with_brush_art`] measures it).
 pub fn reach_within(n: &Node) -> f64 {
     let members = match &n.kind {
-        NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => children.get(..1).unwrap_or_default(),
+        NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
+            vectorcraft_doc::clipping_path_in(children).and_then(|k| children.get(k..=k)).unwrap_or_default()
+        }
         NodeKind::Compound { .. } => &[],
         _ => n.children().map_or(&[][..], |c| &c[..]),
     };

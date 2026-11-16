@@ -31,7 +31,7 @@ pub use ids::{LAYER_COLORS, LayerColor, NodeId};
 pub use kind::{ImageObject, MAX_BUFFERED_VALUES, NodeKind, with_buffered_value_budget};
 pub use live_shape::{LiveShape, Scaling};
 pub use opacity::{Knockout, OpacityMask, whiten};
-pub use ops::{flattens, keeps_gradient_fit};
+pub use ops::{Clipped, clipping_path_in, flattens, keeps_gradient_fit, split_clipping_path};
 pub(crate) use ops::{held_guides, map_held, strip_held};
 use wire::NodeWire;
 pub(crate) use wire::counted_list;

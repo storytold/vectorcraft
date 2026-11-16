@@ -384,9 +384,10 @@ fn drawn_art(symbols: &SymbolBoxes, n: &Node, outline: bool) -> Option<Rc<Vec<No
 }
 
 /// Does `art`, the drawn art of clip group or layer `n`, hold any of the objects `n` clips (its
-/// members after the clipping path), or does `n` clip none?
+/// members other than the clipping path), or does `n` clip none?
 fn holds_clipped_art(n: &Node, art: &[Node]) -> bool {
-    let clipped: HashSet<NodeId> = n.children().into_iter().flatten().skip(1).map(|c| c.id).collect();
+    let clipped: HashSet<NodeId> =
+        n.children().and_then(|c| crate::split_clipping_path(c)).into_iter().flat_map(|(_, rest)| rest).map(|c| c.id).collect();
     if clipped.is_empty() {
         return true;
     }
@@ -473,7 +474,7 @@ pub fn selected_hidden_at(doc: &Document, p: Point, opt: HitOptions, selected: &
         let below = start.scope.and_then(|s| chain.iter().position(|a| *a == s)).map_or(0, |i| i + 1);
         let masked = nodes.iter().enumerate().rev().skip(1).any(|(k, n)| {
             let outline = start.outline || nodes.get(below..=k).is_some_and(|ns| ns.iter().any(|n| previews_off(n)));
-            n.clips() && n.children().and_then(|c| c.first()).is_some_and(|clip| clip.id != id && !clip_contains(clip, p, outline))
+            n.clipping_path().is_some_and(|clip| clip.id != id && !clip_contains(clip, p, outline))
         });
         // A click may reach it there ([`may_hit`]: not a guide while guides are locked or
         // hidden, nor a Shaper group's hidden part), and its own art is what a click would hit
@@ -556,18 +557,19 @@ fn objects_at_layer(layer: &Node, p: Point, opt: HitOptions, symbols: &SymbolBox
     if drawn_art(symbols, layer, opt.outline).is_some() {
         return false;
     }
-    if layer.clips()
-        && let Some(clip) = children.first()
+    let clip_at = layer.clipping_path_index();
+    if let Some(k) = clip_at
+        && let Some(clip) = children.get(k)
     {
         // As the hit test does: the clipping mask's outline first, then only inside the mask.
-        if clip_outline_hit(layer, clip, p, opt, symbols, true).is_some() && seen.insert(clip.id) {
+        if clip_outline_hit(layer, k, clip, p, opt, symbols, true).is_some() && seen.insert(clip.id) {
             tops.push(clip.id);
         }
         if !clip_contains(clip, p, opt.outline) {
             return true;
         }
     }
-    for (i, c) in children.iter().enumerate().rev() {
+    for (i, c) in top_down(children, clip_at) {
         if !may_hit(layer, i, c, p, opt, symbols, true) || seen.contains(&c.id) {
             continue;
         }
@@ -588,7 +590,7 @@ fn objects_at_layer(layer: &Node, p: Point, opt: HitOptions, symbols: &SymbolBox
         }
         let skip = |id| seen.contains(&id);
         let mut chain = Vec::new();
-        let hit = plain(i == 0 && layer.clips(), || match &c.kind {
+        let hit = plain(Some(i) == clip_at, || match &c.kind {
             NodeKind::Group { .. } | NodeKind::Intertwine { .. } => hit_children(c, p, opt, symbols, &skip, &mut chain, true).is_some(),
             NodeKind::Blend { .. } => hit_children(c, p, opt, symbols, &skip, &mut chain, true).is_some() || hit_leaf(c, p, opt, symbols).is_some(),
             _ => hit_leaf(c, p, opt, symbols).is_some(),
@@ -670,7 +672,11 @@ fn locked_children(parent: &Node, p: Point, opt: HitOptions, symbols: &SymbolBox
         art.iter().rev().any(|a| art_hit(a, p, opt, symbols, &mut list));
         return;
     }
-    if parent.clips() && !edits_inside(parent, opt.scope) && children.first().is_some_and(|clip| !clip_contains(clip, p, opt.outline)) {
+    let clip_at = parent.clipping_path_index();
+    if let Some(clip) = clip_at.and_then(|k| children.get(k))
+        && !edits_inside(parent, opt.scope)
+        && !clip_contains(clip, p, opt.outline)
+    {
         return;
     }
     for i in hit_order(parent, children, p) {
@@ -682,7 +688,7 @@ fn locked_children(parent: &Node, p: Point, opt: HitOptions, symbols: &SymbolBox
             continue;
         }
         if c.locked {
-            if plain(i == 0 && parent.clips(), || locked_hit(c, p, opt, symbols)) {
+            if plain(Some(i) == clip_at, || locked_hit(c, p, opt, symbols)) {
                 out.push(c.id);
             }
             continue;
@@ -1060,14 +1066,14 @@ fn clip_outline(clip: &Node, p: Point, opt: HitOptions) -> Option<HitKind> {
 }
 
 /// For the selection tools ([`HitOptions::clip_outlines`]), a press on the outline of `clip`, the
-/// clipping path of `parent` (a clip group or a layer with a clipping mask), within the tolerance:
-/// it is hit before the art it clips. There Direct Selection takes its segments, and the
+/// clipping path of `parent` (a clip group or a layer with a clipping mask) and its child `k`, within
+/// the tolerance: it is hit before the art it clips. There Direct Selection takes its segments, and the
 /// Selection tool the clip group. The reference app reshapes a clipping path with Direct Selection
 /// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-clipping-masks.html>);
 /// without this, art drawn over the path's edge is hit first and its segments can't be dragged.
 /// The clipping path must be one a click may hit ([`may_hit`]: visible, editable, within reach).
-fn clip_outline_hit(parent: &Node, clip: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes, editable_only: bool) -> Option<HitKind> {
-    if !opt.clip_outlines || !editable_only || !may_hit(parent, 0, clip, p, opt, symbols, editable_only) {
+fn clip_outline_hit(parent: &Node, k: usize, clip: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes, editable_only: bool) -> Option<HitKind> {
+    if !opt.clip_outlines || !editable_only || !may_hit(parent, k, clip, p, opt, symbols, editable_only) {
         return None;
     }
     clip_outline(clip, p, opt)
@@ -1092,21 +1098,22 @@ fn hit_children(
     editable_only: bool,
 ) -> Option<Hit> {
     let children = parent.children()?;
-    let clip = children.first().filter(|_| parent.clips());
+    let clip_at = parent.clipping_path_index();
+    let clip = clip_at.and_then(|k| children.get(k).map(|c| (k, c)));
     // The selection tools in isolation mode within a clip group (or a layer with a clipping mask)
     // hit what it holds outside its clipping mask too.
     let edited = clip.is_some() && opt.clip_outlines && editable_only && edits_inside(parent, opt.scope);
     // A group or layer whose own geometry effects reshape what it holds hits where that art is drawn.
     let art = if edited { None } else { drawn_art(symbols, parent, opt.outline) };
-    if let Some(clip) = clip {
+    if let Some((k, clip)) = clip {
         // The clipping mask's outline first, where it is drawn.
-        let drawn_clip = art.as_deref().and_then(|a| a.first()).filter(|a| a.clips()).and_then(|a| a.children()?.first());
+        let drawn_clip = art.as_deref().and_then(|a| a.first()).and_then(|a| a.clipping_path());
         let kind = match drawn_clip {
             Some(drawn) => {
-                let takes = opt.clip_outlines && editable_only && may_reach(parent, 0, clip, opt, editable_only);
+                let takes = opt.clip_outlines && editable_only && may_reach(parent, k, clip, opt, editable_only);
                 takes.then(|| clip_outline(drawn, p, opt)).flatten()
             }
-            None => clip_outline_hit(parent, clip, p, opt, symbols, editable_only),
+            None => clip_outline_hit(parent, k, clip, p, opt, symbols, editable_only),
         };
         if let Some(kind) = kind.filter(|_| !skip(clip.id)) {
             chain.push(clip.id);
@@ -1117,7 +1124,7 @@ fn hit_children(
         return drawn_hit(parent, &art, p, opt, symbols, skip, chain, editable_only);
     }
     // Elsewhere a clip group (or a layer with a clipping mask) only hits inside it.
-    if let Some(clip) = clip
+    if let Some((_, clip)) = clip
         && !edited
         && !clip_contains(clip, p, opt.outline)
     {
@@ -1129,7 +1136,7 @@ fn hit_children(
             continue;
         }
         chain.push(c.id);
-        let hit = plain(i == 0 && clip.is_some(), || match &c.kind {
+        let hit = plain(Some(i) == clip_at, || match &c.kind {
             // A sublayer whose Preview is off is clicked in outline, like an outline view.
             NodeKind::Layer { preview: false, .. } => hit_children(c, p, HitOptions { outline: true, ..opt }, symbols, skip, chain, editable_only),
             NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Intertwine { .. } => {
@@ -1246,9 +1253,7 @@ fn art_hit(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes, accept: &
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } | NodeKind::Intertwine { children } => {
             // A layer with Preview off is clicked in outline, as [`hit_children`] clicks it.
             let opt = HitOptions { outline: opt.outline || previews_off(n), ..opt };
-            if n.clips()
-                && let Some(clip) = children.first()
-            {
+            if let Some(clip) = n.clipping_path() {
                 // The selection tools take a clipping path on its outline before the art it clips,
                 // as [`hit_children`] does.
                 if opt.clip_outlines
@@ -1270,14 +1275,22 @@ fn art_hit(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes, accept: &
 
 /// The order a click at `p` tries the children of `parent` in, front first: their stacking order
 /// from the top, except that in an Intertwine group the members are tried in the order they are
-/// drawn at `p`, from the top ([`crate::intertwine::tier_at`]).
+/// drawn at `p`, from the top ([`crate::intertwine::tier_at`]), and that a clip group's or clipping
+/// layer's clipping path is tried last, wherever it sits, as its fill is drawn behind the art.
 fn hit_order<'a>(parent: &Node, children: &'a [std::sync::Arc<Node>], p: Point) -> impl Iterator<Item = usize> + 'a {
-    let mut order: Vec<usize> = (0..children.len()).rev().collect();
+    let mut order: Vec<usize> = top_down(children, parent.clipping_path_index()).map(|(i, _)| i).collect();
     if matches!(parent.kind, NodeKind::Intertwine { .. }) {
         let tier = |i: usize| children.get(i).map_or(0, |c| crate::intertwine::tier_at(c, p));
         order.sort_by_cached_key(|i| std::cmp::Reverse((tier(*i), *i)));
     }
     order.into_iter()
+}
+
+/// `children` with their indices from the top, as clicks try them: `clip`, a clip group's or
+/// clipping layer's clipping path, last, wherever it sits, as its fill is drawn behind the art.
+fn top_down(children: &[std::sync::Arc<Node>], clip: Option<usize>) -> impl Iterator<Item = (usize, &std::sync::Arc<Node>)> {
+    let clip = clip.and_then(|k| children.get(k).map(|c| (k, c)));
+    children.iter().enumerate().rev().filter(move |(i, _)| clip.is_none_or(|(k, _)| k != *i)).chain(clip)
 }
 
 /// A click on the strokes of a path or compound path `n` along `bp`: what any visible stroke
@@ -1526,10 +1539,11 @@ fn hit_any(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option
     match &n.kind {
         // A clip group only hits inside its clipping path.
         NodeKind::Group { children, clip } => {
-            if *clip && children.first().is_some_and(|c| !clip_contains(c, p, opt.outline)) {
+            let clip_at = if *clip { crate::clipping_path_in(children) } else { None };
+            if clip_at.and_then(|k| children.get(k)).is_some_and(|c| !clip_contains(c, p, opt.outline)) {
                 return None;
             }
-            children.iter().enumerate().rev().find_map(|(i, c)| plain(i == 0 && *clip, || hit_any(c, p, opt, symbols)))
+            top_down(children, clip_at).find_map(|(i, c)| plain(Some(i) == clip_at, || hit_any(c, p, opt, symbols)))
         }
         // An intertwine group hits by its members, as on the canvas.
         NodeKind::Intertwine { children } => children.iter().rev().find_map(|c| hit_any(c, p, opt, symbols)),
@@ -1676,32 +1690,35 @@ impl FindPart<'_> {
             return None;
         }
         let whole = self.art.whole(n, whole);
-        if n.clips()
-            && let Some(first) = children.first()
+        let clip_at = n.clipping_path_index();
+        if let Some(k) = clip_at
+            && let Some(mask) = children.get(k)
         {
-            let clip = self.art.place_unclipped(first, whole)?;
+            let clip = self.art.place_unclipped(mask, whole)?;
             if !self.whole_instance
                 && self.opt.clip_outlines
-                && first.visible
-                && !first.locked
-                && !self.skips_guide(first)
+                && mask.visible
+                && !mask.locked
+                && !self.skips_guide(mask)
+                && let Ok(at) = u32::try_from(k)
                 && let Some(kind) = clip_outline(&clip, self.p, opt)
             {
-                path.push(0);
+                path.push(at);
                 return Some(kind);
             }
             if !clip_contains(&clip, self.p, outline) {
                 return None;
             }
         }
-        for (i, c) in children.iter().enumerate().rev() {
+        for (i, c) in top_down(children, clip_at) {
             // A Shaper group's original shapes are not drawn; symbol art has no isolation scope.
             if shaper_hides(n, i, None) {
                 continue;
             }
+            let is_clip = Some(i) == clip_at;
             let Ok(i) = u32::try_from(i) else { continue };
             path.push(i);
-            if let Some(kind) = plain(i == 0 && n.clips(), || self.find(c, path, whole, outline)) {
+            if let Some(kind) = plain(is_clip, || self.find(c, path, whole, outline)) {
                 return Some(kind);
             }
             path.pop();
@@ -1891,17 +1908,18 @@ pub fn symbol_part_outline_in_view(doc: &Document, inst: &Node, path: &[u32], op
     let mut whole = None;
     let mut n = &art.art;
     for &i in path {
+        let i = usize::try_from(i).ok()?;
         let children = n.children()?;
         whole = art.whole(n, whole);
         outline = outline || previews_off(n);
-        if i != 0
-            && n.clips()
-            && let Some(first) = children.first()
+        if let Some(k) = n.clipping_path_index()
+            && i != k
+            && let Some(clip) = children.get(k)
         {
-            let Some(within) = limit_within(&art.place_unclipped(first, whole)?, limit, outline) else { return Some(out) };
+            let Some(within) = limit_within(&art.place_unclipped(clip, whole)?, limit, outline) else { return Some(out) };
             limit = within;
         }
-        n = children.get(usize::try_from(i).ok()?)?;
+        n = children.get(i)?;
     }
     outline_within(&art.place(part, whole)?, limit, outline, &mut out);
     Some(out)
@@ -1942,10 +1960,10 @@ fn outline_within(n: &Node, limit: Option<Rect>, outline: bool, out: &mut BezPat
     let Some(children) = n.children() else { return };
     let outline = outline || previews_off(n);
     if n.clips()
-        && let Some((first, rest)) = children.split_first()
+        && let Some((clip, rest)) = crate::split_clipping_path(children)
     {
-        let Some(inner) = limit_within(first, limit, outline) else { return };
-        rest.iter().for_each(|c| outline_within(c, inner, outline, out));
+        let Some(inner) = limit_within(clip, limit, outline) else { return };
+        rest.for_each(|c| outline_within(c, inner, outline, out));
         return;
     }
     children.iter().for_each(|c| outline_within(c, limit, outline, out));
@@ -2106,6 +2124,7 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
         let outline = outline || previews_off(l);
         let drawn = drawn.or_else(|| touched_in_art(l, s, r, whole_compounds, outline));
         let inner = marquee_in_parent(l, r, outline);
+        let clip_at = l.clipping_path_index();
         for (i, c) in l.children().into_iter().flatten().enumerate() {
             if c.is_layer() {
                 if let Some(inner) = if drawn.is_some() { Some(r) } else { inner }
@@ -2118,7 +2137,7 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
             } else if !c.is_ruler_guide() {
                 if drawn.is_some() {
                     out.push((c, Some(r), outline, None, drawn.clone()));
-                } else if i == 0 && l.clips() {
+                } else if Some(i) == clip_at {
                     out.push((c, mask_marquee(l, r), outline, Some(r), None));
                 } else if inner.is_some() {
                     out.push((c, inner, outline, None, None));
@@ -2202,10 +2221,11 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Intertwine { children } => {
                 let outline = outline || previews_off(n);
                 let inner = marquee_in_parent(n, r, outline);
+                let clip_at = n.clipping_path_index();
                 children.iter().enumerate().any(|(i, c)| {
                     c.visible
                         && !shaper_hides(n, i, scope)
-                        && if i == 0 && n.clips() {
+                        && if Some(i) == clip_at {
                             plain(true, || mask_marquee(n, r).is_some_and(|r| touches(c, s, r, scope, whole_compounds, outline)))
                                 || clip_edge_touches(c, r, outline)
                         } else {
@@ -2271,11 +2291,12 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
                     return;
                 }
                 let inner = marquee_in_parent(n, r, outline);
+                let clip_at = n.clipping_path_index();
                 for (i, c) in children.iter().enumerate() {
                     if !c.visible || c.locked || shaper_hides(n, i, scope) {
                         continue;
                     }
-                    if i == 0 && n.clips() {
+                    if Some(i) == clip_at {
                         let before = out.len();
                         if let Some(r) = mask_marquee(n, r) {
                             plain(true, || collect_leaves(c, s, r, scope, whole_compounds, outline, out));
@@ -2356,9 +2377,9 @@ pub fn marquee_in(parent: &Node, r: Rect) -> Option<Rect> {
 /// clipping path clips to ([`clip_areas`]), or by that path's plain shapes with `outline`
 /// ([`marquee_in_view`]).
 fn marquee_in_parent(parent: &Node, r: Rect, outline: bool) -> Option<Rect> {
-    match parent.children().and_then(|c| c.first()) {
-        Some(clip) if parent.clips() => marquee_in_clip(clip, r, outline),
-        _ => Some(r),
+    match parent.clipping_path() {
+        Some(clip) => marquee_in_clip(clip, r, outline),
+        None => Some(r),
     }
 }
 

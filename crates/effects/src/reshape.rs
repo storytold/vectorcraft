@@ -441,10 +441,10 @@ fn add_row_effects(doc: Option<&Document>, outer: &str, n: &mut Node, fill: &[Ef
     if matches!(n.kind, NodeKind::Compound { .. }) {
         return;
     }
-    // A clip group's first member is its clipping path, whatever its kind.
-    let clips = n.clips();
+    // A clip group's clipping path takes none, whatever its kind.
+    let clip = n.clipping_path_index();
     for (i, c) in n.children_mut().into_iter().flatten().enumerate() {
-        if !(clips && i == 0) {
+        if Some(i) != clip {
             add_row_effects(doc, outer, Arc::make_mut(c), fill, stroke);
         }
     }
@@ -963,10 +963,10 @@ pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping
     if !clipping {
         paint_type_clip(doc, n);
     }
-    let clips = n.clips();
+    let clip = n.clipping_path_index();
     let Some(ch) = n.children_mut() else { return };
     for (i, c) in ch.iter_mut().enumerate() {
-        let clipping = clipping || (clips && i == 0);
+        let clipping = clipping || Some(i) == clip;
         let art = match &c.kind {
             NodeKind::Text(_) if clipping => clipping_text_outline(c),
             NodeKind::Text(_) => as_art(doc, c, None),
@@ -987,17 +987,26 @@ pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping
 /// (keeping its id, name and transparency) with the clip group inside. The other members stay as
 /// they are. Hidden type paints nothing.
 pub(crate) fn paint_type_clip(doc: Option<&Document>, n: &mut Node) {
-    let Some((first, rest)) = n.children().and_then(|ch| ch.split_first()) else { return };
-    if !n.clips() || !matches!(first.kind, NodeKind::Text(_)) || !first.visible {
+    if !n.clips() {
         return;
     }
-    let paint = first.clip_paint();
+    let Some((text, rest)) = n.children().and_then(|ch| vectorcraft_doc::split_clipping_path(ch)) else { return };
+    if !matches!(text.kind, NodeKind::Text(_)) || !text.visible {
+        return;
+    }
+    let paint = text.clip_paint();
     if paint.fill.is_none() && paint.stroke.is_none() {
         return;
     }
-    let Some(clip) = clipping_text_outline(first) else { return };
-    let art = |part: Option<Node>| part.and_then(|p| as_art(doc, &p, None)).map(Arc::new);
-    let members: Vec<Arc<Node>> = std::iter::once(Arc::new(clip)).chain(art(paint.fill)).chain(rest.iter().cloned()).collect();
+    let Some(clip) = clipping_text_outline(text) else { return };
+    // Art, not a clipping path: the type's copies would keep its mark, and clip in their place.
+    let art = |part: Option<Node>| {
+        part.and_then(|p| as_art(doc, &p, None)).map(|mut a| {
+            a.set_clipping_path(false);
+            Arc::new(a)
+        })
+    };
+    let members: Vec<Arc<Node>> = std::iter::once(Arc::new(clip)).chain(art(paint.fill)).chain(rest.cloned()).collect();
     let stroke = art(paint.stroke);
     let id = n.id;
     match (&mut n.kind, stroke) {
@@ -2157,7 +2166,7 @@ fn transform_leaf(
 /// Does a Transform effect's copies of `art` copy it whole ([`copy_art`])? They do when `art` is a
 /// group or layer of several objects, at least one of which paints, with no type left in it and no
 /// fill or stroke of its own that paints. Type that stays type is copied in its place by the baking
-/// that keeps it, a clipping group's first member is its clip, and the art's own fills and strokes
+/// that keeps it, a clipping group's clip is among its members, and the art's own fills and strokes
 /// paint the shape of everything under it, copies included. A member that [`makes_art`] is copied
 /// in its place as well: each copy would make that art again, past what [`copy_art`] counts.
 fn copies_whole(art: &Node) -> bool {
@@ -3248,6 +3257,7 @@ fn group_marks(
         NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. } if !n.extras().type_outlines => {
             let layer = matches!(n.kind, NodeKind::Layer { .. });
             let skip = children.len().saturating_sub(n.editing_children().len());
+            let clip_at = clip.then(|| vectorcraft_doc::clipping_path_in(children)).flatten();
             let (mut bounds, mut held) = (None, false);
             for (i, c) in children.iter().enumerate() {
                 at.push(i);
@@ -3257,7 +3267,7 @@ fn group_marks(
                 }
                 at.pop();
                 // Only members measured in the bounds hold the group's gradients in place.
-                let counts = if *clip { i == 0 } else { i >= skip && (c.visible || !layer) };
+                let counts = if *clip { Some(i) == clip_at } else { i >= skip && (c.visible || !layer) };
                 if counts {
                     bounds = vectorcraft_geom::union_opt(bounds, b);
                     held |= h;
@@ -3512,11 +3522,14 @@ impl WarpedImages {
 pub(crate) fn mark_warped_images(n: &mut Node, f: &WarpMap, kept: &HashSet<usize>, held: bool, at: &mut usize, warped: &mut WarpedImages) {
     let (NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. }) = &mut n.kind else { return };
     let mut held = held;
-    // A clip group's first member is its clipping art: when a path in it kept its shape, it and
-    // the members it clips keep theirs.
-    if *clip && let Some(first) = children.first() {
-        let start = *at;
-        held |= (start..start + leaf_count(first)).any(|p| kept.contains(&p));
+    // A clip group's clipping path is its clipping art: when a path in it kept its shape, it and
+    // the members it clips keep theirs. Its paths are counted after those of the members below it.
+    if *clip
+        && let Some(k) = vectorcraft_doc::clipping_path_in(children)
+        && let Some(path) = children.get(k)
+    {
+        let start = *at + children.iter().take(k).map(|c| leaf_count(c)).sum::<usize>();
+        held |= (start..start + leaf_count(path)).any(|p| kept.contains(&p));
     }
     for c in children.iter_mut() {
         match &c.kind {

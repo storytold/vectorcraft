@@ -706,7 +706,7 @@ pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRul
         // A clip group shows its members only inside its clipping path: its outline is that
         // region, not the clipped members' own shapes, which may reach far outside it (#7289).
         if n.clips() {
-            let clip = n.children().and_then(|ch| ch.first());
+            let clip = n.clipping_path();
             out.extend(clip.and_then(|c| crate::clip::clip_outline(c)).map(|(bp, rule)| (PathData::from_bezpath(&bp), rule)));
             return;
         }
@@ -977,16 +977,15 @@ fn copied_container(doc: Option<&Document>, n: &Node, t: usize) -> Node {
 /// most [`crate::SYMBOL_ART_MAX_NODES`] members: past either limit, members stay as they are.
 pub(crate) fn members_as_drawn(doc: Option<&Document>, n: &mut Node) {
     let Some(_frame) = DrawnFrame::enter() else { return };
-    let clip = usize::from(n.clips());
+    let clip = n.clipping_path_index();
     let Some(ch) = n.children_mut() else { return };
     // The clipping path's own geometry effects shape it before the effects around it do.
-    if clip == 1
-        && let Some(first) = ch.first_mut()
-        && let Some(applied) = crate::clip::with_clip_effects_applied_while(first, DrawnFrame::take_member)
+    if let Some(path) = clip.and_then(|k| ch.get_mut(k))
+        && let Some(applied) = crate::clip::with_clip_effects_applied_while(path, DrawnFrame::take_member)
     {
-        *first = Arc::new(applied);
+        *path = Arc::new(applied);
     }
-    for c in ch.iter_mut().skip(clip).filter(|c| c.visible) {
+    for (_, c) in ch.iter_mut().enumerate().filter(|(i, c)| Some(*i) != clip && c.visible) {
         if !DrawnFrame::take_member() {
             return;
         }

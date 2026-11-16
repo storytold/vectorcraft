@@ -927,7 +927,9 @@ impl Writer<'_> {
                 self.line("</g>");
             }
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
-                let Some((clip, rest)) = children.split_first() else { return };
+                let Some((clip, rest)) = vectorcraft_doc::split_clipping_path(children) else { return };
+                // The clipped members, bottom to top, wherever the clipping path sits among them.
+                let rest: Vec<std::sync::Arc<Node>> = rest.cloned().collect();
                 let cid = self.fresh_id("clip-path");
                 self.def(1, &format!("<clipPath id=\"{cid}\">"));
                 // The region every output clips to; with nothing to clip by, an empty clip path
@@ -954,7 +956,7 @@ impl Writer<'_> {
                 if let Some(fill) = &paint.fill {
                     self.node(fill);
                 }
-                self.group_children(n, rest);
+                self.group_children(n, &rest);
                 self.depth -= 1;
                 self.line("</g>");
                 if let Some(stroke) = &paint.stroke {

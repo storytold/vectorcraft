@@ -754,8 +754,7 @@ fn art_box(art: &Arc<Node>, symbols: &SymbolBoxes) -> Option<ArtBox> {
         art.walk(&mut |n| {
             let b = match &n.kind {
                 NodeKind::SymbolInstance { symbol, .. } if symbols.art(symbol).is_some_and(|a| a.reshaped.is_some()) => n.reach(Some(symbols)),
-                _ if n.clips() => n.children().and_then(|c| c.first()).and_then(|c| crate::hit::reshaped_clip_box(c)),
-                _ => None,
+                _ => n.clipping_path().and_then(|c| crate::hit::reshaped_clip_box(c)),
             };
             reshaped = vectorcraft_geom::union_opt(reshaped, b.filter(finite));
         });

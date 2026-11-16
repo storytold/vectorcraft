@@ -106,16 +106,16 @@ impl Builder {
             match &n.kind {
                 NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
                     let (clip, rest) = if n.clips() {
-                        let (first, rest) = children.split_first()?;
+                        let (first, rest) = vectorcraft_doc::split_clipping_path(children)?;
                         // Nothing to clip by hides the clipped art.
                         let (bp, rule) = effects::clip_outline(first)?;
                         (Some(self.shape(PathData::from_bezpath(&bp), rule, Kind::Vector)?), rest)
                     } else {
-                        (None, &children[..])
+                        (None, children.iter().chain(&[]))
                     };
                     let outer = self.clip;
                     self.clip = clip.or(outer);
-                    let children = rest.iter().filter_map(|c| self.elem(c)).collect();
+                    let children = rest.filter_map(|c| self.elem(c)).collect();
                     self.clip = outer;
                     Body::Group { clip, children }
                 }

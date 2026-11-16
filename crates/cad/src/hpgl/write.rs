@@ -819,16 +819,16 @@ impl<'a> Walk<'a> {
         baked.or(art).map(Arc::unwrap_or_clone).unwrap_or_else(|| Node::group(vectorcraft_doc::NodeId(0), vec![]))
     }
 
-    /// A container's children. A clipping container's first child cuts the rest; it is drawn
+    /// A container's children. A clipping container's clipping path cuts the rest; it is drawn
     /// itself, once and whole, when it paints: where its stroke paints (over the clipped art) when
     /// it has one, else where its fill paints (below it). Nothing to clip by hides the clipped art,
     /// as on the canvas.
     fn children(&mut self, children: &[Arc<Node>], clip: bool) {
-        let Some((first, rest)) = children.split_first().filter(|_| clip) else {
+        let Some((clip_path, rest)) = clip.then(|| vectorcraft_doc::split_clipping_path(children)).flatten() else {
             children.iter().for_each(|c| self.node(c, false));
             return;
         };
-        let mut paint = first.clip_paint();
+        let mut paint = clip_path.clip_paint();
         // A stroke at 0% opacity isn't drawn, so the clipping path is drawn in its fill.
         let type_stroke = |s: &Node| matches!(&s.kind, NodeKind::Text(t) if t.runs.iter().any(|r| r.style.has_stroke()));
         // The strokes of a clipping path whose stroke effects were applied are a group of pieces,
@@ -839,13 +839,13 @@ impl<'a> Walk<'a> {
         {
             self.node(fill, false);
         }
-        match vectorcraft_effects::clip_outline(first).map(|(bp, rule)| (self.rings(&bp), rule)) {
+        match vectorcraft_effects::clip_outline(clip_path).map(|(bp, rule)| (self.rings(&bp), rule)) {
             Some((Some(rings), rule)) => {
                 let held: usize = rings.iter().map(Vec::len).sum();
                 if let Some(region) = Region::new(rings, rule) {
                     self.mask_points += held;
                     self.clips.push(region);
-                    rest.iter().for_each(|c| self.node(c, false));
+                    rest.for_each(|c| self.node(c, false));
                     self.clips.pop();
                     self.mask_points -= held;
                 }
@@ -853,7 +853,7 @@ impl<'a> Walk<'a> {
             // A mask past the budget isn't built: the art it would clip is drawn unclipped by it.
             Some((None, _)) => {
                 self.warn(MASK_POINTS);
-                rest.iter().for_each(|c| self.node(c, false));
+                rest.for_each(|c| self.node(c, false));
             }
             None => {}
         }
@@ -861,12 +861,12 @@ impl<'a> Walk<'a> {
         // without a stroke are drawn too. Pieces of a clipping path whose fill and stroke effects
         // were applied are drawn in its stroke pieces alone, closed where its fill paints.
         if let Some(stroke) = &paint.stroke {
-            if first.extras().clip_pieces {
+            if clip_path.extras().clip_pieces {
                 let closing = std::mem::replace(&mut self.closing, paint.fill.as_ref().is_some_and(fills_in_pieces));
                 self.node(stroke, false);
                 self.closing = closing;
             } else {
-                self.node(first, false);
+                self.node(clip_path, false);
             }
         }
     }
@@ -1066,6 +1066,7 @@ pub fn plots_nothing(doc: &Document, n: &Node) -> bool {
 fn plotted(nodes: &[Arc<Node>], clipping: bool) -> Option<Vec<Arc<Node>>> {
     let mut changed = false;
     let mut out = Vec::with_capacity(nodes.len());
+    let clip = clipping.then(|| vectorcraft_doc::clipping_path_in(nodes)).flatten();
     for (i, n) in nodes.iter().enumerate() {
         match &n.kind {
             NodeKind::Layer { printable, template, .. } if !(n.visible && n.opacity > 0.0 && *printable && !*template) => {
@@ -1074,7 +1075,7 @@ fn plotted(nodes: &[Arc<Node>], clipping: bool) -> Option<Vec<Arc<Node>>> {
             }
             NodeKind::Path { guide: true, .. } => {
                 changed = true;
-                if clipping && i == 0 {
+                if Some(i) == clip {
                     let mut g = (**n).clone();
                     g.appearance.effects.clear();
                     out.push(Arc::new(g));

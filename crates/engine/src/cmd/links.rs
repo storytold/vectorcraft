@@ -755,8 +755,8 @@ enum ClipTo {
 fn clip_path_of(d: &Document, id: NodeId) -> Option<(&PathData, FillRule)> {
     let g = d.node(d.parent_of(id)?)?;
     match &g.kind {
-        NodeKind::Group { children, clip: true } => match &children[..] {
-            [c, o] if o.id == id => match &c.kind {
+        NodeKind::Group { children, clip: true } => match lone_clip(children) {
+            Some((_, c, o)) if o.id == id => match &c.kind {
                 NodeKind::Path { path, rule, clipping: true, .. } => Some((path, *rule)),
                 _ => None,
             },
@@ -764,6 +764,16 @@ fn clip_path_of(d: &Document, id: NodeId) -> Option<(&PathData, FillRule)> {
         },
         _ => None,
     }
+}
+
+/// The clipping path of a clip group of `children` that holds just it and one object, with its
+/// index and that object, when it is a path marked as one ([`vectorcraft_doc::clipping_path_in`]):
+/// a clip group as [`clipping_path`] and [`new_clip_group`] make them.
+pub(super) fn lone_clip(children: &[Arc<Node>]) -> Option<(usize, &Arc<Node>, &Arc<Node>)> {
+    let [a, b] = children else { return None };
+    let k = vectorcraft_doc::clipping_path_in(children)?;
+    let (clip, object) = if k == 0 { (a, b) } else { (b, a) };
+    matches!(clip.kind, NodeKind::Path { clipping: true, .. }).then_some((k, clip, object))
 }
 
 /// Do `a` and `b` have the same subpaths, each closed or open alike, and the same anchors, each
@@ -893,8 +903,8 @@ impl Nested<'_> {
         let mut around = None;
         if let Some(children) = n.children() {
             // A clip group holding just the object: its clipping path changes.
-            let clip_path = match (&n.kind, &children[..]) {
-                (NodeKind::Group { clip: true, .. }, [c, _]) if matches!(c.kind, NodeKind::Path { clipping: true, .. }) => Some(c),
+            let clip_path = match &n.kind {
+                NodeKind::Group { clip: true, .. } => lone_clip(children).map(|(k, c, _)| (k, c)),
                 _ => None,
             };
             let plain = matches!((&n.kind, &children[..]), (NodeKind::Group { clip: false, .. }, [_]));
@@ -904,12 +914,12 @@ impl Nested<'_> {
                     match (self.update(&mut new, nested), clip_path) {
                         (None, _) if Arc::ptr_eq(&new, c) => {}
                         (None, _) => slots.push((i, new)),
-                        (Some(placement), Some(path)) if i == 1 => slots.extend([(0, with_clip(path, placement, None)), (1, new)]),
+                        (Some(placement), Some((k, path))) if i != k => slots.extend([(k, with_clip(path, placement, None)), (i, new)]),
                         (Some(placement), _) => slots.push((i, Arc::new(self.clip_group(new, (placement, FillRule::NonZero))))),
                     }
                     continue;
                 }
-                let held = clip_path.filter(|_| i == 1).and_then(|p| match &p.kind {
+                let held = clip_path.filter(|&(k, _)| i != k).and_then(|(_, p)| match &p.kind {
                     NodeKind::Path { path, rule, .. } => Some((path, *rule)),
                     _ => None,
                 });
@@ -918,8 +928,8 @@ impl Nested<'_> {
                 let _ = self.update(&mut new, true);
                 match (clip, clip_path) {
                     (ClipTo::Keep, _) => slots.push((i, new)),
-                    (ClipTo::Path(clip), Some(path)) if i == 1 => slots.extend([(0, with_clip(path, clip, None)), (1, new)]),
-                    (ClipTo::File((clip, rule)), Some(path)) if i == 1 => slots.extend([(0, with_clip(path, clip, Some(rule))), (1, new)]),
+                    (ClipTo::Path(clip), Some((k, path))) if i != k => slots.extend([(k, with_clip(path, clip, None)), (i, new)]),
+                    (ClipTo::File((clip, rule)), Some((k, path))) if i != k => slots.extend([(k, with_clip(path, clip, Some(rule))), (i, new)]),
                     (ClipTo::File(clip), None) if plain => reclipped = Some((clip, new)),
                     (ClipTo::Path(clip), _) => {
                         let group = self.clip_group(new, (clip, FillRule::NonZero));
@@ -929,24 +939,24 @@ impl Nested<'_> {
                         let group = self.clip_group(new, clip);
                         slots.push((i, Arc::new(group)));
                     }
-                    (ClipTo::Off, Some(_)) if i == 1 => declipped = Some(new),
+                    (ClipTo::Off, Some((k, _))) if i != k => declipped = Some(new),
                     (ClipTo::Off, _) => slots.push((i, new)),
                     // The file's clip group stays `n`, and the placement's clip goes around it.
-                    (ClipTo::Both { file: Some((file, rule)), placement }, Some(path)) if i == 1 => {
-                        slots.extend([(0, with_clip(path, file, Some(rule))), (1, new)]);
+                    (ClipTo::Both { file: Some((file, rule)), placement }, Some((k, path))) if i != k => {
+                        slots.extend([(k, with_clip(path, file, Some(rule))), (i, new)]);
                         around = Some(placement);
                     }
                     (ClipTo::Both { file: Some(file), placement }, None) if plain => {
                         reclipped = Some((file, new));
                         around = Some(placement);
                     }
-                    (ClipTo::Both { file: None, placement }, Some(_)) if i == 1 => {
+                    (ClipTo::Both { file: None, placement }, Some((k, _))) if i != k => {
                         declipped = Some(new);
                         around = Some(placement);
                     }
-                    (ClipTo::BothInside { file, placement }, Some(path)) if i == 1 => {
+                    (ClipTo::BothInside { file, placement }, Some((k, path))) if i != k => {
                         let group = self.clip_group(new, file);
-                        slots.extend([(0, with_clip(path, placement, None)), (1, Arc::new(group))]);
+                        slots.extend([(k, with_clip(path, placement, None)), (i, Arc::new(group))]);
                     }
                     (ClipTo::Both { file, placement }, _) => slots.push((i, self.clip_both(new, file, placement))),
                     (ClipTo::BothInside { file, placement }, _) => slots.push((i, self.clip_both(new, Some(file), placement))),
@@ -1116,8 +1126,8 @@ fn placed_xf(xf: Affine, old: (f64, f64), old_pt: (f64, f64), new: (f64, f64), n
 /// rule `rule` when one is given; false when no such clip group holds it.
 fn set_clip_path(d: &mut Document, id: NodeId, path: PathData, rule: Option<FillRule>) -> bool {
     let clip_path = d.parent_of(id).and_then(|p| match &d.node(p)?.kind {
-        NodeKind::Group { children, clip: true } => match &children[..] {
-            [c, im] if im.id == id && matches!(c.kind, NodeKind::Path { clipping: true, .. }) => Some(c.id),
+        NodeKind::Group { children, clip: true } => match lone_clip(children) {
+            Some((_, c, im)) if im.id == id => Some(c.id),
             _ => None,
         },
         _ => None,
@@ -1293,8 +1303,8 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
 /// as a plain group of the object, with its id, name, visibility and transparency as they were.
 fn unclip(d: &mut Document, id: NodeId) -> Result<()> {
     let Some((g, clip)) = d.parent_of(id).and_then(|g| match &d.node(g)?.kind {
-        NodeKind::Group { children, clip: true } => match &children[..] {
-            [c, o] if o.id == id && matches!(c.kind, NodeKind::Path { clipping: true, .. }) => Some((g, c.id)),
+        NodeKind::Group { children, clip: true } => match lone_clip(children) {
+            Some((_, c, o)) if o.id == id => Some((g, c.id)),
             _ => None,
         },
         _ => None,
@@ -2432,12 +2442,14 @@ fn dcs_transparency(d: &Document) -> BTreeSet<NodeId> {
             _ => {}
         }
         let Some(children) = n.children() else { return };
-        // A clip group's or clipping layer's first child clips the others.
+        // A clip group's or clipping layer's clipping path clips the others.
         let clip = match &n.kind {
-            NodeKind::Group { clip: true, .. } | NodeKind::Layer { clip: true, .. } => match children.first().and_then(|c| c.geometric_bounds()) {
-                Some(c) => Some(clip.map_or(c, |o| o.intersect(c))),
-                None => clip,
-            },
+            NodeKind::Group { clip: true, .. } | NodeKind::Layer { clip: true, .. } => {
+                match vectorcraft_doc::clipping_path_in(children).and_then(|k| children.get(k)).and_then(|c| c.geometric_bounds()) {
+                    Some(c) => Some(clip.map_or(c, |o| o.intersect(c))),
+                    None => clip,
+                }
+            }
             _ => clip,
         };
         for c in children {

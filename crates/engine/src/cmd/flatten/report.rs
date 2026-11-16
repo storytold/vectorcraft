@@ -24,9 +24,7 @@ pub(super) fn target_roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     keyed.dedup();
     let roots = roots_of(d, keyed.into_iter().map(|(_, id)| id).collect());
     // A clipping path stays where it clips.
-    let clipping = |id: NodeId| {
-        d.parent_of(id).and_then(|p| d.node(p)).is_some_and(|p| p.clips() && p.children().and_then(|c| c.first()).is_some_and(|c| c.id == id))
-    };
+    let clipping = |id: NodeId| d.parent_of(id).and_then(|p| d.node(p)).and_then(Node::clipping_path).is_some_and(|c| c.id == id);
     let editable = d.editable();
     Ok(roots.into_iter().filter(|id| d.is_visible(*id) && editable(*id) && !clipping(*id)).collect())
 }

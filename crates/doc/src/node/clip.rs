@@ -28,8 +28,8 @@ impl Node {
                 }
                 out.push((bp, *rule));
             }
-            NodeKind::Group { children, clip: true } => {
-                if let Some(c) = children.first() {
+            NodeKind::Group { clip: true, .. } => {
+                if let Some(c) = self.clipping_path() {
                     c.push_clip_shapes(text, out);
                 }
             }

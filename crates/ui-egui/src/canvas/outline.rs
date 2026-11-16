@@ -107,7 +107,7 @@ pub(super) fn too_many_anchors<'a>(nodes: impl IntoIterator<Item = &'a Node>) ->
         }
         // A clip group counts only its clipping path, the one child `walk_drawn` visits.
         if n.clips() {
-            return n.children().and_then(|children| children.first()).is_some_and(|clip| over(clip, left));
+            return n.clipping_path().is_some_and(|clip| over(clip, left));
         }
         !matches!(n.kind, NodeKind::Envelope { .. }) && n.editing_children().iter().any(|c| over(c, left))
     }
@@ -141,14 +141,14 @@ fn overlay_points(n: &Node) -> usize {
 
 /// [`Node::walk`] over what a selection highlight shows: an envelope's content is left out (the
 /// envelope shows its mesh instead), and a clip group or clipping layer shows only its clipping
-/// path, its first child, not the art the path clips (#2422).
+/// path, not the art the path clips (#2422).
 pub(super) fn walk_drawn<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
     f(n);
     if matches!(n.kind, NodeKind::Envelope { .. }) {
         return;
     }
     if n.clips() {
-        if let Some(clip) = n.children().and_then(|children| children.first()) {
+        if let Some(clip) = n.clipping_path() {
             walk_drawn(clip, f);
         }
         return;

@@ -839,7 +839,7 @@ fn has_effects(n: &Node) -> bool {
 
 /// `n` without the objects that `left_out` picks in it, when it is a layer or a group, and in the
 /// layers and groups in it at any depth; `None` when it picks none of them. A clipping layer or
-/// group keeps its clipping path, its first object, and a Shaper group and a layer or group with
+/// group keeps its clipping path, and a Shaper group and a layer or group with
 /// effects, fills or strokes of its own keep all they hold. In the art of a dynamic symbol
 /// (`changed`, the changes an instance makes to it, as for [`all_left_out`]; `n` is at place
 /// `at`), each object is judged with those changes ([`as_drawn`]), and an object taken out leaves
@@ -849,13 +849,14 @@ fn without_nodes(n: &Arc<Node>, left_out: &dyn Fn(&Node) -> bool, changed: Optio
     if has_effects(&as_drawn(n, changed, at)) || n.extras().shaper.is_some() {
         return None;
     }
+    let clip_at = vectorcraft_doc::clipping_path_in(children).filter(|_| *clip);
     let mut taken = false;
     let kept: Vec<Arc<Node>> = children
         .iter()
         .enumerate()
         .filter_map(|(i, c)| {
             at.push(i as u32);
-            let out = if left_out(&as_drawn(c, changed, at)) && !(*clip && i == 0) {
+            let out = if left_out(&as_drawn(c, changed, at)) && clip_at != Some(i) {
                 taken = true;
                 changed.map(|_| Arc::new(Node::group(c.id, Vec::new())))
             } else {

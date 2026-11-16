@@ -466,11 +466,11 @@ fn bake_object(d: &mut Document, n: &Node) -> Option<Node> {
         // A clipping path takes the geometry effects in it as the canvas clips by it, those of a
         // compound path's paths before the compound path's own ([`crate::clip::with_clip_effects_applied`]);
         // the pieces it is made of then get ids of their own.
-        let clip = usize::from(n.clips());
+        let clip = n.clipping_path_index();
         let baked: Vec<Arc<Node>> = ch
             .iter()
             .enumerate()
-            .map(|(i, c)| match (i < clip).then(|| crate::clip::with_clip_effects_applied(c)).flatten() {
+            .map(|(i, c)| match (Some(i) == clip).then(|| crate::clip::with_clip_effects_applied(c)).flatten() {
                 Some(a) => {
                     let mut a = one_deeper(|| bake_node(d, &a)).unwrap_or(a);
                     fresh_ids(d, &mut a, &mut std::collections::HashSet::new());
@@ -495,24 +495,25 @@ fn bake_object(d: &mut Document, n: &Node) -> Option<Node> {
 /// The other members are baked as usual. `None` for other objects and when the type has nothing to
 /// clip by.
 fn clip_group_with_type_clip(d: &mut Document, n: &Node) -> Option<Node> {
-    let (first, rest) = n.children()?.split_first()?;
-    if !n.clips()
-        || !matches!(first.kind, NodeKind::Text(_))
-        || !(has_geometry(&first.appearance.effects) || first.projection().is_some() || has_item_geometry(first))
+    if !n.clips() {
+        return None;
+    }
+    let (text, rest) = vectorcraft_doc::split_clipping_path(n.children()?)?;
+    if !matches!(text.kind, NodeKind::Text(_)) || !(has_geometry(&text.appearance.effects) || text.projection().is_some() || has_item_geometry(text))
     {
         return None;
     }
-    let (bp, rule) = crate::clip_outline(first)?;
-    let mut clip = Node::path(first.id, PathData::from_bezpath(&bp), Appearance::default());
+    let (bp, rule) = crate::clip_outline(text)?;
+    let mut clip = Node::path(text.id, PathData::from_bezpath(&bp), Appearance::default());
     if let NodeKind::Path { rule: r, clipping, .. } = &mut clip.kind {
         (*r, *clipping) = (rule, true);
     }
-    clip.name = first.name.clone();
-    clip.visible = first.visible;
-    let paint = first.clip_paint();
+    clip.name = text.name.clone();
+    clip.visible = text.visible;
+    let paint = text.clip_paint();
     // The type's fills and strokes as art: baked with the type's id, as the renderer draws them,
     // then given ids of their own.
-    let mut seen = std::collections::HashSet::from([n.id, first.id]);
+    let mut seen = std::collections::HashSet::from([n.id, text.id]);
     let mut art = |d: &mut Document, part: Option<Node>| {
         part.map(|p| {
             let mut a = bake_node(d, &p).unwrap_or(p);
@@ -523,7 +524,7 @@ fn clip_group_with_type_clip(d: &mut Document, n: &Node) -> Option<Node> {
     let fill = art(d, paint.fill);
     let stroke = art(d, paint.stroke);
     let members: Vec<Arc<Node>> =
-        std::iter::once(Arc::new(clip)).chain(fill).chain(rest.iter().map(|c| bake_node(d, c).map(Arc::new).unwrap_or_else(|| c.clone()))).collect();
+        std::iter::once(Arc::new(clip)).chain(fill).chain(rest.map(|c| bake_node(d, c).map(Arc::new).unwrap_or_else(|| c.clone()))).collect();
     let mut m = n.clone();
     let Some(stroke) = stroke else {
         if let Some(ch) = m.children_mut() {
@@ -550,13 +551,13 @@ fn clip_group_with_type_clip(d: &mut Document, n: &Node) -> Option<Node> {
 /// canvas clips by it ([`crate::clip::with_clip_effects_applied`]).
 fn bake_pieces(d: &mut Document, mut m: Node) -> Node {
     let mut seen = std::collections::HashSet::from([m.id]);
-    let clip = usize::from(m.clips() && !m.children().and_then(|ch| ch.first()).is_some_and(|c| matches!(c.kind, NodeKind::Text(_))));
+    let clip = m.clipping_path_index().filter(|_| !m.clipping_path().is_some_and(|c| matches!(c.kind, NodeKind::Text(_))));
     let children = m.children().cloned().unwrap_or_default();
     let children = children
         .into_iter()
         .enumerate()
         .map(|(i, c)| {
-            let c = (i < clip).then(|| crate::clip::with_clip_effects_applied(&c)).flatten().unwrap_or_else(|| Arc::unwrap_or_clone(c));
+            let c = (Some(i) == clip).then(|| crate::clip::with_clip_effects_applied(&c)).flatten().unwrap_or_else(|| Arc::unwrap_or_clone(c));
             let mut c = one_deeper(|| bake_node(d, &c)).unwrap_or(c);
             fresh_ids(d, &mut c, &mut seen);
             Arc::new(c)
@@ -728,10 +729,10 @@ fn container_keeping_type(d: &Document, n: &Node) -> Option<Node> {
         if !clipping {
             paint_type_clip(Some(d), n);
         }
-        let clips = n.clips();
+        let clip = n.clipping_path_index();
         let Some(ch) = n.children_mut() else { return };
         for (i, c) in ch.iter_mut().enumerate() {
-            let clipping = clipping || (clips && i == 0);
+            let clipping = clipping || Some(i) == clip;
             if !matches!(c.kind, NodeKind::Text(_)) {
                 if has_pathfinder(c) || has_own_paint(c) || !geometry_effects(c).is_empty() {
                     outline_nested_text(Some(d), Arc::make_mut(c), clipping);

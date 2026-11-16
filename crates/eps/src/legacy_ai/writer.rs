@@ -239,7 +239,7 @@ impl<'a> Writer<'a> {
         true
     }
 
-    /// A container's members, the first clipping the others when `clip`; `locked`: the container is.
+    /// A container's members, the clipping path clipping the others when `clip`; `locked`: the container is.
     fn contents(&mut self, children: &[Arc<Node>], clip: bool, locked: bool) {
         if clip {
             self.clip_group(children, locked);
@@ -399,10 +399,10 @@ impl<'a> Writer<'a> {
         self.line(crate::ai_graph::END);
     }
 
-    /// A clipping group: its first member's outline clips the others (`h W n`). That member's fills
-    /// paint behind the art, inside the clip, and its strokes over it, outside.
+    /// A clipping group: its clipping path's outline clips the other members (`h W n`). The clipping
+    /// path's fills paint behind the art, inside the clip, and its strokes over it, outside.
     fn clip_group(&mut self, children: &[Arc<Node>], locked: bool) {
-        let Some((clip, rest)) = children.split_first() else { return };
+        let Some((clip, rest)) = vectorcraft_doc::split_clipping_path(children) else { return };
         // Nothing to clip by hides the clipped art.
         let Some((outline, rule)) = vectorcraft_effects::clip_outline(clip) else { return };
         let paint = clip.clip_paint();

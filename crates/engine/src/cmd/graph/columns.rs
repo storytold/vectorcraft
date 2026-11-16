@@ -132,7 +132,7 @@ fn only_groups(n: &Node) -> bool {
 
 /// Is `n` a clipping group whose clipping path is type that holds a total?
 fn clipped_by_total(n: &Node) -> bool {
-    matches!(&n.kind, NodeKind::Group { clip: true, children } if children.first().is_some_and(|c| holds_total(c)))
+    matches!(n.kind, NodeKind::Group { clip: true, .. }) && n.clipping_path().is_some_and(|c| holds_total(c))
 }
 
 /// `art` without the type in it that holds a total, inside groups at any depth that only group ([`only_groups`]), and

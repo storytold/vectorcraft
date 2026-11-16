@@ -241,7 +241,10 @@ fn insert_look_turned(
 /// of its children.
 pub(crate) fn draw_inside_group(d: &mut vectorcraft_doc::Document, target: NodeId) -> Result<NodeId> {
     if let Some(p) = d.parent_of(target)
-        && d.node(p).is_some_and(|pn| matches!(&pn.kind, NodeKind::Group { clip: true, children } if children.get(1).is_some_and(|c| c.id == target)))
+        && d.node(p).is_some_and(|pn| {
+            matches!(&pn.kind, NodeKind::Group { clip: true, children }
+                if vectorcraft_doc::split_clipping_path(children).and_then(|(_, mut clipped)| clipped.next()).is_some_and(|c| c.id == target))
+        })
     {
         return Ok(p);
     }

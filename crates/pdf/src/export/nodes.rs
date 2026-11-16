@@ -397,15 +397,17 @@ impl Exporter<'_> {
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 // The region every output clips to; nothing to clip by hides the clipped art. The
                 // clipping path's fill paints behind the clipped art and its stroke over it, unclipped.
-                if let Some((clip, rest)) = children.split_first()
+                if let Some((clip, rest)) = vectorcraft_doc::split_clipping_path(children)
                     && let Some((p, r)) = vectorcraft_effects::clip_outline(clip).and_then(|(bp, r)| to_path(s, &bp).map(|p| (p, r)))
                 {
+                    // The clipped members, bottom to top, wherever the clipping path sits among them.
+                    let rest: Vec<std::sync::Arc<Node>> = rest.cloned().collect();
                     let paint = clip.clip_paint();
                     s.push_clip_path(&p, &rule(r));
                     if let Some(fill) = &paint.fill {
                         self.node(s, fill, page, false);
                     }
-                    self.children(s, rest, page);
+                    self.children(s, &rest, page);
                     s.pop();
                     if let Some(stroke) = &paint.stroke {
                         self.node(s, stroke, page, false);

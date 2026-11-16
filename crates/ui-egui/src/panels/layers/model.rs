@@ -298,8 +298,9 @@ pub(super) fn push_rows(
         }
     }
     if open && let Some(children) = n.children() {
+        let clip = n.clipping_path_index();
         for (i, c) in children.iter().enumerate().rev() {
-            push_rows(c, depth + 1, i == 0 && n.clips(), (colour, shown), cx, out);
+            push_rows(c, depth + 1, Some(i) == clip, (colour, shown), cx, out);
         }
     }
     // A blend's spine is a row in it, below its key objects, as Release leaves it (not while

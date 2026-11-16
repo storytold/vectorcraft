@@ -270,7 +270,7 @@ impl Node {
             // The live geometry effects of a clipping path can move or grow the region it clips to
             // past its plain shape ([`crate::hit::set_clip_region`]).
             NodeKind::Layer { children, clip: true, .. } | NodeKind::Group { children, clip: true } => {
-                vectorcraft_geom::union_opt(self.visual(symbols), children.first().and_then(|c| crate::hit::reshaped_clip_box(c)))
+                vectorcraft_geom::union_opt(self.visual(symbols), split_clipping_path(children).and_then(|(c, _)| crate::hit::reshaped_clip_box(c)))
             }
             // The live geometry effects of the clipping paths in the art can draw it past its box.
             NodeKind::SymbolInstance { symbol, xf } => {
@@ -334,7 +334,7 @@ impl Node {
         match &self.kind {
             NodeKind::Path { path, .. } => path.bounds(),
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
-                children.first().and_then(|c| c.geometric(symbols))
+                split_clipping_path(children).and_then(|(c, _)| c.geometric(symbols))
             }
             NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Compound { .. } => self
                 .editing_children()
@@ -396,7 +396,7 @@ impl Node {
         match &self.kind {
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 // A clipping path that paints (see `clip_paint`) strokes over the clip edge.
-                let clip = children.first()?;
+                let (clip, _) = split_clipping_path(children)?;
                 if matches!(clip.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_)) || clip.extras().clip_pieces {
                     clip.visual(symbols)
                 } else {
@@ -776,7 +776,7 @@ impl Node {
             return (!m.disabled && !m.invert).then_some(&m.art);
         }
         match &self.kind {
-            NodeKind::Group { children, clip: true } => children.first(),
+            NodeKind::Group { clip: true, .. } => self.clipping_path(),
             _ => None,
         }
     }
@@ -794,7 +794,8 @@ impl Node {
         }
     }
 
-    /// Whether this is a clip group or a layer with a clipping mask: its first child clips the rest.
+    /// Whether this is a clip group or a layer with a clipping mask: its clipping path
+    /// ([`Self::clipping_path_index`]) clips the rest.
     /// A layer whose first child is a ruler guide holds no art, so a guide never clips it.
     pub fn clips(&self) -> bool {
         match &self.kind {
@@ -834,8 +835,7 @@ impl Node {
         if !self.clips() {
             return None;
         }
-        let children = self.children().filter(|c| !c.is_empty())?;
-        Some(children.iter().position(|c| c.is_clipping_path()).unwrap_or(0))
+        clipping_path_in(self.children()?)
     }
 
     /// This clip group's or clipping layer's clipping path ([`Self::clipping_path_index`]).
@@ -878,7 +878,8 @@ impl Node {
         if node.is_ruler_guide() { i.max(start) } else { i.min(start) }
     }
 
-    /// Make this group or layer clip its children by its first child, or stop it.
+    /// Make this group or layer clip its children by its clipping path ([`Self::clipping_path_index`]),
+    /// or stop it.
     pub fn set_clips(&mut self, on: bool) {
         if let NodeKind::Group { clip, .. } | NodeKind::Layer { clip, .. } = &mut self.kind {
             *clip = on;
@@ -904,6 +905,27 @@ impl Node {
     pub fn children_blend(children: &[Arc<Node>], inner: &mut dyn FnMut(&Arc<Node>) -> bool) -> bool {
         children.iter().any(|c| c.visible && (c.blend != BlendMode::Normal || (!c.isolate && inner(c))))
     }
+}
+
+/// The index of the clipping path among `children`, the members of a clip group or clipping layer:
+/// the first marked member ([`Node::is_clipping_path`]), else the first (bottom-most) member, as a
+/// clip group built in code or read from a file without marks has it. None when there are none.
+pub fn clipping_path_in(children: &[Arc<Node>]) -> Option<usize> {
+    if children.is_empty() {
+        return None;
+    }
+    Some(children.iter().position(|c| c.is_clipping_path()).unwrap_or(0))
+}
+
+/// The members a clipping path clips, bottom to top ([`split_clipping_path`]).
+pub type Clipped<'a> = std::iter::Chain<std::slice::Iter<'a, Arc<Node>>, std::slice::Iter<'a, Arc<Node>>>;
+
+/// The clipping path among `children`, the members of a clip group or clipping layer
+/// ([`clipping_path_in`]), and the members it clips, bottom to top. None when there are none.
+pub fn split_clipping_path(children: &[Arc<Node>]) -> Option<(&Arc<Node>, Clipped<'_>)> {
+    let (below, from) = children.split_at(clipping_path_in(children)?);
+    let (clip, above) = from.split_first()?;
+    Some((clip, below.iter().chain(above)))
 }
 
 /// The ruler guides a layer holds: its children that are one, by index in order (each with

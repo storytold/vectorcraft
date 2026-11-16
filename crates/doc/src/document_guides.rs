@@ -139,19 +139,19 @@ impl Document {
         fn has(c: &Node, s: &SymbolBoxes, rect: Rect, exact: bool) -> bool {
             match &c.kind {
                 NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
-                    let Some((clip, rest)) = children.split_first() else { return false };
+                    let Some((clip, mut rest)) = crate::split_clipping_path(children) else { return false };
                     let paint = clip.clip_paint();
                     if (paint.fill.is_some() || paint.stroke.is_some()) && art_box_meets(clip, s, rect, exact) {
                         return true;
                     }
                     if !exact {
                         // The part of `rect` inside the clip's box lies inside `rect`.
-                        return rest.iter().any(|m| has(m, s, rect, false));
+                        return rest.any(|m| has(m, s, rect, false));
                     }
                     // The members show only inside the clip's box.
                     let Some(b) = c.visual_bounds_with(s).filter(|b| meets(Some(*b), rect)) else { return false };
                     let inside = Rect::new(b.x0.max(rect.x0), b.y0.max(rect.y0), b.x1.min(rect.x1), b.y1.min(rect.y1));
-                    rest.iter().any(|m| has(m, s, inside, true))
+                    rest.any(|m| has(m, s, inside, true))
                 }
                 NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => children.iter().any(|m| has(m, s, rect, exact)),
                 NodeKind::Path { guide: true, .. } | NodeKind::RulerGuide { .. } => false,

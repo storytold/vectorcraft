@@ -428,7 +428,7 @@ fn content_box_in(n: &Arc<Node>, stroked: bool, to: Affine, typed: &std::collect
         }
         NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
             // A clipping path that paints strokes over the clip edge, as in `Node::visual_bounds`.
-            let clip = children.first()?;
+            let (clip, _) = crate::split_clipping_path(children)?;
             content_box_in(
                 clip,
                 stroked && matches!(clip.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_)),

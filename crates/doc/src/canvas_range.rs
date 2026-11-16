@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use vectorcraft_geom::{Point, Rect};
 
-use crate::{Document, MAX_COORD, Node, NodeId, NodeKind};
+use crate::{Document, MAX_COORD, Node, NodeId, NodeKind, clipping_path_in};
 
 /// What [`Document::drop_beyond_canvas`] removed.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -81,16 +81,23 @@ struct Picked(Vec<(usize, Picked)>);
 /// What in `n` reaches beyond the canvas, by `far`, or `None` when nothing does. A container is
 /// looked into object by object: its own bounds leave out a layer's hidden objects and, when it
 /// clips, all but its clipping path. Each object is measured once, and the objects a clipping
-/// path beyond the canvas clips are not measured: they go with it (see [`clips_beyond`]).
+/// path beyond the canvas clips are not measured: they go with it (see [`clips_beyond`]). The
+/// clipping path, wherever it is among the objects, is measured first.
 fn reach(n: &Node, far: &impl Fn(&Node) -> bool) -> Option<Picked> {
     let Some(clip) = clipping(n) else { return far(n).then(Picked::default) };
+    let children = n.children().map(Vec::as_slice).unwrap_or_default();
+    let clip_at = if clip { clipping_path_in(children) } else { None };
+    if let Some(k) = clip_at
+        && let Some(p) = children.get(k).and_then(|c| reach(c, far))
+    {
+        return Some(Picked(vec![(k, p)]));
+    }
     let mut inner = Vec::new();
-    for (i, c) in n.children().into_iter().flatten().enumerate() {
-        if let Some(p) = reach(c, far) {
+    for (i, c) in children.iter().enumerate() {
+        if Some(i) != clip_at
+            && let Some(p) = reach(c, far)
+        {
             inner.push((i, p));
-            if clip && i == 0 {
-                break;
-            }
         }
     }
     (!inner.is_empty()).then_some(Picked(inner))
@@ -100,7 +107,7 @@ fn reach(n: &Node, far: &impl Fn(&Node) -> bool) -> Option<Picked> {
 /// Then the path and the objects it clips go together, so no other object becomes the clipping
 /// path.
 fn clips_beyond(n: &Node, found: &Picked) -> bool {
-    clipping(n) == Some(true) && found.0.first().is_some_and(|(i, _)| *i == 0)
+    clipping(n) == Some(true) && n.children().and_then(|c| clipping_path_in(c)).is_some_and(|k| found.0.first().is_some_and(|(i, _)| *i == k))
 }
 
 /// Add the ids of `n` and the layers in it, if it is a layer, to `layers`: their layer guides go

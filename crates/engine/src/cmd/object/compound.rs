@@ -215,10 +215,12 @@ pub(super) fn clip_edit(s: &mut Session, mask: bool) -> Result<Value> {
         let mut cur = Some(id);
         while let Some(c) = cur {
             if let Some(NodeKind::Group { children, clip: true }) = st.doc.node(c).map(|n| &n.kind) {
-                if mask {
-                    ids.extend(children.first().map(|c| c.id));
-                } else {
-                    ids.extend(children.iter().skip(1).map(|c| c.id));
+                if let Some((clip, rest)) = vectorcraft_doc::split_clipping_path(children) {
+                    if mask {
+                        ids.push(clip.id);
+                    } else {
+                        ids.extend(rest.map(|c| c.id));
+                    }
                 }
                 break;
             }

@@ -105,10 +105,8 @@ fn parts(d: &Document) -> Vec<Part<'_>> {
     let editable = d.editable();
     let mut masks = HashSet::new();
     d.walk(|n| {
-        if n.clips()
-            && let Some(first) = n.children().and_then(|c| c.first())
-        {
-            first.walk(&mut |m| {
+        if let Some(clip) = n.clipping_path() {
+            clip.walk(&mut |m| {
                 masks.insert(m.id);
             });
         }

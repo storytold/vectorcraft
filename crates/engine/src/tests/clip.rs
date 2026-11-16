@@ -328,3 +328,38 @@ fn the_clipping_path_is_marked_whatever_its_kind_until_the_clip_goes() {
     s.execute("layer.clippingMask.toggle", &json!({"id": layer.0})).unwrap();
     assert!(!marked(&s, donut), "releasing the layer's clip takes it off");
 }
+
+/// A clip group finds its clipping path by the mark, not by its place: moved to the top of its
+/// group, the ring still clips the art as before, on screen, in clicks, in its bounds and in the
+/// SVG and PDF output.
+#[test]
+fn a_marked_clipping_path_clips_wherever_it_sits_in_its_group() {
+    let mut s = session();
+    let (art, donut) = art_and_donut(&mut s);
+    select(&mut s, &[art, donut]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    let bounds = |s: &Session| s.doc().unwrap().doc.node(g).unwrap().geometric_bounds();
+    let before = bounds(&s);
+    // `node.move` puts a row anywhere, the bottom of a clip group included.
+    s.execute("node.move", &json!({"id": donut.0, "parent": g.0, "index": 1})).unwrap();
+    assert_eq!(child_ids(&s, g), [art, donut]);
+    let r = render(&s);
+    assert!(opaque(&r, 20, 50), "the ring shows the art");
+    assert!(!opaque(&r, 50, 50), "the hole stays transparent");
+    assert!(!opaque(&r, 3, 3), "outside the ring");
+    assert_eq!(bounds(&s), before);
+    assert_eq!(hit(&s, 20.0, 50.0), Some(art));
+    assert_eq!(hit(&s, 50.0, 50.0), None, "the hole");
+    // The SVG and PDF drawings (the PDF without the native document, which reopens in its place).
+    for (format, options) in [("svg", json!({})), ("pdf", json!({"preserveEditing": false}))] {
+        let mut params = json!({"format": format});
+        params.as_object_mut().unwrap().extend(options.as_object().unwrap().clone());
+        let data = s.execute("document.export", &params).unwrap()["dataBase64"].clone();
+        let mut o = Session::new();
+        o.execute("document.open", &json!({"name": format!("clip.{format}"), "dataBase64": data})).unwrap();
+        let out = render(&o);
+        for (x, y) in [(20, 50), (50, 50), (3, 3), (80, 50)] {
+            assert_eq!(opaque(&out, x, y), opaque(&r, x, y), "{format} at ({x}, {y})");
+        }
+    }
+}

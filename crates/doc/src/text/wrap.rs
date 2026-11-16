@@ -19,8 +19,8 @@ fn outline(n: &Node, out: &mut PathData) {
             }
         }
         // A clip group wraps by its clipping path.
-        NodeKind::Group { children, clip: true } => {
-            if let Some(c) = children.first() {
+        NodeKind::Group { clip: true, .. } => {
+            if let Some(c) = n.clipping_path() {
                 outline(c, out);
             }
         }
