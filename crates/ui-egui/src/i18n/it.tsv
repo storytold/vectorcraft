@@ -4504,6 +4504,8 @@ axis	Both	Entrambi
 @msg	the script is no longer in the Scripts folder	lo script non è più nella cartella Scripts
 	Some scripts were not listed	Alcuni script non sono stati elencati
 	The Scripts folder cannot be read	Impossibile leggere la cartella Scripts
+	Loading scripts…	Caricamento degli script…
+	The Scripts folder is still being read	La cartella Scripts è ancora in lettura
 @msg	the script's run is no longer available	l'esecuzione dello script non è più disponibile
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	un comando non riuscito ha modificato passaggi di annullamento che non è stato possibile ripristinare, quindi lo script è stato interrotto
 @msg	a recovery copy could not be written, so the script was not run	non è stato possibile scrivere una copia di recupero, quindi lo script non è stato eseguito

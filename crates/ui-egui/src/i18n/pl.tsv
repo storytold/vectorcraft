@@ -4595,6 +4595,8 @@ imageTrace	Outline	Kontur
 @msg	the script is no longer in the Scripts folder	skryptu nie ma już w folderze Scripts
 	Some scripts were not listed	Niektóre skrypty nie zostały wyświetlone
 	The Scripts folder cannot be read	Nie można odczytać folderu Scripts
+	Loading scripts…	Wczytywanie skryptów…
+	The Scripts folder is still being read	Folder Scripts jest nadal odczytywany
 @msg	the script's run is no longer available	uruchomienie skryptu nie jest już dostępne
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	nieudane polecenie zmieniło kroki cofania, których nie udało się przywrócić, więc skrypt został zatrzymany
 @msg	a recovery copy could not be written, so the script was not run	nie udało się zapisać kopii odzyskiwania, więc skrypt nie został uruchomiony

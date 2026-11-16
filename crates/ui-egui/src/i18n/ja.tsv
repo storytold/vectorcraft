@@ -5272,6 +5272,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the script is no longer in the Scripts folder	スクリプトは Scripts フォルダーにもうありません
 	Some scripts were not listed	一部のスクリプトは一覧に表示されていません
 	The Scripts folder cannot be read	Scripts フォルダーを読み込めません
+	Loading scripts…	スクリプトを読み込み中…
+	The Scripts folder is still being read	Scripts フォルダーをまだ読み込んでいます
 @msg	the script's run is no longer available	スクリプトの実行は利用できなくなりました
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	失敗したコマンドが元に戻せない取り消し手順を変更したため、スクリプトを停止しました
 @msg	a recovery copy could not be written, so the script was not run	復元用のコピーを書き込めなかったため、スクリプトは実行されませんでした

@@ -4771,6 +4771,8 @@ imageTrace	Outline	Obrys
 @msg	the script is no longer in the Scripts folder	skript už není ve složce Scripts
 	Some scripts were not listed	Některé skripty nebyly uvedeny
 	The Scripts folder cannot be read	Složku Scripts nelze přečíst
+	Loading scripts…	Načítání skriptů…
+	The Scripts folder is still being read	Složka Scripts se stále načítá
 @msg	the script's run is no longer available	běh skriptu již není k dispozici
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	neúspěšný příkaz změnil kroky zpět, které nebylo možné obnovit, proto byl skript zastaven
 @msg	a recovery copy could not be written, so the script was not run	záložní kopii se nepodařilo zapsat, proto skript nebyl spuštěn
