@@ -1,6 +1,6 @@
 use super::bidi::{is_rtl, para_bidi_with, visual_order};
 use super::breaking::{Metrics, optical_hangs, optical_hangs_rtl, optical_share, roman_share};
-use super::flow::list_markers;
+use super::flow::{list_markers, repeat_mark_glyph};
 use super::region::in_range;
 use super::{
     Affine, ArcPath, BezPath, Ctx, GlyphBend, Justify, LineInfo, ListMarker, ParamCurve, PathAlign, PathData, PathEffect, PathEl, Point, Range,
@@ -409,6 +409,22 @@ fn hide_before_open_path(cx: &mut Ctx<'_>, ap: &ArcPath, lead: bool, at: usize, 
     true
 }
 
+/// Kurikaeshi Moji Shori: type on a path is one line, which starts with the first character of its
+/// first paragraph `pr` (shaped as `glyphs`). When that paragraph continues from the frame before
+/// and has the setting on, a repeat mark there is drawn as the character before it in the frames
+/// before ([`TextObject::first_para_lead`]): its glyph in `glyphs` is replaced, and the mark's byte
+/// and the character drawn are returned.
+fn line_start_repeat(cx: &Ctx<'_>, t: &TextObject, pr: &Range<usize>, glyphs: &mut [SGlyph]) -> Option<(usize, char)> {
+    if !t.first_para_continues || !t.para_at(0).kurikaeshi_moji_shori {
+        return None;
+    }
+    let at = glyphs.iter().position(|g| g.len > 0 && g.byte == pr.start)?;
+    let (glyph, c) = repeat_mark_glyph(cx, glyphs.get(at)?, glyphs.get(at + 1), || Some(t.first_para_lead))?;
+    let g = glyphs.get_mut(at)?;
+    *g = glyph;
+    Some((g.byte, c))
+}
+
 /// Lay type on a path out along `path` (text space), between its brackets.
 pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, path: &PathData) {
     cx.out.on_path = true;
@@ -431,6 +447,8 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
         }
         shaped.push((pr.clone(), bidi.filter(|b| b.has_rtl() && !cx.vertical), glyphs));
     }
+    // Kurikaeshi Moji Shori: the repeat mark that starts the line, recorded when its glyph is drawn.
+    let mut repeat = shaped.first_mut().and_then(|(pr, _, glyphs)| line_start_repeat(cx, t, pr, glyphs));
     let rtl = rtl.unwrap_or(false);
     // The text before byte `cut` in visual order, as area type reorders each line it breaks.
     let visual = |cut: usize| {
@@ -710,6 +728,9 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
         let at = cx.out.glyphs.len();
         cx.emit(g, pre, origin, angle, g.adv, 0);
         let hidden = hide_before_open_path(cx, &ap, lead, at, s + step * 0.5, rise);
+        if !hidden && let Some(mark) = repeat.take_if(|&mut (byte, _)| g.len > 0 && g.byte == byte) {
+            cx.out.repeat_marks.push(mark);
+        }
         // A glyph of a script whose letters join is bent along a curved path (Rainbow), so its
         // joining strokes meet its neighbours' instead of standing off the curve.
         if !hidden && t.path_effect == PathEffect::Rainbow && g.cursive && !cx.vertical && g.inline.is_none() {

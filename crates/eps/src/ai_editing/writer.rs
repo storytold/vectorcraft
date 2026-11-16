@@ -31,6 +31,7 @@ pub(super) use envelopes::ENVELOPES;
 pub(super) use styles::{LARGE_CANVAS_STYLES, style_links, styled_definitions, styled_objects};
 #[cfg(test)]
 pub(super) use styles::{PANEL_EMPTY, PANEL_STYLES, STYLE_LINKS, WARPED_IMAGES, same_appearance};
+pub(super) use texts::wraps_held;
 
 pub(super) use images::PAYLOAD;
 #[cfg(test)]
@@ -49,7 +50,7 @@ pub(super) use variables::{ACTIVE, BINDINGS, LIMITS, VALUES};
 /// [`vectorcraft_doc::MAX_DEPTH`].
 pub(super) const MAX_NEST: u32 = 8;
 
-pub(super) const TYPE: &str = "type in opacity masks, pattern tiles, symbols and art cut to a clipping object, mirrored type, area type and type on a path that is turned or unevenly scaled or whose frame or path has several parts, area type in an open frame, type on an open path whose ends meet, area type that flows around a text wrap, type of only white space, threads of type on a path, threads whose frames differ in orientation or hold a frame written as outlines, type of sizes past what the reader reads, stories past what the reader reads (1,048,576 bytes a story, 16,777,216 bytes in all, and the size of text document it reads), and type with inline graphics, ruby, gradient or pattern paint, or fills, strokes, effects or an opacity mask of the object's own, is written as its outlines in the editing data for other apps";
+pub(super) const TYPE: &str = "type in opacity masks, pattern tiles, symbols and art cut to a clipping object, mirrored type, area type and type on a path that is turned or unevenly scaled or whose frame or path has several parts, area type in an open frame, type on an open path whose ends meet, area type whose text wrap cannot be preserved from the saved objects, type of only white space, threads of type on a path, threads whose frames differ in orientation or hold a frame written as outlines, type of sizes past what the reader reads, stories past what the reader reads (1,048,576 bytes a story, 16,777,216 bytes in all, and the size of text document it reads), and type with inline graphics, ruby, gradient or pattern paint, or fills, strokes, effects or an opacity mask of the object's own, is written as its outlines in the editing data for other apps";
 pub(super) const PATTERNS: &str = "pattern fills whose tiles aren't a grid or whose art reaches past the tile, pattern fills in another pattern's tile or in a symbol, and pattern fills nested more than 8 deep are written as their tiles cut to the shape in the editing data for other apps";
 pub(super) const PATTERN_TILES: &str = "pattern fills with more tiles than a fill places are written filled gray in the editing data for other apps";
 pub(super) const CLIPPING: &str = "clipping groups and clipping layers whose clipping object isn't a path, and the clipping groups inside them, are written as their art cut to that object in the editing data for other apps";
@@ -228,6 +229,10 @@ pub(super) struct Writer<'a> {
     bound: Vec<(vectorcraft_doc::NodeId, String, Vec<String>)>,
     /// The text document: the stories of the type written as text.
     pub(super) texts: texts::TextDoc,
+    /// The area type with wrap shapes that may be written as type ([`texts::wraps_held`]).
+    pub(super) wraps_held: HashSet<NodeId>,
+    /// Area type with wrap shapes was written as type.
+    wrapped_typed: bool,
     /// Symbol instances on the layers may be written as instances ([`Self::live_instance`]); false
     /// on a large canvas, where they are written as their art.
     pub(super) symbols_live: bool,
@@ -348,6 +353,8 @@ impl<'a> Writer<'a> {
             typed: false,
             bound: vec![],
             texts: texts::TextDoc::default(),
+            wraps_held: HashSet::new(),
+            wrapped_typed: false,
             cms: vectorcraft_color::cms::active(),
             body: String::new(),
             warnings: vec![],
@@ -402,6 +409,12 @@ impl<'a> Writer<'a> {
             series_tag: None,
             graph_tags: vec![],
         }
+    }
+
+    /// Was area type with wrap shapes written as type, and art left out at the object limit
+    /// ([`Self::take_objects`])? The reader may then wrap that type by fewer objects than it had.
+    pub(super) fn wrapped_type_cut(&self) -> bool {
+        self.wrapped_typed && self.left_out > 0
     }
 
     /// Whether `count` more objects may be written: the objects written so far, counted as the
@@ -1218,26 +1231,25 @@ impl<'a> Writer<'a> {
     }
 
     /// A container's members, the first one's outline cutting the others: its fills painted
-    /// behind them (cut to the region outside too), its strokes over them, not cut by it. Its text
-    /// wrap options are written once: with its fills, or with its strokes when no fill object is
-    /// written (it has no fills, or the region outside leaves nothing of them).
+    /// behind them (cut to the region outside too), its strokes over them, not cut by it. Its name,
+    /// variables and text wrap options are written once, under them all, with its opacity mask
+    /// ([`Self::object_carrier`]), and not with its fills or strokes, which may be cut or left out
+    /// and keep only the opacity mask they are drawn through.
     fn clip_contents(&mut self, children: &[Arc<Node>]) {
         let Some((first, rest)) = children.split_first() else { return };
+        self.object_carrier(first);
         // Nothing to clip by hides the clipped art.
         let Some((outline, rule)) = vectorcraft_effects::clip_outline(first) else { return };
         let mut paint = first.clip_paint();
+        for part in [&mut paint.fill, &mut paint.stroke].into_iter().flatten() {
+            part.extras_mut().wrap = None;
+            part.name = None;
+        }
         let outer = self.clip.clone();
         let region = self.cut(&PathData::from_bezpath(&outline), rule);
         self.clip = Some(region);
         if let Some(fill) = &paint.fill {
-            let objects = self.objects;
             self.node(fill);
-            if self.objects > objects
-                && let Some(stroke) = &mut paint.stroke
-                && stroke.extras().wrap.is_some()
-            {
-                stroke.extras_mut().wrap = None;
-            }
         }
         for c in rest {
             self.node(c);
@@ -1245,6 +1257,48 @@ impl<'a> Writer<'a> {
         self.clip = outer;
         if let Some(stroke) = &paint.stroke {
             self.node(stroke);
+        }
+    }
+
+    /// The dictionary of clipping object `first` ([`Self::dictionary`]: its name, visibility
+    /// variables, text wrap options and opacity mask), when it has one, on an unpainted path (a
+    /// compound path for several subpaths), uncut, locked and hidden as `first` is. The path is the
+    /// outline area type wraps around when `first` has text wrap options
+    /// ([`vectorcraft_doc::text::wrap_outline`]); else, and without the options when that outline is
+    /// empty, `first`'s clipping outline, or the rectangle of its bounds when it has none. Nothing
+    /// is written without such a path, or without room for the path ([`Self::take_objects`]), or
+    /// when the dictionary would be empty (an opacity mask left out with nothing else in it).
+    fn object_carrier(&mut self, first: &Node) {
+        let points = |p: &PathData| p.subpaths.iter().any(|sp| !sp.anchors.is_empty());
+        let wrap = first.extras().wrap.filter(|_| self.drawn == 0 && !self.in_look);
+        let wrap_outline = wrap.map(|_| vectorcraft_doc::text::wrap_outline(first)).filter(points);
+        let named = first.name.as_deref().is_some_and(|s| !s.is_empty());
+        let bound = !self.bound_variables(first, false, false).is_empty();
+        if wrap_outline.is_none() && !named && !bound && first.extras().mask.is_none() {
+            return;
+        }
+        let wrapped = wrap_outline.is_some();
+        let outline = wrap_outline
+            .or_else(|| vectorcraft_effects::clip_outline(first).map(|(o, _)| PathData::from_bezpath(&o)).filter(points))
+            .or_else(|| finite_bounds(first).map(shapes::rectangle));
+        let Some(outline) = outline else { return };
+        let (start, state, gs, objects) = (self.body.len(), self.state, self.gs, self.objects);
+        self.state(first.locked, !first.visible);
+        self.plain_object(&outline, FillRule::NonZero, None, None, Xy::of(first).object());
+        if self.objects == objects {
+            // Without the path, its lock and hidden lines are taken out too, and no dictionary follows.
+            self.body.truncate(start);
+            self.state = state;
+            return;
+        }
+        self.block_end = usize::MAX;
+        let path_end = self.body.len();
+        // Text wrap options go only on the outline area type wraps around.
+        self.wrap_moved = !wrapped;
+        self.dictionary(first);
+        if self.body.len() == path_end {
+            self.body.truncate(start);
+            (self.state, self.gs, self.objects) = (state, gs, objects);
         }
     }
 
@@ -1482,7 +1536,11 @@ impl<'a> Writer<'a> {
         let thread = doc.text_threads.iter().find(|th| th.contains(&n.id));
         let contents = self.contents_level.filter(|(hidden, nest, _)| (*hidden, *nest) == (self.hidden, self.nest));
         // Type that can't be a stub is written as its outlines, which count their own objects.
-        if (self.hidden > 0 && contents.is_none()) || self.clip.is_some() || self.in_symbol || (thread.is_none() && !texts::holds(n, t)) {
+        if (self.hidden > 0 && contents.is_none())
+            || self.clip.is_some()
+            || self.in_symbol
+            || (thread.is_none() && !texts::holds(n, t, self.wraps_held.contains(&n.id)))
+        {
             self.outlined += 1;
             return self.outlined_text(n, xy);
         }
@@ -1495,7 +1553,7 @@ impl<'a> Writer<'a> {
         }
         let placed = if let Some(thread) = thread {
             // A thread is checked for what it loses, in every frame, when its story is written.
-            let placed = self.texts.thread(doc, thread, n.id, self.canvas, &|id| !cut_to_clipping_object(doc, id));
+            let placed = self.texts.thread(doc, thread, n.id, self.canvas, &|id| !cut_to_clipping_object(doc, id), &self.wraps_held);
             placed.map(|p| (p, self.texts.take_lost()))
         } else {
             self.texts.add(t, self.canvas).map(|story| ((story, 0), texts::loses(t)))
@@ -1507,6 +1565,7 @@ impl<'a> Writer<'a> {
             return self.outlined_text(n, xy);
         };
         self.typed = true;
+        self.wrapped_typed |= !t.wrap.is_empty();
         if lost {
             self.warn(texts::TYPE_ATTRIBUTES);
         }
