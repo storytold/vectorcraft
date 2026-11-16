@@ -81,7 +81,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transparency",
             ["Window", "Transparency"],
             None,
-            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, item?: appearance item index|null, target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md)} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects; when every target is a gradient mesh with points picked by the Mesh tool, Direct Selection or the Lasso, those points take the opacity themselves). With an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, opacity and blend change that object for this instance only (isolate, knockout, knockoutShape, aligned and target are refused). On a path directly in a graph series (for a fill or stroke item, a series group's id stands for those paths), the graph also stores the opacity and blend mode of the object and of the topmost visible fill and stroke, and on a series group without an item, the group's own opacity, blend mode, isolate, knockout and knockoutShape (exceptions: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring, the graph stores that object's opacity and blend mode for every label or line of its kind, and with `item` its topmost visible fill and stroke rows too",
+            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, item?: appearance item index|null, target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md)} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects; when every target is a gradient mesh with points picked by the Mesh tool, Direct Selection or the Lasso, those points take the opacity themselves). With an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, opacity and blend change that object for this instance only (isolate, knockout, knockoutShape, aligned and target are refused). On a path directly in a graph series (for a fill or stroke item, a series group's id stands for those paths), the graph also stores the opacity and blend mode of the object and of the topmost visible fill and stroke, and on a series group without an item, the group's own opacity, blend mode, isolate, knockout and knockoutShape (exceptions: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (for a fill or stroke item, a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels; when their rows differ, `item` needs `aligned` and is a row of the backmost one), the graph stores that object's opacity and blend mode for every label or line of its kind, and with `item` its topmost visible fill and stroke rows too",
             has_doc,
             transparency
         ),
@@ -1013,8 +1013,6 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
             }
             // The swap writes the paint of the topmost fill and stroke, not their opacity.
             let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (false, false), true, false);
-            // The graph lines among `ids` keep the paint the swap changed for every line of their kind; the opacity and blend
-            // modes the kind keeps stay.
             let labels = super::graph::capture_label_changes(&before, d, &ids, false, None);
             Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept || labels))
         })?;
@@ -1051,9 +1049,13 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
             let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (true, true), false, false);
-            let labels = super::graph::capture_label_changes(&before, d, &ids, false, None);
-            // The graph keeps the default fill and stroke rows for every line of a kind it reached, also when one already
-            // showed them; the object opacity the kind keeps stays.
+            // The graph keeps the default paint for every label of a kind it reached, and the default fill and stroke rows
+            // for every line of a kind it reached, also when one already showed them; the object opacity a line kind keeps
+            // stays.
+            let labels = super::graph::capture_label_styles(d, &ids, &|st| {
+                st.fill = Paint::solid(Color::BLACK);
+                st.stroke = Paint::None;
+            });
             let lines = super::graph::capture_line_fill_stroke_rows(d, &ids);
             Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept || labels || lines))
         })?;
@@ -1276,6 +1278,9 @@ fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // Opacity and blend belong to the targeted fill/stroke; isolate/knockout/knockoutShape stay object-level.
     let item_ids = if editing_mask { ids } else { row_targets(s, p, C)? };
+    if !editing_mask {
+        super::appearance::check_part_rows(s, p, aligned || !explicit, C)?;
+    }
     // The art of a graph design whose stack an explicit aligned item is a row of goes first: appearance.setItem leaves
     // it as it is and matches the other objects' rows against it.
     let of = if editing_mask || !explicit { None } else { super::appearance::design_reference(s, p, C)? };

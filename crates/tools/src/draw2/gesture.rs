@@ -18,10 +18,13 @@
 //! gives there. The other tools
 //! collect the drag polyline (shown as an overlay) and run one command on release. With Shift
 //! held, the Blob Brush's points stay on the horizontal or
-//! vertical line through the press point. Alt held at the press, or before the Blob Brush's drag
+//! vertical line through the press point, and the Eraser's on the line from the press point at the
+//! nearest 45° step from the Constrain Angle. Alt held at the press, or before the Blob Brush's drag
 //! has moved, switches the Blob Brush to the Smooth tool: the drag smooths the selected paths.
 //! Alt held at a Paintbrush press with a selected path also smooths; Alt pressed after its stroke
 //! begins closes the path on release.
+//! Alt held at the Eraser's press draws a marquee instead of a stroke, a square while Shift is
+//! held, and the release erases everything inside it.
 //! Alt held at the Knife's press makes it cut along the straight line from the press point to the
 //! pointer, even if Alt is released during the drag. Shift on each drag or release constrains that
 //! line to 45° steps from the canvas axes.
@@ -78,6 +81,9 @@ const BAND_WORK_PER_CALL: usize = 20_000;
 const PREVIEW_FIDELITY_PX: f64 = 0.5;
 /// The Smooth tool's Fidelity (screen pixels) until Smooth Tool Options sets another.
 const SMOOTH_FIDELITY: f64 = 2.5;
+/// How far the pointer goes from the press point, in screen pixels, before a Shift-drag of the
+/// Eraser takes the 45° step it lies nearest to.
+const ERASER_SHIFT_PX: f64 = 3.0;
 
 /// The `fidelity` (points) the Pencil and the Paintbrush send `path.freehand` for `px` screen pixels
 /// at the current zoom, within the range the command takes
@@ -163,13 +169,19 @@ pub struct GestureTool {
     /// The pointer has moved from the press point, by any distance (a move too short to add a
     /// point counts).
     moved: bool,
+    /// Active Eraser drag draws a marquee (Alt held at the press): the release erases the
+    /// rectangle from the press point to the pointer, a square while Shift is held.
+    marquee: bool,
+    /// Shift was held at the last event of the Eraser's marquee drag.
+    square: bool,
     /// Active Pencil drag draws a straight line (Shift or Alt held at the press), or active Knife
     /// drag cuts along one (Alt held at the press): the stroke is the press point and the pointer.
     straight: bool,
     /// The straight line is not constrained to 45° steps: the Pencil's Alt line, whose end snaps to
     /// Smart Guides as a stroke's end does, or the Knife's line while Shift is up.
     unconstrained: bool,
-    /// Axis selected during the current uninterrupted Shift interval, in degrees.
+    /// Axis selected during the current uninterrupted Shift interval, in degrees: the Blob Brush's
+    /// horizontal or vertical, or the Eraser's 45° step.
     shift_line: Option<f64>,
     /// "Merge only with selection": a Blob Brush stroke merges only with selected paths.
     pub merge_only_selection: bool,
@@ -871,6 +883,8 @@ impl GestureTool {
             smooth_fidelity: SMOOTH_FIDELITY,
             smoothing: false,
             moved: false,
+            marquee: false,
+            square: false,
             straight: false,
             unconstrained: false,
             shift_line: None,
@@ -996,6 +1010,11 @@ impl GestureTool {
         self.id == "blobBrush" && m.alt && !self.moved
     }
 
+    /// Would a press with `m` held draw the Eraser's marquee? Alt held at the press.
+    fn alt_marquee(&self, m: Mods) -> bool {
+        self.id == "eraser" && m.alt
+    }
+
     /// Shift keeps an active straight Knife cut at 45° steps; without Shift it follows the pointer.
     /// Releasing Alt does not end a straight cut.
     fn knife_shift(&mut self, m: Mods) {
@@ -1005,9 +1024,10 @@ impl GestureTool {
     }
 
     /// Constrain a straight Pencil line from the Constrain Angle, a straight Knife cut from the
-    /// canvas axes, or the current Blob Brush sample. Blob Brush chooses an
-    /// axis once per uninterrupted Shift interval; samples already drawn never move.
-    /// A smoothing drag follows the pointer without a Shift constraint.
+    /// canvas axes, or the current Blob Brush or Eraser sample. The Blob Brush chooses an axis,
+    /// and the Eraser a 45° step from the Constrain Angle, once per uninterrupted Shift interval;
+    /// samples already drawn never move. A smoothing drag follows the pointer without a Shift
+    /// constraint.
     fn constrained(&mut self, cx: &ToolContext, p: Point, m: Mods) -> Point {
         if self.straight && self.unconstrained {
             return p;
@@ -1018,10 +1038,21 @@ impl GestureTool {
             let origin = if self.id == "knife" { 0.0 } else { cx.constrain_angle };
             return start + vectorcraft_geom::constrain_angle_from(p - start, 45.0, origin);
         }
-        let Some(&start) = self.points.first().filter(|_| self.id == "blobBrush" && m.shift && !self.smoothing) else {
+        let shifts = (self.id == "blobBrush" && !self.smoothing) || self.id == "eraser";
+        let Some(&start) = self.points.first().filter(|_| shifts && m.shift) else {
             self.shift_line = None;
             return p;
         };
+        if self.id == "eraser" && self.shift_line.is_none() {
+            // The step is taken once the pointer is clear of the press point, in screen pixels at
+            // any zoom; until then the stroke waits at its last sample.
+            let v = p - start;
+            if v.hypot() * cx.zoom < ERASER_SHIFT_PX {
+                return self.points.last().copied().unwrap_or(start);
+            }
+            let c = vectorcraft_geom::constrain_angle_from(v, 45.0, cx.constrain_angle);
+            self.shift_line = Some(-c.y.atan2(c.x).to_degrees());
+        }
         if self.shift_line.is_none() {
             // Raw press-to-pointer displacement in logical screen pixels along the constraint
             // axes. Zoom changes the document distance, not the activation tolerance.
@@ -1041,6 +1072,16 @@ impl GestureTool {
         start + vectorcraft_geom::constrain_angle_from(p - start, 180.0, self.shift_line.unwrap_or(cx.constrain_angle))
     }
 
+    /// [`Self::constrained`] for a drag to `p`: the Eraser's tip outline shows where its stroke
+    /// is, on the line of a Shift-drag.
+    fn constrained_drag(&mut self, cx: &ToolContext, p: Point, m: Mods) -> Point {
+        let p = self.constrained(cx, p, m);
+        if self.id == "eraser" && self.tip_at.is_some() {
+            self.tip_at = Some(p);
+        }
+        p
+    }
+
     /// The Blob Brush's or the Eraser's tip at the pointer, before and while painting: its outline
     /// `size` across at its angle and roundness (the Eraser's as the pen varies them while it
     /// erases, [`Self::tip_now`]), at the zoom, black on a white halo so it reads on
@@ -1057,6 +1098,43 @@ impl GestureTool {
             Overlay::Path { path: path.clone(), color: [0xff, 0xff, 0xff], width: 3.0, dashed: false },
             Overlay::Path { path, color: [0, 0, 0], width: 1.0, dashed: false },
         ]
+    }
+
+    /// The Eraser's marquee: the rectangle from the press point to the pointer, or with Shift held
+    /// the square on the larger of its sides, in the direction the pointer went. `None` outside a
+    /// marquee drag.
+    fn marquee_rect(&self) -> Option<Rect> {
+        let (&a, &b) = (self.points.first()?, self.points.last()?);
+        if !self.marquee {
+            return None;
+        }
+        let d = b - a;
+        let b = if self.square {
+            let side = d.x.abs().max(d.y.abs());
+            a + Vec2::new(side.copysign(d.x), side.copysign(d.y))
+        } else {
+            b
+        };
+        Some(Rect::from_points(a, b))
+    }
+
+    /// A drag or the release of the Eraser's marquee: the marquee runs from the press point to the
+    /// pointer, and the release erases it. `None` for any other event.
+    fn marquee_pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Option<Vec<Action>> {
+        if !(self.active && self.marquee && matches!(ev.kind, PointerKind::Drag | PointerKind::Up)) {
+            return None;
+        }
+        self.square = ev.mods.shift;
+        self.points.truncate(1);
+        self.points.push(ev.pos);
+        if !matches!(ev.kind, PointerKind::Up) {
+            return Some(vec![]);
+        }
+        let out = self.finish(cx, ev.mods);
+        self.active = false;
+        self.marquee = false;
+        self.clear();
+        Some(out)
     }
 
     /// Forget the stroke.
@@ -1422,6 +1500,13 @@ impl GestureTool {
             }
             return vec![];
         }
+        if let Some(r) = self.marquee_rect() {
+            // A click, or a drag along one axis, encloses no area: nothing is erased.
+            if r.width() <= 0.0 || r.height() <= 0.0 || r.width().max(r.height()) < cx.tol(1.0) {
+                return vec![];
+            }
+            return vec![Action::Exec("path.eraseRegion".into(), json!({"rect": [r.x0, r.y0, r.width(), r.height()]}))];
+        }
         match self.id {
             "pencil" | "paintbrush" => {
                 if !self.began {
@@ -1497,6 +1582,9 @@ impl Tool for GestureTool {
         if self.varies_size() {
             self.tip_at = (!ev.mods.cmd && !self.blob_alt_smooths(ev.mods)).then_some(p);
         }
+        if let Some(out) = self.marquee_pointer(cx, ev) {
+            return out;
+        }
         match ev.kind {
             PointerKind::Down => {
                 self.active = true;
@@ -1513,6 +1601,9 @@ impl Tool for GestureTool {
                 // too, the line keeps Shift's 45° steps. Alt makes the Knife cut along a straight line.
                 self.straight = (self.id == "pencil" && !self.smoothing && (ev.mods.shift || ev.mods.alt)) || (self.id == "knife" && ev.mods.alt);
                 self.unconstrained = self.straight && !ev.mods.shift;
+                // Alt makes the Eraser draw a marquee, and Shift keeps it square.
+                self.marquee = self.alt_marquee(ev.mods);
+                self.square = ev.mods.shift;
                 let extend = if self.draws_path() && !self.smoothing { self.find_extend(cx, p) } else { None };
                 self.set_extend(cx, extend);
                 // The stroke's previews select the path it continues, so the others are kept now.
@@ -1548,7 +1639,7 @@ impl Tool for GestureTool {
                 }
                 self.knife_shift(ev.mods);
                 self.moved |= self.points.first().is_some_and(|start| p.distance(*start) > vectorcraft_geom::EPS);
-                let p = self.constrained(cx, p, ev.mods);
+                let p = self.constrained_drag(cx, p, ev.mods);
                 let mut end = p;
                 if self.grid_snaps(cx) && !self.smoothing && !self.straight {
                     // Where the stroke would end on the grid or a pixel: taken on release.
@@ -1694,6 +1785,7 @@ impl Tool for GestureTool {
                 self.smoothing = false;
                 self.straight = false;
                 self.unconstrained = false;
+                self.marquee = false;
                 self.clear();
                 if began { vec![Action::Cancel] } else { vec![] }
             }
@@ -1726,6 +1818,7 @@ impl Tool for GestureTool {
         self.smoothing = false;
         self.straight = false;
         self.unconstrained = false;
+        self.marquee = false;
         self.clear();
         if began { stale.into_iter().chain([Action::Commit]).collect() } else { vec![] }
     }
@@ -1733,6 +1826,14 @@ impl Tool for GestureTool {
         self.area_pending.set(false);
         self.band_pending.set(false);
         let mut o = self.snap.guides().to_vec();
+        // The Eraser's marquee shows without the tip outline.
+        if self.active
+            && self.points.len() >= 2
+            && let Some(r) = self.marquee_rect()
+        {
+            o.push(Overlay::Marquee(r));
+            return o;
+        }
         // A path being drawn shows itself, except with the Pencil's Live preview off.
         if !self.active || self.points.len() < 2 || (self.began && self.previews()) {
             o.extend(self.tip_outline(cx));
