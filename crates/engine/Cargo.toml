@@ -29,6 +29,8 @@ vectorcraft-tools = { workspace = true }
 vectorcraft-text = { workspace = true }
 vectorcraft-render = { workspace = true }
 vectorcraft-pathops = { workspace = true }
+# The panels and hinges of a packaging blank (Packaging Tools' Check Fold Lines).
+vectorcraft-three-d = { workspace = true }
 vectorcraft-brush = { workspace = true }
 vectorcraft-trace = { workspace = true }
 vectorcraft-svg = { workspace = true }
