@@ -3212,7 +3212,7 @@ own layout rules.
 
 ## Learn panel
 
-Window › Learn and the Explore tutorials button beside the search icon at the right end of the app bar show and hide
+Window › Learn and the Explore tutorials button beside the search field at the right end of the app bar show and hide
 the Learn panel. Its For you tab holds a Get started section with a Quick skill guide card; choosing the card opens
 the Skills tab. The Skills tab lists VectorCraft's own skills, each with a progress ring and the count of its tutorials
 finished of all its tutorials. Choosing a skill lists its tutorials, choosing a tutorial shows its numbered steps, and

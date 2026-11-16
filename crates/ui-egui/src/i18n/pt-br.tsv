@@ -2742,6 +2742,7 @@ digits	Malayalam	Malaiala
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` representa configurações alteradas: salve a predefinição com outro nome
 @msg	`{key}` must be an array of these names: {_1}	`{key}` deve ser uma matriz destes nomes: {_1}
 	Search Commands…	Pesquisar Comandos…
+	Search commands	Pesquisar comandos
 	Search commands and tools	Pesquisar comandos e ferramentas
 	Search commands and tools…	Pesquisar comandos e ferramentas…
 	Recent Commands	Comandos recentes
