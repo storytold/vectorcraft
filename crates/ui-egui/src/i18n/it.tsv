@@ -1215,6 +1215,7 @@ font-technology	Variable	Variabili
 	Highlight Size	Dimensione lucentezza
 	Blend Steps	Passaggi di fusione
 	Shading Color	Colore ombreggiatura
+	Black Overprint	Nero in sovrastampa
 	Draw Hidden Faces	Disegna facce nascoste
 	Eyedropper	Contagocce
 	Sample Color from Screen	Campiona colore dallo schermo
@@ -3082,6 +3083,12 @@ digits	Malayalam	Malayalam
 	Responsive	Adattivo
 	Restore	Ripristina
 	Restore every preference to its default (applied on OK)	Ripristina tutte le preferenze ai valori predefiniti (applicato con OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	L'unità dei nuovi documenti nelle dimensioni predefinite, tranne quelle in pixel, e dei file aperti che non registrano alcuna unità; sceglierla qui e fare clic su OK la imposta anche per il documento attivo.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Gli spessori della traccia, i trattini e gli spazi sono mostrati in questa unità, e i numeri digitati per essi sono letti in questa unità.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Dimensioni del testo, interlinea e spostamento della linea di base sono mostrati in questa unità, e i numeri digitati per essi sono letti in questa unità.
+	The unit for East Asian type measurements, which no field uses yet.	L'unità per le misure del testo dell'Asia orientale, che nessun campo usa ancora.
+	When on, a number typed without a unit into a field in picas is read in points.	Se attiva, un numero digitato senza unità in un campo in pica viene letto in punti.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Con ID XML, i nomi degli oggetti sono mostrati come ID XML in Livelli, Variabili e Opzioni livello.
 	Reset all preferences to their defaults?	Ripristinare tutte le preferenze ai valori predefiniti?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	I valori predefiniti vengono applicati quando fai clic su OK in Preferenze. Annulla lì mantiene le preferenze attuali.
 	Restore Recovered Documents	Ripristina documenti recuperati
@@ -3115,6 +3122,7 @@ digits	Malayalam	Malayalam
 	Roman Hanging Punctuation	Punteggiatura sporgente romana
 	Korean Line Break Anywhere	Interruzione di riga coreana ovunque
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Impostazioni di composizione dell’Asia orientale
 	Korean Composition Settings	Impostazioni di composizione coreana
 	Rotate	Ruota
