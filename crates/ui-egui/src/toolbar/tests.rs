@@ -1127,6 +1127,44 @@ fn tool_cards_are_off_by_default_and_fall_back_to_the_tool_tip() {
     assert!(!none.contains(&described("selection")) && !none.contains(&selection_tip), "tool tips off: {none:?}");
 }
 
+/// A card that is showing goes away when tool tips are turned off, while the pointer stays on its
+/// button.
+#[test]
+fn a_shown_tool_card_goes_away_when_tool_tips_are_turned_off() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
+    let ctx = egui::Context::default();
+    let selection = frame(&mut app, &ctx, 0.0, vec![])[0].center();
+    let (time, _) = until_card(&mut app, &ctx, 1.0, selection, "selection");
+    app.run("prefs.set", json!({"key": "showToolTips", "value": false})).unwrap();
+    let after: Vec<String> = (1..5).flat_map(|i| painted_texts(&mut app, &ctx, time + f64::from(i) * 0.1, vec![])).collect();
+    assert!(!after.contains(&described("selection")), "{after:?}");
+
+    // A card a click put away stays away while the pointer rests on its button, and shows again on
+    // the next rest when the pointer left and came back while tool tips were off.
+    app.run("prefs.set", json!({"key": "showToolTips", "value": true})).unwrap();
+    let (t, _) = until_card(&mut app, &ctx, 10.0, selection, "selection");
+    let b = |pressed| Event::PointerButton { pos: selection, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    painted_texts(&mut app, &ctx, t + 0.1, vec![b(true)]);
+    painted_texts(&mut app, &ctx, t + 0.15, vec![b(false)]);
+    // Tool tips off and on again while the pointer stays: the card stays away.
+    app.run("prefs.set", json!({"key": "showToolTips", "value": false})).unwrap();
+    painted_texts(&mut app, &ctx, t + 0.2, vec![]);
+    app.run("prefs.set", json!({"key": "showToolTips", "value": true})).unwrap();
+    let stayed: Vec<String> = (3..30).flat_map(|i| painted_texts(&mut app, &ctx, t + f64::from(i) * 0.1, vec![])).collect();
+    assert!(!stayed.contains(&described("selection")), "{stayed:?}");
+    let t = t + 3.0;
+    app.run("prefs.set", json!({"key": "showToolTips", "value": false})).unwrap();
+    painted_texts(&mut app, &ctx, t + 0.2, vec![Event::PointerGone]);
+    // Back onto the button.
+    painted_texts(&mut app, &ctx, t + 0.3, vec![Event::PointerMoved(selection + vec2(2.0, 2.0))]);
+    painted_texts(&mut app, &ctx, t + 0.35, vec![Event::PointerMoved(selection)]);
+    app.run("prefs.set", json!({"key": "showToolTips", "value": true})).unwrap();
+    let again: Vec<String> = (4..30).flat_map(|i| painted_texts(&mut app, &ctx, t + f64::from(i) * 0.1, vec![])).collect();
+    assert!(again.contains(&described("selection")), "{again:?}");
+}
+
 /// A card never gets in the way: a press with it showing picks the tool and puts the card away at
 /// once, it stays away until the pointer leaves, a key (one the shortcuts take first too), a
 /// modifier key alone and a scroll put it away, a long press with it showing still opens a group's flyout on time, while that flyout is

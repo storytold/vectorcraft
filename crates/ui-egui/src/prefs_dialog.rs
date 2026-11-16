@@ -332,8 +332,9 @@ fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, force: bool) {
         app.canvas.key = None;
         ctx.data_mut(|d| d.insert_temp(id, Some(want)));
     }
-    let cards =
-        crate::toolbar::card::CardPrefs { on: app.session.prefs.show_tool_cards, animated_zoom: crate::canvas::animated_zoom(&app.session.prefs) };
+    // Cards show only with Show Tool Tips on: an open card goes away as soon as tool tips are turned off.
+    let p = &app.session.prefs;
+    let cards = crate::toolbar::card::CardPrefs { on: p.show_tool_cards && p.show_tool_tips, animated_zoom: crate::canvas::animated_zoom(p) };
     crate::toolbar::card::set_prefs(ctx, cards);
     let z = app.session.prefs.ui_scaling.clamp(0.75, 2.0) as f32;
     if (ctx.zoom_factor() - z).abs() > 1e-3 {

@@ -72,11 +72,13 @@ pub(crate) fn hover(resp: Response, tool: &ToolInfo, side: Side, tip: Option<Str
     let prefs = prefs(&ctx);
     let allowed = side == Side::Row || !flyout_drawn(&ctx);
     let description = if prefs.on && allowed { tool_description(tool.id) } else { None };
-    // A button the pointer is not over shows neither a card nor a tool tip: skip measuring its card,
-    // and let `quiet` drop the button's quiet mark.
-    if description.is_some() && !resp.hovered() {
-        quiet(&ctx, &resp);
-        return resp;
+    // A button the pointer is not on shows neither a card nor a tool tip. Its quiet mark goes, with
+    // the cards off too, so the next rest on it shows its card; and its card is not measured.
+    if !pointer_on(&ctx, &resp) {
+        forget_quiet(&ctx, &resp);
+        if description.is_some() {
+            return resp;
+        }
     }
     let place = description.and_then(|d| placement(&ctx, resp.rect, side, height(tool.id, prefs.animated_zoom)).map(|p| (d, p)));
     let Some((description, (align, others, gap))) = place else {
@@ -143,11 +145,8 @@ fn flyout_opens_left(ctx: &Context) -> bool {
 /// modifier key is held, or a press, key, modifier, scroll or pinch came since it arrived.
 fn quiet(ctx: &Context, resp: &Response) -> bool {
     let quiet_for: Option<Id> = ctx.data(|d| d.get_temp(quiet_id()));
-    let over = resp.hovered() && ctx.input(|i| i.pointer.hover_pos()).is_some_and(|p| resp.rect.contains(p));
-    if !over {
-        if quiet_for == Some(resp.id) {
-            ctx.data_mut(|d| d.remove::<Id>(quiet_id()));
-        }
+    if !pointer_on(ctx, resp) {
+        forget_quiet(ctx, resp);
         return true;
     }
     let busy = ctx.input(|i| {
@@ -174,6 +173,18 @@ fn quiet(ctx: &Context, resp: &Response) -> bool {
         return true;
     }
     quiet_for == Some(resp.id)
+}
+
+/// Whether the pointer rests on the button `resp`.
+fn pointer_on(ctx: &Context, resp: &Response) -> bool {
+    resp.hovered() && ctx.input(|i| i.pointer.hover_pos()).is_some_and(|p| resp.rect.contains(p))
+}
+
+/// Drops the quiet mark of `resp`, once the pointer has left it.
+fn forget_quiet(ctx: &Context, resp: &Response) {
+    if ctx.data(|d| d.get_temp::<Id>(quiet_id())) == Some(resp.id) {
+        ctx.data_mut(|d| d.remove::<Id>(quiet_id()));
+    }
 }
 
 /// The card: icon, name and shortcut; what the tool does; one line per action of its hint.
