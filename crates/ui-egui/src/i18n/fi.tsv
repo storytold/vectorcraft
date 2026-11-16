@@ -7193,6 +7193,7 @@ anchor	Points:	Pisteet:
 	Open a document to check it for issues.	Avaa asiakirja tarkistaaksesi sen ongelmat.
 	Empty Text	Tyhjä teksti
 	Unpainted Objects	Värittömät objektit
+	Empty Text Paths	Tyhjät tekstipolut
 	Zero-Opacity Objects	Täysin läpinäkyvät objektit
 	Duplicate Objects	Objektien kaksoiskappaleet
 	Off-Artboard Art	Piirtoalustojen ulkopuolinen grafiikka
