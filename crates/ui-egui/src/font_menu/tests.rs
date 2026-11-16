@@ -1343,13 +1343,13 @@ fn clock() -> std::time::SystemTime {
 
 const DAY: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
 
-/// The Recently Added filter's list of `families` (newest first), as found in `db`, to be found
-/// again from `recheck_at` on.
+/// The Recently Added filter's list of `families` (newest first), as found in `db` at [`clock`],
+/// to be found again from `recheck_at` on.
 fn added_in(db: &vectorcraft_text::FontDb, families: &[&str], recheck_at: Option<std::time::SystemTime>) -> Option<super::RecentlyAddedFonts> {
     let list = vectorcraft_text::RecentlyAdded { families: families.iter().map(|f| f.to_string()).collect(), recheck_at };
     // The font folders' first scan changes the generation: it runs before the generation is read.
     db.family_list();
-    Some(((db.id(), db.generation()), std::sync::Arc::new(super::AddedFonts::of(&list))))
+    Some(((db.id(), db.generation()), clock(), std::sync::Arc::new(super::AddedFonts::of(&list))))
 }
 
 /// Draws the open menu of the families in `db` twice for `look` under the filters of `st`, with
@@ -1431,6 +1431,20 @@ fn the_recently_added_filter_drops_families_as_their_30_days_end() {
     settle_menu_of(&ctx, &db, &mut st, later, vec![button(false)]);
     assert!(!st.added_only, "the chip turns the filter off");
     assert!(listed_families(&st).len() > 1, "every family: {:?}", st.rows);
+}
+
+/// When the clock goes back before the time the list was found for (the system clock is set back),
+/// the filter finds its families again rather than keep the list it found.
+#[test]
+fn the_recently_added_filter_finds_its_families_again_when_the_clock_goes_back() {
+    // The bundled fonts alone, which are never recently added.
+    let db = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+    let ctx = egui::Context::default();
+    let mut st = super::MenuState { added_only: true, added: added_in(&db, &["Inter"], None), ..Default::default() };
+    settle_menu_of(&ctx, &db, &mut st, super::MenuLook { samples: false, clock: Some(clock()), ..Default::default() }, vec![]);
+    assert_eq!(listed_families(&st), ["Inter"]);
+    settle_menu_of(&ctx, &db, &mut st, super::MenuLook { samples: false, clock: Some(clock() - DAY), ..Default::default() }, vec![]);
+    assert!(st.rows.is_empty(), "found again a day earlier: {:?}", st.rows);
 }
 
 /// A font file installed just now is recently added by its creation time, and no longer 31 days

@@ -398,9 +398,10 @@ impl AddedFonts {
     }
 }
 
-/// The recently added families a [`MenuState`] found, and the database and font list generation
-/// they were found in ([`vectorcraft_text::FontDb::id`], [`vectorcraft_text::FontDb::generation`]).
-type RecentlyAddedFonts = ((u64, u64), Arc<AddedFonts>);
+/// The recently added families a [`MenuState`] found, the database and font list generation they
+/// were found in ([`vectorcraft_text::FontDb::id`], [`vectorcraft_text::FontDb::generation`]), and
+/// the time they were found for.
+type RecentlyAddedFonts = ((u64, u64), std::time::SystemTime, Arc<AddedFonts>);
 
 /// The families a [`MenuState`] found in a document (lowercase), and the document version and font
 /// list generation they were found for.
@@ -565,21 +566,23 @@ fn added_clock(look: MenuLook) -> std::time::SystemTime {
 
 /// The families the Recently Added filter lists, when it is on: those `db` dates within
 /// [`vectorcraft_text::RECENTLY_ADDED_WITHIN`] before `look`'s clock, found again only when the
-/// font list changed or the clock reached the instant the list may change at.
+/// font list changed, the clock reached the instant the list may change at, or the clock went back
+/// before the time the list was found for.
 fn added_families(db: &vectorcraft_text::FontDb, st: &mut MenuState, look: MenuLook) -> Option<Arc<AddedFonts>> {
     if !st.added_only {
         return None;
     }
     let now = added_clock(look);
     let key = (db.id(), db.generation());
-    if let Some((k, added)) = &st.added
+    if let Some((k, asked, added)) = &st.added
         && *k == key
+        && *asked <= now
         && added.recheck_at.is_none_or(|t| now < t)
     {
         return Some(added.clone());
     }
     let added = Arc::new(AddedFonts::of(&db.recently_added(now)));
-    st.added = Some((key, added.clone()));
+    st.added = Some((key, now, added.clone()));
     Some(added)
 }
 
