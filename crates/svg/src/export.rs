@@ -38,7 +38,13 @@ const UNIQUE_PLACEHOLDER: &str = "u_vc_unique_-";
 
 pub(crate) fn export(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>) -> Output {
     // Live geometry effects (Roughen, Warp, Offset Path, Effect → Pathfinder…) export as their result.
-    let baked = vectorcraft_effects::bake_document(doc);
+    // An instance of a symbol whose art has such effects is written as that art placed by the
+    // instance and then baked, as the canvas draws it; other symbols keep one `<symbol>` def.
+    // Hidden layers and objects are written when the options keep them; layers that do not print
+    // always are. `native` (Preserve Editing) is the document as it is, with its live effects.
+    let hidden = opts.hidden_layers;
+    let layers = vectorcraft_effects::WrittenLayers { hidden, non_printing: true, hidden_objects: hidden };
+    let baked = vectorcraft_effects::bake_document_placing_symbols(doc, true, layers);
     let doc = baked.as_ref().unwrap_or(doc);
     if opts.object_ids != ObjectIds::Unique {
         return write(doc, opts, native, "");

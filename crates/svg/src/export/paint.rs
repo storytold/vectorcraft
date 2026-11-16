@@ -37,9 +37,25 @@ pub(super) enum StrokePlan {
     Written(Written),
 }
 
+/// Visit `n` and the descendants the writer draws ([`Writer::node_body`]): a hidden layer or object
+/// and what it holds only with `hidden` (SVG Options › hidden layers kept), and a template layer's
+/// art never.
+fn walk_drawn<'a>(n: &'a Node, hidden: bool, f: &mut impl FnMut(&'a Node)) {
+    if !(n.visible || hidden) {
+        return;
+    }
+    f(n);
+    if matches!(n.kind, NodeKind::Layer { template: true, .. }) {
+        return;
+    }
+    for c in n.children().into_iter().flatten() {
+        walk_drawn(c, hidden, f);
+    }
+}
+
 impl Writer<'_> {
     pub(super) fn count_colorized_images(&mut self, art: &Node) {
-        art.walk(&mut |n| {
+        walk_drawn(art, self.opts.hidden_layers, &mut |n| {
             let NodeKind::Image(im) = &n.kind else { return };
             let Some(Paint::Solid { color, .. }) = n.extras().colorize.as_deref() else { return };
             let shown = self.doc.shown_image(n, im);
@@ -176,7 +192,7 @@ impl Writer<'_> {
         self.count_colorized_images(art);
         // Each image's count and its first piece, which shows what they all show.
         let mut seen: HashMap<(String, u32, u32), (usize, vectorcraft_doc::ImageObject)> = HashMap::new();
-        art.walk(&mut |c| {
+        walk_drawn(art, self.opts.hidden_layers, &mut |c| {
             if let NodeKind::Image(im) = &c.kind {
                 let shown = self.doc.shown_image(c, im);
                 let im = &*shown;
