@@ -148,6 +148,11 @@ impl Outline {
         if (turning - TAU).abs() > 1e-6 {
             return Err(OutlineError::NotConvex);
         }
+        // A short bend the other way can lie between two of the points: each segment is checked
+        // whole.
+        if segments.iter().any(|s| bends_against(s, sign)) {
+            return Err(OutlineError::NotConvex);
+        }
         let center = (Vec2::new(cx / (3.0 * area2), cy / (3.0 * area2)) * size + origin).to_point();
         if !center.x.is_finite() || !center.y.is_finite() {
             return Err(OutlineError::Empty);
@@ -290,6 +295,32 @@ impl Outline {
 
 /// Calls `f` with each point of `s` where `p · n` can be largest (its ends and the places where
 /// the curve runs square to `n`) and the value there.
+/// Whether cubic `s` bends against `sign` (the way its outline turns) anywhere. The cross product
+/// of its first and second derivatives is a quadratic in t; its lowest value on [0, 1] is compared
+/// with the segment's control polygon length squared.
+fn bends_against(s: &CubicBez, sign: f64) -> bool {
+    let (a, b, c) = (s.p1 - s.p0, s.p2 - s.p1, s.p3 - s.p2);
+    let q = |t: f64| {
+        let u = 1.0 - t;
+        let d1 = a * (u * u) + b * (2.0 * u * t) + c * (t * t);
+        let d2 = (b - a) * u + (c - b) * t;
+        d1.cross(d2) * sign
+    };
+    let (q0, half, q1) = (q(0.0), q(0.5), q(1.0));
+    // q(t) = q0 + k1 t + k2 t².
+    let k2 = 2.0 * (q0 + q1 - 2.0 * half);
+    let k1 = q1 - q0 - k2;
+    let mut low = q0.min(q1);
+    if k2 > 0.0 {
+        let t = -k1 / (2.0 * k2);
+        if t > 0.0 && t < 1.0 {
+            low = low.min(q(t));
+        }
+    }
+    let scale = (a.hypot() + b.hypot() + c.hypot()).powi(2);
+    low < -1e-9 * scale
+}
+
 fn each_extreme(s: &CubicBez, n: Vec2, mut f: impl FnMut(Point, f64)) {
     let [v0, v1, v2, v3] = [s.p0, s.p1, s.p2, s.p3].map(|p| p.to_vec2().dot(n));
     f(s.p0, v0);
@@ -835,6 +866,17 @@ mod tests {
         assert_eq!(Outline::convex(&open).err(), Some(OutlineError::Open));
         let star = shapes::star(Point::new(0.0, 0.0), 50.0, 20.0, 5, 0.0).subpaths[0].clone();
         assert_eq!(Outline::convex(&star).err(), Some(OutlineError::NotConvex));
+        // A half disk whose straight side is a cubic with crossed handles: it bends the other way
+        // for a short stretch between two of the points the outline is checked at.
+        let mut bp = vectorcraft_geom::BezPath::new();
+        let k = 0.5523 * 50.0;
+        bp.move_to((0.0, 0.0));
+        bp.curve_to((62.4, 43.4), (60.3, 44.2), (100.0, 0.0));
+        bp.curve_to((100.0, -k), (50.0 + k, -50.0), (50.0, -50.0));
+        bp.curve_to((50.0 - k, -50.0), (0.0, -k), (0.0, 0.0));
+        bp.close_path();
+        let bend = vectorcraft_geom::PathData::from_bezpath(&bp).subpaths[0].clone();
+        assert_eq!(Outline::convex(&bend).err(), Some(OutlineError::NotConvex));
         // A square traced twice around winds around twice.
         let twice: Vec<Point> = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)].repeat(2).into_iter().map(Point::from).collect();
         assert_eq!(Outline::convex(&SubPath::polyline(&twice, true)).err(), Some(OutlineError::NotConvex));
