@@ -3687,6 +3687,9 @@ digits	Malayalam	Malayalam
 @msg	`{_1}` is the name of an installed font	`{_1}` är namnet på ett installerat typsnitt
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} använder `{font}`, ett sammansatt typsnitt
 @msg	give fonts: [{name, parts}…]	ange fonts: [{name, parts}…]
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` måste vara "document", {{artboards: [index, …]}} eller {{layers: [id, …]}}
+@msg	numbers out of order in {{}} quantifier	talen står i fel ordning i kvantifieraren {{}}
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	färgen är inte en fri gradient (använd en med paint.editGradient {{kind: "freeform"}})
 @msg	path is empty	path är tom
 @msg	fonts must be a list of composite fonts	fonts måste vara en lista med sammansatta typsnitt
 @msg	names must be strings	names måste vara strängar
@@ -9040,7 +9043,6 @@ digits	Hindi	Hindi
 @msg	`rows` must be lists of numbers or nulls, not {r}	`rows` måste vara listor med tal eller null, inte {r}
 @msg	`scale` must be a number from 0.001 to 1000	`scale` måste vara ett tal från 0,001 till 1000
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}` måste vara en icke-tom array
-@msg	`scope` must be "document", {artboards} or {layers}	`scope` måste vara "document", {artboards} eller {layers}
 @msg	`side` must be "left", "right", "top" or "bottom"	`side` måste vara "left", "right", "top" eller "bottom"
 @msg	`side` places the artboard: leave out x, y, width and height	`side` placerar ritytan: utelämna x, y, width och height
 @msg	`source` is the only path in series group `target`	`source` är den enda banan i seriegruppen `target`
@@ -9219,7 +9221,6 @@ digits	Hindi	Hindi
 @msg	not a regular expression	inte ett reguljärt uttryck
 @msg	not an action set: the text doesn't start with /version and a number	inte en åtgärdsuppsättning: texten börjar inte med /version och ett tal
 @msg	nothing to repeat	inget att upprepa
-@msg	numbers out of order in {_1} quantifier	talen står i fel ordning i kvantifieraren {_1}
 @msg	object {_1} needs a 3D effect	objekt {_1} behöver en 3D-effekt
 @msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	objekt {_1}: en ihålig Extrudera och fasa saknar lock: aktivera Lock för att mappa en grafik
 @msg	object {_1}: with a depth of 0 the object has one face: map its graphics onto the front	objekt {_1}: med djupet 0 har objektet en enda yta: mappa dess grafik på framsidan
@@ -9293,7 +9294,6 @@ digits	Hindi	Hindi
 @msg	a linked JavaScript file is outside the read roots	en länkad JavaScript-fil ligger utanför läsrötterna
 @msg	the line is too long, or the paths it passes too many, to check	linjen är för lång, eller passerar för många banor, för att kunna kontrolleras
 @msg	the method needs an XML value	metoden kräver ett XML-värde
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	färgsättningen är inte en fri gradient (använd en med paint.editGradient {kind})
 @msg	the parameters or body do not form one function	parametrarna eller funktionskroppen bildar inte en funktion
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	det inklistrade SVG-filtret {name} ritar annorlunda än dokumentets filter med det namnet, och inget ledigt namn passar det
 @msg	the paths are too many or too tangled to find where they cross	banorna är för många eller för intrasslade för att hitta var de korsar varandra
