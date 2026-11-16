@@ -1523,6 +1523,8 @@ font-technology	Variable	Variabla
 	Show smooth color wheel	Visa steglöst färghjul
 	Show segmented color wheel	Visa segmenterat färghjul
 	Show color bars	Visa färgstaplar
+	Show brightness and hue on wheel	Visa ljusstyrka och nyans på hjulet
+	Show saturation and hue on wheel	Visa mättnad och nyans på hjulet
 	Add Color Tool	Verktyget Lägg till färg
 	Remove Color Tool	Verktyget Ta bort färg
 	Remove Color	Ta bort färg
@@ -2592,6 +2594,10 @@ font-technology	Variable	Variabla
 	Play Current Selection	Spela upp aktuell markering
 	Save Actions…	Spara åtgärder…
 	Load Actions…	Läs in åtgärder…
+	Reset Actions	Återställ åtgärder
+	Replace the current actions with the default set?	Vill du ersätta de aktuella åtgärderna med standarduppsättningen?
+	Append adds the default set after the current sets instead.	Lägg till lägger i stället till standarduppsättningen efter de aktuella uppsättningarna.
+	Append	Lägg till
 	Plug-in Info	Information om plugin
 	Plug-ins	Plugins
 	Plug-in…	Plugin…
@@ -3203,8 +3209,12 @@ digits	Malayalam	Malayalam
 	Scripts	Skript
 	Search	Sök
 	Search All	Sök i alla
-	Search commands and tools	Sök kommandon och verktyg
-	Search commands and tools…	Sök kommandon och verktyg…
+	Search commands, tools, panels and effects	Sök kommandon, verktyg, paneler och effekter
+	Search commands, tools, panels and effects…	Sök kommandon, verktyg, paneler och effekter…
+	No commands match	Inga kommandon matchar
+	{pos} of {total}: {name}	{pos} av {total}: {name}
+@plural	{n} result|{n} results	{n} resultat|{n} resultat
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.|{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.
 	Recent Commands	Senaste kommandon
 	No recent commands	Inga senaste kommandon
 	Search Commands…	Sök kommandon…
@@ -4228,6 +4238,7 @@ imageTrace	Outline	Kontur
 	 to set spacing and orientation	 för att ange avstånd och orientering
 	:	:
 	Isolate Selected Group	Isolera markerad grupp
+	Isolate Selected Path	Isolera markerad bana
 	Release Clipping Mask	Släpp klippningsmask
 	Make Compound Path	Skapa sammansatt bana
 	Release Compound Path	Släpp sammansatt bana
@@ -7543,6 +7554,9 @@ breakText	Glyphs	Glyfer
 	Malayalam	Malayalam
 	Odia	Oriya
 	Urdu	Urdu
+	Nepali	Nepalesiska
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} och senare (version {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Exportera alla öppna dokument som PDF
@@ -9426,4 +9440,24 @@ digits	Hindi	Hindi
 	No objects are selected.	Inga objekt är markerade.
 	Open a document to mark its fold lines.	Öppna ett dokument för att markera dess falslinjer.
 	Remove Fold Line Role	Ta bort linjetyp
+	Check	Kontrollera
+	Check Fold Lines	Kontrollera falslinjer
+@msg	No cut lines are in the selection.	Det finns inga skärlinjer i markeringen.
+@msg	No cut lines are in the document.	Det finns inga skärlinjer i dokumentet.
+@msg	The cut lines do not enclose an area.	Skärlinjerna omsluter inget område.
+@msg	A cut line ends without meeting another cut line.	En skärlinje slutar utan att möta en annan skärlinje.
+@msg	A gap between cut lines was closed.	Ett mellanrum mellan skärlinjer stängdes.
+@msg	The fold lines are too complex to check.	Falslinjerna är för komplexa för att kontrollera.
+@msg	A cut line and a crease lie on top of each other.	En skärlinje och en biglinje ligger ovanpå varandra.
+@msg	No cut lines are among the given objects.	Det finns inga skärlinjer bland de angivna objekten.
+@msg	Two fold lines lie on top of each other.	Två falslinjer ligger ovanpå varandra.
+@msg	A crease ends inside a panel.	En biglinje slutar inuti en panel.
+@msg	A crease does not divide two panels.	En biglinje delar inte två paneler.
+@msg	A crease lies outside the cut outline, wholly or in part.	En biglinje ligger helt eller delvis utanför skärkonturen.
+@msg	The pieces of a hinge are not on one straight line.	Delarna av ett gångjärn ligger inte på en rak linje.
+@msg	A gap between cut lines is too narrow to tell apart.	Ett mellanrum mellan skärlinjer är för smalt för att skilja ut.
+@msg	A cut-out area holds other fold lines or another blank.	Ett utskuret område innehåller andra falslinjer eller ett annat ämne.
+@msg	A panel is not joined to the rest by a crease.	En panel är inte förbunden med resten av någon biglinje.
+@msg	A fold line is on a non-printing layer.	En falslinje ligger på ett lager som inte skrivs ut.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, gångjärn: {hinges}, fel: {errors}, varningar: {warnings}
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen

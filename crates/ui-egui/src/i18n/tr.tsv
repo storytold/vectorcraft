@@ -1480,6 +1480,8 @@ font-technology	Variable	Değişken
 	Show smooth color wheel	Kesintisiz renk tekerleğini göster
 	Show segmented color wheel	Bölümlü renk tekerleğini göster
 	Show color bars	Renk çubuklarını göster
+	Show brightness and hue on wheel	Tekerlekte parlaklık ve renk tonunu göster
+	Show saturation and hue on wheel	Tekerlekte doygunluk ve renk tonunu göster
 	Add Color Tool	Renk Ekle aracı
 	Remove Color Tool	Renk Kaldır aracı
 	Remove Color	Rengi kaldır
@@ -2433,6 +2435,10 @@ shape	Open	Açık
 	Play Current Selection	Geçerli Seçimi Oynat
 	Save Actions…	Eylemleri Kaydet…
 	Load Actions…	Eylemleri Yükle…
+	Reset Actions	Eylemleri Sıfırla
+	Replace the current actions with the default set?	Geçerli eylemler varsayılan setle değiştirilsin mi?
+	Append adds the default set after the current sets instead.	Ekle bunun yerine varsayılan seti geçerli setlerin sonuna ekler.
+	Append	Ekle
 	Plug-in Info	Eklenti Bilgisi
 	Plug-ins	Eklentiler
 	Plug-in…	Eklenti…
@@ -3075,8 +3081,12 @@ digits	Malayalam	Malayalam
 	Redefine {name}	“{name}” Stilini Yeniden Tanımla
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` değiştirilmiş ayarları ifade eder: ön ayarı başka bir adla kaydedin
 @msg	`{key}` must be an array of these names: {_1}	`{key}` şu adlardan oluşan bir dizi olmalıdır: {_1}
-	Search commands and tools	Komutları ve araçları arayın
-	Search commands and tools…	Komutları ve araçları arayın…
+	Search commands, tools, panels and effects	Komutları, araçları, panelleri ve efektleri arayın
+	Search commands, tools, panels and effects…	Komutları, araçları, panelleri ve efektleri arayın…
+	No commands match	Eşleşen komut yok
+	{pos} of {total}: {name}	{pos}/{total}: {name}
+@plural	{n} result|{n} results	{n} sonuç
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} sonuçtan {shown} tanesi. Daraltmak için yazmaya devam edin.
 	Recent Commands	Son komutlar
 	No recent commands	Son komut yok
 	Search Commands…	Arama Komutları…
@@ -4079,6 +4089,7 @@ imageTrace	Outline	Kontur
 	 to set spacing and orientation	 aralığı ve yönlendirmeyi ayarlamak için
 	:	:
 	Isolate Selected Group	Seçili Grubu İzole Et
+	Isolate Selected Path	Seçili Yolu İzole Et
 	Isolate Selected Object	Seçili Nesneyi Ayır
 	Release Clipping Mask	Kırpma Maskesini Serbest Bırakın
 	Make Compound Path	Bileşik Yol Yap
@@ -9395,6 +9406,11 @@ breakText	Glyphs	Glifler
 	Malayalam	Malayalam dili
 	Odia	Oriya dili
 	Urdu	Urduca
+	Sanskrit	Sanskrit
+	Nepali	Nepalce
+	Assamese	Assamca
+	Konkani	Konkani dili
+	Sindhi	Sindhi dili
 	VectorCraft {release} and later (version {n})	VectorCraft {release} ve sonrası (sürüm {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Tüm Açık Belgeleri PDF Olarak Dışa Aktar
@@ -9697,3 +9713,23 @@ breakText	Glyphs	Glifler
 	No objects are selected.	Hiçbir nesne seçili değil.
 	Open a document to mark its fold lines.	Katlama çizgilerini işaretlemek için bir belgeyi açın.
 	Remove Fold Line Role	Çizgi Türünü Kaldır
+	Check	Denetle
+	Check Fold Lines	Katlama Çizgilerini Denetle
+@msg	No cut lines are in the selection.	Seçimde kesim çizgisi yok.
+@msg	No cut lines are in the document.	Belgede kesim çizgisi yok.
+@msg	The cut lines do not enclose an area.	Kesim çizgileri bir alanı çevrelemiyor.
+@msg	A cut line ends without meeting another cut line.	Bir kesim çizgisi başka bir kesim çizgisiyle buluşmadan bitiyor.
+@msg	A gap between cut lines was closed.	Kesim çizgileri arasındaki bir boşluk kapatıldı.
+@msg	The fold lines are too complex to check.	Katlama çizgileri denetlenemeyecek kadar karmaşık.
+@msg	A cut line and a crease lie on top of each other.	Bir kesim çizgisi ile bir pilyaj çizgisi üst üste.
+@msg	No cut lines are among the given objects.	Belirtilen nesneler arasında kesim çizgisi yok.
+@msg	Two fold lines lie on top of each other.	İki katlama çizgisi üst üste.
+@msg	A crease ends inside a panel.	Bir pilyaj çizgisi bir panelin içinde bitiyor.
+@msg	A crease does not divide two panels.	Bir pilyaj çizgisi iki paneli ayırmıyor.
+@msg	A crease lies outside the cut outline, wholly or in part.	Bir pilyaj çizgisi tamamen veya kısmen kesim konturunun dışında.
+@msg	The pieces of a hinge are not on one straight line.	Bir menteşenin parçaları tek bir düz çizgi üzerinde değil.
+@msg	A gap between cut lines is too narrow to tell apart.	Kesim çizgileri arasındaki bir boşluk ayırt edilemeyecek kadar dar.
+@msg	A cut-out area holds other fold lines or another blank.	Kesilip çıkarılmış bir alan başka katlama çizgileri veya başka bir açınım içeriyor.
+@msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
+@msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}
