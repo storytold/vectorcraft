@@ -862,6 +862,33 @@ fn a_given_number_carries_through_threaded_frames() {
     assert_eq!([numbers(&s, a), numbers(&s, b)].concat(), want);
 }
 
+/// A number given in a threaded frame whose first paragraph continues from the frame before goes
+/// to the next numbered paragraph that begins in that frame, not to the item the earlier frame shows.
+#[test]
+fn a_given_number_skips_the_paragraph_continued_from_the_frame_before() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let text = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    let numbers = |s: &Session, id: u64| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s, id)).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>()
+    };
+    let long = (1..=40).map(|i| format!("word{i}")).collect::<Vec<_>>().join(" ");
+    let story = format!("One\n{long}\nThree");
+    let a =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 250})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, b], "list": "number"})).unwrap();
+    assert!(text(&s, b).first_para_continues, "the second frame starts inside the long paragraph");
+    assert_eq!((numbers(&s, a), numbers(&s, b)), (vec!["1.".to_string(), "2.".into()], vec!["3.".to_string()]));
+    s.execute("text.setFormat", &json!({"ids": [b], "startNumber": 5})).unwrap();
+    assert_eq!((numbers(&s, a), numbers(&s, b)), (vec!["1.".to_string(), "2.".into()], vec!["5.".to_string()]));
+}
+
 /// `startNumber` over several type objects goes to the first numbered paragraph with text among
 /// all of them, past an empty numbered object listed first; with no text anywhere it goes to the
 /// first numbered paragraph.
