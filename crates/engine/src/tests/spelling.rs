@@ -452,6 +452,27 @@ fn change_all_replaces_every_word_listed_in_one_undo_step() {
     assert_eq!(run(&mut s, "text.spelling.change", json!({"to": "x", "words": []}))["changed"], 0);
 }
 
+/// A listed word that already reads as `to` is left alone: with no other word, no edit and no
+/// undo step, so the redo history stays.
+#[test]
+fn change_all_skips_words_that_already_read_as_the_replacement() {
+    let mut s = session();
+    let a = text(&mut s, 50.0, "fixed qzxvw");
+    run(&mut s, "text.editRange", json!({"id": a.0, "start": 6, "end": 11, "insert": "other"}));
+    run(&mut s, "edit.undo", json!({}));
+    let (undo, redo) = {
+        let h = &s.doc().unwrap().history;
+        (h.undo.len(), h.redo.len())
+    };
+    let r = run(&mut s, "text.spelling.change", json!({"to": "fixed", "words": [{"id": a.0, "start": 0, "end": 5}]}));
+    assert_eq!(r["changed"], 0);
+    let h = &s.doc().unwrap().history;
+    assert_eq!((h.undo.len(), h.redo.len()), (undo, redo), "no undo step, and redo kept");
+    let words = json!([{"id": a.0, "start": 0, "end": 5}, {"id": a.0, "start": 6, "end": 11}]);
+    assert_eq!(run(&mut s, "text.spelling.change", json!({"to": "fixed", "words": words}))["changed"], 1);
+    assert_eq!(plain(&s, a), "fixed fixed");
+}
+
 /// Each change to the custom dictionary moves its generation on, whether it is saved or not, so
 /// what Auto Spell Check found before is checked again.
 #[test]

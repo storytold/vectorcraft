@@ -9305,7 +9305,8 @@ system Hunspell dictionary, and last the public-domain Moby word list built into
 ones `text.editRange` takes, so `text.editRange {id, start, end, insert}` changes a word as one undo step, and
 `text.spelling.change {to, words: [{id, start, end}…]}` changes every listed word to `to` as one undo step (Check
 Spelling's Change All; an error, with nothing changed, when a word's bytes are not in its object's text or two words
-overlap). At most
+overlap). A listed word that already reads as `to` is left alone; when every one does, the command makes no edit and
+no undo step, and `changed` is 0. At most
 `max` words are listed (1 to 10,000, default 10,000); `more` is `true` when there were more. To get the rest, check
 again with `from: {id, byte}` set to the last word's `id` and `end`: that check lists the words of that type object
 that start at `byte` or later, then those of the objects after it, so a type object with more unknown words than one

@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Change All",
             [],
             None,
-            "{to: string, words: [{id, start: byte, end: byte}…] (words of type objects, as text.spelling.check lists them; none overlapping)} replaces each word with to, all in one undo step, each object laid out once (Check Spelling's Change All); an error, with nothing changed, when a word's bytes are not in its object's text → {changed: count}",
+            "{to: string, words: [{id, start: byte, end: byte}…] (words of type objects, as text.spelling.check lists them; none overlapping)} replaces each word with to, all in one undo step, each object laid out once (Check Spelling's Change All); a word that already reads as to is left alone, and with no other word there is no edit and no undo step; an error, with nothing changed, when a word's bytes are not in its object's text → {changed: count of words replaced}",
             has_doc,
             change_words
         ),
@@ -208,7 +208,10 @@ fn change_words(s: &mut Session, p: &Value) -> Result<Value> {
             }
             last_end = b;
         }
+        // A word that already reads as `to` is left alone, so a list of only those makes no edit.
+        ranges.retain(|&(a, b)| text.get(a..b) != Some(to.as_str()));
     }
+    by_id.retain(|_, ranges| !ranges.is_empty());
     let changed: usize = by_id.values().map(Vec::len).sum();
     if changed == 0 {
         return Ok(json!({ "changed": 0 }));
