@@ -725,7 +725,7 @@ fn overprint_black_keeps_the_cyan_under_near_and_freeform_blacks_on_postscript_p
 #[test]
 fn an_overprinting_fill_keeps_its_faint_ink_on_pdf_plates() {
     // 0.4% cyan beside 100% K, set to overprint: a PDF plate draws it with Darken, a PostScript
-    // plate draws it as nothing (it has no blending modes).
+    // plate (it has no blending modes) draws it as nothing, since the color counts as black.
     let mut square = Node::path(
         vectorcraft_doc::NodeId(0),
         shapes::rectangle(Rect::new(10.0, 15.0, 30.0, 35.0)),
@@ -743,6 +743,79 @@ fn an_overprinting_fill_keeps_its_faint_ink_on_pdf_plates() {
         count
     };
     assert_eq!((fills(false), fills(true)), (2, 1), "the cyan plate as PDF, as PostScript");
+}
+
+#[test]
+fn overprinting_paints_keep_their_faint_ink_on_postscript_plates() {
+    // 0.4% cyan in a color that is not black, set to overprint, on a fill, a stroke, a character
+    // fill, a linear gradient's stop and a freeform gradient's point: the cyan plate draws it on
+    // PDF and PostScript plates alike. A magenta with no cyan at all draws as nothing.
+    let faint = Color::cmyk(0.004, 0.5, 0.0, 0.0);
+    let magenta = Color::cmyk(0.0, 0.5, 0.0, 0.0);
+    let square = |x: f64, fill: Paint, stroke: Paint| {
+        let mut n =
+            Node::path(vectorcraft_doc::NodeId(0), shapes::rectangle(Rect::new(x, 15.0, x + 20.0, 35.0)), Appearance::basic(fill, stroke, 2.0));
+        if let Some(f) = n.appearance.fill_mut() {
+            f.overprint = true;
+        }
+        if let Some(s) = n.appearance.stroke_mut() {
+            s.overprint = true;
+        }
+        n
+    };
+    let linear = GradientPaint::new(Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, faint), GradientStop::new(1.0, magenta)]));
+    let mut freeform =
+        GradientPaint::new(Gradient::new(GradientKind::Freeform, vec![GradientStop::new(0.0, magenta), GradientStop::new(1.0, magenta)]));
+    let points = vec![FreeformPoint::new(kurbo::Point::new(105.0, 20.0), magenta), FreeformPoint::new(kurbo::Point::new(115.0, 30.0), faint)];
+    freeform.freeform = Some(Freeform { points, ..Default::default() });
+    let style = vectorcraft_doc::CharStyle { fill: Paint::solid(faint), overprint_fill: true, ..Default::default() };
+    let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(20.0, 60.0), "Hi", style);
+    let d = over_cyan(vec![
+        square(10.0, Paint::solid(faint), Paint::None),
+        square(40.0, Paint::None, Paint::solid(faint)),
+        square(70.0, Paint::Gradient(Box::new(linear)), Paint::None),
+        square(100.0, Paint::Gradient(Box::new(freeform)), Paint::None),
+        square(130.0, Paint::solid(magenta), Paint::None),
+        Node::new(vectorcraft_doc::NodeId(0), NodeKind::Text(Box::new(text))),
+        // A black linked to the spot swatch at a 0.4% tint: 0.4% on the spot plate, none on the cyan.
+        square(160.0, Paint::Solid { color: Color::cmyk(0.0, 0.0, 0.0, 1.0), swatch: Some("Ink".into()), tint: 0.004 }, Paint::None),
+    ]);
+    let opts = PrintOptions { settings: settings(json!({"output": {"mode": "separations"}})), postscript: true, ..Default::default() };
+    let p = plan(&d, &opts).unwrap();
+    let mut spot = vec![];
+    p.plates[4].walk(|n| {
+        spot.extend(n.appearance.fill().and_then(|f| f.paint.color()).map(|c| match c {
+            Color::Gray { k } => (k * 1000.0).round(),
+            c => panic!("{c:?}"),
+        }))
+    });
+    assert!(spot.contains(&4.0), "the PostScript spot plate draws the spot tint: {spot:?}");
+    // The fills, strokes and character fills the cyan plate draws, and the gray of the solid fills.
+    let drawn = |postscript: bool| {
+        let opts = PrintOptions { settings: settings(json!({"output": {"mode": "separations"}})), postscript, ..Default::default() };
+        let p = plan(&d, &opts).unwrap();
+        let (mut fills, mut strokes, mut chars, mut grays) = (0, 0, 0, vec![]);
+        p.plates[0].walk(|n| {
+            if let Some(f) = n.appearance.fill().filter(|f| !f.paint.is_none()) {
+                fills += 1;
+                if let Some(Color::Gray { k }) = f.paint.color() {
+                    grays.push((k * 1000.0).round());
+                }
+            }
+            strokes += usize::from(n.appearance.stroke().is_some_and(|s| !s.paint.is_none()));
+            if let NodeKind::Text(t) = &n.kind {
+                chars += t.runs.iter().filter(|r| !r.style.fill.is_none()).count();
+            }
+        });
+        (fills, strokes, chars, grays)
+    };
+    for postscript in [false, true] {
+        let (fills, strokes, chars, grays) = drawn(postscript);
+        let at = if postscript { "PostScript" } else { "PDF" };
+        assert_eq!((strokes, chars), (1, 1), "{at}: the stroke and the character fill");
+        assert_eq!(fills, 4, "{at}: the cyan, the faint fill and both gradients, not the magenta");
+        assert_eq!(grays, [1000.0, 4.0], "{at}: the cyan and the faint fill's 0.4%");
+    }
 }
 
 #[test]
