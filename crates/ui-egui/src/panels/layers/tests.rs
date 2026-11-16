@@ -1462,6 +1462,57 @@ fn dragging_a_layer_into_the_empty_space_under_the_rows_moves_it_to_the_bottom()
     assert_eq!(ids(&app), vec![top, bottom], "the top layer is now the bottom one");
 }
 
+/// #8237: with Alt, the top layer dropped on the top edge of its own row copies above itself, and
+/// the bottom layer dropped in the empty space under the list copies below itself. Without Alt,
+/// neither drop changes anything.
+#[test]
+fn alt_dragging_the_top_layer_up_or_the_bottom_layer_down_copies_it() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    app.session.execute("layer.new", &json!({"top": true})).unwrap();
+    let ids = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers.iter().map(|l| l.id).collect::<Vec<_>>();
+    let [bottom, top] = ids(&app)[..] else { panic!("two layers") };
+    let ctx = egui::Context::default();
+    // Rows: the top layer, the bottom layer, then empty space.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2);
+    let row = |y: f32| egui::pos2(150.0, y);
+    let top_edge = |y: f32| egui::pos2(150.0, y - ROW_MEDIUM * 0.4);
+    let under = |y: f32| egui::pos2(150.0, y + 3.0 * ROW_MEDIUM);
+    drag(&mut app, &ctx, row(circles[0].y), top_edge(circles[0].y), false);
+    drag(&mut app, &ctx, row(circles[1].y), under(circles[1].y), false);
+    assert_eq!(ids(&app), vec![bottom, top], "moved onto their own places, nothing changes");
+    drag(&mut app, &ctx, row(circles[0].y), top_edge(circles[0].y), true);
+    let after = ids(&app);
+    assert_eq!((after.len(), &after[..2]), (3, &[bottom, top][..]), "a copy above the top layer");
+    // Rows: the copy, the top layer, the bottom layer, then empty space.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 3);
+    drag(&mut app, &ctx, row(circles[2].y), under(circles[2].y), true);
+    let after = ids(&app);
+    assert_eq!((after.len(), after[1]), (4, bottom), "a copy below the bottom layer");
+}
+
+/// #8237: a document's only layer, Alt-dragged up onto its own row or down into the empty space,
+/// is copied above or below itself.
+#[test]
+fn a_lone_layer_alt_dragged_up_or_down_is_copied() {
+    for (up, at) in [(true, 0), (false, 1)] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let ids = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers.iter().map(|l| l.id).collect::<Vec<_>>();
+        let [only] = ids(&app)[..] else { panic!("one layer") };
+        let ctx = egui::Context::default();
+        let (circles, _) = frame(&mut app, &ctx, vec![], false);
+        assert_eq!(circles.len(), 1);
+        let y = circles[0].y;
+        let to = if up { y - ROW_MEDIUM * 0.4 } else { y + 3.0 * ROW_MEDIUM };
+        drag(&mut app, &ctx, egui::pos2(150.0, y), egui::pos2(150.0, to), true);
+        let after = ids(&app);
+        assert_eq!((after.len(), after[at]), (2, only), "up: {up}");
+    }
+}
+
 #[test]
 fn dragging_rows_moves_them_into_other_layers_and_alt_copies() {
     let (mut app, [layer, sub, g, _, a, c]) = nested();

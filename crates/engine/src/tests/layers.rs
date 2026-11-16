@@ -643,6 +643,27 @@ fn alt_drag_copies_rows_and_the_selected_art_moves_between_layers() {
     assert_eq!(s.doc().unwrap().selection.objects, vec![a, g], "it stays selected");
 }
 
+/// #8237: a copy may go above or below a row it copies, so a lone layer, the top layer dragged up
+/// and the bottom one dragged down can be copied. A move there, or a copy inside the row, is still
+/// refused.
+#[test]
+fn a_copy_goes_above_or_below_a_row_it_copies() {
+    let mut s = session();
+    let layers = |s: &Session| s.doc().unwrap().doc.layers.iter().map(|l| l.id).collect::<Vec<_>>();
+    let [only] = layers(&s)[..] else { panic!("one layer") };
+    for place in ["above", "below", "inside"] {
+        assert!(s.execute("layer.move", &json!({"ids": [only.0], "target": only.0, "place": place})).is_err(), "a move {place} itself");
+    }
+    assert!(s.execute("layer.move", &json!({"ids": [only.0], "target": only.0, "place": "inside", "copy": true})).is_err());
+    assert_eq!(layers(&s), vec![only], "nothing changed");
+    let above = ids(&run(&mut s, "layer.move", json!({"ids": [only.0], "target": only.0, "place": "above", "copy": true})));
+    assert_eq!(layers(&s), vec![only, above[0]], "the copy above the original");
+    let below = ids(&run(&mut s, "layer.move", json!({"ids": [only.0], "target": only.0, "place": "below", "copy": true})));
+    assert_eq!(layers(&s), vec![below[0], only, above[0]], "and one below it");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(layers(&s), vec![only, above[0]], "each copy is one undo step");
+}
+
 /// The selected art in rows dragged into a hidden layer or group is deselected, the key object
 /// included. Undo puts the rows back and selects the art again.
 #[test]

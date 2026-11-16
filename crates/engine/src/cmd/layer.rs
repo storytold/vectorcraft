@@ -110,7 +110,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Rows",
             [],
             None,
-            "{ids|id, target, place?: \"above\"|\"below\"|\"inside\" (default inside), copy?: bool} drag rows in the Layers panel: above or below the target row (beside it, in its layer or group), or inside a layer or group (on top of its contents). Layers go only in layers or at the top level, objects in layers and groups; an object placed beside a top-level layer goes inside it. A row never goes into itself; a locked layer or group takes nothing. `copy` (Alt-drag) moves copies. Every selected object left hidden or locked, such as one moved into a hidden layer or group, is deselected (the key object too). One undo step → {ids}",
+            "{ids|id, target, place?: \"above\"|\"below\"|\"inside\" (default inside), copy?: bool} drag rows in the Layers panel: above or below the target row (beside it, in its layer or group), or inside a layer or group (on top of its contents). Layers go only in layers or at the top level, objects in layers and groups; an object placed beside a top-level layer goes inside it. A row never goes into itself; a locked layer or group takes nothing. `copy` (Alt-drag) moves copies, which may also go above or below a row they copy (the target among `ids`). Every selected object left hidden or locked, such as one moved into a hidden layer or group, is deselected (the key object too). One undo step → {ids}",
             has_doc,
             move_rows
         ),
@@ -773,9 +773,11 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad(C, "no such rows"));
     }
-    // Never into itself or a row inside it.
+    // Never into itself or a row inside it. A copy may go above or below one of the rows it
+    // copies, which a move there would leave where it is (#8237).
+    let beside_itself = copy && place != Place::Inside && ids.contains(&target);
     let around = d.ancestry(target).unwrap_or_default();
-    if ids.iter().any(|i| around.contains(i)) {
+    if ids.iter().any(|i| around.contains(i) && !(beside_itself && *i == target)) {
         return Err(bad(C, "a row can't go into itself"));
     }
     let nodes: Vec<&Node> = ids.iter().filter_map(|i| d.node(*i)).collect();

@@ -5372,7 +5372,9 @@ and `layerRows`, the rows highlighted in the panel.
 - **Dragging rows**: `layer.move {ids, target, place?: above|below|inside, copy?}` moves rows beside a row or into a
   layer or group (on top of its contents), keeping their stacking order; `copy` (Alt-drag) moves copies. Layers go
   only in layers or at the top level and objects in layers and groups (an object placed beside a top-level layer goes
-  inside it); a row never goes into itself or a row inside it, and a locked layer or group takes nothing. Dragging the
+  inside it); a row never goes into itself or a row inside it, and a locked layer or group takes nothing. With `copy`,
+  the target may be one of the rows copied: the copies go above or below it, as an Alt-drag onto a row's own row (or a
+  bottom layer's into the empty space under the list) places them (#8237). Dragging the
   selected-art square is `layer.move` with the selected objects. `node.move {id, parent?, index}` is the low-level
   form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group.
 - **Buttons**: `layer.new {name?, top?, below?, …options}` (above the current layer at its level; `top` with
