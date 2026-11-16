@@ -513,7 +513,8 @@ fn drag_symbol(ui: &Ui, resp: &egui::Response, name: &str, uid: Option<u64>) {
 
 /// The symbol of the active document (`uid`, whose symbols are `names`) dragged from the panel and
 /// released on `button` this frame, if any; `button` is outlined while one is held over it, also
-/// when it is disabled for clicks. A symbol dragged from another document is ignored.
+/// when it is disabled for clicks. A symbol dragged from another document is ignored. Only the
+/// release of the primary button drops the symbol; the release of another button ends the drag.
 fn symbol_dropped(ui: &Ui, button: &egui::Response, names: &[String], uid: Option<u64>) -> Option<String> {
     let held = button.dnd_hover_payload::<PanelDrag>()?;
     let PanelDrag::Symbol(name) = &*held else { return None };
@@ -521,6 +522,9 @@ fn symbol_dropped(ui: &Ui, button: &egui::Response, names: &[String], uid: Optio
         return None;
     }
     widgets::drop_target_outline(ui, button.rect);
+    if !ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
+        return None;
+    }
     button.dnd_release_payload::<PanelDrag>().map(|_| name.clone())
 }
 
@@ -2168,6 +2172,42 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!(symbols(&mut app), ["A", "C"]);
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
+    }
+
+    /// Only the release of the primary button drops a symbol: a secondary button pressed and
+    /// released while the symbol is held over New Symbol or Delete Symbol, Alt held, makes no copy,
+    /// deletes nothing, asks nothing and adds no undo step, and the later primary release does
+    /// nothing either.
+    #[test]
+    fn a_secondary_release_over_new_or_delete_symbol_drops_nothing() {
+        for label in ["New Symbol", "Delete Symbol"] {
+            let mut app = leaf_and_dot();
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            let target = button_rect(&ctx, &mut app, label);
+            let undo = app.session.active().unwrap().history.undo.len();
+            let tile = pos2(26.0, 26.0);
+            frame(&ctx, &mut app, vec![]);
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
+            let held = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(target.center())], egui::Modifiers::NONE);
+            assert!(outlined(&held, target), "{label}: outlined while Leaf is held over it");
+            let secondary = |pressed| egui::Event::PointerButton {
+                pos: target.center(),
+                button: egui::PointerButton::Secondary,
+                pressed,
+                modifiers: egui::Modifiers::ALT,
+            };
+            frame_held(&ctx, &mut app, vec![secondary(true)], egui::Modifiers::ALT);
+            frame_held(&ctx, &mut app, vec![secondary(false)], egui::Modifiers::ALT);
+            assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "{label}: the secondary release");
+            assert_eq!(dialog_kind(&app), None, "{label}: the secondary release asks nothing");
+            frame_held(&ctx, &mut app, vec![button(target.center(), false)], egui::Modifiers::ALT);
+            assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "{label}: the primary release");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "{label}: no undo step");
+            assert_eq!(dialog_kind(&app), None, "{label}");
+        }
     }
 
     /// Delete Symbol takes only a symbol of the active document's that it still has: a library
