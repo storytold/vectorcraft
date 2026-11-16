@@ -306,6 +306,9 @@ fn linked_size_form(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
         if d.kind == "roundedRectangle" {
             form::length_field(ui, d, "radius", &form::humanized("radius"), unit);
         }
+        if d.kind == "ellipse" {
+            form::field(ui, d, "anchors", "Anchors:");
+        }
     });
     let Some(rows) = rows else { return };
     let on = d.bool(LINK);
@@ -358,6 +361,13 @@ fn follow_link(d: &mut Dialog, typed: &str) {
     }
 }
 
+/// The Ellipse dialog's Anchors: the nearest whole number from 2 to 1000 (4, a live ellipse, when
+/// left empty or not a number).
+fn ellipse_anchors(d: &Dialog) -> u64 {
+    let n = d.f64("anchors", 4.0);
+    if n.is_finite() { n.round().clamp(2.0, 1000.0) as u64 } else { 4 }
+}
+
 /// The top-left corner of a rectangle or ellipse: the click itself, or with Alt held (draw from centre) the click minus half the size.
 fn box_origin(d: &Dialog) -> (f64, f64) {
     let (x, y) = (d.f64("x", 0.0), d.f64("y", 0.0));
@@ -386,11 +396,15 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
             values[key] = json!(d.f64(key, default).clamp(min, 1000.0) as u64);
             values
         })
+        .or_else(|| (d.kind == "ellipse").then(|| json!({"anchors": ellipse_anchors(d)})))
         .or_else(|| OPTION_TOOLS.contains(&d.kind.as_str()).then(|| tool_options(d)));
     let (x, y) = (d.f64("x", 0.0), d.f64("y", 0.0));
     let (bx, by) = box_origin(d);
     let (id, params) = match d.kind.as_str() {
-        "ellipse" => ("shape.ellipse", json!({"x": bx, "y": by, "width": d.f64("width", 100.0), "height": d.f64("height", 100.0)})),
+        "ellipse" => (
+            "shape.ellipse",
+            json!({"x": bx, "y": by, "width": d.f64("width", 100.0), "height": d.f64("height", 100.0), "anchors": ellipse_anchors(d)}),
+        ),
         "polygon" => ("shape.polygon", json!({"cx": x, "cy": y, "radius": d.f64("radius", 50.0), "sides": d.f64("sides", 6.0) as u64})),
         "star" => (
             "shape.star",
@@ -647,6 +661,85 @@ mod tests {
         let doc = &app.session.doc().unwrap().doc;
         let b = doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
         assert!((b.width() - 80.0).abs() < 1e-6 && (b.height() - 40.0).abs() < 1e-6, "{b:?}");
+    }
+
+    /// The Ellipse dialog opens with Anchors 4, which draws a live ellipse; OK with 6 draws a plain
+    /// path of 6 anchors, and the next Ellipse dialog opens on 6.
+    #[test]
+    fn the_ellipse_dialog_draws_and_keeps_its_anchor_count() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("tool.select", json!({"tool": "ellipse"})).unwrap();
+        let last = |app: &VectorcraftApp| {
+            let doc = &app.session.doc().unwrap().doc;
+            doc.layers[0].children().unwrap().last().cloned().expect("an ellipse")
+        };
+
+        super::super::open_tool_dialog(&mut app, "ellipse", json!({"x": 10.0, "y": 10.0}));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().f64("anchors", 0.0), 4.0);
+        super::super::confirm(&mut app).unwrap();
+        let n = last(&app);
+        assert!(matches!(n.live_shape(), Some(vectorcraft_doc::LiveShape::Ellipse { .. })), "{:?}", n.live_shape());
+
+        super::super::open_tool_dialog(&mut app, "ellipse", json!({"x": 150.0, "y": 150.0}));
+        app.ui.dialog.as_mut().unwrap().fields.insert("anchors".into(), json!("6"));
+        super::super::confirm(&mut app).unwrap();
+        let n = last(&app);
+        assert!(n.live_shape().is_none());
+        assert_eq!(n.path_data().unwrap().anchor_count(), 6);
+        let b = n.geometric_bounds().unwrap();
+        assert!((b.width() - 100.0).abs() < 1e-6 && (b.height() - 100.0).abs() < 1e-6, "{b:?}");
+
+        // Kept as the Ellipse tool's `anchors` option for the next click, after another tool too.
+        assert_eq!(app.session.tool_options_of("ellipse")["anchors"], json!(6));
+        app.run("tool.select", json!({"tool": "rectangle"})).unwrap();
+        app.run("tool.select", json!({"tool": "ellipse"})).unwrap();
+        super::super::open_tool_dialog(&mut app, "ellipse", json!({"x": 10.0, "y": 150.0}));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().f64("anchors", 0.0), 6.0);
+        app.ui.dialog = None;
+        // `tool.setOption` keeps it from 2 to 1000, and the dialog opens on what it keeps.
+        for (set, want) in [(json!(1), 2.0), (json!(2000), 1000.0), (json!(7), 7.0)] {
+            app.run("tool.setOption", json!({"tool": "ellipse", "values": {"anchors": set}})).unwrap();
+            super::super::open_tool_dialog(&mut app, "ellipse", json!({"x": 10.0, "y": 150.0}));
+            assert_eq!(app.ui.dialog.as_ref().unwrap().f64("anchors", 0.0), want, "{set}");
+            app.ui.dialog = None;
+        }
+    }
+
+    /// The dialog's Anchors field is named, under Height, and typing into it sets the count.
+    #[test]
+    fn the_ellipse_dialog_shows_an_anchors_field() {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::Queryable;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        super::super::open_tool_dialog(&mut app, "ellipse", json!({"x": 10.0, "y": 10.0}));
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                super::super::show(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(5);
+        h.check_accessibility();
+        let height = h.get_by_role_and_label(Role::TextInput, "Height:").rect();
+        let anchors = h.get_by_role_and_label(Role::TextInput, "Anchors:").rect();
+        assert!(anchors.center().y > height.center().y, "Anchors is below Height: {anchors:?} {height:?}");
+        assert_eq!(ellipse_anchors(h.state().ui.dialog.as_ref().unwrap()), 4);
+    }
+
+    #[test]
+    fn ellipse_anchors_take_the_nearest_whole_number_from_2_to_1000() {
+        let d = |v: Value| Dialog::new("ellipse", json!({ "anchors": v }));
+        for (v, want) in [(json!(6), 6), (json!("7"), 7), (json!(5.6), 6), (json!(1), 2), (json!(0), 2), (json!(-3), 2), (json!(5000), 1000)] {
+            assert_eq!(ellipse_anchors(&d(v.clone())), want, "{v}");
+        }
+        assert_eq!(ellipse_anchors(&Dialog::new("ellipse", json!({}))), 4);
     }
 
     #[test]

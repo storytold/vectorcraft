@@ -16,7 +16,7 @@ use super::scan::{file_face_names, is_font_file};
 #[cfg(test)]
 use super::traits::faces_published;
 #[cfg(not(target_arch = "wasm32"))]
-use super::traits::{Alias, FaceStyle};
+use super::traits::{Alias, FaceStyle, regular_rank};
 use super::{Arc, AtomicU64, FontDb, FontPaths, HashMap, Mutex, Ordering, Path, PathBuf, RwLock, StringId};
 #[cfg(not(target_arch = "wasm32"))]
 use super::{ScanStamp, modified};
@@ -430,6 +430,9 @@ impl FontDb {
                 let entry = catalog.entry(family.to_ascii_lowercase()).or_default();
                 let kind = entry.traits.get_or_insert(traits);
                 kind.variable |= traits.variable;
+                if regular_rank(&traits.likeness) < regular_rank(&kind.likeness) {
+                    kind.likeness = traits.likeness;
+                }
                 if entry.name.is_empty() {
                     entry.name = family;
                 }

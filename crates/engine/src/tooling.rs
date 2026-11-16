@@ -255,7 +255,7 @@ impl Session {
         }
         // The Selection and Group Selection tools act on the instance whole.
         self.select_whole_instance(id);
-        // The tool lent to does not see the press: it counts as a press elsewhere for the clicks a
+        // The lending tool does not see the press: it counts as a press elsewhere for the clicks a
         // double-click or triple-click compares.
         self.tool.press_elsewhere();
         let lent = self.make_tool(id);
@@ -1347,6 +1347,18 @@ impl Session {
         }
         // Every value is checked before any is set, so an invalid one changes nothing.
         vectorcraft_tools::builder::check_builder_options(tool.unwrap_or(self.tool.id()), &values)?;
+        if tool.unwrap_or(self.tool.id()) == vectorcraft_tools::cropimage::ID {
+            use vectorcraft_tools::cropimage as crop;
+            // The most the selected image can be cropped to, when one is selected.
+            let max = self.doc().ok().and_then(|st| {
+                let (id, _) = crop::selected_image(&st.doc, &st.selection)?;
+                match &st.doc.node(id)?.kind {
+                    vectorcraft_doc::NodeKind::Image(im) => Some(crop::image_ppi(im).1),
+                    _ => None,
+                }
+            });
+            crop::check_options(&values, max)?;
+        }
         // The Place queue is read later, by a click outside any automation scope: its files must
         // be readable now, under the roots of whoever sets it.
         if let Some(entries) = values.get("queue").and_then(|q| q.get("entries")).and_then(Value::as_array) {

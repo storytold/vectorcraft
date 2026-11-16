@@ -111,20 +111,29 @@ fn reaches_appearance(e: &Effect) -> bool {
 /// or whose live-effect plug-ins paint what they return ([`has_painted_effects`])? It is drawn,
 /// baked and expanded through that art ([`reshape`]).
 pub fn has_transform_art(n: &Node) -> bool {
-    has_gradient_copies(n) || has_layered_copies(n) || has_transform_options(n) || has_painted_effects(n) || copied_raster_at(n).is_some()
+    has_gradient_copies(n)
+        || has_layered_copies(n)
+        || has_transform_options(n)
+        || has_painted_effects(n)
+        || (matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) && copied_raster_at(n).is_some())
 }
 
-/// Where the own effects of `n`, a path or compound path, split so that each copy of a Transform
-/// effect carries the raster effects listed before that effect ([`copied_raster_art`]): the index
-/// of the last visible Transform effect that makes copies, when a visible raster effect that
-/// follows a Transform effect ([`crate::raster::follows`]) is listed before it and every other
-/// visible effect before it is a geometry effect or such a raster effect. `None` otherwise, and for
-/// a path with a linked opacity mask, a 3D effect, Crop Marks, Vector Halftone, a live-effect
-/// plug-in that paints what it returns, or a fill or stroke that paints with geometry effects of
-/// its own.
+/// Where the own effects of `n`, a path, compound path, type, image or symbol instance, split so
+/// that each copy of a Transform effect carries the raster effects listed before that effect
+/// ([`copied_raster_art`]): the index of the last visible Transform effect that makes copies, when
+/// a visible raster effect that follows a Transform effect ([`crate::raster::follows`]) is listed
+/// before it and every other visible effect before it is a geometry effect or such a raster effect.
+/// `None` otherwise, and for an object with a linked opacity mask, a 3D effect, Crop Marks, Vector
+/// Halftone, a live-effect plug-in that paints what it returns, a fill or stroke that paints with
+/// geometry effects of its own, or (type, images and symbol instances) a perspective.
 pub(crate) fn copied_raster_at(n: &Node) -> Option<usize> {
-    if !matches!(n.kind, NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. }) {
-        return None;
+    match n.kind {
+        NodeKind::Path { guide: false, clipping: false, .. }
+        | NodeKind::Compound { .. }
+        | NodeKind::Text(_)
+        | NodeKind::Image(_)
+        | NodeKind::SymbolInstance { .. } => {}
+        _ => return None,
     }
     let effects = &n.appearance.effects;
     // Checked first: this runs for every object drawn.
@@ -143,7 +152,8 @@ pub(crate) fn copied_raster_at(n: &Node) -> Option<usize> {
         || crate::has_crop_marks(n)
         || crate::addons::halftone::has_halftone(n)
         || has_painted_effects(n)
-        || n.appearance.items.iter().any(|i| crate::paints(i) && crate::has_geometry(i.effects()));
+        || n.appearance.items.iter().any(|i| crate::paints(i) && crate::has_geometry(i.effects()))
+        || n.projection().is_some();
     (carried && !excluded).then_some(t)
 }
 
@@ -890,6 +900,16 @@ pub fn expand_outlined(doc: Option<&Document>, n: &Node, symbol_art: Option<&Nod
     as_art(doc, n, symbol_art)
 }
 
+/// Symbol instance `n` as plain art for Expand Appearance, with or without geometry effects: the
+/// art it places, reshaped by those effects when it has some, in the form [`expand_outlined`]
+/// gives. `None` for other kinds of objects and for an instance without `symbol_art`.
+pub fn instance_as_art(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
+    if !matches!(n.kind, NodeKind::SymbolInstance { .. }) {
+        return None;
+    }
+    as_art(doc, n, symbol_art)
+}
+
 /// [`reshape`] without its checks (no geometry effects: just the art).
 pub(crate) fn as_art(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
     as_art_with(doc, doc, n, symbol_art, &outline_text, &SymbolNodes::default())
@@ -921,7 +941,8 @@ fn as_art_opts(
     apart: bool,
 ) -> Option<Node> {
     if let Some(t) = copied_raster_at(n) {
-        return Some(dressed_keeping_effects(copied_raster_art(paint_doc, n, t, apart), n));
+        let outlined = |s: &Node| as_art_opts(symbols, paint_doc, s, symbol_art, outline, nodes, apart);
+        return copied_raster_art(paint_doc, n, t, apart, &outlined).map(|art| dressed_keeping_effects(art, n));
     }
     let fx = geometry_effects(n);
     let mut art = match &n.kind {
@@ -1016,20 +1037,35 @@ fn dressed_keeping_effects(mut art: Node, n: &Node) -> Node {
     art
 }
 
-/// The art of path or compound path `n` whose own effects split at `t` ([`copied_raster_at`]): the
-/// art the effects before the Transform effect at `t` make of `n`, with their raster effects, then
-/// copied by that Transform effect, each copy an object of its own carrying those raster effects
-/// moved, turned, reflected and scaled with it ([`follow_art`]), and then reshaped by the geometry
-/// effects after it. The art keeps `n`'s id and carries the raster effects from `t` on, without
-/// `n`'s name, visibility, transparency and opacity mask. The copies stop where [`copy_art`]'s do,
-/// each with its raster effects. With `apart`, the Transform effects before `t` make each copy an
-/// object of its own ([`copy_leaf`]).
-fn copied_raster_art(doc: Option<&Document>, n: &Node, t: usize, apart: bool) -> Node {
+/// The art of `n` whose own effects split at `t` ([`copied_raster_at`]): the art the effects before
+/// the Transform effect at `t` make of `n`, with their raster effects, then copied by that
+/// Transform effect, each copy an object of its own carrying those raster effects moved, turned,
+/// reflected and scaled with it ([`follow_art`]), and then reshaped by the geometry effects after
+/// it. The art keeps `n`'s id and carries the raster effects from `t` on, without `n`'s name,
+/// visibility, transparency and opacity mask. The copies stop where [`copy_art`]'s do, each with
+/// its raster effects. With `apart`, the Transform effects before `t` make each copy of a path an
+/// object of its own ([`copy_leaf`]). Type, an image or a symbol instance becomes its art through
+/// `outlined` ([`as_art_opts`]) before it is copied: type as its outlines, an image in its frame
+/// and an instance as its symbol's art, whose members take their own geometry effects first
+/// ([`crate::group::members_as_drawn`]). `None` when `outlined` gives no art.
+fn copied_raster_art(doc: Option<&Document>, n: &Node, t: usize, apart: bool, outlined: &dyn Fn(&Node) -> Option<Node>) -> Option<Node> {
     let (before, rest) = n.appearance.effects.split_at(t);
     let mut source = n.clone();
     source.appearance.effects = before.to_vec();
     let piece = match copied_raster_at(&source) {
-        Some(at) => copied_raster_art(doc, &source, at, apart),
+        Some(at) => copied_raster_art(doc, &source, at, apart, outlined)?,
+        None if needs_outline(&source) => {
+            let mut art = outlined(&source)?;
+            if matches!(source.kind, NodeKind::SymbolInstance { .. }) && geometry_effects(&source).is_empty() {
+                // The copying Transform effect reshapes what the symbol's members draw.
+                crate::group::members_as_drawn(doc, &mut art);
+            }
+            art.name = None;
+            art.visible = true;
+            (art.opacity, art.blend, art.isolate, art.knockout_shape) = (1.0, Default::default(), false, false);
+            art.extras_mut().mask = None;
+            art
+        }
         None => {
             let mut art = one_piece(&source);
             let carry = reshape_leaves_apart(&mut art, &geometry_effects(&source), &source.appearance.effects, Budget::EFFECTS, apart, doc);
@@ -1079,11 +1115,12 @@ fn copied_raster_art(doc: Option<&Document>, n: &Node, t: usize, apart: bool) ->
         carry.hide_skipped(&mut ran);
     }
     art.appearance.effects = crate::raster::without_geometry(ran.get(t..).unwrap_or_default());
-    art
+    Some(art)
 }
 
 /// The effects of `n` that paint around its whole art: all of its own, or from the Transform effect
-/// on for a path whose copies each carry the raster effects listed before it ([`copied_raster_at`]).
+/// on for a path, compound path, type, image or symbol instance whose copies each carry the raster
+/// effects listed before it ([`copied_raster_at`]).
 pub fn outer_effects(n: &Node) -> &[Effect] {
     match copied_raster_at(n) {
         Some(t) => n.appearance.effects.get(t..).unwrap_or_default(),
@@ -1119,7 +1156,7 @@ pub(crate) fn own_effects_art(doc: Option<&Document>, n: &Node) -> Option<Node> 
         return None;
     }
     if let Some(t) = copied_raster_at(n) {
-        return Some(dressed_keeping_effects(copied_raster_art(doc, n, t, false), n));
+        return copied_raster_art(doc, n, t, false, &|_| None).map(|art| dressed_keeping_effects(art, n));
     }
     if n.appearance.items.iter().any(|i| crate::paints(i) && crate::has_geometry(i.effects())) {
         // One element: its pieces never knock each other out.

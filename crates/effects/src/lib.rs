@@ -87,8 +87,8 @@ pub use raster::{
 };
 pub use reshape::{
     SYMBOL_ART_MAX_NODES, expand_outlined, follows_image_pixels, gives_image_shape, has_gradient_copies, has_instance_row_raster, has_item_geometry,
-    has_painted_effects, has_transform_art, has_transform_copies, has_transform_options, image_paint, needs_outline, outer_effects, outline_art,
-    outline_text, paint_type_piece, reshape,
+    has_painted_effects, has_transform_art, has_transform_copies, has_transform_options, image_paint, instance_as_art, needs_outline, outer_effects,
+    outline_art, outline_text, paint_type_piece, reshape,
 };
 pub use revolve::{
     CLASSIC_REVOLVE, REVOLVE, has_revolve, is_revolve, revolve_art, revolve_art_in, revolve_options, validate_revolve, validate_revolve_in,
@@ -103,8 +103,8 @@ pub use solids::{
     with_graphic,
 };
 pub use solids::{
-    GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, GRAPHICS_NOT_TAKEN, appearance_graphic_symbols, graphic_frame_at, graphics_reshaped_after,
-    rename_appearance_graphic_symbol,
+    GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, GRAPHICS_NOT_TAKEN, appearance_graphic_symbols, exports_three_d, graphic_frame_at,
+    graphics_reshaped_after, rename_appearance_graphic_symbol,
 };
 pub use stylize::{ScribbleSetting, scribble_setting_id, scribble_settings};
 pub use svg_filter::SVG_FILTER;

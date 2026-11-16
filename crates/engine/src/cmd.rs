@@ -98,6 +98,8 @@ pub(crate) mod symboledit;
 pub mod symbollib;
 pub(crate) mod tabs;
 mod textedit;
+mod xmlattrs;
+
 pub use textedit::effective_kerning;
 pub mod textstyles;
 pub(crate) mod textwrap;
@@ -233,11 +235,7 @@ pub fn has_multi(s: &Session) -> std::result::Result<(), String> {
 /// editing and symbol editing mode isolate their own layer, which does not count here; an object
 /// isolated inside them counts.
 pub(crate) fn ordinary_isolation(st: &crate::DocState) -> Option<vectorcraft_doc::NodeId> {
-    st.isolation.filter(|l| {
-        !st.doc.pattern_edit.as_ref().is_some_and(|e| e.layer == *l)
-            && !st.doc.mask_edit.as_ref().is_some_and(|e| e.layer == *l)
-            && !st.doc.symbol_edit.as_ref().is_some_and(|e| e.layer == *l)
-    })
+    vectorcraft_tools::ordinary_isolation(&st.doc, st.isolation)
 }
 /// Objects are selected ([`has_selection`]), and in isolation mode ([`ordinary_isolation`]) at
 /// least one of them is inside the isolated object: Object › Lock's and Object › Hide's items.
