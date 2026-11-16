@@ -215,6 +215,7 @@ impl Headless {
                     self.session.select_tool(&t, self.view).map_err(|e| e.to_string())?;
                 }
                 UiRequest::Dialog(k, p) => out.push(json!({"dialog": k, "params": p})),
+                UiRequest::Panel(panel) => out.push(json!({"panel": panel})),
                 UiRequest::Status(msg) => out.push(json!({"status": msg})),
                 // The place cursor's file, placed at once.
                 UiRequest::Place(p) => {

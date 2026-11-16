@@ -423,6 +423,7 @@ pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Ve
             for r in reqs {
                 match r {
                     vectorcraft_engine::UiRequest::Dialog(kind, p) => crate::dialogs::open_tool_dialog(app, &kind, p),
+                    vectorcraft_engine::UiRequest::Panel(panel) => activate_panel(app, &panel),
                     vectorcraft_engine::UiRequest::SwitchTool(t) => app.select_tool(&t),
                     vectorcraft_engine::UiRequest::Status(msg) => app.status(msg),
                     vectorcraft_engine::UiRequest::Place(p) => crate::place::place_from_cursor(app, &p),
@@ -440,5 +441,13 @@ pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Ve
             crate::panels::actions::after_journaled_edit(app);
         }
         Err(e) => app.status(e.to_string()),
+    }
+}
+
+/// Show and select `panel` where it is (`window.panel.activate`): a panel already on show stays on
+/// show, and a dock hidden by Tab shows again.
+fn activate_panel(app: &mut VectorcraftApp, panel: &str) {
+    if let Err(e) = app.run("window.panel.activate", serde_json::json!({ "panel": panel })) {
+        app.status(e);
     }
 }

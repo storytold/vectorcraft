@@ -613,3 +613,29 @@ fn an_arrow_press_without_a_drag_keeps_mixed_radii() {
     assert_eq!(radii, before, "each corner keeps its radius");
     assert!(kinds.iter().all(|k| *k == CornerKind::InvertedRound), "{kinds:?}");
 }
+
+/// A double-click on a corner widget with the Rectangle tool asks the frontend for the Transform
+/// panel, and leaves the document, its undo history, the selection and the tool as they were.
+#[test]
+fn a_double_click_on_a_corner_widget_with_a_shape_tool_asks_for_the_transform_panel() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let (mut s, id) = session();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("rectangle", v).unwrap();
+    let st = s.doc().unwrap();
+    let w = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, v.zoom, false, true, 180.0).expect("corner widgets show");
+    let at = w.visible().next().expect("a widget");
+    let (doc, selection, steps) = (st.doc.clone(), st.selection.clone(), st.history.undo.len());
+    let mut asked = vec![];
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
+        asked.extend(s.pointer(&PointerEvent::new(kind, at.x, at.y).with_mods(Mods::default()), v).unwrap());
+    }
+    assert_eq!(asked, vec![UiRequest::Panel("transform".into())]);
+    let st = s.doc().unwrap();
+    assert!(*st.doc == *doc, "the document is unchanged");
+    assert_eq!(st.selection, selection);
+    assert_eq!(st.history.undo.len(), steps, "no undo step");
+    assert!(st.interaction.is_none());
+    assert_eq!(s.tool_id(), "rectangle");
+}
