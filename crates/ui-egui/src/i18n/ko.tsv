@@ -1385,6 +1385,18 @@ antiAlias	Sharp	날카롭게
 	Copy Width Point	너비 점 복사
 	Copyright	저작권
 	Copyright Info URL:	저작권 정보 URL:
+	Save Metadata Template…	메타데이터 템플릿 저장…
+	Import Options	가져오기 옵션
+	Clear existing fields and use the template's	기존 필드를 지우고 템플릿의 필드 사용
+	Keep existing fields, but replace those the template has	기존 필드를 유지하되 템플릿에 있는 필드 바꾸기
+	Keep existing fields, but append those the template has	기존 필드를 유지하되 템플릿에 있는 필드 추가
+@msg	the template name can't be empty	템플릿 이름은 비워 둘 수 없습니다
+@msg	the template name isn't usable as a file name	템플릿 이름은 파일 이름으로 사용할 수 없습니다
+@msg	no metadata templates folder here	여기에는 메타데이터 템플릿 폴더가 없습니다
+@msg	give `name` or `path`, not both	`name` 또는 `path` 중 하나만 지정하세요
+@msg	give one of `path`, `name` and `data`	`path`, `name`, `data` 중 하나를 지정하세요
+@msg	mode must be replace, keep or append	모드는 replace, keep 또는 append여야 합니다
+@msg	the file is not an XMP metadata template	파일이 XMP 메타데이터 템플릿이 아닙니다
 	Copyright Notice:	저작권 고지:
 	Copyright Status:	저작권 상태:
 	Corner Point Angle Threshold:	모퉁이 포인트 각도 임계값:
@@ -3410,6 +3422,9 @@ mark-style	Japanese	일본식
 	Swap Fill and Stroke	칠과 선 바꾸기
 	Swap start and end arrowheads	시작과 끝 화살촉 바꾸기
 	Stylistic Alternates	스타일 대체 글자
+	Ligatures	합자
+	Ornaments	장식
+	Figures	숫자
 	Swash	스워시
 	Swatch Conflict	견본 충돌
 	Swatch Conflicts	견본 충돌
@@ -5238,6 +5253,27 @@ theme	Appearance	외관
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: 기본 제공 함수의 콜백, getter, 변환 또는 $.evalFile이 실행하는 파일 안에서는 대화 상자를 열 수 없습니다. 스크립트 자체 코드에서 호출하세요
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: `answers`의 다음 답은 {name}이(가) 아니라 {_1}에 대한 것입니다
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers`에 이 대화 상자에 대한 답이 남아 있지 않습니다
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers`에 스크립트가 사용하지 않은 답이 {n}개 있습니다
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1}은(는) 브러시 아래의 개체 {n}개를 변경하지 않았습니다({_2}). 패스만 변형합니다
+liquify-tool	Warp	왜곡
+liquify-tool	Twirl	돌리기
+liquify-tool	Pucker	오므리기
+liquify-tool	Bloat	부풀리기
+liquify-tool	Scallop	스캘럽
+liquify-tool	Crystallize	결정화
+liquify-tool	Wrinkle	주름
+liquify-kind	graphs	그래프
+liquify-kind	type	문자
+liquify-kind	symbols	심볼
+liquify-kind	images	이미지
+liquify-kind	meshes	메시
+liquify-kind	envelopes	엔벨로프
+liquify-kind	repeats	반복
+liquify-kind	placed documents	가져온 문서
+liquify-kind	blends	블렌드
+liquify-list-two	{0}, {1}	{0} 및 {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	vc.document{place} is too large for a script	vc.document{place}이(가) 스크립트에 비해 너무 큽니다
 @msg	vc.log: the log of this run is full	vc.log: 이 실행의 로그가 가득 찼습니다
 @msg	this function's script run has ended	이 함수의 스크립트 실행이 끝났습니다

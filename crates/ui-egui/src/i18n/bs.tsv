@@ -2047,6 +2047,9 @@ digits	Malayalam	Malajalam
 	Select text to set its OpenType features.	Odaberite tekst da postavite njegove OpenType mogućnosti.
 	Standard Ligatures	Standardne ligature
 	Stylistic Alternates	Stilske alternative
+	Ligatures	Ligature
+	Ornaments	Ornamenti
+	Figures	Brojke
 	Set {n}	Skup {n}
 	Swash	Ukrasni potez
 	Tabular Lining	Tabelarne brojke
@@ -2584,6 +2587,11 @@ digits	Malayalam	Malajalam
 	Author Title:	Titula autora:
 	Author:	Autor:
 	Copyright Info URL:	URL informacija o autorskim pravima:
+	Save Metadata Template…	Sačuvaj predložak metapodataka…
+	Import Options	Opcije uvoza
+	Clear existing fields and use the template's	Obriši postojeća polja i koristi polja iz predloška
+	Keep existing fields, but replace those the template has	Zadrži postojeća polja, ali zamijeni ona koja predložak sadrži
+	Keep existing fields, but append those the template has	Zadrži postojeća polja, ali dodaj ona koja predložak sadrži
 	Copyright Notice:	Obavještenje o autorskim pravima:
 	Copyright Status:	Status autorskih prava:
 	Created:	Kreirano:
