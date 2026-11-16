@@ -6740,6 +6740,54 @@ fn filled_lines_keep_the_line_colour_and_fall_back_to_thin_lines() {
     assert!(series_parts(&s, big, 0)[0].appearance.fill_paint().is_none());
 }
 
+/// Line Width sets how wide Draw Filled Lines draws the bands and is kept through save and open. A width outside 0.01
+/// to 1000 pt is refused, the same width again records no undo step, and the default 3 pt is stored as no width.
+#[test]
+fn filled_lines_take_a_line_width() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = make(&mut s, "line", ",a\nQ1,2\nQ2,2\nQ3,2");
+    s.execute("graph.setType", &json!({"id": id.0, "filledLines": true})).unwrap();
+    let height = |s: &Session| series_parts(s, id, 0)[0].geometric_bounds().unwrap().height();
+    assert!((height(&s) - 3.0).abs() < 1e-6, "3 pt by default: {}", height(&s));
+    assert_eq!(s.execute("graph.setType", &json!({"id": id.0})).unwrap()["lineWidth"], json!(3.0));
+    s.execute("graph.setType", &json!({"id": id.0, "lineWidth": 8})).unwrap();
+    assert!((height(&s) - 8.0).abs() < 1e-6, "{}", height(&s));
+    assert_eq!(s.execute("graph.setType", &json!({"id": id.0})).unwrap()["lineWidth"], json!(8.0));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+    for p in [json!({"id": id.0, "lineWidth": 8}), json!({"id": id.0, "lineWidth": 8.0, "filledLines": true}), json!({"id": id.0, "lineWidth": null})]
+    {
+        s.execute("graph.setType", &p).unwrap();
+        assert_eq!(steps(&s), before, "nothing changed: {p}");
+    }
+    for w in [json!(0), json!(-2), json!(0.005), json!(1000.5)] {
+        let e = s.execute("graph.setType", &json!({"id": id.0, "lineWidth": w})).unwrap_err().to_string();
+        assert!(e.contains(&format!("`lineWidth` must be from 0.01 to 1000 pt, not {}", w.as_f64().unwrap())), "{e}");
+        assert_eq!((steps(&s), spec(&s, id).line_width), (before, Some(8.0)), "{w}");
+    }
+    s.execute("graph.setType", &json!({"id": id.0, "lineWidth": 0.01})).unwrap();
+    assert_eq!(spec(&s, id).line_width, Some(0.01));
+    s.execute("graph.setType", &json!({"id": id.0, "lineWidth": 1000})).unwrap();
+    assert_eq!(spec(&s, id).line_width, Some(1000.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(spec(&s, id).line_width, Some(8.0));
+    // Kept through save and open.
+    let dir = vectorcraft_testkit::TempDir::new("graph-line-width");
+    let path = dir.join("width.vectorcraft");
+    s.execute("document.save", &json!({"path": path})).unwrap();
+    s.execute("document.open", &json!({"path": path})).unwrap();
+    assert_eq!(spec(&s, id).line_width, Some(8.0));
+    assert!((height(&s) - 8.0).abs() < 1e-6, "{}", height(&s));
+    // The default width is stored as no width, so the file keeps no `lineWidth`.
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setType", &json!({"id": id.0, "lineWidth": 3})).unwrap();
+    assert_eq!(spec(&s, id).line_width, None);
+    assert!(serde_json::to_value(spec(&s, id)).unwrap().get("lineWidth").is_none());
+    assert!((height(&s) - 3.0).abs() < 1e-6, "{}", height(&s));
+}
+
 #[test]
 fn overlapping_columns_keep_clear_of_the_legend_and_options_follow_the_graph_type() {
     let mut s = Session::new();
@@ -7897,6 +7945,28 @@ fn recoloring_a_graph_keeps_its_axis_lines_paint() {
     assert!(!label_paint.is_empty() && label_paint.iter().all(|l| *l == ("#ffffff".to_string(), true)), "{label_paint:?}");
 }
 
+/// Swap Fill and Stroke on an axis line keeps the swapped paint for every axis line and leaves the fill opacity the axis
+/// lines keep from another line, though the line swapped still shows 100%.
+#[test]
+fn swapping_an_axis_lines_paint_keeps_the_fill_opacity_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    let (first, second) = (lines[0].id, lines[1].id);
+    s.execute("paint.setFill", &json!({"ids": [first.0], "color": "#00ff00"})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [first.0], "item": top_row(&s, first, true), "opacity": 40})).unwrap();
+    let shown = s.doc().unwrap().doc.node(second).unwrap().appearance.fill().map(|f| f.opacity);
+    assert!(shown.is_none_or(|o| o == 1.0), "the other lines show 100% until the graph is drawn again: {shown:?}");
+    s.execute("paint.swap", &json!({"ids": [second.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    for n in line_nodes(&s, id) {
+        let fill = n.appearance.fill().map(|f| (f.paint.color().map(|c| c.to_hex()), f.opacity));
+        assert!(fill.as_ref().is_some_and(|(c, o)| c.as_deref() == Some("#000000") && (*o - 0.4).abs() < 1e-6), "{fill:?}");
+        assert!(n.appearance.stroke_paint().is_none(), "the swapped line had no fill, so the lines have no stroke");
+    }
+}
+
 /// A stroke given the whole graph, or its Axes group, is kept for its axis lines.
 #[test]
 fn a_stroke_given_the_whole_graph_or_its_axes_group_is_kept_for_its_axis_lines() {
@@ -8037,6 +8107,56 @@ fn an_object_opacity_on_an_axis_line_keeps_the_stroke_its_kind_keeps() {
         let looks = redrawn_line_looks(&mut s, id);
         assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.2 - 0.5).abs() < 1e-6), "{cmd}: {looks:?}");
     }
+}
+
+/// A stroke painted on an axis line after another axis line's stroke was set to None is kept for every axis line with
+/// the painted line's weight, not the zero weight the unpainted stroke left on its kind.
+#[test]
+fn a_stroke_painted_after_an_axis_line_lost_its_stroke_keeps_a_weight() {
+    let cases = ["paint.setStroke", "addon.color.fillToStroke", "appearance.setItem"];
+    every_case(cases, |cmd| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        let weight = line_look(&lines[1]).1;
+        assert!(weight > 0.0, "{cmd}: the line has a stroke weight: {weight}");
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "none": true})).unwrap();
+        let b = lines[1].id.0;
+        match *cmd {
+            "paint.setStroke" => s.execute(cmd, &json!({"ids": [b], "color": "#ff0000"})).unwrap(),
+            "addon.color.fillToStroke" => {
+                s.execute("paint.setFill", &json!({"ids": [b], "color": "#ff0000"})).unwrap();
+                s.execute(cmd, &json!({"ids": [b]})).unwrap()
+            }
+            _ => s.execute(cmd, &json!({"ids": [b], "index": top_row(&s, lines[1].id, false), "color": "#ff0000"})).unwrap(),
+        };
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.1 - weight).abs() < 1e-9), "{cmd}: {looks:?}");
+    });
+}
+
+/// A zero stroke weight set together with a stroke color on an axis line is kept for every axis line as set, also when
+/// a stroke is painted on another axis line before the graph is drawn again.
+#[test]
+fn a_zero_weight_set_with_a_stroke_color_on_an_axis_line_is_kept() {
+    every_case([false, true], |repaint| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "none": true})).unwrap();
+        let at = top_row(&s, lines[1].id, false);
+        s.execute("appearance.setItem", &json!({"ids": [lines[1].id.0], "index": at, "color": "#ff0000", "weight": 0})).unwrap();
+        let color = if *repaint {
+            s.execute("paint.setStroke", &json!({"ids": [lines[2].id.0], "color": "#0000ff"})).unwrap();
+            "#0000ff"
+        } else {
+            "#ff0000"
+        };
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| l.0 == color && l.1 == 0.0), "repaint {repaint}: {looks:?}");
+    });
 }
 
 /// A reorder that leaves an axis line's rows as they were keeps what its kind keeps from another line and is no edit.
@@ -9256,6 +9376,7 @@ fn graph_commands_refuse_params_of_the_wrong_type() {
         ("firstRowInFront", json!("yes"), "`firstRowInFront` must be true or false"),
         ("firstColumnInFront", json!(0), "`firstColumnInFront` must be true or false"),
         ("filledLines", json!("on"), "`filledLines` must be true or false"),
+        ("lineWidth", json!("4"), "`lineWidth` must be a number, not \"4\""),
         ("dropShadow", json!(1), "`dropShadow` must be true or false"),
         ("legendAcrossTop", json!("x"), "`legendAcrossTop` must be true or false"),
         ("type", json!(5), "`type` must be a string"),
@@ -9421,6 +9542,58 @@ fn a_drawn_graph_saved_as_ai_opens_as_a_graph_unless_the_save_warns() {
     }
     for ty in ["column", "stackedColumn", "area"] {
         assert!(live.contains(&format!("{ty} v7.ai")) && live.contains(&format!("{ty} pdf.ai")), "{ty}: {live:?}");
+    }
+}
+
+/// A line graph the graph tools draw with Draw Filled Lines, saved as `.ai` in either form, opens again as the same graph
+/// with its filled lines and Line Width, the default 3 pt included, and without a warning about graphs. A Line Width past
+/// the records' 100 pt is saved as the graph's art, with the warning.
+#[test]
+fn a_drawn_graph_with_filled_lines_saved_as_ai_opens_with_them() {
+    let dir = vectorcraft_testkit::temp_dir("graph-ai-filled");
+    for (width, live) in [(None, true), (Some(8.0), true), (Some(150.0), false)] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let csv = ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,1,6";
+        let id = s.execute("graph.create", &json!({"type": "line", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        let mut options = json!({"id": id, "filledLines": true});
+        if let Some(w) = width {
+            options["lineWidth"] = json!(w);
+        }
+        s.execute("graph.setType", &options).unwrap();
+        let written = spec(&s, NodeId(id));
+        assert_eq!((written.filled_lines, written.line_width), (true, width));
+        for (name, version) in [("v7.ai", Some("7")), ("pdf.ai", None)] {
+            let path = dir.join(format!("{width:?}-{name}"));
+            let mut p = json!({"path": path, "format": "ai"});
+            if let Some(v) = version {
+                p["aiVersion"] = json!(v);
+            }
+            let r = s.execute("file.saveAs", &p).unwrap();
+            let notes = r["warnings"].as_array().cloned().unwrap_or_default();
+            let warned = notes.iter().any(|w| w.as_str().is_some_and(|w| w.starts_with("graphs are written as their art")));
+            assert_eq!(warned, !live, "{width:?} {name}: {r}");
+            let mut again = Session::new();
+            again.execute("document.open", &json!({"path": path})).unwrap();
+            let mut graphs = vec![];
+            again.doc().unwrap().doc.walk(|n| graphs.extend(n.extras().graph.as_deref().map(|g| (n.id, g.clone()))));
+            assert_eq!(graphs.len(), usize::from(live), "{width:?} {name}");
+            if let Some((gid, g)) = graphs.first() {
+                assert_eq!((g.kind, g.cells(), g.filled_lines, g.line_width), (written.kind, written.cells(), true, width), "{width:?} {name}");
+                assert_eq!(g.filled_line_width(), written.filled_line_width(), "{width:?} {name}");
+                // With Draw Filled Lines turned off, each series draws its thin 1 pt line again.
+                again.execute("select.set", &json!({"ids": [gid.0]})).unwrap();
+                again.execute("graph.setType", &json!({"id": gid.0, "filledLines": false})).unwrap();
+                for series in 0..2 {
+                    let line = series_parts(&again, *gid, series)
+                        .into_iter()
+                        .any(|p| p.appearance.fill_paint().is_none() && !p.appearance.stroke_paint().is_none() && p.appearance.stroke_width() == 1.0);
+                    assert!(line, "{width:?} {name}: series {series} draws no thin line");
+                }
+            }
+        }
     }
 }
 

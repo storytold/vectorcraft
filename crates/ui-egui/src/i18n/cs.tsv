@@ -902,6 +902,7 @@
 	Auto Color	Automatická barva
 	Automatic	Automaticky
 	Isolate Selected Group	Izolovat vybranou skupinu
+	Isolate Selected Path	Izolovat vybranou cestu
 	Isolate Selected Object	Izolovat vybraný objekt
 	Exit Isolation Mode	Ukončit izolovaný režim
 	Make Clipping Mask	Vytvořit ořezovou masku
@@ -1448,6 +1449,8 @@ lighting	Light	Světlo
 	Lasso Tool	Nástroj Laso
 	Enclosing Lasso Tool	Nástroj obklopující laso
 	Enclosing Lasso	Obklopující laso
+	Polygonal Lasso Tool	Nástroj Mnohoúhelníkové laso
+	Polygonal Lasso	Mnohoúhelníkové laso
 	Lasso	Laso
 	Line Cut Tool	Nástroj Řez čarou
 	Line Graph Tool	Nástroj Spojnicový graf
@@ -1537,6 +1540,10 @@ lighting	Light	Světlo
 	Play Current Selection	Přehrát aktuální výběr
 	Save Actions…	Uložit akce…
 	Load Actions…	Načíst akce…
+	Reset Actions	Obnovit akce
+	Replace the current actions with the default set?	Nahradit aktuální akce výchozí sadou?
+	Append adds the default set after the current sets instead.	Tlačítko Připojit místo toho přidá výchozí sadu za aktuální sady.
+	Append	Připojit
 	Reflect Horizontal	Zrcadlit vodorovně
 	Rotate 90° CW	Otočit o 90° po směru hodin
 	Set 1	Sada 1
@@ -1758,6 +1765,10 @@ digits	Malayalam	Malajálamské
 	Em Box	Čtverčík
 	x-Height	Výška x
 	ICF Box	Rámeček ICF
+	Show Sample	Zobrazit ukázku
+	Hide Sample	Skrýt ukázku
+	Max Ascent/Descent	Max. výška/hloubka
+	Max Ascender	Max. horní dotah
 	Copy Color Value (Hex)	Kopírovat hodnotu barvy (hex)
 	Create New Swatch…	Vytvořit novou položku vzorníku…
 	Name 40%	Název 40 %
@@ -3015,6 +3026,11 @@ digits	Malayalam	Malajálamské
 	Show smooth color wheel	Zobrazit plynulé barevné kolo
 	Show segmented color wheel	Zobrazit segmentované barevné kolo
 	Show color bars	Zobrazit barevné pruhy
+	Show brightness and hue on wheel	Zobrazit jas a odstín na kole
+	Show saturation and hue on wheel	Zobrazit sytost a odstín na kole
+	Add Color Tool	Nástroj Přidat barvu
+	Remove Color Tool	Nástroj Odstranit barvu
+	Remove Color	Odstranit barvu
 	Find the selected colors in the artwork	Najít vybrané barvy v kresbě
 	Harmony Rules	Pravidla harmonie
 	Keep this row's colors (exclude)	Ponechat barvy tohoto řádku (vyloučit)
@@ -3706,6 +3722,8 @@ theme	Appearance	Motiv
 	Find Font Files	Najít soubory písem
 	Add Font Files	Přidat soubory písem
 	Font List	Seznam písem
+	Show Similar Fonts	Zobrazit podobná písma
+	Clear Similar Fonts	Zrušit podobná písma
 	Fonts in Document	Písma v dokumentu
 	Refresh Font List	Obnovit seznam písem
 	Replace Font	Nahradit písmo
@@ -3741,6 +3759,7 @@ theme	Appearance	Motiv
 	Connect Data Points	Spojit datové body
 	Edge-to-Edge Lines	Čáry od okraje k okraji
 	Draw Filled Lines	Kreslit vyplněné čáry
+	Line Width	Šířka čáry
 	Tick Values	Hodnoty značek
 	Override Calculated Values	Přepsat vypočítané hodnoty
 	Divisions	Dílky
@@ -4931,6 +4950,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	Divide Objects Below: select exactly one path	Rozdělit objekty pod: vyberte právě jednu cestu
 @msg	Downloaded {what}	Staženo: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Rozložit vzhled: výběr má základní vzhled
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	některé rastrové efekty nebyly převedeny na obrazy: zabraly by více než 1 024 obrazů nebo celkem 256 megapixelů
 @msg	Expand: no brush strokes selected	Rozložit: nejsou vybrány žádné tahy štětcem
 @msg	Expand: no gradient fills	Rozložit: žádné přechodové výplně
 @msg	Expand: nothing to expand	Rozložit: není co rozložit
@@ -6374,7 +6394,7 @@ mark-style	Japanese	Japonské
 @msg	Unknown dimension style	Neznámý styl kóty
 @msg	Unknown unit	Neznámá jednotka
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Uzavře kruhové konce otevřených profilů. Boční řezy částečného otočení zůstávají otevřené.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Uzavře kruhové konce otevřených profilů. Boční řezy částečného otočení se také uzavřou.
 @msg	span must be "object" or "selection", got {v}	span musí být "object" nebo "selection", ne {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" umísťuje `gradient`, ne vzorník
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" umísťuje přechod: zadejte `gradient`
@@ -6526,6 +6546,7 @@ mark-style	Japanese	Japonské
 	Single Word Justification:	Zarovnání jednoho slova:
 	Full Justify	Zarovnat do bloku
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum nesmí překročit požadovanou hodnotu ani požadovaná hodnota maximum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: minimum nesmí překročit požadovanou hodnotu ani požadovaná hodnota maximum
 	Justification	Zarovnání do bloku
 	Add filters from the list above	Přidejte filtry ze seznamu výše
 	Add to Stack	Přidat na zásobník
@@ -7465,6 +7486,22 @@ breakText	Glyphs	Glyfy
 	Remove Gaps	Odstranit mezery
 @msg	that makes too many pieces (at most 100000): make the dashes longer	tím vznikne příliš mnoho dílů (nejvýše 100000): prodlužte čárky
 @msg	select paths, or segments, to divide	vyberte cesty nebo segmenty k rozdělení
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Společné tečny…
+	Common Tangents	Společné tečny
+	Tangents	Tečny
+	Centerline	Středová čára
+	External	Vnější
+	Internal	Vnitřní
+@msg	select two closed paths	vyberte dvě uzavřené cesty
+@msg	a selected path is open	vybraná cesta je otevřená
+@msg	a selected path is not convex	vybraná cesta není konvexní
+@msg	a selected path has no area	vybraná cesta nemá žádnou plochu
+@msg	a selected path has more than 10000 segments	vybraná cesta má více než 10000 segmentů
+@msg	the two paths have the same outline	obě cesty mají stejný obrys
+@msg	One path lies inside the other, so they have no common tangents	Jedna cesta leží uvnitř druhé, takže nemají žádné společné tečny
+@msg	The paths overlap, so they have no internal tangents	Cesty se překrývají, takže nemají žádné vnitřní tečny
+@msg	One path lies inside the other, so they have no internal tangents	Jedna cesta leží uvnitř druhé, takže nemají žádné vnitřní tečny
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Rozložit čárky na cesty
 @msg	select paths with dashed strokes to expand	vyberte cesty s čárkovaným tahem k rozložení
@@ -7507,6 +7544,11 @@ breakText	Glyphs	Glyfy
 	Malayalam	Malajálamština
 	Odia	Urijština
 	Urdu	Urdština
+	Sanskrit	Sanskrt
+	Nepali	Nepálština
+	Assamese	Ásámština
+	Konkani	Konkánština
+	Sindhi	Sindhština
 	VectorCraft {release} and later (version {n})	VectorCraft {release} a novější (verze {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Exportovat všechny otevřené dokumenty jako PDF
@@ -7540,7 +7582,7 @@ breakText	Glyphs	Glyfy
 @msg	stroke cannot be set on a symbol instance	stroke nelze nastavit u instance symbolu
 @msg	fill on a symbol instance must be a solid color or none	fill instance symbolu musí být plná barva nebo none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} nelze nastavit u obrazu bez efektu Převést na tvar nebo Převést objekt na obrys
-@msg	pass newName, registration, exportType, nineSlice and/or type	zadejte newName, registration, exportType, nineSlice a/nebo type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	zadejte newName, registration, exportType, nineSlice, type a/nebo alignToPixelGrid
 	Text Flow	Tok textu
 	By Rows	Po řádcích
 	By Columns	Po sloupcích
@@ -7882,6 +7924,8 @@ breakText	Glyphs	Glyfy
 @msg	No bridge of this width fits across the selected art	Přes vybranou kresbu se nevejde žádný můstek této šířky
 @msg	Some islands could not be joined to the area around the art	Některé ostrůvky nebylo možné připojit k oblasti kolem kresby
 @msg	`width` must be from {lo} to {hi} pt	`width` musí být od {lo} do {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` musí být od -180 do 180 stupňů
+@msg	`roundness` must be from 1 to 100%	`roundness` musí být od 1 do 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` musí být celé číslo od 1 do {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Rámeček a linie pro vybírání…
 	Weed Box and Lines	Rámeček a linie pro vybírání
@@ -9136,7 +9180,9 @@ breakText	Glyphs	Glyfy
 @msg	position must be normal, superscript or subscript	position musí být normal, superscript nebo subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position musí být topLeft, topRight, bottomLeft nebo bottomRight
 @msg	positions must be between 0 and 100000 pt	positions musí být mezi 0 a 100000 pt
+@msg	ppi can't be more than {max} for this image	ppi nemůže být pro tento obrázek víc než {max}
 @msg	ppi must be a positive number, not {ppi}	ppi musí být kladné číslo, ne {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim ponechává pixely obrázku beze změny: vynechte ppi
 @msg	ppi must be between 1 and 2400	ppi musí být mezi 1 a 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` není transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape musí být clippingMask|transparency
@@ -9732,3 +9778,23 @@ breakText	Glyphs	Glyfy
 	No objects are selected.	Nejsou vybrány žádné objekty.
 	Open a document to mark its fold lines.	Otevřete dokument, abyste označili jeho linie skladu.
 	Remove Fold Line Role	Odstranit typ linie
+	Check	Zkontrolovat
+	Check Fold Lines	Zkontrolovat linie skladu
+@msg	No cut lines are in the selection.	Ve výběru nejsou žádné linie řezu.
+@msg	No cut lines are in the document.	V dokumentu nejsou žádné linie řezu.
+@msg	The cut lines do not enclose an area.	Linie řezu neohraničují žádnou plochu.
+@msg	A cut line ends without meeting another cut line.	Linie řezu končí, aniž by se setkala s jinou linií řezu.
+@msg	A gap between cut lines was closed.	Mezera mezi liniemi řezu byla uzavřena.
+@msg	The fold lines are too complex to check.	Linie skladu jsou příliš složité na kontrolu.
+@msg	A cut line and a crease lie on top of each other.	Linie řezu a linie bigu leží přes sebe.
+@msg	No cut lines are among the given objects.	Mezi zadanými objekty nejsou žádné linie řezu.
+@msg	Two fold lines lie on top of each other.	Dvě linie skladu leží přes sebe.
+@msg	A crease ends inside a panel.	Linie bigu končí uvnitř panelu.
+@msg	A crease does not divide two panels.	Linie bigu nerozděluje dva panely.
+@msg	A crease lies outside the cut outline, wholly or in part.	Linie bigu leží zcela nebo zčásti mimo obrys řezu.
+@msg	The pieces of a hinge are not on one straight line.	Části jednoho pantu neleží na jedné přímce.
+@msg	A gap between cut lines is too narrow to tell apart.	Mezera mezi liniemi řezu je příliš úzká na rozlišení.
+@msg	A cut-out area holds other fold lines or another blank.	Vyříznutá oblast obsahuje další linie skladu nebo jiný přířez.
+@msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
+@msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}

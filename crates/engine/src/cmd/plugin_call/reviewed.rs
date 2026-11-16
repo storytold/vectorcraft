@@ -40,11 +40,13 @@ pub(super) const ALLOWED: &[&str] = &[
     "addon.image.colorMask",
     "addon.image.removeBackground",
     "addon.image.removeColorMask",
+    "addon.packaging.check",
     "addon.packaging.roles",
     "addon.packaging.setRole",
     "addon.packaging.setRoleSwatch",
     "addon.pathtools.addPoints",
     "addon.pathtools.close",
+    "addon.pathtools.commonTangents",
     "addon.pathtools.corner",
     "addon.pathtools.cornerRemove",
     "addon.pathtools.cornerSet",
@@ -705,8 +707,9 @@ pub(super) const ALLOWED: &[&str] = &[
 ];
 
 /// Commands a plug-in may not call although no rule refuses them, in order: they change the
-/// preferences, a tool's options, a drag's state or the font names the whole app knows, run
-/// plug-ins again, or read a file and report where it is on disk.
+/// preferences, a tool's options, a drag's state or the font names the whole app knows, list the
+/// fonts installed on the system as `text.fontList` does, run plug-ins again, or read a file and
+/// report where it is on disk.
 pub(super) const DENIED: &[&str] = &[
     "addon.cleanup.splitText",
     "addon.pathtools.movePointsTogether",
@@ -719,5 +722,6 @@ pub(super) const DENIED: &[&str] = &[
     "object.pathfinder.options",
     "stroke.arrowheads.edit",
     "stroke.arrowheads.list",
+    "text.similarFonts",
     "type.compositeFonts.set",
 ];
