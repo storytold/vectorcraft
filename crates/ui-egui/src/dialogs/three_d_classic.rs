@@ -70,7 +70,7 @@ fn surfaces(app: &crate::VectorcraftApp, ctx: &egui::Context, d: &Dialog) -> Opt
     // The effect being edited, when the dialog edits one already on the object.
     let index = d.fields.get("__index").and_then(Value::as_u64).map(|i| i as usize);
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    (id.0, item, index, &effect, p.to_string(), st.revision).hash(&mut hasher);
+    (st.uid, id.0, item, index, &effect, p.to_string(), st.revision).hash(&mut hasher);
     let key = hasher.finish();
     let cache = egui::Id::unique("map-art-surfaces");
     if let Some((at, kept)) = ctx.data(|m| m.get_temp::<(u64, std::sync::Arc<Vec<MapSurface>>)>(cache))
