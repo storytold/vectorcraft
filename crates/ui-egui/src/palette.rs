@@ -8,6 +8,8 @@ use serde_json::json;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, menus};
 
+mod search;
+
 /// Engine commands the palette leaves out, each with the UI command of the same name that runs it
 /// the way the panels and menus do: (engine id, UI command id). The Layers panel's Delete
 /// Selection asks before deleting a layer that holds art, and the other UI commands open the
@@ -275,35 +277,82 @@ pub(crate) struct Entry {
     /// label and the id (and the id of the engine command a UI command wraps), lowercased, one per
     /// line: a query word (which has no line break) matches within one of them.
     haystack: String,
+    /// The English menu path of the first item of the menu bar shown that runs the entry
+    /// ([`search::menu_homes`]), if one does.
+    home: Option<String>,
+    /// The English label of that item of the menu bar, which may differ from the entry's (File ›
+    /// Exit runs Quit VectorCraft), or empty.
+    menu_item: &'static str,
+    /// The entry's kind, in the order [`search::kind`] ranks kinds.
+    kind: u8,
 }
 
-/// The palette's entries in `lang`. They are built when the language, the installed plug-ins or
-/// the keyboard shortcuts (shown beside each entry) change, not on every frame while a query is
-/// typed.
+/// The palette's entries, the index a query is looked up in, and the last query's ranked results.
+pub(crate) struct Catalog {
+    list: Vec<Entry>,
+    index: search::Index,
+    ranked: std::sync::Mutex<Option<(String, Arc<[u32]>)>>,
+}
+
+impl std::ops::Deref for Catalog {
+    type Target = [Entry];
+
+    fn deref(&self) -> &[Entry] {
+        &self.list
+    }
+}
+
 /// What the entries depend on: the language, the installed plug-ins and the shortcuts.
 fn cache_key(lang: crate::i18n::Lang) -> (&'static str, u64, u64) {
     (lang.code(), menus::plugin_revision(), crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed))
 }
 
-fn entries(ctx: &egui::Context, lang: crate::i18n::Lang) -> Arc<Vec<Entry>> {
-    type Cached = ((&'static str, u64, u64), Arc<Vec<Entry>>);
+/// The palette's entries in `lang` with the in-window menu bar.
+#[cfg(test)]
+fn entries(ctx: &egui::Context, lang: crate::i18n::Lang) -> Arc<Catalog> {
+    entries_in(ctx, lang, false)
+}
+
+/// The palette's entries in `lang`, with the native menu bar when `native`. They and their index
+/// are built the first time the palette opens after the language, the installed plug-ins, the
+/// keyboard shortcuts (shown beside each entry) or the menu bar change, not at start and not on
+/// every frame while a query is typed.
+fn entries_in(ctx: &egui::Context, lang: crate::i18n::Lang, native: bool) -> Arc<Catalog> {
+    type Cached = ((&'static str, u64, u64), bool, Arc<Catalog>);
     let key = cache_key(lang);
     let id = egui::Id::unique("palette-entries");
-    if let Some((k, v)) = ctx.data(|d| d.get_temp::<Cached>(id))
+    if let Some((k, n, v)) = ctx.data(|d| d.get_temp::<Cached>(id))
         && k == key
+        && n == native
     {
         return v;
     }
-    let built: Arc<Vec<Entry>> = Arc::new(build(lang));
-    ctx.data_mut(|d| d.insert_temp::<Cached>(id, (key, built.clone())));
+    let built = Arc::new(catalog(lang, native));
+    ctx.data_mut(|d| d.insert_temp::<Cached>(id, (key, native, built.clone())));
     built
+}
+
+/// The entries of [`build_in`] and their index.
+fn catalog(lang: crate::i18n::Lang, native: bool) -> Catalog {
+    let list = build_in(lang, native);
+    let shown_homes: Vec<Option<String>> =
+        list.iter().map(|e| e.home.as_deref().map(|h| format!("{} › {}", shown_label(lang, h), crate::i18n::tr(lang, e.menu_item)))).collect();
+    let index = search::Index::build(&list, &shown_homes);
+    Catalog { list, index, ranked: std::sync::Mutex::new(None) }
+}
+
+/// The palette's entries in `lang` with the in-window menu bar.
+#[cfg(test)]
+fn build(lang: crate::i18n::Lang) -> Vec<Entry> {
+    build_in(lang, false)
 }
 
 /// The palette's entries in `lang`: [`items`], then one per filter plug-in's Object › Plug-ins
 /// item (`plugin:<id>`), whose name is not translated, each with a name no result for another id
 /// shows, in English and in `lang` ([`distinct_names`]). A query still matches the name before
-/// it was made distinct.
-fn build(lang: crate::i18n::Lang) -> Vec<Entry> {
+/// it was made distinct. Each entry's menu home is read from the native menu bar when `native`.
+fn build_in(lang: crate::i18n::Lang, native: bool) -> Vec<Entry> {
+    let homes = search::menu_homes(native);
     let mut drafts = drafts();
     drafts.extend(crate::shortcut_editor::filter_items().iter().map(|f| Draft {
         translates: false,
@@ -322,7 +371,9 @@ fn build(lang: crate::i18n::Lang) -> Vec<Entry> {
                 haystack.push('\n');
                 haystack.push_str(&engine.to_lowercase());
             }
-            Entry { id: d.id, shortcut: d.shortcut, shown, haystack }
+            let (home, menu_item) = homes.get(&d.id).map_or((None, ""), |(path, item)| (Some(path.clone()), *item));
+            let kind = search::kind(&d.id, home.as_deref());
+            Entry { id: d.id, shortcut: d.shortcut, shown, haystack, home, menu_item, kind }
         })
         .collect()
 }
@@ -362,19 +413,21 @@ pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
     }
 }
 
-/// Every entry that holds every word of the lowercased query `q`, the ones whose name without its
-/// menu path is the query (the Layers panel for "layers") first, each group in catalog order.
-/// [`show`] lists the first [`MAX_RESULTS`] and counts the rest.
-fn matching<'a>(entries: &'a [Entry], q: &str) -> Vec<&'a Entry> {
-    let words: Vec<&str> = q.split_whitespace().collect();
-    let whole = words.join(" ");
-    // The plain, English and shown names are the haystack's first three lines.
-    let named = |e: &Entry| e.haystack.lines().take(3).any(|l| l.rsplit(" › ").next().is_some_and(|n| n.trim_end_matches('…') == whole));
-    let mut found: Vec<&Entry> = entries.iter().filter(|e| words.iter().all(|w| e.haystack.contains(w))).collect();
-    if !whole.is_empty() {
-        found.sort_by_key(|e| !named(e));
-    }
-    found
+/// The entries the query `q` matches, best first ([`search::rank`]). The ranking of the last query
+/// is kept, so a frame that draws the same query does not rank again. [`show`] lists the first
+/// [`MAX_RESULTS`] and counts the rest.
+fn matching<'a>(catalog: &'a Catalog, q: &str) -> Vec<&'a Entry> {
+    let q = search::normalize(q);
+    let kept = catalog.ranked.lock().ok().and_then(|last| last.as_ref().filter(|(k, _)| *k == q).map(|(_, r)| r.clone()));
+    let ranked = kept.unwrap_or_else(|| {
+        let ranked: Arc<[u32]> = search::rank(&catalog.list, &catalog.index, &q).into();
+        // A poisoned lock only loses the kept ranking: the next frame ranks again.
+        if let Ok(mut last) = catalog.ranked.lock() {
+            *last = Some((q, ranked.clone()));
+        }
+        ranked
+    });
+    ranked.iter().filter_map(|&i| catalog.list.get(i as usize)).collect()
 }
 
 /// The height of a result row, in points: one line of 13-point body text.
@@ -461,8 +514,9 @@ fn nearest_in_view(sel: usize, offset: f32, view: f32, n: usize) -> usize {
     sel.clamp(first, last)
 }
 
-/// The highlighted result, the query it belongs to, the list's scroll offset and the list's height.
-type Highlight = (usize, String, f32, f32);
+/// The highlighted result, the query it belongs to, the list's scroll offset, the list's height
+/// and the highlighted result's id.
+type Highlight = (usize, String, f32, f32, String);
 
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // The widget that had the keyboard focus when the palette opened takes it back when the palette
@@ -492,7 +546,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     crate::shortcuts::hold_back_keys(app, ctx);
     let t = Tokens::get(ctx);
     let q = app.ui.palette_query.to_lowercase();
-    let entries = entries(ctx, crate::i18n::current());
+    let entries = entries_in(ctx, crate::i18n::current(), app.services.native_menu.is_some());
     let mut matches = matching(&entries, &q);
     let total = matches.len();
     matches.truncate(MAX_RESULTS);
@@ -500,12 +554,19 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // The highlighted result (#1757): Up and Down move it (wrapping), Page Up and Page Down move it
     // by a page, the pointer over a result takes it, and a new query starts again from the first.
     let sel_id = egui::Id::unique("palette-selected");
-    let (mut sel, last_q, mut offset, last_view) = ctx.data(|d| d.get_temp::<Highlight>(sel_id)).unwrap_or_default();
+    let (mut sel, last_q, mut offset, last_view, last_id) = ctx.data(|d| d.get_temp::<Highlight>(sel_id)).unwrap_or_default();
     let mut view = last_view;
     let new_query = last_q != q;
+    // The highlight stays on its result when the results change under the same query, as when a
+    // plug-in is installed, a shortcut changes or the language changes; it goes to the first
+    // result when its result is gone.
+    let held = sel;
     if new_query {
         sel = 0;
+    } else if matches.get(sel).is_none_or(|e| e.id != last_id) {
+        sel = matches.iter().position(|e| e.id == last_id).unwrap_or(0);
     }
+    let moved = sel != held;
     let n = matches.len();
     let mut moves = Moves::default();
     if n > 0 {
@@ -569,7 +630,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     // `show_rows` adds the item spacing to each row, and rows touch.
                     ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
                     let mut area = egui::ScrollArea::vertical().id_salt("palette-results").max_height(view).auto_shrink([false, true]);
-                    if new_query || moves.any() || resized {
+                    if new_query || moves.any() || resized || moved {
                         offset = offset_showing(sel, if new_query { 0.0 } else { offset }, view);
                         area = area.vertical_scroll_offset(offset);
                     }
@@ -639,7 +700,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if sel != drawn {
         ctx.request_repaint();
     }
-    ctx.data_mut(|d| d.insert_temp::<Highlight>(sel_id, (sel, q, offset, view)));
+    let sel_key = matches.get(sel).map(|e| e.id.clone()).unwrap_or_default();
+    ctx.data_mut(|d| d.insert_temp::<Highlight>(sel_id, (sel, q, offset, view, sel_key)));
     if let Some(id) = run {
         app.ui.palette_open = false;
         run_pick(app, &id);
@@ -1312,7 +1374,7 @@ mod tests {
     /// leaves it showing rather than hiding it as the Window menu item does.
     #[test]
     fn a_panel_is_a_result_whose_pick_shows_it() {
-        let entries = build(Lang::EN);
+        let entries = catalog(Lang::EN, false);
         let panels: Vec<&Entry> = entries.iter().filter(|e| e.id.starts_with("panel:")).collect();
         assert_eq!(panels.len(), crate::state::all_panels().count());
         // Many results hold "layers" in their menu path; the panel, named Layers, is shown first, and "color guide" shows the Color Guide panel first too.
@@ -2077,5 +2139,55 @@ mod tests {
         window.click(egui::pos2(window.popup().center().x, ((row.2 + row.3) / 2.0) as f32));
         assert!(!window.app.ui.palette_open);
         assert!(crate::panel_docking::showing(&window.app.ui, &panel), "{panel}: {}", window.app.ui.status);
+    }
+
+    /// The entries and their index are built when the palette first opens, not before.
+    #[test]
+    fn the_search_index_is_built_when_the_palette_opens() {
+        type Cached = ((&'static str, u64, u64), bool, Arc<Catalog>);
+        let built = |ctx: &egui::Context| ctx.data(|d| d.get_temp::<Cached>(egui::Id::unique("palette-entries"))).is_some();
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let ctx = egui::Context::default();
+        let frame = |app: &mut VectorcraftApp| {
+            ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui.ctx())).textures_delta.clear();
+        };
+        frame(&mut app);
+        assert!(!built(&ctx), "nothing is built while the palette is closed");
+        app.ui.palette_open = true;
+        frame(&mut app);
+        assert!(built(&ctx));
+    }
+
+    /// The highlight stays on its result when the results change under the same query: when a
+    /// plug-in whose name ranks above it is installed, a shortcut changes, or the language
+    /// changes.
+    #[test]
+    fn the_highlight_stays_on_its_result_when_the_results_change() {
+        use vectorcraft_plugins::wat as tpl;
+        let mut open = Open::new("group", WINDOW);
+        open.press(egui::Key::ArrowDown, 3);
+        let held = |open: &Open| open.ctx.data(|d| d.get_temp::<Highlight>(egui::Id::unique("palette-selected"))).unwrap();
+        let id = held(&open).4;
+        assert_eq!(open.listed().get(3), Some(&id));
+        let filter = "test.UI.palette_highlight-group";
+        let manifest = format!(r#"{{"id":"{filter}","name":"Group","version":"1","kind":"filter","params":{{}}}}"#);
+        vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+        open.frame(vec![]);
+        let listed = open.listed();
+        let plugin = listed.iter().position(|r| *r == format!("plugin:{filter}"));
+        vectorcraft_plugins::registry::remove(filter);
+        assert!(plugin.is_some_and(|p| p < 3), "the plug-in ranks above the highlight: {listed:?}");
+        let (sel, .., now) = held(&open);
+        assert_eq!((listed.get(sel), &now), (Some(&id), &id), "after the plug-in was installed");
+        crate::shortcut_editor::GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        open.frame(vec![]);
+        assert_eq!(held(&open).4, id, "after a shortcut changed");
+        crate::i18n::set_current(Lang::from_code("de").unwrap());
+        open.frame(vec![]);
+        let (sel, .., now) = held(&open);
+        let de = entries(&open.ctx, Lang::from_code("de").unwrap());
+        let de_listed: Vec<String> = matching(&de, "group").iter().map(|e| e.id.clone()).collect();
+        crate::i18n::set_current(Lang::EN);
+        assert_eq!((de_listed.get(sel), &now), (Some(&id), &id), "after the language changed");
     }
 }
