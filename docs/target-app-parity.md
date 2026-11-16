@@ -2624,6 +2624,21 @@ Edit › Copy and Cut put the selected ruler guides on the clipboard, with the s
   `live_paint_bucket_drag_rejects_invalid_points_atomically` covers invalid command input.
   Behaviour source: [Paint with the Live Paint Bucket tool](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/learn-painting-basics/paint-with-the-live-paint-bucket-tool.html).
   Scores and estimates unchanged.
+- **Live Paint Bucket stroke drag:** starting on an edge (Shift with Paint Fills alone, or a
+  plain press with Paint Strokes on), a drag paints with the current stroke that edge and every
+  visible edge of the same group it crosses or touches, including edges between pointer events;
+  edges of other groups and hidden edges keep their strokes. The gesture is one Undo step, Escape
+  cancels it, and a drag over edges that already have the stroke records no undo step. A drag
+  that starts on a face still fills only faces. `livePaint.strokeEdge` takes the drag's `points`
+  and `continuation` as `livePaint.fill` does. Regression evidence:
+  `live_paint_bucket_drag_strokes_crossed_edges_as_one_undo`,
+  `live_paint_bucket_stroke_drag_no_op_keeps_history`,
+  `live_paint_stroke_drag_rejects_invalid_points_atomically` and the tool's
+  `bucket_edge_drag_previews_points_and_commits_once`,
+  `visible_edges_along_finds_crossed_and_near_edges` and
+  `bucket_edge_double_click_joins_through_an_edge_the_first_drag_stroked`. The help page describes dragging across
+  edges to stroke several at once: [Paint with the Live Paint Bucket tool](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/learn-painting-basics/paint-with-the-live-paint-bucket-tool.html);
+  how a drag finds the edges it crosses is VectorCraft's own rule. Scores and estimates unchanged.
 - **Live Paint Bucket cursors:** over a face a click fills (of a Live Paint group, or a region of
   the selected paths) the cursor is a filled paint bucket, over an edge it paints it is a brush,
   and where a click paints nothing it is an empty bucket. It follows Paint Fills, Paint Strokes

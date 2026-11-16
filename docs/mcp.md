@@ -4092,8 +4092,12 @@ already walks Image Trace. Short agent entry points:
   With `paintStrokes` alone on, a click runs `livePaint.strokeEdge` on the edge within 4 screen pixels of the pointer,
   or nothing when none is in reach, and Shift-click runs `livePaint.fill`. With both on, a click runs
   `livePaint.strokeEdge` when an edge is within 4 screen pixels of the pointer and `livePaint.fill` otherwise, and
-  Shift-click runs `livePaint.fill`. With both off, a click runs nothing. With `highlight` off, the face or edge under
-  the pointer is not outlined.
+  Shift-click runs `livePaint.fill`. With both off, a click runs nothing. A drag from a press that runs
+  `livePaint.strokeEdge` previews it with the drag's path in `points` (and `continuation` past 4096 points), so the edge
+  and every edge of the same group that the drag crosses or comes within 0.0001 pt of take the stroke, hidden edges and
+  other groups' edges skipped; the release keeps it as one undo step and Escape before the release cancels it. A drag
+  from a press that fills a face fills only faces. With `highlight` off, the face or edge under the pointer is not
+  outlined.
   A double-click runs the command a click there runs with `scope: "connected"`, and a triple-click with
   `scope: "samePaint"`; Alt held runs nothing, and so does Cmd/Ctrl (`mods.cmd`), whose presses go to the selection
   tool Cmd lends. With Space held (`mods.space`, the view tools), a press, a
@@ -4125,9 +4129,10 @@ already walks Image Trace. Short agent entry points:
   defaults to the face's fill or the stroke paint the edge draws with. `livePaint.strokeEdge {scope: "connected", through}`
   takes `through`, at most 4096 ids of the group's edges, each given once, that the join counts as drawing with `match`
   whatever they draw with now; a hidden edge among them is still skipped. The tool passes each other edge of the group
-  that either of the double-click's two clicks painted and that drew with `match` before that click. `through` with
+  that either of the double-click's two clicks painted, by its press or its drag, and that drew with `match` before
+  that click. `through` with
   another scope, or one that is not an array of the group's edge ids or names an edge twice, is an error and changes
-  nothing. `livePaint.fill` refuses a `scope` other than `"one"` with `points`. Both replies add `count`, the number of
+  nothing. `livePaint.fill` and `livePaint.strokeEdge` refuse a `scope` other than `"one"` with `points`. Both replies add `count`, the number of
   faces or edges the click reaches, including those that already had the paint.
   With the Live Paint Bucket selected and no drag in progress, Left and Right without Shift, Alt or Cmd/Ctrl (which
   keep their shortcuts) run `paint.setFill {swatch, ids: []}` (or
@@ -4135,7 +4140,7 @@ already walks Image Trace. Short agent entry points:
   Swatches panel, wrapping around at the ends; from a color that is no swatch, Right picks the first swatch and Left
   the last, and with no color swatch the tool does not take the keys. The selected art keeps its paint. With
   `cursorSwatchPreview` on, the active paint shows as a ringed chip above the pointer between the swatches before and
-  after it, except during a fill drag or with Alt held; a solid color that is no swatch shows alone, and a paint that is not a solid color shows no chip. Left and
+  after it, except during a fill or stroke drag or with Alt held; a solid color that is no swatch shows alone, and a paint that is not a solid color shows no chip. Left and
   Right step the swatches with `cursorSwatchPreview` off too.
   `livePaint.merge` keeps the bottom Live Paint group's id, name, lock, visibility, transparency, appearance, opacity
   mask and graphic style link. With a Live Paint group among the objects, `livePaint.make` adds the others to it as
@@ -4145,7 +4150,8 @@ already walks Image Trace. Short agent entry points:
   objects; otherwise it returns an error and does not merge the objects.
   A Live Paint command that changes nothing records no undo step, keeps the redo steps, leaves a saved document saved
   and replies as usual: `livePaint.fill` (a click, or a Bucket drag) when every face it reaches already has one fill, shown,
-  fully opaque, blending normally and with the paint (or no fill, for none), `livePaint.strokeEdge` when every edge it
+  fully opaque, blending normally and with the paint (or no fill, for none), `livePaint.strokeEdge` (a click, or a
+  Bucket drag from an edge) when every edge it
   reaches already has one such stroke with the paint and the width (at any width for none, or no stroke),
   `livePaint.gapOptions` (and the Gap Options
   dialog's OK) when every group already has the options and `closeGaps` finds no gap, and `livePaint.make` or
