@@ -1,5 +1,6 @@
 //! Graphic Styles panel: the document's styles as rendered thumbnails (Thumbnail View) or rows
-//! (Small and Large List View), shown on a square or on type. Clicking a style applies it to the
+//! (Small and Large List View), shown on a square or on type; a style with no fill and no stroke
+//! shows the shape outlined in black and filled with white, under a red slash. Clicking a style applies it to the
 //! selection (Alt-click adds it on top); Shift-click adds to the panel's selection every style from
 //! the last one clicked without Shift through this one; Cmd/Ctrl-click adds or removes one;
 //! double-click opens Graphic Style Options. Dragging a style moves it in the list, or applies it
@@ -15,10 +16,10 @@ use std::sync::Arc;
 
 use egui::{Color32, Rect, Response, Sense, Stroke, StrokeKind, TextureHandle, Ui, pos2, vec2};
 use serde_json::{Value, json};
-use vectorcraft_color::{BlendMode, Paint};
+use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::style_libs::STYLE_LIBRARIES;
 use vectorcraft_doc::text::{CharStyle, TextObject};
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, GraphicStyle, Node, NodeId, NodeKind, PatternDef, StyleLibrary};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, GraphicStyle, Node, NodeId, NodeKind, PatternDef, StrokeLayer, StyleLibrary};
 use vectorcraft_engine::cmd::stylelib;
 use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
 use vectorcraft_geom::{Affine, Point, shapes};
@@ -30,9 +31,10 @@ use crate::menus::Item;
 use crate::theme::Tokens;
 use crate::widgets::{self, PanelDrag, menu_item};
 
-/// The panel's views.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-enum View {
+/// The panel's views (`ui.panelView {panel: "graphicStyles", view}`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum View {
     #[default]
     Thumbnail,
     SmallList,
@@ -77,6 +79,50 @@ thread_local! {
 /// Does `g` stroke with a brush?
 fn uses_brush(g: &GraphicStyle) -> bool {
     g.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.brush.is_some()))
+}
+
+/// Does `g` have no fill and no stroke? A fill or stroke row whose paint is None does not count; a
+/// hidden row or one with zero opacity does. The thumbnails of such a style show the preview shape
+/// with a black outline, a white fill and a red slash ([`backing`], [`slash`]).
+fn paints_nothing(g: &GraphicStyle) -> bool {
+    g.appearance.items.iter().all(|i| i.paint().is_none())
+}
+
+/// `g` with a white fill below its rows and a black stroke `width` wide above them, and every row
+/// above the contents, so the white fill also covers type's own character colors: the shape a
+/// style with no fill and no stroke is shown on, with the style's effects and transparency.
+fn backing(g: &GraphicStyle, width: f64) -> GraphicStyle {
+    let mut g = g.clone();
+    g.appearance.contents_index = None;
+    g.appearance.items.insert(0, AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::WHITE))));
+    g.appearance.items.push(AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::BLACK), width)));
+    g
+}
+
+/// The red of the slash on the thumbnail of a style with no fill and no stroke.
+const SLASH: [f32; 3] = [230.0, 0.0, 0.0];
+
+/// Draw a red slash (`/`) across the middle of `img`, a third of its side long, over what is there.
+fn slash(img: &mut egui::ColorImage) {
+    let [w, h] = img.size;
+    let side = w.min(h) as f32;
+    let (cx, cy, half) = (w as f32 / 2.0, h as f32 / 2.0, side / 6.0);
+    let (a, b) = (pos2(cx - half, cy + half), pos2(cx + half, cy - half));
+    let radius = (side * 0.035).max(0.9);
+    let ab = b - a;
+    for y in 0..h {
+        for x in 0..w {
+            let p = pos2(x as f32 + 0.5, y as f32 + 0.5);
+            let t = ((p - a).dot(ab) / ab.length_sq()).clamp(0.0, 1.0);
+            let cover = (radius + 0.5 - (p - (a + ab * t)).length()).clamp(0.0, 1.0);
+            if cover > 0.0
+                && let Some(px) = img.pixels.get_mut(y * w + x)
+            {
+                let mix = |old: u8, new: f32| (old as f32 + (new - old as f32) * cover).round() as u8;
+                *px = Color32::from_rgb(mix(px.r(), SLASH[0]), mix(px.g(), SLASH[1]), mix(px.b(), SLASH[2]));
+            }
+        }
+    }
 }
 
 /// What a style's thumbnail paints with besides the style: the patterns and brushes of a document,
@@ -146,9 +192,20 @@ fn look_hashes(ctx: &egui::Context, app: &VectorcraftApp) -> Arc<Vec<u64>> {
 }
 
 /// Style `g` applied (as `graphicStyle.apply` applies it) to the preview shape, rendered `px`
-/// pixels square on white, with `paints`.
+/// pixels square on white, with `paints`. A style with no fill and no stroke ([`paints_nothing`])
+/// is shown on the shape outlined in black and filled with white, under a red slash.
 fn render(app: &VectorcraftApp, paints: Paints, g: &GraphicStyle, preview: Preview, px: u32) -> Option<egui::ColorImage> {
     const SIDE: f64 = 100.0;
+    let empty = paints_nothing(g);
+    let backed;
+    let g = if empty {
+        // An outline 1.5 pixels wide on images up to 150 pixels across, and one hundredth of the
+        // image width on larger ones.
+        backed = backing(g, (1.5 * SIDE / px.max(1) as f64).max(1.0));
+        &backed
+    } else {
+        g
+    };
     let mut doc = Document::new(SIDE, SIDE);
     doc.patterns = paints.patterns.to_vec();
     if uses_brush(g)
@@ -171,7 +228,11 @@ fn render(app: &VectorcraftApp, paints: Paints, g: &GraphicStyle, preview: Previ
     let layer = doc.layers[0].id;
     doc.insert(Some(layer), 0, app.session.styled(&shape, g)).ok()?;
     let img = RENDERER.with(|r| r.borrow_mut().render_region(&doc, vectorcraft_geom::Rect::new(0.0, 0.0, SIDE, SIDE), px as f64 / SIDE, true));
-    Some(crate::canvas::color_image(&img))
+    let mut img = crate::canvas::color_image(&img);
+    if empty {
+        slash(&mut img);
+    }
+    Some(img)
 }
 
 /// The thumbnail of style `g` (`look`: its [`look_hash`]) at `size` points.
@@ -225,8 +286,10 @@ pub(super) fn outline(ui: &Ui, r: Rect, on: bool, hovered: bool) {
     ui.painter().rect_stroke(r, 0.0, Stroke::new(if on { 2.0 } else { 1.0 }, color), StrokeKind::Inside);
 }
 
-/// Style `g` on a copy of the first selected object, `px` pixels square on white. One texture,
-/// re-rendered only when the document, the style's look or the size changes.
+/// Style `g` on a copy of the first selected object, `px` pixels square on white; a style with no
+/// fill and no stroke shows the object outlined in black and filled with white, under a red slash,
+/// as [`render`] shows it. One texture, re-rendered only when the document, the style's look or the
+/// size changes.
 fn object_preview(app: &VectorcraftApp, ctx: &egui::Context, g: &GraphicStyle, look: u64, px: u32) -> Option<TextureHandle> {
     let st = app.session.active()?;
     let n = st.doc.node(*st.selection.objects.first()?)?;
@@ -237,12 +300,28 @@ fn object_preview(app: &VectorcraftApp, ctx: &egui::Context, g: &GraphicStyle, l
     {
         return Some(tex);
     }
-    let styled = app.session.styled(n, g);
-    let img = RENDERER.with(|r| r.borrow_mut().render_node_thumbnail(&st.doc, &styled, px, Some([255; 4])))?;
-    let color = crate::canvas::color_image(&img);
-    let tex = ctx.load_texture("gs-large-object", color, egui::TextureOptions::LINEAR);
+    let tex = ctx.load_texture("gs-large-object", render_object(app, &st.doc, n, g, px)?, egui::TextureOptions::LINEAR);
     ctx.data_mut(|d| d.insert_temp(slot, (key, tex.clone())));
     Some(tex)
+}
+
+/// Style `g` on a copy of `n` (an object of `doc`), rendered `px` pixels square on white: the image
+/// of [`object_preview`].
+fn render_object(app: &VectorcraftApp, doc: &Document, n: &Node, g: &GraphicStyle, px: u32) -> Option<egui::ColorImage> {
+    let empty = paints_nothing(g);
+    let styled = if empty {
+        // An outline about 1.5 pixels wide on the object scaled to the preview.
+        let side = n.geometric_bounds().map_or(1.0, |b| b.width().max(b.height()));
+        app.session.styled(n, &backing(g, (1.5 * side / px.max(1) as f64).max(1e-3)))
+    } else {
+        app.session.styled(n, g)
+    };
+    let img = RENDERER.with(|r| r.borrow_mut().render_node_thumbnail(doc, &styled, px, Some([255; 4])))?;
+    let mut img = crate::canvas::color_image(&img);
+    if empty {
+        slash(&mut img);
+    }
+    Some(img)
 }
 
 /// The large preview of style `i` next to the pointer while the right button is held on it: on
@@ -463,7 +542,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let looks = look_hashes(ui.ctx(), app);
     let shown = Shown { d: &doc, looks: &looks, preview: pstate(ui.ctx(), "gs-preview") };
     let sel = selected(ui.ctx(), &doc);
-    let view: View = pstate(ui.ctx(), "gs-view");
+    let view = app.ui.graphic_styles_view;
     let mut ev = Events::default();
     // In a sized panel the list fills the space above the footer (#2992), as the Artboards list
     // does; elsewhere it keeps its 220 pt.
@@ -605,10 +684,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.run("graphicStyle.sortByName", json!({})).ok();
     }
     ui.separator();
-    let view: View = pstate(ui.ctx(), "gs-view");
+    let view = app.ui.graphic_styles_view;
     for (v, label) in View::ALL {
-        if menu_item(ui, tl!(label), true, view == v) {
-            set_pstate(ui.ctx(), "gs-view", v);
+        if menu_item(ui, tl!(label), true, view == v)
+            && let Err(e) = app.run("ui.panelView", json!({ "panel": "graphicStyles", "view": v }))
+        {
+            app.status(e);
         }
     }
     ui.separator();
@@ -865,7 +946,7 @@ mod tests {
             app.session.execute("graphicStyle.new", &json!({"name": format!("Style {i:02}")})).unwrap();
         }
         let ctx = egui::Context::default();
-        set_pstate(&ctx, "gs-view", View::LargeList);
+        app.ui.graphic_styles_view = View::LargeList;
         // The clip rect of the first style's name: the list's visible area.
         let mut list = |bottom: Option<f32>| {
             let mut clip = None;
@@ -891,7 +972,7 @@ mod tests {
         let mut app = app();
         app.session.execute("graphicStyle.new", &json!({"name": "Mine"})).unwrap();
         let ctx = egui::Context::default();
-        set_pstate(&ctx, "gs-view", View::LargeList);
+        app.ui.graphic_styles_view = View::LargeList;
         let texts = frame(&ctx, |ui| {
             show(&mut app, ui);
             menu(&mut app, ui);
@@ -906,7 +987,7 @@ mod tests {
         let unused: Vec<String> = serde_json::from_value(app.session.execute("graphicStyle.unused", &json!({})).unwrap()["names"].clone()).unwrap();
         assert_eq!(unused.len(), 4);
         set_pstate(&ctx, "gs-sel", unused.clone());
-        set_pstate(&ctx, "gs-view", View::SmallList);
+        app.ui.graphic_styles_view = View::SmallList;
         frame(&ctx, |ui| show(&mut app, ui));
         // Delete asks first; OK deletes, and the panel selection follows.
         delete(&mut app, &unused, false);
@@ -951,6 +1032,104 @@ mod tests {
         assert_eq!(px(2, 2), Color32::WHITE);
     }
 
+    /// Is `c` the slash's red?
+    fn red(c: Color32) -> bool {
+        c.r() > 180 && c.g() < 70 && c.b() < 70
+    }
+
+    /// Is `c` near black?
+    fn dark(c: Color32) -> bool {
+        c.r() < 90 && c.g() < 90 && c.b() < 90
+    }
+
+    /// A style with no fill and no stroke shows its thumbnail on the preview square or on type,
+    /// outlined in black and filled with white, under a red slash; so does a style whose rows paint
+    /// None, and one with only effects, whose effects still show. The large preview on the selected
+    /// object shows the same.
+    #[test]
+    fn a_style_with_no_fill_and_no_stroke_shows_an_outlined_shape_and_a_red_slash() {
+        let app = app();
+        let d = app.session.active().unwrap().doc.clone();
+        let image = |app: &VectorcraftApp, g: &GraphicStyle, preview: Preview| render(app, Paints::of(&d), g, preview, 40).unwrap();
+        let px = |img: &egui::ColorImage, x: usize, y: usize| img.pixels[y * img.size[0] + x];
+        let empty = GraphicStyle::new("Empty", Appearance::default());
+        let nones = GraphicStyle::new("Nones", Appearance::basic(Paint::None, Paint::None, 1.0));
+        for g in [&empty, &nones] {
+            let img = image(&app, g, Preview::Square);
+            // The square spans 8.8 to 31.2 pixels: a black edge, white inside, red in the middle.
+            assert!(red(px(&img, 20, 20)), "{}: {:?}", g.name, px(&img, 20, 20));
+            assert!((7..=10).any(|x| dark(px(&img, x, 20))), "{}: the left edge is black", g.name);
+            assert_eq!(px(&img, 13, 13), Color32::WHITE, "{}", g.name);
+            assert_eq!(px(&img, 2, 2), Color32::WHITE, "{}", g.name);
+            assert!(!red(px(&img, 13, 13)) && !red(px(&img, 27, 27)));
+        }
+        // On type: the slash over the outlined characters.
+        let img = image(&app, &empty, Preview::Text);
+        assert!(red(px(&img, 20, 20)));
+        assert!(img.pixels.iter().any(|c| dark(*c)), "the characters are outlined in black");
+        // Effects still show: a drop shadow 10 points down and right of the square.
+        let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: json!({"x": 10, "y": 10, "blur": 0}), visible: true };
+        let effects = GraphicStyle::new("Shadow", Appearance { effects: vec![shadow], ..Appearance::default() });
+        let img = image(&app, &effects, Preview::Square);
+        assert!(red(px(&img, 20, 20)));
+        assert_ne!(px(&img, 33, 33), Color32::WHITE, "the shadow shows below the square");
+        // The large preview on the selected rectangle.
+        let st = app.session.active().unwrap();
+        let n = st.doc.node(st.selection.objects[0]).unwrap();
+        let img = render_object(&app, &st.doc, n, &empty, 60).unwrap();
+        assert!(red(px(&img, 30, 30)));
+        assert!(dark(px(&img, 1, 30)), "{:?}", px(&img, 1, 30));
+        assert_eq!(px(&img, 10, 10), Color32::WHITE);
+        // A style that paints keeps its own look there, without the slash.
+        let blue = GraphicStyle::new("Blue", Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 1.0));
+        let img = render_object(&app, &st.doc, n, &blue, 60).unwrap();
+        assert_eq!(px(&img, 30, 30), Color32::from_rgb(0, 0, 255));
+    }
+
+    /// The white fill of a style with no fill and no stroke paints above type's characters even
+    /// when the style puts its Characters row above some of its rows and Override Character Color
+    /// is off: the type preview looks the same as for the style without that row order.
+    #[test]
+    fn the_white_fill_of_a_style_with_no_paint_covers_the_characters_whatever_its_contents_row() {
+        let mut app = app();
+        app.session.prefs.override_char_color = false;
+        let d = app.session.active().unwrap().doc.clone();
+        let image = |g: &GraphicStyle| render(&app, Paints::of(&d), g, Preview::Text, 40).unwrap();
+        let plain = GraphicStyle::new("Nones", Appearance::basic(Paint::None, Paint::None, 1.0));
+        let mut above = plain.clone();
+        above.appearance.set_contents_at(1);
+        assert_eq!(above.appearance.contents_index, Some(1));
+        assert!(paints_nothing(&above));
+        assert!(image(&above).pixels == image(&plain).pixels, "the characters' own fill shows through the white fill");
+    }
+
+    /// A style with only a fill, or only a stroke, shows its own paint; a hidden fill or one with
+    /// zero opacity still counts as a fill, so its thumbnail shows no slash.
+    #[test]
+    fn a_fill_or_a_stroke_alone_or_a_hidden_fill_shows_no_slash() {
+        let app = app();
+        let d = app.session.active().unwrap().doc.clone();
+        let image = |g: &GraphicStyle| render(&app, Paints::of(&d), g, Preview::Square, 40).unwrap();
+        let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+        let fill = GraphicStyle::new("Fill", Appearance::basic(blue.clone(), Paint::None, 1.0));
+        let stroke = GraphicStyle::new("Stroke", Appearance::basic(Paint::None, Paint::solid(Color::rgb(0.0, 0.6, 0.0)), 4.0));
+        let mut hidden = GraphicStyle::new("Hidden", Appearance::basic(blue.clone(), Paint::None, 1.0));
+        if let Some(f) = hidden.appearance.fill_mut() {
+            f.visible = false;
+        }
+        let mut clear = GraphicStyle::new("Clear", Appearance::basic(blue, Paint::None, 1.0));
+        if let Some(f) = clear.appearance.fill_mut() {
+            f.opacity = 0.0;
+        }
+        for g in [&fill, &stroke, &hidden, &clear] {
+            assert!(!paints_nothing(g), "{}", g.name);
+            assert!(!image(g).pixels.iter().any(|c| red(*c)), "{} shows no slash", g.name);
+        }
+        assert_eq!(image(&fill).pixels[20 * 40 + 20], Color32::from_rgb(0, 0, 255));
+        assert_eq!(image(&hidden).pixels[20 * 40 + 20], Color32::WHITE);
+        assert!(image(&stroke).pixels.iter().any(|c| c.g() > 100 && c.r() < 60 && c.b() < 60), "the stroke shows");
+    }
+
     #[test]
     fn merge_asks_for_a_name_and_drops_move_styles_or_make_new_ones() {
         let mut app = app();
@@ -967,7 +1146,7 @@ mod tests {
 
         // A style dragged onto the top half of the first row lands first (Small List View: rows
         // of 18 points from the top of the list).
-        set_pstate(&ctx, "gs-view", View::SmallList);
+        app.ui.graphic_styles_view = View::SmallList;
         frame(&ctx, |ui| show(&mut app, ui));
         let release = |at: egui::Pos2| {
             let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
@@ -992,7 +1171,7 @@ mod tests {
         let n = names(&app);
         assert_eq!(n.len(), 5);
         let ctx = egui::Context::default();
-        set_pstate(&ctx, "gs-view", View::SmallList);
+        app.ui.graphic_styles_view = View::SmallList;
         frame(&ctx, |ui| show(&mut app, ui));
         // A click on row `i` (Small List View: rows of 18 points, 3 apart) with `modifiers` held,
         // a second after the last one so that two clicks on a row are not a double-click.

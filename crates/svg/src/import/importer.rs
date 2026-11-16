@@ -7,6 +7,7 @@ use super::{
     StrokeLayer, Vec2, fnv1a, fx, shapes, text, vector_effect,
 };
 use crate::SvgError;
+use craft_svg::tree::usvg;
 use kurbo::BezPath;
 use vectorcraft_color::GradientSpread;
 
@@ -243,48 +244,59 @@ impl Importer {
         if !matches!(kids.get(main), Some(usvg::Node::Path(p)) if p.is_visible()) {
             return Some(vec![]);
         }
-        let text::PendingText { name, mut obj, servers, paints, non_scaling, under, .. } = self.slots.texts.get(i)?.clone();
-        // The scale the type draws at becomes its size (last, below): text space grows by `grow`.
-        let xf = ts * obj.xf;
-        let grow = text::size_scale(&obj, xf);
-        // usvg resolved the `url(#…)` paints (the paths after the main one) in the element's user
-        // space; runs paint in text space.
-        let to_text = Affine::scale(grow) * obj.xf.inverse();
+        let text::PendingText { name, obj, servers, rest, paints, non_scaling, under, .. } = self.slots.texts.get(i)?.clone();
         let slot_paint = |im: &mut Self, k: usize, m: Affine| match kids.get(main + 1 + k) {
             Some(usvg::Node::Path(p)) => p.fill().map_or(Paint::None, |f| im.paint(f.paint(), m)),
             _ => Paint::None,
         };
-        let resolved: Vec<Paint> = (0..paints).map(|k| slot_paint(self, k, to_text)).collect();
-        let server = |k: usize| resolved.get(k).cloned().unwrap_or(Paint::None);
-        for (run, (fill, stroke)) in obj.runs.iter_mut().zip(servers) {
-            if let Some(k) = fill {
-                run.style.fill = server(k);
+        // A text split into several objects becomes a group of them, named after the element.
+        let whole = rest.is_empty();
+        let mut skewed = false;
+        let mut nodes = Vec::with_capacity(rest.len() + 1);
+        for (mut obj, servers) in std::iter::once((obj, servers)).chain(rest) {
+            // The scale the type draws at becomes its size (last, below): text space grows by `grow`.
+            let xf = ts * obj.xf;
+            let grow = text::size_scale(&obj, xf);
+            // usvg resolved the `url(#…)` paints (the paths after the main one) in the element's user
+            // space; runs paint in text space.
+            let to_text = Affine::scale(grow) * obj.xf.inverse();
+            let resolved: Vec<Paint> = (0..paints).map(|k| slot_paint(self, k, to_text)).collect();
+            let server = |k: usize| resolved.get(k).cloned().unwrap_or(Paint::None);
+            for (run, (fill, stroke)) in obj.runs.iter_mut().zip(servers) {
+                if let Some(k) = fill {
+                    run.style.fill = server(k);
+                }
+                if let Some(k) = stroke {
+                    run.style.stroke = server(k);
+                }
             }
-            if let Some(k) = stroke {
-                run.style.stroke = server(k);
+            obj.xf = xf;
+            skewed |= non_scaling && !vector_effect::unscale_text(&mut obj, self.screen);
+            // A stroke under the characters is the object's own: it paints in the document.
+            let under = under.clone().map(|(mut sl, k)| {
+                if let Some(k) = k {
+                    sl.paint = slot_paint(self, k, ts);
+                }
+                let mut ap = Appearance { items: vec![AppearanceItem::Stroke(sl)], ..Default::default() };
+                ap.scale_strokes(if non_scaling { self.screen } else { obj.xf.determinant().abs().sqrt() });
+                ap.set_contents_at(1);
+                ap
+            });
+            text::fold_scale(&mut obj, grow);
+            let mut n = self.named(if whole { &name } else { "" }, NodeKind::Text(Box::new(obj)))?;
+            if let Some(ap) = under {
+                n.appearance = ap.into();
             }
+            nodes.push(Arc::new(n));
         }
-        obj.xf = xf;
-        if non_scaling && !vector_effect::unscale_text(&mut obj, self.screen) {
+        if skewed {
             let label = if name.is_empty() || made_up(&name) { "a text".to_string() } else { format!("text '{name}'") };
             self.warn(format!("non-scaling stroke on {label} approximated: the text is stretched or skewed"));
         }
-        // A stroke under the characters is the object's own: it paints in the document.
-        let under = under.map(|(mut sl, k)| {
-            if let Some(k) = k {
-                sl.paint = slot_paint(self, k, ts);
-            }
-            let mut ap = Appearance { items: vec![AppearanceItem::Stroke(sl)], ..Default::default() };
-            ap.scale_strokes(if non_scaling { self.screen } else { obj.xf.determinant().abs().sqrt() });
-            ap.set_contents_at(1);
-            ap
-        });
-        text::fold_scale(&mut obj, grow);
-        let mut n = self.named(&name, NodeKind::Text(Box::new(obj)))?;
-        if let Some(ap) = under {
-            n.appearance = ap.into();
+        if whole {
+            return Some(nodes);
         }
-        Some(vec![Arc::new(n)])
+        Some(vec![Arc::new(self.named(&name, NodeKind::Group { children: nodes, clip: false })?)])
     }
 
     fn group_node(&mut self, g: &usvg::Group, acc: Affine) -> Option<Node> {
@@ -303,11 +315,11 @@ impl Importer {
             (None, id) => format!("'{id}'"),
         };
         let mask = g.mask().and_then(|m| self.opacity_mask(m, ts, &label));
-        // Blurs, shadows and glows become live effects (see [`fx`]); other filters become Effect ›
-        // SVG Filters effects that keep their XML.
+        // Blurs, shadows and glows become live effects (see [`fx`]); other filters, and blurs that
+        // differ by direction in the document, become Effect › SVG Filters effects that keep their XML.
         let effects = match g.filters() {
             [] => vec![],
-            filters => fx::effects(filters, ts, &self.blends).or_else(|| fx::kept(filters, ts, &self.filter_sources)).unwrap_or_else(|| {
+            filters => fx::imported(filters, ts, &self.blends, &self.filter_sources).map(|(fx, _)| fx).unwrap_or_else(|| {
                 // usvg wraps a filtered element in a group of its own: name the element then.
                 let on = match g.children() {
                     [usvg::Node::Group(_)] | [] => label.clone(),
@@ -383,7 +395,7 @@ impl Importer {
     /// (<https://www.w3.org/TR/SVG11/filters.html#FilterEffectsRegion>) cuts a filter's result at
     /// its region. A filter that didn't import (drawn without it) clips nothing.
     fn filter_regions(&mut self, g: &usvg::Group, ts: Affine, mut n: Node) -> Option<Node> {
-        if g.filters().is_empty() || fx::effects(g.filters(), ts, &self.blends).is_none() {
+        if g.filters().is_empty() || !fx::imported(g.filters(), ts, &self.blends, &self.filter_sources).is_some_and(|(_, live)| live) {
             return Some(n);
         }
         for f in g.filters() {
@@ -584,7 +596,8 @@ impl Importer {
         if p.id().is_empty() || !p.is_visible() || p.fill().is_some_and(|f| f.rule() == usvg::FillRule::EvenOdd) {
             return None;
         }
-        let mut obj = self.slots.texts.get(self.slots.find(p)?)?.obj.clone();
+        // A text split into several objects clips by its outlines.
+        let mut obj = self.slots.texts.get(self.slots.find(p)?).filter(|t| t.rest.is_empty())?.obj.clone();
         obj.xf = m * self.slots.inner(p) * obj.xf;
         let grow = text::size_scale(&obj, obj.xf);
         for run in &mut obj.runs {
@@ -766,11 +779,7 @@ impl Importer {
             usvg::ImageKind::SVG(tree) => return self.svg_image(tree, acc),
         };
         let size = i.size();
-        let (pw, ph) = image::ImageReader::new(std::io::Cursor::new(&bytes[..]))
-            .with_guessed_format()
-            .ok()
-            .and_then(|r| r.into_dimensions().ok())
-            .unwrap_or((size.width().round().max(1.0) as u32, size.height().round().max(1.0) as u32));
+        let (pw, ph) = vectorcraft_doc::header_size(bytes).unwrap_or((size.width().round().max(1.0) as u32, size.height().round().max(1.0) as u32));
         // A turned CMYK image is stored as the CMYK TIFF of its inks, the size of the PNG usvg got.
         let cmyk = self.files.stored(i.kind());
         let (bytes, mime) = match &cmyk {

@@ -501,9 +501,10 @@ fn link_text(ui: &Ui) -> egui::RichText {
     egui::RichText::new(tl!("Transform")).size(12.0).color(Tokens::get(ui.ctx()).text).underline()
 }
 
-/// The width of the Transform [`link`] in `ui`.
+/// The width of the Transform [`link`] in `ui`: its text, and the point that the underline's stroke
+/// and the text's placement on the pixel grid can add at its right end.
 pub fn link_width(ui: &Ui) -> f32 {
-    widgets::text_width(ui, link_text(ui))
+    widgets::text_width(ui, link_text(ui)) + 1.0
 }
 
 /// The width and height of [`constrain_link`]'s button.

@@ -359,6 +359,34 @@ mod tests {
     }
 
     #[test]
+    fn coons_places_are_where_the_patch_bends() {
+        // A rectangle's sides have 65 evenly spaced points.
+        let [u, v] = Coons::rect(Rect::new(0.0, 0.0, 100.0, 50.0)).places();
+        assert_eq!((u.len(), v.len()), (65, 65));
+        assert!(u.iter().enumerate().all(|(i, x)| (x - i as f64 / 64.0).abs() < 1e-12), "{u:?}");
+        // A top object with a curved top: between two places next to each other the patch is
+        // straight, in `u` and in `v`.
+        let mut path = kurbo::BezPath::new();
+        path.move_to((0.0, 0.0));
+        path.curve_to((30.0, -20.0), (70.0, 10.0), (100.0, 0.0));
+        path.line_to((100.0, 50.0));
+        path.line_to((40.0, 50.0));
+        path.line_to((0.0, 50.0));
+        path.close_path();
+        let c = Coons::from_top_object(&PathData::from_bezpath(&path), Some([0, 1, 2, 4])).unwrap();
+        let [u, v] = c.places();
+        assert!(u.first() == Some(&0.0) && u.last() == Some(&1.0) && u.windows(2).all(|w| w[0] < w[1]), "{u:?}");
+        assert!(v.first() == Some(&0.0) && v.last() == Some(&1.0) && v.windows(2).all(|w| w[0] < w[1]), "{v:?}");
+        for w in u.windows(2) {
+            for y in [0.0, 0.3, 1.0] {
+                let mid = c.eval((w[0] + w[1]) / 2.0, y);
+                let half = c.eval(w[0], y).midpoint(c.eval(w[1], y));
+                assert!(mid.distance(half) < 1e-9, "{w:?} {y}: {mid:?} {half:?}");
+            }
+        }
+    }
+
+    #[test]
     fn maps_go_on_past_the_content_box() {
         // A stroke outline reaches past the box: a flat mesh and a rectangle stay the identity there.
         let r = Rect::new(0.0, 0.0, 100.0, 100.0);

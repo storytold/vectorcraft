@@ -11,27 +11,37 @@ rust-version = "1.95"
 repository = "https://github.com/storytold/vectorcraft"
 
 [workspace.dependencies]
-craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb", default-features = false, features = ["interpret", "write"] }
-craft-print = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
-craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
-craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "c4b8405d5fd8f29cf77de528206bd2b38bb0ecb6", features = ["serde"] }
-craft-keymap = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
-craft-proof = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
+craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd", default-features = false, features = ["interpret", "write"] }
+craft-print = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd", features = ["serde"] }
+craft-keymap = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+craft-proof = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
 # Decides who draws the window frame (desktop vs. app) so the suite shares one native titlebar per
 # desktop. The `egui` feature adds `craft_window::decorate`. (craft-libs#217.)
-craft-window = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb", features = ["egui"] }
+craft-window = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd", features = ["egui"] }
 # The `.vectorcraft` envelope: its members, version, embedded images and the data after the JSON.
-craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", rev = "e98299546f5c5c3c22388d16507f8b5e61a5f280" }
+craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+craft-gzip = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
 # craft-update: app-specific pretend versions apply to startup and manual checks.
 # Native Affinity documents (craft-libs#914).
-craft-affinity = { git = "https://github.com/storytold/craft-libs", rev = "228f6d0c50f1fdee4c5124603602993fc79d4c9d" }
+craft-affinity = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
 # SVG parsing, limits, SVGZ and writer (craft-libs#778).
-craft-svg = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e820b517b11a99cad040ebac670e1e2", features = ["tree"] }
+craft-svg = { git = "https://github.com/storytold/craft-libs", rev = "431f704478962677ec47e512754464d372901830", features = ["tree"] }
 # EPS container, previews, ASCII85 and DSC comments (craft-libs#778).
-craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e820b517b11a99cad040ebac670e1e2" }
+craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
 # DXF tags, reader and writer (craft-libs#778, #926, #927).
-craft-dxf = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e820b517b11a99cad040ebac670e1e2" }
-craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.1.0", rev = "e98299546f5c5c3c22388d16507f8b5e61a5f280", features = ["egui"] }
+craft-dxf = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+# WMF, EMF and EMF+ reader (craft-libs#778).
+craft-metafile = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+craft-xml = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+craft-image-codecs = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+craft-gif = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+craft-tiff = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+craft-psd = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+craft-stream-codecs = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+craft-jxl = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.1.0", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd", features = ["egui"] }
 # internal
 vectorcraft-geom = { path = "crates/geom" }
 vectorcraft-color = { path = "crates/color" }
@@ -89,10 +99,12 @@ wat = "1.228"
 # Without `text` (glyph runs, through glifo and a second skrifa): the renderer draws the outlines
 # vectorcraft-text gives it. The other default features stay.
 vello_cpu = { version = "0.2", default-features = false, features = ["std", "png", "u8_pipeline", "f32_pipeline"] }
+# The image crate still decodes and encodes for the readers not yet moved to craft-image-codecs
+# (File › Open's raster path, PDF and SVG images, the renderer's image paint, DIBs). Its format
+# features stay until the last of those moves, so no file that opens today stops opening.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "tiff", "bmp", "tga"] }
 # Without `text` and the system fonts (fontdb, harfrust and skrifa, at other versions than ours):
-# SVG import reads `<text>` from the XML itself and never gives usvg a font. A test of the SVG
-# crate turns `text` on.
+# SVG import reads `<text>` from the XML itself and never gives usvg a font.
 usvg = { version = "0.48", default-features = false, features = ["svgz"] }
 # Without `simple-text` (its text shaping, the only user of rustybuzz and ttf-parser, which are
 # unmaintained, #1730): the PDF writer places glyphs itself. A test of the PDF crate turns it on.
@@ -104,18 +116,9 @@ flate2 = { version = "1", default-features = false, features = ["rust_backend"] 
 rustix = { version = "1.1", default-features = false }
 # Zstandard decoder (pure Rust, builds for wasm32 too): the editing copy an EPS carries of its art.
 ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
-# CCITT Group 3 and Group 4 decoder (ITU-T T.4 and T.6): EPS images read through
-# `CCITTFaxDecode`. The PDF reader's hayro-syntax uses the same version.
-hayro-ccitt = "0.3"
-# Substring search for the EPS reader's PostScript `search`.
-memchr = "2"
-# The WHATWG Encoding Standard's legacy encodings: names in legacy .ai files read in the code page
-# the user picks (Mac OS Roman, Korean, Japanese, Chinese).
-encoding_rs = "0.8.42"
-jpeg-encoder = { version = "0.6", default-features = false, features = ["std"] }
-gif = { version = "0.14", default-features = false, features = ["std", "raii_no_panic"] }
-# CMYK image samples (vectorcraft-doc's cmyk module): the image crate's own TIFF and JPEG
-# decoders, read directly (the image crate converts CMYK to RGB).
+# vectorcraft-doc's CMYK TIFF reader and writer (src/cmyk.rs) still use `tiff`. `zune-jpeg` and
+# `hayro-ccitt` are only the references tests compare craft-image-codecs' CMYK JPEG inks and
+# craft-stream-codecs' Group 3 rows with (vectorcraft-doc's and vectorcraft-engine's dev-dependencies).
 tiff = "0.11"
 zune-jpeg = "0.5"
 # JPEG XL decoder (pure Rust, MIT OR Apache-2.0): File › Open and Place read `.jxl` images. It is
@@ -128,6 +131,13 @@ jxl-grid = "0.6.2"
 # Tests: a lossless JPEG XL encoder (pure Rust, MIT OR Apache-2.0 OR Zlib) for the `.jxl` test files.
 zune-jpegxl = { version = "0.5.2", default-features = false, features = ["std"] }
 zune-core = "0.5"
+hayro-ccitt = "0.3"
+jpeg-encoder = { version = "0.6", default-features = false, features = ["std"] }
+# Substring search for the EPS reader's PostScript `search`.
+memchr = "2"
+# The WHATWG Encoding Standard's legacy encodings: names in legacy .ai files read in the code page
+# the user picks (Mac OS Roman, Korean, Japanese, Chinese).
+encoding_rs = "0.8.42"
 
 # ui
 egui = "0.37"
@@ -171,13 +181,13 @@ lto = "thin"
 codegen-units = 1
 
 [patch.crates-io]
-hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
-hayro-interpret = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
-hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
-hayro-cmap = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
-hayro-postscript = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
-krilla = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
-linesweeper = { git = "https://github.com/storytold/craft-libs", rev = "481f66d287b2a06845f3667a19daf35f0fe958ed" }
+hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+hayro-interpret = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+hayro-cmap = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+hayro-postscript = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+krilla = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+linesweeper = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
 ecolor = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
 emath = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
 epaint = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }

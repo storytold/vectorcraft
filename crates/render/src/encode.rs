@@ -10,6 +10,7 @@ pub mod gif;
 pub mod jpeg;
 pub mod png;
 pub mod psd;
+mod psd_type;
 pub mod quantize;
 pub mod tga;
 pub mod tiff;
@@ -185,11 +186,16 @@ pub fn on_white(p: &[u8; 4]) -> [u8; 3] {
 
 /// Lossless WebP.
 pub(crate) fn webp(img: &Rendered) -> Result<Vec<u8>, String> {
-    let mut buf = Vec::new();
-    let enc = image::codecs::webp::WebPEncoder::new_lossless(&mut buf);
-    image::ImageEncoder::write_image(enc, &img.to_straight(), img.width, img.height, image::ExtendedColorType::Rgba8)
-        .map_err(|e| format!("WebP encoding failed: {e}"))?;
-    Ok(buf)
+    let src = craft_image_codecs::Image::from_raw(
+        img.width,
+        img.height,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        img.to_straight(),
+    )
+    .map_err(|e| format!("WebP encoding failed: {e}"))?;
+    let opts = craft_image_codecs::EncodeOptions { webp_lossless: true, ..craft_image_codecs::EncodeOptions::default() };
+    craft_image_codecs::encode(&src, craft_image_codecs::Format::WebP, &opts).map_err(|e| format!("WebP encoding failed: {e}"))
 }
 
 /// Bounds of the art an export draws: visible objects off template layers (guides left out),

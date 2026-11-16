@@ -20,13 +20,23 @@
 //! would leave it out.
 //!
 //! The style sheets' rules are matched against each element once, as usvg matches them against
-//! each copy.
+//! each copy. usvg tests a selector against an element without keeping what it found, so a
+//! selector whose leftmost part matches nothing can test every set of ancestors in turn: the tests
+//! usvg makes for each copy are counted, and an SVG past [`MAX_SELECTOR_TESTS`] of them is refused.
+//! A look at an attribute counts one test for every 16 attributes of the element it scans, and one
+//! for every 16 bytes of the value it compares. Matching stops once the tests pass what is left of
+//! the limit.
+//!
+//! The import's own style cascade (`css::Styles`) keeps the declarations of the rules that match
+//! each element, once per element, and reads selectors usvg drops (`:not()`). What it keeps and the
+//! tests it makes count toward the same limits, measured before it runs.
 
+use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
 use usvg::roxmltree;
 
-use super::{MAX_NODES, SVG_NS, XNode};
+use super::{MAX_NODES, SVG_NS, XNode, css};
 use crate::{MAX_ELEMENT_DEPTH, SvgError};
 
 /// Most elements usvg may make of an SVG: [`MAX_NODES`], and below the 1,000,000 elements past
@@ -36,6 +46,10 @@ pub(crate) const MAX_SVG_ELEMENTS: usize = if MAX_NODES < 999_999 { MAX_NODES } 
 /// Most bytes of style values usvg may copy into the elements of an SVG and the SVG images it
 /// shows, all together: VectorCraft's own limit.
 pub(crate) const MAX_COPIED_STYLES: u64 = 64 << 20;
+
+/// Most tests of a style sheet selector's parts against elements an SVG and the SVG images it
+/// shows may take, all together: VectorCraft's own limit.
+pub(crate) const MAX_SELECTOR_TESTS: u64 = 50_000_000;
 
 /// What usvg keeps for each value it copies besides its bytes (the count and length of a shared
 /// string).
@@ -116,28 +130,59 @@ fn svg_name<'a>(n: XNode<'a, '_>) -> Option<&'a str> {
     (n.is_element() && matches!(name.namespace(), None | Some(SVG_NS)) && ELEMENTS.contains(&name.name())).then(|| name.name())
 }
 
-/// An element as the style sheets' selectors see it, as usvg matches them.
-struct Element<'a, 'i>(XNode<'a, 'i>);
+#[cfg(test)]
+thread_local! {
+    /// The selector tests the last measurement on this thread made as usvg matches the style
+    /// sheets, as far as it got.
+    static USVG_TESTS: Cell<u64> = const { Cell::new(0) };
+}
 
-impl simplecss::Element for Element<'_, '_> {
+/// An element as the style sheets' selectors see it, as usvg matches them. Each look at it counts
+/// as tests in `tests`; past `most` it has no parent or sibling and matches nothing, so the
+/// matching ends.
+struct Element<'a, 'i, 't> {
+    node: XNode<'a, 'i>,
+    tests: &'t Cell<u64>,
+    most: u64,
+}
+
+impl<'a, 'i, 't> Element<'a, 'i, 't> {
+    /// Counts `n` tests: false past `most`.
+    fn test(&self, n: u64) -> bool {
+        let tests = self.tests.get().saturating_add(n);
+        self.tests.set(tests);
+        #[cfg(test)]
+        USVG_TESTS.set(tests);
+        tests <= self.most
+    }
+
+    fn of(&self, node: Option<XNode<'a, 'i>>) -> Option<Self> {
+        node.filter(|_| self.test(1)).map(|node| Element { node, tests: self.tests, most: self.most })
+    }
+}
+
+impl simplecss::Element for Element<'_, '_, '_> {
     fn parent_element(&self) -> Option<Self> {
-        self.0.parent_element().map(Self)
+        self.of(self.node.parent_element())
     }
 
     fn prev_sibling_element(&self) -> Option<Self> {
-        self.0.prev_sibling_element().map(Self)
+        self.of(self.node.prev_sibling_element())
     }
 
     fn has_local_name(&self, name: &str) -> bool {
-        self.0.tag_name().name() == name
+        self.test(1) && self.node.tag_name().name() == name
     }
 
     fn attribute_matches(&self, name: &str, operator: simplecss::AttributeOperator<'_>) -> bool {
-        self.0.attribute(name).is_some_and(|value| operator.matches(value))
+        // The lookup scans the element's attributes, and the match the value.
+        let value = self.node.attribute(name);
+        let scanned = css::scan_tests(self.node.attributes().len()).saturating_add(value.map_or(0, |v| css::scan_tests(v.len())));
+        self.test(scanned) && value.is_some_and(|value| operator.matches(value))
     }
 
     fn pseudo_class_matches(&self, class: simplecss::PseudoClass<'_>) -> bool {
-        matches!(class, simplecss::PseudoClass::FirstChild) && self.0.prev_sibling_element().is_none()
+        self.test(1) && matches!(class, simplecss::PseudoClass::FirstChild) && self.node.prev_sibling_element().is_none()
     }
 }
 
@@ -153,16 +198,34 @@ fn copied(declaration: &simplecss::Declaration) -> u64 {
     }
 }
 
-/// What usvg makes of one element: elements (text nodes included) and bytes of copied styles.
-#[derive(Clone, Copy, Default)]
-struct Cost {
-    elements: u64,
-    bytes: u64,
+/// What usvg makes of an element or an SVG: elements (text nodes included), bytes of copied
+/// styles and selector tests.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct Cost {
+    pub(crate) elements: u64,
+    pub(crate) bytes: u64,
+    pub(crate) tests: u64,
 }
 
 impl Cost {
-    fn add(self, other: Cost) -> Cost {
-        Cost { elements: self.elements.saturating_add(other.elements), bytes: self.bytes.saturating_add(other.bytes) }
+    /// The most an SVG and the SVG images it shows may cost together.
+    pub(crate) const LIMITS: Cost = Cost { elements: MAX_SVG_ELEMENTS as u64, bytes: MAX_COPIED_STYLES, tests: MAX_SELECTOR_TESTS };
+
+    pub(crate) fn add(self, other: Cost) -> Cost {
+        Cost {
+            elements: self.elements.saturating_add(other.elements),
+            bytes: self.bytes.saturating_add(other.bytes),
+            tests: self.tests.saturating_add(other.tests),
+        }
+    }
+
+    /// What is left of `self` after `spent`.
+    pub(crate) fn less(self, spent: Cost) -> Cost {
+        Cost {
+            elements: self.elements.saturating_sub(spent.elements),
+            bytes: self.bytes.saturating_sub(spent.bytes),
+            tests: self.tests.saturating_sub(spent.tests),
+        }
     }
 }
 
@@ -178,6 +241,14 @@ struct Measure<'a, 'i> {
     /// The first element of each id.
     ids: HashMap<&'a str, XNode<'a, 'i>>,
     sheet: simplecss::StyleSheet<'a>,
+    /// The selector tests made of `sheet` so far, each element once.
+    tests: Cell<u64>,
+    /// The most selector tests of `sheet` that are left: matching stops past them.
+    most_tests: u64,
+    /// The selector tests the import's own cascade made ([`Measure::cascade`]).
+    cascade_tests: Cell<u64>,
+    /// The import's own style cascade of the same style sheets.
+    cascade: css::Styles,
     /// The elements that hold a `<use>` of themselves.
     holds_use_of_itself: HashSet<roxmltree::NodeId>,
     /// The `<use>`s of each element, by the element.
@@ -204,7 +275,17 @@ impl<'a, 'i> Measure<'a, 'i> {
                 sheet.parse_more(text);
             }
         }
-        let mut m = Measure { ids, sheet, holds_use_of_itself: HashSet::new(), used_by: HashMap::new(), tref_text: HashMap::new() };
+        let mut m = Measure {
+            ids,
+            sheet,
+            tests: Cell::new(0),
+            most_tests: MAX_SELECTOR_TESTS,
+            cascade_tests: Cell::new(0),
+            cascade: css::Styles::new(xml),
+            holds_use_of_itself: HashSet::new(),
+            used_by: HashMap::new(),
+            tref_text: HashMap::new(),
+        };
         for u in xml.descendants().filter(|n| n.has_tag_name((SVG_NS, "use"))) {
             let Some(target) = m.target(u) else { continue };
             if u.ancestors().skip(1).any(|a| a == target) {
@@ -241,21 +322,51 @@ impl<'a, 'i> Measure<'a, 'i> {
         Shows::All(link)
     }
 
-    /// The bytes of style values usvg copies into one copy of element `n`.
-    fn styles(&self, n: XNode) -> u64 {
+    /// Element `n` alone, as usvg makes one copy of it: the bytes of style values it copies into
+    /// it, and the selector tests usvg makes to find them (each rule tested counts as one too).
+    fn own(&self, n: XNode) -> Cost {
+        let before = self.tests.get();
         let mut bytes = 0u64;
-        for rule in self.sheet.rules.iter().filter(|r| r.selector.matches(&Element(n))) {
-            bytes = rule.declarations.iter().map(copied).fold(bytes, u64::saturating_add);
+        for rule in &self.sheet.rules {
+            self.tests.set(self.tests.get().saturating_add(1));
+            if rule.selector.matches(&Element { node: n, tests: &self.tests, most: self.most_tests }) {
+                bytes = rule.declarations.iter().map(copied).fold(bytes, u64::saturating_add);
+            }
         }
         if let Some(style) = n.attribute("style") {
             bytes = simplecss::DeclarationTokenizer::from(style).map(|d| copied(&d)).fold(bytes, u64::saturating_add);
         }
-        bytes
+        Cost { elements: 1, bytes, tests: self.tests.get().saturating_sub(before) }
     }
 
-    /// Element `n` alone.
-    fn own(&self, n: XNode) -> Cost {
-        Cost { elements: 1, bytes: self.styles(n) }
+    /// Have the selector tests made so far passed what is left of them?
+    fn tests_past(&self) -> bool {
+        self.tests.get() > self.most_tests
+    }
+
+    /// What the import's own style cascade keeps for the elements of `xml`, each once, up to
+    /// `left`: the bytes of the declarations of the rules that match it, and the tests it makes to
+    /// find them.
+    /// The tests it makes are kept in `cascade_tests`, as far as it gets.
+    fn cascade(&self, xml: &roxmltree::Document, left: Cost) -> Result<Cost, Past> {
+        let mut cost = Cost::default();
+        if !self.cascade.has_rules() {
+            return Ok(cost);
+        }
+        let mut result = Ok(());
+        for n in xml.descendants().filter(XNode::is_element) {
+            let Some(bytes) = self.cascade.matched_bytes(n, COPY, &mut cost.tests, left.tests) else {
+                result = Err(Past::Tests);
+                break;
+            };
+            cost.bytes = cost.bytes.saturating_add(bytes);
+            if cost.bytes > left.bytes {
+                result = Err(Past::Bytes);
+                break;
+            }
+        }
+        self.cascade_tests.set(cost.tests);
+        result.map(|()| cost)
     }
 
     /// `<text>` `t` and what usvg makes of what it holds: at most an element of each element, and
@@ -265,11 +376,11 @@ impl<'a, 'i> Measure<'a, 'i> {
         for d in t.descendants().skip(1) {
             if d.is_text() {
                 let len = d.text().map_or(0, str::len) as u64;
-                cost = cost.add(Cost { elements: 1, bytes: COPY + len });
+                cost = cost.add(Cost { elements: 1, bytes: COPY + len, tests: 0 });
             } else if svg_name(d).is_some() {
                 cost = cost.add(self.own(d));
                 if svg_name(d) == Some("tref") {
-                    cost = cost.add(Cost { elements: 1, bytes: COPY + self.tref(d) });
+                    cost = cost.add(Cost { elements: 1, bytes: COPY + self.tref(d), tests: 0 });
                 }
             }
         }
@@ -286,16 +397,23 @@ impl<'a, 'i> Measure<'a, 'i> {
     }
 }
 
-/// The bytes of style values usvg would copy into the elements of `xml`, when that is no more
-/// than `bytes_left` and it makes no more than [`MAX_SVG_ELEMENTS`] elements of it, nested no
-/// deeper than `depth` (counted as `depth::height` counts, which finds at least as much).
-pub(super) fn check(xml: &roxmltree::Document, bytes_left: u64, depth: usize) -> Result<u64, SvgError> {
-    match measure(xml, MAX_SVG_ELEMENTS as u64, bytes_left, depth) {
-        Ok(cost) => Ok(cost.bytes),
-        Err(Past::Elements) => Err(SvgError::TooLarge(MAX_SVG_ELEMENTS)),
-        Err(Past::Bytes) => Err(SvgError::StylesTooLarge((MAX_COPIED_STYLES >> 20) as usize)),
-        Err(Past::Depth) => Err(SvgError::TooDeep(MAX_ELEMENT_DEPTH)),
-    }
+/// What usvg would make of `xml`, with what the import's own style cascade keeps of it and the
+/// selector tests it makes, when that is no more than `left` and nested no deeper than `depth`
+/// (counted as `depth::height` counts, which finds at least as much).
+pub(super) fn check(xml: &roxmltree::Document, left: Cost, depth: usize) -> Result<Cost, SvgError> {
+    check_spending(xml, left, depth).0
+}
+
+/// [`check`], with the selector tests it made, as far as it got.
+pub(super) fn check_spending(xml: &roxmltree::Document, left: Cost, depth: usize) -> (Result<Cost, SvgError>, u64) {
+    let (result, tests) = measure_spending(xml, left, depth);
+    let result = result.map_err(|past| match past {
+        Past::Elements => SvgError::TooLarge(MAX_SVG_ELEMENTS),
+        Past::Bytes => SvgError::StylesTooLarge((MAX_COPIED_STYLES >> 20) as usize),
+        Past::Tests => SvgError::StylesTooComplex,
+        Past::Depth => SvgError::TooDeep(MAX_ELEMENT_DEPTH),
+    });
+    (result, tests)
 }
 
 /// The limit [`measure`] stopped at.
@@ -303,14 +421,32 @@ pub(super) fn check(xml: &roxmltree::Document, bytes_left: u64, depth: usize) ->
 enum Past {
     Elements,
     Bytes,
+    Tests,
     Depth,
 }
 
-/// What usvg makes of `xml`, up to `elements` elements and `bytes` bytes of copied styles, its
-/// elements and the copies `<use>`s show nested up to `depth` deep. Without recursion; each
-/// element is measured once.
-fn measure(xml: &roxmltree::Document, elements: u64, bytes: u64, depth: usize) -> Result<Cost, Past> {
+/// What usvg makes of `xml` with what the import's own style cascade keeps of it and its tests,
+/// up to `left`, its elements and the copies `<use>`s show nested up to `depth` deep. Without
+/// recursion; each element is measured once.
+#[cfg(test)]
+fn measure(xml: &roxmltree::Document, left: Cost, depth: usize) -> Result<Cost, Past> {
+    measure_spending(xml, left, depth).0
+}
+
+/// [`measure`], with the selector tests it made, as far as it got.
+fn measure_spending(xml: &roxmltree::Document, left: Cost, depth: usize) -> (Result<Cost, Past>, u64) {
     let mut m = Measure::new(xml);
+    let result = walk(&mut m, xml, left, depth);
+    (result, m.cascade_tests.get().saturating_add(m.tests.get()))
+}
+
+/// [`measure`] with `m`, made of `xml`.
+fn walk<'a, 'i>(m: &mut Measure<'a, 'i>, xml: &'a roxmltree::Document<'i>, left: Cost, depth: usize) -> Result<Cost, Past> {
+    // First: its tests are bounded by what it finds, usvg's are not.
+    let cascade = m.cascade(xml, left)?;
+    let left = left.less(cascade);
+    m.most_tests = left.tests;
+    let (elements, bytes) = (left.elements, left.bytes);
     let mut costs: HashMap<roxmltree::NodeId, Cost> = HashMap::new();
     // The elements entered and not yet left: one entered again is a loop.
     let mut open: HashSet<roxmltree::NodeId> = HashSet::new();
@@ -366,11 +502,15 @@ fn measure(xml: &roxmltree::Document, elements: u64, bytes: u64, depth: usize) -
                 if cost.bytes > bytes {
                     return Err(Past::Bytes);
                 }
+                if m.tests_past() || cost.tests > left.tests {
+                    return Err(Past::Tests);
+                }
                 costs.insert(n.id(), cost);
             }
         }
     }
-    Ok(costs.get(&root.id()).copied().unwrap_or_default())
+    let usvg = costs.get(&root.id()).copied().unwrap_or_default();
+    Ok(usvg.add(cascade))
 }
 
 #[cfg(test)]
@@ -381,15 +521,17 @@ mod tests {
         format!(r#"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="10" height="10">{body}</svg>"#)
     }
 
+    const NO_LIMITS: Cost = Cost { elements: u64::MAX, bytes: u64::MAX, tests: u64::MAX };
+
     /// What [`measure`] makes of `text` with no limits, as (elements, bytes).
     fn cost(text: &str) -> (u64, u64) {
         let xml = roxmltree::Document::parse(text).unwrap();
-        let c = measure(&xml, u64::MAX, u64::MAX, usize::MAX).unwrap_or_else(|p| panic!("{p:?}"));
+        let c = measure(&xml, NO_LIMITS, usize::MAX).unwrap_or_else(|p| panic!("{p:?}"));
         (c.elements, c.bytes)
     }
 
     fn past(text: &str, elements: u64, bytes: u64) -> Option<Past> {
-        measure(&roxmltree::Document::parse(text).unwrap(), elements, bytes, usize::MAX).err()
+        measure(&roxmltree::Document::parse(text).unwrap(), Cost { elements, bytes, tests: u64::MAX }, usize::MAX).err()
     }
 
     /// Groups `g0` to `g{levels}`: `g0` a rectangle styled `style`, each other two `<use>`s of the
@@ -423,9 +565,12 @@ mod tests {
     #[test]
     fn style_sheet_rules_count_where_they_match() {
         let groups = "<g class='a'/>".repeat(4);
-        // `g` matches the four groups (16 + 3 each), `.b` none, `svg` the root (16 + 4).
+        // `g` matches the four groups (16 + 3 each), `.b` none, `svg` the root (16 + 4); the
+        // import's own cascade keeps the same, names included (16 + 4 + 3 and 16 + 4 + 4).
         let (_, bytes) = cost(&svg(&format!("<style>g{{fill:red}} .b{{fill:blue}} svg{{fill:none}}</style>{groups}")));
-        assert_eq!(bytes, 4 * 19 + 20);
+        assert_eq!(bytes, 4 * 19 + 20 + 4 * 23 + 24);
+        // usvg drops a `:not()` rule; the cascade keeps it for each group it matches.
+        assert_eq!(cost(&svg(&format!("<style>g:not(.x){{fill:red}}</style>{groups}"))).1, 4 * 23);
         // A style sheet of another type is not read; the style element itself makes nothing.
         assert_eq!(cost(&svg(&format!("<style type='text/x'>g{{fill:red}}</style>{groups}"))), (5, 0));
         // `marker` sets three properties; `font` resets twelve and sets six from its text.
@@ -467,13 +612,13 @@ mod tests {
         let links: String = (0..3000).map(|i| format!("<g id='u{i}'><use href='#u{}'/></g>", i + 1)).collect();
         let deep = svg(&format!("<defs>{links}<rect id='u3000' width='1' height='1'/></defs><use href='#u0'/>"));
         let xml = roxmltree::Document::parse(&deep).unwrap();
-        assert_eq!(measure(&xml, u64::MAX, u64::MAX, MAX_ELEMENT_DEPTH).err(), Some(Past::Depth));
+        assert_eq!(measure(&xml, NO_LIMITS, MAX_ELEMENT_DEPTH).err(), Some(Past::Depth));
         assert!(super::super::depth::height(&xml, MAX_ELEMENT_DEPTH).is_none());
-        assert!(matches!(check(&xml, MAX_COPIED_STYLES, MAX_ELEMENT_DEPTH), Err(SvgError::TooDeep(_))));
+        assert!(matches!(check(&xml, Cost::LIMITS, MAX_ELEMENT_DEPTH), Err(SvgError::TooDeep(_))));
         for text in [chain(5, ""), svg("<g><g><use href='#r'/></g></g><rect id='r'/>")] {
             let xml = roxmltree::Document::parse(&text).unwrap();
             let height = super::super::depth::height(&xml, usize::MAX).unwrap_or(0);
-            assert!(measure(&xml, u64::MAX, u64::MAX, height).is_ok(), "{height} {text}");
+            assert!(measure(&xml, NO_LIMITS, height).is_ok(), "{height} {text}");
         }
     }
 
@@ -492,11 +637,110 @@ mod tests {
     fn a_long_rule_on_many_elements_is_refused_before_the_cascade_reads_it() {
         let groups = svg(&format!("<style>g{{font-family:{}}}</style>{}", "a".repeat(100_000), "<g/>".repeat(1000)));
         let image = svg(&format!(r#"<image href="data:image/svg+xml;base64,{}" width="10" height="10"/>"#, crate::base64_encode(groups.as_bytes())));
-        for text in [groups, image] {
+        // usvg drops a `:not()` rule, which the import's own cascade reads.
+        let not = svg(&format!("<style>g:not(.x){{font-family:{}}}</style>{}", "a".repeat(100_000), "<g/>".repeat(1000)));
+        for text in [groups, image, not] {
             let before = super::super::css::selector_tests();
             let err = super::super::import(&text, &crate::ImportOptions::default(), MAX_NODES).err();
             assert!(matches!(err, Some(SvgError::StylesTooLarge(64))), "{err:?}");
             assert_eq!(super::super::css::selector_tests(), before);
         }
+    }
+
+    /// A linked SVG file with such a rule, and an `<image>` of its own whose link the import reads,
+    /// is refused before the cascade reads it too.
+    #[test]
+    fn a_linked_svg_with_a_long_rule_is_refused_before_the_cascade_reads_it() {
+        let linked =
+            svg(&format!("<style>g{{font-family:{}}}</style>{}<image href='b.png' width='1' height='1'/>", "a".repeat(100_000), "<g/>".repeat(1000)));
+        let read = |path: &str| path.ends_with("a.svg").then(|| (linked.clone().into_bytes(), vectorcraft_doc::LinkInfo::new(path)));
+        let folder = std::env::temp_dir().join("vectorcraft-svg-budget");
+        let folder = folder.to_string_lossy();
+        let opts = crate::ImportOptions { folder: Some(&folder), read: Some(&read) };
+        let before = super::super::css::selector_tests();
+        let err = super::super::import(&svg("<image href='a.svg' width='10' height='10'/>"), &opts, MAX_NODES).err();
+        assert!(matches!(err, Some(SvgError::StylesTooLarge(64))), "{err:?}");
+        assert_eq!(super::super::css::selector_tests(), before);
+    }
+
+    /// `depth` groups in one another, each of class `a`, around a rectangle, with `sheet`.
+    fn nested(depth: usize, sheet: &str) -> String {
+        svg(&format!("<style>{sheet}</style>{}<rect width='1' height='1'/>{}", "<g class='a'>".repeat(depth), "</g>".repeat(depth)))
+    }
+
+    /// A selector whose leftmost part matches nothing makes usvg test every set of ancestors in
+    /// turn: the tests stop at the limit and the SVG is refused, before usvg or the cascade runs.
+    #[test]
+    fn a_selector_that_never_matches_stops_at_the_test_limit() {
+        let never = nested(60, &format!(".missing{} {{fill:red}}", " g".repeat(20)));
+        let xml = roxmltree::Document::parse(&never).unwrap();
+        assert_eq!(measure(&xml, Cost::LIMITS, usize::MAX).err(), Some(Past::Tests));
+        let before = super::super::css::selector_tests();
+        let err = super::super::import(&never, &crate::ImportOptions::default(), MAX_NODES).err();
+        assert!(matches!(err, Some(SvgError::StylesTooComplex)), "{err:?}");
+        assert_eq!(super::super::css::selector_tests(), before);
+        // The same selector without its leftmost part matches at once, and imports.
+        let matching = nested(60, &format!("g{} {{fill:red}}", " g".repeat(19)));
+        assert!(super::super::import(&matching, &crate::ImportOptions::default(), MAX_NODES).is_ok());
+    }
+
+    /// usvg tests the rules against each copy a `<use>` shows: the tests add up as the copies do,
+    /// and the cascade's tests count once for each element.
+    #[test]
+    fn selector_tests_count_for_each_copy() {
+        let tests = |levels: usize| {
+            let text = chain(levels, "").replacen("<defs>", "<style>.b rect{fill:red}</style><defs>", 1);
+            let xml = roxmltree::Document::parse(&text).unwrap();
+            measure(&xml, NO_LIMITS, usize::MAX).unwrap_or_else(|p| panic!("{p:?}")).tests
+        };
+        let (ten, eleven) = (tests(10), tests(11));
+        assert!(eleven > 2 * ten - 100, "{ten} {eleven}");
+        let text = chain(11, "").replacen("<defs>", "<style>.b rect{fill:red}</style><defs>", 1);
+        let xml = roxmltree::Document::parse(&text).unwrap();
+        assert_eq!(measure(&xml, Cost { tests: eleven - 1, ..NO_LIMITS }, usize::MAX).err(), Some(Past::Tests));
+        assert!(measure(&xml, Cost { tests: eleven, ..NO_LIMITS }, usize::MAX).is_ok());
+    }
+
+    /// Each alternative of a `:not()` counts as a test of the cascade, for each element.
+    #[test]
+    fn not_alternatives_count_as_tests() {
+        let alternatives: Vec<String> = (0..1000).map(|i| format!(".m{i}")).collect();
+        let text = svg(&format!("<style>g:not({}){{fill:red}}</style>{}", alternatives.join(","), "<g/>".repeat(1000)));
+        let xml = roxmltree::Document::parse(&text).unwrap();
+        let tests = measure(&xml, NO_LIMITS, usize::MAX).unwrap_or_else(|p| panic!("{p:?}")).tests;
+        assert!(tests > 1000 * 1000, "{tests}");
+        assert_eq!(measure(&xml, Cost { tests: 1000 * 1000, ..NO_LIMITS }, usize::MAX).err(), Some(Past::Tests));
+    }
+
+    /// Matching as usvg matches stops once its tests pass what the limits have left, as when an
+    /// SVG image gets what the SVG showing it left.
+    #[test]
+    fn usvg_matching_stops_at_what_is_left() {
+        let never = nested(60, &format!(".missing{} {{fill:red}}", " g".repeat(20)));
+        let xml = roxmltree::Document::parse(&never).unwrap();
+        let cascade = Measure::new(&xml).cascade(&xml, NO_LIMITS).unwrap_or_else(|p| panic!("{p:?}")).tests;
+        assert_eq!(measure(&xml, Cost { tests: cascade + 1000, ..NO_LIMITS }, usize::MAX).err(), Some(Past::Tests));
+        let made = USVG_TESTS.get();
+        assert!((1000..1100).contains(&made), "{made}");
+    }
+
+    /// Each class of a compound is looked for in the element's class list, so the tests grow with
+    /// the list's length: in the import's own cascade (a `:not()` rule, which usvg drops) and as
+    /// usvg matches.
+    #[test]
+    fn class_tests_grow_with_the_class_list() {
+        let list = (0..1000).map(|i| format!("c{i}")).collect::<Vec<_>>().join(" ");
+        let classes: String = (0..100).map(|i| format!(".c{i}")).collect();
+        let scans = 100 * css::scan_tests(list.len());
+        let tests = |rule: &str| {
+            let text = svg(&format!("<style>{rule}{{fill:red}}</style><g class='{list}'/>"));
+            let xml = roxmltree::Document::parse(&text).unwrap();
+            measure(&xml, NO_LIMITS, usize::MAX).unwrap_or_else(|p| panic!("{p:?}")).tests
+        };
+        let cascade = tests(&format!("g:not(.x{classes})"));
+        assert!(cascade >= scans, "{cascade} {scans}");
+        tests(&format!("g{classes}"));
+        let usvg = USVG_TESTS.get();
+        assert!(usvg >= scans, "{usvg} {scans}");
     }
 }
