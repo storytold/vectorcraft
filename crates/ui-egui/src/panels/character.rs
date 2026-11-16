@@ -544,6 +544,18 @@ pub(crate) fn toggle_underline(app: &mut VectorcraftApp) -> Result<Value, String
     Ok(json!(on))
 }
 
+/// `type.superscript` (Cmd+Shift+=) and `type.subscript` (Cmd+Alt+Shift+=): what the Superscript
+/// or Subscript button does, on the text the panels act on. Returns the position the text now
+/// has: `"normal"` only when every character had `position`, else `position`.
+pub(crate) fn toggle_position(app: &mut VectorcraftApp, position: &str) -> Result<Value, String> {
+    text_style(app).ok_or("select some type first")?;
+    let now = shared(app, |s| s.position).map(|p| p.id()).unwrap_or("");
+    let change = position_toggle(now, position);
+    let to = change["position"].clone();
+    run_format(app, change)?;
+    Ok(to)
+}
+
 /// `text.setRangeStyle` with `p` on the range the Type tool has selected (the whole text when
 /// nothing is selected). Does nothing unless the Type tool edits text.
 pub(crate) fn range_style(app: &mut VectorcraftApp, p: Value) {

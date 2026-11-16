@@ -7042,6 +7042,12 @@ Pen's second anchor at (150, 431), in line with the square's centre.
   in remote mode `press_key {key: "U", mods: {cmd: true, shift: true}}` or `invoke_menu`) does what the Character
   panel's Underline button does: it underlines the Type tool's selected text or the selected type objects, or removes
   the underline when the text the panel shows is underlined, and returns whether the text is now underlined.
+  `type.superscript` (Cmd+Shift+=, `press_key {key: "=", mods: {cmd: true, shift: true}}`) and `type.subscript`
+  (Cmd+Alt+Shift+=) do what the Character panel's Superscript and Subscript buttons do on the same text: they set its
+  position through `text.setFormat {position}`, or set it back to `"normal"` when every character already has that
+  position, and return the position the text now has. Without selected type or text the Type tool edits, both fail
+  and are dimmed, and Cmd+Shift+= zooms in, as Cmd+= does. In general, when the command a Shift+= chord is bound to is
+  dimmed, the press runs what the same chord without Shift is bound to.
 - `missingGlyphProtection` (on by default): `text.setStyle` and `text.setRangeStyle` changing the font leave the
   characters the new font has no glyph for in the font that had one.
 - `typeSelectionByPathOnly` (off by default): on, the Selection tools (`pointer_gesture` with `selection`, and the
