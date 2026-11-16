@@ -1070,15 +1070,9 @@ fn queue(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The colour mode an image file stores its pixels in.
 fn color_mode(bytes: &[u8]) -> &'static str {
-    use image::{ExtendedColorType as E, ImageDecoder as _};
-    let kind = image::ImageReader::new(std::io::Cursor::new(bytes))
-        .with_guessed_format()
-        .ok()
-        .and_then(|r| r.into_decoder().ok())
-        .map(|d| d.original_color_type());
-    match kind {
-        Some(E::L1 | E::La1 | E::L2 | E::La2 | E::L4 | E::La4 | E::L8 | E::La8 | E::L16 | E::La16) => "Grayscale",
-        Some(E::Cmyk8 | E::Cmyk16) => "CMYK",
+    match craft_image_codecs::decode(bytes).ok().map(|img| img.layout()) {
+        Some(craft_image_codecs::ChannelLayout::Gray | craft_image_codecs::ChannelLayout::GrayA) => "Grayscale",
+        Some(craft_image_codecs::ChannelLayout::Cmyk | craft_image_codecs::ChannelLayout::CmykA) => "CMYK",
         _ => "RGB",
     }
 }
