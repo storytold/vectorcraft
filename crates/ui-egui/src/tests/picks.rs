@@ -366,18 +366,17 @@ fn load_variable_library_asks_off_the_ui_thread() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
-/// The Variables panel menu's Save Variable Library… is enabled once the document has a text
-/// variable, and then asks off the UI thread: the library is written
-/// to the path the dialog answers, Load Variable Library reads it back, and the warning about the
-/// visibility variable it left out shows in the status bar.
+/// The Variables panel menu's Save Variable Library… is enabled once the document has a variable,
+/// of any kind, and then asks off the UI thread: the library is written to the path the dialog
+/// answers, and Load Variable Library reads back its visibility and text variables.
 #[test]
 fn save_variable_library_asks_off_the_ui_thread() {
     let (mut app, shown, _) = app();
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
-    app.run("variable.define", json!({"name": "Shown", "kind": "visibility"})).unwrap();
-    // Without a text variable the item is disabled and asks for no file.
+    // Without a variable the item is disabled and asks for no file.
     click(&mut app, "Save Variable Library…", crate::panels::variables::menu);
     assert!(shown.requests().is_empty(), "{:?}", shown.requests());
+    app.run("variable.define", json!({"name": "Shown", "kind": "visibility"})).unwrap();
     app.run("variable.define", json!({"name": "Name", "kind": "text"})).unwrap();
     app.run("dataset.new", json!({"name": "A", "values": {"Name": "x", "Shown": true}})).unwrap();
     let dir = vectorcraft_testkit::temp_dir("picks-save-variable-library");
@@ -392,10 +391,11 @@ fn save_variable_library_asks_off_the_ui_thread() {
     assert!(!library.exists(), "nothing is written before the dialog answers");
     shown.answer(&[&library.to_string_lossy()]);
     poll(&mut app);
-    assert_eq!(app.ui.status, "variables that aren't text were left out: visibility (1)");
     let xml = std::fs::read_to_string(&library).unwrap_or_else(|e| panic!("{e}: {}", app.ui.status));
     let loaded = app.run("variable.loadLibrary", json!({"xml": xml})).unwrap();
-    assert_eq!((loaded["variables"].clone(), loaded["names"].clone()), (json!(["Name"]), json!(["A"])));
+    assert_eq!((loaded["variables"].clone(), loaded["names"].clone()), (json!(["Shown", "Name"]), json!(["A"])));
+    let values = &app.session.doc().unwrap().doc.variables.datasets[0].values;
+    assert_eq!(values.get("Shown"), Some(&vectorcraft_doc::DataValue::Visible(true)));
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -456,7 +456,9 @@ fn keyboard_shortcuts_export_text_writes_the_working_set_as_text() {
     d.fields.insert("set".into(), json!("Custom"));
     click(&mut app, "Export Text…", dialogs);
     match shown.requests().as_slice() {
-        [PickRequest::Save(pick)] => assert_eq!(pick.filters, FilePick::filters([("Text", &["txt"][..])])),
+        [PickRequest::Save(pick)] => {
+            assert_eq!(pick.filters, FilePick::filters([("Text", &["txt"][..]), ("Shortcut sheet", &["pdf"][..]), ("CSV", &["csv"][..])]))
+        }
         other => panic!("{other:?}"),
     }
     shown.answer(&["/keys/list.txt"]);
@@ -472,6 +474,76 @@ fn keyboard_shortcuts_export_text_writes_the_working_set_as_text() {
     assert!(text.contains(&format!("\t{}\n", crate::menus::pretty_shortcut("Ctrl+Alt+G"))), "{text}");
     assert!(app.ui.shortcut_overrides.is_empty(), "the working set is kept only on OK");
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("shortcuts"), "the dialog stays open");
+}
+
+/// The file type picked in Export Text…'s save dialog picks the file: the PDF sheet or the CSV file
+/// for a name typed with `.pdf` or `.csv`, and for a type the dialog reports with a name typed
+/// without an extension, that type's file under the name with its extension.
+#[test]
+fn keyboard_shortcuts_export_text_writes_the_format_picked_in_its_save_dialog() {
+    for (answer, path, start) in [
+        (&["/keys/list.pdf"][..], "/keys/list.pdf", &b"%PDF-"[..]),
+        (&["/keys/list.csv"][..], "/keys/list.csv", &b"\xef\xbb\xbfGroup,Command,Shortcut\r\n"[..]),
+        (&["/keys/table", "csv"][..], "/keys/table.csv", &b"\xef\xbb\xbfGroup,Command,Shortcut\r\n"[..]),
+        (&["/keys/sheet", "pdf"][..], "/keys/sheet.pdf", &b"%PDF-"[..]),
+        (&["/keys/plain", "txt"][..], "/keys/plain.txt", &b"Keyboard Shortcuts\n"[..]),
+    ] {
+        let (mut app, shown, _) = app();
+        type Files = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
+        let files: Files = Default::default();
+        let f = files.clone();
+        app.services.write = Some(Box::new(move |path: &str, b: &[u8]| {
+            f.borrow_mut().push((path.to_string(), b.to_vec()));
+            Ok(())
+        }));
+        app.run("edit.keyboardShortcuts", json!({})).unwrap();
+        click(&mut app, "Export Text…", dialogs);
+        shown.answer(answer);
+        poll(&mut app);
+        let files = files.borrow();
+        let [(written, bytes)] = files.as_slice() else { panic!("{files:?}") };
+        assert_eq!(written, path);
+        assert!(bytes.starts_with(start), "{path}: {:?}", String::from_utf8_lossy(&bytes[..bytes.len().min(40)]));
+    }
+}
+
+/// `shortcuts.exportText` with a `format` and no `path` gives the name its save dialog answers
+/// that format's extension, though the dialog reports no file type.
+#[test]
+fn export_text_with_a_format_gives_the_answered_name_its_extension() {
+    let (mut app, shown, _) = app();
+    let written: Rc<RefCell<Vec<String>>> = Default::default();
+    let w = written.clone();
+    app.services.write = Some(Box::new(move |path: &str, _: &[u8]| {
+        w.borrow_mut().push(path.to_string());
+        Ok(())
+    }));
+    let _ = app.run("shortcuts.exportText", json!({"format": "sheet"}));
+    shown.answer(&["/keys/sheet"]);
+    poll(&mut app);
+    assert_eq!(*written.borrow(), ["/keys/sheet.pdf"]);
+}
+
+/// A name that Export Text… gives the picked type's extension names a file the save dialog did
+/// not check: when one is there, a question asks before replacing it and nothing is written
+/// meanwhile.
+#[test]
+fn keyboard_shortcuts_export_text_asks_before_replacing_a_file_its_extension_names() {
+    let (mut app, shown, _) = app();
+    let written: Rc<RefCell<Vec<String>>> = Default::default();
+    let w = written.clone();
+    app.services.write = Some(Box::new(move |path: &str, _: &[u8]| {
+        w.borrow_mut().push(path.to_string());
+        Ok(())
+    }));
+    app.services.exists = Some(std::sync::Arc::new(|p: &str| p == "/keys/list.pdf"));
+    app.run("edit.keyboardShortcuts", json!({})).unwrap();
+    click(&mut app, "Export Text…", dialogs);
+    shown.answer(&["/keys/list.txt", "pdf"]);
+    poll(&mut app);
+    assert!(written.borrow().is_empty(), "{:?}", written.borrow());
+    let d = app.ui.dialog.as_ref().expect("a question");
+    assert_eq!(d.str("path"), "/keys/list.pdf");
 }
 
 /// Keyboard Shortcuts' Import… opens a shortcut set another app saved as text (`.kys`) in Import

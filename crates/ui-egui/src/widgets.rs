@@ -30,14 +30,14 @@ pub use buttons::{
     SPLIT_ARROW, flat_button, flat_button_fit, icon_button, icon_button_enabled, menu_item, menu_item_name, paint_icon_button, primary_button,
     primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
 };
-pub(crate) use buttons::{button_width, icon_button_info, primary_button_width, secondary_button_width};
+pub(crate) use buttons::{button_width, flat_button_fit_width, icon_button_info, primary_button_width, secondary_button_width};
 #[cfg(test)]
 use chips::gradient_chip_colors;
 pub use chips::{ProxyClicks, chip_button, chip_button_named, fill_stroke_proxy, gradient_chip, paint_chip, proxy_chip, swatch_tile};
 pub use color::{
-    FieldAxis, Live, RingResponse, SliderValue, WheelResponse, channel_slider, channel_slider_named, channel_slider_valued, color_field, color_mesh,
-    color_slider, color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32, hue_ring,
-    region_texture, ring_square, segment_color, segmented_wheel, stepped_area,
+    FieldAxis, Live, RingResponse, SliderValue, WheelAxes, WheelResponse, channel_slider, channel_slider_named, channel_slider_valued, color_field,
+    color_mesh, color_slider, color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32,
+    hue_ring, region_texture, ring_square, segment_color, segment_color_on, segmented_wheel, stepped_area, wheel_of,
 };
 pub(crate) use color::{HEX_FIELD_CHARS, hex_text, pointer_phase};
 pub use drag::{
@@ -45,7 +45,7 @@ pub use drag::{
 };
 #[cfg(test)]
 use dropdowns::combo_button_id;
-pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field_named, combo_named, field_focused_in, popover_is_open};
+pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field_named, combo_named, field_focused_in, menu_min_width, popover_is_open};
 pub use dropdowns::{
     dropdown, dropdown_icon_names, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style,
     menu_room, menu_scroll, panel_scroll, popover, set_menu_floor, strip_scroll,
@@ -53,7 +53,7 @@ pub use dropdowns::{
 #[cfg(test)]
 pub(crate) use dropdowns::{menu_floor, menu_room_either};
 pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_label, section_header, section_toggle, section_toggle_name, subheader};
-pub(crate) use labels::{label_field, take_previous_label, text_width};
+pub(crate) use labels::{dim_label_width, label_field, take_previous_label, text_width};
 pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
 pub use numeric::{
     SpinPick, mixed_field, mixed_field_named, num_field, num_field_live, num_field_named, num_field_refusing, num_field_within,
@@ -73,6 +73,7 @@ pub use text::{
     exact_text_field, exact_text_field_named, plain_field, plain_field_named, search_field, text_field, text_field_named, text_presets,
     text_presets_named,
 };
+pub(crate) use toggles::choice_width;
 pub use toggles::{check, check_box, check_name, check_tip, check3, check3_tip, radio, radio_button};
 #[cfg(test)]
 pub(crate) use wheel_stream::WHEEL_STREAM_GAP;
@@ -102,6 +103,13 @@ impl<T> std::fmt::Debug for HashOnly<T> {
 /// `parent.with(salt)` for a salt that needs only `Hash`.
 pub(crate) fn id_with(parent: egui::Id, salt: impl std::hash::Hash) -> egui::Id {
     parent.with(HashOnly(salt))
+}
+
+/// Gives `resp` the screen-reader role of a list item named `label`, with `selected` as its
+/// selected state. [`egui::WidgetInfo::selected`] would set the toggled state instead.
+pub(crate) fn list_item_info(resp: &Response, selected: bool, label: impl Fn() -> String) {
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ListItem, true, label()));
+    resp.ctx.accesskit_node_builder(resp.id, |node| node.set_selected(selected));
 }
 
 #[cfg(test)]
@@ -216,6 +224,26 @@ pub(crate) mod accessibility_tests {
         on("Grid by Row");
         off("Recent");
         on("Saved");
+    }
+
+    #[test]
+    fn list_items_report_selection_and_section_headers_report_expansion() {
+        let tree = tree(|ui| {
+            for (name, on) in [("Artboard 1", true), ("Artboard 2", false)] {
+                let resp = ui.allocate_response(vec2(120.0, 20.0), Sense::click());
+                list_item_info(&resp, on, || name.to_string());
+            }
+            section_toggle(ui, "Open Section", true);
+            section_toggle(ui, "Closed Section", false);
+        });
+        let state = |label| {
+            let n = named(&tree, label);
+            (n.role(), n.toggled(), n.is_selected(), n.is_expanded())
+        };
+        assert_eq!(state("Artboard 1"), (Role::ListItem, None, Some(true), None));
+        assert_eq!(state("Artboard 2"), (Role::ListItem, None, Some(false), None));
+        assert_eq!(state("Open Section"), (Role::DisclosureTriangle, None, None, Some(true)));
+        assert_eq!(state("Closed Section"), (Role::DisclosureTriangle, None, None, Some(false)));
     }
 
     #[test]

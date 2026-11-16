@@ -312,7 +312,7 @@ pub fn default_sets() -> Vec<ActionSet> {
             Action::new("Center on Artboard", vec![step("object.align", json!({"horizontal": "center", "vertical": "center", "to": "artboard"}))]),
             Action::new("Outline Text", vec![step("type.createOutlines", json!({}))]),
             Action::new("Rotate 90° CW", vec![step("object.rotate", json!({"angle": -90}))]),
-            Action::new("Reflect Horizontal", vec![step("object.reflect", json!({"axis": "vertical"}))]),
+            Action::new("Reflect Horizontal", vec![step("object.reflect", json!({"axis": "vertical", "basis": "box"}))]),
         ],
     )]
 }
@@ -2145,6 +2145,81 @@ pub fn duplicate(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     Ok(result)
 }
 
+/// The command that puts the built-in action set back ([`reset`]).
+pub const RESET: &str = "ui.actionSet.reset";
+
+/// `ui.actionSet.reset {mode?: "replace" | "append"}`: Reset Actions. `replace` (the default)
+/// replaces every set in the panel with a new copy of the built-in sets ([`default_sets`]), makes
+/// the first one current and selected, clears the panel's selected action and step, its expanded
+/// actions and a step being dragged, and closes an open Set Options, New Action, Batch or step
+/// dialog that names a set. When the panel already shows the built-in sets that way, nothing
+/// changes and the sets keep their ids. `append` adds a new copy of the built-in sets after the
+/// sets there are, a name already in use getting the next free number (`Default Actions 2`), and
+/// keeps the current set and the selection. Omitted params (`null`) count as `{}`. Params of another
+/// type, another key, or another `mode` is an error, and so is a reset while an action records or
+/// plays (also while it waits at a stop); then nothing changes. No undo step is recorded.
+/// → {changed, mode, set: the index of the first built-in set}
+pub fn reset(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    const SELECTED: &str = "actions-selected";
+    const EXPANDED: &str = "actions-expanded";
+    let append = match p {
+        Value::Null => false,
+        Value::Object(m) => {
+            if let Some(key) = m.keys().find(|k| *k != "mode") {
+                let keys = "mode";
+                return Err(format!("unknown parameter `{key}`; the command takes: {keys}"));
+            }
+            match m.get("mode").map(Value::as_str) {
+                None | Some(Some("replace")) => false,
+                Some(Some("append")) => true,
+                Some(_) => return Err("mode must be replace or append".into()),
+            }
+        }
+        got => return Err(format!("the params must be an object, not {got}")),
+    };
+    if app.ui.recording.is_some() {
+        return Err("an action is already recording".into());
+    }
+    if app.ui.action_playing.is_some() {
+        return Err("an action is already playing".into());
+    }
+    let sets = default_sets();
+    if append {
+        let first = app.ui.action_sets.len();
+        for mut set in sets {
+            set.name = files::free_set_name(&app.ui.action_sets, &set.name);
+            app.ui.action_sets.push(set);
+        }
+        return Ok(json!({ "changed": true, "mode": "append", "set": first }));
+    }
+    let ctx = app.ui_ctx.clone();
+    let panel_clear = ctx.as_ref().is_none_or(|ctx| {
+        pstate::<Option<(usize, usize)>>(ctx, SELECTED).is_none()
+            && pstate::<Option<(u64, usize)>>(ctx, SELECTED_STEP).is_none()
+            && pstate::<Option<DraggedStep>>(ctx, DRAGGED_STEP).is_none()
+            && pstate::<BTreeSet<u64>>(ctx, EXPANDED).is_empty()
+    });
+    // The ids are not saved, so two lists that save alike hold the same sets.
+    let built_in = serde_json::to_value(&app.ui.action_sets).is_ok_and(|now| serde_json::to_value(&sets).is_ok_and(|new| new == now));
+    let shown_as_reset = app.ui.action_set == Some(0) && app.ui.action_sets_selected == [0] && !app.ui.dialog.as_ref().is_some_and(holds_set);
+    if built_in && shown_as_reset && panel_clear {
+        return Ok(json!({ "changed": false, "mode": "replace", "set": 0 }));
+    }
+    app.ui.action_sets = sets;
+    app.ui.action_set = Some(0);
+    app.ui.action_sets_selected = vec![0];
+    if app.ui.dialog.as_ref().is_some_and(holds_set) {
+        app.ui.dialog = None;
+    }
+    if let Some(ctx) = ctx {
+        set_pstate::<Option<(usize, usize)>>(&ctx, SELECTED, None);
+        set_pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP, None);
+        set_pstate::<Option<DraggedStep>>(&ctx, DRAGGED_STEP, None);
+        set_pstate(&ctx, EXPANDED, BTreeSet::<u64>::new());
+    }
+    Ok(json!({ "changed": true, "mode": "replace", "set": 0 }))
+}
+
 /// The panel's (≡) menu.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     // Button Mode is off while an action records, so the Stop button the list shows stays in reach.
@@ -2238,6 +2313,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         {
             app.status(e);
         }
+    }
+    // Asks first: OK replaces the sets with the built-in set, Append adds it after them.
+    if widgets::menu_item(ui, tl!("Reset Actions"), !recording && app.ui.action_playing.is_none(), false) {
+        crate::dialogs::confirm::ask_reset_actions(app);
     }
 }
 
@@ -2719,6 +2798,28 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// The built-in Reflect Horizontal reflects a rotated object across its bounding box's own axis,
+    /// as the Reflect dialog does, so the box keeps its angle; a saved step without a basis, recorded
+    /// before Reflect followed the box, still reflects across the page's axis.
+    #[test]
+    fn the_built_in_reflect_follows_the_turned_box() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let id = vectorcraft_doc::NodeId(
+            app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].as_u64().unwrap(),
+        );
+        app.run("select.set", json!({"ids": [id.0]})).unwrap();
+        app.run("object.rotate", json!({"angle": 30})).unwrap();
+        let angle = |app: &VectorcraftApp| app.session.active().unwrap().doc.bbox_angle(&[id]);
+        let reflect = default_sets()[0].actions.iter().position(|a| a.name == "Reflect Horizontal").unwrap();
+        app.ui.action_sets = default_sets();
+        play(&mut app, 0, reflect).unwrap();
+        assert!((angle(&app) - 30.0).abs() < 1e-6, "{}", angle(&app));
+        app.ui.action_sets = vec![ActionSet::new("Old", vec![Action::new("Reflect", vec![("object.reflect".into(), json!({"axis": "vertical"}))])])];
+        play(&mut app, 0, 0).unwrap();
+        assert!((angle(&app) + 30.0).abs() < 1e-6, "{}", angle(&app));
     }
 
     /// An action recorded with a key its command no longer reads still plays, accelerated and one
@@ -3722,6 +3823,170 @@ mod tests {
         assert_eq!(app.ui.dialog.as_ref().map(|d| d.fields["set"].clone()), Some(json!(3)), "Set Options still on Other");
     }
 
+    /// The sets as Save Actions… writes them, without the ids.
+    fn saved_sets(sets: &[ActionSet]) -> Value {
+        serde_json::to_value(sets).unwrap()
+    }
+
+    /// A click on the panel menu's Reset Actions.
+    fn menu_reset(ctx: &egui::Context, app: &mut VectorcraftApp) {
+        use super::super::tests_appearance::{click, frame_events};
+        let texts = frame_events(ctx, app, vec![], menu);
+        let item = texts.iter().find(|(s, _)| s.trim() == "Reset Actions").map(|(_, r)| *r).expect("Reset Actions in the menu");
+        click(ctx, app, item.center(), menu);
+    }
+
+    /// The panel menu's Reset Actions asks before it changes anything, also with no current set,
+    /// and does nothing while an action records or plays, waiting at a stop included.
+    #[test]
+    fn the_panel_menus_reset_actions_asks_first_and_is_off_while_an_action_runs() {
+        let mut app = app_with_sets();
+        let ctx = egui::Context::default();
+        let before = saved_sets(&app.ui.action_sets);
+        menu_reset(&ctx, &mut app);
+        let d = app.ui.dialog.as_ref().expect("Reset Actions asks first, with no current set too");
+        assert_eq!((d.kind.as_str(), d.bool("append")), (crate::dialogs::confirm::RESET_ACTIONS, false));
+        assert_eq!(saved_sets(&app.ui.action_sets), before, "asking changes no set");
+        app.ui.dialog = None;
+
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run(START_RECORDING, json!({})).unwrap();
+        menu_reset(&ctx, &mut app);
+        assert!(app.ui.dialog.is_none(), "off while an action records");
+        app.run(STOP_RECORDING, json!({})).unwrap();
+
+        let (mut app, _) = app_with_a_stop(true);
+        play(&mut app, 0, 0).unwrap();
+        assert!(waiting_at_stop(&app));
+        app.ui.dialog = None;
+        menu_reset(&ctx, &mut app);
+        assert!(app.ui.dialog.is_none(), "off while playback waits at a stop");
+    }
+
+    /// `ui.actionSet.reset` replaces every set, edited ones included, with the built-in set, makes it
+    /// current and selected, clears the panel's selected action and step, expanded actions and a
+    /// dragged step, closes a dialog that holds a set index, and records no undo step.
+    #[test]
+    fn reset_replaces_every_set_with_the_built_in_set_and_clears_what_named_the_old_ones() {
+        let mut app = app_with_sets();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        let undo = undo_steps(&app);
+        app.ui.action_sets[0].name = "Renamed".into();
+        app.ui.action_sets[0].actions.pop();
+        app.ui.action_set = Some(2);
+        app.ui.action_sets_selected = vec![1, 2];
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        let nudge = app.ui.action_sets[1].actions[1].id;
+        set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((1, 1)));
+        set_pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP, Some((nudge, 0)));
+        set_pstate(&ctx, "actions-expanded", BTreeSet::from([nudge]));
+        let dragged: DraggedStep = (nudge, 0, std::sync::Arc::new((vec![], BTreeSet::new())));
+        set_pstate::<Option<DraggedStep>>(&ctx, DRAGGED_STEP, Some(dragged));
+        crate::dialogs::action_batch::open(&mut app, 1, 1).unwrap();
+
+        assert_eq!(app.run(RESET, json!({})).unwrap(), json!({"changed": true, "mode": "replace", "set": 0}));
+        assert_eq!(saved_sets(&app.ui.action_sets), saved_sets(&default_sets()), "only the built-in set, as it comes");
+        assert_eq!((app.ui.action_set, app.ui.action_sets_selected.clone()), (Some(0), vec![0]), "it is current and selected");
+        assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), None);
+        assert_eq!(pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP), None);
+        assert!(pstate::<BTreeSet<u64>>(&ctx, "actions-expanded").is_empty());
+        assert!(pstate::<Option<DraggedStep>>(&ctx, DRAGGED_STEP).is_none());
+        assert!(app.ui.dialog.is_none(), "the Batch dialog of a replaced set closes");
+        assert_eq!(undo_steps(&app), undo, "no undo step");
+
+        app.ui.action_sets.clear();
+        app.ui.action_set = None;
+        assert_eq!(app.run(RESET, Value::Null).unwrap(), json!({"changed": true, "mode": "replace", "set": 0}), "from no sets");
+        assert_eq!(saved_sets(&app.ui.action_sets), saved_sets(&default_sets()));
+        assert_eq!(app.ui.action_set, Some(0));
+    }
+
+    /// Reset Actions on the built-in set as it comes still makes it current when no set is, and
+    /// changes nothing, ids included, once the panel shows it as a reset leaves it.
+    #[test]
+    fn reset_on_the_built_in_set_makes_it_current_then_changes_nothing() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        assert_eq!(app.ui.action_set, None, "a new app has no current set");
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        assert_eq!(app.run(RESET, json!({"mode": "replace"})).unwrap()["changed"], true, "the set becomes current");
+        assert_eq!((app.ui.action_set, app.ui.action_sets_selected.clone()), (Some(0), vec![0]));
+        let ids = (app.ui.action_sets[0].id, app.ui.action_sets[0].actions.iter().map(|a| a.id).collect::<Vec<_>>());
+        assert_eq!(app.run(RESET, json!({})).unwrap(), json!({"changed": false, "mode": "replace", "set": 0}));
+        assert_eq!((app.ui.action_sets[0].id, app.ui.action_sets[0].actions.iter().map(|a| a.id).collect()), ids, "the ids stay");
+        set_pstate(&ctx, "actions-expanded", BTreeSet::from([ids.1[0]]));
+        assert_eq!(app.run(RESET, json!({})).unwrap()["changed"], true, "an expanded action is collapsed");
+        crate::dialogs::action_set_options::open(&mut app, 0);
+        assert_eq!(app.run(RESET, json!({})).unwrap()["changed"], true, "Set Options for the set closes");
+        assert!(app.ui.dialog.is_none());
+    }
+
+    /// Append adds a copy of the built-in set after the sets there are, with the first free number,
+    /// and keeps every set, the current set, the selection and an open dialog as they are.
+    #[test]
+    fn reset_append_adds_the_built_in_set_with_a_free_number_and_keeps_the_rest() {
+        let mut app = app_with_sets();
+        app.ui.action_sets[0].actions.pop();
+        app.ui.action_sets[2].name = "Default Actions 3".into();
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((1, 1)));
+        let before = saved_sets(&app.ui.action_sets);
+        assert_eq!(app.run(RESET, json!({"mode": "append"})).unwrap(), json!({"changed": true, "mode": "append", "set": 3}));
+        assert_eq!(set_names(&app), ["Default Actions", "Mine", "Default Actions 3", "Default Actions 2"]);
+        assert_eq!(saved_sets(&app.ui.action_sets[..3]), before, "the sets there were stay as they were");
+        assert_eq!(saved_sets(&app.ui.action_sets[3..])[0]["actions"], saved_sets(&default_sets())[0]["actions"], "the built-in actions");
+        assert_eq!(app.ui.action_set, None, "still no current set");
+        assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), Some((1, 1)), "the selection stays");
+        app.ui.action_set = Some(1);
+        app.ui.action_sets_selected = vec![1];
+        crate::dialogs::action_batch::open(&mut app, 1, 0).unwrap();
+        assert_eq!(app.run(RESET, json!({"mode": "append"})).unwrap()["set"], 4);
+        assert_eq!(set_names(&app)[4], "Default Actions 4");
+        assert_eq!((app.ui.action_set, app.ui.action_sets_selected.clone()), (Some(1), vec![1]), "the current set stays");
+        assert!(app.ui.dialog.as_ref().is_some_and(|d| d.kind == crate::dialogs::action_batch::KIND), "the Batch dialog stays open");
+    }
+
+    /// `ui.actionSet.reset` refuses params that are not an object, another key or mode, and a reset
+    /// while an action records or plays, waiting at a stop included, and then changes nothing.
+    #[test]
+    fn reset_refuses_bad_params_and_a_running_action_and_changes_nothing() {
+        let mut app = app_with_sets();
+        let before = saved_sets(&app.ui.action_sets);
+        for (p, error) in [
+            (json!(1), "the params must be an object, not 1"),
+            (json!("append"), "the params must be an object, not \"append\""),
+            (json!([]), "the params must be an object, not []"),
+            (json!({"mode": null}), "mode must be replace or append"),
+            (json!({"mode": 1}), "mode must be replace or append"),
+            (json!({"mode": "clear"}), "mode must be replace or append"),
+            (json!({"mode": "append", "set": 0}), "unknown parameter `set`; the command takes: mode"),
+        ] {
+            assert_eq!(app.run(RESET, p.clone()).unwrap_err(), error, "{p}");
+            assert_eq!(saved_sets(&app.ui.action_sets), before, "{p} changes nothing");
+            assert_eq!(app.ui.action_set, None);
+        }
+
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run(START_RECORDING, json!({})).unwrap();
+        for mode in ["replace", "append"] {
+            assert_eq!(app.run(RESET, json!({ "mode": mode })).unwrap_err(), "an action is already recording");
+        }
+        assert_eq!(saved_sets(&app.ui.action_sets), before, "a recording keeps its set");
+        app.run(STOP_RECORDING, json!({})).unwrap();
+
+        let (mut app, _) = app_with_a_stop(true);
+        let before = saved_sets(&app.ui.action_sets);
+        play(&mut app, 0, 0).unwrap();
+        assert!(waiting_at_stop(&app));
+        for mode in ["replace", "append"] {
+            assert_eq!(app.run(RESET, json!({ "mode": mode })).unwrap_err(), "an action is already playing");
+        }
+        assert_eq!(saved_sets(&app.ui.action_sets), before, "the playing set stays");
+    }
+
     /// A recording keeps its steps when a canceled undo group drops journal entries made before the
     /// recording began.
     #[test]
@@ -4214,6 +4479,125 @@ mod tests {
         assert_eq!(app.ui.action_sets[3].actions[0].steps, [("object.group".to_string(), json!({}))]);
         assert_eq!(r["skipped"], json!([{"action": "A", "step": "group"}, {"action": "A", "step": "Ungroup"}]));
         assert_eq!(r["leftOut"], 2);
+    }
+
+    /// A Set Selection step written from scratch, as `/event-N` text: its label (none when empty),
+    /// whether it is on, and its recorded values, each the text inside a `/parameter-N` block.
+    fn set_selection_event(n: usize, label: &str, on: bool, values: &[String]) -> String {
+        let hex = |t: &[u8]| format!("[ {} {} ]", t.len(), t.iter().map(|b| format!("{b:02x}")).collect::<String>());
+        let label = if label.is_empty() { String::new() } else { format!("/localizedName {} ", hex(label.as_bytes())) };
+        let params: String = values.iter().enumerate().map(|(i, v)| format!("/parameter-{} {{ {v} }} ", i + 1)).collect();
+        format!(
+            "/event-{n} {{ /useRulersIn1stQuadrant 0 /internalName (adobe_setSelection) {label}/isOn {} /isOff 0 /parameterCount {} {params}}} ",
+            u8::from(on),
+            values.len()
+        )
+    }
+
+    /// The recorded values of a Set Selection step: the note's bytes, then Whole Word and Case
+    /// Sensitive.
+    fn set_selection_values(note: &[u8], whole_word: u8, case_sensitive: u8) -> Vec<String> {
+        let hex = |t: &[u8]| format!("[ {} {} ]", t.len(), t.iter().map(|b| format!("{b:02x}")).collect::<String>());
+        vec![
+            format!("/key 1952807028 /showInPalette 4294967295 /type (ustring) /value {}", hex(note)),
+            format!("/key 2003792484 /showInPalette 4294967295 /type (boolean) /value {whole_word}"),
+            format!("/key 1667330917 /showInPalette 4294967295 /type (boolean) /value {case_sensitive}"),
+        ]
+    }
+
+    /// Load Actions… reads an `.aia` Set Selection step, found by its internal name whatever its
+    /// label, as a Select Object step with its note (trimmed), Case Sensitive and Whole Word, in any
+    /// order; a step that is off stays excluded. The set saves to VectorCraft's own file and loads
+    /// back the same, and playing it selects the objects with that note.
+    #[test]
+    fn load_actions_reads_set_selection_steps_as_select_object() {
+        let mut reordered = set_selection_values("Größe ✓".as_bytes(), 1, 0);
+        reordered.reverse();
+        let events = [
+            set_selection_event(1, "Set Selection", true, &set_selection_values(b" Badge front ", 0, 1)),
+            set_selection_event(2, "Auswahl festlegen", true, &reordered),
+            set_selection_event(3, "", false, &set_selection_values(b"Off", 1, 1)),
+        ]
+        .concat();
+        let text = format!("/version 3 /name [ 5 4e6f746573 ] /actionCount 1 /action-1 {{ /name [ 1 41 ] /eventCount 3 {events}}}");
+        let mut app = app_with_sets();
+        let r = app.run(LOAD_SET, json!({ "data": text })).unwrap();
+        assert_eq!((r["leftOut"].clone(), r["skipped"].clone()), (json!(0), json!([])));
+        let step = |note: &str, case_sensitive: bool, whole_word: bool| {
+            (SELECT_OBJECT_STEP.to_string(), json!({"note": note, "caseSensitive": case_sensitive, "wholeWord": whole_word}))
+        };
+        let expected = [step("Badge front", true, false), step("Größe ✓", false, true), step("Off", true, true)];
+        assert_eq!(app.ui.action_sets[3].actions[0].steps, expected);
+        assert_eq!(app.ui.action_sets[3].actions[0].excluded_steps, [2].into());
+
+        let saved = files::write_set(&app.ui.action_sets[3]);
+        assert!(saved.contains("\"version\": 4"), "{saved}");
+        app.run(LOAD_SET, json!({ "data": saved })).unwrap();
+        assert_eq!(app.ui.action_sets[4].actions[0].steps, expected);
+        assert_eq!(app.ui.action_sets[4].actions[0].excluded_steps, [2].into());
+
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let mut ids = vec![];
+        for x in [0, 50] {
+            ids.push(app.run("shape.rectangle", json!({"x": x, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+        }
+        app.run("attributes.set", json!({"ids": [ids[1]], "note": "Badge front"})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.ui.action_sets[3].actions[0].excluded_steps = [1, 2].into();
+        play(&mut app, 3, 0).unwrap();
+        let selected: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
+        assert_eq!(selected, [ids[1]], "the step selected the object with the note");
+    }
+
+    /// A Set Selection step whose recorded values are not exactly the note (UTF-8 text, not empty
+    /// once trimmed, at most 1,024 bytes) and the two options (each 0 or 1), with the right types and
+    /// no other value, is left out, listed by its label (else its internal name) and counted; no step
+    /// comes in with a missing option filled in. A value whose byte count is wrong refuses the file.
+    #[test]
+    fn set_selection_steps_with_bad_values_are_left_out() {
+        let good = || set_selection_values(b"Badge", 0, 0);
+        let with = |i: usize, value: &str| {
+            let mut v = good();
+            v[i] = value.to_string();
+            v
+        };
+        let mut extra = good();
+        extra.push("/key 1 /type (boolean) /value 0".into());
+        let mut duplicate = good();
+        duplicate[0] = good()[2].clone();
+        let bad: Vec<Vec<String>> = vec![
+            good()[1..].to_vec(),
+            vec![good()[0].clone(), good()[1].clone()],
+            extra,
+            duplicate,
+            with(0, "/key 1952807028 /type (ustring) /value [ 2 c328 ]"),
+            with(0, "/key 1952807028 /type (ustring) /value [ 3 202020 ]"),
+            with(0, &format!("/key 1952807028 /type (ustring) /value [ 1025 {} ]", "61".repeat(1025))),
+            with(0, "/key 1952807028 /type (text) /value [ 5 4261646765 ]"),
+            with(0, "/key 1952807028 /type (ustring) /value 5"),
+            with(1, "/key 2003792484 /type (boolean) /value 2"),
+            with(1, "/key 2003792484 /type (integer) /value 1"),
+            with(2, "/key 1667330917 /type (boolean) /value 1.0"),
+            with(2, "/key 1667330917 /type (boolean)"),
+            with(2, "/key 1 /type (boolean) /value 1"),
+        ];
+        let events: String = bad.iter().enumerate().map(|(i, values)| set_selection_event(i + 1, "Set Selection", true, values)).collect();
+        let events = events + &set_selection_event(bad.len() + 1, "", true, &[]);
+        let text = format!("/version 3 /name [ 3 426164 ] /action-1 {{ /name [ 1 41 ] {events}}}");
+        let mut app = app_with_sets();
+        let r = app.run(LOAD_SET, json!({ "data": text })).unwrap();
+        assert!(app.ui.action_sets[3].actions[0].steps.is_empty(), "{:?}", app.ui.action_sets[3].actions[0].steps);
+        assert_eq!(r["leftOut"], bad.len() + 1);
+        let names: Vec<&str> = r["skipped"].as_array().unwrap().iter().map(|s| s["step"].as_str().unwrap()).collect();
+        let mut expected = vec!["Set Selection"; bad.len()];
+        expected.push("adobe_setSelection");
+        assert_eq!(names, expected);
+        assert_eq!(app.ui.status, format!("Loaded “Bad”: {} steps were left out", bad.len() + 1));
+
+        let wrong_count = set_selection_event(1, "Set Selection", true, &with(0, "/key 1952807028 /type (ustring) /value [ 6 4261646765 ]"));
+        let text = format!("/version 3 /action-1 {{ {wrong_count}}}");
+        assert_eq!(app.run(LOAD_SET, json!({ "data": text })).unwrap_err(), "the action set file can't be read in full");
+        assert_eq!(app.ui.action_sets.len(), 4, "no set added");
     }
     /// Load Actions… picks action set files of both kinds, and a set another app saved without a
     /// name takes the file's name, or `Actions` when there is no file; one named like a set in the
@@ -6345,8 +6729,10 @@ mod tests {
     #[test]
     fn place_cursor_exec_checks_recording_step_limit_on_completion() {
         let steps = "the action already has 10,000 steps";
-        let mut png = vec![];
-        image::RgbImage::new(8, 8).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let raw =
+            craft_image_codecs::Image::from_raw(8, 8, craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, vec![0; 8 * 8 * 3])
+                .unwrap();
+        let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
         let placed = |app: &VectorcraftApp| {
             let st = app.session.active().unwrap();
             st.doc.layers.iter().flat_map(|l| l.children().into_iter().flatten()).filter(|n| n.name.as_deref() == Some("a.png")).count()

@@ -90,6 +90,65 @@ pub fn visible_edge_near(group: &Node, p: Point, tol: f64) -> Option<&Arc<Node>>
     nearest_edge(edges(group).into_iter().filter(|e| e.visible), p, tol)
 }
 
+/// The edges of `group` that are not hidden and that the polyline through the points of each chunk
+/// of `chunks` crosses or comes within [`LP_JOIN_TOL`] of, each once, in the group's order. Each
+/// stretch of the polyline tests only the edge segments whose bounds lie near it.
+pub fn visible_edges_along<'a>(group: &'a Node, chunks: &[Vec<Point>]) -> Vec<&'a Arc<Node>> {
+    use kurbo::ParamCurveNearest as _;
+    let shown: Vec<&Arc<Node>> = edges(group).into_iter().filter(|e| e.visible).collect();
+    // Each edge segment, with the index in `shown` of its edge.
+    let mut owner: Vec<usize> = vec![];
+    let mut segs: Vec<(kurbo::CubicBez, bool)> = vec![];
+    for (i, e) in shown.iter().enumerate() {
+        for s in e.path_data().map(lp_segments).unwrap_or_default() {
+            owner.push(i);
+            segs.push((s, true));
+        }
+    }
+    if segs.is_empty() {
+        return vec![];
+    }
+    let grid = LpEdgeGrid::new(&segs);
+    let close = LP_JOIN_TOL * LP_JOIN_TOL;
+    let mut hit = vec![false; shown.len()];
+    for chunk in chunks {
+        for pair in chunk.windows(2) {
+            let &[a, b] = pair else { continue };
+            let line = kurbo::Line::new(a, b);
+            let on_line = |p: Point| line.nearest(p, 1e-9).distance_sq <= close;
+            for k in grid.near_box(Rect::from_points(a, b).inflate(LP_JOIN_TOL, LP_JOIN_TOL)) {
+                let (Some((c, _)), Some(&i)) = (segs.get(k), owner.get(k)) else { continue };
+                let Some(h) = hit.get_mut(i) else { continue };
+                if *h {
+                    continue;
+                }
+                let on_seg = |p: Point| c.nearest(p, 1e-9).distance_sq <= close;
+                // An end of either one on the other covers a touch and a stretch that runs along
+                // the edge, where no single crossing point exists. Where neither crosses the other,
+                // their closest points are ends or a point of the edge where it runs parallel to
+                // the drag. A crossing kurbo finds just before or after an end of the edge counts
+                // only through the checks on that end.
+                *h = on_seg(a)
+                    || on_seg(b)
+                    || on_line(c.p0)
+                    || on_line(c.p3)
+                    || (a != b
+                        && (kurbo::PathSeg::Cubic(*c).intersect_line(line).iter().any(|x| (0.0..=1.0).contains(&x.segment_t))
+                            || lp_parallel_at(c, b - a).into_iter().any(|t| on_line(kurbo::ParamCurve::eval(c, t)))));
+            }
+        }
+    }
+    shown.into_iter().zip(hit).filter_map(|(e, h)| h.then_some(e)).collect()
+}
+
+/// The parameters strictly between 0 and 1 where cubic `c` runs parallel to direction `d`: the
+/// roots of the cross product of its derivative with `d`.
+fn lp_parallel_at(c: &kurbo::CubicBez, d: kurbo::Vec2) -> Vec<f64> {
+    let [a, b, e] = [c.p1 - c.p0, c.p2 - c.p1, c.p3 - c.p2].map(|v| v.cross(d));
+    // a(1-t)² + 2b·t(1-t) + e·t², expanded in powers of t.
+    kurbo::common::solve_quadratic(a, 2.0 * (b - a), a - 2.0 * b + e).into_iter().filter(|t| t.is_finite() && *t > 0.0 && *t < 1.0).collect()
+}
+
 /// The edge of `edges` nearest to `p` within `tol`.
 fn nearest_edge<'a>(edges: impl IntoIterator<Item = &'a Arc<Node>>, p: Point, tol: f64) -> Option<&'a Arc<Node>> {
     let mut best: Option<(f64, &Arc<Node>)> = None;
@@ -130,7 +189,7 @@ fn lp_cells_around(p: Point) -> impl Iterator<Item = (i64, i64)> {
 /// The stroke paint Live Paint edge `edge` draws with: the paint of its topmost stroke that is shown
 /// with a paint, a weight above 0 and an opacity above 0, or [`Paint::None`] when the edge is fully
 /// transparent or has no such stroke.
-pub(super) fn lp_stroke_paint(edge: &Node) -> Paint {
+pub fn lp_stroke_paint(edge: &Node) -> Paint {
     if edge.opacity <= 0.0 {
         return Paint::None;
     }
@@ -405,8 +464,15 @@ impl LpEdgeGrid {
 /// end of an edge already reached.
 /// Empty when `start` is not an edge of `group` that is not hidden.
 pub fn connected_edges(group: &Node, start: NodeId, paint: &Paint) -> Vec<NodeId> {
+    connected_edges_through(group, start, paint, &[])
+}
+
+/// [`connected_edges`], with the edges in `through` counted as drawing with stroke paint `paint`
+/// whatever paint they draw with now.
+pub fn connected_edges_through(group: &Node, start: NodeId, paint: &Paint, through: &[NodeId]) -> Vec<NodeId> {
     use std::collections::{HashMap, HashSet};
-    let es: Vec<&Arc<Node>> = edges(group).into_iter().filter(|e| e.visible && (e.id == start || lp_stroke_paint(e) == *paint)).collect();
+    let es: Vec<&Arc<Node>> =
+        edges(group).into_iter().filter(|e| e.visible && (e.id == start || through.contains(&e.id) || lp_stroke_paint(e) == *paint)).collect();
     // The first and last points of each subpath of each edge.
     let ends: Vec<Vec<Point>> = es
         .iter()
@@ -505,8 +571,8 @@ fn collect_members<'a>(n: &'a Node, builder: bool, out: &mut Vec<&'a Node>) {
         NodeKind::Path { guide: true, .. } | NodeKind::Path { clipping: true, .. } => {}
         NodeKind::Path { .. } | NodeKind::Compound { .. } => out.push(n),
         NodeKind::Group { .. } if builder && is_live_paint(n) => {
-            out.extend(faces(n).into_iter().filter(|f| !f.visible || f.locked || !f.appearance.fill_paint().is_none()).map(|f| &**f));
-            out.extend(edges(n).into_iter().filter(|e| !e.visible || e.locked || !e.appearance.stroke_paint().is_none()).map(|e| &**e));
+            out.extend(faces(n).into_iter().filter(|f| !f.visible || f.locked || (f.opacity > 0.0 && f.appearance.has_drawn_fill())).map(|f| &**f));
+            out.extend(edges(n).into_iter().filter(|e| !e.visible || e.locked || (e.opacity > 0.0 && e.appearance.has_drawn_stroke())).map(|e| &**e));
         }
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
             for c in children {
@@ -587,9 +653,12 @@ fn shapes_of<'a>(doc: &'a Document, roots: &[NodeId], builder: bool) -> (Vec<po:
 /// Shape Builder inputs: [`shapes_for`], with the open subpaths of filled paths closed where that
 /// encloses an area (the fill bounds a region, as if an invisible edge closed it) when
 /// `open_filled_as_closed`. Unfilled open paths and straight lines stay open and cut the regions
-/// they cross, and so do filled open paths without `open_filled_as_closed`. A Live Paint group
-/// contributes its filled faces as shapes and its stroked edges as open lines; its unfilled faces
-/// and its edges without a stroke are left out. Locked objects, and objects in a locked group or
+/// they cross, and so do filled open paths without `open_filled_as_closed`. A path, face or edge
+/// counts as filled or stroked when any of its fill or stroke rows draws
+/// ([`vectorcraft_doc::Appearance::has_drawn_fill`], [`vectorcraft_doc::Appearance::has_drawn_stroke`]),
+/// whichever row is on top. A Live Paint group contributes its filled faces as shapes and its
+/// stroked edges as open lines; its unfilled faces, its edges without a stroke, and its faces and
+/// edges whose own opacity is 0 are left out. Locked objects, and objects in a locked group or
 /// layer, give nothing.
 pub fn shape_builder_shapes<'a>(doc: &'a Document, roots: &[NodeId], open_filled_as_closed: bool) -> (Vec<po::Shape>, Vec<&'a Node>) {
     let (mut shapes, leaves) = shapes_of(doc, roots, true);
@@ -600,7 +669,7 @@ pub fn shape_builder_shapes<'a>(doc: &'a Document, roots: &[NodeId], open_filled
             s.path.subpaths = s.path.subpaths.iter().flat_map(|sp| sp.cut_at(&start)).collect();
             continue;
         }
-        if !open_filled_as_closed || l.appearance.fill_paint().is_none() {
+        if !open_filled_as_closed || !l.appearance.has_drawn_fill() {
             continue;
         }
         for sp in s.path.subpaths.iter_mut().filter(|sp| !sp.closed) {

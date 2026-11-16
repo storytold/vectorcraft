@@ -1,12 +1,12 @@
 //! The shadow of the 3D and Materials effects (Extrude & Bevel, Inflate, Rotate and Revolve): the
 //! `shadow` switch with `shadowPosition`, `shadowDistance` and `shadowBounds`, and the shape it
-//! draws behind the solids.
+//! draws behind the solids, blurred by the first light's Softness.
 use std::ops::Range;
 use std::sync::Arc;
 
-use serde_json::Value;
+use serde_json::{Value, json};
 use vectorcraft_doc::color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, Node, NodeId};
+use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, Node, NodeId};
 use vectorcraft_three_d::{Shadow, ShadowCaster, ShadowPlane, ShadowPosition};
 
 use super::Scope;
@@ -15,15 +15,21 @@ use crate::util::{flag, num, text};
 /// The shadow's paint: black at this opacity. VectorCraft's own values.
 const SHADOW_OPACITY: f32 = 0.5;
 
+/// Blur radii below this, in points, leave the shadow hard-edged.
+const MIN_BLUR: f64 = 0.01;
+
 /// The shadow `p` asks for, or `None` with the switch off or when the first light lights nothing
-/// (Shading is off or its intensity is 0), so that no shadow is built.
+/// (Shading is off or its intensity is 0), so that no shadow is built. Its softness is the first
+/// light's.
 pub(crate) fn options(p: &Value) -> Option<Shadow> {
-    let intensity = crate::lighting::lights(p).and_then(|l| l.iter().next().map(|l| l.intensity)).unwrap_or_else(|| num(p, "lightIntensity", 80.0));
+    let first = crate::lighting::lights(p).and_then(|l| l.iter().next().copied());
+    let intensity = first.map_or_else(|| num(p, "lightIntensity", 80.0), |l| l.intensity);
     let lit = flag(p, "shade", true) && intensity > 0.0;
     (lit && flag(p, "shadow", false)).then(|| Shadow {
         position: ShadowPosition::parse(text(p, "shadowPosition", "behind")).unwrap_or_default(),
         distance: num(p, "shadowDistance", 0.0) / 100.0,
         bounds: num(p, "shadowBounds", 100.0) / 100.0,
+        softness: first.map_or_else(|| num(p, "lightSoftness", 0.0) / 100.0, |l| l.softness),
     })
 }
 
@@ -50,9 +56,23 @@ pub(crate) struct Ink {
     pub(crate) blend: BlendMode,
 }
 
+impl Ink {
+    /// Whether art in this ink casts part of a shadow ([`casts`]).
+    pub(crate) fn casts(self) -> bool {
+        casts(self.opacity)
+    }
+}
+
+/// Whether art at `opacity` casts part of a shadow: its opacity is a finite number above zero.
+/// Art at zero, negative, NaN or infinite opacity casts nothing.
+pub(crate) fn casts(opacity: f32) -> bool {
+    opacity.is_finite() && opacity > 0.0
+}
+
 /// The shadow of the faces in `caster` as a path of object `id`, cast by art in `ink`: filled
-/// black at [`SHADOW_OPACITY`] times its opacity, in its blending mode, with the nonzero rule;
-/// `None` when it casts nothing.
+/// black at [`SHADOW_OPACITY`] times its opacity, in its blending mode, with the nonzero rule, and
+/// with the light's Softness a Gaussian Blur of the plane's radius ([`ShadowPlane::blur`]), which
+/// is drawn, measured, exported and expanded as that effect is; `None` when it casts nothing.
 pub(crate) fn art(id: NodeId, caster: &ShadowCaster, shadow: Shadow, ink: Ink) -> Option<Node> {
     let all = 0..caster.len();
     let all = std::slice::from_ref(&all);
@@ -65,7 +85,9 @@ fn piece(id: NodeId, caster: &ShadowCaster, plane: &ShadowPlane, faces: &[Range<
     let mut fill = FillLayer::new(Paint::solid(Color::BLACK));
     fill.opacity = SHADOW_OPACITY * ink.opacity.clamp(0.0, 1.0);
     fill.blend = ink.blend;
-    Some(Node::path(id, path, Appearance { items: vec![AppearanceItem::Fill(fill)], ..Default::default() }))
+    let blur = plane.blur();
+    let effects = if blur >= MIN_BLUR { vec![Effect { id: "blur.gaussian".into(), params: json!({"radius": blur}), visible: true }] } else { vec![] };
+    Some(Node::path(id, path, Appearance { items: vec![AppearanceItem::Fill(fill)], effects, ..Default::default() }))
 }
 
 /// Whether `a` and `b` are the same objects' scopes (each member holds its own copies).

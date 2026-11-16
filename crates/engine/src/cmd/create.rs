@@ -26,7 +26,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Ellipse",
             [],
             None,
-            "{x, y, width, height, rotation?: deg clockwise about the centre (0: upright)} → {id}",
+            "{x, y, width, height, rotation?: deg clockwise about the centre (0: upright), anchors=4 (2–1000: smooth anchors spaced evenly by angle; any count but 4 draws a plain path, not a live ellipse)} → {id}",
             has_doc,
             ellipse
         ),
@@ -53,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Flare",
             [],
             None,
-            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?} → {id}",
+            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?, ringSeed? (whole number below 2^53: places the rings along the path anew, keeping their count and sizes)} → {id}",
             has_doc,
             flare
         ),
@@ -64,7 +64,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Arc",
             [],
             None,
-            "{x1, y1, x2, y2, closed?, slope?} or {x, y, lengthX, lengthY, reference?, baseAlong?: x|y, slope?, closed?, fillArc?} → {id}",
+            "{x1, y1, x2, y2, closed?, slope?: −100…100 (default 100), rotation?: deg clockwise about (x1, y1)} or {x, y, lengthX, lengthY, reference?: 0–8 (default 0), baseAlong?: x|y (either case; default x), slope?: −100…100 (default 50), closed?, fillArc?, rotation?: deg clockwise about the reference point (x, y)} (0: upright); a reference or baseAlong given as anything else (null included) or a slope outside its range is an error and draws nothing → {id}",
             has_doc,
             arc
         ),
@@ -73,7 +73,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rectangular Grid",
             [],
             None,
-            "{x, y, width, height, rows=5, columns=5, rowSkew=0, columnSkew=0 (−500…500 %: + crowds the horizontal dividers toward the top, the vertical ones toward the right), frame=true (the outside as one rectangle, else its four sides), fill=false (the current fill, else none), rotation?: deg clockwise about the centre (0: upright)} → {id}",
+            "{x, y, width, height, rows=5, columns=5 (whole numbers; at most 999), rowSkew=0, columnSkew=0 (−500…500 %: + crowds the horizontal dividers toward the top, the vertical ones toward the right), frame=true (the outside as one rectangle, else its four sides), fill=false (the current fill, else none), rotation?: deg clockwise about the centre (0: upright)} → {id}",
             has_doc,
             rect_grid
         ),
@@ -82,7 +82,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Polar Grid",
             [],
             None,
-            "{x, y, width, height, concentric=5, radial=5, concentricSkew=0, radialSkew=0 (−500…500 %: + crowds the ellipses toward the outside, the radial dividers clockwise of the top one), compound=false (the ellipses pair up into compound-path rings), fill=false (the current fill, else none), rotation?: deg clockwise about the centre (0: upright)} → {id}",
+            "{x, y, width, height, concentric=5, radial=5 (whole numbers; at most 999), concentricSkew=0, radialSkew=0 (−500…500 %: + crowds the ellipses toward the outside, the radial dividers clockwise of the top one), compound=false (the ellipses pair up into compound-path rings), fill=false (the current fill, else none), rotation?: deg clockwise about the centre (0: upright)} → {id}",
             has_doc,
             polar_grid
         ),
@@ -299,7 +299,8 @@ fn path_kind(path: PathData, live: Option<LiveShape>) -> NodeKind {
 /// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/rotate-objects-by-specific-angles.html>):
 /// a box (rectangle, ellipse, grid) runs along the turned axes from `pivot`, the point the dialog
 /// placed at the click (its top-left corner `x`, `y`, or a grid's reference point), which stays
-/// put; a polygon or star turns its base orientation about its centre. The params as they are at
+/// put; an arc sized by its lengths turns about its reference point `x`, `y`, which the dialog
+/// placed at the click; a polygon or star turns its base orientation about its centre. The params as they are at
 /// 0° or a whole turn, for other commands and when they already carry a `rotation`.
 pub fn constrain_click(s: &Session, cmd: &str, mut params: Value, pivot: Point) -> Value {
     let base = s.prefs.constrain_angle;
@@ -316,6 +317,9 @@ pub fn constrain_click(s: &Session, cmd: &str, mut params: Value, pivot: Point) 
             o.insert("rotation".into(), json!(rotation));
         }
         "shape.polygon" | "shape.star" => {
+            o.insert("rotation".into(), json!(rotation));
+        }
+        "shape.arc" if o.contains_key("lengthX") || o.contains_key("lengthY") => {
             o.insert("rotation".into(), json!(rotation));
         }
         _ => {}
@@ -362,10 +366,28 @@ fn rectangle(s: &mut Session, p: &Value) -> Result<Value> {
     add_art_turned(s, label, path_kind(live.to_path(), Some(live)), f64_or(p, "rotation", 0.0))
 }
 
+/// The most anchors `shape.ellipse` draws, as many as a polygon's sides.
+const MAX_ELLIPSE_ANCHORS: u64 = 1000;
+
 fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
     let r = rect_of(p, "shape.ellipse")?;
-    let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: rect_transform(r, p, "shape.ellipse")? };
-    add_art_turned(s, "Ellipse", path_kind(live.to_path(), Some(live)), f64_or(p, "rotation", 0.0))
+    // One message for every number that is not a whole count in range (a fraction, a negative,
+    // 0, 1, too many); a value that is not a number gets `number_or`'s.
+    let (key, min, max) = ("anchors", 2, MAX_ELLIPSE_ANCHORS);
+    let n = number_or(p, key, 4.0, "shape.ellipse")?;
+    if n.fract() != 0.0 || !(min as f64..=max as f64).contains(&n) {
+        return Err(bad("shape.ellipse", format!("`{key}` must be a whole number between {min} and {max} (got {n})")));
+    }
+    let x = n as u64;
+    let xf = rect_transform(r, p, "shape.ellipse")?;
+    let rotation = f64_or(p, "rotation", 0.0);
+    if x != 4 {
+        // Another count is a plain path: a live ellipse always has 4 anchors.
+        let path = shapes::ellipse_with_anchors(Rect::new(0.0, 0.0, r.width(), r.height()), x as u32).transformed(xf);
+        return add_art_turned(s, "Ellipse", path_kind(path, None), rotation);
+    }
+    let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf };
+    add_art_turned(s, "Ellipse", path_kind(live.to_path(), Some(live)), rotation)
 }
 
 /// The whole-number count `p` gives for `key` (`5` or `5.0`), or `default` when it is left out or
@@ -429,6 +451,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
         "direction",
         "pathLength",
         "seed",
+        "ringSeed",
     ];
     check_numbers(p, &numbers, "shape.flare")?;
     let pct = |k: &str, d: f64| (f64_or(p, k, d) / 100.0).clamp(0.0, 10.0);
@@ -450,14 +473,28 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
             c + vectorcraft_geom::Vec2::new(a.cos(), -a.sin()) * f64_or(p, "pathLength", 300.0)
         }
     };
-    // Deterministic pseudo-random sizes (same parameters → same flare).
-    let mut seed = p.get("seed").and_then(Value::as_u64).unwrap_or(0x2545_f491_4f6c_dd1d) | 1;
-    let mut rnd = move || {
-        seed ^= seed << 13;
-        seed ^= seed >> 7;
-        seed ^= seed << 17;
-        (seed >> 11) as f64 / (1u64 << 53) as f64
+    // Deterministic pseudo-random sizes (same parameters → same flare). `ringSeed` places the rings
+    // along the path from a sequence of its own; their count and sizes and the other parts stay.
+    let seed_of = |key: &str| match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_u64().map(Some).ok_or_else(|| bad("shape.flare", format!("`{key}` must be a whole number of at least 0, not {v}"))),
     };
+    // The generator's state is odd (never 0).
+    let random = |mut state: u64| {
+        move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state >> 11) as f64 / (1u64 << 53) as f64
+        }
+    };
+    let mut rnd = random(seed_of("seed")?.unwrap_or(0x2545_f491_4f6c_dd1d) | 1);
+    // Each `ringSeed` below 2^53 (what a JSON number holds exactly) gets a state of its own.
+    let ring_seed = match seed_of("ringSeed")? {
+        Some(r) if r >= 1 << 53 => return Err(bad("shape.flare", format!("`ringSeed` must be below 2^53, not {r}"))),
+        r => r,
+    };
+    let mut ring_at = ring_seed.map(|r| random((r << 1) | 1));
     let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, vectorcraft_color::Color::WHITE) };
     let radial = |centre: Point, radius: f64, stops: Vec<GradientStop>| {
         let mut g = GradientPaint::new(Gradient::new(GradientKind::Radial, stops));
@@ -495,6 +532,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
     // Rings along the path to the end point (Largest = % of the average ring size).
     for _ in 0..rings {
         let t = rnd();
+        let t = ring_at.as_mut().map_or(t, |next| next());
         let at = c + (end - c) * t;
         let rr = (r * largest * (0.25 + rnd() * 0.75)).max(0.5);
         let solid = rnd() < 0.5;
@@ -556,26 +594,56 @@ fn spiral(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn arc(s: &mut Session, p: &Value) -> Result<Value> {
+    let rotation = if p.get("rotation").is_some() { f64_req(p, "rotation", "shape.arc")? } else { 0.0 };
+    if !rotation.is_finite() {
+        return Err(bad("shape.arc", "rotation must be finite"));
+    }
     let closed = switch_or(p, "closed", false, "shape.arc")?;
     let fill_arc = switch_or(p, "fillArc", false, "shape.arc")?;
-    let base_x = !matches!(p.get("baseAlong").and_then(Value::as_str), Some("y" | "Y"));
-    let path = if p.get("lengthX").is_some() || p.get("lengthY").is_some() {
+    // Given values are checked in both forms, null included; only a left-out key takes its default.
+    let base_x = match p.get("baseAlong") {
+        None => true,
+        Some(Value::String(v)) if v.eq_ignore_ascii_case("x") || v.eq_ignore_ascii_case("y") => v.eq_ignore_ascii_case("x"),
+        Some(_) => return Err(bad("shape.arc", "`baseAlong` must be one of x, y")),
+    };
+    let reference = match p.get("reference") {
+        None => 0,
+        Some(v) => match (v.as_u64(), v.as_f64()) {
+            (Some(n), _) if n <= 8 => n as usize,
+            (None, Some(x)) if (0.0..=8.0).contains(&x) && x.fract() == 0.0 => x as usize,
+            _ => return Err(bad("shape.arc", "`reference` must be a whole number from 0 to 8")),
+        },
+    };
+    let slope = |default: f64| {
+        let (key, lo, hi) = ("slope", -100.0, 100.0);
+        let v = number_or(p, key, default, "shape.arc")?;
+        if (lo..=hi).contains(&v) { Ok(v) } else { Err(bad("shape.arc", format!("`{key}` must be from {lo} to {hi}, not {v}"))) }
+    };
+    // The upright path, and the point `rotation` turns it about.
+    let (path, pivot) = if p.get("lengthX").is_some() || p.get("lengthY").is_some() {
         let anchor = Point::new(f64_req(p, "x", "shape.arc")?, f64_req(p, "y", "shape.arc")?);
-        let reference = p.get("reference").and_then(Value::as_u64).unwrap_or(0) as usize;
-        shapes::arc_segment(
+        let path = shapes::arc_segment(
             anchor,
             reference,
             number_or(p, "lengthX", 100.0, "shape.arc")?,
             number_or(p, "lengthY", 100.0, "shape.arc")?,
             base_x,
-            number_or(p, "slope", 50.0, "shape.arc")?,
+            slope(50.0)?,
             closed,
-        )
+        );
+        (path, anchor)
     } else {
         let a = Point::new(f64_req(p, "x1", "shape.arc")?, f64_req(p, "y1", "shape.arc")?);
         let b = Point::new(f64_req(p, "x2", "shape.arc")?, f64_req(p, "y2", "shape.arc")?);
-        let slope = number_or(p, "slope", 100.0, "shape.arc")?;
-        shapes::arc(a, b, slope, closed, base_x)
+        (shapes::arc(a, b, slope(100.0)?, closed, base_x), a)
+    };
+    // 0 and whole turns leave the path as it is; quarter turns are exact.
+    let bbox_angle = bbox_turn(rotation);
+    let path = if bbox_angle == 0.0 {
+        path
+    } else {
+        let c = pivot.to_vec2();
+        path.transformed(Affine::translate(c) * vectorcraft_geom::rotate_deg(rotation) * Affine::translate(-c))
     };
     let fill = if fill_arc { s.paint.fill.clone() } else { vectorcraft_color::Paint::None };
     let look = s.new_art_look(
@@ -583,7 +651,7 @@ fn arc(s: &mut Session, p: &Value) -> Result<Value> {
         if s.paint.stroke.is_none() { vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK) } else { s.paint.stroke.clone() },
         s.paint.stroke_width.max(0.1),
     );
-    add_look(s, "Arc", path_kind(path, None), look, None)
+    insert_look_turned(s, "Arc", path_kind(path, None), look, None, true, bbox_angle)
 }
 
 /// The grid `paths` (bottom first) as one selected group in the new-art stroke, filled with the
@@ -621,13 +689,11 @@ fn grid_group(s: &mut Session, label: &str, (paths, bbox_angle): (Vec<PathData>,
     Ok(json!({ "id": id.0 }))
 }
 
-/// A grid's divider count `count` (an error unless it is a number or null; 5 unless it is a JSON
-/// whole number of 0 or more, so 4.0 gives 4 and 2.5 gives 5; at most 999) with its skew `key` in percent (0 when
-/// absent, clamped to ±[`shapes::GRID_SKEW_MAX`]).
+/// A grid's divider count `count` (5 when absent or null; a whole number of 0 or more, so 4.0 gives
+/// 4, and anything else, such as 2.5, -1 or `"3"`, is an error; at most 999) with its skew `key` in
+/// percent (0 when absent, clamped to ±[`shapes::GRID_SKEW_MAX`]).
 fn dividers(p: &Value, count: &str, key: &str, cmd: &str) -> Result<(u32, f64)> {
-    check_numbers(p, &[count], cmd)?;
-    let whole = |v: &Value| v.as_u64().or_else(|| v.as_f64().filter(|f| f.is_finite() && *f >= 0.0 && f.fract() == 0.0).map(|f| f as u64));
-    let n = p.get(count).and_then(whole).unwrap_or(5).min(999) as u32;
+    let n = count_or(p, count, 5, cmd)?.min(999) as u32;
     let skew = match p.get(key) {
         None | Some(Value::Null) => 0.0,
         Some(v) => v.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad(cmd, format!("`{key}` must be a number")))?,
@@ -847,7 +913,8 @@ pub(crate) fn new_area_fit(s: &Session, p: &Value, c: &str, t: &mut TextObject) 
 
 /// The character style new type gets: `size`, `font`, `style` and `color` from `p` (an RGB
 /// `color` in a CMYK document as [`super::paint::new_color`] stores it), else the defaults,
-/// filled with the current fill unless that is None or white (black then), in the document's
+/// filled as `[Normal Character Style]` is (black unless redefined; never the current fill,
+/// #7975), in the document's
 /// language. A `size` outside [`super::typecmd::TYPE_SIZES`] is an error.
 pub(crate) fn new_type_style(s: &Session, p: &Value, cmd: &str) -> Result<CharStyle> {
     let mut style = CharStyle::default();
@@ -865,8 +932,7 @@ pub(crate) fn new_type_style(s: &Session, p: &Value, cmd: &str) -> Result<CharSt
     }
     style.fill = match p.get("color").and_then(color_value) {
         Some(c) => vectorcraft_color::Paint::solid(super::paint::new_color(s, p, c)),
-        None if !s.paint.fill.is_none() && s.paint.fill != vectorcraft_color::Paint::solid(vectorcraft_color::Color::WHITE) => s.paint.fill.clone(),
-        None => vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+        None => s.doc().map_or_else(|_| CharStyle::default().fill, |d| super::textstyles::normal_char_fill(&d.doc)),
     };
     // In the language Document Setup chose, else Preferences › Hyphenation › Default Language; none
     // for the default. Type already in a document keeps its own.
