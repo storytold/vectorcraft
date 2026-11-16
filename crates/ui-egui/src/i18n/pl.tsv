@@ -7276,6 +7276,24 @@ breakText	Glyphs	Glify
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Rozszerz kreski na ścieżki
 @msg	select paths with dashed strokes to expand	zaznacz ścieżki z przerywanym konturem do rozszerzenia
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Okrąg styczny…
+	Tangent Circle	Okrąg styczny
+	Circle:	Okrąg:
+@msg	`ids` names an object twice	`ids` wskazuje ten sam obiekt dwa razy
+@msg	select two or three paths or compound paths	zaznacz dwie lub trzy ścieżki lub ścieżki złożone
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` musi wynosić od 0.01 do 1000000 pt
+@msg	two shapes need a `radius`	dwa kształty wymagają `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	trzy kształty same wyznaczają promień: pomiń `radius`
+@msg	`circle` must be from 0 to 64	`circle` musi wynosić od 0 do 64
+@msg	a shape has no outline	kształt nie ma konturu
+@msg	the shapes are too complex: at most 2000 segments in all	kształty są zbyt złożone: łącznie najwyżej 2000 segmentów
+@msg	these shapes take too long to search	wyszukiwanie dla tych kształtów trwa zbyt długo
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	tych kształtów dotyka ponad 64 okręgów: mogą się z nimi stykać wzdłuż całej krzywej
+@msg	no circle touches these shapes	żaden okrąg nie dotyka tych kształtów
+@msg	`circle` is past the last circle found ({found})	`circle` wykracza poza ostatni znaleziony okrąg ({found})
+@msg	object {value} is not a path or compound path	obiekt {value} nie jest ścieżką ani ścieżką złożoną
+@msg	these shapes are too small to measure	te kształty są za małe, aby je zmierzyć
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Narzędzia dokumentu
 	Save a Timestamped Copy	Zapisz kopię z datą i godziną

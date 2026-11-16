@@ -7070,6 +7070,24 @@ breakText	Glyphs	字符
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	將短破折號展開為路徑
 @msg	select paths with dashed strokes to expand	請選取要展開的虛線筆畫路徑
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	相切圓…
+	Tangent Circle	相切圓
+	Circle:	圓：
+@msg	`ids` names an object twice	`ids` 將同一個物件指定了兩次
+@msg	select two or three paths or compound paths	請選取兩個或三個路徑或複合路徑
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` 必須為 0.01 到 1000000 pt
+@msg	two shapes need a `radius`	兩個形狀需要 `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	三個形狀會自行決定半徑：請勿指定 `radius`
+@msg	`circle` must be from 0 to 64	`circle` 必須為 0 到 64
+@msg	a shape has no outline	有一個形狀沒有外框
+@msg	the shapes are too complex: at most 2000 segments in all	形狀過於複雜：總共最多 2000 個線段
+@msg	these shapes take too long to search	這些形狀的搜尋耗時過長
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	與這些形狀相切的圓超過 64 個：它們可能沿整條曲線相接
+@msg	no circle touches these shapes	沒有與這些形狀相切的圓
+@msg	`circle` is past the last circle found ({found})	`circle` 超出了找到的最後一個圓（{found}）
+@msg	object {value} is not a path or compound path	物件 {value} 不是路徑或複合路徑
+@msg	these shapes are too small to measure	這些形狀太小，無法測量
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	文件工具
 	Save a Timestamped Copy	儲存附時間戳記的拷貝

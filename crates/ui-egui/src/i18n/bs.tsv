@@ -6805,6 +6805,24 @@ shape	Open	Otvoren
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Proširi crtice u putanje
 @msg	select paths with dashed strokes to expand	odaberite putanje s isprekidanim potezom za proširivanje
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Tangentna kružnica…
+	Tangent Circle	Tangentna kružnica
+	Circle:	Kružnica:
+@msg	`ids` names an object twice	`ids` navodi objekat dvaput
+@msg	select two or three paths or compound paths	odaberite dvije ili tri putanje ili složene putanje
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` mora biti od 0.01 do 1000000 pt
+@msg	two shapes need a `radius`	dva oblika trebaju `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	tri oblika sama određuju poluprečnik: izostavite `radius`
+@msg	`circle` must be from 0 to 64	`circle` mora biti od 0 do 64
+@msg	a shape has no outline	oblik nema obris
+@msg	the shapes are too complex: at most 2000 segments in all	oblici su previše složeni: najviše 2000 segmenata ukupno
+@msg	these shapes take too long to search	pretraga za ove oblike traje predugo
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	više od 64 kružnice dodiruje ove oblike: možda ih dodiruju duž cijele krivulje
+@msg	no circle touches these shapes	nijedna kružnica ne dodiruje ove oblike
+@msg	`circle` is past the last circle found ({found})	`circle` je iza posljednje pronađene kružnice ({found})
+@msg	object {value} is not a path or compound path	objekat {value} nije putanja ni složena putanja
+@msg	these shapes are too small to measure	ovi oblici su premali za mjerenje
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Alati za dokument
 	Save a Timestamped Copy	Sačuvaj kopiju s datumom i vremenom

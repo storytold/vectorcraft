@@ -7405,6 +7405,24 @@ breakText	Glyphs	Glifák
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Szaggatások kibontása útvonalakká
 @msg	select paths with dashed strokes to expand	jelöljön ki szaggatott körvonalú útvonalakat a kibontáshoz
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Érintőkör…
+	Tangent Circle	Érintőkör
+	Circle:	Kör:
+@msg	`ids` names an object twice	`ids`: egy objektumot kétszer nevez meg
+@msg	select two or three paths or compound paths	jelölj ki két vagy három útvonalat vagy összetett útvonalat
+@msg	`radius` must be from 0.01 to 1000000 pt	a `radius` értéke 0.01 és 1000000 pt között lehet
+@msg	two shapes need a `radius`	két alakzathoz `radius` kell
+@msg	three shapes set the radius themselves: leave `radius` out	három alakzat maga határozza meg a sugarat: hagyd el a `radius` értéket
+@msg	`circle` must be from 0 to 64	a `circle` értéke 0 és 64 között lehet
+@msg	a shape has no outline	egy alakzatnak nincs körvonala
+@msg	the shapes are too complex: at most 2000 segments in all	az alakzatok túl összetettek: összesen legfeljebb 2000 szakasz
+@msg	these shapes take too long to search	ezeknek az alakzatoknak a keresése túl sokáig tart
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	több mint 64 kör érinti ezeket az alakzatokat: lehet, hogy egy teljes görbe mentén érintik őket
+@msg	no circle touches these shapes	egyetlen kör sem érinti ezeket az alakzatokat
+@msg	`circle` is past the last circle found ({found})	a `circle` az utolsó talált kör után van ({found})
+@msg	object {value} is not a path or compound path	a(z) {value} objektum nem útvonal és nem összetett útvonal
+@msg	these shapes are too small to measure	ezek az alakzatok túl kicsik a méréshez
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentumeszközök
 	Save a Timestamped Copy	Másolat mentése időbélyeggel

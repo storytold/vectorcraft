@@ -6753,6 +6753,24 @@ breakText	Glyphs	Глифи
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Разширяване на тиретата в пътища
 @msg	select paths with dashed strokes to expand	изберете пътища с прекъснат щрих за разширяване
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Допирателна окръжност…
+	Tangent Circle	Допирателна окръжност
+	Circle:	Окръжност:
+@msg	`ids` names an object twice	`ids` посочва обект два пъти
+@msg	select two or three paths or compound paths	изберете два или три пътя или съставни пътя
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` трябва да е от 0.01 до 1000000 pt
+@msg	two shapes need a `radius`	две форми изискват `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	три форми сами задават радиуса: пропуснете `radius`
+@msg	`circle` must be from 0 to 64	`circle` трябва да е от 0 до 64
+@msg	a shape has no outline	една от формите няма контур
+@msg	the shapes are too complex: at most 2000 segments in all	формите са твърде сложни: общо най-много 2000 сегмента
+@msg	these shapes take too long to search	търсенето за тези форми отнема твърде дълго
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	повече от 64 окръжности докосват тези форми: може да ги докосват по цяла крива
+@msg	no circle touches these shapes	никоя окръжност не докосва тези форми
+@msg	`circle` is past the last circle found ({found})	`circle` е след последната намерена окръжност ({found})
+@msg	object {value} is not a path or compound path	обект {value} не е път или съставен път
+@msg	these shapes are too small to measure	тези форми са твърде малки, за да бъдат измерени
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Инструменти за документи
 	Save a Timestamped Copy	Запазване на копие с дата и час

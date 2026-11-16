@@ -7465,6 +7465,24 @@ breakText	Glyphs	Merkit
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Laajenna viivat poluiksi
 @msg	select paths with dashed strokes to expand	valitse laajennettavat polut, joissa on katkoviiva
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Sivuava ympyrä…
+	Tangent Circle	Sivuava ympyrä
+	Circle:	Ympyrä:
+@msg	`ids` names an object twice	`ids` mainitsee saman objektin kahdesti
+@msg	select two or three paths or compound paths	valitse kaksi tai kolme polkua tai yhdistelmäpolkua
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` on oltava 0.01–1000000 pt
+@msg	two shapes need a `radius`	kaksi muotoa tarvitsee arvon `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	kolme muotoa määrää säteen itse: jätä `radius` pois
+@msg	`circle` must be from 0 to 64	`circle` on oltava 0–64
+@msg	a shape has no outline	muodolla ei ole ääriviivaa
+@msg	the shapes are too complex: at most 2000 segments in all	muodot ovat liian monimutkaisia: enintään 2000 segmenttiä yhteensä
+@msg	these shapes take too long to search	haku kestää liian kauan näille muodoille
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	yli 64 ympyrää sivuaa näitä muotoja: ne saattavat sivuta niitä koko käyrän matkalta
+@msg	no circle touches these shapes	mikään ympyrä ei sivua näitä muotoja
+@msg	`circle` is past the last circle found ({found})	`circle` on viimeisen löydetyn ympyrän jälkeen ({found})
+@msg	object {value} is not a path or compound path	objekti {value} ei ole polku eikä yhdistelmäpolku
+@msg	these shapes are too small to measure	nämä muodot ovat liian pieniä mitattaviksi
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Asiakirjatyökalut
 	Save a Timestamped Copy	Tallenna kopio aikaleimalla

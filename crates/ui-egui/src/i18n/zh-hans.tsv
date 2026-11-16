@@ -7261,6 +7261,24 @@ breakText	Glyphs	字形
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	将短划线扩展为路径
 @msg	select paths with dashed strokes to expand	请选择要扩展的虚线描边路径
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	相切圆…
+	Tangent Circle	相切圆
+	Circle:	圆：
+@msg	`ids` names an object twice	`ids` 重复指定了同一个对象
+@msg	select two or three paths or compound paths	请选择两个或三个路径或复合路径
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` 必须为 0.01 到 1000000 pt
+@msg	two shapes need a `radius`	两个形状需要 `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	三个形状会自行确定半径：请省略 `radius`
+@msg	`circle` must be from 0 to 64	`circle` 必须为 0 到 64
+@msg	a shape has no outline	有一个形状没有轮廓
+@msg	the shapes are too complex: at most 2000 segments in all	形状过于复杂：总共最多 2000 个线段
+@msg	these shapes take too long to search	这些形状的搜索耗时过长
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	与这些形状相切的圆超过 64 个：它们可能沿整条曲线相接
+@msg	no circle touches these shapes	没有与这些形状相切的圆
+@msg	`circle` is past the last circle found ({found})	`circle` 超出了找到的最后一个圆（{found}）
+@msg	object {value} is not a path or compound path	对象 {value} 不是路径或复合路径
+@msg	these shapes are too small to measure	这些形状太小，无法测量
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	文档工具
 	Save a Timestamped Copy	保存带时间戳的副本

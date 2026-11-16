@@ -9458,6 +9458,24 @@ breakText	Glyphs	Glyffer
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Udvid streger til stier
 @msg	select paths with dashed strokes to expand	vælg stier med stiplet streg, der skal udvides
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Tangentcirkel…
+	Tangent Circle	Tangentcirkel
+	Circle:	Cirkel:
+@msg	`ids` names an object twice	`ids` nævner et objekt to gange
+@msg	select two or three paths or compound paths	vælg to eller tre stier eller sammensatte stier
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` skal være fra 0.01 til 1000000 pt
+@msg	two shapes need a `radius`	to figurer kræver en `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	tre figurer bestemmer selv radius: udelad `radius`
+@msg	`circle` must be from 0 to 64	`circle` skal være fra 0 til 64
+@msg	a shape has no outline	en figur har ingen kontur
+@msg	the shapes are too complex: at most 2000 segments in all	figurerne er for komplekse: højst 2000 segmenter i alt
+@msg	these shapes take too long to search	søgningen tager for lang tid for disse figurer
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	mere end 64 cirkler rører disse figurer: de rører dem måske langs en hel kurve
+@msg	no circle touches these shapes	ingen cirkel rører disse figurer
+@msg	`circle` is past the last circle found ({found})	`circle` ligger efter den sidste fundne cirkel ({found})
+@msg	object {value} is not a path or compound path	objekt {value} er ikke en sti eller sammensat sti
+@msg	these shapes are too small to measure	disse figurer er for små til at blive målt
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentværktøjer
 	Save a Timestamped Copy	Gem en kopi med dato og klokkeslæt

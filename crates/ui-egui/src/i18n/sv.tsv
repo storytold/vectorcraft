@@ -7436,6 +7436,24 @@ breakText	Glyphs	Glyfer
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandera streck till banor
 @msg	select paths with dashed strokes to expand	markera banor med streckad kontur att expandera
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Tangentcirkel…
+	Tangent Circle	Tangentcirkel
+	Circle:	Cirkel:
+@msg	`ids` names an object twice	`ids` anger ett objekt två gånger
+@msg	select two or three paths or compound paths	markera två eller tre banor eller sammansatta banor
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` måste vara från 0.01 till 1000000 pt
+@msg	two shapes need a `radius`	två former kräver en `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	tre former bestämmer radien själva: utelämna `radius`
+@msg	`circle` must be from 0 to 64	`circle` måste vara från 0 till 64
+@msg	a shape has no outline	en form har ingen kontur
+@msg	the shapes are too complex: at most 2000 segments in all	formerna är för komplexa: högst 2000 segment totalt
+@msg	these shapes take too long to search	sökningen tar för lång tid för formerna
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	fler än 64 cirklar rör vid formerna: de kan röra vid dem längs en hel kurva
+@msg	no circle touches these shapes	ingen cirkel rör vid formerna
+@msg	`circle` is past the last circle found ({found})	`circle` ligger efter den sista funna cirkeln ({found})
+@msg	object {value} is not a path or compound path	objekt {value} är inte en bana eller sammansatt bana
+@msg	these shapes are too small to measure	formerna är för små för att mätas
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentverktyg
 	Save a Timestamped Copy	Spara en kopia med tidsstämpel

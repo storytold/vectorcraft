@@ -7389,6 +7389,24 @@ breakText	Glyphs	Γλύφοι
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Επέκταση παυλών σε διαδρομές
 @msg	select paths with dashed strokes to expand	επιλέξτε διαδρομές με διακεκομμένο περίγραμμα για επέκταση
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Εφαπτόμενος κύκλος…
+	Tangent Circle	Εφαπτόμενος κύκλος
+	Circle:	Κύκλος:
+@msg	`ids` names an object twice	το `ids` αναφέρει ένα αντικείμενο δύο φορές
+@msg	select two or three paths or compound paths	επιλέξτε δύο ή τρεις διαδρομές ή σύνθετες διαδρομές
+@msg	`radius` must be from 0.01 to 1000000 pt	το `radius` πρέπει να είναι από 0.01 έως 1000000 pt
+@msg	two shapes need a `radius`	δύο σχήματα χρειάζονται `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	τρία σχήματα ορίζουν μόνα τους την ακτίνα: παραλείψτε το `radius`
+@msg	`circle` must be from 0 to 64	το `circle` πρέπει να είναι από 0 έως 64
+@msg	a shape has no outline	ένα σχήμα δεν έχει περίγραμμα
+@msg	the shapes are too complex: at most 2000 segments in all	τα σχήματα είναι υπερβολικά σύνθετα: το πολύ 2000 τμήματα συνολικά
+@msg	these shapes take too long to search	η αναζήτηση για αυτά τα σχήματα διαρκεί υπερβολικά πολύ
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	περισσότεροι από 64 κύκλοι αγγίζουν αυτά τα σχήματα: ίσως τα αγγίζουν κατά μήκος μιας ολόκληρης καμπύλης
+@msg	no circle touches these shapes	κανένας κύκλος δεν αγγίζει αυτά τα σχήματα
+@msg	`circle` is past the last circle found ({found})	το `circle` είναι μετά τον τελευταίο κύκλο που βρέθηκε ({found})
+@msg	object {value} is not a path or compound path	το αντικείμενο {value} δεν είναι διαδρομή ή σύνθετη διαδρομή
+@msg	these shapes are too small to measure	αυτά τα σχήματα είναι πολύ μικρά για να μετρηθούν
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Εργαλεία εγγράφου
 	Save a Timestamped Copy	Αποθήκευση αντιγράφου με ημερομηνία και ώρα

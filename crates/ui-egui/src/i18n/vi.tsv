@@ -7046,6 +7046,24 @@ breakText	Glyphs	Glyph
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Mở rộng nét đứt thành đường dẫn
 @msg	select paths with dashed strokes to expand	chọn các đường dẫn có nét đứt để mở rộng
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Đường tròn tiếp xúc…
+	Tangent Circle	Đường tròn tiếp xúc
+	Circle:	Đường tròn:
+@msg	`ids` names an object twice	`ids` nêu một đối tượng hai lần
+@msg	select two or three paths or compound paths	chọn hai hoặc ba đường dẫn hoặc đường dẫn phức hợp
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` phải từ 0.01 đến 1000000 pt
+@msg	two shapes need a `radius`	hai hình cần `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	ba hình tự xác định bán kính: hãy bỏ `radius`
+@msg	`circle` must be from 0 to 64	`circle` phải từ 0 đến 64
+@msg	a shape has no outline	một hình không có đường viền
+@msg	the shapes are too complex: at most 2000 segments in all	các hình quá phức tạp: tổng cộng tối đa 2000 đoạn
+@msg	these shapes take too long to search	việc tìm kiếm cho các hình này mất quá nhiều thời gian
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	hơn 64 đường tròn chạm vào các hình này: có thể chúng chạm dọc theo cả một đường cong
+@msg	no circle touches these shapes	không có đường tròn nào chạm vào các hình này
+@msg	`circle` is past the last circle found ({found})	`circle` vượt quá đường tròn cuối cùng tìm được ({found})
+@msg	object {value} is not a path or compound path	đối tượng {value} không phải đường dẫn hay đường dẫn phức hợp
+@msg	these shapes are too small to measure	các hình này quá nhỏ để đo
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Công cụ tài liệu
 	Save a Timestamped Copy	Lưu bản sao có ngày giờ

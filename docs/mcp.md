@@ -12212,6 +12212,26 @@ Commands:
   drawn, and the path's fills stay on it, below its dashes (a path without fills goes). A compound path's dashes are
   plain paths with its appearance. Paths without a dashed stroke stay as they are, and it is an error if none has one.
   The dashes are selected; more than 100,000 (or a pattern too fine to draw) is refused. → `{ids, dashes}`.
+- `addon.pathtools.tangentCircle {ids?, radius?, circle?}` draws the circles that touch two paths or compound paths
+  and have `radius` (0.01 to 1,000,000 pt, needed with two), or that touch three (which set the radius themselves, so
+  `radius` is then an error), as one undo step (Object › Plug-ins › Path Precision Tools › Tangent Circle…). `ids`
+  defaults to the selection. A circle touches a shape when it meets the shape's outline without crossing it, the whole
+  outline lying outside the circle or inside it: at a smooth point it is tangent to the outline, and at a corner or an
+  open end it passes through that point. A compound path's members count as one outline. For shapes that are all
+  circles of four curved segments (as the Ellipse tool draws them) the answers come from the true circles and are then
+  moved onto the drawn Bézier outlines, which differ by up to 0.0273% of the radius; within that much of a tangency
+  threshold the true circles decide. Every circle that touches all the shapes is found (three circles have up to
+  eight); with three shapes, circles up to 64 times the diagonal of the box around the shapes' anchors and handles.
+  They are listed by radius, then top to bottom, then left to right, and `circle` (0 to 64; 0 by default) picks the
+  nth of them, or 0 draws them all. Each circle is a new ellipse with the current paint on top of the current layer,
+  or of the isolated group, and the circles are selected; inside an isolated compound path they join it. Locked and
+  hidden shapes given by `ids` are read and left as they are. It is an error, with the document unchanged, when no
+  circle touches the shapes, when more than 64 do (shapes touched along a whole curve, such as two concentric
+  circles), when `circle` is past the last one, when `ids` names an object twice, when the shapes lie at one point or
+  are too small for the radius, above 2,000 segments in all, and when the search for other shapes goes past its
+  limits. → `{ids, found}` (`found`: how many circles touch the shapes). Tangent Circle… opens a dialog
+  (`ui.menuDialog {command}`, kind `tangentCircle`) with the radius (used with two shapes selected; 36 pt to start), a
+  Circle menu (All, or one circle by number, as many as the last preview found) and Preview, which starts on.
 - `addon.pathtools.cornerSet {ids?, anchors?, items?, radius, kind?, every?, minAngle?, maxAngle?}` cuts live corners, the ones Direct Selection's
   corner widgets and the Corners dialog edit, as one undo step. `ids` (default: the selection) are the paths and
   `anchors` the anchor indices of each path's outline with no corners cut; without `anchors`, a path's direct-selected
