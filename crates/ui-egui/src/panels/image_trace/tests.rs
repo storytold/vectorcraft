@@ -2,7 +2,7 @@ use super::super::tests_long_popups::{
     PopupWindow, assert_last_row_scrolls_into_view, assert_rows_stay_on_one_line, assert_short_list_does_not_scroll,
 };
 use super::*;
-use crate::panels::library_panel;
+use crate::panels::{first_selected, library_panel};
 use egui::{Event, PointerButton, Pos2, Rect, vec2};
 
 /// One headless frame of the panel (and its menu) with `events`: the texts drawn, with where.

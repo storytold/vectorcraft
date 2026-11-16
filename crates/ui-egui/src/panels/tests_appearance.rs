@@ -2064,3 +2064,49 @@ fn a_dash_typed_in_a_stroke_popup_sticks_when_a_click_outside_closes_it() {
         assert!(!texts.iter().any(|(t, _)| t == "Dashed Line"), "{link}: the popup closed");
     }
 }
+
+/// `first_selected` gives the `Arc` the document holds for the first selected object, nested in a
+/// group too, not a copy of it; nothing with nothing selected or no document open.
+#[test]
+fn first_selected_is_the_node_the_document_holds() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    assert!(first_selected(&app).is_none(), "no document");
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let a = run(&mut app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50}))["id"].clone();
+    let b = run(&mut app, "shape.ellipse", json!({"x": 70, "y": 10, "width": 50, "height": 50}))["id"].clone();
+    let held = |app: &VectorcraftApp, id: &Value| layers::node_arc(&app.session.active().unwrap().doc, NodeId(id.as_u64().unwrap())).unwrap();
+    run(&mut app, "select.set", json!({ "ids": [a, b] }));
+    let id = app.session.active().unwrap().selection.objects[0];
+    let first = first_selected(&app).expect("a selected object");
+    assert_eq!(first.id, id, "the first of the selection");
+    assert!(Arc::ptr_eq(&first, &held(&app, &json!(id.0))), "the first selected object, as the document holds it");
+    run(&mut app, "object.group", json!({}));
+    run(&mut app, "select.set", json!({ "ids": [a] }));
+    assert!(Arc::ptr_eq(&first_selected(&app).expect("the rectangle"), &held(&app, &a)), "a node inside a group");
+    run(&mut app, "select.none", json!({}));
+    assert!(first_selected(&app).is_none(), "nothing selected");
+}
+
+/// Properties, Appearance and Transparency show the selected object's current opacity after an
+/// edit and after Undo, never an earlier one.
+#[test]
+fn panels_show_the_selected_object_after_an_edit_and_after_undo() {
+    type Panel = fn(&mut VectorcraftApp, &mut egui::Ui);
+    let panels: [(&str, Panel); 3] = [("Properties", properties::show), ("Appearance", appearance::show), ("Transparency", transparency::show)];
+    let mut app = app_with_rect();
+    // One context per panel, kept across the edits, as the app keeps its own.
+    let ctxs: Vec<egui::Context> = panels.iter().map(|_| egui::Context::default()).collect();
+    let shows = |app: &mut VectorcraftApp, want: &str, not: &str| {
+        for ((name, panel), ctx) in panels.iter().zip(&ctxs) {
+            let texts = frame_in(ctx, app, *panel);
+            assert!(texts.iter().any(|t| t.contains(want)), "{name} shows {want}: {texts:?}");
+            assert!(!texts.iter().any(|t| t.contains(not)), "{name} no longer shows {not}: {texts:?}");
+        }
+    };
+    run(&mut app, "transparency.set", json!({"opacity": 60}));
+    shows(&mut app, "60%", "35%");
+    run(&mut app, "transparency.set", json!({"opacity": 35}));
+    shows(&mut app, "35%", "60%");
+    run(&mut app, "edit.undo", json!({}));
+    shows(&mut app, "60%", "35%");
+}
