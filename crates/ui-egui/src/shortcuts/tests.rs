@@ -1255,6 +1255,48 @@ fn enclosing_lasso_escape_cancels_and_q_returns_to_anchor_lasso() {
     assert_eq!(app.session.tool_id(), "lasso");
 }
 
+/// While a Polygonal Lasso loop is open, Backspace and Delete remove its last vertex instead of
+/// deleting the selected art, Enter closes it, and Escape drops it and leaves the selection.
+#[test]
+fn polygonal_lasso_takes_backspace_delete_enter_and_escape_while_a_loop_is_open() {
+    use vectorcraft_doc::NodeId;
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    crate::shortcut_editor::sync(&app.ui);
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let id = NodeId(app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.set", json!({"ids": [id.0]})).unwrap();
+    app.select_tool(vectorcraft_tools::addons::polygonal_lasso::ID);
+    let view = app.view_info();
+    let click = |app: &mut VectorcraftApp, x: f64, y: f64| {
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, x, y), view).unwrap();
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, x, y), view).unwrap();
+    };
+    for (x, y) in [(80.0, 80.0), (140.0, 80.0), (300.0, 300.0)] {
+        click(&mut app, x, y);
+    }
+    frame(&mut app, press(Key::Backspace, Modifiers::NONE));
+    assert!(app.session.active().unwrap().doc.node(id).is_some(), "Backspace leaves the selected art");
+    click(&mut app, 300.0, 300.0);
+    frame(&mut app, press(Key::Delete, Modifiers::NONE));
+    assert!(app.session.active().unwrap().doc.node(id).is_some(), "Delete leaves the selected art");
+    assert!(app.session.tool_ends_on_escape(view));
+    frame(&mut app, press(Key::Escape, Modifiers::NONE));
+    assert!(!app.session.tool_ends_on_escape(view));
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![id]);
+    for (x, y) in [(80.0, 80.0), (140.0, 80.0), (300.0, 300.0)] {
+        click(&mut app, x, y);
+    }
+    frame(&mut app, press(Key::Backspace, Modifiers::NONE));
+    click(&mut app, 80.0, 140.0);
+    frame(&mut app, press(Key::Enter, Modifiers::NONE));
+    assert!(!app.session.tool_ends_on_escape(view));
+    let sel = &app.session.active().unwrap().selection;
+    assert_eq!(sel.objects, vec![id]);
+    assert_eq!(sel.anchors.get(&id).map(|a| a.len()), Some(1), "only the corner inside the loop");
+}
+
 /// Binds Show Grid to `chord`, or with `None` leaves every command its default shortcut.
 fn bind_grid(app: &mut VectorcraftApp, chord: Option<&str>) {
     app.ui.shortcut_overrides.clear();

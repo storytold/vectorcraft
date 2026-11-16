@@ -9,7 +9,7 @@
 use std::ops::Range;
 use std::str::FromStr;
 
-use usvg::roxmltree;
+use craft_svg::tree::usvg::roxmltree;
 
 /// The elements whose geometry attributes are rewritten.
 const SHAPES: &[&str] = &["rect", "circle", "ellipse", "line", "image", "use", "text"];

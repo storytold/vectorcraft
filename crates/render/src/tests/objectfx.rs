@@ -306,7 +306,41 @@ fn image_doc(effects: Vec<Effect>) -> Document {
     let mut d = Document::new(100.0, 100.0);
     let img = image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]));
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     d.images.insert("red".into(), ImageBlob::new("image/png", png));
     let mut n = Node::new(
         NodeId(0),
@@ -786,7 +820,41 @@ fn an_images_outline_object_stroke_follows_new_pixels_under_the_same_key() {
         image::Rgba([255, 0, 0, if r <= 8.0 { 255 } else { 0 }])
     });
     let mut png = vec![];
-    disc.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = disc.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     d.images.insert("red".into(), ImageBlob::new("image/png", png));
     let img = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
     assert_eq!((lum(img.pixel(19, 35)), lum(img.pixel(26, 35))), (WHITE, 0));
@@ -1241,6 +1309,45 @@ fn each_copy_of_a_transform_effect_draws_its_own_shadow() {
     let n = &d.layers[0].children().unwrap()[0];
     let b = crate::fx::visual_bounds(&d.symbol_boxes(), n).unwrap();
     assert!(b.x1 >= 80.0 - 1e-9, "{b:?}");
+}
+
+/// Each copy of a fill's own Transform effect, and each copy of its object's Transform effect,
+/// draws the fill's drop shadow under itself, scaled with it: as for the object's own shadow
+/// above, the copy's green shadow is 40 pt to its right. A 4 pt stroke's own Transform effect
+/// gives each copy the shadow of its stroke: the copy's right edge (38..42 across) casts it at
+/// 78..82. The bounds reach as far as the copy's shadow.
+#[test]
+fn each_copy_of_a_fills_or_strokes_transform_draws_its_own_shadow() {
+    let shadow = || fx("stylize.dropShadow", json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"}));
+    let copies = || fx("distort.transform", json!({"scaleH": 200, "scaleV": 200, "moveV": 60, "copies": 1}));
+    let square = |item: AppearanceItem| {
+        Node::path(NodeId(0), shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), Appearance { items: vec![item], ..Default::default() })
+    };
+    let mut red = FillLayer::new(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    red.effects = vec![shadow(), copies()];
+    let own = square(AppearanceItem::Fill(red.clone()));
+    red.effects = vec![shadow()];
+    let mut owner = square(AppearanceItem::Fill(red));
+    owner.appearance.effects = vec![copies()];
+    for (what, n) in [("own", own), ("object's", owner)] {
+        let d = doc_with(Document::new(100.0, 100.0), n);
+        let img = render(&d);
+        assert_eq!(img.pixel(20, 20), [255, 0, 0, 255], "{what}: the square");
+        assert_eq!(img.pixel(45, 20), [0, 255, 0, 255], "{what}: the square's shadow");
+        assert_eq!(img.pixel(20, 80), [255, 0, 0, 255], "{what}: the copy");
+        assert_eq!(img.pixel(70, 80), [0, 255, 0, 255], "{what}: the copy's shadow, 40 pt to its right");
+        assert_eq!(img.pixel(85, 80), [255, 255, 255, 255], "{what}: past the copy's shadow");
+        let n = &d.layers[0].children().unwrap()[0];
+        let b = crate::fx::visual_bounds(&d.symbol_boxes(), n).unwrap();
+        assert!(b.x1 >= 80.0 - 1e-9, "{what}: {b:?}");
+    }
+    let mut blue = StrokeLayer::new(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 4.0);
+    blue.effects = vec![shadow(), copies()];
+    let d = doc_with(Document::new(100.0, 100.0), square(AppearanceItem::Stroke(blue)));
+    let img = render(&d);
+    assert_eq!(img.pixel(50, 20), [0, 255, 0, 255], "the square's stroke shadow");
+    assert_eq!(img.pixel(80, 80), [0, 255, 0, 255], "the copy's stroke shadow, 40 pt to the right of its edge");
+    assert_eq!(img.pixel(60, 80), [255, 255, 255, 255], "inside the copy's stroke shadow");
 }
 
 /// Each copy of an image's Transform effect draws the drop shadow listed before the effect under

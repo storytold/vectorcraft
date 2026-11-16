@@ -15,23 +15,23 @@ pub(crate) struct Rest {
 /// The planar graph of `shapes` (in the sweep's frame) with its faces walked: what [`build`] makes
 /// Live Paint faces and edges from, and what [`Map::merge`] merges faces in.
 pub(crate) struct Map {
-    edges: Vec<Edge>,
+    pub(super) edges: Vec<Edge>,
     around: Vec<Vec<usize>>,
     slot_of: Vec<usize>,
     /// Bounded faces: their cycle of half-edges, path and area; and, by their bounds, which can
     /// hold a point, so finding the face around one tests only those.
-    faces: Vec<(Vec<usize>, BezPath, f64)>,
+    pub(super) faces: Vec<(Vec<usize>, BezPath, f64)>,
     face_index: RectIndex<usize>,
     /// Bounded faces left out as slivers ([`is_sliver`]): their cycle of half-edges and the inputs
     /// whose fill covers them (none for a gap, such as a thin cutout).
     pub(super) slivers: Vec<(Vec<usize>, Vec<usize>)>,
     /// Outer boundaries of connected pieces, and the face each one is a hole in.
-    holes: Vec<(Vec<usize>, BezPath)>,
-    face_holes: Vec<Vec<usize>>,
-    tidy: Tidy,
+    pub(super) holes: Vec<(Vec<usize>, BezPath)>,
+    pub(super) face_holes: Vec<Vec<usize>>,
+    pub(super) tidy: Tidy,
     /// The inputs' anchors (sorted by x) and how close results snap back onto them.
-    anchors: Vec<Point>,
-    snap: f64,
+    pub(super) anchors: Vec<Point>,
+    pub(super) snap: f64,
 }
 
 /// With `cover`, also finds which inputs cover each sliver, which only [`Map::merge`] reads;
@@ -41,7 +41,7 @@ pub(crate) fn map(shapes: &[Shape], cover: bool) -> Option<Map> {
 }
 
 /// [`map`] whose faces and pieces are refit to `precision`, and whose slivers thinner than it are dropped.
-fn map_with(shapes: &[Shape], cover: bool, precision: f64) -> Option<Map> {
+pub(super) fn map_with(shapes: &[Shape], cover: bool, precision: f64) -> Option<Map> {
     let mut inputs: Vec<(BezPath, usize)> = Vec::new();
     for (i, s) in shapes.iter().enumerate() {
         let mut bp = BezPath::new();

@@ -24,14 +24,15 @@ kurbo = { workspace = true }
 thiserror = { workspace = true }
 flate2 = { workspace = true, features = ["zlib-rs"] }
 image = { workspace = true }
-# CMYK JPEGs (the image crate writes RGB and grey ones only).
+craft-image-codecs = { workspace = true }
+# CMYK JPEGs (src/images.rs; the image crate writes RGB and grey ones only).
 jpeg-encoder = { workspace = true }
 craft-pdf = { workspace = true }
+craft-stream-codecs = { workspace = true }
 log = { workspace = true }
 chrono = { workspace = true }
 smallvec = "1"
 siphasher = "1"
-weezl = "0.2"
 serde = { workspace = true }
 # The XMP packet that File Info is read from (file_info.rs).
 craft-xml = { workspace = true }

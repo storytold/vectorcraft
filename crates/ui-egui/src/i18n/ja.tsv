@@ -49,6 +49,10 @@ font-technology	Variable	バリアブル
 	Cap Height	キャップハイト
 	x-Height	x ハイト
 	ICF Box	平均字面
+	Show Sample	サンプルを表示
+	Hide Sample	サンプルを隠す
+	Max Ascent/Descent	最大アセント/ディセント
+	Max Ascender	最大アセンダ
 	Proportional Metrics	プロポーショナルメトリクス
 	H or V Style	横組み・縦組み用かな
 	Roman Italics	欧文イタリック
@@ -946,6 +950,7 @@ digits	Malayalam	マラヤーラム数字
 	Auto Color	自動カラー
 	Automatic	自動
 	Isolate Selected Group	選択したグループを分離
+	Isolate Selected Path	選択したパスを分離
 	Isolate Selected Object	選択したオブジェクトを分離
 	Exit Isolation Mode	分離モードを終了
 	Make Clipping Mask	クリッピングマスクを作成
@@ -1862,6 +1867,8 @@ antiAlias	Sharp	シャープ
 	Folder	フォルダー
 	Folder Name:	フォルダー名:
 	Font List	フォントリスト
+	Show Similar Fonts	類似フォントを表示
+	Clear Similar Fonts	類似フォントの表示を解除
 	Font Preview Size	フォントプレビューのサイズ
 	Font:	フォント:
 	Fonts	フォント
@@ -1953,6 +1960,11 @@ antiAlias	Sharp	シャープ
 	Show smooth color wheel	滑らかなカラーホイールを表示
 	Show segmented color wheel	分割カラーホイールを表示
 	Show color bars	カラーバーを表示
+	Show brightness and hue on wheel	ホイールに明るさと色相を表示
+	Show saturation and hue on wheel	ホイールに彩度と色相を表示
+	Add Color Tool	カラー追加ツール
+	Remove Color Tool	カラー削除ツール
+	Remove Color	カラーを削除
 	Find the selected colors in the artwork	選択したカラーをアートワーク内で検索
 	Height	高さ
 	Height:	高さ:
@@ -2224,6 +2236,8 @@ antiAlias	Sharp	シャープ
 	Lasso Tool	なげなわツール
 	Enclosing Lasso Tool	囲みなげなわツール
 	Enclosing Lasso	囲みなげなわ
+	Polygonal Lasso Tool	多角形なげなわツール
+	Polygonal Lasso	多角形なげなわ
 	Last Effect: {name}	最後の効果：{name}
 	Last Page	最後のページ
 	Layer Options…	レイヤーオプション…
@@ -2773,6 +2787,10 @@ diagnostics	ui	UI
 	Play Current Selection	選択項目を再生
 	Save Actions…	アクションを保存…
 	Load Actions…	アクションを読み込み…
+	Reset Actions	アクションをリセット
+	Replace the current actions with the default set?	現在のアクションを初期設定のセットで置き換えますか？
+	Append adds the default set after the current sets instead.	「追加」を選ぶと、初期設定のセットを現在のセットの後に追加します。
+	Append	追加
 	Plug-in Info	プラグイン情報
 	Plug-in…	プラグイン…
 	Points	ポイント
@@ -3922,6 +3940,7 @@ file-filter	Templates	テンプレート
 	Connect Data Points	データポイントを線でつなぐ
 	Edge-to-Edge Lines	端から端までの線
 	Draw Filled Lines	線を塗りつぶして描く
+	Line Width	線幅
 	Tick Values	目盛りの値
 	Override Calculated Values	計算値を上書き
 	Divisions	分割数
@@ -4623,6 +4642,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no history to clear	消去するヒストリーがありません
 @msg	no history state {v}	ヒストリーの状態 {v} はありません
 @msg	Expand Appearance: the selection has a basic appearance	アピアランスを分割: 選択範囲は基本アピアランスです
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	一部のラスター効果は画像になりませんでした: 1,024 枚または合計 256 メガピクセルを超えるためです
 @msg	select (or target) objects whose appearance isn't basic	基本アピアランスではないオブジェクトを選択するか、ターゲットに指定してください
 @msg	{C}: no effect at index {from}	{C}: インデックス {from} に効果がありません
 @msg	Expand: no gradient fills	拡張: グラデーションの塗りがありません
@@ -6023,7 +6043,7 @@ lighting	Light	ライト
 @msg	Unknown dimension style	寸法のスタイルが不明です
 @msg	Unknown unit	単位が不明です
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	開いたプロファイルの円形の端を閉じます。部分的な回転では切断面は開いたままです。
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	開いたプロファイルの円形の端を閉じます。部分的な回転では切断面も閉じます。
 	Distance	距離
 @msg	span must be "object" or "selection", got {v}	span は "object" または "selection" で指定してください ({v} は指定できません)
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" は `gradient` を配置します。スウォッチは配置できません
@@ -6177,6 +6197,7 @@ lighting	Light	ライト
 	Single Word Justification:	単語のみの行の揃え:
 	Full Justify	両端揃え
 	Minimum must not exceed Desired, nor Desired Maximum.	最小値は最適値を、最適値は最大値を超えることはできません。
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: 最小値は最適値を、最適値は最大値を超えることはできません
 	Minimum	最小
 	Justification	文字組み
 	Add filters from the list above	上のリストからフィルターを追加
@@ -7929,7 +7950,9 @@ axis	Y Axis	Y 軸
 @msg	position must be normal, superscript or subscript	position には normal、superscript、subscript のいずれかを指定してください
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position には topLeft、topRight、bottomLeft、bottomRight のいずれかを指定してください
 @msg	positions must be between 0 and 100000 pt	positions には 0 から 100000 pt までの値を指定してください
+@msg	ppi can't be more than {max} for this image	この画像の ppi には {max} 以下の値を指定してください
 @msg	ppi must be a positive number, not {ppi}	ppi には正の数値を指定してください ({ppi} は指定できません)
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim は画像のピクセルをそのまま残します: ppi は指定しないでください
 @msg	ppi must be between 1 and 2400	ppi には 1 から 2400 までの値を指定してください
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` は transforms|bounds|fileDimensions|fit|fill のいずれでもありません
 @msg	preserveShape must be clippingMask|transparency	preserveShape には clippingMask|transparency のいずれかを指定してください
@@ -8950,6 +8973,22 @@ breakText	Glyphs	字形
 	Remove Gaps	間隔を削除
 @msg	that makes too many pieces (at most 100000): make the dashes longer	分割数が多すぎます（最大 100000）：ダッシュを長くしてください
 @msg	select paths, or segments, to divide	分割するパスまたはセグメントを選択してください
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	共通接線…
+	Common Tangents	共通接線
+	Tangents	接線
+	Centerline	中心線
+	External	外側
+	Internal	内側
+@msg	select two closed paths	閉じたパスを 2 つ選択してください
+@msg	a selected path is open	選択したパスが開いています
+@msg	a selected path is not convex	選択したパスが凸形ではありません
+@msg	a selected path has no area	選択したパスに面積がありません
+@msg	a selected path has more than 10000 segments	選択したパスのセグメントが 10000 を超えています
+@msg	the two paths have the same outline	2 つのパスの輪郭が同じです
+@msg	One path lies inside the other, so they have no common tangents	一方のパスがもう一方の内側にあるため、共通接線はありません
+@msg	The paths overlap, so they have no internal tangents	パスが重なっているため、内側の接線はありません
+@msg	One path lies inside the other, so they have no internal tangents	一方のパスがもう一方の内側にあるため、内側の接線はありません
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	破線をパスに拡張
 @msg	select paths with dashed strokes to expand	拡張する破線のパスを選択してください
@@ -8992,6 +9031,11 @@ breakText	Glyphs	字形
 	Malayalam	マラヤーラム語
 	Odia	オディア語
 	Urdu	ウルドゥー語
+	Sanskrit	サンスクリット語
+	Nepali	ネパール語
+	Assamese	アッサム語
+	Konkani	コンカニ語
+	Sindhi	シンド語
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 以降 (バージョン {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	開いているすべてのドキュメントを PDF として書き出し
@@ -9025,7 +9069,7 @@ breakText	Glyphs	字形
 @msg	stroke cannot be set on a symbol instance	シンボルインスタンスには stroke を設定できません
 @msg	fill on a symbol instance must be a solid color or none	シンボルインスタンスの fill は単色または none にしてください
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	「シェイプに変換」または「オブジェクトのアウトライン」効果のない画像には {key} を設定できません
-@msg	pass newName, registration, exportType, nineSlice and/or type	newName、registration、exportType、nineSlice、type のいずれかを指定してください
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	newName、registration、exportType、nineSlice、type、alignToPixelGrid のいずれかを指定してください
 	Text Flow	テキストの流れ
 	By Rows	行方向
 	By Columns	列方向
@@ -9251,6 +9295,8 @@ breakText	Glyphs	字形
 @msg	No bridge of this width fits across the selected art	この幅のブリッジは選択したアートワークに収まりません
 @msg	Some islands could not be joined to the area around the art	一部のアイランドをアートワークの周囲の領域につなげられませんでした
 @msg	`width` must be from {lo} to {hi} pt	`width` は {lo}～{hi} pt の範囲で指定してください
+@msg	`angle` must be from -180 to 180 degrees	`angle` は -180～180 度の範囲で指定してください
+@msg	`roundness` must be from 1 to 100%	`roundness` は 1～100% の範囲で指定してください
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` には 1 から {MAX_BRIDGES_PER_ISLAND} の整数を指定してください
 	Weed Box and Lines…	カス取り枠とライン…
 	Weed Box and Lines	カス取り枠とライン
@@ -9411,3 +9457,23 @@ breakText	Glyphs	字形
 	No objects are selected.	オブジェクトが選択されていません。
 	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
 	Remove Fold Line Role	線種を解除
+	Check	チェック
+	Check Fold Lines	折り線をチェック
+@msg	No cut lines are in the selection.	選択範囲にカット線がありません。
+@msg	No cut lines are in the document.	ドキュメントにカット線がありません。
+@msg	The cut lines do not enclose an area.	カット線が領域を囲んでいません。
+@msg	A cut line ends without meeting another cut line.	カット線が他のカット線と接しないまま終わっています。
+@msg	A gap between cut lines was closed.	カット線間の隙間を閉じました。
+@msg	The fold lines are too complex to check.	折り線が複雑すぎるためチェックできません。
+@msg	A cut line and a crease lie on top of each other.	カット線と筋入れ線が重なっています。
+@msg	No cut lines are among the given objects.	指定したオブジェクトにカット線がありません。
+@msg	Two fold lines lie on top of each other.	折り線が 2 本重なっています。
+@msg	A crease ends inside a panel.	筋入れ線がパネルの内側で終わっています。
+@msg	A crease does not divide two panels.	筋入れ線が 2 つのパネルを分けていません。
+@msg	A crease lies outside the cut outline, wholly or in part.	筋入れ線の全体または一部がカットの輪郭の外側にあります。
+@msg	The pieces of a hinge are not on one straight line.	ヒンジの各部分が 1 本の直線上にありません。
+@msg	A gap between cut lines is too narrow to tell apart.	カット線間の隙間が狭すぎて区別できません。
+@msg	A cut-out area holds other fold lines or another blank.	切り抜かれた領域に他の折り線または別の展開図があります。
+@msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
+@msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
