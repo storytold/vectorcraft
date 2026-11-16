@@ -421,10 +421,10 @@ pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
         let command = crate::keymap::command_of(id);
         // While the Effect menu dims the item (nothing selected), no dialog opens and the status
         // line says why.
-        if id.starts_with("effect:") && !menus::enabled(app, &command.id) {
-            if let Err(why) = crate::shortcut_editor::dimmed(app, &command.id) {
-                app.status(why);
-            }
+        if id.starts_with("effect:")
+            && let Some(why) = crate::shortcut_editor::dimmed(app, &command.id, &command.id)
+        {
+            app.status(why);
         } else {
             menus::invoke(app, &command.id, command.params);
         }
@@ -437,12 +437,12 @@ pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
     }
 }
 
-/// Why the result `id` can't run now, as an English status message, or `None` while it can: the
-/// engine's reason when it gives one, else the status line a dimmed menu item's pick gives
-/// ([`crate::shortcut_editor::dimmed`]). A panel can't be shown in Presentation Mode, a tool can
-/// always be chosen, and every other result asks [`menus::enabled`] about the command its pick
-/// runs.
-fn unavailable(app: &VectorcraftApp, id: &str) -> Option<String> {
+/// Why the result `id`, shown as `name`, can't run now, as an English status message, or `None`
+/// while it can: the status line a pick of its dimmed menu item gives
+/// ([`crate::shortcut_editor::dimmed`]), with the engine's reason when it gives one and `name` in
+/// place of the command's id. A panel can't be shown in Presentation Mode, a tool can always be
+/// chosen, and every other result asks about the command its pick runs.
+fn unavailable(app: &VectorcraftApp, id: &str, name: &str) -> Option<String> {
     if id.starts_with("tool:") {
         return None;
     }
@@ -455,31 +455,38 @@ fn unavailable(app: &VectorcraftApp, id: &str) -> Option<String> {
     } else {
         id.to_string()
     };
-    if menus::enabled(app, &id) {
-        return None;
-    }
-    let why = vectorcraft_engine::find_command(&id).and_then(|c| (c.enabled)(&app.session).err());
-    Some(why.unwrap_or_else(|| format!("command `{id}` is not available right now")))
+    crate::shortcut_editor::dimmed(app, &id, name)
 }
 
-/// The drawn results' [`unavailable`] answers, in the interface language, for the state `key`
-/// ([`availability_key`]) they were read in. An engine check can take tens of milliseconds on a
-/// large selection, so each result is asked once per state instead of on every frame.
+/// The drawn results' [`unavailable`] answers for the state `key` ([`availability_key`]) they were
+/// read in. An engine check can take tens of milliseconds on a large selection, so each result is
+/// asked once per state instead of on every frame.
 #[derive(Clone, Default)]
 struct Availability {
     key: u64,
+    /// Each asked result's answer: why it can't run now, in English, or `None` while it can.
     known: std::collections::HashMap<String, Option<String>>,
+    /// How many results were asked since the key was set.
+    #[cfg(test)]
+    asked: usize,
 }
 
 impl Availability {
-    /// Why the result `id` can't run now, translated, or `None` while it can.
-    fn why(&mut self, app: &VectorcraftApp, id: &str) -> Option<String> {
-        if let Some(why) = self.known.get(id) {
-            return why.clone();
-        }
-        let why = unavailable(app, id).map(|why| crate::i18n::msg(&why));
-        self.known.insert(id.to_string(), why.clone());
-        why
+    /// Why the result `e` can't run now, in the interface language, or `None` while it can.
+    fn why(&mut self, app: &VectorcraftApp, e: &Entry) -> Option<String> {
+        let why = match self.known.get(&e.id) {
+            Some(why) => why.clone(),
+            None => {
+                #[cfg(test)]
+                {
+                    self.asked += 1;
+                }
+                let why = unavailable(app, &e.id, &e.shown);
+                self.known.insert(e.id.clone(), why.clone());
+                why
+            }
+        };
+        why.map(|why| crate::i18n::msg(&why))
     }
 }
 
@@ -487,13 +494,12 @@ impl Availability {
 /// ([`crate::native_menu::state_hash`]: commands run, the document's revision, selection, history
 /// and clipboard, the language and more), whether the document has unsaved changes, the screen
 /// mode, an open dialog, and the background saves and exports, file reads, plug-in runs and traces
-/// that run or show their progress. A frame with a pointer button release also changes it, for
-/// what it leaves out (a panel shown, a tool chosen); typing in the search field does not.
-fn availability_key(app: &VectorcraftApp, ctx: &egui::Context) -> u64 {
+/// that run or show their progress. A click asks again for what it leaves out (a panel shown, a
+/// tool chosen) without changing it ([`show`]); typing in the search field does not.
+fn availability_key(app: &VectorcraftApp) -> u64 {
     use std::hash::{Hash, Hasher};
-    let click = ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::PointerButton { pressed: false, .. })));
     let mut h = std::collections::hash_map::DefaultHasher::new();
-    crate::native_menu::state_hash(app, click.then_some(app.host_iteration)).hash(&mut h);
+    crate::native_menu::state_hash(app, None).hash(&mut h);
     let running = app.background.jobs.iter().filter(|j| j.progress.is_some() && !j.cancelled()).count();
     (app.ui.screen_mode, app.ui.dialog.is_some(), app.background.jobs.len(), running).hash(&mut h);
     (app.opening.pending.len(), crate::opening::any_shown(app)).hash(&mut h);
@@ -752,11 +758,14 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let focus_id = egui::Id::unique("palette-focus-before");
     let field_id = egui::Id::unique("palette-field");
     let sel_id = egui::Id::unique("palette-selected");
+    let availability_id = egui::Id::unique("palette-availability");
     if !app.ui.palette_open {
         // The palette opens again with its first row highlighted and its list scrolled to the top
-        // (a list height of 0 scrolls it to the highlighted row).
+        // (a list height of 0 scrolls it to the highlighted row), and asks its results again
+        // whether they can run.
         let field = ctx.data_mut(|d| {
             d.remove::<Highlight>(sel_id);
+            d.remove::<Availability>(availability_id);
             let field = d.get_temp::<egui::Id>(field_id);
             d.remove::<egui::Id>(field_id);
             field
@@ -855,13 +864,16 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         });
     }
     let screen = ctx.content_rect();
-    // The drawn results' availability, kept while the state it was read in lasts.
-    let availability_id = egui::Id::unique("palette-availability");
-    let key = availability_key(app, ctx);
+    // The drawn results' availability, kept while the state it was read in lasts. A frame with a
+    // pointer button release asks again, once, for what the state leaves out.
+    let key = availability_key(app);
     let mut availability = ctx
         .data_mut(|d| d.remove_temp::<Availability>(availability_id))
         .filter(|a| a.key == key)
-        .unwrap_or(Availability { key, known: Default::default() });
+        .unwrap_or_else(|| Availability { key, ..Default::default() });
+    if ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::PointerButton { pressed: false, .. }))) {
+        availability.known.clear();
+    }
     // The highlighted result the rows and the field's description are drawn with.
     let mut drawn = sel;
     // The backdrop covers the canvas, the toolbars, the docked panels and the app bar under the
@@ -900,7 +912,25 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                             ui.add_enabled(false, egui::Button::new(tl!("No recent commands")));
                         }
                         for (i, e) in recent.iter().enumerate() {
-                            let row = ui.add(egui::Button::new(e.shown.as_str()).shortcut_text(menus::shown_shortcut(&e.shortcut)));
+                            // A pick that can't run now is drawn dimmed, as in the results, and says
+                            // why on hover and to screen readers; it can still be chosen.
+                            let why = availability.why(app, e);
+                            let (name, shortcut) = (egui::RichText::new(e.shown.as_str()), egui::RichText::new(menus::shown_shortcut(&e.shortcut)));
+                            let (name, shortcut) = match why {
+                                Some(_) => (name.color(t.text_disabled), shortcut.color(t.text_disabled)),
+                                None => (name, shortcut),
+                            };
+                            let row = ui.add(egui::Button::new(name).shortcut_text(shortcut));
+                            ui.ctx().accesskit_node_builder(row.id, |node| {
+                                if let Some(why) = &why {
+                                    node.set_disabled();
+                                    node.set_description(why.clone());
+                                }
+                            });
+                            let row = match why {
+                                Some(why) => row.on_hover_text(why),
+                                None => row,
+                            };
                             if i == rsel {
                                 row.request_focus();
                             }
@@ -937,7 +967,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 let pos = (rank + 1).to_string();
                 let of = total.to_string();
                 let mut said = crate::i18n::fmt(tl!("{pos} of {total}: {name}"), &[("pos", &pos), ("total", &of), ("name", &row_label(e))]);
-                if let Some(why) = availability.why(app, &e.id) {
+                if let Some(why) = availability.why(app, e) {
                     said = format!("{said}\n{why}");
                 }
                 ui.ctx().accesskit_node_builder(r.id, |node| node.set_description(said));
@@ -964,7 +994,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                             }
                             // A result that can't run now stays in its place, drawn dimmed, and says
                             // why on hover and to screen readers.
-                            let why = availability.why(app, &e.id);
+                            let why = availability.why(app, e);
                             let (name_color, shortcut_color) = if why.is_some() { (t.text_disabled, t.text_disabled) } else { (t.text, t.text_dim) };
                             let font = egui::TextStyle::Body.resolve(ui.style());
                             let shortcut = menus::shown_shortcut(&e.shortcut);
@@ -1005,7 +1035,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             // While the highlighted result can't run now, the footer also says why, so a keyboard
             // user reads it too: on the count's line, or alone under the recent picks, so the
             // footer stays the height counted above.
-            let why = matches.get(sel).and_then(|e| availability.why(app, &e.id));
+            let why = matches.get(sel).and_then(|e| availability.why(app, e));
             // Under the recent picks no count is shown; with none, one dimmed line says so.
             if !empty {
                 ui.add_space(6.0);
@@ -2388,6 +2418,8 @@ mod tests {
         time: f64,
         /// Whether the last frame asked for another one at once.
         repaint: bool,
+        /// What the last frame drew.
+        shapes: Vec<egui::epaint::ClippedShape>,
     }
 
     impl Open {
@@ -2401,7 +2433,7 @@ mod tests {
             ctx.enable_accesskit();
             crate::theme::install_fonts(&ctx);
             crate::theme::apply(&ctx, Default::default());
-            let mut open = Open { app, ctx, size, time: 0.0, repaint: false };
+            let mut open = Open { app, ctx, size, time: 0.0, repaint: false, shapes: Vec::new() };
             open.frame(vec![]);
             open
         }
@@ -2415,6 +2447,7 @@ mod tests {
             let mut out = self.ctx.run_ui(input, |ui| show(app, ui.ctx()));
             out.textures_delta.clear();
             self.repaint = out.viewport_output.get(&egui::ViewportId::ROOT).is_some_and(|v| v.repaint_delay.is_zero());
+            self.shapes = std::mem::take(&mut out.shapes);
             out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default()
         }
 
@@ -2422,6 +2455,18 @@ mod tests {
         fn press(&mut self, k: egui::Key, times: usize) -> Vec<egui::accesskit::Node> {
             let key = egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
             self.frame(vec![key; times])
+        }
+
+        /// The color the last frame drew the text `text` in.
+        fn color_of(&self, text: &str) -> Option<egui::Color32> {
+            fn find(shape: &egui::Shape, text: &str) -> Option<egui::Color32> {
+                match shape {
+                    egui::Shape::Text(t) if t.galley.text() == text => Some(t.fallback_color),
+                    egui::Shape::Vec(shapes) => shapes.iter().find_map(|s| find(s, text)),
+                    _ => None,
+                }
+            }
+            self.shapes.iter().find_map(|s| find(&s.shape, text))
         }
 
         /// The highlighted result's index.
@@ -2768,14 +2813,18 @@ mod tests {
     fn a_result_that_cannot_run_now_is_dimmed_and_says_why() {
         let mut session = vectorcraft_testkit::fixtures::Fixture::Multi.session();
         session.execute("select.none", &json!({})).unwrap();
-        let why = crate::i18n::msg(&(vectorcraft_engine::find_command("object.ungroup").unwrap().enabled)(&session).unwrap_err());
+        let why = ungroup_reason(&session);
         let mut open = open_on("ungroup", session);
-        let name = entries(&open.ctx, Lang::EN).iter().find(|e| e.id == "object.ungroup").map(row_label).unwrap();
+        let entries = entries(&open.ctx, Lang::EN);
+        let entry = entries.iter().find(|e| e.id == "object.ungroup").unwrap();
+        let name = row_label(entry);
         let order = open.listed();
         let nodes = highlight(&mut open, "object.ungroup");
         let ungroup = row_named(&nodes, &name);
         assert!(ungroup.is_disabled(), "{ungroup:?}");
         assert_eq!(ungroup.description(), Some(why.as_str()));
+        let t = Tokens::get(&open.ctx);
+        assert_eq!(open.color_of(&entry.shown), Some(t.text_disabled), "the name is drawn dimmed");
         let footer_says = |nodes: &[egui::accesskit::Node]| labels(nodes).contains(&why);
         assert!(footer_says(&nodes), "{:?}", labels(&nodes));
         // The arrow keys leave screen readers on the search field, so its description says why too.
@@ -2787,11 +2836,39 @@ mod tests {
         let nodes = open.frame(vec![]);
         let ungroup = row_named(&nodes, &name);
         assert!(!ungroup.is_disabled() && ungroup.description().is_none(), "{ungroup:?}");
+        assert_eq!(open.color_of(&entry.shown), Some(t.text));
         assert!(!footer_says(&nodes), "{:?}", labels(&nodes));
         assert_eq!(field_description(&nodes), place);
         // Whether a result can run never moves it.
         assert_eq!(open.listed(), order);
         assert_eq!(rows(&nodes).into_iter().map(|r| r.0).collect::<Vec<_>>(), dimmed_rows);
+    }
+
+    /// Why Object › Ungroup can't run in `session`, as the palette shows it: the engine's reason,
+    /// with the result's name and no command id.
+    fn ungroup_reason(session: &vectorcraft_engine::Session) -> String {
+        let reason = (vectorcraft_engine::find_command("object.ungroup").unwrap().enabled)(session).unwrap_err();
+        let why = crate::i18n::msg(&format!("command `Object › Ungroup` is not available right now: {reason}"));
+        assert!(!why.contains("object.ungroup"), "{why}");
+        why
+    }
+
+    /// The pointer resting on a result that can't run now shows why in a tooltip, as well as in
+    /// the footer of the result it highlights.
+    #[test]
+    fn hovering_a_result_that_cannot_run_now_says_why() {
+        let mut session = vectorcraft_testkit::fixtures::Fixture::Multi.session();
+        session.execute("select.none", &json!({})).unwrap();
+        let why = ungroup_reason(&session);
+        let mut open = open_on("ungroup", session);
+        let name = entries(&open.ctx, Lang::EN).iter().find(|e| e.id == "object.ungroup").map(row_label).unwrap();
+        let nodes = open.frame(vec![]);
+        let b = row_named(&nodes, &name).bounds().unwrap();
+        let at = egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32);
+        open.frame(vec![egui::Event::PointerMoved(at)]);
+        let says = |nodes: &[egui::accesskit::Node]| labels(nodes).iter().filter(|l| **l == why).count();
+        let shown = (0..30).map(|_| says(&open.frame(vec![]))).max().unwrap_or(0);
+        assert_eq!(shown, 2, "the footer and the tooltip");
     }
 
     /// Under an empty search, a highlighted recent pick that can't run now is dimmed and the line
@@ -2800,7 +2877,7 @@ mod tests {
     fn a_recent_pick_that_cannot_run_now_says_why() {
         let mut session = vectorcraft_testkit::fixtures::Fixture::Multi.session();
         session.execute("select.none", &json!({})).unwrap();
-        let why = crate::i18n::msg(&(vectorcraft_engine::find_command("object.ungroup").unwrap().enabled)(&session).unwrap_err());
+        let why = ungroup_reason(&session);
         let mut open = open_on("", session);
         open.app.ui.recent_commands = vec!["object.ungroup".to_string(), "object.group".to_string()];
         let nodes = open.frame(vec![]);
@@ -2813,8 +2890,90 @@ mod tests {
         assert!(popup.bottom() <= WINDOW.y, "{popup:?}");
     }
 
+    /// The Recent Commands list beside the search field draws a pick that can't run now dimmed,
+    /// disabled for screen readers with the reason as its description, and says why on hover.
+    #[test]
+    fn a_recent_command_that_cannot_run_now_is_dimmed_in_the_list() {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        app.run("select.none", json!({})).unwrap();
+        let why = ungroup_reason(&app.session);
+        app.ui.recent_commands = vec!["object.ungroup".into(), "select.all".into()];
+        let mut h = palette_harness(app);
+        h.ctx.all_styles_mut(|s| s.interaction.tooltip_delay = 0.0);
+        h.get_by_label(tl!("Recent Commands")).click();
+        h.run_steps(2);
+        let shown = |id: &str| entries(&h.ctx, Lang::EN).iter().find(|e| e.id == id).map(|e| e.shown.clone()).unwrap();
+        let (ungroup, all) = (shown("object.ungroup"), shown("select.all"));
+        // A row's label also holds its shortcut.
+        let row = |name: &str| {
+            let name = name.to_string();
+            move |n: &egui_kittest::kittest::AccessKitNode<'_>| n.role() == Role::Button && n.label().is_some_and(|l| l.contains(&name))
+        };
+        let ungroup_row = h.get_by(row(&ungroup));
+        assert!(ungroup_row.accesskit_node().is_disabled());
+        assert_eq!(ungroup_row.accesskit_node().description().as_deref(), Some(why.as_str()));
+        let all_row = h.get_by(row(&all));
+        assert!(!all_row.accesskit_node().is_disabled() && all_row.accesskit_node().description().is_none());
+        h.get_by(row(&ungroup)).hover();
+        h.run_steps(3);
+        assert!(h.query_by_label(&why).is_some(), "the tooltip says why");
+    }
+
+    /// The palette drops its answers when it closes, so opening it again, with the keyboard too,
+    /// asks its results again.
+    #[test]
+    fn the_palette_asks_again_when_it_opens_again() {
+        let mut session = vectorcraft_testkit::fixtures::Fixture::Multi.session();
+        session.execute("select.none", &json!({})).unwrap();
+        let mut open = open_on("ungroup", session);
+        let id = egui::Id::unique("palette-availability");
+        let kept = |open: &Open| open.ctx.data(|d| d.get_temp::<Availability>(id));
+        assert!(kept(&open).is_some_and(|a| a.known.contains_key("object.ungroup")));
+        open.app.ui.palette_open = false;
+        open.frame(vec![]);
+        assert!(kept(&open).is_none(), "the answers go when the palette closes");
+        open.app.ui.palette_open = true;
+        open.frame(vec![]);
+        assert!(kept(&open).is_some_and(|a| a.asked > 0 && a.known.contains_key("object.ungroup")), "asked again");
+    }
+
+    /// What the results' availability depends on changes the key it is kept under: an open dialog,
+    /// the screen mode, a background job, and a save that marks the document saved without a new
+    /// revision.
+    #[test]
+    fn availability_is_asked_again_when_what_it_depends_on_changes() {
+        let write_shared: crate::background::SharedWriteFn = std::sync::Arc::new(|_: &str, _: &[u8]| Ok(()));
+        let services = crate::Services { write_shared: Some(write_shared), ..Default::default() };
+        let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), services);
+        let mut key = availability_key(&app);
+        let mut changed = |app: &VectorcraftApp, what: &str| {
+            let now = availability_key(app);
+            assert_ne!(now, key, "{what}");
+            key = now;
+        };
+        app.ui.dialog = Some(crate::state::Dialog::new("about", json!({})));
+        changed(&app, "a dialog opens");
+        app.ui.dialog = None;
+        changed(&app, "the dialog closes");
+        app.ui.screen_mode = 3;
+        changed(&app, "Presentation Mode");
+        let started = crate::background::run(&mut app, true, "Saving".into(), None, |_| Ok(json!({})), |_, r| r).unwrap();
+        assert_eq!(started.get("background"), Some(&json!(true)), "{started}");
+        changed(&app, "a background job starts");
+        app.run("select.all", json!({})).unwrap();
+        app.run("object.group", json!({})).unwrap();
+        changed(&app, "an edit");
+        let revision = app.session.active().map(|d| d.revision);
+        app.session.active_mut().unwrap().mark_saved();
+        assert_eq!(app.session.active().map(|d| d.revision), revision);
+        changed(&app, "the document is saved");
+    }
+
     /// The drawn results are asked whether they can run once per state: keys pressed in the palette
-    /// keep the answers, and a command run or a click asks again.
+    /// keep the answers, a command run asks again, and a frame with a click asks again once,
+    /// without changing the state the answers are kept for.
     #[test]
     fn availability_is_read_once_per_state() {
         let mut session = vectorcraft_testkit::fixtures::Fixture::Multi.session();
@@ -2847,8 +3006,18 @@ mod tests {
             pressed: false,
             modifiers: egui::Modifiers::NONE,
         };
-        open.frame(vec![release]);
-        assert_ne!(read(&open).key, after.key, "a click asks again");
+        // The same retries as for the key presses.
+        let once = (0..20).any(|_| {
+            open.frame(vec![]);
+            let before = read(&open);
+            open.frame(vec![release.clone()]);
+            let clicked = read(&open);
+            open.frame(vec![]);
+            let next = read(&open);
+            let asked_again = clicked.key == before.key && clicked.asked > before.asked;
+            asked_again && (next.key, next.asked) == (clicked.key, clicked.asked)
+        });
+        assert!(once, "a click asks again on its own frame only");
     }
 
     /// Paste is dimmed while the clipboard is empty and nothing can be pasted from the system
@@ -2860,7 +3029,7 @@ mod tests {
         let nodes = open.frame(vec![]);
         let paste = row_named(&nodes, "Edit › Paste");
         assert!(paste.is_disabled(), "{paste:?}");
-        assert_eq!(paste.description(), Some(crate::i18n::msg("clipboard is empty").as_str()));
+        assert_eq!(paste.description(), Some("command `Edit › Paste` is not available right now: clipboard is empty"));
         open.app.system_paste = true;
         let nodes = open.frame(vec![]);
         assert!(!row_named(&nodes, "Edit › Paste").is_disabled());
@@ -2872,27 +3041,45 @@ mod tests {
         let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
         let tools: Vec<String> = build(Lang::EN).into_iter().map(|e| e.id).filter(|id| id.starts_with("tool:")).collect();
         assert!(!tools.is_empty());
-        assert!(tools.iter().all(|id| unavailable(&app, id).is_none()), "{tools:?}");
+        assert!(tools.iter().all(|id| unavailable(&app, id, id).is_none()), "{tools:?}");
         let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
-        assert_eq!(unavailable(&app, "panel:layers"), None);
+        assert_eq!(unavailable(&app, "panel:layers", "Window › Layers"), None);
         app.ui.screen_mode = 3;
-        assert_eq!(unavailable(&app, "panel:layers").as_deref(), Some("panels can't be shown in Presentation Mode"));
+        assert_eq!(unavailable(&app, "panel:layers", "Window › Layers").as_deref(), Some("panels can't be shown in Presentation Mode"));
     }
 
     /// A UI command without an engine reason says it is not available, and a filter plug-in or an
-    /// effect asks about the command its pick runs.
+    /// effect asks about the command its pick runs. The message names the result as the palette
+    /// shows it, never by the command's id.
     #[test]
     fn a_result_without_an_engine_reason_says_it_is_not_available() {
         let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
         assert!(vectorcraft_engine::find_command("ui.newBrush").is_none());
-        assert_eq!(unavailable(&app, "ui.newBrush").as_deref(), Some("command `ui.newBrush` is not available right now"));
-        assert_eq!(unavailable(&app, "plugin:any.filter").as_deref(), Some("command `plugin.dialog` is not available right now"));
+        let brush = unavailable(&app, "ui.newBrush", "New Brush…");
+        assert_eq!(brush.as_deref(), Some("command `New Brush…` is not available right now"));
+        let filter = unavailable(&app, "plugin:any.filter", "Object › Plug-ins › Any Filter…");
+        assert_eq!(filter.as_deref(), Some("command `Object › Plug-ins › Any Filter…` is not available right now"));
         let effect = crate::shortcut_editor::effect_items().first().map(|e| format!("effect:{}", e.effect)).expect("an Effect menu item");
-        assert!(unavailable(&app, &effect).is_some(), "{effect}");
+        let why = unavailable(&app, &effect, "Effect › Any").unwrap_or_else(|| panic!("{effect}"));
+        assert!(why.starts_with("command `Effect › Any` is not available right now"), "{why}");
         let app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
-        assert_eq!(unavailable(&app, "ui.newBrush"), None);
-        assert_eq!(unavailable(&app, "plugin:any.filter"), None);
-        assert_eq!(unavailable(&app, &effect), None, "{effect}");
+        assert_eq!(unavailable(&app, "ui.newBrush", "New Brush…"), None);
+        assert_eq!(unavailable(&app, "plugin:any.filter", "Any Filter…"), None);
+        assert_eq!(unavailable(&app, &effect, "Effect › Any"), None, "{effect}");
+    }
+
+    /// Every result's reason names it as the palette shows it: no command id appears in it.
+    #[test]
+    fn no_reason_shows_a_command_id() {
+        let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let entries = build(Lang::EN);
+        let reasons: Vec<(String, String)> =
+            entries.iter().filter_map(|e| unavailable(&app, &e.id, &e.shown).map(|why| (e.id.clone(), why))).collect();
+        assert!(reasons.len() > 100, "with no document most results can't run: {}", reasons.len());
+        for (id, why) in &reasons {
+            let command = crate::keymap::command_of(id).id;
+            assert!(!why.contains(&format!("`{command}`")), "{id}: {why}");
+        }
     }
 
     /// Screen readers stay on the field: its description names the highlighted result and its

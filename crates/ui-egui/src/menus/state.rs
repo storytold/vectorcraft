@@ -200,22 +200,38 @@ pub(super) fn has_subject(app: &VectorcraftApp) -> bool {
 /// Can command `id` run now? An engine command asks the engine, a UI command the app's state;
 /// none that would act on text an input method is still composing.
 pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
+    why_off(app, id).is_none()
+}
+
+/// Why command `id` can't run now ([`enabled`]): `None` while it can, else `Some` with the
+/// engine's reason when the engine's check of an engine command fails. The engine's check runs at
+/// most once.
+pub(crate) fn why_off(app: &VectorcraftApp, id: &str) -> Option<Option<String>> {
     if waits_for_ime(app, id) {
-        return false;
+        return Some(None);
     }
     if SUBJECT_COMMANDS.contains(&id) {
-        return has_subject(app);
+        return (!has_subject(app)).then_some(None);
     }
     // The Artboard tool's canvas menu measured this when it opened.
     if id == "artboard.deleteEmpty"
         && let Some(facts) = crate::panels::artboards::open_menu_facts(app)
     {
-        return facts.any_empty;
+        return (!facts.any_empty).then_some(None);
     }
     if let Some(c) = vectorcraft_engine::find_command(id) {
-        // The system clipboard's contents can be pasted with an empty internal clipboard.
-        return (c.enabled)(&app.session).is_ok() || app.system_paste && id.starts_with("edit.paste");
+        return match (c.enabled)(&app.session) {
+            Ok(()) => None,
+            // The system clipboard's contents can be pasted with an empty internal clipboard.
+            Err(_) if app.system_paste && id.starts_with("edit.paste") => None,
+            Err(why) => Some(Some(why)),
+        };
     }
+    (!ui_enabled(app, id)).then_some(None)
+}
+
+/// Can UI command `id` run now?
+fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
     match id {
         // Save is off for a clean document that already has its own file.
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
