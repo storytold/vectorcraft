@@ -706,6 +706,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	No bridge of this width fits across the selected art	Ingen bro med denne bredde passer hen over den markerede grafik
 @msg	Some islands could not be joined to the area around the art	Nogle øer kunne ikke forbindes med området omkring grafikken
 @msg	`width` must be from {lo} to {hi} pt	`width` skal være fra {lo} til {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` skal være fra -180 til 180 grader
+@msg	`roundness` must be from 1 to 100%	`roundness` skal være fra 1 til 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` skal være et heltal fra 1 til {MAX_BRIDGES_PER_ISLAND}
 
 	File	Filer
@@ -3498,6 +3500,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Auto Color	Autofarve
 	Automatic	Automatisk
 	Isolate Selected Group	Isolér valgt gruppe
+	Isolate Selected Path	Isolér valgt kurve
 	Exit Isolation Mode	Afslut isoleringstilstand
 	Make Clipping Mask	Opret beskæringsmask
 	Release Clipping Mask	Frigør beskæringsmask
@@ -4012,6 +4015,8 @@ lighting	Light	Lys
 	Lasso Tool	Lassoværktøj
 	Enclosing Lasso Tool	Omsluttende lassoværktøj
 	Enclosing Lasso	Omsluttende lasso
+	Polygonal Lasso Tool	Polygonlassoværktøj
+	Polygonal Lasso	Polygonlasso
 	Lasso	Lasso
 	Line Cut Tool	Linjeskæringsværktøj
 	Line Graph Tool	Linjediagramværktøj
@@ -4099,6 +4104,10 @@ lighting	Light	Lys
 	Play Current Selection	Afspil aktuel markering
 	Save Actions…	Gem handlinger…
 	Load Actions…	Indlæs handlinger…
+	Reset Actions	Nulstil handlinger
+	Replace the current actions with the default set?	Vil du erstatte de aktuelle handlinger med standardsættet?
+	Append adds the default set after the current sets instead.	Tilføj tilføjer i stedet standardsættet efter de aktuelle sæt.
+	Append	Tilføj
 	Reflect Horizontal	Spejl vandret
 	Rotate 90° CW	Rotér 90° med uret
 	Set 1	Sæt 1
@@ -4319,6 +4328,10 @@ digits	Malayalam	Malayalam
 	Em Box	Em-felt
 	x-Height	x-højde
 	ICF Box	ICF-felt
+	Show Sample	Vis eksempel
+	Hide Sample	Skjul eksempel
+	Max Ascent/Descent	Maks. højde/dybde
+	Max Ascender	Maks. overhøjde
 	Copy Color Value (Hex)	Kopiér farveværdi (hex)
 	Create New Swatch…	Opret ny farveprøve…
 	Name 40%	Navn 40%
@@ -5452,6 +5465,11 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Vis glat farvehjul
 	Show segmented color wheel	Vis segmenteret farvehjul
 	Show color bars	Vis farvebjælker
+	Show brightness and hue on wheel	Vis lysstyrke og farvetone på hjulet
+	Show saturation and hue on wheel	Vis mætning og farvetone på hjulet
+	Add Color Tool	Værktøjet Tilføj farve
+	Remove Color Tool	Værktøjet Fjern farve
+	Remove Color	Fjern farve
 	Find the selected colors in the artwork	Find de valgte farver i grafikken
 	Harmony Rules	Harmoniregler
 	Keep this row's colors (exclude)	Behold farverne i denne række (ekskludér)
@@ -6092,6 +6110,8 @@ theme	Appearance	Udseende
 	Find Font Files	Find skrifttypefiler
 	Add Font Files	Tilføj skrifttypefiler
 	Font List	Skrifttypeliste
+	Show Similar Fonts	Vis lignende skrifttyper
+	Clear Similar Fonts	Ryd lignende skrifttyper
 	Fonts in Document	Skrifttyper i dokumentet
 	Refresh Font List	Opdatér skrifttypeliste
 	Replace Font	Erstat skrifttype
@@ -6127,6 +6147,7 @@ theme	Appearance	Udseende
 	Connect Data Points	Forbind datapunkter
 	Edge-to-Edge Lines	Linjer fra kant til kant
 	Draw Filled Lines	Tegn udfyldte linjer
+	Line Width	Linjebredde
 	Tick Values	Afmærkningsværdier
 	Override Calculated Values	Tilsidesæt beregnede værdier
 	Divisions	Inddelinger
@@ -7131,6 +7152,7 @@ imageTrace	Outline	Kontur
 @msg	Divide Objects Below: select exactly one path	Opdel objekter nedenunder: markér præcis én kurve
 @msg	Downloaded {what}	Downloadede {what}
 @msg	Expand Appearance: the selection has a basic appearance	Udvid udseende: markeringen har et grundlæggende udseende
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	nogle rastereffekter blev ikke lavet om til billeder: de ville kræve mere end 1.024 billeder eller i alt 256 megapixel
 @msg	Expand: no brush strokes selected	Udvid: ingen penselstrøg er markeret
 @msg	Expand: no gradient fills	Udvid: ingen gradientfyld
 @msg	Expand: nothing to expand	Udvid: intet at udvide
@@ -8386,7 +8408,7 @@ mark-style	Japanese	Japansk
 @msg	Unknown dimension orientation	Ukendt målretning
 @msg	Unknown dimension style	Ukendt målstil
 @msg	Unknown unit	Ukendt enhed
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Luk de runde ender af åbne profiler. Delvise omdrejninger beholder deres skårne sider åbne.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Luk de runde ender af åbne profiler. Delvise omdrejninger lukker også deres skårne sider.
 	Darkness	Mørke
 	Isolate Selected Object	Isolér markeret objekt
 	Keep selected	Behold markeret
@@ -8791,6 +8813,7 @@ swatch	Bright Violet	Kraftig violet
 	Single Word Justification:	Justering af enkeltord:
 	Full Justify	Lige margener
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum må ikke overstige Ønsket, og Ønsket ikke Maksimum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Minimum må ikke overstige Ønsket, og Ønsket ikke Maksimum
 	Justification	Justering
 	Add filters from the list above	Tilføj filtre fra listen ovenfor
 	Add to Stack	Tilføj til stak
@@ -9497,6 +9520,22 @@ breakText	Glyphs	Glyffer
 	Remove Gaps	Fjern mellemrum
 @msg	that makes too many pieces (at most 100000): make the dashes longer	det giver for mange stykker (højst 100000): gør stregerne længere
 @msg	select paths, or segments, to divide	vælg stier eller segmenter, der skal opdeles
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Fælles tangenter…
+	Common Tangents	Fælles tangenter
+	Tangents	Tangenter
+	Centerline	Midterlinje
+	External	Ydre
+	Internal	Indre
+@msg	select two closed paths	vælg to lukkede stier
+@msg	a selected path is open	en valgt sti er åben
+@msg	a selected path is not convex	en valgt sti er ikke konveks
+@msg	a selected path has no area	en valgt sti har intet areal
+@msg	a selected path has more than 10000 segments	en valgt sti har mere end 10000 segmenter
+@msg	the two paths have the same outline	de to stier har samme omrids
+@msg	One path lies inside the other, so they have no common tangents	Den ene sti ligger inden i den anden, så de har ingen fælles tangenter
+@msg	The paths overlap, so they have no internal tangents	Stierne overlapper, så de har ingen indre tangenter
+@msg	One path lies inside the other, so they have no internal tangents	Den ene sti ligger inden i den anden, så de har ingen indre tangenter
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Udvid streger til stier
 @msg	select paths with dashed strokes to expand	vælg stier med stiplet streg, der skal udvides
@@ -9539,6 +9578,11 @@ breakText	Glyphs	Glyffer
 	Malayalam	Malayalam
 	Odia	Oriya
 	Urdu	Urdu
+	Sanskrit	Sanskrit
+	Nepali	Nepalesisk
+	Assamese	Assamesisk
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} og nyere (version {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Eksportér alle åbne dokumenter som PDF
@@ -9572,7 +9616,7 @@ breakText	Glyphs	Glyffer
 @msg	stroke cannot be set on a symbol instance	stroke kan ikke angives for en symbolforekomst
 @msg	fill on a symbol instance must be a solid color or none	fill på en symbolforekomst skal være en ensfarvet farve eller none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kan ikke angives for et billede uden effekten Konvertér til form eller Objekt til kontur
-@msg	pass newName, registration, exportType, nineSlice and/or type	angiv newName, registration, exportType, nineSlice og/eller type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	angiv newName, registration, exportType, nineSlice, type og/eller alignToPixelGrid
 	Text Flow	Tekstflow
 	By Rows	Efter rækker
 	By Columns	Efter kolonner
@@ -9816,4 +9860,24 @@ breakText	Glyphs	Glyffer
 	No objects are selected.	Ingen objekter er markeret.
 	Open a document to mark its fold lines.	Åbn et dokument for at markere dets foldelinjer.
 	Remove Fold Line Role	Fjern linjetype
+	Check	Kontrollér
+	Check Fold Lines	Kontrollér foldelinjer
+@msg	No cut lines are in the selection.	Der er ingen skærelinjer i markeringen.
+@msg	No cut lines are in the document.	Der er ingen skærelinjer i dokumentet.
+@msg	The cut lines do not enclose an area.	Skærelinjerne omslutter ikke et område.
+@msg	A cut line ends without meeting another cut line.	En skærelinje slutter uden at møde en anden skærelinje.
+@msg	A gap between cut lines was closed.	Et mellemrum mellem skærelinjer blev lukket.
+@msg	The fold lines are too complex to check.	Foldelinjerne er for komplekse til at kontrollere.
+@msg	A cut line and a crease lie on top of each other.	En skærelinje og en rillelinje ligger oven på hinanden.
+@msg	No cut lines are among the given objects.	Der er ingen skærelinjer blandt de angivne objekter.
+@msg	Two fold lines lie on top of each other.	To foldelinjer ligger oven på hinanden.
+@msg	A crease ends inside a panel.	En rillelinje slutter inde i et panel.
+@msg	A crease does not divide two panels.	En rillelinje deler ikke to paneler.
+@msg	A crease lies outside the cut outline, wholly or in part.	En rillelinje ligger helt eller delvist uden for skærekonturen.
+@msg	The pieces of a hinge are not on one straight line.	Delene af et hængsel ligger ikke på én ret linje.
+@msg	A gap between cut lines is too narrow to tell apart.	Et mellemrum mellem skærelinjer er for smalt til at skelne.
+@msg	A cut-out area holds other fold lines or another blank.	Et udskåret område indeholder andre foldelinjer eller et andet emne.
+@msg	A panel is not joined to the rest by a crease.	Et panel er ikke forbundet med resten af en rillelinje.
+@msg	A fold line is on a non-printing layer.	En foldelinje ligger på et lag, der ikke udskrives.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, hængsler: {hinges}, fejl: {errors}, advarsler: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
