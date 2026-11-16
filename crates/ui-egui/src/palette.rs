@@ -562,10 +562,20 @@ fn remember(list: &mut Vec<String>, id: &str, known: impl Fn(&str) -> bool) {
     list.truncate(end.unwrap_or(list.len()).min(MAX_SAVED_RECENT_COMMANDS));
 }
 
+/// The command that opens and closes the palette. A pick of it is not recorded in Recent Commands:
+/// as the first recent pick, Enter on an empty search would close the palette and open it again.
+const PALETTE_TOGGLE: &str = "help.commandPalette";
+
 /// The entries the Recent Commands list shows for the ids `ids`, most recent first. An id with no
-/// entry (a removed plug-in) is skipped.
+/// entry (a removed plug-in) and the palette's own toggle, saved before its picks were left out,
+/// are skipped.
 fn recent<'a>(entries: &'a [Entry], ids: &[String]) -> Vec<&'a Entry> {
-    ids.iter().take(MAX_SAVED_RECENT_COMMANDS).filter_map(|id| entries.iter().find(|e| e.id == *id)).take(MAX_RECENT_COMMANDS).collect()
+    ids.iter()
+        .take(MAX_SAVED_RECENT_COMMANDS)
+        .filter(|id| *id != PALETTE_TOGGLE)
+        .filter_map(|id| entries.iter().find(|e| e.id == *id))
+        .take(MAX_RECENT_COMMANDS)
+        .collect()
 }
 
 /// The id of the Recent Commands list's popup.
@@ -746,7 +756,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             // The list shows as many rows as fit above the footer in the window, up to
             // VISIBLE_ROWS; a page is that many rows.
             let spacing = ui.spacing().item_spacing.y;
-            let footer_height = spacing + 6.0 + ui.text_style_height(&egui::TextStyle::Body) + f32::from(margin) + BOTTOM_GAP;
+            // Under the recent picks no footer line is drawn.
+            let footer_line = if empty { 0.0 } else { spacing + 6.0 + ui.text_style_height(&egui::TextStyle::Body) };
+            let footer_height = footer_line + f32::from(margin) + BOTTOM_GAP;
             let room = screen.bottom() - footer_height - ui.cursor().top() - spacing;
             let rows = ((room / ROW_HEIGHT).floor().max(1.0) as usize).min(VISIBLE_ROWS);
             sel = moves.apply(sel, n, rows);
@@ -816,6 +828,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 ui.add_space(6.0);
                 ui.label(egui::RichText::new(footer(n, total)).color(t.text_dim));
             } else if n == 0 {
+                ui.add_space(6.0);
                 ui.label(egui::RichText::new(tl!("No recent commands")).color(t.text_dim));
             }
             if !list_open
@@ -854,7 +867,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     });
     if let Some(id) = run {
         app.ui.palette_open = false;
-        remember(&mut app.ui.recent_commands, &id, |c| entries.list.iter().any(|e| e.id == c));
+        if id != PALETTE_TOGGLE {
+            remember(&mut app.ui.recent_commands, &id, |c| entries.list.iter().any(|e| e.id == c));
+        }
         run_pick(app, &id);
     } else if outside {
         app.ui.palette_open = false;
@@ -1514,6 +1529,51 @@ mod tests {
         assert!(top.2 >= f64::from(open.popup().top()), "the first row is in view: {shown:?}");
     }
 
+    /// A pick of the palette's own toggle is not recorded, and one saved earlier is not listed, so
+    /// Enter on an empty search runs the last other pick.
+    #[test]
+    fn the_palette_toggle_is_not_a_recent_pick() {
+        let mut open = Open::new("search commands", WINDOW);
+        open.app.ui.recent_commands = vec!["paint.swap".into()];
+        let k = open.listed().iter().position(|id| id == PALETTE_TOGGLE).expect("the toggle's result");
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, k);
+        assert_eq!(open.highlighted(), k);
+        open.press(egui::Key::Enter, 1);
+        assert_eq!(open.app.ui.recent_commands, ["paint.swap"]);
+        open.app.ui.recent_commands = vec![PALETTE_TOGGLE.into(), "paint.swap".into()];
+        open.app.ui.palette_query.clear();
+        open.app.ui.palette_open = true;
+        open.frame(vec![]);
+        assert_eq!(open.listed(), ["paint.swap"]);
+        let nodes = open.frame(vec![]);
+        let shown: Vec<(String, bool)> = rows(&nodes).into_iter().map(|r| (r.0, r.1)).collect();
+        assert_eq!(shown, [(row_labels(&open.ctx, &["paint.swap"])[0].clone(), true)]);
+    }
+
+    /// A click on a lower row of the empty search's list runs that pick and moves it to the top of
+    /// Recent Commands.
+    #[test]
+    fn a_click_on_a_recent_pick_runs_it_and_moves_it_first() {
+        let mut open = Open::new("", WINDOW);
+        open.app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        open.app.ui.recent_commands = vec!["object.group".into(), "paint.swap".into()];
+        open.app.ui.palette_open = true;
+        let nodes = open.frame(vec![]);
+        let row = rows(&nodes).into_iter().nth(1).expect("the second pick's row");
+        assert_eq!(row.0, row_labels(&open.ctx, &["paint.swap"])[0]);
+        let before = open.app.session.active().unwrap().history.undo.len();
+        let at = egui::pos2(open.popup().right() - 24.0, ((row.2 + row.3) / 2.0) as f32);
+        let button =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        open.frame(vec![egui::Event::PointerMoved(at)]);
+        open.frame(vec![button(true)]);
+        open.frame(vec![button(false)]);
+        assert!(!open.app.ui.palette_open, "the palette closes");
+        assert_eq!(open.app.session.active().unwrap().history.undo.len(), before + 1, "{}", open.app.ui.status);
+        assert_eq!(open.app.ui.recent_commands, ["paint.swap", "object.group"]);
+    }
+
     /// #1757: Up and Down move the highlighted result, wrapping at the ends; a new query starts
     /// from the first again.
     #[test]
@@ -2046,7 +2106,13 @@ mod tests {
         /// The results the palette lists for its query.
         fn listed(&self) -> Vec<String> {
             let entries = entries(&self.ctx, Lang::EN);
-            matching(&entries, &self.app.ui.palette_query.to_lowercase()).iter().take(MAX_RESULTS).map(|e| e.id.clone()).collect()
+            // An empty search lists the recent picks, as `show` does.
+            let listed = if self.app.ui.palette_query.trim().is_empty() {
+                recent(&entries.list, &self.app.ui.recent_commands)
+            } else {
+                matching(&entries, &self.app.ui.palette_query.to_lowercase())
+            };
+            listed.iter().take(MAX_RESULTS).map(|e| e.id.clone()).collect()
         }
     }
 
