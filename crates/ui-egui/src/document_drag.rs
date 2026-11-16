@@ -196,9 +196,14 @@ pub(crate) fn drop_on_canvas(app: &mut VectorcraftApp, resp: &Response, xf: &can
     if resp.contains_pointer() {
         resp.ctx.set_cursor_icon(if same && !copy { egui::CursorIcon::Move } else { egui::CursorIcon::Copy });
     }
-    if let Some(art) = resp.dnd_release_payload::<Artwork>()
-        && let Some(at) = resp.ctx.input(released_at).map(|p| xf.to_doc(p))
+    // The canvas takes a release where the button went up, as [`cleanup`] judges it, and not where
+    // a later move in the same frame leaves the pointer.
+    let ctx = &resp.ctx;
+    let over = |p: egui::Pos2| resp.interact_rect.contains(p) && !ctx.layer_id_at(p).is_some_and(|l| l != resp.layer_id);
+    if let Some(p) = ctx.input(|i| i.pointer.primary_released().then(|| released_at(i)).flatten()).filter(|p| over(*p))
+        && let Some(art) = egui::DragAndDrop::take_payload::<Artwork>(ctx)
     {
+        let at = xf.to_doc(p);
         let result = if same {
             // Back in the source tab, resume the ordinary move (Alt copies).
             let copy = release_alt(&resp.ctx);
