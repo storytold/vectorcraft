@@ -3623,9 +3623,15 @@ fn a_drag_over_a_wide_blur_draws_the_blur_from_the_still_frame() {
         app.run("select.set", json!({"ids": [square]})).unwrap();
         app.select_tool("selection");
         let ctx = egui::Context::default();
-        // One headless frame with `events`, then, on the worker, frames until the frame it renders
-        // for them is shown.
-        let run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        // The worker's jobs are rendered here by the code the worker thread runs (`render_job`), one
+        // at a time, and each reports 50 ms: what the canvas draws, and how many frames run, does
+        // not depend on how long a render takes.
+        let (worker, jobs, completed) = crate::render_worker::Worker::test_channel();
+        let mut worker = Some(worker);
+        let (mut worker_renderer, mut kept) = (vectorcraft_render::Renderer::new(), None);
+        // One headless frame with `events`, then, on the worker, a frame that shows the frame it
+        // rendered for them.
+        let mut run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
             let frame = |app: &mut VectorcraftApp, events| {
                 let raw =
                     egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1440.0, 870.0))), events, ..Default::default() };
@@ -3633,9 +3639,22 @@ fn a_drag_over_a_wide_blur_draws_the_blur_from_the_still_frame() {
                 out.textures_delta.clear();
             };
             frame(app, events);
-            let until = std::time::Instant::now() + std::time::Duration::from_secs(60);
-            while app.canvas.worker.as_ref().is_some_and(|w| w.pending.is_some()) && std::time::Instant::now() < until {
-                std::thread::sleep(std::time::Duration::from_millis(5));
+            while app.canvas.worker.as_ref().is_some_and(|w| w.pending.is_some()) {
+                let mut job = jobs.try_recv().expect("the pending frame was submitted");
+                while let Ok(newer) = jobs.try_recv() {
+                    job = newer;
+                }
+                let made = job.scope.clone().run(|| job.effects.view(|| crate::canvas::render_job(&mut worker_renderer, &mut kept, &job)));
+                let done = crate::render_worker::Done {
+                    key: job.key,
+                    doc: job.doc,
+                    opts: job.opts,
+                    img: made.img,
+                    ms: 50.0,
+                    moved: made.moved,
+                    reused: made.reused,
+                };
+                completed.send(done).unwrap();
                 frame(app, vec![]);
             }
         };
@@ -3645,7 +3664,7 @@ fn a_drag_over_a_wide_blur_draws_the_blur_from_the_still_frame() {
             (vm.zoom, vm.center) = (2.0, Point::new(290.0, 410.0));
         }
         if on_worker {
-            app.canvas.worker = crate::render_worker::Worker::spawn(ctx.clone());
+            app.canvas.worker = worker.take();
             app.canvas.last_ms = 50.0;
         }
         run(&mut app, vec![]);
@@ -3659,11 +3678,7 @@ fn a_drag_over_a_wide_blur_draws_the_blur_from_the_still_frame() {
             run(&mut app, vec![egui::Event::PointerMoved(at + vec2(13.0, 7.0) * step)]);
             assert!(app.canvas.key.as_ref().is_some_and(|k| k.interacting && k.dragging), "step {step}, on the worker: {on_worker}");
             assert_eq!(app.canvas.from_worker, on_worker, "step {step}");
-            assert!(
-                !moved(&app),
-                "the blur drawn from the still frame's raster, step {step}, on the worker: {on_worker} ({} ms)",
-                app.perf.render_ms
-            );
+            assert!(!moved(&app), "the blur drawn from the still frame's raster, step {step}, on the worker: {on_worker}");
         }
         run(&mut app, vec![button(at + vec2(39.0, 21.0), false)]);
         let info = app.run("document.inspect", json!({})).unwrap();
