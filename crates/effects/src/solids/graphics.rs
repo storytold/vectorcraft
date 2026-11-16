@@ -28,7 +28,7 @@ use vectorcraft_doc::color::{BlendMode, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, Symbol};
 use vectorcraft_geom::kurbo::{CubicBez, ParamCurve, PathEl, Shape};
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, SubPath, Vec2};
-use vectorcraft_three_d::{FaceMap, Facet, PlanarFace};
+use vectorcraft_three_d::{DepthPlane, FaceMap, Facet, PlanarFace};
 
 /// The effect parameter that holds the graphics.
 pub const GRAPHICS: &str = "graphics";
@@ -1017,8 +1017,8 @@ pub struct GraphicFrame {
 
 /// The pieces of Inflate's front and puffed back that show their outside to the viewer, as the
 /// graphics are drawn on them ([`surface_parts`]): each piece's face, its corners in the art's plane
-/// (offsets from the center of the object's bounds) and on the page, and its depth (larger is
-/// nearer).
+/// (offsets from the center of the object's bounds) and on the page, its depth (larger is nearer)
+/// and its plane, for its depth at a point of the page.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct MembraneFrame {
     pieces: Vec<MembranePiece>,
@@ -1030,6 +1030,15 @@ struct MembranePiece {
     uv: [Point; 3],
     page: [Point; 3],
     depth: f64,
+    plane: Option<DepthPlane>,
+}
+
+impl MembranePiece {
+    /// The piece's depth at page point `p`: its plane's depth there, or its own depth when it has
+    /// no plane or the plane gives none.
+    fn depth_at(&self, p: Point) -> f64 {
+        self.plane.and_then(|plane| plane.depth_at(p)).unwrap_or(self.depth)
+    }
 }
 
 impl MembraneFrame {
@@ -1043,15 +1052,15 @@ impl MembraneFrame {
                 let cell = f.surface.as_ref().filter(|c| c.outward)?;
                 let uv = <[Point; 3]>::try_from(cell.uv.as_slice()).ok()?;
                 let page = <[Point; 3]>::try_from(cell.page.as_slice()).ok()?;
-                Some(MembranePiece { face, uv, page, depth: f.depth })
+                Some(MembranePiece { face, uv, page, depth: f.depth, plane: f.plane })
             })
             .collect();
         Self { pieces }
     }
 
     /// Point `p` of `face` in the art's plane mapped onto the page, or with `from_page` a page point
-    /// mapped into the art's plane, through the nearest piece of that face that holds it. `None`
-    /// when no piece the viewer sees holds it.
+    /// mapped into the art's plane, through the piece of that face that holds it and is nearest at
+    /// that point of the page. `None` when no piece the viewer sees holds it.
     fn map(&self, face: PlanarFace, p: Point, from_page: bool) -> Option<Point> {
         let inside = |t: &[Point; 3], q: Point| {
             let side = |a: Point, b: Point| (b - a).cross(q - a);
@@ -1061,11 +1070,13 @@ impl MembraneFrame {
         let mut best: Option<(Point, f64)> = None;
         for piece in self.pieces.iter().filter(|piece| piece.face == face) {
             let (from, to) = if from_page { (&piece.page, &piece.uv) } else { (&piece.uv, &piece.page) };
-            if !inside(from, p) || best.is_some_and(|(_, depth)| depth >= piece.depth) {
+            if !inside(from, p) {
                 continue;
             }
-            if let Some(q) = triangle_map(from, to).map(|m| m * p).filter(|q| q.is_finite()) {
-                best = Some((q, piece.depth));
+            let Some(q) = triangle_map(from, to).map(|m| m * p).filter(|q| q.is_finite()) else { continue };
+            let depth = piece.depth_at(if from_page { p } else { q });
+            if best.is_none_or(|(_, nearest)| depth > nearest) {
+                best = Some((q, depth));
             }
         }
         best.map(|(q, _)| q)

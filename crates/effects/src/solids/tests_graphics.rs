@@ -1032,3 +1032,27 @@ fn an_inflate_frame_puts_the_handle_on_the_puff_and_reads_it_back() {
     let (x, y) = frame.offset_at(PlanarFace::Back, page).unwrap();
     assert!((x - 15.0).abs() < 1e-6 && (y - 5.0).abs() < 1e-6, "{x} {y}");
 }
+
+/// Where two pieces of an Inflate face overlap on the page, a point maps through the piece nearer
+/// at that point, though the other is nearer at its center.
+#[test]
+fn overlapping_inflate_pieces_map_a_point_through_the_one_nearer_there() {
+    let page = [Point::new(0.0, 0.0), Point::new(20.0, 0.0), Point::new(10.0, 20.0)];
+    let piece = |shift: f64, depth: f64, normal: [f64; 3], offset: f64| MembranePiece {
+        face: PlanarFace::Front,
+        uv: page.map(|p| p + Vec2::new(shift, 0.0)),
+        page,
+        depth,
+        plane: Some(DepthPlane { normal, offset, center: Point::ORIGIN, eye: None }),
+    };
+    // The tilted piece is nearer at its center (depth 10) but at depth 0 where x is 10; the flat
+    // one lies at depth 5 everywhere.
+    let tilted = piece(0.0, 10.0, [1.0, 0.0, 1.0], 10.0);
+    let flat = piece(100.0, 5.0, [0.0, 0.0, 1.0], 5.0);
+    let frame = GraphicFrame::inflated(Rect::new(0.0, 0.0, 20.0, 20.0), MembraneFrame { pieces: vec![tilted, flat] });
+    let (x, y) = frame.offset_at(PlanarFace::Front, Point::new(10.0, 5.0)).unwrap();
+    assert!((x - 110.0).abs() < 1e-6 && (y - 5.0).abs() < 1e-6, "{x} {y}");
+    // Near the tilted piece's left corner it is the nearer one.
+    let (x, _) = frame.offset_at(PlanarFace::Front, Point::new(2.0, 0.5)).unwrap();
+    assert!((x - 2.0).abs() < 1e-6, "{x}");
+}
