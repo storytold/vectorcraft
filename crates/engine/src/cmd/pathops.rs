@@ -677,6 +677,10 @@ fn run_pf(s: &mut Session, p: &Value, op: PathfinderOp) -> Result<Value> {
     }
     let shape_mode =
         matches!(op, PathfinderOp::Unite | PathfinderOp::MinusFront | PathfinderOp::Intersect | PathfinderOp::Exclude | PathfinderOp::MinusBack);
+    // An operand its clipping masks hide altogether is an empty shape for the operations whose
+    // result it changes (Intersect gives nothing, Minus Front loses its back object, Minus Back its
+    // front one, Crop its cropping shape); the others leave it out, which gives the same art.
+    let keeps_hidden = matches!(op, PathfinderOp::Intersect | PathfinderOp::MinusFront | PathfinderOp::MinusBack | PathfinderOp::Crop);
     let label = pf_label(op);
     let options = pf_options(s, p, &format!("object.pathfinder.{}", pf_id(op)))?;
     let ids = s.edit(label, |d, sel| {
@@ -684,39 +688,41 @@ fn run_pf(s: &mut Session, p: &Value, op: PathfinderOp) -> Result<Value> {
         let mut styles: Vec<Style> = vec![];
         let mut shapes: Vec<po::Shape> = vec![];
         let mut names: Vec<Option<String>> = vec![];
-        let mut push = |mut path: PathData, mut rule: FillRule, mut st: Style, name: Option<String>, clip: Option<&Clip>| -> Result<()> {
-            if path.is_empty() {
-                return Ok(());
-            }
-            // Trim, Merge and Crop remove any strokes (and Merge then merges by fill alone), as the
-            // public Pathfinder documentation describes.
-            if matches!(op, PathfinderOp::Trim | PathfinderOp::Merge | PathfinderOp::Crop) {
-                st.appearance.items.retain(|i| !matches!(i, AppearanceItem::Stroke(_)));
-            }
-            if op == PathfinderOp::Divide && st.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Fill(f) if !f.paint.is_none())) {
-                // Filled open contours keep their implicit closing edge. A zero-area line
-                // stays a cutter; normalised area also catches zero-signed-area self crossings.
-                for sub in path.subpaths.iter_mut().filter(|sp| !sp.closed) {
-                    sub.closed = po::encloses_area(sub) || po::area(&PathData::single(sub.clone()), rule) > 0.0;
-                }
-            }
-            if let Some(clip) = clip {
-                (path, rule) = clipped(path, rule, clip, op == PathfinderOp::Divide, options.precision)?;
-                if path.is_empty() {
+        // `hidden`: the masks hide the operand altogether, and its empty path stands for it.
+        let mut push =
+            |mut path: PathData, mut rule: FillRule, mut st: Style, name: Option<String>, clip: Option<&Clip>, hidden: bool| -> Result<()> {
+                if path.is_empty() && !(hidden && keeps_hidden) {
                     return Ok(());
                 }
-            }
-            let key = match styles.iter().position(|x| *x == st) {
-                Some(k) => k,
-                None => {
-                    styles.push(st);
-                    styles.len() - 1
+                // Trim, Merge and Crop remove any strokes (and Merge then merges by fill alone), as the
+                // public Pathfinder documentation describes.
+                if matches!(op, PathfinderOp::Trim | PathfinderOp::Merge | PathfinderOp::Crop) {
+                    st.appearance.items.retain(|i| !matches!(i, AppearanceItem::Stroke(_)));
                 }
+                if op == PathfinderOp::Divide && st.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Fill(f) if !f.paint.is_none())) {
+                    // Filled open contours keep their implicit closing edge. A zero-area line
+                    // stays a cutter; normalised area also catches zero-signed-area self crossings.
+                    for sub in path.subpaths.iter_mut().filter(|sp| !sp.closed) {
+                        sub.closed = po::encloses_area(sub) || po::area(&PathData::single(sub.clone()), rule) > 0.0;
+                    }
+                }
+                if let Some(clip) = clip {
+                    (path, rule) = clipped(path, rule, clip, op == PathfinderOp::Divide, options.precision)?;
+                    if path.is_empty() && !keeps_hidden {
+                        return Ok(());
+                    }
+                }
+                let key = match styles.iter().position(|x| *x == st) {
+                    Some(k) => k,
+                    None => {
+                        styles.push(st);
+                        styles.len() - 1
+                    }
+                };
+                shapes.push(po::Shape::new(path, rule, key as u64));
+                names.push(name);
+                Ok(())
             };
-            shapes.push(po::Shape::new(path, rule, key as u64));
-            names.push(name);
-            Ok(())
-        };
         // Whether a clip group was among the selection, for the error when its mask hides it all.
         let mut masked = false;
         for id in &roots {
@@ -742,21 +748,28 @@ fn run_pf(s: &mut Session, p: &Value, op: PathfinderOp) -> Result<Value> {
                         parts.push((l, p, r));
                     }
                 }
-                let Some((top, ..)) = parts.last() else { continue };
+                let name = n.name.clone().or_else(|| parts.iter().find_map(|(l, ..)| l.name.clone()));
+                let Some((top, ..)) = parts.last() else {
+                    // The masks hide the whole group.
+                    if let Some((top, _)) = lv.last() {
+                        push(PathData::default(), FillRule::NonZero, style_of(top), name, None, true)?;
+                    }
+                    continue;
+                };
                 let top = *top;
                 let refs: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, p, r)| (p, *r)).collect();
-                let name = n.name.clone().or_else(|| parts.iter().find_map(|(l, ..)| l.name.clone()));
                 push(
                     po::try_unite_all_with(&refs, options.precision).map_err(|e| EngineError::Other(e.to_string()))?,
                     FillRule::NonZero,
                     style_of(top),
                     name,
                     None,
+                    false,
                 )?;
             } else {
                 for (l, clip) in &lv {
                     if let Some((p, r)) = node_path(l) {
-                        push(p, r, style_of(l), n.name.clone().or_else(|| l.name.clone()), clip.as_deref())?;
+                        push(p, r, style_of(l), n.name.clone().or_else(|| l.name.clone()), clip.as_deref(), clip.is_some())?;
                     }
                 }
             }

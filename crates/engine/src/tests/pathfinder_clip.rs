@@ -241,3 +241,45 @@ fn art_the_masks_hide_altogether_is_refused_with_a_reason() {
     assert!(e.contains("clipping masks hide"), "{e}");
     assert_eq!(s.doc().unwrap().history.undo.len(), undo, "nothing changes");
 }
+
+/// A clip group its mask hides altogether, selected with a red square at (0, 0) and a blue one at
+/// (50, 50), each 100 pt, at `position` in the stacking order (0: at the back).
+fn with_a_hidden_clip_group(s: &mut Session, position: usize) {
+    let mut ids = vec![];
+    for i in 0..3 {
+        if i == position {
+            // Two members, so among other objects the group is one shape: their union.
+            let a = rect(s, 300.0, 300.0, 100.0, 100.0, green());
+            let b = rect(s, 450.0, 300.0, 100.0, 100.0, green());
+            let mask = rect(s, 0.0, 0.0, 100.0, 100.0, green());
+            ids.push(clip(s, &[a, b, mask]));
+        } else {
+            let at = if ids.len() == usize::from(position == 0) { 0.0 } else { 50.0 };
+            ids.push(rect(s, at, at, 100.0, 100.0, if at == 0.0 { red() } else { blue() }));
+        }
+    }
+    select(s, &ids);
+}
+
+/// A selected object its masks hide altogether is an empty operand: Intersect, Minus Front with
+/// it at the back, Minus Back with it in front and Crop with it on top give nothing, and the other
+/// operations make what they make without it.
+#[test]
+fn a_hidden_operand_is_an_empty_shape_where_it_changes_the_result() {
+    for (op, position) in [("intersect", 1), ("minusFront", 0), ("minusBack", 2), ("crop", 2)] {
+        let mut s = session();
+        with_a_hidden_clip_group(&mut s, position);
+        let undo = s.doc().unwrap().history.undo.len();
+        let e = s.execute(&format!("object.pathfinder.{op}"), &json!({})).unwrap_err().to_string();
+        assert!(e.contains("empty result"), "{op}: {e}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{op}: nothing changes");
+    }
+    for (op, position, want) in [("unite", 2, 17500.0), ("exclude", 2, 15000.0), ("minusFront", 2, 7500.0), ("minusBack", 0, 7500.0)] {
+        let mut s = session();
+        with_a_hidden_clip_group(&mut s, position);
+        let ps = pieces(&mut s, &format!("object.pathfinder.{op}"));
+        let total: f64 = ps.iter().map(area).sum();
+        assert!((total - want).abs() < 1.0, "{op}: {total}, want {want}");
+        assert!(ps.iter().all(|p| p.0 != Paint::solid(green())), "{op}: the hidden group's style: {ps:?}");
+    }
+}
