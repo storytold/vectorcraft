@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{ColorMode, Document, Node, NodeId, NodeKind, RepeatKind, RepeatSpec};
-use vectorcraft_geom::{Affine, Rect};
+use vectorcraft_geom::{Affine, FillRule, Rect};
 use vectorcraft_text::embed::Embedding;
 
 use super::{CommandSpec, Result, Session, bad, bool_or, cmd, has_doc, has_selection, str_param, targets};
@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document: {…, units (English), unitId: the units' Preferences › Units id (points, millimeters, feetInches, …), rasterEffectsPpi}, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), objectArea: pt² (the paths' total filled area, compound paths' holes subtracted by winding, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), fontDetails: [{font, match: exact|style|missingWithFallback|missing, family, style, file, embedding: allowed|editing|previewPrint|forbidden|null}] (each font of fonts, in order: how it was found, the face shown (null when none), that face's file name (null for a built-in face) and what its license allows), images, imageObjects: [{name, width, height, linked, file}] (the image objects in the order Linked Images and Embedded Images list them; file: what a linked image's row shows, null for an embedded one), swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient that color a part of it above opacity 0 (a stop at opacity 0 counts only where it mixes with a stop above opacity 0 over a stretch of some width), at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients, kinds}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else its kind's name, such as Linear gradient; kinds gives each one's kind, linear|radial|conic|diamond|freeform, when it is named by its kind, else null; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone. brushNames, brushes, spotObjects, patternObjects and gradientObjects leave out hidden objects, objects at an opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0 (with selectionOnly too), their characters' paints and colorized images included; objects still counts them as paths, groups and the other kinds",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document: {…, units (English), unitId: the units' Preferences › Units id (points, millimeters, feetInches, …), rasterEffectsPpi}, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), objectArea: pt² (the paths' total filled area, a compound path's disjoint regions added and its holes subtracted by its fill rule, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), fontDetails: [{font, match: exact|style|missingWithFallback|missing, family, style, file, embedding: allowed|editing|previewPrint|forbidden|null}] (each font of fonts, in order: how it was found, the face shown (null when none), that face's file name (null for a built-in face) and what its license allows), images, imageObjects: [{name, width, height, linked, file}] (the image objects in the order Linked Images and Embedded Images list them; file: what a linked image's row shows, null for an embedded one), swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient that color a part of it above opacity 0 (a stop at opacity 0 counts only where it mixes with a stop above opacity 0 over a stretch of some width), at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients, kinds}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else its kind's name, such as Linear gradient; kinds gives each one's kind, linear|radial|conic|diamond|freeform, when it is named by its kind, else null; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone. brushNames, brushes, spotObjects, patternObjects and gradientObjects leave out hidden objects, objects at an opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0 (with selectionOnly too), their characters' paints and colorized images included; objects still counts them as paths, groups and the other kinds",
             has_doc,
             info
         ),
@@ -498,6 +498,39 @@ fn path_area(path: &vectorcraft_geom::PathData) -> f64 {
     path.subpaths.iter().map(|sp| sp.signed_area()).sum()
 }
 
+/// The members of the compound paths in `roots`, descendants searched: their area is their
+/// compound path's, so the walk over the selection does not count it a second time.
+fn compound_members_in(roots: &[(&Node, bool)]) -> HashSet<*const Node> {
+    let mut members = HashSet::new();
+    let mut pending: Vec<&Node> = roots.iter().map(|(n, _)| *n).collect();
+    while let Some(n) = pending.pop() {
+        if let NodeKind::Compound { children, .. } = &n.kind {
+            members.extend(children.iter().map(|c| std::ptr::from_ref(&**c)));
+        }
+        if let Some(children) = n.children() {
+            pending.extend(children.iter().map(|c| &**c));
+        }
+    }
+    members
+}
+
+/// The area a compound path's members fill together under its `rule`: disjoint regions add up
+/// (their signed areas alone cancel when `object.compoundPath.make` winds two of them against each
+/// other), holes wound the other way subtract, and members that overlap count once. A fill the
+/// area routine refuses (a self-intersection at the precision it uses) falls back to the members'
+/// signed areas, as Document Info counted them before.
+fn compound_area(children: &[std::sync::Arc<Node>], rule: FillRule) -> f64 {
+    let mut subpaths = Vec::new();
+    let mut signed = 0.0;
+    for c in children {
+        if let Some(pd) = c.path_data() {
+            signed += path_area(pd);
+            subpaths.extend(pd.subpaths.iter().cloned());
+        }
+    }
+    vectorcraft_pathops::try_area(&vectorcraft_geom::PathData::new(subpaths), rule).unwrap_or(signed)
+}
+
 /// The object of `d` at index path `path`, with whether the groups and layers around it draw
 /// ([`draws`]).
 fn node_and_drawn<'a>(d: &'a Document, path: &[usize]) -> Option<(&'a Node, bool)> {
@@ -625,6 +658,12 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     // not count them again. A member visited without its compound path (selected on its own)
     // still counts.
     let mut area_skip: HashSet<*const Node> = HashSet::new();
+    // A selection can hold a compound path and one of its members, in either order: the members of
+    // the compounds in it are known before the walk counts any area, so a member beside its
+    // compound path does not count its area twice (one selected without its compound path counts).
+    if selection_only {
+        area_skip = compound_members_in(&roots);
+    }
     // The members of the document's compound paths: the compound path's own fills and strokes paint them.
     let mut members: HashSet<*const Node> = HashSet::new();
     d.walk(|n| {
@@ -666,10 +705,12 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                     Some("paths")
                 }
-                NodeKind::Compound { children, .. } => {
-                    // The members' signed areas together, so holes cut by the front paths (which
-                    // `object.compoundPath.make` runs against the backmost) subtract by winding.
-                    let a: f64 = children.iter().filter_map(|c| c.path_data()).map(path_area).filter(|a| a.is_finite()).sum();
+                NodeKind::Compound { children, rule } => {
+                    // The area its members fill together under its rule (a compound path's own fills
+                    // and strokes paint them): disjoint regions add up, where their signed areas
+                    // alone cancel when `object.compoundPath.make` winds two of them against each
+                    // other, and holes wound the other way subtract.
+                    let a = compound_area(children, *rule);
                     if a.is_finite() {
                         object_area += a.abs();
                     }
@@ -969,9 +1010,9 @@ mod tests {
     }
 
     /// Document Info › Objects gives the paths' total filled area in square points: a 100 × 50
-    /// pt rectangle is 5,000 pt², a compound path's hole subtracts by winding, a guide is left
-    /// out while a hidden path still counts, as for the length. The Objects rows show it beside
-    /// the length in the General unit squared, updating with the selection.
+    /// pt rectangle is 5,000 pt², a compound path's hole subtracts while its disjoint regions add
+    /// up, a guide is left out while a hidden path still counts, as for the length. The Objects
+    /// rows show it beside the length in the General unit squared, updating with the selection.
     #[test]
     fn info_gives_the_paths_total_area() {
         let mut s = Session::new();
@@ -982,7 +1023,7 @@ mod tests {
         // A compound path's hole subtracts: a 20 × 10 rect inside leaves 4,800.
         let hole = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 10})).unwrap()["id"].clone();
         s.execute("select.set", &json!({"ids": [rect, hole]})).unwrap();
-        s.execute("object.compoundPath.make", &json!({})).unwrap();
+        let compound = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].clone();
         assert!((area(&mut s, json!({})) - 4800.0).abs() < 1e-6);
         // The Objects rows show the area beside the length, updating with the selection.
         let rows = s.execute("document.info", &json!({"selectionOnly": true, "category": "objects"})).unwrap()["sections"][0]["rows"].clone();
@@ -1005,6 +1046,19 @@ mod tests {
         assert_eq!(area(&mut s, json!({"selectionOnly": true})), 0.0);
         let rows = s.execute("document.info", &json!({"selectionOnly": true, "category": "objects"})).unwrap()["sections"][0]["rows"].clone();
         assert!(rows.as_array().unwrap().iter().all(|r| r[0] != "Area"), "{rows}");
+        // A member selected with its compound path counts once, whichever comes first in the
+        // selection: the compound path adds the area its members fill.
+        for ids in [json!([hole, compound]), json!([compound, hole])] {
+            s.execute("select.set", &json!({"ids": ids})).unwrap();
+            assert!((area(&mut s, json!({"selectionOnly": true})) - 4800.0).abs() < 1e-6, "{ids}");
+        }
+        // Two disjoint 10 × 10 regions: Make winds them against each other, and their signed areas
+        // alone cancel; the filled area is both together.
+        let a = s.execute("shape.rectangle", &json!({"x": 0, "y": 100, "width": 10, "height": 10})).unwrap()["id"].clone();
+        let b = s.execute("shape.rectangle", &json!({"x": 20, "y": 100, "width": 10, "height": 10})).unwrap()["id"].clone();
+        s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+        s.execute("object.compoundPath.make", &json!({})).unwrap();
+        assert!((area(&mut s, json!({"selectionOnly": true})) - 200.0).abs() < 1e-6);
     }
 
     /// Document Info › Brushes lists the brushes the art's strokes use, each once with its type, and
