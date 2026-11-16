@@ -54,7 +54,7 @@ pub(crate) use face::MAX_LIVE_INSTANCES;
 pub(crate) use face::PathAlignHeights;
 pub use face::{FALLBACK_FAMILY, FontFace, IcfMargins};
 pub(crate) use glyph_pen::FlipPen;
-pub use gsub::{GlyphOrigin, JoiningPosition, Substitution, SubstitutionKind};
+pub use gsub::{GlyphCategory, GlyphCategoryKind, GlyphOrigin, JoiningPosition, Substitution, SubstitutionKind};
 #[cfg(not(target_arch = "wasm32"))]
 use names::SysFallback;
 #[cfg(test)]

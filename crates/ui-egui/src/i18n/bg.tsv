@@ -639,6 +639,11 @@ font-technology	Variable	Променливи
 	Copy Width Point	Копиране на точка на ширина
 	Copyright	Авторско право
 	Copyright Info URL:	URL адрес с информация за авторското право:
+	Save Metadata Template…	Запази шаблон за метаданни…
+	Import Options	Опции за импортиране
+	Clear existing fields and use the template's	Изчисти съществуващите полета и използвай тези от шаблона
+	Keep existing fields, but replace those the template has	Запази съществуващите полета, но замени съдържащите се в шаблона
+	Keep existing fields, but append those the template has	Запази съществуващите полета, но добави съдържащите се в шаблона
 	Copyright Notice:	Бележка за авторското право:
 	Copyright Status:	Статус на авторското право:
 	Copyright Symbol	Символ за авторско право
@@ -3578,6 +3583,9 @@ digits	Malayalam	Малаялам
 	Show Import Options	Показване на опциите за импортиране
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Питане за опциите за импортиране на всеки PDF, DXF или текстов файл преди поставянето му; изключено: използват се последно избраните опции
 	Stylistic Alternates	Стилистични алтернативи
+	Ligatures	Лигатури
+	Ornaments	Орнаменти
+	Figures	Цифри
 	Set {n}	Набор {n}
 	Swash	Декоративен елемент
 	Swatch Conflict	Конфликт на образци
@@ -5157,6 +5165,7 @@ effect	Soft	Меко
 	Change Panel Layout	Промяна на оформлението на панела
 	Close Panel	Затваряне на панела
 	Collapse Panel Group	Свиване на групата панели
+	Cycle Display Sizes	Превключване на размерите на показване
 	Move Panel	Преместване на панела
 	Group with	Групиране с
 	Resize panels	Преоразмеряване на панели
