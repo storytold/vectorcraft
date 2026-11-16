@@ -1,8 +1,6 @@
 use super::ops::MAX_DATA;
-use super::{
-    DecodeSettings, Decoder, DecoderContext, DictRef, EncodingMode, ImageBlob, Key, Obj, PsError, Rc, RefCell, Res, find, hex_decode,
-    jpeg_components, ps, ps_err,
-};
+use super::{DictRef, ImageBlob, Key, Obj, PsError, Rc, RefCell, Res, find, hex_decode, jpeg_components, ps, ps_err};
+use craft_stream_codecs::CcittParams;
 
 /// A file object: the program itself, or data a filter decoded.
 #[derive(Debug)]
@@ -163,36 +161,29 @@ fn dct(raw: &[u8]) -> Res<(Vec<u8>, usize, u8)> {
 /// `Rows`; without it they end after `Rows` rows, or at the end of the data when `Rows` is 0.
 /// Damaged data ends the rows: those decoded before it are kept, and damage in the first row is an
 /// `ioerror`. Rows that would take more than `MAX_DATA` bytes are refused.
-fn fax(raw: &[u8], settings: DecodeSettings) -> Res<(Vec<u8>, usize)> {
+fn fax(raw: &[u8], settings: CcittParams) -> Res<(Vec<u8>, usize)> {
     let row = (settings.columns as usize).div_ceil(8).max(1);
     let most = u32::try_from(MAX_DATA / row).unwrap_or(u32::MAX);
-    if !settings.end_of_block && settings.rows > most {
+    if !settings.end_of_block && settings.rows > i64::from(most) {
         return Err(PsError::Limit("decoded data is too large"));
     }
     // Without a row count that ends the data, a row past `most` shows that the data is too large.
-    let rows = if settings.end_of_block || settings.rows == 0 { most.saturating_add(1) } else { settings.rows };
+    let rows = if settings.end_of_block || settings.rows == 0 { most.saturating_add(1) } else { settings.rows as u32 };
+    // With `EndOfBlock` the rows end at the end-of-block code, whatever `Rows` says.
+    let params = if settings.end_of_block { CcittParams { rows: 0, ..settings } } else { settings };
     // The decoder reads the RTC of Group 3 two-dimensional data as rows: it gets the data before it.
-    let rtc = match settings.encoding {
-        EncodingMode::Group3_2D { .. } if settings.end_of_block => rtc(raw),
-        _ => None,
-    };
+    let rtc = if settings.k > 0 && settings.end_of_block { rtc(raw) } else { None };
     let data = rtc.and_then(|(cut, _)| raw.get(..cut)).unwrap_or(raw);
-    let mut out = FaxRows::default();
-    let read = hayro_ccitt::decode(data, &mut out, &mut DecoderContext::new(DecodeSettings { rows, ..settings }));
-    if out.rows > most {
+    let out = craft_stream_codecs::decode_ccitt_raw(data, &params, rows).map_err(|_| PsError::Limit("decoded data is too large"))?;
+    if out.rows_decoded > most {
         return Err(PsError::Limit("decoded data is too large"));
     }
-    let used = match read {
-        Ok(used) => used,
-        Err(_) if out.rows > 0 => {
-            out.data.truncate(out.rows as usize * row);
-            // The whole rows decoded again, for how many bytes they took.
-            let used = hayro_ccitt::decode(data, &mut Dropped, &mut DecoderContext::new(DecodeSettings { rows: out.rows, ..settings }));
-            used.unwrap_or(data.len())
-        }
-        Err(_) => return io("CCITTFaxDecode"),
-    };
-    Ok((out.data, rtc.map_or(used, |(_, end)| end)))
+    // Damaged data ends the rows: those decoded before it are kept, and damage in the first row
+    // is an `ioerror`.
+    if out.error.is_some() && out.rows_decoded == 0 {
+        return io("CCITTFaxDecode");
+    }
+    Ok((out.data, rtc.map_or(out.bytes_consumed, |(_, end)| end)))
 }
 
 /// The RTC that ends Group 3 two-dimensional data (six EOLs, each followed by a 1 tag bit, ITU-T
@@ -225,50 +216,6 @@ fn rtc(raw: &[u8]) -> Option<(usize, usize)> {
     None
 }
 
-/// Rows of 1-bit samples from a CCITT decoder, each padded to a whole byte: 1 is white, or black
-/// with `BlackIs1`.
-#[derive(Default)]
-struct FaxRows {
-    data: Vec<u8>,
-    /// Samples in the row being decoded.
-    x: u32,
-    /// Whole rows decoded.
-    rows: u32,
-}
-
-impl Decoder for FaxRows {
-    fn push_pixel(&mut self, white: bool) {
-        if self.x.is_multiple_of(8) {
-            self.data.push(0);
-        }
-        if white && let Some(b) = self.data.last_mut() {
-            *b |= 0x80 >> (self.x % 8);
-        }
-        self.x = self.x.saturating_add(1);
-    }
-
-    fn push_pixel_chunk(&mut self, white: bool, chunk_count: u32) {
-        self.data.extend(std::iter::repeat_n(if white { 0xff } else { 0 }, chunk_count as usize));
-        self.x = self.x.saturating_add(chunk_count.saturating_mul(8));
-    }
-
-    fn next_line(&mut self) {
-        self.x = 0;
-        self.rows = self.rows.saturating_add(1);
-    }
-}
-
-/// A CCITT decoder that drops what it decodes.
-struct Dropped;
-
-impl Decoder for Dropped {
-    fn push_pixel(&mut self, _: bool) {}
-
-    fn push_pixel_chunk(&mut self, _: bool, _: u32) {}
-
-    fn next_line(&mut self) {}
-}
-
 /// A decoding filter and its parameters.
 #[derive(Clone, Debug)]
 pub(crate) struct Filter {
@@ -278,7 +225,7 @@ pub(crate) struct Filter {
     /// `FlateDecode`'s and `LZWDecode`'s `Predictor`: what it undoes.
     pub(super) predictor: Option<Predictor>,
     /// `CCITTFaxDecode`'s parameters.
-    pub(super) fax: Option<DecodeSettings>,
+    pub(super) fax: Option<CcittParams>,
 }
 
 /// A `Predictor` (2: TIFF, 10–15: PNG) with its `Colors`, `BitsPerComponent` and `Columns`.
@@ -407,7 +354,7 @@ fn paeth(a: u8, b: u8, c: u8) -> u8 {
 /// §7.4.6): `K` (below 0 Group 4, 0 Group 3 one-dimensional, above 0 Group 3 mixed), `Columns`,
 /// `Rows`, `EndOfBlock`, `EndOfLine`, `EncodedByteAlign` and `BlackIs1`, with their defaults where
 /// `d` leaves them out. `Columns` outside 1 to 65,535 and `Rows` below 0 are a `rangecheck`.
-pub(super) fn fax_settings(d: Option<&DictRef>) -> Res<DecodeSettings> {
+pub(super) fn fax_settings(d: Option<&DictRef>) -> Res<CcittParams> {
     let get = |k: &str| d.and_then(|d| d.borrow().get(&Key::name(k)).cloned());
     let num = |k: &str, default: f64| get(k).and_then(|o| o.as_num()).unwrap_or(default);
     let flag = |k: &str, default: bool| match get(k) {
@@ -418,21 +365,23 @@ pub(super) fn fax_settings(d: Option<&DictRef>) -> Res<DecodeSettings> {
     if !k.is_finite() || !(1.0..=65_535.0).contains(&columns) || !(0.0..=f64::from(u32::MAX)).contains(&rows) {
         return ps_err("rangecheck", "CCITTFaxDecode");
     }
-    let encoding = if k < 0.0 {
-        EncodingMode::Group4
+    // Group 4 below 0, one-dimensional Group 3 at 0, mixed Group 3 above (the row's tag bit says
+    // how it is coded, so any positive `K` reads the same); `as` saturates.
+    let k = if k < 0.0 {
+        -1
     } else if k == 0.0 {
-        EncodingMode::Group3_1D
+        0
     } else {
-        EncodingMode::Group3_2D { k: k.min(f64::from(u32::MAX)) as u32 }
+        (k as i64).max(1)
     };
-    Ok(DecodeSettings {
-        columns: columns as u32,
-        rows: rows as u32,
+    Ok(CcittParams {
+        k,
+        columns: columns as i64,
+        rows: rows as i64,
         end_of_block: flag("EndOfBlock", true),
         end_of_line: flag("EndOfLine", false),
-        rows_are_byte_aligned: flag("EncodedByteAlign", false),
-        encoding,
-        invert_black: flag("BlackIs1", false),
+        encoded_byte_align: flag("EncodedByteAlign", false),
+        black_is_1: flag("BlackIs1", false),
     })
 }
 
