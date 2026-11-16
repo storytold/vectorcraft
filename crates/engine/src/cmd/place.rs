@@ -159,6 +159,16 @@ struct Loaded {
 /// of its art, and their options.
 type Slices = Vec<(Rect, SliceOptions)>;
 
+/// The most bytes [`head_is_dcs`] reads from the start of a file.
+pub const DCS_HEAD_BYTES: usize = dcs::HEAD_BYTES;
+
+/// Does `head`, the start of a file `size` bytes long (at most [`DCS_HEAD_BYTES`] of it, or all of
+/// it), name DCS plates? `file.place` places such a file as a linked image, never as a placed
+/// document. `None` when `head` can't tell.
+pub fn head_is_dcs(head: &[u8], size: u64) -> Option<bool> {
+    dcs::head_is_dcs(head, size)
+}
+
 /// Points per pixel of a raster image at the resolution it declares (72 ppi when none).
 pub(crate) fn pt_per_px(ppi: Option<(f64, f64)>) -> (f64, f64) {
     let (x, y) = ppi.unwrap_or((72.0, 72.0));
