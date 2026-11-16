@@ -64,15 +64,15 @@ fn the_scroll_bar_leaves_the_stars_clear() {
 
 /// In a wide row the sample starts after the widest name and a gap, not halfway along, even for a
 /// name wider than the menu widens itself for; the sample keeps its room, and a row too narrow for
-/// both gives the name half of it. Without samples the name runs to the star.
+/// both gives the name half of it. Without samples the name runs to the Show Similar Fonts button.
 #[test]
 fn the_sample_starts_after_the_widest_name() {
-    use super::{DISCLOSURE, NAME_GAP, NAME_MAX, SAMPLE_W, STAR, name_column};
+    use super::{DISCLOSURE, NAME_GAP, NAME_MAX, SAMPLE_W, SIMILAR, STAR, name_column};
     assert_eq!(name_column(500.0, 100.0, true), DISCLOSURE + 100.0 + NAME_GAP);
     assert_eq!(name_column(600.0, NAME_MAX + 80.0, true), DISCLOSURE + NAME_MAX + 80.0 + NAME_GAP);
-    assert_eq!(name_column(600.0, 1000.0, true), 600.0 - STAR - 2.0 - SAMPLE_W);
+    assert_eq!(name_column(600.0, 1000.0, true), 600.0 - SIMILAR - STAR - 2.0 - SAMPLE_W);
     assert_eq!(name_column(200.0, 100.0, true), 100.0);
-    assert_eq!(name_column(500.0, 100.0, false), 500.0 - STAR);
+    assert_eq!(name_column(500.0, 100.0, false), 500.0 - SIMILAR - STAR);
 }
 
 /// The widest label is the widest one laid out, though it has fewer characters than others, or
@@ -1054,4 +1054,80 @@ fn a_menu_items_sample_follows_show_samples_on_white() {
     super::wait_for_samples(&ctx);
     assert!(!shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default())), "no sample");
     assert!(shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.fill == super::SAMPLE_PAPER && r.rect == slot)), "the slot is white");
+}
+
+/// The center of the first text shape whose text passes `wanted`.
+fn text_at(shapes: &[egui::epaint::ClippedShape], wanted: impl Fn(&str) -> bool) -> Option<egui::Pos2> {
+    shapes.iter().find_map(|c| match &c.shape {
+        egui::Shape::Text(t) if wanted(t.galley.text()) => Some(t.visual_bounding_rect().center()),
+        _ => None,
+    })
+}
+
+/// Show Similar Fonts: the ≈ button of a family's row orders the listed families by likeness to
+/// it, that family first and highlighted, without the Recent Fonts section and without picking a
+/// font; the ≈ chip under the filters puts the menu's order back, and so does opening the menu
+/// again.
+#[test]
+fn show_similar_fonts_orders_the_list_by_likeness() {
+    // The bundled fonts alone: fonts that tests running alongside add stay out of the rows.
+    let db = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+    let recent = vec!["JetBrains Mono".to_string()];
+    let ctx = egui::Context::default();
+    let area = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 800.0));
+    let look = super::MenuLook { samples: false, recent: &recent, ..Default::default() };
+    let mut st = super::MenuState::default();
+    let picks = std::cell::RefCell::new(vec![]);
+    let mut frame = |events: Vec<egui::Event>, st: &mut super::MenuState| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(area), ..Default::default() }, |ui| {
+            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area));
+            picks.borrow_mut().extend(super::list_of(&mut child, &db, egui::Id::unique("similar"), st, "Inter", None, look).inner);
+        });
+        out.textures_delta.clear();
+        out.shapes
+    };
+    let click = |frame: &mut dyn FnMut(Vec<egui::Event>, &mut super::MenuState) -> Vec<egui::epaint::ClippedShape>,
+                 st: &mut super::MenuState,
+                 pos: egui::Pos2| {
+        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(vec![egui::Event::PointerMoved(pos)], st);
+        frame(vec![button(true)], st);
+        frame(vec![button(false)], st);
+        frame(vec![], st)
+    };
+    let families = |st: &super::MenuState| st.rows.iter().filter_map(super::Row::family).map(str::to_string).collect::<Vec<_>>();
+    let row_of = |st: &super::MenuState, family: &str| st.rows.iter().position(|r| r.family() == Some(family) && r.style().is_none());
+    let shapes = frame(vec![], &mut st);
+    let menu_order = families(&st);
+    assert_eq!(st.rows.first(), Some(&super::Row::Heading("Recent Fonts")));
+    // A hovered row shows its ≈ button: here Source Serif 4's, not the current family's (Inter).
+    let name = text_at(&shapes, |t| t == "Source Serif 4").expect("Source Serif 4 is listed");
+    let shapes = frame(vec![egui::Event::PointerMoved(name)], &mut st);
+    let button = shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text() == "≈" && (t.visual_bounding_rect().center().y - name.y).abs() < 2.0 => {
+                Some(t.visual_bounding_rect().center())
+            }
+            _ => None,
+        })
+        .expect("the hovered row shows ≈");
+    let shapes = click(&mut frame, &mut st, button);
+    assert_eq!(st.similar.as_deref(), Some("Source Serif 4"));
+    assert_eq!(families(&st), db.similar_families("Source Serif 4", &db.menu_family_list()));
+    assert_eq!(families(&st).first().map(String::as_str), Some("Source Serif 4"));
+    assert!(!st.rows.iter().any(|r| matches!(r, super::Row::Heading(_))), "no Recent Fonts section: {:?}", st.rows);
+    assert_eq!(st.highlight, Some(0));
+    assert!(!picks.borrow().iter().any(|p| matches!(p, super::FontPick::Chosen(..))), "no font picked: {:?}", picks.borrow());
+    // The chip under the filters clears it, and the family it ordered by stays highlighted.
+    let chip = text_at(&shapes, |t| t.starts_with("≈ Source Serif 4")).expect("the chip names the family");
+    click(&mut frame, &mut st, chip);
+    assert_eq!(st.similar, None);
+    assert_eq!(families(&st), menu_order);
+    assert_eq!(st.highlight, row_of(&st, "Source Serif 4"));
+    // Opening the menu again lists in the menu's order too.
+    st.similar = Some("Inter".into());
+    st.last = 0;
+    frame(vec![], &mut st);
+    assert_eq!((st.similar.as_deref(), families(&st)), (None, menu_order));
 }
