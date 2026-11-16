@@ -1089,6 +1089,27 @@ fn expand_pieces(
     expanded
 }
 
+/// `m`, the art a 3D effect expanded into, with each object in it that has effects of its own (a
+/// shadow blurred by the light's Softness) expanded as Expand Appearance expands it on its own:
+/// a blurred shadow becomes an image. Groups in `m` without effects that hold such an object are
+/// looked into; the rest are left as they are. The objects `skip` lists are not expanded.
+fn expand_raster_pieces(d: &mut Document, mut m: Node, brushes: &[vectorcraft_brush::Brush], skip: &[NodeId], raster: &mut RasterBudget) -> Node {
+    for c in m.children_mut().into_iter().flatten() {
+        if !c.appearance.effects.is_empty() {
+            if let Some(e) = expanded_node(d, (**c).clone(), brushes, skip, &mut vec![], raster) {
+                *c = Arc::new(e);
+            }
+        } else if c.children().is_some() {
+            let mut holds = false;
+            c.walk(&mut |n| holds |= !n.appearance.effects.is_empty());
+            if holds {
+                *c = Arc::new(expand_raster_pieces(d, (**c).clone(), brushes, skip, raster));
+            }
+        }
+    }
+    m
+}
+
 /// Replace each symbol instance in `m`, art an instance placed (`depth` instances deep), whose
 /// active fill or stroke has a geometry or raster effect ([`effects::has_item_geometry`],
 /// [`effects::has_instance_row_raster`]) by its art ([`expanded_instance`]), and the instances in
@@ -1353,6 +1374,9 @@ fn expanded_node(
                     m
                 })
             };
+            // A 3D effect's shadow blurred by the light's Softness keeps its blur in the art: it
+            // expands in turn, to an image.
+            let m = if effects::has_solid(&v) || effects::has_revolve(&v) { m.map(|m| expand_raster_pieces(d, m, brushes, skip, raster)) } else { m };
             match image {
                 Some((image, _)) => {
                     let mut m = m.unwrap_or(v);

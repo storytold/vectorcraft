@@ -593,8 +593,8 @@ pub(crate) fn store_image(d: &mut Document, key: &str, full: ImageBlob, linked: 
 /// Whether `bytes` are a PNG, JPEG, GIF or WebP file: the formats [`fileio::raster_image`] keeps
 /// as they are after reading only their header.
 pub(crate) fn kept_unread(bytes: &[u8]) -> bool {
-    use image::ImageFormat as F;
-    matches!(image::guess_format(bytes), Ok(F::Png | F::Jpeg | F::Gif | F::WebP))
+    use craft_image_codecs::Format as F;
+    matches!(craft_image_codecs::detect(bytes), Some(F::Png | F::Jpeg | F::Gif | F::WebP))
 }
 
 /// `blob`, an image [`fileio::raster_image`] read from a file, ready to keep. When `unread` (the
@@ -2639,12 +2639,34 @@ const UNEMBED_EXTS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "tif", "tif
 
 /// Encoded image `bytes` re-encoded in the format of extension `ext` (JPEG without alpha).
 fn convert_image(bytes: &[u8], ext: &str) -> std::result::Result<Vec<u8>, String> {
-    let format = image::ImageFormat::from_extension(ext).ok_or_else(|| format!("can't write .{ext} images"))?;
-    let img = image::load_from_memory(bytes).map_err(|e| e.to_string())?;
-    let img = if format == image::ImageFormat::Jpeg { image::DynamicImage::ImageRgb8(img.to_rgb8()) } else { img };
-    let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), format).map_err(|e| e.to_string())?;
-    Ok(out)
+    let format = match ext.to_ascii_lowercase().as_str() {
+        "png" => craft_image_codecs::Format::Png,
+        "jpg" | "jpeg" => craft_image_codecs::Format::Jpeg,
+        "gif" => craft_image_codecs::Format::Gif,
+        "webp" => craft_image_codecs::Format::WebP,
+        "tif" | "tiff" => craft_image_codecs::Format::Tiff,
+        "bmp" => craft_image_codecs::Format::Bmp,
+        _ => return Err(format!("can't write .{ext} images")),
+    };
+    let mut opts = craft_image_codecs::DecodeOptions::default();
+    opts.limits.max_alloc = vectorcraft_doc::MAX_RASTER_ALLOC;
+    opts.limits.max_width = u32::MAX;
+    opts.limits.max_height = u32::MAX;
+    let img = craft_image_codecs::decode_with(bytes, &opts).map_err(|e| e.to_string())?;
+    let raw = if format == craft_image_codecs::Format::Jpeg {
+        let rgb: Vec<u8> = img.to_rgba8().as_chunks::<4>().0.iter().flat_map(|p| [p[0], p[1], p[2]]).collect();
+        craft_image_codecs::Image::from_raw(
+            img.width(),
+            img.height(),
+            craft_image_codecs::ChannelLayout::Rgb,
+            craft_image_codecs::SampleType::U8,
+            rgb,
+        )
+        .map_err(|e| e.to_string())?
+    } else {
+        img
+    };
+    craft_image_codecs::encode(&raw, format, &craft_image_codecs::EncodeOptions::default()).map_err(|e| e.to_string())
 }
 
 fn unembed(s: &mut Session, p: &Value) -> Result<Value> {

@@ -1504,6 +1504,11 @@ font-technology	Variable	Променливи
 	Show smooth color wheel	Показване на плавно цветово колело
 	Show segmented color wheel	Показване на сегментирано цветово колело
 	Show color bars	Показване на цветни ленти
+	Show brightness and hue on wheel	Показване на яркост и оттенък на колелото
+	Show saturation and hue on wheel	Показване на насищане и оттенък на колелото
+	Add Color Tool	Инструмент „Добавяне на цвят“
+	Remove Color Tool	Инструмент „Премахване на цвят“
+	Remove Color	Премахване на цвят
 	Find the selected colors in the artwork	Намиране на избраните цветове в илюстрацията
 	Harmony Sets	Набори от хармонии
 	Height	Височина
@@ -1836,6 +1841,8 @@ font-technology	Variable	Променливи
 	Lasso Tool	Инструмент „Ласо“
 	Enclosing Lasso Tool	Инструмент „Обхващащо ласо“
 	Enclosing Lasso	Обхващащо ласо
+	Polygonal Lasso Tool	Инструмент „Многоъгълно ласо“
+	Polygonal Lasso	Многоъгълно ласо
 	Last Effect: {name}	Посл. ефект: {name}
 	Last Effect: {}	Посл. ефект: {}
 	Last Effect…	Посл. ефект…
@@ -2566,6 +2573,10 @@ font-technology	Variable	Променливи
 	Play Current Selection	Изпълнение на текущия избор
 	Save Actions…	Запазване на действия…
 	Load Actions…	Зареждане на действия…
+	Reset Actions	Нулиране на действия
+	Replace the current actions with the default set?	Да се заменят ли текущите действия с набора по подразбиране?
+	Append adds the default set after the current sets instead.	С „Добавяне“ наборът по подразбиране се добавя след текущите набори.
+	Append	Добавяне
 	Plug-in Info	Информация за приставката
 	Plug-ins	Приставки
 	Plug-in…	Приставка…
@@ -4160,6 +4171,7 @@ imageTrace	Outline	Контур
 	 to set spacing and orientation	 за задаване на разстояние и ориентация
 	:	:
 	Isolate Selected Group	Изолиране на избраната група
+	Isolate Selected Path	Изолиране на избрания път
 	Release Clipping Mask	Освобождаване на маска за изрязване
 	Make Compound Path	Създаване на съставен път
 	Release Compound Path	Освобождаване на съставен път
@@ -6815,6 +6827,11 @@ breakText	Glyphs	Глифи
 	Malayalam	Малаялам
 	Odia	Ория
 	Urdu	Урду
+	Sanskrit	Санскрит
+	Nepali	Непалски
+	Assamese	Асамски
+	Konkani	Конкани
+	Sindhi	Синдхи
 	VectorCraft {release} and later (version {n})	VectorCraft {release} и по-нови (версия {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Експортиране на всички отворени документи като PDF
@@ -7079,4 +7096,24 @@ breakText	Glyphs	Глифи
 	No objects are selected.	Няма избрани обекти.
 	Open a document to mark its fold lines.	Отворете документ, за да отбележите линиите му на сгъване.
 	Remove Fold Line Role	Премахни вида на линията
+	Check	Провери
+	Check Fold Lines	Провери линиите на сгъване
+@msg	No cut lines are in the selection.	В селекцията няма линии за рязане.
+@msg	No cut lines are in the document.	В документа няма линии за рязане.
+@msg	The cut lines do not enclose an area.	Линиите за рязане не ограждат площ.
+@msg	A cut line ends without meeting another cut line.	Линия за рязане завършва, без да срещне друга линия за рязане.
+@msg	A gap between cut lines was closed.	Процеп между линии за рязане беше затворен.
+@msg	The fold lines are too complex to check.	Линиите на сгъване са твърде сложни за проверка.
+@msg	A cut line and a crease lie on top of each other.	Линия за рязане и линия за биговане лежат една върху друга.
+@msg	No cut lines are among the given objects.	Сред дадените обекти няма линии за рязане.
+@msg	Two fold lines lie on top of each other.	Две линии на сгъване лежат една върху друга.
+@msg	A crease ends inside a panel.	Линия за биговане завършва вътре в панел.
+@msg	A crease does not divide two panels.	Линия за биговане не разделя два панела.
+@msg	A crease lies outside the cut outline, wholly or in part.	Линия за биговане лежи изцяло или отчасти извън контура за рязане.
+@msg	The pieces of a hinge are not on one straight line.	Частите на една панта не лежат на една права линия.
+@msg	A gap between cut lines is too narrow to tell apart.	Процеп между линии за рязане е твърде тесен, за да се различи.
+@msg	A cut-out area holds other fold lines or another blank.	Изрязана област съдържа други линии на сгъване или друг разкрой.
+@msg	A panel is not joined to the rest by a crease.	Панел не е свързан с останалите с линия за биговане.
+@msg	A fold line is on a non-printing layer.	Линия на сгъване е на слой, който не се печата.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панели: {panels}, панти: {hinges}, грешки: {errors}, предупреждения: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

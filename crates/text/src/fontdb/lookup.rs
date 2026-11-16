@@ -153,7 +153,9 @@ impl FontDb {
     /// neither, as [`FontTraits`] tells), then the others, each group nearest first by
     /// [`FontLikeness::distance`](super::FontLikeness::distance) of their
     /// [`family_traits`](Self::family_traits), a family of another kind ([`FontTraits::class`])
-    /// counting 2 further. Families equally far keep their order in `families`. Reads no font
+    /// counting 2 further. A family that shares none of those numbers with `family` comes after
+    /// every family that shares one in its group. Families equally far keep their order in
+    /// `families`. Reads no font
     /// file, as `family_traits` does not.
     pub fn similar_families(&self, family: &str, families: &[String]) -> Vec<String> {
         let base = self.family_traits(family);

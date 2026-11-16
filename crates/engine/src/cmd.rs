@@ -897,6 +897,10 @@ pub use brushsym::reset_transformation_changes;
 /// the selected ones).
 pub use brushsym::is_symbol_set;
 
+/// The Symbols panel's current symbol, as `symbol.list` answers it (the panel reads it on every
+/// frame without running the command).
+pub use brushsym::current_symbol;
+
 /// The byte order of UTF-16 text without a byte-order mark, by Import Data Sets' rule (the Graph
 /// Data window reads files by it too).
 pub use variablecmds::utf16_order_without_mark;
