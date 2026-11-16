@@ -1,6 +1,6 @@
 //! Hand-written Illustrator editing data (the format `vectorcraft_eps`'s reader documents) and the
 //! EPS, `.ai` and PDF files that carry it, for import tests. Nothing here comes from files another
-//! app wrote, except the key names that [`pdf`] uses, the XML node keys of [`variable_library`] and
+//! app wrote, except the key names that [`pdf`] uses, the XML node keys of [`xml_node`] and
 //! the keys of [`on_path_record`] and [`on_path_member`].
 
 /// Editing data of a `width` × `height` page: header comments (the art's bounding box and the crop
@@ -41,41 +41,174 @@ pub fn named(name: &str) -> String {
     format!("%_/ArtDictionary :\n%_/XMLUID : ({}) ; (AI10_ArtUID) ,\n%_;\n%_\n", name.replace(' ', "_"))
 }
 
-/// The document data with a variable library: a `/Document` dictionary whose `Recorded` dictionary
-/// holds the library's XML document as XML nodes (`/XMLNode`) under `#document`. The library has
-/// one variable set, the text variables `variables` and the data sets `data_sets`, each with a `p`
-/// element for every variable.
-pub fn variable_library(variables: &[&str], data_sets: &[&str]) -> String {
-    // A node: its name, value and type (1 an element, 2 an attribute, 3 text, 9 the document), its
-    // children and its attributes.
-    fn node(kind: u8, name: &str, value: &str, attributes: &[(&str, &str)], children: &[String]) -> String {
-        let attributes: String = attributes.iter().map(|(k, v)| node(2, k, v, &[], &[node(3, "#text", v, &[], &[])])).collect();
-        format!(
-            "%_/XMLNode :\n%_({name}) /String (xmlnode-nodename) ,\n%_({value}) /String (xmlnode-nodevalue) ,\n%_{kind} /Int (xmlnode-nodetype) ,\n\
-             %_/Array :\n{}%_; (xmlnode-children) ,\n%_/Array :\n{attributes}%_; (xmlnode-attributes) ,\n%_;\n",
-            children.concat()
-        )
+/// The value of an XML node of the document data ([`xml_node`]), with the type it is written with.
+#[derive(Clone, Copy, Debug)]
+pub enum XmlValue<'a> {
+    /// A `/String`.
+    Str(&'a str),
+    /// A `/UnicodeString`.
+    Unicode(&'a str),
+    /// A `/Bool`, `0` or `1`.
+    Bool(bool),
+    /// Anything else, written as it is before the key (`5 /Int`).
+    Raw(&'a str),
+}
+
+/// `s` as PostScript string literals on `%_` lines: `\`, `(` and `)` escaped, and a string longer
+/// than 40 bytes split into literals of at most 40 bytes on lines of their own, the last one left
+/// open for what follows it on its line.
+fn ps_strings(s: &str) -> String {
+    let escaped = |part: &str| part.replace('\\', "\\\\").replace('(', "\\(").replace(')', "\\)");
+    let mut parts = vec![];
+    let mut start = 0;
+    for (at, c) in s.char_indices() {
+        if at + c.len_utf8() - start > 40 {
+            parts.push(&s[start..at]);
+            start = at;
+        }
     }
-    let element = |name: &str, attributes: &[(&str, &str)], children: &[String]| node(1, name, "", attributes, children);
-    let declared: Vec<String> = variables.iter().map(|v| element("variable", &[("varName", v), ("trait", "textcontent")], &[])).collect();
+    parts.push(&s[start..]);
+    let Some((last, first)) = parts.split_last() else { return String::new() };
+    let lines: String = first.iter().map(|p| format!("%_({})\n", escaped(p))).collect();
+    format!("{lines}%_({})", escaped(last))
+}
+
+/// `value` written before a key on a `%_` line, the line's `%_` included.
+fn xml_value(value: XmlValue) -> String {
+    match value {
+        XmlValue::Str("") => "%_ /String".into(),
+        XmlValue::Str(s) => format!("{} /String", ps_strings(s)),
+        XmlValue::Unicode(s) => format!("{} /UnicodeString", ps_strings(s)),
+        XmlValue::Bool(b) => format!("%_{} /Bool", u8::from(b)),
+        XmlValue::Raw(r) => format!("%_{r}"),
+    }
+}
+
+/// An XML node of the document data (`/XMLNode`): its name, its value, its type `kind` (1 an
+/// element, 2 an attribute, 3 text, 9 the document), its children (an array) and its attribute
+/// nodes (a dictionary, each under its name).
+pub fn xml_node(kind: u8, name: &str, value: XmlValue, attributes: &[(&str, XmlValue)], children: &[String]) -> String {
+    let attributes: String = attributes.iter().map(|(k, v)| format!("{}%_; ({k}) ,\n", xml_node_open(2, k, *v, &[], ""))).collect();
+    format!("{}%_;\n", xml_node_open(kind, name, value, children, &attributes))
+}
+
+/// [`xml_node`] up to the `;` that closes it.
+fn xml_node_open(kind: u8, name: &str, value: XmlValue, children: &[String], attributes: &str) -> String {
+    format!(
+        "%_/XMLNode :\n{} (xmlnode-nodename) ,\n{} (xmlnode-nodevalue) ,\n%_{kind} /Int (xmlnode-nodetype) ,\n\
+         %_/Array :\n{}%_; (xmlnode-children) ,\n%_/Dictionary :\n{attributes}%_; (xmlnode-attributes) ,\n",
+        xml_value(XmlValue::Str(name)),
+        xml_value(value),
+        // Each child is closed as an item of the array.
+        children.iter().map(|c| format!("{}%_; ,\n", c.strip_suffix("%_;\n").unwrap_or(c))).collect::<String>()
+    )
+}
+
+/// An element `name` with the attributes `attributes` (each a `/UnicodeString`) and the children
+/// `children`.
+pub fn xml_element(name: &str, attributes: &[(&str, &str)], children: &[String]) -> String {
+    let attributes: Vec<(&str, XmlValue)> = attributes.iter().map(|(k, v)| (*k, XmlValue::Unicode(v))).collect();
+    xml_node(1, name, XmlValue::Str(""), &attributes, children)
+}
+
+/// A text node (`#text`) holding `value`.
+pub fn xml_text(value: XmlValue) -> String {
+    xml_node(3, "#text", value, &[], &[])
+}
+
+/// The document data with the XML nodes `library` (a `variableSets` element): a `/Document`
+/// dictionary whose `Recorded` dictionary holds them as the XML document `#document`, in its
+/// `metadata` element.
+pub fn variable_library_data(library: &str) -> String {
+    let document = xml_node(9, "#document", XmlValue::Str(""), &[], &[xml_element("metadata", &[], &[library.to_string()])]);
+    let document = document.strip_suffix("%_;\n").unwrap_or(&document);
+    format!("%AI9_BeginDocumentData\n%_/Document :\n%_/Dictionary :\n{document}%_; (#document) ,\n%_; /Recorded ,\n%_;\n%AI9_EndDocumentData\n")
+}
+
+/// The document data with a variable library ([`variable_library_data`]) of one variable set,
+/// unlocked, with the text variables `variables` and the data sets `data_sets`, each with a `p`
+/// element for every variable (`<data set> <variable>`).
+pub fn variable_library(variables: &[&str], data_sets: &[&str]) -> String {
+    let declared: Vec<String> = variables.iter().map(|v| xml_element("variable", &[("trait", "textcontent"), ("varName", v)], &[])).collect();
     let sets: Vec<String> = data_sets
         .iter()
         .map(|d| {
-            let values: Vec<String> =
-                variables.iter().map(|v| element(v, &[], &[element("p", &[], &[node(3, "#text", &format!("{d} {v}"), &[], &[])])])).collect();
-            element("v:sampleDataSet", &[("dataSetName", d)], &values)
+            let values: Vec<String> = variables
+                .iter()
+                .map(|v| xml_element(v, &[], &[xml_element("p", &[], &[xml_text(XmlValue::Unicode(&format!("{d} {v}")))])]))
+                .collect();
+            xml_element("v:sampleDataSet", &[("dataSetName", d)], &values)
         })
         .collect();
-    let set = element(
+    let set = xml_element(
         "variableSet",
-        &[("varSetName", "binding1"), ("locked", "none")],
-        &[element("variables", &[], &declared), element("v:sampleDataSets", &[("xmlns", "&ns_custom;"), ("xmlns:v", "&ns_vars;")], &sets)],
+        &[("locked", "none"), ("varSetName", "binding1")],
+        &[xml_element("variables", &[], &declared), xml_element("v:sampleDataSets", &[("xmlns", "&ns_custom;"), ("xmlns:v", "&ns_vars;")], &sets)],
     );
-    let library = element("metadata", &[], &[element("variableSets", &[("xmlns", "&ns_vars;")], &[set])]);
-    format!(
-        "%AI9_BeginDocumentData\n%_/Document :\n%_/Dictionary :\n{}%_; (#document) ,\n%_; /Recorded ,\n%_;\n%AI9_EndDocumentData\n",
-        node(9, "#document", "", &[], &[library])
-    )
+    variable_library_data(&xml_element("variableSets", &[("xmlns", "&ns_vars;")], &[set]))
+}
+
+/// The linked file of [`sample_variable_sets`]' second data set: a path that names no file.
+pub const SAMPLE_MISSING_FILE: &str = "/Users/test/Missing Folder (old)/a linked file that isn't there.eps";
+
+/// A `variableSets` element for [`variable_library_data`]: one variable set, its `locked` attribute
+/// `locked`, with the variables `v_text` (text), `v_visible` (visibility), `v_file` (a linked file),
+/// `v_graph` (a graph) and `v_unbound` (no kind), and the data sets `ds_one`, `ds_two` (the one
+/// shown) and `ds_three`. `ds_two`'s text is two paragraphs, `line one` and `line two & < é`, its
+/// visibility false, its linked file [`SAMPLE_MISSING_FILE`] and `v_unbound` empty; the elements
+/// `more` follow its values. No data set has a graph value.
+pub fn sample_variable_sets(locked: &str, more: &[String]) -> String {
+    let declare = |name: &str, kind: Option<(&str, &str)>, art: Option<&str>| {
+        let mut attributes = vec![];
+        if let Some((t, category)) = kind {
+            attributes.push(("trait", XmlValue::Str(t)));
+            attributes.push(("category", XmlValue::Str(category)));
+        }
+        attributes.push(("varName", XmlValue::Unicode(name)));
+        let art = art.map(|a| format!("/XMLUIDREF : ({a}) ;"));
+        if let Some(a) = &art {
+            attributes.push(("docRef", XmlValue::Raw(a)));
+        }
+        xml_node(1, "variable", XmlValue::Str(""), &attributes, &[])
+    };
+    let declared = vec![
+        declare("v_text", Some(("textcontent", "&ns_flows;")), Some("text_x5F_1")),
+        declare("v_visible", Some(("visibility", "&ns_vars;")), Some("path_x5F_1")),
+        declare("v_file", Some(("fileref", "&ns_vars;")), Some("image_x5F_1")),
+        declare("v_graph", Some(("graphdata", "&ns_vars;")), None),
+        declare("v_unbound", None, None),
+    ];
+    let paragraph = |text: &str| xml_element("p", &[], &[xml_text(XmlValue::Unicode(text))]);
+    let row = |name: &str, text: &[&str], show: bool, file: &str, more: &[String]| {
+        let mut values = vec![
+            xml_element("v_text", &[], &text.iter().map(|t| paragraph(t)).collect::<Vec<_>>()),
+            xml_element("v_visible", &[], &[xml_text(XmlValue::Bool(show))]),
+            xml_element("v_file", &[], &[xml_text(XmlValue::Str(&format!("file:///{file}")))]),
+            xml_element("v_unbound", &[], &[]),
+        ];
+        values.extend_from_slice(more);
+        xml_node(1, "v:sampleDataSet", XmlValue::Str(""), &[("dataSetName", XmlValue::Unicode(name))], &values)
+    };
+    let rows = [
+        row("ds_one", &["one"], true, "/Users/test/Art (one)/tile-a.eps", &[]),
+        row("ds_two", &["line one", "line two & < é"], false, SAMPLE_MISSING_FILE, more),
+        row("ds_three", &["three"], true, "/Users/test/Art (one)/tile-b.eps", &[]),
+    ];
+    let data_sets = xml_node(
+        1,
+        "v:sampleDataSets",
+        XmlValue::Str(""),
+        &[("i:activeDataSet", XmlValue::Unicode("ds_two")), ("xmlns", XmlValue::Str("&ns_custom;")), ("xmlns:v", XmlValue::Str("&ns_vars;"))],
+        &rows,
+    );
+    let set = xml_node(
+        1,
+        "variableSet",
+        XmlValue::Str(""),
+        &[("varSetName", XmlValue::Str("binding1")), ("locked", XmlValue::Str(locked))],
+        &[xml_element("variables", &[], &declared), data_sets],
+    );
+    xml_element("variableSets", &[("xmlns", "&ns_vars;")], &[set])
 }
 
 /// The document data with an Objects on Path record: a `/Document` dictionary whose `Constraint

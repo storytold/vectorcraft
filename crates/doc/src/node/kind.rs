@@ -122,6 +122,17 @@ pub enum NodeKind {
     Intertwine {
         children: Vec<Arc<Node>>,
     },
+    /// A ruler guide: a straight line across the canvas, or across one artboard, that draws on
+    /// screen only. It is always a direct child of a layer or sublayer, above the layer's other
+    /// children, and has no bounds.
+    RulerGuide {
+        /// true: a vertical guide at x = `pos`; false: a horizontal one at y = `pos`.
+        vertical: bool,
+        pos: f64,
+        /// The [`crate::Artboard::id`] of the artboard it runs across; None: across the canvas.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        artboard: Option<u32>,
+    },
 }
 
 /// Reading a [`NodeKind`]. Derived, an internally tagged enum buffers each kind (with every
@@ -214,6 +225,12 @@ mod kind_de {
         PlacedDocument(Box<crate::placed_document::PlacedDocument>),
         Intertwine {
             children: Vec<Arc<Node>>,
+        },
+        RulerGuide {
+            vertical: bool,
+            pos: f64,
+            #[serde(default)]
+            artboard: Option<u32>,
         },
     }
 

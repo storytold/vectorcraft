@@ -1,7 +1,7 @@
 use super::align::choice;
 use super::{
-    Affine, Arc, Document, EngineError, LastTransform, Node, NodeId, NodeKind, Point, Result, Scaling, Session, Value, Vec2, bad, bool_or,
-    check_numbers, check_switches, duplicate_in, effects, f64_or, f64_req, ids_param, json, matrix_param, ok, outermost, point_param,
+    Affine, Arc, Document, EngineError, LastTransform, Node, NodeId, NodeKind, OrientedBox, Point, Rect, Result, Scaling, Session, Value, Vec2, bad,
+    bool_or, check_numbers, check_switches, duplicate_in, effects, f64_or, f64_req, ids_param, json, matrix_param, ok, outermost, point_param,
     selected_roots_to_transform,
 };
 
@@ -12,7 +12,7 @@ fn origin_of(s: &Session, p: &Value, ids: &[NodeId]) -> Result<Point> {
     // Direct-selected anchors transform alone (see [`apply_transform`]), about their own centre.
     let st = s.doc()?;
     if !bool_or(p, "copy", false)
-        && let Some(b) = effects::preview::anchor_bounds(&st.selection, &st.doc, s.prefs.use_preview_bounds)
+        && let Some(b) = effects::preview::anchor_bounds_with(&st.selection, &st.doc, s.bounds_measure())
     {
         return Ok(b.center());
     }
@@ -70,10 +70,12 @@ pub(crate) fn transforms_objects(p: &Value) -> bool {
 /// check them with [`check_switches`] before they change anything.
 pub(super) const TRANSFORM_SWITCHES: [&str; 6] = ["copy", "strokes", "corners", "patterns", "objects", "typeAreas"];
 
-/// `xf` on `n` with Transform Objects (`objects`, see [`transforms_objects`]) on or off.
+/// `xf` on `n` with Transform Objects (`objects`, see [`transforms_objects`]) on or off. The objects
+/// in `n` that are aligned to the pixel grid snap to it again ([`super::pixelgrid::keep_pixel_aligned`]).
 pub(crate) fn transform_node(n: &mut Node, xf: Affine, sc: Scaling, objects: bool) {
     if objects {
         n.transform(xf, sc);
+        super::pixelgrid::keep_pixel_aligned(n, sc);
     } else if sc.patterns {
         vectorcraft_doc::pattern::transform_patterns_only(n, xf);
     }
@@ -112,13 +114,17 @@ fn apply_transform_moving_guides(
     let c = xf.as_coeffs();
     let is_translation = (c[0] - 1.0).abs() < 1e-9 && c[1].abs() < 1e-9 && c[2].abs() < 1e-9 && (c[3] - 1.0).abs() < 1e-9;
     let delta = guides.unwrap_or(Vec2::new(c[4], c[5]));
-    let with_guides = objects && ids_param(p, "ids").is_none() && is_translation;
+    let with_guides = objects && p.get("ids").is_none_or(Value::is_null) && is_translation;
     let has_guides = with_guides && !s.doc()?.selection.guides.is_empty();
     // A transform of ids that name no object, or an identity transform without a copy, moves
     // nothing: the document and its undo history stay as they are, and Transform Again repeats it.
     // With a copy, the reply lists the copies, and there are none.
+    // An edit normally preserves the tree positions already found here. Settling an active
+    // typing session can change the document before the edit closure runs, so look up again then.
+    let reindex = copy || (!s.previewing && crate::cmd::typing_in_progress(s));
     let d = &s.doc()?.doc;
-    let none = d.index_paths(ids.iter().copied()).is_empty() && !has_guides;
+    let paths = d.index_paths(ids.iter().copied());
+    let none = paths.is_empty() && !has_guides;
     let ids = if anchors && objects && !copy && !s.doc()?.selection.anchors.is_empty() {
         if xf != Affine::IDENTITY {
             crate::cmd::path::transform_anchors(s, label, xf, sc)?;
@@ -139,23 +145,25 @@ fn apply_transform_moving_guides(
                 }
                 None if copy => {
                     let guide_copies = if with_guides {
-                        let copies: Vec<_> = sel.guides.iter().filter_map(|&i| d.guides.get(i).cloned()).collect();
+                        let copies: Vec<_> = sel.guides.iter().filter_map(|&i| d.ruler_guide(i)).collect();
                         (!copies.is_empty()).then_some(copies)
                     } else {
                         None
                     };
                     let new_ids = duplicate_in(d, sel, &ids, Affine::IDENTITY)?;
                     if let Some(copies) = guide_copies {
-                        let first = d.guides.len();
-                        d.guides.extend(copies);
-                        sel.guides = (first..d.guides.len()).collect();
+                        sel.guides = copies.iter().map(|g| d.add_ruler_guide(g)).collect();
                     }
                     new_ids
                 }
                 None => ids.clone(),
             };
-            // Transforms don't move nodes in the tree, so the paths found up front stay right.
-            let paths = d.index_paths(targets.iter().copied());
+            // Pattern editing with Move Tile with Art: the tile art's bounds before a move.
+            let moves_only = c[0] == 1.0 && c[1] == 0.0 && c[2] == 0.0 && c[3] == 1.0;
+            let tile_art = if objects && !copy && moves_only { crate::cmd::patterncmds::tile_art_bounds(d) } else { None };
+            // Transforms don't move nodes in the tree, so reuse the paths found for the no-copy
+            // case; copies and a settled typing session need paths from the edited document.
+            let paths = if reindex { d.index_paths(targets.iter().copied()) } else { paths };
             for id in &targets {
                 if let Some(n) = paths.get(id).and_then(|p| d.node_mut_at(p))
                     && !(objects && areas && resize_type_area(n, xf))
@@ -163,11 +171,18 @@ fn apply_transform_moving_guides(
                     transform_node(n, xf, sc, objects);
                 }
             }
+            if objects {
+                for id in &targets {
+                    super::pixelgrid::keep_compound_aligned(d, *id, sc);
+                }
+                // Moving all of the tile art moves the tile as far.
+                if let Some(before) = tile_art {
+                    crate::cmd::patterncmds::move_tile_with_art(d, &targets, before);
+                }
+            }
             if with_guides && (delta.x != 0.0 || delta.y != 0.0) {
                 for i in sel.guides.clone() {
-                    if let Some(g) = d.guides.get_mut(i) {
-                        *g = g.moved(delta);
-                    }
+                    d.edit_ruler_guide(i, |g| *g = g.moved(delta));
                 }
             }
             Ok(targets)
@@ -212,10 +227,8 @@ pub(crate) fn preview_copies(s: &mut Session, roots: &[NodeId], with_guides: boo
     let ids = duplicate_in(Arc::make_mut(&mut doc), &mut selection, roots, Affine::IDENTITY)?;
     if has_guide_copies {
         let d = Arc::make_mut(&mut doc);
-        let first = d.guides.len();
-        let copies: Vec<_> = st.selection.guides.iter().filter_map(|&i| d.guides.get(i).cloned()).collect();
-        d.guides.extend(copies);
-        selection.guides = (first..d.guides.len()).collect();
+        let copies: Vec<_> = st.selection.guides.iter().filter_map(|&i| d.ruler_guide(i)).collect();
+        selection.guides = copies.iter().map(|g| d.add_ruler_guide(g)).collect();
     }
     let k = Arc::new(crate::PreviewCopies { from: it.doc.clone(), roots: roots.to_vec(), doc, selection, ids });
     it.copies = Some(k.clone());
@@ -237,7 +250,12 @@ pub(super) fn transform(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &TRANSFORM_SWITCHES, "object.transform")?;
     check_switches(p, &["anchors", "releaseOutside"], "object.transform")?;
     let m = matrix_param(p, "matrix").ok_or_else(|| bad("object.transform", "missing matrix [a,b,c,d,e,f]"))?;
-    let (ids, anchors) = match ids_param(p, "ids") {
+    // An object selected in a symbol instance's art stays where the symbol puts it: the selection
+    // is left as it is, and the reply's warning goes to the status bar.
+    if p.get("ids").is_none() && crate::cmd::brushsym::selected_part(s)?.is_some() {
+        return Ok(json!({ "warning": crate::cmd::brushsym::part_only().to_string() }));
+    }
+    let (ids, anchors) = match ids_param(p, "ids", "object.transform")? {
         Some(v) => (outermost(&s.doc()?.doc, v), false),
         None => (selected_roots_to_transform(s)?, bool_or(p, "anchors", false)),
     };
@@ -347,24 +365,50 @@ pub(super) fn scale(s: &mut Session, p: &Value) -> Result<Value> {
     if sx == 0.0 || sy == 0.0 {
         return Err(bad("object.scale", "scale must be non-zero"));
     }
-    apply_transform(s, "Scale", ids, about(o, Affine::scale_non_uniform(sx, sy)), p, true)
+    let frame = basis_frame(s, p, "object.scale", &ids)?;
+    apply_transform(s, "Scale", ids, about(o, frame.conjugate(Affine::scale_non_uniform(sx, sy))), p, true)
+}
+
+/// The frame that `object.scale` and a named `object.reflect` act in, from the `basis` param:
+/// `"box"` (the default) is the bounding box of `ids`, turned with rotated objects until Reset
+/// Bounding Box ([`Document::bbox_angle`]); `"page"` is the page's axes. Anchors selected with
+/// Direct Selection (with no copy and Transform Objects on) transform along the page's axes, as
+/// their own box does. The basis joins the journal entry, so a replay acts in the same frame. A
+/// saved step without `basis` ([`Session::replay`]) was recorded before Scale and Reflect followed
+/// the box, so it acts along the page's axes, as it did when it was recorded.
+fn basis_frame(s: &mut Session, p: &Value, cmd: &str, ids: &[NodeId]) -> Result<OrientedBox> {
+    let basis = choice(p, cmd, "basis", &["box", "page"])?;
+    let page = basis == Some("page") || (basis.is_none() && s.replaying());
+    let st = s.doc()?;
+    let anchors = !bool_or(p, "copy", false)
+        && transforms_objects(p)
+        && effects::preview::anchor_bounds_with(&st.selection, &st.doc, s.bounds_measure()).is_some();
+    let angle = if page || anchors { 0.0 } else { st.doc.bbox_angle(ids) };
+    s.note_journal("basis", json!(if page { "page" } else { "box" }));
+    Ok(OrientedBox { angle, rect: Rect::ZERO })
 }
 
 pub(super) fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &TRANSFORM_SWITCHES, "object.reflect")?;
     let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
-    let m = match p.get("axis") {
-        Some(Value::String(a)) if a == "horizontal" => Affine::scale_non_uniform(1.0, -1.0),
-        Some(Value::Number(n)) => {
-            let t = -n.as_f64().unwrap_or(90.0).to_radians();
-            Affine::rotate(t) * Affine::scale_non_uniform(1.0, -1.0) * Affine::rotate(-t)
-        }
-        None | Some(Value::Null) => Affine::scale_non_uniform(-1.0, 1.0),
-        Some(Value::String(a)) if a == "vertical" => Affine::scale_non_uniform(-1.0, 1.0),
+    // A named axis is the bounding box's own (see [`basis_frame`]); an angle is a line on the page.
+    let named = match p.get("axis") {
+        Some(Value::String(a)) if a == "horizontal" => Some(Affine::scale_non_uniform(1.0, -1.0)),
+        Some(Value::Number(_)) => None,
+        None | Some(Value::Null) => Some(Affine::scale_non_uniform(-1.0, 1.0)),
+        Some(Value::String(a)) if a == "vertical" => Some(Affine::scale_non_uniform(-1.0, 1.0)),
         Some(v) => {
             let given = v.as_str().map_or_else(|| v.to_string(), str::to_string);
             return Err(bad("object.reflect", format!("axis must be \"vertical\", \"horizontal\" or an angle in degrees, not `{given}`")));
+        }
+    };
+    let m = match named {
+        Some(m) => basis_frame(s, p, "object.reflect", &ids)?.conjugate(m),
+        None => {
+            choice(p, "object.reflect", "basis", &["box", "page"])?;
+            let t = -p.get("axis").and_then(Value::as_f64).unwrap_or(90.0).to_radians();
+            Affine::rotate(t) * Affine::scale_non_uniform(1.0, -1.0) * Affine::rotate(-t)
         }
     };
     apply_transform(s, "Reflect", ids, about(o, m), p, true)

@@ -1,13 +1,19 @@
 //! File → Document Setup: General (units, bleed, Edit Artboards, outline images, the substituted
 //! glyphs highlight), Transparency (grid size and colours, simulated paper, flattener preset, white
-//! overprint) and Type (language, quotes, superscript/subscript/small caps, text export) tabs.
+//! overprint), Type (language, quotes, superscript/subscript/small caps, text export) and Color
+//! (document color mode and assigned profiles) tabs.
 //!
-//! Fields: what `document.setup` reports (and takes back), plus `tab` and `bleedLinked`. OK runs
-//! `document.setup` with them: one undo step. On an error the dialog stays open.
+//! Fields: what `document.setup` reports (and takes back), plus `tab`, `bleedLinked` and the Color
+//! tab's `colorMode`, `convertColors`, `rgbProfile` and `cmykProfile` (null: the working space).
+//! OK runs `document.setup` with them: one undo step. When the Color tab changed something, OK runs
+//! `document.setup`, `edit.assignProfile` and `file.documentColorMode` in one `command.batch`,
+//! and the document's changes are still one undo step. On an error the dialog stays open.
 
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
+use vectorcraft_color::cms::ProfileKind;
 use vectorcraft_doc::setup::{GRID_COLOR_PRESETS, LANGUAGES};
-use vectorcraft_doc::{GridSize, Quotes, Unit};
+use vectorcraft_doc::{ColorMode, GridSize, Quotes, Unit};
+use vectorcraft_engine::cmd::colormgmt::doc_profiles;
 
 use super::{DialogSpec, form};
 use crate::state::Dialog;
@@ -15,10 +21,13 @@ use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
 
 pub(super) const KIND: &str = "documentSetup";
-const TABS: [&str; 3] = ["General", "Transparency", "Type"];
+const TABS: [&str; 4] = ["General", "Transparency", "Type", "Color"];
 /// Dialog-only fields `document.setup` doesn't take.
-const UI_ONLY: [&str; 2] = ["tab", "bleedLinked"];
+const UI_ONLY: [&str; 6] = ["tab", "bleedLinked", "colorMode", "convertColors", "rgbProfile", "cmykProfile"];
 pub(super) const LABEL: f32 = 130.0;
+/// The profile rows' entry for no assigned profile: the document uses the working space.
+const WORKING_RGB: &str = "Working RGB (don't tag)";
+const WORKING_CMYK: &str = "Working CMYK (don't tag)";
 
 pub(super) const SPEC: DialogSpec =
     DialogSpec { heading: |_| tl!("Document Setup").into(), body, confirm, min_width: 540.0, max_width: Some(540.0), ..DialogSpec::FORM };
@@ -29,13 +38,76 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let linked = fields["bleed"].as_array().is_some_and(|b| b.windows(2).all(|w| w[0] == w[1]));
     fields["bleedLinked"] = json!(linked);
     fields["tab"] = json!(TABS[0]);
+    if let Some(st) = app.session.active() {
+        let (rgb, cmyk) = doc_profiles(&st.doc);
+        fields["colorMode"] = json!(mode_id(st.doc.color_mode));
+        fields["rgbProfile"] = json!(rgb);
+        fields["cmykProfile"] = json!(cmyk);
+    }
+    fields["convertColors"] = json!(true);
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     Ok(Value::Null)
 }
 
+/// The `mode` param of `file.documentColorMode` for `m`.
+fn mode_id(m: ColorMode) -> &'static str {
+    match m {
+        ColorMode::Rgb => "rgb",
+        ColorMode::Cmyk => "cmyk",
+    }
+}
+
+/// The commands the Color tab's changes run, as `command.batch` steps, in the order OK runs them:
+/// Edit › Assign Profile first, so that a mode change converts through the profiles it assigns,
+/// then File › Document Color Mode. Empty when the tab matches the active document. A field the
+/// dialog holds with a value of the wrong kind is an error, and then nothing runs; an omitted
+/// field leaves its setting as it is (`convertColors`: converts).
+fn color_commands(app: &VectorcraftApp, d: &Dialog) -> Result<Vec<Value>, String> {
+    let Some(st) = app.session.active() else { return Ok(vec![]) };
+    let mut out = vec![];
+    let (rgb, cmyk) = doc_profiles(&st.doc);
+    let mut assign = Map::new();
+    for (key, param, current) in [("rgbProfile", "rgb", rgb), ("cmykProfile", "cmyk", cmyk)] {
+        let chosen = match d.fields.get(key) {
+            None => continue,
+            Some(Value::Null) => None,
+            Some(Value::String(n)) => Some(n.clone()),
+            Some(_) => return Err(format!("`{key}` must be a profile name or null")),
+        };
+        if chosen != current {
+            assign.insert(param.into(), json!(chosen));
+        }
+    }
+    let mode = match d.fields.get("colorMode") {
+        None => None,
+        Some(Value::String(m)) if m.eq_ignore_ascii_case("rgb") => Some(ColorMode::Rgb),
+        Some(Value::String(m)) if m.eq_ignore_ascii_case("cmyk") => Some(ColorMode::Cmyk),
+        Some(_) => return Err("`colorMode` must be one of rgb, cmyk".into()),
+    };
+    let key = "convertColors";
+    let convert = match d.fields.get(key) {
+        None => true,
+        Some(Value::Bool(b)) => *b,
+        Some(_) => return Err(format!("`{key}` must be true or false")),
+    };
+    if !assign.is_empty() {
+        out.push(json!({"command": "edit.assignProfile", "params": assign}));
+    }
+    if let Some(mode) = mode.filter(|m| *m != st.doc.color_mode) {
+        out.push(json!({"command": "file.documentColorMode", "params": {"mode": mode_id(mode), "convert": convert}}));
+    }
+    Ok(out)
+}
+
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let params = d.fields.iter().filter(|(k, _)| !UI_ONLY.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
-    let r = app.run("document.setup", Value::Object(params));
+    let params: Map<String, Value> = d.fields.iter().filter(|(k, _)| !UI_ONLY.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
+    let color = color_commands(app, d)?;
+    let r = if color.is_empty() {
+        app.run("document.setup", Value::Object(params))
+    } else {
+        let commands: Vec<Value> = std::iter::once(json!({"command": "document.setup", "params": params})).chain(color).collect();
+        app.run("command.batch", json!({"label": "Document Setup", "commands": commands}))
+    };
     if r.is_ok() {
         app.ui.dialog = None;
     }
@@ -54,7 +126,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         match tab {
             0 => close = general(app, ui, d),
             1 => transparency(app, ui, d),
-            _ => typography(ui, d),
+            2 => typography(ui, d),
+            _ => color(app, ui, d),
         }
     });
     close
@@ -208,10 +281,40 @@ fn typography(ui: &mut egui::Ui, d: &mut Dialog) {
     choice(ui, d, "exportText", tl!("Export:"), &[("editable", tl!("Preserve Text Editability")), ("appearance", tl!("Preserve Text Appearance"))]);
 }
 
+/// The Color tab: the document color mode, whether a mode change converts the colors (unchecked:
+/// they keep their numbers), and the RGB and CMYK profiles assigned to the document.
+fn color(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+    widgets::subheader(ui, tl!("Document Color Mode"));
+    choice(ui, d, "colorMode", tl!("Color Mode:"), &[("rgb", "RGB Color"), ("cmyk", "CMYK Color")]);
+    let mode = d.str("colorMode");
+    let changes = app.session.active().is_some_and(|st| mode_id(st.doc.color_mode) != mode);
+    let label = if mode == "cmyk" { tl!("Convert to CMYK") } else { tl!("Convert to RGB") };
+    widgets::label_row(ui, "", LABEL, |ui| {
+        let on = d.bool("convertColors");
+        if widgets::check(ui, label, on, changes) {
+            d.fields.insert("convertColors".into(), json!(!on));
+        }
+    });
+    ui.add_space(14.0);
+    widgets::subheader(ui, tl!("Assign Profile"));
+    for (key, label, kind, working) in
+        [("rgbProfile", tl!("RGB:"), ProfileKind::Rgb, WORKING_RGB), ("cmykProfile", tl!("CMYK:"), ProfileKind::Cmyk, WORKING_CMYK)]
+    {
+        let current = d.fields.get(key).and_then(Value::as_str).unwrap_or(working).to_string();
+        widgets::label_row(ui, label, LABEL, |ui| {
+            if let Some(n) = crate::panels::separations::profile_dropdown(ui, key, &current, kind, Some(working)) {
+                d.fields.insert(key.into(), if n == working { Value::Null } else { json!(n) });
+            }
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use egui::{Event, PointerButton, Pos2, Rect, vec2};
     use serde_json::json;
+    use vectorcraft_color::{Color, Paint, cms};
+    use vectorcraft_doc::{ColorMode, NodeId};
     use vectorcraft_engine::Session;
 
     use crate::VectorcraftApp;
@@ -302,7 +405,7 @@ mod tests {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
         app.run("file.documentSetup", json!({})).unwrap();
-        for tab in ["General", "Transparency", "Type"] {
+        for tab in ["General", "Transparency", "Type", "Color"] {
             app.ui.dialog.as_mut().unwrap().fields.insert("tab".into(), json!(tab));
             frame(&mut app);
         }
@@ -342,5 +445,194 @@ mod tests {
         assert!(!texts.iter().any(|t| t == "Highlight Substituted Fonts"), "{texts:?}");
         crate::dialogs::confirm(&mut app).unwrap();
         assert!(app.ui.dialog.is_none());
+    }
+
+    /// A new document with a red square → the app and the square.
+    fn red_square() -> (VectorcraftApp, NodeId) {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("paint.setFill", json!({"ids": [id], "color": "#ff0000"})).unwrap();
+        (app, NodeId(id))
+    }
+
+    fn fill(app: &VectorcraftApp, id: NodeId) -> Paint {
+        app.session.active().unwrap().doc.node(id).unwrap().appearance.fill().unwrap().paint.clone()
+    }
+
+    fn undo_steps(app: &VectorcraftApp) -> usize {
+        app.session.active().unwrap().history.undo.len()
+    }
+
+    /// Opens Document Setup on the Color tab and sets `fields` in it.
+    fn color_tab(app: &mut VectorcraftApp, fields: serde_json::Value) {
+        app.run("file.documentSetup", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("tab".into(), json!("Color"));
+        for (k, v) in fields.as_object().unwrap() {
+            d.fields.insert(k.clone(), v.clone());
+        }
+    }
+
+    /// The Color tab opens on the document's color mode and assigned profiles, and shows them.
+    /// The CMYK profile assigned is the working one, so the process-wide color settings stay as
+    /// they are for the other tests.
+    #[test]
+    fn color_tab_shows_the_color_mode_and_profiles() {
+        let (mut app, _) = red_square();
+        let working = cms::active_settings().cmyk;
+        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        app.run("edit.assignProfile", json!({"cmyk": working})).unwrap();
+        let steps = undo_steps(&app);
+        color_tab(&mut app, json!({}));
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.str("colorMode"), d.str("cmykProfile"), d.fields["rgbProfile"].clone()), ("cmyk".into(), working.clone(), json!(null)));
+        assert!(d.bool("convertColors"));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        dialog_frame(&mut app, &ctx, vec![]);
+        let texts: Vec<String> = dialog_frame(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+        for shown in ["CMYK Color", "Convert to CMYK", "Working RGB (don't tag)", working.as_str()] {
+            assert!(texts.iter().any(|t| t == shown), "no {shown} in {texts:?}");
+        }
+        // Picking the other mode names the conversion OK makes.
+        app.ui.dialog.as_mut().unwrap().fields.insert("colorMode".into(), json!("rgb"));
+        let texts: Vec<String> = dialog_frame(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+        assert!(texts.iter().any(|t| t == "Convert to RGB"), "{texts:?}");
+        app.ui.dialog.as_mut().unwrap().fields.insert("colorMode".into(), json!("cmyk"));
+        // OK with nothing changed records nothing.
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(undo_steps(&app), steps);
+    }
+
+    /// OK with a new mode converts the colors as File › Document Color Mode does, together with the
+    /// dialog's other changes, in one undo step.
+    #[test]
+    fn ok_converts_the_color_mode_with_the_other_changes_in_one_undo_step() {
+        let (mut app, id) = red_square();
+        let (mut menu, menu_id) = red_square();
+        menu.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        let steps = undo_steps(&app);
+        color_tab(&mut app, json!({"colorMode": "cmyk", "bleed": [9, 9, 9, 9]}));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        let st = app.session.active().unwrap();
+        assert_eq!((st.doc.color_mode, st.doc.setup.bleed), (ColorMode::Cmyk, [9.0; 4]));
+        assert_eq!(fill(&app, id), fill(&menu, menu_id));
+        assert!(matches!(fill(&app, id), Paint::Solid { color: Color::Cmyk { .. }, .. }), "{:?}", fill(&app, id));
+        assert_eq!(undo_steps(&app), steps + 1);
+        app.run("edit.undo", json!({})).unwrap();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.doc.color_mode, st.doc.setup.bleed), (ColorMode::Rgb, [0.0; 4]));
+        assert_eq!(fill(&app, id), Paint::solid(Color::from_hex("ff0000").unwrap()));
+    }
+
+    /// With Convert unchecked the mode changes and the colors keep their numbers.
+    #[test]
+    fn ok_without_convert_keeps_the_color_numbers() {
+        let (mut app, id) = red_square();
+        let before = fill(&app, id);
+        let steps = undo_steps(&app);
+        color_tab(&mut app, json!({"colorMode": "cmyk", "convertColors": false}));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.color_mode, ColorMode::Cmyk);
+        assert_eq!(fill(&app, id), before);
+        assert_eq!(undo_steps(&app), steps + 1);
+    }
+
+    /// OK assigns the profiles picked, with the dialog's other changes, in one undo step; the
+    /// working-space entry assigns none.
+    #[test]
+    fn ok_assigns_the_profiles_with_the_other_changes_in_one_undo_step() {
+        let (mut app, _) = red_square();
+        let working = cms::active_settings().cmyk;
+        let steps = undo_steps(&app);
+        color_tab(&mut app, json!({"cmykProfile": working, "bleed": [9, 9, 9, 9]}));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.doc.color_profiles.cmyk.clone(), st.doc.color_profiles.rgb.clone()), (Some(working.clone()), None));
+        assert_eq!((st.doc.setup.bleed, st.doc.color_mode), ([9.0; 4], ColorMode::Rgb));
+        assert_eq!(undo_steps(&app), steps + 1);
+        // Back to the working space: no profile assigned.
+        color_tab(&mut app, json!({"cmykProfile": null}));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.color_profiles.cmyk, None);
+        app.run("edit.undo", json!({})).unwrap();
+        app.run("edit.undo", json!({})).unwrap();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.doc.color_profiles.cmyk.clone(), st.doc.setup.bleed), (None, [0.0; 4]));
+    }
+
+    /// OK assigns the RGB profile picked, in one undo step.
+    #[test]
+    fn ok_assigns_the_rgb_profile() {
+        let (mut app, _) = red_square();
+        let working = cms::active_settings().rgb;
+        let steps = undo_steps(&app);
+        color_tab(&mut app, json!({"rgbProfile": working}));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.doc.color_profiles.rgb.clone(), st.doc.color_profiles.cmyk.clone()), (Some(working), None));
+        assert_eq!(undo_steps(&app), steps + 1);
+    }
+
+    /// A profile and a mode changed in one OK: Assign Profile runs before Document Color Mode, so
+    /// the conversion goes through the profile picked.
+    #[test]
+    fn a_profile_and_a_mode_change_assign_the_profile_first() {
+        let (mut app, _) = red_square();
+        color_tab(&mut app, json!({"colorMode": "cmyk", "cmykProfile": cms::DEVICE_CMYK}));
+        let commands = super::color_commands(&app, app.ui.dialog.as_ref().unwrap()).unwrap();
+        assert_eq!(
+            commands,
+            vec![
+                json!({"command": "edit.assignProfile", "params": {"cmyk": cms::DEVICE_CMYK}}),
+                json!({"command": "file.documentColorMode", "params": {"mode": "cmyk", "convert": true}}),
+            ]
+        );
+    }
+
+    /// A Color tab field with a value of the wrong kind is an error: the dialog stays open and
+    /// nothing changes, the profile picked with it included.
+    #[test]
+    fn a_bad_color_field_is_an_error_and_changes_nothing() {
+        let bad = [
+            ("colorMode", json!("lab")),
+            ("colorMode", json!(null)),
+            ("rgbProfile", json!(5)),
+            ("cmykProfile", json!(true)),
+            ("convertColors", json!("no")),
+        ];
+        for (key, value) in bad {
+            let (mut app, id) = red_square();
+            let before = fill(&app, id);
+            let steps = undo_steps(&app);
+            color_tab(&mut app, json!({"colorMode": "cmyk", "cmykProfile": cms::active_settings().cmyk}));
+            app.ui.dialog.as_mut().unwrap().fields.insert(key.into(), value.clone());
+            assert!(super::color_commands(&app, app.ui.dialog.as_ref().unwrap()).is_err(), "{key}: {value}");
+            assert!(crate::dialogs::confirm(&mut app).is_err(), "{key}: {value}");
+            assert!(app.ui.dialog.is_some());
+            let st = app.session.active().unwrap();
+            assert_eq!((st.doc.color_mode, st.doc.color_profiles.cmyk.clone()), (ColorMode::Rgb, None), "{key}: {value}");
+            assert_eq!(fill(&app, id), before);
+            assert_eq!(undo_steps(&app), steps);
+        }
+    }
+
+    /// Cancel leaves the color mode, the colors and the history as they were.
+    #[test]
+    fn cancel_changes_no_color_setting() {
+        let (mut app, id) = red_square();
+        let before = fill(&app, id);
+        let steps = undo_steps(&app);
+        color_tab(&mut app, json!({"colorMode": "cmyk", "cmykProfile": cms::active_settings().cmyk}));
+        click_dialog_button(&mut app, "Cancel");
+        assert!(app.ui.dialog.is_none());
+        let st = app.session.active().unwrap();
+        assert_eq!((st.doc.color_mode, st.doc.color_profiles.cmyk.clone()), (ColorMode::Rgb, None));
+        assert_eq!(fill(&app, id), before);
+        assert_eq!(undo_steps(&app), steps);
     }
 }

@@ -514,8 +514,7 @@ fn the_preset_menu_saves_changes_and_opens_import_and_export() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn export_writes_into_the_picked_folder() {
-    let dir = std::env::temp_dir().join(format!("vc-asset-panel-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = vectorcraft_testkit::TempDir::new("asset-panel");
     let folder = dir.to_string_lossy().replace('\\', "/");
     let (mut app, _, [a, _]) = app(false);
     let picked = folder.clone();
@@ -526,8 +525,179 @@ fn export_writes_into_the_picked_folder() {
     frame(&ctx, &mut app, vec![], false);
     let texts = frame(&ctx, &mut app, vec![], false);
     frame(&ctx, &mut app, click(at(&texts, "Export")), false);
-    assert!(dir.join("Badge.png").is_file(), "{:?}", std::fs::read_dir(&dir).map(|d| d.count()));
+    // Create Sub-folders is on by default: the 1x row's folder.
+    assert!(dir.join("1x").join("Badge.png").is_file(), "{:?}", std::fs::read_dir(&dir).map(|d| d.count()));
+}
+
+/// The panel menu's Create Sub-folders and Open Location after Export are check items, on by
+/// default, that change the settings the panel shares with Export for Screens, and the panel's
+/// Export follows them.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn the_menu_sets_create_subfolders_and_open_location_and_export_follows_them() {
+    let dir = vectorcraft_testkit::TempDir::new("asset-panel-menu");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    let (mut app, _, [a, _]) = app(false);
+    let picked = folder.clone();
+    app.services.pick_folder = Some(Box::new(move || Some(picked.clone())));
+    let shown = Rc::new(RefCell::new(Vec::<String>::new()));
+    let s = shown.clone();
+    app.services.reveal = Some(Box::new(move |path: &str| {
+        s.borrow_mut().push(path.to_string());
+        Ok(())
+    }));
+    app.run("assets.add", json!({"ids": [a], "name": "Badge"})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    menu_frame(&ctx, &mut app, vec![]);
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    for item in ["✓ Create Sub-folders", "✓ Open Location after Export", "   Format Settings…"] {
+        assert!(has(&texts, item), "{item}");
+    }
+    // Both on: the 1x row's folder, and the file manager shows the file.
+    let export = |app: &mut VectorcraftApp| {
+        frame(&ctx, app, vec![], false);
+        let texts = frame(&ctx, app, vec![], false);
+        frame(&ctx, app, click(at(&texts, "Export")), false);
+    };
+    export(&mut app);
+    assert!(dir.join("1x").join("Badge.png").is_file());
+    assert_eq!(shown.borrow().len(), 1);
+    // Both turned off (a click lands on the items of the frame before).
+    menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&texts, "✓ Create Sub-folders")));
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&texts, "✓ Open Location after Export")));
+    let settings = app.run("document.exportSettings", json!({})).unwrap()["settings"].clone();
+    assert_eq!((&settings["subfolders"], &settings["openLocation"]), (&json!(false), &json!(false)), "{settings}");
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    assert!(has(&texts, "   Create Sub-folders") && has(&texts, "   Open Location after Export"));
+    // Export for Screens opens on the same choices.
+    app.run("file.exportForScreens", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((&d.fields["subfolders"], &d.fields["openLocation"]), (&json!(false), &json!(false)));
+    crate::dialogs::cancel(&mut app);
     let _ = std::fs::remove_dir_all(&dir);
+    export(&mut app);
+    assert!(dir.join("Badge.png").is_file() && !dir.join("1x").exists());
+    assert_eq!(shown.borrow().len(), 1, "no file manager after export");
+    // Create Sub-folders on again: a folder per row.
+    menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&texts, "   Create Sub-folders")));
+    let settings = app.run("document.exportSettings", json!({})).unwrap()["settings"].clone();
+    assert_eq!((&settings["subfolders"], &settings["folders"]), (&json!(true), &json!("rows")), "{settings}");
+    // Only true and false are taken.
+    for bad in [json!({"openLocation": "yes"}), json!({"subfolders": 1})] {
+        assert!(app.run("assets.settings.set", bad.clone()).is_err(), "{bad}");
+    }
+}
+
+/// A folder per format, remembered by Export for Screens or a preset, is used by the panel's Export
+/// too.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn export_uses_a_remembered_folder_per_format() {
+    let dir = vectorcraft_testkit::TempDir::new("asset-panel-format");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    let (mut app, _, [a, _]) = app(false);
+    app.services.pick_folder = Some(Box::new(move || Some(folder.clone())));
+    let asset = app.run("assets.add", json!({"ids": [a], "name": "Badge"})).unwrap()["assets"][0].clone();
+    // An export as Export for Screens sends it with Create Sub-folders by Format, which the
+    // document remembers.
+    let formats = json!([{"format": "png"}, {"format": "svg"}]);
+    app.run("document.exportForScreens", json!({"assets": [asset], "formats": formats, "folders": "format", "subfolders": false})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    menu_frame(&ctx, &mut app, vec![]);
+    assert!(has(&menu_frame(&ctx, &mut app, vec![]), "✓ Create Sub-folders"));
+    frame(&ctx, &mut app, vec![], false);
+    let texts = frame(&ctx, &mut app, vec![], false);
+    frame(&ctx, &mut app, click(at(&texts, "Export")), false);
+    assert!(dir.join("png").join("Badge.png").is_file() && dir.join("svg").join("Badge.svg").is_file());
+}
+
+/// Remembered empty folders are none, as an export reads them: Create Sub-folders is off in the
+/// panel menu and in Export for Screens.
+#[test]
+fn empty_remembered_folders_are_create_subfolders_off() {
+    let (mut app, _, [a, _]) = app(true);
+    let asset = app.run("assets.add", json!({"ids": [a]})).unwrap()["assets"][0].clone();
+    app.run("document.exportForScreens", json!({"assets": [asset], "formats": [{"format": "svg"}], "folders": "", "subfolders": true})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    menu_frame(&ctx, &mut app, vec![]);
+    assert!(has(&menu_frame(&ctx, &mut app, vec![]), "   Create Sub-folders"));
+    app.run("file.exportForScreens", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["subfolders"], false);
+}
+
+/// Open Location after Export turned off in a document without settings leaves Create Sub-folders
+/// on, in the panel menu and in Export for Screens.
+#[test]
+fn open_location_off_leaves_create_subfolders_on() {
+    let (mut app, _, _) = app(false);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    menu_frame(&ctx, &mut app, vec![]);
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&texts, "✓ Open Location after Export")));
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    assert!(has(&texts, "✓ Create Sub-folders") && has(&texts, "   Open Location after Export"));
+    app.run("file.exportForScreens", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((&d.fields["subfolders"], &d.fields["openLocation"]), (&json!(true), &json!(false)));
+}
+
+/// Editing the rows of a document without a Create Sub-folders choice keeps it on, in Export for
+/// Screens too; a preset that turns it off shows it off, and the menu turns it on again.
+#[test]
+fn row_edits_keep_create_subfolders_on_and_a_preset_can_turn_it_off() {
+    let (mut app, _, [a, _]) = app(true);
+    app.run("assets.add", json!({"ids": [a]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&ctx, &mut app, vec![], false);
+    let texts = frame(&ctx, &mut app, vec![], false);
+    frame(&ctx, &mut app, click(at(&texts, "+ Add Scale")), false);
+    assert!(has(&menu_frame(&ctx, &mut app, vec![]), "✓ Create Sub-folders"));
+    app.run("file.exportForScreens", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["subfolders"], true);
+    crate::dialogs::cancel(&mut app);
+    // Logo Package sorts by format: checked, as in Export for Screens. Turned off, the sorting
+    // ends; turned on again, a folder per row.
+    app.run("assets.settings.set", json!({"exportPreset": "Logo Package"})).unwrap();
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&texts, "✓ Create Sub-folders")));
+    let settings = app.run("document.exportSettings", json!({})).unwrap()["settings"].clone();
+    assert_eq!((&settings["subfolders"], &settings["folders"]), (&json!(false), &json!("none")), "{settings}");
+    app.run("file.exportForScreens", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["subfolders"], false);
+    crate::dialogs::cancel(&mut app);
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&texts, "   Create Sub-folders")));
+    let settings = app.run("document.exportSettings", json!({})).unwrap()["settings"].clone();
+    assert_eq!((&settings["subfolders"], &settings["folders"]), (&json!(true), &json!("rows")), "{settings}");
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    assert!(has(&texts, "✓ Create Sub-folders"));
+    // The web downloads the files: the menu has no Open Location after Export.
+    assert!(!texts.iter().any(|(t, _)| t.ends_with("Open Location after Export")));
+}
+
+/// Format Settings… in the panel menu opens Export for Screens on its Assets tab, showing the
+/// first row's format settings.
+#[test]
+fn format_settings_opens_the_first_rows_format_settings() {
+    let (mut app, _, [a, b]) = app(true);
+    app.run("assets.add", json!({"ids": [a, b], "multiple": true})).unwrap();
+    app.run("assets.settings.set", json!({"formats": [{"format": "jpeg"}, {"format": "svg"}]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    menu_frame(&ctx, &mut app, vec![]);
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&texts, "   Format Settings…")));
+    let d = app.ui.dialog.as_ref().expect("Export for Screens");
+    assert_eq!((d.kind.as_str(), &d.fields["tab"], &d.fields["__settings"]), (crate::dialogs::EXPORT_FOR_SCREENS, &json!("assets"), &json!("jpg")));
+    assert_eq!(d.fields["assets"].as_array().map(Vec::len), Some(2));
 }
 
 #[test]
@@ -596,6 +766,29 @@ fn tiff_photometric(bytes: &[u8]) -> u16 {
     let entry = (0..usize::from(short(dir))).map(|i| dir + 2 + 12 * i).find(|&at| short(at) == 262).expect("PhotometricInterpretation");
     assert_eq!((short(entry + 2), long(entry + 4)), (3, 1), "one SHORT");
     short(entry + 8)
+}
+
+/// Remembered format settings that hold keys the export no longer reads, and settings for a format
+/// it doesn't write, are left out of the panel's export, so it is not refused.
+#[test]
+fn export_leaves_out_remembered_keys_no_longer_read() {
+    let (mut app, log, [a, _]) = app(true);
+    app.run("assets.add", json!({"ids": [a], "name": "Badge"})).unwrap();
+    let serde_json::Value::Object(saved) = json!({
+        "formats": [{"format": "tiff", "scale": "1x", "noSuchOption": 1}],
+        "settings": {"png": {"noSuchSetting": true}, "dxf": {}, "tiff": {"lzw": false, "noSuchSetting": 1}}
+    }) else {
+        panic!("an object")
+    };
+    std::sync::Arc::make_mut(&mut app.session.active_mut().unwrap().doc).export_settings = saved;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&ctx, &mut app, vec![], false);
+    let texts = frame(&ctx, &mut app, vec![], false);
+    frame(&ctx, &mut app, click(at(&texts, "Export")), false);
+    let log = log.borrow();
+    let [(name, _)] = log.as_slice() else { panic!("expected one TIFF: {}", app.ui.status) };
+    assert_eq!(name, "Badge.tif");
 }
 
 #[test]
@@ -693,8 +886,7 @@ fn tiff_panel_preserves_shared_antialias_and_explicit_overrides() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn tiff_saved_aliases_use_document_defaults_and_explicit_rgb() {
-    let dir = std::env::temp_dir().join(format!("vc-asset-tiff-aliases-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = vectorcraft_testkit::TempDir::new("asset-tiff-aliases");
     // The first case is the historical control: saved tif without an explicit model must be CMYK.
     // Native picked folders let the mixed-row case inspect each file without introducing a ZIP decoder.
     for (case, (alias, rgb_override, mixed)) in
@@ -741,5 +933,79 @@ fn tiff_saved_aliases_use_document_defaults_and_explicit_rgb() {
             "direct export preserves saved aliases and explicit options"
         );
     }
-    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Export 3D Object in the panel menu collects the selected 3D object; its tile is marked 3D, the
+/// Format row sets its mesh format, and Export writes it as a mesh file beside the pictures.
+#[test]
+fn a_3d_asset_takes_its_format_from_the_row_and_exports_as_a_mesh() {
+    let (mut app, log, [a, b]) = app(true);
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "params": {"depth": 20}})).unwrap();
+    app.run("layer.setProps", json!({"id": a, "name": "Box"})).unwrap();
+    app.run("assets.add", json!({"ids": [b], "name": "Flat"})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    // Without a 3D asset there is no 3D Format row.
+    frame(&ctx, &mut app, vec![], false);
+    assert!(!has(&frame(&ctx, &mut app, vec![], false), "3D Format:"));
+    menu_frame(&ctx, &mut app, vec![]);
+    let items = menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&items, "   Export 3D Object")));
+    let list = assets(&mut app);
+    assert_eq!((list[1]["name"].clone(), list[1]["format3D"].clone()), (json!("Box"), json!("usda")));
+    let texts = frame(&ctx, &mut app, vec![], false);
+    let texts = if has(&texts, "3D Format:") { texts } else { frame(&ctx, &mut app, vec![], false) };
+    assert!(has(&texts, "3D") && has(&texts, "3D Format:"), "{:?}", texts.iter().map(|t| &t.0).collect::<Vec<_>>());
+    frame(&ctx, &mut app, click(at(&texts, "USDA")), false);
+    let texts = frame(&ctx, &mut app, vec![], false);
+    frame(&ctx, &mut app, click(at(&texts, "OBJ")), false);
+    assert_eq!(assets(&mut app)[1]["format3D"], "obj");
+    // The menu left the new 3D asset selected: Export writes its OBJ and MTL alone, as one zip.
+    let texts = frame(&ctx, &mut app, vec![], false);
+    frame(&ctx, &mut app, click(at(&texts, "Export 1 Selected")), false);
+    {
+        let log = log.borrow();
+        let [(name, zip)] = log.as_slice() else { panic!("{:?} {}", log.iter().map(|f| &f.0).collect::<Vec<_>>(), app.ui.status) };
+        assert!(name.ends_with(".zip"), "{name}");
+        let has_name = |n: &str| zip.windows(n.len()).any(|w| w == n.as_bytes());
+        assert!(has_name("Box.obj") && has_name("Box.mtl"));
+    }
+    // Every asset: the 3D asset's files first, since they are written at once, then the picture
+    // asset as before.
+    log.borrow_mut().clear();
+    menu_frame(&ctx, &mut app, vec![]);
+    let items = menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&items, "   Select All Assets")));
+    frame(&ctx, &mut app, vec![], false);
+    let texts = frame(&ctx, &mut app, vec![], false);
+    frame(&ctx, &mut app, click(at(&texts, "Export")), false);
+    let log = log.borrow();
+    assert_eq!(log.iter().map(|f| f.0.ends_with(".zip")).collect::<Vec<_>>(), [true, false], "{:?}", log.iter().map(|f| &f.0).collect::<Vec<_>>());
+    assert!(log[1].0.starts_with("Flat"), "{}", log[1].0);
+}
+
+/// When the 3D assets fail to export, Export leaves the picture assets unexported and the status
+/// bar keeps the 3D error.
+#[test]
+fn a_failed_3d_export_stops_the_picture_export() {
+    let (mut app, log, [a, b]) = app(true);
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "params": {"depth": 20}})).unwrap();
+    app.run("layer.setProps", json!({"id": a, "name": "Box"})).unwrap();
+    app.run("assets.add3D", json!({"ids": [a]})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.run("effect.remove", json!({"index": 0})).unwrap();
+    app.run("assets.add", json!({"ids": [b], "name": "Flat"})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&ctx, &mut app, vec![], false);
+    menu_frame(&ctx, &mut app, vec![]);
+    let items = menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&items, "   Select All Assets")));
+    frame(&ctx, &mut app, vec![], false);
+    let texts = frame(&ctx, &mut app, vec![], false);
+    frame(&ctx, &mut app, click(at(&texts, "Export")), false);
+    assert!(log.borrow().is_empty(), "{:?}", log.borrow().iter().map(|f| &f.0).collect::<Vec<_>>());
+    assert!(app.ui.status.contains("Box"), "{}", app.ui.status);
 }

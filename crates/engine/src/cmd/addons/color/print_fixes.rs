@@ -11,7 +11,7 @@ use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_doc::overprint::{OverprintBlack, is_white};
 use vectorcraft_doc::{ColorMode, Node, NodeKind};
 
-use super::super::super::colorcmds::{Recolor, Scope};
+use super::super::super::colorcmds::{Recolor, Scope, keeping_series_paint};
 use super::super::super::overprint::edit_counted;
 use super::super::super::{bad, checked_ids_or_selection, number_or, switch_or, text_param};
 use crate::{Result, Session};
@@ -107,7 +107,7 @@ impl Fixes {
         let white = usize::from(self.remove_white_overprint && self.unset_white(n));
         let blacks = self.overprint_black > 0.0 && (!self.text_only || matches!(n.kind, NodeKind::Text(_)));
         let mut counts = (white, usize::from(blacks && black.apply(n, spots)));
-        for c in n.children_mut().into_iter().flatten() {
+        for c in n.children_mut().into_iter().flatten().filter(|c| !c.is_ruler_guide()) {
             let (w, b) = self.overprint(Arc::make_mut(c), black, spots);
             counts = (counts.0 + w, counts.1 + b);
         }
@@ -149,7 +149,7 @@ pub(super) fn run(s: &mut Session, p: &Value) -> Result<Value> {
                 true
             };
             let scope = Scope { fill: fixes.fill, stroke: fixes.stroke, images: false, patterns: false };
-            ink = Recolor::with_links(scope, &|c| fixes.limit(c), &links).run(d, &ids);
+            ink = keeping_series_paint(d, &ids, |d| Ok(Recolor::with_links(scope, &|c| fixes.limit(c), &links).run(d, &ids)))?;
         }
         if !fixes.remove_white_overprint && fixes.overprint_black <= 0.0 {
             return Ok(ink);

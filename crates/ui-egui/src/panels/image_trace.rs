@@ -270,6 +270,21 @@ fn preset_label(name: &str) -> &str {
     crate::i18n::tr_ctx(crate::i18n::current(), "imageTrace", name)
 }
 
+/// The buttons above the Image Trace panel's Preset dropdown, in panel order: each one's name and the
+/// built-in preset a click chooses. The help page lists these options before Preset
+/// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/image-trace-panel-options.html>);
+/// which preset each one chooses is VectorCraft's own.
+fn preset_buttons() -> [(&'static str, &'static str); 6] {
+    [
+        (preset_label("Auto Color"), "Auto Color"),
+        (tl!("High Color"), "High Fidelity Photo"),
+        (tl!("Low Color"), "Low Fidelity Photo"),
+        (tl!("Grayscale"), "Shades of Gray"),
+        (tl!("Black and White"), "Black and White Logo"),
+        (preset_label("Outline"), "Outline"),
+    ]
+}
+
 fn preset_list(app: &mut VectorcraftApp, ui: &mut Ui, current: &str) -> Option<String> {
     let mut chosen = None;
     let list = presets(app, ui.ctx());
@@ -314,7 +329,7 @@ pub(crate) fn trace_button(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
     if main.on_hover_text(tl!("Trace the image with the Default preset")).clicked() {
         trace_with(app, "Default");
     }
-    if let Some(p) = egui::Popup::menu(&arrow).show(|ui| preset_list(app, ui, "")).and_then(|r| r.inner) {
+    if let Some(p) = egui::Popup::menu(&arrow).show(|ui| widgets::menu_scroll(ui, |ui| preset_list(app, ui, ""))).and_then(|r| r.inner) {
         trace_with(app, &p);
     }
 }
@@ -334,19 +349,25 @@ pub(crate) fn preset_dropdown(app: &mut VectorcraftApp, ui: &mut Ui, traced_with
 }
 
 /// The Control bar for one selected Image Trace object: its preset, view, the Image Trace panel
-/// and Expand. Whether it is one.
-pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
+/// and Expand. Whether it is one. Each label with its menu, and each button, shows only while the row
+/// has room for it and `reserve` after it, and the controls after one left out are left out too.
+pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) -> bool {
     let Some((preset, view)) = selected_trace(app) else { return false };
-    widgets::dim_label(ui, tl!("Preset:"));
-    preset_dropdown(app, ui, &preset, 150.0);
-    view_row(app, ui, view, 190.0);
-    if widgets::icon_button(ui, "image", tl!("Image Trace"), false, 24.0).clicked() {
+    let mut fit = crate::chrome::Fit::new(reserve);
+    if fit.room(ui, &[widgets::dim_label_width(ui, tl!("Preset:")), 150.0]) {
+        widgets::dim_label(ui, tl!("Preset:"));
+        preset_dropdown(app, ui, &preset, 150.0);
+    }
+    if fit.room(ui, &[widgets::dim_label_width(ui, tl!("View:")), 190.0]) {
+        view_row(app, ui, view, 190.0);
+    }
+    if fit.room(ui, &[24.0]) && widgets::icon_button(ui, "image", tl!("Image Trace"), false, 24.0).clicked() {
         open_settings(app);
     }
-    if widgets::flat_button(ui, tl!("Expand"), 64.0).clicked() {
+    if fit.room(ui, &[widgets::flat_button_fit_width(ui, tl!("Expand"), 64.0)]) && widgets::flat_button_fit(ui, tl!("Expand"), 64.0).clicked() {
         app.run("imageTrace.expand", json!({})).ok();
     }
-    ui.separator();
+    fit.separator(ui);
     true
 }
 
@@ -559,6 +580,23 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let restored = sync_with_object(&mut st, stored, object, &all, &changes);
     let mut retrace = false;
 
+    // A preset button chooses its preset as the Preset dropdown does; the button of the panel's
+    // preset shows as selected.
+    ui.horizontal_wrapped(|ui| {
+        for (label, name) in preset_buttons() {
+            let selected = st.preset == name;
+            if cfg!(test) {
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique(("trace-preset-button", name)), selected));
+            }
+            if ui.add(egui::Button::selectable(selected, label)).on_hover_text(preset_label(name)).clicked()
+                && let Some(p) = all.iter().find(|p| p.0 == name)
+            {
+                st.preset = name.to_string();
+                st.params = p.1.clone();
+                retrace = true;
+            }
+        }
+    });
     ui.horizontal(|ui| {
         widgets::dim_label(ui, tl!("Preset:"));
         let manage = 24.0;

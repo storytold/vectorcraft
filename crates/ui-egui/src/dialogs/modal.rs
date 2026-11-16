@@ -1,8 +1,9 @@
 //! The modal dialog window: a backdrop that keeps the rest of the app from taking clicks, and a
 //! window with no title bar that opens centred and moves by dragging its heading (the band from its
-//! top edge down to the heading), as a title bar would. Where it was moved to stays, per window, for
-//! the session, and the window never leaves the screen. Rows too many for the screen's height
-//! scroll inside it ([`scrolled_rows`]), so its heading and buttons stay in view.
+//! top edge down to the heading), as a title bar would, showing the arrow until it is dragged. Where
+//! it was moved to stays, per window, for the session, and the window never leaves the screen. Rows
+//! too many for the screen's height scroll inside it ([`scrolled_rows`]), so its heading and buttons
+//! stay in view.
 
 use egui::{Id, Rect, Vec2};
 
@@ -60,10 +61,10 @@ pub(crate) fn drag_band(ui: &mut egui::Ui, bottom: f32) {
     let band = Rect::from_x_y_ranges(outer.x_range(), outer.top()..=bottom.max(outer.top()));
     // Not focusable (`Sense::drag()` is): Tab goes through the dialog's controls, not the band.
     let r = ui.interact(band, handle(id), egui::Sense::DRAG);
+    // Hovered, it keeps the arrow, as a title bar does (the grab cursor is Windows' four-way move
+    // arrows: #5246); only while it is dragged does it show the window being carried.
     if r.dragged() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
-    } else if r.hovered() {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
     }
 }
 

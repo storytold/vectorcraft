@@ -28,6 +28,27 @@ pub(super) struct Sample {
 /// x and y.
 const PEN_KEYS: [&str; 4] = ["pressure", "tiltX", "tiltY", "rotation"];
 
+/// The range each of [`PEN_KEYS`] takes: pressure 0..1, each tilt −90..90 degrees and rotation
+/// 0..360 degrees (360 is the same direction as 0).
+const PEN_RANGES: [(f64, f64); PEN_KEYS.len()] = [(0.0, 1.0), (-90.0, 90.0), (-90.0, 90.0), (0.0, 360.0)];
+
+/// Blob Brush and Eraser Tool Options' Size, in points.
+pub(super) const SIZES: (f64, f64) = (0.1, 1000.0);
+
+/// Blob Brush and Eraser Tool Options' Size Variation, in points.
+pub(super) const SIZE_VARIATIONS: (f64, f64) = (0.0, 1000.0);
+
+/// `v`, or an error naming `key` when it is outside `lo..=hi` (or not a number at all, NaN).
+fn within(v: f64, key: &str, (lo, hi): (f64, f64), cmd: &str) -> Result<f64> {
+    if (lo..=hi).contains(&v) { Ok(v) } else { Err(bad(cmd, format!("`{key}` must be from {lo} to {hi}"))) }
+}
+
+/// The number `p` gives for `key`, `default` when it leaves it out or gives null, as [`number_or`]
+/// reads it, or an error naming `key` when the number is outside `range`.
+pub(super) fn ranged(p: &Value, key: &str, default: f64, range: (f64, f64), cmd: &str) -> Result<f64> {
+    within(number_or(p, key, default, cmd)?, key, range, cmd)
+}
+
 /// The point `[x, y, …]` or `{x, y, …}` that `v` holds, or an error when its x or y is not a finite
 /// number.
 pub(super) fn point_entry(v: &Value, cmd: &str) -> Result<Point> {
@@ -42,27 +63,36 @@ pub(super) fn point_entry(v: &Value, cmd: &str) -> Result<Point> {
 /// [`points_param`] with what a pen read at each point, as far as it is given:
 /// `[[x,y,pressure,tiltX,tiltY,rotation]…]` or `[{x,y,pressure,tiltX,tiltY,rotation}…]`. Pressure
 /// is 0..1; tilt in degrees, each −90..90 (one of the two without the other is 0); rotation in
-/// degrees clockwise. A point whose x or y is not a number, or whose pressure, tilt or rotation is
-/// neither a number nor null, is an error.
+/// degrees clockwise, 0..360. A point whose x or y is not a number, whose pressure, tilt or
+/// rotation is neither a number nor null or is outside its range, or an array of more than six
+/// numbers, is an error.
 pub(super) fn samples_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<Sample>> {
     let a = p.get(key).and_then(Value::as_array).ok_or_else(|| bad(cmd, format!("missing array `{key}`")))?;
     let pts: Vec<Sample> = a
         .iter()
-        .map(|v| {
+        .enumerate()
+        .map(|(at, v)| {
+            const MAX_ITEMS: usize = 2 + PEN_KEYS.len();
+            if let Value::Array(xy) = v
+                && xy.len() > MAX_ITEMS
+            {
+                let key = format!("{key}[{at}]");
+                return Err(bad(cmd, format!("`{key}` must be an array of at most {MAX_ITEMS} entries")));
+            }
             let mut pen = [None; 4];
-            for (i, (key, slot)) in PEN_KEYS.iter().zip(&mut pen).enumerate() {
+            for (i, ((key, range), slot)) in PEN_KEYS.iter().zip(PEN_RANGES).zip(&mut pen).enumerate() {
                 let given = match v {
                     Value::Array(xy) => xy.get(i + 2),
                     _ => v.get(*key),
                 };
                 *slot = match given {
                     None | Some(Value::Null) => None,
-                    Some(n @ Value::Number(_)) => n.as_f64(),
+                    Some(n @ Value::Number(_)) => n.as_f64().map(|x| within(x, key, range, cmd)).transpose()?,
                     Some(v) => return Err(bad(cmd, format!("`{key}` must be a number, not {v}"))),
                 };
             }
             let [pressure, tx, ty, rotation] = pen;
-            let tilt = (tx.is_some() || ty.is_some()).then(|| [tx, ty].map(|t| t.unwrap_or(0.0).clamp(-90.0, 90.0)));
+            let tilt = (tx.is_some() || ty.is_some()).then(|| [tx, ty].map(|t| t.unwrap_or(0.0)));
             Ok(Sample { pt: point_entry(v, cmd)?, pressure, tilt, rotation })
         })
         .collect::<Result<_>>()?;
@@ -186,18 +216,14 @@ impl PenRecord {
 }
 
 /// Blob Brush and Eraser Tool Options' Size set to Pressure (`sizeMode: "pressure"`, with
-/// `sizeVariation` in points): the stroke's pen pressure along it and the variation, `None` for
-/// Fixed (the default), no variation or a stroke without pressure (a mouse), which keeps the size.
+/// `sizeVariation` in points, 0..1000): the stroke's pen pressure along it and the variation, `None`
+/// for Fixed (the default), no variation or a stroke without pressure (a mouse), which keeps the
+/// size. A `sizeVariation` outside its range is an error with Fixed too.
 pub(super) fn size_pressure(p: &Value, samples: &[Sample], cmd: &str) -> Result<Option<(PressureProfile, f64)>> {
+    let variation = ranged(p, "sizeVariation", 0.0, SIZE_VARIATIONS, cmd)?;
     match p.get("sizeMode").filter(|v| !v.is_null()).map(|v| v.as_str().ok_or(v)) {
         None | Some(Ok("fixed")) => Ok(None),
-        Some(Ok("pressure")) => {
-            let variation = number_or(p, "sizeVariation", 0.0, cmd)?;
-            if !(variation.is_finite() && variation >= 0.0) {
-                return Err(bad(cmd, "sizeVariation must be 0 or more"));
-            }
-            Ok(stroke_pressure(samples).filter(|_| variation > 0.0).map(|prof| (prof, variation)))
-        }
+        Some(Ok("pressure")) => Ok(stroke_pressure(samples).filter(|_| variation > 0.0).map(|prof| (prof, variation))),
         Some(Ok(other)) => Err(bad(cmd, format!("sizeMode is \"fixed\" or \"pressure\", not `{other}`"))),
         Some(Err(other)) => Err(bad(cmd, format!("sizeMode is \"fixed\" or \"pressure\", not {other}"))),
     }
@@ -231,9 +257,9 @@ pub(super) fn within_input_bound(q: Point) -> bool {
     q.x.is_finite() && q.y.is_finite() && q.x.abs() < MAX_INPUT && q.y.abs() < MAX_INPUT
 }
 
-/// The whole number of 0 or more that `key` holds, read with [`index`].
+/// The whole number of 0 or more that `key` holds, read with [`u64_req`](crate::cmd::u64_req) and [`index`].
 pub(super) fn usize_req(p: &Value, key: &str, cmd: &str) -> Result<usize> {
-    p.get(key).and_then(Value::as_u64).map(index).ok_or_else(|| bad(cmd, format!("missing integer `{key}`")))
+    crate::cmd::u64_req(p, key, cmd).map(index)
 }
 
 /// The whole number of 0 or more that `key` holds, or `None` when `key` is absent or null. Any other

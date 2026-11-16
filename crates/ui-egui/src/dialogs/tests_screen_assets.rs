@@ -122,6 +122,28 @@ fn the_assets_tab_exports_the_checked_assets_into_the_folder() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// 3D assets export as mesh files from the Asset Export panel: the Assets tab lists and checks the
+/// picture assets alone.
+#[test]
+fn the_assets_tab_leaves_3d_assets_out() {
+    let (mut app, _, [a, b]) = app(false);
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "params": {}})).unwrap();
+    let three_d = app.run("assets.add3D", json!({"ids": [a]})).unwrap()["assets"][0].as_u64().unwrap();
+    let picture = app.run("assets.add", json!({"ids": [b], "name": "Flat"})).unwrap()["assets"][0].as_u64().unwrap();
+    app.run("assets.rename", json!({"asset": three_d, "name": "Solid"})).unwrap();
+    app.run("file.exportForScreens", json!({})).unwrap();
+    assert_eq!(field(&app, "assets"), json!([picture]));
+    set(&mut app, "tab", json!("assets"));
+    let text = painted_text(&mut app, |app, ui| super::show(app, ui.ctx()));
+    assert!(text.contains("Flat") && !text.contains("Solid"), "{text}");
+    // Opened from the panel with both checked, the tab still shows the picture asset alone.
+    open_export_for_screens_assets(&mut app, Some(&[three_d, picture]));
+    assert_eq!(field(&app, "__scrollTo"), json!(picture), "the list scrolls to the first asset it shows");
+    let text = painted_text(&mut app, |app, ui| super::show(app, ui.ctx()));
+    assert!(text.contains("Flat") && !text.contains("Solid"), "{text}");
+}
+
 #[test]
 fn an_empty_assets_tab_says_how_to_collect_art() {
     let (mut app, _, _) = app(false);

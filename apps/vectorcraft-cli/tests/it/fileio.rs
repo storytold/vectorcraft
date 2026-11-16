@@ -4,8 +4,6 @@ use std::process::Command;
 
 use serde_json::Value;
 
-const BIN: &str = env!("CARGO_BIN_EXE_vectorcraft-cli");
-
 /// Returns the path of `name` in `vectorcraft-cli-fileio-<pid>` in the temp folder. The first call
 /// removes that folder and creates it again empty.
 fn tmp(name: &str) -> String {
@@ -20,7 +18,7 @@ fn tmp(name: &str) -> String {
 }
 
 fn ok(args: &[&str]) -> String {
-    let out = Command::new(BIN).args(args).output().unwrap();
+    let out = Command::new(crate::bin()).args(args).output().unwrap();
     assert!(out.status.success(), "{args:?}: {}", String::from_utf8_lossy(&out.stderr));
     String::from_utf8(out.stdout).unwrap()
 }
@@ -106,6 +104,38 @@ fn images_open_at_their_pixel_size() {
 }
 
 #[test]
+fn raster_exports_use_document_resolution_unless_overridden() {
+    let source = tmp("resolution.vectorcraft");
+    ok(&["run", "--cmd", "file.new", "--params", r#"{"width":72,"height":36,"rasterEffectsPpi":300}"#, "--export", &source]);
+    for (flags, width, height) in [(vec![], 300u32, 150u32), (vec!["--scale", "1"], 72, 36), (vec!["--ppi", "150", "--scale", "2"], 150, 75)] {
+        for mode in ["run", "convert"] {
+            for format in ["png", "psd"] {
+                let path = tmp(&format!("resolution-{mode}-{width}.{format}"));
+                let mut args = if mode == "run" { vec!["run", "--in", &source, "--export", &path] } else { vec!["convert", &source, &path] };
+                args.extend_from_slice(&flags);
+                ok(&args);
+                let bytes = std::fs::read(&path).unwrap();
+                let dimensions = if format == "png" { &bytes[16..24] } else { &bytes[14..22] };
+                let expected =
+                    if format == "png" { [width.to_be_bytes(), height.to_be_bytes()] } else { [height.to_be_bytes(), width.to_be_bytes()] };
+                assert_eq!(dimensions, expected.concat(), "{args:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn raster_export_rejects_invalid_ppi() {
+    for ppi in ["0", "-150", "NaN", "inf", "high"] {
+        for args in [vec!["run", "--export", "unused.png", "--ppi", ppi], vec!["convert", "unused.svg", "unused.png", "--ppi", ppi]] {
+            let out = Command::new(crate::bin()).args(&args).output().unwrap();
+            assert!(!out.status.success(), "{args:?}");
+            assert!(String::from_utf8_lossy(&out.stderr).contains("positive finite number"), "{args:?}: {out:?}");
+        }
+    }
+}
+
+#[test]
 fn help_lists_readable_formats() {
     let out = ok(&["--help"]);
     assert!(out.contains("Readable formats: .vectorcraft") && out.contains(".ait") && out.contains(".webp"), "{out}");
@@ -145,6 +175,27 @@ fn convert_reports_import_warnings() {
     let out: Value = serde_json::from_str(ok(&["convert", &svg, &png]).trim()).unwrap();
     let w = out["importWarnings"].as_array().unwrap_or_else(|| panic!("{out}"));
     assert!(w.iter().any(|w| w.as_str().unwrap().contains("nowhere-to-be-found.png")), "{out}");
+}
+
+/// A conversion sends each format only the options it reads, so its warnings name an unused
+/// option only when the command line gave one: `--outline-text` for a format without it.
+#[test]
+fn convert_warns_about_an_unused_option_only_when_one_was_given() {
+    let svg = tmp("unused-option.svg");
+    std::fs::write(&svg, r#"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="20" height="10"/></svg>"#).unwrap();
+    let unused = |out: &Value| -> Vec<String> {
+        let w = out["warnings"].as_array().unwrap_or_else(|| panic!("{out}"));
+        w.iter().filter_map(Value::as_str).filter(|w| w.contains("was not used")).map(str::to_string).collect()
+    };
+    for ext in ["png", "jpg", "pdf", "ai", "eps", "psd", "dxf", "svg", "txt", "vectorcraft", "vctemplate"] {
+        let path = tmp(&format!("unused-option.{ext}"));
+        let out: Value = serde_json::from_str(ok(&["convert", &svg, &path]).trim()).unwrap();
+        assert!(unused(&out).is_empty(), "{ext}: {out}");
+    }
+    let out: Value = serde_json::from_str(ok(&["convert", &svg, &tmp("unused-option-outlined.svg"), "--outline-text"]).trim()).unwrap();
+    assert!(unused(&out).is_empty(), "{out}");
+    let out: Value = serde_json::from_str(ok(&["convert", &svg, &tmp("unused-option-outlined.png"), "--outline-text"]).trim()).unwrap();
+    assert_eq!(unused(&out), ["`outlineText` was not used: PNG files don't read it"], "{out}");
 }
 
 #[test]
@@ -196,7 +247,7 @@ fn convert_writes_legacy_ai_with_its_options() {
     assert!(r["warnings"].to_string().contains("hidden objects are left out"), "{r}");
     assert!(std::fs::read(&one).unwrap().starts_with(b"%!PS-Adobe-3.0"));
     // A value the engine doesn't take is an error.
-    let bad = Command::new(BIN).args(["convert", &src, &tmp("bad.ai"), "--ai-version", "7", "--hidden-objects", "behind"]).output().unwrap();
+    let bad = Command::new(crate::bin()).args(["convert", &src, &tmp("bad.ai"), "--ai-version", "7", "--hidden-objects", "behind"]).output().unwrap();
     assert!(!bad.status.success());
     assert!(String::from_utf8_lossy(&bad.stderr).contains("hiddenObjects"), "{}", String::from_utf8_lossy(&bad.stderr));
 }
@@ -221,7 +272,7 @@ fn convert_and_run_write_ait_templates() {
         assert_eq!(info(ait)["artboards"].as_array().unwrap().len(), 2, "{ait}");
     }
     // A template holds every artboard: one can't be picked.
-    let one = Command::new(BIN).args(["convert", &pdf, &tmp("one.ait"), "--artboard", "0"]).output().unwrap();
+    let one = Command::new(crate::bin()).args(["convert", &pdf, &tmp("one.ait"), "--artboard", "0"]).output().unwrap();
     assert!(!one.status.success());
     assert!(String::from_utf8_lossy(&one.stderr).contains("every artboard"), "{}", String::from_utf8_lossy(&one.stderr));
 }

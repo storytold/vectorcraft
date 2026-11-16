@@ -69,6 +69,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         objects_on_path_section(app, ui, &oop);
         divider(ui);
     }
+    graph::section(app, ui);
     if matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Text(_))) {
         type_sections(app, ui);
         divider(ui);
@@ -122,6 +123,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // any tool (<https://helpx.adobe.com/illustrator/using/blending-objects.html>, #4817).
     let blend_options = n_sel == 1 && matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Blend { .. }));
     let merge_live_paint = n_sel > 1 && can_merge_live_paint(app);
+    // Repeat Options for one selected repeat (radial, grid or mirror), or one object of its source
+    // art in isolation mode: Object › Repeat › Options, the dialog of the repeat options pages
+    // (<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/set-radial-repeat-options.html>,
+    // #5181).
+    let repeat_options = n_sel == 1 && crate::menus::enabled(app, "object.repeat.options");
     let mut actions: Vec<(&str, &str)> = vec![];
     if n_sel > 1 {
         actions.push((tl!("Group"), "object.group"));
@@ -132,6 +138,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if blend_options {
         actions.push((tl!("Blend Options"), "ui.blendOptions"));
+    }
+    if repeat_options {
+        actions.push((tl!("Repeat Options"), "object.repeat.options"));
     }
     if is_group {
         actions.push((tl!("Ungroup"), "object.ungroup"));
@@ -151,6 +160,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         crate::panels::image_trace::trace_button(app, ui, ui.available_width());
         actions.push((tl!("Crop Image"), "ui.cropImage"));
         actions.push((tl!("Mask"), "object.maskImage"));
+        // Remove Background at once with its defaults, as the reference app's Quick Actions do
+        // (<https://community.adobe.com/announcements-651/ai-powered-image-editing-features-in-illustrator-1624061>).
+        actions.push((tl!("Remove Background"), crate::addons::image::REMOVE_BACKGROUND));
     }
     // Object › Path's Offset Path and Simplify take paths: type alone could only fail, and offsets
     // live through the Appearance panel's Effect › Path › Offset Path (#2238).
@@ -240,13 +252,24 @@ fn global_edit_row(app: &mut VectorcraftApp, ui: &mut Ui) {
             crate::menus::invoke(app, "select.globalEdit", json!({}));
         }
         let options = widgets::icon_button_enabled(ui, "chevron-down", tl!("Global Edit Options"), false, !on, 20.0);
-        egui::Popup::menu(&options).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| global_edit_options(app, ui));
+        egui::Popup::menu(&options)
+            .open_memory(global_edit_options_open(&options, on))
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| global_edit_options(app, ui));
     });
 }
 
+/// The open state for a Global Edit Options dropdown's popup: a click on the button toggles the
+/// popup, and the popup is closed while Global Edit is on, including when Global Edit starts with
+/// the popup open.
+pub(crate) fn global_edit_options_open(options: &egui::Response, on: bool) -> Option<egui::SetOpenCommand> {
+    if on { Some(egui::SetOpenCommand::Bool(false)) } else { options.clicked().then_some(egui::SetOpenCommand::Toggle) }
+}
+
 /// The Global Edit Options: what else similar objects must share (Match), where they may lie (On
-/// Artboards) and how many objects that takes now.
-fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// Artboards) and how many objects that takes now. The Control bar's Global Edit Options dropdown
+/// shows them too.
+pub(crate) fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.set_min_width(220.0);
     let o = app.session.global_edit_options.clone();
     let set = |app: &mut VectorcraftApp, p: serde_json::Value| crate::menus::invoke(app, "select.globalEditOptions", p);
@@ -334,7 +357,7 @@ fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(4.0);
     let w = (ui.available_width() - 6.0) / 2.0;
     let links = crate::panels::links::ID;
-    ui.horizontal(|ui| crate::place::link_buttons(app, ui, id, linked, &name, Some(w)));
+    ui.horizontal(|ui| crate::place::link_buttons(app, ui, id, linked, &name, crate::place::LinkButtons::Width(w)));
     ui.horizontal(|ui| {
         if app.services.pick_open.is_some() && widgets::flat_button(ui, tl!("Replace…"), w).clicked() {
             crate::panels::links::replace(app, vec![id]);
@@ -367,12 +390,15 @@ fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vect
     });
 }
 
-/// The Objects on Path groups selected with nothing else: their ids, and the Pivot and Rotate they
-/// share (`None` where they differ).
+/// The Objects on Path groups selected with nothing else: their ids, the Pivot and Rotate they
+/// share (`None` where they differ), and whether Detach can take an object off the path: one group,
+/// neither hidden nor locked, with an object chosen with its Select/Move widget that is neither
+/// hidden nor locked.
 struct ObjectsOnPathSelection {
     ids: Vec<u64>,
     pivot: Option<u8>,
     rotate: Option<f64>,
+    detachable: bool,
 }
 
 /// The selection as Objects on Path groups ([`ObjectsOnPathSelection`]), when every selected
@@ -383,7 +409,11 @@ fn selected_objects_on_path(app: &VectorcraftApp) -> Option<ObjectsOnPathSelecti
     for id in &st.selection.objects {
         let rec = st.doc.node(*id)?.extras().objects_on_path.as_deref()?;
         match &mut out {
-            None => out = Some(ObjectsOnPathSelection { ids: vec![id.0], pivot: Some(rec.pivot), rotate: Some(rec.rotate) }),
+            None => {
+                let chosen = st.selection.on_path_member.filter(|m| st.selection.objects.len() == 1 && rec.members.iter().any(|x| x.id == *m));
+                let detachable = chosen.is_some_and(|m| st.doc.is_editable(*id) && st.doc.is_editable(m));
+                out = Some(ObjectsOnPathSelection { ids: vec![id.0], pivot: Some(rec.pivot), rotate: Some(rec.rotate), detachable });
+            }
             Some(s) => {
                 s.ids.push(id.0);
                 if s.pivot != Some(rec.pivot) {
@@ -403,7 +433,8 @@ fn selected_objects_on_path(app: &VectorcraftApp) -> Option<ObjectsOnPathSelecti
 /// path, as the help page places them in the Properties panel
 /// (<https://helpx.adobe.com/illustrator/using/objects-on-path.html>). A change goes to every
 /// selected group in one undo step (`object.objectsOnPath.options`). Where the groups differ, no
-/// Pivot square is chosen and Rotate is blank.
+/// Pivot square is chosen and Rotate is blank. Detach takes the object chosen with its Select/Move
+/// widget off the path (`object.objectsOnPath.detach`), and is dimmed until one is chosen.
 fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop: &ObjectsOnPathSelection) {
     section_header(ui, tl!("Objects on Path Options"));
     let fw = super::field_width(ui);
@@ -416,7 +447,7 @@ fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop: &ObjectsO
     egui::Grid::new("props-objects-on-path").num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
         dim_label(ui, tl!("Pivot:"));
         // 9 is no square: the groups' pivots differ.
-        if let Some(i) = widgets::reference_point(ui, oop.pivot.map_or(9, usize::from))
+        if let Some(i) = widgets::reference_point_named(ui, oop.pivot.map_or(9, usize::from), tl!("Pivot:"))
             && oop.pivot.is_none_or(|p| usize::from(p) != i)
         {
             set(app, json!({ "pivot": i }));
@@ -430,6 +461,12 @@ fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop: &ObjectsO
         }
         ui.end_row();
     });
+    let w = ui.available_width();
+    if ui.add_enabled_ui(oop.detachable, |ui| widgets::flat_button(ui, tl!("Detach"), w)).inner.clicked()
+        && let Err(e) = app.run("object.objectsOnPath.detach", json!({}))
+    {
+        app.status(e);
+    }
 }
 
 /// Whether the selection uses more than one colour (`recolor.colors`), which offers the Recolor
@@ -448,20 +485,27 @@ fn multi_color(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
     }
 }
 
-/// Edit Artboards (the Artboard tool): the active artboard's name, which can be edited to rename
-/// it, and the Artboard Options icon; its position and size, its preset and
-/// orientation (#671) (with Scale Artwork with Artboard on, a new size scales its art, #602; a new
-/// W or H, preset or orientation goes to every selected artboard, in one undo step), its Fill (background color), Move
-/// and Scale Artwork with Artboard, New Artboard and Delete Artboard, and Quick Actions: Rearrange All (#681) and
-/// Exit back to the Selection tool (#530).
+/// Edit Artboards (the Artboard tool), as in the reference app (#5219): a Transform section with
+/// the active artboard's reference point, position and size (as in the Transform panel: X and Y
+/// are the reference point's, and a new W or H keeps it in place, with the Constrain Width and
+/// Height Proportions link; with Scale Artwork with Artboard on, a new size scales its art, #602;
+/// a new W or H, preset or orientation goes to every selected artboard, in one undo step), its
+/// preset and orientation (#671), and Move and Scale Artwork with Artboard; then an Artboards
+/// section with its name, which can be edited to rename it, the Artboard Options icon, its Fill
+/// (background color, also for every selected artboard), New Artboard and Delete Artboard; and
+/// Quick Actions: Rearrange All (#681) and Exit back to the Selection tool (#530).
 fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let units = app.session.general_unit();
-    let origin = app.ruler_origin();
     let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
     let i = super::artboards::selected(app, n);
-    let scale_art = super::artboards::scale_art(app);
-    let move_art = super::artboards::move_art(app);
     if let Some(ab) = app.session.active().and_then(|d| d.doc.artboards.get(i)).cloned() {
+        section_header(ui, tl!("Transform"));
+        let fw = super::field_width(ui);
+        super::transform::artboard_fields(app, ui, i, ab.rect, fw);
+        artboard_size_row(app, ui, i, ab.rect.width(), ab.rect.height());
+        ui.add_space(2.0);
+        super::artboards::art_options(app, ui);
+        divider(ui);
+        section_header(ui, tl!("Artboards"));
         // The field shows the artboard's name as it is (names are never translated). Typing a new
         // name and pressing Enter or clicking elsewhere renames the artboard as the Artboards panel's
         // rename does; pressing Escape or leaving the field empty keeps the old name. A click on
@@ -476,39 +520,13 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
                 app.run("tool.options", json!({"tool": "artboard"})).ok();
             }
         });
-        let fw = super::field_width(ui);
-        egui::Grid::new("ab-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
-            let r = ab.rect;
-            for (row, [(l1, k1, v1), (l2, k2, v2)]) in
-                [[("X:", "x", r.x0), ("W:", "width", r.width())], [("Y:", "y", r.y0), ("H:", "height", r.height())]].into_iter().enumerate()
-            {
-                for (label, key, v) in [(l1, k1, v1), (l2, k2, v2)] {
-                    dim_label(ui, label);
-                    let offset = match key {
-                        "x" => origin.x,
-                        "y" => origin.y,
-                        _ => 0.0,
-                    };
-                    if let Some(v) = widgets::num_field_named(ui, ("ab", key, row), Some(tl!(label)), Some(v - offset), units, fw) {
-                        // A new X or Y moves the active artboard; a new W or H goes to every selected one.
-                        let indices = if matches!(key, "width" | "height") { super::artboards::resized_with(app, i) } else { vec![i] };
-                        let common = json!({"scaleArt": scale_art, "moveArt": move_art});
-                        super::artboards::set_props(app, &indices, common, |j, _| Some(json!({"index": j, key: v + offset}))).ok();
-                    }
-                }
-                ui.end_row();
-            }
-        });
-        artboard_size_row(app, ui, i, ab.rect.width(), ab.rect.height());
         artboard_fill_row(app, ui, i, ab.color);
-        ui.add_space(2.0);
-        super::artboards::art_options(app, ui);
     }
     ui.add_space(4.0);
     let w = (ui.available_width() - 6.0) / 2.0;
     ui.horizontal(|ui| {
-        if widgets::flat_button(ui, tl!("New Artboard"), w).clicked() && app.run("artboard.new", json!({})).is_ok() {
-            super::artboards::select(app, n);
+        if widgets::flat_button(ui, tl!("New Artboard"), w).clicked() {
+            super::artboards::add_new(app);
         }
         let deletable = n > 1 && !super::artboards::deletable(app, n).is_empty();
         if ui.add_enabled_ui(deletable, |ui| widgets::flat_button(ui, tl!("Delete Artboard"), w)).inner.clicked() {
@@ -614,7 +632,7 @@ fn artboard_size_controls_inner(
     let mut fit = None;
     ui.horizontal(|ui| {
         dim_label(ui, tl!("Preset:"));
-        preset = widgets::combo(ui, "ab-preset", &current, 140.0, |ui| {
+        preset = widgets::combo(ui, "ab-preset", &current, PRESET_MENU_WIDTH, |ui| {
             let mut chosen = None;
             if let Some(enabled) = fits {
                 for (selection, label) in [(false, tl!("Fit to Artwork Bounds")), (true, tl!("Fit to Selected Art"))] {
@@ -647,6 +665,19 @@ fn artboard_size_controls_inner(
     (preset.map(|(w, h)| ArtboardSizeChoice::Preset(w, h)).or_else(|| orientation.map(ArtboardSizeChoice::Orientation)), fit)
 }
 
+/// The width of the artboard size row's Preset menu.
+const PRESET_MENU_WIDTH: f32 = 140.0;
+
+/// The width of the artboard size row's Portrait and Landscape buttons, 26 points each, with the
+/// 2 points between them.
+const ORIENTATION_BUTTONS_WIDTH: f32 = 2.0 * 26.0 + 2.0;
+
+/// The widths of the parts of [`artboard_size_row`] in a row, as [`crate::chrome::Fit::room`] takes
+/// them: the Preset label, its menu, and the Portrait and Landscape buttons.
+pub(crate) fn artboard_size_row_widths(ui: &Ui) -> [f32; 3] {
+    [widgets::dim_label_width(ui, tl!("Preset:")), PRESET_MENU_WIDTH, ORIENTATION_BUTTONS_WIDTH]
+}
+
 /// Artboard `i`'s Fill, its background `color`: the chip shows it (the None paint when the artboard
 /// has none) and a click on it opens the Color Picker for the artboard. The list sets None, White or
 /// Black (in the document's color mode) or opens the Color Picker.
@@ -670,8 +701,11 @@ fn artboard_fill_row(app: &mut VectorcraftApp, ui: &mut Ui, i: usize, color: Opt
             None => {}
         }
     });
+    // A Fill chosen from the list goes to every selected artboard, in one undo step (#5698).
     if let Some(c) = set {
-        app.run("artboard.setProps", json!({"index": i, "color": c.as_ref().map(super::color_json)})).ok();
+        let color = c.as_ref().map(super::color_json);
+        let indices = super::artboards::renamed_with(app, i);
+        super::artboards::set_props(app, &indices, json!({}), |j, _| Some(json!({"index": j, "color": color}))).ok();
     }
     if pick {
         app.run("ui.colorPicker", json!({"artboard": i})).ok();
@@ -993,7 +1027,8 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     super::character::variable_font(app, ui, &s, w - 4.0);
     super::character::metrics_grid(app, ui, "props-char", &s, w, false);
     section_header(ui, tl!("Paragraph"));
-    // As in the Paragraph panel: the seven alignments and Hyphenate (#775); the rest is there.
+    // As in the Paragraph panel: the seven alignments and Hyphenate (#775), and area type's
+    // vertical alignment (#3759); the rest is there.
     if let Some((_, para)) = super::character::text_style(app) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 3.0;
@@ -1002,9 +1037,22 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
                 app.ui.open_panel = Some("paragraph".into());
             }
         });
+        // Area type: its vertical alignment in the frame (#3759).
+        if vertical_align::shown(app).is_some() {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 3.0;
+                vertical_align::buttons(app, ui, 24.0);
+            });
+        }
         super::paragraph::hyphenate_check(app, ui, &para);
+        // Area type: Dynamic Text's Block and its gaps.
+        dynamic_text::rows(app, ui);
     }
 }
+
+pub(crate) mod dynamic_text;
+pub(crate) mod graph;
+pub(crate) mod vertical_align;
 
 #[cfg(test)]
 mod tests;

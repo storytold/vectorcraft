@@ -1,7 +1,10 @@
 //! Shadings: axial and radial ones become gradients (their stops sampled from the shading
-//! function in its own colour model; an end that doesn't extend clips the painted area), a
-//! function-based one whose colour changes along one axis a linear gradient (else its average
-//! colour; all of them within one budget of function evaluations per import), patch and triangle
+//! function in its own color model, sharp steps between colors kept where they are; an end that
+//! doesn't extend clips the painted area), a
+//! function-based one whose color changes along one axis a linear gradient, one whose color
+//! turns around the origin of its space a conic gradient, and one whose color is the same along
+//! each square about that origin a diamond gradient (else its average color; all of them
+//! within one budget of function evaluations per import), patch and triangle
 //! meshes become gradient meshes, a gradient drawn through a luminosity mask that is
 //! the same gradient in grey (how stop opacity is written) gets its opacity stops back, and a shape
 //! clipping a gradient that fills it becomes one path with the gradient.
@@ -17,7 +20,7 @@ use vectorcraft_doc::{AppearanceItem, Node, NodeKind, OpacityMask};
 use vectorcraft_geom::PathData;
 
 use crate::import::{closed_subpaths, round3};
-use crate::import_color::{Colors, Native};
+use crate::import_color::{Colors, Native, Space};
 use crate::import_mask::{contains, is_rectangle, luminance};
 
 /// The most mesh patches (or triangles) imported per shading: past it, the shading is a flat
@@ -39,26 +42,28 @@ pub(crate) fn shading_gradient(sp: &ShadingPattern, colors: &mut Colors<'_>, ink
         let [r, g, b, _] = cs.to_rgba(&at(t)?, 1.0, false).components();
         Some(Color::rgb(round3(r), round3(g), round3(b)))
     };
-    // Sample densely, then drop samples that linear interpolation reproduces.
+    // Sample densely, halving each span between samples where its middle strays from the line
+    // between them (so a sharp step between two colors, as repeated stops make, is found to
+    // within [`EDGE_DEPTH`] halvings), then drop samples that linear interpolation reproduces.
     const N: usize = 64;
     let mut pts: Vec<(f32, [f32; 3])> = Vec::with_capacity(N + 1);
     for i in 0..=N {
         let t = i as f32 / N as f32;
-        pts.push((t, sample(t)?.to_rgb()));
-        // An ink that paints only at samples dropped below is still a spot swatch.
+        let rgb = sample(t)?.to_rgb();
+        if let Some(&(t0, c0)) = pts.last() {
+            refine(&sample, (t0, c0), (t, rgb), 0, &mut pts);
+        }
+        pts.push((t, rgb));
+    }
+    // An ink that paints only at samples dropped below is still a spot swatch.
+    for &(t, _) in &pts {
         if let Some(v) = at(t) {
             colors.mark_inks(space, &v);
         }
     }
     let ts: Vec<f32> = linear_keep(&pts).iter().filter_map(|&k| pts.get(k)).map(|p| p.0).collect();
-    let mut stop_at = |t: f32, offset: f32| -> GradientStop {
-        let rgb = sample(t).unwrap_or(Color::BLACK);
-        match at(t).and_then(|v| colors.native(space, &v)) {
-            Some(Native { color, link: Some((name, tint)) }) => GradientStop { swatch: Some(name), tint, ..GradientStop::new(offset, color) },
-            Some(Native { color, link: None }) => GradientStop::new(offset, color),
-            None => GradientStop::new(offset, rgb),
-        }
-    };
+    let mut stop_at =
+        |t: f32, offset: f32| -> GradientStop { shading_stop(colors, space, at(t).as_deref(), offset, sample(t).unwrap_or(Color::BLACK)) };
     let c = |x: f32, y: f32| m * Point::new(x as f64, y as f64);
     let (kind, geom, stops) = if *axial {
         let geom = GradientGeom { start: c(coords[0], coords[1]), end: c(coords[2], coords[3]), aspect: 1.0, focal: None };
@@ -79,6 +84,52 @@ pub(crate) fn shading_gradient(sp: &ShadingPattern, colors: &mut Colors<'_>, ink
     let mut g = GradientPaint::new(Gradient::new(kind, stops));
     g.geom = Some(geom);
     Some((g, *extend))
+}
+
+/// A shading's stop at `offset` of components `comps` of `space` in their own model, linked to
+/// its spot swatch at its tint (with the process plates it prints with, looking like `rgb`, the
+/// colour the file gives it); `rgb` when the components can't be read or kept.
+fn shading_stop(colors: &mut Colors<'_>, space: Space, comps: Option<&[f32]>, offset: f32, rgb: Color) -> GradientStop {
+    let Some(v) = comps else { return GradientStop::new(offset, rgb) };
+    if let Some((name, tint, plates)) = colors.ink_with_plates(space, v) {
+        return GradientStop { swatch: Some(name), tint, plates: Some(plates), ..GradientStop::new(offset, rgb) };
+    }
+    match colors.native(space, v) {
+        Some(Native { color, link: Some((name, tint)) }) => GradientStop { swatch: Some(name), tint, ..GradientStop::new(offset, color) },
+        Some(Native { color, link: None }) => GradientStop::new(offset, color),
+        None => GradientStop::new(offset, rgb),
+    }
+}
+
+/// How many times [`refine`] halves a span of an axial or radial shading's samples: to 1/64 ×
+/// 2^-14 of the axis.
+const EDGE_DEPTH: u32 = 14;
+/// The most samples of one axial or radial shading [`refine`] takes.
+const MAX_EDGE_SAMPLES: usize = 16_384;
+/// Where in a span [`refine`] looks a second time when the span's middle lies on the line: at
+/// the golden section, which no whole number of repeated steps across the span puts on the same
+/// place in a step as the ends.
+const SECOND_LOOK: f32 = 0.381_966;
+
+/// Samples of `sample` between `a` and `b` (offset, RGB), pushed onto `out` in order: the span's
+/// middle where it, or the point [`SECOND_LOOK`] along the span, strays from the line between
+/// them by more than 1.5 levels, and the samples of each half the same way, at most
+/// [`EDGE_DEPTH`] halvings deep and [`MAX_EDGE_SAMPLES`] in all. The second look finds steps that
+/// repeat a whole number of times across the span, which put its ends and its middle at the same
+/// place in a step.
+fn refine(sample: &dyn Fn(f32) -> Option<Color>, a: (f32, [f32; 3]), b: (f32, [f32; 3]), depth: u32, out: &mut Vec<(f32, [f32; 3])>) {
+    if depth >= EDGE_DEPTH || out.len() >= MAX_EDGE_SAMPLES {
+        return;
+    }
+    let on_line = |u: f32, c: [f32; 3]| (0..3).all(|k| (a.1[k] + (b.1[k] - a.1[k]) * u - c[k]).abs() <= 1.5 / 255.0);
+    let t = (a.0 + b.0) / 2.0;
+    let Some(c) = sample(t).map(|c| c.to_rgb()) else { return };
+    if on_line(0.5, c) && sample(a.0 + (b.0 - a.0) * SECOND_LOOK).is_none_or(|p| on_line(SECOND_LOOK, p.to_rgb())) {
+        return;
+    }
+    refine(sample, a, (t, c), depth + 1, out);
+    out.push((t, c));
+    refine(sample, (t, c), b, depth + 1, out);
 }
 
 /// The samples of `pts` (offset, RGB; at least one) a gradient keeps as stops: the first, the
@@ -150,7 +201,7 @@ impl FunctionBudget {
 
 /// What a function-based shading comes in as ([`function_paint`]).
 pub(crate) enum FunctionPaint {
-    /// Its colour changes along one axis: a linear gradient.
+    /// Its color changes along one axis (a linear gradient) or around the origin (a conic one).
     Gradient(Box<GradientPaint>),
     /// It has no gradient: the colour it averages to.
     Average(Color),
@@ -170,7 +221,10 @@ pub(crate) fn function_paint(
     if !matches!(sp.shading.shading_type.as_ref(), ShadingType::FunctionBased { .. }) {
         return None;
     }
-    Some(match function_gradient(sp, colors, inks, budget) {
+    let gradient = function_gradient(sp, colors, inks, budget)
+        .or_else(|| function_sweep(sp, colors, inks, budget))
+        .or_else(|| function_diamond(sp, colors, inks, budget));
+    Some(match gradient {
         Some(g) => FunctionPaint::Gradient(Box::new(g)),
         None => function_average(sp, budget).map_or(FunctionPaint::Unread, FunctionPaint::Average),
     })
@@ -248,6 +302,215 @@ fn function_gradient(sp: &ShadingPattern, colors: &mut Colors<'_>, inks: Option<
         _ => return None,
     };
     let point = |s: f32| if along_x { (lerp(x0, x1, s), lerp(y0, y1, 0.5)) } else { (lerp(x0, x1, 0.5), lerp(y0, y1, s)) };
+    let out = function_stops(sp, function, colors, inks, budget, &point)?;
+    let p = |s: f32| {
+        let (x, y) = point(s);
+        Point::new(x as f64, y as f64)
+    };
+    let mut geom = GradientGeom { start: p(0.0), end: p(1.0), aspect: 1.0, focal: None };
+    geom.transform(sp.matrix * *matrix, GradientKind::Linear);
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Linear, out));
+    g.geom = Some(geom);
+    // It paints only over its domain ([`extend_clip`]).
+    Some(g)
+}
+
+/// A function-based shading (type 1) whose color turns around the origin of its space and stays
+/// the same along each ray from it (how a conic gradient is written: a function of the angle,
+/// ISO 32000-1 8.7.4.5.2, as the calculator function's `atan` gives it, 7.10.5) as a conic
+/// gradient, its vector along the space's x axis and its sweep towards its y axis: stops sampled
+/// around a circle about the origin, as [`function_stops`] samples them. When the origin lies
+/// outside the domain (a conic whose center is off the painted area), the stops are read across
+/// the turns the domain shows, and the colors there extend to the rest of the sweep. `None` when
+/// the color changes along a ray or doesn't change from ray to ray, the stops would be more than
+/// [`MAX_FUNCTION_STOPS`], or `budget` runs out (leaving [`AVERAGE_EVALUATIONS`] for
+/// [`function_average`]).
+fn function_sweep(sp: &ShadingPattern, colors: &mut Colors<'_>, inks: Option<&[String]>, budget: &FunctionBudget) -> Option<GradientPaint> {
+    use std::f32::consts::TAU;
+    let ShadingType::FunctionBased { matrix, .. } = sp.shading.shading_type.as_ref() else { return None };
+    let (function, domain) = function_domain(sp)?;
+    let [x0, x1, y0, y1] = domain;
+    let rgb = |x: f32, y: f32| function_rgb(sp, function, x, y, budget, AVERAGE_EVALUATIONS);
+    let around = x0 < 0.0 && x1 > 0.0 && y0 < 0.0 && y1 > 0.0;
+    // The angles the domain shows: once around, ending just before the seam (where the angle
+    // starts again at 0), or those its corners span seen from outside it.
+    let (a0, a1) = if around { (0.0, TAU * (1.0 - SWEEP_SEAM)) } else { seen_angles(domain)? };
+    // Around the origin, the circle the stops are read on, well inside the domain.
+    let inner = 0.25 * (-x0).min(x1).min(-y0).min(y1);
+    // Where the ray at angle `a` runs through the domain (from that circle around the origin).
+    let ray = |a: f32| ray_in_domain(a, domain).map(|(near, far)| if around { (inner, far) } else { (near, far) });
+    // Along each test ray (off round angles), the color near where it enters the domain, halfway
+    // through and near where it leaves is the same. Outside, the first is a little way in, off the
+    // origin when the domain's edge runs through it.
+    let mut first = None;
+    let mut turns = false;
+    let enter = if around { 0.0 } else { 0.05 };
+    for i in 0..=FUNCTION_GRID {
+        let a = a0 + (a1 - a0) * grid_at(i);
+        let (dx, dy) = (a.cos(), a.sin());
+        let (near, far) = ray(a)?;
+        let at = |f: f32| near + (far - near) * f;
+        let c = rgb(at(enter) * dx, at(enter) * dy)?;
+        for r in [at(0.5), at(0.9)] {
+            if !same_rgb(rgb(r * dx, r * dy)?, c) {
+                return None;
+            }
+        }
+        match first {
+            None => first = Some(c),
+            Some(f) => turns |= !same_rgb(f, c),
+        }
+    }
+    if !turns {
+        return None;
+    }
+    // The stops of turns `from..to` (as fractions of a turn from the space's x axis; `angle` gives
+    // the angle of a turn), read where each ray enters the domain, or halfway through it outside.
+    let mut read = |from: f32, to: f32, angle: &dyn Fn(f32) -> f32| -> Option<Vec<GradientStop>> {
+        let point = |s: f32| {
+            let a = angle(from + (to - from) * s);
+            let (near, far) = ray(a).unwrap_or((0.0, 0.0));
+            let r = if around { near } else { (near + far) / 2.0 };
+            (r * a.cos(), r * a.sin())
+        };
+        let mut stops = function_stops(sp, function, colors, inks, budget, &point)?;
+        for s in &mut stops {
+            s.offset = from + (to - from) * s.offset;
+        }
+        Some(stops)
+    };
+    let out = if around {
+        read(0.0, 1.0 - SWEEP_SEAM, &|t| t * TAU)?
+    } else {
+        let t0 = (a0 / TAU).rem_euclid(1.0);
+        let t1 = t0 + (a1 - a0) / TAU;
+        let angle = |t: f32| a0 + (t - t0) * TAU;
+        if t1 <= 1.0 {
+            read(t0, t1, &angle)?
+        } else {
+            // The turns it shows run on past the seam: those after it first, then those before.
+            let mut out = read(0.0, t1 - 1.0, &|t| angle(t + 1.0))?;
+            out.extend(read(t0, 1.0 - SWEEP_SEAM, &angle)?);
+            out
+        }
+    };
+    if out.len() > MAX_FUNCTION_STOPS {
+        return None;
+    }
+    let mut geom = GradientGeom { start: Point::ZERO, end: Point::new(1.0, 0.0), aspect: 1.0, focal: None };
+    geom.transform(sp.matrix * *matrix, GradientKind::Conic);
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Conic, out));
+    g.geom = Some(geom);
+    // It paints only over its domain ([`extend_clip`]).
+    Some(g)
+}
+
+/// A function-based shading (type 1) whose domain holds the origin of its space and whose color
+/// is the same along each square about it with corners on the axes (a function of `abs(x) +
+/// abs(y)`, as a calculator function gives it, ISO 32000-1 7.10.5) as a diamond gradient, its
+/// vector along the space's x axis to the corner of the largest such square the domain reaches
+/// (through the domain's farthest corner): stops sampled from the origin out to that corner, as
+/// [`function_stops`] samples them. `None` when the domain does not hold the origin, the color
+/// differs between grid points on one square or doesn't change from square to square, the stops
+/// would be more than [`MAX_FUNCTION_STOPS`], or `budget` runs out (leaving
+/// [`AVERAGE_EVALUATIONS`] for [`function_average`]).
+fn function_diamond(sp: &ShadingPattern, colors: &mut Colors<'_>, inks: Option<&[String]>, budget: &FunctionBudget) -> Option<GradientPaint> {
+    let ShadingType::FunctionBased { matrix, .. } = sp.shading.shading_type.as_ref() else { return None };
+    let (function, domain) = function_domain(sp)?;
+    let [x0, x1, y0, y1] = domain;
+    if !(x0 < 0.0 && x1 > 0.0 && y0 < 0.0 && y1 > 0.0) {
+        return None;
+    }
+    let rgb = |x: f32, y: f32| function_rgb(sp, function, x, y, budget, AVERAGE_EVALUATIONS);
+    let lerp = |a: f32, b: f32, t: f32| a + (b - a) * t;
+    // The farthest corner of the domain, and a point on each square up to it inside the domain:
+    // along the x axis toward that corner, then up its side.
+    let (fx, fy) = (if x1 >= -x0 { x1 } else { x0 }, if y1 >= -y0 { y1 } else { y0 });
+    let reach = fx.abs() + fy.abs();
+    let on_square = |level: f32| {
+        let x = level.clamp(0.0, fx.abs());
+        (x.copysign(fx), (level - x).clamp(0.0, fy.abs()).copysign(fy))
+    };
+    // Each grid point has the color of that point on its square, and the color changes from
+    // square to square.
+    let mut turns = false;
+    let origin = rgb(0.0, 0.0)?;
+    for j in 0..=FUNCTION_GRID {
+        for i in 0..=FUNCTION_GRID {
+            let (x, y) = (lerp(x0, x1, grid_at(i)), lerp(y0, y1, grid_at(j)));
+            let (sx, sy) = on_square(x.abs() + y.abs());
+            let on_path = rgb(sx, sy)?;
+            if !same_rgb(rgb(x, y)?, on_path) {
+                return None;
+            }
+            turns |= !same_rgb(on_path, origin);
+        }
+    }
+    if !turns {
+        return None;
+    }
+    let out = function_stops(sp, function, colors, inks, budget, &|s: f32| on_square(s * reach))?;
+    let mut geom = GradientGeom { start: Point::ZERO, end: Point::new(f64::from(reach), 0.0), aspect: 1.0, focal: None };
+    geom.transform(sp.matrix * *matrix, GradientKind::Diamond);
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Diamond, out));
+    g.geom = Some(geom);
+    // It paints only over its domain ([`extend_clip`]).
+    Some(g)
+}
+
+/// How far short of a whole turn [`function_sweep`] reads the last stop: just before the seam.
+const SWEEP_SEAM: f32 = 1e-4;
+
+/// The angles (radians, the first the smaller, less than half a turn apart) at which rays from the
+/// origin cross domain `[x0, x1, y0, y1]`, which does not hold the origin, kept a little inside the
+/// angles of its corners; `None` when the domain shows no angles.
+fn seen_angles([x0, x1, y0, y1]: [f32; 4]) -> Option<(f32, f32)> {
+    use std::f32::consts::{PI, TAU};
+    let mid = ((y0 + y1) / 2.0).atan2((x0 + x1) / 2.0);
+    let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
+    for (x, y) in [(x0, y0), (x1, y0), (x1, y1), (x0, y1)] {
+        // A corner on the origin has no angle.
+        if x.hypot(y) > 1e-6 {
+            let r = (y.atan2(x) - mid + PI).rem_euclid(TAU) - PI;
+            (lo, hi) = (lo.min(r), hi.max(r));
+        }
+    }
+    let margin = (hi - lo) * 0.01;
+    (hi - lo > 1e-4 && (hi - lo).is_finite()).then_some((mid + lo + margin, mid + hi - margin))
+}
+
+/// Where the ray from the origin at angle `a` (radians) runs through domain `[x0, x1, y0, y1]`:
+/// its distances from the origin where it enters (0 when the domain holds the origin) and
+/// leaves; `None` when it misses the domain.
+fn ray_in_domain(a: f32, [x0, x1, y0, y1]: [f32; 4]) -> Option<(f32, f32)> {
+    let (mut near, mut far) = (0.0f32, f32::INFINITY);
+    for (d, lo, hi) in [(a.cos(), x0, x1), (a.sin(), y0, y1)] {
+        if d.abs() < 1e-6 {
+            if lo > 0.0 || hi < 0.0 {
+                return None;
+            }
+            continue;
+        }
+        let (t0, t1) = (lo / d, hi / d);
+        (near, far) = (near.max(t0.min(t1)), far.min(t0.max(t1)));
+    }
+    (far > near && far.is_finite()).then_some((near, far))
+}
+
+/// The stops of a function-based shading's function `function` read along `point` (0..1 to a
+/// point of the domain): sampled at [`FUNCTION_SAMPLES`] even steps, each hard color change two
+/// stops at one offset, and stops between which the color runs straight left out. `None` when
+/// they would be more than [`MAX_FUNCTION_STOPS`], or `budget` runs out (leaving
+/// [`AVERAGE_EVALUATIONS`]).
+fn function_stops(
+    sp: &ShadingPattern,
+    function: &ShadingFunction,
+    colors: &mut Colors<'_>,
+    inks: Option<&[String]>,
+    budget: &FunctionBudget,
+    point: &dyn Fn(f32) -> (f32, f32),
+) -> Option<Vec<GradientStop>> {
+    let rgb = |x: f32, y: f32| function_rgb(sp, function, x, y, budget, AVERAGE_EVALUATIONS);
     let color_of = |s: f32| {
         let (x, y) = point(s);
         rgb(x, y)
@@ -299,26 +562,10 @@ fn function_gradient(sp: &ShadingPattern, colors: &mut Colors<'_>, inks: Option<
         for k in linear_keep(&pts) {
             let Some(&(offset, read, c)) = piece.get(k) else { continue };
             let rgb = Color::rgb(round3(c[0]), round3(c[1]), round3(c[2]));
-            out.push(match value(read).and_then(|v| colors.native(space, &v)) {
-                Some(Native { color, link: Some((name, tint)) }) => GradientStop { swatch: Some(name), tint, ..GradientStop::new(offset, color) },
-                Some(Native { color, link: None }) => GradientStop::new(offset, color),
-                None => GradientStop::new(offset, rgb),
-            });
+            out.push(shading_stop(colors, space, value(read).as_deref(), offset, rgb));
         }
     }
-    if out.len() > MAX_FUNCTION_STOPS {
-        return None;
-    }
-    let p = |s: f32| {
-        let (x, y) = point(s);
-        Point::new(x as f64, y as f64)
-    };
-    let mut geom = GradientGeom { start: p(0.0), end: p(1.0), aspect: 1.0, focal: None };
-    geom.transform(sp.matrix * *matrix, GradientKind::Linear);
-    let mut g = GradientPaint::new(Gradient::new(GradientKind::Linear, out));
-    g.geom = Some(geom);
-    // It paints only over its domain ([`extend_clip`]).
-    Some(g)
+    (out.len() <= MAX_FUNCTION_STOPS).then_some(out)
 }
 
 /// The colour a function-based shading averages to over its domain, for one that has no gradient

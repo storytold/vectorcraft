@@ -13,7 +13,6 @@ use std::io::Read;
 use craft_pdf::write::backend as krilla;
 use krilla::geom::PathBuilder;
 use krilla::graphic::Graphic;
-use krilla::surface::Surface;
 use std::sync::Arc;
 
 use vectorcraft_doc::{Document, Node, NodeKind};
@@ -21,6 +20,7 @@ use vectorcraft_doc::{Document, Node, NodeKind};
 use crate::encrypt::{Lexer, Obj, StreamSpans, Tok, int, stream_spans};
 use crate::output::{deflate, text_string};
 use crate::patch::{Patch, Xref};
+use crate::surface::{Surface, affine};
 use crate::{PdfError, PdfSettings, Standard};
 
 /// What a marked form is.
@@ -87,6 +87,9 @@ pub(crate) fn form(s: &mut Surface, mark: Mark, draw: impl FnOnce(&mut Surface))
 /// form's drawing space), rounded outwards to whole units: [`finish`] gives the form a box that
 /// covers the paper and the art.
 pub(crate) fn layer_form(s: &mut Surface, i: usize, paper: vectorcraft_geom::Rect, draw: impl FnOnce(&mut Surface)) {
+    // The art and its box move into page space together; keeping the old local paper here
+    // would clip layers on translated artboards or give the importer a spurious clipping group.
+    let paper = affine(s.group_transform()).transform_rect_bbox(paper);
     let corner = |x: f64, y: f64| (x as f32, y as f32);
     marked(s, Mark::Layer(i), [corner(paper.x0.floor(), paper.y0.floor()), corner(paper.x1.ceil(), paper.y1.ceil())], draw);
 }
@@ -94,8 +97,9 @@ pub(crate) fn layer_form(s: &mut Surface, i: usize, paper: vectorcraft_geom::Rec
 /// Draw `draw` as a form of its own, marked `mark`: an empty clip from the mark's first point
 /// through `rest`.
 fn marked(s: &mut Surface, mark: Mark, rest: [(f32, f32); 2], draw: impl FnOnce(&mut Surface)) {
+    let transform = s.group_transform();
     let mut sb = s.stream_builder();
-    let mut fs = sb.surface();
+    let mut fs = Surface::stream(sb.surface());
     let (x, y) = mark.at();
     let mut pb = PathBuilder::new();
     pb.move_to(x, y);
@@ -108,10 +112,14 @@ fn marked(s: &mut Surface, mark: Mark, rest: [(f32, f32); 2], draw: impl FnOnce(
         fs.push_clip_path(&p, &krilla::paint::FillRule::NonZero);
         fs.pop();
     }
+    fs.push_transform(&transform);
     draw(&mut fs);
+    fs.pop();
     fs.finish();
     let stream = sb.finish();
+    s.push_transform(&transform.invert().unwrap_or_default());
     s.draw_graphic(Graphic::new(stream, false));
+    s.pop();
 }
 
 // ---------- finishing the written file ----------

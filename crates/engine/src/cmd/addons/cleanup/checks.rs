@@ -10,7 +10,7 @@ use vectorcraft_geom::{PathData, Point, Rect};
 use vectorcraft_pathops::addons as po;
 
 use super::super::super::edit::outermost;
-use super::super::super::layer::empty_artboards;
+use super::super::super::layer::{empty_artboards, remove_artboards};
 use crate::Result;
 
 /// Sine of the turn below which an anchor on a straight run is collinear.
@@ -185,7 +185,7 @@ fn objects<'a>(d: &'a Document, scope: &Scope) -> Vec<(&'a Node, Place)> {
 }
 
 fn visit<'a>(n: &'a Node, place: Place, out: &mut Vec<(&'a Node, Place)>) {
-    if !n.visible || n.locked || out.len() >= MAX_OBJECTS {
+    if !n.visible || n.locked || n.is_ruler_guide() || out.len() >= MAX_OBJECTS {
         return;
     }
     let inner = |clip: bool, i: usize, top: bool| Place { clips: clip && i == 0, top, in_compound: false };
@@ -216,7 +216,7 @@ fn is_generated(n: &Node) -> bool {
 }
 
 fn is_guide_or_clip(n: &Node) -> bool {
-    matches!(n.kind, NodeKind::Path { guide: true, .. } | NodeKind::Path { clipping: true, .. })
+    n.is_guide() || matches!(n.kind, NodeKind::Path { clipping: true, .. })
 }
 
 fn is_shape(n: &Node) -> bool {
@@ -275,6 +275,7 @@ fn same_art(a: &NodeKind, b: &NodeKind) -> bool {
                 moved.xf = a.xf;
                 moved.cached_bounds = a.cached_bounds;
                 moved.cached_baselines.clone_from(&a.cached_baselines);
+                moved.cached_ink = a.cached_ink;
                 **a == moved
             }
         }
@@ -368,17 +369,43 @@ fn restructure(d: &mut Document, scope: &mut Scope, kind: Kind) -> Result<Outcom
             break;
         }
         if let Scope::Objects(roots) = scope {
-            for (id, nodes) in &found {
-                if let Some(at) = roots.iter().position(|r| r == id) {
-                    roots.splice(at..=at, nodes.iter().map(|n| n.id));
-                }
-            }
+            *roots = replace_roots(roots, &found);
         }
         out.ids.extend(found.iter().map(|(id, _)| *id));
         d.insert_beside(found, true)?;
     }
     out.count = out.ids.len();
     Ok(out)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many scope roots [`replace_roots`] looked at on this thread.
+    pub(super) static ROOTS_SEEN: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The scope's objects after a pass replaced `found`: each found object gives way to the ids of
+/// what replaces it, in its place, and the others keep their order. An id that `roots` lists more
+/// than once is replaced at its first places, once for each time `found` lists it. One walk of
+/// `roots`.
+pub(super) fn replace_roots(roots: &[NodeId], found: &[(NodeId, Vec<Node>)]) -> Vec<NodeId> {
+    let mut with: HashMap<NodeId, (&[Node], usize)> = HashMap::with_capacity(found.len());
+    for (id, nodes) in found {
+        with.entry(*id).or_insert((nodes.as_slice(), 0)).1 += 1;
+    }
+    let mut out = Vec::with_capacity(roots.len());
+    for r in roots {
+        #[cfg(test)]
+        ROOTS_SEEN.set(ROOTS_SEEN.get() + 1);
+        match with.get_mut(r) {
+            Some((nodes, left)) if *left > 0 => {
+                *left -= 1;
+                out.extend(nodes.iter().map(|n| n.id));
+            }
+            _ => out.push(*r),
+        }
+    }
+    out
 }
 
 /// Run `f` on a copy of each path in scope (not guides), and keep the copies it changed: `f`
@@ -478,13 +505,9 @@ fn near_points(d: &mut Document, scope: &Scope) -> Result<Outcome> {
 fn artboards(d: &mut Document, sel: &mut Selection, scope: &Scope) -> Result<Outcome> {
     let Scope::Document = scope else { return Ok(Outcome::default()) };
     let empty = empty_artboards(d);
-    // The last first, so the others keep their places.
-    for &i in empty.iter().rev() {
-        if i < d.artboards.len() {
-            let id = d.artboards.remove(i).id;
-            d.retire_artboard_id(id);
-            d.retain_guides(sel, |_, g| g.artboard != Some(id));
-        }
+    if empty.is_empty() {
+        return Ok(Outcome::default());
     }
+    remove_artboards(d, sel, &empty)?;
     Ok(Outcome { count: empty.len(), ids: vec![], artboards: empty })
 }

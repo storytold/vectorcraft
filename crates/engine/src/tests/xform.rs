@@ -407,7 +407,7 @@ fn an_alt_drag_in_perspective_on_a_grid_from_an_older_file_attaches_the_copies()
 /// first one kept, and the drag leaves what one `perspective.move` with copy leaves, as one undo
 /// step.
 #[test]
-fn alt_drag_in_perspective_of_30000_objects_finishes_within_20_s() {
+fn alt_drag_in_perspective_of_30000_objects_takes_few_tree_walks() {
     // The squares are 6 pt wide and 10 pt apart, in rows of 150, between the left vanishing point
     // of the two-point grid and its origin.
     let on_the_left = |d: &mut Document, k: usize| {
@@ -526,6 +526,70 @@ fn distort_command_maps_corners() {
     assert!(close(bounds(&s, a), Rect::new(0.0, 0.0, 100.0, 100.0)));
 }
 
+/// Free Distort warps the art of a linked opacity mask with the object it masks, and one undo puts
+/// both back; an unlinked mask stays where it is.
+#[test]
+fn distort_command_warps_a_linked_opacity_mask_with_its_object() {
+    for linked in [true, false] {
+        let mut s = session();
+        let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+        let b = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+        if !linked {
+            s.execute("transparency.unlinkOpacityMask", &json!({})).unwrap();
+        }
+        let mask_path = |s: &Session| s.doc().unwrap().doc.node(a).unwrap().extras().mask.as_ref().unwrap().art.path_data().cloned();
+        let path = |s: &Session| s.doc().unwrap().doc.node(a).unwrap().path_data().cloned();
+        let before = (path(&s), mask_path(&s));
+        s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+        s.execute("object.distort", &json!({"corners": [[10, 0], [90, 0], [100, 100], [0, 100]]})).unwrap();
+        assert!(path(&s) != before.0);
+        let want = if linked { path(&s) } else { before.1.clone() };
+        assert_eq!(mask_path(&s), want, "linked: {linked}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!((path(&s), mask_path(&s)), before);
+    }
+}
+
+/// Free Distort of a group warps the linked opacity mask of a path inside it with the path.
+#[test]
+fn distort_command_warps_the_linked_mask_of_a_path_in_a_group() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    let c = rect(&mut s, 150.0, 0.0, 50.0, 50.0);
+    s.execute("select.set", &json!({"ids": [a.0, c.0]})).unwrap();
+    let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let before = s.doc().unwrap().doc.node(a).unwrap().path_data().cloned();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[10, 0], [190, 0], [200, 100], [0, 100]]})).unwrap();
+    let a = s.doc().unwrap().doc.node(a).unwrap();
+    assert!(a.path_data().cloned() != before, "the path is warped");
+    assert_eq!(a.extras().mask.as_ref().unwrap().art.path_data(), a.path_data(), "and so is its mask");
+}
+
+/// Corners where the box already stands change nothing: no undo step, the document as it was. A
+/// corner moved by a hundredth of a point is a warp.
+#[test]
+fn unchanged_distort_records_no_history() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let n = undo_len(&s);
+    let at = |x1: f64| json!([[b.x0, b.y0], [x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]]);
+    assert_eq!(s.execute("object.distort", &json!({"corners": at(b.x1)})).unwrap()["ids"], json!([a.0]));
+    assert_eq!(undo_len(&s), n);
+    assert!(s.doc().unwrap().doc == doc, "the document is unchanged");
+    s.execute("object.distort", &json!({"corners": at(b.x1 + 0.01)})).unwrap();
+    assert_eq!(undo_len(&s), n + 1);
+    assert!(s.doc().unwrap().doc != doc);
+}
+
 #[test]
 fn distort_perspective_midpoint_is_projective() {
     // Distort a tiny probe at the centre of a 100×100 source box into a trapezoid: with a real
@@ -553,6 +617,35 @@ fn free_transform_distort_mode_via_pointer() {
     assert!(pts.iter().any(|p| p.distance(Point::new(250.0, 260.0)) < 1e-6), "{pts:?}");
     assert!(pts.iter().any(|p| p.distance(Point::new(100.0, 100.0)) < 1e-6));
     assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("object.distort"));
+}
+
+/// With Constrain on, a Free Distort corner keeps to the diagonal through the opposite corner, in
+/// one undo step that undoes and redoes whole.
+#[test]
+fn free_transform_constrained_distort_keeps_the_corner_on_its_diagonal() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    let v = ViewInfo::default();
+    s.select_tool("freeTransform", v).unwrap();
+    s.set_tool_option("mode", &json!("distort"));
+    s.set_tool_option("constrain", &json!(true));
+    let before = undo_len(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 300.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 320.0, 230.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 340.0, 260.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 340.0, 260.0), v).unwrap();
+    let pts = |s: &Session| -> Vec<Point> { s.doc().unwrap().doc.node(a).unwrap().path_data().unwrap().anchors().map(|(_, _, an)| an.p).collect() };
+    let has_all = |pts: &[Point], want: [(f64, f64); 4]| want.iter().all(|&(x, y)| pts.iter().any(|q| q.distance(Point::new(x, y)) < 1e-6));
+    // (40, 60) along the diagonal (200, 100) is 0.28 of it, (56, 28).
+    let distorted = [(100.0, 100.0), (300.0, 100.0), (356.0, 228.0), (100.0, 200.0)];
+    let original = [(100.0, 100.0), (300.0, 100.0), (300.0, 200.0), (100.0, 200.0)];
+    assert!(has_all(&pts(&s), distorted), "{:?}", pts(&s));
+    assert_eq!(undo_len(&s), before + 1);
+    assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("object.distort"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(has_all(&pts(&s), original), "{:?}", pts(&s));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(has_all(&pts(&s), distorted), "{:?}", pts(&s));
 }
 
 #[test]
@@ -766,7 +859,7 @@ fn stroke_width(s: &Session, id: NodeId) -> f64 {
 }
 
 fn guide_positions(s: &Session) -> Vec<f64> {
-    s.doc().unwrap().doc.guides.iter().map(|g| g.pos).collect()
+    s.doc().unwrap().doc.ruler_guides().iter().map(|g| g.pos).collect()
 }
 
 /// Scale Artwork with Artboard (#602): `artboard.setProps {scaleArt}` takes the art fully inside the
@@ -904,6 +997,31 @@ fn coordinate_moves_journal_the_locked_art_preference() {
     s.prefs.move_locked_with_artboard = false;
     s.execute(&id, &p).unwrap();
     assert_eq!(bounds(&s, locked), Rect::new(130.0, 100.0, 330.0, 200.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    // A null reads as a key left out, and journals the value it resolved to.
+    s.prefs.move_locked_with_artboard = true;
+    s.execute("artboard.setProps", &json!({"index": 0, "x": 30, "moveArt": true, "lockedAndHidden": null})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1["lockedAndHidden"], true);
+}
+
+/// A drag with the Artboard tool journals whether locked art went along, so a replay under the
+/// other preference moves the same art.
+#[test]
+fn artboard_tool_drag_journals_the_locked_art_preference() {
+    let mut s = session();
+    let locked = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    s.execute("object.lock", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.prefs.move_locked_with_artboard = true;
+    gesture(&mut s, "artboard", &[(400.0, 300.0), (420.0, 310.0), (450.0, 330.0), (450.0, 330.0)], Mods::default());
+    let moved = Rect::new(150.0, 130.0, 200.0, 180.0);
+    assert!(close(bounds(&s, locked), moved));
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!((id.as_str(), &p["lockedAndHidden"]), ("artboard.move", &json!(true)));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.prefs.move_locked_with_artboard = false;
+    s.execute(&id, &p).unwrap();
+    assert!(close(bounds(&s, locked), moved));
 }
 
 /// Locked and hidden art scales only with Move Locked and Hidden Artwork with Artboard, as it
@@ -976,8 +1094,128 @@ fn lasso_selects_anchor_subset() {
     assert_eq!(st.selection.partial(a).map(|p| p.len()), Some(2));
 }
 
+/// #5351: a Lasso loop round a gradient mesh's points keeps the mesh selected and picks the
+/// points inside it, so a solid fill colour recolours just those points.
+#[test]
+fn lasso_picks_gradient_mesh_points() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    // Round the top row of points (100,100), (150,100) and (200,100).
+    gesture(&mut s, "lasso", &[(90.0, 90.0), (210.0, 90.0), (210.0, 110.0), (90.0, 110.0), (90.0, 110.0)], Mods::default());
+    let st = s.doc().unwrap();
+    let Some(NodeKind::Mesh(m)) = st.doc.node(a).map(|n| &n.kind) else { panic!("still a gradient mesh") };
+    assert_eq!(m.points.len(), 9);
+    assert_eq!(st.selection.objects, vec![a], "the mesh stays selected");
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let Some(NodeKind::Mesh(m)) = s.doc().unwrap().doc.node(a).map(|n| &n.kind) else { panic!("still a gradient mesh") };
+    let red: Vec<usize> = (0..m.points.len()).filter(|i| m.points[*i].color.to_hex() == "#ff0000").collect();
+    let top: Vec<usize> = (0..3).map(|c| m.idx(0, c)).collect();
+    assert_eq!(red, top, "only the points inside the loop are recoloured");
+}
+
+/// With gradient mesh points picked, the Fill proxy (and the Color panel that edits it) shows
+/// the color a solid fill gives them, not the mesh object's own fill: "?" when the picked
+/// points' colors differ, the object's fill again once no point is picked.
+#[test]
+fn the_fill_proxy_shows_the_picked_mesh_points_color() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff8500"})).unwrap();
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    let object_fill = s.proxy_paints().0;
+    // Round the top row of points.
+    gesture(&mut s, "lasso", &[(90.0, 90.0), (210.0, 90.0), (210.0, 110.0), (90.0, 110.0), (90.0, 110.0)], Mods::default());
+    s.execute("paint.setFill", &json!({"color": "#3366ff"})).unwrap();
+    let shown = s.execute("paint.proxies", &json!({})).unwrap();
+    assert_eq!(s.proxy_paints().0.color().map(|c| c.to_hex()), Some("#3366ff".into()), "the picked points' color: {shown}");
+    assert_eq!(shown["fillMixed"], json!(false));
+    assert_eq!(shown["fill"], json!(s.proxy_paints().0));
+    // One picked point takes another color: the points differ.
+    let Some(NodeKind::Mesh(m)) = s.doc().unwrap().doc.node(a).map(|n| &n.kind) else { panic!("still a gradient mesh") };
+    let first = m.idx(0, 0);
+    s.execute("object.mesh.setPointColor", &json!({"id": a.0, "index": first, "color": "#00ff00"})).unwrap();
+    assert!(s.proxy_mixed().0, "the picked points' colors differ");
+    // Picking none (the Selection tool) shows the object's fill again.
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    assert_eq!(s.proxy_paints().0, object_fill);
+    assert!(!s.proxy_mixed().0);
+}
+
+/// With the Appearance panel's stroke row active, a solid fill still recolors the picked mesh
+/// points, so the Fill proxy shows them; with its fill row active, the fill goes to that row, and
+/// the proxy shows the row.
+#[test]
+fn the_fill_proxy_follows_where_the_fill_goes_with_an_appearance_row_active() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff8500"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#000000"})).unwrap();
+    let items = &s.doc().unwrap().doc.node(a).unwrap().appearance.items;
+    let fill_row = items.iter().position(|it| it.is_fill()).expect("a fill row");
+    let stroke_row = items.iter().position(|it| !it.is_fill()).expect("a stroke row");
+    gesture(&mut s, "lasso", &[(90.0, 90.0), (210.0, 90.0), (210.0, 110.0), (90.0, 110.0), (90.0, 110.0)], Mods::default());
+    assert_eq!(s.fill_mesh_points().first().map(|(_, v)| v.len()), Some(3), "the top row is picked");
+    let point_color = |s: &Session| {
+        let Some(NodeKind::Mesh(m)) = s.doc().unwrap().doc.node(a).map(|n| &n.kind) else { panic!("still a gradient mesh") };
+        m.points[m.idx(0, 0)].color.to_hex()
+    };
+
+    s.execute("appearance.setActiveItem", &json!({"index": stroke_row})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#3366ff"})).unwrap();
+    assert_eq!(point_color(&s), "#3366ff", "the stroke row leaves the fill on the picked points");
+    assert_eq!(s.proxy_paints().0.color().map(|c| c.to_hex()), Some("#3366ff".into()));
+    assert!(!s.proxy_mixed().0);
+
+    s.execute("appearance.setActiveItem", &json!({"index": fill_row})).unwrap();
+    assert!(s.fill_mesh_points().is_empty());
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    assert_eq!(point_color(&s), "#3366ff", "the fill row takes the fill");
+    assert_eq!(s.proxy_paints().0.color().map(|c| c.to_hex()), Some("#00ff00".into()));
+}
+
+/// A gradient mesh with points picked selected with another object: a solid fill recolors the
+/// points and fills the other object, and the Fill proxy and its "?" count the points' colors.
+#[test]
+fn the_fill_proxy_counts_picked_mesh_points_beside_other_objects() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let b = rect(&mut s, 300.0, 300.0, 50.0, 50.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    gesture(&mut s, "lasso", &[(90.0, 90.0), (210.0, 90.0), (210.0, 110.0), (90.0, 110.0), (90.0, 110.0)], Mods::default());
+    s.execute("select.add", &json!({"ids": [b.0]})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, b]);
+    assert_eq!(s.fill_mesh_points().first().map(|(id, v)| (*id, v.len())), Some((a, 3)), "the top row is still picked");
+    s.execute("paint.setFill", &json!({"color": "#3366ff"})).unwrap();
+    let Some(NodeKind::Mesh(m)) = s.doc().unwrap().doc.node(a).map(|n| &n.kind) else { panic!("still a gradient mesh") };
+    assert_eq!(m.points[m.idx(0, 0)].color.to_hex(), "#3366ff");
+    assert_eq!(s.proxy_paints().0.color().map(|c| c.to_hex()), Some("#3366ff".into()));
+    assert!(!s.proxy_mixed().0, "the points and the other object are the same color");
+    s.execute("paint.setFill", &json!({"ids": [b.0], "color": "#00ff00"})).unwrap();
+    assert!(s.proxy_mixed().0, "the picked points and the other object's fill differ");
+}
+
 /// Shift-drag a marquee with the Selection tool (#483): the selected objects it reaches are
 /// deselected and the others selected, the rest of the selection staying as it was.
+#[test]
+fn a_selection_tool_click_gives_new_art_the_objects_fill() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    rect(&mut s, 200.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    gesture(&mut s, "selection", &[(125.0, 125.0), (125.0, 125.0)], Mods::default());
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a]);
+    assert_eq!(s.paint.fill, s.doc().unwrap().doc.node(a).unwrap().appearance.fill_paint());
+}
+
 #[test]
 fn selection_shift_marquee_toggles_objects() {
     let mut s = session();
@@ -1084,6 +1322,32 @@ fn distort_rejects_malformed_coordinates_and_ids_without_editing_art() {
     }
     s.execute("object.distort", &json!({"corners": corners, "from": [0, 0, 100, 100], "ids": [a.0]})).unwrap();
     assert_eq!(undo_len(&s), history + 1);
+}
+
+/// `object.distort` with `angle` reads `from` as a box in the frame turned by it, as the Free
+/// Transform tool sends a turned bounding box: corners where that box already stands leave the art.
+#[test]
+fn distort_reads_from_in_a_turned_frame_and_rejects_a_bad_angle() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let original = bounds(&s, a);
+    let bx = vectorcraft_doc::OrientedBox { angle: 90.0, rect: Rect::new(-100.0, 0.0, 0.0, 100.0) };
+    let corners: Vec<serde_json::Value> = bx.corners().iter().map(|c| json!([c.x, c.y])).collect();
+    let history = undo_len(&s);
+    for p in [
+        json!({"corners": corners, "from": [-100, 0, 0, 100], "angle": "90", "ids": [a.0]}),
+        json!({"corners": corners, "from": [-100, 0, 0, 100], "angle": [90], "ids": [a.0]}),
+    ] {
+        assert!(s.execute("object.distort", &p).is_err(), "invalid input: {p}");
+        assert!(close(bounds(&s, a), original));
+        assert_eq!(undo_len(&s), history);
+    }
+    s.execute("object.distort", &json!({"corners": corners, "from": [-100, 0, 0, 100], "angle": 90, "ids": [a.0]})).unwrap();
+    assert!(close(bounds(&s, a), original), "{:?}", bounds(&s, a));
+    assert_eq!(undo_len(&s), history, "corners where the box stands change nothing");
+    // Without `from`, the box is the objects' bounds in the turned frame: the same box here.
+    s.execute("object.distort", &json!({"corners": corners, "angle": 90, "ids": [a.0]})).unwrap();
+    assert!(close(bounds(&s, a), original), "{:?}", bounds(&s, a));
 }
 
 /// `artboard.move` and `artboard.delete` take several artboards at once (#1139): one undo step

@@ -63,21 +63,27 @@ pub(super) fn insert_items(list: &[(&'static str, &'static str)]) -> Vec<Item> {
 /// Type → Font: one item per available family, the installed fonts included. Built again only when
 /// the fonts or Show Font Names in English change (the menu tree is built every frame); labels are
 /// interned once each, so rebuilding doesn't allocate forever. The command still sets the English
-/// family name ([`vectorcraft_text::FontDb::canonical`]).
+/// family name ([`vectorcraft_text::FontDb::canonical`]). Until the installed fonts are scanned it
+/// lists the fonts already loaded, by their English names, rather than wait for the scan: the menu
+/// bar is drawn in the window's first frame, which a large font library would otherwise hold up
+/// past the first-frame watchdog (#5483).
 pub(super) fn font_items(english_names: bool) -> Vec<Item> {
     static NAMES: std::sync::Mutex<std::collections::BTreeSet<&'static str>> = std::sync::Mutex::new(std::collections::BTreeSet::new());
-    static ITEMS: std::sync::Mutex<(u64, bool, Vec<Item>)> = std::sync::Mutex::new((u64::MAX, true, Vec::new()));
+    static ITEMS: std::sync::Mutex<(u64, bool, bool, Vec<Item>)> = std::sync::Mutex::new((u64::MAX, true, false, Vec::new()));
     let db = vectorcraft_text::FontDb::global();
-    // Read first: fonts that load meanwhile make the next frame build the list again.
+    // Read first: fonts that load meanwhile make the next frame build the list again. The scan
+    // ends between changing the generation and counting as cataloged, so both are kept.
+    let cataloged = db.installed_fonts_ready();
     let generation = db.generation();
-    let fams = db.menu_family_list();
+    let fams = db.menu_family_list_now();
     let (Ok(mut names), Ok(mut items)) = (NAMES.lock(), ITEMS.lock()) else { return vec![] };
-    if items.0 != generation || items.1 != english_names {
+    if items.0 != generation || items.1 != english_names || items.2 != cataloged {
         let list = fams
             .iter()
             .map(|f| {
                 let english = f.as_str();
-                let shown = db.family_display_name(english, english_names);
+                // A native name may be the catalog's, which isn't there to read yet.
+                let shown = if cataloged { db.family_display_name(english, english_names) } else { english.to_string() };
                 let label: &'static str = match names.get(shown.as_str()) {
                     Some(n) => n,
                     None => {
@@ -97,10 +103,13 @@ pub(super) fn font_items(english_names: bool) -> Vec<Item> {
                 cp(label, "text.setStyle", json!({ "font": font }))
             })
             .collect();
-        *items = (generation, english_names, list);
+        *items = (generation, english_names, cataloged, list);
     }
-    items.2.clone()
+    items.3.clone()
 }
+
+/// The catalogue's menu path of the effects in 3D and Materials › 3D (Classic).
+const CLASSIC_3D: &[&str] = &["Effect", "3D and Materials", "3D (Classic)"];
 
 /// The raster effects' submenus of the Effect menu (the Photoshop-style effects, below the
 /// vector effects): (submenu, the catalogue's menu path of its effects).
@@ -127,6 +136,7 @@ pub(super) fn effect_menu() -> Vec<Item> {
         c("Last Effect…", "effect.last"),
         Sep,
         c("Document Raster Effects Settings…", "document.rasterEffectsSettings"),
+        c("Refresh Deferred Effects", "effect.refreshDeferred"),
         Sep,
         Item::Header("Vector Effects"),
     ];
@@ -166,11 +176,15 @@ pub(super) fn effect_menu() -> Vec<Item> {
             out.push(item(e));
             continue;
         }
+        // Apply SVG Filter…, Import SVG Filter… and the document's filters.
+        if sub_name == "SVG Filters" {
+            out.push(sub(sub_name, crate::dialogs::svg_filter::menu_items()));
+            continue;
+        }
         let items = items_at(&["Effect", sub_name], true);
         if items.is_empty() {
             let placeholder = match sub_name {
                 "3D and Materials" => vec![todo("Extrude & Bevel…"), todo("Revolve…"), todo("Inflate…"), todo("Rotate…"), todo("Materials…")],
-                "SVG Filters" => vec![todo("Apply SVG Filter…")],
                 _ => continue,
             };
             out.push(sub(sub_name, placeholder));
@@ -184,6 +198,10 @@ pub(super) fn effect_menu() -> Vec<Item> {
                     _ => 9,
                 });
                 items.push(todo("Materials…"));
+                let classic: Vec<Item> = cat.iter().filter(|e| e.menu == CLASSIC_3D).map(item).collect();
+                if !classic.is_empty() {
+                    items.push(sub("3D (Classic)", classic));
+                }
             }
             out.push(sub(sub_name, items));
         }
@@ -204,7 +222,9 @@ pub(super) fn effect_menu() -> Vec<Item> {
         out.extend(raster);
     }
     // Anything not placed above (future effects) still shows up.
-    let placed = |e: &vectorcraft_effects::EffectInfo| top_level(e) || in_vector_menu(e) || RASTER_MENUS.iter().any(|(_, path)| e.menu == *path);
+    let placed = |e: &vectorcraft_effects::EffectInfo| {
+        top_level(e) || in_vector_menu(e) || e.menu == CLASSIC_3D || RASTER_MENUS.iter().any(|(_, path)| e.menu == *path)
+    };
     for e in cat.iter().filter(|e| !placed(e)) {
         out.push(Item::Cmd(e.label, "effect.dialog", json!({ "effect": e.id })));
     }

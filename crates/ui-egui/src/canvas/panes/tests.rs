@@ -45,7 +45,7 @@ fn button(pos: Pos2, pressed: bool) -> egui::Event {
 
 /// The documents' indices in the panes the last frame drew, and the panes.
 fn panes(app: &VectorcraftApp) -> (Vec<usize>, Vec<egui::Rect>) {
-    app.canvas.panes.last.iter().copied().unzip()
+    app.canvas.panes.last.iter().map(|(w, r)| (w.0, *r)).unzip()
 }
 
 #[test]
@@ -105,7 +105,7 @@ fn tile_shows_a_pane_for_each_document_fitted_to_it() {
     for (i, r) in docs.iter().zip(&rects) {
         let v = app.views[*i];
         let shown = if *i == 2 { canvas } else { view_rects(&app, *r, ctx.pixels_per_point()).1 };
-        assert!(v.fitted && (v.zoom - fit_zoom(shown, artboard, 0.0)).abs() < 1e-9, "document {i} fits its pane: {v:?}");
+        assert!(v.fitted && (v.zoom - fit_zoom(shown, artboard, 0.0, 1.0)).abs() < 1e-9, "document {i} fits its pane: {v:?}");
         assert_eq!(v.center, artboard.center());
     }
     assert_eq!(app.canvas.panes.shown.len(), 2, "the other two documents are rendered for their panes");
@@ -113,6 +113,29 @@ fn tile_shows_a_pane_for_each_document_fitted_to_it() {
     assert_eq!(inspected["tiled"], json!(true));
     let active: Vec<bool> = inspected["panes"].as_array().unwrap().iter().map(|p| p["active"].as_bool().unwrap()).collect();
     assert_eq!(active, [false, false, true]);
+}
+
+/// With the interface zoomed by Preferences › User Interface › UI Scaling, each tiled document
+/// fits its pane with 30 interface points to spare: its zoom is the zoom that fits it in an
+/// unscaled interface times the UI Scaling.
+#[test]
+fn tiled_documents_fit_their_panes_at_every_ui_scaling() {
+    for ui_zoom in [0.75_f32, 1.5, 2.0] {
+        let mut app = app_with(3);
+        let ctx = egui::Context::default();
+        ctx.set_zoom_factor(ui_zoom);
+        let size = vec2(1200.0, 800.0) / ui_zoom;
+        frame_in(&mut app, &ctx, vec![], size);
+        app.run("window.arrange.tile", json!({})).unwrap();
+        frame_in(&mut app, &ctx, vec![], size);
+        let (docs, rects) = panes(&app);
+        for (i, r) in docs.iter().zip(&rects).filter(|(i, _)| **i != 2) {
+            let shown = view_rects(&app, *r, ctx.pixels_per_point()).1;
+            let unscaled = ((f64::from(shown.width()) - 60.0) / 400.0).min((f64::from(shown.height()) - 60.0) / 300.0);
+            let v = app.views[*i];
+            assert!(v.fitted && (v.zoom - unscaled * f64::from(ui_zoom)).abs() < 1e-9, "UI Scaling {ui_zoom}×: document {i} fits its pane: {v:?}");
+        }
+    }
 }
 
 #[test]
@@ -151,7 +174,7 @@ fn consolidate_all_windows_shows_one_document_again() {
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     assert_eq!(panes(&app).0.len(), 2);
-    assert_eq!(app.run("window.arrange.consolidateAllWindows", json!({})).unwrap(), json!({"tiled": false}));
+    assert_eq!(app.run("window.arrange.consolidateAllWindows", json!({})).unwrap(), json!({"tiled": false, "floating": []}));
     frame(&mut app, &ctx, vec![]);
     assert!(panes(&app).0.is_empty() && app.canvas.panes.shown.is_empty());
     assert_eq!(app.canvas_rect, Some(tabbed), "the current document fills the document area again");
@@ -180,13 +203,25 @@ fn arrange_items_follow_the_open_documents() {
 }
 
 #[test]
+fn tile_with_one_document_leaves_the_next_one_under_its_tab() {
+    let mut app = app_with(1);
+    let ctx = egui::Context::default();
+    assert_eq!(app.run("window.arrange.tile", json!({})).unwrap(), json!({"tiled": false, "panes": 1}));
+    assert!(!app.ui.tiled);
+    assert!(!enabled(&app, "window.arrange.consolidateAllWindows"));
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert!(panes(&app).0.is_empty(), "the second document opens under its tab");
+}
+
+#[test]
 fn closing_a_document_while_tiled_tiles_the_others() {
     let mut app = app_with(3);
     let ctx = egui::Context::default();
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     assert_eq!(panes(&app).0, [0, 1, 2]);
-    let first = app.session.documents()[0].uid as usize;
+    let first = (app.session.documents()[0].uid, 1);
     assert!(app.canvas.panes.shown.contains_key(&first));
     // The first document, not the current one, closes.
     app.run("file.close", json!({"index": 0})).unwrap();
@@ -208,7 +243,7 @@ fn an_edit_shows_in_its_pane_once_another_document_is_current() {
     app.run("document.activate", json!({"index": 0})).unwrap();
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
-    let uid = app.session.documents()[1].uid as usize;
+    let uid = (app.session.documents()[1].uid, 1);
     let before = app.canvas.panes.shown.get(&uid).map(|(k, _)| k.revision);
     assert_eq!(before, Some(app.session.documents()[1].revision), "the second document's pane shows it");
     app.run("document.activate", json!({"index": 1})).unwrap();
@@ -269,7 +304,7 @@ fn opening_a_document_while_tiled_fits_each_document_to_its_new_pane() {
     let pane = panes(&app).1[0];
     let rect = view_rects(&app, pane, ctx.pixels_per_point()).1;
     let v = app.views[0];
-    assert!((v.zoom - fit_zoom(rect, Rect::new(0.0, 0.0, 400.0, 300.0), 0.0)).abs() < 1e-9, "fitted to its new pane: {v:?}");
+    assert!((v.zoom - fit_zoom(rect, Rect::new(0.0, 0.0, 400.0, 300.0), 0.0, 1.0)).abs() < 1e-9, "fitted to its new pane: {v:?}");
     assert_ne!(v.zoom, side_by_side, "the pane changed size");
 }
 
@@ -282,10 +317,60 @@ fn other_panes_show_pixel_preview() {
     app.ui.view.pixel_preview = true;
     app.views[0].zoom = 4.0;
     frame(&mut app, &ctx, vec![]);
-    let uid = app.session.documents()[0].uid as usize;
+    let uid = (app.session.documents()[0].uid, 1);
     let key = app.canvas.panes.shown.get(&uid).map(|(k, _)| k.clone()).unwrap();
     let [x0, y0, x1, y1] = key.pixel.expect("the pane renders document pixels");
     assert!(x1 > x0 && y1 > y0);
+}
+
+/// A pane more device pixels across than the largest texture side the display supports renders
+/// its document within that size, as the canvas does, and the frame covers the pane.
+#[test]
+fn other_panes_render_within_the_largest_texture_side() {
+    let mut app = app_with(2);
+    app.canvas.panes.worker_started = true; // every pane renders on this thread
+    let ctx = egui::Context::default();
+    ctx.set_pixels_per_point(2.0);
+    app.run("window.arrange.tile", json!({})).unwrap();
+    // The first frame sets the pixels a point, the second draws at them.
+    for _ in 0..2 {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
+            max_texture_side: Some(1024),
+            ..Default::default()
+        };
+        ctx.run_ui(raw, |ui| app.canvas_area(ui)).textures_delta.clear();
+    }
+    let uid = (app.session.documents()[0].uid, 1);
+    let (key, tex) = app.canvas.panes.shown.get(&uid).map(|(k, t)| (k.clone(), t.size())).expect("the other document's pane rendered");
+    assert_eq!(tex[0].max(tex[1]), 1024, "the pane's frame is {tex:?} pixels");
+    let (docs, cells) = panes(&app);
+    let pane = docs.iter().zip(cells).find(|(i, _)| **i == 0).map(|(_, r)| r).unwrap();
+    let rect = view_rects(&app, pane, ctx.pixels_per_point()).1;
+    assert!(rect.width().max(rect.height()) * ctx.pixels_per_point() > 1024.0, "the pane is {rect:?} at {} pixels a point", ctx.pixels_per_point());
+    assert!(
+        (key.w as f32 / key.ppp - rect.width()).abs() < 1.0 && (key.h as f32 / key.ppp - rect.height()).abs() < 1.0,
+        "the frame covers the pane {rect:?}: {} × {} pixels at {} a point",
+        key.w,
+        key.h,
+        key.ppp
+    );
+}
+
+/// A pane's render key takes its document's [`CacheKey::placed`] value ([`placed_key`]), which a
+/// bitmap made for a test running beside this one does not move: the document holds no images.
+#[test]
+fn a_panes_key_takes_its_documents_placed_value() {
+    let mut app = app_with(2);
+    let ctx = egui::Context::default();
+    app.run("window.arrange.tile", json!({})).unwrap();
+    let uid = app.session.documents()[0].uid;
+    let generation = vectorcraft_render::placed_document::generation();
+    let marked = generation.wrapping_add(1000);
+    app.canvas.placed_keys.insert(uid, crate::PlacedKey { checked: generation, key: marked, before: (marked, generation) });
+    frame(&mut app, &ctx, vec![]);
+    let key = app.canvas.panes.shown.get(&(uid, 1)).map(|(k, _)| k.placed);
+    assert_eq!(key, Some(marked));
 }
 
 #[test]
@@ -303,7 +388,241 @@ fn a_resized_window_fits_the_tiled_documents_again_unless_one_was_zoomed() {
     let (_, rects) = panes(&app);
     for i in [0, 2] {
         let area = if i == 2 { app.canvas_rect.unwrap() } else { view_rects(&app, rects[i], ctx.pixels_per_point()).1 };
-        assert!((app.views[i].zoom - fit_zoom(area, artboard, 0.0)).abs() < 1e-9, "document {i} fits its smaller pane: {:?}", app.views[i]);
+        assert!((app.views[i].zoom - fit_zoom(area, artboard, 0.0, 1.0)).abs() < 1e-9, "document {i} fits its smaller pane: {:?}", app.views[i]);
     }
     assert_eq!(app.views[1].zoom, zoomed.zoom, "the zoomed document keeps its zoom");
+}
+
+/// The RGB of the middle pixel of the render that document `i`'s pane uploaded in `out`.
+fn pane_middle(app: &VectorcraftApp, out: &egui::FullOutput, i: usize) -> [u8; 3] {
+    let uid = app.session.documents()[i].uid;
+    let id = app.canvas.panes.shown.iter().find(|(slot, _)| slot.0 == uid).map(|(_, (_, tex))| tex.id()).unwrap();
+    let image = out.textures_delta.set.iter().find(|(t, _)| **t == id).and_then(|(_, d)| d.last()).map(|d| d.image.clone()).unwrap();
+    let egui::ImageData::Color(img) = image;
+    let p = img.pixels[img.size[1] / 2 * img.size[0] + img.size[0] / 2];
+    [p.r(), p.g(), p.b()]
+}
+
+#[test]
+fn other_panes_draw_through_their_documents_profiles() {
+    const CHILD: &str = "VECTORCRAFT_TEST_PANE_PROFILES";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings are process-wide: assign profiles in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "canvas::panes::tests::other_panes_draw_through_their_documents_profiles", "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated pane profile test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    use vectorcraft_color::cms::{self, Cms, ColorSettings};
+    let mut app = app_with(2);
+    app.session.prefs.monitor_profile_display = false;
+    // Each document is covered by one RGB rectangle; the second is assigned Display P3.
+    for i in 0..2 {
+        app.run("document.activate", json!({"index": i})).unwrap();
+        app.run("shape.rectangle", json!({"x": -50, "y": -50, "width": 500, "height": 400})).unwrap();
+        app.run("paint.setFill", json!({"color": "#339966"})).unwrap();
+    }
+    app.run("edit.assignProfile", json!({"rgb": cms::DISPLAY_P3})).unwrap();
+    // Its simulated paper shows in another color.
+    app.run("document.setup", json!({"gridColors": ["#cc6633", "#ffffff"], "simulatePaper": true})).unwrap();
+    let in_p3 = |r: u8, g: u8, b: u8| {
+        let color = vectorcraft_color::Color::Rgb { r: r as f32 / 255.0, g: g as f32 / 255.0, b: b as f32 / 255.0 };
+        let p3 = Cms::new(&ColorSettings { rgb: cms::DISPLAY_P3.into(), ..cms::working_settings() }).unwrap().display_rgb(&color);
+        (color, p3.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8))
+    };
+    let (color, p3) = in_p3(0x33, 0x99, 0x66);
+    let srgb = [0x33, 0x99, 0x66];
+    assert_ne!(p3, srgb, "Display P3 draws the color differently");
+    let (_, paper_p3) = in_p3(0xcc, 0x66, 0x33);
+    let near = |a: [u8; 3], b: [u8; 3]| a.iter().zip(b).all(|(x, y)| x.abs_diff(y) <= 1);
+    // Whether `out` fills a shape with the RGB `rgb`, give or take one.
+    let fills = |out: &egui::FullOutput, rgb: [u8; 3]| {
+        fn any(s: &Shape, f: &dyn Fn(Color32) -> bool) -> bool {
+            match s {
+                Shape::Vec(v) => v.iter().any(|s| any(s, f)),
+                Shape::Path(p) => f(p.fill),
+                _ => false,
+            }
+        }
+        out.shapes.iter().any(|c| any(&c.shape, &|c: Color32| c.a() == 255 && near([c.r(), c.g(), c.b()], rgb)))
+    };
+    let ctx = egui::Context::default();
+    let raw = || egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
+        max_texture_side: Some(8192),
+        ..Default::default()
+    };
+    app.run("window.arrange.tile", json!({})).unwrap();
+    // The first document in front: the second one's pane draws through Display P3, its paper too.
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let mut out = ctx.run_ui(raw(), |ui| app.canvas_area(ui));
+    let shown = pane_middle(&app, &out, 1);
+    assert!(fills(&out, paper_p3), "the back document's paper draws through its Display P3: {paper_p3:?}");
+    assert!(!fills(&out, [0xcc, 0x66, 0x33]), "the back document's paper does not draw through the working space");
+    out.textures_delta.clear();
+    assert!(near(shown, p3), "the back document draws through its Display P3: {shown:?}, not {p3:?}");
+    // The same in a floating window.
+    app.run("window.arrange.consolidateAllWindows", json!({})).unwrap();
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let floating = |app: &mut VectorcraftApp| {
+        ctx.run_ui(raw(), |ui| {
+            app.canvas_area(ui);
+            crate::doc_windows::show(app, ui.ctx());
+        })
+    };
+    // The window takes its place in the first frame and fades in over the next few.
+    for _ in 0..30 {
+        floating(&mut app).textures_delta.clear();
+    }
+    app.canvas.panes.clear();
+    let mut out = floating(&mut app);
+    let shown = pane_middle(&app, &out, 1);
+    assert!(fills(&out, paper_p3), "the floating document's paper draws through its Display P3: {paper_p3:?}");
+    out.textures_delta.clear();
+    assert!(near(shown, p3), "the floating document draws through its Display P3: {shown:?}, not {p3:?}");
+    app.run("window.arrange.consolidateAllWindows", json!({})).unwrap();
+    app.run("window.arrange.tile", json!({})).unwrap();
+    app.canvas.panes.clear();
+    // The second document in front: the first one's pane draws through the working sRGB.
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let mut out = ctx.run_ui(raw(), |ui| app.canvas_area(ui));
+    let shown = pane_middle(&app, &out, 0);
+    out.textures_delta.clear();
+    assert!(near(shown, srgb), "the back document draws through the working space: {shown:?}, not {srgb:?}");
+    // The same off the UI thread.
+    app.canvas.panes.clear();
+    app.canvas.panes.worker = crate::thumb_worker::ThumbWorker::start(&ctx, "test-panes");
+    app.canvas.panes.worker_started = true;
+    ctx.run_ui(raw(), |ui| app.canvas_area(ui)).textures_delta.clear();
+    let done = app.canvas.panes.worker.as_ref().unwrap().wait().unwrap();
+    assert_eq!(done.key.0.0, app.session.documents()[0].uid);
+    let img = done.img.unwrap();
+    let at = ((img.height / 2 * img.width + img.width / 2) * 4) as usize;
+    let shown = [img.pixels[at], img.pixels[at + 1], img.pixels[at + 2]];
+    assert!(near(shown, srgb), "the worker draws the back document through the working space: {shown:?}, not {srgb:?}");
+    // A CMYK document behind the front one draws through its own assigned CMYK profile.
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let steps = json!([
+        {"command": "edit.assignProfile", "params": {"cmyk": cms::DEVICE_CMYK}},
+        {"command": "file.documentColorMode", "params": {"mode": "cmyk"}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    app.run("paint.setFill", json!({"color": {"c": 60, "m": 10, "y": 80, "k": 0}})).unwrap();
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let ink = vectorcraft_color::Color::cmyk(0.6, 0.1, 0.8, 0.0);
+    let to_u8 = |c: [f32; 3]| c.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+    let device = to_u8(Cms::new(&ColorSettings { cmyk: cms::DEVICE_CMYK.into(), ..cms::working_settings() }).unwrap().display_rgb(&ink));
+    let front = to_u8(cms::active().display_rgb(&ink));
+    let close = |a: [u8; 3], b: [u8; 3]| a.iter().zip(b).all(|(x, y)| x.abs_diff(y) <= 3);
+    assert!(!close(device, front), "the two CMYK profiles draw the color differently: {device:?}, {front:?}");
+    app.canvas.panes.clear();
+    ctx.run_ui(raw(), |ui| app.canvas_area(ui)).textures_delta.clear();
+    let done = app.canvas.panes.worker.as_ref().unwrap().wait().unwrap();
+    assert_eq!(done.key.0.0, app.session.documents()[0].uid);
+    let img = done.img.unwrap();
+    let at = ((img.height / 2 * img.width + img.width / 2) * 4) as usize;
+    let shown = [img.pixels[at], img.pixels[at + 1], img.pixels[at + 2]];
+    assert!(close(shown, device), "the back CMYK document draws through its Device CMYK: {shown:?}, not {device:?} (front: {front:?})");
+    assert!(near(cms::active().display_rgb(&color).map(|v| (v * 255.0).round() as u8), p3), "the front document's profile stays active");
+}
+
+/// With a display profile, the tiled pane of a document behind the front one blends its
+/// translucent art with that document's own simulated paper in sRGB, then converts the blend:
+/// drawn over its converted paper, the pane shows the converted blend, not the art converted alone
+/// and not a blend with the front document's paper. Opaque and empty pixels convert as before.
+#[test]
+fn tiled_documents_blend_translucent_art_over_their_own_paper_before_display_conversion() {
+    use crate::display_profile::{Found, Reading};
+    let mut app = app_with(2);
+    app.canvas.panes.worker_started = true; // every pane renders on this thread
+    let (front_paper, back_paper) = ([0x20, 0x40, 0xc0], [0xe0, 0xc0, 0x20]);
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("document.setup", json!({"gridColors": ["#2040c0", "#ffffff"], "simulatePaper": true})).unwrap();
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.run("document.setup", json!({"gridColors": ["#e0c020", "#ffffff"], "simulatePaper": true})).unwrap();
+    let half = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 300, "height": 200})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [half], "color": "#ff0000"})).unwrap();
+    app.run("transparency.set", json!({"ids": [half], "opacity": 50})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    app.run("window.arrange.tile", json!({})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let uid = app.session.documents()[1].uid;
+    let ctx = egui::Context::default();
+    // The second document's pane: the raster one frame uploads, its width, and the key it was rendered for.
+    let pane = |app: &mut VectorcraftApp| -> (Vec<Color32>, usize, CacheKey) {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
+            max_texture_side: Some(8192),
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| app.canvas_area(ui));
+        let (key, tex) = app.canvas.panes.shown.iter().find(|(slot, _)| slot.0 == uid).map(|(_, s)| s).expect("the second document's pane rendered");
+        let id = tex.id();
+        let up = out.textures_delta.set.iter().find(|e| e.0.eq(&id)).and_then(|e| e.1.last()).map(|d| {
+            let egui::ImageData::Color(img) = &d.image;
+            (img.pixels.clone(), img.width())
+        });
+        let key = key.clone();
+        out.textures_delta.clear();
+        let (pixels, width) = up.expect("the pane uploads");
+        (pixels, width, key)
+    };
+    app.session.prefs.monitor_profile_display = false;
+    let (srgb, width, key) = pane(&mut app);
+    assert!(key.backdrop.is_none(), "no display profile: nothing to blend");
+    let p3 = crate::display_profile::tests::p3();
+    let t = vectorcraft_color::cms::display::DisplayTransform::from_icc(&p3).unwrap();
+    app.display_profile.report(Reading { display: Some("DP-1".into()), found: Found::Profile { icc: p3, from: "test".into() } });
+    app.session.prefs.monitor_profile_display = true;
+    let (shown, _, key) = pane(&mut app);
+    let backdrop = key.backdrop.as_deref().expect("the pane's Preview blends with its paper");
+    assert!(
+        !backdrop.artboards.is_empty() && backdrop.artboards.iter().all(|(_, c)| *c == back_paper),
+        "the pane blends with its own document's paper: {backdrop:?}"
+    );
+    assert_eq!(srgb.len(), shown.len());
+    // What the canvas shows of pixel `c` over the converted paper `under`, as egui blends it.
+    let over = |c: Color32, under: [u8; 3]| {
+        let k = 255 - u32::from(c.a());
+        [0, 1, 2].map(|i| u32::from(c.to_array()[i]) + (u32::from(under[i]) * k + 127) / 255)
+    };
+    let plain = |s: Color32| {
+        let mut px = s.to_array();
+        t.apply_premultiplied(&mut px);
+        Color32::from_rgba_premultiplied(px[0], px[1], px[2], px[3])
+    };
+    // Pixel `s` over the paper `paper` in sRGB, converted.
+    let blend = |s: Color32, paper: [u8; 3]| {
+        let k = 255 - u32::from(s.a());
+        t.apply8([0, 1, 2].map(|j| (u32::from(s.to_array()[j]) + (u32::from(paper[j]) * k + 127) / 255).min(255) as u8)).map(u32::from)
+    };
+    let differs = |a: [u32; 3], b: [u32; 3]| (0..3).any(|j| a[j].abs_diff(b[j]) > 2);
+    let under = t.apply8(back_paper);
+    for (s, c) in srgb.iter().zip(&shown) {
+        if s.a() == 0 || s.a() == 255 {
+            assert_eq!(*c, plain(*s), "opaque and empty pixels convert as before");
+        }
+    }
+    // The middle of the pane is the middle of the document, inside the 50% fill.
+    let at = srgb.len() / width / 2 * width + width / 2;
+    let (s, c) = (srgb[at], shown[at]);
+    assert!((50..=205).contains(&s.a()), "the 50% fill at the middle: {s:?}");
+    assert_eq!(c.a(), s.a(), "the alpha is kept");
+    let want = blend(s, back_paper);
+    let got = over(c, under);
+    assert!((0..3).all(|j| got[j].abs_diff(want[j]) <= 1), "{got:?} shown, {want:?} wanted");
+    // The check tells the two papers and the plain conversion apart.
+    assert!(differs(want, blend(s, front_paper)), "the front document's paper blends to another color");
+    assert!(differs(got, over(plain(s), under)), "the art converted alone shows another color");
 }

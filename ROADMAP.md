@@ -1,15 +1,8 @@
 # VectorCraft Roadmap
 
-- PDF.R1: editable PDF import uses the shared reader, scans page content in windows, and rejects known incomplete input before returning a document.
-- PDF.W1: PDF export and print composition use the shared optional writer for configuration, metadata, font preparation and guarded finalization; drawing and output policy remain app-owned.
-
-- UI.5: Shared docking adds tab reordering, docking into other groups, dock splits and resizable floating panel groups. Panel positions and return locations persist with workspaces; the native icon rail and Tools panel remain available.
-
-- UI.4: Dock and floating-panel headers use shared accessible tabs with bounded overflow. Widget-state theme application uses `craft-ui`; all four palettes, font stacks and preferences remain app-owned.
-
 **Stage: alpha** · next: beta, ~13 points (ready for real work ~62% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (Progress log row for the Color Effects add-on's Find Nearest Swatch; headline numbers unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-15 · **Change:** minor (G5: built-in Neon & Glow graphic style library (Cyan Neon, Magenta Laser, Amber Tube, Electric Lime, Pulse Violet, Cobalt Phosphor); G5 estimate unchanged (3–13 h); previously: Tech Circuit brush library, G5; previously: docs tidy-up, no content change: stray notes at the top moved into the revision table; scores and estimates unchanged; previously minor: Raster effects 85% → 88%, gallery thumbnails and in-dialog preview in; headline numbers unchanged; Symbols area ~87% → ~88%: dynamic instance parts take opacity, blend, gradient and pattern on the canvas; G5 docs sync for Overlap and Pattern auto corners; previously minor: Tools stays beside the canvas with left-side panels; Hindi catalog draft complete under the translation tests; contributor loanword terminology reviewed; wider proofreading welcome; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs
 on macOS, Windows, Linux, FreeBSD and the web (WASM), and agents can drive all of it over MCP, the CLI and a JSON
@@ -18,18 +11,20 @@ and the work list in [`docs/gaps.md`](docs/gaps.md).
 
 **Why alpha:** the core workflows exist end to end (drawing and path editing, Pathfinder, paint and appearance,
 type, SVG/PDF/EPS, print, export) and feature depth is ~75%, but a professional can't yet switch: Illustrator's
-own `.ai` files open with a wrong layer structure in real cases and can't be saved back with Illustrator's
-editing data, the interaction details have never been checked side by side, and some machines fail to start the
+own `.ai` files open with a wrong layer structure in real cases and are saved back with an editing copy that
+keeps live effects only on paths, compound paths and groups that qualify (at most a fill and a stroke, a non-zero fill rule when filled, no large canvas) and whose appearance and effects the art-style writer supports (see [docs/file-format-parity.md](docs/file-format-parity.md)), and writes live objects as their art, the interaction details have never been checked side by side, and some machines fail to start the
 app. Beta needs those closed (the beta list in [gaps.md](docs/gaps.md)). It passes the core-workflow
 gate: all six core workflows (path drawing and editing, paint and style, type, layers/artboards/export, print
 production, file exchange) work end to end on macOS with save and reopen, and only the last is partial, without
 blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 
+> **Gujarati status (2026-11-14, #6613):** 4,673 catalog rows: the original 4,286 remain unchanged; all 387 additions are contributor-reviewed and approved, with 11 wording corrections. Status/error messages remain partial, and the pinned CI/release fonts and web startup list contain no Gujarati face; web selection stays unavailable until a Gujarati interface face is bundled. Scores and estimates unchanged.
+
 ## Headline numbers
 
 | | Value | Kind |
 |---|---|---|
-| **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 348/375 wired (92.8%), tools 89/92, Illustrator effects 46/50, Photoshop effects 57/57, 3D 4/4 (initial types, no materials) |
+| **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 717/719 wired (99.7%), tools 89/92, Illustrator effects 46/50, Photoshop effects 57/57, 3D 4/4 (initial types, no materials) |
 | **Feature depth** (weighted by use, scored by behaviour) | **~75%** | estimated |
 | **To beta** | **~170–270 h** one agent · ~50–80 h with 4–6 agents | estimated |
 | **To full parity** | **~360–590 h** one agent · ~95–165 h with 4–6 agents | estimated |
@@ -77,11 +72,11 @@ The dimension hours overlap (feature rows hold some UI, format and AI work), so 
 | Strokes, brushes, width profiles | 88% | 8–15 |
 | Appearance, transparency, graphic styles, masks | 97% | 1–2 |
 | Live vector effects | 85% | 4–8 |
-| Raster effects (Effect Gallery) — [effects-parity.md](docs/effects-parity.md) | 85% | 1–2 |
+| Raster effects (Effect Gallery) — [effects-parity.md](docs/effects-parity.md) | 88% | — |
 | 3D and Materials | ~25% | 30–55 |
 | Type core — [type-parity.md](docs/type-parity.md) | 80% | 14–19 |
 | Type advanced (CJK, spelling, Touch Type) | 50% | 20–28 |
-| Symbols, blends, envelopes, Repeat, perspective | 87% | 5–9 |
+| Symbols, blends, envelopes, Repeat, perspective | 88% | 4–7 |
 | Image Trace, graphs, image tools | 75% | 5–8 |
 | Layers, artboards, document setup | 78% | 5–8 |
 | View & navigation | 70% | 9–14 |
@@ -103,18 +98,19 @@ Weights, evidence and the missing items per area: [target-app-parity.md](docs/ta
 | English | `en` | full | 100% |
 | Simplified Chinese | `zh-hans` | partial (messages in English) | 85% |
 | Spanish | `es` | full | 100% |
-| Hindi | `hi` | none | 0% |
+| Hindi | `hi` | catalog complete; machine-assisted draft, native review pending | complete under the scanner |
+| Gujarati | `gu` | 4,673 contributor-reviewed catalog rows; 11 corrections applied to the 387 additions | menus and dialogs; status/error messages partial |
 | Arabic | `ar` | none (no right-to-left interface) | 0% |
 | French | `fr` | full | 100% |
 | Portuguese (Brazil) | `pt-br` | full | 100% |
-| Indonesian | `id` | none | 0% |
+| Indonesian | `id` | 6,947 catalog rows; status and error messages partial | most dialogs and tooltips |
 | Japanese | `ja` | full | 100% |
 | German | `de` | full | 98% |
 | Korean | `ko` | full | 100% |
 | Bosnian | `bs` | full (AI-assisted, native review pending) | 100% |
 | Vietnamese | `vi` | full | 100% |
 
-Also shipped: Traditional Chinese (partial, 80%), Bulgarian, Finnish, Greek, Hungarian, Italian, Polish, Russian, Swedish, Ukrainian and Georgian (full), Catalan (full; AI-drafted, native review welcome), Czech (catalog complete; render-site gaps reduced; native review pending).
+Also shipped: Traditional Chinese (partial, 80%), Bulgarian, Finnish, Greek, Hungarian, Italian, Polish, Russian, Swedish, Ukrainian, Georgian, Dutch, Danish and Turkish (full), Catalan (full; AI-drafted, native review welcome), Czech (catalog complete; render-site gaps reduced; native review pending).
 The Georgian catalog has had a native speaker's review; no other catalog has. Details: [localization-parity.md](docs/localization-parity.md).
 
 ## Upcoming
@@ -125,22 +121,42 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 2. **`.ai` files from real users** (G9): layer structure, guides, speed: 10–20 h.
 3. **Launch and stability on real machines** (G10): 20–35 h.
 4. **Core-tool correctness** (G11: Shape Builder regions, Asset Export borders): 8–15 h.
-5. **Raster effects** (G2) alongside: the Effect Gallery's filter thumbnails and in-dialog preview area (the gallery and every Photoshop-style filter are in), 1–2 h.
-6. **Then:** type core and advanced type (G4), the Illustrator 2026 additions (G13), 3D (G3).
+5. **Then:** type core and advanced type (G4), the Illustrator 2026 additions (G13), 3D (G3). The Effect Gallery's filter thumbnails and in-dialog preview are in (G2).
 
 ## Progress log
 
+- 2026-11-14: Built-in symbol library Weather Icons: adds a sixth procedural symbol library (Window › Symbol Libraries, the Symbols panel's Symbol Libraries Menu) containing six original vector symbols (Sun, Moon, Cloud, Rain, Thunder, Snow) generated in code without default 9-slice guides (part of Gap 5). Headline numbers unchanged.
+- 2026-11-14: Built-in Tech Circuit brush library: Circuit Trace (chamfered art with 45-degree elbows and terminal pads), Bus Lines (parallel conductor pattern) and Terminal Nodes (repeating solder pads, test points and leads), all original geometry generated in code. Ten built-in brush libraries; G5 remaining estimate 3–13 h (estimated), headline numbers unchanged.
+
+- 2026-11-05: Window › Toolbars › Keep Tools Beside the Canvas, off by default, docks the Tools panel between left-side panels and the canvas instead of at the window's left edge, and the canvas's left edge then also docks a floating Tools panel (`window.toolsBesideCanvas`, #5395). Workspaces keep the setting; workspaces saved without it keep Tools at the window's edge. An optional VectorCraft layout choice; headline numbers unchanged.
+- 2026-11-12: Stencil Bridges in the Cutting Tools add-on (Object › Plug-ins › Cutting Tools): strips of a set width are cut out of the selected art so that every island of a stencil cut from it (the inside of an O, a hole in a shape) stays attached to the sheet, by the shortest crossings first, vertical, horizontal or the shortest among 12 directions 15° apart, with up to 16 bridges per island; type is measured by its glyph outlines and stays type, and the original goes to a hidden layer or is replaced. One undo step (`addon.cutting.bridges`). A VectorCraft addition: headline numbers unchanged.
+- 2026-11-13: Banner Hems and Grommets in the Cutting Tools add-on (Object › Plug-ins › Cutting Tools): on the chosen sides of the selected art's bounds, or of each artboard, a hem line at a set depth inside the edge and grommet marks (a circle with a cross) at a set inset, one at each end of a side and the rest spread evenly at most a set spacing apart, stroked in a chosen swatch; a dialog with Preview, one undo step (`addon.cutting.banner`). A VectorCraft addition: headline numbers unchanged.
+- 2026-11-14: Nest Shapes in the Cutting Tools add-on (Object › Plug-ins › Cutting Tools): the selected objects move close together onto an artboard, a sheet of a set size or a roll of a set width, packed by their bounding boxes with a margin inside the edges and a spacing between them, optionally turning objects 90° to fit; objects that do not fit go in a column beside the sheet; a dialog with Preview, one undo step (`addon.cutting.nest`). A VectorCraft addition: headline numbers unchanged.
+- 2026-11-15: With Smart Guides and Snap to Tangent on, a circle drawn from its center with the Ellipse tool (Alt and Shift) snaps its radius so that the circle touches a nearby path (a straight segment, a curve, or another circle from outside or inside) when the radius comes within the snapping tolerance of that size, and the touch point shows the "tangent" label. A VectorCraft addition: headline numbers unchanged.
+- 2026-11-05: Release Type on a Path joins the Type Tools add-on (Object › Plug-ins › Type Tools): each selected type on a path splits into point type with the same text and attributes, on one straight line starting where its first character sat, and the plain path it was set on, with its exact shape and place in the stacking order and no paint; or keeps only the path or only the text, optionally leaving the original. A dialog with Preview, one undo step (`addon.type.releasePath`, #5532). A VectorCraft addition: headline numbers unchanged.
+- 2026-11-04: New Document: the units chosen in Preset Details now belong to the chosen document, as the pane's options are listed for the selected preset; the chosen card shows them, every other Recent and Saved card keeps the units its document or preset was made in, and the built-in tabs still follow the chosen units, so switching between inches and millimetres no longer restyles every recent template. Scores and estimates unchanged.
+- 2026-11-14: Packaging Tools add-on (Object › Plug-ins › Packaging Tools): fold line roles for dielines (Cut, Crease, Partial Cut, Perforation), each carried by the swatch on a path's top stroke through a per-document role table that native files keep; PDF prints a role line on its swatch's separation when that swatch is a spot color, as the default role swatches are, and SVG, DXF and HP-GL keep the stroke's color. Make Cut Line, Make Crease Line, Make Partial Cut Line and Make Perforation Line give the selected paths a role, overprinting by default, and make a missing role swatch; the Fold Lines panel counts each role in the selection or the document, and its Role Swatches… picks another swatch for a role (`addon.packaging.setRole`, `addon.packaging.roles`, `addon.packaging.setRoleSwatch`). A VectorCraft addition: headline numbers unchanged.
+- 2026-11-02: Mouse wheel over a closed font-family field in Character, Properties or Control changes selected text through the family list using saved font filters (excluding search text), one undo step per notch, stopping at the ends (#5253). Scores and estimates unchanged.
 - 2026-10-31: Pattern libraries: Window › Swatch Libraries › Patterns and the Swatches panel's library menu open Geometric Patterns, a built-in library of eleven pattern swatches (dots, stripes, checks, a grid and shapes); clicking one adds its pattern and swatch to the document, once, and applies it to the active fill or stroke (`swatch.library.add`).
+- 2026-11-11: Pattern libraries: Patterns › Grit Textures, a second built-in pattern library, holds eight seamless black textures (Fine Grain, Coarse Grit, Sand, Speckle, Stipple, Scratches, Sparse Flecks and Dense Flecks) on tiles of 18 to 36 pt, each drawn the same way every time; marks that reach past a tile edge continue on the next tile, so the tiles join without a seam (`swatch.library.add`). Scores and estimates unchanged.
+- 2026-11-11: Pattern libraries: Patterns › Optical Effects, a third built-in pattern library, of VectorCraft's own designs, holds eight black wave, moiré and op-art tiles (Sine Bands, Ripple Lines, Interference Rings, Offset Rings, Warped Checks, Pinched Stripes, Chevron Pulse and Radiating Lenses) of 32 to 48 pt, each drawn the same way every time; each tile is one period of its design, and art that reaches past a tile edge continues on the next tile, so the tiles join without a seam (`swatch.library.add`). Scores and estimates unchanged.
 - 2026-11-01: Find Nearest Swatch joins the Color Effects add-on (Object › Plug-ins › Color Effects): for each colour of the selection, the closest swatches of the document, a built-in library or a library or colour book the user loaded, with their CIEDE2000 difference; Apply gives each colour its nearest swatch as one undo step, linking global and spot swatches and adding a library's to the document first, so a process colour becomes the closest spot colour (`addon.color.nearestSwatch`, `addon.color.applyNearestSwatch`, #4923).
 - 2026-11-01: Expand Dashes into Paths joins the Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): each selected path's dashed stroke becomes separate open paths, one per dash, laid out exactly as the stroke draws them (pattern, offset, Align Dashes to Corners and Path Ends), each keeping the stroke with the dashes off, so the gaps are real gaps for cutters and plotters, as one undo step (`addon.pathtools.expandDashes`, #4922).
 - 2026-11-01: Randomize Opacity joins the Arrange Tools add-on (Object › Plug-ins › Arrange Tools): each selected object gets its own opacity at random between a minimum and a maximum percent, with a seed that repeats the result, as one undo step (`addon.arrange.randomizeOpacity`, #4925).
 - 2026-11-01: Sort Objects joins the Arrange Tools add-on (Object › Plug-ins › Arrange Tools): the selected objects are sorted by width, height, area, position, opacity or stacking order (small to large, large to small or at random) and take another of those in that order, trading their values or stepping them evenly, as one undo step (`addon.arrange.sort`, #4917).
+- 2026-11-15: Tangent Circle joins the Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): the circles that touch two selected paths or compound paths at a set radius, or three of them (up to eight for three circles), touching each outline without crossing it; circles, rotated ellipses and other paths alike. A dialog that previews every circle or one picked by number, the current paint, one undo step (`addon.pathtools.tangentCircle`). A VectorCraft addition: headline numbers unchanged.
 - 2026-11-01: New Symbols from Layers joins the Document Tools add-on (Object › Plug-ins › Document Tools): one symbol of each top-level layer's art (the layers highlighted in the Layers panel when two or more are, else every layer), named after the layer, made as New Symbol makes one; Convert Layers to Symbols also puts an instance of each in place of its layer's art. Empty layers are skipped and reported; one undo step. A VectorCraft addition: headline numbers unchanged.
 - 2026-11-01: Document Tools, a built-in add-on (Object › Plug-ins › Document Tools), starts with Save a Timestamped Copy: a copy of the document named `<name>_YYYY-MM-DD_HH-MM` (UTC; `-2`, `-3`… when that name is taken) goes next to it, or into a folder picked for a document never saved, written as File › Save a Copy writes it, so the document keeps its path, title and modified state. Off on the web, which has no clock. A VectorCraft addition: headline numbers unchanged.
 - 2026-11-01: Divide into Dashes joins the Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): the selected paths, or only their direct-selected segments, are cut into separate open paths of a dash length measured along the curve, with an optional gap (left empty, or kept as pieces), each keeping the path's appearance; Fit to Corners and Ends stretches or squeezes the lengths so every run starts and ends on a dash. A dialog with Preview, one undo step, at most 100000 pieces. A VectorCraft addition: headline numbers unchanged.
+- 2026-11-15: Common Tangents in the Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): the straight lines that touch two selected convex closed paths (ellipses at any rotation and scale, or convex Bézier paths) without crossing either are added as open paths with the current stroke: external, internal or all, and the line joining the centers if asked; a path inside the other has none unless the two touch, and a message says why; a dialog with Preview, one undo step (`addon.pathtools.commonTangents`, #7845). A VectorCraft addition: headline numbers unchanged.
+- 2026-11-15: With Smart Guides and Snap to Tangent on, a Line Segment drag pressed on one convex curved path and dragged near another lands on a common tangent of the two: both ends move to where the line touches the paths, each labeled "tangent" (#7845). A VectorCraft addition: headline numbers unchanged.
+- 2026-11-03: Text Tweaker, the first tool of the Type Tools add-on (Object › Plug-ins › Type Tools): one character attribute (size, baseline shift, rotation, horizontal or vertical scale, tracking, leading or stroke weight) goes letter by letter from a start value to an end value along a straight ramp, an ease, a bow, a spike or at random with a seed, set as the Character panel sets it, while the text stays live; a dialog with Preview, one undo step (`addon.type.textTweaker`, #4924). A VectorCraft addition: headline numbers unchanged.
 - 2026-11-01: Group Overlapping Objects joins the Arrange Tools add-on (Object › Plug-ins › Arrange Tools): the selected objects whose visual bounds overlap or touch, chains included, go into one group each, within their own layer or group, at the stacking place of their frontmost member; objects that overlap nothing stay as they are. One undo step, a sweep along x so thousands of loose pieces group quickly (at most 20000 objects). A VectorCraft addition: headline numbers unchanged.
 - 2026-10-31: Export for Screens works as the reference app's dialog: Artboards and Assets tabs with a grid or list of thumbnails, Clear Selection and Prefix, Create Sub-folders by Scale or Format (on by default), Export PDFs As Single File (the chosen artboards as one PDF's pages, `pdfs: "single"`) or Multiple Files, iOS and Android rows, format presets in a ☰ menu, and a count of the files the export writes (#4895). About 55 community PRs and fixes landed the same day: Find Font, Replace Font, Outline Stroke and Expand leave hidden and locked art alone (with a warning); DXF export writes LINE and ELLIPSE entities and outlines only the strokes a CAD line can't draw; Blob Brush Angle and Roundness; Shift-constrained Perspective Selection; Grid Repeat Options Preview; a gradient mesh from a file budgeted at about a million quads; width-profile strokes keep their shape zoomed out; `.ai`/EPS import fidelity (area type, envelopes, transparency in dictionaries, character styles); PDF import finds hyphenated and CMap-suffixed font names; Windows renders follow the process's core affinity; Enter or Escape in a floating panel's field no longer reaches the canvas (#4803); Properties shows Blend Options for any selected blend (#4817); Artwork Cleanup finds doubled type (#4835) and joins stacked lines into one object (Join Point Text, #4826). Headline numbers unchanged.
 - 2026-10-31: Arrange Tools, a built-in add-on (Object › Plug-ins › Arrange Tools): Arrange in Grid lays the selected objects out in rows and columns, a row or a column with gaps, from the selection's top-left or centred on the artboard; Swap Objects swaps two objects' places (and, with Swap Objects and Sizes, their sizes); Replace with Top Object puts a copy of the topmost selected object in place of each of the others, kept, stretched or fitted in proportion; Set Size of Each gives every selected object an exact width and/or height about a reference point; Zoom to Selection fits the view to the selection. Each is one undo step with a previewed dialog where it has options. A VectorCraft addition: headline numbers unchanged.
+- 2026-11-11: Window › Swatch Libraries › Gradients › Organic Fades: fifteen soft fades (ten linear, five radial) through three to five unevenly spaced stops with off-center midpoints, mixed with the Perceptual method, that thin out to transparent at the end of a linear one and at the edge of a radial one; they also list in the Swatches panel's library menu, `swatch.library.list` and the Gradient panel's Presets.
+- 2026-11-13: Gradient panel › Method: Hue Clockwise and Hue Counterclockwise mix a linear, radial, conic or diamond gradient's colors around the hue wheel in one direction, so red to blue passes through magenta one way and through yellow and green the other (`paint.editGradient` `method`: `hue-clockwise`, `hue-counterclockwise`); SVG and PDF exports write such a gradient as an image.
+- 2026-11-11: Window › Swatch Libraries › Gradients › Holographic: seven foils (opaque linear gradients of six narrow pastel and pearl bands with off-center midpoints) and seven glows (radial gradients from a bright center out to a clear edge), mixed with the Perceptual method; they also list in the Swatches panel's library menu, `swatch.library.list` and the Gradient panel's Presets.
 - 2026-10-30: Gradient panel presets: a Presets menu applies one of the built-in gradient libraries' presets (grouped by theme) or a saved one to the gradient behind the active proxy, keeping its placement, as one undo step; the panel menu saves the current gradient as a preset, kept with the preferences, and deletes saved ones (`gradient.presets.list/apply/save/delete`).
 - 2026-10-23: Pathfinder › Trap: the Pathfinder panel's Trap… and Effect › Pathfinder › Trap… add a thin overprinting strip of the lighter colour inside the darker one where two solid colours meet, so misregistered plates leave no gap ([trapping](https://helpx.adobe.com/illustrator/using/trapping.html)), with Thickness, Height/Width, Tint Reduction, Traps with Process Color and Reverse Traps. Illustrator effects 49/50 (SVG Filters remains); Live vector effects hours 6–10 → 4–8; headline numbers unchanged.
 - 2026-10-23: OpenType SVG colour fonts draw as vector art: each glyph's SVG document is read by the SVG importer, in the text's colours where it asks for them, and draws, exports and outlines as COLR glyphs do; all colour font formats are now drawn.
@@ -217,6 +233,23 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-15 | minor | Graphic Styles: built-in Neon & Glow graphic style library (Cyan Neon, Magenta Laser, Amber Tube, Electric Lime, Pulse Violet, Cobalt Phosphor); G5 estimate unchanged (3–13 h). |
+| 2026-11-14 | minor | Tech Circuit adds three original procedural brushes (Circuit Trace, Bus Lines, Terminal Nodes); ten built-in brush libraries. G5 remaining estimate 3–13 h (estimated); parity scores and headline totals unchanged. |
+| 2026-11-14 | minor | Gujarati (#6613): contributor proofreading completed for all 387 additions, with 11 wording corrections; 4,673 reviewed catalog rows. Status/error messages remain partial; web selection requires a bundled Gujarati face. Scores and estimates unchanged. |
+| 2026-11-10 | minor | Tidy-up, no content change: the unheaded change bullets at the top of the file and a revision row inside the headline-numbers table move to this table under their commit dates. Scores and estimates unchanged. |
+| 2026-11-10 | minor | Raster effects: Effect Gallery thumbnails and an in-dialog preview (an original drawing through each filter). Features-table Raster effects 85% → 88%, hours 1–2 → none. Headline numbers unchanged, so the progress log is unchanged. |
+| 2026-11-05 | minor | Compound Shapes add-on (beyond Illustrator): a menu for Make, Release and Expand Compound Shape and a setting, off by default, that makes the Pathfinder panel's Shape Mode buttons create compound shapes on a click. Scores and estimates unchanged. |
+| 2026-11-04 | minor | Contour add-on (beyond Illustrator): drag a selected shape's edge outward or inward for a live, editable offset copy, with a floating bar for distance and Sharp, Round or Square corners; Bake turns it into paths. Scores and estimates unchanged. |
+| 2026-11-03 | minor | Paint: new gradients use the document's color model for default stops, including Gradient tool creation. Scores and estimates unchanged. |
+| 2026-11-03 | minor | UI: Window → Help Bar toggles the tool-help strip separately from the status bar and saves visibility with workspaces. Scores and estimates unchanged. |
+| 2026-11-03 | minor | Docked Tools stays between left-side panels and the canvas; redocking accepts canvas and window edges. Requested layout choice; scores and estimates unchanged. |
+| 2026-11-02 | minor | Selection QoL: saved marquee modes, screen drag direction with a 3 px dead zone, and translated mode/E feedback (#5313); VectorCraft addition, scores and estimates unchanged. |
+| 2026-11-12 | minor | Gujarati (`gu`): reviewed by a native speaker; zero/one singular plurals (CLDR); Gujarati craft-fonts faces join the UI fonts; strings added on main since branching translated (4,286 rows) |
+| 2026-11-11 | minor | Gujarati (`gu`): 4,235-row machine-assisted interface catalog, one/other plurals, desktop Gujarati font fallback; messages not yet translated; native review pending |
+| 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
+| 2026-11-05 | minor | Progress log row for the Type Tools add-on's Release Type on a Path (#5532); headline numbers unchanged. |
+| 2026-11-03 | minor | Progress log row for the Type Tools add-on's Text Tweaker (#4924); headline numbers unchanged. |
+| 2026-11-02 | minor | Closed font-family fields accept wheel input for selected text in Character, Properties and Control (#5253); scores and estimates unchanged. |
 | 2026-11-01 | minor | Progress log row for the Color Effects add-on's Find Nearest Swatch (#4923); headline numbers unchanged. |
 | 2026-11-01 | minor | Progress log row for the Path Precision Tools add-on's Expand Dashes into Paths (#4922); headline numbers unchanged. |
 | 2026-11-01 | minor | Progress log row for the Arrange Tools add-on's Randomize Opacity (#4925); headline numbers unchanged. |
@@ -249,10 +282,14 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 | 2026-10-13 | minor | Bounded synthetic control input (#1709): counts and queued events validated before mutation; control-channel bursts yield between frames. Scores and hours unchanged. |
 | 2026-10-14 | minor | Progress log row for the merges of 2026-10-14 (#1641–#1808 as listed there) and Image Trace's #1647 and #1657; the 2026-10-13 row now says that a guide's position in the Transform panel (#1659) is not established by the documentation found and is kept as a convenience pending the owner's decision; headline numbers unchanged. |
 | 2026-10-13 | minor | Control transport deadlines (#1726): idle and partial clients and blocked replies release connection slots; parity scores and estimates unchanged. |
+| 2026-10-13 | minor | PDF.R1: editable PDF import uses the shared reader, scans page content in windows, and rejects known incomplete input before returning a document. |
+| 2026-10-13 | minor | PDF.W1: PDF export and print composition use the shared optional writer for configuration, metadata, font preparation and guarded finalization; drawing and output policy remain app-owned. |
 | 2026-10-10 | minor | Method changed, no new evidence: full ready for real work is the additive weighted sum, ~62%; hours per audience; beta ~13 points away |
 | 2026-10-10 | minor | Added the essentials-user readiness score (~75%) |
 | 2026-10-10 | minor | Ready for real work re-examined against the issue tracker and user feedback: 50% → 55% (full), 65% mainstream added; see target-app-parity.md |
 | 2026-10-10 | minor | Applied the core-workflow gate (docs/roadmap.md › Alpha gate): passes, stage stays alpha |
 | 2026-10-10 | major | Re-measured against Illustrator 2026 (30.x) from code counts, 71 open issues and public docs; stage set to alpha; moved the parity estimate, honest assessment and "Shipped so far" to `docs/target-app-parity.md`, the gap list to `docs/gaps.md`, milestones to `docs/roadmap.md`, the `.ai` scope to `docs/file-format-parity.md` |
+| 2026-10-10 | minor | UI.5: Shared docking adds tab reordering, docking into other groups, dock splits and resizable floating panel groups. Panel positions and return locations persist with workspaces; the native icon rail and Tools panel remain available. |
+| 2026-10-10 | minor | UI.4: Dock and floating-panel headers use shared accessible tabs with bounded overflow. Widget-state theme application uses `craft-ui`; all four palettes, font stacks and preferences remain app-owned. |
 | 2026-10-05 | major | Honest assessment by dimension and the prioritized gap list |
 | 2026-10-02 | major | First 22-area weighted parity estimate |

@@ -1,5 +1,6 @@
-//! Swatches panel: proxy, Recent Colors, find field, thumbnail grid (15.5 pt tiles on a 17 pt pitch)
-//! or list, colour groups as folders, None/Registration first, bottom bar and panel menu.
+//! Swatches panel: proxy, Recent Colors (hidden by the panel menu's Show Recent Colors), find
+//! field, thumbnail grid (15.5 pt tiles on a 17 pt pitch) or list, colour groups as folders,
+//! None/Registration first, bottom bar and panel menu.
 //!
 //! Swatches drag to reorder, into and out of colour groups (`swatch.move`) and onto art (the active
 //! proxy's paint command with the object's id) and onto the Gradient panel's ramp; a Fill/Stroke
@@ -208,6 +209,43 @@ fn apply(app: &mut VectorcraftApp, ui: &Ui, e: &Entry) {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     body(app, ui, TILE);
+}
+
+/// Item actions target the clicked swatch, independently of the paint or other selected chips.
+fn item_context_menu(app: &mut VectorcraftApp, ui: &Ui, resp: &Response, e: &Entry) {
+    if e.is_folder() {
+        return;
+    }
+    let name = e.name();
+    if resp.secondary_clicked() {
+        let selected = dnd::selection(app, ui);
+        if selected.last().map(String::as_str) != Some(name) {
+            set_pstate(ui.ctx(), "swatch-selected", vec![name.to_string()]);
+            set_pstate(ui.ctx(), "swatch-anchor", name.to_string());
+        }
+    }
+    resp.context_menu(|ui| {
+        // Recheck the document each frame: a swatch can be deleted while its menu is open.
+        let enabled = app.session.active().and_then(|st| st.doc.swatch(name)).is_some_and(|s| !s.is_reserved());
+        let command = if menu_item(ui, tl!("Swatch Options…"), enabled, false) {
+            Some("ui.swatchOptions")
+        } else if menu_item(ui, tl!("Duplicate Swatch"), enabled, false) {
+            Some("swatch.duplicate")
+        } else if menu_item(ui, tl!("Delete Swatch"), enabled, false) {
+            Some("swatch.delete")
+        } else {
+            None
+        };
+        if let Some(command) = command {
+            if command == "swatch.delete" {
+                actions::delete(app, vec![name.to_string()], false);
+            } else {
+                // run reports failures through the app's status message.
+                let _ = app.run(command, json!({"name": name}));
+            }
+            ui.close();
+        }
+    });
 }
 
 /// The panel in a Fill/Stroke chip popover (the Control bar's and Properties'): the same body, its

@@ -65,3 +65,29 @@ fn halftone_options() {
         assert!(s.execute("object.vectorHalftone", &bad).is_err(), "{bad}");
     }
 }
+
+#[test]
+fn halftone_refuses_a_param_of_the_wrong_type() {
+    for bad in [
+        json!({"frequency": "60"}),
+        json!({"angle": "30"}),
+        json!({"shape": 1}),
+        json!({"mode": true}),
+        json!({"invert": "true"}),
+        json!({"clip": "false"}),
+        json!({"keepOriginal": 1}),
+        json!({"color": 0}),
+    ] {
+        let mut s = session();
+        let id = red_rect(&mut s);
+        let before = s.doc().unwrap().doc.clone();
+        assert!(s.execute("object.vectorHalftone", &bad).is_err(), "{bad}");
+        assert_eq!(s.doc().unwrap().doc, before, "{bad} changed the document");
+        assert!(s.doc().unwrap().doc.node(id).is_some());
+    }
+    // Null stands for an omitted value.
+    let mut s = session();
+    red_rect(&mut s);
+    let p = json!({"frequency": null, "angle": null, "shape": null, "mode": null, "color": null, "invert": null, "clip": null, "keepOriginal": null});
+    assert!(s.execute("object.vectorHalftone", &p).is_ok());
+}

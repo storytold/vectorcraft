@@ -97,7 +97,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transform Each…",
             ["Object", "Transform"],
             Some("Cmd+Alt+Shift+D"),
-            "{scaleH?: % (100), scaleV?: % (100), moveH?: pt, moveV?: pt (down = +), rotate?: deg (counter-clockwise), reflectX?: bool (flip left-right, as Reflect X in the Transform Each dialog), reflectY?: bool (flip top-bottom, as Reflect Y), random?: bool, seed?: n, reference?: 0..8 (9-point grid, 4 = centre), copy?: bool, strokes?: bool (Scale Strokes & Effects), corners?: bool (Scale Corners; both default to the preferences), objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns; default: prefs transformPatternTiles)} transform every selected object about its own reference point → {ids}",
+            "{scaleH?: % (100), scaleV?: % (100), relative?: bool (true: scaleH and scaleV are percentages of each object's size, as the dialog's Relative; false: Absolute, scaleH and scaleV are the width and height in pt each object becomes, measured on its own bounds, and a side left out keeps its size), moveH?: pt, moveV?: pt (down = +), rotate?: deg (counter-clockwise), reflectX?: bool (flip left-right, as Reflect X in the Transform Each dialog), reflectY?: bool (flip top-bottom, as Reflect Y), random?: bool, seed?: n, reference?: 0..8 (9-point grid, 4 = centre), copy?: bool, strokes?: bool (Scale Strokes & Effects), corners?: bool (Scale Corners; both default to the preferences), objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns; default: prefs transformPatternTiles)} transform every selected object about the reference point of its own box, along its own axes → {ids}",
             has_selection,
             transform_each
         ),
@@ -106,7 +106,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reset Bounding Box",
             ["Object", "Transform"],
             None,
-            "{} square the bounding box of the selected objects to the page again after a rotation (their geometry stays; one undo step, none when no box is rotated) → {changed: objects reset}",
+            "{} square the bounding box of the selected objects, and of every object inside them (the children of groups, compound paths, clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks), to the page again after a rotation (their geometry stays; one undo step, none when no box is rotated) → {changed: objects reset, the objects inside included}",
             has_selection,
             reset_bounding_box
         ),
@@ -115,7 +115,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rasterize…",
             ["Object"],
             None,
-            "{ppi?, background?: transparent|white|black|\"#rrggbb\", antiAlias?: none|art|type (text snapped to pixels)|bool, padding?|addAround?: pt (0–1000), colorModel?: \"rgb\"|\"cmyk\"|\"grayscale\"|\"bitmap\", clippingMask?: bool (a clip group with the art's outline)} replace the selection with an embedded image (PNG; in a CMYK document with its own colour model, a CMYK image of the art's inks, its transparency as its opacity mask); each defaults to document.rasterEffectsSettings; a frame of threaded text that is rasterized leaves its thread with the text it shows → {id (the image, or its clip group), width, height, warning?: \"an image couldn't be decoded and is missing from the picture\" (as raster exports say)}",
+            "{ppi?, background?: transparent|white|black|\"#rrggbb\" (#rrggbbaa and #rgba are refused), antiAlias?: none|art|type (text snapped to pixels)|bool, padding?|addAround?: pt (0–1000), colorModel?: \"rgb\"|\"cmyk\"|\"grayscale\"|\"bitmap\", clippingMask?: bool (a clip group with the art's outline)} replace the selection with an embedded image (PNG; grayscale makes a gray PNG, and bitmap a 1-bit TIFF or, where it has transparency, a black-and-white gray PNG with alpha; in a CMYK document with its own colour model, a CMYK image of the art's inks, its transparency as its opacity mask); each defaults to document.rasterEffectsSettings; an image larger than 64 Mpx or 32,768 px a side is refused; a frame of threaded text that is rasterized leaves its thread with the text it shows → {id (the image, or its clip group), width, height, warning?: \"an image couldn't be decoded and is missing from the picture\" (as raster exports say)}",
             has_selection,
             rasterize
         ),
@@ -133,7 +133,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Crop Image",
             ["Object"],
             None,
-            "{rect?: [x, y, width, height] | trim?: true (to the pixels that aren't fully transparent, pixel for pixel; an image with none to cut is left as it is, trimmed: false)} crop the selected image (default: to the artboard it sits on) → {id, width, height, trimmed? (with trim), warning? (without trim: the image couldn't be decoded, as object.rasterize says)}",
+            "{rect?: [x, y, width, height] | trim?: true (to the pixels that aren't fully transparent, pixel for pixel; an image with none to cut is left as it is, trimmed: false), ppi?: number (without trim: the cropped image's resolution in pixels per inch, resampled from the cut pixels; 1 to 2400, at most the image's own, or 300 for a linked image; default the image's own; a rect over the whole image with a new ppi only resamples it)} crop the selected image (default: to the artboard it sits on) → {id, width, height, trimmed? (with trim), warning? (without trim: the image couldn't be decoded, as object.rasterize says)}",
             has_image,
             crop_image
         ),
@@ -178,7 +178,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rearrange All Artboards…",
             ["Object", "Artboards"],
             None,
-            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (each object of a layer or sublayer moves with the artboard its center is on; locked and hidden art, and art on a locked artboard, only with prefs moveLockedWithArtboard), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), byColumn?: bool (an older way to ask for layout gridByColumn)} lay the artboards out in their order, the grid's top-left at the first artboard's; a locked artboard stays where it is → {artboards, rows, columns}",
+            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (each object of a layer or sublayer moves with the artboard its center is on; locked and hidden art, and art on a locked artboard, only with lockedAndHidden), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), lockedAndHidden?: bool (default: prefs moveLockedWithArtboard), byColumn?: bool (an older way to ask for layout gridByColumn)} lay the artboards out in their order, the grid's top-left at the first artboard's; a locked artboard stays where it is → {artboards, rows, columns}",
             has_doc,
             rearrange_artboards
         ),
@@ -203,10 +203,11 @@ pub(crate) fn whole_or(p: &Value, key: &str, default: u64, cmd: &str) -> Result<
     }
 }
 
-/// Run a command's implementation without the enablement check or journaling.
+/// Run a command's implementation without the enablement check or journaling. A command with a
+/// parameter schema runs with its params checked ([`super::run_checked`]).
 pub(crate) fn run_raw(s: &mut Session, id: &str, p: &Value) -> Result<Value> {
     let c = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.into()))?;
-    (c.run)(s, p)
+    super::run_checked(s, c, p)
 }
 
 /// Merge the undo entries pushed since the history had `from` entries into one labelled step.
@@ -223,21 +224,63 @@ pub(crate) fn squash(s: &mut Session, from: usize, label: &str) {
 
 // ---------- Reset Bounding Box ----------
 
+/// Squares each selected object and every object inside it: the children of groups, compound paths,
+/// clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks.
 fn reset_bounding_box(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let d = &s.doc()?.doc;
-    let turned: Vec<NodeId> = ids.into_iter().filter(|id| d.node(*id).is_some_and(|n| n.bbox_angle != 0.0)).collect();
-    if !turned.is_empty() {
+    let mut changed = 0;
+    let squared: Vec<(NodeId, Node)> = ids
+        .into_iter()
+        .filter_map(|id| {
+            let (n, count) = squared(d.node(id)?);
+            changed += count;
+            Some((id, n?))
+        })
+        .collect();
+    if !squared.is_empty() {
         s.edit("Reset Bounding Box", |d, _| {
-            for id in &turned {
-                if let Some(n) = d.node_mut(*id) {
-                    n.bbox_angle = 0.0;
+            for (id, n) in squared {
+                if let Some(slot) = d.node_mut(id) {
+                    *slot = n;
                 }
             }
             Ok(())
         })?;
     }
-    Ok(json!({ "changed": turned.len() }))
+    Ok(json!({ "changed": changed }))
+}
+
+/// A copy of `n` with the angle of every object in its subtree set to 0, or `None` when no box in
+/// it stands at an angle, and the number of objects squared. The subtree takes in children and the
+/// art of linked opacity masks (an unlinked mask's art turns on its own); layers have no box. Only
+/// the nodes on the way to a turned object are copied.
+fn squared(n: &Node) -> (Option<Node>, usize) {
+    let mut out = (!n.is_layer() && n.bbox_angle != 0.0).then(|| {
+        let mut c = n.clone();
+        c.bbox_angle = 0.0;
+        c
+    });
+    let mut count = usize::from(out.is_some());
+    for (i, c) in n.children().into_iter().flatten().enumerate() {
+        let (child, k) = squared(c);
+        count += k;
+        if let Some(child) = child
+            && let Some(slot) = out.get_or_insert_with(|| n.clone()).children_mut().and_then(|ch| ch.get_mut(i))
+        {
+            *slot = Arc::new(child);
+        }
+    }
+    if let Some(m) = n.extras().mask.as_ref().filter(|m| m.linked) {
+        let (art, k) = squared(&m.art);
+        count += k;
+        if let Some(art) = art
+            && let Some(m) = out.get_or_insert_with(|| n.clone()).extras_if_any().and_then(|e| e.mask.as_mut())
+        {
+            m.art = Arc::new(art);
+        }
+    }
+    (out, count)
 }
 
 // ---------- Lock / Hide ----------
@@ -347,7 +390,7 @@ fn other_layers(s: &mut Session, lock: bool) -> Result<Value> {
 }
 
 /// Returns the objects [`super::select::walk_selectable`] visits that are not among the selected objects `roots` and
-/// hold none of them. A selected layer's objects count as selected. The walk goes into a plain group, but not a Shaper
+/// hold none of them. A selected layer and its objects count as selected. The walk goes into a plain group, but not a Shaper
 /// group, that holds a selected object. With `lock`, it also goes into a clip group or compound path that holds one,
 /// and includes guide paths while `guides_locked`. Without `lock`, guide paths and the objects that hold one are left
 /// out while `guides_locked`; a clip group, Shaper group, compound path and every other object that holds a selected
@@ -360,13 +403,31 @@ fn unselected(
     guides_locked: bool,
     lock: bool,
 ) -> Vec<NodeId> {
+    /// Pushes the visible guide paths in `n`, `n` included, locked ones too.
+    fn shown_guides(n: &vectorcraft_doc::Node, out: &mut Vec<NodeId>) {
+        if !n.visible {
+            return;
+        }
+        if matches!(n.kind, NodeKind::Path { guide: true, .. }) {
+            out.push(n.id);
+        }
+        for c in n.children().into_iter().flatten() {
+            shown_guides(c, out);
+        }
+    }
     let mut roots: HashSet<NodeId> = roots.iter().copied().collect();
-    roots.extend(selection.iter().filter_map(|id| d.node(*id)).filter(|n| n.is_layer()).flat_map(|l| l.layer_art(true)));
+    let layers = || selection.iter().filter_map(|id| d.node(*id)).filter(|n| n.is_layer());
+    roots.extend(layers().map(|l| l.id));
+    roots.extend(layers().flat_map(|l| l.layer_art(true)));
     let mut kept: Vec<NodeId> = roots.iter().copied().collect();
     if guides_locked && !lock {
         super::select::walk_selectable(d, iso, |n| {
             if matches!(n.kind, NodeKind::Path { guide: true, .. }) {
                 kept.push(n.id);
+            }
+            // The walk skips locked objects, so the guide paths in them are looked for here.
+            for c in n.children().into_iter().flatten().filter(|c| c.locked) {
+                shown_guides(c, &mut kept);
             }
             true
         });
@@ -436,6 +497,30 @@ fn about(o: Point, a: Affine) -> Affine {
     Affine::translate(o.to_vec2()) * a * Affine::translate(-o.to_vec2())
 }
 
+/// The largest width or height (pt) an Absolute Transform Each takes, so coordinates stay finite.
+const MAX_ABSOLUTE: f64 = 1.0e7;
+
+/// The box a symbol instance or any other object has of its own, rotated with it, as the Transform
+/// panel and the Control bar show it: Absolute Transform Each measures its targets on this, with
+/// `symbols` shared so many instances of one symbol measure its art once.
+fn own_box(doc: &vectorcraft_doc::Document, id: NodeId, symbols: &vectorcraft_doc::SymbolBoxes) -> Option<Rect> {
+    doc.oriented_bounds_with(&[id], false, symbols).map(|b| b.rect)
+}
+
+/// Whether Absolute scaling by `target` leaves a side of `current` as it is, to within a millionth
+/// of the size: a square turned 45° measures 100.00000000000001 in its own box, and the size it
+/// shows must not scale it.
+fn keeps_size(target: f64, current: f64) -> bool {
+    (scale_factor(target, current) - 1.0).abs() <= 1.0e-9
+}
+
+/// The factor that takes `current` to `target` (Absolute Transform Each). A side of 0 (a line)
+/// keeps its factor 1, since no factor gives it another size, and the factor is bounded as the
+/// moves are, so a hairline side can't throw coordinates past what a document can hold.
+fn scale_factor(target: f64, current: f64) -> f64 {
+    if current.abs() > 1.0e-9 { (target / current).clamp(-1.0e7, 1.0e7) } else { 1.0 }
+}
+
 fn transform_each(s: &mut Session, p: &Value) -> Result<Value> {
     transform_each_as(s, p, "Transform Each")
 }
@@ -452,9 +537,17 @@ pub(crate) fn transform_each_again(s: &mut Session, p: &Value) -> Result<Value> 
 fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
     let roots = selected_roots(s)?;
     check_numbers(p, &["scaleH", "scaleV", "moveH", "moveV", "rotate"], "object.transformEach")?;
+    // Relative (the default) scales each object by a percentage of its own size; Absolute
+    // (`relative: false`, the dialog's Absolute) takes each object to the width and height given,
+    // a side left out staying as it is.
+    let relative = switch_or(p, "relative", true, "object.transformEach")?;
     // Bounded so coordinates stay finite (and the document stays serializable).
-    let sh = f64_or(p, "scaleH", 100.0).clamp(-100_000.0, 100_000.0);
-    let sv = f64_or(p, "scaleV", 100.0).clamp(-100_000.0, 100_000.0);
+    let given = |key: &str| p.get(key).filter(|v| !v.is_null()).and_then(Value::as_f64).map(|v| v.clamp(-MAX_ABSOLUTE, MAX_ABSOLUTE));
+    let (sh, sv) = if relative {
+        (Some(f64_or(p, "scaleH", 100.0).clamp(-100_000.0, 100_000.0)), Some(f64_or(p, "scaleV", 100.0).clamp(-100_000.0, 100_000.0)))
+    } else {
+        (given("scaleH"), given("scaleV"))
+    };
     let mh = f64_or(p, "moveH", 0.0).clamp(-1.0e7, 1.0e7);
     let mv = f64_or(p, "moveV", 0.0).clamp(-1.0e7, 1.0e7);
     let rot = f64_or(p, "rotate", 0.0);
@@ -465,16 +558,26 @@ fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
     let copy = switch_or(p, "copy", false, "object.transformEach")?;
     check_switches(p, &["strokes", "corners", "objects", "patterns"], "object.transformEach")?;
     let objects = super::object::transforms_objects(p);
-    if sh == 0.0 || sv == 0.0 {
+    if sh == Some(0.0) || sv == Some(0.0) {
         return Err(bad("object.transformEach", "scale must be non-zero"));
     }
     let mut rng = Rng(whole_or(p, "seed", 0x9E37_79B9_7F4A_7C15, "object.transformEach")?.max(1));
-    let mut sc = if sh != 100.0 || sv != 100.0 { super::object::scaling(s, p) } else { Default::default() };
+    let mut sc = if !relative || sh != Some(100.0) || sv != Some(100.0) { super::object::scaling(s, p) } else { Default::default() };
     sc.patterns = super::object::transform_patterns(s, p, &roots)?;
-    // With no object to transform, or without a copy when both scales are 100% and there is no
-    // move, rotation or reflection (with or without Random), the document and its undo history
-    // stay as they are.
-    if roots.is_empty() || (!copy && sh == 100.0 && sv == 100.0 && mh == 0.0 && mv == 0.0 && rot == 0.0 && !rx && !ry) {
+    // With no object to transform, or without a copy when nothing would change (both scales 100%
+    // or, with Absolute, the size each object already has, and no move, rotation or reflection,
+    // with or without Random), the document and its undo history stay as they are.
+    let scales_change = if relative {
+        sh != Some(100.0) || sv != Some(100.0)
+    } else {
+        let doc = &s.doc()?.doc;
+        let symbols = doc.symbol_boxes();
+        roots.iter().any(|id| {
+            own_box(doc, *id, &symbols)
+                .is_some_and(|b| sh.is_some_and(|v| !keeps_size(v, b.width())) || sv.is_some_and(|v| !keeps_size(v, b.height())))
+        })
+    };
+    if roots.is_empty() || (!copy && !scales_change && mh == 0.0 && mv == 0.0 && rot == 0.0 && !rx && !ry) {
         return Ok(ids_json(&roots));
     }
     let ids = s.edit(label, |d, sel| {
@@ -482,24 +585,44 @@ fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
         // Measure each object's geometric bounds first, with symbol instances measured by their art.
         let symbols = d.symbol_boxes();
         let boxes: Vec<Option<Rect>> = targets.iter().map(|id| d.node(*id).and_then(|n| n.geometric_bounds_with(&symbols))).collect();
-        for (id, b) in targets.iter().zip(boxes) {
+        let own: Vec<Option<Rect>> = targets.iter().map(|id| own_box(d, *id, &symbols)).collect();
+        for ((id, b), own) in targets.iter().zip(boxes).zip(own) {
             let Some(b) = b else { continue };
-            let (mut k_sh, mut k_sv, mut k_mh, mut k_mv, mut k_rot) = (sh, sv, mh, mv, rot);
+            let own = own.unwrap_or(b);
+            // Relative scales by a percentage of the object's size; Absolute takes it to the size
+            // given, measured on the object's own box, rotated with it, as the dialog shows it (so
+            // objects of different sizes come out alike, and a rotated shape keeps its size).
+            let (own_w, own_h) = (own.width(), own.height());
+            let (mut k_sh, mut k_sv) = (
+                sh.map(|v| if relative { v / 100.0 } else { scale_factor(v, own_w) }),
+                sv.map(|v| if relative { v / 100.0 } else { scale_factor(v, own_h) }),
+            );
+            let (mut k_mh, mut k_mv, mut k_rot) = (mh, mv, rot);
             if random {
-                k_sh = 100.0 + (sh - 100.0) * rng.next();
-                k_sv = 100.0 + (sv - 100.0) * rng.next();
-                k_mh = mh * (rng.next() * 2.0 - 1.0);
-                k_mv = mv * (rng.next() * 2.0 - 1.0);
-                k_rot = rot * (rng.next() * 2.0 - 1.0);
+                // Five draws whatever the scales are, so a seed gives the moves and the rotation
+                // the same values whether a side is scaled or not.
+                let [r_sh, r_sv, r_mh, r_mv, r_rot] = [rng.next(), rng.next(), rng.next(), rng.next(), rng.next()];
+                k_sh = k_sh.map(|v| 1.0 + (v - 1.0) * r_sh);
+                k_sv = k_sv.map(|v| 1.0 + (v - 1.0) * r_sv);
+                k_mh = mh * (r_mh * 2.0 - 1.0);
+                k_mv = mv * (r_mv * 2.0 - 1.0);
+                k_rot = rot * (r_rot * 2.0 - 1.0);
             }
-            let o = vectorcraft_geom::reference_point(b, refi);
+            // The object's own box, turned with it, as the Transform panel and the dialog show it:
+            // the scales act along its axes, about that box's reference point, so a turned square
+            // keeps its shape and the size the dialog shows is the one it takes.
+            let frame = vectorcraft_doc::OrientedBox { angle: d.bbox_angle(&[*id]), rect: own };
+            let o = frame.reference_point(refi);
             // Reflect X / Reflect Y match Object › Transform › Transform Each and Effect › Distort › Transform:
             // Reflect X flips left-right (negate x), Reflect Y flips top-bottom (negate y).
             let refl = Affine::scale_non_uniform(if rx { -1.0 } else { 1.0 }, if ry { -1.0 } else { 1.0 });
-            let m = Affine::translate((k_mh, k_mv))
-                * about(o, Affine::rotate(-k_rot.to_radians()) * refl * Affine::scale_non_uniform(k_sh / 100.0, k_sv / 100.0));
+            let scale = Affine::rotate(-k_rot.to_radians()) * refl * Affine::scale_non_uniform(k_sh.unwrap_or(1.0), k_sv.unwrap_or(1.0));
+            let m = Affine::translate((k_mh, k_mv)) * about(o, frame.conjugate(scale));
             if let Some(n) = d.node_mut(*id) {
                 super::object::transform_node(n, m, sc, objects);
+            }
+            if objects {
+                super::object::keep_compound_aligned(d, *id, sc);
             }
         }
         Ok(targets)
@@ -547,7 +670,11 @@ fn render_pixels(
     opts: &vectorcraft_render::RenderOptions,
     color: RasterColorModel,
 ) -> Result<(vectorcraft_render::Rendered, Option<&'static str>)> {
-    if region.width() * region.height() * scale * scale > MAX_PIXELS || region.width() * scale > 65535.0 || region.height() * scale > 65535.0 {
+    // No side longer than the renderer draws: it would cut the image off there. The sides are
+    // measured in the renderer's whole pixels.
+    let side = vectorcraft_render::MAX_RASTER_SIDE;
+    let (w, h) = vectorcraft_render::region_pixels(region, scale);
+    if region.width() * region.height() * scale * scale > MAX_PIXELS || w > side || h > side {
         return Err(EngineError::Other("image would be too large; lower the resolution".into()));
     }
     let mut r = vectorcraft_render::Renderer::new();
@@ -602,7 +729,9 @@ fn cmyk_raster(
 /// The image Object › Rasterize makes of some art, before it goes in a document
 /// ([`rasterize_art`]).
 pub(crate) struct Rasterized {
-    /// A PNG, or a CMYK image of the art's inks ([`cmyk_raster`]).
+    /// A PNG (greyscale for the Grayscale colour model), a 1-bit TIFF or greyscale PNG for Bitmap
+    /// ([`vectorcraft_render::Rendered::to_bilevel`]), or a CMYK image of the art's inks
+    /// ([`cmyk_raster`]).
     blob: vectorcraft_doc::ImageBlob,
     /// A CMYK image's transparency, a greyscale PNG: it becomes the image's opacity mask.
     alpha: Option<Vec<u8>>,
@@ -642,7 +771,8 @@ impl Rasterized {
 /// Object › Rasterize's image of `nodes` (drawn also where hidden) with the params `p` of command
 /// `cmd`, each defaulting to `doc`'s raster effects settings: over the bounds of what the art draws
 /// ([`vectorcraft_render::drawn_bounds`]) and the room around them, in whole pixels. With `inks`,
-/// a CMYK document's colour model makes a CMYK image ([`cmyk_raster`]); otherwise images are PNGs.
+/// a CMYK document's colour model makes a CMYK image ([`cmyk_raster`]); otherwise images are PNGs,
+/// greyscale for the Grayscale and Bitmap colour models (an opaque Bitmap image is a 1-bit TIFF).
 pub(crate) fn rasterize_art(doc: &vectorcraft_doc::Document, nodes: Vec<Node>, p: &Value, cmd: &str, inks: bool) -> Result<Rasterized> {
     check_numbers(p, &["ppi"], cmd)?;
     let ppi = f64_or(p, "ppi", doc.raster_effects_ppi);
@@ -709,10 +839,17 @@ pub(crate) fn rasterize_art(doc: &vectorcraft_doc::Document, nodes: Vec<Node>, p
     let tmp = isolated_doc(doc, nodes);
     let opts = raster.render_options(RasterFormat::Png);
     let (img, warning) = render_pixels(&tmp, region, scale, &opts, look.color_model)?;
-    let (blob, alpha) = if inks && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk && look.color_model == RasterColorModel::Document {
-        cmyk_raster(&tmp, region, scale, &opts, &img)?
-    } else {
-        (vectorcraft_doc::ImageBlob::new("image/png", img.to_png().map_err(EngineError::Other)?), None)
+    let png =
+        |bytes: std::result::Result<Vec<u8>, String>| bytes.map(|b| vectorcraft_doc::ImageBlob::new("image/png", b)).map_err(EngineError::Other);
+    let (blob, alpha) = match look.color_model {
+        RasterColorModel::Document if inks && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk => cmyk_raster(&tmp, region, scale, &opts, &img)?,
+        RasterColorModel::Document => (png(img.to_png())?, None),
+        // Grayscale images, as the colour models say (#6969).
+        RasterColorModel::Grayscale => (png(img.to_gray_png())?, None),
+        RasterColorModel::Bitmap => {
+            let (mime, bytes) = img.to_bilevel(ppi).map_err(EngineError::Other)?;
+            (vectorcraft_doc::ImageBlob::new(mime, bytes), None)
+        }
     };
     let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
     Ok(Rasterized { blob, alpha, width: img.width, height: img.height, xf, clip, warning })
@@ -744,7 +881,7 @@ fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
-fn has_image(s: &Session) -> std::result::Result<(), String> {
+pub(crate) fn has_image(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
     let st = s.active().ok_or("no document open")?;
     if st.selection.objects.iter().any(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_)))) {
@@ -830,6 +967,116 @@ fn polygon_path(pts: &[Point]) -> PathData {
     PathData::single(vectorcraft_geom::SubPath::new(pts.iter().map(|p| Anchor::corner(*p)).collect(), true))
 }
 
+/// The part of an image under `r` (in document space) copied out of its pixels, with its placement. `None` when
+/// the image can't be cut that way (turned or skewed, CMYK, pixels that can't be read, or `r` not on the pixel
+/// grid), so the caller draws it instead.
+fn crop_pixels(doc: &vectorcraft_doc::Document, im: &ImageObject, r: Rect) -> Option<(image::RgbaImage, Affine)> {
+    let blob = doc.images.get(&im.key)?;
+    let [a, b, c, d, _, _] = im.xf.as_coeffs();
+    if blob.is_cmyk() || b.abs() > 1e-9 || c.abs() > 1e-9 || a.abs() < 1e-9 || d.abs() < 1e-9 {
+        return None;
+    }
+    let inv = im.xf.inverse();
+    let (p0, p1) = (inv * Point::new(r.x0, r.y0), inv * Point::new(r.x1, r.y1));
+    // Only a rect on the pixel grid is cut from the pixels; one between pixels keeps its exact bounds by being drawn.
+    // Checked before decoding, so an off-grid crop of a large image doesn't decode it for nothing.
+    let on_grid = |v: f64| (v - v.round()).abs() < 1e-3;
+    if ![p0.x, p0.y, p1.x, p1.y].into_iter().all(on_grid) {
+        return None;
+    }
+    let px = decode_rgba("object.cropImage", blob).ok()?;
+    let (w, h) = px.dimensions();
+    if w == 0 || h == 0 || (w, h) != (im.width, im.height) {
+        return None;
+    }
+    let lo = |v: f64, max: u32| v.round().clamp(0.0, f64::from(max)) as u32;
+    let (x0, x1) = (lo(p0.x.min(p1.x), w), lo(p0.x.max(p1.x), w));
+    let (y0, y1) = (lo(p0.y.min(p1.y), h), lo(p0.y.max(p1.y), h));
+    if x1 <= x0 || y1 <= y0 {
+        return None;
+    }
+    let cut = image::imageops::crop_imm(&px, x0, y0, x1 - x0, y1 - y0).to_image();
+    Some((cut, im.xf * Affine::translate((f64::from(x0), f64::from(y0)))))
+}
+
+/// Crop Image's `ppi`: the resolution asked for, in pixels per point, and whether it keeps the image's pixels as
+/// they are (its own, with square pixels); `None` for the image's own. Refuses a resolution that isn't a positive
+/// number or is above what the image allows: its own, or 300 ppi for a linked image, within 1 to 2400 ppi as
+/// Rasterize's.
+fn crop_resolution(p: &Value, im: &ImageObject) -> Result<Option<(f64, bool)>> {
+    const C: &str = "object.cropImage";
+    let Some(ppi) = p.get("ppi").filter(|v| !v.is_null()) else { return Ok(None) };
+    let ppi = ppi.as_f64().filter(|v| v.is_finite() && *v > 0.0).ok_or_else(|| bad(C, format!("ppi must be a positive number, not {ppi}")))?;
+    if !(1.0..=2400.0).contains(&ppi) {
+        return Err(bad(C, "ppi must be between 1 and 2400"));
+    }
+    let (_, max) = vectorcraft_tools::cropimage::image_ppi(im);
+    if ppi > max + 1e-6 {
+        let max = (max * 100.0 + 1e-6).floor() / 100.0;
+        return Err(bad(C, format!("ppi can't be more than {max} for this image")));
+    }
+    // An image whose pixels are not square is resampled on both sides, even at its denser side's resolution.
+    Ok(Some((ppi / 72.0, vectorcraft_tools::cropimage::keeps_resolution(im, ppi, 1e-6))))
+}
+
+/// A `w` × `h` image resampled at a resolution asked for, held to the size a drawing may have ([`MAX_PIXELS`], and
+/// no side past the renderer's).
+fn check_crop_size(w: f64, h: f64) -> Result<()> {
+    let side = f64::from(vectorcraft_render::MAX_RASTER_SIDE);
+    if w * h > MAX_PIXELS || w > side || h > side {
+        let (w, h) = (w as u64, h as u64);
+        return Err(bad("object.cropImage", format!("an image of {w} × {h} pixels is too large to draw")));
+    }
+    Ok(())
+}
+
+/// `img` resampled to `w` × `h` with its colors weighted by their alpha, so the color of a fully
+/// transparent pixel does not show at the edges of what is opaque. The weighted colors are held in
+/// 16 bits a channel until the end, so a nearly transparent pixel keeps its color. An error when
+/// the working copies would not fit ([`check_resample_size`]).
+fn resize_premultiplied(img: &image::RgbaImage, w: u32, h: u32) -> Result<image::RgbaImage> {
+    check_resample_size(img.width(), img.height(), w, h)?;
+    let mut pre = image::ImageBuffer::<image::Rgba<u16>, Vec<u16>>::new(img.width(), img.height());
+    for (d, s) in pre.pixels_mut().zip(img.pixels()) {
+        let a = u32::from(s[3]);
+        for (dc, sc) in d.0[..3].iter_mut().zip(&s.0[..3]) {
+            // c × 257 × a / 255, rounded: the color scaled to 16 bits and weighted.
+            *dc = ((u32::from(*sc) * 257 * a + 127) / 255) as u16;
+        }
+        d.0[3] = (a * 257) as u16;
+    }
+    let out = image::imageops::resize(&pre, w, h, image::imageops::FilterType::Lanczos3);
+    let mut res = image::RgbaImage::new(out.width(), out.height());
+    for (d, s) in res.pixels_mut().zip(out.pixels()) {
+        let a = u64::from(s[3]);
+        for (dc, sc) in d.0[..3].iter_mut().zip(&s.0[..3]) {
+            // c × 65535 / a back to 8 bits (÷ 257), rounded: c × 255 / a.
+            *dc = (u64::from(*sc) * 255 + a / 2).checked_div(a).unwrap_or(0).min(255) as u8;
+        }
+        d.0[3] = ((a + 128) / 257).min(255) as u8;
+    }
+    Ok(res)
+}
+
+/// Whether resampling a `sw` × `sh` image to `w` × `h` fits in [`MAX_RASTER_ALLOC`]: the source and
+/// its weighted 16-bit copy (12 bytes a pixel), the resampler's float rows between its two passes
+/// (16 bytes a pixel, `sw` × `h`) and the 16-bit and 8-bit results (12 bytes a pixel of `w` × `h`).
+pub(crate) fn check_resample_size(sw: u32, sh: u32, w: u32, h: u32) -> Result<()> {
+    let (sw, sh, w, h) = (u64::from(sw), u64::from(sh), u64::from(w), u64::from(h));
+    let bytes = (sw * sh).saturating_mul(12).saturating_add((sw * h).saturating_mul(16)).saturating_add((w * h).saturating_mul(12));
+    if bytes > crate::cmd::fileio::MAX_RASTER_ALLOC {
+        return Err(bad("object.cropImage", format!("an image of {sw} × {sh} pixels is too large to resample")));
+    }
+    Ok(())
+}
+
+/// `img` as PNG bytes.
+fn encode_png(img: &image::RgbaImage) -> Result<Vec<u8>> {
+    let mut png = Vec::new();
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| bad("object.cropImage", e.to_string()))?;
+    Ok(png)
+}
+
 fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.cropImage";
     let st = s.doc()?;
@@ -843,9 +1090,15 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     let node = st.doc.node(id).cloned().ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
     if switch_or(p, "trim", false, C)? {
+        if p.get("ppi").is_some_and(|v| !v.is_null()) {
+            return Err(bad(C, "trim keeps the image's pixels as they are: leave out ppi"));
+        }
         return trim_image(s, id, (**im).clone());
     }
     let ib = node.geometric_bounds().ok_or_else(|| bad(C, "image has no bounds"))?;
+    let asked = crop_resolution(p, im)?;
+    // The resolution the image's pixels are resampled to when they are cut straight.
+    let target = asked.and_then(|(t, keeps)| (!keeps).then_some(t));
     let rect = match p.get("rect").filter(|v| !v.is_null()) {
         Some(Value::Array(a)) if a.len() == 4 => {
             let v: Vec<f64> = a.iter().filter_map(Value::as_f64).collect();
@@ -867,33 +1120,94 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     if r.width() <= 0.0 || r.height() <= 0.0 {
         return Err(bad(C, "crop rectangle doesn't overlap the image"));
     }
-    if (r.x0 - ib.x0).abs() < 1e-6 && (r.y0 - ib.y0).abs() < 1e-6 && (r.x1 - ib.x1).abs() < 1e-6 && (r.y1 - ib.y1).abs() < 1e-6 {
+    // A box over the whole image still resamples it to a new resolution.
+    let whole = (r.x0 - ib.x0).abs() < 1e-6 && (r.y0 - ib.y0).abs() < 1e-6 && (r.x1 - ib.x1).abs() < 1e-6 && (r.y1 - ib.y1).abs() < 1e-6;
+    // A turned or skewed image is drawn, so a resolution asked for, even its own, still makes a new image.
+    let [_, xb, xc, _, _, _] = im.xf.as_coeffs();
+    let turned = xb.abs() > 1e-9 || xc.abs() > 1e-9;
+    if whole && target.is_none() && (asked.is_none() || !turned) {
         return Err(bad(C, "nothing to crop"));
     }
-    // Keep the image's pixel density.
-    let scale = (im.width as f64 / ib.width().max(1e-9)).max(im.height as f64 / ib.height().max(1e-9));
+    if let Some(t) = target {
+        check_crop_size((r.width() * t).round().max(1.0), (r.height() * t).round().max(1.0))?;
+    }
+    // A plain, axis-aligned raster is cut straight from its pixels, so nothing is resampled unless a
+    // resolution is asked for.
+    if let Some((cut, xf)) = crop_pixels(&st.doc, im, r) {
+        let (cut, xf) = match target {
+            Some(t) => {
+                let (cw, ch) = cut.dimensions();
+                let (w, h) = ((r.width() * t).round().max(1.0) as u32, (r.height() * t).round().max(1.0) as u32);
+                let resized = resize_premultiplied(&cut, w, h)?;
+                (resized, xf * Affine::scale_non_uniform(f64::from(cw) / f64::from(w), f64::from(ch) / f64::from(h)))
+            }
+            None => (cut, xf),
+        };
+        let (cw, ch) = cut.dimensions();
+        put_pixels(s, id, encode_png(&cut)?, cw, ch, xf)?;
+        return Ok(json!({ "id": id.0, "width": cw, "height": ch }));
+    }
+    // A drawn crop is made at a resolution asked for even when it is the image's own: the box of a
+    // turned or skewed image holds fewer of its pixels a point than the image does.
+    let target = asked.map(|(t, _)| t);
+    if let Some(t) = target {
+        check_crop_size((r.width() * t).round().max(1.0), (r.height() * t).round().max(1.0))?;
+    }
+    // Drawn at the image's pixel density, or for a resolution asked for at up to twice that (no more
+    // than the image's own, measured on its pixel grid however it is turned, nor past the size a
+    // drawing may have), and resampled to it.
+    let native = (im.width as f64 / ib.width().max(1e-9)).max(im.height as f64 / ib.height().max(1e-9));
+    let scale = target.map_or(native, |t| {
+        let own = native.max(vectorcraft_tools::cropimage::image_ppi(im).0 / 72.0);
+        let side = f64::from(vectorcraft_render::MAX_RASTER_SIDE);
+        let budget = (MAX_PIXELS / (r.width() * r.height()).max(1e-9)).sqrt().min(side / r.width().max(1e-9)).min(side / r.height().max(1e-9));
+        (2.0 * t).min(own).min(budget).max(t.min(own))
+    });
     let mut bare = node.clone();
     bare.opacity = 1.0;
     bare.blend = Default::default();
     bare.appearance = Appearance::default().into();
     bare.visible = true;
+    // The image's own pixels are cut, not the masked ones a color mask shows: the mask is made
+    // again for the cut pixels after the edit.
+    if let Some(e) = bare.extras_if_any() {
+        e.color_mask = None;
+    }
+    let (dw, dh) = ((r.width() * scale).round().max(1.0), (r.height() * scale).round().max(1.0));
+    let region = Rect::new(r.x0, r.y0, r.x0 + dw / scale, r.y0 + dh / scale);
+    // At a resolution asked for, the drawing is fitted to the box below: the image is stretched
+    // about the box's corner so the box fills the whole pixels drawn, and nothing past it is drawn.
+    if target.is_some()
+        && let NodeKind::Image(bi) = &mut bare.kind
+    {
+        let o = r.origin().to_vec2();
+        bi.xf = Affine::translate(o)
+            * Affine::scale_non_uniform(region.width() / r.width(), region.height() / r.height())
+            * Affine::translate(-o)
+            * bi.xf;
+    }
     let tmp = isolated_doc(&st.doc, vec![bare]);
-    let region = Rect::new(r.x0, r.y0, r.x0 + (r.width() * scale).round().max(1.0) / scale, r.y0 + (r.height() * scale).round().max(1.0) / scale);
     let (png, w, h, warning) =
         render_png(&tmp, region, scale, &RasterExportOptions::default().render_options(RasterFormat::Png), RasterColorModel::Document)?;
+    // At a resolution asked for, the drawing is resampled to the box's size at that resolution and
+    // fitted to the box, so the image keeps its size.
+    let (png, w, h, xf) = match target {
+        Some(t) => {
+            let drawn = image::load_from_memory(&png).map_err(|e| bad(C, e.to_string()))?.into_rgba8();
+            // Only the decoded pixels are held while they are resampled.
+            drop(png);
+            let (tw, th) = ((r.width() * t).round().max(1.0) as u32, (r.height() * t).round().max(1.0) as u32);
+            let resized = resize_premultiplied(&drawn, tw, th)?;
+            let xf = Affine::translate(r.origin().to_vec2()) * Affine::scale_non_uniform(r.width() / f64::from(tw), r.height() / f64::from(th));
+            (encode_png(&resized)?, tw, th, xf)
+        }
+        None => (png, w, h, Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale)),
+    };
     s.edit("Crop Image", |d, _| {
         let key = unique_key(d, "crop");
         d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", png));
         if let Some(n) = d.node_mut(id) {
-            n.kind = NodeKind::Image(Box::new(ImageObject {
-                key,
-                width: w,
-                height: h,
-                xf: Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale),
-                link: None,
-                placement: Default::default(),
-                pixels: None,
-            }));
+            n.kind = NodeKind::Image(Box::new(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None }));
         }
         Ok(())
     })?;
@@ -902,6 +1216,27 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
         out["warning"] = json!(w);
     }
     Ok(out)
+}
+
+/// The image's pixels as RGBA, held to the allowance opening a raster has.
+fn decode_rgba(c: &str, blob: &vectorcraft_doc::ImageBlob) -> Result<image::RgbaImage> {
+    // Print rasters run to gigabytes decoded: the same allowance opening them has.
+    let reader = || {
+        image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice()))
+            .with_guessed_format()
+            .map_err(|_| bad(c, "the image's pixels can't be read"))
+    };
+    // The image's size as RGBA, read from its header, is held to that allowance before anything
+    // is decoded (#1717).
+    let (w, h) = reader()?.into_dimensions().map_err(|e| bad(c, format!("the image's pixels can't be read: {e}")))?;
+    if u64::from(w) * u64::from(h) > crate::cmd::fileio::MAX_RASTER_ALLOC / 4 {
+        return Err(bad(c, format!("an image of {w} × {h} pixels is too large to draw")));
+    }
+    let mut reader = reader()?;
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(crate::cmd::fileio::MAX_RASTER_ALLOC);
+    reader.limits(limits);
+    Ok(reader.decode().map_err(|e| bad(c, format!("the image's pixels can't be read: {e}")))?.to_rgba8())
 }
 
 /// Crop Image's trim: the image cut to the box of its pixels that aren't fully transparent, the
@@ -914,23 +1249,7 @@ fn trim_image(s: &mut Session, id: NodeId, im: ImageObject) -> Result<Value> {
     if blob.is_cmyk() {
         return Ok(json!({ "id": id.0, "width": im.width, "height": im.height, "trimmed": false }));
     }
-    // Print rasters run to gigabytes decoded: the same allowance opening them has.
-    let reader = || {
-        image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice()))
-            .with_guessed_format()
-            .map_err(|_| bad(C, "the image's pixels can't be read"))
-    };
-    // The image's size as RGBA, read from its header, is held to that allowance before anything
-    // is decoded (#1717).
-    let (w, h) = reader()?.into_dimensions().map_err(|e| bad(C, format!("the image's pixels can't be read: {e}")))?;
-    if u64::from(w) * u64::from(h) > crate::cmd::fileio::MAX_RASTER_ALLOC / 4 {
-        return Err(bad(C, format!("an image of {w} × {h} pixels is too large to draw")));
-    }
-    let mut reader = reader()?;
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(crate::cmd::fileio::MAX_RASTER_ALLOC);
-    reader.limits(limits);
-    let px = reader.decode().map_err(|e| bad(C, format!("the image's pixels can't be read: {e}")))?.to_rgba8();
+    let px = decode_rgba(C, blob)?;
     let (w, h) = px.dimensions();
     let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0, 0);
     for (x, y, p) in px.enumerate_pixels() {
@@ -949,23 +1268,22 @@ fn trim_image(s: &mut Session, id: NodeId, im: ImageObject) -> Result<Value> {
     let mut png = Vec::new();
     cut.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| bad(C, e.to_string()))?;
     let (cw, ch) = (x1 - x0, y1 - y0);
+    put_pixels(s, id, png, cw, ch, im.xf * Affine::translate((f64::from(x0), f64::from(y0))))?;
+    Ok(json!({ "id": id.0, "width": cw, "height": ch, "trimmed": true }))
+}
+
+/// Crop Image's edit for a cut made from the image's own pixels: `png` (`w` × `h` px) takes the
+/// image's place, mapped into the document by `xf`.
+fn put_pixels(s: &mut Session, id: NodeId, png: Vec<u8>, w: u32, h: u32, xf: Affine) -> Result<()> {
     s.edit("Crop Image", |d, _| {
         let key = unique_key(d, "crop");
         d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", png));
         if let Some(n) = d.node_mut(id) {
-            n.kind = NodeKind::Image(Box::new(ImageObject {
-                key,
-                width: cw,
-                height: ch,
-                xf: im.xf * Affine::translate((f64::from(x0), f64::from(y0))),
-                link: None,
-                placement: Default::default(),
-                pixels: None,
-            }));
+            n.kind = NodeKind::Image(Box::new(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None }));
         }
         Ok(())
     })?;
-    Ok(json!({ "id": id.0, "width": cw, "height": ch, "trimmed": true }))
+    Ok(())
 }
 
 /// The Control bar's Mask for an image: a clip group of the image and a clipping path on its
@@ -1136,13 +1454,16 @@ fn convert_to_artboards(s: &mut Session, _: &Value) -> Result<Value> {
         let symbols = d.symbol_boxes();
         let boxes: Vec<(NodeId, Rect)> = roots.iter().filter_map(|id| Some((*id, d.node(*id)?.geometric_bounds_with(&symbols)?))).collect();
         let mut converted = vec![];
+        // The highest artboard id the document has, kept up to date as artboards are added.
+        let mut top = d.artboards.iter().map(|a| a.id).max();
         for (id, b) in boxes {
             if b.width() <= 0.0 || b.height() <= 0.0 {
                 continue;
             }
             // Named one past the highest artboard id the document has, whatever id it is given.
-            let number = d.artboards.iter().map(|a| a.id).max().map_or(1, |m| m.saturating_add(1));
-            let aid = d.next_artboard_id();
+            let number = top.map_or(1, |m| m.saturating_add(1));
+            let aid = d.next_artboard_id_above(top);
+            top = top.max(Some(aid));
             d.artboards.push(vectorcraft_doc::Artboard {
                 id: aid,
                 name: format!("Artboard {number}"),
@@ -1153,6 +1474,7 @@ fn convert_to_artboards(s: &mut Session, _: &Value) -> Result<Value> {
                 show_video_safe_areas: false,
                 video_ruler_pixel_aspect_ratio: 1.0,
                 color: None,
+                guide_label: None,
             });
             converted.push(id);
         }
@@ -1197,7 +1519,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     let spacing = f64_or(p, "spacing", 20.0).clamp(-1.0e5, 1.0e5);
     let move_art = switch_or(p, "moveArtwork", true, CMD)?;
     check_switches(p, &["patterns"], CMD)?;
-    let locked_and_hidden = s.prefs.move_locked_with_artboard;
+    let locked_and_hidden = super::panelcmds::locked_and_hidden(s, p, move_art, CMD)?;
     let d = &s.doc()?.doc;
     let rects: Vec<Rect> = d.artboards.iter().map(|a| a.rect).collect();
     let sizes: Vec<(f64, f64)> = rects.iter().map(|r| (r.width(), r.height())).collect();
@@ -1214,7 +1536,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     // With moveArtwork, each top-level object (a child of a layer or sublayer) moves with the
     // artboard its center is on, with symbol instances measured by their art as
     // `Document::art_on_artboard` measures them; locked and hidden art, and art on a locked
-    // artboard, moves only when prefs moveLockedWithArtboard is on.
+    // artboard, moves only with `locked_and_hidden`.
     fn objects<'a>(n: &'a Node, all: bool, out: &mut Vec<&'a Node>) {
         for c in n.children().into_iter().flatten().filter(|c| c.rides_with_artboard(all)) {
             if c.is_layer() { objects(c, all, out) } else { out.push(c) }
@@ -1244,6 +1566,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
         for (id, dl) in &art {
             if let Some(n) = d.node_mut(*id) {
                 n.transform(Affine::translate(*dl), sc);
+                super::object::keep_pixel_aligned(n, sc);
             }
         }
         let mut moved = vec![];

@@ -83,6 +83,241 @@ fn write(doc: &Document) -> LegacyAiOutput {
     write_with(doc, LegacyAiOptions::default())
 }
 
+/// The format has no conic gradient: a conic fill, and a conic stroke (written as its filled
+/// outline), are solid wedges clipped to the shape, with a warning, and print as the canvas
+/// draws them ([`write`] runs the file).
+#[test]
+fn conic_gradients_are_written_as_wedges_clipped_to_the_shape() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Conic, stops));
+    g.geom = Some(vectorcraft_color::GradientGeom {
+        start: vectorcraft_geom::Point::new(100.0, 50.0),
+        end: vectorcraft_geom::Point::new(140.0, 30.0),
+        aspect: -0.7,
+        focal: None,
+    });
+    let conic = Paint::Gradient(Box::new(g));
+    for (fill, stroke) in [(conic.clone(), Paint::None), (Paint::None, conic)] {
+        let mut doc = Document::new(200.0, 100.0);
+        let n = shape(&mut doc, shapes::ellipse(Rect::new(20.0, 10.0, 180.0, 90.0)), fill.clone(), stroke.clone());
+        let l = doc.layers[0].id;
+        doc.insert(Some(l), 0, n).unwrap();
+        let out = write(&doc);
+        assert!(out.warnings.iter().any(|w| w == CONIC), "{:?}", out.warnings);
+        let text = String::from_utf8_lossy(&out.bytes);
+        assert!(!text.contains("%AI5_BeginGradient"), "no gradient stands in");
+        assert!(text.matches("\nf\n").count() >= CONIC_WEDGES, "a wedge a degree");
+    }
+}
+
+/// The format's gradients pad past their ends: a linear gradient that repeats or reflects is
+/// written with its stops repeated across the shape (a definition of its own, not named after the
+/// swatch), and a conic one as wedges that repeat with the stops (which print as the canvas
+/// draws them), with a warning.
+#[test]
+fn spread_gradients_are_written_with_their_stops_repeated() {
+    use vectorcraft_color::{GradientGeom, GradientSpread};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let linear = |spread| {
+        let mut g = GradientPaint::new(Gradient { spread, repeats: 3, ..Gradient::new(GradientKind::Linear, stops.clone()) });
+        // Across the shape: three runs.
+        g.geom = Some(GradientGeom {
+            start: vectorcraft_geom::Point::new(20.0, 50.0),
+            end: vectorcraft_geom::Point::new(180.0, 50.0),
+            aspect: 1.0,
+            focal: None,
+        });
+        g.swatch = Some("Bands".into());
+        Paint::Gradient(Box::new(g))
+    };
+    for (spread, colors) in [
+        (GradientSpread::Repeat, ["0 0 1", "1 0 0", "0 0 1", "1 0 0", "0 0 1", "1 0 0"]),
+        (GradientSpread::Reflect, ["0 0 1", "1 0 0", "1 0 0", "0 0 1", "0 0 1", "1 0 0"]),
+    ] {
+        let mut doc = Document::new(200.0, 100.0);
+        let n = shape(&mut doc, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), linear(spread), Paint::None);
+        let l = doc.layers[0].id;
+        doc.insert(Some(l), 0, n).unwrap();
+        let out = write(&doc);
+        assert!(out.warnings.iter().any(|w| w == SPREAD), "{:?}", out.warnings);
+        let text = String::from_utf8_lossy(&out.bytes);
+        assert!(text.contains("(Gradient) 0 6 Bd") && !text.contains("(Bands)"), "{text}");
+        // A linear definition lists its stops from the last to the first, each RGB stop as
+        // `c m y k r g b 2 …`.
+        let def = text.split("(Gradient) 0 6 Bd\n[\n").nth(1).unwrap();
+        for (line, rgb) in def.lines().take(6).zip(colors) {
+            assert!(line.contains(&format!(" {rgb} 2 ")), "{spread:?}: {line} lacks {rgb}\n{def}");
+        }
+    }
+    let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Reflect, repeats: 3, ..Gradient::new(GradientKind::Conic, stops) });
+    g.geom = Some(GradientGeom {
+        start: vectorcraft_geom::Point::new(100.0, 50.0),
+        end: vectorcraft_geom::Point::new(140.0, 30.0),
+        aspect: 1.0,
+        focal: None,
+    });
+    let mut doc = Document::new(200.0, 100.0);
+    let n = shape(&mut doc, shapes::ellipse(Rect::new(20.0, 10.0, 180.0, 90.0)), Paint::Gradient(Box::new(g)), Paint::None);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let text = String::from_utf8_lossy(&write(&doc).bytes).into_owned();
+    assert!(text.matches("\nf\n").count() >= 3 * CONIC_WEDGES, "a wedge a degree for each run");
+}
+
+/// A gradient repeated more times than the reader keeps stops for is written with no more stops
+/// than it reads, with a warning, so it opens with every stop that was written.
+#[test]
+fn many_repeats_are_written_within_the_stops_the_reader_reads() {
+    use vectorcraft_color::{GradientGeom, GradientSpread};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    // A run of 0.4 pt across a shape 160 pt wide: 400 runs.
+    let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, repeats: 100, ..Gradient::new(GradientKind::Linear, stops) });
+    g.geom = Some(GradientGeom {
+        start: vectorcraft_geom::Point::new(20.0, 50.0),
+        end: vectorcraft_geom::Point::new(60.0, 50.0),
+        aspect: 1.0,
+        focal: None,
+    });
+    let mut doc = Document::new(200.0, 100.0);
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Paint::Gradient(Box::new(g)), Paint::None);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == SPREAD_CAPPED), "{:?}", out.warnings);
+    let text = String::from_utf8_lossy(&out.bytes).into_owned();
+    let def = text.split("%AI5_BeginGradient: (Gradient)\n").nth(1).and_then(|d| d.split("%AI5_EndGradient").next()).unwrap();
+    let written = def.matches(" %_Bs\n").count();
+    assert!((2..=crate::import::MAX_GRADIENT_STOPS).contains(&written), "{written} stops");
+    let read = crate::import(&out.bytes).unwrap().document;
+    let mut stops = None;
+    read.walk(|n| {
+        if let (None, Paint::Gradient(g)) = (&stops, n.appearance.fill_paint()) {
+            stops = Some(g.gradient.stops.len());
+        }
+    });
+    assert_eq!(stops, Some(written), "every stop written is read");
+}
+
+/// The format's gradients mix their stops' colors directly: a gradient mixed around the hue wheel
+/// is written with the colors on its way around the wheel as stops, no more than the reader
+/// reads, with a warning, and opens with the colors it had.
+#[test]
+fn hue_wheel_gradients_are_written_with_the_stops_on_their_curve() {
+    use vectorcraft_color::GradientMethod;
+    for (method, middle) in [(GradientMethod::HueCounterclockwise, [0.0, 1.0, 0.0]), (GradientMethod::HueClockwise, [1.0, 0.0, 1.0])] {
+        let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+        let g = GradientPaint::new(Gradient { method, ..Gradient::new(GradientKind::Linear, stops) });
+        let want = g.gradient.clone();
+        let mut doc = Document::new(200.0, 100.0);
+        let n = shape(&mut doc, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Paint::Gradient(Box::new(g)), Paint::None);
+        let l = doc.layers[0].id;
+        doc.insert(Some(l), 0, n).unwrap();
+        let out = write(&doc);
+        assert!(out.warnings.iter().any(|w| w == HUE_STOPS), "{method:?}: {:?}", out.warnings);
+        let text = String::from_utf8_lossy(&out.bytes).into_owned();
+        let def = text.split("%AI5_BeginGradient: (Gradient)\n").nth(1).and_then(|d| d.split("%AI5_EndGradient").next()).unwrap();
+        let written = def.matches(" %_Bs\n").count();
+        // The two ends and each sixth of the wheel between them, where the way turns in RGB.
+        assert!((3..=crate::import::MAX_GRADIENT_STOPS).contains(&written), "{method:?}: {written} stops");
+        let read = crate::import(&out.bytes).unwrap().document;
+        let mut back = None;
+        read.walk(|n| {
+            if let (None, Paint::Gradient(g)) = (&back, n.appearance.fill_paint()) {
+                back = Some(g.gradient.clone());
+            }
+        });
+        let back = back.unwrap();
+        assert!(back.method.is_classic(), "{method:?}");
+        let mid = back.sample(0.5).0.to_rgb();
+        assert!(mid.iter().zip(middle).all(|(a, b)| (a - b).abs() < 0.03), "{method:?}: the middle is {mid:?}");
+        for k in 0..=100 {
+            let t = k as f32 / 100.0;
+            let (a, b) = (want.sample(t).0.to_rgb(), back.sample(t).0.to_rgb());
+            assert!(a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.03), "{method:?} at {t}: {a:?} vs {b:?}");
+        }
+    }
+}
+
+/// A radial gradient repeated out from a center far from the shape is written with its ramp points
+/// (percent) to five decimals, so its runs keep their places hundreds of runs out.
+#[test]
+fn far_runs_keep_their_places() {
+    use vectorcraft_color::{GradientGeom, GradientSpread};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, ..Gradient::new(GradientKind::Radial, stops) });
+    // Runs 0.25 pt apart, the shape 480 runs and more from the center.
+    let c = vectorcraft_geom::Point::new(-100.0, 50.0);
+    g.geom = Some(GradientGeom { start: c, end: c + vectorcraft_geom::Vec2::new(0.25, 0.0), aspect: 1.0, focal: None });
+    let bounds = Rect::new(20.0, 10.0, 180.0, 90.0);
+    let padded = g.gradient.padded_within(&g.geom.unwrap(), bounds, crate::import::MAX_GRADIENT_STOPS).unwrap();
+    let mut doc = Document::new(200.0, 100.0);
+    let n = shape(&mut doc, shapes::rectangle(bounds), Paint::Gradient(Box::new(g)), Paint::None);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let text = String::from_utf8_lossy(&write(&doc).bytes).into_owned();
+    let def = text.split("%AI5_BeginGradient: (Gradient)\n").nth(1).and_then(|d| d.split("%AI5_EndGradient").next()).unwrap();
+    let ramps: Vec<f64> = def.lines().filter_map(|l| l.strip_suffix(" %_Bs")).map(|l| l.rsplit(' ').next().unwrap().parse().unwrap()).collect();
+    assert_eq!(ramps.len(), padded.gradient.stops.len());
+    for (ramp, stop) in ramps.iter().zip(&padded.gradient.stops) {
+        assert!((ramp / 100.0 - f64::from(stop.offset)).abs() < 2e-7, "{ramp} for {}", stop.offset);
+    }
+}
+
+/// The format has no diamond gradient: a diamond fill, and a diamond stroke (written as its filled
+/// outline), are four path objects clipped to the shape, each a linear gradient over a quadrant
+/// of the diamond's frame, with a warning; the definition is not named after the swatch.
+#[test]
+fn diamond_gradients_are_written_as_four_linear_gradients_clipped_to_the_shape() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Diamond, stops));
+    g.geom = Some(vectorcraft_color::GradientGeom {
+        start: vectorcraft_geom::Point::new(100.0, 50.0),
+        end: vectorcraft_geom::Point::new(140.0, 30.0),
+        aspect: 0.7,
+        focal: None,
+    });
+    g.swatch = Some("Gem".into());
+    let diamond = Paint::Gradient(Box::new(g));
+    for (fill, stroke) in [(diamond.clone(), Paint::None), (Paint::None, diamond)] {
+        let mut doc = Document::new(200.0, 100.0);
+        let n = shape(&mut doc, shapes::ellipse(Rect::new(20.0, 10.0, 180.0, 90.0)), fill.clone(), stroke.clone());
+        let l = doc.layers[0].id;
+        doc.insert(Some(l), 0, n).unwrap();
+        let out = write(&doc);
+        assert!(out.warnings.iter().any(|w| w == DIAMOND), "{:?}", out.warnings);
+        let text = String::from_utf8_lossy(&out.bytes);
+        assert_eq!(text.matches("%AI5_BeginGradient: (Gradient)").count(), 1, "one linear definition: {text}");
+        assert!(!text.contains("(Gem)"), "not named after the swatch");
+        assert_eq!(text.matches(" Bg\n").count(), 4, "a gradient a quadrant");
+    }
+}
+
+/// A diamond gradient that repeats is four linear gradients over the quadrants of its frame, each
+/// with its stops repeated out to the shape's edge, with a warning.
+#[test]
+fn a_spread_diamond_repeats_in_each_quadrant() {
+    use vectorcraft_color::GradientSpread;
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, repeats: 3, ..Gradient::new(GradientKind::Diamond, stops) });
+    g.geom = Some(vectorcraft_color::GradientGeom {
+        start: vectorcraft_geom::Point::new(100.0, 50.0),
+        end: vectorcraft_geom::Point::new(140.0, 30.0),
+        aspect: 0.7,
+        focal: None,
+    });
+    let mut doc = Document::new(200.0, 100.0);
+    let n = shape(&mut doc, shapes::ellipse(Rect::new(20.0, 10.0, 180.0, 90.0)), Paint::Gradient(Box::new(g)), Paint::None);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == DIAMOND) && out.warnings.iter().any(|w| w == SPREAD), "{:?}", out.warnings);
+    let text = String::from_utf8_lossy(&out.bytes).into_owned();
+    assert_eq!(text.matches(" Bg\n").count(), 4, "a gradient a quadrant");
+    let defs: Vec<usize> =
+        text.split("%AI5_BeginGradient: ").skip(1).map(|d| d.split("%AI5_EndGradient").next().unwrap_or("").matches(" %_Bs\n").count()).collect();
+    assert!(!defs.is_empty() && defs.iter().all(|&n| n >= 6), "stops in each definition: {defs:?}");
+}
+
 /// `doc` written with options `o`. Every file the tests write is also run as a PostScript program
 /// ([`prints_as`]) and must draw what `doc` draws.
 fn write_with(doc: &Document, o: LegacyAiOptions) -> LegacyAiOutput {
@@ -136,9 +371,9 @@ fn as_printed(doc: &Document, o: &LegacyAiOptions) -> Document {
         nodes.extend(layout.glyphs.iter().filter_map(|g| g.placed_colour(t.xf)).map(Arc::new));
         Node::group(vectorcraft_doc::NodeId(0), nodes)
     }
-    fn plain(nodes: &mut Vec<Arc<Node>>, o: &LegacyAiOptions, images: &mut std::collections::BTreeMap<String, ImageBlob>) {
+    fn plain(doc: &Document, nodes: &mut Vec<Arc<Node>>, o: &LegacyAiOptions, images: &mut std::collections::BTreeMap<String, ImageBlob>) {
         nodes.retain(|n| match &n.kind {
-            NodeKind::Text(t) => o.outline_text || !writable(t),
+            NodeKind::Text(t) => o.outline_text || !writable(doc, t),
             NodeKind::Layer { printable, .. } => *printable,
             _ => true,
         });
@@ -155,18 +390,21 @@ fn as_printed(doc: &Document, o: &LegacyAiOptions) -> Document {
                     AppearanceItem::Fill(f) => &mut f.paint,
                     AppearanceItem::Stroke(s) => &mut s.paint,
                 };
-                if let Paint::Gradient(g) = paint {
+                // Conic gradients are written as wedges, which print.
+                if let Paint::Gradient(g) = paint
+                    && g.gradient.kind != GradientKind::Conic
+                {
                     *paint = g.gradient.stops.first().map_or(Paint::None, |s| Paint::solid(s.color));
                 }
             }
             if let Some(c) = n.children_mut() {
-                plain(c, o, images);
+                plain(doc, c, o, images);
             }
         }
     }
     let mut d = doc.clone();
     let mut images = std::mem::take(&mut d.images);
-    plain(&mut d.layers, o, &mut images);
+    plain(doc, &mut d.layers, o, &mut images);
     d.images = images;
     d
 }
@@ -420,6 +658,47 @@ fn images_are_written_in_the_form_the_specification_shows() {
     assert!(rgb.iter().zip([247.0, 148.0, 29.0]).all(|(c, want)| (c * 255.0 - want).abs() < 0.1), "{rgb:?}");
 }
 
+/// The pieces of an image cut into a raster mesh warp (as Object › Expand leaves a Warp on an
+/// image) are written as the image whole once, then each as the part of it that its triangle shows,
+/// and the file draws as the document does ([`write`] runs it).
+#[test]
+fn the_pieces_of_a_warped_image_are_written_as_the_parts_they_show() {
+    // GUARDS: each of a warped image's 200 pieces was written with all of the image's samples.
+    let mut doc = Document::new(200.0, 160.0);
+    let mut png = vec![];
+    image::RgbaImage::from_fn(64, 64, |x, y| image::Rgba([(x * 4) as u8, (y * 4) as u8, ((x * 7 + y * 13) % 256) as u8, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let blob = ImageBlob::new("image/png", png);
+    let key = blob.content_key();
+    doc.images.insert(key.clone(), blob);
+    let im = ImageObject {
+        key,
+        width: 64,
+        height: 64,
+        xf: Affine::new([2.0, 0.0, 0.0, 2.0, 20.0, 10.0]),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let photo = Node::new(doc.alloc_id(), NodeKind::Image(Box::new(im.clone())));
+    let bend = |p: vectorcraft_geom::Point| vectorcraft_geom::Point::new(p.x, p.y + 12.0 * ((p.x - 20.0) / 128.0 * std::f64::consts::PI).sin());
+    let warped = vectorcraft_doc::live::mesh_warp_image(&photo, &im, &bend, 10, false, false);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, warped).unwrap();
+    let text = String::from_utf8(write(&doc).bytes).unwrap();
+    let images = rasters(&text);
+    assert_eq!(images.len(), 200);
+    let digits = |lines: &Vec<&str>| {
+        lines.iter().filter_map(|l| l.strip_prefix('%')).filter(|l| l.bytes().all(|b| b.is_ascii_hexdigit())).map(str::len).sum::<usize>()
+    };
+    let whole = 64 * 64 * 3 * 2;
+    assert_eq!(digits(&images[0]), whole, "the first piece holds the whole image");
+    // Each piece holds its cell (two triangles share one) and 2 pixels more around it.
+    let total: usize = images.iter().map(digits).sum();
+    assert!(total < 10 * whole, "{total} digits of samples for an image of {whole}");
+}
+
 /// An image whose data is empty is left out with the note for empty or too large images, and an
 /// image whose data can't be decoded is left out with the decode note.
 #[test]
@@ -440,6 +719,129 @@ fn empty_images_get_the_size_note_and_undecodable_ones_the_decode_note() {
     };
     assert_eq!(notes(vec![]), [LARGE_IMAGE]);
     assert_eq!(notes(b"not an image".to_vec()), [UNDECODED]);
+}
+
+/// A gray image of `doc`, `w` × `h` pixels of `gray`, colorized `paint`, placed 10 pt a pixel
+/// at (`x`, `y`).
+fn colorized_image(doc: &mut Document, (w, h): (u32, u32), gray: Vec<u8>, paint: &Paint, (x, y): (f64, f64)) -> Node {
+    let mut png = vec![];
+    image::GrayImage::from_raw(w, h, gray).unwrap().write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let blob = ImageBlob::new("image/png", png);
+    let key = blob.content_key();
+    doc.images.insert(key.clone(), blob);
+    let xf = Affine::new([10.0, 0.0, 0.0, 10.0, x, y]);
+    let im = ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None };
+    let mut n = Node::new(doc.alloc_id(), NodeKind::Image(Box::new(im)));
+    n.extras_mut().colorize = Some(Box::new(paint.clone()));
+    n
+}
+
+/// A colorized image whose pixels are black or white is written as a 1-bit image mask
+/// (ImageMask 1) after its color as the fill: its black pixels are 0 bits, which take the color, and its
+/// white pixels 1 bits, which are clear. It prints in its color over the square behind it and
+/// reads back colorized with that color and with the same clear pixels. A colorized image with
+/// gray pixels is written with its color in its pixels, over white, with the note for
+/// transparent pixels.
+#[test]
+fn colorized_images_keep_their_color() {
+    let mut doc = Document::new(200.0, 100.0);
+    doc.layers.clear();
+    let layer = doc.add_layer(Some("Art"));
+    let square = shape(&mut doc, shapes::rectangle(Rect::new(5.0, 5.0, 45.0, 30.0)), red(), Paint::None);
+    doc.insert(Some(layer), usize::MAX, square).unwrap();
+    let paint = Paint::solid(Color::cmyk(0.0, 0.5, 1.0, 0.0));
+    // 1 0 0 1 0 1 1 0 / 0 1 1 0 1 0 0 1 in black (1) and white (0).
+    let mask: Vec<u8> = "1001011001101001".bytes().map(|b| if b == b'1' { 0 } else { 255 }).collect();
+    let bitmap = colorized_image(&mut doc, (8, 2), mask.clone(), &paint, (10.0, 10.0));
+    doc.insert(Some(layer), usize::MAX, bitmap).unwrap();
+    let out = write(&doc);
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    let images = rasters(&text);
+    assert_eq!(images.len(), 1, "{text}");
+    let [_, _, xi, data @ .., _, _] = images[0].as_slice() else { panic!("{:?}", images[0]) };
+    assert!(xi.ends_with(" ] 0 0 8 2 8 2 1 1 0 0 0 1 XI"), "{xi}");
+    // Each row is a byte: the black pixels are 0 bits.
+    assert_eq!(data, &["%6996"], "{text}");
+    let at = text.find("%AI5_File:\n").unwrap();
+    assert!(text[..at].ends_with("0 0.5 1 0 k\n"), "{text}");
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let read = crate::import(&out.bytes).unwrap().document;
+    let mut found = vec![];
+    read.walk(|n| {
+        if let NodeKind::Image(im) = &n.kind {
+            found.push((read.image_blob(im).and_then(ImageBlob::coverage), n.extras().colorize.as_deref().cloned()));
+        }
+    });
+    let want: Vec<u8> = mask.iter().map(|&v| 255 - v).collect();
+    assert_eq!(found, [(Some((8, 2, want)), Some(paint.clone()))]);
+
+    // Gray pixels: the color at each pixel's strength, over white.
+    let mut doc = Document::new(200.0, 100.0);
+    doc.layers.clear();
+    let layer = doc.add_layer(Some("Art"));
+    let tint = colorized_image(&mut doc, (2, 1), vec![0, 128], &Paint::solid(Color::rgb(1.0, 0.0, 0.0)), (10.0, 10.0));
+    doc.insert(Some(layer), usize::MAX, tint).unwrap();
+    let out = write(&doc);
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    let images = rasters(&text);
+    let [_, _, xi, data @ .., _, _] = images[0].as_slice() else { panic!("{:?}", images[0]) };
+    assert!(xi.ends_with(" ] 0 0 2 1 2 1 8 3 0 0 0 0 XI"), "{xi}");
+    assert_eq!(data, &["%FF0000FF8080"], "{text}");
+    assert_eq!(out.warnings, [IMAGE_ALPHA]);
+}
+
+/// The pieces of a colorized warped image work out the image's coverage once, and an image with
+/// other data works out its own: a black and white image's pieces are written as image masks
+/// in its color, and a gray image's pieces with its color in their pixels.
+#[test]
+fn the_pieces_of_a_colorized_warped_image_work_out_its_coverage_once() {
+    // GUARDS: each piece of a colorized warped image decoded the image again for its coverage.
+    let mut doc = Document::new(400.0, 200.0);
+    doc.layers.clear();
+    let layer = doc.add_layer(Some("Art"));
+    let paint = Paint::solid(Color::cmyk(0.0, 0.5, 1.0, 0.0));
+    let checks: Vec<u8> = (0..16 * 16).map(|i| if (i % 16 + i / 16) % 2 == 0 { 0 } else { 255 }).collect();
+    let ramp: Vec<u8> = (0..16 * 16).map(|i| (i % 16 * 16) as u8).collect();
+    for (gray, x) in [(checks, 10.0), (ramp, 210.0)] {
+        let photo = colorized_image(&mut doc, (16, 16), gray, &paint, (x, 10.0));
+        let NodeKind::Image(im) = &photo.kind else { panic!("{:?}", photo.kind) };
+        let bend = move |p: vectorcraft_geom::Point| vectorcraft_geom::Point::new(p.x, p.y + 8.0 * ((p.x - x) / 160.0 * std::f64::consts::PI).sin());
+        let warped = vectorcraft_doc::live::mesh_warp_image(&photo, im, &bend, 4, false, false);
+        doc.insert(Some(layer), usize::MAX, warped).unwrap();
+    }
+    super::writer::COVERAGE_RUNS.with(|n| n.set(0));
+    let out = write(&doc);
+    assert_eq!(super::writer::COVERAGE_RUNS.with(std::cell::Cell::get), 2, "once for each image");
+    let text = String::from_utf8(out.bytes).unwrap();
+    let images = rasters(&text);
+    assert_eq!(images.len(), 64, "32 pieces of each image");
+    let xi = |piece: &Vec<&str>| piece.iter().find(|l| l.ends_with(" XI")).map(|l| l.to_string()).unwrap_or_default();
+    assert!(images[..32].iter().all(|p| xi(p).ends_with(" 1 1 0 0 0 1 XI")), "{:?}", images[..32].iter().map(xi).collect::<Vec<_>>());
+    assert!(images[32..].iter().all(|p| xi(p).ends_with(" 8 3 0 0 0 0 XI")), "{:?}", images[32..].iter().map(xi).collect::<Vec<_>>());
+    // The first piece holds the whole image: each row of 16 pixels in two bytes, its black pixels 0 bits.
+    assert!(xi(&images[0]).ends_with(" ] 0 0 16 16 16 16 1 1 0 0 0 1 XI"), "{}", xi(&images[0]));
+    let data: Vec<&str> = images[0].iter().filter_map(|l| l.strip_prefix('%')).filter(|l| l.bytes().all(|b| b.is_ascii_hexdigit())).collect();
+    assert_eq!(data.concat(), "5555AAAA".repeat(8));
+    assert_eq!(out.warnings, [IMAGE_ALPHA]);
+}
+
+/// An image mask is only for a colorized image the writer draws as the document does: not one
+/// with an opacity mask turned on, and not one with more pixels than the writer writes.
+#[test]
+fn image_masks_are_for_images_the_writer_draws_as_they_are() {
+    let mut doc = Document::new(200.0, 100.0);
+    let paint = Paint::solid(Color::cmyk(0.0, 0.5, 1.0, 0.0));
+    let mut n = colorized_image(&mut doc, (2, 1), vec![0, 255], &paint, (10.0, 10.0));
+    assert!(writes_image_mask(&doc, &n));
+    let art = shape(&mut doc, shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Paint::solid(Color::gray(1.0)), Paint::None);
+    n.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, false)));
+    assert!(!writes_image_mask(&doc, &n));
+    if let Some(m) = n.extras_mut().mask.as_mut() {
+        m.disabled = true;
+    }
+    assert!(writes_image_mask(&doc, &n));
+    let big = colorized_image(&mut doc, (8193, 8193), vec![255; 8193 * 8193], &paint, (10.0, 10.0));
+    assert!(!writes_image_mask(&doc, &big));
 }
 
 #[test]
@@ -467,6 +869,28 @@ fn a_gradient_fill_and_its_stroke_are_one_object() {
     let Paint::Gradient(g) = n.appearance.fill_paint() else { panic!("{:?}", n.appearance) };
     assert_eq!(g.gradient.kind, GradientKind::Radial);
     assert_eq!(n.appearance.stroke_paint().color(), Some(Color::rgb(1.0, 0.0, 0.0)));
+}
+
+/// An RGB gradient stop's CMYK equivalent is the one of its RGB values as written (to four
+/// decimals), so the reopened file writes the same stops.
+#[test]
+fn rgb_stops_are_written_again_unchanged() {
+    let mut doc = Document::new(100.0, 100.0);
+    let rgb = |i: u16| {
+        let v = |s: f32| (f32::from(i) * s + 0.123_456_7).fract();
+        Color::rgb(v(0.137_911_3), v(0.271_828_2), v(0.314_159_3))
+    };
+    let stops = (0..12u16).map(|i| GradientStop::new(f32::from(i) / 11.0, rgb(i))).collect();
+    let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 50.0)), paint, Paint::None);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let stops = |bytes: Vec<u8>| String::from_utf8(bytes).unwrap().lines().filter(|l| l.ends_with("%_Bs")).map(String::from).collect::<Vec<_>>();
+    let first = write(&doc).bytes;
+    let again = write(&crate::import(&first).unwrap().document).bytes;
+    let (first, again) = (stops(first), stops(again));
+    assert_eq!(first.len(), 12, "{first:?}");
+    assert_eq!(again, first);
 }
 
 /// A gradient from white to #1b2a6b, the colors of #2687's circle, placed at `geom` (None: fitted
@@ -852,6 +1276,35 @@ fn names_outside_windows_1252_are_replaced_and_kept_apart() {
     assert_eq!(inks(&read), want);
 }
 
+/// #6502: the legacy writer gives Yellow, Magenta and Cyan (presets 4, 5 and 6) the file's
+/// indexes 6, 4 and 5, and they open as the same presets.
+#[test]
+fn layer_presets_are_written_with_the_files_colour_index() {
+    let mut doc = Document::new(100.0, 100.0);
+    doc.layers.clear();
+    for i in 3..8u8 {
+        let id = doc.alloc_id();
+        doc.layers.push(Arc::new(Node::layer(id, &format!("P{i}"), vectorcraft_doc::LayerColor::Preset(i))));
+    }
+    let out = write(&doc);
+    let text = String::from_utf8_lossy(&out.bytes).replace("\r\n", "\n");
+    for (i, index) in [(3, 3), (4, 6), (5, 4), (6, 5), (7, 7)] {
+        let [r, g, b] = vectorcraft_doc::LAYER_COLORS[i].1;
+        let want = format!(" 0 {index} {r} {g} {b} Lb\n(P{i}) Ln\n");
+        assert!(text.contains(&want), "missing {want:?} in\n{text}");
+    }
+    let read = crate::import(&out.bytes).unwrap().document;
+    let colors: Vec<_> = read
+        .layers
+        .iter()
+        .filter_map(|l| match l.kind {
+            NodeKind::Layer { color, .. } => Some(color),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(colors, (3..8u8).map(vectorcraft_doc::LayerColor::Preset).collect::<Vec<_>>());
+}
+
 #[test]
 fn losses_are_warned() {
     let mut doc = sample();
@@ -1017,6 +1470,251 @@ fn variable_font_settings_are_warned_as_left_out() {
     assert!(String::from_utf8(out.bytes).unwrap().contains("(H\\351llo \\2005\\r) Tx\n"), "still written as text");
 }
 
+/// A legacy `.ai` text object has no Insert Aki (§15.4): type with Insert Aki Left or Right is
+/// written as text with the warning that it is left out. Written as outlines, the glyphs keep the
+/// space it adds, and nothing is reported.
+#[test]
+fn insert_aki_is_warned_as_left_out_of_text() {
+    for (left, right) in [(250.0, 0.0), (0.0, 125.0)] {
+        let mut doc = typed();
+        let id = texts(&doc)[0].0.id;
+        if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+            t.runs[0].style.aki_left = left;
+            t.runs[0].style.aki_right = right;
+        }
+        let out = write(&doc);
+        assert!(out.warnings.iter().any(|w| w == TYPE_ATTRIBUTES), "{left} {right}: {:?}", out.warnings);
+        assert!(String::from_utf8(out.bytes).unwrap().contains("(H\\351llo \\2005\\r) Tx\n"), "still written as text");
+    }
+    let width = |aki: f64| {
+        let mut st = style(20.0, red());
+        st.aki_left = aki;
+        st.aki_right = aki;
+        let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "HH", st);
+        let mut doc = Document::new(300.0, 200.0);
+        let layer = doc.layers[0].id;
+        let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = write_with(&doc, LegacyAiOptions { outline_text: true, ..LegacyAiOptions::default() });
+        assert!(!out.warnings.iter().any(|w| w == TYPE_ATTRIBUTES), "{:?}", out.warnings);
+        let back = crate::import(&out.bytes).unwrap().document;
+        children(&children(&back.layers[0])[0])[0].visual_bounds().unwrap().width()
+    };
+    // Between the two H's: 0.5 em after the first and 0.5 em before the second, 20 pt.
+    let (plain, spaced) = (width(0.0), width(500.0));
+    assert!((spaced - plain - 20.0).abs() < 0.05, "{plain} {spaced}");
+}
+
+/// Standard Vertical Roman Alignment is written as `Tv` and Tate-chu-yoko in horizontal type as a
+/// Kumi block recorded for later use, `TY` (§15.3.4), each where it changes: the marks read back
+/// on the same characters, a block is closed before its text object ends, and type with neither
+/// mark has neither operator.
+#[test]
+fn vertical_roman_and_tate_chu_yoko_are_written_and_read_back() {
+    use vectorcraft_doc::{TextObject, TextRun};
+    let plain = style(12.0, Paint::solid(Color::BLACK));
+    let roman = vectorcraft_doc::CharStyle { standard_vertical_roman: true, ..plain.clone() };
+    let tcy = vectorcraft_doc::CharStyle { tate_chu_yoko: true, ..plain.clone() };
+    let both = vectorcraft_doc::CharStyle { tate_chu_yoko: true, standard_vertical_roman: true, ..plain.clone() };
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let mut marked = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "A", plain.clone());
+    for (text, st) in [("12", &tcy), ("b", &roman), ("c", &both), ("34", &tcy)] {
+        marked.runs.push(TextRun::new(text, st.clone()));
+    }
+    let next = TextObject::point(vectorcraft_geom::Point::new(20.0, 80.0), "D", plain.clone());
+    for t in [marked, next] {
+        let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let out = write(&doc);
+    assert!(!out.warnings.iter().any(|w| w == TYPE || w == TYPE_ATTRIBUTES), "{:?}", out.warnings);
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    assert_eq!((text.matches("1 TY\n").count(), text.matches("0 TY\n").count()), (2, 2), "{text}");
+    assert_eq!((text.matches("1 Tv\n").count(), text.matches("0 Tv\n").count()), (1, 1), "{text}");
+    // The last block ends before its text object does.
+    assert!(text.contains("(34) Tx\n0 TY\nTO\n"), "{text}");
+    let read = texts(&crate::import(&out.bytes).unwrap().document);
+    let flags = |t: &TextObject| -> Vec<(String, bool, bool)> {
+        let mut out: Vec<(String, bool, bool)> = vec![];
+        for r in &t.runs {
+            let key = (r.style.tate_chu_yoko, r.style.standard_vertical_roman);
+            match out.last_mut() {
+                Some(last) if (last.1, last.2) == key => last.0.push_str(&r.text),
+                _ => out.push((r.text.clone(), key.0, key.1)),
+            }
+        }
+        out
+    };
+    let s = |x: &str| x.to_string();
+    assert_eq!(
+        flags(&read[0].1),
+        [(s("A"), false, false), (s("12"), true, false), (s("b"), false, true), (s("c"), true, true), (s("34"), true, false)]
+    );
+    assert_eq!(flags(&read[1].1), [(s("D"), false, false)]);
+
+    // Type with neither mark has neither operator.
+    let text = String::from_utf8(write(&typed()).bytes).unwrap();
+    assert!(!text.contains(" Tv\n") && !text.contains(" TY\n"), "{text}");
+}
+
+/// A legacy `.ai` text path holds the path and where the type starts on it, and no Align to Path
+/// or end bracket: type on a path with either is written as text, with the warning that they are
+/// left out. An end bracket at the end of an open path, or once around a closed one, is kept. A
+/// path with a second subpath is written with its first one only, with the same warning.
+#[test]
+fn type_on_a_path_alignment_and_end_bracket_are_warned_as_left_out() {
+    use vectorcraft_doc::{PathAlign, TextKind, TextObject};
+    let along = |closed: bool| {
+        let pts = [(150.0, 150.0).into(), (250.0, 150.0).into(), (250.0, 190.0).into()];
+        PathData::new(vec![vectorcraft_geom::SubPath::polyline(&pts, closed)])
+    };
+    let warned = |edit: &dyn Fn(&mut TextObject)| {
+        let mut doc = Document::new(300.0, 200.0);
+        let layer = doc.layers[0].id;
+        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "Along", style(12.0, Paint::solid(Color::BLACK)));
+        t.kind = TextKind::OnPath { path: along(false), start: 0.25, end: None };
+        t.xf = Affine::IDENTITY;
+        edit(&mut t);
+        let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = write(&doc);
+        assert!(String::from_utf8(out.bytes).unwrap().contains("(Along) Tx\n"), "still written as text");
+        out.warnings.iter().any(|w| w == TYPE_ATTRIBUTES)
+    };
+    assert!(!warned(&|_| {}));
+    for align in [PathAlign::Ascender, PathAlign::Descender, PathAlign::Center] {
+        assert!(warned(&|t| t.path_align = align), "{align:?}");
+    }
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(false), start: 0.25, end: Some(0.6) }));
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(true), start: 0.25, end: Some(0.9) }));
+    assert!(!warned(&|t| t.kind = TextKind::OnPath { path: along(false), start: 0.25, end: Some(1.0) }));
+    assert!(!warned(&|t| t.kind = TextKind::OnPath { path: along(true), start: 0.1, end: Some(0.1) }));
+    assert!(!warned(&|t| t.kind = TextKind::OnPath { path: along(true), start: 0.7, end: None }));
+    // A closed path's span that wraps past the path's start and stops short of a full turn.
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(true), start: 0.7, end: Some(0.5) }));
+    // An open path's end bracket before its start bracket.
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(false), start: 0.5, end: Some(0.3) }));
+    // Type that starts before its open path: the text path holds a start on the path only.
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(false), start: -0.25, end: None }));
+    assert!(!warned(&|t| t.kind = TextKind::OnPath { path: along(false), start: 0.0, end: None }));
+    // It is written starting at the path's start: the same text object as a start of 0.
+    let written = |start: f64| {
+        let mut doc = Document::new(300.0, 200.0);
+        let layer = doc.layers[0].id;
+        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "Along", style(12.0, Paint::solid(Color::BLACK)));
+        t.kind = TextKind::OnPath { path: along(false), start, end: None };
+        t.xf = Affine::IDENTITY;
+        let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        write(&doc).bytes
+    };
+    assert_eq!(written(-0.25), written(0.0));
+    assert_ne!(written(0.25), written(0.0));
+    let two = |first_closed: bool| {
+        let mut path = along(first_closed);
+        let pts = [(150.0, 100.0).into(), (250.0, 100.0).into()];
+        path.subpaths.push(vectorcraft_geom::SubPath::polyline(&pts, false));
+        path
+    };
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: two(true), start: 0.25, end: None }));
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: two(false), start: 0.25, end: None }));
+}
+
+/// Optical kerning, Optical Margin Alignment, System Layout, fractional widths off and an area
+/// type frame with a second subpath are not held by a legacy `.ai` text object: type with any of
+/// them is written as text, with the warning that they are left out. Manual kerning is held
+/// (`Tk`), with no warning.
+#[test]
+fn optical_kerning_margins_widths_and_extra_frames_are_warned_as_left_out() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    let warned = |edit: &dyn Fn(&mut TextObject)| {
+        let mut doc = typed();
+        let id = texts(&doc)[0].0.id;
+        if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+            edit(t);
+        }
+        let out = write(&doc);
+        assert!(String::from_utf8(out.bytes).unwrap().contains(") Tx\n"), "still written as text");
+        out.warnings.iter().any(|w| w == TYPE_ATTRIBUTES)
+    };
+    assert!(!warned(&|_| {}));
+    assert!(!warned(&|t| t.runs[0].style.kerning = Some(0.0)));
+    assert!(!warned(&|t| t.runs[0].style.kerning = Some(50.0)));
+    assert!(!warned(&|t| t.runs[0].style.kerning_before = 50.0));
+    assert!(warned(&|t| t.runs[0].style.optical_kerning = true));
+    assert!(warned(&|t| t.optical_margin = true));
+    assert!(warned(&|t| t.system_layout = true));
+    assert!(warned(&|t| t.fractional_widths = false));
+    let square = |x: f64| {
+        let pts = [(x, 10.0).into(), (x + 80.0, 10.0).into(), (x + 80.0, 90.0).into(), (x, 90.0).into()];
+        vectorcraft_geom::SubPath::polyline(&pts, true)
+    };
+    assert!(!warned(&|t| t.kind = TextKind::Area { frame: PathData::new(vec![square(10.0)]) }));
+    assert!(warned(&|t| t.kind = TextKind::Area { frame: PathData::new(vec![square(10.0), square(120.0)]) }));
+}
+
+/// Manual kerning is written as `0 value Tk` after each character that has it, the space before a
+/// paragraph's first character as `Tk` before it, and a soft hyphen as a discretionary hyphen
+/// (`T+`, §15.4.6.1 and §15.4.10.1); each reads back on the same characters.
+#[test]
+fn manual_kerning_and_soft_hyphens_are_written_and_read_back() {
+    use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+    let plain = style(12.0, Paint::solid(Color::BLACK));
+    let kerned = CharStyle { kerning: Some(-80.0), ..plain.clone() };
+    let before = CharStyle { kerning_before: 40.0, ..plain.clone() };
+    let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "AV", kerned.clone());
+    for (text, st) in [("A co\u{ad}op\n", &plain), ("W", &before), ("ord", &plain), ("d\u{ad}", &kerned)] {
+        t.runs.push(TextRun::new(text, st.clone()));
+    }
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = write(&doc);
+    assert!(!out.warnings.iter().any(|w| w == TYPE || w == TYPE_ATTRIBUTES), "{:?}", out.warnings);
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    assert!(text.contains("(A) Tx\n0 -80 Tk\n(V) Tx\n0 -80 Tk\n"), "{text}");
+    assert!(text.contains("(A co) Tx\nT+\n(op\\r) Tx\n"), "{text}");
+    assert!(text.contains("0 40 Tk\n(W) Tx\n"), "{text}");
+    // A soft hyphen with manual kerning keeps it too.
+    assert!(text.contains("(d) Tx\n0 -80 Tk\nT+\n0 -80 Tk\n"), "{text}");
+    let read = texts(&crate::import(&out.bytes).unwrap().document);
+    let runs: Vec<(String, Option<f64>, f64)> = read[0].1.runs.iter().map(|r| (r.text.clone(), r.style.kerning, r.style.kerning_before)).collect();
+    let s = |x: &str| x.to_string();
+    assert_eq!(
+        runs,
+        [
+            (s("AV"), Some(-80.0), 0.0),
+            (s("A co\u{ad}op\n"), None, 0.0),
+            (s("W"), None, 40.0),
+            (s("ord"), None, 0.0),
+            (s("d\u{ad}"), Some(-80.0), 0.0)
+        ]
+    );
+}
+
+/// Manual kerning of 0 is written as `0 0 Tk` and reads back as manual kerning, not as the
+/// automatic kerning of a pair with no `Tk`.
+#[test]
+fn manual_kerning_of_zero_is_written_and_read_back() {
+    use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+    let plain = style(12.0, Paint::solid(Color::BLACK));
+    let zero = CharStyle { kerning: Some(0.0), ..plain.clone() };
+    let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "AV", zero);
+    t.runs.push(TextRun::new("To", plain));
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = write(&doc);
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    assert!(text.contains("(A) Tx\n0 0 Tk\n(V) Tx\n0 0 Tk\n"), "{text}");
+    let read = texts(&crate::import(&out.bytes).unwrap().document);
+    let runs: Vec<(String, Option<f64>)> = read[0].1.runs.iter().map(|r| (r.text.clone(), r.style.kerning)).collect();
+    assert_eq!(runs, [("AV".to_string(), Some(0.0)), ("To".to_string(), None)]);
+}
+
 /// Type whose font size measures the cap height is written at the em size it is drawn at, with
 /// no warning: 14 pt measuring a 0.7 em cap height reads back as 20 pt type.
 #[test]
@@ -1035,6 +1733,74 @@ fn a_font_height_reference_is_written_as_the_size_drawn() {
     let imported = crate::import(&out.bytes).unwrap();
     let size = texts(&imported.document)[0].1.runs[0].style.size;
     assert!((size - 20.0).abs() < 1e-6, "{size}");
+}
+
+/// Type on a path with Dynamic Text is written at the sizes it is drawn at, with a warning that
+/// the setting itself is not written; without Dynamic Text there is no warning.
+#[test]
+fn dynamic_text_is_written_at_its_drawn_sizes_with_a_warning() {
+    let mut doc = typed();
+    assert!(!write(&doc).warnings.iter().any(|w| w == DYNAMIC_TEXT));
+    let id = texts(&doc).into_iter().find(|(_, t)| matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. })).unwrap().0.id;
+    let mut drawn = 0.0;
+    if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[0].style.size = 4.0;
+        t.dynamic_text = true;
+        drawn = 4.0 * vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).fit_scale;
+    }
+    assert!(drawn > 4.0, "{drawn}");
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == DYNAMIC_TEXT), "{:?}", out.warnings);
+    let imported = crate::import(&out.bytes).unwrap();
+    let (_, back) = texts(&imported.document).into_iter().find(|(_, t)| t.runs.iter().any(|r| r.text.contains("path"))).unwrap();
+    assert!(!back.dynamic_text);
+    assert!((back.runs[0].style.size - drawn).abs() < 1e-3, "{} vs {drawn}", back.runs[0].style.size);
+    // Type written as outlines loses the setting too, and says so.
+    if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[0].text.push('\u{2192}');
+    }
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == TYPE) && out.warnings.iter().any(|w| w == DYNAMIC_TEXT), "{:?}", out.warnings);
+    let out = write_with(&doc, LegacyAiOptions { outline_text: true, ..LegacyAiOptions::default() });
+    assert!(out.warnings.iter().any(|w| w == DYNAMIC_TEXT), "{:?}", out.warnings);
+}
+
+/// Dynamic Text fits type whose size measures the cap height at the size the Character panel
+/// shows: 1,000 pt measuring a 0.7 em cap height on a long path grows to the 1,296 pt limit and is
+/// written at the em size drawn there, as text and as outlines.
+#[test]
+fn dynamic_text_with_a_font_height_reference_is_written_at_its_drawn_size() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, height_font};
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(height_font(true).unwrap());
+    let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "HE", style(1000.0, red()));
+    let st = &mut t.runs[0].style;
+    st.font_family = HEIGHT_FAMILY.into();
+    st.font_height_reference = vectorcraft_doc::FontHeightReference::CapHeight;
+    let mut line = PathData::new(vec![]);
+    line.subpaths.push(vectorcraft_geom::SubPath::polyline(&[(0.0, 2000.0).into(), (100_000.0, 2000.0).into()], false));
+    t.kind = TextKind::OnPath { path: line, start: 0.0, end: None };
+    t.xf = Affine::IDENTITY;
+    t.dynamic_text = true;
+    let lay = vectorcraft_text::layout(db, &t);
+    assert!((lay.fit_scale - 1.296).abs() < 1e-9, "{}", lay.fit_scale);
+    let em = 1296.0 / 0.7;
+    let mut glyphs = kurbo::BezPath::new();
+    for g in &lay.glyphs {
+        glyphs.extend(g.outline.iter());
+    }
+    let want = glyphs.bounding_box();
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let back = crate::import(&write(&doc).bytes).unwrap().document;
+    let size = texts(&back)[0].1.runs[0].style.size;
+    assert!((size - em).abs() < 1e-3, "{size} vs {em}");
+    let back = crate::import(&write_with(&doc, LegacyAiOptions { outline_text: true, ..LegacyAiOptions::default() }).bytes).unwrap().document;
+    let b = children(&children(&back.layers[0])[0])[0].visual_bounds().unwrap();
+    assert!((b.height() - want.height()).abs() < 0.05 && (b.width() - want.width()).abs() < 0.05, "{b:?}, laid out at {want:?}");
 }
 
 /// Characters with Auto leading are written with their paragraph's Auto Leading share of the
@@ -1357,12 +2123,12 @@ fn hidden_objects_go_to_a_hidden_layer_above_their_own() {
 #[test]
 fn hidden_objects_can_be_left_out_or_shown() {
     let out = write_with(&with_hidden(), LegacyAiOptions { hidden: HiddenObjects::Omit, ..LegacyAiOptions::default() });
-    assert!(out.warnings.iter().any(|w| w == HIDDEN), "{:?}", out.warnings);
+    assert!(out.setting_notes.iter().any(|w| w == HIDDEN), "{:?}", out.setting_notes);
     let doc = crate::import(&out.bytes).unwrap().document;
     assert_eq!(doc.layers.len(), 2);
     assert_eq!(children(&children(&doc.layers[0])[0]).len(), 1);
     let out = write_with(&with_hidden(), LegacyAiOptions { hidden: HiddenObjects::Visible, ..LegacyAiOptions::default() });
-    assert!(out.warnings.iter().any(|w| w == HIDDEN_SHOWN), "{:?}", out.warnings);
+    assert!(out.setting_notes.iter().any(|w| w == HIDDEN_SHOWN), "{:?}", out.setting_notes);
     let doc = crate::import(&out.bytes).unwrap().document;
     assert_eq!(doc.layers.len(), 2);
     let pair = children(&children(&doc.layers[0])[0]);
@@ -1427,4 +2193,79 @@ fn colr_glyphs_of_outlined_type_are_vector_art() {
     let text = String::from_utf8(write(&doc).bytes).unwrap();
     assert!(rasters(&text).is_empty(), "no images: {text}");
     assert!(text.contains("1 0 0 Xa"), "the red layer: {text}");
+}
+
+/// An instance stained blue by its fill writes its symbol's red art in blue, as the canvas draws it.
+#[test]
+fn a_stained_instance_is_written_in_its_stained_color() {
+    let mut doc = Document::new(200.0, 100.0);
+    let art = shape(&mut doc, shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 40.0)), red(), Paint::None);
+    doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(art) });
+    let mut n = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((50.0, 30.0)) });
+    n.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0).into();
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let text = String::from_utf8(write(&doc).bytes).unwrap();
+    assert!(text.contains("0 0 1 Xa") && !text.contains("1 0 0 Xa"), "{text}");
+}
+
+/// A graph whose records read back whole is written with them (§17), and opens again as the same
+/// live graph: its table, type and settings, its series' groups tagged in order, without a warning
+/// about graphs.
+#[test]
+fn graphs_are_written_with_their_records_and_open_live() {
+    use crate::ai_graph::sample;
+    for (what, doc) in sample::kept() {
+        let out = write(&doc);
+        assert!(!out.warnings.iter().any(|w| w == GRAPHS), "{what}: {:?}", out.warnings);
+        let text = String::from_utf8(out.bytes.clone()).unwrap();
+        assert_eq!((text.matches("%_Gs\n").count(), text.matches("%_GS\n").count()), (1, 1), "{what}: {text}");
+        let read = crate::import(&out.bytes).unwrap();
+        let written = sample::graphs(&doc);
+        let graphs = sample::graphs(&read.document);
+        assert_eq!(graphs.len(), 1, "{what}: {:?}", read.warnings);
+        assert!(sample::same(&written[0].0, &graphs[0].0), "{what}: {:#?}\n{:#?}", written[0].0, graphs[0].0);
+        assert_eq!(graphs[0].1, written[0].1, "{what}: the members and their series");
+    }
+}
+
+/// A graph inside a group is written with its records too, and opens on its own group.
+#[test]
+fn a_graph_in_a_group_is_written_with_its_records() {
+    use crate::ai_graph::sample;
+    let mut doc = Document::new(400.0, 300.0);
+    let graph = sample::graph(&mut doc, sample::spec(vectorcraft_doc::GraphKind::Column));
+    let frame = shape(&mut doc, shapes::rectangle(Rect::new(10.0, 10.0, 20.0, 20.0)), red(), Paint::None);
+    let outer = Node::group(doc.alloc_id(), vec![Arc::new(frame), Arc::new(graph)]);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, outer).unwrap();
+    let out = write(&doc);
+    assert!(!out.warnings.iter().any(|w| w == GRAPHS), "{:?}", out.warnings);
+    let read = crate::import(&out.bytes).unwrap();
+    let graphs = sample::graphs(&read.document);
+    assert_eq!(graphs.len(), 1, "{:?}", read.warnings);
+    assert!(sample::same(&sample::graphs(&doc)[0].0, &graphs[0].0));
+    let layer = children(&read.document.layers[0]);
+    assert!(layer[0].extras().graph.is_none() && layer[0].children().is_some_and(|c| c.len() == 2), "{layer:#?}");
+}
+
+/// A graph whose records wouldn't read back as it is is written as its art, without records, with
+/// the warning, and opens as that art.
+#[test]
+fn graphs_the_records_cant_keep_are_written_as_their_art() {
+    use crate::ai_graph::sample;
+    for (what, doc) in sample::unkept() {
+        let out = export_legacy_ai(&doc, &LegacyAiOptions::default()).unwrap();
+        assert!(out.warnings.iter().any(|w| w == GRAPHS), "{what}: {:?}", out.warnings);
+        let text = String::from_utf8_lossy(&out.bytes).into_owned();
+        assert!(!text.contains("%_Gs") && !text.contains(" Go\n") && !text.contains("%_GS"), "{what}: {text}");
+        let read = crate::import(&out.bytes).unwrap();
+        assert!(sample::graphs(&read.document).is_empty(), "{what}");
+        let paths = |d: &Document| {
+            let mut count = 0;
+            d.walk(|n| count += usize::from(matches!(n.kind, NodeKind::Path { .. })));
+            count
+        };
+        assert_eq!(paths(&read.document), paths(&doc), "{what}: the graph's art is kept");
+    }
 }

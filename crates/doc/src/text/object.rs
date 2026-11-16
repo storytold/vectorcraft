@@ -1,8 +1,8 @@
 use super::area::{AreaOptions, PathAlign, PathEffect};
 use super::char_style::CharStyle;
-use super::para_style::ParaStyle;
-use super::runs::{RubySpan, TextKind, TextRun, move_anchors, reverse_from_end};
-use super::tabs_lists::ParaList;
+use super::para_style::{JustificationOptions, ParaStyle};
+use super::runs::{RubySpan, TextKind, TextRun, TypeAntiAlias, move_anchors, reverse_from_end};
+use super::tabs_lists::{ListCounts, ParaList};
 use super::{Affine, PathData, Point, Rect, TextObject, TextStyleScale, Vec2};
 
 impl TextObject {
@@ -34,10 +34,19 @@ impl TextObject {
         style.baseline_shift *= scale.points;
         style.tcy_up_down *= scale.points;
         style.tcy_left_right *= scale.points;
+        style.warichu_gap *= scale.points;
         style.h_scale *= scale.horizontal;
-        if ![style.size, style.leading.unwrap_or(0.0), style.baseline_shift, style.tcy_up_down, style.tcy_left_right, style.h_scale]
-            .iter()
-            .all(|v| v.is_finite())
+        if ![
+            style.size,
+            style.leading.unwrap_or(0.0),
+            style.baseline_shift,
+            style.tcy_up_down,
+            style.tcy_left_right,
+            style.warichu_gap,
+            style.h_scale,
+        ]
+        .iter()
+        .all(|v| v.is_finite())
         {
             return None;
         }
@@ -71,6 +80,7 @@ impl TextObject {
         self.xf *= Affine::scale_non_uniform(1.0 / sx, 1.0 / sy);
         self.cached_bounds = None;
         self.cached_baselines.clear();
+        self.cached_ink = None;
         true
     }
 
@@ -84,21 +94,41 @@ impl TextObject {
             para: ParaStyle::default(),
             paras: Vec::new(),
             first_para_continues: false,
+            first_para_lead: None,
             area: AreaOptions::default(),
             path_effect: PathEffect::default(),
             path_align: PathAlign::default(),
             path_spacing: 0.0,
+            dynamic_text: false,
             wrap: Vec::new(),
             optical_margin: false,
+            anti_alias: TypeAntiAlias::Sharp,
             system_layout: false,
             fractional_widths: true,
             list_count: 0,
+            list_level_counts: Vec::new(),
             cached_bounds: None,
             cached_baselines: Vec::new(),
+            cached_ink: None,
         }
+    }
+    /// The list counts the story's earlier frames carry into this frame at each level
+    /// ([`Self::list_count`] and [`Self::list_level_counts`]).
+    pub fn list_counts(&self) -> ListCounts {
+        ListCounts::from_parts(self.list_count, &self.list_level_counts)
+    }
+    /// Set the list counts the story's earlier frames carry into this frame ([`Self::list_counts`]).
+    pub fn set_list_counts(&mut self, counts: ListCounts) {
+        (self.list_count, self.list_level_counts) = counts.parts();
     }
     pub fn plain_text(&self) -> String {
         self.runs.iter().map(|r| r.text.as_str()).collect()
+    }
+    /// Does layout stack some of this type's characters as warichu ([`CharStyle::warichu`])? Not
+    /// on a path, which sets them as they are. Exports that write live text write such type as
+    /// outlines, as they do ruby: their text can't place the stacked lines.
+    pub fn stacks_warichu(&self) -> bool {
+        !matches!(self.kind, TextKind::OnPath { .. }) && self.runs.iter().any(|r| r.style.warichu && !r.text.is_empty())
     }
     /// Clamp the ruby spans to the plain text, drop empty/empty-reading ones and sort them.
     ///
@@ -156,6 +186,19 @@ impl TextObject {
     pub fn para_at(&self, i: usize) -> &ParaStyle {
         self.paras.get(i).or(self.paras.last()).unwrap_or(&self.para)
     }
+    /// The Justification… options the layout sets `para` with: its own, except that with Dynamic
+    /// Text's Block on area type ([`Self::dynamic_text`]) the Desired word spacing is the word gap
+    /// ([`AreaOptions::block_gaps`]), and Minimum and Maximum move out to it when it lies outside
+    /// them. The paragraph keeps its own values, which apply again when Block is off.
+    pub fn layout_justification(&self, para: &ParaStyle) -> JustificationOptions {
+        let mut j = para.justification.clone();
+        if self.dynamic_text && matches!(self.kind, TextKind::Area { .. }) {
+            let gap = self.area.block_gaps().0;
+            let [min, _, max] = j.word_spacing;
+            j.word_spacing = [min.min(gap), gap, max.max(gap)];
+        }
+        j
+    }
     /// Every paragraph's attributes, one per paragraph.
     pub fn paragraph_styles(&self) -> Vec<ParaStyle> {
         (0..self.paragraph_count()).map(|i| self.para_at(i).clone()).collect()
@@ -200,14 +243,16 @@ impl TextObject {
     }
     /// The list that the characters before byte `at` start ([`ParaList::typed`]) with the byte
     /// where their paragraph starts: when the plain text from the start of the paragraph up to
-    /// `at` is a list's start followed by a space, and the paragraph is in no list. None otherwise.
+    /// `at` is a list's start followed by a space, and the paragraph is in no list. None otherwise,
+    /// and for a first paragraph that continues from the frame before
+    /// ([`TextObject::first_para_continues`]).
     pub fn typed_list_at(&self, at: usize) -> Option<(usize, ParaList)> {
         let text = self.plain_text();
         let before = text.get(..at)?;
         let start = before.rfind('\n').map_or(0, |i| i + 1);
         let list = ParaList::typed(before[start..].strip_suffix(' ')?)?;
         let index = before.bytes().filter(|&b| b == b'\n').count();
-        self.para_at(index).list.is_none().then_some((start, list))
+        (!(index == 0 && self.first_para_continues) && self.para_at(index).list.is_none()).then_some((start, list))
     }
     /// Apply `f` to the attributes of paragraphs `range` (indices; None = every paragraph).
     pub fn edit_paras(&mut self, range: Option<std::ops::Range<usize>>, mut f: impl FnMut(&mut ParaStyle)) {
@@ -275,6 +320,12 @@ impl TextObject {
             TextKind::Point => Some(self.xf.transform_rect_bbox(self.cached_bounds.unwrap_or_else(|| self.estimate_bounds()))),
         }
     }
+    /// The cached ink of the glyphs in text space ([`Self::cached_ink`]): `Some(None)` when nothing
+    /// draws, and `None` when it was not measured with the current `cached_bounds`.
+    pub fn ink(&self) -> Option<Option<Rect>> {
+        let (bounds, ink) = self.cached_ink?;
+        (self.cached_bounds == Some(bounds)).then_some(ink)
+    }
     /// How far the characters' strokes paint past their glyphs, in document space: they scale
     /// with the type.
     pub fn char_stroke_outset(&self) -> f64 {
@@ -302,7 +353,10 @@ impl TextObject {
     }
     /// Flip type on a path to the other side of its path (Type on a Path Options › Flip, or its
     /// centre bracket dragged across the path): the path runs the other way and the brackets swap
-    /// ends, so the type keeps its stretch of the path. False, changing nothing, for other type.
+    /// ends, so the type keeps its stretch of the path. Type that starts before an open path's start
+    /// ([`TextKind::path_text_start`]) starts at its start bracket after the flip: the part of its
+    /// span before the path's start would come after the path's end. False, changing nothing, for
+    /// other type.
     pub fn flip_on_path(&mut self) -> bool {
         let Some((s, e)) = self.kind.path_span() else { return false };
         let TextKind::OnPath { path, start, end } = &mut self.kind else { return false };
@@ -345,6 +399,24 @@ impl TextObject {
     /// exist, a degenerate `xf` or a path that would not be finite.
     pub fn move_path_anchors(&mut self, refs: &[(usize, usize)], d: Vec2) -> bool {
         matches!(self.kind, TextKind::OnPath { .. }) && self.reshape_local(|path, to_text| move_anchors(path, to_text, refs, d))
+    }
+    /// Move the out (`out`) or in direction handle of anchor `ai` of subpath `si` of type on a
+    /// path's path to `pos` in document space, as a path's anchor takes it
+    /// ([`vectorcraft_geom::Anchor::set_handle`]; `independent`: that side only, the anchor a
+    /// corner): a Direct Selection drag of a handle (#3565). The handle is set in document space,
+    /// so a smooth anchor keeps its other handle's length as drawn; the brackets keep their
+    /// fractions of the path. False, changing nothing, for other type, when the anchor doesn't
+    /// exist, a degenerate `xf` or a path that would not be finite.
+    pub fn set_path_handle(&mut self, (si, ai): (usize, usize), out: bool, pos: Point, independent: bool) -> bool {
+        let xf = self.xf;
+        matches!(self.kind, TextKind::OnPath { .. })
+            && self.reshape_local(|path, to_text| {
+                let Some(a) = path.anchor_mut(si, ai) else { return false };
+                let mut drawn = a.transform(xf);
+                drawn.set_handle(out, pos, independent);
+                *a = drawn.transform(to_text);
+                true
+            })
     }
     /// Edit a copy of the area frame with `f` (given the document → text space map) and keep it
     /// when `f` succeeds and the result is finite.
@@ -435,12 +507,41 @@ impl crate::Document {
             st.h_scale = num("h_scale").unwrap_or(st.h_scale);
             st.v_scale = num("v_scale").unwrap_or(st.v_scale);
             st.baseline_shift = num("baseline_shift").unwrap_or(st.baseline_shift);
+            st.tcy_up_down = num("tcyUpDown").unwrap_or(st.tcy_up_down);
+            st.tcy_left_right = num("tcyLeftRight").unwrap_or(st.tcy_left_right);
+            st.aki_left = num("akiLeft").unwrap_or(st.aki_left);
+            st.aki_right = num("akiRight").unwrap_or(st.aki_right);
+            st.tsume = num("tsume").unwrap_or(st.tsume);
+            st.diacritic_horizontal = num("diacriticHorizontal").unwrap_or(st.diacritic_horizontal);
+            st.diacritic_vertical = num("diacriticVertical").unwrap_or(st.diacritic_vertical);
+            st.warichu_gap = num("warichuGap").unwrap_or(st.warichu_gap);
+            st.warichu_scale = num("warichuScale").unwrap_or(st.warichu_scale);
             st.keep_dimensions_in_range();
+            // Lines is a whole number: a stored number outside the range, or with a fraction,
+            // becomes the nearest whole number within it.
+            if let Some(old) = def.attrs.get_mut("warichuLines")
+                && old.is_number()
+                && old.as_u64().is_none_or(|v| !super::WARICHU_LINES.contains(&u8::try_from(v).unwrap_or(u8::MAX)))
+            {
+                let (lo, hi) = (*super::WARICHU_LINES.start(), *super::WARICHU_LINES.end());
+                let v = old.as_f64().filter(|v| v.is_finite()).map_or(2.0, |v| v.round().clamp(f64::from(lo), f64::from(hi)));
+                // Within 1..6 after the clamp, so the cast keeps the value.
+                *old = (v as u8).into();
+            }
             let kept = [
+                ("warichuGap", Some(st.warichu_gap)),
+                ("warichuScale", Some(st.warichu_scale)),
                 ("size", Some(st.size)),
                 ("h_scale", Some(st.h_scale)),
                 ("v_scale", Some(st.v_scale)),
                 ("baseline_shift", Some(st.baseline_shift)),
+                ("tcyUpDown", Some(st.tcy_up_down)),
+                ("tcyLeftRight", Some(st.tcy_left_right)),
+                ("akiLeft", Some(st.aki_left)),
+                ("akiRight", Some(st.aki_right)),
+                ("tsume", Some(st.tsume)),
+                ("diacriticHorizontal", Some(st.diacritic_horizontal)),
+                ("diacriticVertical", Some(st.diacritic_vertical)),
                 ("leading", st.leading),
             ];
             for (k, v) in kept {

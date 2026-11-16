@@ -2,12 +2,16 @@
 //! and `file.place` read ([`LoadOptions`]), the pages they import and `document.pdfInfo` (pages,
 //! boxes, a thumbnail; one page for a PostScript file) for the Import PDF dialog.
 
+use std::sync::Arc;
+
 use serde_json::{Value, json};
-use vectorcraft_doc::{ColorMode, Document};
+use vectorcraft_doc::{Artboard, ColorMode, Document, LayerColor, LinkInfo, Node, NodeKind};
+use vectorcraft_geom::{Affine, Rect};
 use vectorcraft_pdf::{Choice, CropTo, ImportOptions, PdfError, TextAs};
 
 use super::super::colormgmt::Grays;
-use super::super::{Result, Session, bad, f64_or, parse_range, str_param};
+use super::super::place::document;
+use super::super::{Result, Session, bad, check_numbers, number_or, parse_range, text_param};
 use super::{err, source};
 
 /// The `document.open` options besides the file. The PDF ones (pages, box, password, text,
@@ -28,8 +32,12 @@ pub struct LoadOptions {
     /// What a PDF's text becomes.
     pub text_as: TextAs,
     /// A PDF's optional content groups become layers (else one layer per page, without the art
-    /// that is off).
+    /// that is off), and a PSD or PSB file's layers become layers (else its merged image opens).
     pub layers: bool,
+    /// A PSD or PSB file's hidden layers come in, hidden (`hiddenLayers`; else they are left out).
+    pub hidden_layers: bool,
+    /// A PSD or PSB file's slices become user slices (`importSlices`; else they are left out).
+    pub import_slices: bool,
     /// How a DXF drawing comes in (the `dxf` param, see [`super::dxfimport`]).
     pub dxf: vectorcraft_cad::ImportOptions,
     /// An Illustrator EPS or `.ai` that carries the editing copy of its art opens from it (its
@@ -39,6 +47,15 @@ pub struct LoadOptions {
     /// A `.ai` opens from its editing copy even where that draws differently from its PDF part
     /// (which can be older than it), with a warning, instead of from the PDF part.
     pub trust_editing_data: bool,
+    /// The encoding names in a `.ai` or EPS's editing data are read in when they aren't UTF-8
+    /// (`legacyNameEncoding`).
+    pub legacy_names: vectorcraft_eps::NameEncoding,
+    /// A PDF or `.ai` saved with Preserve Editing opens from the VectorCraft document it carries;
+    /// off, it opens as another app would open it, from the editing copy of its art or its pages.
+    pub native: bool,
+    /// Each page of a PDF opens as a placed document linked to that page of its file, on an
+    /// artboard of its own, instead of as editable art (`linkPages`; see [`linked_pages`]).
+    pub link_pages: bool,
 }
 
 impl Default for LoadOptions {
@@ -51,9 +68,14 @@ impl Default for LoadOptions {
             grays: Grays::default(),
             text_as: TextAs::default(),
             layers: true,
+            hidden_layers: false,
+            import_slices: true,
             dxf: Default::default(),
             editing_data: true,
             trust_editing_data: false,
+            legacy_names: vectorcraft_eps::NameEncoding::default(),
+            native: true,
+            link_pages: false,
         }
     }
 }
@@ -61,8 +83,10 @@ impl Default for LoadOptions {
 impl LoadOptions {
     /// From command params: `pages` (`"2-3, 5"`, a page number or `"all"`), `page` (one page, when
     /// `pages` isn't given), `cropTo` (or `crop`), `password`, `colorMode` (`rgb` | `cmyk`) with `grays`,
-    /// `textAs` (`text` | `outlines`), `layers` (true | false), `editingData` (true | false | `always`) and `dxf`
-    /// (the DXF import options).
+    /// `textAs` (`text` | `outlines`), `layers` (true | false), `hiddenLayers` (true | false),
+    /// `importSlices` (true | false), `editingData` (true | false | `always`),
+    /// `legacyNameEncoding` (one of [`vectorcraft_eps::NameEncoding::LABELS`]), `linkPages` (true |
+    /// false) and `dxf` (the DXF import options).
     pub fn from_params(cmd: &str, p: &Value) -> Result<Self> {
         let pages = match p.get("pages").filter(|v| !v.is_null()).or_else(|| p.get("page").filter(|v| !v.is_null())) {
             None => None,
@@ -71,48 +95,81 @@ impl LoadOptions {
             Some(Value::Number(n)) => Some(n.to_string()),
             Some(v) => return Err(bad(cmd, format!("pages must be a range such as \"2-3\" or a page number, not {v}"))),
         };
-        let crop = choice(cmd, "cropTo", str_param(p, "cropTo").or_else(|| str_param(p, "crop")))?;
-        let password = str_param(p, "password").filter(|s| !s.is_empty()).map(str::to_string);
-        let color_mode = match str_param(p, "colorMode").map(str::to_ascii_lowercase).as_deref() {
+        let (crop_to, crop_alias) = (text_param(p, "cropTo", cmd)?, text_param(p, "crop", cmd)?);
+        let crop = choice(cmd, "cropTo", crop_to.or(crop_alias))?;
+        let password = text_param(p, "password", cmd)?.filter(|s| !s.is_empty()).map(str::to_string);
+        let color_mode = match text_param(p, "colorMode", cmd)?.map(str::to_ascii_lowercase).as_deref() {
             None => None,
             Some("rgb") => Some(ColorMode::Rgb),
             Some("cmyk") => Some(ColorMode::Cmyk),
             Some(m) => return Err(bad(cmd, format!("colorMode must be rgb or cmyk, not `{m}`"))),
         };
         let grays = Grays::param(cmd, p)?;
-        let text_as = choice(cmd, "textAs", str_param(p, "textAs"))?;
+        let text_as = choice(cmd, "textAs", text_param(p, "textAs", cmd)?)?;
         let layers = match p.get("layers").filter(|v| !v.is_null()) {
             None => true,
             Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "layers must be true or false"))?,
+        };
+        let hidden_layers = match p.get("hiddenLayers").filter(|v| !v.is_null()) {
+            None => false,
+            Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "hiddenLayers must be true or false"))?,
+        };
+        let import_slices = match p.get("importSlices").filter(|v| !v.is_null()) {
+            None => true,
+            Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "importSlices must be true or false"))?,
         };
         let (editing_data, trust_editing_data) = match p.get("editingData").filter(|v| !v.is_null()) {
             None => (true, false),
             Some(Value::String(s)) if s.eq_ignore_ascii_case("always") => (true, true),
             Some(v) => (v.as_bool().ok_or_else(|| bad(cmd, "editingData must be true, false or \"always\""))?, false),
         };
+        let legacy_names = match p.get("legacyNameEncoding").filter(|v| !v.is_null()) {
+            None => vectorcraft_eps::NameEncoding::default(),
+            Some(v) => v
+                .as_str()
+                .and_then(vectorcraft_eps::NameEncoding::from_label)
+                .ok_or_else(|| bad(cmd, format!("legacyNameEncoding must be one of {}", vectorcraft_eps::NameEncoding::LABELS.join(", "))))?,
+        };
+        let link_pages = match p.get("linkPages").filter(|v| !v.is_null()) {
+            None => false,
+            Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "linkPages must be true or false"))?,
+        };
         let dxf = super::dxfimport::options(cmd, p.get("dxf"))?;
-        Ok(Self { pages, crop, password, color_mode, grays, text_as, layers, dxf, editing_data, trust_editing_data })
+        Ok(Self {
+            pages,
+            crop,
+            password,
+            color_mode,
+            grays,
+            text_as,
+            layers,
+            hidden_layers,
+            import_slices,
+            dxf,
+            editing_data,
+            trust_editing_data,
+            legacy_names,
+            native: true,
+            link_pages,
+        })
     }
 
     /// Does the document read only part of the file, or read it differently (a page range, another
-    /// box, a password, without its hidden layers)? Writing it back would lose the rest, so Save
-    /// doesn't (it asks for a name).
+    /// box, a password, without its hidden layers, without the VectorCraft document it carries, its
+    /// pages linked)? Writing it back would lose the rest, so Save doesn't (it asks for a name).
     pub fn is_partial(&self) -> bool {
-        self.pages.is_some() || self.crop != CropTo::default() || self.password.is_some() || !self.layers
+        self.pages.is_some() || self.crop != CropTo::default() || self.password.is_some() || !self.layers || !self.native || self.link_pages
     }
 
     /// The PDF import options: `pages` resolved against the file's page count. A PDF-compatible
     /// `.ai`, or a PDF saved with its editing data, asked for its crop box opens on its trim boxes,
     /// its editor's artboards, with the bleed round them (its crop box takes the bleed in).
-    fn import_options(&self, bytes: &[u8], editor_document: bool) -> Result<ImportOptions> {
+    fn import_options(&self, opened: &vectorcraft_pdf::Opened, editor_document: bool) -> Result<ImportOptions> {
         let pages = match &self.pages {
             None => None,
-            Some(range) => {
-                let count = vectorcraft_pdf::info(bytes, self.password.as_deref()).map_err(err)?.pages.len();
-                Some(parse_range(range, count).map_err(|e| err(format!("pages: {e}")))?)
-            }
+            Some(range) => Some(parse_range(range, opened.page_count()).map_err(|e| err(format!("pages: {e}")))?),
         };
-        let is_ai = self.crop == CropTo::Crop && vectorcraft_pdf::has_illustrator_data(bytes, self.password.as_deref());
+        let is_ai = self.crop == CropTo::Crop && opened.has_illustrator_data();
         Ok(ImportOptions {
             pages,
             crop: if is_ai { CropTo::Trim } else { self.crop },
@@ -136,24 +193,152 @@ fn choice<T: Choice + Default>(cmd: &str, key: &str, id: Option<&str>) -> Result
         .ok_or_else(|| bad(cmd, format!("{key} must be one of {}", T::IDS.join(", "))))
 }
 
-/// Import the pages `o` pick → the document, import notes and what else the import tells.
+/// Import the pages `o` pick of `opened`, the PDF `bytes` already read
+/// ([`vectorcraft_pdf::open_pdf`]) → the document, import notes and what else the import tells.
 /// `editor_document`: a `.ai` file.
-pub(super) fn import(bytes: &[u8], o: &LoadOptions, editor_document: bool) -> Result<vectorcraft_pdf::ImportReport> {
-    vectorcraft_pdf::import_with_report(bytes, &o.import_options(bytes, editor_document)?).map_err(err)
+pub(super) fn import(
+    bytes: &[u8],
+    opened: &vectorcraft_pdf::Opened,
+    o: &LoadOptions,
+    editor_document: bool,
+) -> Result<vectorcraft_pdf::ImportReport> {
+    let options = o.import_options(opened, editor_document)?;
+    vectorcraft_pdf::import_opened(bytes, opened, &options).map_err(err)
 }
 
 /// Page `page` (0-based) of a PDF as a document of one artboard (its `o.crop` box) and one
 /// layer of what it shows, with the same text choice as Open, and the import notes.
 pub fn page_document(bytes: &[u8], page: usize, o: &LoadOptions) -> Result<(Document, Vec<String>)> {
-    let opts = ImportOptions {
-        pages: Some(vec![page]),
-        crop: o.crop,
-        password: o.password.clone(),
-        text_as: o.text_as,
-        layers: false,
-        ..Default::default()
+    vectorcraft_pdf::import_with_report(bytes, &page_options(page, o)).map(|r| (r.document, r.warnings)).map_err(err)
+}
+
+/// [`page_document`] of `opened`, the PDF `bytes` already read.
+pub(crate) fn opened_page_document(bytes: &[u8], opened: &vectorcraft_pdf::Opened, page: usize, o: &LoadOptions) -> Result<(Document, Vec<String>)> {
+    vectorcraft_pdf::import_opened(bytes, opened, &page_options(page, o)).map(|r| (r.document, r.warnings)).map_err(err)
+}
+
+/// The import options of [`page_document`].
+fn page_options(page: usize, o: &LoadOptions) -> ImportOptions {
+    ImportOptions { pages: Some(vec![page]), crop: o.crop, password: o.password.clone(), text_as: o.text_as, layers: false, ..Default::default() }
+}
+
+/// `document.open` with `linkPages`: the pages `o` picks of the PDF (or PDF-compatible `.ai` or
+/// `.ait`) `name`, read from `path`, as a document holding one placed document per page, linked to
+/// that page of the file as File › Place with Link places one ([`document::source`]). Each page
+/// gets an artboard of its `o.crop` box (its art's bounds for `bounding`, a blank page's crop box;
+/// a PDF-compatible `.ai` asked for its crop box gets its trim box, as it opens), in a row from the
+/// left with the gap a PDF's artboards open with, and a layer named after the page. On its trim box,
+/// a page shows its bleed box round the artboard, and the document's bleed is the pages' bleed (the
+/// widest on each side); the artboards are then the gap apart plus the bleed on both sides. The document opens
+/// in CMYK when most of the pages read in CMYK, unless `o.color_mode` names a mode. Refused without a
+/// path, for any other file, with a password (a linked page is read again without one), with
+/// `textAs: outlines` (a linked page shows the file's own type) and for a file over
+/// [`document::MAX_FILE`] → the document and the notes of reading its pages.
+pub(super) fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, o: &LoadOptions) -> Result<(Document, Vec<String>)> {
+    const C: &str = "document.open";
+    let file = super::file_name(name);
+    if !document::is_pdf(name, bytes) {
+        return Err(bad(C, format!("linkPages: `{file}` isn't a PDF or a PDF-compatible .ai file")));
+    }
+    let path = path.ok_or_else(|| bad(C, "linkPages needs the file's path: linked pages are read from it"))?;
+    if o.password.is_some() {
+        return Err(bad(C, "linkPages can't open a file with a password: linked pages are read again without it"));
+    }
+    if o.text_as != TextAs::Text {
+        return Err(bad(C, "linkPages can't be used with textAs: outlines: linked pages show the file's own type"));
+    }
+    if bytes.len() > document::MAX_FILE {
+        return Err(bad(C, format!("linkPages: `{file}` is over {} MB", document::MAX_FILE >> 20)));
+    }
+    // The file is read once: every page is read from it.
+    let opened = vectorcraft_pdf::open_pdf(bytes, None).map_err(err)?;
+    let count = opened.page_count();
+    let picked = match &o.pages {
+        None => (0..count).collect(),
+        Some(range) => parse_range(range, count).map_err(|e| err(format!("pages: {e}")))?,
     };
-    vectorcraft_pdf::import_with_report(bytes, &opts).map(|r| (r.document, r.warnings)).map_err(err)
+    let bounding = o.crop == CropTo::Bounding;
+    // A PDF-compatible `.ai` asked for its crop box opens on its trim boxes ([`LoadOptions::import_options`]).
+    let crop = if o.crop == CropTo::Crop && opened.has_illustrator_data() { CropTo::Trim } else { o.crop };
+    let mut doc = Document::new(1.0, 1.0);
+    let board = doc.artboards.first().cloned().ok_or_else(|| err("a new document has no artboard"))?;
+    doc.artboards.clear();
+    doc.layers.clear();
+    let link = crate::cmd::links::link_info(path, bytes);
+    let gap = ImportOptions::default().artboard_gap;
+    // Every page's object keeps the same one copy of the file.
+    let shared = Arc::new(bytes.to_vec());
+    // The file is hashed once for all its pages.
+    let hash = link.hash.clone().unwrap_or_else(|| vectorcraft_doc::links::hash_bytes(bytes));
+    let (mut warnings, mut cmyk_pages) = (Vec::<String>::new(), 0);
+    // Each page as read, with its bleed (top, bottom, left, right). The pages are laid out once
+    // the document's bleed is known.
+    let mut read_pages = Vec::with_capacity(picked.len());
+    for &index in &picked {
+        let page = index as u32 + 1;
+        let file_once = document::SharedFile { bytes: &shared, hash: &hash, opened: &opened };
+        // On its trim box, a page shows its bleed box, the artboard on the trim box inside it, so
+        // the art in the bleed shows and prints as bleed.
+        let bleed = if crop == CropTo::Trim { opened.page_bleed(index) } else { None };
+        let page_box = if bleed.is_some() { vectorcraft_doc::PageBox::Bleed } else { document::page_box(crop) };
+        let read = |bounding| document::shared_source(name, file_once, Some(path), page, bounding, page_box, C);
+        // A blank page has no art's bounds: it keeps its crop box, as opening it as art does.
+        let (mut s, bounding) = match read(bounding) {
+            Err(e) if bounding && e.to_string().contains("has no art to place") => (read(false)?, false),
+            s => (s?, bounding),
+        };
+        // A page that is only a placeholder (a `.ai` saved without PDF compatibility) shows the
+        // file's editing data, not a page of the file.
+        if s.editing_data {
+            return Err(bad(C, format!("linkPages: `{file}` isn't a PDF or a PDF-compatible .ai file")));
+        }
+        cmyk_pages += usize::from(s.color_mode == ColorMode::Cmyk);
+        // The document's bleed is the widest of the pages' on each side.
+        let sides = bleed.unwrap_or_default();
+        for (side, b) in doc.setup.bleed.iter_mut().zip(sides) {
+            *side = side.max(b.min(vectorcraft_doc::setup::MAX_BLEED));
+        }
+        for w in std::mem::take(&mut s.warnings) {
+            if !warnings.contains(&w) {
+                warnings.push(w);
+            }
+        }
+        read_pages.push((page, s, bounding, sides));
+    }
+    // Each artboard is the gap from the one before plus the bleed on both sides of it: the
+    // document's bleed, which export adds round every artboard, or a page's own bleed box where it
+    // reaches farther. Neither page then shows or exports the other's art.
+    let [_, _, doc_left, doc_right] = doc.setup.bleed;
+    let mut x = 0.0;
+    for (i, (page, s, bounding, [top, bottom, left, right])) in read_pages.into_iter().enumerate() {
+        if i > 0 {
+            x += doc_left.max(left);
+        }
+        let mut node = document::node(&mut doc, &s, LinkInfo { page: Some(page), ..link.clone() }, bounding);
+        if let NodeKind::PlacedDocument(p) = &mut node.kind {
+            p.xf = Affine::translate((x - left, -top));
+        }
+        node.name = Some(file.clone());
+        let mut layer = Node::layer(doc.alloc_id(), &format!("Page {page}"), LayerColor::Preset((i % 27) as u8));
+        if let NodeKind::Layer { children, .. } = &mut layer.kind {
+            children.push(Arc::new(node));
+        }
+        doc.layers.push(Arc::new(layer));
+        let rect = Rect::new(x, 0.0, x + s.frame.width() - left - right, s.frame.height() - top - bottom);
+        doc.artboards.push(Artboard { id: i as u32 + 1, name: format!("Artboard {}", i + 1), rect, ..board.clone() });
+        x = rect.x1 + doc_right.max(right) + gap;
+    }
+    // Pages painted mostly in CMYK read as CMYK documents, as opening them as art does: the
+    // document opens in CMYK (with the CMYK default swatches) when most of its pages do.
+    if cmyk_pages * 2 > picked.len() {
+        doc.color_mode = ColorMode::Cmyk;
+        let (swatches, groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
+        (doc.swatches, doc.swatch_groups) = (swatches.into(), groups.into());
+    }
+    if let Some(mode) = o.color_mode.filter(|m| *m != doc.color_mode) {
+        super::super::colormgmt::set_color_mode(&mut doc, mode, true, None, o.grays);
+    }
+    Ok((doc, warnings))
 }
 
 const INFO: &str = "document.pdfInfo";
@@ -162,17 +347,20 @@ const INFO: &str = "document.pdfInfo";
 pub(super) fn pdf_info(_: &mut Session, p: &Value) -> Result<Value> {
     let bytes = source(p, INFO)?.bytes;
     let o = LoadOptions::from_params(INFO, p)?;
+    check_numbers(p, &["thumbnailSize"], INFO)?;
     // Programs whose header is only `%!` are PostScript too, as `clipboard.importEps` reads them.
     if bytes.starts_with(b"%!") || vectorcraft_pdf::is_postscript(&bytes) {
         return postscript_info(&bytes, p);
     }
-    let info = match vectorcraft_pdf::info(&bytes, o.password.as_deref()) {
-        Ok(i) => i,
+    // The file is read once, for its pages and the thumbnail.
+    let opened = match vectorcraft_pdf::open_pdf(&bytes, o.password.as_deref()) {
+        Ok(opened) => opened,
         Err(e @ (PdfError::NeedsPassword | PdfError::WrongPassword)) => {
             return Ok(json!({"pages": 0, "needsPassword": true, "wrongPassword": e == PdfError::WrongPassword, "pageInfo": []}));
         }
         Err(e) => return Err(err(e)),
     };
+    let info = opened.info();
     let r4 = |r: vectorcraft_geom::Rect| json!([r.x0, r.y0, r.x1, r.y1]);
     let pages: Vec<Value> = info
         .pages
@@ -184,7 +372,7 @@ pub(super) fn pdf_info(_: &mut Session, p: &Value) -> Result<Value> {
         .collect();
     let mut out = json!({"pages": pages.len(), "needsPassword": false, "pageInfo": pages});
     if let Some(page) = thumbnail_page(p, info.pages.len(), "PDF")? {
-        let (doc, _) = page_document(&bytes, page, &o)?;
+        let (doc, _) = opened_page_document(&bytes, &opened, page, &o)?;
         out["thumbnail"] = json!(thumbnail(&doc, p)?);
     }
     Ok(out)
@@ -217,7 +405,7 @@ fn postscript_info(bytes: &[u8], p: &Value) -> Result<Value> {
 /// A PNG of `doc`'s first artboard, `thumbnailSize` px (default 160, from 16 to 1024) on its longer
 /// side, base64.
 fn thumbnail(doc: &Document, p: &Value) -> Result<String> {
-    let size = f64_or(p, "thumbnailSize", 160.0).clamp(16.0, 1024.0);
+    let size = number_or(p, "thumbnailSize", 160.0, INFO)?.clamp(16.0, 1024.0);
     let r = doc.artboards.first().map(|a| a.rect).ok_or_else(|| err("the page has no area"))?;
     let png = super::encode(doc, "png", &json!({"scale": size / r.width().max(r.height()).max(1.0)}))?;
     Ok(vectorcraft_format::base64_encode(&png))

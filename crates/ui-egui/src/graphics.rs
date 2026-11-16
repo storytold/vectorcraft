@@ -195,6 +195,7 @@ mod tests {
     #[test]
     fn the_app_uploads_everything_again_in_a_new_context() {
         let mut app = app();
+        app.canvas.worker_started = true; // render on this thread
         let old = egui::Context::default();
         // Fonts, then the canvas.
         for _ in 0..3 {

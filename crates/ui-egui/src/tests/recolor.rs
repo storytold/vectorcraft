@@ -1,7 +1,7 @@
 //! Recolor Artwork (M3.78) and Edit or Apply Color Group (M3.79), drawn headlessly.
 
 use egui::{Event, Modifiers, PointerButton, Pos2, Rect, vec2};
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
 use vectorcraft_color::recolor::ColorKey;
@@ -576,7 +576,10 @@ fn switching_tabs_or_slider_modes_keeps_the_dialog_height() {
         ("sliderMode", json!("hsb")),
         ("sliderMode", json!("lab")),
         ("tab", json!("edit")),
+        ("display", json!("segmented")),
+        ("display", json!("bars")),
         ("sliderMode", json!("global")),
+        ("display", json!("smooth")),
         ("sliderMode", json!("rgb")),
         ("tab", json!("assign")),
     ] {
@@ -938,4 +941,401 @@ fn the_last_edit_color_can_be_selected_edited_and_undone() {
         }
         assert_eq!(h.state().session.doc().unwrap().doc, before);
     }
+}
+
+/// The height of the open Recolor Artwork dialog.
+fn dialog_height(h: &egui_kittest::Harness<'_, VectorcraftApp>) -> f32 {
+    h.ctx.memory(|m| m.area_rect(egui::Id::unique(("dialog", "recolor")))).unwrap().height()
+}
+
+/// Clicks the Edit tab's display button named `name` and lets the dialog settle.
+fn show_display(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, name: &str) {
+    h.get_by_role_and_label(egui::accesskit::Role::Button, name).click();
+    h.run_steps(6);
+}
+
+/// The Edit tab opens on the smooth color wheel and its buttons switch to the segmented wheel and to
+/// the color bars and back: the dialog keeps its size, and the rows and the selected row stay. The
+/// choice stays while the dialog is open; the next opening starts on the smooth wheel again.
+#[test]
+fn the_edit_tab_shows_a_smooth_or_segmented_wheel_or_color_bars() {
+    let mut h = edit_harness(&["#ff0000", "#0000ff", "#00ff00"]);
+    set(h.state_mut(), "__sel", json!([1]));
+    h.run_steps(4);
+    let (rows, height) = (field(h.state(), "rows"), dialog_height(&h));
+    let slider = |h: &egui_kittest::Harness<'_, VectorcraftApp>, name: &str| h.query_by_role_and_label(egui::accesskit::Role::Slider, name).is_some();
+    let bar = |h: &egui_kittest::Harness<'_, VectorcraftApp>, name: &str| h.query_by_role_and_label(egui::accesskit::Role::Button, name).is_some();
+    assert!(slider(&h, "Color wheel") && !slider(&h, "Segmented color wheel"), "the smooth wheel first");
+    assert!(!bar(&h, "Color 1"));
+    show_display(&mut h, "Show segmented color wheel");
+    assert_eq!(field(h.state(), "display"), json!("segmented"));
+    assert!(slider(&h, "Segmented color wheel") && !slider(&h, "Color wheel"));
+    assert_eq!(widget_of_size(&h, vec2(220.0, 220.0)).size(), vec2(220.0, 220.0), "the same size of wheel");
+    assert!(slider(&h, "Brightness"));
+    show_display(&mut h, "Show color bars");
+    assert_eq!(field(h.state(), "display"), json!("bars"));
+    assert!(!slider(&h, "Color wheel") && !slider(&h, "Segmented color wheel"));
+    assert!(["Color 1", "Color 2", "Color 3"].iter().all(|n| bar(&h, n)), "a bar per color");
+    assert_eq!(dialog_height(&h), height, "the bars keep the dialog's height");
+    show_display(&mut h, "Show smooth color wheel");
+    assert!(slider(&h, "Color wheel"));
+    assert_eq!(dialog_height(&h), height);
+    assert_eq!(field(h.state(), "rows"), rows, "switching changes no color");
+    assert_eq!(field(h.state(), "__sel"), json!([1]), "and keeps the selected row");
+    show_display(&mut h, "Show color bars");
+    set(h.state_mut(), "tab", json!("assign"));
+    h.run_steps(3);
+    set(h.state_mut(), "tab", json!("edit"));
+    h.run_steps(3);
+    assert!(bar(&h, "Color 1"), "the choice stays while the dialog is open");
+    let app = h.state_mut();
+    dialogs::cancel(app);
+    app.run("select.all", json!({})).unwrap();
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    assert_eq!(field(app, "display"), Value::Null, "a new opening starts on the smooth wheel");
+}
+
+/// The segmented wheel's patches: 24 hues, centered on red, by 5 saturations, at the brightness asked.
+#[test]
+fn the_segmented_wheel_has_24_hues_by_5_saturations() {
+    let seg = |h, s, v| crate::widgets::segment_color(h, s, v).to_hsb();
+    let near = |a: [f32; 3], b: [f32; 3]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-3);
+    assert!(near(seg(7.0, 0.95, 1.0), [0.0, 0.9, 1.0]), "{:?}", seg(7.0, 0.95, 1.0));
+    assert!(near(seg(8.0, 0.0, 0.5), [15.0, 0.1, 0.5]), "{:?}", seg(8.0, 0.0, 0.5));
+    assert!(near(seg(355.0, 1.0, 1.0), [0.0, 0.9, 1.0]), "{:?}", seg(355.0, 1.0, 1.0));
+    assert!(near(seg(120.0, 0.5, 1.0), [120.0, 0.5, 1.0]), "{:?}", seg(120.0, 0.5, 1.0));
+    let mut patches = std::collections::BTreeSet::new();
+    for h in 0..360 {
+        for s in 0..=100 {
+            patches.insert(ColorKey::of(&crate::widgets::segment_color(h as f32, s as f32 / 100.0, 1.0)).to_string());
+        }
+    }
+    assert_eq!(patches.len(), 24 * 5);
+}
+
+/// On the segmented wheel a marker moves as freely as on the smooth one, past patch edges and
+/// without snapping to a patch; linked colors turn with it from where the drag started, an excluded
+/// row keeps its color, and the smooth wheel shows the result. Its Brightness slider works too.
+#[test]
+fn a_segmented_wheel_marker_moves_freely() {
+    let mut h = edit_harness(&["rgb 200 100 100", "rgb 100 200 200", "rgb 20 160 20"]);
+    let mut rows = field(h.state(), "rows");
+    let green = (0..3).find(|i| rows[*i]["from"] == json!(["rgb 20 160 20"])).unwrap();
+    let red = (0..3).find(|i| rows[*i]["from"] == json!(["rgb 200 100 100"])).unwrap();
+    rows[green]["exclude"] = json!(true);
+    set(h.state_mut(), "rows", rows);
+    set(h.state_mut(), "__sel", json!([red]));
+    h.run_steps(4);
+    show_display(&mut h, "Show segmented color wheel");
+    let start = new_hsb(h.state());
+    let wheel = widget_of_size(&h, vec2(220.0, 220.0));
+    let (c, r) = (wheel.center(), 100.0);
+    let at = |hue: f32, s: f32| c + vec2(hue.to_radians().cos(), -hue.to_radians().sin()) * r * s;
+    let [hue, s, _] = start[red];
+    h.hover_at(at(hue, s));
+    h.run_steps(1);
+    h.drag_at(at(hue, s));
+    h.run_steps(1);
+    // 37° on in small steps, across two patch edges, ending inside a patch away from its center.
+    for k in 1..=10 {
+        h.hover_at(at(hue + 3.7 * k as f32, s));
+        h.run_steps(1);
+    }
+    h.drop_at(at(hue + 37.0, s));
+    h.run_steps(2);
+    let moved = new_hsb(h.state());
+    let gap = |a: f32, b: f32| (a - b).rem_euclid(360.0).min((b - a).rem_euclid(360.0));
+    let want = (hue + 37.0).rem_euclid(360.0);
+    assert!(gap(moved[red][0], want) < 1.0, "the marker follows the pointer: {} -> {}", hue, moved[red][0]);
+    assert!(gap(moved[red][0], (want / 15.0).round() * 15.0) > 2.0, "not snapped to a patch center: {}", moved[red][0]);
+    let other = 3 - red - green;
+    assert!((gap(moved[other][0], start[other][0]) - 37.0).abs() < 1.5, "linked: {:?} -> {:?}", start[other], moved[other]);
+    assert_eq!(field(h.state(), "rows")[green]["to"], json!("rgb 20 160 20"), "the excluded row stays");
+    let rows = field(h.state(), "rows");
+    show_display(&mut h, "Show smooth color wheel");
+    assert_eq!(field(h.state(), "rows"), rows, "the smooth wheel shows the same colors");
+    show_display(&mut h, "Show segmented color wheel");
+    click_slider(&mut h, "Brightness", 0.25);
+    assert!((new_hsb(h.state())[red][2] - 0.25).abs() < 0.02, "the Brightness slider: {:?}", new_hsb(h.state()));
+}
+
+/// The rows as `(current colors, new color)` pairs, sorted.
+fn row_pairs(app: &VectorcraftApp) -> Vec<String> {
+    let mut v: Vec<String> = field(app, "rows").as_array().unwrap().iter().map(|r| format!("{} {}", r["from"], r["to"])).collect();
+    v.sort();
+    v
+}
+
+/// The color bars: one per recolored row (none for an excluded row), the last one selected with a
+/// click and edited with the H slider, then dragged to the top, which moves its row and changes no
+/// color. Preview shows the edit, Cancel restores the art and OK keeps it as one undo step.
+#[test]
+fn color_bars_select_edit_and_reorder_the_rows() {
+    for confirm in [false, true] {
+        let mut h = edit_harness(&["#ff0000", "#0000ff", "#00ff00", "#ffff00"]);
+        let before = h.state().session.doc().unwrap().doc.clone();
+        let undo = h.state().session.doc().unwrap().history.undo.len();
+        let mut rows = field(h.state(), "rows");
+        rows[1]["exclude"] = json!(true);
+        set(h.state_mut(), "rows", rows);
+        set(h.state_mut(), "linked", json!(false));
+        set(h.state_mut(), "sliderMode", json!("hsb"));
+        show_display(&mut h, "Show color bars");
+        let bar = |h: &egui_kittest::Harness<'_, VectorcraftApp>, name: &str| {
+            h.query_by_role_and_label(egui::accesskit::Role::Button, name).map(|n| n.rect())
+        };
+        assert!(bar(&h, "Color 2").is_none(), "no bar for the excluded row");
+        let first = bar(&h, "Color 1").expect("a bar per recolored row");
+        let last = bar(&h, "Color 4").expect("a bar per recolored row");
+        assert!(bar(&h, "Color 3").is_some_and(|r| r.top() > first.bottom() && r.bottom() < last.top()), "in row order");
+        h.input_mut().events.extend(press(last.center(), 1));
+        h.run_steps(3);
+        assert_eq!(field(h.state(), "__sel"), json!([3]), "a click selects the bar's row");
+        let unedited = field(h.state(), "rows");
+        click_slider(&mut h, "H", 0.5);
+        let edited = field(h.state(), "rows");
+        assert_ne!(edited[3]["to"], unedited[3]["to"], "the H slider edits the selected bar's color");
+        assert_eq!(&edited.as_array().unwrap()[..3], &unedited.as_array().unwrap()[..3], "and only that one");
+        let previewed = h.state().session.doc().unwrap().doc.clone();
+        assert_ne!(previewed, before, "the art previews the edit");
+        let pairs = row_pairs(h.state());
+        let last = bar(&h, "Color 4").unwrap();
+        h.hover_at(last.center());
+        h.run_steps(1);
+        h.drag_at(last.center());
+        h.run_steps(1);
+        let top = egui::pos2(last.center().x, first.top() + 2.0);
+        for k in 1..=8 {
+            h.hover_at(last.center().lerp(top, k as f32 / 8.0));
+            h.run_steps(1);
+        }
+        h.drop_at(top);
+        h.run_steps(3);
+        let rows = field(h.state(), "rows");
+        assert_eq!(rows[0], edited[3], "the dragged row moved to the top: {rows}");
+        assert_eq!(rows.as_array().unwrap()[1..], [edited[0].clone(), edited[1].clone(), edited[2].clone()], "the others shift down");
+        assert_eq!(row_pairs(h.state()), pairs, "moving a bar changes no color");
+        assert_eq!(field(h.state(), "__sel"), json!([0]), "the moved row stays selected");
+        assert_eq!(h.state().session.doc().unwrap().doc, previewed, "and the art keeps the same colors");
+        h.get_by_label(if confirm { "OK" } else { "Cancel" }).click();
+        h.run_steps(2);
+        assert!(h.state().ui.dialog.is_none());
+        let app = h.state();
+        if confirm {
+            assert_eq!(app.session.doc().unwrap().doc, previewed, "OK keeps the edit");
+            assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "as one undo step");
+        } else {
+            assert_eq!(app.session.doc().unwrap().doc, before, "Cancel restores the art");
+            assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+        }
+    }
+}
+
+/// Many color bars scroll within the wheel's height, the dialog keeps its height, and the last bar
+/// can be reached and selected; with every row excluded the bars area says there is nothing to
+/// recolor.
+#[test]
+fn color_bars_scroll_and_show_when_nothing_is_recolored() {
+    let colors: Vec<String> = (1..=40).map(|i| format!("#{:06x}", i * 9973)).collect();
+    let refs: Vec<&str> = colors.iter().map(String::as_str).collect();
+    let mut h = edit_harness(&refs);
+    let height = dialog_height(&h);
+    show_display(&mut h, "Show color bars");
+    assert_eq!(dialog_height(&h), height, "40 bars keep the dialog's height");
+    let first = h.get_by_role_and_label(egui::accesskit::Role::Button, "Color 1").rect();
+    let wheel_bottom = first.top() + 251.0;
+    let last = |h: &egui_kittest::Harness<'_, VectorcraftApp>| h.get_by_role_and_label(egui::accesskit::Role::Button, "Color 40").rect();
+    assert!(last(&h).top() > wheel_bottom, "the last bar starts out of view: {:?}", last(&h));
+    h.input_mut().events.extend([
+        Event::PointerMoved(first.center()),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(0.0, -10000.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Modifiers::NONE,
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.run_steps(12);
+    let shown = last(&h);
+    assert!(shown.bottom() <= wheel_bottom + 1.0, "the last bar scrolls into view: {shown:?}");
+    assert_eq!(dialog_height(&h), height);
+    h.input_mut().events.extend(press(shown.center(), 1));
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "__sel"), json!([39]));
+    let mut rows = field(h.state(), "rows");
+    for r in rows.as_array_mut().unwrap() {
+        r["exclude"] = json!(true);
+    }
+    set(h.state_mut(), "rows", rows);
+    h.run_steps(4);
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Button, "Color 1").is_none());
+    let _ = h.get_by_label("No colors to recolor (preserved colors are left out).");
+}
+
+/// Where the Edit tab's wheel draws a marker for hue `hue` and saturation `s`.
+fn wheel_at(h: &egui_kittest::Harness<'_, VectorcraftApp>, hue: f32, s: f32) -> Pos2 {
+    let c = widget_of_size(h, vec2(220.0, 220.0)).center();
+    c + vec2(hue.to_radians().cos(), -hue.to_radians().sin()) * 100.0 * s
+}
+
+/// Clicks the Edit tab's button named `name` and lets the dialog settle.
+fn click_button(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, name: &str) {
+    h.get_by_role_and_label(egui::accesskit::Role::Button, name).click();
+    h.run_steps(3);
+}
+
+/// The Add Color tool: a click on the smooth wheel adds the hue and saturation under it, at the
+/// base color's brightness, as a row with no current colors that becomes the selected row; the art
+/// keeps its colors, and the Assign tab shows the row without current colors. A second click on the
+/// button turns the tool off, and a click on the wheel then adds nothing.
+#[test]
+fn the_add_color_tool_adds_a_row_with_no_current_colors() {
+    let mut h = edit_harness(&["rgb 200 100 100", "rgb 100 200 200"]);
+    set(h.state_mut(), "__sel", json!([0]));
+    h.run_steps(4);
+    let (fills_before, v) = (fills(h.state()), new_hsb(h.state())[0][2]);
+    click_button(&mut h, "Add Color Tool");
+    assert_eq!(field(h.state(), "wheelTool"), json!("add"));
+    let at = wheel_at(&h, 120.0, 0.5);
+    h.input_mut().events.extend(press(at, 1));
+    h.run_steps(3);
+    let rows = field(h.state(), "rows");
+    assert_eq!(rows.as_array().unwrap().len(), 3, "a new row: {rows}");
+    assert_eq!(rows[2]["from"], json!([]), "with no current colors");
+    assert_eq!(rows[2]["added"], json!(true), "marked as an added color");
+    let [hue, s, b] = new_hsb(h.state())[2];
+    assert!((hue - 120.0).abs() < 1.0 && (s - 0.5).abs() < 0.01 && (b - v).abs() < 0.01, "{:?}", [hue, s, b]);
+    assert_eq!(field(h.state(), "__sel"), json!([2]), "the new color is selected");
+    assert_eq!(fills(h.state()), fills_before, "a color with no current colors recolors no art");
+    // A second click adds another color; the tool stays on.
+    let next = wheel_at(&h, 240.0, 0.75);
+    h.input_mut().events.extend(press(next, 1));
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "rows").as_array().unwrap().len(), 4);
+    click_button(&mut h, "Add Color Tool");
+    assert_eq!(field(h.state(), "wheelTool"), Value::Null, "a second click turns the tool off");
+    h.input_mut().events.extend(press(at, 1));
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "rows").as_array().unwrap().len(), 4, "without the tool a click adds nothing");
+    assert_eq!(field(h.state(), "__sel"), json!([2]), "it selects the marker clicked");
+    set(h.state_mut(), "tab", json!("assign"));
+    h.run_steps(3);
+    let _ = h.get_by_label("Current Colors (2)");
+    assert!(h.query_by_label("Color 4").is_some(), "the Assign tab has a row for each added color");
+    let app = h.state_mut();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    dialogs::confirm(app).unwrap();
+    assert_eq!(fills(app), fills_before, "OK leaves the art's colors");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "and records no undo step");
+}
+
+/// On the segmented wheel the Add Color tool adds the patch's color. Opened on a color group without
+/// art, OK adds the added color to the group, as one undo step.
+#[test]
+fn an_added_color_joins_the_color_group() {
+    let app = app();
+    let before = group_keys(&app, "Brights");
+    let mut h = assign_harness(app, json!({"group": "Brights"}));
+    set(h.state_mut(), "tab", json!("edit"));
+    h.run_steps(4);
+    show_display(&mut h, "Show segmented color wheel");
+    let v = new_hsb(h.state())[0][2];
+    click_button(&mut h, "Add Color Tool");
+    let patch = wheel_at(&h, 187.0, 0.95);
+    h.input_mut().events.extend(press(patch, 1));
+    h.run_steps(3);
+    let added = field(h.state(), "rows").as_array().unwrap().last().unwrap()["to"].clone();
+    let [hue, s, b] = vectorcraft_engine::cmd::color_value(&added).unwrap().to_hsb();
+    assert!((hue - 180.0).abs() < 1.0 && (s - 0.9).abs() < 0.01 && (b - v).abs() < 0.01, "the patch's color: {:?}", [hue, s, b]);
+    let app = h.state_mut();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    dialogs::confirm(app).unwrap();
+    let mut want = before.clone();
+    want.push(added);
+    assert_eq!(group_keys(app, "Brights"), want);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+}
+
+/// The Remove Color tool: a click on the base color's marker removes nothing; a click on another
+/// marker leaves its row of art's colors with no new color, so OK leaves that art's colors as they
+/// were while the other rows recolor theirs. The tools are off for the color bars.
+#[test]
+fn the_remove_color_tool_removes_a_marker_but_not_the_base_colors() {
+    let mut h = edit_harness(&["rgb 200 100 100", "rgb 100 200 200", "rgb 20 160 20"]);
+    let fills_before = fills(h.state());
+    let mut rows = field(h.state(), "rows");
+    let tos = ["rgb 255 0 0", "rgb 0 255 0", "rgb 0 0 255"];
+    for (r, to) in rows.as_array_mut().unwrap().iter_mut().zip(tos) {
+        r["to"] = json!(to);
+    }
+    set(h.state_mut(), "rows", rows.clone());
+    set(h.state_mut(), "linked", json!(false));
+    set(h.state_mut(), "__sel", json!([0]));
+    h.run_steps(4);
+    click_button(&mut h, "Remove Color Tool");
+    assert_eq!(field(h.state(), "wheelTool"), json!("remove"));
+    let (red, green) = (wheel_at(&h, 0.0, 1.0), wheel_at(&h, 120.0, 1.0));
+    h.input_mut().events.extend(press(red, 1));
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "rows"), rows, "the base color stays");
+    h.input_mut().events.extend(press(green, 1));
+    h.run_steps(3);
+    let now = field(h.state(), "rows");
+    assert_eq!(now.as_array().unwrap().len(), 3, "the row of art's colors stays");
+    assert_eq!((&now[0], &now[1]["to"], &now[2]), (&rows[0], &Value::Null, &rows[2]), "with no new color: {now}");
+    assert_eq!(field(h.state(), "__sel"), json!([0]), "the base color stays selected");
+    show_display(&mut h, "Show color bars");
+    let tool = h.get_by_role_and_label(egui::accesskit::Role::Button, "Remove Color Tool");
+    assert!(tool.accesskit_node().is_disabled(), "the tools are for the wheels");
+    let kept = rows[1]["from"][0].clone();
+    let app = h.state_mut();
+    dialogs::confirm(app).unwrap();
+    let after = fills(app);
+    for (b, a) in fills_before.iter().zip(&after) {
+        let was = json!(ColorKey::of(&b.unwrap()).to_string());
+        if was == kept {
+            assert_eq!(a, b, "the art of the removed color keeps it");
+        } else {
+            assert_ne!(a, b, "the other art takes its new color");
+        }
+    }
+}
+
+/// Right-clicks the color bar named `name`.
+fn right_click_bar(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, name: &str) {
+    let at = h.get_by_role_and_label(egui::accesskit::Role::Button, name).rect().center();
+    h.event(Event::PointerMoved(at));
+    h.event(Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed: true, modifiers: Modifiers::NONE });
+    h.event(Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed: false, modifiers: Modifiers::NONE });
+    h.run_steps(2);
+}
+
+/// A color bar's right-click menu has Remove Color: off for the base color's bar; on an added
+/// color's bar it removes the row, and on a bar of art's colors it leaves the row with no new color
+/// and no bar.
+#[test]
+fn a_color_bars_menu_removes_its_color() {
+    let mut h = edit_harness(&["#ff0000", "#0000ff", "#00ff00"]);
+    let mut rows = field(h.state(), "rows");
+    rows.as_array_mut().unwrap().push(json!({"from": [], "to": "rgb 10 20 30", "added": true}));
+    set(h.state_mut(), "rows", rows.clone());
+    set(h.state_mut(), "__sel", json!([0]));
+    h.run_steps(4);
+    show_display(&mut h, "Show color bars");
+    right_click_bar(&mut h, "Color 1");
+    assert!(h.get_by_label("   Remove Color").accesskit_node().is_disabled(), "the base color can't be removed");
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    right_click_bar(&mut h, "Color 4");
+    h.get_by_label("   Remove Color").click();
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "rows").as_array().unwrap()[..], rows.as_array().unwrap()[..3], "the added row goes");
+    right_click_bar(&mut h, "Color 2");
+    h.get_by_label("   Remove Color").click();
+    h.run_steps(3);
+    let now = field(h.state(), "rows");
+    assert_eq!((&now[1]["from"], &now[1]["to"]), (&rows[1]["from"], &Value::Null), "{now}");
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Button, "Color 2").is_none(), "its bar goes");
+    assert_eq!(field(h.state(), "__sel"), json!([0]));
 }

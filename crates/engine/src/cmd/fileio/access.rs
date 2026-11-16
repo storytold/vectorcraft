@@ -10,7 +10,7 @@ use super::{EngineError, Result, Session, Value, bad, json};
 
 /// `path` checked for reading against the automation roots in force.
 #[cfg(not(target_arch = "wasm32"))]
-pub(super) fn may_read(path: &str) -> Result<()> {
+pub(crate) fn may_read(path: &str) -> Result<()> {
     #[cfg(test)]
     touch(path);
     crate::file_access::check_read(path).map_err(EngineError::Other)
@@ -42,9 +42,189 @@ pub(crate) fn touched<T>(f: impl FnOnce() -> T) -> (T, Vec<String>) {
     (out, seen)
 }
 
+/// May a reply to the request being served name `path`, a file or folder the client did not give?
+/// Always without roots in force; with them, only inside the read roots ([`crate::file_access::check_read`]).
+pub(crate) fn shown(path: &str) -> bool {
+    crate::file_access::check_read(path).is_ok()
+}
+
+/// `path` as a reply to the request being served names it: whole when [`shown`], else its file name,
+/// after the last `/` or `\` whichever platform wrote it (empty for a path that ends in no name, such
+/// as `..` or a folder ending in a separator).
+pub(crate) fn shown_path(path: &str) -> std::borrow::Cow<'_, str> {
+    shown_link(path, None)
+}
+
+/// A link's `stored` path as a reply to the request being served names it: whole when the file it
+/// names (`resolved`, else `stored` itself) is [`shown`], else its file name as [`shown_path`] gives it.
+pub(crate) fn shown_link<'a>(stored: &'a str, resolved: Option<&str>) -> std::borrow::Cow<'a, str> {
+    if shown(resolved.unwrap_or(stored)) {
+        return std::borrow::Cow::Borrowed(stored);
+    }
+    let name = stored.rsplit(vectorcraft_doc::links::path_separators(stored)).next().unwrap_or_default();
+    std::borrow::Cow::Borrowed(if matches!(name, "." | "..") { "" } else { name })
+}
+
+/// What an error names a file or folder outside the read roots by when [`shown_path`] gives no
+/// name for it, or gives one that is not valid text.
+pub(crate) const UNNAMED: &str = "a file or folder outside the read roots";
+
+/// An error about `path`, a file or folder the client did not give, as the request being served
+/// may see it: where the message names `path` ([`naming_in_message`]), it names it as
+/// [`shown_path`] does, or as [`UNNAMED`] when that is empty or holds a replacement character. The
+/// roots the message names and the reason stay whole. Unchanged when `path` is [`shown`].
+pub(crate) fn naming_in_error(e: EngineError, path: &str) -> EngineError {
+    if path.is_empty() || shown(path) {
+        return e;
+    }
+    naming_as(e, path, &error_name(path))
+}
+
+/// What an error names `path` by when it is outside the read roots: [`shown_path`], or
+/// [`UNNAMED`] when that is empty or holds a replacement character.
+pub(crate) fn error_name(path: &str) -> String {
+    let name = shown_path(path);
+    if name.is_empty() || name.contains('\u{FFFD}') { UNNAMED.to_string() } else { name.into_owned() }
+}
+
+/// [`naming_in_error`] with `path` named `name`, whether or not it is [`shown`] (a name worked out
+/// earlier, for the request that prepared the work).
+pub(crate) fn naming_as(e: EngineError, path: &str, name: &str) -> EngineError {
+    match e {
+        EngineError::Other(msg) => EngineError::Other(naming_in_message(&msg, path, name)),
+        EngineError::BadParams { cmd, msg } => EngineError::BadParams { cmd, msg: naming_in_message(&msg, path, name) },
+        EngineError::ReadOnlyLocation(msg) => EngineError::ReadOnlyLocation(naming_in_message(&msg, path, name)),
+        e => e,
+    }
+}
+
+/// `msg` with `path` given as `name` where it begins a path the message is about: at the start of
+/// `msg` (`<path>: <reason>`), after a `: ` (`... outside the write root <root>: <path>`) or after
+/// `cannot resolve `, followed by the end, a separator, a `:` or a space. A root the message names
+/// stays whole, even one inside `path`.
+pub(crate) fn naming_in_message(msg: &str, path: &str, name: &str) -> String {
+    const BEFORE: [&str; 2] = [": ", "cannot resolve "];
+    let mut out = String::with_capacity(msg.len());
+    let mut rest = msg;
+    loop {
+        if let Some(after) = rest.strip_prefix(path)
+            && after.chars().next().is_none_or(|c| matches!(c, '/' | '\\' | ':' | ' '))
+        {
+            out.push_str(name);
+            rest = after;
+        }
+        let Some((i, len)) = BEFORE.iter().filter_map(|b| rest.find(b).map(|i| (i, b.len()))).min() else { break };
+        out.push_str(&rest[..i + len]);
+        rest = &rest[i + len..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// The error for a file that would name a JavaScript file the document links outside the read roots.
+pub(crate) const SCRIPT_OUTSIDE: &str = "a linked JavaScript file is outside the read roots";
+
+/// `cmd` may write `st`'s document in format `format` (a format id) with options `p` (presets
+/// written out): always, unless read roots are in force, the document links a JavaScript file
+/// outside them (`svg_scripts`, a relative path taken from the document's folder; a URL is not
+/// checked) and the file names it ([`names_linked_scripts`], with the artboards `p` picks counted
+/// in `st`'s document): an SVG's `<script>` element, or the native document that a native file, a
+/// `.ai` file, an EPS file or a PDF with Preserve Editing carries. The error names no file or folder.
+pub fn check_linked_scripts(cmd: &str, format: &str, st: &crate::DocState, p: &Value) -> Result<()> {
+    check_scripts_of(cmd, &st.doc, st.path.as_deref(), || names_linked_scripts(cmd, format, p, st.doc.artboards.len()))
+}
+
+/// `doc`, saved at `doc_path`, may be written by `cmd` in a file that names its linked JavaScript
+/// files when `names` says so: as [`check_linked_scripts`] allows it.
+pub(crate) fn check_scripts_of(cmd: &str, doc: &vectorcraft_doc::Document, doc_path: Option<&str>, names: impl FnOnce() -> bool) -> Result<()> {
+    if crate::file_access::current().is_none() || !doc.svg_scripts.iter().any(|f| crate::cmd::links::script_hidden(f, doc_path)) || !names() {
+        return Ok(());
+    }
+    Err(bad(cmd, SCRIPT_OUTSIDE))
+}
+
+/// Does a file of a document with `artboards` artboards, written in format `format` with options
+/// `p`, name the JavaScript files the document links? SVG, SVGZ, native files, native templates and
+/// EPS files always do. A `.ai` or `.ait` file does unless it is a legacy version 7 `.ai` file or `p`
+/// picks only some of the artboards; a PDF does with Preserve Editing on (as its preset, standard and
+/// options leave it) unless `p` picks only some of the artboards. Neither a `.ai` file nor a PDF
+/// does when `useArtboards` is false in `p` (one page, the bounds of the art). Options the encoder
+/// refuses count as naming them.
+pub(crate) fn names_linked_scripts(cmd: &str, format: &str, p: &Value, artboards: usize) -> bool {
+    use serde::Deserialize;
+    let every_artboard = || {
+        let pick = if p.is_object() { super::ArtboardPick::deserialize(p).ok() } else { Some(super::ArtboardPick::default()) };
+        pick.and_then(|pick| pick.resolve(artboards).ok()).is_none_or(|v| v.is_none_or(|v| v.iter().copied().eq(0..artboards)))
+    };
+    let art_page = || super::encode::use_artboards(cmd, p).is_ok_and(|u| u == Some(false));
+    match format {
+        "svg" | "svgz" | "vectorcraft" | "template" | "eps" => true,
+        "ai" | "ait" => {
+            let legacy = super::format(format).is_some_and(|f| super::legacy_ai::wanted(cmd, f, p).unwrap_or(false));
+            !legacy && !(format == "ai" && art_page()) && every_artboard()
+        }
+        "pdf" => {
+            let editing = super::pdf::settings(cmd, p).ok().is_none_or(|s| s.preserve_editing);
+            editing && !art_page() && every_artboard()
+        }
+        _ => false,
+    }
+}
+
+/// The error for an SVG that would name a linked image's file outside the read roots.
+pub(crate) const IMAGE_OUTSIDE: &str = "a linked image file is outside the read roots";
+
+/// `cmd` may write `d`, the document an output of `st` writes (all of it, or the objects it
+/// exports), in format `format` (a format id) with options `p`: any format but SVG and SVGZ, and
+/// those too unless read roots are in force and the file would name a linked image's file outside
+/// them (a relative path taken from `st`'s folder; a URL is not checked). An `<image>` names the
+/// file with SVG Options › Images set to Link, and with Embed when the document holds no pixels for
+/// the image, for the images of the art each file draws (with chosen artboards, the art over each
+/// one; hidden layers and objects only with `hiddenLayers`, template layers and the opacity-mask
+/// and symbol editing layers never, opacity masks not with SVG Tiny 1.2, and objects with effects
+/// SVG has no filters for as the images the file draws of them), of the art the file draws for each
+/// placed document, and of the symbols, patterns and brushes that art uses; with
+/// Preserve Editing Capabilities, the native document the file carries names every linked file, the relative paths kept of them
+/// and each data set's image. The error names no file or folder.
+pub fn check_linked_images(cmd: &str, format: &str, st: &crate::DocState, d: &vectorcraft_doc::Document, p: &Value) -> Result<()> {
+    check_images_in(cmd, format, d, crate::cmd::links::LinkBase::of(st), p)
+}
+
+/// [`check_linked_images`] for `d`, a document whose links are looked for from `base` (the
+/// objects on the clipboard, looked for from the document they came from).
+pub(crate) fn check_images_in(cmd: &str, format: &str, d: &vectorcraft_doc::Document, base: crate::cmd::links::LinkBase, p: &Value) -> Result<()> {
+    if !matches!(format, "svg" | "svgz") || crate::file_access::current().is_none() {
+        return Ok(());
+    }
+    // Options that don't read as the encoder's choices count as Link, Preserve Editing, hidden
+    // layers kept and SVG 1.1: the encoder refuses them anyway.
+    let (link, preserve, hidden, tiny) = match super::svg::options_map(p) {
+        Ok(m) => {
+            let on = |k: &str| m.get(k).is_some_and(|v| v.as_bool() != Some(false));
+            let tiny = m.get("profile").and_then(Value::as_str) == Some("tiny12");
+            (m.get("images").is_some_and(|v| v.as_str() != Some("embed")), on("preserveEditing"), on("hiddenLayers"), tiny)
+        }
+        Err(_) => (true, true, true, false),
+    };
+    // The opacity-mask and symbol editing layers are never written.
+    let d = &*d.without_edit_modes();
+    let names = |d: &vectorcraft_doc::Document| crate::cmd::links::svg_names_hidden_image(d, base, link, hidden, tiny);
+    // The SVG draws the objects with effects it has no filters for as images of them, as the
+    // encoder and the clipboard prepare them.
+    let drawing_names = || {
+        let flat = crate::cmd::rasterfx::flatten_pixel_effects_for(d, !tiny);
+        let d = flat.as_ref().unwrap_or(d);
+        names(d) && super::svg::drawn(d, p).is_none_or(|files| files.iter().any(|f| names(f)))
+    };
+    if preserve && crate::cmd::links::names_hidden_file(d, base) || names(d) && drawing_names() {
+        return Err(bad(cmd, IMAGE_OUTSIDE));
+    }
+    Ok(())
+}
+
 /// `path` checked for writing against the automation roots in force.
 #[cfg(not(target_arch = "wasm32"))]
-pub(super) fn may_write(path: &str) -> Result<()> {
+pub(crate) fn may_write(path: &str) -> Result<()> {
     crate::file_access::check_write(path).map_err(EngineError::Other)
 }
 
@@ -87,6 +267,31 @@ pub fn write_file_with(path: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write)
     vectorcraft_doc::cancel::check()?;
     may_write(path)?;
     vectorcraft_format::write_atomic_with(std::path::Path::new(path), |f| fill(f)).map_err(|e| EngineError::Other(format!("{path}: {e}")))
+}
+
+/// The save commands' writer: preserves a filesystem location refusal as a typed error. Other
+/// writers keep their existing errors; an automation-root refusal is never reclassified.
+pub fn write_save_file(path: &str, bytes: &[u8]) -> Result<()> {
+    write_save_file_with(path, &mut |w| w.write_all(bytes))
+}
+
+/// [`write_save_file`] for a streamed save.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn write_save_file_with(path: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>) -> Result<()> {
+    vectorcraft_doc::cancel::check()?;
+    may_write(path)?;
+    vectorcraft_format::write_atomic_with(std::path::Path::new(path), |f| fill(f)).map_err(|e| save_write_error(path, e))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn save_write_error(path: &str, error: std::io::Error) -> EngineError {
+    let reason = format!("{path}: {error}");
+    if vectorcraft_format::read_only_location(&error) { EngineError::ReadOnlyLocation(reason) } else { EngineError::Other(reason) }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn write_save_file_with(path: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>) -> Result<()> {
+    write_file_with(path, fill)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -169,7 +374,7 @@ pub(super) fn file_list(_: &mut Session, p: &Value) -> Result<Value> {
 /// The entries of folder `path`, sorted by name: at most `max`, and whether there were more. A
 /// link isn't followed: its target may lie outside the automation roots.
 #[cfg(not(target_arch = "wasm32"))]
-pub(super) fn list_dir(path: &str, max: usize) -> Result<(Vec<Value>, bool)> {
+pub(crate) fn list_dir(path: &str, max: usize) -> Result<(Vec<Value>, bool)> {
     may_read(path)?;
     let dir = std::fs::read_dir(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
     let mut entries: Vec<(String, Value)> = vec![];
@@ -195,7 +400,7 @@ pub(super) fn list_dir(path: &str, max: usize) -> Result<(Vec<Value>, bool)> {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub(super) fn list_dir(_: &str, _: usize) -> Result<(Vec<Value>, bool)> {
+pub(crate) fn list_dir(_: &str, _: usize) -> Result<(Vec<Value>, bool)> {
     Err(EngineError::Other("no file system here".into()))
 }
 
@@ -417,4 +622,53 @@ pub(crate) fn create_dir(path: &str) -> Result<()> {
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn write_new_file(path: &str, _: &[u8]) -> Result<()> {
     Err(no_fs(path))
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+    use crate::file_access::{AutomationRoots, confine};
+
+    /// An error about a path the client did not give, under roots that don't let it be read: the
+    /// path is named by its file name (after a `/` or a `\`), or as [`UNNAMED`] when it ends in no
+    /// name or its name is not valid text, and every root and the reason stay whole. A path inside the
+    /// read roots, and any path without roots in force, stay whole.
+    #[test]
+    fn an_error_names_a_path_outside_the_read_roots_by_its_name() {
+        let base = std::env::temp_dir().join(format!("vc-access-naming-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (a, b, out) = (base.join("a"), base.join("b"), base.join("kept-out"));
+        for f in [&a, &b, &out] {
+            std::fs::create_dir_all(f).unwrap();
+        }
+        let text = |p: &std::path::Path| p.to_string_lossy().into_owned();
+        let roots = AutomationRoots::new(&[a.as_path(), b.as_path()], &[a.as_path(), b.as_path()]).unwrap();
+        let file = text(&out.join("doc.svg"));
+        let raw = confine(roots.as_ref(), || crate::file_access::check_write(&file)).unwrap_err();
+        let shown_root = |p: &std::path::Path| crate::cmd::findfiles::plain(std::fs::canonicalize(p).unwrap()).display().to_string();
+        let (ra, rb) = (shown_root(&a), shown_root(&b));
+        let named = |e: EngineError, path: &str| confine(roots.as_ref(), || naming_in_error(e, path)).to_string();
+
+        assert_eq!(named(EngineError::Other(raw.clone()), &file), format!("automation path rejected: outside the write roots {ra}, {rb}: doc.svg"));
+        let io = named(EngineError::Other(format!("{file}: disk full")), &file);
+        assert_eq!(io, "doc.svg: disk full");
+        let bad = named(EngineError::BadParams { cmd: "x".into(), msg: format!("{file}: not a file") }, &file);
+        assert_eq!(bad, "invalid parameters for `x`: doc.svg: not a file");
+        // A save refused by the file system keeps its type and its code.
+        let read_only = confine(roots.as_ref(), || naming_in_error(EngineError::ReadOnlyLocation(format!("{file}: Permission denied")), &file));
+        assert!(matches!(&read_only, EngineError::ReadOnlyLocation(_)));
+        assert_eq!(read_only.to_string(), format!("{}: doc.svg: Permission denied", crate::READ_ONLY_LOCATION));
+        // A Windows path written with `\`, a path that ends in no name and a name that isn't text.
+        let win = r"C:\Users\me\secret\doc.svg";
+        assert_eq!(named(EngineError::Other(format!("{win}: denied")), win), "doc.svg: denied");
+        let folder = format!("{}/", text(&out));
+        assert_eq!(named(EngineError::Other(format!("{folder}: denied")), &folder), format!("{UNNAMED}: denied"));
+        let lossy = text(&out.join("bad\u{FFFD}.svg"));
+        assert_eq!(named(EngineError::Other(format!("{lossy}: denied")), &lossy), format!("{UNNAMED}: denied"));
+        // Readable, or nothing confined: whole.
+        let inside = text(&a.join("x.svg"));
+        assert_eq!(named(EngineError::Other(format!("{inside}: denied")), &inside), format!("{inside}: denied"));
+        assert_eq!(naming_in_error(EngineError::Other(raw.clone()), &file).to_string(), raw);
+        let _ = std::fs::remove_dir_all(base);
+    }
 }

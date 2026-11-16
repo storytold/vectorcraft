@@ -20,7 +20,7 @@ use std::sync::{Arc, Mutex};
 
 use vectorcraft_color::blend::{cmyk_planes, planes_cmyk};
 use vectorcraft_color::cms::{self, Cms, CmykLut, ProofLut, lab};
-use vectorcraft_color::{Color, Gradient};
+use vectorcraft_color::{Color, Freeform, Gradient};
 use vectorcraft_doc::cmyk::Inks;
 use vectorcraft_doc::{ColorMode, Document, ImageBlob};
 use vello_cpu::Pixmap;
@@ -126,6 +126,23 @@ impl Ink {
         Some(g)
     }
 
+    /// Transform original freeform points before their colors mix, as [`Self::gradient`] does for
+    /// stops.
+    pub(crate) fn freeform(self, f: &Freeform) -> Option<Freeform> {
+        let amount = self.darkness()?;
+        let mut f = f.clone();
+        for point in &mut f.points {
+            point.color = Self::darkened_color(&point.color, amount, self.black_endpoint());
+        }
+        Some(f)
+    }
+
+    /// Whether this ink paints a point of `f` as RGB black: Appearance of Black's Rich setting and
+    /// a point of pure CMYK black.
+    pub(crate) fn blacks_a_point(self, f: &Freeform) -> bool {
+        self.base() == Ink::RichBlack && f.points.iter().any(|p| matches!(p.color, Color::Cmyk { c, m, y, k } if is_pure_black([c, m, y, k])))
+    }
+
     /// The three values painted for colour `c`.
     pub(crate) fn rgb(self, c: &Color) -> [f32; 3] {
         if let Some(amount) = self.darkness() {
@@ -135,6 +152,15 @@ impl Ink {
             (Ink::RichBlack, Color::Cmyk { c, m, y, k }) if is_pure_black([c, m, y, k]) => [0.0; 3],
             (Ink::Display | Ink::RichBlack, _) => c.to_rgb(),
             _ => self.plane(inks(c)),
+        }
+    }
+
+    /// [`Self::rgb`] for colors sampled densely (a freeform gradient's grid): on an ink plane, RGB
+    /// colors go through the separation tables placed images use.
+    pub(crate) fn rgb_sampled(self, c: &Color) -> [f32; 3] {
+        match (self, c) {
+            (Ink::Cmy | Ink::K, Color::Rgb { .. }) => separation().0[(self == Ink::K) as usize].apply(c.to_rgb()),
+            _ => self.rgb(c),
         }
     }
 
@@ -150,7 +176,7 @@ impl Ink {
         peniko::Color::from_rgba8(r, g, b, a)
     }
 
-    fn fixed8(self, [r, g, b, a]: [u8; 4]) -> [u8; 4] {
+    pub(crate) fn fixed8(self, [r, g, b, a]: [u8; 4]) -> [u8; 4] {
         match self.base() {
             Ink::Display | Ink::RichBlack => [r, g, b, a],
             _ => {
@@ -213,19 +239,29 @@ fn inks(c: &Color) -> [f32; 4] {
     let key = c.key();
     let cms = cms::active();
     SEPARATED.with(|s| {
-        let (owner, seen) = &mut *s.borrow_mut();
+        let kept = &mut *s.borrow_mut();
+        let i = match kept.iter().position(|(owner, _)| Arc::ptr_eq(owner, &cms)) {
+            Some(i) => i,
+            None => {
+                if kept.len() >= KEPT_TABLES {
+                    kept.remove(0);
+                }
+                kept.push((cms.clone(), HashMap::new()));
+                kept.len() - 1
+            }
+        };
+        let seen = &mut kept[i].1;
         // Large enough for the many colours of gradient meshes and blends, which otherwise cleared
         // it over and over and separated every colour through the profile again.
-        if !owner.as_ref().is_some_and(|o| Arc::ptr_eq(o, &cms)) || seen.len() >= 1 << 16 {
+        if seen.len() >= 1 << 16 {
             seen.clear();
-            *owner = Some(cms.clone());
         }
         *seen.entry(key).or_insert_with(|| cms.to_cmyk(c, cms.settings().intent))
     })
 }
 
-/// Separated colours, for the colour settings they were separated with.
-type Separated = (Option<Arc<Cms>>, HashMap<[u32; 5], [f32; 4]>);
+/// Separated colours, for each of the colour settings they were separated with, the newest last.
+type Separated = Vec<(Arc<Cms>, HashMap<[u32; 5], [f32; 4]>)>;
 
 thread_local! {
     static SEPARATED: RefCell<Separated> = RefCell::default();
@@ -250,31 +286,37 @@ impl InkLut {
     }
 }
 
-/// A table built for the colour settings it was built with, and its generation (see [`cached`]).
-type Cached<T> = Mutex<Option<(Arc<Cms>, Arc<T>, u64)>>;
+/// Tables built for the colour settings they were built with, and their generations, the newest
+/// last (see [`cached`]).
+type Cached<T> = Mutex<Vec<(Arc<Cms>, Arc<T>, u64)>>;
+
+/// How many tables each [`Cached`] keeps: documents drawn side by side through their own profiles
+/// don't make them again and again.
+const KEPT_TABLES: usize = 4;
 
 /// The last table generation handed out: images made with a table are cached under its
 /// generation (see [`crate::images`]), and none is ever reused.
 static GENERATION: AtomicU64 = AtomicU64::new(0);
 
-static DISPLAY: Cached<InkLut> = Mutex::new(None);
+static DISPLAY: Cached<InkLut> = Mutex::new(Vec::new());
 /// Screen colours → [`Ink::Cmy`] and [`Ink::K`] values (placed images).
-static SEPARATE: Cached<[ProofLut; 2]> = Mutex::new(None);
+static SEPARATE: Cached<[ProofLut; 2]> = Mutex::new(Vec::new());
 
-/// The table in `slot` for the active colour settings, built by `build` when they changed, and
-/// its generation.
+/// The table in `slot` for the active colour settings, built by `build` when none is kept for
+/// them, and its generation.
 fn cached<T>(slot: &Cached<T>, build: impl FnOnce(&Cms) -> T) -> (Arc<T>, u64) {
     let cms = cms::active();
     let mut s = slot.lock().unwrap_or_else(|e| e.into_inner());
-    match &*s {
-        Some((owner, t, g)) if Arc::ptr_eq(owner, &cms) => (t.clone(), *g),
-        _ => {
-            let t = Arc::new(build(&cms));
-            let g = GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
-            *s = Some((cms, t.clone(), g));
-            (t, g)
-        }
+    if let Some((_, t, g)) = s.iter().find(|(owner, _, _)| Arc::ptr_eq(owner, &cms)) {
+        return (t.clone(), *g);
     }
+    let t = Arc::new(build(&cms));
+    let g = GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+    if s.len() >= KEPT_TABLES {
+        s.remove(0);
+    }
+    s.push((cms, t.clone(), g));
+    (t, g)
 }
 
 /// [`compose`] puts at least this many pixels in each band but the last.
@@ -395,6 +437,22 @@ pub(crate) fn cmyk_pixmap(blob: &ImageBlob, lut: &InkLut) -> Option<Pixmap> {
     inks_pixmap(&blob.cmyk()?, lut)
 }
 
+/// Whether image pixels `key` are a CMYK image's inks as shown (not adjusted or greyscale), so
+/// they paint those inks ([`key_inks`]).
+pub(crate) fn shows_own_inks(key: &ImageKey) -> bool {
+    key.luts.0 != 0 && key.adjust.is_none() && !key.grey
+}
+
+/// The ink amounts behind image pixels `key` when they are CMYK image `blob`'s inks as shown (not
+/// adjusted or greyscale): its own inks, halved as its pixels are to `key`'s mip
+/// ([`images::half_inks`]). `None` for other pixels.
+pub(crate) fn key_inks(key: &ImageKey, blob: Option<&ImageBlob>) -> Option<Inks> {
+    if !shows_own_inks(key) {
+        return None;
+    }
+    (0..key.mip).try_fold(blob?.cmyk()?, |inks, _| images::half_inks(&inks))
+}
+
 /// The separation tables of placed images ([`Ink::Cmy`], [`Ink::K`]) and their generation.
 fn separation() -> (Arc<[ProofLut; 2]>, u64) {
     cached(&SEPARATE, |cms| {
@@ -432,10 +490,7 @@ fn darkened_image(key: &ImageKey, pm: &Arc<Pixmap>, ink: Ink, amount: f32, blob:
     }
     let base = ink.base();
     let display = matches!(base, Ink::Display | Ink::RichBlack);
-    let raw_cmyk = (key.luts.0 != 0 && key.adjust.is_none() && !key.grey)
-        .then(|| blob.and_then(ImageBlob::cmyk))
-        .flatten()
-        .filter(|i| (i.width, i.height) == (u32::from(pm.width()), u32::from(pm.height())));
+    let raw_cmyk = key_inks(key, blob).filter(|i| (i.width, i.height) == (u32::from(pm.width()), u32::from(pm.height())));
     let sep = (!display).then(separation);
     let shown = (display && raw_cmyk.is_some()).then(display_lut);
     let mut out = Pixmap::new(pm.width(), pm.height());
@@ -487,8 +542,7 @@ pub(crate) fn ink_image(key: &ImageKey, pm: &Arc<Pixmap>, ink: Ink, blob: Option
     }
     // CMYK images (shown through the display table) paint their own inks; the others are separated.
     let size = (pm.width() as u32, pm.height() as u32);
-    let cmyk = key.luts.0 != 0 && key.adjust.is_none() && !key.grey;
-    let inks = blob.filter(|_| cmyk).and_then(ImageBlob::cmyk).filter(|i| (i.width, i.height) == size);
+    let inks = key_inks(key, blob).filter(|i| (i.width, i.height) == size);
     let planes = [Ink::Cmy, Ink::K].map(|plane| {
         let mut out = Pixmap::new(pm.width(), pm.height());
         if let Some(inks) = &inks {
@@ -532,6 +586,7 @@ mod tests {
             luts: (0, 0),
             plates: 0,
             mip: 0,
+            tile: None,
         };
         let pm =
             Arc::new(Pixmap::from_parts(vec![PremulRgba8 { r: 204, g: 102, b: 51, a: 255 }, PremulRgba8 { r: 102, g: 51, b: 26, a: 128 }], 2, 1));
@@ -547,20 +602,40 @@ mod tests {
     }
 
     #[test]
+    fn tables_of_two_color_settings_are_kept_side_by_side() {
+        // Two documents drawn in turn through their own settings each keep their tables.
+        let settings = || Arc::new(Cms::new(&cms::ColorSettings::default()).unwrap());
+        let (a, b) = (settings(), settings());
+        let tables = |c: &Arc<Cms>| cms::with_active(c.clone(), || (display_lut().1, separation().1));
+        let (first_a, first_b) = (tables(&a), tables(&b));
+        assert_ne!(first_a, first_b, "each settings get their own tables");
+        assert_eq!(tables(&a), first_a, "the first settings' tables are not made again");
+        assert_eq!(tables(&b), first_b, "the second settings' tables are not made again");
+    }
+
+    #[test]
     fn the_ink_table_matches_the_profile() {
         let cms = cms::active();
         let lut = InkLut::build(&cms);
-        let mut worst = 0.0f32;
+        let (mut worst, mut worst_dark) = (0.0f32, 0.0f32);
         // Between the grid points (where interpolation errs most) and on them.
         for i in 0..=20 {
             for j in 0..=20 {
                 let inks = [i as f32 / 20.0, j as f32 / 20.0, ((i * 7 + j * 3) % 21) as f32 / 20.0, ((i + j * 5) % 21) as f32 / 20.0];
                 let (a, b) = (lut.apply(inks), cms.cmyk_to_srgb(inks, false));
-                worst = worst.max((0..3).map(|c| (a[c] - b[c]).abs()).fold(0.0, f32::max));
+                let err = (0..3).map(|c| (a[c] - b[c]).abs()).fold(0.0, f32::max);
+                // Builds darker than the press's black point clip at 0 in one or more XYZ channels,
+                // so the grid interpolates across that clip in the darkest levels.
+                if b.iter().all(|v| *v < 0.05) {
+                    worst_dark = worst_dark.max(err);
+                } else {
+                    worst = worst.max(err);
+                }
             }
         }
         // Within two 8-bit levels: far below a visible difference.
         assert!(worst * 255.0 < 2.5, "worst error {} levels", worst * 255.0);
+        assert!(worst_dark * 255.0 < 5.0, "worst error near black {} levels", worst_dark * 255.0);
     }
 
     #[test]

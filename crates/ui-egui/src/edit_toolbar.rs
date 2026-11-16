@@ -416,7 +416,7 @@ fn heading(id: &str) -> &'static str {
 }
 
 /// The headings in order, each with its tools in the toolbar's order.
-fn sections() -> &'static [(&'static str, Vec<&'static ToolInfo>)] {
+pub(crate) fn sections() -> &'static [(&'static str, Vec<&'static ToolInfo>)] {
     static SECTIONS: OnceLock<Vec<(&'static str, Vec<&'static ToolInfo>)>> = OnceLock::new();
     SECTIONS.get_or_init(|| {
         let mut out: Vec<(&'static str, Vec<&'static ToolInfo>)> = crate::toolbar::BASIC.iter().map(|(cat, _)| (*cat, vec![])).collect();
@@ -467,7 +467,7 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let screen = ctx.content_rect();
     let id = drawer_id();
     let size = ctx.memory(|m| m.area_rect(id)).map_or(vec2(WIDTH, 200.0), |r| r.size());
-    let x = (bar.right() + GAP).min(screen.right() - size.x - GAP).max(screen.left());
+    let x = crate::toolbar::beside(bar, size.x, GAP, crate::toolbar::room(app, ctx).shrink(GAP));
     // Never above the toolbar's top: higher up are the window's title bar (and on macOS its
     // buttons) and the bars under it.
     let top = bar.top().max(screen.top() + GAP);
@@ -481,15 +481,20 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let removing = dragged.is_some_and(|d| d.from_toolbar) && ctx.memory(|m| m.area_rect(id)).is_some_and(over);
     let mut picked = None;
     let mut reset = false;
-    let mut new_toolbar = false;
+    // New Toolbar… or Manage Toolbars… in the drawer's menu.
+    let mut toolbars_cmd = None;
     let mut advanced = None;
     let mut show_toggle = None;
+    // A Learn link locating a tool that no shown toolbar holds: its row, scrolled into view once.
+    let locate = crate::panels::learn::locate::wanted_in_drawer(&app.ui);
+    let scroll = app.ui.learn_locate.as_ref().is_some_and(|l| !l.scrolled);
+    let (mut located, mut scrolled) = (None, false);
     let resp = egui::Area::new(id).order(egui::Order::Foreground).fixed_pos(pos2(x, y)).show(ctx, |ui| {
         crate::toolbar::flyout_frame(&t, removing).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
             let width = WIDTH.min(screen.width() - 2.0 * GAP - 16.0).max(160.0);
             ui.set_width(width);
-            // All Tools, and the drawer's flyout menu: Reset, the Basic or Advanced toolbar, and New
-            // Toolbar.
+            // All Tools, and the drawer's flyout menu: Reset, the Basic or Advanced toolbar, New
+            // Toolbar and Manage Toolbars.
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(tl!("All Tools")).size(13.0).color(t.text_strong));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -510,7 +515,10 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         }
                         ui.separator();
                         if widgets::menu_item(ui, "New Toolbar…", true, false) {
-                            new_toolbar = true;
+                            toolbars_cmd = Some("window.toolbar.new");
+                        }
+                        if widgets::menu_item(ui, "Manage Toolbars…", true, false) {
+                            toolbars_cmd = Some("window.toolbar.manage");
                         }
                     });
                 });
@@ -531,8 +539,16 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         egui::Frame::NONE.stroke(Stroke::new(1.0, t.divider)).corner_radius(2.0).show(ui, |ui| {
                             ui.set_width(inner);
                             for tool in g.iter() {
-                                if row(ui, &t, tool, tool.id == active, in_toolbar.contains(tool.id)) {
+                                let (r, clicked) = row(ui, &t, tool, tool.id == active, in_toolbar.contains(tool.id));
+                                if clicked {
                                     picked = Some(tool.id);
+                                }
+                                if locate == Some(tool.id) {
+                                    if scroll && !ui.clip_rect().contains_rect(r) {
+                                        ui.scroll_to_rect(r, Some(egui::Align::Center));
+                                        scrolled = true;
+                                    }
+                                    located = Some((ui.layer_id(), ui.clip_rect(), r));
                                 }
                             }
                         });
@@ -559,6 +575,12 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
         });
     });
     let rect = resp.response.rect;
+    if scrolled {
+        crate::panels::learn::locate::scroll_once(&mut app.ui);
+        ctx.request_repaint();
+    } else if let Some((layer, clip, r)) = located {
+        crate::panels::learn::locate::mark(app, ctx, layer, clip, r);
+    }
     // A tool dragged from the toolbar and dropped in the drawer leaves the toolbar.
     if let Some(d) = dragged.filter(|d| d.from_toolbar && over(rect))
         && ctx.input(|i| i.pointer.any_released())
@@ -571,7 +593,9 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if reset && let Err(e) = app.run("toolbar.reset", json!({ "toolbar": target })) {
         app.ui.status = e;
     }
-    if new_toolbar && let Err(e) = app.run("window.toolbar.new", json!({})) {
+    if let Some(id) = toolbars_cmd
+        && let Err(e) = app.run(id, json!({}))
+    {
         app.ui.status = e;
     }
     if let Some(advanced) = advanced
@@ -591,6 +615,9 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // A click in the toolbar (picking a tool, or the ••• button that toggles the drawer) leaves
         // it open.
         app.ui.tools_drawer = false;
+    }
+    if app.ui.tools_drawer {
+        crate::toolbar::mark_flyout_open(ctx);
     }
     ghost(ctx, &t);
 }
@@ -657,8 +684,8 @@ fn menu_id() -> egui::Id {
 }
 
 /// A tool's row in the drawer: icon, name and shortcut, dimmed when the tool is in the toolbar
-/// already (it can't be dragged in again). Returns whether it was clicked.
-fn row(ui: &mut Ui, t: &Tokens, tool: &'static ToolInfo, on: bool, dimmed: bool) -> bool {
+/// already (it can't be dragged in again). Returns where it is drawn and whether it was clicked.
+fn row(ui: &mut Ui, t: &Tokens, tool: &'static ToolInfo, on: bool, dimmed: bool) -> (Rect, bool) {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW), if dimmed { Sense::click() } else { Sense::click_and_drag() });
     if !dimmed {
         resp.dnd_set_drag_payload(ToolDrag { tool: tool.id, from_toolbar: false });
@@ -702,7 +729,7 @@ fn row(ui: &mut Ui, t: &Tokens, tool: &'static ToolInfo, on: bool, dimmed: bool)
         egui::FontId::proportional(12.5),
         color,
     );
-    resp.on_hover_text(crate::toolbar::tip(tool)).clicked()
+    (rect, resp.on_hover_text(crate::toolbar::tip(tool)).clicked())
 }
 
 /// The tool being dragged, by the pointer (below and right of it, clear of the drop marker).

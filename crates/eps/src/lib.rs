@@ -28,7 +28,16 @@
 //! - `import`: the PostScript interpreter.
 //! - `print`: print jobs as PostScript files ([`print()`]), their pages drawn by `scene`.
 //! - `legacy_ai`: legacy `.ai` files of version 7 ([`export_legacy_ai`]), with their layers and groups.
+//! - `ai_editing`: the editing copy of the art a PDF-compatible `.ai` file carries
+//!   ([`export_ai_editing`], [`ai_private_data`]).
+//! - `ai_ops`: the path and line style operators those two write.
+//! - `ai_graph`: the records of a live graph those two write around its group.
+//! - [`dcs`]: DCS files, an EPS file with one program per printing plate, read for placing.
 
+mod ai_editing;
+mod ai_graph;
+mod ai_ops;
+pub mod dcs;
 mod import;
 mod latin;
 mod legacy_ai;
@@ -37,10 +46,12 @@ mod ps;
 mod scene;
 mod tiff;
 
+pub use ai_editing::{AiEditingOptions, AiEditingOutput, CREATOR_VERSION, export_ai_editing, private_data as ai_private_data};
 pub use import::{
-    Imported, POSTSCRIPT_ERRORS, ai_alone, ai_alone_on_page, family_style, import, import_trusting, import_with, is_loss, layered_ai, page,
+    AiLayers, Imported, NameEncoding, POSTSCRIPT_ERRORS, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard,
+    family_style, import, import_ai, import_names, import_trusting, import_with, is_loss, layered_ai, layered_ai_from, page,
 };
-pub use legacy_ai::{HiddenObjects, LegacyAiOptions, LegacyAiOutput, export_legacy_ai};
+pub use legacy_ai::{HiddenObjects, LegacyAiOptions, LegacyAiOutput, export_legacy_ai, writes_image_mask};
 pub use print::{PrintJob, PrintPage, print};
 
 use vectorcraft_doc::Document;
@@ -188,6 +199,8 @@ pub struct EpsOutput {
     pub bytes: Vec<u8>,
     /// What was approximated or left out.
     pub warnings: Vec<String>,
+    /// Notes on the options: the preview or thumbnail asked for that was left out.
+    pub setting_notes: Vec<String>,
 }
 
 /// The `%%BoundingBox` of `region` with PostScript's origin at document point `origin`: whole
@@ -217,14 +230,17 @@ pub fn export(doc: &Document, opts: &EpsOptions, preview: Option<&Raster>, thumb
     if ![r.x0, r.y0, r.x1, r.y1, opts.origin.x, opts.origin.y].iter().all(|v| v.is_finite()) {
         return Err("the export region is not finite".into());
     }
-    let baked = vectorcraft_effects::bake_document(doc);
+    // Type in the document's composite fonts is drawn in them, whether or not an app has the document open.
+    let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
+    let layers = vectorcraft_effects::WrittenLayers { hidden: false, non_printing: true, hidden_objects: false };
+    let baked = vectorcraft_effects::bake_document_placing_symbols(doc, true, layers);
     let doc = baked.as_ref().unwrap_or(doc);
     let page = scene::Scene::new(doc, opts).run();
-    let mut warnings = page.warnings;
+    let mut setting_notes = vec![];
     let thumb = thumbnail.and_then(|t| match tiff::png(t) {
         Ok(png) => Some(png),
         Err(e) => {
-            warnings.push(format!("the thumbnail was left out: {e}"));
+            setting_notes.push(format!("the thumbnail was left out: {e}"));
             None
         }
     });
@@ -232,7 +248,7 @@ pub fn export(doc: &Document, opts: &EpsOptions, preview: Option<&Raster>, thumb
     let bytes = match (opts.preview, preview) {
         (Preview::None, _) => ps.into_bytes(),
         (_, None) => {
-            warnings.push("the preview was left out: nothing was rendered for it".into());
+            setting_notes.push("the preview was left out: nothing was rendered for it".into());
             ps.into_bytes()
         }
         (kind, Some(img)) => {
@@ -240,7 +256,7 @@ pub fn export(doc: &Document, opts: &EpsOptions, preview: Option<&Raster>, thumb
             dos_eps(ps.as_bytes(), &tiff)?
         }
     };
-    Ok(EpsOutput { bytes, warnings })
+    Ok(EpsOutput { bytes, warnings: page.warnings, setting_notes })
 }
 
 /// Comment lines that start a data section the file carries (`%VectorCraft_BeginData: <name>`)
@@ -339,64 +355,23 @@ fn read_data(ps: &[u8], name: &str) -> Option<Vec<u8>> {
     None
 }
 
-/// The magic number of an EPS file with a binary header (a preview).
-const DOS_MAGIC: [u8; 4] = [0xC5, 0xD0, 0xD3, 0xC6];
-/// The binary header's size.
-const DOS_HEADER: usize = 30;
+pub use craft_eps::{DOS_HEADER, DOS_MAGIC, Sections, is_eps};
 
 /// `ps` behind a binary header, followed by the TIFF preview `tiff`.
 fn dos_eps(ps: &[u8], tiff: &[u8]) -> Result<Vec<u8>, String> {
-    let big = || "the file is too large for an EPS preview header (4 GB): choose no preview".to_string();
-    let ps_len = u32::try_from(ps.len()).map_err(|_| big())?;
-    let tiff_at = u32::try_from(DOS_HEADER + ps.len()).map_err(|_| big())?;
-    let tiff_len = u32::try_from(tiff.len()).map_err(|_| big())?;
-    tiff_at.checked_add(tiff_len).ok_or_else(big)?;
-    let mut out = Vec::with_capacity(DOS_HEADER + ps.len() + tiff.len());
-    out.extend(DOS_MAGIC);
-    out.extend((DOS_HEADER as u32).to_le_bytes());
-    out.extend(ps_len.to_le_bytes());
-    // No metafile preview.
-    out.extend(0u32.to_le_bytes());
-    out.extend(0u32.to_le_bytes());
-    out.extend(tiff_at.to_le_bytes());
-    out.extend(tiff_len.to_le_bytes());
-    // No checksum.
-    out.extend(0xFFFFu16.to_le_bytes());
-    out.extend(ps);
-    out.extend(tiff);
-    Ok(out)
+    craft_eps::wrap(ps, Some(tiff), None).map_err(|e| e.to_string())
 }
 
 /// The sections of an EPS file: its PostScript and its TIFF preview (binary header), or the whole
 /// file as PostScript. `None` when a binary header points outside the file.
 pub fn sections(bytes: &[u8]) -> Option<(&[u8], Option<&[u8]>)> {
-    if !bytes.starts_with(&DOS_MAGIC) {
-        return Some((bytes, None));
-    }
-    let word = |at: usize| bytes.get(at..at + 4).and_then(|b| <[u8; 4]>::try_from(b).ok()).map(|b| u32::from_le_bytes(b) as usize);
-    let part = |at: usize| {
-        let (start, len) = (word(at)?, word(at + 4)?);
-        bytes.get(start..start.checked_add(len)?)
-    };
-    let ps = part(4)?;
-    let tiff = match word(24) {
-        Some(0) | None => None,
-        Some(_) => Some(part(20)?),
-    };
-    Some((ps, tiff))
+    let s = craft_eps::sections(bytes).ok()?;
+    Some((s.postscript, s.tiff))
 }
 
 /// The Windows metafile preview behind an EPS file's binary header, if it has one.
 pub fn metafile_preview(bytes: &[u8]) -> Option<&[u8]> {
-    if !bytes.starts_with(&DOS_MAGIC) {
-        return None;
-    }
-    let word = |at: usize| bytes.get(at..at + 4).and_then(|b| <[u8; 4]>::try_from(b).ok()).map(|b| u32::from_le_bytes(b) as usize);
-    let (start, len) = (word(12)?, word(16)?);
-    if start == 0 || len == 0 {
-        return None;
-    }
-    bytes.get(start..start.checked_add(len)?)
+    craft_eps::sections(bytes).ok()?.metafile
 }
 
 /// The native document an EPS file written by [`export`] carries, if any.

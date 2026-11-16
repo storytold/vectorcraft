@@ -28,16 +28,28 @@ fn create_text(s: &mut Session, t: &str) -> NodeId {
     NodeId(s.execute("text.create", &json!({"x": 10, "y": 50, "text": t, "size": 20})).unwrap()["id"].as_u64().unwrap())
 }
 
-/// Click with the Type tool at (x, y) and type `keys` one at a time; returns the new text object.
+/// Click with the Type tool at (x, y) and type `keys` one at a time on the keyboard; returns the
+/// new text object.
 fn type_at(s: &mut Session, x: f64, y: f64, keys: &[&str]) -> NodeId {
+    enter_at(s, x, y, keys, true)
+}
+
+/// Click with the Type tool at (x, y) and enter `texts` one at a time, typed on the keyboard
+/// ([`Session::tool_typed_text`]) or inserted as the Glyphs panel and pastes do
+/// ([`Session::tool_text`]); returns the new text object.
+fn enter_at(s: &mut Session, x: f64, y: f64, texts: &[&str], keyboard: bool) -> NodeId {
     let v = ViewInfo::default();
     s.select_tool("type", v).unwrap();
     for k in [PointerKind::Down, PointerKind::Up] {
         s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
     }
     let id = s.doc().unwrap().selection.objects[0];
-    for k in keys {
-        s.tool_text(k, v).unwrap();
+    for t in texts {
+        if keyboard {
+            s.tool_typed_text(t, v).unwrap();
+        } else {
+            s.tool_text(t, v).unwrap();
+        }
     }
     s.tool_key(ToolKey::Escape, Default::default(), v).unwrap();
     id
@@ -175,6 +187,53 @@ fn typographers_quotes_setting_changes_typed_quotes() {
     s.execute("document.setup", &json!({"typographersQuotes": false})).unwrap();
     let id = type_at(&mut s, 50.0, 250.0, &["\"", "b", "'"]);
     assert_eq!(text(&s, id).plain_text(), "\"b'");
+}
+
+/// A lone typed `”` is set like a straight quote where a quote opens: the macOS Serbian Cyrillic
+/// layout has no straight quote and types `”` on Shift+2 (#5247), so Serbian text still gets
+/// „…”. Where a quote closes it stays `”`. `“ „` and the single quotes stay as typed, so `’90s`
+/// keeps its apostrophe. Pasted text and the Glyphs panel keep their quotes, and with the option
+/// off `”` stays as typed.
+#[test]
+fn a_typed_closing_double_quote_opens_where_a_quote_opens() {
+    let mut s = session();
+    s.execute("document.setup", &json!({"language": "Serbian: Cyrillic"})).unwrap();
+    let id = type_at(&mut s, 50.0, 50.0, &["”", "П", "р", "о", "б", "а", "”"]);
+    assert_eq!(text(&s, id).plain_text(), "„Проба”");
+    // The other curly quotes stay as typed.
+    let id = type_at(&mut s, 50.0, 100.0, &["„", "a", " ", "’", "b", "’", "“"]);
+    assert_eq!(text(&s, id).plain_text(), "„a ’b’“");
+    // In English a `”` that opens is `“`; the apostrophes stay.
+    s.execute("document.setup", &json!({"language": "English: USA"})).unwrap();
+    let id = type_at(&mut s, 50.0, 150.0, &["”", "i", "t", "’", "s", "”"]);
+    assert_eq!(text(&s, id).plain_text(), "“it’s”");
+    // An apostrophe after a space stays an apostrophe, and a typed `‘` stays `‘`.
+    let id = type_at(&mut s, 50.0, 200.0, &["t", "h", "e", " ", "’", "9", "0", "s", " ", "‘", "a"]);
+    assert_eq!(text(&s, id).plain_text(), "the ’90s ‘a");
+    // Where a quote closes, `”` stays `”` even if the document's closing quote is another.
+    s.execute("document.setup", &json!({"language": "German"})).unwrap();
+    let id = type_at(&mut s, 50.0, 250.0, &["”", "a", "”"]);
+    assert_eq!(text(&s, id).plain_text(), "„a”");
+    // More than one character is pasted text, not a typed quote.
+    let id = type_at(&mut s, 50.0, 300.0, &["”a”"]);
+    assert_eq!(text(&s, id).plain_text(), "”a”");
+    // An IME commit of a lone `”` that will open is not verbatim (it is rewritten); from the Glyphs
+    // panel it would be inserted as it is.
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, 50.0, 312.0), v).unwrap();
+    }
+    assert!(!s.tool_typed_text_is_verbatim("”", v));
+    assert!(s.tool_text_is_verbatim("”", v));
+    s.tool_key(ToolKey::Escape, Default::default(), v).unwrap();
+    // A `”` inserted from the Glyphs panel or pasted alone stays as inserted.
+    let id = enter_at(&mut s, 50.0, 325.0, &["”", "a"], false);
+    assert_eq!(text(&s, id).plain_text(), "”a");
+    // With the option off a typed `”` stays as typed.
+    s.execute("document.setup", &json!({"typographersQuotes": false})).unwrap();
+    let id = type_at(&mut s, 50.0, 350.0, &["”", "b", "”"]);
+    assert_eq!(text(&s, id).plain_text(), "”b”");
 }
 
 #[test]

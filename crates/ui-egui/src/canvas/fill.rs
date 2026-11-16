@@ -95,10 +95,24 @@ pub(super) fn fill_uncovered(
         let (_, _, view) = fill_view(&done.key);
         app.canvas.fill = Some(Fill { key: done.key, view, size: (fw, fh), tex });
     }
+    let effects = app.session.documents().iter().find(|d| d.uid as usize == key.doc).map(|d| d.plugin_effects.clone()).unwrap_or_default();
+    let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
     let Some(worker) = app.canvas.fill_worker.as_mut().filter(|_| !gaps.is_empty()) else { return };
     if !app.canvas.fill.as_ref().is_some_and(|f| covers(&f.key)) && !worker.pending.as_ref().is_some_and(covers) {
         let (w, h, view) = fill_view(key);
-        worker.submit(crate::render_worker::Job { key: key.clone(), doc: doc.clone(), w, h, view, opts });
+        worker.submit(crate::render_worker::Job {
+            key: key.clone(),
+            doc: doc.clone(),
+            w,
+            h,
+            view,
+            opts,
+            scope: vectorcraft_engine::file_access::ScopeHandle::capture(),
+            effects,
+            may_copy: false,
+            may_keep: false,
+            display,
+        });
     }
     let Some(f) = app.canvas.fill.as_ref().filter(|f| usable(&f.key)) else { return };
     let to_uv = Affine::scale_non_uniform(1.0 / f64::from(f.size.0.max(1)), 1.0 / f64::from(f.size.1.max(1))) * f.view * screen_to_doc;

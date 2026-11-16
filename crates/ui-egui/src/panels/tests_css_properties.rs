@@ -146,3 +146,23 @@ fn export_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
     assert_eq!(app.ui.status, format!("Exported /tmp/site/site.css with 1 note: {WARNING}"));
     assert_eq!(log.borrow().len(), 3, "the sheet and the image's picture are still written");
 }
+
+/// A CSS export with several notes: the status bar names the first, counts them, and keeps every
+/// one of them for its hover.
+#[test]
+fn export_keeps_every_note_for_the_hover() {
+    let (mut app, _) = app();
+    let mut png = Vec::new();
+    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({}));
+    // Type painted with a gradient is rasterized, and its picture is drawn in the fallback font.
+    app.run("text.create", json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
+    app.run("paint.setFill", json!({"gradient": {"stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]}})).unwrap();
+    let r = app.run("css.exportFile", json!({"path": "/tmp/site/site.css", "scope": "all", "rasterize": true})).unwrap();
+    let notes = crate::io::notes_of(&r);
+    assert_eq!(notes.len(), 2, "{r}");
+    assert_eq!(app.ui.status, format!("Exported /tmp/site/site.css with 2 notes: {}", notes[0]));
+    assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
+}

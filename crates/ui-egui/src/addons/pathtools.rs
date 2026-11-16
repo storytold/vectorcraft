@@ -1,6 +1,6 @@
 //! Path Precision Tools in the interface: its submenu (Object › Plug-ins › Path Precision Tools),
-//! which selects its tools, opens its panels and runs Split / Add Points at Crossings, Divide into
-//! Dashes ([`dashes`]), Expand Dashes into Paths and Convert to Parametric Shape; the Anchor Inspector panel (the selected
+//! which selects its tools, opens its panels and runs Split / Add Points at Crossings, Set Corners… ([`set_corners`]), Divide into
+//! Dashes ([`dashes`]), Expand Dashes into Paths, Convert to Parametric Shape and Tangent Circle… ([`tangent_circle`]); the Anchor Inspector panel (the selected
 //! anchor's position and handles as numbers, the add-on's anchor edits, the Corner Tool's values,
 //! [`corner`], and the Shared Edge Merge Tool's, [`shared_edge`]); the Parametric Shape panel
 //! ([`shape`]); and its tools' options dialog (a double-click on the tool). Everything acts through `addon.pathtools.*` and
@@ -8,13 +8,15 @@
 
 pub mod corner;
 pub mod dashes;
+pub mod set_corners;
 pub mod shape;
 pub mod shared_edge;
+pub mod tangent_circle;
 
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_geom::Point;
-use vectorcraft_tools::addons::{anchor_eraser, extend_path, measure_inspect, parametric_shape, slide_anchor};
+use vectorcraft_tools::addons::{anchor_eraser, extend_path, measure_inspect, parametric_shape, slide_anchor, trim};
 
 use crate::VectorcraftApp;
 use crate::dialogs::DialogSpec;
@@ -29,6 +31,10 @@ pub const ID: &str = "anchorInspector";
 const COUNT: &str = "anchor-inspector-count";
 /// The tools' options dialog.
 pub const KIND: &str = "pathToolOptions";
+/// Common Tangents' command, whose menu item opens the command dialog with a Preview.
+pub const COMMON_TANGENTS: &str = "addon.pathtools.commonTangents";
+/// The kinds of tangent Common Tangents' `tangents` picks, and their labels.
+pub const TANGENT_KINDS: &[(&str, &str)] = &[("All", "all"), ("External", "external"), ("Internal", "internal")];
 /// The close modes, as `addon.pathtools.close` names them, and their labels.
 const CLOSE_MODES: [(&str, &str); 3] = [("handles", "Keep Handles"), ("straight", "Straight"), ("smooth", "Smooth")];
 const LABEL_W: f32 = 64.0;
@@ -56,8 +62,10 @@ pub fn menu() -> Vec<Item> {
         tool("Measure & Inspect Tool", measure_inspect::ID),
         tool("Parametric Shape Tool", parametric_shape::ID),
         Item::Cmd("Corner Tool", corner::COMMAND, json!({})),
+        Item::Cmd("Set Corners…", set_corners::COMMAND, Value::Null),
         tool("Slide Anchor Along Path", slide_anchor::ID),
         Item::Cmd("Shared Edge Merge Tool", shared_edge::COMMAND, json!({})),
+        tool("Trim at Crossings Tool", trim::ID),
         Item::Sep,
         Item::Cmd("Anchor Inspector", "window.panel", json!({ "panel": ID })),
         Item::Cmd("Parametric Shape", "window.panel", json!({ "panel": shape::ID })),
@@ -67,6 +75,8 @@ pub fn menu() -> Vec<Item> {
         Item::Cmd("Divide into Dashes…", dashes::COMMAND, Value::Null),
         Item::Cmd("Expand Dashes into Paths", "addon.pathtools.expandDashes", json!({})),
         Item::Cmd("Convert to Parametric Shape", "addon.pathtools.shape.convert", json!({})),
+        Item::Cmd("Tangent Circle…", tangent_circle::COMMAND, Value::Null),
+        Item::Cmd("Common Tangents…", COMMON_TANGENTS, json!({ "tangents": "all", "centerline": false })),
     ]
 }
 

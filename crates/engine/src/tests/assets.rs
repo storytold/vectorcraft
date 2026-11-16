@@ -301,6 +301,42 @@ fn an_export_preset_sets_the_shared_settings() {
     assert_eq!(run(&mut s, "document.exportSettings", json!({}))["settings"]["prefix"], "p_");
 }
 
+/// `openLocation` (Open Location after Export) is remembered in the document's export settings,
+/// outside presets; null removes it, and only true or false is taken.
+#[test]
+fn open_location_is_remembered_in_the_export_settings() {
+    let mut s = session();
+    let open = |s: &mut Session| run(s, "document.exportSettings", json!({}))["settings"]["openLocation"].clone();
+    let r = run(&mut s, "assets.settings.set", json!({"openLocation": false}));
+    assert_eq!(open(&mut s), false);
+    assert!(r["settings"].get("openLocation").is_none(), "{r}");
+    // Create Sub-folders, on for a document without settings, stays on.
+    assert_eq!(r["settings"]["subfolders"], true, "{r}");
+    run(&mut s, "document.exportPresets.save", json!({"name": "Kept", "settings": {"formats": [{"format": "svg"}]}}));
+    run(&mut s, "assets.settings.set", json!({"exportPreset": "Kept"}));
+    assert_eq!(open(&mut s), false, "a preset leaves it as it is");
+    run(&mut s, "assets.settings.set", json!({"openLocation": null}));
+    assert_eq!(open(&mut s), Value::Null);
+    for bad in [json!({"openLocation": "yes"}), json!({"openLocation": 1}), json!({"subfolders": "no"})] {
+        assert!(s.execute("assets.settings.set", &bad).is_err(), "{bad}");
+    }
+}
+
+/// Create Sub-folders turned off on its own ends a remembered folder per format or item, so Export
+/// for Screens opens with it off too; given with an export preset, the preset's folders stay.
+#[test]
+fn create_sub_folders_off_alone_ends_a_folder_per_format_or_item() {
+    let mut s = session();
+    let folders = |s: &mut Session| run(s, "document.exportSettings", json!({}))["settings"]["folders"].clone();
+    run(&mut s, "document.exportPresets.save", json!({"name": "Items", "settings": {"formats": [{"format": "svg"}], "folders": "item"}}));
+    for preset in ["Logo Package", "Items"] {
+        run(&mut s, "assets.settings.set", json!({"exportPreset": preset, "subfolders": false}));
+        assert_ne!(folders(&mut s), "none", "{preset}");
+        run(&mut s, "assets.settings.set", json!({"subfolders": false}));
+        assert_eq!(folders(&mut s), "none", "{preset}");
+    }
+}
+
 /// An export preset applied to the shared settings keeps its folders, with Create Sub-folders on
 /// for a folder per row; with Create Sub-folders off every file goes into the folder itself,
 /// mobile and density rows too.
@@ -453,4 +489,22 @@ fn collecting_explicit_assets_rejects_invalid_ids_without_adding_anything() {
     // Valid ids still collect art in document paint order.
     assert_eq!(run(&mut s, "assets.add", json!({"ids": [b, a]}))["added"], 2);
     assert_eq!(assets(&mut s).len(), 2);
+}
+
+/// Settings saved without the PDF passwords they were given export only once a password is given
+/// again, never as an unprotected PDF; security given without `passwordRequired` exports as given.
+#[test]
+fn settings_saved_without_their_pdf_passwords_refuse_to_export_until_given_again() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    run(&mut s, "assets.add", json!({"ids": [a]}));
+    let row = |security: Value| json!({"formats": [{"format": "pdf", "security": security}]});
+    run(&mut s, "assets.settings.set", row(json!({"openPassword": "open sesame"})));
+    let err = s.execute("assets.export", &json!({})).unwrap_err().to_string();
+    assert!(err.contains("without their passwords"), "{err}");
+    let encrypted = |r: &Value| files(r)[0].1.windows(8).any(|w| w == b"/Encrypt");
+    let r = run(&mut s, "assets.export", row(json!({"openPassword": "open sesame", "passwordRequired": true})));
+    assert!(encrypted(&r), "given again: protected");
+    let r = run(&mut s, "assets.export", row(json!({})));
+    assert!(!encrypted(&r), "left out on purpose: unprotected");
 }

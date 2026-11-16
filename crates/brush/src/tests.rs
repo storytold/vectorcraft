@@ -1,6 +1,6 @@
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, StrokeLayer};
-use vectorcraft_geom::{Affine, BezPath, Point, Rect, shapes};
+use vectorcraft_geom::{Affine, BezPath, Point, Rect, Vec2, shapes};
 
 use super::*;
 
@@ -139,6 +139,50 @@ fn art_brush_proportional_keeps_aspect() {
     let out =
         stroke_pieces(&Document::new(1.0, 1.0), &art_brush(rect_art(100.0, 4.0), ArtScale::Proportional), &line(0.0, 0.0, 200.0, 0.0), &stroke(1.0));
     assert!(near(bounds(&out).height(), 8.0, 1e-6));
+}
+
+/// Scale Proportionately art is scaled across by the stroke weight and the Width, as Stretch art
+/// is, on top of the scale the path length gives it.
+#[test]
+fn art_brush_proportional_grows_with_weight() {
+    let brush = |width: f64, overlap: bool| {
+        let mut b = art_brush(rect_art(100.0, 4.0), ArtScale::Proportional);
+        if let BrushKind::Art(a) = &mut b.kind {
+            (a.width, a.overlap) = (width, overlap);
+        }
+        b
+    };
+    let draw = |b: &Brush, bp: &BezPath, st: &StrokeLayer| stroke_pieces(&Document::new(1.0, 1.0), b, bp, st);
+    // 3 pt stroke → 3× wider than at 1 pt (8 pt); the length still follows the path.
+    let b = bounds(&draw(&brush(100.0, false), &line(0.0, 0.0, 200.0, 0.0), &stroke(3.0)));
+    assert!(near(b.height(), 24.0, 1e-6) && near(b.x0, 0.0, 1e-6) && near(b.x1, 200.0, 1e-6), "{b:?}");
+    // The Width (50 %) applies on top of the stroke weight.
+    let b = bounds(&draw(&brush(50.0, false), &line(0.0, 0.0, 200.0, 0.0), &stroke(3.0)));
+    assert!(near(b.height(), 12.0, 1e-6), "{b:?}");
+    // A path twice as long at twice the weight (as Scale Strokes & Effects at 200 % leaves it):
+    // 2× from the length and 2× from the weight.
+    let b = bounds(&draw(&brush(100.0, false), &line(0.0, 0.0, 400.0, 0.0), &stroke(2.0)));
+    assert!(near(b.height(), 32.0, 1e-6), "{b:?}");
+    // With Overlap, each run between corners is scaled by its own length and by the weight: the
+    // 100 pt run 4 pt × 3 across, the 50 pt run 2 pt × 3.
+    let mut bent = BezPath::new();
+    bent.move_to((0.0, 0.0));
+    bent.line_to((100.0, 0.0));
+    bent.line_to((100.0, 50.0));
+    let out = draw(&brush(100.0, true), &bent, &stroke(3.0));
+    assert_eq!(out.len(), 2);
+    let (r0, r1) = (out[0].geometric_bounds().unwrap(), out[1].geometric_bounds().unwrap());
+    assert!(near(r0.height(), 12.0, 1e-6) && near(r1.width(), 6.0, 1e-6), "{r0:?} {r1:?}");
+    // A width that follows the pen: 50 % at the lightest pressure, 300 % at the heaviest, times
+    // the 2 pt weight (4 pt art on a 100 pt path: 4 pt across at 100 %, 1 pt either side).
+    let mut pen = brush(50.0, false);
+    if let BrushKind::Art(a) = &mut pen.kind {
+        (a.width_mode, a.width_max) = (Some(Variation::Pressure), Some(300.0));
+    }
+    let ramp = StrokeLayer { width: 2.0, ..pressed(vec![(0.0, 0.0), (1.0, 1.0)]) };
+    let out = draw(&pen, &line(0.0, 0.0, 100.0, 0.0), &ramp);
+    assert!(near(half_width(&out, 0.0, 1.0), 2.0, 0.1), "{}", half_width(&out, 0.0, 1.0));
+    assert!(near(half_width(&out, 99.0, 100.0), 12.0, 0.2), "{}", half_width(&out, 99.0, 100.0));
 }
 
 #[test]
@@ -296,6 +340,101 @@ fn pattern_places_corner_tiles() {
     for n in out.iter().filter(|n| !curved(n)) {
         let NodeKind::Path { path, .. } = &n.kind else { continue };
         assert_eq!(path.subpaths[0].anchors.len(), 4, "a rectangle tile on a straight run stays four anchors");
+    }
+}
+
+/// A pattern brush whose corner tiles have a 4 × 4 pt frame and, as art, a 2 × 2 pt square in the
+/// top-left quarter of the frame. Corner art joins a side tile on its right to one below it, so
+/// that quarter is on the outside of the turn. `inner` and `outer` say which kinds of corner have
+/// art; `flips` are the brush's Flip Along and Flip Across.
+fn marked_corner_brush(inner: bool, outer: bool, (flip_along, flip_across): (bool, bool)) -> Brush {
+    let marker =
+        Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, -2.0, 2.0, 0.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let mut b = pattern_brush(PatternFit::Stretch, false);
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        let frame = Some(Rect::new(0.0, -2.0, 4.0, 2.0));
+        if inner {
+            (p.inner_corner, p.inner_corner_frame) = (Some(marker.clone()), frame);
+        }
+        if outer {
+            (p.outer_corner, p.outer_corner_frame) = (Some(marker), frame);
+        }
+        (p.flip_along, p.flip_across) = (flip_along, flip_across);
+    }
+    b
+}
+
+/// Each combination of corner art (both kinds, inner only, outer only) and of the two flips.
+fn marked_corner_brushes() -> Vec<(String, Brush)> {
+    let mut v = vec![];
+    for (inner, outer) in [(true, true), (true, false), (false, true)] {
+        for flips in [(false, false), (true, false), (false, true), (true, true)] {
+            v.push((format!("inner {inner}, outer {outer}, flips {flips:?}"), marked_corner_brush(inner, outer, flips)));
+        }
+    }
+    v
+}
+
+/// The bounds of the 2 × 2 pt corner markers among `out`, turned or not.
+fn marker_bounds(out: &[Node]) -> Vec<Rect> {
+    out.iter().filter_map(Node::geometric_bounds).filter(|r| r.width() < 3.0 && r.height() < 3.0).collect()
+}
+
+/// Corner tiles are square to the sides at a right angle and turn 90° with each turn of the path:
+/// on a square drawn either way round, each corner's marker fills the quarter of the band's corner
+/// outside the turn, with the brush flipped or not and with art for one kind of corner only
+/// (#6110).
+#[test]
+fn pattern_corner_tiles_are_square_to_the_sides() {
+    let doc = Document::new(1.0, 1.0);
+    let sq = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)).to_bezpath();
+    let mut reversed = BezPath::new();
+    reversed.move_to((0.0, 0.0));
+    for (x, y) in [(0.0, 100.0), (100.0, 100.0), (100.0, 0.0)] {
+        reversed.line_to((x, y));
+    }
+    reversed.close_path();
+    // The square turns the same way at all four corners, and the reversed square the other way,
+    // so one draws only inner corner tiles and the other only outer ones.
+    for (name, brush) in marked_corner_brushes() {
+        for path in [&sq, &reversed] {
+            let out = stroke_pieces(&doc, &brush, path, &stroke(1.0));
+            let marks = marker_bounds(&out);
+            assert_eq!(marks.len(), 4, "{name}: one marker a corner");
+            for (corner, outside) in SQUARE_CORNERS {
+                let want = Rect::from_points(corner, outside);
+                assert!(
+                    marks
+                        .iter()
+                        .any(|r| near(r.x0, want.x0, 1e-6) && near(r.y0, want.y0, 1e-6) && near(r.x1, want.x1, 1e-6) && near(r.y1, want.y1, 1e-6)),
+                    "{name}: the marker at {corner:?} fills {want:?}: {marks:?}"
+                );
+            }
+        }
+    }
+}
+
+/// At a corner that is not a right angle, a corner tile splits the difference between the two
+/// sides: its marker lies on the line that halves the angle, outside the turn, for sharp and
+/// shallow turns either way. Near a hairpin the marker moves smoothly towards the line the path
+/// arrives on.
+#[test]
+fn pattern_corner_tiles_sit_on_the_corners_diagonal() {
+    let doc = Document::new(1.0, 1.0);
+    for (name, brush) in marked_corner_brushes() {
+        for turn in [-179.9_f64, -170.0, -135.0, -60.0, -45.0, 45.0, 60.0, 135.0, 170.0, 179.9] {
+            let (a, b) = (Vec2::new(1.0, 0.0), Vec2::new(turn.to_radians().cos(), turn.to_radians().sin()));
+            let mut bp = BezPath::new();
+            bp.move_to((0.0, 0.0));
+            bp.line_to((50.0, 0.0));
+            bp.line_to(Point::new(50.0, 0.0) + b * 50.0);
+            let out = stroke_pieces(&doc, &brush, &bp, &stroke(1.0));
+            let marks = marker_bounds(&out);
+            assert_eq!(marks.len(), 1, "{name}, {turn}°: one corner marker");
+            let away = a - b;
+            let want = Point::new(50.0, 0.0) + away / away.hypot() * 2.0_f64.sqrt();
+            assert!(marks[0].center().distance(want) < 1e-6, "{name}, {turn}°: the marker is at {:?}, not {want:?}", marks[0].center());
+        }
     }
 }
 
@@ -701,6 +840,55 @@ fn tints_colorization_uses_stroke_colour() {
     assert_eq!(white.appearance.fill_paint().color().unwrap().to_rgb(), [1.0, 1.0, 1.0]);
 }
 
+/// Black ink alone is a tint by its amount: a process black stroke leaves it as it is, and another
+/// process stroke color takes that share of its inks. Tints of a process color stay process.
+#[test]
+fn tints_of_black_ink_are_its_amount_of_the_stroke_color() {
+    let tinted = |art: Color, stroke: Color| {
+        let mut n = rect_art(1.0, 1.0);
+        n.appearance.set_fill(Paint::solid(art));
+        colorize(&mut n, Colorization::Tints, &Paint::solid(stroke));
+        n.appearance.fill_paint().color().unwrap()
+    };
+    let ink = Color::cmyk(0.0, 0.0, 0.0, 0.6);
+    let close = |a: Color, b: Color| {
+        let (Color::Cmyk { c, m, y, k }, Color::Cmyk { c: c2, m: m2, y: y2, k: k2 }) = (a, b) else { panic!("{a:?} {b:?}") };
+        (c - c2).abs() < 1e-5 && (m - m2).abs() < 1e-5 && (y - y2).abs() < 1e-5 && (k - k2).abs() < 1e-5
+    };
+    assert!(close(tinted(ink, Color::cmyk(0.0, 0.0, 0.0, 1.0)), ink));
+    assert!(close(tinted(ink, Color::cmyk(0.0, 1.0, 1.0, 0.0)), Color::cmyk(0.0, 0.6, 0.6, 0.0)));
+    let [r, g, b] = tinted(ink, Color::rgb(1.0, 0.0, 0.0)).to_rgb();
+    assert!((r - 1.0).abs() < 1e-5 && (g - 0.4).abs() < 1e-5 && (b - 0.4).abs() < 1e-5, "{r} {g} {b}");
+    let Color::Gray { k } = tinted(ink, Color::gray(0.5)) else { panic!("tints of a gray stroke color stay gray") };
+    assert!((k - 0.3).abs() < 1e-5, "{k}");
+}
+
+/// Under Tints and Shades black ink stays black, however light 100% K displays, and a band of black
+/// ink is its amount: K 0.5 is the stroke color. A process or gray stroke color stays in its model.
+#[test]
+fn tints_and_shades_of_black_ink_go_by_its_amount() {
+    let mapped = |k: f32, stroke: Color| {
+        let mut n = rect_art(1.0, 1.0);
+        n.appearance.set_fill(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, k)));
+        colorize(&mut n, Colorization::TintsAndShades, &Paint::solid(stroke));
+        n.appearance.fill_paint().color().unwrap()
+    };
+    let close = |a: [f32; 4], b: [f32; 4]| a.iter().zip(&b).all(|(x, y)| (x - y).abs() < 1e-5);
+    let inks = |c: Color| {
+        let Color::Cmyk { c, m, y, k } = c else { panic!("a process color: {c:?}") };
+        [c, m, y, k]
+    };
+    let orange = Color::cmyk(0.0, 0.6, 1.0, 0.0);
+    assert!(close(inks(mapped(1.0, orange)), [0.0, 0.0, 0.0, 1.0]), "black stays black");
+    assert!(close(inks(mapped(0.5, orange)), [0.0, 0.6, 1.0, 0.0]), "the stroke color");
+    assert!(close(inks(mapped(0.25, orange)), [0.0, 0.3, 0.5, 0.0]), "a tint");
+    assert!(close(inks(mapped(0.75, orange)), [0.0, 0.3, 0.5, 0.5]), "a shade");
+    let Color::Gray { k } = mapped(0.75, Color::gray(0.4)) else { panic!("a gray stroke color stays gray") };
+    assert!((k - 0.7).abs() < 1e-5, "{k}");
+    let [r, g, b] = mapped(1.0, Color::rgb(1.0, 0.0, 0.0)).to_rgb();
+    assert!(r < 1e-5 && g < 1e-5 && b < 1e-5, "black stays black: {r} {g} {b}");
+}
+
 /// Point type at (0, 0) whose characters are painted `fill` and `stroke` (1 pt wide).
 fn type_art(fill: Paint, stroke: Paint) -> Node {
     use vectorcraft_doc::{CharStyle, TextObject};
@@ -764,6 +952,26 @@ fn stain_mixes_type_strokes_too() {
     assert_eq!(run_paints(&[art]), [(Paint::solid(blue), Paint::solid(blue))]);
 }
 
+/// An instance whose fill has an opacity of 0 does not stain its symbol's art, so the art keeps its
+/// swatch links.
+#[test]
+fn a_fill_with_no_opacity_leaves_the_symbol_art_linked() {
+    let spot = Paint::Solid { color: Color::cmyk(1.0, 0.7, 0.0, 0.4), swatch: Some("Spot".into()), tint: 1.0 };
+    let art = Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(spot.clone(), Paint::None, 0.0));
+    let mut inst = Node::new(NodeId(2), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::IDENTITY });
+    inst.appearance = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    if let Some(f) = inst.appearance.fill_mut() {
+        f.opacity = 0.0;
+    }
+    assert_eq!(stain(&inst), None);
+    assert_eq!(instance_art(&art, &inst).appearance.fill_paint(), spot);
+    // Any opacity above 0 still stains.
+    if let Some(f) = inst.appearance.fill_mut() {
+        f.opacity = 0.01;
+    }
+    assert_ne!(instance_art(&art, &inst).appearance.fill_paint(), spot);
+}
+
 #[test]
 fn library_defaults_store_and_find() {
     let mut d = Document::new(100.0, 100.0);
@@ -779,6 +987,187 @@ fn library_defaults_store_and_find() {
     assert!(find(&d, "Chain").is_none());
     assert_eq!(library(&d).len(), lib.len());
     assert_eq!(unique_name(&lib, "Arrow"), "Arrow 2");
+}
+
+/// A stored library that repeats a name reads with the first brush of that name as stored and each
+/// later one numbered, past every name the library already has; strokes of the name keep drawing
+/// the first brush.
+#[test]
+fn repeated_brush_names_are_numbered_when_read() {
+    let mut d = Document::new(100.0, 100.0);
+    let named = |name: &str, size: f64| Brush { name: name.into(), ..calli(0.0, 100.0, size) };
+    store(&mut d, &[named("Nib", 1.0), named("Nib 2", 2.0), named("Nib", 3.0), named("Other", 4.0), named("Nib", 5.0), named("Nib 2", 6.0)]);
+    let lib = library(&d);
+    let names: Vec<&str> = lib.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(names, ["Nib", "Nib 2", "Nib 3", "Other", "Nib 4", "Nib 2 2"]);
+    let size = |b: &Brush| if let BrushKind::Calligraphic(c) = &b.kind { c.size } else { 0.0 };
+    assert_eq!(lib.iter().map(size).collect::<Vec<_>>(), [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    assert_eq!(find(&d, "Nib").map(|b| size(&b)), Some(1.0));
+    assert_eq!(find(&d, "Nib 3").map(|b| size(&b)), Some(3.0));
+    // Reading again gives the same names, and the numbered library stored again reads as stored.
+    assert_eq!(library(&d), lib);
+    store(&mut d, &lib);
+    assert_eq!(library(&d), lib);
+    // Many brushes of one name take the numbers in order, past the numbered names the file has.
+    let many: Vec<Brush> = (0..5000).map(|i| named(if i == 1 { "Nib 3" } else { "Nib" }, 1.0)).collect();
+    store(&mut d, &many);
+    let names: Vec<String> = library(&d).into_iter().map(|b| b.name).collect();
+    assert_eq!(names[..5], ["Nib", "Nib 3", "Nib 2", "Nib 4", "Nib 5"]);
+    assert_eq!(names.last().map(String::as_str), Some("Nib 5000"));
+    assert_eq!(names.iter().collect::<std::collections::HashSet<_>>().len(), names.len());
+}
+
+/// Art of `w`×`h` points holding a linked image: a group of [`rect_art`] and the image, both with id 0.
+fn linked_art(w: f64, h: f64) -> Node {
+    let image = Node::new(
+        NodeId(0),
+        NodeKind::Image(Box::new(vectorcraft_doc::ImageObject {
+            key: "k".into(),
+            width: 4,
+            height: 4,
+            xf: Affine::IDENTITY,
+            link: Some(vectorcraft_doc::LinkInfo::new("/art/a.png")),
+            placement: Default::default(),
+            pixels: None,
+        })),
+    );
+    Node::group(NodeId(0), vec![std::sync::Arc::new(rect_art(w, h)), std::sync::Arc::new(image)])
+}
+
+/// The art of the stored brushes that holds images mounts on the document as stored art, each tile
+/// with the brush, its place in the library and the tile as owner, its objects with ids of their
+/// own; writing it back changes only the entries whose art changed, and leaves an entry that does
+/// not read as a brush, a brush without art and a brush whose art holds no image as they were stored.
+#[test]
+fn stored_brush_art_mounts_and_writes_back_only_what_changed() {
+    use stored_art::StoredArt;
+    let mut d = Document::new(100.0, 100.0);
+    let layer_object = d.layers[0].id;
+    let mut side = linked_art(10.0, 4.0);
+    side.id = layer_object;
+    let pattern =
+        Brush { name: "Frame".into(), kind: BrushKind::Pattern(PatternBrush { side, start: Some(linked_art(4.0, 4.0)), ..Default::default() }) };
+    let scatter = Brush {
+        name: "Dots".into(),
+        kind: BrushKind::Scatter(Scatter { art: linked_art(2.0, 2.0), colorization: Colorization::None, ..Default::default() }),
+    };
+    // Written as a file holds it, without the ids `store` gives.
+    let lib = [calli(0.0, 100.0, 3.0), pattern, scatter, art_brush(rect_art(10.0, 4.0), ArtScale::Stretch)];
+    d.unknown.insert(DOC_KEY.into(), serde_json::to_value(lib).unwrap());
+    let odd = serde_json::json!({ "name": "Odd", "type": "unknown" });
+    if let Some(list) = d.unknown.get_mut(DOC_KEY).and_then(serde_json::Value::as_array_mut) {
+        list.insert(1, odd.clone());
+    }
+    let stored = d.unknown[DOC_KEY].clone();
+    let art = StoredArt::read(&d);
+    art.mount(&mut d);
+    let owners: Vec<&serde_json::Value> = d.mounted_art.iter().map(|(_, o)| o).collect();
+    assert_eq!(
+        owners,
+        [
+            &serde_json::json!({ "kind": "brush", "name": "Frame", "index": 1, "tile": "side" }),
+            &serde_json::json!({ "kind": "brush", "name": "Frame", "index": 1, "tile": "start" }),
+            &serde_json::json!({ "kind": "brush", "name": "Dots", "index": 2 }),
+        ]
+    );
+    let ids: Vec<NodeId> = d.mounted_art.iter().map(|(n, _)| n.id).collect();
+    let mut all = vec![];
+    d.visit_stored(|n, _| all.push(n.id));
+    assert!(all.iter().all(|id| id.0 != 0) && !all[1..].contains(&layer_object), "{all:?}");
+    assert_eq!(all.iter().collect::<std::collections::HashSet<_>>().len(), all.len(), "{all:?}");
+    // The scatter brush's art changes; the pattern brush's tiles keep the ids mounting gave them.
+    d.stored_node_mut(ids[2]).unwrap().name = Some("changed".into());
+    art.write_back(&mut d);
+    assert!(d.mounted_art.is_empty());
+    let now = d.unknown[DOC_KEY].as_array().unwrap();
+    assert_eq!(now.len(), 5);
+    assert_eq!((&now[0], &now[1], &now[4]), (&stored[0], &odd, &stored[4]), "the entries without images stay as stored");
+    assert_ne!(now[2], stored[2], "the pattern brush keeps the ids its art was given");
+    let lib = library(&d);
+    let Some(BrushKind::Pattern(p)) = lib.iter().find(|b| b.name == "Frame").map(|b| &b.kind) else { panic!("no pattern brush") };
+    assert_eq!((p.side.id, p.start.as_ref().map(|n| n.id)), (ids[0], Some(ids[1])));
+    assert_eq!(find(&d, "Dots").unwrap().art()[0].name.as_deref(), Some("changed"));
+    // Mounting again gives the same ids and changes nothing, so writing back leaves the library as it is.
+    let again = d.unknown[DOC_KEY].clone();
+    let art = StoredArt::read(&d);
+    art.mount(&mut d);
+    assert_eq!(d.mounted_art.iter().map(|(n, _)| n.id).collect::<Vec<_>>(), ids);
+    art.write_back(&mut d);
+    assert_eq!(d.unknown[DOC_KEY], again);
+}
+
+/// A brush whose stored name repeats an earlier brush's is named in its art's owner as the Brushes
+/// panel lists it, numbered.
+#[test]
+fn stored_brush_art_owner_names_a_repeated_name_as_listed() {
+    use stored_art::StoredArt;
+    let mut d = Document::new(100.0, 100.0);
+    let scatter = Brush { name: "Dots".into(), kind: BrushKind::Scatter(Scatter { art: linked_art(2.0, 2.0), ..Default::default() }) };
+    store(&mut d, &[scatter.clone(), scatter]);
+    StoredArt::read(&d).mount(&mut d);
+    let names: Vec<&serde_json::Value> = d.mounted_art.iter().map(|(_, o)| &o["name"]).collect();
+    assert_eq!(names, ["Dots", "Dots 2"]);
+}
+
+/// Storing a library whose brush art holds an image gives that art ids of its own, so mounting it
+/// later gives the same ids whatever the document allocated in between; art without images keeps
+/// the ids it was stored with.
+#[test]
+fn storing_brush_art_with_images_keeps_ids_of_its_own() {
+    use stored_art::StoredArt;
+    let mut d = Document::new(100.0, 100.0);
+    let mut art = linked_art(2.0, 2.0);
+    art.id = d.layers[0].id;
+    let scatter = Brush { name: "Dots".into(), kind: BrushKind::Scatter(Scatter { art, ..Default::default() }) };
+    store(&mut d, &[scatter, art_brush(rect_art(10.0, 4.0), ArtScale::Stretch)]);
+    let lib = library(&d);
+    let stored = lib[0].art()[0].id;
+    assert_ne!(stored, d.layers[0].id);
+    assert_eq!(lib[1].art()[0].id, NodeId(0), "art without images is stored as it was");
+    d.alloc_id();
+    StoredArt::read(&d).mount(&mut d);
+    assert_eq!(d.mounted_art[0].0.id, stored);
+}
+
+/// When the library is written again while the art is mounted, numbering a repeated name and
+/// adding a brush (as placing a document's brushes into it does), writing back changes the entry
+/// at its own place that reads as the brush apart from its new name, keeping that name, even when
+/// an earlier brush is the same as the one it was, and gives the added brush's art ids of its own.
+#[test]
+fn brush_art_written_back_finds_its_renamed_entry_and_numbers_added_art() {
+    use stored_art::StoredArt;
+    /// `n` with ids from `next` on, in paint order.
+    fn numbered(mut n: Node, next: &mut u64) -> Node {
+        n.id = NodeId(*next);
+        *next += 1;
+        for c in n.children_mut().into_iter().flatten() {
+            *c = std::sync::Arc::new(numbered((**c).clone(), next));
+        }
+        n
+    }
+    let mut d = Document::new(100.0, 100.0);
+    let scatter =
+        |n: &str| Brush { name: n.into(), kind: BrushKind::Scatter(Scatter { art: numbered(linked_art(2.0, 2.0), &mut 50), ..Default::default() }) };
+    // Two brushes the same apart from the ids mounting gives the second.
+    d.unknown.insert(DOC_KEY.into(), serde_json::to_value([scatter("Dots"), scatter("Dots")]).unwrap());
+    let art = StoredArt::read(&d);
+    art.mount(&mut d);
+    assert_eq!(d.mounted_art[0].0.id, NodeId(50));
+    let second = d.mounted_art[1].0.id;
+    // The library is written again: the repeated name numbered, a brush whose art repeats an id added.
+    let mut added = scatter("New");
+    if let BrushKind::Scatter(s) = &mut added.kind {
+        s.art.id = d.layers[0].id;
+    }
+    let lib = [library(&d), vec![added]].concat();
+    d.unknown.insert(DOC_KEY.into(), serde_json::to_value(&lib).unwrap());
+    assert_eq!(lib[1].name, "Dots 2");
+    d.stored_node_mut(second).unwrap().name = Some("changed".into());
+    art.write_back(&mut d);
+    let lib = library(&d);
+    assert_eq!(lib.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["Dots", "Dots 2", "New"]);
+    assert_eq!((lib[0].art()[0].name.as_deref(), lib[1].art()[0].name.as_deref()), (None, Some("changed")));
+    assert_ne!(lib[2].art()[0].id, d.layers[0].id, "the added brush's art has ids of its own");
 }
 
 #[test]
@@ -843,6 +1232,26 @@ fn half_width(nodes: &[Node], x0: f64, x1: f64) -> f64 {
 
 fn pressed(points: Vec<(f64, f64)>) -> StrokeLayer {
     StrokeLayer { pressure: Some(vectorcraft_doc::PressureProfile { points }), ..stroke(1.0) }
+}
+
+/// A nib that follows the pen is sampled between the vertices of the flattened path too. Along a
+/// curve those samples sit on the curve, and the outline keeps its distance from it.
+#[test]
+fn pen_driven_nib_outline_follows_the_curve_between_vertices() {
+    // The top half of a circle of radius 50; a round nib 20 pt across, the same at any pressure.
+    let (r, half) = (50.0, 10.0);
+    let c = Point::new(r, r);
+    let ring = shapes::ellipse(Rect::new(0.0, 0.0, 2.0 * r, 2.0 * r)).to_bezpath();
+    let half_circle: BezPath = ring.elements().iter().take(3).copied().collect();
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &pressure_calli(20.0, 0.0), &half_circle, &pressed(vec![(0.0, 0.5), (1.0, 0.5)]));
+    let mut pts = vec![];
+    for n in &out {
+        all_points(n, &mut pts);
+    }
+    // Away from the round caps at the two ends, every outline point is `half` from the curve.
+    let middle = pts.iter().filter(|p| ((p.y - c.y).atan2(p.x - c.x).abs() - std::f64::consts::FRAC_PI_2).abs() <= 1.2);
+    let worst = middle.map(|p| ((p.distance(c) - (r + half)).abs()).min((p.distance(c) - (r - half)).abs())).fold(0.0, f64::max);
+    assert!(worst < 0.05, "an outline point strays {worst:.4} pt from the nib's reach");
 }
 
 /// #852: with Size on Pressure the nib goes from size − variation at the lightest pressure to
@@ -1207,6 +1616,62 @@ fn art_brush_width_follows_the_pressure() {
     assert!(plain.get("width_mode").is_none() && plain.get("width_max").is_none(), "{plain}");
 }
 
+/// Art Brush Options: Width on Tilt goes from Width with the pen lying flat to the second width
+/// upright, and on Bearing or Rotation from Width at −180° to the second width at 180°, along the
+/// stroke as the pen recorded it; each mode reads only its own input.
+#[test]
+fn art_brush_width_follows_tilt_bearing_and_rotation() {
+    let brush = |mode: Variation| {
+        let mut b = art_brush(rect_art(10.0, 4.0), ArtScale::Stretch);
+        if let BrushKind::Art(a) = &mut b.kind {
+            (a.width, a.width_mode, a.width_max) = (50.0, Some(mode), Some(300.0));
+        }
+        b
+    };
+    let bp = line(0.0, 0.0, 100.0, 0.0);
+    let draw = |b: &Brush, st: &StrokeLayer| stroke_pieces(&Document::new(1.0, 1.0), b, &bp, st);
+    // Tilt, upright at the start (300 %: 6 pt either side of 4 pt art) to flat at the end (50 %: 1 pt).
+    let upright_to_flat = StrokeLayer { tilt: Some(vectorcraft_doc::PressureProfile { points: vec![(0.0, 0.0), (1.0, 1.0)] }), ..stroke(1.0) };
+    let out = draw(&brush(Variation::Tilt), &upright_to_flat);
+    assert!(near(half_width(&out, 0.0, 1.0), 6.0, 0.1), "{}", half_width(&out, 0.0, 1.0));
+    assert!(near(half_width(&out, 99.0, 100.0), 1.0, 0.1), "{}", half_width(&out, 99.0, 100.0));
+    assert!(near(half_width(&out, 49.0, 51.0), 3.5, 0.15), "{}", half_width(&out, 49.0, 51.0));
+    // Bearing and Rotation: half way at 0°, a quarter of the way at −90°, three quarters at 90°.
+    for (mode, angle, half) in [
+        (Variation::Bearing, 0.0, 3.5),
+        (Variation::Bearing, -90.0, 2.25),
+        (Variation::Bearing, 90.0, 4.75),
+        (Variation::Rotation, -90.0, 2.25),
+        (Variation::Rotation, 90.0, 4.75),
+    ] {
+        let st = if mode == Variation::Bearing { posed(Some(0.5), Some(angle), None) } else { posed(None, None, Some(angle)) };
+        let h = bounds(&draw(&brush(mode), &st)).height();
+        assert!(near(h, 2.0 * half, 1e-6), "{mode:?} {angle}: {h}");
+    }
+    // Each mode reads its own input: without it (the pressure, or another of the pen's values
+    // recorded instead), the art is half way between the two widths.
+    let others = [
+        (Variation::Tilt, posed(None, Some(90.0), Some(90.0))),
+        (Variation::Tilt, pressed(vec![(0.0, 0.0), (1.0, 1.0)])),
+        (Variation::Bearing, posed(Some(0.0), None, Some(90.0))),
+        (Variation::Rotation, posed(Some(0.0), Some(90.0), None)),
+        (Variation::Pressure, posed(Some(0.0), Some(90.0), Some(90.0))),
+    ];
+    for (mode, st) in others {
+        let h = bounds(&draw(&brush(mode), &st)).height();
+        assert!(near(h, 7.0, 1e-6), "{mode:?}: {h}");
+    }
+    // The pen's modes are kept when a definition is read, and Random is read as Fixed.
+    let lib = parse_library(&serde_json::json!([
+        {"name": "t", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "tilt", "width_max": 300.0},
+        {"name": "b", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "bearing", "width_max": 300.0},
+        {"name": "r", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "rotation", "width_max": 300.0},
+        {"name": "x", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "random", "width_max": 300.0},
+    ]));
+    let modes: Vec<_> = lib.iter().map(|b| if let BrushKind::Art(a) = &b.kind { a.width_mode } else { None }).collect();
+    assert_eq!(modes, [Some(Variation::Tilt), Some(Variation::Bearing), Some(Variation::Rotation), None]);
+}
+
 /// Definitions from files and commands are kept within their ranges.
 #[test]
 fn sanitize_keeps_values_within_their_ranges() {
@@ -1301,6 +1766,7 @@ fn pieces_leave_out_what_draws_a_brushed_stroke_by_name() {
     };
     let art = Node::group(NodeId(0), [instance("plain"), instance("brushed"), painted("plain"), painted("brushed")].map(std::sync::Arc::new).into());
     let b = Brush { name: "s".into(), kind: BrushKind::Scatter(Scatter { art, colorization: Colorization::None, ..Default::default() }) };
+    store(&mut doc, std::slice::from_ref(&b));
     let out = stroke_pieces(&doc, &b, &line(0.0, 0.0, 100.0, 0.0), &stroke(1.0));
     assert!(!out.is_empty());
     for piece in &out {
@@ -1313,6 +1779,46 @@ fn pieces_leave_out_what_draws_a_brushed_stroke_by_name() {
         let fills: Vec<Paint> =
             children.iter().filter(|c| c.path_data().is_some()).filter_map(|c| c.appearance.fill().map(|f| f.paint.clone())).collect();
         assert_eq!(fills, [Paint::Pattern { pattern: "plain".into(), xf: vectorcraft_geom::Affine::IDENTITY }, Paint::None]);
+    }
+}
+
+/// A symbol instance at the root of an opacity mask is filtered like one among the children: when
+/// its symbol draws a brushed stroke the mask goes (it would run the brush again from inside the
+/// mask, without end), and a mask whose root symbol is plain stays.
+#[test]
+fn pieces_leave_out_a_mask_whose_root_draws_a_brushed_stroke() {
+    use vectorcraft_doc::{OpacityMask, Symbol};
+    let mut doc = Document::new(100.0, 100.0);
+    let mut brushed = rect_art(10.0, 4.0);
+    brushed.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(StrokeLayer { brush: Some("s".into()), ..stroke(1.0) }));
+    // A brush the library lacks draws a plain stroke: its mask stays.
+    let mut unresolved = rect_art(10.0, 4.0);
+    unresolved.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(StrokeLayer { brush: Some("missing".into()), ..stroke(1.0) }));
+    for (name, art) in [("plain", rect_art(10.0, 4.0)), ("brushed", brushed), ("unresolved", unresolved)] {
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: std::sync::Arc::new(art) });
+    }
+    let instance = |symbol: &str| Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: symbol.into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    let masked = |symbol: &str| {
+        let mut n = rect_art(10.0, 4.0);
+        n.extras_mut().mask = Some(Box::new(OpacityMask::new(instance(symbol), true)));
+        n
+    };
+    let art = Node::group(NodeId(0), [masked("plain"), masked("brushed"), masked("unresolved")].map(std::sync::Arc::new).into());
+    let b = Brush { name: "s".into(), kind: BrushKind::Scatter(Scatter { art, colorization: Colorization::None, ..Default::default() }) };
+    store(&mut doc, std::slice::from_ref(&b));
+    let out = stroke_pieces(&doc, &b, &line(0.0, 0.0, 100.0, 0.0), &stroke(1.0));
+    assert!(!out.is_empty());
+    for piece in &out {
+        let roots: Vec<Option<&str>> = piece
+            .children()
+            .unwrap()
+            .iter()
+            .map(|c| match c.extras().mask.as_ref().map(|m| &m.art.kind) {
+                Some(NodeKind::SymbolInstance { symbol, .. }) => Some(symbol.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(roots, [Some("plain"), None, Some("unresolved")], "the plain and unresolved masks stay and the brushed one goes");
     }
 }
 
@@ -1395,6 +1901,35 @@ fn an_ordinary_stroke_is_unaffected_by_the_budget() {
     let out = stroke_pieces(&Document::new(1.0, 1.0), &brush, &sq, &stroke(1.0));
     assert_eq!(out.len(), 40, "ten tiles on each of the four sides, as before the budget");
     assert!(anchors(&out) < 2_000_000);
+}
+
+/// A straight-sided art brush on a smooth curve draws smooth edges: they do not turn at the smooth
+/// anchors the fit puts along them.
+#[test]
+fn art_brush_edges_stay_smooth_along_a_curve() {
+    for &(r, w, h, sw) in &[(100.0, 100.0, 10.0, 1.0), (300.0, 100.0, 10.0, 2.0), (30.0, 100.0, 10.0, 1.0), (2000.0, 100.0, 10.0, 1.0)] {
+        // The top half of a circle, as one open path of two curves.
+        let ring = shapes::ellipse(Rect::new(0.0, 0.0, 2.0 * r, 2.0 * r)).to_bezpath();
+        let half_circle: BezPath = ring.elements().iter().take(3).copied().collect();
+        let out = stroke_pieces(&Document::new(1.0, 1.0), &art_brush(rect_art(w, h), ArtScale::Stretch), &half_circle, &stroke(sw));
+        let NodeKind::Path { path, .. } = &out[0].kind else { panic!("an art brush on a path draws a path") };
+
+        // The turn at each smooth anchor of the edges: the angle between the incoming and the
+        // outgoing direction. Real corners (the ends of the art) turn by far more than 60°.
+        let mut kink = 0.0f64;
+        for sp in &path.subpaths {
+            for (k, a) in sp.anchors.iter().enumerate().skip(1).take(sp.anchors.len().saturating_sub(2)) {
+                let h_in = if a.h_in != a.p { a.h_in } else { sp.anchors[k - 1].p };
+                let h_out = if a.h_out != a.p { a.h_out } else { sp.anchors[k + 1].p };
+                let (u, v) = (a.p - h_in, h_out - a.p);
+                if u.hypot() < 1e-9 || v.hypot() < 1e-9 || u.dot(v) < 0.5 * u.hypot() * v.hypot() {
+                    continue;
+                }
+                kink = kink.max(u.cross(v).atan2(u.dot(v)).abs().to_degrees());
+            }
+        }
+        assert!(kink < 0.5, "r={r} art={w}x{h} weight {sw}: an edge turns by {kink:.3}° at a smooth anchor");
+    }
 }
 
 /// Anchors under `n`, and how many of them keep a handle (so the segment is a curve).

@@ -224,7 +224,11 @@ fn save_writes_svg_and_remembers_its_options() {
     let native = dir.join("doc.vectorcraft").to_string_lossy().to_string();
     s.execute("document.save", &json!({"path": native})).unwrap();
     assert!(vectorcraft_format::sniff(&std::fs::read(&native).unwrap()));
-    assert!(s.doc().unwrap().save_options.is_empty(), "a native save remembers no options");
+    assert_eq!(
+        Value::Object(s.doc().unwrap().save_options.clone()),
+        json!({"pdfCompatible":true}),
+        "a native save retains its PDF choice without SVG options"
+    );
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -348,20 +352,8 @@ fn svg_darkness_preserves_source_model_and_gradient_appearance() {
 
 #[test]
 fn svg_darkness_uses_rendered_shadow_in_non_srgb_working_space() {
-    const CHILD: &str = "VECTORCRAFT_TEST_SHADOW_RGB_PROFILE";
-    if std::env::var_os(CHILD).is_none() {
-        // Color settings are process-wide: exercise this profile in a separate test process.
-        let output = std::process::Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "cmd::fileio::tests_svg::svg_darkness_uses_rendered_shadow_in_non_srgb_working_space", "--nocapture"])
-            .env(CHILD, "1")
-            .output()
-            .unwrap();
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(
-            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
-            "isolated color profile test failed:\n{stdout}\n{}",
-            String::from_utf8_lossy(&output.stderr),
-        );
+    // Color settings are process-wide: exercise this profile in a separate test process.
+    if !crate::tests::in_own_process("cmd::fileio::tests_svg::svg_darkness_uses_rendered_shadow_in_non_srgb_working_space") {
         return;
     }
     use vectorcraft_color::{Color, Paint, cms};

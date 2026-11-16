@@ -98,7 +98,9 @@ fn templates_and_libraries_cannot_silently_extract_preview_content() {
     let original = s.doc().unwrap().doc.clone();
     for name in ["test.af", "renamed.svg"] {
         let p = json!({"name":name, "dataBase64":vectorcraft_format::base64_encode(&file(&png()))});
-        for cmd in ["file.newFromTemplate", "swatch.library.load", "graphicStyle.loadLibrary"] {
+        for cmd in
+            ["file.newFromTemplate", "swatch.library.load", "graphicStyle.loadLibrary", "charStyle.load", "paraStyle.load", "textStyle.loadAll"]
+        {
             let e = s.execute(cmd, &p).unwrap_err().to_string();
             assert!(e.contains("File › Open"), "{cmd}: {e}");
         }
@@ -263,6 +265,66 @@ mod native {
             (tag(b"DocR"), F::Def(1, vec![tag(b"DocN")], vec![(tag(b"Chld"), F::Shared(vec![spread]))])),
         ]);
         synth::container(&[("doc.dat", &doc, method)], Some(&png()))
+    }
+
+    /// A version-12 document at 144 ppi holding a 100 px square filled with a red-to-blue conical
+    /// gradient centered at (50, 40) px, 40 px across: its unit +y points down the page, or up
+    /// (`mirror`).
+    fn conical_document(mirror: bool) -> Vec<u8> {
+        let stop = |id: u32, c: F| F::Def(id, vec![tag(b"RGBA")], vec![(tag(b"_col"), c)]);
+        let positions = [[0.0f32, 0.5], [1.0, 0.5]].iter().map(|p| p.iter().flat_map(|v| v.to_le_bytes()).collect()).collect();
+        let grad = F::Obj(
+            tag(b"Grad"),
+            vec![
+                (tag(b"Cols"), F::Shared(vec![stop(23, rgba(1.0, 0.0, 0.0, 1.0)), stop(24, rgba(0.0, 0.0, 1.0, 1.0))])),
+                (tag(b"Posn"), F::Records(8, positions)),
+            ],
+        );
+        let fill = F::Def(22, vec![tag(b"FilG")], vec![(tag(b"Type"), F::Enum(3, 0)), (tag(b"Grad"), grad)]);
+        let unit = F::F64s(vec![40.0, 0.0, 50.0, 0.0, if mirror { -40.0 } else { 40.0 }, 40.0]);
+        let gradient = F::Def(21, vec![tag(b"FDsc")], vec![(tag(b"FDeX"), unit), (tag(b"FDeF"), fill)]);
+        let square = F::Def(
+            20,
+            vec![tag(b"ShpN")],
+            vec![
+                (tag(b"Shpe"), F::Def(25, vec![tag(b"ShNR")], vec![])),
+                (tag(b"ShpB"), F::F64s(vec![0.0, 0.0, 100.0, 100.0])),
+                (tag(b"BFFl"), F::Shared(vec![gradient])),
+            ],
+        );
+        let spread =
+            F::Def(2, vec![tag(b"Sprd")], vec![(tag(b"SprB"), F::F64s(vec![0.0, 0.0, 200.0, 200.0])), (tag(b"Chld"), F::Shared(vec![square]))]);
+        let doc = synth::stream(&[
+            (tag(b"UVCn"), F::Obj(tag(b"UVCn"), vec![(tag(b"UPPI"), F::F64(144.0))])),
+            (tag(b"DocR"), F::Def(1, vec![tag(b"DocN")], vec![(tag(b"Chld"), F::Shared(vec![spread]))])),
+        ]);
+        synth::container(&[("doc.dat", &doc, Method::Stored)], Some(&png()))
+    }
+
+    #[test]
+    fn conical_gradients_open_as_conic_gradients() {
+        use vectorcraft_color::{GradientKind, Paint};
+        for mirror in [false, true] {
+            let mut s = Session::new();
+            let r = open_bytes(&mut s, "conic.af", &conical_document(mirror), None).unwrap();
+            assert!(r["warnings"].as_array().unwrap().iter().all(|w| !w.as_str().unwrap().contains("conical")), "{r}");
+            let mut paint = None;
+            s.doc().unwrap().doc.walk(|n| {
+                if let Paint::Gradient(g) = n.appearance.fill_paint() {
+                    paint = Some(g.clone());
+                }
+            });
+            let g = paint.expect("a gradient fill");
+            assert_eq!(g.gradient.kind, GradientKind::Conic);
+            let geom = g.geom.unwrap();
+            // At 144 ppi: centered at (25, 20) pt, 20 pt across, red where the sweep starts.
+            assert!(geom.start.distance(kurbo::Point::new(25.0, 20.0)) < 1e-9 && (geom.length() - 20.0).abs() < 1e-9, "{geom:?}");
+            assert_eq!(geom.is_mirrored(), mirror, "{geom:?}");
+            // A quarter turn on lies along the unit +y: below the center, or above it mirrored.
+            let quarter = kurbo::Point::new(25.0, if mirror { 10.0 } else { 30.0 });
+            assert!((geom.param_at(GradientKind::Conic, quarter) - 0.25).abs() < 1e-9, "{geom:?}");
+            assert_eq!(g.gradient.stops[0].color.to_hex(), "#ff0000");
+        }
     }
 
     #[test]

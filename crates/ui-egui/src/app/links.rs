@@ -24,10 +24,23 @@ impl VectorcraftApp {
     /// control or MCP request, or a frame of synthetic input): the automation roots don't confine
     /// what that app does.
     pub(crate) fn refuse_automation(&self, id: &str) -> Result<(), String> {
-        if self.ui.answering_control || self.synthetic_frame {
+        if self.automation_is_acting() {
             return Err(format!("{id} opens another app: only the person at the keyboard can run it"));
         }
         Ok(())
+    }
+
+    /// Did automation send what is being handled now: a control or MCP request, or a frame of
+    /// synthetic input?
+    pub(crate) fn automation_is_acting(&self) -> bool {
+        self.ui.answering_control || self.synthetic_frame
+    }
+
+    /// Did automation ask for what is being handled now: [`Self::automation_is_acting`], or the
+    /// answer of a file dialog that automation opened ([`crate::picks::as_automated`]), even when a
+    /// person picked the file in it?
+    pub(crate) fn automation_asked(&self) -> bool {
+        self.automation_is_acting() || self.picks.automated()
     }
 
     /// Run a Help link command and open the URL it returns.

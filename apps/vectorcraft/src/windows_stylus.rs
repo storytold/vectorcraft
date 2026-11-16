@@ -16,6 +16,14 @@
 //! mouse message that Windows did not make from a pen or a touch
 //! (<https://learn.microsoft.com/en-us/windows/win32/tablet/system-events-and-mouse-messages>)
 //! clears the feed.
+//!
+//! The same `POINTER_PEN_INFO` gives the pen's tilt and barrel rotation (#372: a 6D Art Pen turns a
+//! Calligraphic brush's nib with its barrel), each only where its `PEN_MASK_*` bit says the pen
+//! reports it (<https://learn.microsoft.com/en-us/windows/win32/inputmsg/pen-mask-constants>):
+//! `tiltX` and `tiltY` in degrees −90..90, positive to the right and toward the user, and
+//! `rotation` in degrees 0..359 clockwise
+//! (<https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-pointer_pen_info>).
+//! Toward the user is down the screen, so they are [`PenPose`]'s axes and direction as they come.
 #![cfg_attr(not(windows), allow(dead_code))]
 
 use std::cell::RefCell;
@@ -37,6 +45,11 @@ const PEN_FLAG_INVERTED: u32 = 0x0002;
 const PEN_FLAG_ERASER: u32 = 0x0004;
 /// `PEN_MASK_PRESSURE` (`winuser.h`), in `POINTER_PEN_INFO::penMask`: the pen reports pressure.
 const PEN_MASK_PRESSURE: u32 = 0x0001;
+/// `PEN_MASK_ROTATION`, `PEN_MASK_TILT_X` and `PEN_MASK_TILT_Y` (`winuser.h`): the pen reports its
+/// barrel rotation, its tilt along x and its tilt along y.
+const PEN_MASK_ROTATION: u32 = 0x0002;
+const PEN_MASK_TILT_X: u32 = 0x0004;
+const PEN_MASK_TILT_Y: u32 = 0x0008;
 /// `MI_WP_SIGNATURE` and `SIGNATURE_MASK`: the extra information of a mouse message that Windows
 /// made from a pen or a touch.
 const MI_WP_SIGNATURE: u32 = 0xFF51_5700;
@@ -94,7 +107,8 @@ pub fn msg_hook(msg: *const std::ffi::c_void) -> bool {
         // pointer that is not a pen.
         unsafe { GetPointerPenInfo((msg.wParam.0 & 0xffff) as u32, &mut info) }.ok()?;
         let in_contact = info.pointerInfo.pointerFlags.0 & POINTER_FLAG_INCONTACT.0 != 0;
-        Some(pen_sample(info.pressure, info.penMask, info.penFlags, in_contact))
+        let pose = pen_pose(info.penMask, info.tiltX, info.tiltY, info.rotation);
+        Some(pen_sample(info.pressure, info.penMask, info.penFlags, in_contact, pose))
     };
     // SAFETY: `GetMessageExtraInfo` reads the extra information of the thread's last message.
     let from_mouse = || is_mouse(unsafe { GetMessageExtraInfo() }.0 as u32);
@@ -106,15 +120,25 @@ pub fn msg_hook(msg: *const std::ffi::c_void) -> bool {
 
 /// What a pen whose `POINTER_PEN_INFO` holds `pressure` (0..1024), `pen_mask` and `pen_flags`
 /// reports: the pressure as winit gives it to a touch, 0 while it hovers, a full press for a pen
-/// in contact that reports none; and the eraser end while it is inverted or its eraser button is
-/// pressed.
-fn pen_sample(pressure: u32, pen_mask: u32, pen_flags: u32, in_contact: bool) -> PenSample {
+/// in contact that reports none; the eraser end while it is inverted or its eraser button is
+/// pressed; and how it is held, `pose` ([`pen_pose`]).
+fn pen_sample(pressure: u32, pen_mask: u32, pen_flags: u32, in_contact: bool, pose: PenPose) -> PenSample {
     let pressure = match pressure {
         1..=1024 if pen_mask & PEN_MASK_PRESSURE != 0 => pressure as f32 / 1024.0,
         _ if in_contact => 1.0,
         _ => 0.0,
     };
-    PenSample { pressure, eraser: pen_flags & (PEN_FLAG_INVERTED | PEN_FLAG_ERASER) != 0, pose: PenPose::default() }
+    PenSample { pressure, eraser: pen_flags & (PEN_FLAG_INVERTED | PEN_FLAG_ERASER) != 0, pose }
+}
+
+/// How a pen whose `POINTER_PEN_INFO` holds `pen_mask`, `tilt_x`, `tilt_y` and `rotation` is
+/// held: the tilt when the pen reports it along either axis (0 along an axis it doesn't), the
+/// rotation when it reports one, each kept within [`PenPose`]'s ranges.
+fn pen_pose(pen_mask: u32, tilt_x: i32, tilt_y: i32, rotation: u32) -> PenPose {
+    let along = |mask: u32, t: i32| if pen_mask & mask != 0 { t as f32 } else { 0.0 };
+    let tilt = (pen_mask & (PEN_MASK_TILT_X | PEN_MASK_TILT_Y) != 0).then(|| [along(PEN_MASK_TILT_X, tilt_x), along(PEN_MASK_TILT_Y, tilt_y)]);
+    let rotation = (pen_mask & PEN_MASK_ROTATION != 0).then_some(rotation as f32);
+    PenPose { tilt, rotation }.sanitized()
 }
 
 /// Whether a mouse message with this extra information (`GetMessageExtraInfo`) comes from a mouse,
@@ -390,7 +414,7 @@ mod tests {
 
     #[test]
     fn an_inverted_pen_or_its_eraser_button_is_the_eraser_end() {
-        let eraser = |flags| pen_sample(512, PEN_MASK_PRESSURE, flags, true).eraser;
+        let eraser = |flags| pen_sample(512, PEN_MASK_PRESSURE, flags, true, PenPose::default()).eraser;
         assert!(!eraser(0), "the tip");
         assert!(!eraser(PEN_FLAG_BARREL), "the barrel button");
         assert!(eraser(PEN_FLAG_INVERTED), "turned over");
@@ -400,18 +424,31 @@ mod tests {
     }
 
     #[test]
+    fn a_pens_tilt_and_rotation_come_where_it_reports_them() {
+        let all = PEN_MASK_TILT_X | PEN_MASK_TILT_Y | PEN_MASK_ROTATION;
+        assert_eq!(pen_pose(all, 30, -45, 90), PenPose { tilt: Some([30.0, -45.0]), rotation: Some(90.0) });
+        assert_eq!(pen_pose(PEN_MASK_PRESSURE, 30, -45, 90), PenPose::default(), "a pen that reports neither");
+        assert_eq!(pen_pose(PEN_MASK_TILT_X, 30, -45, 90), PenPose { tilt: Some([30.0, 0.0]), rotation: None }, "one axis");
+        assert_eq!(pen_pose(PEN_MASK_ROTATION, 0, 0, 359), PenPose { tilt: None, rotation: Some(359.0) }, "a 6D Art Pen's barrel");
+        let wild = pen_pose(all, 400, i32::MIN, 720);
+        assert_eq!(wild, PenPose { tilt: Some([90.0, -90.0]), rotation: Some(0.0) }, "kept within the ranges");
+        let pose = pen_pose(all, 10, 20, 180);
+        assert_eq!(pen_sample(512, PEN_MASK_PRESSURE | all, 0, true, pose).pose, pose);
+    }
+
+    #[test]
     fn a_pens_pressure_is_the_one_winit_gives_its_touch() {
-        assert_eq!(pen_sample(512, PEN_MASK_PRESSURE, 0, true).pressure, 0.5);
-        assert_eq!(pen_sample(1024, PEN_MASK_PRESSURE, 0, true).pressure, 1.0);
+        assert_eq!(pen_sample(512, PEN_MASK_PRESSURE, 0, true, PenPose::default()).pressure, 0.5);
+        assert_eq!(pen_sample(1024, PEN_MASK_PRESSURE, 0, true, PenPose::default()).pressure, 1.0);
         assert_eq!(
-            pen_sample(0, PEN_MASK_PRESSURE, PEN_FLAG_INVERTED, false),
+            pen_sample(0, PEN_MASK_PRESSURE, PEN_FLAG_INVERTED, false, PenPose::default()),
             PenSample { pressure: 0.0, eraser: true, pose: PenPose::default() },
             "hovering"
         );
-        assert_eq!(pen_sample(0, 0, 0, true).pressure, 1.0, "a pen in contact that reports no pressure presses fully");
-        assert_eq!(pen_sample(300, 0, 0, true).pressure, 1.0, "a pressure without the pressure mask is not one");
-        assert_eq!(pen_sample(0, PEN_MASK_PRESSURE, 0, true).pressure, 1.0, "as winit, which gives no force for 0");
-        assert_eq!(pen_sample(2000, PEN_MASK_PRESSURE, 0, false).pressure, 0.0);
+        assert_eq!(pen_sample(0, 0, 0, true, PenPose::default()).pressure, 1.0, "a pen in contact that reports no pressure presses fully");
+        assert_eq!(pen_sample(300, 0, 0, true, PenPose::default()).pressure, 1.0, "a pressure without the pressure mask is not one");
+        assert_eq!(pen_sample(0, PEN_MASK_PRESSURE, 0, true, PenPose::default()).pressure, 1.0, "as winit, which gives no force for 0");
+        assert_eq!(pen_sample(2000, PEN_MASK_PRESSURE, 0, false, PenPose::default()).pressure, 0.0);
     }
 
     #[test]

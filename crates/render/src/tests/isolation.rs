@@ -498,4 +498,13 @@ fn nested_isolated_blending_groups_stay_within_the_offscreen_budget() {
     assert!(images <= budget, "{images} pixels drawn from offscreen groups, budget {budget}");
     assert_near(frame.pixel(50, 50), blend_rgb(Blend::Multiply, B, S), "inside the groups");
     assert_near(frame.pixel(10, 10), B, "outside the groups");
+    let mut r = Renderer::new();
+    render_with(&mut r, &d, &RenderOptions::default());
+    assert!(r.stats.view_sized > 0, "levels past the budget depend on the frame's size");
+    let within = doc(|d| {
+        let n = multiply(d);
+        group(d, vec![n], 1.0, Blend::Multiply, true)
+    });
+    render_with(&mut r, &within, &RenderOptions::default());
+    assert_eq!(r.stats.view_sized, 0, "a group within the budget");
 }
