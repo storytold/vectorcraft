@@ -289,8 +289,8 @@ impl Index {
     /// words of a result's menu home and of its menu item's label count as menu path words. The
     /// words of the English names, menu home and menu item label also add their English stem forms
     /// ([`stems`]); words in the UI language do not. `search_row` gives the UI language's words
-    /// for a group of words with the same meaning ([`synonym_groups`]). A catalog with more results than a
-    /// posting can name gets an empty index, and queries match by the substring rule alone.
+    /// for a group of words with the same meaning ([`synonym_groups`]). A catalog with more results
+    /// than a posting can name gets an empty index, and queries match by the substring rule alone.
     pub(crate) fn build(entries: &[Entry], homes: &[Option<String>], search_row: impl Fn(&str) -> Option<String>) -> Index {
         if entries.len() > usize::from(u16::MAX) {
             return Index::default();
@@ -1158,7 +1158,12 @@ mod tests {
         assert!(within("flip", "object.reflect", 3), "{:?}", ranked(&c, "flip"));
         assert!(within("combine", "object.pathfinder.unite", 3), "{:?}", ranked(&c, "combine"));
         assert!(ranked(&c, "vectorize").iter().take(3).any(|id| id.starts_with("imageTrace.")), "{:?}", ranked(&c, "vectorize"));
-        assert!(within("colour", "panel:color", 3), "{:?}", ranked(&c, "colour"));
+        assert_eq!(first("colour"), "panel:color", "{:?}", ranked(&c, "colour"));
+        // A word that only starts other labels is in a group, and its labels follow the direct match.
+        assert_eq!(first("unite"), "object.pathfinder.unite");
+        assert!(place(&c, "unite", "object.slice.combine").is_some(), "{:?}", ranked(&c, "unite"));
+        assert!(place(&c, "delete", "view.guides.clear").is_some(), "{:?}", ranked(&c, "delete"));
+        assert!(place(&c, "settings", "edit.preferences").is_some(), "{:?}", ranked(&c, "settings"));
         let merge = ranked(&c, "merge");
         let unite = merge.iter().position(|id| id == "object.pathfinder.unite");
         let named = |id: &String| c.list.iter().any(|e| &e.id == id && split_name(&e.shown).0 == "Merge");

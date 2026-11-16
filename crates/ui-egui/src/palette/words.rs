@@ -2,18 +2,22 @@
 //! written for this table. A query word in a group also finds results whose label or menu path
 //! holds another word of its group ([`super::search`]).
 //!
-//! A word that is a command's own label, or that names other commands, stays out of a group with
-//! another command's word: Merge names Pathfinder and Live Paint commands that are not Unite, Mirror
-//! names a repeat that is not Reflect…, and Insert names type commands that are not Place…, so these
-//! are in no group. Plural and verb forms that the search's English stem forms already join (round
-//! and rounded) are not groups.
+//! A word that is the whole label of a command stays out of a group whose other words name a
+//! different command: Merge is the label of Pathfinder and Live Paint commands that are not Unite,
+//! and Mirror is the label of a repeat that is not Reflect…, so these are in no group. Insert is left
+//! out too, since it starts the labels of type commands that are not Place…. A word that only starts
+//! or ends other labels can be in a group, and a search for another word of its group also lists
+//! those labels: "unite" lists Combine Slices after Unite, and "delete" lists Clear Guides. Plural and
+//! verb forms that the search's English stem forms already join (round and rounded) are not groups.
 //!
 //! A catalog may add a group's words in its language with a row in the `search` context: the group's
 //! English words joined by ", ", then that language's words joined by ", ". The words join the group
-//! while that language is the UI language. No catalog has to have these rows.
+//! while that language is the UI language. No catalog has to have these rows. The search splits
+//! labels into words only at spaces and punctuation, so in a language written without spaces a row's
+//! word finds only a label that is that word alone.
 
-/// The groups: lowercase single English words, at most [`MAX_WORDS`] in a group and
-/// [`MAX_GROUPS`] groups, no word longer than [`MAX_CHARS`] characters and no word in two groups.
+/// The groups: lowercase single English words, at most `MAX_WORDS` in a group and `MAX_GROUPS`
+/// groups, no word longer than [`MAX_CHARS`] characters and no word in two groups.
 pub(crate) const GROUPS: &[&[&str]] = &[
     &["remove", "delete", "erase", "clear"],
     &["background", "bg"],

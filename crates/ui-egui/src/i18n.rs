@@ -633,6 +633,11 @@ pub fn tr_ctx<'a>(lang: Lang, context: &str, s: &'a str) -> &'a str {
     lang.catalog().contextual(context, s).unwrap_or_else(|| tr(lang, s))
 }
 
+/// The translation of `s` in `lang`'s `context` rows alone, or `None` when it has no such row.
+pub fn tr_ctx_row(lang: Lang, context: &str, s: &str) -> Option<&'static str> {
+    lang.catalog().contextual(context, s)
+}
+
 /// A name the app gives something (a default swatch's), translated where the current language has
 /// a `context` row for it; any other name (one the user gave) comes back as it is.
 pub fn t_name<'a>(context: &str, name: &'a str) -> &'a str {
