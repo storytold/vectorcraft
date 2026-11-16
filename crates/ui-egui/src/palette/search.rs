@@ -21,7 +21,8 @@ const PATH_STEMMED: u8 = 4;
 /// A word's grade in a result, best first: a whole word of the label, a word of the label it
 /// shares an English stem form with ("outlines" and Outline), a word of the label it starts, a
 /// word of the menu path it is, shares a stem form with or starts, a word of the id it is or
-/// starts, or text inside a word of any field ([`super::matching`]'s substring rule). The grades
+/// starts, text inside a word of any field ([`super::matching`]'s substring rule), a word of the
+/// label a typo away from it ([`Index::typos`]), or a word of the menu path a typo away. The grades
 /// without a stem are twice the values they had before stems were added, so results matched
 /// without a stem keep their order by the sum of the grades.
 const LABEL_WORD: u8 = 2;
@@ -30,7 +31,12 @@ const LABEL_PREFIX: u8 = 4;
 const PATH_WORD: u8 = 6;
 const ID_WORD: u8 = 8;
 const SUBSTRING: u8 = 10;
+const LABEL_TYPO: u8 = 12;
+const PATH_TYPO: u8 = 14;
 const NONE: u8 = u8::MAX;
+
+/// The most words a query word with a typo meets ([`Index::typos`]), nearest first.
+const TYPO_TERMS: usize = 32;
 
 /// How a whole query matches a result, best first: it is the result's id, it is a label, a label
 /// starts with it, or it is the initials of a label.
@@ -131,6 +137,80 @@ fn stems(word: &str) -> Vec<String> {
         return one(word.get(..n - 1).unwrap_or_default());
     }
     vec![]
+}
+
+/// Is `c` a letter of a script written without spaces between words (Han, kana or Hangul)?
+fn spaceless(c: char) -> bool {
+    matches!(
+        u32::from(c),
+        0x1100..=0x11FF
+            | 0x3040..=0x30FF
+            | 0x3130..=0x318F
+            | 0x31F0..=0x31FF
+            | 0x3400..=0x4DBF
+            | 0x4E00..=0x9FFF
+            | 0xA960..=0xA97F
+            | 0xAC00..=0xD7FF
+            | 0xF900..=0xFAFF
+            | 0xFF66..=0xFFDC
+            | 0x20000..=0x323AF
+    )
+}
+
+/// The most edits a query word may be away from a word it meets as a typo: 1 for a word of 4 to 7
+/// characters, 2 for a longer one, and none for a shorter word or one with letters of a script
+/// written without spaces ([`spaceless`]).
+fn typo_bound(word: &str) -> Option<usize> {
+    if word.chars().any(spaceless) {
+        return None;
+    }
+    match word.chars().count() {
+        0..=3 => None,
+        4..=7 => Some(1),
+        _ => Some(2),
+    }
+}
+
+/// The number of edits between `a` and `b` when it is at most `bound`: a character inserted,
+/// removed or changed, or two adjacent characters swapped (`gruop` and `group`), each count as one.
+/// The count stops as soon as every way of lining the two up needs more than `bound`.
+fn edits_within(a: &[char], b: &[char], bound: usize) -> Option<usize> {
+    if a.len().abs_diff(b.len()) > bound {
+        return None;
+    }
+    let at = |row: &[usize], j: usize| row.get(j).copied().unwrap_or(usize::MAX);
+    // The edits between the first i characters of `a` and the first j of `b`, for the rows i - 2,
+    // i - 1 and i.
+    let mut before: Vec<usize> = vec![0; b.len() + 1];
+    let mut last: Vec<usize> = (0..=b.len()).collect();
+    let mut row: Vec<usize> = vec![0; b.len() + 1];
+    for (i, &ca) in a.iter().enumerate() {
+        if let Some(first) = row.first_mut() {
+            *first = i + 1;
+        }
+        for (j, &cb) in b.iter().enumerate() {
+            let changed = at(&last, j).saturating_add(usize::from(ca != cb));
+            let removed = at(&last, j + 1).saturating_add(1);
+            let inserted = at(&row, j).saturating_add(1);
+            let mut edits = changed.min(removed).min(inserted);
+            let swapped = i.checked_sub(1).and_then(|k| a.get(k)).zip(j.checked_sub(1).and_then(|k| b.get(k)));
+            if let Some((&pa, &pb)) = swapped
+                && pa == cb
+                && pb == ca
+            {
+                edits = edits.min(at(&before, j - 1).saturating_add(1));
+            }
+            if let Some(cell) = row.get_mut(j + 1) {
+                *cell = edits;
+            }
+        }
+        if row.iter().all(|&e| e > bound) {
+            return None;
+        }
+        std::mem::swap(&mut before, &mut last);
+        std::mem::swap(&mut last, &mut row);
+    }
+    last.last().copied().filter(|&e| e <= bound)
 }
 
 /// Adds each word of `text` to `found` for result `entry` in `field`, and with `stemmed`, each
@@ -330,6 +410,56 @@ impl Index {
         out
     }
 
+    /// The words of labels and menu paths that `word` is a typo of: within [`typo_bound`] edits of
+    /// it ([`edits_within`]), at most [`TYPO_TERMS`], nearest first, as places in `terms`. Ids and
+    /// words with letters of a script written without spaces ([`spaceless`]) are not compared.
+    fn typos(&self, word: &str) -> Vec<usize> {
+        let Some(bound) = typo_bound(word) else { return vec![] };
+        let word: Vec<char> = word.chars().collect();
+        let mut term: Vec<char> = vec![];
+        let mut near: Vec<(usize, usize)> = vec![];
+        for (t, at) in self.terms.iter().enumerate() {
+            let text = self.text(at);
+            if text.chars().count().abs_diff(word.len()) > bound || text.chars().any(spaceless) {
+                continue;
+            }
+            term.clear();
+            term.extend(text.chars());
+            if let Some(edits) = edits_within(&word, &term, bound)
+                && self.postings_of(t).iter().any(|p| matches!(p.field, LABEL | PATH))
+            {
+                near.push((edits, t));
+            }
+        }
+        near.sort_unstable();
+        near.truncate(TYPO_TERMS);
+        near.into_iter().map(|(_, t)| t).collect()
+    }
+
+    /// Gives each result a word of `near` ([`Index::typos`]) is a word of its label or menu path
+    /// [`LABEL_TYPO`] or [`PATH_TYPO`] in `grades`, where its grade is not better.
+    fn mark_typos(&self, near: &[usize], grades: &mut [u8]) {
+        for &t in near {
+            for p in self.postings_of(t) {
+                let grade = match p.field {
+                    LABEL => LABEL_TYPO,
+                    PATH => PATH_TYPO,
+                    _ => continue,
+                };
+                if let Some(g) = grades.get_mut(usize::from(p.entry)) {
+                    *g = (*g).min(grade);
+                }
+            }
+        }
+    }
+
+    /// The text of the first word of `near` that is a word of result `i` in `field` (its label or
+    /// its menu path).
+    fn nearest_of(&self, near: &[usize], i: usize, field: u8) -> Option<&str> {
+        let t = near.iter().find(|&&t| self.postings_of(t).iter().any(|p| usize::from(p.entry) == i && p.field == field))?;
+        self.terms.get(*t).map(|at| self.text(at))
+    }
+
     /// Is `query` (no spaces) the initials of one of result `i`'s labels?
     fn initials_are(&self, i: usize, query: &str) -> bool {
         let Some(&(offset, len)) = self.initials.get(i) else { return false };
@@ -379,18 +509,23 @@ fn phrase(e: &Entry, query: &str, initials: bool) -> u8 {
     NO_PHRASE
 }
 
-/// What results are ordered by, compared field by field: how the whole query matches, the worst
-/// grade a word gets, the sum of the grades, the kind of result and the label's length.
-type RankKey = (u8, u8, u32, u8, usize);
+/// What results are ordered by, compared field by field: whether a word matched only through a
+/// typo, how the whole query matches, the worst grade a word gets, the sum of the grades, the kind
+/// of result and the label's length.
+type RankKey = (bool, u8, u8, u32, u8, usize);
 
 /// The results of `entries` that the lowercased `query` matches, best first, as places in
 /// `entries`. A result matches when every word of the query is text in one of its names or ids
 /// (the rule the palette always had, so nothing it found is lost), when every word of the query is
 /// or starts a word of its label, menu path or id or shares an English stem form with a word of its
 /// label or menu path ("rounded corners" for Round Corners…), or when the query is the initials of
-/// a label ("ea" for Export As…). Results are ordered by how the whole query matches ([`phrase`]),
-/// then by the worst grade a word gets, the sum of the grades, the kind of result ([`kind`]), the
-/// label's length and the catalog order. An empty query lists every result in catalog order.
+/// a label ("ea" for Export As…). A query word that is no word, stem form or word start of any
+/// result also matches the words of labels and menu paths it is a typo of ([`Index::typos`]).
+/// Results where a word matched only through a typo come after every other result, and their
+/// whole-query match is read with each such word replaced by the word it is a typo of ("gruop" as
+/// "group"). Results are ordered by that, by how the whole query matches ([`phrase`]), then by the
+/// worst grade a word gets, the sum of the grades, the kind of result ([`kind`]), the label's length
+/// and the catalog order. An empty query lists every result in catalog order.
 pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
     let query = normalize(query);
     if query.is_empty() {
@@ -399,8 +534,34 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
     let spaced: Vec<&str> = query.split(' ').collect();
     let head: String = query.chars().take(INDEX_CHARS).collect();
     let tokens: Vec<&str> = words(&head).collect();
+    // Where each word starts in the query (`head` is its start), for reading the query with a typo
+    // corrected.
+    let starts: Vec<usize> = tokens.iter().map(|t| (t.as_ptr() as usize).saturating_sub(head.as_ptr() as usize)).collect();
     let n = entries.len();
-    let indexed: Vec<Vec<u8>> = tokens.iter().map(|t| index.grades(t, n)).collect();
+    let mut indexed: Vec<Vec<u8>> = Vec::with_capacity(tokens.len());
+    let mut typos: Vec<Vec<usize>> = Vec::with_capacity(tokens.len());
+    // After a word that is nothing in any result and a typo of nothing, a result is found only by
+    // the substring rule or its initials, where a typo grade changes nothing, so the later words are
+    // not compared.
+    let mut compare = true;
+    for (k, t) in tokens.iter().enumerate() {
+        // A repeated word is graded once.
+        if let Some(j) = tokens.iter().take(k).position(|u| u == t)
+            && let (Some(grades), Some(near)) = (indexed.get(j).cloned(), typos.get(j).cloned())
+        {
+            indexed.push(grades);
+            typos.push(near);
+            continue;
+        }
+        let mut grades = index.grades(t, n);
+        let near = if compare && grades.iter().all(|&g| g == NONE) { index.typos(t) } else { vec![] };
+        if near.is_empty() && grades.iter().all(|&g| g == NONE) {
+            compare = false;
+        }
+        index.mark_typos(&near, &mut grades);
+        indexed.push(grades);
+        typos.push(near);
+    }
     // The index reads only the start of a longer query, so such a query matches by the substring
     // rule, which reads all of it.
     let fits = query.chars().count() <= INDEX_CHARS;
@@ -414,24 +575,55 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
         // Each word's grade, the worst and their sum; with initials, every word counts as a word
         // the label starts, as the initials stand for every word of the label.
         let (mut all_indexed, mut worst, mut sum) = (fits && !tokens.is_empty(), 0u8, 0u32);
-        for (grades, token) in indexed.iter().zip(&tokens) {
+        // The query as read for the whole-query match, with each word matched only through a typo
+        // replaced by the word of this result it is a typo of.
+        let (mut typo, mut corrected) = (false, String::new());
+        let mut copied = 0;
+        for (k, (grades, token)) in indexed.iter().zip(&tokens).enumerate() {
             let mut g = grades.get(i).copied().unwrap_or(NONE);
             if g == NONE {
                 all_indexed = false;
-                if e.haystack.contains(token) {
-                    g = SUBSTRING;
+            }
+            if g > SUBSTRING && e.haystack.contains(token) {
+                g = SUBSTRING;
+            }
+            let g = if initials {
+                g.min(LABEL_PREFIX)
+            } else if g == NONE {
+                SUBSTRING
+            } else {
+                g
+            };
+            let field = match g {
+                LABEL_TYPO => Some(LABEL),
+                PATH_TYPO => Some(PATH),
+                _ => None,
+            };
+            if let Some(field) = field {
+                typo = true;
+                let near = typos.get(k).and_then(|near| index.nearest_of(near, i, field));
+                if let (Some(near), Some(&start)) = (near, starts.get(k))
+                    && let Some(between) = query.get(copied..start)
+                {
+                    corrected.push_str(between);
+                    corrected.push_str(near);
+                    copied = start + token.len();
                 }
             }
-            let g = if initials { g.min(LABEL_PREFIX) } else { g.min(SUBSTRING) };
             worst = worst.max(g);
             sum += u32::from(g);
         }
         if !(substring || all_indexed || initials) {
             continue;
         }
-        let tier = phrase(e, &query, initials);
+        let tier = if typo {
+            corrected.push_str(query.get(copied..).unwrap_or_default());
+            phrase(e, &corrected, false)
+        } else {
+            phrase(e, &query, initials)
+        };
         let length = split_name(&e.shown).0.chars().count();
-        ranked.push(((tier, worst, sum, e.kind, length), place));
+        ranked.push(((typo, tier, worst, sum, e.kind, length), place));
     }
     ranked.sort_by_key(|&(key, place)| (key, place));
     ranked.into_iter().map(|(_, place)| place).collect()
@@ -702,6 +894,121 @@ mod tests {
         ] {
             assert!(place(&en, q, id).is_some(), "{q} finds {id}");
         }
+    }
+
+    /// Edits are counted up to a bound: a changed, inserted or removed character, or two adjacent
+    /// characters swapped, is one edit, and words further apart than the bound give none.
+    #[test]
+    fn edits_are_counted_up_to_a_bound() {
+        let edits = |a: &str, b: &str, bound: usize| edits_within(&a.chars().collect::<Vec<_>>(), &b.chars().collect::<Vec<_>>(), bound);
+        for (a, b, bound, expected) in [
+            ("group", "group", 1, Some(0)),
+            ("gruop", "group", 1, Some(1)),
+            ("elipse", "ellipse", 1, Some(1)),
+            ("rectange", "rectangle", 2, Some(1)),
+            ("eyedroper", "eyedropper", 2, Some(1)),
+            ("recktanglee", "rectangle", 2, Some(2)),
+            ("grop", "group", 1, Some(1)),
+            ("grap", "group", 1, None),
+            ("ab", "abcd", 1, None),
+            ("ca", "abc", 2, None),
+            ("abcd", "wxyz", 2, None),
+            ("über", "uber", 1, Some(1)),
+            ("", "ab", 2, Some(2)),
+        ] {
+            assert_eq!(edits(a, b, bound), expected, "{a} {b}");
+            assert_eq!(edits(b, a, bound), expected, "{b} {a}");
+        }
+        assert_eq!(typo_bound("pen"), None);
+        assert_eq!(typo_bound("elip"), Some(1));
+        assert_eq!(typo_bound("rectang"), Some(1));
+        assert_eq!(typo_bound("rectange"), Some(2));
+        for w in ["群組群組", "かなかなか", "한국어단어", "zz群組"] {
+            assert_eq!(typo_bound(w), None, "{w}");
+        }
+    }
+
+    /// A query word with a typo finds a result whose label or menu path holds the word, below every
+    /// result matched without a typo, and a word that is a word or a word start of some result, a
+    /// word of fewer than 4 letters, an id and a word of a script written without spaces get no
+    /// typo matches.
+    #[test]
+    fn a_word_with_a_typo_finds_the_result() {
+        let c = synthetic(vec![entry("Zz Group", "a.one"), entry("Zz Cut", "b.two"), entry("Zz Rectangle", "c.three")]);
+        assert_eq!(ranked(&c, "gruop"), ["a.one"], "two letters swapped");
+        assert_eq!(ranked(&c, "gruop zz"), ["a.one"]);
+        assert_eq!(ranked(&c, "cutx"), ["b.two"]);
+        assert!(ranked(&c, "cux").is_empty(), "3 letters");
+        assert_eq!(ranked(&c, "recktanglee"), ["c.three"], "two edits in a longer word");
+        assert!(ranked(&c, "rectanglexxx").is_empty());
+        // Below a result whose name holds the word as text, and below one that holds it whole.
+        let c = synthetic(vec![entry("Zz Color", "a.one"), entry("Zz Bcolrb", "b.two")]);
+        assert_eq!(ranked(&c, "colr"), ["b.two", "a.one"]);
+        let c = synthetic(vec![entry("Color", "a.one"), entry("Zz Bcolrb", "b.two")]);
+        assert_eq!(ranked(&c, "colr"), ["b.two", "a.one"], "also when the word spelled right is the label");
+        let c = synthetic(vec![entry("Zz Color", "a.one"), entry("Zz Colr", "b.two")]);
+        assert_eq!(ranked(&c, "colr"), ["b.two"], "a word some result holds gets no typo matches");
+        // A word of the label before a word of the menu path.
+        let c = synthetic(vec![entry("Color › Zz Other", "a.one"), entry("Zz Color", "b.two")]);
+        assert_eq!(ranked(&c, "colr"), ["b.two", "a.one"]);
+        // Ids and words of scripts written without spaces.
+        let c = synthetic(vec![entry("Zz One", "group.one"), entry("物件 › 群組群組", "b.two")]);
+        assert!(ranked(&c, "gruop").is_empty());
+        assert!(ranked(&c, "群組群物").is_empty());
+        // A word of Latin letters followed by Han letters, one edit from "abcd", is not compared.
+        let c = synthetic(vec![entry("Zz Abc群", "a.one")]);
+        assert!(ranked(&c, "abcd").is_empty());
+        // The whole query is read with the word it is a typo of: "gruop" names Group as "group" does.
+        let c = synthetic(vec![entry("Group Selection Tool", "tool:groupSelection"), entry("Object › Group", "object.group")]);
+        assert_eq!(ranked(&c, "gruop"), ranked(&c, "group"));
+        assert_eq!(ranked(&c, "gruop").first().map(String::as_str), Some("object.group"));
+        // The rest of the query is read as typed, `›` included.
+        let c = synthetic(vec![entry("Object › Group Zz Tool", "tool:zz"), entry("Object › Group", "object.group")]);
+        assert_eq!(ranked(&c, "object › group"), ["object.group", "tool:zz"]);
+        assert_eq!(ranked(&c, "object › gruop"), ranked(&c, "object › group"));
+        // A label typo is read with the word of the label, even when a word of the menu path is
+        // nearer: "abcdefgh" reads as "abcdefyy" in the first, which is then its label.
+        let c = synthetic(vec![entry("Abcdefyy Zz", "tool:b"), entry("Abcdefgx › Abcdefyy", "a.one")]);
+        assert_eq!(ranked(&c, "abcdefgh"), ["a.one", "tool:b"]);
+    }
+
+    /// A query word with a typo meets at most 32 words, the nearest first, and a long word with no
+    /// match finds nothing.
+    #[test]
+    fn a_typo_meets_at_most_32_words() {
+        // 35 words one edit from the query and one word two edits from it, which sorts before them.
+        let near = ('a'..='z').chain('0'..='9').filter(|&ch| ch != 'q');
+        let mut entries: Vec<Entry> = near.enumerate().map(|(i, ch)| entry(&format!("Abcdefg{ch}"), &format!("a.n{i}"))).collect();
+        entries.insert(0, entry("Abcdeaxq", "far.one"));
+        let c = synthetic(entries);
+        let found = ranked(&c, "abcdefgq");
+        assert_eq!(found.len(), 32, "{found:?}");
+        assert!(!found.contains(&"far.one".to_string()));
+        let c = synthetic(vec![entry("Abcdeaxq", "far.one")]);
+        assert_eq!(ranked(&c, "abcdefgq"), ["far.one"], "two edits in a word of 8 letters");
+        assert!(ranked(&c, &"q".repeat(30)).is_empty());
+    }
+
+    /// On the English results, misspelled words list first the commands the word spelled right
+    /// lists first, the tool among the first four, and a word of 3 letters is not read as a typo.
+    #[test]
+    fn misspelled_words_find_the_command() {
+        let c = catalog(Lang::EN, false);
+        let first = |q: &str| ranked(&c, q).first().cloned().unwrap_or_default();
+        assert_eq!(first("gruop"), "object.group");
+        for (typo, word, tool) in [
+            ("eyedroper", "eyedropper", "tool:eyedropper"),
+            ("rectange", "rectangle", "tool:rectangle"),
+            ("elipse", "ellipse", "tool:ellipse"),
+            ("gruop", "group", "tool:groupSelection"),
+        ] {
+            assert!(substring_rule(&c, typo).is_empty(), "{typo} matched nothing before");
+            let top = |q: &str| ranked(&c, q).into_iter().take(4).collect::<Vec<_>>();
+            assert_eq!(top(typo), top(word), "{typo}");
+            assert!(place(&c, typo, tool).is_some_and(|p| p < 4), "{typo}: {:?}", ranked(&c, typo));
+        }
+        assert_eq!(first("pen"), "tool:pen");
+        assert!(place(&c, "pen", "file.open").is_some(), "Open… holds the text");
     }
 
     /// The application menu of the native Mac menu bar holds the items [`menu_homes`] puts there,
@@ -975,7 +1282,9 @@ mod tests {
         let index = Index::build(&c.list, &[]);
         println!("catalog {built:?}, index alone {:?}, {} results, {} bytes", started.elapsed(), c.list.len(), index.bytes());
         let long = "q".repeat(200);
-        for q in ["e", "ea", "select", "bring front", "zzzz", long.as_str()] {
+        let typos = "gruop elipse rectange eyedroper trasnform patern gradeint symbl";
+        let repeated = format!("{typos} ").repeat(3);
+        for q in ["e", "ea", "select", "bring front", "zzzz", "eyedroper", "gruop zz", typos, repeated.as_str(), long.as_str()] {
             let started = std::time::Instant::now();
             let runs = 100;
             for _ in 0..runs {
