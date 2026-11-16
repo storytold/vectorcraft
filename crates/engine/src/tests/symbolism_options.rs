@@ -491,6 +491,8 @@ fn bad_sprayer_attributes_are_refused() {
     // Style: User Defined with a style the document does not have; Average does not use it.
     let user = json!({"name": "Dot", "points": [[200, 150]], "attributes": {"style": "userDefined"}, "style": "Nope"});
     refused(&mut s, "symbol.spray", user, "unknown graphic style `Nope`");
+    let number = json!({"name": "Dot", "points": [[200, 150]], "attributes": {"style": "userDefined"}, "style": 3});
+    refused(&mut s, "symbol.spray", number, "`style` must be a graphic style's name, not 3");
     let average = json!({"name": "Dot", "points": [[200, 150]], "style": "Nope"});
     assert_eq!(s.execute("symbol.spray", &average).unwrap()["count"], 1);
     let all = json!({"scrunch": "average", "size": "userDefined", "spin": null, "screen": "average", "stain": "average", "style": "average"});

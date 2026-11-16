@@ -941,6 +941,9 @@ pub(super) fn symbol_spray(s: &mut Session, p: &Value) -> Result<Value> {
         Some(c) => crate::cmd::paint::new_color(s, p, c),
         None => s.paint.fill.color().unwrap_or(Color::BLACK),
     };
+    if let Some(v) = p.get("style").filter(|v| !v.is_string()) {
+        return Err(bad(C, format!("`style` must be a graphic style's name, not {v}")));
+    }
     let style = style_paint(&st.doc, p);
     // Style: User Defined uses the style `style` names, so one the document does not have is an error.
     if let Some(n) = str_param(p, "style").filter(|_| !modes.style && style.is_none()) {
