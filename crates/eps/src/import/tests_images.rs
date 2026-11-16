@@ -106,6 +106,23 @@ fn image_data_comes_from_the_file_being_run() {
     );
 }
 
+/// An image whose procedure reads its rows with `readhexstring` comes out with the same pixels as
+/// the same samples given as one hexadecimal string, with the digits broken by CR LF, LF, tabs,
+/// spaces and characters that are not digits, read from the program's own file and from a file
+/// being run.
+#[test]
+fn hex_rows_read_by_a_procedure_match_a_hexadecimal_string() {
+    let rgb: Vec<u8> = (0..36u32).map(|i| (i * 37 % 256) as u8).collect();
+    let digits = hex(&rgb);
+    let breaks = ["\r\n", "\n", "\t", " z", "%"];
+    let broken: String = digits.as_bytes().chunks(5).zip(breaks.iter().cycle()).map(|(d, b)| format!("{}{b}", String::from_utf8_lossy(d))).collect();
+    let want = pixels(&read(&format!("10 10 scale 4 3 8 [4 0 0 -3 0 3] <{digits}> false 3 colorimage")), 4, 3);
+    assert_eq!(want, rgb.chunks(3).map(|p| [p[0], p[1], p[2], 255]).collect::<Vec<_>>());
+    let image = "10 10 scale 4 3 8 [4 0 0 -3 0 3] {currentfile 12 string readhexstring pop} false 3 colorimage";
+    assert_eq!(pixels(&read(&format!("{image}\r\n{broken}\n")), 4, 3), want);
+    assert_eq!(pixels(&read(&format!("currentfile 0 (endstream) /SubFileDecode filter cvx exec\n{image}\n{broken}\nendstream\n")), 4, 3), want);
+}
+
 /// A filter waits until it is first read, then reads the file it was made over, wherever the
 /// program runs by then: one over the program's own file, read in a file being run, and one over
 /// a file being run, read in a file that one runs.
