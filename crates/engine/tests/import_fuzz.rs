@@ -4498,7 +4498,8 @@ proptest! {
         })?;
         match opened {
             Some(Ok(editing)) => prop_assert!(editing),
-            Some(Err(e)) => prop_assert_eq!(Some(e), page_error),
+            // The page's error, followed by why the editing data couldn't be read when it says.
+            Some(Err(e)) => prop_assert!(page_error.as_deref().is_some_and(|p| e == p || e.starts_with(&format!("{p}; its editing data couldn't be read either ("))), "{e}"),
             None => {}
         }
     }
