@@ -840,6 +840,7 @@
 	Auto Color	Kolor automatyczny
 	Automatic	Automatycznie
 	Isolate Selected Group	Izoluj zaznaczoną grupę
+	Isolate Selected Path	Izoluj zaznaczoną ścieżkę
 	Isolate Selected Object	Izoluj zaznaczony obiekt
 	Exit Isolation Mode	Wyjdź z trybu izolacji
 	Make Clipping Mask	Utwórz maskę przycinającą
@@ -1362,6 +1363,8 @@ lighting	Light	Światło
 	Lasso Tool	Narzędzie Lasso
 	Enclosing Lasso Tool	Narzędzie lassa obejmującego
 	Enclosing Lasso	Lasso obejmujące
+	Polygonal Lasso Tool	Narzędzie lassa wielokątnego
+	Polygonal Lasso	Lasso wielokątne
 	Line Cut Tool	Narzędzie Cięcie linią
 	Line Graph Tool	Narzędzie Wykres liniowy
 	Line Segment Tool	Narzędzie Odcinek
@@ -1441,6 +1444,10 @@ lighting	Light	Światło
 	Play Current Selection	Odtwórz bieżące zaznaczenie
 	Save Actions…	Zapisz operacje…
 	Load Actions…	Wczytaj operacje…
+	Reset Actions	Resetuj operacje
+	Replace the current actions with the default set?	Zastąpić bieżące operacje zestawem domyślnym?
+	Append adds the default set after the current sets instead.	Dołącz dodaje zamiast tego zestaw domyślny po bieżących zestawach.
+	Append	Dołącz
 	Reflect Horizontal	Odbij w poziomie
 	Rotate 90° CW	Obróć o 90° w prawo
 	Set 1	Zestaw 1
@@ -1661,6 +1668,10 @@ digits	Malayalam	Malajalam
 	Em Box	Ramka firetowa
 	x-Height	Wysokość x
 	ICF Box	Ramka ICF
+	Show Sample	Pokaż próbkę
+	Hide Sample	Ukryj próbkę
+	Max Ascent/Descent	Maks. wysokość/głębokość
+	Max Ascender	Maks. wydłużenie górne
 	Copy Color Value (Hex)	Kopiuj wartość koloru (hex)
 	Create New Swatch…	Utwórz nową próbkę…
 	Name 40%	Nazwa 40%
@@ -2916,6 +2927,11 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Pokaż płynne koło kolorów
 	Show segmented color wheel	Pokaż segmentowe koło kolorów
 	Show color bars	Pokaż paski kolorów
+	Show brightness and hue on wheel	Pokaż jasność i barwę na kole
+	Show saturation and hue on wheel	Pokaż nasycenie i barwę na kole
+	Add Color Tool	Narzędzie Dodaj kolor
+	Remove Color Tool	Narzędzie Usuń kolor
+	Remove Color	Usuń kolor
 	Find the selected colors in the artwork	Znajdź zaznaczone kolory w kompozycji
 	Keep this row's colors (exclude)	Zachowaj kolory tego wiersza (wyklucz)
 	Limit to Library:	Ogranicz do biblioteki:
@@ -3576,6 +3592,8 @@ theme	Appearance	Wygląd
 	Find Font Files	Znajdź pliki czcionek
 	Add Font Files	Dodaj pliki czcionek
 	Font List	Lista czcionek
+	Show Similar Fonts	Pokaż podobne czcionki
+	Clear Similar Fonts	Wyczyść podobne czcionki
 	Fonts in Document	Czcionki w dokumencie
 	Refresh Font List	Odśwież listę czcionek
 	Replace Font	Zastąp czcionkę
@@ -3611,6 +3629,7 @@ theme	Appearance	Wygląd
 	Connect Data Points	Połącz punkty danych
 	Edge-to-Edge Lines	Linie od krawędzi do krawędzi
 	Draw Filled Lines	Rysuj wypełnione linie
+	Line Width	Szerokość linii
 	Tick Values	Wartości podziałki
 	Override Calculated Values	Zastąp obliczone wartości
 	Divisions	Podziały
@@ -4748,6 +4767,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	Divide Objects Below: select exactly one path	Podziel obiekty poniżej: zaznacz dokładnie jedną ścieżkę
 @msg	Downloaded {what}	Pobrano {what}
 @msg	Expand Appearance: the selection has a basic appearance	Rozszerz wygląd: zaznaczenie ma wygląd podstawowy
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	niektóre efekty rastrowe nie zostały zamienione na obrazy: zajęłyby więcej niż 1024 obrazy lub łącznie 256 megapikseli
 @msg	Expand: no brush strokes selected	Rozszerz: nie zaznaczono pociągnięć pędzla
 @msg	Expand: no gradient fills	Rozszerz: brak wypełnień gradientem
 @msg	Expand: nothing to expand	Rozszerz: nie ma czego rozszerzać
@@ -6215,7 +6235,7 @@ mark-style	Japanese	Japońskie
 @msg	Unknown dimension style	Nieznany styl wymiaru
 @msg	Unknown unit	Nieznana jednostka
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Zamknij okrągłe końce otwartych profili. Przy częściowym obrocie boki przekroju pozostają otwarte.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Zamknij okrągłe końce otwartych profili. Przy częściowym obrocie boki przekroju również zostają zamknięte.
 	Distance	Odległość
 @msg	span must be "object" or "selection", got {v}	span musi mieć wartość "object" lub "selection", a nie {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" umieszcza `gradient`, a nie próbkę
@@ -6369,6 +6389,7 @@ mark-style	Japanese	Japońskie
 	Single Word Justification:	Justowanie pojedynczego wyrazu:
 	Full Justify	Pełne justowanie
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum nie może przekraczać wartości optymalnej, a wartość optymalna maksimum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: minimum nie może przekraczać wartości optymalnej, a wartość optymalna maksimum
 	Justification	Justowanie
 	Add filters from the list above	Dodaj filtry z listy powyżej
 	Add to Stack	Dodaj do stosu
@@ -7305,6 +7326,22 @@ breakText	Glyphs	Glify
 	Remove Gaps	Usuń odstępy
 @msg	that makes too many pieces (at most 100000): make the dashes longer	to daje za dużo części (najwyżej 100000): wydłuż kreski
 @msg	select paths, or segments, to divide	zaznacz ścieżki lub segmenty do podzielenia
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Wspólne styczne…
+	Common Tangents	Wspólne styczne
+	Tangents	Styczne
+	Centerline	Linia środkowa
+	External	Zewnętrzne
+	Internal	Wewnętrzne
+@msg	select two closed paths	zaznacz dwie zamknięte ścieżki
+@msg	a selected path is open	zaznaczona ścieżka jest otwarta
+@msg	a selected path is not convex	zaznaczona ścieżka nie jest wypukła
+@msg	a selected path has no area	zaznaczona ścieżka nie ma pola
+@msg	a selected path has more than 10000 segments	zaznaczona ścieżka ma więcej niż 10000 segmentów
+@msg	the two paths have the same outline	obie ścieżki mają ten sam kontur
+@msg	One path lies inside the other, so they have no common tangents	Jedna ścieżka leży wewnątrz drugiej, więc nie mają wspólnych stycznych
+@msg	The paths overlap, so they have no internal tangents	Ścieżki nachodzą na siebie, więc nie mają stycznych wewnętrznych
+@msg	One path lies inside the other, so they have no internal tangents	Jedna ścieżka leży wewnątrz drugiej, więc nie mają stycznych wewnętrznych
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Rozszerz kreski na ścieżki
 @msg	select paths with dashed strokes to expand	zaznacz ścieżki z przerywanym konturem do rozszerzenia
@@ -7347,6 +7384,11 @@ breakText	Glyphs	Glify
 	Malayalam	Malajalam
 	Odia	Orija
 	Urdu	Urdu
+	Sanskrit	Sanskryt
+	Nepali	Nepalski
+	Assamese	Asamski
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} i nowsze (wersja {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Eksportuj wszystkie otwarte dokumenty jako PDF
@@ -7380,7 +7422,7 @@ breakText	Glyphs	Glify
 @msg	stroke cannot be set on a symbol instance	nie można ustawić stroke dla wystąpienia symbolu
 @msg	fill on a symbol instance must be a solid color or none	fill wystąpienia symbolu musi być jednolitym kolorem lub none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	nie można ustawić {key} dla obrazu bez efektu Konwertuj na kształt lub Kontur obiektu
-@msg	pass newName, registration, exportType, nineSlice and/or type	podaj newName, registration, exportType, nineSlice i/lub type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	podaj newName, registration, exportType, nineSlice, type i/lub alignToPixelGrid
 	Text Flow	Przepływ tekstu
 	By Rows	Wierszami
 	By Columns	Kolumnami
@@ -7606,6 +7648,8 @@ breakText	Glyphs	Glify
 @msg	No bridge of this width fits across the selected art	Żaden mostek o tej szerokości nie mieści się w zaznaczonej grafice
 @msg	Some islands could not be joined to the area around the art	Niektórych wysp nie udało się połączyć z obszarem wokół grafiki
 @msg	`width` must be from {lo} to {hi} pt	`width` musi mieścić się w zakresie od {lo} do {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` musi mieścić się w zakresie od -180 do 180 stopni
+@msg	`roundness` must be from 1 to 100%	`roundness` musi mieścić się w zakresie od 1 do 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` musi być liczbą całkowitą od 1 do {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Ramka i linie do wybierania…
 	Weed Box and Lines	Ramka i linie do wybierania
@@ -8989,7 +9033,9 @@ breakText	Glyphs	Glify
 @msg	position must be normal, superscript or subscript	position musi mieć wartość normal, superscript lub subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position musi mieć wartość topLeft, topRight, bottomLeft lub bottomRight
 @msg	positions must be between 0 and 100000 pt	positions musi mieścić się w zakresie od 0 do 100000 pt
+@msg	ppi can't be more than {max} for this image	ppi nie może przekraczać {max} dla tego obrazu
 @msg	ppi must be a positive number, not {ppi}	ppi musi być liczbą dodatnią, a nie {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim zachowuje piksele obrazu bez zmian: pomiń ppi
 @msg	ppi must be between 1 and 2400	ppi musi mieścić się w zakresie od 1 do 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` nie jest jedną z wartości transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape musi mieć wartość clippingMask|transparency
@@ -9568,3 +9614,23 @@ breakText	Glyphs	Glify
 	No objects are selected.	Nie zaznaczono żadnych obiektów.
 	Open a document to mark its fold lines.	Otwórz dokument, aby oznaczyć jego linie zgięcia.
 	Remove Fold Line Role	Usuń rodzaj linii
+	Check	Sprawdź
+	Check Fold Lines	Sprawdź linie zgięcia
+@msg	No cut lines are in the selection.	W zaznaczeniu nie ma linii cięcia.
+@msg	No cut lines are in the document.	W dokumencie nie ma linii cięcia.
+@msg	The cut lines do not enclose an area.	Linie cięcia nie obejmują żadnego obszaru.
+@msg	A cut line ends without meeting another cut line.	Linia cięcia kończy się, nie stykając się z inną linią cięcia.
+@msg	A gap between cut lines was closed.	Zamknięto przerwę między liniami cięcia.
+@msg	The fold lines are too complex to check.	Linie zgięcia są zbyt złożone, aby je sprawdzić.
+@msg	A cut line and a crease lie on top of each other.	Linia cięcia i linia bigowania leżą na sobie.
+@msg	No cut lines are among the given objects.	Wśród podanych obiektów nie ma linii cięcia.
+@msg	Two fold lines lie on top of each other.	Dwie linie zgięcia leżą na sobie.
+@msg	A crease ends inside a panel.	Linia bigowania kończy się wewnątrz panelu.
+@msg	A crease does not divide two panels.	Linia bigowania nie rozdziela dwóch paneli.
+@msg	A crease lies outside the cut outline, wholly or in part.	Linia bigowania leży całkowicie lub częściowo poza konturem cięcia.
+@msg	The pieces of a hinge are not on one straight line.	Części zawiasu nie leżą na jednej linii prostej.
+@msg	A gap between cut lines is too narrow to tell apart.	Przerwa między liniami cięcia jest zbyt wąska, aby ją rozróżnić.
+@msg	A cut-out area holds other fold lines or another blank.	Wycięty obszar zawiera inne linie zgięcia lub inny wykrój.
+@msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
+@msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}

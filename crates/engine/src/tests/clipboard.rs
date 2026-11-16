@@ -468,7 +468,7 @@ fn styles_symbols_and_images_of_the_same_name_are_renamed() {
     assert_eq!(key(&s, img2), src_key);
 }
 
-/// A graph whose series fill, value labels and legend rows paint with global swatch "Brand" and
+/// A graph whose series fill, value labels, legend rows and axis and ring line rows paint with global swatch "Brand" and
 /// whose value labels are set in character style "Emphasis" and paragraph style "Body", as a
 /// later redraw would give them to its marks and labels.
 fn styled_graph(s: &mut Session) -> NodeId {
@@ -484,8 +484,9 @@ fn styled_graph(s: &mut Session) -> NodeId {
     let l = &mut g.label_styles;
     l.values = Some(vectorcraft_doc::CharStyle { fill: brand.clone(), style_name: Some("Emphasis".into()), ..Default::default() });
     l.values_para = Some(vectorcraft_doc::ParaStyle { style_name: Some("Body".into()), ..Default::default() });
-    let rows = vectorcraft_doc::SeriesPaint { stroke: Some(brand), ..Default::default() };
-    l.legend_rows = Some(vectorcraft_doc::graph::LabelRows { paint: rows, ..Default::default() });
+    let paint = vectorcraft_doc::SeriesPaint { stroke: Some(brand), ..Default::default() };
+    let rows = vectorcraft_doc::graph::LabelRows { paint, ..Default::default() };
+    (l.legend_rows, l.axis_rows, l.ring_rows) = (Some(rows.clone()), Some(rows.clone()), Some(rows));
     id
 }
 
@@ -515,7 +516,7 @@ fn a_pasted_graph_brings_and_follows_its_label_styles_and_paints() {
     let d = doc(&s);
     assert!(d.swatch("Brand").is_some(), "{v}");
     assert!(d.char_styles.iter().any(|x| x.name == "Emphasis") && d.para_styles.iter().any(|x| x.name == "Body"), "{v}");
-    let brand = vec!["Brand".to_string(); 3];
+    let brand = vec!["Brand".to_string(); 5];
     assert_eq!(graph_links(&s, ids_of(&v)[0]), (brand.clone(), Some("Emphasis".into()), Some("Body".into())));
 
     // Into a document that gives each name something else: they come in renamed.
@@ -524,15 +525,15 @@ fn a_pasted_graph_brings_and_follows_its_label_styles_and_paints() {
     s.execute("charStyle.new", &json!({"name": "Emphasis", "attrs": {"size": 8.0}})).unwrap();
     s.execute("paraStyle.new", &json!({"name": "Body", "attrs": {"space_after": 2.0}})).unwrap();
     let v = s.execute("edit.pasteInPlace", &json!({"swatchConflict": "add"})).unwrap();
-    let brand2 = vec!["Brand 2".to_string(); 3];
+    let brand2 = vec!["Brand 2".to_string(); 5];
     assert_eq!(graph_links(&s, ids_of(&v)[0]), (brand2, Some("Emphasis 2".into()), Some("Body 2".into())), "{v}");
 
     // Without formatting: the labels' text styles stay behind.
     new_doc(&mut s);
     let v = s.execute("edit.pasteWithoutFormatting", &json!({})).unwrap();
     assert!(doc(&s).char_styles.is_empty() && doc(&s).para_styles.is_empty(), "{v}");
-    // The value labels' red characters stay behind too; the series fill and the legend rows keep Brand.
-    assert_eq!(graph_links(&s, ids_of(&v)[0]), (vec!["Brand".to_string(); 2], None, None));
+    // The value labels' red characters stay behind too; the series fill, the legend rows and the line rows keep Brand.
+    assert_eq!(graph_links(&s, ids_of(&v)[0]), (vec!["Brand".to_string(); 4], None, None));
 }
 
 /// Each label of graph `id` (the text of its Axes and Legend groups) with its size and its first paragraph's format.
@@ -596,8 +597,8 @@ fn a_graph_pasted_without_formatting_keeps_plain_labels_when_drawn_again() {
     let r = node(&s, p).extras().graph.as_deref().unwrap().rect;
     let off = [r.x0 - plot.x0 - 10.0, r.y0 - plot.y0 - 20.0, r.x1 - plot.x1 - 10.0, r.y1 - plot.y1 - 20.0];
     assert!(off.iter().all(|d| d.abs() < 1e-6), "the plot moves by the offset and keeps its size: {plot:?} → {r:?}");
-    s.execute("graph.setType", &json!({"id": p.0, "type": "column"})).unwrap();
-    assert_eq!(graph_label_looks(&s, p), pasted, "a change of type draws them the same way");
+    s.execute("graph.setType", &json!({"id": p.0, "type": "column", "dropShadow": true})).unwrap();
+    assert_eq!(graph_label_looks(&s, p), pasted, "a change of graph type options draws them the same way");
 
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("edit.undo", &json!({})).unwrap();
