@@ -7737,7 +7737,8 @@ fn image_trace_views_draw_on_screen_only_and_expand_to_the_result() {
 }
 
 /// Outline views draw the traced paths' outlines and leave out an Abutting trace's seam fills
-/// (their clipping box and strokes, or on a stretched image the strokes' filled outlines).
+/// (their clipping box and strokes, or on a stretched image the strokes' filled outlines), renamed
+/// too.
 #[test]
 fn image_trace_outline_view_leaves_out_the_seam_fills() {
     // Red beside blue in the middle of a transparent 60 × 40 image, placed at 50, 50 and scaled 2×,
@@ -7769,6 +7770,14 @@ fn image_trace_outline_view_leaves_out_the_seam_fills() {
         }
         // The art's left edge (x = 70) is outlined.
         assert!((68..=72).any(|x| screen.pixel(x, 90)[0] < 128), "{scale:?}");
+        // Beside the red and blue paths' shared edge (x = 110), inside the seam band (1.5 units
+        // each side on the stretched image) but off the traced outlines (x = 109 and 110): nothing.
+        for x in [108, 111] {
+            assert!(screen.pixel(x, 100)[0] > 245, "{scale:?}, x = {x}: {:?}", screen.pixel(x, 100));
+        }
+        // Renamed, the group is still left out: the view draws as it did.
+        s.execute("layer.setProps", &json!({"id": seams.id.0, "name": "Edges"})).unwrap();
+        assert!(render_doc(&s, true).pixels == screen.pixels, "{scale:?}: renamed seam fills drawn");
     }
 }
 
