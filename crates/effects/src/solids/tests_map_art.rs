@@ -246,6 +246,44 @@ fn the_points_drawn_on_earlier_surfaces_leave_the_next_symbol_its_own_allowance(
     assert_eq!(pieces.len(), 1);
 }
 
+#[test]
+fn art_past_the_paint_copies_allowance_leaves_the_allowance_to_later_art() {
+    let d = document();
+    let mut b = BezPath::new();
+    b.move_to((100.0, 0.0));
+    b.line_to((100.0, 100.0));
+    let path = PathData::from_bezpath(&b);
+    let gray = Paint::solid(Color::rgb(0.5, 0.5, 0.5));
+    let n = Node::path(NodeId(7), path.clone(), Appearance::basic(Paint::None, gray.clone(), 1.0));
+    let p = crate::merged_params(
+        CLASSIC_REVOLVE,
+        &json!({"rotationX": 0, "rotationY": 0, "rotationZ": 0, "surface": "none", "offset": 40, "mapArt": [{"surface": 1, "symbol": "Mark"}]}),
+    );
+    let art = MapArt::of(Some(&d), CLASSIC_REVOLVE, &p).unwrap();
+    let bounds = path.bounds().unwrap();
+    let options = vectorcraft_three_d::Revolve { map_surface: true, ..crate::revolve::options_of(CLASSIC_REVOLVE, &p) };
+    let (width, height) = vectorcraft_three_d::revolve_surface_size(&path, bounds, options).unwrap();
+    let layout = SolidLayout { first: 0, surfaces: vec![SolidSurface { kind: SurfaceKind::Side, width, height, center: None }], ends: None };
+    let facets = vectorcraft_three_d::revolve_facets(&path, bounds, options).unwrap();
+    // The side's art, with the copies of its paint and its points counted from `copies` and
+    // `budget` already used.
+    let draw = |copies: &mut usize, budget: &mut MapBudget| {
+        let mapped = crate::solids::classic::Mapped { art: &art, layout: &layout, budget, copies };
+        let blend = vectorcraft_doc::color::BlendMode::Normal;
+        crate::solids::classic::surface(&n, facets.clone(), &gray, (1.0, blend), &p, Some(mapped), false).0
+    };
+    let (mut copies, mut budget) = (0, MapBudget::default());
+    assert!(!filled(&draw(&mut copies, &mut budget), RED).is_empty());
+    assert!(copies > 0 && budget != MapBudget::default());
+    // With the allowance used up, the art is left out, and so are the copies and the points it
+    // would have taken.
+    let full = crate::revolve::MAX_PAINT_COPIES;
+    let (mut copies, mut budget) = (full, MapBudget::default());
+    assert!(filled(&draw(&mut copies, &mut budget), RED).is_empty());
+    assert_eq!(copies, full);
+    assert_eq!(budget, MapBudget::default());
+}
+
 fn missing(d: &Document, p: &Value) -> Option<String> {
     super::super::missing_symbol(d, p, None)
 }

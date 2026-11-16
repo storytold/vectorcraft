@@ -352,7 +352,8 @@ fn flat_view(
         let keys = crate::panels::symbols::document_symbols(st);
         let mut inner = ui.new_child(egui::UiBuilder::new().max_rect(view));
         inner.set_clip_rect(view.intersect(ui.clip_rect()));
-        crate::panels::symbols::chip(&inner, &st.doc, &keys, egui::Rect::from_center_size(center, half * 2.0), &m.symbol);
+        let r = egui::Rect::from_center_size(center, half * 2.0);
+        crate::panels::symbols::art_chip(&inner, &st.doc, &keys, r, &m.symbol, art);
     }
     let corners: Vec<egui::Pos2> = [(-1.0f32, -1.0f32), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
         .iter()

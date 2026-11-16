@@ -208,7 +208,7 @@ pub(crate) struct SolidLayout {
 }
 
 /// What the mapped art of one object has drawn so far, against the limits its maps share.
-#[derive(Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct MapBudget {
     elements: usize,
     /// The points of the maps' symbols cut into straight pieces, against [`MAX_ELEMENTS`].

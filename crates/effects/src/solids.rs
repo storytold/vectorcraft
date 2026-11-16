@@ -2320,26 +2320,48 @@ pub fn map_surfaces_at(doc: Option<&Document>, n: &Node, item: Option<usize>, in
     let (fx, shapes) = picked(n, item, &|fx: &[Effect]| fx.get(index).filter(|e| takes_map_art(&e.id)).map(|e| (index, e)))?;
     let p = crate::merged_params(&fx.id, &fx.params);
     let b = union_bounds(&shapes)?;
-    // The edges of `facets` on local surface `k` of `surfaces`: every edge of an end, and the
-    // edges of the cells that lie along the sides of the flat surface.
-    let seen = |surfaces: &[vectorcraft_three_d::SolidSurface], facets: &[Facet], k: usize| -> Vec<[Point; 2]> {
-        let Some(surface) = surfaces.get(k) else { return vec![] };
-        let flat = match surface.kind {
-            SurfaceKind::Side => Rect::new(-surface.width / 2.0, -surface.height / 2.0, surface.width / 2.0, surface.height / 2.0),
-            _ => Rect::new(0.0, 0.0, surface.width, surface.height),
-        };
-        let near = (surface.width.max(surface.height) * 1e-6).max(1e-9);
-        let mut edges = vec![];
+    // The edges of `facets` on each local surface of `surfaces`, in one pass over the facets: every
+    // edge of an end, and the edges of the cells that lie along the sides of the flat surface.
+    let seen = |surfaces: &[vectorcraft_three_d::SolidSurface], facets: &[Facet]| -> Vec<Vec<[Point; 2]>> {
+        let mut edges: Vec<Vec<[Point; 2]>> = vec![vec![]; surfaces.len()];
+        // Each surface laid out flat, and how near a point must be to its side to lie along it.
+        let frames: Vec<(Rect, f64)> = surfaces
+            .iter()
+            .map(|s| {
+                let flat = match s.kind {
+                    SurfaceKind::Side => Rect::new(-s.width / 2.0, -s.height / 2.0, s.width / 2.0, s.height / 2.0),
+                    _ => Rect::new(0.0, 0.0, s.width, s.height),
+                };
+                (flat, (s.width.max(s.height) * 1e-6).max(1e-9))
+            })
+            .collect();
+        let ends: Vec<(usize, PlanarFace)> = surfaces
+            .iter()
+            .enumerate()
+            .filter_map(|(k, s)| match s.kind {
+                SurfaceKind::End(end) => Some((k, end)),
+                _ => None,
+            })
+            .collect();
         for f in facets.iter().filter(|f| !f.away) {
-            if let (SurfaceKind::End(end), Some(at)) = (surface.kind, f.end) {
-                if end == at {
-                    for c in &f.contours {
-                        edges.extend(c.iter().zip(c.iter().cycle().skip(1)).take(c.len()).map(|(a, b)| [*a, *b]));
+            if let Some(at) = f.end {
+                for &(k, end) in &ends {
+                    if end == at
+                        && let Some(out) = edges.get_mut(k)
+                    {
+                        for c in &f.contours {
+                            out.extend(c.iter().zip(c.iter().cycle().skip(1)).take(c.len()).map(|(a, b)| [*a, *b]));
+                        }
                     }
                 }
+            }
+            let Some(cell) = f.cell.as_deref().filter(|c| c.uv.len() == c.page.len()) else { continue };
+            let k = cell.surface;
+            // A facet of an end adds to an end's surface only its own edges, above.
+            if f.end.is_some() && surfaces.get(k).is_some_and(|s| matches!(s.kind, SurfaceKind::End(_))) {
                 continue;
             }
-            let Some(cell) = f.cell.as_deref().filter(|c| c.surface == k && c.uv.len() == c.page.len()) else { continue };
+            let (Some(&(flat, near)), Some(out)) = (frames.get(k), edges.get_mut(k)) else { continue };
             let count = cell.uv.len();
             for i in 0..count {
                 let j = (i + 1) % count;
@@ -2347,15 +2369,14 @@ pub fn map_surfaces_at(doc: Option<&Document>, n: &Node, item: Option<usize>, in
                 let along = |at: f64, of: fn(&Point) -> f64| (of(a) - at).abs() <= near && (of(c) - at).abs() <= near;
                 let on_side = along(flat.x0, |p| p.x) || along(flat.x1, |p| p.x) || along(flat.y0, |p| p.y) || along(flat.y1, |p| p.y);
                 if let (true, Some(from), Some(to)) = (on_side, cell.page.get(i), cell.page.get(j)) {
-                    edges.push([*from, *to]);
+                    out.push([*from, *to]);
                 }
             }
         }
         edges
     };
     let listed = |surfaces: &[vectorcraft_three_d::SolidSurface], facets: &[Facet], out: &mut Vec<MapSurface>| {
-        for (k, s) in surfaces.iter().enumerate() {
-            let outline = seen(surfaces, facets, k);
+        for (s, outline) in surfaces.iter().zip(seen(surfaces, facets)) {
             out.push(MapSurface { kind: s.kind, width: s.width, height: s.height, visible: !outline.is_empty(), outline });
         }
     };

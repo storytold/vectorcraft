@@ -301,15 +301,20 @@ pub(crate) fn surface(
     let (paint, mask) = if wire { (source.clone(), None) } else { crate::lighting::opaque_surface_paint(source, || super::facets_bounds(&facets)) };
     let paint = &paint;
     // The mapped art of each facet, and whether the faces themselves are left out. Art past the
-    // limits is left out, and the faces draw.
+    // limits is left out, and the faces draw; the copies and the points of art left out do not
+    // count against the art of later solids.
     let (mut parts, invisible) = match mapped.filter(|_| !wire) {
         Some(m) => {
             let shaded_as = |f: &Facet, c: Color| {
                 let (tone, spec) = shading.tone(f.normal, &lights);
                 shaded(c, tone, spec, shade)
             };
-            match m.art.parts(n.id, &facets, m.layout, &shaded_as, m.budget, m.copies) {
-                Some(parts) => (parts, m.art.invisible),
+            let (mut used, mut budget) = (*m.copies, m.budget.clone());
+            match m.art.parts(n.id, &facets, m.layout, &shaded_as, &mut budget, &mut used) {
+                Some(parts) => {
+                    (*m.copies, *m.budget) = (used, budget);
+                    (parts, m.art.invisible)
+                }
                 None => (vec![], false),
             }
         }
