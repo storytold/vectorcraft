@@ -40,7 +40,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::hit::{Hit, HitKind, hit_test, marquee, objects_at, selected_hidden_at};
+use vectorcraft_doc::hit::{Hit, HitKind, hit_test, marquee_in_view, objects_at, selected_hidden_at};
 use vectorcraft_doc::{NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
@@ -147,6 +147,8 @@ enum State {
     Mirror(crate::mirror::MirrorDrag),
     /// Drag a grid repeat's row, column or corner handle or a spacing slider.
     GridRepeat(crate::repeat_grid::GridDrag),
+    /// Drag a radial repeat's instances or radius handle.
+    RadialRepeat(crate::repeat_radial::RadialDrag),
     /// Dragging a bracket of type on a path.
     Bracket(BracketDrag),
     /// Dragging a 9-slice guide of the symbol being edited.
@@ -172,6 +174,8 @@ pub struct SelectionTool {
     /// The params of the move's last preview: in Shaper's Construction mode the move ends with
     /// them and `releaseOutside` ([`construction`]).
     last_move: Option<Value>,
+    /// How far the move's last preview carried the selection ([`Tool::readout`]).
+    moved: Option<Vec2>,
     /// Held state used for the most recent bounding-box preview.
     last_backquote: bool,
     /// Pointer position used for the most recent bounding-box preview.
@@ -825,6 +829,12 @@ impl Tool for SelectionTool {
             return d.cancel();
         }
         if key == ToolKey::Escape
+            && matches!(self.state, State::RadialRepeat(_))
+            && let State::RadialRepeat(d) = std::mem::take(&mut self.state)
+        {
+            return d.cancel();
+        }
+        if key == ToolKey::Escape
             && matches!(self.state, State::NineSlice(_))
             && let State::NineSlice(d) = std::mem::take(&mut self.state)
         {
@@ -873,7 +883,7 @@ impl Tool for SelectionTool {
             State::Marquee { .. } => key == ToolKey::Letter('e'),
             State::Corner(_) => matches!(key, ToolKey::Up | ToolKey::Down),
             State::BlendWidget(_) => matches!(key, ToolKey::Up | ToolKey::Down | ToolKey::Left | ToolKey::Right),
-            State::Loaded { .. } | State::Mirror(_) | State::GridRepeat(_) | State::NineSlice(_) => key == ToolKey::Escape,
+            State::Loaded { .. } | State::Mirror(_) | State::GridRepeat(_) | State::RadialRepeat(_) | State::NineSlice(_) => key == ToolKey::Escape,
             _ => false,
         }
     }
@@ -898,6 +908,10 @@ impl Tool for SelectionTool {
         matches!(self.state, State::Moving { began: true, .. })
     }
 
+    fn readout(&self, _cx: &ToolContext) -> Option<crate::Readout> {
+        self.moved.filter(|_| self.moving()).map(crate::Readout::drag)
+    }
+
     fn transforming(&self) -> bool {
         match &self.state {
             State::Moving { began: true, .. } | State::Scaling { .. } | State::Rotating { .. } => true,
@@ -911,6 +925,7 @@ impl Tool for SelectionTool {
             State::Bracket(b) => b.adjusting(),
             State::Mirror(d) => d.adjusting(),
             State::GridRepeat(d) => d.adjusting(),
+            State::RadialRepeat(d) => d.adjusting(),
             _ => false,
         }
     }
@@ -1157,7 +1172,7 @@ impl Tool for SelectionTool {
                 if r.width() < Self::drag_threshold(cx) && r.height() < Self::drag_threshold(cx) {
                     return if toggle { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
                 }
-                let touched = marquee(cx.doc, r, cx.isolation, false);
+                let touched = marquee_in_view(cx.doc, r, cx.isolation, false, cx.outline);
                 let enclosed = marquee_enclosed(cx, enclosed, marquee_direction(cx, start, p, directional_inside));
                 let ids = if enclosed { inside(cx, r, touched) } else { touched };
                 let art = Action::Exec(if toggle { "select.toggle" } else { "select.set" }.into(), json!({ "ids": json_ids(&ids) }));
@@ -1222,6 +1237,9 @@ impl Tool for SelectionTool {
         if let State::GridRepeat(d) = &self.state {
             return d.cursor(cx);
         }
+        if let State::RadialRepeat(d) = &self.state {
+            return d.cursor(cx);
+        }
         if matches!(self.state, State::NineSlice(_)) || (matches!(self.state, State::Idle) && crate::nineslice::over_guide(cx, p)) {
             return Cursor::Move;
         }
@@ -1229,7 +1247,8 @@ impl Tool for SelectionTool {
             && !m.cmd
             && !m.ctrl
             && !m.alt
-            && let Some(cursor) = crate::mirror::cursor(cx, p).or_else(|| crate::repeat_grid::cursor(cx, p))
+            && let Some(cursor) =
+                crate::mirror::cursor(cx, p).or_else(|| crate::repeat_grid::cursor(cx, p)).or_else(|| crate::repeat_radial::cursor(cx, p))
         {
             return cursor;
         }
@@ -1547,6 +1566,21 @@ impl SelectionTool {
                 _ => return Some(vec![]),
             }
         }
+        if let State::RadialRepeat(mut d) = self.state.clone() {
+            match ev.kind {
+                PointerKind::Drag | PointerKind::Up => {
+                    let mut out = d.drag(ev.pos);
+                    if ev.kind == PointerKind::Up {
+                        out.extend(d.finish());
+                        self.state = State::Idle;
+                    } else {
+                        self.state = State::RadialRepeat(d);
+                    }
+                    return Some(out);
+                }
+                _ => return Some(vec![]),
+            }
+        }
         if matches!(self.state, State::Idle)
             && ev.kind == PointerKind::Down
             && let Some(d) = crate::mirror::MirrorDrag::hit(cx, ev.pos, ev.mods)
@@ -1560,6 +1594,14 @@ impl SelectionTool {
             && let Some(d) = crate::repeat_grid::GridDrag::hit(cx, ev.pos, ev.mods)
         {
             self.state = State::GridRepeat(d);
+            self.hover = None;
+            return Some(vec![]);
+        }
+        if matches!(self.state, State::Idle)
+            && ev.kind == PointerKind::Down
+            && let Some(d) = crate::repeat_radial::RadialDrag::hit(cx, ev.pos, ev.mods)
+        {
+            self.state = State::RadialRepeat(d);
             self.hover = None;
             return Some(vec![]);
         }
@@ -1753,6 +1795,7 @@ impl SelectionTool {
             params["patterns"] = json!(true);
         }
         self.last_move = Some(params.clone());
+        self.moved = Some(d);
         out.push(Action::Preview("object.transform".into(), params));
         out
     }

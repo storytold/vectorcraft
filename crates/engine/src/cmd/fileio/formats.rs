@@ -308,7 +308,7 @@ const PSD_LAYERS: FormatOption = FormatOption {
     name: "layers",
     ty: "boolean",
     default: "true",
-    description: "write layers: each top-level layer a pixel layer with its opacity and blend mode (a background colour is a Background layer); false: one flat image, on white where transparent",
+    description: "write layers: each top-level layer a pixel layer with its opacity and blend mode (a background colour is a Background layer); false: one flat image, on white where transparent. The user and object slices are written either way",
 };
 
 const MAX_EDITABILITY: FormatOption = FormatOption {
@@ -316,6 +316,13 @@ const MAX_EDITABILITY: FormatOption = FormatOption {
     ty: "boolean",
     default: "false",
     description: "with layers: layers and sublayers become groups and every object a layer of its own, named as the Layers panel names it (text by its text); clipping, masked or knockout layers stay one layer",
+};
+
+const PRESERVE_TEXT: FormatOption = FormatOption {
+    name: "preserveText",
+    ty: "boolean",
+    default: "false",
+    description: "with layers: horizontal and vertical point type in solid colors, with left-to-right paragraphs that set only their alignment, without strokes, effects or an appearance of its own, becomes editable type layers (with their pixels); a layer holding such type becomes a group of its type layers and pixel layers of the art between them, unless other art in it blends in a mode other than normal; refused with layers: false",
 };
 
 const PSD_HIDDEN_LAYERS: FormatOption = FormatOption {
@@ -339,6 +346,7 @@ const PSD_OPTIONS: &[FormatOption] = &[
     ANTI_ALIAS,
     COLOR_MODEL,
     PSD_LAYERS,
+    PRESERVE_TEXT,
     MAX_EDITABILITY,
     PSD_HIDDEN_LAYERS,
     EMBED_ICC,

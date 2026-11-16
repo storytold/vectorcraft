@@ -734,7 +734,24 @@ fn tiff_dropdown_exports_only_the_selected_asset_and_shares_settings() {
         let [(name, bytes)] = log.as_slice() else { panic!("expected only the selected asset") };
         assert_eq!(name, "Badge@2x.tif");
         assert_eq!(&bytes[..4], b"MM\0*", "the saved TIFF byte order reaches asset export");
-        let img = image::load_from_memory_with_format(bytes, image::ImageFormat::Tiff).unwrap().to_rgba8();
+        let img = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8();
         assert_eq!(img.dimensions(), (60, 40), "the selected 30x20 asset at 2x");
         let pixel = img.get_pixel(30, 20).0;
         assert!(pixel[0] > pixel[1] && pixel[0] > pixel[2] && pixel[3] == 255, "the red Badge, not the blue Other asset: {pixel:?}");
@@ -866,7 +883,24 @@ fn tiff_panel_preserves_shared_antialias_and_explicit_overrides() {
             let log = log.borrow();
             let [(name, bytes)] = log.as_slice() else { panic!("expected one TIFF: format={format_aa:?}, row={row_aa:?}") };
             assert_eq!(name, "Edge.tif");
-            let img = image::load_from_memory_with_format(bytes, image::ImageFormat::Tiff).unwrap().to_rgba8();
+            let img = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, bytes)
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .unwrap()
+                .to_rgba8();
             assert!(img.pixels().any(|p| p[3] == 255), "the ellipse is present");
             assert!(img.pixels().any(|p| p[3] == 0), "transparent outside the ellipse");
             let hard = img.pixels().all(|p| p[3] == 0 || p[3] == 255);
@@ -917,12 +951,44 @@ fn tiff_saved_aliases_use_document_defaults_and_explicit_rgb() {
         let bytes = std::fs::read(folder.join("Badge@2x.tif")).unwrap();
         assert_eq!(tiff_photometric(&bytes), if rgb_override { 2 } else { 5 }, "saved alias {alias}, explicit RGB={rgb_override}");
         if rgb_override {
-            let img = image::load_from_memory_with_format(&bytes, image::ImageFormat::Tiff).unwrap();
+            let img = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, &bytes)
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .unwrap();
             assert_eq!((img.width(), img.height()), (60, 40), "the saved TIFF row is still 2x");
         }
         if mixed {
             let png = std::fs::read(folder.join("Badge.png")).unwrap();
-            let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).unwrap();
+            let img = craft_image_codecs::decode_as(craft_image_codecs::Format::Png, &png)
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .unwrap();
             assert_eq!((img.width(), img.height()), (30, 20), "the PNG row keeps its own 1x scale");
             assert_eq!(png.get(28), Some(&1), "the saved PNG interlace option survives the TIFF defaults");
         }

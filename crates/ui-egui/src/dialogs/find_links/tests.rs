@@ -42,9 +42,41 @@ fn write(path: &Path, bytes: &[u8]) {
 /// A PNG of one color, a different one for each `n`.
 fn png(n: u8) -> Vec<u8> {
     let mut out = vec![];
-    image::RgbaImage::from_pixel(40, 30, image::Rgba([200, n.wrapping_mul(40), 0, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(40, 30, image::Rgba([200, n.wrapping_mul(40), 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -154,6 +186,42 @@ fn files_not_relinked_go_back_to_linked_file_not_found() {
     assert_eq!(d.fields["notes"], json!(["a note"]));
     super::super::cancel(&mut app);
     assert_eq!(app.run("links.check", json!({})).unwrap()["missing"], 2);
+    let opened = crate::io::opened_with_notes(1, "a note");
+    assert_eq!((&app.ui.status, &app.ui.status_notes), (&opened, &Some((opened.clone(), vec!["a note".to_string()]))));
+}
+
+/// Relink, and Cancel, in the Find Linked Files dialog that Linked File Not Found's Find in Folder…
+/// opened: the status bar shows the open's notes again and keeps them for its hover. Cancel of the
+/// Links panel's Find in Folder… leaves the message as it is.
+#[test]
+fn the_last_find_in_folder_answer_keeps_the_open_notes() {
+    let root = folder("notes");
+    let mut app = app_for(&root);
+    let bytes = opened_without(&mut app, &root, &["a.png"]);
+    let found = at(&root, "found/a.png");
+    write(&found, &bytes[0]);
+    let missing = rows(app.ui.dialog.as_ref().unwrap(), "missing");
+    let notes = vec!["a note".to_string(), "another note".to_string()];
+    let opened = crate::io::opened_with_notes(2, "a note");
+    let find = |app: &mut VectorcraftApp, back: bool| {
+        let mut d = dialog(app, missing.clone(), vec![], back).unwrap();
+        d.fields.insert("notes".into(), json!(notes));
+        d.fields.insert("picks".into(), json!([found]));
+        app.ui.dialog = Some(d);
+        app.status("Something else");
+    };
+    find(&mut app, false);
+    super::super::cancel(&mut app);
+    assert_eq!(app.ui.status, "Something else");
+    find(&mut app, true);
+    super::super::cancel(&mut app);
+    assert!(app.ui.dialog.is_none());
+    assert_eq!((&app.ui.status, &app.ui.status_notes), (&opened, &Some((opened.clone(), notes.clone()))), "Cancel");
+    find(&mut app, true);
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.run("links.check", json!({})).unwrap()["missing"], 0);
+    assert_eq!((&app.ui.status, &app.ui.status_notes), (&opened, &Some((opened.clone(), notes.clone()))), "Relink");
 }
 
 /// A file is chosen when the choice is clear: the only same file, else the only file. A row the

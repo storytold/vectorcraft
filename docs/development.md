@@ -83,6 +83,7 @@ The canvas is rasterized on the CPU (`vectorcraft-render`, vello_cpu); the GPU (
   - `WGPU_VALIDATION_INDIRECT_CALL=1`: turns wgpu's check of indirect draw arguments back on. VectorCraft draws nothing indirectly and turns it off, since the compute shader it needs fails to compile on some drivers (#651).
   - On Linux with Mesa, `MESA_VK_DEVICE_SELECT=10de:2f04!` (vendor:device as `vulkaninfo --summary` or `lspci -nn` show it) leaves only that GPU to Vulkan, and `DRI_PRIME=1` picks the other GPU.
 - Help › About and the control channel's `ui.inspect` (`graphicsAdapter`) show the adapter in use, and the app logs it at startup.
+- **How frames reach the display.** By default the window presents with `autovsync` and lets the display queue one frame. With `autovsync`, wgpu uses relaxed vsync (FifoRelaxed, which tears a frame that arrives late) where the driver offers it, else vsync (Fifo). For a launch, `--present-mode` (or `VECTORCRAFT_PRESENT_MODE`) sets the present mode to `fifo` (vsync), `autovsync` or `novsync` (wgpu uses Immediate, else Mailbox, else Fifo, whichever the driver offers), and `--frame-latency` (or `VECTORCRAFT_FRAME_LATENCY`) sets the frames the display may queue, `1` to `3`. A flag overrides its variable, and a value that is not one of these stops the app with a message. On Windows and Linux, a launch with either one set opens its files in a new window, as with `--new-instance`, instead of handing them to a running VectorCraft. At startup the log records what the app asks the window surface for, for example `requested window surface: autovsync, frame latency 2 (override)`. The driver chooses the mode that `autovsync` and `novsync` resolve to and may clamp the latency, and on macOS egui uses at least 2 frames while the window is being resized. The code is `apps/vectorcraft/src/presentation.rs`.
 
 ## Logs
 
@@ -98,6 +99,8 @@ When the interface thread stays in one part of a frame for 3 s (VectorCraft's ow
 |---|---|
 | `VECTORCRAFT_CONTROL_PORT` | Same as `--control <port>`, which overrides it; a value that isn't a port from 1 to 65535 stops the app |
 | `VECTORCRAFT_IN_WINDOW_MENUS` | Any value but empty or `0`: same as `--in-window-menus` (see [macOS: the menu bar](#macos-the-menu-bar)) |
+| `VECTORCRAFT_PRESENT_MODE` | Same as `--present-mode`, which overrides it: `fifo`, `autovsync` or `novsync`; any other value stops the app (see [Desktop graphics processor](#desktop-graphics-processor)) |
+| `VECTORCRAFT_FRAME_LATENCY` | Same as `--frame-latency`, which overrides it: `1` to `3` frames; any other value stops the app (see [Desktop graphics processor](#desktop-graphics-processor)) |
 | `VECTORCRAFT_NO_PREFS` | No preferences read or written, no default Data Recovery folder and no log file, and no saved PDF presets or loaded ICC profiles kept (agents' test runs; also for `vectorcraft-cli`) |
 | `VECTORCRAFT_CONFIG_DIR` | The folder for the preferences and the folders next to them (`PDF Presets`, `Color Profiles`, …), for the app and `vectorcraft-cli` (see `docs/control-protocol.md`) |
 | `WGPU_POWER_PREF` | Graphics adapter: `low`, `high` or `none` (see [Desktop graphics processor](#desktop-graphics-processor)) |
@@ -294,7 +297,10 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
   control channel, MCP and tests read them) and are translated only where the status bar draws them
   (`i18n::msg`). `@msg` catalog rows hold a whole message or a template such as
   `Couldn't open {name}: {e}`; `{_1}`, `{_2}` … stand for the format string's `{}`, and the values in the
-  placeholders are translated in turn (the reason after `: {e}` is often a message too). A literal brace in a
+  placeholders are translated in turn (the reason after `: {e}` is often a message too). A value that starts with
+  `{` is translated only when it has an exact row, so a JSON object stays as it is; a value that starts with `[` is
+  also matched against a template that starts with `[` and an index of digits, such as an effect's refusal
+  ``[{j}] `{_1}`: {why}``, so its reason is translated while a JSON array stays as it is. A literal brace in a
   row is written `{{` or `}}`, in the English and in the translation: a message made with `format!` keeps the
   doubled braces of its format string, and a plain string literal has each of its braces doubled, so the row for
   `"expected {\"objects\": [...]}"` is `expected {{"objects": [...]}}`. Czech, German, Greek, Spanish, French, Georgian, Hindi, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Traditional Chinese, Swedish, Ukrainian, Vietnamese, Finnish, Turkish, Catalan, Dutch and Danish

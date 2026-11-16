@@ -145,7 +145,7 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             for (i, e) in events.iter().enumerate() {
                 let kind = e.get("kind").and_then(Value::as_str).unwrap_or("");
                 if crate::headless::pointer_kind(kind).is_none() {
-                    return Err(format!("event {i}: unknown kind `{kind}` (down, drag, up, move, doubleclick)"));
+                    return Err(format!("event {i}: unknown kind `{kind}` (down, drag, up, move, doubleclick, tripleclick)"));
                 }
                 if !e.get("x").is_some_and(Value::is_number) || !e.get("y").is_some_and(Value::is_number) {
                     return Err(format!("event {i}: numeric `x` and `y` required"));
@@ -465,7 +465,16 @@ fn render_preview(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
     // The render was asked for at most 4096 a side.
     let img = super::handlers::decode_png(&png, 8192).map_err(|e| format!("read preview: {e}"))?;
     let img = if img.width() > max || img.height() > max { fitted(img, max, max, Resample::Average) } else { img };
-    let mut out = std::io::Cursor::new(Vec::new());
-    img.write_to(&mut out, image::ImageFormat::Png).map_err(|e| format!("encode preview: {e}"))?;
-    Ok(image_result(out.get_ref(), json!({"width":img.width(),"height":img.height()})))
+    let rgba = img.to_rgba8();
+    let raw = craft_image_codecs::Image::from_raw(
+        rgba.width(),
+        rgba.height(),
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        rgba.into_raw(),
+    )
+    .map_err(|e| format!("encode preview: {e}"))?;
+    let out = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+        .map_err(|e| format!("encode preview: {e}"))?;
+    Ok(image_result(&out, json!({"width":img.width(),"height":img.height()})))
 }
