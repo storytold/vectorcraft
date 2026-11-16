@@ -2599,6 +2599,31 @@ file-filter	Templates	範本
 @msg	$.evalFile requires a file path	$.evalFile 需要檔案路徑
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile：逾時必須是 0 或更大的有限毫秒數
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile：接受一個檔案路徑和一個逾時值
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} 未定義
+@msg	cannot read property '{key}' of {base}	無法讀取 {base} 的屬性 '{key}'
+@msg	cannot set property '{key}' of {base}	無法設定 {base} 的屬性 '{key}'
+@msg	cannot read a property of {base}	無法讀取 {base} 的屬性
+@msg	cannot set a property of {base}	無法設定 {base} 的屬性
+@msg	cannot define property '{key}': {why}	無法定義屬性 '{key}'：{why}
+@msg	cannot assign to property '{key}': {why}	無法為屬性 '{key}' 賦值：{why}
+@msg	cannot delete property '{key}'	無法刪除屬性 '{key}'
+@msg	cannot declare function {ident}	無法宣告函式 {ident}
+@msg	invalid assignment target	賦值目標無效
+@msg	the array's length is read-only	陣列的長度是唯讀的
+@msg	the property cannot be redefined	屬性無法重新定義
+@msg	the object is not extensible	物件不可擴充
+@msg	the length cannot be redefined	長度無法重新定義
+@msg	it is read-only	它是唯讀的
+@msg	an element cannot be deleted	無法刪除元素
+@msg	it has only a getter	它只有 getter
+@msg	the value is a primitive	該值是基本值
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}：{file} 第 {line} 行，第 {column} 欄：{e}（擲回）
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}：第 {line} 行，第 {column} 欄：{e}（擲回）
 @msg	{name}: {e} (thrown)	{name}：{e}（擲回）
@@ -4416,6 +4441,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Filter Layers Panel Rows	篩選圖層面板列
 	Search commands and tools	搜尋指令與工具
 	Search commands and tools…	搜尋指令與工具…
+	Recent Commands	最近使用的指令
+	No recent commands	沒有最近使用的指令
 	Search Commands…	搜尋指令…
 	Secondary	次要
 	Section Symbol	章節符號
@@ -7068,6 +7095,24 @@ breakText	Glyphs	字符
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	將短破折號展開為路徑
 @msg	select paths with dashed strokes to expand	請選取要展開的虛線筆畫路徑
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	相切圓…
+	Tangent Circle	相切圓
+	Circle:	圓：
+@msg	`ids` names an object twice	`ids` 將同一個物件指定了兩次
+@msg	select two or three paths or compound paths	請選取兩個或三個路徑或複合路徑
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` 必須為 0.01 到 1000000 pt
+@msg	two shapes need a `radius`	兩個形狀需要 `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	三個形狀會自行決定半徑：請勿指定 `radius`
+@msg	`circle` must be from 0 to 64	`circle` 必須為 0 到 64
+@msg	a shape has no outline	有一個形狀沒有外框
+@msg	the shapes are too complex: at most 2000 segments in all	形狀過於複雜：總共最多 2000 個線段
+@msg	these shapes take too long to search	這些形狀的搜尋耗時過長
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	與這些形狀相切的圓超過 64 個：它們可能沿整條曲線相接
+@msg	no circle touches these shapes	沒有與這些形狀相切的圓
+@msg	`circle` is past the last circle found ({found})	`circle` 超出了找到的最後一個圓（{found}）
+@msg	object {value} is not a path or compound path	物件 {value} 不是路徑或複合路徑
+@msg	these shapes are too small to measure	這些形狀太小，無法測量
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	文件工具
 	Save a Timestamped Copy	儲存附時間戳記的拷貝

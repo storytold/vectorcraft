@@ -556,6 +556,7 @@
 	Chosen: {n} of {total}	પસંદ કરેલ: {total} માંથી {n}
 	Chrome…	ક્રોમ…
 	Circle	વર્તુળ
+	Circle:	વર્તુળ:
 	Classic	ક્લાસિક
 	Clean Up	સાફ કરો
 	Clean Up…	સાફ કરો…
@@ -3364,6 +3365,8 @@
 	Search Preferences	પસંદગીઓ શોધો
 	Search commands and tools	આદેશો અને ટૂલ્સ શોધો
 	Search commands and tools…	આદેશો અને ટૂલ્સ શોધો…
+	Recent Commands	તાજેતરના આદેશો
+	No recent commands	કોઈ તાજેતરના આદેશો નથી
 	Search images	છબીઓ શોધો
 	Searching…	શોધી રહ્યા છીએ…
 	Secondary	ગૌણ
@@ -3856,6 +3859,8 @@
 	Table	ટેબલ
 	Tabs	ટૅબ
 	Tamil	તમિલ
+	Tangent Circle	સ્પર્શક વર્તુળ
+	Tangent Circle…	સ્પર્શક વર્તુળ…
 	Taper	ટેપર
 	Target	લક્ષ્ય
 	Target Contents	લક્ષ્ય સામગ્રી
