@@ -18,6 +18,10 @@ pub(super) const MAX_PATTERN_DEPTH: u32 = 4;
 /// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).
 pub(super) const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
 
+/// The warning for an image left out because its colors can't be converted as the Output
+/// settings ask, although it could be written in its own colors.
+pub(super) const UNCONVERTED: &str = "an image couldn't be converted to the Output destination and is missing from the picture";
+
 /// The warning for an image whose placement cannot be written.
 pub(super) const UNWRITABLE_IMAGE: &str = "an image couldn't be written and is missing from the picture";
 

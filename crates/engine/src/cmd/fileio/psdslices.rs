@@ -18,7 +18,7 @@
 use vectorcraft_doc::{SliceKind, SliceOptions};
 use vectorcraft_geom::Rect;
 
-use super::psdread::{Reader, TRUNCATED, header, resources};
+use super::psdread::{Reader, TRUNCATED, header, resource};
 
 /// The image resource that holds the slices.
 const SLICES: u16 = 1050;
@@ -51,12 +51,12 @@ struct Stored {
 }
 
 /// The slices PSD or PSB file `bytes` stores. `None` when it stores none (no `8BIM` resource 1050
-/// before the image resources end or are cut short). An error when the file isn't a PSD or PSB
-/// file, or its slices can't be read.
+/// before the image resources end, or before a block that is cut short ahead of it). An error when
+/// the file isn't a PSD or PSB file, resource 1050 is cut short, or its slices can't be read.
 fn read(bytes: &[u8]) -> Result<Option<Stored>, String> {
     let mut r = Reader::new(bytes);
     let h = header(&mut r)?;
-    let Some((_, _, data)) = resources(h.resources, true).find(|(id, _, _)| *id == SLICES) else { return Ok(None) };
+    let Some(data) = resource(h.resources, SLICES)? else { return Ok(None) };
     Ok(Some(Stored { slices: decode(data)?, size: (h.width, h.height) }))
 }
 
@@ -87,8 +87,9 @@ fn version_6(r: &mut Reader<'_>, budget: &mut usize) -> Result<Vec<PsdSlice>, St
     if count > MAX_SLICES {
         return Err(format!("the file has {count} slices, more than the {MAX_SLICES} read"));
     }
+    let one_after_another = records_one_after_another(Reader::new(r.rest()), count, *budget);
     let mut out = vec![];
-    for _ in 0..count {
+    for i in 0..count {
         // The ID and group ID.
         r.take(8)?;
         let origin = r.u32()?;
@@ -116,9 +117,10 @@ fn version_6(r: &mut Reader<'_>, budget: &mut usize) -> Result<Vec<PsdSlice>, St
             format!("#{red:02x}{green:02x}{blue:02x}")
         };
         // Photoshop 7 and later may follow a record with a descriptor (version 16); a record that
-        // doesn't start one is the next slice. A descriptor read that uses up the budget is an
-        // error.
-        if r.rest().starts_with(&16u32.to_be_bytes()) {
+        // doesn't start one is the next slice. When the records follow one another, only the
+        // last one may be followed by a descriptor. A descriptor read that uses up the budget is
+        // an error.
+        if (!one_after_another || i + 1 == count) && r.rest().starts_with(&16u32.to_be_bytes()) {
             let mut ahead = Reader::new(r.rest());
             ahead.u32()?;
             match descriptor(&mut ahead, 0, budget) {
@@ -137,6 +139,37 @@ fn version_6(r: &mut Reader<'_>, budget: &mut usize) -> Result<Vec<PsdSlice>, St
         }
     }
     Ok(out)
+}
+
+/// Whether `r` holds `count` version 6 records one after another, followed by nothing or by one
+/// descriptor (version 16) that reads within `budget`, as ag-psd writes them. A record whose ID is
+/// 16 then isn't taken for a descriptor. Otherwise each record may be followed by a descriptor.
+fn records_one_after_another(mut r: Reader<'_>, count: usize, mut budget: usize) -> bool {
+    if !(0..count).all(|_| skip_record(&mut r).is_ok()) {
+        return false;
+    }
+    r.rest().is_empty() || (r.rest().starts_with(&16u32.to_be_bytes()) && r.u32().is_ok() && descriptor(&mut r, 0, &mut budget).is_ok())
+}
+
+/// Reads past the version 6 record `r` starts with, in the layout [`version_6`] reads. Its strings
+/// are checked and read past without being decoded.
+fn skip_record(r: &mut Reader<'_>) -> Result<(), String> {
+    // The ID and group ID.
+    r.take(8)?;
+    if r.u32()? == 1 {
+        r.take(4)?;
+    }
+    units(r)?;
+    // The type and the rectangle.
+    r.take(20)?;
+    for _ in 0..4 {
+        units(r)?;
+    }
+    r.take(1)?;
+    units(r)?;
+    // The alignments and the background color.
+    r.take(12)?;
+    Ok(())
 }
 
 /// Versions 7 and 8: the descriptor's `slices` list, each slice an object.
@@ -221,10 +254,15 @@ fn text_len(n: usize) -> Result<usize, String> {
 
 /// A Unicode string: a count of UTF-16 units, then the units; trailing NULs dropped.
 fn unicode(r: &mut Reader<'_>) -> Result<String, String> {
-    let n = text_len(r.u32()? as usize)?;
-    let bytes = r.take(n.checked_mul(2).ok_or(TRUNCATED)?)?;
+    let bytes = units(r)?;
     let units: Vec<u16> = bytes.as_chunks::<2>().0.iter().map(|u| u16::from_be_bytes(*u)).collect();
     Ok(String::from_utf16_lossy(&units).trim_end_matches('\0').to_string())
+}
+
+/// A Unicode string's units, as bytes: a count of UTF-16 units, then the units.
+fn units<'a>(r: &mut Reader<'a>) -> Result<&'a [u8], String> {
+    let n = text_len(r.u32()? as usize)?;
+    r.take(n.checked_mul(2).ok_or(TRUNCATED)?)
 }
 
 /// A descriptor's value, as far as the slices need it.

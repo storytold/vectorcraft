@@ -7,13 +7,15 @@
 use std::sync::Arc;
 
 use vectorcraft_color::{BlendMode, cms};
+use vectorcraft_doc::text::TypeAntiAlias;
 use vectorcraft_doc::{Document, Knockout, LayerColor, Node, NodeKind};
-use vectorcraft_geom::Rect;
+use vectorcraft_geom::{Point, Rect};
 
 use super::jpeg::{self, ColorModel};
+use super::psd_type;
 use super::tiff::packbits;
 use super::{RasterExportOptions, RasterFormat, on_white};
-use crate::{RenderOptions, Rendered, Renderer, fx};
+use crate::{AntiAlias, RenderOptions, Rendered, Renderer, fx};
 
 /// Most pixels a side of a PSD can have (larger images need the format's large-document variant).
 pub const MAX_SIDE: u32 = 30_000;
@@ -33,6 +35,11 @@ pub struct PsdOptions {
     /// its objects together (a clipping mask, an opacity mask, its own appearance, knockout) stays
     /// one pixel layer.
     pub max_editability: bool,
+    /// With `layers`: horizontal and vertical point type in layers and sublayers is written as type
+    /// layers that a reader can edit, each with its pixels: type in solid colours without strokes,
+    /// effects or an appearance of its own. A layer that holds such type becomes a group of its type
+    /// layers and pixel layers of the art between them.
+    pub preserve_text: bool,
     /// With `layers`: hidden layers (and hidden objects) are written as hidden layers instead of
     /// being left out.
     pub hidden_layers: bool,
@@ -42,7 +49,7 @@ pub struct PsdOptions {
 
 impl Default for PsdOptions {
     fn default() -> Self {
-        Self { color_model: ColorModel::Rgb, layers: true, max_editability: false, hidden_layers: false, embed_icc: true }
+        Self { color_model: ColorModel::Rgb, layers: true, max_editability: false, preserve_text: false, hidden_layers: false, embed_icc: true }
     }
 }
 
@@ -141,6 +148,8 @@ struct Record {
     hidden: bool,
     /// Section divider: [`OPEN_GROUP`] or [`END_GROUP`].
     divider: Option<u32>,
+    /// A type layer's type tool object (`TySh`).
+    type_tool: Option<Vec<u8>>,
 }
 
 /// Section divider kinds.
@@ -159,6 +168,7 @@ impl Record {
             opacity: 255,
             hidden: false,
             divider: None,
+            type_tool: None,
         }
     }
 
@@ -237,6 +247,9 @@ impl Record {
         block(&mut extra, b"luni", &luni)?;
         if let Some(kind) = self.divider {
             block(&mut extra, b"lsct", &[&kind.to_be_bytes()[..], b"8BIM", &self.blend].concat())?;
+        }
+        if let Some(data) = &self.type_tool {
+            block(&mut extra, b"TySh", data)?;
         }
         out.extend(len32(extra.len())?.to_be_bytes());
         out.extend(extra);
@@ -451,13 +464,40 @@ impl Parts<'_> {
             return;
         }
         let (hidden, opacity) = (!n.visible, opacity_byte(n.opacity));
-        if self.o.max_editability
+        if self.o.preserve_text
+            && let Some(t) = psd_type::editable(n)
+        {
+            let record = self.draw(n);
+            let [top, left, bottom, right] = record.rect.map(f64::from);
+            let origin = Point::new(self.region.x0, self.region.y0);
+            let aa = if self.ro.anti_alias == AntiAlias::None { TypeAntiAlias::None } else { t.anti_alias };
+            let type_tool = Some(psd_type::type_block(t, origin, self.scale, Rect::new(left, top, right, bottom), aa));
+            self.records.push(Record { blend: blend_key(n.blend), opacity, hidden, type_tool, ..record });
+            return;
+        }
+        let per_object = self.o.max_editability;
+        let hidden_layers = self.o.hidden_layers;
+        if (per_object || self.o.preserve_text && holds_type(n, hidden_layers))
             && splits(n)
             && let Some(children) = n.children()
         {
             self.records.push(Record { divider: Some(END_GROUP), ..Record::empty(GROUP_END.into(), self.colors()) });
-            for c in children {
-                self.add(c);
+            if per_object {
+                for c in children {
+                    self.add(c);
+                }
+            } else {
+                // The art between type layers stays together, one pixel layer per stretch.
+                let mut stretch: Vec<Arc<Node>> = vec![];
+                for c in children {
+                    if type_layer(c, hidden_layers) {
+                        self.add_stretch(n, std::mem::take(&mut stretch));
+                        self.add(c);
+                    } else {
+                        stretch.push(c.clone());
+                    }
+                }
+                self.add_stretch(n, stretch);
             }
             // A group in normal blending lets its layers blend with what is below it.
             let blend = if n.blend == BlendMode::Normal && !n.isolate { *b"pass" } else { blend_key(n.blend) };
@@ -466,6 +506,22 @@ impl Parts<'_> {
         }
         let record = self.draw(n);
         self.records.push(Record { blend: blend_key(n.blend), opacity, hidden, ..record });
+    }
+
+    /// `nodes`, children of layer `layer` next to each other, drawn together as one pixel layer
+    /// named after the layer (nothing when they paint nothing).
+    fn add_stretch(&mut self, layer: &Node, nodes: Vec<Arc<Node>>) {
+        if nodes.is_empty() {
+            return;
+        }
+        let mut part = layer.clone();
+        if let Some(children) = part.children_mut() {
+            *children = nodes;
+        }
+        let record = self.draw(&part);
+        if record.rect != [0; 4] {
+            self.records.push(record);
+        }
     }
 
     /// `n` drawn alone, visible, at full opacity in normal blending (its record carries those).
@@ -530,6 +586,30 @@ impl Parts<'_> {
 /// Can layer `n` be written as a group of its parts without changing its look?
 fn splits(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Layer { clip: false, .. }) && n.extras().mask.is_none() && n.knockout != Knockout::On && !fx::has_object_fx(n)
+}
+
+/// Does layer `n`, or a sublayer that can be written as a group, hold point type that can be a type
+/// layer? Not when other art in it blends in a mode other than normal (the object, or a fill or
+/// stroke of it, as [`Node::blends_through`] sees it): drawn as a pixel layer of its own, it would no
+/// longer blend with the type or the art below. Hidden type counts only when `hidden` (Include
+/// Hidden Layers) writes it.
+fn holds_type(n: &Node, hidden: bool) -> bool {
+    let Some(children) = n.children().filter(|_| splits(n)) else { return false };
+    let mut held = false;
+    for c in children {
+        if type_layer(c, hidden) {
+            held = true;
+        } else if Node::children_blend(std::slice::from_ref(c), &mut |c| c.blends_through()) {
+            return false;
+        }
+    }
+    held
+}
+
+/// Is child `c` written as a type layer, or as a group holding one ([`holds_type`])? A hidden child
+/// is written only when `hidden`.
+fn type_layer(c: &Node, hidden: bool) -> bool {
+    (c.visible || hidden) && (psd_type::editable(c).is_some() || holds_type(c, hidden))
 }
 
 /// Does anything in `n` carry effects of its own that may paint outside the art's bounds?

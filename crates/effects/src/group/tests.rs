@@ -1,6 +1,6 @@
 use super::*;
 use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{CharStyle, Effect, NodeId, TextObject};
+use vectorcraft_doc::{CharStyle, Effect, FillLayer, NodeId, TextObject};
 use vectorcraft_geom::{Point, Rect, shapes};
 
 /// Type tests need glyph outlines, which only the optional craft-fonts build input provides.
@@ -71,6 +71,33 @@ fn trap_effect_adds_an_overprinting_strip_above_the_members() {
     assert_eq!(fill.paint.color(), Some(yellow));
 }
 
+/// Trap takes each member's top fill that paints: a hidden fill on top is skipped, and a member
+/// whose only fill is hidden does not take part.
+#[test]
+fn trap_skips_a_hidden_fill() {
+    let yellow = Color::cmyk(0.0, 0.0, 1.0, 0.0);
+    let blue = Color::cmyk(1.0, 0.6, 0.0, 0.0);
+    let mut hidden = FillLayer::new(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)));
+    hidden.visible = false;
+    let trap = |members: Vec<Arc<Node>>| {
+        let mut g = Node::group(NodeId(10), members);
+        let params = serde_json::json!({"thickness": 1.0, "tintReduction": 100});
+        g.appearance.effects.push(Effect { id: crate::trap::TRAP.into(), params, visible: true });
+        pathfinder_children(None, &g, None).unwrap()
+    };
+    let mut covered = (*sq(1, 0.0, yellow)).clone();
+    covered.appearance.items.push(AppearanceItem::Fill(hidden.clone()));
+    let out = trap(vec![Arc::new(covered), sq(2, 10.0, blue)]);
+    assert_eq!(out.len(), 3, "both squares and one trap");
+    assert_eq!(out[2].appearance.fill().unwrap().paint.color(), Some(yellow));
+    let only_hidden = Node::path(
+        NodeId(1),
+        shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)),
+        Appearance { items: vec![AppearanceItem::Fill(hidden)], ..Default::default() },
+    );
+    assert_eq!(trap(vec![Arc::new(only_hidden), sq(2, 10.0, blue)]).len(), 2, "no trap");
+}
+
 #[test]
 fn hard_mix_takes_the_highest_of_each_cmyk_channel_and_drops_strokes() {
     let mut g = two_overlapping_cmyk_squares();
@@ -85,6 +112,72 @@ fn soft_mix_blends_cmyk_bottom_to_top_and_drops_strokes() {
     g.appearance.effects.push(Effect { id: "pathfinder.softMix".into(), params: serde_json::json!({"mixingRate": 50.0}), visible: true });
     let [c, m, y, k] = overlap_cmyk(&g);
     assert!((c - 0.3).abs() < 0.02 && (m - 0.43).abs() < 0.02 && (y - 0.35).abs() < 0.02 && (k - 0.05).abs() < 0.02, "{c} {m} {y} {k}");
+}
+
+/// Soft Mix and Hard Mix mix the top fill that paints: a hidden fill above it adds no color.
+#[test]
+fn mixes_skip_a_hidden_fill() {
+    for effect in ["pathfinder.softMix", "pathfinder.hardMix"] {
+        let mut plain = two_overlapping_cmyk_squares();
+        plain.appearance.effects.push(Effect { id: effect.into(), params: serde_json::json!({"mixingRate": 50.0}), visible: true });
+        let mut covered = plain.clone();
+        let NodeKind::Group { children, .. } = &mut covered.kind else { panic!("group") };
+        let mut hidden = FillLayer::new(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)));
+        hidden.visible = false;
+        for c in children.iter_mut() {
+            Arc::make_mut(c).appearance.items.push(AppearanceItem::Fill(hidden.clone()));
+        }
+        assert_eq!(overlap_cmyk(&covered), overlap_cmyk(&plain), "{effect}");
+    }
+}
+
+/// Outline strokes each edge with the top fill that paints, keeping that fill's opacity, blend
+/// mode and overprint. A hidden fill or a fill of no paint gives the edges nothing; with no fill
+/// that paints, the edges take the top stroke that paints, which skips hidden and 0 pt strokes.
+#[test]
+fn outline_edges_keep_the_fill_layers_opacity_blend_and_overprint() {
+    use vectorcraft_doc::StrokeLayer;
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    let mut fill = FillLayer::new(red.clone());
+    (fill.opacity, fill.blend, fill.overprint) = (0.5, BlendMode::Multiply, true);
+    let mut hidden = FillLayer::new(Paint::solid(Color::rgb(0.0, 1.0, 0.0)));
+    hidden.visible = false;
+    let mut stroke = StrokeLayer::new(blue.clone(), 2.0);
+    (stroke.opacity, stroke.blend, stroke.overprint) = (0.5, BlendMode::Multiply, true);
+    let mut hidden_stroke = StrokeLayer::new(Paint::solid(Color::rgb(0.0, 1.0, 0.0)), 2.0);
+    hidden_stroke.visible = false;
+    let zero_stroke = StrokeLayer::new(Paint::solid(Color::rgb(0.0, 1.0, 0.0)), 0.0);
+    let look = |items: Vec<AppearanceItem>| Appearance { items, ..Default::default() };
+    let (f, s) = (AppearanceItem::Fill, AppearanceItem::Stroke);
+    let cases = [
+        (look(vec![f(fill.clone())]), Some(red.clone())),
+        (look(vec![f(fill.clone()), f(hidden.clone())]), Some(red.clone())),
+        (look(vec![f(fill.clone()), f(FillLayer::new(Paint::None))]), Some(red.clone())),
+        (look(vec![f(hidden.clone())]), None),
+        (look(vec![s(stroke.clone())]), Some(blue.clone())),
+        (look(vec![f(hidden.clone()), s(stroke.clone())]), Some(blue.clone())),
+        (look(vec![s(stroke.clone()), s(hidden_stroke), s(zero_stroke.clone())]), Some(blue.clone())),
+        (look(vec![s(zero_stroke)]), None),
+    ];
+    for (appearance, want) in cases {
+        let member = Arc::new(Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), appearance));
+        let mut g = Node::group(NodeId(10), vec![member, sq(2, 5.0, Color::rgb(0.0, 0.0, 1.0))]);
+        g.appearance.effects.push(Effect { id: "pathfinder.outline".into(), params: serde_json::json!({}), visible: true });
+        let out = pathfinder_children(None, &g, None).unwrap();
+        let edges: Vec<_> = out.iter().filter(|n| n.id == NodeId(1)).collect();
+        assert!(!edges.is_empty(), "{out:#?}");
+        for n in edges {
+            let [AppearanceItem::Stroke(s)] = n.appearance.items.as_slice() else { panic!("one stroke: {n:#?}") };
+            match &want {
+                Some(paint) => {
+                    assert_eq!(&s.paint, paint);
+                    assert_eq!((s.opacity, s.blend, s.overprint), (0.5, BlendMode::Multiply, true), "{s:#?}");
+                }
+                None => assert!(s.paint.is_none() && s.opacity == 1.0, "{s:#?}"),
+            }
+        }
+    }
 }
 
 #[test]
