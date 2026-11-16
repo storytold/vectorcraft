@@ -365,6 +365,30 @@ pub fn height_outside_font() -> Option<Vec<u8>> {
     heights_font(HEIGHT_OUTSIDE_FAMILY, Some((HEIGHT_OUTSIDE_X, HEIGHT_OUTSIDE_CAP)), false)
 }
 
+/// The family of [`numberless_font`].
+pub const NUMBERLESS_FAMILY: &str = "Numberlesstest Sans";
+
+/// The bundled Source Sans 3 Regular as family [`NUMBERLESS_FAMILY`], without its OS/2 and `post`
+/// tables, so it gives none of the numbers Show Similar Fonts compares faces by. `None` when it
+/// can't be built.
+pub fn numberless_font() -> Option<Vec<u8>> {
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let full = format!("{NUMBERLESS_FAMILY} Regular");
+    let postscript = format!("{}-Regular", NUMBERLESS_FAMILY.replace(' ', ""));
+    let name = name_table(&[(1, NUMBERLESS_FAMILY), (2, "Regular"), (4, &full), (6, &postscript)])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if builder.contains(tag) || tag == Tag::new(b"OS/2") || tag == Tag::new(b"post") {
+            continue;
+        }
+        builder.add_raw(tag, font.table_data(r.tag())?.as_bytes().to_vec());
+    }
+    Some(builder.build())
+}
+
 /// The bundled Source Sans 3 Regular as `family`: with the x height and cap height `heights` in
 /// its OS/2 table, else a version 1 OS/2 table, which holds neither; with `base`, the `BASE`
 /// table of [`height_font`].

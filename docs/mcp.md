@@ -11229,7 +11229,8 @@ others, each group nearest first. The measure is VectorCraft's own. It compares 
 Regular by its OS/2 PANOSE digits (only between faces of the same PANOSE family kind), weight and width classes, x-height,
 cap height and average character width, and its `post` italic angle (a named instance of a variable font takes its `wght`
 and `slnt` settings), leaving out a number either face does not give, and counts a family of another kind (serif, sans
-serif, script and the font menu's other kinds) as further away. It reads these when a font is cataloged or loaded and opens
+serif, script and the font menu's other kinds) as further away. A family that shares none of these numbers with `family`
+comes after every family in its group that shares one. It reads these when a font is cataloged or loaded and opens
 no font file when asked. `limit` (a whole number from 1 to 100000) keeps
 the first ones. A missing or blank `family` fails with `` `family` is required ``, one that is not a string with
 `` `family` must be a string ``, a family that isn't available or that the font menus don't list with ``font family `<name>` is not available``, and any
