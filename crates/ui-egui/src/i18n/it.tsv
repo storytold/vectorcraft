@@ -1215,6 +1215,7 @@ font-technology	Variable	Variabili
 	Highlight Size	Dimensione lucentezza
 	Blend Steps	Passaggi di fusione
 	Shading Color	Colore ombreggiatura
+	Black Overprint	Nero in sovrastampa
 	Draw Hidden Faces	Disegna facce nascoste
 	Eyedropper	Contagocce
 	Sample Color from Screen	Campiona colore dallo schermo
@@ -3083,6 +3084,12 @@ digits	Malayalam	Malayalam
 	Responsive	Adattivo
 	Restore	Ripristina
 	Restore every preference to its default (applied on OK)	Ripristina tutte le preferenze ai valori predefiniti (applicato con OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	L'unità dei nuovi documenti nelle dimensioni predefinite, tranne quelle in pixel, e dei file aperti che non registrano alcuna unità; sceglierla qui e fare clic su OK la imposta anche per il documento attivo.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Gli spessori della traccia, i trattini e gli spazi sono mostrati in questa unità, e i numeri digitati per essi sono letti in questa unità.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Dimensioni del testo, interlinea e spostamento della linea di base sono mostrati in questa unità, e i numeri digitati per essi sono letti in questa unità.
+	The unit for East Asian type measurements, which no field uses yet.	L'unità per le misure del testo dell'Asia orientale, che nessun campo usa ancora.
+	When on, a number typed without a unit into a field in picas is read in points.	Se attiva, un numero digitato senza unità in un campo in pica viene letto in punti.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Con ID XML, i nomi degli oggetti sono mostrati come ID XML in Livelli, Variabili e Opzioni livello.
 	Reset all preferences to their defaults?	Ripristinare tutte le preferenze ai valori predefiniti?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	I valori predefiniti vengono applicati quando fai clic su OK in Preferenze. Annulla lì mantiene le preferenze attuali.
 	Restore Recovered Documents	Ripristina documenti recuperati
@@ -3116,6 +3123,7 @@ digits	Malayalam	Malayalam
 	Roman Hanging Punctuation	Punteggiatura sporgente romana
 	Korean Line Break Anywhere	Interruzione di riga coreana ovunque
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Impostazioni di composizione dell’Asia orientale
 	Korean Composition Settings	Impostazioni di composizione coreana
 	Rotate	Ruota
@@ -3310,6 +3318,8 @@ digits	Malayalam	Malayalam
 @msg	`{key}` must be an array of these names: {_1}	`{key}` deve essere un array di questi nomi: {_1}
 	Search commands and tools	Cerca comandi e strumenti
 	Search commands and tools…	Cerca comandi e strumenti…
+	Recent Commands	Comandi recenti
+	No recent commands	Nessun comando recente
 	Search Commands…	Cerca comandi…
 	Secondary	Secondario
 	Section Symbol	Simbolo di sezione
@@ -4511,6 +4521,31 @@ axis	Both	Entrambi
 @msg	$.evalFile requires a file path	$.evalFile richiede un percorso di file
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: il timeout deve essere un numero finito di millisecondi, 0 o più
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: accetta un percorso di file e un timeout
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} non è definito
+@msg	cannot read property '{key}' of {base}	impossibile leggere la proprietà '{key}' di {base}
+@msg	cannot set property '{key}' of {base}	impossibile impostare la proprietà '{key}' di {base}
+@msg	cannot read a property of {base}	impossibile leggere una proprietà di {base}
+@msg	cannot set a property of {base}	impossibile impostare una proprietà di {base}
+@msg	cannot define property '{key}': {why}	impossibile definire la proprietà '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	impossibile assegnare alla proprietà '{key}': {why}
+@msg	cannot delete property '{key}'	impossibile eliminare la proprietà '{key}'
+@msg	cannot declare function {ident}	impossibile dichiarare la funzione {ident}
+@msg	invalid assignment target	destinazione di assegnazione non valida
+@msg	the array's length is read-only	la lunghezza dell'array è di sola lettura
+@msg	the property cannot be redefined	la proprietà non può essere ridefinita
+@msg	the object is not extensible	l'oggetto non è estensibile
+@msg	the length cannot be redefined	la lunghezza non può essere ridefinita
+@msg	it is read-only	è di sola lettura
+@msg	an element cannot be deleted	un elemento non può essere eliminato
+@msg	it has only a getter	ha solo un getter
+@msg	the value is a primitive	il valore è primitivo
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: riga {line}, colonna {column} di {file}: {e} (generato)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: riga {line}, colonna {column}: {e} (generato)
 @msg	{name}: {e} (thrown)	{name}: {e} (generato)
@@ -7038,6 +7073,24 @@ breakText	Glyphs	Glifi
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Espandi trattini in tracciati
 @msg	select paths with dashed strokes to expand	seleziona tracciati con traccia tratteggiata da espandere
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Cerchio tangente…
+	Tangent Circle	Cerchio tangente
+	Circle:	Cerchio:
+@msg	`ids` names an object twice	`ids` indica due volte lo stesso oggetto
+@msg	select two or three paths or compound paths	seleziona due o tre tracciati o tracciati composti
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` deve essere da 0.01 a 1000000 pt
+@msg	two shapes need a `radius`	due forme richiedono un `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	tre forme fissano da sole il raggio: ometti `radius`
+@msg	`circle` must be from 0 to 64	`circle` deve essere da 0 a 64
+@msg	a shape has no outline	una forma non ha contorno
+@msg	the shapes are too complex: at most 2000 segments in all	le forme sono troppo complesse: al massimo 2000 segmenti in tutto
+@msg	these shapes take too long to search	la ricerca richiede troppo tempo per queste forme
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	più di 64 cerchi toccano queste forme: potrebbero toccarle lungo un’intera curva
+@msg	no circle touches these shapes	nessun cerchio tocca queste forme
+@msg	`circle` is past the last circle found ({found})	`circle` va oltre l’ultimo cerchio trovato ({found})
+@msg	object {value} is not a path or compound path	l’oggetto {value} non è un tracciato né un tracciato composto
+@msg	these shapes are too small to measure	queste forme sono troppo piccole per essere misurate
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Strumenti documento
 	Save a Timestamped Copy	Salva una copia con data e ora
@@ -7092,7 +7145,7 @@ breakText	Glyphs	Glifi
 @msg	stroke cannot be set on a symbol instance	stroke non può essere impostato su un’istanza di simbolo
 @msg	fill on a symbol instance must be a solid color or none	il fill di un’istanza di simbolo deve essere un colore pieno o none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} non può essere impostato su un’immagine senza l’effetto Converti in forma o Contorna oggetto
-@msg	pass newName, registration, exportType, nineSlice and/or type	specifica newName, registration, exportType, nineSlice e/o type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	specifica newName, registration, exportType, nineSlice, type e/o alignToPixelGrid
 	Text Flow	Flusso del testo
 	By Rows	Per righe
 	By Columns	Per colonne

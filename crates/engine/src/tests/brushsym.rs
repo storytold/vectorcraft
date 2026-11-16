@@ -1302,9 +1302,9 @@ fn wheel_of(s: &Session, id: NodeId) -> Option<PressureProfile> {
     node(s, id).appearance.stroke().and_then(|st| st.wheel.clone())
 }
 
-/// `path.freehand` points carry an airbrush pen's finger wheel seventh (or as `wheel`), 0..1 and
-/// clamped; the stroke keeps it, a continued or reversed stroke keeps it in step, a point that is
-/// not a number is refused, and the Paintbrush records it from the pen. A Calligraphic brush with
+/// `path.freehand` points carry an airbrush pen's finger wheel seventh (or as `wheel`), 0..1; the
+/// stroke keeps it, a continued or reversed stroke keeps it in step, a wheel that is not a number
+/// or is outside 0..1 is refused, and the Paintbrush records it from the pen. A Calligraphic brush with
 /// Size on Stylus Wheel draws it, and it lasts through saving, new art leaving it behind.
 #[test]
 fn freehand_points_record_the_stylus_wheel() {
@@ -1317,8 +1317,8 @@ fn freehand_points_record_the_stylus_wheel() {
     assert!(w.at(0.0) < 1e-6 && (w.at(1.0) - 1.0).abs() < 1e-6, "{w:?}");
     assert_eq!(pose_of(&s, id), (None, None, None), "the wheel alone");
     assert_eq!(pressure_of(&s, id), None);
-    // As keys, clamped; a point without one is half way.
-    let id = draw(&mut s, json!([{"x": 0, "y": 150, "wheel": -2}, {"x": 50, "y": 150}, {"x": 100, "y": 150, "wheel": 9}]));
+    // As keys; a point without one is half way.
+    let id = draw(&mut s, json!([{"x": 0, "y": 150, "wheel": 0}, {"x": 50, "y": 150}, {"x": 100, "y": 150, "wheel": 1}]));
     let w = wheel_of(&s, id).unwrap();
     assert!(w.at(0.0) < 1e-6 && (w.at(0.5) - 0.5).abs() < 1e-6 && (w.at(1.0) - 1.0).abs() < 1e-6, "{w:?}");
     // No wheel given: none recorded.
@@ -1329,6 +1329,12 @@ fn freehand_points_record_the_stylus_wheel() {
     let err = s.execute("path.freehand", &json!({"points": [[0, 0, null, null, null, null, "0.5"], [10, 0]], "style": "brush"}));
     assert!(err.unwrap_err().to_string().contains("`wheel` must be a number"));
     assert_eq!(s.doc().unwrap().doc.layers, before.layers, "the document is unchanged");
+    // Outside 0..1: refused, and nothing drawn.
+    for points in [json!([{"x": 0, "y": 0, "wheel": -2}, {"x": 10, "y": 0}]), json!([[0, 0], [10, 0, null, null, null, null, 9]])] {
+        let err = s.execute("path.freehand", &json!({"points": points, "style": "brush"}));
+        assert!(err.unwrap_err().to_string().contains("`wheel` must be from 0 to 1"));
+        assert_eq!(s.doc().unwrap().doc.layers, before.layers, "the document is unchanged");
+    }
     // Continued at its end by a stroke without a wheel: the old part keeps it, the new one is half way.
     let id = draw(&mut s, json!([[0, 350, null, null, null, null, 1], [100, 350, null, null, null, null, 1]]));
     s.execute("path.freehand", &json!({"points": [[100, 350], [200, 350]], "style": "brush", "extend": {"id": id.0, "end": "end"}})).unwrap();

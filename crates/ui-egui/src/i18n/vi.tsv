@@ -1396,6 +1396,7 @@ font-technology	Variable	Biến thiên
 	Highlight Size	Kích thước điểm sáng
 	Blend Steps	Số bước hòa trộn
 	Shading Color	Màu tô bóng
+	Black Overprint	Đen in chồng
 	Draw Hidden Faces	Vẽ các mặt ẩn
 	Eyedropper	Ống hút màu
 	Sample Color from Screen	Lấy mẫu màu từ màn hình
@@ -3389,6 +3390,12 @@ mark-style	Japanese	Kiểu Nhật
 	Responsive	Đáp ứng
 	Restore	Khôi phục
 	Restore every preference to its default (applied on OK)	Khôi phục tất cả tùy chọn về mặc định (áp dụng khi nhấn OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Đơn vị cho tài liệu mới theo kích thước dựng sẵn, trừ kích thước bằng pixel, và cho tệp đã mở không ghi đơn vị; chọn đơn vị ở đây rồi bấm OK cũng đặt nó cho tài liệu đang hoạt động.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Độ dày nét, nét đứt và khoảng cách hiển thị theo đơn vị này, và số nhập cho chúng được đọc theo đơn vị này.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Cỡ chữ, giãn dòng và dịch chuyển đường cơ sở hiển thị theo đơn vị này, và số nhập cho chúng được đọc theo đơn vị này.
+	The unit for East Asian type measurements, which no field uses yet.	Đơn vị cho số đo chữ Đông Á, hiện chưa có trường nào dùng.
+	When on, a number typed without a unit into a field in picas is read in points.	Khi bật, số nhập không có đơn vị vào trường tính bằng pica được đọc theo điểm.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Với XML ID, tên đối tượng hiển thị dưới dạng XML ID trong Các lớp, Biến số và Tùy chọn lớp.
 	Reset all preferences to their defaults?	Đặt lại tất cả tùy chọn về mặc định?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Giá trị mặc định được áp dụng khi bạn nhấn OK trong Tùy chọn. Hủy ở đó giữ nguyên các tùy chọn hiện tại của bạn.
 	Restore Recovered Documents	Khôi phục tài liệu đã phục hồi
@@ -3428,6 +3435,7 @@ mark-style	Japanese	Kiểu Nhật
 	Roman Hanging Punctuation	Dấu câu treo Roman
 	Korean Line Break Anywhere	Ngắt dòng tiếng Hàn ở bất kỳ đâu
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Cài đặt dàn trang Đông Á
 	Korean Composition Settings	Cài đặt dàn trang tiếng Hàn
 	Rotate	Xoay
@@ -3644,6 +3652,8 @@ mark-style	Japanese	Kiểu Nhật
 @msg	`{key}` must be an array of these names: {_1}	`{key}` phải là một mảng gồm các tên sau: {_1}
 	Search commands and tools	Tìm kiếm lệnh và công cụ
 	Search commands and tools…	Tìm kiếm lệnh và công cụ…
+	Recent Commands	Lệnh gần đây
+	No recent commands	Không có lệnh gần đây
 	Search Commands…	Tìm kiếm lệnh…
 	Search Fonts Folder	Tìm kiếm thư mục phông chữ
 	Searching…	Đang tìm kiếm…
@@ -4936,6 +4946,44 @@ theme	Appearance	Giao diện
 @msg	$.evalFile requires a file path	$.evalFile cần đường dẫn tệp
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: thời gian chờ phải là một số mili giây hữu hạn, từ 0 trở lên
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: nhận một đường dẫn tệp và một thời gian chờ
+@msg	assignment to a constant binding	gán cho một ràng buộc hằng
+@msg	invalid array length	độ dài mảng không hợp lệ
+@msg	array literal too long	literal mảng quá dài
+@msg	the value is not a function	giá trị không phải là hàm
+@msg	apply was called on a value that is not a function	apply được gọi trên một giá trị không phải là hàm
+@msg	the argument list is not an object	danh sách đối số không phải là đối tượng
+@msg	too many arguments	quá nhiều đối số
+@msg	the value is not a constructor	giá trị không phải là hàm tạo
+@msg	cannot convert the object to a primitive value	không thể chuyển đối tượng thành giá trị nguyên thủy
+@msg	cannot convert undefined or null to an object	không thể chuyển undefined hoặc null thành đối tượng
+@msg	the right side of 'in' is not an object	vế phải của 'in' không phải là đối tượng
+@msg	the right side of 'instanceof' is not a function	vế phải của 'instanceof' không phải là hàm
+@msg	the function's prototype is not an object	nguyên mẫu của hàm không phải là đối tượng
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} chưa được định nghĩa
+@msg	cannot read property '{key}' of {base}	không thể đọc thuộc tính '{key}' của {base}
+@msg	cannot set property '{key}' of {base}	không thể đặt thuộc tính '{key}' của {base}
+@msg	cannot read a property of {base}	không thể đọc thuộc tính của {base}
+@msg	cannot set a property of {base}	không thể đặt thuộc tính của {base}
+@msg	cannot define property '{key}': {why}	không thể định nghĩa thuộc tính '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	không thể gán cho thuộc tính '{key}': {why}
+@msg	cannot delete property '{key}'	không thể xóa thuộc tính '{key}'
+@msg	cannot declare function {ident}	không thể khai báo hàm {ident}
+@msg	invalid assignment target	đích gán không hợp lệ
+@msg	the array's length is read-only	độ dài của mảng là chỉ đọc
+@msg	the property cannot be redefined	không thể định nghĩa lại thuộc tính
+@msg	the object is not extensible	đối tượng không thể mở rộng
+@msg	the length cannot be redefined	không thể định nghĩa lại độ dài
+@msg	it is read-only	nó là chỉ đọc
+@msg	an element cannot be deleted	không thể xóa một phần tử
+@msg	it has only a getter	nó chỉ có getter
+@msg	the value is a primitive	giá trị là kiểu nguyên thủy
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: dòng {line}, cột {column} của {file}: {e} (đã ném)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: dòng {line}, cột {column}: {e} (đã ném)
 @msg	{name}: {e} (thrown)	{name}: {e} (đã ném)
@@ -7037,6 +7085,24 @@ breakText	Glyphs	Glyph
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Mở rộng nét đứt thành đường dẫn
 @msg	select paths with dashed strokes to expand	chọn các đường dẫn có nét đứt để mở rộng
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Đường tròn tiếp xúc…
+	Tangent Circle	Đường tròn tiếp xúc
+	Circle:	Đường tròn:
+@msg	`ids` names an object twice	`ids` nêu một đối tượng hai lần
+@msg	select two or three paths or compound paths	chọn hai hoặc ba đường dẫn hoặc đường dẫn phức hợp
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` phải từ 0.01 đến 1000000 pt
+@msg	two shapes need a `radius`	hai hình cần `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	ba hình tự xác định bán kính: hãy bỏ `radius`
+@msg	`circle` must be from 0 to 64	`circle` phải từ 0 đến 64
+@msg	a shape has no outline	một hình không có đường viền
+@msg	the shapes are too complex: at most 2000 segments in all	các hình quá phức tạp: tổng cộng tối đa 2000 đoạn
+@msg	these shapes take too long to search	việc tìm kiếm cho các hình này mất quá nhiều thời gian
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	hơn 64 đường tròn chạm vào các hình này: có thể chúng chạm dọc theo cả một đường cong
+@msg	no circle touches these shapes	không có đường tròn nào chạm vào các hình này
+@msg	`circle` is past the last circle found ({found})	`circle` vượt quá đường tròn cuối cùng tìm được ({found})
+@msg	object {value} is not a path or compound path	đối tượng {value} không phải đường dẫn hay đường dẫn phức hợp
+@msg	these shapes are too small to measure	các hình này quá nhỏ để đo
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Công cụ tài liệu
 	Save a Timestamped Copy	Lưu bản sao có ngày giờ
@@ -7091,7 +7157,7 @@ breakText	Glyphs	Glyph
 @msg	stroke cannot be set on a symbol instance	không thể đặt stroke cho thực thể ký hiệu
 @msg	fill on a symbol instance must be a solid color or none	fill của thực thể ký hiệu phải là màu đặc hoặc none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	không thể đặt {key} cho hình ảnh không có hiệu ứng Chuyển thành hình dạng hoặc Đường bao đối tượng
-@msg	pass newName, registration, exportType, nineSlice and/or type	hãy cung cấp newName, registration, exportType, nineSlice và/hoặc type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	hãy cung cấp newName, registration, exportType, nineSlice, type và/hoặc alignToPixelGrid
 	Text Flow	Luồng văn bản
 	By Rows	Theo hàng
 	By Columns	Theo cột
