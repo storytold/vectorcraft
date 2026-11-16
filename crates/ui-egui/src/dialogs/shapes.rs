@@ -701,9 +701,11 @@ mod tests {
         super::super::open_tool_dialog(&mut app, "ellipse", json!({"x": 10.0, "y": 150.0}));
         assert_eq!(app.ui.dialog.as_ref().unwrap().f64("anchors", 0.0), 6.0);
         app.ui.dialog = None;
-        // `tool.setOption` keeps it from 2 to 1000, and the dialog opens on what it keeps.
-        for (set, want) in [(json!(1), 2.0), (json!(2000), 1000.0), (json!(7), 7.0)] {
-            app.run("tool.setOption", json!({"tool": "ellipse", "values": {"anchors": set}})).unwrap();
+        // `tool.setOption` takes it from 2 to 1000 and refuses other counts, and the dialog opens on
+        // what it keeps.
+        for (set, want) in [(json!(1), 6.0), (json!(2000), 6.0), (json!(2), 2.0), (json!(1000), 1000.0), (json!(7), 7.0)] {
+            let r = app.run("tool.setOption", json!({"tool": "ellipse", "values": {"anchors": set}}));
+            assert_eq!(r.is_ok(), set.as_u64().is_some_and(|n| (2..=1000).contains(&n)), "{set}: {r:?}");
             super::super::open_tool_dialog(&mut app, "ellipse", json!({"x": 10.0, "y": 150.0}));
             assert_eq!(app.ui.dialog.as_ref().unwrap().f64("anchors", 0.0), want, "{set}");
             app.ui.dialog = None;

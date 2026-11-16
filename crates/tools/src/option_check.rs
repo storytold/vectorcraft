@@ -174,7 +174,8 @@ mod tests {
             (&["place"], &["count", "current", "name", "width", "height", "names"]),
         ];
         let read_only = |id: &str, k: &str| READ_ONLY.iter().any(|(ids, keys)| ids.contains(&id) && keys.contains(&k));
-        let extra = ["place", "dimension"];
+        // Tools that `create` makes and the catalog doesn't list.
+        let extra = ["place", "dimension", crate::cropimage::ID, "intertwine"];
         let mut refused = Vec::new();
         let mut check = |id: &str, tool: &dyn Tool, after: &str| {
             let Some(mut options) = tool.options().as_object().cloned() else { return };

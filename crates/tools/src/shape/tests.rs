@@ -1119,3 +1119,15 @@ fn a_move_from_the_centre_point_snaps_and_shows_the_hollow_arrow() {
     assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["matrix"][4] == json!(10.0)), "{a:?}");
     assert_eq!(t.cursor(&c, Point::new(160.0, 150.0), Mods::default()), Cursor::Arrow);
 }
+
+/// `tool.setOption` takes an ellipse's anchor count from 2 to 1000, as the tool keeps it.
+#[test]
+fn the_anchor_count_is_checked_against_its_range() {
+    let t = ShapeTool::new("ellipse");
+    for n in [2, 4, 1000] {
+        assert_eq!(t.check_option("anchors", &json!(n)), Ok(()), "{n}");
+    }
+    for bad in [json!(1), json!(1001), json!(4.5), json!("4")] {
+        assert_eq!(t.check_option("anchors", &bad), Err("`anchors` must be a whole number from 2 to 1000".into()), "{bad}");
+    }
+}

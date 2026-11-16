@@ -875,6 +875,7 @@ impl Tool for ShapeTool {
         use crate::option_check as c;
         match key {
             "sides" | "points" => c::whole(key, v, 3, 1000),
+            "anchors" => c::whole(key, v, 2, 1000),
             "cornerRadius" => c::number(key, v, 0.0, MAX_CORNER_RADIUS),
             "starRatio" => c::number(key, v, 0.01, 1.0),
             "length" => c::number(key, v, 0.0, 1e6),
