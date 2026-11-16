@@ -2,7 +2,8 @@
 //! File › Place (#918): the merged image, the flattened picture every PSD carries after its layers,
 //! as a linked PSD shows. Written from Adobe's public "Photoshop File Formats Specification"
 //! (<https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/>). File › Open reads the
-//! layers with [`super::psdlayers`], which shares this reader.
+//! layers with [`super::psdlayers`], which shares this reader. The clipping path a document names
+//! ([`clipping_path`]) clips its merged image where it opens or is placed.
 //!
 //! Every mode Photoshop saves a merged image in is read: Bitmap, Grayscale, Duotone (as its
 //! grayscale data), Indexed, RGB, CMYK and Lab, at 1, 8, 16 and 32 bits per channel, stored raw,
@@ -14,6 +15,7 @@
 use std::io::Read;
 
 use vectorcraft_color::cms::{Lab, lab::lab_to_srgb};
+use vectorcraft_geom::{Anchor, AnchorKind, PathData, Point, SubPath};
 
 /// Photoshop's colour modes (the header's numbers), as far as the merged image is concerned.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -103,7 +105,7 @@ pub(super) struct Header<'a> {
     /// Colour mode data: an indexed image's palette (256 reds, then greens, then blues).
     palette: &'a [u8],
     /// The image resources.
-    resources: &'a [u8],
+    pub(super) resources: &'a [u8],
     /// The layer and mask information.
     pub(super) layers: &'a [u8],
 }
@@ -154,30 +156,138 @@ pub(super) fn header<'a>(r: &mut Reader<'a>) -> Result<Header<'a>, String> {
 pub fn resolution(bytes: &[u8]) -> Option<(f64, f64)> {
     let mut r = Reader::new(bytes);
     let h = header(&mut r).ok()?;
-    let mut r = Reader::new(h.resources);
+    let (_, _, data) = resources(h.resources, false).find(|(id, _, _)| *id == 0x03ed)?;
+    let mut d = Reader::new(data);
+    // Fixed 16.16 values, each with its unit (1: per inch, 2: per centimetre) and the unit the
+    // size is shown in.
+    let mut axis = || -> Option<f64> {
+        let v = f64::from(d.u32().ok()?) / 65536.0;
+        let unit = d.u16().ok()?;
+        d.u16().ok()?;
+        Some(if unit == 2 { v * 2.54 } else { v })
+    };
+    Some((axis()?, axis()?))
+}
+
+/// The image resource blocks of `resources`, in file order: each one's id, name (the bytes of its
+/// Pascal string) and data. Stops at the first block that is cut short. With `signed`, only the
+/// blocks whose signature is `8BIM` are given.
+pub(super) fn resources(resources: &[u8], signed: bool) -> impl Iterator<Item = (u16, &[u8], &[u8])> {
+    let mut r = Reader::new(resources);
+    std::iter::from_fn(move || if r.rest().is_empty() { None } else { block(&mut r).ok() })
+        .filter(move |(ours, ..)| *ours || !signed)
+        .map(|(_, id, name, data)| (id, name, data))
+}
+
+/// The data of the first `8BIM` image resource block `id` of `resources`. `None` when there is
+/// none before the blocks end or before a block that is cut short ahead of it. An error when
+/// that block itself is cut short.
+pub(super) fn resource(resources: &[u8], id: u16) -> Result<Option<&[u8]>, String> {
+    let mut r = Reader::new(resources);
     while !r.rest().is_empty() {
-        r.take(4).ok()?;
-        let id = r.u16().ok()?;
-        // A Pascal string padded to an even size, length byte included.
-        let name = usize::from(r.u8().ok()?);
-        r.take(name + (name + 1) % 2).ok()?;
-        let size = usize::try_from(r.u32().ok()?).ok()?;
-        let data = r.take(size).ok()?;
-        r.take(size % 2).ok()?;
-        if id == 0x03ed {
-            let mut d = Reader::new(data);
-            // Fixed 16.16 values, each with its unit (1: per inch, 2: per centimetre) and the
-            // unit the size is shown in.
-            let mut axis = || -> Option<f64> {
-                let v = f64::from(d.u32().ok()?) / 65536.0;
-                let unit = d.u16().ok()?;
-                d.u16().ok()?;
-                Some(if unit == 2 { v * 2.54 } else { v })
-            };
-            return Some((axis()?, axis()?));
+        match block(&mut r) {
+            Ok((true, i, _, data)) if i == id => return Ok(Some(data)),
+            Ok(_) => {}
+            Err(Some((true, i))) if i == id => return Err(TRUNCATED.into()),
+            Err(_) => return Ok(None),
         }
     }
-    None
+    Ok(None)
+}
+
+/// An image resource block: whether its signature is `8BIM`, its id, its name (the bytes of its
+/// Pascal string) and its data.
+type Block<'a> = (bool, u16, &'a [u8], &'a [u8]);
+
+/// The image resource block that `r` starts with. When it is cut short, the error gives whether
+/// its signature is `8BIM` and its id, when those were read.
+fn block<'a>(r: &mut Reader<'a>) -> Result<Block<'a>, Option<(bool, u16)>> {
+    let ours = r.take(4).map_err(|_| None)? == b"8BIM";
+    let id = r.u16().map_err(|_| None)?;
+    let mut rest = || -> Result<(&'a [u8], &'a [u8]), String> {
+        // A Pascal string padded to an even size, length byte included.
+        let len = usize::from(r.u8()?);
+        let name = r.take(len)?;
+        r.take((len + 1) % 2)?;
+        let size = usize::try_from(r.u32()?).map_err(|_| TRUNCATED.to_string())?;
+        let data = r.take(size)?;
+        r.take(size % 2)?;
+        Ok((name, data))
+    };
+    let (name, data) = rest().map_err(|_| Some((ours, id)))?;
+    Ok((ours, id, name, data))
+}
+
+/// The resource naming the document's clipping path.
+const CLIPPING_PATH_NAME: u16 = 2999;
+
+/// The saved paths' resource ids.
+const SAVED_PATHS: std::ops::RangeInclusive<u16> = 2000..=2997;
+
+/// The clipping path a PSD or PSB file names, in its pixel space (x across its width, y down
+/// its height): the saved path (resources 2000 to 2997) whose name the clipping path resource
+/// (2999) gives, both `8BIM` resources. `None` when the document names none, names a path it doesn't have, or that path
+/// has no anchors or more records than [`vectorcraft_geom::path::MAX_READ_ANCHORS`]. Saved paths
+/// use the even-odd rule. A path whose initial fill record says the fill starts with all pixels
+/// begins with a subpath around the whole image, so its subpaths cut holes in it.
+pub fn clipping_path(bytes: &[u8]) -> Option<PathData> {
+    let mut r = Reader::new(bytes);
+    let h = header(&mut r).ok()?;
+    let (_, _, named) = resources(h.resources, true).find(|(id, _, _)| *id == CLIPPING_PATH_NAME)?;
+    // A Pascal string, then the flatness and a fill rule, which the specification says is ignored.
+    let len = usize::from(*named.first()?);
+    let name = named.get(1..1 + len)?;
+    let (_, _, data) = resources(h.resources, true).find(|(id, n, _)| SAVED_PATHS.contains(id) && *n == name)?;
+    // A path of more records than a document may hold anchors is left out before it is built.
+    if data.len() / PATH_RECORD > vectorcraft_geom::path::MAX_READ_ANCHORS {
+        return None;
+    }
+    let path = saved_path(data, f64::from(h.width), f64::from(h.height));
+    (!path.is_empty()).then_some(path)
+}
+
+/// One record of a saved path: a selector, then 24 bytes.
+const PATH_RECORD: usize = 26;
+
+/// The saved path of path records `data`, scaled to an image `width` × `height` pixels. Knot
+/// records come after their subpath's length record; one that comes before any, or past the knots
+/// a length record counts, is left out, as is a last record cut short.
+fn saved_path(data: &[u8], width: f64, height: f64) -> PathData {
+    // A path point: a vertical, then a horizontal signed 8.24 fixed-point fraction of the image's
+    // height and width.
+    let fixed = |b: [u8; 4]| f64::from(i32::from_be_bytes(b)) / f64::from(1 << 24);
+    let point = |[v0, v1, v2, v3, h0, h1, h2, h3]: [u8; 8]| Point::new(fixed([h0, h1, h2, h3]) * width, fixed([v0, v1, v2, v3]) * height);
+    let mut subpaths: Vec<SubPath> = vec![];
+    let mut all_pixels = false;
+    // The knots the current subpath still takes.
+    let mut left = 0usize;
+    let (records, _) = data.as_chunks::<PATH_RECORD>();
+    for &[s0, s1, ref body @ ..] in records {
+        let [c0, c1, ..] = *body;
+        let (points, _) = body.as_chunks::<8>();
+        let [a, b, c] = [0, 1, 2].map(|i| points.get(i).copied().map_or(Point::ZERO, point));
+        match u16::from_be_bytes([s0, s1]) {
+            sel @ (0 | 3) => {
+                left = usize::from(u16::from_be_bytes([c0, c1]));
+                // Anchors are added as knots come: a count can claim more than follow.
+                subpaths.push(SubPath::new(vec![], sel == 0));
+            }
+            sel @ (1 | 2 | 4 | 5) if left > 0 => {
+                let Some(sp) = subpaths.last_mut() else { continue };
+                left -= 1;
+                let kind = if matches!(sel, 1 | 4) { AnchorKind::Smooth } else { AnchorKind::Corner };
+                sp.anchors.push(Anchor { h_in: a, p: b, h_out: c, kind });
+            }
+            8 => all_pixels = [c0, c1] == [0, 1],
+            _ => {}
+        }
+    }
+    subpaths.retain(|s| !s.anchors.is_empty());
+    if all_pixels && !subpaths.is_empty() {
+        let all = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, width, height));
+        subpaths.splice(0..0, all.subpaths);
+    }
+    PathData::new(subpaths)
 }
 
 /// Does the merged image keep its transparency in the first extra channel? Yes when the layer

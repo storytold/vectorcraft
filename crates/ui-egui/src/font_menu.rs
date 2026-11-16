@@ -4,7 +4,10 @@
 //! or reached with ↑/↓ previews its font on the selected text (one live interaction, nothing in
 //! the history); a click or Enter applies it as one step, Escape or closing the menu puts the text
 //! back. The Glyphs panel and Find Font only pick a font ([`picked`]): nothing is previewed on the
-//! document. A star marks a favourite family, and the ★ filter lists only those. The Font
+//! document. A star marks a favourite family, and the ★ filter lists only those. The ≈ button
+//! before a family's star (Show Similar Fonts) orders the listed families by how alike they look to
+//! it ([`vectorcraft_text::FontDb::similar_families`]), that family first and without the Recent
+//! Fonts section, until the ≈ chip under the filters clears it or the menu closes. The Font
 //! Technology filter's Variable lists only variable font families. Preferences › Type › Enable
 //! in-menu font previews and Font Preview Size turn the samples off or size the rows. The menu lays
 //! out its filters on the same four rows wherever it opens. However narrow its field, it opens at
@@ -160,6 +163,8 @@ impl<'a> MenuLook<'a> {
 const ROW: f32 = 24.0;
 /// Width of the star at the end of a family's row.
 const STAR: f32 = 18.0;
+/// Width of the Show Similar Fonts button before the star.
+const SIMILAR: f32 = 18.0;
 /// The least share of a row the family's name takes when the row is too narrow for the widest
 /// name and [`SAMPLE_W`]; the sample fills the rest.
 const NAME_SHARE: f32 = 0.5;
@@ -305,8 +310,8 @@ fn remap_highlight(before: &[Row], selected: Option<usize>, after: &[Row]) -> Op
 
 /// What the rows were listed for: the query, the script, kind, font technology (variable only) and
 /// favourites filters, Show Font Names in English, the expanded families, favourites, recent
-/// history and font list generation.
-type RowsKey = (String, usize, Option<FontClass>, bool, bool, bool, Vec<String>, Vec<String>, Vec<String>, u64);
+/// history, font list generation and the family Show Similar Fonts orders by.
+type RowsKey = (String, usize, Option<FontClass>, bool, bool, bool, Vec<String>, Vec<String>, Vec<String>, u64, Option<String>);
 
 /// The menu's state between frames.
 #[derive(Clone, Default)]
@@ -330,6 +335,12 @@ struct MenuState {
     favorites_only: bool,
     /// Families whose styles are listed (lowercase).
     expanded: Vec<String>,
+    /// Show Similar Fonts: the family the list is ordered by likeness to, until it is cleared or
+    /// the menu closes.
+    similar: Option<String>,
+    /// Show Similar Fonts was chosen or cleared: the family it ordered by, which is highlighted
+    /// and scrolled to once (to the top while the list is ordered by it).
+    similar_moved: Option<String>,
     /// What was previewed last (None: nothing is previewed).
     previewed: Option<(String, Option<String>)>,
     /// The rows listed, and what for: built again only when that changes, not every frame.
@@ -1043,6 +1054,8 @@ fn header<'s>(ui: &mut Ui, db: &'s vectorcraft_text::FontDb, state_id: egui::Id,
         st.highlight = None;
         st.query.clear();
         st.current = current.to_string();
+        st.similar = None;
+        st.similar_moved = None;
     }
     st.last = pass;
     // For [`end_stale_preview`]: the menu is open, in this layer.
@@ -1080,10 +1093,15 @@ fn header<'s>(ui: &mut Ui, db: &'s vectorcraft_text::FontDb, state_id: egui::Id,
         look.favorites.to_vec(),
         look.recent.to_vec(),
         db.generation(),
+        st.similar.clone(),
     );
     if st.rows_key.as_ref() != Some(&key) {
         let families: Vec<_> = db.menu_family_list().iter().filter(|f| listed(db, f, &query, st, look)).cloned().collect();
-        let rows = grouped_rows(&families, look.recent, &st.expanded, |f| db.styles(f));
+        // Show Similar Fonts orders every listed family by likeness, the recent ones among them.
+        let rows = match &st.similar {
+            Some(base) => grouped_rows(&db.similar_families(base, &families), &[], &st.expanded, |f| db.styles(f)),
+            None => grouped_rows(&families, look.recent, &st.expanded, |f| db.styles(f)),
+        };
         // Filter changes (including un-starring a favourite) may remove rows; expanding
         // another family or a background font scan can insert rows before the highlight.
         // Never preview an unrelated family because the old numeric index now points to it.
@@ -1095,6 +1113,9 @@ fn header<'s>(ui: &mut Ui, db: &'s vectorcraft_text::FontDb, state_id: egui::Id,
     if query != st.query || refilter {
         st.query = query.clone();
         st.highlight = None;
+    }
+    if let Some(base) = &st.similar_moved {
+        st.highlight = rows.iter().position(|r| matches!(r, Row::Family(f) if f.eq_ignore_ascii_case(base)));
     }
     if st.highlight.is_none() && query.is_empty() {
         st.highlight = rows.iter().position(|r| matches!(r, Row::Family(f) if f.eq_ignore_ascii_case(current)));
@@ -1196,16 +1217,29 @@ fn filters(ui: &mut Ui, st: &mut MenuState, t: &Tokens) -> bool {
         });
     }
     st.filters = widest;
+    // While Show Similar Fonts orders the list: the family it orders by, which clears it. Its
+    // width is left out of the widest row: a long name wraps instead of widening the menu.
+    if let Some(base) = st.similar.clone() {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(4.0, 2.0);
+            let chip = egui::RichText::new(format!("≈ {base}  ✕")).size(FILTER_SIZE);
+            if ui.selectable_label(true, chip).on_hover_text(tl!("Clear Similar Fonts")).clicked() {
+                st.similar_moved = st.similar.take();
+                refilter = true;
+            }
+        });
+    }
     refilter
 }
 
 /// The width the open menu takes at least: the widest row of filters last frame, and the widest
-/// name up to [`NAME_MAX`] with room for its sample, the star and the scroll bar beside it, within
-/// [`WINDOW_SHARE`] of the window. The menu is never narrower than its field.
+/// name up to [`NAME_MAX`] with room for its sample, the Show Similar Fonts button, the star and the
+/// scroll bar beside it, within [`WINDOW_SHARE`] of the window. The menu is never narrower than its
+/// field.
 fn menu_width(ui: &Ui, st: &MenuState, look: MenuLook) -> f32 {
     let sample = if look.samples { SAMPLE_W } else { 0.0 };
     let names = name_width(ui, vectorcraft_text::FontDb::global(), look.english_names, &st.rows).min(NAME_MAX);
-    let row = DISCLOSURE + names + NAME_GAP + sample + STAR + 2.0 + widgets::list_scroll_style().allocated_width();
+    let row = DISCLOSURE + names + NAME_GAP + sample + SIMILAR + STAR + 2.0 + widgets::list_scroll_style().allocated_width();
     // Rounding in the chips' widths must not wrap the widest row.
     let filters = if st.filters > 0.0 { st.filters.ceil() + 1.0 } else { 0.0 };
     filters.max(row).min(ui.ctx().content_rect().width() * WINDOW_SHARE)
@@ -1267,13 +1301,14 @@ fn widest_label(ui: &Ui, labels: Vec<String>) -> f32 {
 }
 
 /// Where a row `width` wide puts its sample, after the name column: room for the widest name
-/// (`widest`) and a gap, as far as that leaves [`SAMPLE_W`] and the star for the sample or
-/// [`NAME_SHARE`] of the row for the name. Without samples the name runs to the star.
+/// (`widest`) and a gap, as far as that leaves [`SAMPLE_W`], the Show Similar Fonts button and the
+/// star for the sample or [`NAME_SHARE`] of the row for the name. Without samples the name runs to
+/// the Show Similar Fonts button.
 fn name_column(width: f32, widest: f32, samples: bool) -> f32 {
     if !samples {
-        return width - STAR;
+        return width - SIMILAR - STAR;
     }
-    (DISCLOSURE + widest + NAME_GAP).min((width - STAR - 2.0 - SAMPLE_W).max(width * NAME_SHARE))
+    (DISCLOSURE + widest + NAME_GAP).min((width - SIMILAR - STAR - 2.0 - SAMPLE_W).max(width * NAME_SHARE))
 }
 
 /// The disclosure triangle of a family with several styles; whether the pointer is on it.
@@ -1293,6 +1328,18 @@ fn star_cell(p: &egui::Painter, resp: &egui::Response, star: egui::Rect, (on, hi
     resp.interact_pointer_pos().is_some_and(|pos| star.contains(pos))
 }
 
+/// The Show Similar Fonts button before a family's star, shown when the row is hovered or
+/// highlighted, or is the family the list is ordered by; whether the pointer hovers it, and whether
+/// it presses it.
+fn similar_cell(p: &egui::Painter, resp: &egui::Response, cell: egui::Rect, (on, highlighted): (bool, bool), t: &Tokens) -> (bool, bool) {
+    let hot = resp.hover_pos().is_some_and(|pos| cell.contains(pos));
+    if on || highlighted || resp.hovered() {
+        let color = if on || hot { t.accent } else { t.text_dim };
+        p.text(cell.center(), egui::Align2::CENTER_CENTER, "≈", egui::FontId::proportional(13.0), color);
+    }
+    (hot, resp.interact_pointer_pos().is_some_and(|pos| cell.contains(pos)))
+}
+
 /// A heading row (Recent Fonts, Fonts), which cannot preview or apply a font.
 fn heading_row(ui: &mut Ui, row_h: f32, label: &str, t: &Tokens) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::hover());
@@ -1302,6 +1349,35 @@ fn heading_row(ui: &mut Ui, row_h: f32, label: &str, t: &Tokens) {
         _ => tl!("Fonts"),
     };
     ui.painter_at(rect).text(rect.left_center() + vec2(4.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(11.0), t.text_dim);
+}
+
+/// The row the list scrolls to this frame, and how it aligns it. Opening, the list shows the recent
+/// section even when the current family is farther down the list, else centres the current font;
+/// key presses keep the highlight in view. Show Similar Fonts goes to the first row, the family it
+/// orders by, and clearing it goes back to that family, highlighted.
+fn scroll_target(st: &mut MenuState, rows: &[Row], opening: bool, keyed: bool) -> Option<(usize, Option<egui::Align>)> {
+    if st.similar_moved.take().is_some() {
+        return match st.similar {
+            Some(_) => Some((0, Some(egui::Align::TOP))),
+            None => st.highlight.map(|i| (i, Some(egui::Align::Center))),
+        };
+    }
+    if opening && matches!(rows.first(), Some(Row::Heading("Recent Fonts"))) {
+        return Some((0, Some(egui::Align::TOP)));
+    }
+    st.highlight.filter(|_| opening || keyed).map(|i| (i, opening.then_some(egui::Align::Center)))
+}
+
+/// The Show Similar Fonts button of family `f`'s row `i` before its star (`star`); whether the
+/// pointer presses it. A click on it asks for the list ordered by likeness to `f`.
+fn similar_button(p: &egui::Painter, resp: &egui::Response, star: egui::Rect, f: &str, (st, i): (&MenuState, usize), t: &Tokens) -> (bool, bool) {
+    let cell = egui::Rect::from_min_max(egui::pos2(star.min.x - SIMILAR, star.min.y), egui::pos2(star.min.x, star.max.y));
+    let ordering = st.similar.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(f));
+    let (hot, pressed) = similar_cell(p, resp, cell, (ordering, st.highlight == Some(i)), t);
+    if hot {
+        resp.clone().on_hover_text(tl!("Show Similar Fonts"));
+    }
+    (pressed, resp.clicked() && pressed)
 }
 
 /// The rows of the open menu in `range`, the ones in view: the menu's one scrolling part, under
@@ -1327,19 +1403,14 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
         let place = egui::Rect::from_min_size(egui::pos2(left, top + i as f32 * row_h), vec2(width, row_h));
         ui.scroll_to_rect_animation(place, align, egui::style::ScrollAnimation::none());
     };
-    // Open at the recent section even when the current family is farther down the list.
-    // Otherwise centre the current font; subsequent key presses keep the highlight in view.
-    if opening && matches!(rows.first(), Some(Row::Heading("Recent Fonts"))) {
-        scroll_to(ui, 0, Some(egui::Align::TOP));
-    } else if let Some(i) = st.highlight
-        && (opening || keyed)
-    {
-        scroll_to(ui, i, opening.then_some(egui::Align::Center));
+    if let Some((i, align)) = scroll_target(st, &rows, opening, keyed) {
+        scroll_to(ui, i, align);
     }
     let mut chosen: Option<(String, Option<String>)> = None;
     let mut hovered: Option<usize> = None;
     let mut toggled: Option<String> = None;
     let mut starred: Option<String> = None;
+    let mut similar: Option<String> = None;
     for i in range {
         let Some(row) = rows.get(i) else { continue };
         if let Row::Heading(label) = row {
@@ -1379,6 +1450,12 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
                 starred = Some(f.clone());
             }
         }
+        let mut on_similar = false;
+        if let Row::Family(f) = row {
+            let (pressed, clicked) = similar_button(&p, &resp, star, f, (&*st, i), &t);
+            on_similar = pressed;
+            similar = similar.or(clicked.then(|| f.clone()));
+        }
         let indent = if row.style().is_some() { DISCLOSURE + STYLE_INDENT } else { DISCLOSURE };
         let name_w = name_column(rect.width(), widest, look.samples);
         let name_rect = egui::Rect::from_min_max(rect.min + vec2(indent, 0.0), egui::pos2(rect.min.x + name_w - 4.0, rect.max.y));
@@ -1390,7 +1467,7 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
         };
         ui.painter_at(name_rect).text(name_rect.left_center(), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(NAME_SIZE), t.text);
         // The sample takes the row's whole height.
-        let sample_rect = egui::Rect::from_min_max(rect.min + vec2(name_w, 0.0), rect.max - vec2(STAR + 2.0, 0.0));
+        let sample_rect = egui::Rect::from_min_max(rect.min + vec2(name_w, 0.0), rect.max - vec2(SIMILAR + STAR + 2.0, 0.0));
         if look.samples {
             // The paper is drawn while the sample is still rendering, and for a family whose sample fails.
             let area = sample_area(ui, sample_rect, ink, PAPER_INSET);
@@ -1398,9 +1475,15 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
                 paint_sample(ui, area, &tex, ink);
             }
         }
-        if resp.clicked() && !on_triangle && !on_star {
+        if resp.clicked() && !on_triangle && !on_star && !on_similar {
             chosen = row.pick();
         }
+    }
+    if let Some(f) = similar {
+        // The rows are ordered again next frame, which highlights `f` and scrolls to it.
+        st.similar_moved = Some(f.clone());
+        st.similar = Some(f);
+        return None;
     }
     if let Some(f) = toggled {
         if st.expanded.contains(&f) {

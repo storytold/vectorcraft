@@ -516,6 +516,29 @@ fn one_work_budget_bounds_several_calls_together() {
 }
 
 #[test]
+fn work_done_once_can_be_drawn_again_from_another_budget() {
+    let row: Vec<(f64, f64)> = (0..=1000).map(|i| (i as f64, 0.0)).collect();
+    let path = PathData::single(line(&row, false));
+    let start = Work::default();
+    let mut work = start;
+    crossings_on_within(&path, &[], &mut work).unwrap();
+    let cost = work.spent_since(start);
+    // Drawing a call's cost leaves what the call itself leaves, 120 times and no more.
+    let mut again = Work::default();
+    assert_eq!(again.draw(cost), Some(()));
+    assert_eq!(again, work);
+    let draws = (1..200).take_while(|_| again.draw(cost).is_some()).count();
+    assert_eq!(draws, 119);
+    let left = again;
+    assert_eq!(again.draw(cost), None);
+    assert_eq!(again, left, "a draw that fails takes nothing");
+    // A twentieth of the budget pays for the call 6 times.
+    assert_eq!((Work::share(0), Work::share(1)), (Work::default(), Work::default()));
+    let mut part = Work::share(20);
+    assert_eq!((0..200).take_while(|_| part.draw(cost).is_some()).count(), 6);
+}
+
+#[test]
 fn a_segment_that_loops_over_itself_crosses_itself() {
     // One cubic that meets itself at t = 0.25 and t = 0.75.
     let looped = PathData::single(SubPath::new(

@@ -446,6 +446,31 @@ mod tests {
         assert_eq!(&w[1].1[1..4], b"PNG", "PNG from the given path");
     }
 
+    /// An option skips the options dialog, but without `path` the save panel still picks the file.
+    #[test]
+    fn export_selection_with_an_option_and_no_path_asks_for_the_file_only() {
+        let (mut app, written) = app();
+        app.session.execute("file.new", &json!({"width": 60, "height": 40})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 20, "height": 10})).unwrap();
+        let asked = Rc::new(RefCell::new(0));
+        let count = asked.clone();
+        app.services.pick_save = Some(Box::new(move |_: &FilePick| {
+            *count.borrow_mut() += 1;
+            Some("/tmp/sel.png".into())
+        }));
+        let r = app.run("document.exportSelection", json!({"scale": 2})).unwrap();
+        assert_eq!(*asked.borrow(), 1, "the save panel picks the file");
+        assert!(app.ui.dialog.is_none(), "no options dialog follows");
+        assert_eq!(r["path"], "/tmp/sel.png");
+        assert_eq!(&written.borrow()[0].1[1..4], b"PNG");
+        app.run("document.exportSelection", json!({"path": "/tmp/sel2.png", "scale": 2})).unwrap();
+        assert_eq!(*asked.borrow(), 1, "a path writes without the save panel");
+        let w = written.borrow();
+        assert_eq!(w.len(), 2);
+        assert_eq!(w[0].0, "/tmp/sel.png", "the picked file");
+        assert_eq!(w[1].0, "/tmp/sel2.png", "the given path");
+    }
+
     #[test]
     fn written_files_open_as_file_urls() {
         let url = super::file_url("/tmp/My Art #1.pdf");

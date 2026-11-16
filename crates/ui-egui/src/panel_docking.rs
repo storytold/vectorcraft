@@ -51,6 +51,8 @@ pub(crate) struct Runtime {
     raise: Option<String>,
     /// The panel the user last clicked or pressed in (a tab, a panel body, a drop).
     focused: Option<String>,
+    /// Hidden panels shown from the window's edges ([`peek`]).
+    peek: peek::State,
 }
 
 /// Every docking control the main window drew last frame with its rect. Controls in floating
@@ -72,6 +74,7 @@ pub(crate) fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "hidden": app.ui.docking_hidden.keys().collect::<Vec<_>>(),
         "autoCollapse": app.session.prefs.auto_collapse_icon_panels,
         "panelsShown": app.ui.dock && app.ui.screen_mode < 3,
+        "peek": peek::shown(app),
         "hitRects": hits,
     })
 }
@@ -313,7 +316,7 @@ fn apply(layout: &mut Layout<String>, action: Action<String>) -> Result<Vec<Stri
 }
 
 /// The docking commands VectorCraft handles here: `window.panel` (the Window menu), its own
-/// `window.panel.collapse` and `window.collapseDock`, the Tools panel's float and dock
+/// `window.panel.collapse`, `window.panel.cycleOptions` and `window.collapseDock`, the Tools panel's float and dock
 /// ([`crate::tools_float`]) and craft-ui's shared ids. Workspaces stay [`crate::workspaces`]'.
 pub(crate) fn command(app: &mut VectorcraftApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
     if let Some(result) = crate::tools_float::command(app, id, params) {
@@ -322,6 +325,8 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, params: &Value) -> Opt
     match id {
         "window.panel" => return Some(show_panel(app, params)),
         "window.collapseDock" => return Some(crate::menus::opt_bool(params, "collapsed").and_then(|c| collapse_dock(app, c))),
+        "window.panels.peek" => return Some(peek::command(app, params)),
+        "window.panel.cycleOptions" => return Some(sizes::command(app, params)),
         "window.panel.collapse" => {
             let minimized = match crate::menus::opt_bool(params, "collapsed") {
                 Ok(c) => c,
@@ -1167,6 +1172,9 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     if modal || egui::Popup::is_any_open(&ctx) {
         blocked.push(ctx.content_rect());
     }
+    // Panels hidden by Tab or Shift+Tab show on the side of the window edge the pointer rests on.
+    let peeking = peek::update(app, &ctx, ui.available_rect_before_wrap(), &layout, !blocked.is_empty()).map(|edge| peek::edge_panels(&layout, edge));
+    let shown_from_edge = |panel: &String| peeking.as_ref().is_some_and(|panels| panels.contains(panel));
     let style = dock_style(ui);
     let mut dock = craft_ui::docking::DockArea::new(area)
         .blocked_rects(&blocked)
@@ -1187,7 +1195,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     // Tab and Shift+Tab (`window.dock`, `window.panels`) and the full screen modes hide the panels;
     // the canvas stays.
     if !app.ui.dock || app.ui.screen_mode >= 3 {
-        dock = dock.hide_panels(HidePanels::All);
+        dock = dock.hide_panels(if peeking.is_some() { HidePanels::Except(&shown_from_edge) } else { HidePanels::All });
     }
     if let Some(panel) = app.dock_rt.raise.take() {
         dock = dock.raise_panel(panel);
@@ -1220,7 +1228,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         app.open_dropped_files(window.dropped, None, shift);
     }
     forward_keys(app, &ctx, output.forwarded_events, output.forwarded_modifiers);
-    if !thumbnail_panel_showing(&app.ui, &ctx) {
+    if peeking.is_none() && !thumbnail_panel_showing(&app.ui, &ctx) {
         // No panel can ask for these rows again this pass. Keep the cache of open documents, but
         // discard worker jobs queued behind the one already rendering.
         crate::panels::layers::show_thumbs_of(None);
@@ -1383,8 +1391,10 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
     /// Draw a registered panel body, fitting untouched flyouts and pinning sized panels' footers.
     fn body(&mut self, ui: &mut egui::Ui, id: &String) {
         if id == CANVAS {
-            crate::toolbar::show_beside_canvas(self.app, ui);
-            self.app.canvas_area(ui);
+            peek::canvas(self.app, ui, |app, ui| {
+                crate::toolbar::show_beside_canvas(app, ui);
+                app.canvas_area(ui);
+            });
             return;
         }
         let floating = ui.ctx().viewport_id() != egui::ViewportId::ROOT;
@@ -1463,13 +1473,21 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
         crate::panels::panel_menu_items(self.app, ui, id);
     }
 
-    fn group_header_width(&self, panels: &[String], _active: &String, floating: bool, _strip_width: f32) -> f32 {
+    fn group_header_width(&self, panels: &[String], active: &String, floating: bool, _strip_width: f32) -> f32 {
         let flyout = self.app.ui.open_panel.as_ref().is_some_and(|panel| panels.contains(panel));
-        if floating || flyout { 52.0 } else { 28.0 }
+        let cycle = if sizes::has_sizes(active) { sizes::CELL } else { 0.0 };
+        cycle + if floating || flyout { 52.0 } else { 28.0 }
     }
 
     fn group_header(&mut self, ui: &mut egui::Ui, panels: &[String], active: &String, floating: bool) {
-        let header = ui.max_rect();
+        let mut header = ui.max_rect();
+        // The double triangle comes first, for a panel with display sizes.
+        if sizes::has_sizes(active) {
+            let split = (header.left() + sizes::CELL).min(header.right());
+            let cell = egui::Rect::from_min_max(header.min, egui::pos2(split, header.bottom()));
+            sizes::button(self.app, ui, cell, active);
+            header.min.x = split;
+        }
         let flyout = self.app.ui.open_panel.clone().filter(|panel| panels.contains(panel));
         let menu_cell = if floating || flyout.is_some() {
             let split = (header.right() - 28.0).max(header.left());
@@ -1512,6 +1530,9 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
         }
     }
 }
+
+mod peek;
+mod sizes;
 
 #[cfg(test)]
 mod tests;

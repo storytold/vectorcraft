@@ -173,6 +173,8 @@ fn paint_only_keeps_every_drawing_attribute_and_partial_equality() {
         b.style_name = a.style_name.clone();
         b.kerning_before = a.kerning_before;
         b.features = a.features.clone();
+        b.diacritic_horizontal = a.diacritic_horizontal;
+        b.diacritic_vertical = a.diacritic_vertical;
         *a == b
     }
 
@@ -226,6 +228,8 @@ fn paint_only_keeps_every_drawing_attribute_and_partial_equality() {
     field!(tcy_left_right, 1.0, false);
     field!(standard_vertical_roman, true, false);
     field!(digits, Digits::Hindi, false);
+    field!(diacritic_horizontal, 100.0, true);
+    field!(diacritic_vertical, -100.0, true);
     field!(font_height_reference, FontHeightReference::CapHeight, false);
     field!(no_break, true, false);
     field!(language, Some("ar".into()), false);
@@ -331,6 +335,74 @@ fn feature_only_harakat_boundaries_keep_attachment_and_ownership() {
     }
 }
 
+/// Adjust Horizontal and Vertical Diacritic Position move the mark glyphs (GDEF class 3) by
+/// thousandths of an em of the glyph size, right and up for positive values, and leave the letters
+/// where they were. A mark styled apart from its letter takes its own values.
+#[test]
+fn diacritic_positions_move_marks_and_keep_letters() {
+    let db = FontDb::with_font_dirs(vec![]);
+    assert_eq!(db.add_font(crate::test_fonts::lam_alef_font(b"rlig").expect("the test font builds")), 1);
+    let family = crate::test_fonts::lam_alef_family(b"rlig");
+    let face = db.face(family, "Regular").expect("the test face");
+    const WORD: &str = "بَبَبَ";
+    let plain = TextObject::point(Point::ZERO, WORD, style(family));
+    let before = layout(&db, &plain);
+    assert_eq!(before.glyphs.len(), 6, "three bases with their attached marks");
+    let (h, v) = (200.0, 100.0);
+    let moved = (h / 1000.0 * 48.0, -v / 1000.0 * 48.0);
+    // (letters set, marks set): which glyphs move.
+    for (letters, marks) in [(true, true), (false, true), (true, false), (false, false)] {
+        let mut text = plain.clone();
+        for (byte, ch) in WORD.char_indices() {
+            if (is_harakat(ch) && marks) || (!is_harakat(ch) && letters) {
+                crate::edit::style_range(&mut text.runs, byte, byte + ch.len_utf8(), |st| {
+                    st.diacritic_horizontal = h;
+                    st.diacritic_vertical = v;
+                });
+            }
+        }
+        let after = layout(&db, &text);
+        assert_eq!(after.glyphs.len(), before.glyphs.len(), "letters {letters}, marks {marks}");
+        let mut marks_seen = 0;
+        for (a, b) in before.glyphs.iter().zip(&after.glyphs) {
+            assert_eq!((a.gid, a.byte, a.origin, a.advance), (b.gid, b.byte, b.origin, b.advance), "letters {letters}, marks {marks}");
+            let (ta, tb) = (a.xf.translation(), b.xf.translation());
+            let delta = (tb.x - ta.x, tb.y - ta.y);
+            let mark = is_gdef_mark(&face, a.gid);
+            marks_seen += usize::from(mark);
+            let want = if mark && marks { moved } else { (0.0, 0.0) };
+            assert!(
+                (delta.0 - want.0).abs() < 1e-9 && (delta.1 - want.1).abs() < 1e-9,
+                "letters {letters}, marks {marks}: glyph {} moved {delta:?}, want {want:?}",
+                a.gid
+            );
+        }
+        assert_eq!(marks_seen, 3, "the three fathas are marks");
+    }
+}
+
+/// Hebrew points count as diacritics as well as Arabic harakat; Latin accents and letters do not.
+/// A boundary where only the diacritic positions differ asks for the character-level pass only
+/// at such a mark.
+#[test]
+fn hebrew_points_and_harakat_are_diacritics() {
+    use crate::harakat::{diacritic_mark_boundary, is_diacritic};
+    for c in ['\u{05B8}', '\u{05C1}', '\u{05BC}', '\u{064E}', '\u{0651}'] {
+        assert!(is_diacritic(c), "{c:?}");
+    }
+    for c in ['\u{05D0}', '\u{0628}', '\u{0301}', 'a', '\u{05BE}'] {
+        assert!(!is_diacritic(c), "{c:?}");
+    }
+    let a = style(FAMILY);
+    let b = CharStyle { diacritic_vertical: 150.0, ..a.clone() };
+    assert!(diacritic_mark_boundary("שָׁ", 2, &a, &b), "a Hebrew point styled apart");
+    assert!(diacritic_mark_boundary("بَ", 2, &a, &b), "a fatha styled apart");
+    assert!(!diacritic_mark_boundary("e\u{301}", 1, &a, &b), "a Latin accent keeps its cluster's values");
+    assert!(!diacritic_mark_boundary("بَ", 2, &a, &a), "the same values");
+    let c = CharStyle { size: 20.0, ..b.clone() };
+    assert!(!diacritic_mark_boundary("بَ", 2, &a, &c), "a size change splits the run anyway");
+}
+
 /// A range is normalised as `edit::style_range` takes one: clamped, each end moved back to the
 /// start of its character, put in order. Never a silent empty result for a usable range.
 #[test]
@@ -379,6 +451,44 @@ fn check_spaced_harakat(db: &FontDb, family: &str) {
     // 250/1000 of the 48 pt em.
     let length = |l: &TextLayout| l.glyphs.iter().map(|g| g.advance).sum::<f64>();
     assert!((length(&b) - length(&a) - 12.0).abs() < 1e-6, "{family}: {} → {}", length(&a), length(&b));
+}
+
+/// Right to left, with harakat coloured apart, Optical kerning keeps the Tsume of each letter's
+/// cluster as it does in "HOH": the glyphs move as far with Optical kerning as without it.
+#[test]
+fn optical_kerning_keeps_the_tsume_of_a_letter_with_coloured_harakat() {
+    let db = FontDb::with_font_dirs(vec![]);
+    assert_eq!(db.add_font(crate::test_fonts::lam_alef_font(b"rlig").unwrap()), 1);
+    check_optical_tsume(&db, crate::test_fonts::lam_alef_family(b"rlig"));
+    if let Some(face) = arabic_face("optical_kerning_keeps_the_tsume_of_a_letter_with_coloured_harakat") {
+        check_optical_tsume(FontDb::global(), &face.family);
+    }
+}
+
+fn check_optical_tsume(db: &FontDb, family: &str) {
+    const WORD: &str = "بَبَ"; // ب 0, fatha 2, ب 4, fatha 6
+    let set = |optical: bool, letter: Option<usize>| {
+        let mut t = text_with_harakat(WORD, family, Some(red()));
+        crate::edit::style_range(&mut t.runs, 0, WORD.len(), |st| st.optical_kerning = optical);
+        if let Some(at) = letter {
+            crate::edit::style_range(&mut t.runs, at, at + 2, |st| st.tsume = 100.0);
+        }
+        t
+    };
+    // Each glyph's place and advance: where a mark's ink leaves no blank space on the left, the
+    // Tsume of the line's first cluster only narrows its advance and moves no glyph.
+    let xs = |t: &TextObject| layout(db, t).glyphs.iter().flat_map(|g| [g.xf.as_coeffs()[4], g.advance]).collect::<Vec<_>>();
+    assert!(xs(&set(true, None)).iter().zip(xs(&set(false, None))).any(|(a, b)| (a - b).abs() > 1e-6), "{family}: Optical moves the pair");
+    // Each letter in turn: the first one's cluster ends the pair, the second one's starts it.
+    for letter in [0, 4] {
+        let moved = |optical: bool| xs(&set(optical, Some(letter))).iter().zip(xs(&set(optical, None))).map(|(a, b)| a - b).collect::<Vec<_>>();
+        let (without, with_optical) = (moved(false), moved(true));
+        assert!(without.iter().any(|m| m.abs() > 1e-3), "{family} {letter}: Tsume moves or narrows the glyphs: {without:?}");
+        assert!(
+            without.len() == with_optical.len() && without.iter().zip(&with_optical).all(|(a, b)| (a - b).abs() < 1e-6),
+            "{family} {letter}: {without:?} {with_optical:?}"
+        );
+    }
 }
 
 #[test]
@@ -611,6 +721,7 @@ fn duplicate_authored_glyphs_keep_occurrence_order() {
         width_start: 0.0,
         warichu: None,
         warichu_line: 0.0,
+        off_path: false,
     };
     let before = TextLayout { glyphs: vec![glyph(0), glyph(1)], ..TextLayout::default() };
     assert_eq!(assert_kashida_ownership(&text, &before, &before, &red(), "duplicate glyphs", false), 0);

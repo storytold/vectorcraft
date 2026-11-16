@@ -514,8 +514,7 @@ fn the_preset_menu_saves_changes_and_opens_import_and_export() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn export_writes_into_the_picked_folder() {
-    let dir = std::env::temp_dir().join(format!("vc-asset-panel-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = vectorcraft_testkit::TempDir::new("asset-panel");
     let folder = dir.to_string_lossy().replace('\\', "/");
     let (mut app, _, [a, _]) = app(false);
     let picked = folder.clone();
@@ -526,8 +525,179 @@ fn export_writes_into_the_picked_folder() {
     frame(&ctx, &mut app, vec![], false);
     let texts = frame(&ctx, &mut app, vec![], false);
     frame(&ctx, &mut app, click(at(&texts, "Export")), false);
-    assert!(dir.join("Badge.png").is_file(), "{:?}", std::fs::read_dir(&dir).map(|d| d.count()));
+    // Create Sub-folders is on by default: the 1x row's folder.
+    assert!(dir.join("1x").join("Badge.png").is_file(), "{:?}", std::fs::read_dir(&dir).map(|d| d.count()));
+}
+
+/// The panel menu's Create Sub-folders and Open Location after Export are check items, on by
+/// default, that change the settings the panel shares with Export for Screens, and the panel's
+/// Export follows them.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn the_menu_sets_create_subfolders_and_open_location_and_export_follows_them() {
+    let dir = vectorcraft_testkit::TempDir::new("asset-panel-menu");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    let (mut app, _, [a, _]) = app(false);
+    let picked = folder.clone();
+    app.services.pick_folder = Some(Box::new(move || Some(picked.clone())));
+    let shown = Rc::new(RefCell::new(Vec::<String>::new()));
+    let s = shown.clone();
+    app.services.reveal = Some(Box::new(move |path: &str| {
+        s.borrow_mut().push(path.to_string());
+        Ok(())
+    }));
+    app.run("assets.add", json!({"ids": [a], "name": "Badge"})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    menu_frame(&ctx, &mut app, vec![]);
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    for item in ["✓ Create Sub-folders", "✓ Open Location after Export", "   Format Settings…"] {
+        assert!(has(&texts, item), "{item}");
+    }
+    // Both on: the 1x row's folder, and the file manager shows the file.
+    let export = |app: &mut VectorcraftApp| {
+        frame(&ctx, app, vec![], false);
+        let texts = frame(&ctx, app, vec![], false);
+        frame(&ctx, app, click(at(&texts, "Export")), false);
+    };
+    export(&mut app);
+    assert!(dir.join("1x").join("Badge.png").is_file());
+    assert_eq!(shown.borrow().len(), 1);
+    // Both turned off (a click lands on the items of the frame before).
+    menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&texts, "✓ Create Sub-folders")));
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&texts, "✓ Open Location after Export")));
+    let settings = app.run("document.exportSettings", json!({})).unwrap()["settings"].clone();
+    assert_eq!((&settings["subfolders"], &settings["openLocation"]), (&json!(false), &json!(false)), "{settings}");
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    assert!(has(&texts, "   Create Sub-folders") && has(&texts, "   Open Location after Export"));
+    // Export for Screens opens on the same choices.
+    app.run("file.exportForScreens", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((&d.fields["subfolders"], &d.fields["openLocation"]), (&json!(false), &json!(false)));
+    crate::dialogs::cancel(&mut app);
     let _ = std::fs::remove_dir_all(&dir);
+    export(&mut app);
+    assert!(dir.join("Badge.png").is_file() && !dir.join("1x").exists());
+    assert_eq!(shown.borrow().len(), 1, "no file manager after export");
+    // Create Sub-folders on again: a folder per row.
+    menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&texts, "   Create Sub-folders")));
+    let settings = app.run("document.exportSettings", json!({})).unwrap()["settings"].clone();
+    assert_eq!((&settings["subfolders"], &settings["folders"]), (&json!(true), &json!("rows")), "{settings}");
+    // Only true and false are taken.
+    for bad in [json!({"openLocation": "yes"}), json!({"subfolders": 1})] {
+        assert!(app.run("assets.settings.set", bad.clone()).is_err(), "{bad}");
+    }
+}
+
+/// A folder per format, remembered by Export for Screens or a preset, is used by the panel's Export
+/// too.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn export_uses_a_remembered_folder_per_format() {
+    let dir = vectorcraft_testkit::TempDir::new("asset-panel-format");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    let (mut app, _, [a, _]) = app(false);
+    app.services.pick_folder = Some(Box::new(move || Some(folder.clone())));
+    let asset = app.run("assets.add", json!({"ids": [a], "name": "Badge"})).unwrap()["assets"][0].clone();
+    // An export as Export for Screens sends it with Create Sub-folders by Format, which the
+    // document remembers.
+    let formats = json!([{"format": "png"}, {"format": "svg"}]);
+    app.run("document.exportForScreens", json!({"assets": [asset], "formats": formats, "folders": "format", "subfolders": false})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    menu_frame(&ctx, &mut app, vec![]);
+    assert!(has(&menu_frame(&ctx, &mut app, vec![]), "✓ Create Sub-folders"));
+    frame(&ctx, &mut app, vec![], false);
+    let texts = frame(&ctx, &mut app, vec![], false);
+    frame(&ctx, &mut app, click(at(&texts, "Export")), false);
+    assert!(dir.join("png").join("Badge.png").is_file() && dir.join("svg").join("Badge.svg").is_file());
+}
+
+/// Remembered empty folders are none, as an export reads them: Create Sub-folders is off in the
+/// panel menu and in Export for Screens.
+#[test]
+fn empty_remembered_folders_are_create_subfolders_off() {
+    let (mut app, _, [a, _]) = app(true);
+    let asset = app.run("assets.add", json!({"ids": [a]})).unwrap()["assets"][0].clone();
+    app.run("document.exportForScreens", json!({"assets": [asset], "formats": [{"format": "svg"}], "folders": "", "subfolders": true})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    menu_frame(&ctx, &mut app, vec![]);
+    assert!(has(&menu_frame(&ctx, &mut app, vec![]), "   Create Sub-folders"));
+    app.run("file.exportForScreens", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["subfolders"], false);
+}
+
+/// Open Location after Export turned off in a document without settings leaves Create Sub-folders
+/// on, in the panel menu and in Export for Screens.
+#[test]
+fn open_location_off_leaves_create_subfolders_on() {
+    let (mut app, _, _) = app(false);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    menu_frame(&ctx, &mut app, vec![]);
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&texts, "✓ Open Location after Export")));
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    assert!(has(&texts, "✓ Create Sub-folders") && has(&texts, "   Open Location after Export"));
+    app.run("file.exportForScreens", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((&d.fields["subfolders"], &d.fields["openLocation"]), (&json!(true), &json!(false)));
+}
+
+/// Editing the rows of a document without a Create Sub-folders choice keeps it on, in Export for
+/// Screens too; a preset that turns it off shows it off, and the menu turns it on again.
+#[test]
+fn row_edits_keep_create_subfolders_on_and_a_preset_can_turn_it_off() {
+    let (mut app, _, [a, _]) = app(true);
+    app.run("assets.add", json!({"ids": [a]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&ctx, &mut app, vec![], false);
+    let texts = frame(&ctx, &mut app, vec![], false);
+    frame(&ctx, &mut app, click(at(&texts, "+ Add Scale")), false);
+    assert!(has(&menu_frame(&ctx, &mut app, vec![]), "✓ Create Sub-folders"));
+    app.run("file.exportForScreens", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["subfolders"], true);
+    crate::dialogs::cancel(&mut app);
+    // Logo Package sorts by format: checked, as in Export for Screens. Turned off, the sorting
+    // ends; turned on again, a folder per row.
+    app.run("assets.settings.set", json!({"exportPreset": "Logo Package"})).unwrap();
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&texts, "✓ Create Sub-folders")));
+    let settings = app.run("document.exportSettings", json!({})).unwrap()["settings"].clone();
+    assert_eq!((&settings["subfolders"], &settings["folders"]), (&json!(false), &json!("none")), "{settings}");
+    app.run("file.exportForScreens", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["subfolders"], false);
+    crate::dialogs::cancel(&mut app);
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&texts, "   Create Sub-folders")));
+    let settings = app.run("document.exportSettings", json!({})).unwrap()["settings"].clone();
+    assert_eq!((&settings["subfolders"], &settings["folders"]), (&json!(true), &json!("rows")), "{settings}");
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    assert!(has(&texts, "✓ Create Sub-folders"));
+    // The web downloads the files: the menu has no Open Location after Export.
+    assert!(!texts.iter().any(|(t, _)| t.ends_with("Open Location after Export")));
+}
+
+/// Format Settings… in the panel menu opens Export for Screens on its Assets tab, showing the
+/// first row's format settings.
+#[test]
+fn format_settings_opens_the_first_rows_format_settings() {
+    let (mut app, _, [a, b]) = app(true);
+    app.run("assets.add", json!({"ids": [a, b], "multiple": true})).unwrap();
+    app.run("assets.settings.set", json!({"formats": [{"format": "jpeg"}, {"format": "svg"}]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    menu_frame(&ctx, &mut app, vec![]);
+    let texts = menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&texts, "   Format Settings…")));
+    let d = app.ui.dialog.as_ref().expect("Export for Screens");
+    assert_eq!((d.kind.as_str(), &d.fields["tab"], &d.fields["__settings"]), (crate::dialogs::EXPORT_FOR_SCREENS, &json!("assets"), &json!("jpg")));
+    assert_eq!(d.fields["assets"].as_array().map(Vec::len), Some(2));
 }
 
 #[test]
@@ -564,7 +734,24 @@ fn tiff_dropdown_exports_only_the_selected_asset_and_shares_settings() {
         let [(name, bytes)] = log.as_slice() else { panic!("expected only the selected asset") };
         assert_eq!(name, "Badge@2x.tif");
         assert_eq!(&bytes[..4], b"MM\0*", "the saved TIFF byte order reaches asset export");
-        let img = image::load_from_memory_with_format(bytes, image::ImageFormat::Tiff).unwrap().to_rgba8();
+        let img = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8();
         assert_eq!(img.dimensions(), (60, 40), "the selected 30x20 asset at 2x");
         let pixel = img.get_pixel(30, 20).0;
         assert!(pixel[0] > pixel[1] && pixel[0] > pixel[2] && pixel[3] == 255, "the red Badge, not the blue Other asset: {pixel:?}");
@@ -696,7 +883,24 @@ fn tiff_panel_preserves_shared_antialias_and_explicit_overrides() {
             let log = log.borrow();
             let [(name, bytes)] = log.as_slice() else { panic!("expected one TIFF: format={format_aa:?}, row={row_aa:?}") };
             assert_eq!(name, "Edge.tif");
-            let img = image::load_from_memory_with_format(bytes, image::ImageFormat::Tiff).unwrap().to_rgba8();
+            let img = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, bytes)
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .unwrap()
+                .to_rgba8();
             assert!(img.pixels().any(|p| p[3] == 255), "the ellipse is present");
             assert!(img.pixels().any(|p| p[3] == 0), "transparent outside the ellipse");
             let hard = img.pixels().all(|p| p[3] == 0 || p[3] == 255);
@@ -716,8 +920,7 @@ fn tiff_panel_preserves_shared_antialias_and_explicit_overrides() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn tiff_saved_aliases_use_document_defaults_and_explicit_rgb() {
-    let dir = std::env::temp_dir().join(format!("vc-asset-tiff-aliases-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = vectorcraft_testkit::TempDir::new("asset-tiff-aliases");
     // The first case is the historical control: saved tif without an explicit model must be CMYK.
     // Native picked folders let the mixed-row case inspect each file without introducing a ZIP decoder.
     for (case, (alias, rgb_override, mixed)) in
@@ -748,12 +951,44 @@ fn tiff_saved_aliases_use_document_defaults_and_explicit_rgb() {
         let bytes = std::fs::read(folder.join("Badge@2x.tif")).unwrap();
         assert_eq!(tiff_photometric(&bytes), if rgb_override { 2 } else { 5 }, "saved alias {alias}, explicit RGB={rgb_override}");
         if rgb_override {
-            let img = image::load_from_memory_with_format(&bytes, image::ImageFormat::Tiff).unwrap();
+            let img = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, &bytes)
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .unwrap();
             assert_eq!((img.width(), img.height()), (60, 40), "the saved TIFF row is still 2x");
         }
         if mixed {
             let png = std::fs::read(folder.join("Badge.png")).unwrap();
-            let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).unwrap();
+            let img = craft_image_codecs::decode_as(craft_image_codecs::Format::Png, &png)
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .unwrap();
             assert_eq!((img.width(), img.height()), (30, 20), "the PNG row keeps its own 1x scale");
             assert_eq!(png.get(28), Some(&1), "the saved PNG interlace option survives the TIFF defaults");
         }
@@ -764,7 +999,6 @@ fn tiff_saved_aliases_use_document_defaults_and_explicit_rgb() {
             "direct export preserves saved aliases and explicit options"
         );
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Export 3D Object in the panel menu collects the selected 3D object; its tile is marked 3D, the

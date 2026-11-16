@@ -242,7 +242,23 @@ fn exports_into_the_folder_and_shows_it() {
     assert!(app.ui.dialog.is_none());
     let files: Vec<&str> = r["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap()).collect();
     assert_eq!(files, [format!("{folder}/1x/Artboard-2.png"), format!("{folder}/120w/Artboard-2@120w.png"), format!("{folder}/SVG/Artboard-2.svg")]);
-    let png = image::load_from_memory(&std::fs::read(dir.join("120w").join("Artboard-2@120w.png")).unwrap()).unwrap();
+    let png = craft_image_codecs::decode(&std::fs::read(dir.join("120w").join("Artboard-2@120w.png")).unwrap())
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap();
     assert_eq!((png.width(), png.height()), (120, 80));
     assert_eq!(log.borrow().iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(), [files[0]], "Open Location shows the first file");
     // It reopens on those settings.
@@ -507,7 +523,30 @@ fn the_web_downloads_one_zip_or_the_file() {
     let log = log.borrow();
     assert_eq!(log.len(), 1);
     assert_eq!(log[0].0, "Artboard-1.png");
-    assert_eq!(image::load_from_memory(&log[0].1).unwrap().to_rgba8().get_pixel(1, 1).0, [0, 0, 0, 255], "the PNG settings' background");
+    assert_eq!(
+        craft_image_codecs::decode(&log[0].1)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(1, 1)
+            .0,
+        [0, 0, 0, 255],
+        "the PNG settings' background"
+    );
 }
 
 /// Include Artboard Fill: checked, the file shows the artboard's background color behind the art
@@ -524,7 +563,26 @@ fn include_artboard_fill_reaches_the_files_and_is_remembered() {
         set(&mut app, "settings", json!({"png": {"background": "transparent"}}));
         frame(&mut app);
         confirm(&mut app).unwrap();
-        let px = image::load_from_memory(&log.borrow()[0].1).unwrap().to_rgba8().get_pixel(58, 38).0;
+        let px = craft_image_codecs::decode(&log.borrow()[0].1)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(58, 38)
+            .0;
         assert_eq!(px, if include { [255, 0, 0, 255] } else { [0, 0, 0, 0] }, "include {include}");
         if include {
             continue;
@@ -539,9 +597,41 @@ fn the_status_bar_says_when_an_image_could_not_be_decoded() {
     const NOTE: &str = "with 1 note: an image couldn't be decoded and is missing from the picture";
     // A PNG whose header reads but whose pixel data is cut short: the renderer draws nothing for it.
     let mut png = Vec::new();
-    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let place = |app: &mut VectorcraftApp| vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({"at": [10, 10]}));
     let rows = json!([{"format": "png", "scale": "1x", "suffix": ""}, {"format": "jpg", "scale": "2x", "suffix": "@2x"}]);
     let dir = temp_folder("undecoded");
@@ -572,9 +662,41 @@ fn the_status_bar_says_when_an_image_could_not_be_decoded() {
 #[test]
 fn an_export_into_a_folder_keeps_every_note_for_the_hover() {
     let mut png = Vec::new();
-    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let dir = temp_folder("notes");
     let folder = dir.to_string_lossy().replace('\\', "/");
     let rows = json!([{"format": "png", "scale": "1x", "suffix": ""}]);
@@ -788,7 +910,23 @@ fn saved_tiff_alias_gear(alias: &str, asset_panel: bool) {
         assert!(tags.contains(&(259, 3, 1, 1)), "saved uncompressed option survives");
         assert!(tags.contains(&(262, 3, 1, 2)), "saved RGB survives");
         assert!(!tags.iter().any(|t| t.0 == 34675), "saved profile-off option survives");
-        let img = image::load_from_memory_with_format(bytes, image::ImageFormat::Tiff).unwrap();
+        let img = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap();
         assert_eq!((img.width(), img.height()), if asset_panel { (60, 40) } else { (120, 80) });
     }
     let saved = app.run("document.exportSettings", json!({})).unwrap()["settings"].clone();
@@ -859,7 +997,24 @@ fn tiff_dropdown_exports_scaled_artboards_with_options_and_reopens() {
         assert!(tags.contains(&(259, 3, 1, 1)), "uncompressed as selected");
         assert!(tags.contains(&(262, 3, 1, 2)), "RGB");
         assert!(!tags.iter().any(|t| t.0 == 34675), "ICC profile disabled");
-        let img = image::load_from_memory_with_format(bytes, image::ImageFormat::Tiff).unwrap().to_rgba8();
+        let img = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8();
         assert_eq!(img.dimensions(), (120, 80));
         assert_eq!(img.get_pixel(0, 0).0[3], 0, "transparent board corner");
         let inside = img.get_pixel(40, 28).0;
@@ -1318,4 +1473,307 @@ fn the_dialog_builds_the_preset_list_again_only_when_the_presets_change() {
     let list = field(&app, "__exportPresets");
     let mine = list.as_array().unwrap().iter().find(|p| p["name"] == "Mine").unwrap();
     assert_eq!(mine["settings"]["formats"][0]["format"], "pdf", "{list}");
+}
+
+/// #7275: a double-click on an artboard name enters rename without leaving Export for Screens.
+#[test]
+fn same_frame_artboard_double_click_keeps_export_selection() {
+    for view in ["grid", "list"] {
+        for checked in [true, false] {
+            let (mut app, _) = app(2, true);
+            open(&mut app);
+            set(&mut app, "view", json!(view));
+            let mut h = ScreensFrame::new();
+            let out = h.settle(&mut app);
+            let name = app.session.active().unwrap().doc.artboards[0].name.clone();
+            let at = screen_text_at(&out, &format!("1  {name}"));
+            if !checked {
+                h.click(&mut app, at);
+                h.time += 1.0;
+                h.settle(&mut app);
+            }
+            let before = field(&app, "boards");
+            h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+            let events = [true, false, true, false]
+                .into_iter()
+                .map(|pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() })
+                .collect();
+            h.frame(&mut app, events);
+            h.settle(&mut app);
+            assert!(h.ctx.egui_wants_keyboard_input(), "{view}, checked={checked}");
+            assert_eq!(field(&app, "boards"), before, "{view}, checked={checked}");
+        }
+    }
+}
+
+/// #7275: a double-click on an artboard name enters rename without leaving Export for Screens.
+#[test]
+fn switching_export_tabs_commits_an_artboard_name() {
+    for view in ["grid", "list"] {
+        let (mut app, log) = app(2, true);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        let mut h = ScreensFrame::new();
+        let before = field(&app, "boards");
+        let out = h.settle(&mut app);
+        let old = app.session.active().unwrap().doc.artboards[0].name.clone();
+        let at = screen_text_at(&out, &format!("1  {old}"));
+        h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+        for pressed in [true, false, true, false] {
+            h.frame(
+                &mut app,
+                vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+            );
+        }
+        h.settle(&mut app);
+        assert!(h.ctx.egui_wants_keyboard_input());
+        h.frame(&mut app, vec![egui::Event::Text("Committed on tab".into())]);
+        h.click_label(&mut app, "Assets");
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Committed on tab");
+        assert_eq!(field(&app, "tab"), "assets");
+        assert_eq!(field(&app, "boards"), before);
+        assert!(log.borrow().is_empty());
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, old);
+    }
+}
+
+/// #7275: a double-click on an artboard name enters rename without leaving Export for Screens.
+#[test]
+fn double_clicking_an_artboard_name_in_export_for_screens_renames_it() {
+    for view in ["grid", "list"] {
+        let (mut app, log) = app(2, true);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        let mut h = ScreensFrame::new();
+        let before = field(&app, "boards");
+        let out = h.settle(&mut app);
+        let old = app.session.active().unwrap().doc.artboards[0].name.clone();
+        let at = screen_text_at(&out, &format!("1  {old}"));
+        h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+        for pressed in [true, false, true, false] {
+            h.frame(
+                &mut app,
+                vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+            );
+        }
+        h.settle(&mut app);
+        assert!(h.ctx.egui_wants_keyboard_input(), "double-clicking the artboard name must open an editable field");
+        h.frame(&mut app, vec![egui::Event::Text("Renamed".into())]);
+        h.frame(
+            &mut app,
+            vec![egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+        );
+        h.settle(&mut app);
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Renamed");
+        assert_eq!(kind(&app), Some(export_for_screens::KIND));
+        assert_eq!(field(&app, "boards"), before, "renaming must not change the checked artboards");
+        assert!(log.borrow().is_empty(), "renaming must not export");
+        // The real shortcut handler runs before the dialog body. Escape cancels only the name.
+        let out = h.settle(&mut app);
+        let at = screen_text_at(&out, "1  Renamed");
+        h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+        for pressed in [true, false, true, false] {
+            h.frame(
+                &mut app,
+                vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+            );
+        }
+        h.settle(&mut app);
+        h.frame(&mut app, vec![egui::Event::Text("Discard".into())]);
+        let key = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        h.time += 0.1;
+        let input = egui::RawInput {
+            events: vec![key],
+            time: Some(h.time),
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1100.0, 900.0))),
+            ..Default::default()
+        };
+        let mut out = h.ctx.run_ui(input, |ui| {
+            crate::shortcuts::handle(&mut app, ui.ctx());
+            super::show(&mut app, ui.ctx());
+        });
+        out.textures_delta.clear();
+        h.settle(&mut app);
+        assert_eq!(kind(&app), Some(export_for_screens::KIND));
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Renamed");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, old);
+    }
+}
+
+/// #7275: the typed name goes to the artboard whose name was double-clicked, even when the
+/// artboards change order (a command from the control channel or MCP) while it is typed. When that
+/// artboard is deleted, the field closes and Escape closes the dialog.
+#[test]
+fn an_artboard_name_follows_its_artboard_while_it_is_typed() {
+    for view in ["grid", "list"] {
+        let (mut app, log) = app(3, true);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        let mut h = ScreensFrame::new();
+        let names = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect::<Vec<_>>();
+        let rename = |h: &mut ScreensFrame, app: &mut VectorcraftApp, label: &str| {
+            let out = h.settle(app);
+            let at = screen_text_at(&out, label);
+            h.frame(app, vec![egui::Event::PointerMoved(at)]);
+            for pressed in [true, false, true, false] {
+                h.frame(
+                    app,
+                    vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+                );
+            }
+            h.settle(app);
+            assert!(h.ctx.egui_wants_keyboard_input(), "{view}: the double-click opens the name");
+        };
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        rename(&mut h, &mut app, "2  Artboard 2");
+        app.run("artboard.reorder", json!({"index": 1, "to": 0})).unwrap();
+        h.frame(&mut app, vec![egui::Event::Text("Hero".into())]);
+        h.frame(&mut app, vec![enter]);
+        h.settle(&mut app);
+        assert_eq!(names(&app), ["Hero", "Artboard 1", "Artboard 3"], "{view}");
+        assert_eq!(kind(&app), Some(export_for_screens::KIND), "{view}");
+        assert!(log.borrow().is_empty(), "{view}: renaming must not export");
+        // The artboard is deleted while its name is typed: the field closes, no other artboard
+        // takes the name, and Escape closes the dialog again.
+        rename(&mut h, &mut app, "2  Artboard 1");
+        h.frame(&mut app, vec![egui::Event::Text("Gone".into())]);
+        app.run("artboard.delete", json!({"indices": [1]})).unwrap();
+        h.settle(&mut app);
+        assert!(!h.ctx.egui_wants_keyboard_input(), "{view}: the field of a deleted artboard closes");
+        assert_eq!(names(&app), ["Hero", "Artboard 3"], "{view}");
+        let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        h.time += 0.1;
+        let input = egui::RawInput {
+            events: vec![escape],
+            time: Some(h.time),
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1100.0, 900.0))),
+            ..Default::default()
+        };
+        let mut out = h.ctx.run_ui(input, |ui| {
+            crate::shortcuts::handle(&mut app, ui.ctx());
+            super::show(&mut app, ui.ctx());
+        });
+        out.textures_delta.clear();
+        h.settle(&mut app);
+        assert_eq!(kind(&app), None, "{view}: Escape closes the dialog");
+        assert_eq!(names(&app), ["Hero", "Artboard 3"], "{view}");
+        assert!(log.borrow().is_empty(), "{view}: renaming must not export");
+    }
+}
+
+/// #7275: a name typed while another document becomes active (a command from the control channel
+/// or MCP) renames no artboard in either document, and Escape closes the dialog.
+#[test]
+fn an_artboard_name_stays_with_its_document() {
+    let (mut app, log) = app(2, true);
+    app.run("file.new", json!({"width": 60, "height": 40, "artboards": 2})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    open(&mut app);
+    let mut h = ScreensFrame::new();
+    let names = |app: &VectorcraftApp, i: usize| app.session.documents()[i].doc.artboards.iter().map(|a| a.name.clone()).collect::<Vec<_>>();
+    let out = h.settle(&mut app);
+    let at = screen_text_at(&out, "2  Artboard 2");
+    h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+    for pressed in [true, false, true, false] {
+        h.frame(&mut app, vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }]);
+    }
+    h.settle(&mut app);
+    assert!(h.ctx.egui_wants_keyboard_input(), "the double-click opens the name");
+    h.frame(&mut app, vec![egui::Event::Text("Elsewhere".into())]);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    h.time += 0.1;
+    let input = egui::RawInput {
+        events: vec![escape],
+        time: Some(h.time),
+        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1100.0, 900.0))),
+        ..Default::default()
+    };
+    let mut out = h.ctx.run_ui(input, |ui| {
+        crate::shortcuts::handle(&mut app, ui.ctx());
+        super::show(&mut app, ui.ctx());
+    });
+    out.textures_delta.clear();
+    h.settle(&mut app);
+    assert_eq!(kind(&app), None, "Escape closes the dialog");
+    assert_eq!(names(&app, 0), ["Artboard 1", "Artboard 2"]);
+    assert_eq!(names(&app, 1), ["Artboard 1", "Artboard 2"]);
+    assert!(log.borrow().is_empty(), "renaming must not export");
+}
+
+/// Escape or Enter in the first frame that draws an artboard's name field closes the field, and
+/// the dialog stays open.
+#[test]
+fn a_key_in_the_first_frame_of_an_artboard_name_closes_it() {
+    for view in ["grid", "list"] {
+        for key in [egui::Key::Escape, egui::Key::Enter] {
+            let (mut app, log) = app(2, true);
+            open(&mut app);
+            set(&mut app, "view", json!(view));
+            let mut h = ScreensFrame::new();
+            let out = h.settle(&mut app);
+            let at = screen_text_at(&out, "1  Artboard 1");
+            h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+            for pressed in [true, false, true, false] {
+                h.frame(
+                    &mut app,
+                    vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+                );
+            }
+            // The double-click opened the field in the last frame; this frame draws it first.
+            h.time += 0.1;
+            let input = egui::RawInput {
+                events: vec![egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+                time: Some(h.time),
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1100.0, 900.0))),
+                ..Default::default()
+            };
+            let mut out = h.ctx.run_ui(input, |ui| {
+                crate::shortcuts::handle(&mut app, ui.ctx());
+                super::show(&mut app, ui.ctx());
+            });
+            out.textures_delta.clear();
+            h.settle(&mut app);
+            assert!(!h.ctx.egui_wants_keyboard_input(), "{view}, {key:?}: the field closes");
+            assert_eq!(kind(&app), Some(export_for_screens::KIND), "{view}, {key:?}");
+            assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Artboard 1", "{view}, {key:?}");
+            assert!(log.borrow().is_empty(), "{view}, {key:?}: the key must not export");
+        }
+    }
+}
+
+/// A double-click on an earlier artboard's name, both clicks in one frame, renames the artboard
+/// whose name was being typed before it opens the new field.
+#[test]
+fn double_clicking_another_artboard_name_keeps_the_typed_name() {
+    for view in ["grid", "list"] {
+        let (mut app, log) = app(2, true);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        let mut h = ScreensFrame::new();
+        let before = field(&app, "boards");
+        let double_click = |h: &mut ScreensFrame, app: &mut VectorcraftApp, at: egui::Pos2| {
+            h.frame(app, vec![egui::Event::PointerMoved(at)]);
+            let events = [true, false, true, false]
+                .into_iter()
+                .map(|pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() })
+                .collect();
+            h.frame(app, events);
+            h.settle(app);
+        };
+        let out = h.settle(&mut app);
+        let first = screen_text_at(&out, "1  Artboard 1");
+        double_click(&mut h, &mut app, screen_text_at(&out, "2  Artboard 2"));
+        assert!(h.ctx.egui_wants_keyboard_input(), "{view}: the double-click opens the name");
+        h.frame(&mut app, vec![egui::Event::Text("Typed".into())]);
+        h.time += 1.0;
+        double_click(&mut h, &mut app, first);
+        let names: Vec<String> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect();
+        assert_eq!(names, ["Artboard 1", "Typed"], "{view}");
+        assert!(h.ctx.egui_wants_keyboard_input(), "{view}: the second double-click opens its name");
+        assert_eq!(field(&app, "boards"), before, "{view}");
+        assert!(log.borrow().is_empty(), "{view}: renaming must not export");
+    }
 }

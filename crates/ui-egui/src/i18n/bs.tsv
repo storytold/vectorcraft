@@ -421,6 +421,18 @@
 	Title Case	Svaka Riječ Velikim Slovom
 	Sentence case	Veliko početno slovo rečenice
 	Smart Punctuation…	Pametna interpunkcija…
+	Smart Punctuation	Pametna interpunkcija
+	ff, fi, ffi Ligatures	Ligature ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligature ff, fl, ffl
+	Smart Quotes	Pametni navodnici
+	Smart Spaces	Pametni razmaci
+	En, Em Dashes	Srednje i duge crtice
+	Ellipses	Tri tačke
+	Expert Fractions	Stručni razlomci
+	Replace In	Zamijeni u
+	Selected Text Only	Samo odabrani tekst
+	Entire Document	Cijeli dokument
+	Report Results	Izvještaj o rezultatima
 	Create Outlines	Kreiraj obrise
 	Optical Margin Alignment	Optičko poravnanje margina
 	Dynamic Text	Dinamički tekst
@@ -501,12 +513,14 @@
 	Rotate (Classic)…	Rotiraj (klasično)…
 	Surface	Površina
 	Wireframe	Žičani model
+	Render Settings	Postavke renderovanja
 	No Shading	Bez sjenčenja
 	Plastic	Plastika
 	Highlight Intensity	Intenzitet odsjaja
 	Highlight Size	Veličina odsjaja
 	Blend Steps	Koraci prelaza
 	Shading Color	Boja sjenčenja
+	Black Overprint	Crni pretisak
 	Draw Hidden Faces	Crtaj skrivene strane
 	Revolve…	Rotaciono tijelo…
 	Inflate…	Napuhni…
@@ -959,6 +973,7 @@
 	Free Transform	Slobodna transformacija
 	Perspective Distort	Izobličenje perspektive
 	Radial Blur…	Radijalno zamućenje…
+	Blur Center	Središte zamućenja
 	Smart Blur…	Pametno zamućenje…
 	Sharpen	Izoštri
 	Unsharp Mask…	Maska izoštravanja…
@@ -972,6 +987,11 @@
 	NTSC Colors	NTSC boje
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB pravilo:
+	CMYK Policy:	CMYK pravilo:
+	Preserve Embedded Profiles	Zadrži ugrađene profile
+	Convert to Working Space	Pretvori u radni prostor
+	Preserve Numbers	Zadrži brojeve
 	CMYK	CMYK
 	Texture	Tekstura
 	Craquelure…	Krakelura…
@@ -996,6 +1016,7 @@
 	Change Panel Layout	Promijeni raspored panela
 	Close Panel	Zatvori panel
 	Collapse Panel Group	Skupi grupu panela
+	Cycle Display Sizes	Mijenjaj veličine prikaza
 	Move Panel	Pomakni panel
 	Group with	Grupiši sa
 	Resize panels	Promijeni veličinu panela
@@ -1016,6 +1037,8 @@
 	Step up or down	Korak gore ili dolje
 	Drag values or labels. Double-click a value to type.	Prevucite vrijednosti ili oznake. Dvostruki klik na vrijednost za upis.
 	Drag rings to rotate. Shift snaps to 15°.	Prevucite prstenove za rotaciju. Shift hvata na 15°.
+	Track cube	Kocka za rotaciju
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Prevucite stranu, ivicu ili prsten za rotaciju. Shift rotira oko jedne ose ekrana.
 	Drag the light, or its rings. Shift snaps to 15°.	Prevucite svjetlo ili njegove prstenove. Shift hvata na 15°.
 lighting	Light	Svjetlo
 	Keep visible surfaces only when expanding	Pri proširivanju zadrži samo vidljive površine
@@ -1066,6 +1089,14 @@ lighting	Light	Svjetlo
 	Previous Artboard	Prethodna radna ploča
 	Next Artboard	Sljedeća radna ploča
 	Last Artboard	Posljednja radna ploča
+	Status Bar Show	Prikaz u traci stanja
+	Artboard Name	Naziv radne ploče
+	Current Tool	Trenutni alat
+	Date and Time	Datum i vrijeme
+	Number of Undos	Broj poništavanja
+	Document Color Profile	Profil boja dokumenta
+	Undos	Poništavanja
+	Redos	Ponavljanja
 	Graphic Style Options…	Opcije grafičkog stila…
 	Symbol Options	Opcije simbola
 	Symbol Options…	Opcije simbola…
@@ -1382,6 +1413,8 @@ lighting	Light	Svjetlo
 	Lasso Tool	Alat laso
 	Enclosing Lasso Tool	Alat laso za obuhvatanje
 	Enclosing Lasso	Laso za obuhvatanje
+	Polygonal Lasso Tool	Alat poligonalni laso
+	Polygonal Lasso	Poligonalni laso
 	Lasso	Laso
 	Line Cut Tool	Alat za rez linijom
 	Line Graph Tool	Alat za linijski grafikon
@@ -1478,6 +1511,7 @@ lighting	Light	Svjetlo
 	Align to Artboard	Poravnaj s radnom pločom
 	Align to Glyph Bounds	Poravnaj s granicama glifa
 	Align to Key Object	Poravnaj s ključnim objektom
+	Align to Key Anchor	Poravnaj s ključnom sidrenom tačkom
 	Align to Selection	Poravnaj prema odabiru
 	Align To:	Poravnaj s:
 	Cancel Key Object	Otkaži ključni objekat
@@ -1571,9 +1605,13 @@ lighting	Light	Svjetlo
 	Leading	Prored
 	No Break	Bez preloma
 	Proportional Metrics	Proporcionalna metrika
+	H or V Style	Horizontalni ili vertikalni stil
+	Roman Italics	Latinični kurziv
 	Insert Aki Left	Umetni aki lijevo
 	Insert Aki Right	Umetni aki desno
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Podesi vodoravni položaj dijakritika
+	Adjust Vertical Diacritic Position	Podesi okomiti položaj dijakritika
 	Character Direction	Smjer znakova
 	Digits	Cifre
 	Arabic	Arapski
@@ -1625,6 +1663,8 @@ digits	Malayalam	Malajalam
 	Kana	Kana
 	Numerals	Brojevi
 	Scale at Center	Skaliraj od centra
+	Delete Set	Izbriši skup
+	Direct Entry	Direktan unos
 	Up/Down:	Gore/dolje:
 	Left/Right:	Lijevo/desno:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko gore/dolje
@@ -1640,6 +1680,10 @@ digits	Malayalam	Malajalam
 	Em Box	Em okvir
 	x-Height	Visina malih slova
 	ICF Box	ICF okvir
+	Show Sample	Prikaži uzorak
+	Hide Sample	Sakrij uzorak
+	Max Ascent/Descent	Maks. visina gore/dolje
+	Max Ascender	Maks. gornji produžetak
 	Copy Color Value (Hex)	Kopiraj vrijednost boje (hex)
 	Create New Swatch…	Kreiraj novi uzorak boje…
 	Name 40%	Naziv 40%
@@ -1999,12 +2043,18 @@ digits	Malayalam	Malajalam
 	Select text to set its OpenType features.	Odaberite tekst da postavite njegove OpenType mogućnosti.
 	Standard Ligatures	Standardne ligature
 	Stylistic Alternates	Stilske alternative
+	Ligatures	Ligature
+	Ornaments	Ornamenti
+	Figures	Brojke
 	Set {n}	Skup {n}
 	Swash	Ukrasni potez
 	Tabular Lining	Tabelarne brojke
 	Tabular Oldstyle	Tabelarne stare brojke
 	Titling Alternates	Alternative za naslove
-	Every-line Composer	Slagač svih redova
+	Middle Eastern & South Asian Single-line Composer	Slagač jednog reda (Bliski istok i Južna Azija)
+	Middle Eastern & South Asian Every-line Composer	Slagač svih redova (Bliski istok i Južna Azija)
+	Standard Single-line Composer	Standardni slagač jednog reda
+	Standard Every-line Composer	Standardni slagač svih redova
 	First-line Left Indent	Lijeva uvlaka prvog reda
 	Hyphenation…	Rastavljanje riječi…
 	Words Longer Than:	Riječi duže od:
@@ -2041,10 +2091,10 @@ digits	Malayalam	Malajalam
 	Roman Hanging Punctuation	Latinična viseća interpunkcija
 	Korean Line Break Anywhere	Prelom korejskog reda bilo gdje
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Postavke istočnoazijske kompozicije
 	Korean Composition Settings	Postavke korejske kompozicije
 	Select a text object to edit its paragraph attributes.	Odaberite tekstualni objekat da uredite njegove atribute pasusa.
-	Single-line Composer	Slagač jednog reda
 	Toggle Line Composer	Uključi/isključi Line Composer
 	Space After Paragraph	Razmak nakon pasusa
 	Space Before Paragraph	Razmak prije pasusa
@@ -2088,6 +2138,7 @@ digits	Malayalam	Malajalam
 	Show Swatch Bounds	Prikaži granice uzorka boje
 	Show Tile Edge	Prikaži ivicu pločice
 	Size Tile to Art	Prilagodi pločicu crtežu
+	Move Tile with Art	Pomjeri pločicu s crtežom
 	Tile Type:	Vrsta pločice:
 	Top in Front	Vrh naprijed
 	V Spacing:	Okomiti razmak:
@@ -2130,6 +2181,9 @@ digits	Malayalam	Malajalam
 	Use Black Point Compensation	Koristi kompenzaciju crne tačke
 	Working CMYK (don't tag)	Radni CMYK (bez oznake)
 	Working RGB (don't tag)	Radni RGB (bez oznake)
+	Don't Color Manage This Document	Ne upravljaj bojama ovog dokumenta
+	Working RGB: {name}	Radni RGB: {name}
+	Working CMYK: {name}	Radni CMYK: {name}
 	{name} (spot)	{name} (spot)
 	Add to Profiles…	Dodaj u profile…
 	Align Stroke to Center	Poravnaj potez po sredini
@@ -2249,6 +2303,7 @@ digits	Malayalam	Malajalam
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	unos {i} u paths treba path i ids (ID-ove objekata koje nema nijedan drugi unos)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder uzima path: u folderu te datoteke traže se ostale nedostajuće veze
 	Show Missing	Prikaži nedostajuće
+	Sort by Size	Sortiraj po veličini
 	Sort by Status	Sortiraj po statusu
 	Clear Overrides	Očisti zamjene
 	Create New {kind} Style	Kreiraj novi {kind} stil
@@ -2503,6 +2558,7 @@ digits	Malayalam	Malajalam
 	Export Asset	Izvezi resurs
 	Export to:	Izvezi u:
 	Format Settings	Postavke formata
+	Format Settings…	Postavke formata…
 	Formats:	Formati:
 	Full Document	Cijeli dokument
 	Include Bleed	Uključi napust
@@ -2528,6 +2584,11 @@ digits	Malayalam	Malajalam
 	Author Title:	Titula autora:
 	Author:	Autor:
 	Copyright Info URL:	URL informacija o autorskim pravima:
+	Save Metadata Template…	Sačuvaj predložak metapodataka…
+	Import Options	Opcije uvoza
+	Clear existing fields and use the template's	Obriši postojeća polja i koristi polja iz predloška
+	Keep existing fields, but replace those the template has	Zadrži postojeća polja, ali zamijeni ona koja predložak sadrži
+	Keep existing fields, but append those the template has	Zadrži postojeća polja, ali dodaj ona koja predložak sadrži
 	Copyright Notice:	Obavještenje o autorskim pravima:
 	Copyright Status:	Status autorskih prava:
 	Created:	Kreirano:
@@ -2601,6 +2662,7 @@ digits	Malayalam	Malajalam
 	e.g. 1-3, 5	npr. 1-3, 5
 	First Page	Prva stranica
 	Import PDF	Uvezi PDF
+	Import PDF pages as links	Uvezi stranice PDF-a kao veze
 	Last Page	Posljednja stranica
 	Next Page	Sljedeća stranica
 	of {count}	od {count}
@@ -2684,6 +2746,7 @@ digits	Malayalam	Malajalam
 	Transparent Background	Prozirna pozadina
 	Choose…	Odaberi…
 	Copy Fonts Used in the Document	Kopiraj fontove korištene u dokumentu
+	Copy Info	Kopiraj informacije
 	Copy Links	Kopiraj veze
 	Create Report	Kreiraj izvještaj
 	Fonts whose licence doesn't allow embedding are not copied.	Fontovi čija licenca ne dozvoljava ugrađivanje ne kopiraju se.
@@ -2734,6 +2797,8 @@ digits	Malayalam	Malajalam
 	Keep a link to an image file instead of only embedding it	Zadrži vezu na slikovnu datoteku umjesto samo ugrađivanja
 	Place onto a new locked, dimmed template layer below the current layer	Postavi na novi zaključani, zatamnjeni sloj predloška ispod trenutnog sloja
 	Swap the selected object for the file, keeping its place and transform	Zamijeni odabrani objekat datotekom, zadržavajući njegovo mjesto i transformaciju
+	Show Import Options	Prikaži opcije uvoza
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Pitaj za opcije uvoza svake PDF, DXF ili tekstualne datoteke prije postavljanja; isključeno: koriste se posljednje odabrane opcije
 	On: one locked object showing the document, updated when it changes.	Uključeno: jedan zaključani objekat koji prikazuje dokument, ažuriran kad se on promijeni.
 	Off: an editable copy of its art, embedded in this document.	Isključeno: kopija njegovog crteža koja se može uređivati, ugrađena u ovaj dokument.
 	Images: link to the file instead of only embedding it.	Slike: poveži s datotekom umjesto samo ugrađivanja.
@@ -2862,11 +2927,16 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Prikaži glatki kotač boja
 	Show segmented color wheel	Prikaži segmentirani kotač boja
 	Show color bars	Prikaži trake boja
+	Add Color Tool	Alat za dodavanje boje
+	Remove Color Tool	Alat za uklanjanje boje
+	Remove Color	Ukloni boju
+	Find the selected colors in the artwork	Pronađi odabrane boje u crtežu
 	Harmony Rules	Pravila harmonije
 	Keep this row's colors (exclude)	Zadrži boje ovog reda (isključi)
 	Limit to Library:	Ograniči na biblioteku:
 	Link harmony colors	Poveži boje harmonije
 	Merge colors into one row	Spoji boje u jedan red
+	New Row	Novi red
 	No colors to recolor (preserved colors are left out).	Nema boja za ponovno bojenje (sačuvane boje su izostavljene).
 	Preserve:	Očuvaj:
 	Randomly change color order	Nasumično promijeni redoslijed boja
@@ -3533,6 +3603,8 @@ theme	Appearance	Izgled
 	Find Font Files	Pronađi datoteke fontova
 	Add Font Files	Dodaj datoteke fontova
 	Font List	Lista fontova
+	Show Similar Fonts	Prikaži slične fontove
+	Clear Similar Fonts	Očisti slične fontove
 	Fonts in Document	Fontovi u dokumentu
 	Refresh Font List	Osvježi listu fontova
 	Replace Font	Zamijeni font
@@ -3549,6 +3621,43 @@ theme	Appearance	Izgled
 	Create Graph	Kreiraj grafikon
 	Graph Data	Podaci grafikona
 	Graph Type	Vrsta grafikona
+	Graph Type…	Vrsta grafikona…
+	Graph Data…	Podaci grafikona…
+	Graph Options	Opcije grafikona
+	Left Axis	Lijeva osa
+	Right Axis	Desna osa
+	Category Axis	Osa kategorija
+	Separate Scales	Odvojene skale
+	Add Drop Shadow	Dodaj sjenu
+	Add Legend Across Top	Dodaj legendu na vrh
+	First Row in Front	Prvi red naprijed
+	First Column in Front	Prva kolona naprijed
+	Legend	Legenda
+	Column Width	Širina stupca
+	Bar Width	Širina trake
+	Cluster Width	Širina grupe
+	Mark Data Points	Označi tačke podataka
+	Connect Data Points	Poveži tačke podataka
+	Edge-to-Edge Lines	Linije od ivice do ivice
+	Draw Filled Lines	Crtaj ispunjene linije
+	Line Width	Širina linije
+	Tick Values	Vrijednosti crtica
+	Override Calculated Values	Zamijeni izračunate vrijednosti
+	Divisions	Podioci
+	Tick Marks	Crtice
+	Tick Marks per Division	Crtica po podioku
+	Draw Tick Marks Between Labels	Crtaj crtice između oznaka
+	Add Labels	Dodaj oznake
+	Maximum must be more than Minimum.	Maksimum mora biti veći od minimuma.
+	Column Graph	Stupčasti grafikon
+	Stacked Column Graph	Naslagani stupčasti grafikon
+	Bar Graph	Trakasti grafikon
+	Stacked Bar Graph	Naslagani trakasti grafikon
+	Line Graph	Linijski grafikon
+	Area Graph	Površinski grafikon
+	Scatter Graph	Raspršeni grafikon
+	Pie Graph	Tortni grafikon
+	Radar Graph	Radarski grafikon
 	Vector Halftone	Vektorski polutonovi
 	spot	spot
 	Text	Tekst
@@ -4155,6 +4264,7 @@ axis	Both	Obje
 	Replace:	Zamijeni:
 	Type on a Path Options	Opcije teksta na putanji
 	Highlight Variable	Istakni varijablu
+	Sort Variables	Sortiraj varijable
 	New Variable	Nova varijabla
 	List Variables	Izlistaj varijable
 	Bind Variable	Veži varijablu
@@ -4272,6 +4382,8 @@ font-technology	Variable	Varijabilni
 	Saving	Čuvanje
 	Saving {}	Čuvanje {}
 	Search commands and tools…	Pretraži naredbe i alate…
+	Recent Commands	Nedavne naredbe
+	No recent commands	Nema nedavnih naredbi
 	Dashed Line	Isprekidana linija
 	Panel menu	Meni panela
 	Unembed…	Poništi ugrađivanje…
@@ -4282,6 +4394,12 @@ font-technology	Variable	Varijabilni
 	Preferences	Postavke
 	Previous	Prethodno
 	Restore every preference to its default (applied on OK)	Vrati svaku postavku na zadanu vrijednost (primjenjuje se na U redu)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Jedinica za nove dokumente ugrađenih veličina, osim onih u pikselima, i za otvorene datoteke bez zapisane jedinice; ako je odaberete ovdje i kliknete U redu, postaje i jedinica aktivnog dokumenta.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Debljine poteza, crtice i razmaci prikazuju se u ovoj jedinici, a brojevi uneseni za njih čitaju se u njoj.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Veličine teksta, prored i pomak osnovne linije prikazuju se u ovoj jedinici, a brojevi uneseni za njih čitaju se u njoj.
+	The unit for East Asian type measurements, which no field uses yet.	Jedinica za mjere istočnoazijskog teksta, koju još nijedno polje ne koristi.
+	When on, a number typed without a unit into a field in picas is read in points.	Kad je uključeno, broj unesen bez jedinice u polje u picama čita se u tačkama.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Uz XML ID nazivi objekata prikazuju se kao XML ID u Slojevima, Varijablama i Opcijama sloja.
 	Reset all preferences to their defaults?	Vratiti sve postavke na zadane vrijednosti?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Zadane vrijednosti primjenjuju se kada kliknete U redu u Postavkama. Otkaži tamo zadržava vaše trenutne postavke.
 	Smaller ↔ Larger	Manje ↔ veće
@@ -4531,6 +4649,7 @@ imageTrace	Outline	Obris
 	Stop the script and undo what it did? Then quit again.	Zaustaviti skriptu i poništiti ono što je uradila? Zatim ponovo izađite.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Ova skripta je dodala veoma mnogo objekata. Nastaviti, ili je zaustaviti i poništiti ono što je uradila?
 @msg	Copied the script report	Izvještaj skripte kopiran
+@msg	Copied the link info	Informacije o vezi kopirane
 @msg	Corners edits the corners of a path	Uglovi uređuje uglove putanje
 @msg	Couldn't copy to the system clipboard: {e}	Nije moguće kopirati u sistemski međuspremnik: {e}
 @msg	Couldn't open {name}: {e}	Nije moguće otvoriti {name}: {e}
@@ -5777,6 +5896,9 @@ mark-style	Japanese	Japanski
 	Softness	Mekoća
 	Ambient Light	Ambijentalno svjetlo
 	Light behind the object	Svjetlo iza objekta
+	Move Light to Back	Pomjeri svjetlo iza
+	Move Light to Front	Pomjeri svjetlo naprijed
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Prevucite svjetlo da ga pomjerite. Tipke sa strelicama pomjeraju fokusirano svjetlo; Shift ga pomjera za 15°.
 	Shadows	Sjene
 	Distance from Object	Udaljenost od objekta
 	Shadow Bounds	Granice sjene
@@ -5838,7 +5960,7 @@ mark-style	Japanese	Japanski
 @msg	Unknown dimension orientation	Nepoznata orijentacija kote
 @msg	Unknown dimension style	Nepoznat stil kote
 @msg	Unknown unit	Nepoznata jedinica
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Zatvori kružne krajeve otvorenih profila. Djelimična izvlačenja zadržavaju otvorene rezane strane.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Zatvori kružne krajeve otvorenih profila. Djelimična izvlačenja zatvaraju i svoje rezane strane.
 @msg	span must be "object" or "selection", got {v}	span mora biti "object" ili "selection", dobiveno {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" postavlja `gradient`, a ne uzorak boje
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" postavlja gradijent: navedite `gradient`
@@ -6165,6 +6287,8 @@ axis	Y Axis	Y osa
 	Create New Set	Napravi novi skup
 	Stop Global Edit	Zaustavi globalno uređivanje
 	Global Edit Options	Opcije globalnog uređivanja
+	Select Similar Objects	Odaberi slične objekte
+	Select Similar Options	Opcije odabira sličnih
 	Leave Out of Global Edit	Isključi iz globalnog uređivanja
 	Match	Podudaranje
 	On Artboards	Na radnim pločama
@@ -6287,6 +6411,13 @@ axis	Y Axis	Y osa
 	Graphite Pencil	Grafitna olovka
 	Wax Crayon	Voštana bojica
 	Charcoal Dust	Ugljena prašina
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tehnički sklopovi
+	Circuit Trace	Vod sklopa
+	Bus Lines	Linije sabirnice
+	Terminal Nodes	Priključni čvorovi
+
 	Notched Ribbon	Zarezana traka
 	Double Line	Dvostruka linija
 	Wave	Talas
@@ -6683,9 +6814,43 @@ shape	Open	Otvoren
 	Remove Gaps	Ukloni razmake
 @msg	that makes too many pieces (at most 100000): make the dashes longer	to daje previše dijelova (najviše 100000): produžite crtice
 @msg	select paths, or segments, to divide	odaberite putanje ili segmente za dijeljenje
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Zajedničke tangente…
+	Common Tangents	Zajedničke tangente
+	Tangents	Tangente
+	Centerline	Središnja linija
+	External	Vanjske
+	Internal	Unutrašnje
+@msg	select two closed paths	odaberite dvije zatvorene putanje
+@msg	a selected path is open	odabrana putanja je otvorena
+@msg	a selected path is not convex	odabrana putanja nije konveksna
+@msg	a selected path has no area	odabrana putanja nema površinu
+@msg	a selected path has more than 10000 segments	odabrana putanja ima više od 10000 segmenata
+@msg	the two paths have the same outline	obje putanje imaju isti obris
+@msg	One path lies inside the other, so they have no common tangents	Jedna putanja leži unutar druge, pa nemaju zajedničkih tangenti
+@msg	The paths overlap, so they have no internal tangents	Putanje se preklapaju, pa nemaju unutrašnjih tangenti
+@msg	One path lies inside the other, so they have no internal tangents	Jedna putanja leži unutar druge, pa nemaju unutrašnjih tangenti
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Proširi crtice u putanje
 @msg	select paths with dashed strokes to expand	odaberite putanje s isprekidanim potezom za proširivanje
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Tangentna kružnica…
+	Tangent Circle	Tangentna kružnica
+	Circle:	Kružnica:
+@msg	`ids` names an object twice	`ids` navodi objekat dvaput
+@msg	select two or three paths or compound paths	odaberite dvije ili tri putanje ili složene putanje
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` mora biti od 0.01 do 1000000 pt
+@msg	two shapes need a `radius`	dva oblika trebaju `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	tri oblika sama određuju poluprečnik: izostavite `radius`
+@msg	`circle` must be from 0 to 64	`circle` mora biti od 0 do 64
+@msg	a shape has no outline	oblik nema obris
+@msg	the shapes are too complex: at most 2000 segments in all	oblici su previše složeni: najviše 2000 segmenata ukupno
+@msg	these shapes take too long to search	pretraga za ove oblike traje predugo
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	više od 64 kružnice dodiruje ove oblike: možda ih dodiruju duž cijele krivulje
+@msg	no circle touches these shapes	nijedna kružnica ne dodiruje ove oblike
+@msg	`circle` is past the last circle found ({found})	`circle` je iza posljednje pronađene kružnice ({found})
+@msg	object {value} is not a path or compound path	objekat {value} nije putanja ni složena putanja
+@msg	these shapes are too small to measure	ovi oblici su premali za mjerenje
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Alati za dokument
 	Save a Timestamped Copy	Sačuvaj kopiju s datumom i vremenom
@@ -6740,7 +6905,7 @@ shape	Open	Otvoren
 @msg	stroke cannot be set on a symbol instance	stroke se ne može postaviti na instancu simbola
 @msg	fill on a symbol instance must be a solid color or none	fill instance simbola mora biti puna boja ili none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} se ne može postaviti na sliku bez efekta „Pretvori u oblik“ ili „Objekat u obrisu“
-@msg	pass newName, registration, exportType, nineSlice and/or type	navedite newName, registration, exportType, nineSlice i/ili type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	navedite newName, registration, exportType, nineSlice, type i/ili alignToPixelGrid
 	Text Flow	Tok teksta
 	By Rows	Po redovima
 	By Columns	Po kolonama
@@ -6952,3 +7117,24 @@ shape	Open	Otvoren
 	Grommets	Ušice
 	Grommet Inset	Udaljenost ušica od ruba
 	Diameter	Prečnik
+	Nest Shapes…	Slaganje oblika…
+	Nest Shapes	Slaganje oblika
+	Roll	Rolna
+	Packaging Tools	Alati za ambalažu
+	Fold Lines	Linije savijanja
+	Make Cut Line	Napravi liniju rezanja
+	Make Crease Line	Napravi liniju bigovanja
+	Make Partial Cut Line	Napravi liniju djelimičnog rezanja
+	Make Perforation Line	Napravi liniju perforacije
+	Make Fold Line	Napravi liniju savijanja
+	Role Swatches…	Uzorci boja za vrste linija…
+	Role Swatches	Uzorci boja za vrste linija
+	Role	Vrsta linije
+	Cut Line	Linija rezanja
+	Crease Line	Linija bigovanja
+	Partial Cut Line	Linija djelimičnog rezanja
+	Perforation Line	Linija perforacije
+	No objects are selected.	Nijedan objekat nije odabran.
+	Open a document to mark its fold lines.	Otvorite dokument da označite njegove linije savijanja.
+	Remove Fold Line Role	Ukloni vrstu linije
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
