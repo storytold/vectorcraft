@@ -1,6 +1,7 @@
 //! The pieces a raster mesh warp cuts an image into overlap their neighbors: in SVG a partly
 //! transparent image keeps its own alpha where they do, and the pieces share one copy of the image.
 
+use craft_svg::tree::draw::resvg;
 use vectorcraft_doc::live::mesh_warp_image;
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::{Affine, Point};
@@ -14,9 +15,9 @@ fn warped(f: &dyn Fn(Point) -> Point, masked: bool) -> Document {
 
 /// [`warped`] with every pixel `rgba`, after `tweak` adjusts the image object.
 fn warped_pixels(f: &dyn Fn(Point) -> Point, masked: bool, rgba: [u8; 4], tweak: impl FnOnce(&mut Node)) -> Document {
-    let img = image::RgbaImage::from_pixel(4, 4, image::Rgba(rgba));
-    let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let img = craft_image_codecs::Image::from_raw(4, 4, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba.repeat(16))
+        .unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
     let mut d = Document::new(100.0, 100.0);
     d.images.insert("pic".into(), ImageBlob::png(png));
     let im = ImageObject {
@@ -77,9 +78,14 @@ fn a_half_transparent_image_is_half_transparent_where_its_warp_pieces_overlap() 
 /// transparent pixels, and the right half stays half transparent.
 #[test]
 fn opaque_pixels_stay_opaque_where_warp_pieces_overlap() {
-    let img = image::RgbaImage::from_fn(16, 16, |x, _| image::Rgba([255, 0, 0, if x < 8 { 255 } else { 128 }]));
-    let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut data = Vec::with_capacity(16 * 16 * 4);
+    for _ in 0..16 {
+        for x in 0..16 {
+            data.extend_from_slice(&[255, 0, 0, if x < 8 { 255 } else { 128 }]);
+        }
+    }
+    let img = craft_image_codecs::Image::from_raw(16, 16, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, data).unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
     for masked in [false, true] {
         let mut d = Document::new(100.0, 100.0);
         d.images.insert("pic".into(), ImageBlob::png(png.clone()));
@@ -115,6 +121,49 @@ fn opaque_pixels_stay_opaque_where_warp_pieces_overlap() {
         // The right half, (62, 12)–(88, 88).
         let half = alpha(248, 352);
         assert!(half.0 >= 104 && half.1 <= 134, "masked {masked}: {half:?}");
+    }
+}
+
+/// Pieces the file leaves out share no image: with Images set to Link, the warp pieces of a linked
+/// image that are hidden, or sit in hidden clip groups, put no `<image>` naming its file in the
+/// defs unless hidden layers are kept. Visible pieces share one.
+#[test]
+fn hidden_warp_pieces_share_no_image() {
+    let path = "/away/photo.png";
+    let svg = |d: &Document, hidden_layers: bool| {
+        let opts = ExportOptions { images: vectorcraft_svg::ImageMode::Link, hidden_layers, ..ExportOptions::default() };
+        export_full(d, &opts, None).svg
+    };
+    // Every image in `n` linked to `path`.
+    fn link(n: &mut Node, path: &str) {
+        if let NodeKind::Image(im) = &mut n.kind {
+            im.link = Some(vectorcraft_doc::LinkInfo::new(path));
+        }
+        for c in n.children_mut().into_iter().flatten() {
+            link(std::sync::Arc::make_mut(c), path);
+        }
+    }
+    for masked in [false, true] {
+        // Hide every image (`ancestor` false), or every clip group holding one (`ancestor` true).
+        for ancestor in [false, true] {
+            let mut d = warped_pixels(&|p| p, masked, [255, 0, 0, 255], |_| {});
+            let layer = std::sync::Arc::make_mut(&mut d.layers[0]);
+            let g = std::sync::Arc::make_mut(&mut layer.children_mut().unwrap()[0]);
+            link(g, path);
+            let visible = d.clone();
+            assert_eq!(svg(&visible, false).matches(path).count(), 1, "masked {masked}: the pieces share one image");
+            let layer = std::sync::Arc::make_mut(&mut d.layers[0]);
+            let g = std::sync::Arc::make_mut(&mut layer.children_mut().unwrap()[0]);
+            for piece in g.children_mut().unwrap() {
+                let piece = std::sync::Arc::make_mut(piece);
+                match piece.children_mut() {
+                    Some(kids) if !ancestor => std::sync::Arc::make_mut(&mut kids[1]).visible = false,
+                    _ => piece.visible = false,
+                }
+            }
+            assert!(!svg(&d, false).contains(path), "masked {masked}, ancestor {ancestor}: {}", svg(&d, false));
+            assert_eq!(svg(&d, true).matches(path).count(), 1, "masked {masked}, ancestor {ancestor}");
+        }
     }
 }
 

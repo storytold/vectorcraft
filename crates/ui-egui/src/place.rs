@@ -74,8 +74,11 @@ pub struct PlaceState {
     queue_asks: bool,
     /// The loaded cursor's files by name, with the size a click places them at.
     queue_sizes: Vec<(String, f64, f64)>,
+    /// The names of the loaded cursor's encrypted PDF files, which ask for their password.
+    queue_locked: Vec<String>,
     /// The engine's count of cursor loads ([`vectorcraft_engine::Session::place_queue_loads`]) when
-    /// `queue_asks` and `queue_sizes` were set: a later load (`tool.setOption`, a script) clears them.
+    /// `queue_asks`, `queue_sizes` and `queue_locked` were set: a later load (`tool.setOption`, a
+    /// script) clears them.
     queue_load: u64,
     /// The import options dialog a click of the cursor opened (the token in its params'
     /// [`ASKED`]), with the automation roots the cursor was loaded in: its OK, pressed outside any
@@ -223,8 +226,8 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
         return Ok(Value::Null);
     }
     // A PDF with several pages or a password asks for the page, box and password first; with
-    // Show Import Options off, only an encrypted one asks, for its password.
-    let offered = if ask { crate::dialogs::import_pdf::offer_place(app, &p) } else { crate::dialogs::import_pdf::offer_place_password(app, &p) };
+    // Show Import Options off, or with a `page` given, only an encrypted one asks, for its password.
+    let offered = (ask && crate::dialogs::import_pdf::offer_place(app, &p)) || crate::dialogs::import_pdf::offer_place_password(app, &p);
     if offered {
         return Ok(Value::Null);
     }
@@ -485,15 +488,21 @@ fn queue_files(app: &mut VectorcraftApp, p: &Value, read: Read, asks: bool) -> R
 /// The file a click or drag of the place cursor places (`file.place` with `p`, its `rect` set):
 /// read off the UI thread where the files the user places are ([`crate::placing::start`]), else at
 /// once. When the Place dialog loaded the cursor with Show Import Options on, a file that has
-/// import options asks for them first (Cancel leaves it unplaced). An error shows in the status bar.
+/// import options asks for them first (Cancel leaves it unplaced); otherwise only an encrypted PDF
+/// asks, for its password. An error shows in the status bar.
 pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
     // Read within the automation roots of whoever loaded the cursor, even on a click of the person
     // at the keyboard: an agent's queue reaches no file it wasn't given.
     let roots = app.session.place_queue_roots();
     forget_older_queue(app);
     vectorcraft_engine::file_access::confine(roots.as_ref(), || {
-        if app.place.queue_asks {
+        let locked = is_locked(app, p);
+        if app.place.queue_asks || locked {
             let mut p = clicked_at_full_size(app, p);
+            if !app.place.queue_asks {
+                // Only its password is asked for, as File › Place with Show Import Options off.
+                p["showImportOptions"] = json!(false);
+            }
             // The import options it may ask for keep the token, and their OK places within the
             // same roots ([`place_file`]).
             app.place.asked = roots.clone().map(|r| {
@@ -520,8 +529,15 @@ fn forget_older_queue(app: &mut VectorcraftApp) {
     if app.place.queue_load != app.session.place_queue_loads() {
         app.place.queue_asks = false;
         app.place.queue_sizes.clear();
+        app.place.queue_locked.clear();
         app.place.asked = None;
     }
+}
+
+/// Does `p` (a cursor click's `file.place` params) name a file the cursor holds as an encrypted PDF?
+fn is_locked(app: &VectorcraftApp, p: &Value) -> bool {
+    let name = p.get("path").or_else(|| p.get("name")).and_then(Value::as_str).map(fileio::file_name);
+    name.is_some_and(|n| app.place.queue_locked.contains(&n))
 }
 
 /// The params of a cursor click (`rect` at the file's queued size) on a PDF or DXF file, whose
@@ -560,14 +576,21 @@ pub(crate) fn show_thumbnails(app: &mut VectorcraftApp, r: &Value, asks: bool) {
         .flatten()
         .filter_map(|f| Some((f["name"].as_str()?.to_string(), f["width"].as_f64()?, f["height"].as_f64()?)))
         .collect();
+    app.place.queue_locked = r["files"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|f| f["needsPassword"] == true)
+        .filter_map(|f| Some(f["name"].as_str()?.to_string()))
+        .collect();
     app.place.thumbs = r["files"]
         .as_array()
         .into_iter()
         .flatten()
         .filter_map(|f| {
             let png = vectorcraft_format::base64_decode(f["thumbnailBase64"].as_str()?)?;
-            let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).ok()?.to_rgba8();
-            let color = egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], img.as_raw());
+            let img = craft_image_codecs::decode_as(craft_image_codecs::Format::Png, &png).ok()?;
+            let color = egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], &img.to_rgba8());
             Some((f["name"].as_str()?.to_string(), Thumb { image: std::sync::Arc::new(color), tex: None }))
         })
         .collect();
@@ -741,9 +764,11 @@ pub fn image_summary(i: &Value) -> (String, String) {
 
 /// The Control bar for the one selected image: Linked File or Embedded, its file name, colour mode
 /// and effective resolution, Embed or Unembed, Edit Original (a linked file), Image Trace, Mask,
-/// Crop Image and Remove Background. Whether one image is selected. A file name the row has no room
-/// for is left out alone; after it, each control shows only while the row has room for it and
-/// `reserve` after it, and the controls after one left out are left out too.
+/// Crop Image and Remove Background. While the Crop Image tool is in use, the bar shows the file
+/// name, colour mode and resolution only, and the tool's cropping options follow them. Whether one
+/// image is selected. A file name the row has no room for is left out alone; after it, each control
+/// shows only while the row has room for it and `reserve` after it, and the controls after one left
+/// out are left out too.
 pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui, reserve: f32) -> bool {
     let Some(i) = selected_image_info(app) else { return false };
     let (name, details) = image_summary(i);
@@ -763,6 +788,9 @@ pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui, reserve:
         ui.label(details);
     }
     fit.separator(ui);
+    if app.session.tool_id() == vectorcraft_tools::cropimage::ID {
+        return true;
+    }
     link_buttons(app, ui, id, linked, &name, LinkButtons::Fit(&mut fit));
     // The Image Trace button grows past its usual width for a longer translated label.
     let arrow = widgets::SPLIT_ARROW;

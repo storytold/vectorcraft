@@ -142,7 +142,9 @@ pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result
         let one = super::save::artboard_doc(doc, b);
         let (full, placed) = crate::cmd::place::document::full_documents(&one);
         let mut d = full.into_owned();
-        expand_appearances(&mut d);
+        if expand_appearances(&mut d) {
+            note(&mut enc.warnings, super::super::effectcmd::RASTER_EFFECTS_LEFT);
+        }
         if mode == SeeThrough::Flatten {
             expand_image_patterns(&mut d)?;
         }
@@ -175,14 +177,17 @@ pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result
     Ok(enc)
 }
 
-/// Expand Appearance of every layer's art whose appearance the format can't hold.
-fn expand_appearances(d: &mut Document) {
+/// Expand Appearance of every layer's art whose appearance the format can't hold. Returns whether
+/// objects kept raster effects whose images would go past Expand Appearance's limits.
+fn expand_appearances(d: &mut Document) -> bool {
     let brushes = vectorcraft_brush::library(d);
     let layers: Vec<NodeId> = d.layers.iter().map(|l| l.id).collect();
     let mut out = vec![];
+    let mut raster = super::super::effectcmd::RasterBudget::new();
     for id in layers {
-        super::super::effectcmd::expand_node(d, id, &brushes, &mut out);
+        super::super::effectcmd::expand_node(d, id, &brushes, &mut out, &mut raster);
     }
+    raster.left > 0
 }
 
 /// Expand every layer's pattern fills that paint an image with see-through pixels, a colorize paint,

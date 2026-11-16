@@ -468,7 +468,7 @@ fn styles_symbols_and_images_of_the_same_name_are_renamed() {
     assert_eq!(key(&s, img2), src_key);
 }
 
-/// A graph whose series fill, value labels and legend rows paint with global swatch "Brand" and
+/// A graph whose series fill, value labels, legend rows and axis and ring line rows paint with global swatch "Brand" and
 /// whose value labels are set in character style "Emphasis" and paragraph style "Body", as a
 /// later redraw would give them to its marks and labels.
 fn styled_graph(s: &mut Session) -> NodeId {
@@ -484,8 +484,9 @@ fn styled_graph(s: &mut Session) -> NodeId {
     let l = &mut g.label_styles;
     l.values = Some(vectorcraft_doc::CharStyle { fill: brand.clone(), style_name: Some("Emphasis".into()), ..Default::default() });
     l.values_para = Some(vectorcraft_doc::ParaStyle { style_name: Some("Body".into()), ..Default::default() });
-    let rows = vectorcraft_doc::SeriesPaint { stroke: Some(brand), ..Default::default() };
-    l.legend_rows = Some(vectorcraft_doc::graph::LabelRows { paint: rows, ..Default::default() });
+    let paint = vectorcraft_doc::SeriesPaint { stroke: Some(brand), ..Default::default() };
+    let rows = vectorcraft_doc::graph::LabelRows { paint, ..Default::default() };
+    (l.legend_rows, l.axis_rows, l.ring_rows) = (Some(rows.clone()), Some(rows.clone()), Some(rows));
     id
 }
 
@@ -515,7 +516,7 @@ fn a_pasted_graph_brings_and_follows_its_label_styles_and_paints() {
     let d = doc(&s);
     assert!(d.swatch("Brand").is_some(), "{v}");
     assert!(d.char_styles.iter().any(|x| x.name == "Emphasis") && d.para_styles.iter().any(|x| x.name == "Body"), "{v}");
-    let brand = vec!["Brand".to_string(); 3];
+    let brand = vec!["Brand".to_string(); 5];
     assert_eq!(graph_links(&s, ids_of(&v)[0]), (brand.clone(), Some("Emphasis".into()), Some("Body".into())));
 
     // Into a document that gives each name something else: they come in renamed.
@@ -524,15 +525,15 @@ fn a_pasted_graph_brings_and_follows_its_label_styles_and_paints() {
     s.execute("charStyle.new", &json!({"name": "Emphasis", "attrs": {"size": 8.0}})).unwrap();
     s.execute("paraStyle.new", &json!({"name": "Body", "attrs": {"space_after": 2.0}})).unwrap();
     let v = s.execute("edit.pasteInPlace", &json!({"swatchConflict": "add"})).unwrap();
-    let brand2 = vec!["Brand 2".to_string(); 3];
+    let brand2 = vec!["Brand 2".to_string(); 5];
     assert_eq!(graph_links(&s, ids_of(&v)[0]), (brand2, Some("Emphasis 2".into()), Some("Body 2".into())), "{v}");
 
     // Without formatting: the labels' text styles stay behind.
     new_doc(&mut s);
     let v = s.execute("edit.pasteWithoutFormatting", &json!({})).unwrap();
     assert!(doc(&s).char_styles.is_empty() && doc(&s).para_styles.is_empty(), "{v}");
-    // The value labels' red characters stay behind too; the series fill and the legend rows keep Brand.
-    assert_eq!(graph_links(&s, ids_of(&v)[0]), (vec!["Brand".to_string(); 2], None, None));
+    // The value labels' red characters stay behind too; the series fill, the legend rows and the line rows keep Brand.
+    assert_eq!(graph_links(&s, ids_of(&v)[0]), (vec!["Brand".to_string(); 4], None, None));
 }
 
 /// Each label of graph `id` (the text of its Axes and Legend groups) with its size and its first paragraph's format.
@@ -596,8 +597,8 @@ fn a_graph_pasted_without_formatting_keeps_plain_labels_when_drawn_again() {
     let r = node(&s, p).extras().graph.as_deref().unwrap().rect;
     let off = [r.x0 - plot.x0 - 10.0, r.y0 - plot.y0 - 20.0, r.x1 - plot.x1 - 10.0, r.y1 - plot.y1 - 20.0];
     assert!(off.iter().all(|d| d.abs() < 1e-6), "the plot moves by the offset and keeps its size: {plot:?} → {r:?}");
-    s.execute("graph.setType", &json!({"id": p.0, "type": "column"})).unwrap();
-    assert_eq!(graph_label_looks(&s, p), pasted, "a change of type draws them the same way");
+    s.execute("graph.setType", &json!({"id": p.0, "type": "column", "dropShadow": true})).unwrap();
+    assert_eq!(graph_label_looks(&s, p), pasted, "a change of graph type options draws them the same way");
 
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("edit.undo", &json!({})).unwrap();
@@ -766,6 +767,84 @@ fn a_legend_fill_of_its_own_stays_behind_when_pasted_without_formatting() {
     s.execute("text.setStyle", &json!({"ids": [north.0], "size": 11})).unwrap();
     s.execute("graph.setData", &json!({"id": p.0, "csv": csv})).unwrap();
     assert_eq!(label(&s, p, "North").1, Paint::solid(Color::WHITE), "still white when the pie is drawn again");
+}
+
+/// A pie pasted into a document whose swatch of the same name is another color takes that color on its linked wedges
+/// (Merge), and its legend labels in those wedges take the contrast a redraw gives them there: white on a wedge that
+/// turned dark. Pasting with Add, which keeps the copied color, keeps the labels as they were.
+#[test]
+fn pie_legend_labels_follow_wedges_that_take_the_documents_swatch() {
+    let mut s = session();
+    let csv = ",North,South\nP,1,1";
+    s.execute("swatch.new", &json!({"name": "Brand", "color": "#ffff66", "global": true})).unwrap();
+    let g = id_of(&s.execute("graph.create", &json!({"type": "pie", "x": 50, "y": 50, "width": 200, "height": 200, "csv": csv})).unwrap());
+    s.execute("graph.setType", &json!({"id": g.0, "pieLegend": "wedges"})).unwrap();
+    /// The fill of the legend label of graph `id` that says `name`.
+    fn label(s: &Session, id: NodeId, name: &str) -> Paint {
+        let mut out = None;
+        node(s, id).walk(&mut |n| {
+            if let NodeKind::Text(t) = &n.kind
+                && t.plain_text() == name
+            {
+                out = Some(t.first_style().fill.clone());
+            }
+        });
+        out.unwrap()
+    }
+    // The North wedge, black when drawn, takes the light Brand swatch, and a redraw sets its label black.
+    let mut wedges = vec![];
+    for c in node(&s, g).children().unwrap().iter().filter(|c| c.extras().series_index == Some(0)) {
+        c.walk(&mut |m| {
+            if matches!(m.kind, NodeKind::Path { .. }) {
+                wedges.push(m.id.0);
+            }
+        });
+    }
+    assert!(!wedges.is_empty());
+    s.execute("paint.setFill", &json!({"ids": wedges, "swatch": "Brand"})).unwrap();
+    s.execute("graph.setData", &json!({"id": g.0, "csv": csv})).unwrap();
+    assert_eq!(label(&s, g, "North"), Paint::solid(Color::BLACK), "black on the light wedge");
+    assert_eq!(label(&s, g, "South"), Paint::solid(Color::BLACK));
+    copy(&mut s, &[g]);
+
+    for (cmd, choice, north) in [
+        ("edit.pasteWithoutFormatting", "merge", Color::WHITE),
+        ("edit.paste", "merge", Color::WHITE),
+        ("edit.pasteWithoutFormatting", "add", Color::BLACK),
+        ("edit.paste", "add", Color::BLACK),
+    ] {
+        new_doc(&mut s);
+        s.execute("swatch.new", &json!({"name": "Brand", "color": "#202020", "global": true})).unwrap();
+        let p = ids_of(&s.execute(cmd, &json!({"swatchConflict": choice})).unwrap())[0];
+        assert_eq!(label(&s, p, "North"), Paint::solid(north), "{cmd} {choice}");
+        assert_eq!(label(&s, p, "South"), Paint::solid(Color::BLACK), "{cmd} {choice}");
+        s.execute("graph.setData", &json!({"id": p.0, "csv": csv})).unwrap();
+        assert_eq!(label(&s, p, "North"), Paint::solid(north), "{cmd} {choice}: as a redraw sets it");
+    }
+
+    // A copy of the pie in the opacity mask of a rectangle follows the same way.
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    let r = rect(&mut s, 10.0, 10.0, 300.0, 300.0);
+    let art = {
+        let d = doc_mut(&mut s);
+        let pie = d.node(g).unwrap().clone();
+        d.reid(&pie)
+    };
+    doc_mut(&mut s).node_mut(r).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true)));
+    copy(&mut s, &[r]);
+    new_doc(&mut s);
+    s.execute("swatch.new", &json!({"name": "Brand", "color": "#202020", "global": true})).unwrap();
+    let p = ids_of(&s.execute("edit.paste", &json!({"swatchConflict": "merge"})).unwrap())[0];
+    let mask = node(&s, p).extras().mask.as_deref().unwrap().art.clone();
+    let mut north = None;
+    mask.walk(&mut |n| {
+        if let NodeKind::Text(t) = &n.kind
+            && t.plain_text() == "North"
+        {
+            north = Some(t.first_style().fill.clone());
+        }
+    });
+    assert_eq!(north, Some(Paint::solid(Color::WHITE)), "in an opacity mask");
 }
 
 /// A two-line legend label in a narrow dark wedge, whose text sits off the wedge's middle line, stays white when its graph

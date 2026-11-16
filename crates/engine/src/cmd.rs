@@ -235,11 +235,7 @@ pub fn has_multi(s: &Session) -> std::result::Result<(), String> {
 /// editing and symbol editing mode isolate their own layer, which does not count here; an object
 /// isolated inside them counts.
 pub(crate) fn ordinary_isolation(st: &crate::DocState) -> Option<vectorcraft_doc::NodeId> {
-    st.isolation.filter(|l| {
-        !st.doc.pattern_edit.as_ref().is_some_and(|e| e.layer == *l)
-            && !st.doc.mask_edit.as_ref().is_some_and(|e| e.layer == *l)
-            && !st.doc.symbol_edit.as_ref().is_some_and(|e| e.layer == *l)
-    })
+    vectorcraft_tools::ordinary_isolation(&st.doc, st.isolation)
 }
 /// Objects are selected ([`has_selection`]), and in isolation mode ([`ordinary_isolation`]) at
 /// least one of them is inside the isolated object: Object › Lock's and Object › Hide's items.
@@ -896,6 +892,10 @@ pub use buildcmds::live_paint_gaps;
 /// Whether Reset Transformation changes a symbol instance (the Symbols panel menu and the
 /// Control bar enable it when it changes one).
 pub use brushsym::reset_transformation_changes;
+
+/// The Symbols panel's current symbol, as `symbol.list` answers it (the panel reads it on every
+/// frame without running the command).
+pub use brushsym::current_symbol;
 
 /// The byte order of UTF-16 text without a byte-order mark, by Import Data Sets' rule (the Graph
 /// Data window reads files by it too).

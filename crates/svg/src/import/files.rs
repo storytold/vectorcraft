@@ -875,7 +875,8 @@ fn raster(format: image::ImageFormat) -> Option<RasterKind> {
 /// TIFF) leaves the pixels as stored. Otherwise the pixels are read ([`decoded`],
 /// [`tiff_pixels`]), turned or flipped as the orientation says, and written as PNG, so usvg sizes
 /// and fits the image as it is shown, with the resolution the file declares
-/// ([`vectorcraft_doc::ppi::resolution`]), its axes swapped by a quarter turn. A CMYK TIFF also
+/// ([`vectorcraft_doc::ppi::resolution`]), its axes swapped by a quarter turn, and the ICC profile
+/// the file carries when its color space is the written samples' (gray or RGB). A CMYK TIFF also
 /// keeps its inks as a CMYK TIFF ([`vectorcraft_doc::cmyk::stored_cmyk_tiff`]), and a CMYK JPEG
 /// or TIFF that is turned keeps them turned ([`vectorcraft_doc::cmyk::turned_cmyk`]). `None` when
 /// the pixels can't be read, and for a TIFF with more strips or tiles than the decoder can count
@@ -893,7 +894,7 @@ fn shown(bytes: Arc<Vec<u8>>, format: image::ImageFormat) -> Option<Shown> {
         return Some(Shown { kind, bytes, cmyk: None });
     }
     let tiff = image::guess_format(&bytes).ok() == Some(F::Tiff);
-    let mut img = if tiff { tiff_pixels(&bytes)? } else { decoded(&bytes, format)? };
+    let (mut img, icc) = if tiff { tiff_pixels(&bytes)? } else { decoded(&bytes, format)? };
     let ppi = vectorcraft_doc::ppi::resolution(&bytes);
     // The resolution describes the stored pixels; a quarter turn swaps its axes.
     let quarter = orientation.is_some_and(|o| o.to_exif() >= 5);
@@ -906,33 +907,49 @@ fn shown(bytes: Arc<Vec<u8>>, format: image::ImageFormat) -> Option<Shown> {
     if let Some(orientation) = orientation {
         img.apply_orientation(orientation);
     }
+    use image::DynamicImage as D;
+    let img = match img {
+        D::ImageLuma8(_) | D::ImageLumaA8(_) | D::ImageRgb8(_) | D::ImageRgba8(_) => img,
+        D::ImageLuma16(_) | D::ImageLumaA16(_) | D::ImageRgb16(_) | D::ImageRgba16(_) => img,
+        other => D::ImageRgba8(other.into_rgba8()),
+    };
     let mut png = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut png), F::Png).ok()?;
+    let mut encoder = image::codecs::png::PngEncoder::new(&mut png);
+    if let Some(icc) = icc.filter(|icc| png_takes_icc(&img, icc)) {
+        // A profile the encoder doesn't take leaves the image without one.
+        let _ = image::ImageEncoder::set_icc_profile(&mut encoder, icc);
+    }
+    img.write_with_encoder(encoder).ok()?;
     if let Some(ppi) = shown_ppi {
         png = vectorcraft_doc::ppi::with_png_resolution(&png, ppi);
     }
     Some(Shown { kind: ImageKind::PNG, bytes: Arc::new(png), cmyk })
 }
 
+/// Can a PNG of `img`'s samples carry ICC profile `icc`? Its color space must be the samples':
+/// `GRAY` for gray samples, `RGB ` for RGB ones.
+fn png_takes_icc(img: &image::DynamicImage, icc: &[u8]) -> bool {
+    let want = if img.color().has_color() { *b"RGB " } else { *b"GRAY" };
+    vectorcraft_doc::cmyk::icc_color_space(icc) == Some(want)
+}
+
 /// The pixels of encoded image `bytes` (`format` when their bytes don't say), as stored, decoded
 /// within [`vectorcraft_doc::MAX_RASTER_ALLOC`], counted as decoded and as RGBA, as Open and Place
-/// decode them; `None` when they can't be.
-fn decoded(bytes: &[u8], format: image::ImageFormat) -> Option<image::DynamicImage> {
-    use image::ImageDecoder as _;
+/// decode them, with the ICC profile their samples are in when the file carries one the decoder
+/// can read (a TIFF's read by [`vectorcraft_doc::cmyk::tiff_icc_profile`]); `None` when they
+/// can't be.
+fn decoded(bytes: &[u8], format: image::ImageFormat) -> Option<(image::DynamicImage, Option<Vec<u8>>)> {
     let max = vectorcraft_doc::MAX_RASTER_ALLOC;
-    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().ok()?;
-    if reader.format().is_none() {
-        reader.set_format(format);
-    }
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(max);
-    reader.limits(limits);
-    let decoder = reader.into_decoder().ok()?;
-    let (w, h) = decoder.dimensions();
-    if decoder.total_bytes() > max || u64::from(w) * u64::from(h) * 4 > max {
+    let kind = craft_image_codecs::detect(bytes).or_else(|| format.extensions_str().iter().find_map(|e| craft_image_codecs::from_extension(e)))?;
+    let (w, h, per_pixel) = vectorcraft_doc::decode::decoded_layout(bytes, kind)?;
+    let pixels = u64::from(w) * u64::from(h);
+    if pixels.saturating_mul(per_pixel) > max || pixels * 4 > max {
         return None;
     }
-    image::DynamicImage::from_decoder(decoder).ok()
+    let (img, icc) = vectorcraft_doc::decode::decode_image(kind, bytes, max).ok()?;
+    // A TIFF's profile is read by the TIFF reader, as before.
+    let icc = if kind == craft_image_codecs::Format::Tiff { vectorcraft_doc::cmyk::tiff_icc_profile(bytes) } else { icc };
+    Some((img, icc))
 }
 
 /// The pixels of TIFF `bytes`, as stored, read as Open and Place read them: a TIFF with extra
@@ -940,15 +957,17 @@ fn decoded(bytes: &[u8], format: image::ImageFormat) -> Option<image::DynamicIma
 /// ([`vectorcraft_doc::cmyk::extra_samples_tiff_rgba`]); a 1-bit TIFF compressed with CCITT Group
 /// 3 as RGBA ([`vectorcraft_doc::cmyk::group3_tiff_rgba`]); others by [`decoded`], a CMYK TIFF
 /// that stores one plane per ink with its inks written together first
-/// ([`vectorcraft_doc::cmyk::stored_cmyk_tiff`]). `None` when they can't be read.
-fn tiff_pixels(bytes: &[u8]) -> Option<image::DynamicImage> {
+/// ([`vectorcraft_doc::cmyk::stored_cmyk_tiff`]). Pixels the image decoder reads come with the
+/// TIFF's ICC profile; the other readers give sRGB pixels, without one. `None` when they can't be
+/// read.
+fn tiff_pixels(bytes: &[u8]) -> Option<(image::DynamicImage, Option<Vec<u8>>)> {
     use image::DynamicImage::ImageRgba8;
     let cms = vectorcraft_color::cms::active();
     if let Some(img) = vectorcraft_doc::cmyk::extra_samples_tiff_rgba(bytes, |c| cms.cmyk_to_srgb(c, false)) {
-        return Some(ImageRgba8(img));
+        return Some((ImageRgba8(img), None));
     }
     if let Some(read) = vectorcraft_doc::cmyk::group3_tiff_rgba(bytes) {
-        return read.ok().map(ImageRgba8);
+        return read.ok().map(|img| (ImageRgba8(img), None));
     }
     decoded(bytes, image::ImageFormat::Tiff).or_else(|| decoded(&vectorcraft_doc::cmyk::stored_cmyk_tiff(bytes, None)?, image::ImageFormat::Tiff))
 }
@@ -1479,5 +1498,46 @@ mod tests {
                 MAX_NESTED_SVG_TEXT >> 20
             )]
         );
+    }
+
+    /// SVG import's pixels through craft-image-codecs (#778) are those the image crate decoded:
+    /// the same layout and samples for PNG, GIF, WebP, TIFF and BMP at each depth the image
+    /// crate writes, and JPEG samples within two steps.
+    #[test]
+    fn decoded_pixels_are_those_the_image_crate_read() {
+        use image::{DynamicImage as D, ImageFormat as F};
+        let rgba =
+            image::RgbaImage::from_fn(9, 5, |x, y| image::Rgba([(x * 29) as u8, (y * 47) as u8, ((x + 2 * y) * 9) as u8, 255 - (x * y * 6) as u8]));
+        let deep = image::ImageBuffer::<image::Rgba<u16>, _>::from_fn(9, 5, |x, y| {
+            image::Rgba([(x * 7_001) as u16, (y * 12_007) as u16, 5, 65_535 - (x * y) as u16])
+        });
+        let images = [
+            D::ImageRgba8(rgba.clone()),
+            D::ImageRgb8(D::ImageRgba8(rgba.clone()).to_rgb8()),
+            D::ImageLuma8(D::ImageRgba8(rgba.clone()).to_luma8()),
+            D::ImageLumaA8(D::ImageRgba8(rgba).to_luma_alpha8()),
+            D::ImageRgba16(deep.clone()),
+            D::ImageLuma16(D::ImageRgba16(deep).to_luma16()),
+        ];
+        let mut checked = 0;
+        for img in &images {
+            for f in [F::Png, F::Gif, F::WebP, F::Tiff, F::Bmp, F::Jpeg] {
+                let mut bytes = Vec::new();
+                if img.write_to(&mut std::io::Cursor::new(&mut bytes), f).is_err() {
+                    continue;
+                }
+                let what = format!("{f:?} {:?}", img.color());
+                let want = image::load_from_memory_with_format(&bytes, f).unwrap();
+                let (got, _) = super::decoded(&bytes, f).unwrap_or_else(|| panic!("{what}"));
+                let tolerance = if f == F::Jpeg { 2 * 257 } else { 0 };
+                if f != F::Jpeg {
+                    assert_eq!(got.color(), want.color(), "{what}");
+                }
+                let worst = got.to_rgba16().as_raw().iter().zip(want.to_rgba16().as_raw()).map(|(a, b)| a.abs_diff(*b)).max();
+                assert!(worst.is_some_and(|w| w <= tolerance), "{what}: {worst:?}");
+                checked += 1;
+            }
+        }
+        assert!(checked >= 20, "{checked}");
     }
 }
