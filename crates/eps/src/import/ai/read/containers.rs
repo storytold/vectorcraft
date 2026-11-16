@@ -120,11 +120,13 @@ impl<'a> Reader<'a> {
         }
         // A group holding only clipping paths (`q … u <path> W n U … Q`) doesn't clip on its own: `u`/`U` don't save
         // the graphics state as `q`/`Q` do, so its paths clip the clipping group around it, as the file's PDF part draws it.
+        // In a compound path (`*u u <path> W n … U *U`, possibly nested in other groups) they are the compound
+        // path's subpaths, as its other grouped paths are: the compound clipping path, their union.
         if matches!(kind, Kind::Group)
             && unread.is_empty()
             && !clips.is_empty()
             && clips.len() == kids.len()
-            && matches!(self.frames.last(), Some(Frame { kind: Kind::Clip, .. }))
+            && (matches!(self.frames.last(), Some(Frame { kind: Kind::Clip, .. })) || self.in_compound())
         {
             for kid in kids {
                 if let Some(parent) = self.frames.last_mut() {
@@ -195,6 +197,18 @@ impl<'a> Reader<'a> {
             self.add(p, opened_hidden || hidden)?;
         }
         Ok(())
+    }
+
+    /// Is the innermost open frame a compound path (`*u`), or a group in one with only groups between them?
+    fn in_compound(&self) -> bool {
+        for f in self.frames.iter().rev() {
+            match f.kind {
+                Kind::Group => {}
+                Kind::Compound => return true,
+                _ => return false,
+            }
+        }
+        false
     }
 
     /// The compound path of `kids`, painted and made transparent as its subpaths say.

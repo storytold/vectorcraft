@@ -1549,6 +1549,42 @@ fn a_clipping_path_alone_in_a_group_clips_its_clipping_group() {
     assert_eq!(fill(&children[1]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
 }
 
+/// Clipping paths grouped in a compound path (`*u u <path> W n … U *U`, possibly nested in other groups) are
+/// the compound path's subpaths, as its other grouped paths are: the compound clipping path, their union, clips its
+/// clipping group, however many there are and wherever in the group it is written.
+#[test]
+fn clipping_paths_grouped_in_a_compound_path_are_its_subpaths() {
+    let square = rect_path(0.0, 0.0, 80.0, 80.0);
+    let (a, b, c) = (rect_path(0.0, 0.0, 10.0, 10.0), rect_path(30.0, 0.0, 40.0, 10.0), rect_path(60.0, 0.0, 70.0, 10.0));
+    let clip = |p: &str| format!("{p}h\nW\nn\n");
+    let bodies = [
+        // One group of them, after the art.
+        format!("0 Ae\nq\n{RED}{square}f\n*u\n0 Ae\nu\n{}{}{}U\n*U\nQ\n", clip(&a), clip(&b), clip(&c)),
+        // Groups in a group, and one path straight in the compound path, before the art.
+        format!("0 Ae\nq\n*u\n0 Ae\nu\n0 Ae\nu\n{}{}U\n0 Ae\nu\n{}U\nU\n*U\n{RED}{square}f\nQ\n", clip(&a), clip(&b), clip(&c)),
+        format!("0 Ae\nq\n*u\n0 Ae\nu\n{}{}U\n{}*U\n{RED}{square}f\nQ\n", clip(&a), clip(&b), clip(&c)),
+    ];
+    for body in &bodies {
+        let doc = read_ok(&layer(body)).doc;
+        let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("{body}: {:?}", art(&doc)[0].kind) };
+        assert_eq!(children.len(), 2, "{body}: {children:?}");
+        let NodeKind::Compound { children: subpaths, .. } = &children[0].kind else { panic!("{body}: {:?}", children[0].kind) };
+        assert_eq!(subpaths.len(), 3, "{body}: {subpaths:?}");
+        assert!(subpaths.iter().all(|p| matches!(p.kind, NodeKind::Path { clipping: true, .. })), "{body}: {subpaths:?}");
+        assert_eq!(fill(&children[1]).color(), Some(Color::rgb(1.0, 0.0, 0.0)), "{body}");
+    }
+    // Hundreds of them, one union: not clipping groups nested past the document's depth limit.
+    let many = format!("0 Ae\nq\n{RED}{square}f\n*u\n0 Ae\nu\n{}U\n*U\nQ\n", clip(&a).repeat(300));
+    let doc = read_ok(&layer(&many)).doc;
+    let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("{:?}", art(&doc)[0].kind) };
+    let NodeKind::Compound { children: subpaths, .. } = &children[0].kind else { panic!("{:?}", children[0].kind) };
+    assert_eq!(subpaths.len(), 300);
+    // A group of clipping paths outside a compound path or a clipping group is read as before: a clipping group.
+    let alone = format!("0 Ae\nu\n{}{}U\n{RED}{square}f\n", clip(&a), clip(&b));
+    let doc = read_ok(&layer(&alone)).doc;
+    assert!(matches!(art(&doc)[0].kind, NodeKind::Group { clip: true, .. }), "{:?}", art(&doc)[0].kind);
+}
+
 /// #1410: a compound path shows its last path's paint, and paths grouped in it stay its paths.
 #[test]
 fn compound_path_takes_its_last_paths_paint() {
