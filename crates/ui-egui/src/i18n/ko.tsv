@@ -943,6 +943,7 @@ digits	Malayalam	말라얄람어
 	Auto Color	자동 색상
 	Automatic	자동
 	Isolate Selected Group	선택한 그룹 격리
+	Isolate Selected Path	선택한 패스 격리
 	Isolate Selected Object	선택한 개체 격리
 	Exit Isolation Mode	격리 모드 종료
 	Make Clipping Mask	클리핑 마스크 만들기
@@ -1949,6 +1950,8 @@ antiAlias	Sharp	날카롭게
 	Show smooth color wheel	부드러운 색상환 표시
 	Show segmented color wheel	분할 색상환 표시
 	Show color bars	색상 막대 표시
+	Show brightness and hue on wheel	색상환에 밝기 및 색조 표시
+	Show saturation and hue on wheel	색상환에 채도 및 색조 표시
 	Add Color Tool	색상 추가 도구
 	Remove Color Tool	색상 제거 도구
 	Remove Color	색상 제거
@@ -2774,6 +2777,10 @@ diagnostics	ui	UI
 	Play Current Selection	현재 선택 항목 재생
 	Save Actions…	액션 저장…
 	Load Actions…	액션 불러오기…
+	Reset Actions	액션 재설정
+	Replace the current actions with the default set?	현재 액션을 기본 세트로 바꾸시겠습니까?
+	Append adds the default set after the current sets instead.	추가를 누르면 대신 기본 세트를 현재 세트 뒤에 추가합니다.
+	Append	추가
 	Plug-in Info	플러그인 정보
 	Plug-in…	플러그인…
 	Points	포인트
@@ -3193,8 +3200,12 @@ mark-style	Japanese	일본식
 	Filter Layers Panel Rows	레이어 패널 행 필터링
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom`은 변경된 설정을 나타냅니다. 프리셋을 다른 이름으로 저장하세요
 @msg	`{key}` must be an array of these names: {_1}	`{key}`은(는) 다음 이름의 배열이어야 합니다: {_1}
-	Search commands and tools	명령 및 도구 검색
-	Search commands and tools…	명령 및 도구 검색…
+	Search commands, tools, panels and effects	명령, 도구, 패널 및 효과 검색
+	Search commands, tools, panels and effects…	명령, 도구, 패널 및 효과 검색…
+	No commands match	일치하는 명령이 없습니다
+	{pos} of {total}: {name}	{total}개 중 {pos}번째: {name}
+@plural	{n} result|{n} results	결과 {n}개
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	결과 {n}개 중 {shown}개. 계속 입력하여 범위를 좁히세요.
 	Recent Commands	최근 명령
 	No recent commands	최근 명령 없음
 	Secondary	보조
@@ -7113,6 +7124,11 @@ breakText	Glyphs	글리프
 	Malayalam	말라얄람어
 	Odia	오리야어
 	Urdu	우르두어
+	Sanskrit	산스크리트어
+	Nepali	네팔어
+	Assamese	아삼어
+	Konkani	코카니어
+	Sindhi	신디어
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 이상 (버전 {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	열린 모든 문서를 PDF로 내보내기
@@ -9345,3 +9361,23 @@ breakText	Glyphs	글리프
 	No objects are selected.	선택한 개체가 없습니다.
 	Open a document to mark its fold lines.	접는 선을 지정하려면 문서를 여세요.
 	Remove Fold Line Role	선 종류 제거
+	Check	검사
+	Check Fold Lines	접는 선 검사
+@msg	No cut lines are in the selection.	선택 영역에 재단선이 없습니다.
+@msg	No cut lines are in the document.	문서에 재단선이 없습니다.
+@msg	The cut lines do not enclose an area.	재단선이 영역을 둘러싸지 않습니다.
+@msg	A cut line ends without meeting another cut line.	재단선이 다른 재단선과 만나지 않고 끝납니다.
+@msg	A gap between cut lines was closed.	재단선 사이의 틈을 닫았습니다.
+@msg	The fold lines are too complex to check.	접는 선이 너무 복잡해서 검사할 수 없습니다.
+@msg	A cut line and a crease lie on top of each other.	재단선과 오시선이 겹쳐 있습니다.
+@msg	No cut lines are among the given objects.	지정한 개체에 재단선이 없습니다.
+@msg	Two fold lines lie on top of each other.	접는 선 두 개가 겹쳐 있습니다.
+@msg	A crease ends inside a panel.	오시선이 패널 안에서 끝납니다.
+@msg	A crease does not divide two panels.	오시선이 두 패널을 나누지 않습니다.
+@msg	A crease lies outside the cut outline, wholly or in part.	오시선의 전체 또는 일부가 재단 윤곽선 밖에 있습니다.
+@msg	The pieces of a hinge are not on one straight line.	힌지의 조각들이 한 직선 위에 있지 않습니다.
+@msg	A gap between cut lines is too narrow to tell apart.	재단선 사이의 틈이 너무 좁아 구별할 수 없습니다.
+@msg	A cut-out area holds other fold lines or another blank.	잘라 낸 영역에 다른 접는 선이나 다른 전개도가 있습니다.
+@msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
+@msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}

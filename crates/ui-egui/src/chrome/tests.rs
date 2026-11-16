@@ -1508,6 +1508,155 @@ fn isolation_bar_navigation_and_back_button_steps_up() {
     assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(g2)));
 }
 
+/// Headless frames of the isolation bar over a 1200 × 700 canvas for one pointer gesture: a press
+/// at `from`, a move to `to` and a release there. `from == to` is a click.
+fn isolation_bar_gesture(app: &mut crate::VectorcraftApp, ctx: &egui::Context, from: egui::Pos2, to: egui::Pos2) {
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
+    let press = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    for events in [vec![egui::Event::PointerMoved(from)], vec![press(from, true)], vec![egui::Event::PointerMoved(to)], vec![press(to, false)]] {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
+            super::isolation_bar(app, ui, screen);
+        });
+        out.textures_delta.clear();
+    }
+}
+
+/// A context for `isolation_bar_gesture`.
+fn isolation_bar_context() -> egui::Context {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    egui_extras::install_image_loaders(&ctx);
+    ctx
+}
+
+/// A click on the isolation bar's empty space leaves nested isolation mode altogether, selects the
+/// isolated object as Exit Isolation Mode does and adds no undo step. A drag across the bar does not
+/// leave it.
+#[test]
+fn isolation_bar_background_click_exits_nested_isolation() {
+    use vectorcraft_doc::NodeId;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (rect(&mut app, 10.0), rect(&mut app, 50.0));
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let g1 = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    let c = rect(&mut app, 90.0);
+    app.run("select.set", json!({"ids": [g1, c]})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    app.run("object.isolate", json!({"id": a})).unwrap();
+    let ctx = isolation_bar_context();
+    let empty = egui::pos2(700.0, 12.0);
+    isolation_bar_gesture(&mut app, &ctx, empty, egui::pos2(900.0, 14.0));
+    assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(a)), "a drag across the bar stays in isolation mode");
+    let steps = app.session.doc().unwrap().history.undo.len();
+    isolation_bar_gesture(&mut app, &ctx, empty, empty);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.isolation, st.selection.objects.clone()), (None, vec![NodeId(a)]), "the click leaves isolation mode");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), steps, "no undo step");
+}
+
+/// While a pattern is edited, a click on the isolation bar's empty space leaves pattern editing
+/// open; the back arrow still ends it as Done does.
+#[test]
+fn isolation_bar_background_click_leaves_pattern_edit_open() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let f = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [f]})).unwrap();
+    app.run("object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
+    assert!(app.session.active().unwrap().doc.pattern_edit.is_some());
+    let ctx = isolation_bar_context();
+    let empty = egui::pos2(500.0, 12.0);
+    isolation_bar_gesture(&mut app, &ctx, empty, empty);
+    let st = app.session.active().unwrap();
+    assert!(st.doc.pattern_edit.is_some() && st.isolation.is_some(), "pattern editing stays open");
+    let back = egui::pos2(15.0, 12.0);
+    isolation_bar_gesture(&mut app, &ctx, back, back);
+    let st = app.session.active().unwrap();
+    assert!(st.doc.pattern_edit.is_none() && st.isolation.is_none(), "the back arrow ends pattern editing");
+}
+
+/// While an opacity mask is edited, a click on the isolation bar's empty space stops editing the
+/// mask as Exit Isolation Mode does: the masked object is selected again.
+#[test]
+fn isolation_bar_background_click_stops_mask_editing() {
+    use vectorcraft_doc::NodeId;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let obj = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 200, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    let m = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [obj, m]})).unwrap();
+    app.run("transparency.makeOpacityMask", json!({})).unwrap();
+    app.run("transparency.editOpacityMask", json!({})).unwrap();
+    assert!(app.session.active().unwrap().doc.mask_edit.is_some());
+    let ctx = isolation_bar_context();
+    let empty = egui::pos2(700.0, 12.0);
+    isolation_bar_gesture(&mut app, &ctx, empty, empty);
+    let st = app.session.active().unwrap();
+    assert!(st.doc.mask_edit.is_none() && st.isolation.is_none(), "mask editing ends");
+    assert_eq!(st.selection.objects, vec![NodeId(obj)]);
+}
+
+/// In symbol editing mode, a click on the isolation bar's empty space leaves the mode, also while a
+/// group inside the symbol's art is isolated, and the symbol keeps the art drawn while editing.
+#[test]
+fn isolation_bar_background_click_leaves_nested_symbol_editing() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+    app.run("symbol.new", json!({"name": "Box"})).unwrap();
+    app.run("symbol.edit", json!({"name": "Box"})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 130, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let g = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.isolate", json!({"id": g})).unwrap();
+    let ctx = isolation_bar_context();
+    let empty = egui::pos2(700.0, 12.0);
+    isolation_bar_gesture(&mut app, &ctx, empty, empty);
+    let st = app.session.active().unwrap();
+    assert!(st.doc.symbol_edit.is_none() && st.isolation.is_none(), "symbol editing mode ends");
+    let symbol = st.doc.symbols.iter().find(|s| s.name == "Box").expect("the symbol");
+    assert!(symbol.art.children().is_some_and(|c| c.len() >= 2), "the edit reached the symbol");
+    // Symbol editing entered while a group was isolated: the click leaves that isolation too.
+    let c = app.run("shape.rectangle", json!({"x": 200, "y": 150, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let d = app.run("shape.rectangle", json!({"x": 250, "y": 150, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [c, d]})).unwrap();
+    let h = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.isolate", json!({"id": h})).unwrap();
+    app.run("symbol.edit", json!({"name": "Box"})).unwrap();
+    assert!(app.session.active().unwrap().doc.symbol_edit.is_some());
+    isolation_bar_gesture(&mut app, &ctx, empty, empty);
+    let st = app.session.active().unwrap();
+    assert!(st.doc.symbol_edit.is_none() && st.isolation.is_none(), "the isolation from before symbol editing ends too");
+}
+
+/// A click on the current object's name at the end of the breadcrumbs, which is not a link, leaves
+/// isolation mode as a click on the bar's empty space does.
+#[test]
+fn isolation_bar_click_on_the_current_name_exits() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.isolate", json!({"id": a})).unwrap();
+    let ctx = isolation_bar_context();
+    // The crumbs are "Layer 1 › <Path>"; the leaf's name starts after the layer crumb and separator.
+    let layer = app.session.active().unwrap().doc.ancestry(vectorcraft_doc::NodeId(a)).unwrap()[0];
+    let layer_name = app.session.active().unwrap().doc.node(layer).unwrap().display_name();
+    let mut start = 0.0;
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let width = |s: &str| ui.painter().layout_no_wrap(s.to_string(), egui::FontId::proportional(12.0), egui::Color32::WHITE).size().x;
+        start = 30.0 + width(&layer_name) + 6.0 + width("›") + 6.0;
+    });
+    out.textures_delta.clear();
+    let leaf = egui::pos2(start + 4.0, 12.0);
+    isolation_bar_gesture(&mut app, &ctx, leaf, leaf);
+    assert_eq!(app.session.active().unwrap().isolation, None);
+}
+
 /// Tab goes to the isolation bar's back button and breadcrumbs and does not stop on the bar
 /// behind them, which only keeps the pointer off the canvas.
 #[test]

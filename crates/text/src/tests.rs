@@ -8,6 +8,7 @@ mod alternates;
 mod axes;
 mod bidi;
 mod bitmaps;
+mod char_list;
 mod colr;
 mod combos;
 mod composers;
