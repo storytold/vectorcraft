@@ -18,6 +18,7 @@ use crate::ps;
 mod brushes;
 mod envelopes;
 mod images;
+mod meshes;
 mod paints;
 mod styles;
 mod symbols;
@@ -28,6 +29,8 @@ mod variables;
 pub(super) use brushes::BRUSHES;
 #[cfg(test)]
 pub(super) use envelopes::ENVELOPES;
+#[cfg(test)]
+pub(super) use meshes::MESHES;
 pub(super) use styles::{LARGE_CANVAS_STYLES, style_links, styled_definitions, styled_objects};
 #[cfg(test)]
 pub(super) use styles::{PANEL_EMPTY, PANEL_STYLES, STYLE_LINKS, WARPED_IMAGES, same_appearance};
@@ -56,7 +59,7 @@ pub(super) const PATTERN_TILES: &str = "pattern fills with more tiles than a fil
 pub(super) const CLIPPING: &str = "clipping groups and clipping layers whose clipping object isn't a path, and the clipping groups inside them, are written as their art cut to that object in the editing data for other apps";
 pub(super) const CLIP_PAINT: &str = "the fills and strokes of clipping paths that a plain fill and line can't draw are written as paths of their own inside the clipping (fills under the clipped art, strokes over it) in the editing data for other apps";
 pub(super) const CLIP_PAINT_MASKS: &str = "the opacity masks of clipping paths whose fills and strokes are written as paths of their own stay on the clipping path, not on those paths, in the editing data for other apps";
-pub(super) const LIVE: &str = "blends, meshes, repeats, placed documents and intertwines are written as their art in the editing data for other apps";
+pub(super) const LIVE: &str = "blends, repeats, placed documents and intertwines are written as their art in the editing data for other apps";
 pub(super) const GRAPHS: &str = "graphs are written as their art, without their data or settings, in the editing data for other apps";
 pub(super) const STROKES: &str = "strokes a plain line can't draw (inside or outside the path, variable width, dots, dashes fitted to corners, gradients, patterns, arrowheads) are written as filled outlines, and brushed strokes as their brush's art, in the editing data for other apps";
 pub(super) const ITEM_TRANSPARENCY: &str =
@@ -302,6 +305,9 @@ pub(super) struct Writer<'a> {
     brush_set: brushes::Brushes,
     /// Brushes may be written; false on a large canvas, where they are left out.
     pub(super) brushes_live: bool,
+    /// Gradient meshes may be written as meshes; false on a large canvas, where they are written as
+    /// their drawn look.
+    pub(super) meshes_live: bool,
     /// The object just written is an envelope's distorted art, which the plugin's `XP` follows
     /// ([`Self::envelope`]).
     deform: bool,
@@ -393,6 +399,7 @@ impl<'a> Writer<'a> {
             wrap_moved: false,
             brush_set: brushes::Brushes::default(),
             brushes_live: true,
+            meshes_live: true,
             deform: false,
             checks_left: crate::import::ENVELOPE_CHECKS,
             objects: 0,
@@ -721,6 +728,11 @@ impl<'a> Writer<'a> {
             return self.styled_object(n, &orig, &name);
         }
         self.effects(n);
+        // A gradient mesh the reader reads as it is; else it is written as its drawn look.
+        let mut mesh = match &n.kind {
+            NodeKind::Mesh(m) => self.mesh_record(m),
+            _ => None,
+        };
         self.state(n.locked, !n.visible);
         let mut xy = Xy::of(n);
         if masked_warp_pieces(n) {
@@ -736,6 +748,11 @@ impl<'a> Writer<'a> {
         let charged = self.charges();
         match &n.kind {
             NodeKind::Layer { .. } => {}
+            NodeKind::Mesh(_) if mesh.is_some() => {
+                if let Some(record) = mesh.take() {
+                    self.write_mesh(&record, xy);
+                }
+            }
             NodeKind::Group { children, clip: true } => self.clip_group(children, xy),
             NodeKind::Group { children, clip: false } => {
                 if self.open_group("u") {
@@ -838,7 +855,8 @@ impl<'a> Writer<'a> {
             }
             NodeKind::Envelope { .. } if self.envelope(n, xy) => {}
             NodeKind::Envelope { .. } => self.drawn_art(n, xy, Some(envelopes::ENVELOPES), true),
-            NodeKind::Blend { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_) | NodeKind::Intertwine { .. } => {
+            NodeKind::Mesh(_) => self.drawn_art(n, xy, Some(meshes::MESHES), true),
+            NodeKind::Blend { .. } | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_) | NodeKind::Intertwine { .. } => {
                 self.drawn_art(n, xy, Some(LIVE), true);
             }
             // Ruler guides are kept in the document's native copy only.
@@ -917,7 +935,8 @@ impl<'a> Writer<'a> {
             self.warn(w);
         }
         let moved = bounds && self.wrap_on_bounds(n, state);
-        if self.nest < MAX_NEST {
+        // A gradient mesh's drawn look is paths, which hold nothing: it is written at any depth.
+        if self.nest < MAX_NEST || matches!(n.kind, NodeKind::Mesh(_)) {
             let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
             self.nest += 1;
             self.drawn += 1;

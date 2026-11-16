@@ -277,6 +277,18 @@ impl<'a> Reader<'a> {
         Ok(())
     }
 
+    /// A gradient mesh's `X#` entry `vals`. In a symbol's art, corners are in the space an image's
+    /// matrix is in there; a mesh there in a file that doesn't say where the canvas is is unread.
+    pub(super) fn mesh_entry(&mut self, vals: &[V]) {
+        let to_doc = self.image_space();
+        if let Some((m, _)) = self.mesh.as_mut() {
+            match to_doc {
+                Some(to_doc) => m.entry(vals, to_doc),
+                None => m.unread = true,
+            }
+        }
+    }
+
     /// `/End X!`: the gradient mesh read, as one object.
     pub(super) fn end_mesh(&mut self) -> Result<(), String> {
         let Some((m, hidden)) = self.mesh.take() else { return Ok(()) };
@@ -351,11 +363,15 @@ impl<'a> Reader<'a> {
     pub(super) fn set_instance(&mut self, i: &Instance) {
         let mut to_doc = self.space();
         // In a pattern's definition a gradient's `Xm` and `Bm` are written y down about the canvas point of art space's
-        // origin, as the file's PDF part draws them; in a symbol's, as the instances in its art are.
+        // origin, as the file's PDF part draws them; in a symbol's, as the instances in its art are, an envelope's
+        // contents' included (which `space` moves alone).
         if (self.pattern.is_some() || self.symbol.is_some())
             && i.has_matrix()
             && let Some(t) = self.template
         {
+            if self.pattern.is_none() && !self.envelope_blocks.is_empty() {
+                to_doc = Affine::IDENTITY;
+            }
             let (cx, cy) = ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0);
             to_doc *= Affine::new([1.0, 0.0, 0.0, -1.0, CANVAS_CENTRE - cx, CANVAS_CENTRE + cy]);
         }

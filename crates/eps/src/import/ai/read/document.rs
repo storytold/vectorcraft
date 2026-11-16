@@ -923,12 +923,17 @@ impl<'a> Reader<'a> {
     }
 
     /// Art space → where the art being read goes: the document, or while a pattern's definition is
-    /// read, the pattern's space (y down). A symbol's definition is written in the symbol's space.
+    /// read, the pattern's space (y down). A symbol's definition is written in the symbol's space,
+    /// except an envelope's contents in its dictionary (its `AIDeformArtKey` block), which are in the
+    /// canvas's space, y down (in the symbol's space in a file without a template box).
     pub(crate) fn space(&mut self) -> Affine {
         if self.pattern.is_some() {
             FLIP
         } else if self.symbol.is_some() {
-            Affine::IDENTITY
+            match self.canvas_origin() {
+                Some(o) if !self.envelope_blocks.is_empty() => Affine::translate(-o.to_vec2()),
+                _ => Affine::IDENTITY,
+            }
         } else {
             self.ensure_space()
         }

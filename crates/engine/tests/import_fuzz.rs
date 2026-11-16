@@ -8124,3 +8124,95 @@ proptest! {
         prop_assert_eq!(paths, 2, "{:?}", notes);
     }
 }
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// A `.ai` whose gradient meshes, as the writer writes them, are damaged: the record's type,
+    /// size, places, color spaces and corners on `%_` lines, its `/Mesh X!` and `/End X!`, and the
+    /// mesh's transparency and name, cut short or edited.
+    #[test]
+    fn ai_written_meshes_never_panic(cut in 0usize..MESHES_FUZZ_CHARS, edits in prop::collection::vec((0usize..MESHES_FUZZ_CHARS, prop::sample::select(vec!['0', '1', '2', '9', '-', '.', 'e', ' ', '\n', '[', ']', '(', ')', '/', '%', '_', 'X', '!', '#', 'N', 'P', 'E'])), 0..12)) {
+        let text = mutate_text(meshes_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        survive("mutated .ai meshes", || Some(vectorcraft_eps::layered_ai(&private, Document::new(300.0, 200.0), vec![], false, false, 1.0).0))?;
+        survive("mutated .ai meshes, trusted", || Some(vectorcraft_eps::layered_ai(&private, Document::new(300.0, 200.0), vec![], false, true, 1.0).0))?;
+    }
+}
+
+/// The range of [`ai_written_meshes_never_panic`]'s cuts and edits: past the end of [`meshes_text`].
+const MESHES_FUZZ_CHARS: usize = 24_000;
+
+/// The editing data VectorCraft writes for a document with two gradient meshes: 2 × 3 patches whose
+/// rows of points are RGB, CMYK and gray, at half opacity and named; a 1 × 1 mesh with a point at
+/// 40% opacity; and an instance of a symbol whose art is a 2 × 1 mesh.
+fn meshes_text() -> &'static str {
+    static TEXT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    TEXT.get_or_init(|| {
+        use vectorcraft_color::Color;
+        use vectorcraft_doc::live::{GradientMesh, MeshPoint, grid_points, smooth_handles};
+        use vectorcraft_doc::{Node, NodeKind};
+        use vectorcraft_geom::Rect;
+        let mesh = |r: Rect, rows: u32, cols: u32, color: &dyn Fn(usize) -> Color| {
+            let pts = grid_points(r, rows, cols);
+            let handles = smooth_handles(rows, cols, &pts);
+            let width = cols as usize + 1;
+            let points = pts
+                .iter()
+                .zip(handles)
+                .enumerate()
+                .map(|(i, (p, h))| MeshPoint { p: *p, color: color(i / width), opacity: 1.0, handles: h })
+                .collect();
+            GradientMesh { rows, cols, points }
+        };
+        let mut doc = Document::new(300.0, 200.0);
+        let layer = doc.layers[0].id;
+        let sheet = mesh(Rect::new(20.0, 20.0, 200.0, 120.0), 2, 3, &|row| match row {
+            0 => Color::rgb(1.0, 0.5, 0.0),
+            1 => Color::cmyk(0.1, 0.6, 0.2, 0.05),
+            _ => Color::gray(0.4),
+        });
+        let mut sheet = Node::new(doc.alloc_id(), NodeKind::Mesh(sheet));
+        (sheet.name, sheet.opacity) = (Some("Sheet".into()), 0.5);
+        doc.insert(Some(layer), usize::MAX, sheet).unwrap();
+        let mut small = mesh(Rect::new(220.0, 20.0, 280.0, 80.0), 1, 1, &|row| Color::rgb(0.0, 0.3, 0.3 + 0.5 * row as f32));
+        small.points[1].opacity = 0.4;
+        let small = Node::new(doc.alloc_id(), NodeKind::Mesh(small));
+        doc.insert(Some(layer), usize::MAX, small).unwrap();
+        let patch = mesh(Rect::new(0.0, 0.0, 40.0, 30.0), 2, 1, &|row| Color::rgb(0.2 * row as f32, 0.6, 0.1));
+        let patch = Node::new(doc.alloc_id(), NodeKind::Mesh(patch));
+        doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Patch".into(), art: std::sync::Arc::new(patch) });
+        let instance =
+            Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Patch".into(), xf: vectorcraft_geom::Affine::translate((20.0, 140.0)) });
+        doc.insert(Some(layer), usize::MAX, instance).unwrap();
+        let out = vectorcraft_eps::export_ai_editing(&doc, &vectorcraft_eps::AiEditingOptions::default()).unwrap();
+        String::from_utf8(out.program).unwrap()
+    })
+}
+
+/// The data [`ai_written_meshes_never_panic`] damages, as it is, opens with both meshes, the symbol
+/// with its mesh and its instance, and the property's cuts and edits reach all of it.
+#[test]
+fn the_written_meshes_fuzz_data_opens_as_meshes() {
+    use vectorcraft_doc::NodeKind;
+    let text = meshes_text();
+    assert!(text.chars().count() < MESHES_FUZZ_CHARS, "{}", text.chars().count());
+    for mark in ["%AI14_BeginSymbol", "%AI5_BeginLayer", "/Mesh X!", "%_[2 3] /Size X#", "%_/DeviceCMYK /CS X#", "/End X!", "/SymbolInstance :"] {
+        assert!(text.replace("\r\n", "\n").contains(mark), "{mark}");
+    }
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(text)].concat();
+    let (d, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(300.0, 200.0), vec![], false, true, 1.0);
+    assert!(layered, "{warnings:?}");
+    let art = d.layers[0].children().unwrap();
+    let kinds: Vec<&str> = art
+        .iter()
+        .map(|n| match n.kind {
+            NodeKind::Mesh(_) => "mesh",
+            NodeKind::SymbolInstance { .. } => "instance",
+            _ => "other",
+        })
+        .collect();
+    assert_eq!(kinds, ["mesh", "mesh", "instance"], "{warnings:?}");
+    let patch = d.symbols.iter().find(|s| s.name == "Patch").map(|s| &s.art.kind);
+    assert!(matches!(patch, Some(NodeKind::Mesh(_))), "{patch:?}");
+}

@@ -42,6 +42,7 @@ pub(crate) use envelope::{GridPoint as EnvelopeGridPoint, PLUGIN as DEFORM_PLUGI
 pub(crate) use envelope::{MAX_ANY as ENVELOPE_MAX_ANY, MAX_SOLID as ENVELOPE_MAX_SOLID};
 pub(crate) use envelope::{WARPED_TYPE_DRAWN, WarpedType};
 pub(crate) use frames::text_frames;
+pub(crate) use mesh::{MAX_SIDE as MAX_MESH_SIDE, mesh_reads};
 pub use obj::{NameEncoding, Names};
 pub(crate) use paint::MAX_STOPS as MAX_GRADIENT_STOPS;
 #[cfg(test)]

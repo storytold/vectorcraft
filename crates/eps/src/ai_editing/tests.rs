@@ -1089,6 +1089,7 @@ fn counted() -> Vec<(&'static str, Document)> {
         ("blend", blend_doc()),
         ("brushes", brushes_document()),
         ("envelopes", envelopes_document()),
+        ("meshes", meshes_document()),
         ("wrap bounds", wrap_bounds_doc()),
     ]
 }
@@ -10780,7 +10781,7 @@ fn envelopes_are_read_back_live() {
 }
 
 /// An envelope that is a symbol's art is written live in the symbol's definition, and the symbol
-/// opens with it as a live envelope.
+/// opens with it as a live envelope, its contents where they were.
 #[test]
 fn an_envelope_in_a_symbol_is_read_back_live() {
     use vectorcraft_doc::live::EnvelopeOptions;
@@ -10797,13 +10798,101 @@ fn an_envelope_in_a_symbol_is_read_back_live() {
         let (back, notes) = crate::ai_alone(&p.data).unwrap();
         let symbol = back.symbols.iter().find(|s| s.name == "Bent").unwrap_or_else(|| panic!("{name}: {:?}", back.symbols));
         let mut envelopes = vec![];
+        let mut boxes = vec![];
         symbol.art.walk(&mut |n| {
-            if let NodeKind::Envelope { kind, .. } = &n.kind {
+            if let NodeKind::Envelope { kind, content, .. } = &n.kind {
                 envelopes.push((**kind).clone());
+                boxes.extend(content.iter().map(|c| c.geometric_bounds()));
             }
         });
         assert!(matches!(envelopes.as_slice(), [k] if same_envelope_kind(&kind, k)), "{name}: {envelopes:?} {notes:?}");
+        let near = |a: Option<Rect>, b: Rect| {
+            a.is_some_and(|a| (a.x0 - b.x0).abs() + (a.y0 - b.y0).abs() + (a.x1 - b.x1).abs() + (a.y1 - b.y1).abs() < 1e-6)
+        };
+        let want = [Rect::new(40.0, 20.0, 100.0, 80.0), Rect::new(100.0, 20.0, 160.0, 80.0)];
+        assert!(boxes.len() == 2 && boxes.iter().zip(want).all(|(a, b)| near(*a, b)), "{name}: {boxes:?}");
     }
+}
+
+/// A gradient-filled path in the contents of an envelope in a symbol's art opens with its gradient
+/// where it was on the path.
+#[test]
+fn a_gradient_in_an_envelopes_contents_in_a_symbol_keeps_its_place() {
+    use vectorcraft_color::gradient::GradientGeom;
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let mut doc = Document::new(200.0, 100.0);
+    let kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] };
+    let mut art = envelope_node(&mut doc, kind, 50.0, false, EnvelopeOptions::NEW);
+    let geom = GradientGeom { start: (50.0, 30.0).into(), end: (90.0, 70.0).into(), aspect: 1.0, focal: None };
+    let fill = gradient_paint(sunset(), Some(geom), None);
+    let shaded = painted(&mut doc, shapes::rectangle(Rect::new(40.0, 20.0, 100.0, 80.0)), vec![AppearanceItem::Fill(FillLayer::new(fill))]);
+    if let NodeKind::Envelope { content, .. } = &mut art.kind {
+        content[0] = Arc::new(shaded);
+    }
+    doc.symbols.push(Symbol { dynamic: false, name: "Bent".into(), art: Arc::new(art) });
+    let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Bent".into(), xf: Affine::translate((10.0, 5.0)) });
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, instance).unwrap();
+    let back = read_back(&doc);
+    let symbol = back.symbols.iter().find(|s| s.name == "Bent").unwrap_or_else(|| panic!("{:?}", back.symbols));
+    let mut geoms = vec![];
+    symbol.art.walk(&mut |n| {
+        if let NodeKind::Envelope { content, .. } = &n.kind {
+            for c in content {
+                if let Paint::Gradient(g) = c.appearance.fill_paint() {
+                    geoms.push(g.geom);
+                }
+            }
+        }
+    });
+    let near = |a: vectorcraft_geom::Point, b: vectorcraft_geom::Point| (a - b).hypot() < 1e-6;
+    assert!(matches!(geoms.as_slice(), [Some(g)] if near(g.start, geom.start) && near(g.end, geom.end)), "{geoms:?}, want {geom:?}");
+}
+
+/// The contents of an envelope in a symbol's art are written in the canvas's space with y down:
+/// about the canvas point of art space's origin.
+#[test]
+fn an_envelopes_contents_in_a_symbol_are_written_in_the_canvas_space() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let mut doc = Document::new(200.0, 100.0);
+    let kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] };
+    let art = envelope_node(&mut doc, kind, 50.0, false, EnvelopeOptions::NEW);
+    doc.symbols.push(Symbol { dynamic: false, name: "Bent".into(), art: Arc::new(art) });
+    let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Bent".into(), xf: Affine::translate((10.0, 5.0)) });
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, instance).unwrap();
+    let p = program(&doc);
+    let t: Vec<f64> = p.lines().find_map(|l| l.strip_prefix("%AI3_TemplateBox: ")).unwrap().split(' ').map(|v| v.parse().unwrap()).collect();
+    let (ox, oy) = (f64::from(CANVAS_SIZE) / 2.0 - t[0], f64::from(CANVAS_SIZE) / 2.0 + t[1]);
+    let def = &p[p.find("%AI14_BeginSymbol\n(Bent)\n").unwrap()..];
+    let block = &def[def.find("%_X=\n").unwrap()..];
+    let moves: Vec<&str> = block.lines().filter_map(|l| l.trim_start_matches("%_").strip_suffix(" m")).collect();
+    // The red square's points are the rectangle 40 20 to 100 80, in the symbol's space.
+    let xs: Vec<f64> = moves.first().unwrap().split(' ').map(|v| v.parse().unwrap()).collect();
+    assert!([40.0, 100.0].iter().any(|x| (xs[0] - (x + ox)).abs() < 1e-6), "{xs:?}, origin {ox} {oy}");
+    assert!([20.0, 80.0].iter().any(|y| (xs[1] - (y + oy)).abs() < 1e-6), "{xs:?}, origin {ox} {oy}");
+}
+
+/// The grid of an envelope in a symbol's art is written in the space a gradient mesh's corners are
+/// written in there: about the canvas point of art space's origin, y up.
+#[test]
+fn an_envelopes_grid_in_a_symbol_is_written_about_the_canvas_point_of_the_origin() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let mut doc = Document::new(200.0, 100.0);
+    let kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] };
+    let art = envelope_node(&mut doc, kind, 50.0, false, EnvelopeOptions::NEW);
+    doc.symbols.push(Symbol { dynamic: false, name: "Bent".into(), art: Arc::new(art) });
+    let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Bent".into(), xf: Affine::translate((10.0, 5.0)) });
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, instance).unwrap();
+    let p = program(&doc);
+    let t: Vec<f64> = p.lines().find_map(|l| l.strip_prefix("%AI3_TemplateBox: ")).unwrap().split(' ').map(|v| v.parse().unwrap()).collect();
+    let (ox, oy) = (f64::from(CANVAS_SIZE) / 2.0 - t[0], f64::from(CANVAS_SIZE) / 2.0 + t[1]);
+    let def = &p[p.find("%AI14_BeginSymbol\n(Bent)\n").unwrap()..];
+    let first = def.lines().find(|l| l.ends_with(" /N X#")).unwrap();
+    // The grid's top left point, at 30 10.
+    let want = format!("[0 1 {} {} ", ps::num(30.0 - ox), ps::num(oy - 10.0));
+    assert!(first.trim_start_matches("%_").starts_with(&want), "{first}, want {want}");
 }
 
 /// An envelope with an opacity mask comes back live with its mask, and the plugin's `XP` follows
@@ -13003,4 +13092,579 @@ fn a_cut_clipping_object_without_room_for_its_mask_gets_no_carrier() {
             assert_eq!(carriers, [true], "{text}");
         }
     }
+}
+
+// ---------- gradient meshes ----------
+
+use vectorcraft_doc::live::{GradientMesh, H_DOWN, H_RIGHT, MeshPoint, grid_points, smooth_handles};
+
+/// A mesh over `r` of `rows` × `cols` patches: its points on a grid with smooth handles, each
+/// colored `color(row, col)` and opaque.
+fn grid_mesh(r: Rect, rows: u32, cols: u32, color: impl Fn(usize, usize) -> Color) -> GradientMesh {
+    let pts = grid_points(r, rows, cols);
+    let handles = smooth_handles(rows, cols, &pts);
+    let width = cols as usize + 1;
+    let points = pts
+        .iter()
+        .zip(handles)
+        .enumerate()
+        .map(|(i, (p, h))| MeshPoint { p: *p, color: color(i / width, i % width), opacity: 1.0, handles: h })
+        .collect();
+    GradientMesh { rows, cols, points }
+}
+
+fn mesh_node(doc: &mut Document, m: GradientMesh) -> Node {
+    Node::new(doc.alloc_id(), NodeKind::Mesh(m))
+}
+
+/// The gradient meshes in `doc`'s layers, in order (groups and clipping groups included).
+fn meshes_in(doc: &Document) -> Vec<Arc<Node>> {
+    fn walk(nodes: &[Arc<Node>], out: &mut Vec<Arc<Node>>) {
+        for n in nodes {
+            if matches!(n.kind, NodeKind::Mesh(_)) {
+                out.push(n.clone());
+            } else if let Some(c) = n.children() {
+                walk(c, out);
+            }
+        }
+    }
+    let mut out = vec![];
+    walk(&doc.layers, &mut out);
+    out
+}
+
+fn mesh_of(n: &Node) -> &GradientMesh {
+    match &n.kind {
+        NodeKind::Mesh(m) => m,
+        _ => panic!("not a mesh: {n:?}"),
+    }
+}
+
+/// A 400 × 400 document with gradient meshes: `Sheet`, 2 × 3 patches over 20 20 200 120, its top row
+/// of points RGB, its middle row CMYK and its bottom row gray, its middle point moved with handles of
+/// its own, its top left point's handle to the right bent up, two points part transparent, at 60%
+/// in Multiply, followed by a path at 80%; a hidden, locked 1 × 1 gray mesh `Shy` in a group `Box`;
+/// `Masked`, 1 × 2 with an inverted, unlinked opacity mask, knockout shape, isolation and knockout;
+/// and a mesh in a clipping group.
+fn meshes_document() -> Document {
+    let mut doc = Document::new(400.0, 400.0);
+    let layer = doc.layers[0].id;
+    let mut sheet = grid_mesh(Rect::new(20.0, 20.0, 200.0, 120.0), 2, 3, |r, c| match r {
+        0 => Color::rgb(1.0, 0.5 * c as f32 / 3.0, 0.0),
+        1 => Color::cmyk(0.1 * c as f32, 0.6, 0.2, 0.05),
+        _ => Color::gray(0.2 + 0.2 * c as f32),
+    });
+    let middle = &mut sheet.points[5];
+    middle.p += vectorcraft_geom::Vec2::new(7.0, -5.0);
+    middle.handles[H_RIGHT] = vectorcraft_geom::Vec2::new(20.0, 8.0);
+    middle.handles[H_DOWN] = vectorcraft_geom::Vec2::new(-4.0, 12.0);
+    sheet.points[0].handles[H_RIGHT] = vectorcraft_geom::Vec2::new(15.0, -10.0);
+    sheet.points[2].opacity = 0.4;
+    sheet.points[11].opacity = 0.0;
+    let mut sheet = mesh_node(&mut doc, sheet);
+    (sheet.name, sheet.opacity, sheet.blend) = (Some("Sheet".into()), 0.6, BlendMode::Multiply);
+    doc.insert(Some(layer), usize::MAX, sheet).unwrap();
+    let mut after = Node::path(
+        doc.alloc_id(),
+        shapes::rectangle(Rect::new(240.0, 20.0, 260.0, 40.0)),
+        Appearance::basic(solid(Color::rgb(0.0, 1.0, 0.0)), Paint::None, 0.0),
+    );
+    after.opacity = 0.8;
+    doc.insert(Some(layer), usize::MAX, after).unwrap();
+    let mut shy = mesh_node(&mut doc, grid_mesh(Rect::new(20.0, 150.0, 80.0, 190.0), 1, 1, |_, c| Color::gray(0.25 + 0.5 * c as f32)));
+    (shy.name, shy.visible, shy.locked) = (Some("Shy".into()), false, true);
+    let mut group = Node::group(doc.alloc_id(), vec![Arc::new(shy)]);
+    group.name = Some("Box".into());
+    doc.insert(Some(layer), usize::MAX, group).unwrap();
+    let mut masked = mesh_node(&mut doc, grid_mesh(Rect::new(120.0, 150.0, 220.0, 190.0), 1, 2, |r, _| Color::rgb(0.0, 0.3, 0.3 + 0.5 * r as f32)));
+    masked.name = Some("Masked".into());
+    // Knockout shape is a mesh's own; isolation and knockout are a group's.
+    (masked.knockout_shape, masked.isolate, masked.knockout) = (true, true, vectorcraft_doc::Knockout::On);
+    let mask_art = Node::path(
+        doc.alloc_id(),
+        shapes::rectangle(Rect::new(120.0, 150.0, 170.0, 190.0)),
+        Appearance::basic(solid(Color::WHITE), Paint::None, 0.0),
+    );
+    masked.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(mask_art), clip: true, invert: true, disabled: false, linked: false }));
+    doc.insert(Some(layer), usize::MAX, masked).unwrap();
+    let clip = Node::path(doc.alloc_id(), shapes::ellipse(Rect::new(250.0, 150.0, 350.0, 250.0)), Appearance::default());
+    let inside = mesh_node(&mut doc, grid_mesh(Rect::new(250.0, 150.0, 350.0, 250.0), 2, 2, |r, c| Color::rgb(0.5 * r as f32, 0.5 * c as f32, 1.0)));
+    let clipped = Node::new(doc.alloc_id(), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(inside)], clip: true });
+    doc.insert(Some(layer), usize::MAX, clipped).unwrap();
+    doc
+}
+
+/// How far a coordinate, color channel or opacity written to 4 decimals may move: half the last
+/// decimal, and a little for the arithmetic.
+const MESH_ROUNDING: f64 = 5e-5 + 1e-9;
+
+/// `read` is `want` as written, checked without the writer's own test: the same grid; each point
+/// within [`MESH_ROUNDING`] of its place along each axis; each handle that points into the grid
+/// ending within it of where `want`'s ends, and each handle on the mesh's outside edge read as
+/// none (the reader gives those none, and they draw nothing); each color in the same model with
+/// each channel within it of `want`'s clamped to 0 to 1; each opacity within it.
+fn assert_mesh_exact(read: &GradientMesh, want: &GradientMesh, what: &str) {
+    use vectorcraft_doc::live::H_LEFT;
+    use vectorcraft_doc::live::H_UP;
+    assert_eq!((read.rows, read.cols, read.points.len()), (want.rows, want.cols, want.points.len()), "{what}: the grid");
+    let (rows, cols) = (want.rows as usize, want.cols as usize);
+    let close = |a: f64, b: f64| (a - b).abs() <= MESH_ROUNDING;
+    let channels = |c: &Color| -> (u8, Vec<f64>) {
+        match *c {
+            Color::Gray { k } => (0, vec![f64::from(k)]),
+            Color::Rgb { r, g, b } => (1, vec![f64::from(r), f64::from(g), f64::from(b)]),
+            Color::Cmyk { c, m, y, k } => (2, vec![f64::from(c), f64::from(m), f64::from(y), f64::from(k)]),
+            Color::Lab { .. } => (3, vec![]),
+        }
+    };
+    for (i, (a, b)) in read.points.iter().zip(&want.points).enumerate() {
+        let (r, c) = (i / (cols + 1), i % (cols + 1));
+        assert!(close(a.p.x, b.p.x) && close(a.p.y, b.p.y), "{what}: point {i} at {:?}, want {:?}", a.p, b.p);
+        for (h, inside) in [(H_RIGHT, c < cols), (H_LEFT, c > 0), (H_DOWN, r < rows), (H_UP, r > 0)] {
+            if inside {
+                let (ea, eb) = (a.p + a.handles[h], b.p + b.handles[h]);
+                assert!(close(ea.x, eb.x) && close(ea.y, eb.y), "{what}: point {i}'s handle {h} ends at {ea:?}, want {eb:?}");
+            } else {
+                assert_eq!(a.handles[h], vectorcraft_geom::Vec2::ZERO, "{what}: point {i}'s outside handle {h}");
+            }
+        }
+        let ((ma, ca), (mb, cb)) = (channels(&a.color), channels(&b.color));
+        assert_eq!(ma, mb, "{what}: point {i}'s color model: {:?}, want {:?}", a.color, b.color);
+        assert!(ca.iter().zip(&cb).all(|(x, y)| close(*x, y.clamp(0.0, 1.0))), "{what}: point {i}'s color {:?}, want {:?}", a.color, b.color);
+        assert!(close(f64::from(a.opacity), f64::from(b.opacity.clamp(0.0, 1.0))), "{what}: point {i}'s opacity {}, want {}", a.opacity, b.opacity);
+    }
+}
+
+/// Each mesh of `doc` comes back from the editing data alone as a mesh: the same grid, points,
+/// handles, colors in their own models and opacities ([`assert_mesh_exact`]), name, transparency
+/// (opacity, blending mode and knockout shape; isolation and knockout are a group's and are written
+/// off, as for a path), lock and hidden state, and opacity mask (its flags and its art's kind and
+/// box).
+fn assert_meshes_read_back(doc: &Document) {
+    let back = read_back(doc);
+    let (ours, theirs) = (meshes_in(doc), meshes_in(&back));
+    assert_eq!(theirs.len(), ours.len(), "{:#?}", back.layers[0]);
+    for (a, b) in ours.iter().zip(&theirs) {
+        assert_mesh_exact(mesh_of(b), mesh_of(a), &format!("{:?}", a.name));
+        assert_eq!((&b.name, b.opacity, b.blend, b.visible, b.locked), (&a.name, a.opacity, a.blend, a.visible, a.locked));
+        // Isolation and knockout are written off (`Xy`); a mesh read keeps a new object's.
+        let fresh = Node::new(b.id, NodeKind::Mesh(mesh_of(b).clone()));
+        assert_eq!((b.knockout_shape, b.isolate, b.knockout), (a.knockout_shape, fresh.isolate, fresh.knockout), "{:?}'s knockout", a.name);
+        match (&a.extras().mask, &b.extras().mask) {
+            (None, None) => {}
+            (Some(ma), Some(mb)) => {
+                assert_eq!((mb.clip, mb.invert, mb.disabled, mb.linked), (ma.clip, ma.invert, ma.disabled, ma.linked), "{:?}'s mask flags", a.name);
+                assert_eq!(std::mem::discriminant(&mb.art.kind), std::mem::discriminant(&ma.art.kind), "{:?}'s mask art", a.name);
+                let (ba, bb) = (ma.art.geometric_bounds().unwrap(), mb.art.geometric_bounds().unwrap());
+                assert!(
+                    (ba.x0 - bb.x0).abs() < 1e-3 && (ba.y0 - bb.y0).abs() < 1e-3 && (ba.x1 - bb.x1).abs() < 1e-3 && (ba.y1 - bb.y1).abs() < 1e-3,
+                    "{:?}'s mask art box {bb:?}, want {ba:?}",
+                    a.name
+                );
+            }
+            (want, got) => panic!("{:?}'s opacity mask: {} read back, want {}", a.name, got.is_some(), want.is_some()),
+        }
+    }
+}
+
+#[test]
+fn meshes_are_read_back_as_they_are() {
+    let doc = meshes_document();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::MESHES || w == writer::LIVE), "{:?}", out.warnings);
+    assert_eq!(program(&doc).matches("/Mesh X!\n").count(), 4);
+    assert_meshes_read_back(&doc);
+    let back = read_back(&doc);
+    let art = back.layers[0].children().unwrap();
+    assert_eq!((art[1].opacity, matches!(art[1].kind, NodeKind::Path { .. })), (0.8, true), "the path after the mesh keeps its own opacity");
+    // The moved point keeps its place and handles exactly (to the 4 decimals written).
+    let sheet = mesh_of(&art[0]);
+    assert!((sheet.points[5].p - vectorcraft_geom::Point::new(87.0, 65.0)).hypot() < 1e-4, "{:?}", sheet.points[5].p);
+    assert!((sheet.points[5].handles[H_RIGHT] - vectorcraft_geom::Vec2::new(20.0, 8.0)).hypot() < 1e-4);
+}
+
+/// A mesh is `/Mesh X!`, its version (2: corners with an opacity), type and size, `/Data`, each
+/// patch row by row with its place, the color space where it changes and four corners (from the
+/// top left point down, right and up: color, opacity, point, the handle towards the next corner and
+/// the one before it, in art space), `/End X!`; its transparency before it, its name after it, then
+/// `0 0 Xd` and `6 () XW`. Gray is written as lightness.
+#[test]
+fn meshes_are_written_in_their_form() {
+    let doc = meshes_document();
+    let text = program(&doc);
+    let start = text.find("/Mesh X!\n").unwrap();
+    let end = start + text[start..].find("/End X!\n").unwrap() + "/End X!\n".len();
+    let sheet = &text[start..end];
+    assert!(
+        sheet.starts_with("/Mesh X!\n%_2 /Version X#\n%_/Cartesian /Type X#\n%_[2 3] /Size X#\n%_/Data X#\n%_[0 0] /P X#\n%_/DeviceRGB /CS X#\n"),
+        "{sheet}"
+    );
+    let places: Vec<&str> = sheet.lines().filter(|l| l.ends_with(" /P X#")).collect();
+    assert_eq!(places, ["%_[0 0] /P X#", "%_[0 1] /P X#", "%_[0 2] /P X#", "%_[1 0] /P X#", "%_[1 1] /P X#", "%_[1 2] /P X#"]);
+    // The top left point, at 20 20 (art 20 -20): its handle down a third of the way to the next row,
+    // its handle to the right bent up.
+    let corners: Vec<&str> = sheet.lines().filter(|l| l.ends_with(" /N X#")).collect();
+    assert_eq!(corners.len(), 24);
+    assert_eq!(corners[0], "%_[1 0 0 1 20 -20 20 -36.6667 1 35 -10 1] /N X#");
+    // The color space only where it changes.
+    let spaces: Vec<&str> = sheet.lines().filter(|l| l.ends_with(" /CS X#")).collect();
+    assert!(spaces.windows(2).all(|w| w[0] != w[1]), "{spaces:?}");
+    assert!(spaces.contains(&"%_/DeviceCMYK /CS X#") && spaces.contains(&"%_/DeviceGray /CS X#"), "{spaces:?}");
+    // Gray 0.2 of ink is 0.8 of lightness: the bottom left point, the second corner of the second row's first patch.
+    assert!(corners[13].starts_with("%_[0.8 1 20 -120 "), "{}", corners[13]);
+    // Only what the reader reads: no `/R` entries.
+    assert!(!sheet.contains("/R X#"), "{sheet}");
+    // Its transparency before it; its name, then its state block, after it.
+    assert!(text[..start].ends_with("0 XR\n1 0.6 0 0 0 Xy\n"), "{}", &text[start.saturating_sub(80)..start]);
+    let rest = &text[end..];
+    assert!(rest.starts_with("%_/ArtDictionary :\n%_/XMLUID : (Sheet) ; (AI10_ArtUID) ,\n%_;\n%_\n0 0 Xd\n6 () XW\n"), "{}", &rest[..200]);
+}
+
+/// A document with meshes is written as the same bytes again, and what the reader reads back is
+/// written with the same layers.
+#[test]
+fn meshes_write_the_same_bytes_again() {
+    let doc = meshes_document();
+    let first = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(first.program, export_ai_editing(&doc, &opts()).unwrap().program);
+    let again = String::from_utf8(export_ai_editing(&read_back(&doc), &opts()).unwrap().program).unwrap();
+    let first = String::from_utf8(first.program).unwrap();
+    let (again, first) = (mesh_layer_lines(&again), mesh_layer_lines(&first));
+    let differ = again.iter().zip(&first).enumerate().find(|(_, (a, b))| a != b);
+    assert_eq!(differ, None, "the first line that differs");
+    assert_eq!(again.len(), first.len());
+}
+
+/// The lines of the layers, `%AI5_BeginLayer` to the end.
+fn mesh_layer_lines(program: &str) -> Vec<&str> {
+    program.lines().skip_while(|l| !l.starts_with("%AI5_BeginLayer")).collect()
+}
+
+/// A document holding one mesh made by `make`, on a 400 × 400 page.
+fn mesh_document(make: impl FnOnce(&mut Document) -> Node) -> Document {
+    let mut doc = Document::new(400.0, 400.0);
+    let layer = doc.layers[0].id;
+    let n = make(&mut doc);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    doc
+}
+
+/// Whether `doc` holds a gradient mesh anywhere: on its layers (opacity masks' art included), in a
+/// symbol's art or in a pattern's tile.
+fn holds_a_mesh(doc: &Document) -> bool {
+    fn any(n: &Node) -> bool {
+        matches!(n.kind, NodeKind::Mesh(_))
+            || n.extras().mask.as_ref().is_some_and(|m| any(&m.art))
+            || n.children().is_some_and(|c| c.iter().any(|c| any(c)))
+    }
+    doc.layers.iter().any(|n| any(n)) || doc.symbols.iter().any(|s| any(&s.art)) || doc.patterns.iter().any(|p| p.art.iter().any(|n| any(n)))
+}
+
+/// The box and color of each path with a solid fill in `nodes` and what they hold.
+fn filled_paths(nodes: &[Arc<Node>], out: &mut Vec<(Rect, Color)>) {
+    for n in nodes {
+        if let NodeKind::Path { .. } = n.kind {
+            for item in &n.appearance.items {
+                if let AppearanceItem::Fill(f) = item
+                    && let Paint::Solid { color, .. } = &f.paint
+                    && let Some(b) = n.geometric_bounds()
+                {
+                    out.push((b, *color));
+                }
+            }
+        } else if let Some(c) = n.children() {
+            filled_paths(c, out);
+        }
+    }
+}
+
+/// Meshes the reader wouldn't read back as they are, and meshes in places where the writer doesn't
+/// write them as meshes, are written as their drawn look, with a warning: a point in a Lab color;
+/// more than 128 rows (129); more than 128 columns (129); a mesh whose points all lie in one place
+/// (the reader takes its rows for columns); a folded mesh, whose patches turn different ways; a mesh
+/// in art cut to a clipping object; and a mesh on a large canvas. The drawn look reads back as
+/// filled paths in more than one color covering the mesh's box, and no mesh.
+#[test]
+fn meshes_the_reader_cant_read_are_written_as_their_drawn_look() {
+    let r = Rect::new(20.0, 20.0, 120.0, 120.0);
+    let mut cases: Vec<(&str, Document)> = vec![
+        (
+            "Lab point",
+            mesh_document(|doc| {
+                let mut m = grid_mesh(r, 1, 1, |_, _| Color::rgb(0.2, 0.4, 0.6));
+                m.points[3].color = MINT;
+                mesh_node(doc, m)
+            }),
+        ),
+        (
+            "129 rows",
+            mesh_document(|doc| mesh_node(doc, grid_mesh(Rect::new(20.0, 20.0, 120.0, 300.0), 129, 1, |r, _| Color::gray(r as f32 / 129.0)))),
+        ),
+        (
+            "129 columns",
+            mesh_document(|doc| mesh_node(doc, grid_mesh(Rect::new(20.0, 20.0, 300.0, 120.0), 1, 129, |_, c| Color::gray(c as f32 / 129.0)))),
+        ),
+        (
+            "folded",
+            mesh_document(|doc| {
+                let mut m = grid_mesh(r, 1, 2, |_, c| Color::rgb(0.5 * c as f32, 0.0, 0.0));
+                // The right column's points fold back over the left patch; the edges are straight.
+                for row in 0..2 {
+                    m.points[row * 3 + 2].p = vectorcraft_geom::Point::new(40.0, m.points[row * 3 + 2].p.y);
+                }
+                for p in &mut m.points {
+                    p.handles = [vectorcraft_geom::Vec2::ZERO; 4];
+                }
+                mesh_node(doc, m)
+            }),
+        ),
+        (
+            "collapsed",
+            mesh_document(|doc| {
+                let mut m = grid_mesh(r, 2, 2, |r, c| Color::rgb(0.5 * r as f32, 0.5 * c as f32, 0.0));
+                for p in &mut m.points {
+                    (p.p, p.handles) = (vectorcraft_geom::Point::new(50.0, 50.0), [vectorcraft_geom::Vec2::ZERO; 4]);
+                }
+                mesh_node(doc, m)
+            }),
+        ),
+        (
+            "art cut to a clipping object",
+            mesh_document(|doc| {
+                let square = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(20.0, 20.0, 80.0, 80.0)), Appearance::default());
+                let clipper = Node::group(doc.alloc_id(), vec![Arc::new(square)]);
+                let m = mesh_node(doc, grid_mesh(r, 1, 1, |_, c| Color::rgb(c as f32, 0.0, 0.0)));
+                Node::new(doc.alloc_id(), NodeKind::Group { children: vec![Arc::new(clipper), Arc::new(m)], clip: true })
+            }),
+        ),
+    ];
+    let mut large = Document::new(20000.0, 400.0);
+    let layer = large.layers[0].id;
+    let m = mesh_node(&mut large, grid_mesh(Rect::new(1000.0, 20.0, 1600.0, 320.0), 2, 2, |r, c| Color::rgb(0.5 * r as f32, 0.5 * c as f32, 0.5)));
+    large.insert(Some(layer), usize::MAX, m).unwrap();
+    cases.push(("large canvas", large));
+    let mut failed = vec![];
+    for (name, doc) in &cases {
+        let out = export_ai_editing(doc, &opts()).unwrap();
+        let warned = out.warnings.iter().any(|w| w == writer::MESHES);
+        let written = String::from_utf8(out.program).unwrap();
+        let back = read_back(doc);
+        let mut paths = vec![];
+        filled_paths(&back.layers, &mut paths);
+        let mut want = mesh_of(&meshes_in(doc)[0]).bounds().unwrap();
+        if *name == "art cut to a clipping object" {
+            // Its drawn look is cut to the clipping object.
+            want = want.intersect(Rect::new(20.0, 20.0, 80.0, 80.0));
+        }
+        let got = paths.iter().fold(None, |acc: Option<Rect>, (b, _)| Some(acc.map_or(*b, |a| a.union(*b))));
+        let colors = paths.iter().map(|(_, c)| format!("{c:?}")).collect::<std::collections::HashSet<_>>().len();
+        // The collapsed mesh has no area to cover.
+        let covers = *name == "collapsed"
+            || got.is_some_and(|g| {
+                (g.x0 - want.x0).abs() < 0.5 && (g.y0 - want.y0).abs() < 0.5 && (g.x1 - want.x1).abs() < 0.5 && (g.y1 - want.y1).abs() < 0.5
+            });
+        if !(warned && !written.contains("/Mesh X!") && !holds_a_mesh(&back) && covers && (*name == "collapsed" || colors > 1)) {
+            failed.push(format!("{name}: warned {warned}, box {got:?} want {want:?}, {colors} colors"));
+        }
+    }
+    assert!(failed.is_empty(), "written as meshes, without a warning or not as their drawn look: {failed:#?}");
+}
+
+/// A reflected mesh, mirrored across or along, is written as a mesh with its columns in reverse
+/// order, without a warning, and reads back as that mesh: each row's points from the last to the
+/// first, with their handles to the right and left swapped.
+#[test]
+fn a_reflected_mesh_is_written_with_its_columns_reversed() {
+    use vectorcraft_doc::live::{H_LEFT, H_RIGHT};
+    let r = Rect::new(20.0, 20.0, 120.0, 120.0);
+    for (name, mirror) in [("across", Affine::new([-1.0, 0.0, 0.0, 1.0, 140.0, 0.0])), ("along", Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 140.0]))] {
+        let mut m = grid_mesh(r, 2, 3, |r, c| Color::rgb(0.5 * r as f32, c as f32 / 3.0, 0.2));
+        m.points[5].p += vectorcraft_geom::Vec2::new(4.0, -3.0);
+        m.points[5].opacity = 0.5;
+        m.transform(mirror);
+        let doc = mesh_document(|doc| mesh_node(doc, m.clone()));
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(!out.warnings.iter().any(|w| w == writer::MESHES), "{name}: {:?}", out.warnings);
+        let back = meshes_in(&read_back(&doc));
+        assert_eq!(back.len(), 1, "{name}: {back:#?}");
+        let width = m.cols as usize + 1;
+        let mut want = m.clone();
+        want.points = m
+            .points
+            .chunks(width)
+            .flat_map(|row| {
+                row.iter().rev().map(|p| {
+                    let mut p = p.clone();
+                    p.handles.swap(H_RIGHT, H_LEFT);
+                    p
+                })
+            })
+            .collect();
+        assert_mesh_exact(mesh_of(&back[0]), &want, name);
+    }
+}
+
+/// Meshes in pattern tiles, a symbol's pattern tile among them, are written as their drawn look with
+/// a warning: the tile reads back with filled paths and no mesh.
+#[test]
+fn meshes_in_pattern_tiles_are_written_as_their_drawn_look() {
+    let tile = |doc: &mut Document| {
+        let m = mesh_node(doc, grid_mesh(Rect::new(0.0, 0.0, 60.0, 40.0), 1, 1, |_, c| Color::rgb(0.5 * c as f32, 0.2, 0.5)));
+        doc.patterns.push(vectorcraft_doc::PatternDef {
+            tile: Rect::new(0.0, 0.0, 60.0, 40.0),
+            ..vectorcraft_doc::PatternDef::new("Patches", vec![Arc::new(m)])
+        });
+        Node::path(
+            doc.alloc_id(),
+            shapes::rectangle(Rect::new(20.0, 100.0, 180.0, 180.0)),
+            Appearance::basic(Paint::Pattern { pattern: "Patches".into(), xf: Affine::IDENTITY }, Paint::None, 0.0),
+        )
+    };
+    let on_layer = mesh_document(tile);
+    let in_symbol = mesh_document(|doc| {
+        let art = tile(doc);
+        doc.symbols.push(Symbol { dynamic: false, name: "Tiled".into(), art: Arc::new(art) });
+        instance(doc, "Tiled", Affine::translate((20.0, 20.0)))
+    });
+    for (name, doc) in [("on a layer", &on_layer), ("in a symbol", &in_symbol)] {
+        let out = export_ai_editing(doc, &opts()).unwrap();
+        assert!(out.warnings.iter().any(|w| w == writer::MESHES), "{name}: {:?}", out.warnings);
+        let written = String::from_utf8(out.program).unwrap();
+        assert!(!written.contains("/Mesh X!"), "{name}");
+        // The reader doesn't read a symbol whose art has a pattern fill whole, whatever the tile
+        // holds: the drawn look is checked in the program there.
+        if name == "in a symbol" {
+            assert!(written.contains("%AI3_BeginPattern: (Patches)"), "{name}");
+            continue;
+        }
+        let back = read_back(doc);
+        assert!(!holds_a_mesh(&back), "{name}");
+        let tile = back.patterns.iter().find(|p| p.name == "Patches").unwrap();
+        let mut paths = vec![];
+        filled_paths(&tile.art, &mut paths);
+        assert!(!paths.is_empty(), "{name}: {:#?}", tile.art);
+    }
+}
+
+/// Meshes in an opacity mask's art, a symbol's art, an opacity mask in a symbol's art, and a
+/// symbol's art in a document of several artboards (which moves the canvas's center) are written
+/// as meshes and come back as meshes.
+#[test]
+fn meshes_in_masks_and_symbols_are_read_back() {
+    let r = Rect::new(0.0, 0.0, 60.0, 40.0);
+    let colors = |r: usize, c: usize| Color::rgb(0.5 * c as f32, 0.2, 0.5 * r as f32);
+    let square_with = |doc: &mut Document, fill: Paint| {
+        Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(20.0, 100.0, 180.0, 180.0)), Appearance::basic(fill, Paint::None, 0.0))
+    };
+    let mask_of = |n: &Node| n.extras().mask.as_ref().unwrap().art.clone();
+    // Opacity mask.
+    let doc = mesh_document(|doc| {
+        let m = mesh_node(doc, grid_mesh(Rect::new(20.0, 100.0, 180.0, 180.0), 1, 2, colors));
+        let mut n = square_with(doc, solid(Color::BLACK));
+        n.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(m), clip: false, invert: false, disabled: false, linked: true }));
+        n
+    });
+    assert!(!export_ai_editing(&doc, &opts()).unwrap().warnings.iter().any(|w| w == writer::MESHES));
+    let back = read_back(&doc);
+    assert_mesh_exact(mesh_of(&mask_of(&back.layers[0].children().unwrap()[0])), mesh_of(&mask_of(&doc.layers[0].children().unwrap()[0])), "mask");
+    // Symbol, on one artboard and with a second artboard far to the right and below.
+    for boards in [1, 2] {
+        let mut doc = mesh_document(|doc| {
+            let m = mesh_node(doc, grid_mesh(r, 2, 1, colors));
+            doc.symbols.push(Symbol { dynamic: false, name: "Patch".into(), art: Arc::new(m) });
+            instance(doc, "Patch", Affine::translate((20.0, 20.0)))
+        });
+        if boards == 2 {
+            let id = doc.artboards[0].id + 1;
+            doc.artboards.push(Artboard { id, rect: Rect::new(3000.0, 2000.0, 3400.0, 2600.0), ..doc.artboards[0].clone() });
+        }
+        assert!(!export_ai_editing(&doc, &opts()).unwrap().warnings.iter().any(|w| w == writer::MESHES));
+        let back = read_back(&doc);
+        let sym = back.symbols.iter().find(|s| s.name == "Patch").unwrap();
+        assert_mesh_exact(mesh_of(&sym.art), mesh_of(&doc.symbols[0].art), &format!("symbol, {boards} artboards"));
+    }
+    // An opacity mask in a symbol's art.
+    let doc = mesh_document(|doc| {
+        let m = mesh_node(doc, grid_mesh(r, 1, 2, colors));
+        let mut n = square_with(doc, solid(Color::BLACK));
+        n.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(m), clip: false, invert: false, disabled: false, linked: true }));
+        doc.symbols.push(Symbol { dynamic: false, name: "Masked".into(), art: Arc::new(n) });
+        instance(doc, "Masked", Affine::translate((20.0, 20.0)))
+    });
+    assert!(!export_ai_editing(&doc, &opts()).unwrap().warnings.iter().any(|w| w == writer::MESHES));
+    let back = read_back(&doc);
+    let sym = back.symbols.iter().find(|s| s.name == "Masked").unwrap();
+    assert_mesh_exact(mesh_of(&mask_of(&sym.art)), mesh_of(&mask_of(&doc.symbols[0].art)), "mask in a symbol");
+}
+
+/// In a symbol's art a mesh's corners are written about the canvas point of art space's origin, y
+/// up, as an image's matrix there is (the template box's center is the canvas's).
+#[test]
+fn a_mesh_in_a_symbol_is_written_about_the_canvas_point_of_the_origin() {
+    let doc = mesh_document(|doc| {
+        let m = mesh_node(doc, grid_mesh(Rect::new(0.0, 0.0, 60.0, 40.0), 2, 1, |r, c| Color::rgb(0.5 * c as f32, 0.2, 0.5 * r as f32)));
+        doc.symbols.push(Symbol { dynamic: false, name: "Patch".into(), art: Arc::new(m) });
+        instance(doc, "Patch", Affine::translate((20.0, 20.0)))
+    });
+    let p = program(&doc);
+    let t: Vec<f64> = p.lines().find_map(|l| l.strip_prefix("%AI3_TemplateBox: ")).unwrap().split(' ').map(|v| v.parse().unwrap()).collect();
+    let (ox, oy) = (f64::from(CANVAS_SIZE) / 2.0 - t[0], f64::from(CANVAS_SIZE) / 2.0 + t[1]);
+    let def = &p[p.find("%AI14_BeginSymbol\n(Patch)\n").unwrap()..];
+    let first = def.lines().find(|l| l.ends_with(" /N X#")).unwrap();
+    // The top left point, at 0 0: its handle down a third of the way to the next row, its handle
+    // to the right a third of the way to the next column.
+    let want = format!(
+        "%_[0 0.2 0 1 {} {} {} {} 1 {} {} 1] /N X#",
+        ps::num(-ox),
+        ps::num(oy),
+        ps::num(-ox),
+        ps::num(oy - 20.0 / 3.0),
+        ps::num(20.0 - ox),
+        ps::num(oy)
+    );
+    assert_eq!(first, want);
+}
+
+/// A mesh eight levels down in art written in place of symbol instances (where deeper art is left
+/// out) is written as a mesh: it holds no objects of its own. A folded one there is written as its
+/// drawn look, whose paths hold nothing either.
+#[test]
+fn a_mesh_eight_levels_down_is_written_as_a_mesh() {
+    let nested = |fold: bool| {
+        mesh_document(|doc| {
+            let mut m = grid_mesh(Rect::new(0.0, 0.0, 60.0, 40.0), 1, 2, |_, c| Color::rgb(0.5 * c as f32, 0.0, 0.0));
+            if fold {
+                // The right column's points fold back over the left patch.
+                for row in 0..2 {
+                    m.points[row * 3 + 2].p.x = 10.0;
+                }
+            }
+            let m = mesh_node(doc, m);
+            doc.symbols.push(Symbol { dynamic: false, name: "S0".into(), art: Arc::new(m) });
+            for i in 1..8 {
+                let mut inner = instance(doc, &format!("S{}", i - 1), Affine::IDENTITY);
+                inner.isolate = true;
+                doc.symbols.push(Symbol { dynamic: false, name: format!("S{i}"), art: Arc::new(inner) });
+            }
+            let mut top = instance(doc, "S7", Affine::translate((20.0, 20.0)));
+            top.isolate = true;
+            top
+        })
+    };
+    let folded = nested(true);
+    let out = export_ai_editing(&folded, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::MESHES), "{:?}", out.warnings);
+    let back = read_back(&folded);
+    let mut paths = vec![];
+    filled_paths(&back.layers, &mut paths);
+    assert!(!holds_a_mesh(&back) && paths.len() > 1, "{:#?}", back.layers);
+    let doc = nested(false);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::MESHES), "{:?}", out.warnings);
+    assert!(mesh_layer_lines(std::str::from_utf8(&out.program).unwrap()).contains(&"/Mesh X!"));
+    let back = meshes_in(&read_back(&doc));
+    let mut want = mesh_of(&doc.symbols[0].art).clone();
+    want.transform(Affine::translate((20.0, 20.0)));
+    assert_eq!(back.len(), 1, "{back:#?}");
+    assert_mesh_exact(mesh_of(&back[0]), &want, "eight levels down");
 }

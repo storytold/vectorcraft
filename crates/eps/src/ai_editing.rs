@@ -120,7 +120,9 @@
 //!   and opacity mask and a state block as a group's with its opacity and blending mode (an
 //!   instance with isolation, knockout or knockout shape of its own is written as its art). The
 //!   definitions are at most the reader's 4,096. In a symbol's art, an instance's matrix and
-//!   a gradient's take the art to the canvas's space turned y up about art space's origin there.
+//!   a gradient's take the art to the canvas's space turned y up about art space's origin there,
+//!   and a gradient mesh's corners are in that space; an envelope's contents in its dictionary are
+//!   in the canvas's space with y down.
 //! - Art styles, as the reader reads them (`style.rs`, `read/ops.rs`): a path, compound path or
 //!   group with live effects or linked to a graphic style is written as its drawn look (`u`, its
 //!   vector art as its geometry effects leave it, without shadows, glows or feathers, `U`, its
@@ -147,6 +149,13 @@
 //!   reader reads back as the same graph ([`crate::ai_graph`]) is written as its group between
 //!   `%_Gs`, its functional records and `%_GS`, each series' group tagged `Go` right after its end;
 //!   any other graph, and a graph with art left out, as its art, with a warning.
+//! - Gradient meshes, as the reader reads them (`mesh.rs`): `/Mesh X!`, `2 /Version`, the grid's type
+//!   and size, `/Data` (the reader passes over the version and `/Data`), and each patch's place, color
+//!   space and four corners (color, opacity, point and handles) as `X#` entries on `%_` lines,
+//!   `/End X!`; the mesh's transparency before it, its name and opacity mask after it
+//!   (`writer::meshes`). A mesh is written as it is only when the reader reads it back so, when every
+//!   patch turns the same way (a reflected mesh's columns are written in reverse order), and outside
+//!   pattern tiles, art cut to a clipping object and a large canvas.
 //!
 //! Lines end in CR LF. Strings are written in UTF-8. Art space is ruler space: y up, its origin at
 //! the first artboard's top-left corner. On the canvas ([`CANVAS_SIZE`] points square, y down) the
@@ -175,7 +184,9 @@
 //! and instances of
 //! symbols past 4,096 as their art (symbol art past [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects
 //! in all left out), instances of symbols the document doesn't have as empty groups, symbols' 9-slice
-//! guides, export types and dynamic type left out, live objects (placed documents included) as their art,
+//! guides, export types and dynamic type left out, gradient meshes the reader wouldn't read back as
+//! they are, folded meshes, meshes in pattern tiles and in art cut to a clipping object and every mesh
+//! on a large canvas as their drawn look, other live objects (placed documents included) as their art,
 //! strokes a plain line can't draw and the object's art style doesn't hold
 //! as their filled outlines, several fills or strokes as a group of a path for each, freeform
 //! gradient swatches, gradient swatches of more than 256 stops, swatches of patterns written as
@@ -318,6 +329,7 @@ fn export_held(source: &Document, o: &AiEditingOptions, max_objects: usize, keep
     // On a large canvas the layers' symbol instances are written as their art.
     w.symbols_live = scale == 1.0;
     w.brushes_live = scale == 1.0;
+    w.meshes_live = scale == 1.0;
     w.symbol_doc = symbol_doc;
     w.max_objects = max_objects;
     w.wraps_held = wraps_held;

@@ -97,7 +97,9 @@
 //!   have is the object's own appearance, not a link.
 //!
 //! - Symbols: `%AI14_BeginSymbol` (or `%AI10_`), `(name)`, `0 A 0 Xw 0 Ae`, the art (in the
-//!   symbol's space, y down), a dictionary whose `AI13PatternRegistrationType` is the registration
+//!   symbol's space, y down; an image's matrix and a gradient mesh's corners in the canvas's space
+//!   turned y up about art space's origin there, an envelope's contents in its dictionary in the
+//!   canvas's space, y down), a dictionary whose `AI13PatternRegistrationType` is the registration
 //!   point (1 to 9, from the top left, row by row), `%AI10_EndSymbol`; each is read by a reader of
 //!   its own into the document's symbols. `%AI24_BeginSymbolList` (or `%AI10_`) lists their names
 //!   in the Symbols panel's order. An instance: `/SymbolInstance : (name) /SymbolRef , a b c d tx

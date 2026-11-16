@@ -226,10 +226,7 @@ impl<'a> Reader<'a> {
                 }
                 ("X!", Some("End")) if self.mesh.is_some() => return self.end_mesh(),
                 ("X#", _) => {
-                    let to_doc = self.space();
-                    if let Some((m, _)) = self.mesh.as_mut() {
-                        m.entry(&vals, to_doc);
-                    }
+                    self.mesh_entry(&vals);
                     return Ok(());
                 }
                 _ if self.mesh.is_some() => return Ok(()),
