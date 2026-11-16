@@ -1577,6 +1577,7 @@
 	Connect Data Points	ડેટા પોઇન્ટ જોડો
 	Edge-to-Edge Lines	કિનારીથી કિનારી સુધી રેખાઓ
 	Draw Filled Lines	ભરેલી રેખાઓ દોરો
+	Line Width	રેખાની પહોળાઈ
 	Tick Values	ટિક મૂલ્યો
 	Override Calculated Values	ગણતરી કરેલાં મૂલ્યો બદલો
 	Divisions	વિભાગો
@@ -2734,6 +2735,8 @@
 	Polygon	બહુકોણ
 	Polygon Properties:	બહુકોણના ગુણધર્મો:
 	Polygon Tool	બહુકોણ ટૂલ
+	Polygonal Lasso	બહુકોણીય લાસો
+	Polygonal Lasso Tool	બહુકોણીય લાસો ટૂલ
 	Portrait	પોટ્રેટ
 	Portuguese	પોર્ટુગીઝ
 	Position	સ્થિતિ
@@ -2992,6 +2995,22 @@
 	Remove Effect	ઇફેક્ટ દૂર કરો
 	Remove Effects	ઇફેક્ટ્સ દૂર કરો
 	Remove Gaps	ગેપ દૂર કરો
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	સામાન્ય સ્પર્શરેખાઓ…
+	Common Tangents	સામાન્ય સ્પર્શરેખાઓ
+	Tangents	સ્પર્શરેખાઓ
+	Centerline	કેન્દ્ર રેખા
+	External	બાહ્ય
+	Internal	આંતરિક
+@msg	select two closed paths	બે બંધ પાથ પસંદ કરો
+@msg	a selected path is open	પસંદ કરેલો એક પાથ ખુલ્લો છે
+@msg	a selected path is not convex	પસંદ કરેલો એક પાથ બહિર્ગોળ નથી
+@msg	a selected path has no area	પસંદ કરેલા એક પાથનું કોઈ ક્ષેત્રફળ નથી
+@msg	a selected path has more than 10000 segments	પસંદ કરેલા એક પાથમાં 10000 થી વધુ ખંડ છે
+@msg	the two paths have the same outline	બંને પાથની રૂપરેખા સમાન છે
+@msg	One path lies inside the other, so they have no common tangents	એક પાથ બીજાની અંદર છે, તેથી તેમની કોઈ સામાન્ય સ્પર્શરેખા નથી
+@msg	The paths overlap, so they have no internal tangents	પાથ એકબીજા પર ચઢેલા છે, તેથી તેમની કોઈ આંતરિક સ્પર્શરેખા નથી
+@msg	One path lies inside the other, so they have no internal tangents	એક પાથ બીજાની અંદર છે, તેથી તેમની કોઈ આંતરિક સ્પર્શરેખા નથી
 	Remove Guide	ગાઇડ દૂર કરો
 	Remove Item	આઇટમ દૂર કરો
 	Remove JavaScript File	JavaScript ફાઇલ દૂર કરો
@@ -3588,6 +3607,9 @@
 	Show all plates	બધી પ્લેટ બતાવો
 	Show axis	અક્ષ બતાવો
 	Show color bars	રંગ બાર બતાવો
+	Add Color Tool	રંગ ઉમેરો સાધન
+	Remove Color Tool	રંગ દૂર કરો સાધન
+	Remove Color	રંગ દૂર કરો
 	Find the selected colors in the artwork	પસંદ કરેલા રંગો આર્ટવર્કમાં શોધો
 	Show handles when multiple anchors are selected	બહુવિધ એન્કર પસંદ હોય ત્યારે હૅન્ડલ બતાવો
 	Show in Folder	ફોલ્ડરમાં બતાવો

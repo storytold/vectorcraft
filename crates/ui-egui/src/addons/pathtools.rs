@@ -31,6 +31,10 @@ pub const ID: &str = "anchorInspector";
 const COUNT: &str = "anchor-inspector-count";
 /// The tools' options dialog.
 pub const KIND: &str = "pathToolOptions";
+/// Common Tangents' command, whose menu item opens the command dialog with a Preview.
+pub const COMMON_TANGENTS: &str = "addon.pathtools.commonTangents";
+/// The kinds of tangent Common Tangents' `tangents` picks, and their labels.
+pub const TANGENT_KINDS: &[(&str, &str)] = &[("All", "all"), ("External", "external"), ("Internal", "internal")];
 /// The close modes, as `addon.pathtools.close` names them, and their labels.
 const CLOSE_MODES: [(&str, &str); 3] = [("handles", "Keep Handles"), ("straight", "Straight"), ("smooth", "Smooth")];
 const LABEL_W: f32 = 64.0;
@@ -72,6 +76,7 @@ pub fn menu() -> Vec<Item> {
         Item::Cmd("Expand Dashes into Paths", "addon.pathtools.expandDashes", json!({})),
         Item::Cmd("Convert to Parametric Shape", "addon.pathtools.shape.convert", json!({})),
         Item::Cmd("Tangent Circle…", tangent_circle::COMMAND, Value::Null),
+        Item::Cmd("Common Tangents…", COMMON_TANGENTS, json!({ "tangents": "all", "centerline": false })),
     ]
 }
 

@@ -365,7 +365,7 @@ impl SnapKey {
 }
 
 /// The part of the document the window shows (none headless: all of it).
-fn visible(cx: &ToolContext) -> Option<Rect> {
+pub(super) fn visible(cx: &ToolContext) -> Option<Rect> {
     let s = cx.screen?;
     let (w, h) = s.size;
     Some(Rect::from_points(s.at(0.0, 0.0), s.at(w, h)).union_pt(s.at(w, 0.0)).union_pt(s.at(0.0, h)))
@@ -444,6 +444,35 @@ impl DrawSnap {
             self.gather(cx, SnapKey::of(cx, &[]));
         }
         self.snap(cx, p, from)
+    }
+
+    /// How far from `p` the nearest Smart Guides point (an anchor or a center) or crossing of the
+    /// targets lies, when one is within the snapping tolerance: none otherwise, and none while
+    /// pixels or the grid snap instead.
+    pub(crate) fn point_within_reach(&self, cx: &ToolContext, p: Point) -> Option<f64> {
+        let Some((_, PointSnap { targets: Some((t, tol)), .. })) = &self.targets else { return None };
+        if !cx.smart_guides {
+            return None;
+        }
+        let tol = cx.tol(*tol);
+        let point = t.nearest_point(p, tol).map(|(q, _)| q.distance(p));
+        let crossing = t.crossing(p, tol).map(|q| q.distance(p));
+        match (point, crossing) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
+    }
+
+    /// Whether `q`, where a point at `p` snapped to, is the nearest Smart Guides point (an anchor or
+    /// a center) or the nearest crossing of the targets within the snapping tolerance of `p`.
+    pub(crate) fn snapped_to_point(&self, cx: &ToolContext, p: Point, q: Point) -> bool {
+        let Some((_, PointSnap { targets: Some((t, tol)), .. })) = &self.targets else { return false };
+        if !cx.smart_guides {
+            return false;
+        }
+        let tol = cx.tol(*tol);
+        let at = |a: Point| a.distance(q) <= 1e-9 * tol.max(1.0);
+        t.nearest_point(p, tol).is_some_and(|(a, _)| at(a)) || t.crossing(p, tol).is_some_and(at)
     }
 
     /// The guides of the last snap.

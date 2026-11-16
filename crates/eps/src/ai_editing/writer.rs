@@ -1231,17 +1231,19 @@ impl<'a> Writer<'a> {
     }
 
     /// A container's members, the first one's outline cutting the others: its fills painted
-    /// behind them (cut to the region outside too), its strokes over them, not cut by it. Its text
-    /// wrap options are written once, under them all ([`Self::wrap_carrier`]), and not with its fills
-    /// or strokes, which may be cut or left out.
+    /// behind them (cut to the region outside too), its strokes over them, not cut by it. Its name,
+    /// variables and text wrap options are written once, under them all, with its opacity mask
+    /// ([`Self::object_carrier`]), and not with its fills or strokes, which may be cut or left out
+    /// and keep only the opacity mask they are drawn through.
     fn clip_contents(&mut self, children: &[Arc<Node>]) {
         let Some((first, rest)) = children.split_first() else { return };
-        self.wrap_carrier(first);
+        self.object_carrier(first);
         // Nothing to clip by hides the clipped art.
         let Some((outline, rule)) = vectorcraft_effects::clip_outline(first) else { return };
         let mut paint = first.clip_paint();
         for part in [&mut paint.fill, &mut paint.stroke].into_iter().flatten() {
             part.extras_mut().wrap = None;
+            part.name = None;
         }
         let outer = self.clip.clone();
         let region = self.cut(&PathData::from_bezpath(&outline), rule);
@@ -1258,26 +1260,46 @@ impl<'a> Writer<'a> {
         }
     }
 
-    /// The text wrap options of clipping object `first`, when it has them, on an unpainted path
-    /// (a compound path for several subpaths) of the outline area type wraps around
-    /// ([`vectorcraft_doc::text::wrap_outline`]), uncut, locked and hidden as `first` is. Nothing is
-    /// written for an empty outline or without room for the path ([`Self::take_objects`]).
-    fn wrap_carrier(&mut self, first: &Node) {
-        let Some(wrap) = first.extras().wrap.filter(|_| self.drawn == 0 && !self.in_look) else { return };
-        let outline = vectorcraft_doc::text::wrap_outline(first);
-        if outline.is_empty() {
+    /// The dictionary of clipping object `first` ([`Self::dictionary`]: its name, visibility
+    /// variables, text wrap options and opacity mask), when it has one, on an unpainted path (a
+    /// compound path for several subpaths), uncut, locked and hidden as `first` is. The path is the
+    /// outline area type wraps around when `first` has text wrap options
+    /// ([`vectorcraft_doc::text::wrap_outline`]); else, and without the options when that outline is
+    /// empty, `first`'s clipping outline, or the rectangle of its bounds when it has none. Nothing
+    /// is written without such a path, or without room for the path ([`Self::take_objects`]), or
+    /// when the dictionary would be empty (an opacity mask left out with nothing else in it).
+    fn object_carrier(&mut self, first: &Node) {
+        let points = |p: &PathData| p.subpaths.iter().any(|sp| !sp.anchors.is_empty());
+        let wrap = first.extras().wrap.filter(|_| self.drawn == 0 && !self.in_look);
+        let wrap_outline = wrap.map(|_| vectorcraft_doc::text::wrap_outline(first)).filter(points);
+        let named = first.name.as_deref().is_some_and(|s| !s.is_empty());
+        let bound = !self.bound_variables(first, false, false).is_empty();
+        if wrap_outline.is_none() && !named && !bound && first.extras().mask.is_none() {
             return;
         }
+        let wrapped = wrap_outline.is_some();
+        let outline = wrap_outline
+            .or_else(|| vectorcraft_effects::clip_outline(first).map(|(o, _)| PathData::from_bezpath(&o)).filter(points))
+            .or_else(|| finite_bounds(first).map(shapes::rectangle));
+        let Some(outline) = outline else { return };
+        let (start, state, gs, objects) = (self.body.len(), self.state, self.gs, self.objects);
         self.state(first.locked, !first.visible);
-        let start = self.body.len();
         self.plain_object(&outline, FillRule::NonZero, None, None, Xy::of(first).object());
-        if self.body.len() == start {
+        if self.objects == objects {
+            // Without the path, its lock and hidden lines are taken out too, and no dictionary follows.
+            self.body.truncate(start);
+            self.state = state;
             return;
         }
         self.block_end = usize::MAX;
-        self.body.push_str("%_/ArtDictionary :\n");
-        self.text_wrap(wrap);
-        self.body.push_str("%_;\n%_\n");
+        let path_end = self.body.len();
+        // Text wrap options go only on the outline area type wraps around.
+        self.wrap_moved = !wrapped;
+        self.dictionary(first);
+        if self.body.len() == path_end {
+            self.body.truncate(start);
+            (self.state, self.gs, self.objects) = (state, gs, objects);
+        }
     }
 
     /// `path` (filled by `rule`) cut to the region the art is cut to, as a non-zero path.

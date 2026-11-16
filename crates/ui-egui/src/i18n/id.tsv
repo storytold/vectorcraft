@@ -1340,6 +1340,8 @@ lighting	Light	Cahaya
 	Lasso Tool	Alat lasso
 	Enclosing Lasso Tool	Alat laso pengeliling
 	Enclosing Lasso	Laso pengeliling
+	Polygonal Lasso Tool	Alat laso poligonal
+	Polygonal Lasso	Laso poligonal
 	Lasso	Lasso
 	Line Cut Tool	Alat potong garis
 	Line Graph Tool	Alat grafik garis
@@ -2735,6 +2737,9 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Tampilkan roda warna halus
 	Show segmented color wheel	Tampilkan roda warna bersegmen
 	Show color bars	Tampilkan bilah warna
+	Add Color Tool	Alat Tambah Warna
+	Remove Color Tool	Alat Hapus Warna
+	Remove Color	Hapus Warna
 	Find the selected colors in the artwork	Temukan warna yang dipilih di karya seni
 	Harmony Rules	Aturan harmoni
 	Keep this row's colors (exclude)	Pertahankan warna baris ini (kecualikan)
@@ -3412,6 +3417,7 @@ theme	Appearance	Tampilan
 	Connect Data Points	Hubungkan titik data
 	Edge-to-Edge Lines	Garis dari tepi ke tepi
 	Draw Filled Lines	Gambar garis terisi
+	Line Width	Lebar garis
 	Tick Values	Nilai tanda skala
 	Override Calculated Values	Timpa nilai terhitung
 	Divisions	Pembagian
@@ -6771,6 +6777,22 @@ breakText	Glyphs	Glif
 	Remove Gaps	Hapus celah
 @msg	that makes too many pieces (at most 100000): make the dashes longer	itu menghasilkan terlalu banyak potongan (paling banyak 100000): perpanjang garisnya
 @msg	select paths, or segments, to divide	pilih jalur atau segmen yang akan dibagi
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Garis Singgung Persekutuan…
+	Common Tangents	Garis Singgung Persekutuan
+	Tangents	Garis Singgung
+	Centerline	Garis Tengah
+	External	Luar
+	Internal	Dalam
+@msg	select two closed paths	pilih dua jalur tertutup
+@msg	a selected path is open	jalur yang dipilih terbuka
+@msg	a selected path is not convex	jalur yang dipilih tidak cembung
+@msg	a selected path has no area	jalur yang dipilih tidak memiliki luas
+@msg	a selected path has more than 10000 segments	jalur yang dipilih memiliki lebih dari 10000 segmen
+@msg	the two paths have the same outline	kedua jalur memiliki garis luar yang sama
+@msg	One path lies inside the other, so they have no common tangents	Satu jalur berada di dalam jalur lainnya, sehingga tidak ada garis singgung persekutuan
+@msg	The paths overlap, so they have no internal tangents	Jalur-jalur saling tumpang tindih, sehingga tidak ada garis singgung dalam
+@msg	One path lies inside the other, so they have no internal tangents	Satu jalur berada di dalam jalur lainnya, sehingga tidak ada garis singgung dalam
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Perluas garis putus menjadi jalur
 @msg	select paths with dashed strokes to expand	pilih jalur dengan stroke putus-putus yang akan diperluas

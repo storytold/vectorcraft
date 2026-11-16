@@ -45,6 +45,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "addon.packaging.setRoleSwatch",
     "addon.pathtools.addPoints",
     "addon.pathtools.close",
+    "addon.pathtools.commonTangents",
     "addon.pathtools.corner",
     "addon.pathtools.cornerRemove",
     "addon.pathtools.cornerSet",

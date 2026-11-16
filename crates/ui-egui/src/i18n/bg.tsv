@@ -1405,6 +1405,7 @@ font-technology	Variable	Променливи
 	Connect Data Points	Свързване на точките от данни
 	Edge-to-Edge Lines	Линии от край до край
 	Draw Filled Lines	Чертане на запълнени линии
+	Line Width	Ширина на линията
 	Tick Values	Стойности на отметките
 	Override Calculated Values	Замяна на изчислените стойности
 	Divisions	Деления
@@ -1503,6 +1504,9 @@ font-technology	Variable	Променливи
 	Show smooth color wheel	Показване на плавно цветово колело
 	Show segmented color wheel	Показване на сегментирано цветово колело
 	Show color bars	Показване на цветни ленти
+	Add Color Tool	Инструмент „Добавяне на цвят“
+	Remove Color Tool	Инструмент „Премахване на цвят“
+	Remove Color	Премахване на цвят
 	Find the selected colors in the artwork	Намиране на избраните цветове в илюстрацията
 	Harmony Sets	Набори от хармонии
 	Height	Височина
@@ -1835,6 +1839,8 @@ font-technology	Variable	Променливи
 	Lasso Tool	Инструмент „Ласо“
 	Enclosing Lasso Tool	Инструмент „Обхващащо ласо“
 	Enclosing Lasso	Обхващащо ласо
+	Polygonal Lasso Tool	Инструмент „Многоъгълно ласо“
+	Polygonal Lasso	Многоъгълно ласо
 	Last Effect: {name}	Посл. ефект: {name}
 	Last Effect: {}	Посл. ефект: {}
 	Last Effect…	Посл. ефект…
@@ -6756,6 +6762,22 @@ breakText	Glyphs	Глифи
 	Remove Gaps	Премахване на разстоянията
 @msg	that makes too many pieces (at most 100000): make the dashes longer	така се получават твърде много части (най-много 100000): удължете тиретата
 @msg	select paths, or segments, to divide	изберете пътища или сегменти за разделяне
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Общи допирателни…
+	Common Tangents	Общи допирателни
+	Tangents	Допирателни
+	Centerline	Централна линия
+	External	Външни
+	Internal	Вътрешни
+@msg	select two closed paths	изберете два затворени пътя
+@msg	a selected path is open	избран път е отворен
+@msg	a selected path is not convex	избран път не е изпъкнал
+@msg	a selected path has no area	избран път няма площ
+@msg	a selected path has more than 10000 segments	избран път има повече от 10000 сегмента
+@msg	the two paths have the same outline	двата пътя имат еднакъв контур
+@msg	One path lies inside the other, so they have no common tangents	Единият път е вътре в другия, затова нямат общи допирателни
+@msg	The paths overlap, so they have no internal tangents	Пътищата се припокриват, затова нямат вътрешни допирателни
+@msg	One path lies inside the other, so they have no internal tangents	Единият път е вътре в другия, затова нямат вътрешни допирателни
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Разширяване на тиретата в пътища
 @msg	select paths with dashed strokes to expand	изберете пътища с прекъснат щрих за разширяване
