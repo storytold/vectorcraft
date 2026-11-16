@@ -275,7 +275,7 @@ pub fn read_set(text: &str, name: &str) -> Result<ActionSet, String> {
 }
 
 /// `name`, else `name 2`, `name 3` … : the first that no set in `sets` has.
-fn free_set_name(sets: &[ActionSet], name: &str) -> String {
+pub(super) fn free_set_name(sets: &[ActionSet], name: &str) -> String {
     let taken = |n: &str| sets.iter().any(|s| s.name == n);
     if !taken(name) {
         return name.to_string();
