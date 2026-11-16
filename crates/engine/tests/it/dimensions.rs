@@ -1805,6 +1805,134 @@ fn linear_picks_show_and_snap_to_smart_guides() {
     assert_eq!(text(&s, id), "60.02 pt");
 }
 
+/// A shape with a curve at each top corner, for the tests of where Linear picks land.
+const CURVED_TOP: &str = "M130 358 C185 358 230 315 230 260 L425 260 C490 260 541 305 541 358 L541 440 L130 440 Z";
+
+/// Where the next Linear click lands (the last marker the overlays draw, and its size) and the
+/// labels shown, with the pointer at (`x`, `y`).
+fn linear_marker(s: &mut Session, view: ViewInfo, x: f64, y: f64) -> (Option<(vectorcraft_geom::Point, f32)>, Vec<String>) {
+    use vectorcraft_engine::tools::Overlay;
+    s.pointer(&PointerEvent::new(PointerKind::Move, x, y), view).unwrap();
+    let o = s.overlays(view);
+    let at = o.iter().filter_map(|o| if let Overlay::Anchor { p, size, .. } = o { Some((*p, *size)) } else { None }).next_back();
+    let labels = o.iter().filter_map(|o| if let Overlay::Label { text, .. } = o { Some(text.clone()) } else { None }).collect();
+    (at, labels)
+}
+
+/// A plain click at (`x`, `y`): the pointer moves there, then presses and releases.
+fn linear_click(s: &mut Session, view: ViewInfo, x: f64, y: f64) {
+    for kind in [PointerKind::Move, PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, x, y), view).unwrap();
+    }
+}
+
+/// Linear picks land on the anchors and paths of the art with an "anchor" or "path" label, and on
+/// the ends and lines of dimensions already drawn, from as far as on the art's anchors: zoomed in,
+/// a dimension started a few pixels from the end of another starts exactly at that end.
+#[test]
+fn linear_picks_land_on_anchors_paths_and_drawn_dimensions() {
+    let (plain, zoomed) = (ViewInfo::default(), ViewInfo { zoom: 8.0, ..ViewInfo::default() });
+    let mut s = session();
+    run(&mut s, "path.create", json!({"d": CURVED_TOP}));
+    run(&mut s, "select.none", json!({}));
+    s.select_tool("dimension", plain).unwrap();
+    let pt = vectorcraft_geom::Point::new;
+    let hover = |s: &mut Session, view: ViewInfo, x: f64, y: f64| {
+        let (at, labels) = linear_marker(s, view, x, y);
+        (at.map(|(p, _)| p), labels)
+    };
+    // Beside the end of the curve: on the anchor, labeled.
+    assert_eq!(hover(&mut s, plain, 231.0, 262.0), (Some(pt(230.0, 260.0)), vec!["anchor".to_string()]));
+    // Beside the curve: on its closest point, labeled.
+    let (at, labels) = hover(&mut s, plain, 200.0, 337.0);
+    assert!(at.is_some_and(|q| q.distance(pt(200.0, 337.0)) < 6.0 && q != pt(200.0, 337.0)), "{at:?}");
+    assert_eq!(labels, ["path"]);
+    // A first dimension from the bottom of the curve to its top, placed above the art.
+    linear_click(&mut s, plain, 130.0, 358.0);
+    linear_click(&mut s, plain, 230.0, 260.0);
+    linear_click(&mut s, plain, 180.0, 207.0);
+    let first = s.doc().unwrap().selection.objects[0].0;
+    assert_eq!((recipe(&s, first).a, recipe(&s, first).b), (pt(130.0, 358.0), pt(230.0, 260.0)));
+    run(&mut s, "select.none", json!({}));
+    s.select_tool("dimension", zoomed).unwrap();
+    // Zoomed in, 5.8 pixels from the end of its dimension line: on that end, marked as an anchor.
+    assert_eq!(linear_marker(&mut s, zoomed, 230.6, 207.4), (Some((pt(230.0, 207.0), 10.0)), vec!["anchor".to_string()]));
+    // 6.4 pixels beside its extension line: on the line.
+    let (at, labels) = hover(&mut s, zoomed, 230.8, 230.0);
+    assert!(at.is_some_and(|q| (q.x - 230.0).abs() < 1e-6 && (q.y - 230.0).abs() < 1e-6), "{at:?}");
+    assert_eq!(labels, ["path"]);
+    // The next dimension starts where the first one's line ends.
+    linear_click(&mut s, zoomed, 230.6, 207.4);
+    linear_click(&mut s, zoomed, 425.0, 260.0);
+    linear_click(&mut s, zoomed, 330.0, 207.0);
+    let second = s.doc().unwrap().selection.objects[0].0;
+    assert_ne!(second, first);
+    let d = recipe(&s, second);
+    assert!(near(d.a, pt(230.0, 207.0)) && near(d.b, pt(425.0, 260.0)), "{:?} {:?}", d.a, d.b);
+}
+
+/// An anchor of the art that a dimension already measures takes a point picked beside it, not the
+/// end of the extension line a few points off it. A locked dimension pulls no point, and with
+/// Smart Guides and Snap to Point off no dimension pulls a point and no label shows. A press on
+/// the end of a dimension's line over a segment of the art that moves a few pixels before the
+/// release picks that end, as a press on an anchor does.
+#[test]
+fn an_anchor_beside_a_drawn_dimension_takes_the_point() {
+    let (plain, zoomed) = (ViewInfo::default(), ViewInfo { zoom: 8.0, ..ViewInfo::default() });
+    let off = ViewInfo { smart_guides: false, snap_to_point: false, ..zoomed };
+    let mut s = session();
+    run(&mut s, "path.create", json!({"d": CURVED_TOP}));
+    run(&mut s, "select.none", json!({}));
+    s.select_tool("dimension", plain).unwrap();
+    let pt = vectorcraft_geom::Point::new;
+    linear_click(&mut s, plain, 130.0, 358.0);
+    linear_click(&mut s, plain, 230.0, 260.0);
+    linear_click(&mut s, plain, 180.0, 207.0);
+    let first = s.doc().unwrap().selection.objects[0].0;
+    // Locked, the first dimension's line end does not pull a point 5.8 pixels away.
+    run(&mut s, "object.lock", json!({}));
+    let (at, _) = linear_marker(&mut s, zoomed, 230.6, 207.4);
+    assert!(at.is_none_or(|(p, _)| p != pt(230.0, 207.0)), "a locked dimension: {at:?}");
+    run(&mut s, "object.unlockAll", json!({}));
+    run(&mut s, "select.none", json!({}));
+    // 2.5 pixels above the curve's top anchor and 1.5 pixels below the end of the extension line
+    // that starts 4 points above it: on the anchor, linked to the art.
+    assert_eq!(linear_marker(&mut s, plain, 230.0, 257.5), (Some((pt(230.0, 260.0), 10.0)), vec!["anchor".to_string()]));
+    // Smart Guides and Snap to Point off: no pull to the dimension's line end, and no labels.
+    let (at, labels) = linear_marker(&mut s, off, 230.6, 207.4);
+    assert!(at.is_none_or(|(p, _)| p != pt(230.0, 207.0)) && labels.is_empty(), "{at:?} {labels:?}");
+    let (at, labels) = linear_marker(&mut s, off, 230.1, 260.1);
+    assert!(at.is_some_and(|(p, _)| p == pt(230.0, 260.0)) && labels.is_empty(), "{at:?} {labels:?}");
+    // Snap to Point on and Smart Guides off: the line end takes the point, and no label shows.
+    assert_eq!(linear_marker(&mut s, ViewInfo { snap_to_point: true, ..off }, 230.6, 207.4), (Some((pt(230.0, 207.0), 10.0)), vec![]));
+    // A second dimension whose line lies on the bottom edge, from x 425 to x 541.
+    linear_click(&mut s, plain, 425.0, 260.0);
+    linear_click(&mut s, plain, 541.0, 358.0);
+    linear_click(&mut s, plain, 480.0, 440.0);
+    let second = s.doc().unwrap().selection.objects[0].0;
+    assert_ne!(second, first);
+    run(&mut s, "select.none", json!({}));
+    // A press 1.4 pixels from its line's left end, on the bottom edge, moved 5 pixels: the end is
+    // picked, and no dimension of the edge is dragged out.
+    for (kind, x) in [(PointerKind::Move, 426.0), (PointerKind::Down, 426.0), (PointerKind::Drag, 431.0), (PointerKind::Up, 431.0)] {
+        s.pointer(&PointerEvent::new(kind, x, 441.0), plain).unwrap();
+    }
+    linear_click(&mut s, plain, 541.0, 440.0);
+    linear_click(&mut s, plain, 480.0, 470.0);
+    let third = s.doc().unwrap().selection.objects[0].0;
+    assert_ne!(third, second);
+    let d = recipe(&s, third);
+    assert!(near(d.a, pt(425.0, 440.0)) && near(d.b, pt(541.0, 440.0)), "{:?} {:?}", d.a, d.b);
+    // A dimension of the left edge whose line lies 4 points off it, where its extension lines
+    // start: zoomed in, the end of its line still takes a point 4.7 pixels away.
+    run(&mut s, "select.none", json!({}));
+    linear_click(&mut s, plain, 130.0, 358.0);
+    linear_click(&mut s, plain, 130.0, 440.0);
+    linear_click(&mut s, plain, 126.0, 400.0);
+    run(&mut s, "select.none", json!({}));
+    assert_eq!(linear_marker(&mut s, zoomed, 125.5, 358.3), (Some((pt(126.0, 358.0), 10.0)), vec!["anchor".to_string()]));
+}
+
 /// The page content streams of exported PDF `v`, inflated.
 fn pdf_content(v: &Value) -> String {
     let bytes = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
