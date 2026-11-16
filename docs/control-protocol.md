@@ -867,8 +867,8 @@ writes the HTML page to a temporary folder and opens it in the default browser (
 PSD Options: Export As… with the PSD format (`file.exportAs {format: "psd"}`, then the save dialog) opens `psdOptions`:
 the raster rows of PNG Options (`ppi`, `background`, `antiAlias`), then `colorModel` (`rgb`, `cmyk`, `gray`; a CMYK
 document starts on `cmyk`), `layers` (true: Write Layers; false: Flat Image, whose background list starts at White),
-`maxEditability` and `hiddenLayers` (with layers) and `embedIcc`. `ui.dialog.set` the fields and `ui.dialog.confirm`
-writes the file(s) with `document.export`.
+`preserveText`, `maxEditability` and `hiddenLayers` (with layers) and `embedIcc`. `ui.dialog.set` the fields and
+`ui.dialog.confirm` writes the file(s) with `document.export`; with Flat Image it leaves `preserveText` out.
 
 Print: File → Print… (`file.print` with no params, Ctrl/Cmd+P) opens the `print` dialog on the document's print
 settings. Its fields are the `print.setup` settings (`copies`, `artboards`, `range`, `media`, `orientation`,

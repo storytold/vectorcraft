@@ -854,7 +854,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.cropImage",
         "Crop Image",
         "",
-        "{} show a crop box on the selected image (tool `cropImage`): it starts on the part over the image's artboard; drag its handles or inside it, then Enter or the Control bar's Apply crops the image to it (object.cropImage {rect}), Escape or Cancel leaves it as it is, both back to the Selection tool. tool.setOption {key: \"rect\", value: [x, y, width, height]} sets the box. → {tool}; a tool that cannot be chosen returns the error",
+        "{} show a crop box on the selected image (tool `cropImage`): it starts on the part over the image's artboard; drag its handles or inside it, then Enter or the Control bar's Apply crops the image to it (object.cropImage {rect, ppi?}: ppi when a resolution that changes the image's pixels is set, and for a turned or skewed image its own when none is and it can be cropped to it), Escape or Cancel leaves it as it is, both back to the Selection tool. tool.setOption {key: \"rect\", value: [x, y, width, height]} sets the box; {key: \"ppi\", value: 1 to 2400 and at most the selected image's own resolution (300 for a linked image), or null for the image's own} the cropped image's resolution; {key: \"reference\", value: 0 to 8, left to right and top to bottom; 4, the center, by default} the point the Control bar's X and Y name and its W and H resize about; {key: \"linked\", value: true or false (default false)} whether W and H keep the box's proportions. → {tool}; a tool that cannot be chosen returns the error",
     ),
     ("effect.applyLast", "Apply Last Effect", "Cmd+Shift+E", "{}"),
     (

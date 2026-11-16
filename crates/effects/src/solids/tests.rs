@@ -1818,11 +1818,24 @@ fn a_colored_solid_face_on_its_own_keeps_the_composites_colors() {
     assert_eq!(ramps, one.iter().skip(1).collect::<Vec<_>>(), "the same light ramps");
     // The single face's clip holds its seam: the clip reaches past the facet by half the seam.
     let seam = (face.thickness() / 2.0).clamp(0.05, 0.75);
-    let widths: Vec<f64> = paints(&batch).into_iter().filter_map(|(_, w)| w).filter(|w| *w > 0.0 && *w != crate::lighting::UNDERLAY_SEAM).collect();
-    assert!(widths.len() == 3 && widths.iter().all(|w| (w - seam).abs() < 1e-12), "{widths:?}");
     let NodeKind::Group { children, .. } = &single.kind else { panic!("a clip group") };
     let (clip, facet) = (children[0].path_data().and_then(PathData::bounds).unwrap(), face.path().bounds().unwrap());
-    assert!((clip.x0 - (facet.x0 - seam / 2.0)).abs() < 0.1 && (clip.x1 - (facet.x1 + seam / 2.0)).abs() < 0.1, "{clip:?} {facet:?}");
+    let reaches = |b: Rect| (b.x0 - (facet.x0 - seam / 2.0)).abs() < 0.1 && (b.x1 - (facet.x1 + seam / 2.0)).abs() < 0.1;
+    assert!(reaches(clip), "{clip:?} {facet:?}");
+    // In the composite, the facet over the underlay is one fill of the facet and its seam in each
+    // channel: no seam stroke of its own, and a path that reaches past the facet by half the seam.
+    let widths: Vec<f64> = paints(&batch).into_iter().filter_map(|(_, w)| w).filter(|w| *w > 0.0 && *w != crate::lighting::UNDERLAY_SEAM).collect();
+    assert!(widths.is_empty(), "{widths:?}");
+    let mut seamed = vec![];
+    batch.walk(&mut |n| {
+        if let [AppearanceItem::Fill(f)] = n.appearance.items.as_slice()
+            && f.paint != Paint::solid(Color::BLACK)
+            && f.paint != paint
+        {
+            seamed.extend(n.path_data().and_then(PathData::bounds));
+        }
+    });
+    assert!(seamed.len() == 3 && seamed.iter().all(|b| reaches(*b)), "{seamed:?} {facet:?}");
 }
 
 /// `square_node` moved right by `dx`, with id `id` and fill `fill`.

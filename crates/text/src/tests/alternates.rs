@@ -40,6 +40,25 @@ fn alternates_come_in_feature_order_once_each() {
     assert!(bundled.alternates('a').iter().all(|a| a.gid < bundled.glyph_count()));
 }
 
+/// A glyph has alternates when a listed feature gives it another glyph: `a` has them in both
+/// faces, `b` and the alternates of `a` have none, and a glyph past the face has none.
+#[test]
+fn has_alternates_follows_the_listed_substitutions() {
+    let db = db();
+    let [u1, ..] = unencoded_glyphs().expect("unencoded glyphs");
+    for aalt in [true, false] {
+        let face = db.face(alternates_family(aalt), "Regular").expect("the test face");
+        assert!(face.has_alternates(face.glyph_for('a')), "a, aalt {aalt}");
+        assert!(!face.has_alternates(face.glyph_for('b')), "b, aalt {aalt}");
+        assert!(!face.has_alternates(u1), "an alternate of a has none of its own, aalt {aalt}");
+        assert!(!face.has_alternates(face.glyph_count() + 10), "a glyph past the face, aalt {aalt}");
+    }
+    let bundled = db.face(FALLBACK_FAMILY, "Regular").expect("the bundled face");
+    let with = bundled.chars().into_iter().filter(|(_, g)| bundled.has_alternates(*g)).count();
+    let listed = bundled.chars().into_iter().filter(|(c, g)| bundled.alternates(*c).iter().any(|a| a.gid != *g)).count();
+    assert_eq!(with, listed, "the same characters as the alternates lists say");
+}
+
 /// The cap on lookups read in all leaves out the lowest ranked features: `salt` is read even when
 /// the `cv01` records before it list more lookups than the cap.
 #[test]
