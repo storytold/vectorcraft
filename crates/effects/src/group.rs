@@ -891,8 +891,15 @@ fn prepare_container(doc: Option<&Document>, n: &Node) -> Option<PreparedContain
 /// transparency, opacity mask and raster effects stay. `None` when it has none of these. Live
 /// objects among the members are evaluated with the symbols of `doc` (see [`member_shapes`]), and
 /// a Pathfinder operation or compound shape takes the symbol instances among its members as their
-/// symbols' art from `doc`.
+/// symbols' art from `doc`. A Transform effect that makes copies with raster effects listed before
+/// it gives each copy those raster effects ([`copied_container`]).
 pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
+    if !is_container(n) {
+        return None;
+    }
+    if let Some(t) = crate::reshape::copied_container_raster_at(n) {
+        return Some(copied_container(doc, n, t));
+    }
     let PreparedContainer { mut m, guides, paint, .. } = prepare_container(doc, n)?;
     if paint {
         let shapes = member_shapes(doc, &m);
@@ -916,12 +923,82 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     Some(m)
 }
 
+/// The exact pre-copy source shared by rendering and stored gradient placement.
+fn copied_container_source(doc: Option<&Document>, n: &Node, t: usize) -> (Node, Vec<Arc<Node>>, Node) {
+    let mut m = n.clone();
+    let mut guides = vec![];
+    take_sublayer_guides(&mut m, &mut guides, &Node::is_ruler_guide);
+    let mut source = m.clone();
+    source.appearance.effects = n.appearance.effects.get(..t).unwrap_or_default().to_vec();
+    // With no geometry effect before the Transform effect, `evaluate_container` leaves the members'
+    // own effects live (it only paints the group's own fills and strokes): the members are drawn
+    // first, so their effects apply before the copies are made.
+    if crate::reshape::geometry_effects(&source).is_empty() {
+        source = crate::reshape::outlined_members(doc, &source);
+        // The members' raster effects follow the group's own Transform effects as well.
+        let _later = crate::raster::LaterGroups::enter(&n.appearance.effects);
+        members_as_drawn(doc, &mut source);
+    }
+    (m, guides, source)
+}
+
+/// `n`, a group or layer whose own effects split at `t` ([`crate::reshape::copied_container_raster_at`]),
+/// as plain art: the effects before the Transform effect at `t` evaluated on its members as one
+/// piece ([`evaluate_container`]), with the raster effects among them, and that piece copied by the
+/// Transform effect, each copy a group of its own carrying those raster effects moved, turned,
+/// reflected and scaled with it ([`crate::reshape::copied_container_art`]). The art keeps the kind,
+/// transparency and opacity mask of `n` and the raster effects from `t` on, which paint once around
+/// all the copies; a clip group's or clipping layer's copies each clip, and the art itself does not.
+/// Its ruler guides, those in its sublayers and groups included, go once above the copies, hidden
+/// and locked as their containers were.
+fn copied_container(doc: Option<&Document>, n: &Node, t: usize) -> Node {
+    let (mut m, guides, source) = copied_container_source(doc, n, t);
+    let mut piece = evaluate_container(doc, &source).unwrap_or_else(|| {
+        let mut p = source.clone();
+        p.appearance.effects = crate::raster::without_geometry(&p.appearance.effects);
+        p
+    });
+    // The piece is one copy: the transparency, opacity mask and guides stay on the art.
+    piece.name = None;
+    piece.visible = true;
+    piece.locked = false;
+    (piece.opacity, piece.blend, piece.isolate) = (1.0, Default::default(), false);
+    piece.extras_mut().mask = None;
+    // The copies are made about the piece's bounds, measured first: a layer leaves its hidden
+    // members out of them, and a group does not.
+    let bounds = piece.geometric_bounds();
+    // A layer's copies are groups in it.
+    if let NodeKind::Layer { children, clip, .. } = &mut piece.kind {
+        piece.kind = NodeKind::Group { children: std::mem::take(children), clip: *clip };
+    }
+    let (art, effects) = crate::reshape::copied_container_art(doc, n, t, piece, bounds);
+    let copies = art.children().cloned().unwrap_or_default();
+    if let NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. } = &mut m.kind {
+        *children = copies;
+        *clip = false;
+    }
+    m.appearance.items.clear();
+    m.appearance.contents_index = None;
+    m.appearance.effects = effects;
+    if let Some(ch) = m.children_mut() {
+        ch.extend(guides);
+    }
+    m
+}
+
 /// Freeze representable fitted own paints to the box the container pass gives them, retaining
 /// every live effect and already explicit placement. Hidden-only containers the pass does not
 /// evaluate stay unchanged; this does not add a different fallback to `evaluate_container`.
 pub fn pinned_container_appearance(doc: &Document, n: &Node) -> Option<Appearance> {
     if !n.appearance.has_unplaced_gradient() {
         return None;
+    }
+    if let Some(t) = crate::reshape::copied_container_raster_at(n) {
+        let (_, _, source) = copied_container_source(Some(doc), n, t);
+        let pinned = pinned_container_appearance(doc, &source)?;
+        let mut out = (*n.appearance).clone();
+        out.items = pinned.items;
+        return Some(out);
     }
     let PreparedContainer { m, carry, .. } = prepare_container(Some(doc), n)?;
     let bounds = m.geometric_bounds()?;

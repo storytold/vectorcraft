@@ -1433,3 +1433,216 @@ fn eraser_keeps_unused_endpoint_handles_out_of_fill_fixed_tip() {
 fn eraser_keeps_unused_endpoint_handles_out_of_fill_varied_tip() {
     eraser_keeps_unused_endpoint_handles_out_of_fill_case("varied");
 }
+
+fn eraser_copying_container_gradient_before_colors(before_image: &vectorcraft_render::Rendered) -> [[u8; 4]; 2] {
+    let before_colors = [before_image.pixel(190, 175), before_image.pixel(190, 185)];
+    assert!(before_colors.iter().all(|color| color[3] == 255));
+    assert_ne!(before_colors[0], before_colors[1], "the original sibling draws a nonconstant gradient");
+    assert_ne!(before_colors[0], [0, 0, 0, 255], "the Group's own fill covers the black child");
+    assert_eq!(before_image.pixel(125, 105)[3], 255, "the original extremal child paints the trim witness");
+    assert_eq!(before_image.pixel(190, 295)[3], 255, "the translated sibling copy really paints");
+    before_colors
+}
+
+fn eraser_copying_container_gradient_child_offset(s: &mut Session, sibling: NodeId, owner: NodeId, placed: bool) {
+    s.execute(
+        "effect.apply",
+        &json!({"ids": [sibling.0], "target": "object", "item": null,
+            "effect": "path.offsetPath", "params": {"offset": 10, "joins": "round"}}),
+    )
+    .unwrap();
+    // The untouched sibling's live offset makes the evaluated source box
+    // [100,100,230,210]; the Group's raw source box is still [100,100,220,200].
+    let mut gradient = eraser_placement_ramp(placed, 210.0, 100.0);
+    if placed {
+        gradient["start"] = json!([165, 210]);
+        gradient["end"] = json!([165, 100]);
+    }
+    s.execute("appearance.setItem", &json!({"ids": [owner.0], "target": "object", "index": 0, "gradient": gradient})).unwrap();
+    let sibling_node = s.doc().unwrap().doc.node(sibling).unwrap();
+    assert_eq!(sibling_node.appearance.effects.len(), 1);
+    assert_eq!(sibling_node.appearance.effects[0].id, "path.offsetPath");
+    assert!(sibling_node.appearance.effects[0].visible);
+    assert_eq!(sibling_node.appearance.effects[0].params["offset"].as_f64(), Some(10.0));
+}
+
+fn eraser_copying_container_gradient_scene(placed: bool) -> ([[u8; 4]; 2], [[u8; 4]; 2]) {
+    let mut s = session();
+    let (edited, sibling, owner, geom) = eraser_container_gradient_fixture(&mut s, placed, false);
+    s.execute(
+        "effect.apply",
+        &json!({"ids": [owner.0], "target": "object", "item": null,
+            "effect": "stylize.dropShadow", "params": {"x": 10, "y": 0, "blur": 0}}),
+    )
+    .unwrap();
+    s.execute(
+        "effect.apply",
+        &json!({"ids": [owner.0], "target": "object", "item": null,
+            "effect": "distort.transform", "params": {"scaleH": 100, "scaleV": 100,
+                "reference": 8, "objects": true, "copies": 1, "random": false,
+                "rotate": 0, "moveH": 0, "moveV": 120, "patterns": false, "strokes": false}}),
+    )
+    .unwrap();
+    let n = s.doc().unwrap().doc.node(owner).unwrap();
+    assert!(matches!(n.kind, NodeKind::Group { clip: false, .. }));
+    assert_eq!(n.appearance.effects.len(), 2);
+    assert_eq!(n.appearance.effects[0].id, "stylize.dropShadow");
+    assert!(n.appearance.effects[0].visible);
+    assert_eq!(n.appearance.effects[1].id, "distort.transform");
+    assert!(n.appearance.effects[1].visible);
+    assert_eq!(n.appearance.effects[1].params["copies"].as_f64(), Some(1.0));
+    assert_eq!(n.appearance.effects[1].params["moveV"].as_f64(), Some(120.0));
+    let effects = serde_json::to_value(&n.appearance.effects).unwrap();
+    let before_image = eraser_gradient_image(&s);
+    let before_colors = eraser_copying_container_gradient_before_colors(&before_image);
+    let before = s.doc().unwrap().doc.clone();
+    let before_json = serde_json::to_value(&before).unwrap();
+    let sibling_before = serde_json::to_value(before.node(sibling).unwrap()).unwrap();
+    let ancestry = before.ancestry(edited).unwrap();
+    let selection = s.doc().unwrap().selection.clone();
+    let history = s.doc().unwrap().history.undo.len();
+    let miss = eraser_gradient_region(&mut s, "rect", true, true);
+    assert_eq!(miss["ids"], json!([]));
+    assert!(std::sync::Arc::ptr_eq(&s.doc().unwrap().doc, &before), "a miss cannot pin an ancestor");
+    assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before_json);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!(s.doc().unwrap().history.undo.len(), history);
+    let result = eraser_gradient_region(&mut s, "rect", true, false);
+    assert_eq!(result["ids"].as_array().unwrap().len(), 1, "the extremal trim keeps one piece");
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.ancestry(edited).unwrap(), ancestry);
+    assert_eq!(serde_json::to_value(d.node(sibling).unwrap()).unwrap(), sibling_before, "the sibling itself is unchanged");
+    let n = d.node(owner).unwrap();
+    assert!(matches!(n.kind, NodeKind::Group { clip: false, .. }));
+    assert!((n.geometric_bounds().unwrap().y0 - 110.0).abs() < 1e-5);
+    assert_eq!(serde_json::to_value(&n.appearance.effects).unwrap(), effects, "both effects stay live and unchanged");
+    if placed {
+        let vectorcraft_doc::color::Paint::Gradient(g) = n.appearance.fill_paint() else { panic!("the own fill stays a gradient") };
+        assert_eq!(serde_json::to_value(g.geom).unwrap(), geom, "the explicit source fit must not be rewritten");
+    }
+    let after_image = eraser_gradient_image(&s);
+    assert_eq!(after_image.pixel(125, 105)[3], 0, "the intended band was erased");
+    let after_colors = [after_image.pixel(190, 175), after_image.pixel(190, 185)];
+    assert!(after_colors.iter().all(|color| color[3] == 255));
+    eraser_container_gradient_restore(&mut s, &before_json, &selection, history);
+    (before_colors, after_colors)
+}
+
+#[test]
+fn eraser_copying_container_gradient_keeps_source_fit_on_untouched_sibling() {
+    // The source is painted before its translated copy is made. The fixture's explicit
+    // [160,200] -> [160,100] fit is equivalent to the source's original fitted paint.
+    let placed = eraser_copying_container_gradient_scene(true);
+    let fitted = eraser_copying_container_gradient_scene(false);
+    assert_eq!(placed.0, placed.1, "the legitimate explicitly placed source fit preserves the untouched sibling");
+    assert_eq!(fitted.0, placed.0, "both source fits must draw the same original sibling before editing");
+    assert_eq!(fitted.1, fitted.0, "pinning a copying container must not recolor an untouched original sibling");
+    assert_eq!(fitted.1, placed.1, "the fitted edit must match the equivalent explicitly placed source fit");
+}
+
+fn eraser_copying_container_gradient_owner_effects(n: &vectorcraft_doc::Node, nested_copy: bool) {
+    assert!(matches!(n.kind, NodeKind::Group { clip: false, .. }));
+    assert_eq!(n.appearance.effects.len(), if nested_copy { 3 } else { 2 });
+    assert_eq!(n.appearance.effects[0].id, "stylize.dropShadow");
+    assert!(n.appearance.effects[0].visible);
+    for (index, effect) in n.appearance.effects.iter().enumerate().skip(1) {
+        assert_eq!(effect.id, "distort.transform");
+        assert!(effect.visible);
+        assert_eq!(effect.params["copies"].as_f64(), Some(1.0));
+        let move_v = if nested_copy && index == 1 { 60.0 } else { 120.0 };
+        assert_eq!(effect.params["moveV"].as_f64(), Some(move_v));
+    }
+}
+
+fn eraser_copying_container_gradient_variant_scene(placed: bool, nested_copy: bool) -> ([[u8; 4]; 2], [[u8; 4]; 2]) {
+    let mut s = session();
+    let (edited, sibling, owner, _) = eraser_container_gradient_fixture(&mut s, placed, false);
+    if !nested_copy {
+        eraser_copying_container_gradient_child_offset(&mut s, sibling, owner, placed);
+    }
+    s.execute(
+        "effect.apply",
+        &json!({"ids": [owner.0], "target": "object", "item": null,
+            "effect": "stylize.dropShadow", "params": {"x": 10, "y": 0, "blur": 0}}),
+    )
+    .unwrap();
+    if nested_copy {
+        s.execute(
+            "effect.apply",
+            &json!({"ids": [owner.0], "target": "object", "item": null,
+                "effect": "distort.transform", "params": {"scaleH": 100, "scaleV": 100,
+                    "reference": 8, "objects": true, "copies": 1, "random": false,
+                    "rotate": 0, "moveH": 0, "moveV": 60, "patterns": false, "strokes": false}}),
+        )
+        .unwrap();
+    }
+    s.execute(
+        "effect.apply",
+        &json!({"ids": [owner.0], "target": "object", "item": null,
+            "effect": "distort.transform", "params": {"scaleH": 100, "scaleV": 100,
+                "reference": 8, "objects": true, "copies": 1, "random": false,
+                "rotate": 0, "moveH": 0, "moveV": 120, "patterns": false, "strokes": false}}),
+    )
+    .unwrap();
+    let n = s.doc().unwrap().doc.node(owner).unwrap();
+    eraser_copying_container_gradient_owner_effects(n, nested_copy);
+    let vectorcraft_doc::color::Paint::Gradient(g) = n.appearance.fill_paint() else { panic!("the Group owns the gradient") };
+    assert_eq!(g.geom.is_some(), placed);
+    let geom = serde_json::to_value(g.geom).unwrap();
+    let effects = serde_json::to_value(&n.appearance.effects).unwrap();
+    let before_image = eraser_gradient_image(&s);
+    let before_colors = eraser_copying_container_gradient_before_colors(&before_image);
+    let before = s.doc().unwrap().doc.clone();
+    let before_json = serde_json::to_value(&before).unwrap();
+    let sibling_before = serde_json::to_value(before.node(sibling).unwrap()).unwrap();
+    let ancestry = before.ancestry(edited).unwrap();
+    let selection = s.doc().unwrap().selection.clone();
+    let history = s.doc().unwrap().history.undo.len();
+    let miss = eraser_gradient_region(&mut s, "rect", true, true);
+    assert_eq!(miss["ids"], json!([]));
+    assert!(std::sync::Arc::ptr_eq(&s.doc().unwrap().doc, &before), "a miss cannot pin an ancestor");
+    assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before_json);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!(s.doc().unwrap().history.undo.len(), history);
+    let result = eraser_gradient_region(&mut s, "rect", true, false);
+    assert_eq!(result["ids"].as_array().unwrap().len(), 1, "the extremal trim keeps one piece");
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.ancestry(edited).unwrap(), ancestry);
+    assert_eq!(serde_json::to_value(d.node(sibling).unwrap()).unwrap(), sibling_before, "the sibling itself is unchanged");
+    let n = d.node(owner).unwrap();
+    assert!(matches!(n.kind, NodeKind::Group { clip: false, .. }));
+    assert!((n.geometric_bounds().unwrap().y0 - 110.0).abs() < 1e-5);
+    assert_eq!(serde_json::to_value(&n.appearance.effects).unwrap(), effects, "both effects stay live and unchanged");
+    if placed {
+        let vectorcraft_doc::color::Paint::Gradient(g) = n.appearance.fill_paint() else { panic!("the own fill stays a gradient") };
+        assert_eq!(serde_json::to_value(g.geom).unwrap(), geom, "the explicit source fit must not be rewritten");
+    }
+    let after_image = eraser_gradient_image(&s);
+    assert_eq!(after_image.pixel(125, 105)[3], 0, "the intended band was erased");
+    let after_colors = [after_image.pixel(190, 175), after_image.pixel(190, 185)];
+    assert!(after_colors.iter().all(|color| color[3] == 255));
+    eraser_container_gradient_restore(&mut s, &before_json, &selection, history);
+    (before_colors, after_colors)
+}
+
+#[test]
+fn eraser_copying_container_gradient_keeps_evaluated_child_source_fit() {
+    let placed = eraser_copying_container_gradient_variant_scene(true, false);
+    let fitted = eraser_copying_container_gradient_variant_scene(false, false);
+    assert_eq!(placed.0, placed.1, "the explicitly placed evaluated-child source fit preserves the untouched sibling");
+    assert_eq!(fitted.0, placed.0, "both paints fit the evaluated source before copying");
+    assert_eq!(fitted.1, fitted.0, "pinning uses evaluated child geometry, not the raw prefix box");
+    assert_eq!(fitted.1, placed.1, "fitted paint matches the equivalent evaluated-source placement after editing");
+}
+
+#[test]
+fn eraser_copying_container_gradient_keeps_source_fit_through_earlier_copy() {
+    // Both copying effects are eligible: the outer split still leaves the earlier
+    // copying Transform in its prefix. Own paint is fitted before either copy.
+    let placed = eraser_copying_container_gradient_variant_scene(true, true);
+    let fitted = eraser_copying_container_gradient_variant_scene(false, true);
+    assert_eq!(placed.0, placed.1, "the explicit original-source fit is unchanged by the trim");
+    assert_eq!(fitted.0, placed.0, "the original source fit is equivalent before both copy stages");
+    assert_eq!(fitted.1, fitted.0, "pinning follows the earlier eligible copy split as rendering does");
+    assert_eq!(fitted.1, placed.1, "both live copy stages preserve the same source placement after editing");
+}
