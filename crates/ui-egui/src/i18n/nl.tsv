@@ -1796,7 +1796,7 @@ lighting	Light	Licht
 	Name* @ 66.67% (RGB/Preview)	Naam* @ 66.67% (RGB/Voorbeeld)
 	No Document	Geen document
 	Press 	Druk op 
-	Search commands and tools	Opdrachten en gereedschappen zoeken
+	Search commands, tools, panels and effects	Opdrachten, gereedschappen, panelen en effecten zoeken
 	Style:	Stijl:
 	Switch workspace	Werkruimte wisselen
 	Show all open documents	Alle geopende documenten tonen
@@ -4761,7 +4761,11 @@ font-technology	Variable	Variabel
 	Saved {path}	{path} opgeslagen
 	Saving	Bezig met opslaan
 	Saving {}	{} wordt opgeslagen
-	Search commands and tools…	Opdrachten en gereedschappen zoeken…
+	Search commands, tools, panels and effects…	Opdrachten, gereedschappen, panelen en effecten zoeken…
+	No commands match	Geen opdrachten gevonden
+	{pos} of {total}: {name}	{pos} van {total}: {name}
+@plural	{n} result|{n} results	{n} resultaat|{n} resultaten
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} van {n} resultaat. Typ verder om ze te beperken.|{shown} van {n} resultaten. Typ verder om ze te beperken.
 	Recent Commands	Recente opdrachten
 	No recent commands	Geen recente opdrachten
 	Dashed Line	Streepjeslijn
