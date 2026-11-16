@@ -136,7 +136,9 @@ pub type StopPlates = Option<[f32; 4]>;
 /// [`inks`] of a colour that may print process plates `plates` with its spot tint. The plates
 /// print only beside a spot ink: a colour without a valid spot link, or linked to Registration,
 /// prints as [`inks`] separates it. A spot ink named like a process plate prints its tint layered
-/// over that plate's amount. A plate amount that is not a finite number prints no ink.
+/// over that plate's amount; EPS export can't write that ink beside process plates in one DeviceN
+/// space, so it writes such a gradient in process colors with a warning. A plate amount that is
+/// not a finite number prints no ink.
 pub fn stop_inks(doc: &Document, c: &Cms, color: &Color, link: Link, plates: StopPlates, intent: Intent) -> Inks {
     let mut ink = inks(doc, c, color, link, intent);
     if let (Some(p), Some((name, tint))) = (plates, &ink.spot) {
