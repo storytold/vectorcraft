@@ -728,6 +728,51 @@ fn images_are_written_in_the_form_the_specification_shows() {
     assert!(rgb.iter().zip([247.0, 148.0, 29.0]).all(|(c, want)| (c * 255.0 - want).abs() < 0.1), "{rgb:?}");
 }
 
+/// An image's samples are written as upper-case hex on `%` comment lines (§8.1, §8.4) of 60
+/// digits, the last line shorter, each line ending with a newline: no samples write no line, and
+/// samples that fill their last line exactly write no empty `%` line after it.
+#[test]
+fn image_samples_are_written_as_hex_lines() {
+    let hex = |samples: &[u8]| {
+        let mut s = String::new();
+        super::writer::Writer::push_hex(&mut s, samples);
+        s
+    };
+    let mut samples = vec![0x00, 0x09, 0x0A, 0xAF, 0xFF];
+    samples.extend(0x10..=0x29);
+    assert_eq!(hex(&samples), "%00090AAFFF101112131415161718191A1B1C1D1E1F202122232425262728\n%29\n");
+    assert_eq!(hex(&samples[..30]), "%00090AAFFF101112131415161718191A1B1C1D1E1F202122232425262728\n");
+    assert_eq!(hex(&samples[..29]), "%00090AAFFF101112131415161718191A1B1C1D1E1F2021222324252627\n");
+    assert_eq!(hex(&[0xAB]), "%AB\n");
+    assert_eq!(hex(&[]), "");
+    // Appended after what is already written.
+    let mut s = String::from("0 0 1 1 1 1 8 3 0 0 0 0 XI\n");
+    super::writer::Writer::push_hex(&mut s, &[0xC0, 0xFF, 0xEE]);
+    assert_eq!(s, "0 0 1 1 1 1 8 3 0 0 0 0 XI\n%C0FFEE\n");
+}
+
+/// The hex lines are the same as formatting each sample with `{:02X}` and breaking the digits
+/// into lines of [`HEX_LINE`], for every length up to three lines and one more sample, and for
+/// every byte value.
+#[test]
+fn image_hex_matches_formatted_samples() {
+    let formatted = |samples: &[u8]| {
+        let digits: String = samples.iter().map(|c| format!("{c:02X}")).collect();
+        let lines: Vec<String> = digits.as_bytes().chunks(HEX_LINE).map(|l| format!("%{}\n", std::str::from_utf8(l).unwrap())).collect();
+        lines.concat()
+    };
+    let all: Vec<u8> = (0..=255u8).cycle().skip(7).take(3 * HEX_LINE / 2 + 1).collect();
+    for n in 0..=all.len() {
+        let mut s = String::new();
+        super::writer::Writer::push_hex(&mut s, &all[..n]);
+        assert_eq!(s, formatted(&all[..n]), "{n} samples");
+    }
+    let every: Vec<u8> = (0..=255u8).collect();
+    let mut s = String::new();
+    super::writer::Writer::push_hex(&mut s, &every);
+    assert_eq!(s, formatted(&every));
+}
+
 /// The pieces of an image cut into a raster mesh warp (as Object › Expand leaves a Warp on an
 /// image) are written as the image whole once, then each as the part of it that its triangle shows,
 /// and the file draws as the document does ([`write`] runs it).
