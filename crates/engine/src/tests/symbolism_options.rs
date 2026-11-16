@@ -666,3 +666,31 @@ fn set_density_refuses_bad_densities_and_objects_without_a_set() {
     assert!(matches!(&r, Err(EngineError::Other(msg)) if msg == "no symbol set selected"), "{r:?}");
     assert!(state(&s) == before);
 }
+
+/// The Symbol Styler applies the style gradually, by the brush's strength at the instance: the pen
+/// pressure with Use Pressure Pen, else the intensity, less toward the brush's edge. Random gives
+/// each instance a share of that amount.
+#[test]
+fn the_styler_applies_the_style_by_the_brushs_strength() {
+    let styled = |extra: Value, x: f64| {
+        let mut s = session();
+        let a = dot(&mut s, 100.0, 150.0);
+        let id = s.execute("shape.rectangle", &json!({"x": 300, "y": 250, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+        s.execute("graphicStyle.new", &json!({"name": "Blue", "id": id})).unwrap();
+        s.select(|_, sel| sel.clear()).unwrap();
+        let mut p = json!({"tool": "style", "points": [[x, 150]], "radius": 10, "style": "Blue"});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        adjust(&mut s, p);
+        node(&s, a).appearance.fill().map_or(0.0, |f| f.opacity)
+    };
+    let near = |a: f32, b: f32| (a - b).abs() < 1e-6;
+    assert!(near(styled(json!({"intensity": 10}), 100.0), 1.0), "full strength at the center");
+    assert!(near(styled(json!({"intensity": 5}), 100.0), 0.5));
+    assert!(near(styled(json!({"intensity": 10}), 105.0), 0.5), "half way to the edge");
+    assert!(near(styled(json!({"usePressure": true, "points": [[100, 150, 0.25]]}), 100.0), 0.25));
+    assert!(near(styled(json!({"usePressure": true, "points": [[100, 150, 1.0]]}), 100.0), 1.0));
+    assert_eq!(styled(json!({"usePressure": true, "points": [[100, 150, 0.0]]}), 100.0), 0.0, "no pressure, no style");
+    let random = styled(json!({"usePressure": true, "points": [[100, 150, 0.25]], "method": "random"}), 100.0);
+    assert!(random <= 0.25 + 1e-6, "{random}");
+}

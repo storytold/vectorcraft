@@ -1265,9 +1265,11 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                                     continue;
                                 }
                                 let cur = n.appearance.fill().filter(|f| f.paint == paint).map(|f| f.opacity).unwrap_or(0.0);
+                                // The style goes on gradually, by the brush's strength there: in
+                                // full at the center at full intensity or pressure.
                                 let step = match (tool.as_str(), method) {
-                                    ("style", Method::Random) => (share / 2.0) as f32,
-                                    ("style", _) => 1.0,
+                                    ("style", Method::Random) => (w * share / 2.0) as f32,
+                                    ("style", _) => w as f32,
                                     _ => (0.15 * w * share) as f32,
                                 };
                                 (paint, if alt { cur - step } else { cur + step })

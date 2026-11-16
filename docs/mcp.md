@@ -3417,9 +3417,10 @@ already walks Image Trace. Short agent entry points:
   [the archived manual](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=118)):
   `symbol.adjust` takes `method` (`userDefined`, `average` or `random`; not used by `shift`), `usePressure` with
   `points` as `[x, y, pressure]` (each point's pen pressure, 0..1, is the intensity there), and for `size`
-  `proportional` (true) and `affectsDensity` (false). With `tool: style`, a `style` name the document has no graphic style
-  for counts as none (the document's first style after the default one). The Symbol Styler sends the style last
-  clicked into the Graphic Styles panel's selection. `tool.setOption` on a symbolism tool refuses a `method` or
+  `proportional` (true) and `affectsDensity` (false). With `tool: style`, the style goes on by the brush's strength at
+  each instance, in full only at the brush's center at intensity 10 or full pressure, and a `style` name the document
+  has no graphic style for counts as none (the document's first style after the default one). The Symbol Styler sends
+  the style last clicked into the Graphic Styles panel's selection. `tool.setOption` on a symbolism tool refuses a `method` or
   Symbol Sprayer option that is not one of its names, a non-number `diameter`, `intensity` or `density`, a
   non-boolean switch, and a `symbol` or `style` that is neither a name nor null, and sets none of the values.
   `symbol.spray` takes `attributes`
