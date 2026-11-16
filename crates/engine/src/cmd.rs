@@ -43,6 +43,7 @@ pub(crate) mod graph;
 mod halftone;
 pub mod help;
 pub mod importmatches;
+mod info;
 pub(crate) mod inline;
 mod interactivity;
 mod intertwine;
@@ -97,6 +98,8 @@ pub(crate) mod symboledit;
 pub mod symbollib;
 pub(crate) mod tabs;
 mod textedit;
+mod xmlattrs;
+
 pub use textedit::effective_kerning;
 pub mod textstyles;
 pub(crate) mod textwrap;
@@ -344,6 +347,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(docmenu::specs());
         v.extend(variablecmds::specs());
         v.extend(docinfo::specs());
+        v.extend(info::specs());
         v.extend(panelcmds::specs());
         v.extend(artboardalign::specs());
         v.extend(buildcmds::specs());
@@ -896,6 +900,9 @@ pub use brushsym::reset_transformation_changes;
 /// The byte order of UTF-16 text without a byte-order mark, by Import Data Sets' rule (the Graph
 /// Data window reads files by it too).
 pub use variablecmds::utf16_order_without_mark;
+
+/// The Variables panel's sort (`variable.sort`) and its rows in that order.
+pub use variablecmds::{VariableSort, VariableSortKey, variable_order};
 
 /// Command ids kept only so older scripts keep working: `(alias, the command it duplicates)`.
 /// They run as before but the command palette leaves them out (it lists the command once).

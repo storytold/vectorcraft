@@ -321,12 +321,12 @@ fn center_round(x: f64) -> f64 {
 /// for Zoom, rings for Spin) drawn about the center. A press or a drag in the box puts the center
 /// there; with the keyboard focus the arrow keys move it 1 % of the box (10 % with Shift). The
 /// Horizontal and Vertical fields beside it type the same position in percent of the bounds' width
-/// and height. Changes go to `d.fields["centerX"]` and `["centerY"]`.
+/// and height. The center the box shows, kept within 0 to 1, goes to `d.fields["centerX"]` and
+/// `["centerY"]`.
 fn blur_center(ui: &mut egui::Ui, d: &mut Dialog) {
     use egui::{Key, Modifiers, Sense, Stroke};
     let [kx, ky] = BLUR_CENTER;
     let mut c = [d.f64(kx, 0.5).clamp(0.0, 1.0), d.f64(ky, 0.5).clamp(0.0, 1.0)];
-    let before = c;
     let t = Tokens::get(ui.ctx());
     let zoom = d.str("method").eq_ignore_ascii_case("zoom");
     form::caption(ui, "Blur Center");
@@ -404,9 +404,12 @@ fn blur_center(ui: &mut egui::Ui, d: &mut Dialog) {
             });
         });
     });
-    if c != before {
-        d.fields.insert(kx.into(), json!(c[0]));
-        d.fields.insert(ky.into(), json!(c[1]));
+    // A saved center outside the bounds is drawn at the nearest edge, and the fields hold that
+    // edge too, so OK sends the center the box shows.
+    for (key, v) in [(kx, c[0]), (ky, c[1])] {
+        if d.fields.get(key).and_then(Value::as_f64) != Some(v) {
+            d.fields.insert(key.into(), json!(v));
+        }
     }
 }
 
@@ -1501,5 +1504,39 @@ mod tests {
             (RADIAL_BLUR, Some(0.26), Some(1.0)),
             "OK applies it"
         );
+    }
+
+    /// A Radial Blur whose saved Blur Center lies outside the object's bounds (a document written
+    /// by hand or by another build) opens with the center at the nearest edge, and OK stores that
+    /// edge instead of sending the saved value, which `effect.setParams` refuses.
+    #[test]
+    fn radial_blur_center_outside_the_bounds_opens_at_the_edge_and_ok_keeps_it() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("effect.apply", json!({"effect": RADIAL_BLUR, "params": {"amount": 20}})).unwrap();
+        {
+            let st = app.session.doc_mut().unwrap();
+            let d = std::sync::Arc::make_mut(&mut st.doc);
+            let fx = &mut d.node_mut(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0];
+            fx.params["centerX"] = json!(1.5);
+            fx.params["centerY"] = json!(-0.25);
+        }
+        app.run("effect.dialog", json!({"effect": RADIAL_BLUR, "index": 0})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        for k in 0..4 {
+            let input = egui::RawInput { time: Some(f64::from(k) * 0.05), ..Default::default() };
+            let mut out = ctx.run_ui(input, |ui| super::super::show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
+        }
+        let field = |k: &str| app.ui.dialog.as_ref().unwrap().fields.get(k).and_then(Value::as_f64);
+        assert_eq!((field("centerX"), field("centerY")), (Some(1.0), Some(0.0)), "the fields hold the center the box shows");
+        super::super::confirm(&mut app).unwrap();
+        let st = app.session.doc().unwrap();
+        let fx = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0];
+        assert_eq!((fx.params["centerX"].as_f64(), fx.params["centerY"].as_f64()), (Some(1.0), Some(0.0)), "OK stores the edge");
     }
 }

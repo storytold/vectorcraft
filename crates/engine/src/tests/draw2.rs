@@ -894,7 +894,7 @@ fn curvature_rubber_band_is_the_path_the_click_makes() {
     s.pointer(&PointerEvent::new(PointerKind::Up, 450.0, 400.0), v).unwrap();
     let made = path(&s, id).subpaths[0].clone();
     assert_eq!(made.anchors.len(), 4);
-    let tail = vectorcraft_geom::SubPath::new(made.anchors[1..].to_vec(), false);
+    let tail = vectorcraft_geom::SubPath::new(made.anchors.to_vec()[1..].to_vec(), false);
     assert_eq!(preview, bez(&tail));
 }
 
@@ -1222,7 +1222,7 @@ fn scissors_cut_ellipse_end_drags_alone() {
             s.pointer(&PointerEvent::new(PointerKind::Up, cut.x + 8.0, cut.y + 8.0).with_mods(m), v).unwrap();
             assert_eq!(undo_steps(&s), undo + 1);
             let after = path(&s, id);
-            let (old, new) = (&sp.anchors, &after.subpaths[0].anchors);
+            let (old, new) = (&sp.anchors.to_vec(), &after.subpaths[0].anchors.to_vec());
             assert_eq!(new.len(), old.len());
             assert_eq!(new[1..], old[1..], "only the dragged end moves (at anchor: {at_anchor}, {m:?})");
             let d = Point::new(cut.x + 8.0, cut.y + 8.0) - cut;
@@ -1339,6 +1339,84 @@ fn eraser_removes_small_shape_entirely() {
     s.execute("select.none", &json!({})).unwrap();
     s.execute("path.eraseRegion", &json!({"points": [[102, 102]], "size": 20})).unwrap();
     assert!(paths(&s).is_empty());
+}
+
+/// `path.eraseRegion {rect}` (the Eraser's Alt-drag marquee) erases everything inside the
+/// rectangle: a closed shape loses its area, an open path is cut where it crosses the edges, a
+/// shape wholly inside goes, and only the selected paths take part when something is selected. One
+/// undo step puts everything back, and a rectangle that touches nothing adds no undo step.
+#[test]
+fn erase_region_rect_erases_everything_inside_it() {
+    let filled = |s: &Session, x: f64, y: f64| {
+        paths(s).iter().any(|(_, pd)| pd.is_closed() && vectorcraft_geom::hit::fill_contains(&pd.to_bezpath(), FillRule::NonZero, Point::new(x, y)))
+    };
+    let mut s = session();
+    rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+    rect(&mut s, 180.0, 140.0, 10.0, 10.0);
+    line(&mut s, 50.0, 150.0, 350.0, 150.0);
+    s.execute("select.none", &json!({})).unwrap();
+    let undo = undo_steps(&s);
+    let r = s.execute("path.eraseRegion", &json!({"rect": [150, 120, 100, 60]})).unwrap();
+    assert!(!r["ids"].as_array().unwrap().is_empty(), "{r}");
+    assert_eq!(undo_steps(&s), undo + 1);
+    assert!(!filled(&s, 200.0, 150.0) && !filled(&s, 185.0, 145.0), "the area inside is erased, the small square with it");
+    assert!(filled(&s, 120.0, 150.0) && filled(&s, 200.0, 250.0) && filled(&s, 200.0, 110.0), "the rest stays filled");
+    let ps = paths(&s);
+    assert_eq!(ps.iter().filter(|(_, pd)| pd.is_closed()).count(), 1, "the square keeps the rectangle as a hole: {ps:?}");
+    let open: Vec<f64> = ps.iter().filter(|(_, pd)| !pd.is_closed()).map(|(_, pd)| pd.length()).collect();
+    assert_eq!(open.len(), 2, "the line is cut in two: {open:?}");
+    assert!(open.iter().all(|l| (l - 100.0).abs() < 0.01), "{open:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(paths(&s).len(), 3);
+    assert!(filled(&s, 200.0, 160.0) && filled(&s, 185.0, 145.0));
+    // A rectangle away from the art erases nothing and adds no undo step.
+    let undo = undo_steps(&s);
+    assert_eq!(s.execute("path.eraseRegion", &json!({"rect": [500, 500, 10, 10]})).unwrap(), json!({"ids": []}));
+    assert_eq!(undo_steps(&s), undo);
+    // With the line selected, only the line is erased.
+    let ln = paths(&s).into_iter().find(|(_, pd)| !pd.is_closed()).unwrap().0;
+    s.execute("select.set", &json!({"ids": [ln.0]})).unwrap();
+    let closed: Vec<PathData> = paths(&s).into_iter().filter(|(_, pd)| pd.is_closed()).map(|(_, pd)| pd).collect();
+    s.execute("path.eraseRegion", &json!({"rect": [90, 100, 30, 100]})).unwrap();
+    let after: Vec<PathData> = paths(&s).into_iter().filter(|(_, pd)| pd.is_closed()).map(|(_, pd)| pd).collect();
+    assert_eq!(after, closed, "the unselected squares are unchanged");
+    let open: Vec<f64> = paths(&s).iter().filter(|(_, pd)| !pd.is_closed()).map(|(_, pd)| pd.length()).collect();
+    assert_eq!(open.len(), 2);
+    assert!((open.iter().sum::<f64>() - 270.0).abs() < 0.01, "{open:?}");
+}
+
+/// A narrow `path.eraseRegion {rect}` across a long open path cuts it, wherever the rectangle
+/// falls between the samples the path's length would give.
+#[test]
+fn erase_region_rect_cuts_a_long_line_with_a_narrow_rectangle() {
+    let mut s = session();
+    line(&mut s, 0.0, 100.0, 10000.0, 100.0);
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("path.eraseRegion", &json!({"rect": [5000.3, 90, 1, 20]})).unwrap();
+    let mut open: Vec<f64> = paths(&s).iter().map(|(_, pd)| pd.length()).collect();
+    open.sort_by(f64::total_cmp);
+    assert_eq!(open.len(), 2, "{open:?}");
+    assert!((open[0] - 4998.7).abs() < 0.01 && (open[1] - 5000.3).abs() < 0.01, "{open:?}");
+}
+
+/// `path.eraseRegion` refuses a `rect` that is not four finite numbers with a width and a height
+/// above 0, and `rect` given with `points`, and changes nothing.
+#[test]
+fn erase_region_rect_refuses_bad_values() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let shape = "rect is [x, y, width, height] in points, with a width and a height above 0";
+    for p in [
+        json!({"rect": [10, 10, 0, 20]}),
+        json!({"rect": [10, 10, 20, -5]}),
+        json!({"rect": [10, 10, 20]}),
+        json!({"rect": [10, "10", 20, 20]}),
+        json!({"rect": [1e308, 0, 1e308, 20]}),
+        json!({"rect": {"x": 10, "y": 10, "width": 20, "height": 20}}),
+    ] {
+        refuses_with(&mut s, "path.eraseRegion", &p, shape);
+    }
+    refuses_with(&mut s, "path.eraseRegion", &json!({"rect": [10, 10, 20, 20], "points": [[0, 0]]}), "give `points` or `rect`, not both");
 }
 
 /// #4495: the Eraser cuts a compound path as one shape: its hole stays empty, the erased area is
@@ -1576,7 +1654,7 @@ fn a_short_smooth_drag_leaves_the_rest_of_long_segments_alone() {
     drag(&mut s, "smooth", &[(195.0, 194.0), (205.0, 194.0)], Mods::default());
     let p = path(&s, id);
     assert_ne!(p, before, "the bump is smoothed");
-    let a = &p.subpaths[0].anchors;
+    let a = &p.subpaths[0].anchors.to_vec();
     let (first, second, last) = (a[0], a[1], a[a.len() - 1]);
     assert!(first.p == Point::new(50.0, 200.0) && !first.has_out() && !second.has_in(), "the left side is a line still: {first:?} {second:?}");
     assert!(last.p == Point::new(350.0, 200.0) && !last.has_in() && !a[a.len() - 2].has_out(), "and the right one: {last:?}");
@@ -1787,7 +1865,7 @@ fn smoothing_over_a_closed_paths_first_anchor_keeps_its_start() {
     assert_ne!(after, before, "the bump is smoothed");
     assert_starts_nearest(&after, old, 12.0);
     let kept = &after.subpaths[0].anchors;
-    for a in &before.subpaths[0].anchors[2..=10] {
+    for a in &before.subpaths[0].anchors.to_vec()[2..=10] {
         assert!(kept.iter().any(|k| k.p == a.p), "{:?} is out of reach and stays: {kept:?}", a.p);
     }
     s.execute("edit.undo", &json!({})).unwrap();
@@ -2328,6 +2406,39 @@ fn smoothing_keeps_a_corner_between_curves() {
         let at = smooth_turn_at(&path(&s, id).subpaths[0], v);
         assert!(at.is_some_and(|t| (t - turn).abs() < 0.01), "the corner turning {turn}° is kept: {at:?}");
     }
+}
+
+/// A Smooth drag over a corner of a path cut into very many short segments keeps it, however many
+/// segments twice the reach spans: an open path's 90° corner with legs of 2,000 segments 0.05 pt
+/// long at the default reach, and a corner of a 200 pt square cut into 0.25 pt segments with a 40 pt
+/// reach.
+#[test]
+fn smoothing_keeps_corners_on_a_path_of_many_short_segments() {
+    let mut s = session();
+    let (id, v, drag) = smooth_corner_path(&mut s, 90.0, 2000);
+    smooth_pass(&mut s, &drag);
+    let at = smooth_turn_at(&path(&s, id).subpaths[0], v);
+    assert!(at.is_some_and(|t| (t - 90.0).abs() < 0.01), "the open path's corner is kept: {at:?}");
+
+    let mut s = session();
+    let ends = [Point::new(200.0, 200.0), Point::new(400.0, 200.0), Point::new(400.0, 400.0), Point::new(200.0, 400.0)];
+    let mut anchors = vec![];
+    for k in 0..4 {
+        let (a, b) = (ends[k], ends[(k + 1) % 4]);
+        anchors.extend((0..800).map(|j| {
+            let p = a.lerp(b, f64::from(j) / 800.0);
+            json!({"x": p.x, "y": p.y})
+        }));
+    }
+    let id = smooth_test_path(&mut s, &anchors, true);
+    let v = ends[1];
+    let mut drag: Vec<Point> = (0..8).map(|k| v - kurbo::Vec2::new(40.0 - 5.0 * f64::from(k), 0.0)).collect();
+    drag.extend((0..=8).map(|k| v + kurbo::Vec2::new(0.0, 5.0 * f64::from(k))));
+    let pts: Vec<_> = drag.iter().map(|p| json!([p.x, p.y])).collect();
+    s.execute("path.smoothRegion", &json!({"points": pts, "radius": 40, "fidelity": 2.5})).unwrap();
+    let sp = &path(&s, id).subpaths[0];
+    let at = smooth_turn_at(sp, v);
+    assert!(sp.closed && at.is_some_and(|t| (t - 90.0).abs() < 0.01), "the square's corner is kept: {at:?}");
 }
 
 /// A corner at the first anchor of the stretch a drag smooths, just out of its reach, keeps its
@@ -3889,7 +4000,7 @@ fn pen_cmd_selected_anchors_are_what_copy_and_cut_take() {
     assert!(left.is_empty());
     assert!(s.doc().unwrap().selection.objects.is_empty());
     assert_eq!(s.clipboard.nodes.len(), 1);
-    assert_eq!(s.clipboard.nodes[0].path_data().unwrap().subpaths[0].anchors, original.subpaths[0].anchors[1..3]);
+    assert_eq!(s.clipboard.nodes[0].path_data().unwrap().subpaths[0].anchors, original.subpaths[0].anchors.to_vec()[1..3]);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(paths(&s), vec![(id, original.clone())]);
     assert_eq!(s.doc().unwrap().selection, picked);

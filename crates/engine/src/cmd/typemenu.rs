@@ -138,7 +138,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste without Formatting",
             ["Edit"],
             Some("Cmd+Alt+V"),
-            "{center?, dx?, dy?, swatchConflict?} paste as edit.paste; pasted text takes the default character style (one run) and leaves its character and paragraph styles behind, as do the labels of pasted graphs → {ids, added, merged, renamed}",
+            "{center?, dx?, dy?, swatchConflict?} paste as edit.paste; pasted text takes the default character style (one run) and leaves its character and paragraph styles behind, as do the labels of pasted graphs, which take a new graph's label character style and paragraph attributes (keeping their alignment); a pasted graph no longer keeps its labels' character and paragraph formats, so a later redraw sets them the same way → {ids, added, merged, renamed}",
             has_clipboard,
             paste_plain
         ),
@@ -1767,15 +1767,12 @@ fn strip_formatting(n: &mut vectorcraft_doc::Node) {
         t.set_all_paras(Default::default());
         refresh_bounds(t);
     }
-    // A graph keeps the names of its labels' character and paragraph styles for each redraw.
-    if let Some(g) = n.extras_if_any().and_then(|e| e.graph.as_deref_mut()) {
-        let l = &mut g.label_styles;
-        for st in [&mut l.values, &mut l.categories, &mut l.legend].into_iter().flatten() {
-            st.style_name = None;
-        }
-        for pa in [&mut l.values_para, &mut l.categories_para, &mut l.legend_para].into_iter().flatten() {
-            pa.style_name = None;
-        }
+    // A graph keeps its labels' character and paragraph formats for each redraw: they go with the
+    // labels' own formatting, and the labels are set in a new graph's label formats. The graph's generated
+    // bounds follow its changed labels, so the next redraw does not read them as a move.
+    if n.extras().graph.is_some() {
+        super::graph::edit_graph_art(n, |n| super::graph::plain_labels(n, &strip_formatting));
+        return;
     }
     if let Some(ch) = n.children_mut() {
         for c in ch.iter_mut() {
@@ -1786,6 +1783,13 @@ fn strip_formatting(n: &mut vectorcraft_doc::Node) {
 
 fn paste_plain(s: &mut Session, p: &Value) -> Result<Value> {
     let saved = s.clipboard.nodes.clone();
+    // Pasted colors linked to a swatch merged with the document's show its color, so a pasted pie's legend labels take
+    // the contrast of the wedges as pasted. A `swatchConflict` the paste refuses is left to its error.
+    if let (Ok(choices), Ok(st)) = (super::clipboard::SwatchChoices::parse("edit.pasteWithoutFormatting", p), s.doc()) {
+        let same_doc = s.clipboard.source_doc == Some(st.uid);
+        let d = std::sync::Arc::clone(&st.doc);
+        s.clipboard.show_merged_colors(&d, &choices, same_doc);
+    }
     for n in &mut s.clipboard.nodes {
         strip_formatting(n);
     }

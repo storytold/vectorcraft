@@ -160,6 +160,7 @@
 	Align to Artboard	Alinear con la mesa de trabajo
 	Align to Glyph Bounds	Alinear con los límites del glifo
 	Align to Key Object	Alinear con el objeto clave
+	Align to Key Anchor	Alinear con el punto de ancla clave
 	Align to Page	Alinear con la página
 	Align to Path	Alinear con el trazado
 	Align to Selection	Alinear con la selección
@@ -653,6 +654,18 @@ font-technology	Variable	Variables
 	Copy Width Point	Copiar punto de anchura
 	Copyright	Copyright
 	Copyright Info URL:	URL de información de copyright:
+	Save Metadata Template…	Guardar plantilla de metadatos…
+	Import Options	Opciones de importación
+	Clear existing fields and use the template's	Borrar los campos existentes y usar los de la plantilla
+	Keep existing fields, but replace those the template has	Conservar los campos existentes, pero reemplazar los que tenga la plantilla
+	Keep existing fields, but append those the template has	Conservar los campos existentes, pero añadir los que tenga la plantilla
+@msg	the template name can't be empty	el nombre de la plantilla no puede estar vacío
+@msg	the template name isn't usable as a file name	el nombre de la plantilla no se puede usar como nombre de archivo
+@msg	no metadata templates folder here	aquí no hay ninguna carpeta de plantillas de metadatos
+@msg	give `name` or `path`, not both	indique `name` o `path`, no ambos
+@msg	give one of `path`, `name` and `data`	indique uno de `path`, `name` y `data`
+@msg	mode must be replace, keep or append	el modo debe ser replace, keep o append
+@msg	the file is not an XMP metadata template	el archivo no es una plantilla de metadatos XMP
 	Copyright Notice:	Aviso de copyright:
 	Copyright Status:	Estado de copyright:
 	Copyright Symbol	Símbolo de copyright
@@ -1076,7 +1089,10 @@ font-technology	Variable	Variables
 	Every (minutes)	Cada (minutos)
 	Every option is at its default.	Todas las opciones tienen su valor predeterminado.
 	Every option matches {base}.	Todas las opciones coinciden con {base}.
-	Every-line Composer	Composición de todas las líneas
+	Middle Eastern & South Asian Single-line Composer	Composición de una línea (Oriente Medio y Sur de Asia)
+	Middle Eastern & South Asian Every-line Composer	Composición de todas las líneas (Oriente Medio y Sur de Asia)
+	Standard Single-line Composer	Composición estándar de una línea
+	Standard Every-line Composer	Composición estándar de todas las líneas
 	Exact dash lengths	Longitudes exactas de guion
 	Exceptions (comma separated)	Excepciones (separadas por comas)
 	Exclude	Excluir
@@ -1185,6 +1201,7 @@ font-technology	Variable	Variables
 	Rotate (Classic)…	Rotar (clásico)…
 	Surface	Superficie
 	Wireframe	Malla
+	Render Settings	Ajustes de renderizado
 	No Shading	Sin sombreado
 	Plastic	Plástico
 	Highlight Intensity	Intensidad del brillo
@@ -1400,6 +1417,14 @@ font-technology	Variable	Variables
 	Previous Artboard	Mesa de trabajo anterior
 	Next Artboard	Mesa de trabajo siguiente
 	Last Artboard	Última mesa de trabajo
+	Status Bar Show	Mostrar en la barra de estado
+	Artboard Name	Nombre de la mesa de trabajo
+	Current Tool	Herramienta actual
+	Date and Time	Fecha y hora
+	Number of Undos	Número de deshacer
+	Document Color Profile	Perfil de color del documento
+	Undos	Deshacer
+	Redos	Rehacer
 	Go To Link	Ir al vínculo
 	GPL palettes keep solid colours only, as RGB.	Las paletas GPL solo conservan colores sólidos, en RGB.
 	GPU Performance	Rendimiento de GPU
@@ -1419,6 +1444,42 @@ font-technology	Variable	Variables
 	Graph	Gráfico
 	Graph Data	Datos del gráfico
 	Graph Type	Tipo de gráfico
+	Graph Type…	Tipo de gráfico…
+	Graph Data…	Datos del gráfico…
+	Graph Options	Opciones de gráfico
+	Left Axis	Eje izquierdo
+	Right Axis	Eje derecho
+	Category Axis	Eje de categorías
+	Separate Scales	Escalas separadas
+	Add Drop Shadow	Añadir sombra paralela
+	Add Legend Across Top	Añadir leyenda en la parte superior
+	First Row in Front	Primera fila delante
+	First Column in Front	Primera columna delante
+	Legend	Leyenda
+	Column Width	Anchura de columna
+	Bar Width	Anchura de barra
+	Cluster Width	Anchura de grupo
+	Mark Data Points	Marcar puntos de datos
+	Connect Data Points	Conectar puntos de datos
+	Edge-to-Edge Lines	Líneas de borde a borde
+	Draw Filled Lines	Dibujar líneas rellenas
+	Tick Values	Valores de marcas
+	Override Calculated Values	Sustituir valores calculados
+	Divisions	Divisiones
+	Tick Marks	Marcas de graduación
+	Tick Marks per Division	Marcas por división
+	Draw Tick Marks Between Labels	Dibujar marcas entre etiquetas
+	Add Labels	Añadir etiquetas
+	Maximum must be more than Minimum.	El máximo debe ser mayor que el mínimo.
+	Column Graph	Gráfico de columnas
+	Stacked Column Graph	Gráfico de columnas apiladas
+	Bar Graph	Gráfico de barras
+	Stacked Bar Graph	Gráfico de barras apiladas
+	Line Graph	Gráfico de líneas
+	Area Graph	Gráfico de áreas
+	Scatter Graph	Gráfico de dispersión
+	Pie Graph	Gráfico circular
+	Radar Graph	Gráfico de radar
 	Graph Design	Diseño de gráfico
 	Graph Marker	Marcador de gráfico
 	New Design	Nuevo diseño
@@ -1500,6 +1561,7 @@ font-technology	Variable	Variables
 	Show smooth color wheel	Mostrar rueda de color continua
 	Show segmented color wheel	Mostrar rueda de color segmentada
 	Show color bars	Mostrar barras de color
+	Find the selected colors in the artwork	Buscar los colores seleccionados en la ilustración
 	Harmony Sets	Conjuntos de armonía
 	Height	Altura
 	Height:	Altura:
@@ -1539,6 +1601,7 @@ font-technology	Variable	Variables
 	Highlight anchors on mouse over	Resaltar anclas al pasar el puntero
 	Highlight Rows	Resaltar filas
 	Highlight Variable	Resaltar variable
+	Sort Variables	Ordenar variables
 	Highlight Substituted Fonts	Resaltar fuentes sustituidas
 	Highlight Substituted Glyphs	Resaltar glifos sustituidos
 	History	Historial
@@ -2016,6 +2079,7 @@ font-technology	Variable	Variables
 	Menu Dialog	Cuadro de diálogo de menú
 	Merge	Combinar
 	Merge colors into one row	Combinar colores en una fila
+	New Row	Nueva fila
 	Merge Graphic Styles	Combinar estilos gráficos
 	Merge Graphic Styles…	Combinar estilos gráficos…
 	Merge Layers	Combinar capas
@@ -2677,6 +2741,8 @@ font-technology	Variable	Variables
 	Insert Aki Left	Insertar aki a la izquierda
 	Insert Aki Right	Insertar aki a la derecha
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Ajustar posición horizontal de los diacríticos
+	Adjust Vertical Diacritic Position	Ajustar posición vertical de los diacríticos
 	Character Direction	Dirección de caracteres
 	Digits	Dígitos
 	Arabic	Árabes
@@ -3416,7 +3482,6 @@ digits	Malayalam	Malayálam
 	Single Left Quotation Mark	Comilla simple de apertura
 	Single Quotes:	Comillas simples:
 	Single Right Quotation Mark	Comilla simple de cierre
-	Single-line Composer	Composición de una línea
 	Toggle Line Composer	Alternar composición de líneas
 	Sixth Space	Sexto de espacio
 	Size	Tamaño
@@ -3616,6 +3681,9 @@ digits	Malayalam	Malayálam
 	Show Import Options	Mostrar opciones de importación
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Preguntar las opciones de importación de cada archivo PDF, DXF o de texto antes de colocarlo; desactivado: usar las últimas opciones elegidas
 	Stylistic Alternates	Alternativas estilísticas
+	Ligatures	Ligaduras
+	Ornaments	Ornamentos
+	Figures	Cifras
 	Swash	Decorativa
 	Swatch Conflict	Conflicto de muestras
 	Swatch Conflicts	Conflictos de muestras
@@ -3704,11 +3772,55 @@ digits	Malayalam	Malayálam
 	Composite Fonts	Fuentes compuestas
 	Export Composite Fonts	Exportar fuentes compuestas
 	Import Composite Fonts	Importar fuentes compuestas
+@msg	each font must be {name, parts}	cada fuente debe ser {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	clave desconocida `{k}`; una fuente admite name y parts
+@msg	each font needs a name	cada fuente necesita un nombre
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` no puede nombrar una fuente compuesta (de 1 a {COMPOSITE_NAME_MAX} caracteres, sin caracteres de control)
+@msg	`{name}`: parts must be an object	`{name}`: parts debe ser un objeto
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: clase desconocida `{k}`; las clases son kanji, kana, punctuation, symbols, roman y numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} debe ser un objeto
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: clave desconocida `{k}` en {_1}
+@msg	`{name}`: give the kanji part	`{name}`: indique la parte kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	un documento admite como máximo {COMPOSITE_FONTS_MAX} fuentes compuestas
+@msg	two composite fonts are named `{_1}`	dos fuentes compuestas se llaman `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` es el nombre de una fuente instalada
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} usa `{font}`, una fuente compuesta
+@msg	give fonts: [{name, parts}…]	indique fonts: [{name, parts}…]
+@msg	path is empty	path está vacío
+@msg	fonts must be a list of composite fonts	fonts debe ser una lista de fuentes compuestas
+@msg	names must be strings	names debe contener cadenas
+@msg	no composite font named `{n}`	no hay ninguna fuente compuesta llamada `{n}`
+@msg	names must be a list of names	names debe ser una lista de nombres
+@msg	no composite fonts to export	no hay fuentes compuestas para exportar
+@msg	not a composite fonts file: {e}	no es un archivo de fuentes compuestas: {e}
+@msg	not a composite fonts file: no compositeFonts list	no es un archivo de fuentes compuestas: no hay lista compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	el archivo contiene más de {COMPOSITE_FONTS_MAX} fuentes compuestas
+@msg	the file is larger than 4 MB	el archivo ocupa más de 4 MB
+@msg	dataBase64 is not base64	dataBase64 no es base64
+@msg	give one of path, data or dataBase64	indique path, data o dataBase64
+@msg	the file holds no composite fonts	el archivo no contiene fuentes compuestas
+@msg	the file holds two composite fonts named `{_1}`	el archivo contiene dos fuentes compuestas llamadas `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` no puede nombrar una fuente compuesta
+@msg	{k}: give a font	{k}: indique una fuente
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: indique una fuente
+@msg	{k}: size must be {_1} to {_2}%	{k}: size debe estar entre {_1} y {_2} %
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size debe estar entre {_1} y {_2} %
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline debe estar entre {_1} y {_2} %
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline debe estar entre {_1} y {_2} %
+@msg	{k}: scale must be {_1} to {_2}%	{k}: la escala debe estar entre {_1} y {_2} %
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: la escala debe estar entre {_1} y {_2} %
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: solo kana, roman y numerals se pueden escalar
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: solo kana, roman y numerals se pueden escalar
+@msg	{k}: only kana can be scaled at the center	{k}: solo kana se puede escalar desde el centro
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: solo kana se puede escalar desde el centro
+@msg	no composite font	ninguna fuente compuesta
 	Delete Font	Eliminar fuente
 	Kanji	Kanji
 	Kana	Kana
 	Numerals	Números
 	Scale at Center	Escalar desde el centro
+	Delete Set	Eliminar juego
+	Direct Entry	Entrada directa
 	Up/Down:	Arriba/abajo:
 	Left/Right:	Izquierda/derecha:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko arriba/abajo
@@ -4387,6 +4499,27 @@ axis	Both	Ambos
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: un cuadro de diálogo no puede abrirse dentro de una devolución de llamada de una función integrada, un getter, una conversión o un archivo que ejecuta $.evalFile; llámelo desde el propio código del script
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: la siguiente respuesta de `answers` es para {_1}, no para {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: a `answers` no le quedan respuestas para este cuadro de diálogo
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` contiene {n} respuesta que el script no usó|`answers` contiene {n} respuestas que el script no usó
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} dejó {n} objeto bajo el pincel sin cambios ({_2}): solo modifica trazados|{_1} dejó {n} objetos bajo el pincel sin cambios ({_2}): solo modifica trazados
+liquify-tool	Warp	Deformar
+liquify-tool	Twirl	Molinete
+liquify-tool	Pucker	Fruncir
+liquify-tool	Bloat	Engordar
+liquify-tool	Scallop	Festonear
+liquify-tool	Crystallize	Cristalizar
+liquify-tool	Wrinkle	Arrugar
+liquify-kind	graphs	gráficos
+liquify-kind	type	texto
+liquify-kind	symbols	símbolos
+liquify-kind	images	imágenes
+liquify-kind	meshes	mallas
+liquify-kind	envelopes	envolventes
+liquify-kind	repeats	repeticiones
+liquify-kind	placed documents	documentos colocados
+liquify-kind	blends	fusiones
+liquify-list-two	{0}, {1}	{0}, {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0}, {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} es demasiado grande para un script
 @msg	vc.log: the log of this run is full	vc.log: el registro de esta ejecución está lleno
 @msg	this function's script run has ended	la ejecución del script de esta función ha terminado
@@ -4401,6 +4534,17 @@ axis	Both	Ambos
 @msg	`name` must be the name of a script engine	`name` debe ser el nombre de un motor de scripts
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	el motor de scripts principal es nuevo en cada ejecución y nunca se conserva, por lo que no se puede descartar
 @msg	there is no script engine named {name}	no hay ningún motor de scripts llamado {name}
+@msg	`answers` must be a list of answers	`answers` debe ser una lista de respuestas
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` tiene más de {MAX_ANSWERS} respuestas
+@msg	`answers` is larger than 1 MiB	`answers` ocupa más de 1 MiB
+@msg	must be an object with `kind` and `value`	debe ser un objeto con `kind` y `value`
+@msg	must have exactly `kind` and `value`	debe tener exactamente `kind` y `value`
+@msg	is an alert's answer, whose `value` must be "ok"	es la respuesta de un alert, cuyo `value` debe ser "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	es la respuesta de un confirm, cuyo `value` debe ser true o false
+@msg	is longer than 16 KiB	ocupa más de 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	es la respuesta de un prompt, cuyo `value` debe ser una cadena o null
+@msg	must have `kind` alert, confirm or prompt	debe tener `kind` alert, confirm o prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` solo es para una ejecución sin nadie a quien preguntar: en la aplicación, la persona responde cada cuadro de diálogo
 @msg	Running a script	Ejecutando un script
 @msg	Copied the script report	Se copió el informe del script
 @msg	Copied the link info	Se copió la información del vínculo
@@ -5030,6 +5174,8 @@ axis	Both	Ambos
 @msg	unknown option `{path}.{k}`	opción desconocida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpresiones desconocidas `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	panel desconocido `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` no tiene tamaños de visualización que alternar
+@msg	the panels are not shown	los paneles no se muestran
 @msg	panels can't be shown in Presentation Mode	los paneles no se pueden mostrar en el modo de presentación
 @msg	unknown preference `{key}`	preferencia desconocida `{key}`
 @msg	Preferences imported.	Preferencias importadas.
@@ -5318,6 +5464,11 @@ axis	Both	Ambos
 @msg	Imported library {name}	Biblioteca {name} importada
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Norma RGB:
+	CMYK Policy:	Norma CMYK:
+	Preserve Embedded Profiles	Conservar perfiles incrustados
+	Convert to Working Space	Convertir en espacio de trabajo
+	Preserve Numbers	Conservar números
 	Texture	Textura
 	Craquelure…	Craquelado…
 	Grain…	Granulado…
@@ -5400,6 +5551,7 @@ axis	Both	Ambos
 	Change Panel Layout	Cambiar distribución de paneles
 	Close Panel	Cerrar panel
 	Collapse Panel Group	Contraer grupo de paneles
+	Cycle Display Sizes	Alternar tamaños de visualización
 	Move Panel	Mover panel
 	Group with	Agrupar con
 	Resize panels	Cambiar tamaño de los paneles
@@ -5445,6 +5597,8 @@ axis	Both	Ambos
 	Step up or down	Subir o bajar un paso
 	Drag values or labels. Double-click a value to type.	Arrastra los valores o las etiquetas. Haz doble clic en un valor para escribir.
 	Drag rings to rotate. Shift snaps to 15°.	Arrastra los anillos para girar. Shift ajusta a pasos de 15°.
+	Track cube	Cubo de rotación
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Arrastra una cara, una arista o el anillo para girar. Shift gira sobre un eje de la pantalla.
 	Drag the light, or its rings. Shift snaps to 15°.	Arrastra la luz o sus anillos. Shift ajusta a pasos de 15°.
 lighting	Light	Luz
 	Keep visible surfaces only when expanding	Conservar solo superficies visibles al expandir
@@ -5970,6 +6124,7 @@ mark-style	Japanese	Japonesas
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecto 3D en el relleno o el trazo de un grupo no dibuja nada que exportar
 @msg	The 3D object is too complex to export	El objeto 3D es demasiado complejo para exportarlo
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	el objeto no tiene ningún efecto 3D (Extrusión y biselado, Revolución, Inflar o Rotar)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` debe ser un objeto que solo contenga `mode`, con el valor shaded o wireframe
 @msg	its 3D effect builds no solid	su efecto 3D no construye ningún sólido
 @msg	bevel must be none or one of {_1}	bevel debe ser none o uno de estos: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} no puede construir sólidos a partir de esta ilustración: sus instancias de símbolo, fusiones y grupos de recorte contienen demasiados objetos
@@ -6133,8 +6288,11 @@ mark-style	Japanese	Japonesas
 	Export Data Sets…	Exportar conjuntos de datos…
 	Load Variable Library…	Cargar biblioteca de variables…
 	Save Variable Library…	Guardar biblioteca de variables…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	«Importar» lee un archivo de origen de datos con extensión .csv, .tsv, .txt o .xml
 @msg	a variable library holds text variables, and the document has none	una biblioteca de variables contiene variables de texto y el documento no tiene ninguna
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variable `{name}` no se puede guardar en una biblioteca de variables: cámbiele el nombre para que empiece por una letra o `_`, sin espacios ni símbolos distintos de `-`, `_` y `.`
+@msg	{k} has control characters	{k} contiene caracteres de control
+@msg	{k} has control characters or line breaks	{k} contiene caracteres de control o saltos de línea
 @msg	data set `{name}` holds a control character, which a variable library can't hold	el conjunto de datos `{name}` contiene un carácter de control, que una biblioteca de variables no puede contener
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	el conjunto de datos `{name}` empieza o termina con espacio en blanco, que una biblioteca de variables no puede contener
 	Make Graph Dynamic	Hacer gráfico dinámico
@@ -6408,6 +6566,7 @@ axis	Y Axis	Eje Y
 @msg	{what} points outside memory	{what} apunta fuera de la memoria
 @msg	`angle` must be a number	`angle` debe ser un número
 @msg	`aspect` must be from 0.01 to 100	`aspect` debe estar entre 0.01 y 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` debe ser [a, b, c, d], cada uno entre -1000 y 1000, con a·d - b·c a al menos 0.001 de 0
 @msg	`cap` must be "butt", "round" or "square"	`cap` debe ser "butt", "round" o "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` debe ser "nonzero" o "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` debe ser una dirección https:// de {MAX_HELP_URL} bytes como máximo
@@ -6460,6 +6619,7 @@ axis	Y Axis	Eje Y
 @msg	stops must be in order of `offset`	las paradas deben estar en orden de `offset`
 @msg	the document has no pattern {pattern}	el documento no tiene el motivo {pattern}
 @msg	the document has no swatch {n}	el documento no tiene la muestra {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` requiere una parada vinculada a una muestra de tinta plana
 @msg	the output	la salida
 @msg	the path has no anchor points	el trazado no tiene puntos de ancla
 @msg	too many anchor points (limit {MAX_ANCHORS})	demasiados puntos de ancla (límite {MAX_ANCHORS})
@@ -7523,6 +7683,19 @@ breakText	Glyphs	Glifos
 	Not Aligned to Pixel Grid	No alineado con cuadrícula de píxeles
 @msg	only paths and compound paths can be aligned to the pixel grid	solo los trazados y los trazados compuestos se pueden alinear con la cuadrícula de píxeles
 @msg	side is left or right, not `{s}`	side es left o right, no `{s}`
+@msg	side is left or right, not `{v}`	side es left o right, no `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order es un número entero de 0 a {others}, no `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (el nombre de una barra de herramientas) debe ser una cadena de texto
+@msg	no toolbar named `{name}`	no hay ninguna barra de herramientas llamada `{name}`
+@msg	toolbar name can't be empty	el nombre de la barra de herramientas no puede estar vacío
+@msg	a toolbar name has at most {MAX_NAME} characters	el nombre de una barra de herramientas tiene como máximo {MAX_NAME} caracteres
+@msg	there is already a toolbar named `{name}`	ya hay una barra de herramientas llamada `{name}`
+@msg	there is already a toolbar named `{to}`	ya hay una barra de herramientas llamada `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	un espacio de trabajo guarda como máximo {MAX} barras de herramientas
+@msg	name (a toolbar's name) must be a string	name (el nombre de una barra de herramientas) debe ser una cadena de texto
+@msg	name (a toolbar's name) is required	Se requiere name (el nombre de una barra de herramientas)
+@msg	to (the new name) is required	Se requiere to (el nuevo nombre)
+@msg	name must be a toolbar's name	name debe ser el nombre de una barra de herramientas
 	Ignore All	Omitir todo
 	Add to Dictionary	Añadir al diccionario
 	No Suggestions	No hay sugerencias
@@ -7619,3 +7792,21 @@ breakText	Glyphs	Glifos
 	Nest Shapes…	Anidar formas…
 	Nest Shapes	Anidar formas
 	Roll	Rollo
+	Packaging Tools	Herramientas de embalaje
+	Fold Lines	Líneas de plegado
+	Make Cut Line	Convertir en línea de corte
+	Make Crease Line	Convertir en línea de hendido
+	Make Partial Cut Line	Convertir en línea de corte parcial
+	Make Perforation Line	Convertir en línea de perforación
+	Make Fold Line	Convertir en línea de plegado
+	Role Swatches…	Muestras de los tipos de línea…
+	Role Swatches	Muestras de los tipos de línea
+	Role	Tipo de línea
+	Cut Line	Línea de corte
+	Crease Line	Línea de hendido
+	Partial Cut Line	Línea de corte parcial
+	Perforation Line	Línea de perforación
+	No objects are selected.	No hay objetos seleccionados.
+	Open a document to mark its fold lines.	Abre un documento para marcar sus líneas de plegado.
+	Remove Fold Line Role	Quitar tipo de línea
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"

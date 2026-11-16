@@ -26,7 +26,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Ellipse",
             [],
             None,
-            "{x, y, width, height, rotation?: deg clockwise about the centre (0: upright)} → {id}",
+            "{x, y, width, height, rotation?: deg clockwise about the centre (0: upright), anchors=4 (2–1000: smooth anchors spaced evenly by angle; any count but 4 draws a plain path, not a live ellipse)} → {id}",
             has_doc,
             ellipse
         ),
@@ -53,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Flare",
             [],
             None,
-            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?} → {id}",
+            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?, ringSeed? (whole number below 2^53: places the rings along the path anew, keeping their count and sizes)} → {id}",
             has_doc,
             flare
         ),
@@ -362,10 +362,28 @@ fn rectangle(s: &mut Session, p: &Value) -> Result<Value> {
     add_art_turned(s, label, path_kind(live.to_path(), Some(live)), f64_or(p, "rotation", 0.0))
 }
 
+/// The most anchors `shape.ellipse` draws, as many as a polygon's sides.
+const MAX_ELLIPSE_ANCHORS: u64 = 1000;
+
 fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
     let r = rect_of(p, "shape.ellipse")?;
-    let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: rect_transform(r, p, "shape.ellipse")? };
-    add_art_turned(s, "Ellipse", path_kind(live.to_path(), Some(live)), f64_or(p, "rotation", 0.0))
+    // One message for every number that is not a whole count in range (a fraction, a negative,
+    // 0, 1, too many); a value that is not a number gets `number_or`'s.
+    let (key, min, max) = ("anchors", 2, MAX_ELLIPSE_ANCHORS);
+    let n = number_or(p, key, 4.0, "shape.ellipse")?;
+    if n.fract() != 0.0 || !(min as f64..=max as f64).contains(&n) {
+        return Err(bad("shape.ellipse", format!("`{key}` must be a whole number between {min} and {max} (got {n})")));
+    }
+    let x = n as u64;
+    let xf = rect_transform(r, p, "shape.ellipse")?;
+    let rotation = f64_or(p, "rotation", 0.0);
+    if x != 4 {
+        // Another count is a plain path: a live ellipse always has 4 anchors.
+        let path = shapes::ellipse_with_anchors(Rect::new(0.0, 0.0, r.width(), r.height()), x as u32).transformed(xf);
+        return add_art_turned(s, "Ellipse", path_kind(path, None), rotation);
+    }
+    let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf };
+    add_art_turned(s, "Ellipse", path_kind(live.to_path(), Some(live)), rotation)
 }
 
 /// The whole-number count `p` gives for `key` (`5` or `5.0`), or `default` when it is left out or
@@ -429,6 +447,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
         "direction",
         "pathLength",
         "seed",
+        "ringSeed",
     ];
     check_numbers(p, &numbers, "shape.flare")?;
     let pct = |k: &str, d: f64| (f64_or(p, k, d) / 100.0).clamp(0.0, 10.0);
@@ -450,14 +469,28 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
             c + vectorcraft_geom::Vec2::new(a.cos(), -a.sin()) * f64_or(p, "pathLength", 300.0)
         }
     };
-    // Deterministic pseudo-random sizes (same parameters → same flare).
-    let mut seed = p.get("seed").and_then(Value::as_u64).unwrap_or(0x2545_f491_4f6c_dd1d) | 1;
-    let mut rnd = move || {
-        seed ^= seed << 13;
-        seed ^= seed >> 7;
-        seed ^= seed << 17;
-        (seed >> 11) as f64 / (1u64 << 53) as f64
+    // Deterministic pseudo-random sizes (same parameters → same flare). `ringSeed` places the rings
+    // along the path from a sequence of its own; their count and sizes and the other parts stay.
+    let seed_of = |key: &str| match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_u64().map(Some).ok_or_else(|| bad("shape.flare", format!("`{key}` must be a whole number of at least 0, not {v}"))),
     };
+    // The generator's state is odd (never 0).
+    let random = |mut state: u64| {
+        move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state >> 11) as f64 / (1u64 << 53) as f64
+        }
+    };
+    let mut rnd = random(seed_of("seed")?.unwrap_or(0x2545_f491_4f6c_dd1d) | 1);
+    // Each `ringSeed` below 2^53 (what a JSON number holds exactly) gets a state of its own.
+    let ring_seed = match seed_of("ringSeed")? {
+        Some(r) if r >= 1 << 53 => return Err(bad("shape.flare", format!("`ringSeed` must be below 2^53, not {r}"))),
+        r => r,
+    };
+    let mut ring_at = ring_seed.map(|r| random((r << 1) | 1));
     let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, vectorcraft_color::Color::WHITE) };
     let radial = |centre: Point, radius: f64, stops: Vec<GradientStop>| {
         let mut g = GradientPaint::new(Gradient::new(GradientKind::Radial, stops));
@@ -495,6 +528,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
     // Rings along the path to the end point (Largest = % of the average ring size).
     for _ in 0..rings {
         let t = rnd();
+        let t = ring_at.as_mut().map_or(t, |next| next());
         let at = c + (end - c) * t;
         let rr = (r * largest * (0.25 + rnd() * 0.75)).max(0.5);
         let solid = rnd() < 0.5;
