@@ -264,6 +264,9 @@ the suite) keep the agent to the folders you give it:
   selected objects only, and `clipboard.exportSvg` checks the copied objects, following a relative path from
   the document they came from while it is open; in a frame a request drives, Copy then puts no SVG on the
   system clipboard. An image whose pixels the document holds exports embedded, and a URL is not checked.
+- With `preserveEditing`, the document an SVG or SVGZ of these outputs carries leaves out the Export for Screens
+  folder (`export_settings.folder`) when it is outside the read roots, as `document.exportSettings` does; the
+  other export settings and the art are kept, and the open document keeps the folder.
 - `plugin.list`, `plugin.safeMode`, `file.recovery.*` and `ui_inspect`'s `scriptReport` leave out the paths
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
   folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`
@@ -1994,6 +1997,26 @@ and `rotate` in `object.transformEach`; `ppi` in `object.rasterize`; `width`, `h
 four numbers, such as a string, with `rect must be [x, y, width, height]`; a null `rect` crops to the artboard, as a
 missing one does.
 
+`object.cropImage {ppi}` sets the cropped image's resolution in pixels per inch: the cut pixels are resampled to it,
+and the image keeps the size of the crop box. A `rect` over the whole image with a new `ppi` only resamples the image.
+An image scaled differently across and down is resampled on both sides, so its pixels come out square at `ppi`.
+A turned or skewed image is drawn at the `ppi` given, even its own, and over the whole box around it as well; without
+`ppi` it is drawn at the density of that box. The Crop Image tool's Apply sends such an image's own resolution when
+no other is set and the image can be cropped to it, and crops it over the whole box only when a resolution is chosen.
+The most it takes is the image's own resolution (along the denser side of its pixel grid, however it is turned), or
+300 ppi for a linked image; above that it is refused with `ppi can't be more than {max} for this image`. A value
+outside 1 to 2400 is refused with `ppi must be between 1 and 2400`, and a value that is not a positive number with
+`ppi must be a positive number, not {ppi}`. A resample whose working copies would pass the raster allowance (2 GB,
+512 MB in the web app) is refused with `an image of {w} × {h} pixels is too large to resample`, naming the size
+of the pixels being resampled. A null `ppi` is read as a missing one, and `ppi` with
+`trim` is refused. While the Crop Image tool is chosen, `tool.setOption` sets `ppi` (the resolution Apply sends),
+`reference` (0 to 8, left to right and top to bottom: the point of the box that the Control bar's X and Y name and
+that its W and H resize about; 4, the center, by default) and `linked` (W and H keep the box's proportions; false by
+default). It refuses another value of those three, such as a `ppi` of `"high"`, a `ppi` above what the selected
+image allows or a `reference` of 9, and changes nothing; a null `ppi` goes back to the image's own. `tool.options` reads them back with `rect`.
+Apply holds a `ppi` set before the image was selected to that image's limit. With `linked` on, a new W or H that would
+not fit the image is reduced with the other side in proportion, and the box slides back within the image.
+
 `object.createObjectMosaic` (`columns`, `rows`), `object.transformEach` (`reference`, `seed`) and `artboard.rearrange`
 (`columns`) take whole numbers, written `4` or `4.0`. A fraction or a negative number is refused with
 `` `columns` must be a whole number ``. A string or another value that is not a number is refused with
@@ -2039,6 +2062,12 @@ were. `graph.setType` refuses `` `columnWidth` must be a number, not "50" `` for
 `` `type` must be a string `` for `type`, `valueAxis`, the three tick lengths, `prefix`, `suffix`, `rightPrefix`,
 `rightSuffix`, `pieLegend`, `piePosition` and `pieSort`; and `` `ticks` must be a number, not "5" `` (or
 `` `ticks` must be 0 or more `` for a negative number) for `ticks`, `rightTicks` and the three tick mark counts.
+`lineWidth`, the Line Width of Draw Filled Lines in points (3 when the graph sets none), takes a number from 0.01 to
+1000 (VectorCraft's own range); `"4"` is refused with `` `lineWidth` must be a number, not "4" ``, and a width below
+0.01 or past 1000 with `` `lineWidth` must be from 0.01 to 1000 pt, not 0 ``. The graph stores a width only when it is
+not 3, so a graph without one is saved and drawn as before. A graph with a width of its own is written to `.ai` as its
+art, without the editable graph records. `graph.setType` with options that leave the graph as it is
+records no undo step.
 `axisMin`, `axisMax`, `rightAxisMin` and `rightAxisMax` take a number, or null to go back to the value calculated from
 the data; any other value is refused with `` `axisMin` must be a number or null, not "10" ``. `graph.setData` and
 `graph.create` refuse a `csv` that is not a string, `series` or `categories` that are not lists, and `rows` that are not
@@ -4287,9 +4316,12 @@ Parameters: `angle` (degrees, 0..360, default 360), `offset` (points, 0..100000,
 default 0), `ambient` (Ambient Light, 0..200%, default 25; an earlier `lightAzimuth` and `lightElevation` are read
 as the same light), `cap` (boolean, default true), and `expandVisibleOnly` (boolean, default true). A vertical-line profile needs a positive offset to have a radius.
 `cap` closes each circular endpoint of an open profile with one curved, uniformly shaded
-vector path. Body faces share that curved rim. Partial sweeps use sectors and leave their angular
-cut sides open. Closed or coincident-end profiles are unchanged.
-Missing `cap` enables caps; set it to false for open endpoints. Shaded Revolve surfaces automatically interpolate curved-surface lighting with vector gradients while preserving profile corners and flat caps. There is no separate smoothing parameter. `shade: false` disables all lighting. Visibility of intersecting surfaces is approximate.
+vector path. Body faces share that curved rim. Partial sweeps use sectors, and `cap` also closes their two
+angular cut sides with flat faces: the region between each open subpath and the axis and the area the closed
+subpaths fill together under the object's fill rule, one face for each region. A closed subpath that walls a hole
+leaves that hole open, and an overlap of closed subpaths is filled or left open as the fill rule fills it.
+Exported 3D meshes include the cut sides.
+Missing `cap` enables caps; set it to false for open endpoints and open cut sides (hollow). Shaded Revolve surfaces automatically interpolate curved-surface lighting with vector gradients while preserving profile corners and flat caps. There is no separate smoothing parameter. `shade: false` disables all lighting. Visibility of intersecting surfaces is approximate.
 `lights` is null by default, retaining the earlier single-light controls. Set an array of one to ten objects to replace that light: `{color: "#rrggbb", intensity: 0..100, rotation: -180..180, height: 0..90, softness: 0..100, behind: bool}`. Defaults per light are white, 80%, 125.26 degrees, 30 degrees, 0%, false. Omitted fields use defaults; unknown nested keys and malformed lists are refused before mutation. `ambient` is shared and counted once. Set `lights: null` to restore the earlier controls. The list is saved in the native file and survives preview, undo and expansion.
 
 ```json
@@ -4517,7 +4549,7 @@ an unknown surface or shading color is refused with an error and the document is
 `effect.apply {effect: "threeD.classicRevolve", params: {...}, ids?, item?}` is Effect › 3D and Materials ›
 3D (Classic) › Revolve (Classic)…. It sweeps the profile round a vertical axis as `threeD.revolve` does, at 64 segments
 for a full turn, and draws every face, back to front, with the classic surfaces. Parameters: `angle` (degrees,
-0..360, default 360), `cap` (true closes the profile's open ends, false leaves the surface hollow), `offset` (points,
+0..360, default 360), `cap` (true closes the profile's open ends and a partial sweep's cut sides, false leaves the surface hollow), `offset` (points,
 0..1000, default 0; the axis's distance from the profile, so a value above 0 makes a ring), `edge` (`left`, the
 default, or `right`: the edge of the profile's bounds the axis is at), `rotationX/Y/Z` and `perspectiveAngle` as
 above, and `surface`, the lights, `ambient`, `highlightIntensity`, `highlightSize`, `blendSteps`, `shadingColor`,
@@ -5393,11 +5425,19 @@ the object with the image). Type with a geometry effect (Outline Object included
 is outlined; type that has no fills or strokes of its own and whose only effects are shadows or outer glows stays
 type, with the image under it. A group's or layer's own fills and strokes become objects among its members, and its
 members are expanded too. A symbol instance whose topmost fill or topmost stroke is visible, has an opacity above 0
-and has a geometry effect becomes a group of its art: that fill's effects reshape the filled shapes of the art and that
-stroke's effects reshape its stroked shapes, which keep their colors, as the canvas draws them (VectorCraft's own
-rule); the instance's other fills and strokes are dropped. A raster effect on that fill or stroke draws on the filled
-or stroked shapes of the art, and expanding makes it an image as for other objects; with no geometry effect, the
-instance stays an instance over a shadow or glow image, and a blur, feather or inner glow replaces it with the image.
+and has a geometry or raster effect becomes a group of its art: that fill's effects reshape the filled shapes of the
+art and that stroke's effects reshape its stroked shapes, which keep their colors, as the canvas draws them
+(VectorCraft's own rule); the instance's other fills and strokes are dropped. A raster effect on that fill or stroke
+draws on the filled or stroked shapes of the art, and expanding makes it an image as for other objects: a shadow or
+glow image goes under the art, and a blur, feather or inner glow replaces the instance with the image. A symbol
+instance in the art whose topmost fill or stroke has a geometry or raster effect, its own or one the outer instance
+passes on, becomes its art and image the same way, and so do the instances in that art (VectorCraft's own rule).
+Before, an instance whose fill or stroke had only a shadow or glow stayed an instance over the image, and a raster
+effect on an instance in the art stayed live.
+One Expand Appearance makes at most 1,024 images of raster effects, holding 256 megapixels in all (VectorCraft's own
+limits). An object or symbol instance whose image would go past them stays as it is, with its effects and the objects
+in it; the result then carries a `warning` and `rasterLeft`, the number of objects left so, and when nothing else
+expands the command fails with the same message. A legacy `.ai` save notes it the same way.
 The result is `{ids}`; when an image in the art can't be decoded, the images made from
 raster effects do not show it, and the result also carries the `warning` that Flatten Transparency gives.
 A path's strokes stay strokes, as the
@@ -5925,6 +5965,12 @@ string, with "x and y must both be numbers". All of them except `path.curvature`
 rotation or wheel that is neither a number nor null with `` `pressure` must be a number, not "0.5" ``, naming the key
 (`pressure`, `tiltX`, `tiltY`, `rotation` or `wheel`). `path.close` refuses an `at`, `in` or `out` that is not `[x, y]`
 with `` `in` must be [x, y] ``, naming the key.
+
+`path.eraseRegion` refuses an `angle` outside -180° to 180° with `` `angle` must be from -180 to 180 degrees `` and a
+`roundness` outside 1% to 100% with `` `roundness` must be from 1 to 100% ``. `path.split` refuses a `t` outside 0 to 1
+with `` `t` must be from 0 to 1 ``, with `segment` or with `anchor`. The document does not change and no undo step is
+recorded. Left out or null, `angle` is 0° and `roundness` is 100%; left out, `t` is 0.5. The Eraser's ranges are
+VectorCraft's own values.
 
 These commands refuse a string, a number or another value that is not true or false with
 `` `closed` must be true or false ``, naming the key; the document does not change and no undo step is recorded:
@@ -8908,6 +8954,18 @@ has the option as Preserve Text Editability
 {"name":"export","arguments":{"path":"/tmp/poster.psd","options":{"ppi":300,"preserveText":true}}}
 ```
 
+With or without layers, the file keeps the document's slices in image resource 1050, in version 6 of the slices
+resource format of the [Photoshop File Formats Specification](https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/).
+`importSlices` reads that form, so the slices of an opened PSD file come back when the export is opened. The rest are
+VectorCraft's own rules:
+
+- The user and object slices that reach into the exported artboard are written, each clipped to it, in its pixels,
+  at least one pixel each way. Auto slices aren't written; the document that opens the file lays them out again.
+- An object slice is written as a user slice over its object's bounds. Each slice keeps its name, its type (Image
+  or No Image), its link, target, message, alternative text, cell text and background color. An HTML Text slice is
+  written as No Image with its type's text as HTML. Text alignment is written as the default.
+- More than 10000 slices, a slice text longer than 65536 characters, or a slice without finite bounds is an error.
+
 PSD files (`.psd`, and `.psb`, the large document format) place as their merged image, the
 flattened picture every PSD file carries: Bitmap, Grayscale, Duotone, Indexed, RGB, CMYK
 (converted with the colour settings' CMYK) and Lab, at 1, 8, 16 and 32 bits per channel, sized by their resolution.
@@ -10019,9 +10077,19 @@ font based on the one picked, Delete Font takes it out, Import… adds the fonts
 picked. Custom shows the font's custom character sets: Character Set picks one, New adds a set based on the one picked,
 Delete Set takes it out, and Name renames it. Character › Direct Entry adds the characters typed, and Character ›
 Unicode adds the characters of hexadecimal codes (`3042`, `U+3042`, several separated by spaces or commas); Add skips
-characters the set already lists. Delete takes the character picked out of the set. OK runs `type.compositeFonts.set`
-with every font as one undo step; a refused font keeps the dialog open. `ui.dialog.set` takes `custom`, `entry` and
-`char` (the index of the character picked in the set) as soon as the dialog opens.
+characters the set already lists. Delete takes the character picked out of the set. Show Sample (Hide Sample when it
+shows) draws the font picked in a line of sample text, with the first character of each custom set added, and a button
+beside it for each line it can mark: ICF Box, Em Box, Baseline, Cap Height, Max Ascent/Descent, Max Ascender and
+x-height ([Creating composite fonts](https://help.adobe.com/archive/en_US/illustrator/cs4/illustrator_cs4_help.pdf#page=352)).
+The em box and ICF box are those of the font of the part that sets the sample's first Kanji (the Kanji part, or a
+custom set that holds that character), the cap height and x-height those of the face the Roman letters are drawn in (a fallback face when the part's font lacks the character), Max Ascent/Descent the highest
+ascent and lowest descent of the faces the sample uses, and Max Ascender the top of its tallest glyph; each takes its
+part's size, baseline and vertical scale. Zoom draws it at 25% to 800% of 36 pt. The
+sample text, the zoom steps and the size are VectorCraft's own. OK runs `type.compositeFonts.set` with every font as one
+undo step; a refused font keeps the dialog open. `ui.dialog.set` takes `custom`, `entry` and `char` (the index of the
+character picked in the set) as soon as the dialog opens, and `sample` (true or false), `zoom` (25, 50, 75, 100, 200,
+400 or 800) and `lineIcfBox`, `lineEmBox`, `lineBaseline`, `lineCapHeight`, `lineAscentDescent`, `lineAscender` and
+`lineXHeight` (true or false; the first three start true); another value is refused.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.compositeFonts.set","params":{"fonts":[{"name":"My Composite","parts":{"kanji":{"font":"Source Han Sans"},"roman":{"font":"Source Sans 3","size":95,"baseline":-2},"numerals":{"font":"Source Sans 3"}}}]}}}
@@ -11125,9 +11193,23 @@ the fallback font and is listed as missing, without editing the document. The ty
 symbols and pattern swatches is laid out again too, and inline graphics take the new size of their symbols' art. The app does so by
 itself when its window comes to the front and a font folder changed meanwhile.
 
+`text.similarFonts {family, limit?}` gives the families `text.fontList` lists in the order a font menu's Show Similar
+Fonts lists them (the ≈ button on a family's row; the ≈ chip under the filters clears it): `{family, families}`, with
+`family` the family's own name first, then the families that set the same script (Japanese, Thai or neither), then the
+others, each group nearest first. The measure is VectorCraft's own. It compares each family's face nearest an upright
+Regular by its OS/2 PANOSE digits (only between faces of the same PANOSE family kind), weight and width classes, x-height,
+cap height and average character width, and its `post` italic angle (a named instance of a variable font takes its `wght`
+and `slnt` settings), leaving out a number either face does not give, and counts a family of another kind (serif, sans
+serif, script and the font menu's other kinds) as further away. It reads these when a font is cataloged or loaded and opens
+no font file when asked. `limit` (a whole number from 1 to 100000) keeps
+the first ones. A missing or blank `family` fails with `` `family` is required ``, one that is not a string with
+`` `family` must be a string ``, a family that isn't available or that the font menus don't list with ``font family `<name>` is not available``, and any
+other `limit` with `` `limit` must be a whole number from 1 to 100000 ``.
+
 ```json
 {"name":"run_command","arguments":{"command":"text.fontList","params":{}}}
 {"name":"run_command","arguments":{"command":"text.fontList","params":{"family":"Source Serif 4"}}}
+{"name":"run_command","arguments":{"command":"text.similarFonts","params":{"family":"Source Sans 3","limit":10}}}
 {"name":"run_command","arguments":{"command":"text.rescanFonts","params":{}}}
 ```
 
@@ -11233,8 +11315,9 @@ A canvas-click dialog also has `preview` (initially on): tentative settings draw
 Object › Graph › Type… (`graph.setType` without params) and a double-click on a graph tool open Graph Type (dialog
 `graphType`) for the selected graph, or for the series picked in it with Group Selection. Its fields are the options
 `graph.setType {}` returns, under the command's names for them. `legend`, `pieLegend`, `piePosition`, `pieSort`,
-`firstRowInFront`, `firstColumnInFront` and `filledLines` are held for every type, so a type picked in the dialog shows
-the options it uses. `overrideValues` and `rightOverrideValues` are Override Calculated Values of the left (or only)
+`firstRowInFront`, `firstColumnInFront`, `filledLines` and `lineWidth` are held for every type, so a type picked in the
+dialog shows the options it uses. The Line Width field next to Draw Filled Lines is available only while Draw Filled
+Lines and Connect Data Points are on. `overrideValues` and `rightOverrideValues` are Override Calculated Values of the left (or only)
 value axis and of the right one. While one is on, OK sends `axisMin`, `axisMax` and `ticks` (or `rightAxisMin`,
 `rightAxisMax` and `rightTicks`), and the dialog fills the ones the graph lacks with the values the axis would be
 calculated with for the type, value axis and Separate Scales the dialog shows.
@@ -12324,6 +12407,26 @@ Commands:
 - `addon.pathtools.shape.convert {ids?}` makes the selected plain closed paths that are rectangles, ellipses or
   polygons with equal sides and corners (stretched along their own axes at most) parametric shapes with the same
   outline. → `{ids}` (those converted).
+- `addon.pathtools.commonTangents {tangents?, centerline?, ids?}` adds the common tangent lines of two convex closed
+  paths (`ids`, or the two selected objects) as separate open paths: lines that touch both paths without crossing into
+  either. `tangents`: `external` (both paths on the same side of the line), `internal` (lines that run between them)
+  or `all` (default). With `centerline: true` it also adds the line joining the two centers: an ellipse's center, or
+  a path's center of area. Each tangent of paths that do not touch runs from where it touches the lower path to
+  where it touches the upper one; where a straight side of a path lies along the line, the line covers the whole
+  side. An ellipse drawn with the Ellipse tool, then moved, turned or scaled, is measured as an exact ellipse. Any
+  other path must be closed, have one outline, bend the same way all around and have at most 10,000 segments; an open
+  path, a path that bends inward, a path without area, a group, a compound path or type is refused, and so are two
+  paths whose outlines are the same to within the touching tolerance given below. Two separate paths have two
+  external and two internal tangents. Overlapping paths have external tangents only. A path inside the other has
+  none. Paths that touch, from outside or from inside, share one tangent there instead: a line centered on the point
+  where they touch and as long as the narrower path is wide along it. Paths that meet at a corner or along a shared
+  stretch of outline get one such line, at the middle of the directions that touch both. Paths count as touching when
+  the gap between them is less than the tolerance, a billionth of the larger of their sizes and the distance between
+  their centers. The lines are stroked with the current stroke color and weight (black when the stroke is None), have
+  no fill, go directly above the upper of the two paths and are selected; one undo step. When there is no tangent of
+  the kind asked for, nothing changes, and the result's `warning` says why. Common Tangents…
+  opens a dialog (Tangents, Centerline) with Preview. → `{ids, external, internal, centerline, warning?}`
+  (`centerline`: the centerline's id, or null).
 
 A parametric shape is an ordinary path. It keeps its numbers, with a fingerprint of the outline they drew, in one
 entry of its object data (`vc-pathtools-shape`, as `document.node` lists `attrs.data`), which SVG export leaves out;
@@ -12337,6 +12440,7 @@ plain path from then on.
 {"name":"run_command","arguments":{"command":"addon.pathtools.crossings","params":{"cut":true}}}
 {"name":"run_command","arguments":{"command":"addon.pathtools.shape.create","params":{"kind":"star","center":[200,150],"width":120,"height":120,"count":7,"a":0.4}}}
 {"name":"run_command","arguments":{"command":"addon.pathtools.shape.set","params":{"id":14,"kind":"gear","count":16,"radius":2}}}
+{"name":"run_command","arguments":{"command":"addon.pathtools.commonTangents","params":{"ids":[3,4],"tangents":"external","centerline":true}}}
 ```
 
 ### Path Effects (live)

@@ -1306,6 +1306,8 @@ font-technology	Variable	Variabla
 	Font Family & Style	Typsnittsfamilj och stil
 	Font Family, Style & Size	Typsnittsfamilj, stil och storlek
 	Font List	Typsnittslista
+	Show Similar Fonts	Visa liknande typsnitt
+	Clear Similar Fonts	Rensa liknande typsnitt
 	Font Preview Size	Storlek på typsnittsförhandsgranskning
 	Font Size	Teckenstorlek
 	Variable Font	Variabelt typsnitt
@@ -1421,6 +1423,7 @@ font-technology	Variable	Variabla
 	Connect Data Points	Förbind datapunkter
 	Edge-to-Edge Lines	Linjer från kant till kant
 	Draw Filled Lines	Rita fyllda linjer
+	Line Width	Linjebredd
 	Tick Values	Skalstrecksvärden
 	Override Calculated Values	Åsidosätt beräknade värden
 	Divisions	Indelningar
@@ -4533,6 +4536,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	Divide Objects Below: select exactly one path	Dela objekt under: markera exakt en bana
 @msg	Downloaded {what}	Hämtade {what}
 @msg	Expand Appearance: the selection has a basic appearance	Expandera utseende: markeringen har ett grundläggande utseende
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	vissa rastereffekter gjordes inte om till bilder: de skulle kräva mer än 1 024 bilder eller totalt 256 megapixlar
 @msg	Expand: no brush strokes selected	Expandera: inga penseldrag är markerade
 @msg	Expand: no gradient fills	Expandera: inga gradientfyllningar
 @msg	Expand: nothing to expand	Expandera: ingenting att expandera
@@ -5350,6 +5354,10 @@ liquify-list-end	{0}, {1}	{0} och {1}
 	Em Box	Em-ruta
 	x-Height	x-höjd
 	ICF Box	ICF-ruta
+	Show Sample	Visa exempel
+	Hide Sample	Dölj exempel
+	Max Ascent/Descent	Max höjd/djup
+	Max Ascender	Max uppstapel
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` är stegreferensen {r}, som bara `run` och `command_batch` löser upp
 @msg	`ids` must be an array of object ids, not {v}	`ids` måste vara en array med objekt-id:n, inte {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` måste vara en array med färger, inte {v}
@@ -6230,7 +6238,7 @@ theme	Appearance	Utseende
 	By Object	Efter objekt
 	Check an artboard to save.	Markera en rityta som ska sparas.
 	Clear All	Rensa alla
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Stäng de cirkulära ändarna på öppna profiler. Partiella svep behåller sina snittsidor öppna.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Stäng de cirkulära ändarna på öppna profiler. Partiella svep stänger även sina snittsidor.
 	Color Panel Options	Alternativ för panelen Färg
 	Color blindness – Tritanopia-type	Färgblindhet – tritanopi
 	Create Dimension	Skapa mått
@@ -7472,6 +7480,22 @@ breakText	Glyphs	Glyfer
 	Remove Gaps	Ta bort mellanrum
 @msg	that makes too many pieces (at most 100000): make the dashes longer	det blir för många delar (högst 100000): gör strecken längre
 @msg	select paths, or segments, to divide	markera banor eller segment att dela upp
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Gemensamma tangenter…
+	Common Tangents	Gemensamma tangenter
+	Tangents	Tangenter
+	Centerline	Mittlinje
+	External	Yttre
+	Internal	Inre
+@msg	select two closed paths	markera två slutna banor
+@msg	a selected path is open	en markerad bana är öppen
+@msg	a selected path is not convex	en markerad bana är inte konvex
+@msg	a selected path has no area	en markerad bana har ingen yta
+@msg	a selected path has more than 10000 segments	en markerad bana har fler än 10000 segment
+@msg	the two paths have the same outline	de två banorna har samma kontur
+@msg	One path lies inside the other, so they have no common tangents	Den ena banan ligger inuti den andra, så de har inga gemensamma tangenter
+@msg	The paths overlap, so they have no internal tangents	Banorna överlappar, så de har inga inre tangenter
+@msg	One path lies inside the other, so they have no internal tangents	Den ena banan ligger inuti den andra, så de har inga inre tangenter
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandera streck till banor
 @msg	select paths with dashed strokes to expand	markera banor med streckad kontur att expandera
@@ -8700,7 +8724,9 @@ digits	Hindi	Hindi
 @msg	position must be normal, superscript or subscript	position måste vara normal, superscript eller subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position måste vara topLeft, topRight, bottomLeft eller bottomRight
 @msg	positions must be between 0 and 100000 pt	positionerna måste vara mellan 0 och 100 000 pt
+@msg	ppi can't be more than {max} for this image	ppi kan inte vara mer än {max} för den här bilden
 @msg	ppi must be a positive number, not {ppi}	ppi måste vara ett positivt tal, inte {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim behåller bildens pixlar som de är: utelämna ppi
 @msg	ppi must be between 1 and 2400	ppi måste vara mellan 1 och 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` är inte transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape måste vara clippingMask|transparency
@@ -9209,6 +9235,8 @@ digits	Hindi	Hindi
 @msg	No bridge of this width fits across the selected art	Ingen brygga med den här bredden får plats över den markerade teckningen
 @msg	Some islands could not be joined to the area around the art	Vissa öar kunde inte förbindas med området runt teckningen
 @msg	`width` must be from {lo} to {hi} pt	`width` måste vara från {lo} till {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` måste vara från -180 till 180 grader
+@msg	`roundness` must be from 1 to 100%	`roundness` måste vara från 1 till 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` måste vara ett heltal från 1 till {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Rensningsram och rensningslinjer…
 	Weed Box and Lines	Rensningsram och rensningslinjer

@@ -196,6 +196,9 @@ pub(super) fn split(s: &mut Session, p: &Value) -> Result<Value> {
     if !t.is_finite() || p.get("t").is_some_and(|v| !v.is_f64() && !v.is_i64() && !v.is_u64()) {
         return Err(bad(C, "invalid t"));
     }
+    if !(0.0..=1.0).contains(&t) {
+        return Err(bad(C, "`t` must be from 0 to 1"));
+    }
     let ids = s.edit("Split Path", |d, sel| {
         let path = path_mut(d, id)?;
         let mut sp = path.subpaths.get(si).cloned().ok_or_else(|| EngineError::Other("no such subpath".into()))?;
@@ -295,7 +298,13 @@ pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
     let samples = samples_param(p, "points", C)?;
     let size = ranged(p, "size", 10.0, SIZES, C)?;
     let angle = number_or(p, "angle", 0.0, C)?;
+    if !(-180.0..=180.0).contains(&angle) {
+        return Err(bad(C, "`angle` must be from -180 to 180 degrees"));
+    }
     let roundness = number_or(p, "roundness", 100.0, C)?;
+    if !(1.0..=100.0).contains(&roundness) {
+        return Err(bad(C, "`roundness` must be from 1 to 100%"));
+    }
     let vary = eraser_variations(p, C)?;
     if varies_beyond_size_pressure(&vary) {
         return erase_varied(s, &samples, [angle, roundness, size], vary);
@@ -305,7 +314,7 @@ pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
     let r = size / 2.0;
     // The tip's short axis (its narrowest with Pressure): an open path is sampled at least every half of it.
     let narrowest = pressure.as_ref().map_or(size, |(_, v)| vectorcraft_tools::draw2::pressure_size(size, *v, 0.0));
-    let short = narrowest * roundness.clamp(1.0, 100.0) / 100.0;
+    let short = narrowest * roundness / 100.0;
     let st = s.doc()?;
     // A point is under the tip when, with the tip squashed back into a circle, it is within the
     // circle's radius of the squashed drag.

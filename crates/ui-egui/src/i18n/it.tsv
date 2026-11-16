@@ -1045,6 +1045,10 @@ font-technology	Variable	Variabili
 	Cap Height	Altezza maiuscole
 	x-Height	Altezza x
 	ICF Box	Riquadro ICF
+	Show Sample	Mostra campione
+	Hide Sample	Nascondi campione
+	Max Ascent/Descent	Altezza/profondità max
+	Max Ascender	Ascendente max
 	Em Dash	Lineetta
 	Em Space	Spazio em
 	Embed	Incorpora
@@ -1368,6 +1372,8 @@ file-filter	Templates	Modelli
 	Font Family & Style	Famiglia e stile font
 	Font Family, Style & Size	Famiglia, stile e dimensione font
 	Font List	Elenco font
+	Show Similar Fonts	Mostra font simili
+	Clear Similar Fonts	Cancella font simili
 	Font Preview Size	Dimensione anteprima font
 	Font Size	Dimensione font
 	Variable Font	Font variabile
@@ -1483,6 +1489,7 @@ file-filter	Templates	Modelli
 	Connect Data Points	Collega punti dati
 	Edge-to-Edge Lines	Linee da bordo a bordo
 	Draw Filled Lines	Disegna linee piene
+	Line Width	Spessore linea
 	Tick Values	Valori delle tacche
 	Override Calculated Values	Sostituisci valori calcolati
 	Divisions	Divisioni
@@ -4651,6 +4658,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	Divide Objects Below: select exactly one path	Dividi oggetti sottostanti: seleziona esattamente un tracciato
 @msg	Downloaded {what}	Scaricato {what}
 @msg	Expand Appearance: the selection has a basic appearance	Espandi aspetto: la selezione ha un aspetto di base
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	alcuni effetti raster non sono stati trasformati in immagini: richiederebbero più di 1.024 immagini o 256 megapixel in totale
 @msg	Expand: no brush strokes selected	Espandi: nessuna traccia di pennello selezionata
 @msg	Expand: no gradient fills	Espandi: nessun riempimento con sfumatura
 @msg	Expand: nothing to expand	Espandi: niente da espandere
@@ -5975,7 +5983,7 @@ lighting	Light	Luce
 @msg	Unknown dimension style	Stile di quota sconosciuto
 @msg	Unknown unit	Unità sconosciuta
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Chiude le estremità circolari dei profili aperti. Le rotazioni parziali mantengono aperti i lati di taglio.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Chiude le estremità circolari dei profili aperti. Le rotazioni parziali chiudono anche i lati di taglio.
 	Distance	Distanza
 @msg	span must be "object" or "selection", got {v}	span deve essere "object" o "selection", non {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" posiziona un `gradient`, non un campione
@@ -6127,6 +6135,7 @@ lighting	Light	Luce
 	Single Word Justification:	Giustificazione parola singola:
 	Full Justify	Giustificazione completa
 	Minimum must not exceed Desired, nor Desired Maximum.	Il minimo non può superare il valore desiderato, né il desiderato il massimo.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: il minimo non può superare il valore desiderato, né il desiderato il massimo
 	Minimum	Minimo
 	Justification	Giustificazione
 	Add filters from the list above	Aggiungi filtri dall'elenco sopra
@@ -7070,6 +7079,22 @@ breakText	Glyphs	Glifi
 	Remove Gaps	Rimuovi le distanze
 @msg	that makes too many pieces (at most 100000): make the dashes longer	così si ottengono troppi pezzi (al massimo 100000): allunga i trattini
 @msg	select paths, or segments, to divide	seleziona tracciati o segmenti da dividere
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Tangenti comuni…
+	Common Tangents	Tangenti comuni
+	Tangents	Tangenti
+	Centerline	Linea centrale
+	External	Esterne
+	Internal	Interne
+@msg	select two closed paths	seleziona due tracciati chiusi
+@msg	a selected path is open	un tracciato selezionato è aperto
+@msg	a selected path is not convex	un tracciato selezionato non è convesso
+@msg	a selected path has no area	un tracciato selezionato non ha area
+@msg	a selected path has more than 10000 segments	un tracciato selezionato ha più di 10000 segmenti
+@msg	the two paths have the same outline	i due tracciati hanno lo stesso contorno
+@msg	One path lies inside the other, so they have no common tangents	Un tracciato si trova dentro l’altro, quindi non hanno tangenti comuni
+@msg	The paths overlap, so they have no internal tangents	I tracciati si sovrappongono, quindi non hanno tangenti interne
+@msg	One path lies inside the other, so they have no internal tangents	Un tracciato si trova dentro l’altro, quindi non hanno tangenti interne
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Espandi trattini in tracciati
 @msg	select paths with dashed strokes to expand	seleziona tracciati con traccia tratteggiata da espandere
@@ -7371,6 +7396,8 @@ breakText	Glyphs	Glifi
 @msg	No bridge of this width fits across the selected art	Nessun ponte di questa larghezza entra nella grafica selezionata
 @msg	Some islands could not be joined to the area around the art	Non è stato possibile collegare alcune isole all’area intorno alla grafica
 @msg	`width` must be from {lo} to {hi} pt	`width` deve essere compreso tra {lo} e {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` deve essere compreso tra -180 e 180 gradi
+@msg	`roundness` must be from 1 to 100%	`roundness` deve essere compreso tra 1 e 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve essere un numero intero compreso tra 1 e {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Riquadro e linee di spellicolatura…
 	Weed Box and Lines	Riquadro e linee di spellicolatura
@@ -8743,7 +8770,9 @@ breakText	Glyphs	Glifi
 @msg	position must be normal, superscript or subscript	position deve essere normal, superscript o subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position deve essere topLeft, topRight, bottomLeft o bottomRight
 @msg	positions must be between 0 and 100000 pt	le posizioni devono essere comprese tra 0 e 100000 pt
+@msg	ppi can't be more than {max} for this image	ppi non può superare {max} per questa immagine
 @msg	ppi must be a positive number, not {ppi}	ppi deve essere un numero positivo, non {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim mantiene i pixel dell'immagine così come sono: ometti ppi
 @msg	ppi must be between 1 and 2400	ppi deve essere compreso tra 1 e 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` non è transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape deve essere clippingMask|transparency

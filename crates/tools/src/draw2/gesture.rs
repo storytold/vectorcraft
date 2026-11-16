@@ -31,9 +31,11 @@
 //! line to 45° steps from the canvas axes.
 
 mod area;
+mod line;
 
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_brush::{Calligraphic, Variation};
@@ -45,6 +47,7 @@ use super::{FEEDBACK, blob_area, blob_tip, eraser_tip, points_json, polyline};
 use crate::guides::DrawSnap;
 use crate::{Action, Cursor, Mods, Overlay, PenPose, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 use area::{AreaKey, AreaPreview};
+use line::LinePreview;
 
 /// How far from its drag the Smooth tool smooths, in screen pixels. Alt smoothing with the
 /// Pencil, Paintbrush or Blob Brush uses the same radius.
@@ -218,6 +221,8 @@ pub struct GestureTool {
     band: Cell<Option<SmoothBand>>,
     /// The band last shown does not cover the whole drag yet; the next call adds to it.
     band_pending: Cell<bool>,
+    /// The pieces of a long drag's line shown so far ([`LinePreview`]).
+    line: Cell<Option<LinePreview>>,
 }
 
 /// The band a smoothing drag smooths, for the drag's first `used` points at `radius`, kept as its
@@ -240,8 +245,8 @@ struct SmoothBand {
     dirty_long: BTreeSet<usize>,
     /// The band changed since `shown` was made.
     changed: bool,
-    /// The outline last finished.
-    shown: Option<BezPath>,
+    /// The outline last finished, shared with the overlays that show it until it is made again.
+    shown: Option<Arc<BezPath>>,
     /// The work done on long segments in the current call ([`BAND_WORK_PER_CALL`]).
     work: usize,
 }
@@ -497,7 +502,7 @@ impl SmoothBand {
     /// The band's outline: the last one finished. While the band has changed since, the parts it
     /// changed are made again, until [`BAND_WORK_PER_CALL`] is spent in the call; when all are
     /// made, the outline is joined from them ([`SmoothBand::make_outline`]).
-    fn outline(&mut self) -> Option<BezPath> {
+    fn outline(&mut self) -> Option<Arc<BezPath>> {
         while self.changed {
             if !self.dirty_tiles.is_empty() || !self.dirty_long.is_empty() {
                 if self.work >= BAND_WORK_PER_CALL {
@@ -517,7 +522,7 @@ impl SmoothBand {
                     }
                 }
             } else {
-                self.shown = Some(self.make_outline());
+                self.shown = Some(Arc::new(self.make_outline()));
                 self.changed = false;
             }
         }
@@ -904,6 +909,7 @@ impl GestureTool {
             area_pending: Cell::new(false),
             band: Cell::new(None),
             band_pending: Cell::new(false),
+            line: Cell::new(None),
         }
     }
 
@@ -1157,6 +1163,7 @@ impl GestureTool {
         self.area_pending.set(false);
         self.band.set(None);
         self.band_pending.set(false);
+        self.line.set(None);
     }
 
     /// The outline of the band a smoothing drag smooths: every point within `radius` of the drag,
@@ -1169,8 +1176,9 @@ impl GestureTool {
     /// outside the squares, and one whose outlines cannot be combined adds nothing. Either way the
     /// band goes on past it. The work on such long segments stops for the call once
     /// [`BAND_WORK_PER_CALL`] is spent, and the drag is added to the band only once the outline of
-    /// what it holds is finished.
-    fn smooth_band(&self, radius: f64) -> Option<BezPath> {
+    /// what it holds is finished. The outline is the same shared path from one call to the next
+    /// until the band changes.
+    fn smooth_band(&self, radius: f64) -> Option<Arc<BezPath>> {
         let pts = &self.points;
         let &first = pts.first()?;
         let mut b = self
@@ -1858,7 +1866,7 @@ impl Tool for GestureTool {
             && has_selected_smooth_path(cx)
             && let Some(path) = self.smooth_band(cx.tol(SMOOTH_RADIUS))
         {
-            o.push(Overlay::Path { path, color: FEEDBACK, width: 1.0, dashed: true });
+            o.push(Overlay::SharedPath { path, color: FEEDBACK, width: 1.0, dash: Some(0.0) });
         }
         // A Blob Brush drag that smooths shows the Smooth tool's thin line.
         let width = match self.id {
@@ -1891,17 +1899,34 @@ impl Tool for GestureTool {
             let sized = |[angle, roundness, size]: [f64; 3]| [angle, roundness, if size_varies { size } else { self.size }];
             area.step(&self.points, &|i| sized(self.tip_of_point(i)), &|j| sized(self.tip_between(j)));
             let paths = area.paths(&self.points);
-            o.extend(paths.settled.into_iter().map(|path| Overlay::SharedPath { path, color, width: 1.0 }));
+            o.extend(paths.settled.into_iter().map(|path| Overlay::SharedPath { path, color, width: 1.0, dash: None }));
             o.extend(paths.live.into_iter().map(|path| Overlay::Path { path, color, width: 1.0, dashed: false }));
             self.area_pending.set(area.pending(&self.points));
             self.area.set(Some(area));
         } else if size_varies {
             // With Size on a mode that follows the pen, each step of the drag shows as wide as the
-            // tip the pen gives at its ends.
-            for (j, seg) in self.points.windows(2).enumerate() {
-                let width = (self.tip_of_point(j)[2] + self.tip_of_point(j + 1)[2]) / 2.0 * cx.zoom;
-                o.push(Overlay::Path { path: polyline(seg), color, width: width as f32, dashed: false });
+            // tip the pen gives at its ends. A long drag's steps are kept from call to call
+            // ([`LinePreview::segments`]).
+            let width_of = |j: usize| ((self.tip_of_point(j)[2] + self.tip_of_point(j + 1)[2]) / 2.0 * cx.zoom) as f32;
+            if self.points.len() > line::PIECE_SEGMENTS + 1 {
+                let mut kept = self.line.take().unwrap_or_default();
+                for (j, path) in kept.segments(&self.points).into_iter().enumerate() {
+                    o.push(Overlay::SharedPath { path, color, width: width_of(j), dash: None });
+                }
+                self.line.set(Some(kept));
+            } else {
+                for (j, seg) in self.points.windows(2).enumerate() {
+                    o.push(Overlay::Path { path: polyline(seg), color, width: width_of(j), dashed: false });
+                }
             }
+        } else if self.points.len() > line::PIECE_SEGMENTS + 1 {
+            // A long drag's line shows in pieces kept from call to call ([`LinePreview::pieces`]).
+            let mut kept = self.line.take().unwrap_or_default();
+            let dashed = self.id == "knife";
+            for piece in kept.pieces(&self.points) {
+                o.push(Overlay::SharedPath { path: piece.path, color, width, dash: dashed.then_some(piece.along) });
+            }
+            self.line.set(Some(kept));
         } else {
             o.push(Overlay::Path { path: polyline(&self.points), color, width, dashed: self.id == "knife" });
         }
