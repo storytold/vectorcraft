@@ -88,10 +88,12 @@ fn paints_nothing(g: &GraphicStyle) -> bool {
     g.appearance.items.iter().all(|i| i.paint().is_none())
 }
 
-/// `g` with a white fill below its rows and a black stroke `width` wide above them: the shape a
+/// `g` with a white fill below its rows and a black stroke `width` wide above them, and every row
+/// above the contents, so the white fill also covers type's own character colors: the shape a
 /// style with no fill and no stroke is shown on, with the style's effects and transparency.
 fn backing(g: &GraphicStyle, width: f64) -> GraphicStyle {
     let mut g = g.clone();
+    g.appearance.contents_index = None;
     g.appearance.items.insert(0, AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::WHITE))));
     g.appearance.items.push(AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::BLACK), width)));
     g
@@ -1082,6 +1084,23 @@ mod tests {
         let blue = GraphicStyle::new("Blue", Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 1.0));
         let img = render_object(&app, &st.doc, n, &blue, 60).unwrap();
         assert_eq!(px(&img, 30, 30), Color32::from_rgb(0, 0, 255));
+    }
+
+    /// The white fill of a style with no fill and no stroke paints above type's characters even
+    /// when the style puts its Characters row above some of its rows and Override Character Color
+    /// is off: the type preview looks the same as for the style without that row order.
+    #[test]
+    fn the_white_fill_of_a_style_with_no_paint_covers_the_characters_whatever_its_contents_row() {
+        let mut app = app();
+        app.session.prefs.override_char_color = false;
+        let d = app.session.active().unwrap().doc.clone();
+        let image = |g: &GraphicStyle| render(&app, Paints::of(&d), g, Preview::Text, 40).unwrap();
+        let plain = GraphicStyle::new("Nones", Appearance::basic(Paint::None, Paint::None, 1.0));
+        let mut above = plain.clone();
+        above.appearance.set_contents_at(1);
+        assert_eq!(above.appearance.contents_index, Some(1));
+        assert!(paints_nothing(&above));
+        assert!(image(&above).pixels == image(&plain).pixels, "the characters' own fill shows through the white fill");
     }
 
     /// A style with only a fill, or only a stroke, shows its own paint; a hidden fill or one with
