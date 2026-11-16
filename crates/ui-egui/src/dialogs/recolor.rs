@@ -45,7 +45,8 @@
 //! The Color Theme Picker button beside the tabs turns on picking from the canvas: a click on an
 //! object takes the palette of the object a Selection tool click takes, a drag takes the palette
 //! of the art inside its marquee, and Shift adds to the picks so far (`recolor.pickTheme`). The
-//! rows that aren't excluded and hold current colors take the picked colors as their new colors,
+//! rows that aren't excluded and hold current colors (or were added on the Edit tab) take the
+//! picked colors as their new colors,
 //! the most used color first and repeating when the rows outnumber them, and the art previews
 //! them; OK keeps them as one undo step. A new count of Colors keeps the picks: the new rows take them again.
 //!
@@ -401,7 +402,7 @@ fn group_colors<'a>(app: &VectorcraftApp, d: &Dialog, rs: impl Iterator<Item = &
 }
 
 /// The New Color Group menu's request: save the new colors of the rows that aren't excluded and
-/// hold current colors (Save All Colors, in row order; a row without one gives its first current
+/// hold current colors or were added on the Edit tab (Save All Colors, in row order; a row without one gives its first current
 /// color) or of the Prominent Colors bar (Save Prominent Colors, in its order) as a new color
 /// group, a step of its own (`swatch.newGroup`).
 fn save_group(app: &mut VectorcraftApp, d: &mut Dialog, which: &str) {
@@ -428,7 +429,7 @@ const THEME_PICKS: &str = "themePicks";
 const THEME_DONE: &str = "__themePicked";
 
 /// When the picks of the Color Theme Picker changed, give the rows that aren't excluded and hold
-/// current colors the palette of the art picked (`recolor.pickTheme`, as many colors as those
+/// current colors or were added on the Edit tab the palette of the art picked (`recolor.pickTheme`, as many colors as those
 /// rows), in row order; with fewer colors than rows, the colors repeat. Picks that touch no art
 /// leave the rows as they are.
 fn sync_theme(app: &mut VectorcraftApp, d: &mut Dialog) {
@@ -579,14 +580,15 @@ fn is_added(row: &Value) -> bool {
     row["added"].as_bool().unwrap_or(false)
 }
 
-/// Whether `row` holds no current colors: a row made with New Row, until colors are merged into it.
-/// Its new color recolors nothing and is no color of a color group, the wheel or the harmony rules.
+/// Whether `row` is a row made with New Row that holds no current colors, until colors are merged
+/// into it. Its new color recolors nothing and is no color of a color group, the wheel or the
+/// harmony rules. A color added on the Edit tab (`added`) is not empty: it joins the color group.
 fn empty(row: &Value) -> bool {
-    row["from"].as_array().is_some_and(Vec::is_empty)
+    row["from"].as_array().is_some_and(Vec::is_empty) && !is_added(row)
 }
 
 /// Whether `row`'s new color is one of the colors a color group takes: the row isn't excluded and
-/// holds current colors.
+/// holds current colors or is a color added on the Edit tab.
 fn in_group(row: &Value) -> bool {
     !excluded(row) && !empty(row)
 }
@@ -1411,7 +1413,7 @@ fn new_row(rows: &mut Vec<Value>, sel: &[usize]) -> usize {
 }
 
 /// The rows the Edit tab shows, the harmony rules fill and the Color Theme Picker recolors: those
-/// with a new colour that aren't excluded and hold current colors.
+/// with a new colour that aren't excluded and hold current colors or were added on the Edit tab.
 fn active_rows(rows: &[Value]) -> Vec<usize> {
     (0..rows.len()).filter(|i| in_group(&rows[*i]) && to_color(&rows[*i]).is_some()).collect()
 }
@@ -1987,6 +1989,17 @@ mod tests {
         assert_eq!(edit_slider_row(&sel(json!([0])), &r, &active, Some(1)), Some(1));
         assert_eq!(edit_slider_row(&sel(json!([3, 2])), &r, &active, Some(3)), Some(2), "a shown row: the first selected");
         assert_eq!(edit_slider_row(&sel(json!([0])), &r, &[], None), None, "no row to edit");
+    }
+
+    /// A color added on the Edit tab holds no current colors but is not an empty row: the Edit tab
+    /// shows it and a color group takes it.
+    #[test]
+    fn an_added_color_is_not_an_empty_row() {
+        let added = json!({"from": [], "to": "rgb 0 255 255", "added": true});
+        assert!(!empty(&added) && in_group(&added));
+        let mut r = rows();
+        r.push(added);
+        assert_eq!(active_rows(&r), [0, 1, 2, 3]);
     }
 
     /// A rule or a wheel move that gives a row a new color drops the row's tint; a row whose
