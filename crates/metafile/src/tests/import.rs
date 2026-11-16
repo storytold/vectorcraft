@@ -959,6 +959,42 @@ fn text_is_spaced_by_its_advances() {
 }
 
 #[test]
+fn multiline_text_with_advances_aligns_each_line() {
+    let mm = 72.0 / 25.4;
+    // "Hi\nHi" with advances of 20 and 10 mm on each line, left, centered and right aligned: each
+    // line runs from 10 to 40 mm, as "Hi" alone does, the second on the baseline below the first.
+    // A second line of 15 and 5 mm, centered or right aligned, leaves the first where it is.
+    let at = |records: &[(u32, Vec<u8>)]| -> Vec<(f64, f64)> {
+        let back = import(&hand_emf(5000, 3000, records)).unwrap();
+        let mut at = vec![];
+        for n in all(&back.document) {
+            let NodeKind::Text(t) = n.kind else { continue };
+            let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+            for g in laid.glyphs.iter().filter(|g| g.advance > 0.0) {
+                let p = t.xf * g.origin;
+                at.push(((p.x / mm * 100.0).round() / 100.0, (p.y / mm * 100.0).round() / 100.0));
+            }
+        }
+        at
+    };
+    let mut drops = vec![];
+    for (align, x) in [(0, 1000), (6, 2500), (2, 4000)] {
+        let records = vec![(22, le(&[align])), (82, arial()), (37, le(&[2])), (84, text_out(x, "Hi\nHi", &[2000, 1000, 0, 2000, 1000]))];
+        let found = at(&records);
+        let xs: Vec<f64> = found.iter().map(|p| p.0).collect();
+        assert_eq!(xs, vec![10.0, 30.0, 10.0, 30.0], "{align}: {found:?}");
+        assert!(found[0].1 == found[1].1 && found[2].1 == found[3].1 && found[2].1 > found[0].1, "{align}: {found:?}");
+        drops.push(found[2].1 - found[0].1);
+    }
+    assert!(drops.iter().all(|d| (d - drops[0]).abs() < 0.01), "{drops:?}");
+    for (align, x, second) in [(6, 2500, [15.0, 30.0]), (2, 4000, [20.0, 35.0])] {
+        let records = vec![(22, le(&[align])), (82, arial()), (37, le(&[2])), (84, text_out(x, "Hi\nHi", &[2000, 1000, 0, 1500, 500]))];
+        let xs: Vec<f64> = at(&records).iter().map(|p| p.0).collect();
+        assert_eq!(xs, vec![10.0, 30.0, second[0], second[1]], "{align}");
+    }
+}
+
+#[test]
 fn emf_plus_driver_strings_keep_their_positions() {
     // An EMF+ only file: a 1000 pixel Arial (font object 0) and DrawDriverString of "Hi" in black,
     // as characters (CmapLookup), its glyphs at x = 1000 and 3000 pixels (10 and 30 mm).

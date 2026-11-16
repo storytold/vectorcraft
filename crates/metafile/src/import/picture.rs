@@ -14,6 +14,8 @@
 //!   for are spaced by them: tracking on each character, with pair kerning off. On a single left
 //!   to right line, the characters after an advance that tracking can't give (further than its
 //!   range reaches, or a tab) are point type of their own, and an underline or strikethrough is carried across the space between.
+//!   Centered or right aligned type on more than one line is point type per line, each line
+//!   aligned by its own advances.
 //! - Clip regions and clip paths become clipping groups around what they clip; a rectangle around
 //!   the whole picture clips nothing and is left out.
 //!
@@ -610,16 +612,20 @@ impl Mapper {
             (pieces, Some((text, laid)))
         };
         let split = pieces.len() > 1;
+        // Centered or right aligned type on more than one line: a point type object per line.
+        if let Some((_, laid)) = tracked.as_ref().filter(|(_, l)| l.lines.len() > 1 && !matches!(t.h_align, HAlign::Left)) {
+            for (mut text, start, down) in per_line(laid, &s, &dx, lead * k, &t.h_align, f.underline || f.strike, &point) {
+                text.xf = base * Affine::translate((start, drop + down));
+                let mut n = Node::new(NodeId(0), NodeKind::Text(Box::new(text)));
+                n.opacity = f32::from(t.color[3]) / 255.0;
+                self.push(chain.clone(), n);
+            }
+            return;
+        }
         // Along the baseline (the text object's own space), where the next piece starts from the
         // reference point: the line as long as its advances (a leading NUL's included), where the
         // alignment puts it.
-        let total: f64 = lead * k + dx.iter().sum::<f64>();
-        let mut at = lead * k
-            + match t.h_align {
-                HAlign::Left => 0.0,
-                HAlign::Center => -total / 2.0,
-                HAlign::Right => -total,
-            };
+        let mut at = aligned(lead * k, dx.iter().sum(), &t.h_align);
         let last = pieces.len().saturating_sub(1);
         for (i, (from, to)) in pieces.into_iter().enumerate() {
             let piece: String = chars.get(from..to).unwrap_or_default().iter().collect();
@@ -688,6 +694,59 @@ impl Mapper {
         self.doc.layers = vec![Arc::new(layer)];
         Imported { document: self.doc, kind, warnings: self.warnings }
     }
+}
+
+/// Where a line `lead + span` long (along the baseline) starts from the reference point, as
+/// `align` puts it, and `lead` on from there: where its first character starts.
+fn aligned(lead: f64, span: f64, align: &HAlign) -> f64 {
+    let total = lead + span;
+    lead + match align {
+        HAlign::Left => 0.0,
+        HAlign::Center => -total / 2.0,
+        HAlign::Right => -total,
+    }
+}
+
+/// The lines of `s` (laid out as `laid`, more than one line) as point type objects of their own,
+/// each tracked to its characters' entries of `dx` and aligned by them, with where it starts along
+/// the baseline from the reference point and how far its baseline is below the first line's.
+/// Layout leaves the tracking after a line's last character out of the width it aligns, and each
+/// line ends with its own, so one object can't align every line by its advances. `lead` (a leading
+/// NUL's advance) comes before the first line. Blank lines are left out unless `decorated`
+/// (underlined or struck through).
+fn per_line(
+    laid: &vectorcraft_text::TextLayout,
+    s: &str,
+    dx: &[f64],
+    lead: f64,
+    align: &HAlign,
+    decorated: bool,
+    point: &dyn Fn(&str) -> TextObject,
+) -> Vec<(TextObject, f64, f64)> {
+    let db = vectorcraft_text::FontDb::global();
+    let first = laid.lines.first().map_or(0.0, |l| l.baseline);
+    // Where each character starts (bytes): the character a byte offset starts is found by a search.
+    let starts: Vec<usize> = s.char_indices().map(|(at, _)| at).collect();
+    let count = |to: usize| starts.partition_point(|at| *at < to);
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = vec![];
+    for (n, l) in laid.lines.iter().enumerate() {
+        let (from, to) = (count(l.start), count(l.end));
+        let line: String = chars.get(from..to).unwrap_or_default().iter().collect();
+        let Some(dx) = dx.get(from..to) else { continue };
+        if line.is_empty() || (line.trim().is_empty() && !decorated) {
+            continue;
+        }
+        let mut text = point(&line);
+        let line_laid = advanced(&mut text, db, dx);
+        let lead = if n == 0 { lead } else { 0.0 };
+        let x0 = line_laid.lines.first().map_or(0.0, |l| l.x0);
+        let start = aligned(lead, dx.iter().sum(), align) - x0;
+        let down = l.baseline - first;
+        text.cached_bounds = Some(line_laid.bounds);
+        out.push((text, if start.is_finite() { start } else { 0.0 }, if down.is_finite() { down } else { 0.0 }));
+    }
+    out
 }
 
 /// The most times [`advanced`] lays the type out again to correct its tracking.

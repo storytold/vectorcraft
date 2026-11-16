@@ -8718,7 +8718,8 @@ and is missing from the picture" once for all such images.
 one layer: paths with their fills and strokes (pens become strokes with caps, joins and dashes), clipping groups,
 images and point type in the font the file names. Type keeps the file's character advances as tracking, with pair
 kerning off. On a single left to right line, an advance that tracking can't give (wider than its range, or a tab)
-starts a new point type object at the position the advance gives, and an underline or strikethrough is filled across the space between. An EMF that
+starts a new point type object at the position the advance gives, and an underline or strikethrough is filled across the space between. Centered
+or right aligned type on more than one line becomes one point type object per line, each aligned by its own advances. An EMF that
 draws with EMF+ records is read from them. Hatched and pattern brushes fill with their average color. Records VectorCraft doesn't read are skipped with one warning.
 `clipboard.importEmf {dataBase64, center?}` loads an EMF or WMF picture into the clipboard for `edit.paste`; the app
 pastes `image/emf` from the system clipboard ahead of text and bitmaps when the platform's clipboard service offers it
