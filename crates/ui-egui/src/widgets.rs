@@ -35,9 +35,9 @@ pub(crate) use buttons::{button_width, flat_button_fit_width, icon_button_info, 
 use chips::gradient_chip_colors;
 pub use chips::{ProxyClicks, chip_button, chip_button_named, fill_stroke_proxy, gradient_chip, paint_chip, proxy_chip, swatch_tile};
 pub use color::{
-    FieldAxis, Live, RingResponse, SliderValue, WheelResponse, channel_slider, channel_slider_named, channel_slider_valued, color_field, color_mesh,
-    color_slider, color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32, hue_ring,
-    region_texture, ring_square, segment_color, segmented_wheel, stepped_area,
+    FieldAxis, Live, RingResponse, SliderValue, WheelAxes, WheelResponse, channel_slider, channel_slider_named, channel_slider_valued, color_field,
+    color_mesh, color_slider, color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32,
+    hue_ring, region_texture, ring_square, segment_color, segment_color_on, segmented_wheel, stepped_area, wheel_of,
 };
 pub(crate) use color::{HEX_FIELD_CHARS, hex_text, pointer_phase};
 pub use drag::{
@@ -103,6 +103,13 @@ impl<T> std::fmt::Debug for HashOnly<T> {
 /// `parent.with(salt)` for a salt that needs only `Hash`.
 pub(crate) fn id_with(parent: egui::Id, salt: impl std::hash::Hash) -> egui::Id {
     parent.with(HashOnly(salt))
+}
+
+/// Gives `resp` the screen-reader role of a list item named `label`, with `selected` as its
+/// selected state. [`egui::WidgetInfo::selected`] would set the toggled state instead.
+pub(crate) fn list_item_info(resp: &Response, selected: bool, label: impl Fn() -> String) {
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ListItem, true, label()));
+    resp.ctx.accesskit_node_builder(resp.id, |node| node.set_selected(selected));
 }
 
 #[cfg(test)]
@@ -217,6 +224,26 @@ pub(crate) mod accessibility_tests {
         on("Grid by Row");
         off("Recent");
         on("Saved");
+    }
+
+    #[test]
+    fn list_items_report_selection_and_section_headers_report_expansion() {
+        let tree = tree(|ui| {
+            for (name, on) in [("Artboard 1", true), ("Artboard 2", false)] {
+                let resp = ui.allocate_response(vec2(120.0, 20.0), Sense::click());
+                list_item_info(&resp, on, || name.to_string());
+            }
+            section_toggle(ui, "Open Section", true);
+            section_toggle(ui, "Closed Section", false);
+        });
+        let state = |label| {
+            let n = named(&tree, label);
+            (n.role(), n.toggled(), n.is_selected(), n.is_expanded())
+        };
+        assert_eq!(state("Artboard 1"), (Role::ListItem, None, Some(true), None));
+        assert_eq!(state("Artboard 2"), (Role::ListItem, None, Some(false), None));
+        assert_eq!(state("Open Section"), (Role::DisclosureTriangle, None, None, Some(true)));
+        assert_eq!(state("Closed Section"), (Role::DisclosureTriangle, None, None, Some(false)));
     }
 
     #[test]

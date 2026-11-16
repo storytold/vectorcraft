@@ -2524,6 +2524,39 @@ fn flare_options_alt_turns_cancel_into_reset() {
     );
 }
 
+/// Reset Actions' question: OK replaces the action sets with the built-in set, Append adds the
+/// built-in set after them, and Cancel or Escape (`cancel`) leaves them as they are.
+#[test]
+fn reset_actions_ok_replaces_append_adds_and_cancel_keeps_the_sets() {
+    use crate::panels::actions::{ActionSet, default_sets};
+    let names = |app: &VectorcraftApp| app.ui.action_sets.iter().map(|s| s.name.clone()).collect::<Vec<_>>();
+    let mut app = app();
+    app.ui.action_sets.push(ActionSet::new("Mine", vec![]));
+    app.ui.action_set = Some(1);
+    let mut f = Frames::new();
+    for (answer, want, current) in [
+        (Some("Cancel"), vec!["Default Actions", "Mine"], Some(1)),
+        (None, vec!["Default Actions", "Mine"], Some(1)),
+        (Some("Append"), vec!["Default Actions", "Mine", "Default Actions 2"], Some(1)),
+        (Some("OK"), vec!["Default Actions"], Some(0)),
+    ] {
+        crate::dialogs::confirm::ask_reset_actions(&mut app);
+        match answer {
+            Some(label) => {
+                let at = f.button(&mut app, label);
+                f.press(&mut app, at, true);
+                f.press(&mut app, at, false);
+            }
+            None => cancel(&mut app),
+        }
+        assert!(app.ui.dialog.is_none(), "{answer:?} closes the question");
+        assert_eq!(names(&app), want, "{answer:?}");
+        assert_eq!(app.ui.action_set, current, "{answer:?}");
+    }
+    let saved = |sets: &[ActionSet]| serde_json::to_value(sets).unwrap();
+    assert_eq!(saved(&app.ui.action_sets), saved(&default_sets()), "OK leaves the built-in set as it comes");
+}
+
 /// The slider that screen readers name `label` in `out`'s tree: its node id, number and text.
 fn slider_node(out: &egui::FullOutput, label: &str) -> (egui::accesskit::NodeId, Option<f64>, Option<String>) {
     let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
