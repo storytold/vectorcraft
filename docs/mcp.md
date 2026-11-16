@@ -761,6 +761,13 @@ dragged, headless `press_key` `c` chooses the tool bound to C (headless has no b
 from the typed letter, so with nothing being dragged `c` and `f` do not run their shortcuts there. Use `select_tool` or
 `invoke_menu` instead.
 
+With General › Constrain Angle (`prefs.set {key: "constrainAngle"}`) other than 0° or a whole turn, the Arc tool's drag
+and its click dialog draw the arc along the turned x and y axes: the drag sends `shape.arc` with `lengthX` and `lengthY`
+measured along those axes, the reference point `x`, `y` at the drag's corner or the click, and a `rotation` of the
+Constrain Angle's negative. `shape.arc` takes `rotation` in degrees clockwise on the page, about `x1`, `y1` or about the
+reference point `x`, `y`; the arc's bounding box turns with it. Without `rotation`, or at 0° or a whole turn, the arc is
+upright, and a `rotation` that is not a number is an error that adds nothing.
+
 While a spiral is being dragged out with the Spiral tool, a `drag` event with `mods.alt` or `mods.cmd` keeps the
 spiral's inner end at the distance from the center it had on the first modified `drag` event, and the outer end follows
 the pointer. With `mods.alt` alone, dragging outward adds whole winds of four segments and dragging inward removes

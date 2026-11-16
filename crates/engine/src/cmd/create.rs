@@ -64,7 +64,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Arc",
             [],
             None,
-            "{x1, y1, x2, y2, closed?, slope?} or {x, y, lengthX, lengthY, reference?, baseAlong?: x|y, slope?, closed?, fillArc?} → {id}",
+            "{x1, y1, x2, y2, closed?, slope?, rotation?: deg clockwise about (x1, y1)} or {x, y, lengthX, lengthY, reference?, baseAlong?: x|y, slope?, closed?, fillArc?, rotation?: deg clockwise about the reference point (x, y)} (0: upright) → {id}",
             has_doc,
             arc
         ),
@@ -299,7 +299,8 @@ fn path_kind(path: PathData, live: Option<LiveShape>) -> NodeKind {
 /// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/rotate-objects-by-specific-angles.html>):
 /// a box (rectangle, ellipse, grid) runs along the turned axes from `pivot`, the point the dialog
 /// placed at the click (its top-left corner `x`, `y`, or a grid's reference point), which stays
-/// put; a polygon or star turns its base orientation about its centre. The params as they are at
+/// put; an arc sized by its lengths turns about its reference point `x`, `y`, which the dialog
+/// placed at the click; a polygon or star turns its base orientation about its centre. The params as they are at
 /// 0° or a whole turn, for other commands and when they already carry a `rotation`.
 pub fn constrain_click(s: &Session, cmd: &str, mut params: Value, pivot: Point) -> Value {
     let base = s.prefs.constrain_angle;
@@ -316,6 +317,9 @@ pub fn constrain_click(s: &Session, cmd: &str, mut params: Value, pivot: Point) 
             o.insert("rotation".into(), json!(rotation));
         }
         "shape.polygon" | "shape.star" => {
+            o.insert("rotation".into(), json!(rotation));
+        }
+        "shape.arc" if o.contains_key("lengthX") || o.contains_key("lengthY") => {
             o.insert("rotation".into(), json!(rotation));
         }
         _ => {}
@@ -590,13 +594,18 @@ fn spiral(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn arc(s: &mut Session, p: &Value) -> Result<Value> {
+    let rotation = if p.get("rotation").is_some() { f64_req(p, "rotation", "shape.arc")? } else { 0.0 };
+    if !rotation.is_finite() {
+        return Err(bad("shape.arc", "rotation must be finite"));
+    }
     let closed = switch_or(p, "closed", false, "shape.arc")?;
     let fill_arc = switch_or(p, "fillArc", false, "shape.arc")?;
     let base_x = !matches!(p.get("baseAlong").and_then(Value::as_str), Some("y" | "Y"));
-    let path = if p.get("lengthX").is_some() || p.get("lengthY").is_some() {
+    // The upright path, and the point `rotation` turns it about.
+    let (path, pivot) = if p.get("lengthX").is_some() || p.get("lengthY").is_some() {
         let anchor = Point::new(f64_req(p, "x", "shape.arc")?, f64_req(p, "y", "shape.arc")?);
         let reference = p.get("reference").and_then(Value::as_u64).unwrap_or(0) as usize;
-        shapes::arc_segment(
+        let path = shapes::arc_segment(
             anchor,
             reference,
             number_or(p, "lengthX", 100.0, "shape.arc")?,
@@ -604,12 +613,21 @@ fn arc(s: &mut Session, p: &Value) -> Result<Value> {
             base_x,
             number_or(p, "slope", 50.0, "shape.arc")?,
             closed,
-        )
+        );
+        (path, anchor)
     } else {
         let a = Point::new(f64_req(p, "x1", "shape.arc")?, f64_req(p, "y1", "shape.arc")?);
         let b = Point::new(f64_req(p, "x2", "shape.arc")?, f64_req(p, "y2", "shape.arc")?);
         let slope = number_or(p, "slope", 100.0, "shape.arc")?;
-        shapes::arc(a, b, slope, closed, base_x)
+        (shapes::arc(a, b, slope, closed, base_x), a)
+    };
+    // 0 and whole turns leave the path as it is; quarter turns are exact.
+    let bbox_angle = bbox_turn(rotation);
+    let path = if bbox_angle == 0.0 {
+        path
+    } else {
+        let c = pivot.to_vec2();
+        path.transformed(Affine::translate(c) * vectorcraft_geom::rotate_deg(rotation) * Affine::translate(-c))
     };
     let fill = if fill_arc { s.paint.fill.clone() } else { vectorcraft_color::Paint::None };
     let look = s.new_art_look(
@@ -617,7 +635,7 @@ fn arc(s: &mut Session, p: &Value) -> Result<Value> {
         if s.paint.stroke.is_none() { vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK) } else { s.paint.stroke.clone() },
         s.paint.stroke_width.max(0.1),
     );
-    add_look(s, "Arc", path_kind(path, None), look, None)
+    insert_look_turned(s, "Arc", path_kind(path, None), look, None, true, bbox_angle)
 }
 
 /// The grid `paths` (bottom first) as one selected group in the new-art stroke, filled with the
