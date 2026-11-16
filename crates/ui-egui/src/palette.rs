@@ -584,8 +584,12 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // closed it focused another widget, such as a field in a window above the backdrop.
     let focus_id = egui::Id::unique("palette-focus-before");
     let field_id = egui::Id::unique("palette-field");
+    let sel_id = egui::Id::unique("palette-selected");
     if !app.ui.palette_open {
+        // The palette opens again with its first row highlighted and its list scrolled to the top
+        // (a list height of 0 scrolls it to the highlighted row).
         let field = ctx.data_mut(|d| {
+            d.remove::<Highlight>(sel_id);
             let field = d.get_temp::<egui::Id>(field_id);
             d.remove::<egui::Id>(field_id);
             field
@@ -607,11 +611,13 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let t = Tokens::get(ctx);
     let q = app.ui.palette_query.to_lowercase();
     let entries = entries_in(ctx, crate::i18n::current(), app.services.native_menu.is_some());
-    let mut matches = matching(&entries, &q);
+    let recent = recent(&entries.list, &app.ui.recent_commands);
+    // An empty search lists the recent picks, most recent first, so Enter runs the last pick again.
+    let empty = app.ui.palette_query.trim().is_empty();
+    let mut matches = if empty { recent.clone() } else { matching(&entries, &q) };
     let total = matches.len();
     // The highlighted result (#1757): Up and Down move it (wrapping), Page Up and Page Down move it
     // by a page, the pointer over a result takes it, and a new query starts again from the first.
-    let sel_id = egui::Id::unique("palette-selected");
     let (mut sel, last_q, mut offset, last_view, last_id) = ctx.data(|d| d.get_temp::<Highlight>(sel_id)).unwrap_or_default();
     let mut view = last_view;
     let new_query = last_q != q;
@@ -629,7 +635,6 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         kept = Some(at);
     }
     matches.truncate(MAX_RESULTS);
-    let recent = recent(&entries.list, &app.ui.recent_commands);
     // While the Recent Commands list is open, the arrow keys and Enter go to its rows, and the
     // search field leaves them the keyboard.
     let list_open = recent_list_open(ctx);
@@ -735,6 +740,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 .inner;
             ui.ctx().data_mut(|d| d.insert_temp(field_id, r.id));
             ui.add_space(6.0);
+            if empty && n > 0 {
+                ui.label(egui::RichText::new(tl!("Recent Commands")).color(t.text_dim));
+            }
             // The list shows as many rows as fit above the footer in the window, up to
             // VISIBLE_ROWS; a page is that many rows.
             let spacing = ui.spacing().item_spacing.y;
@@ -803,8 +811,13 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     }
                 });
             }
-            ui.add_space(6.0);
-            ui.label(egui::RichText::new(footer(n, total)).color(t.text_dim));
+            // Under the recent picks no count is shown; with none, one dimmed line says so.
+            if !empty {
+                ui.add_space(6.0);
+                ui.label(egui::RichText::new(footer(n, total)).color(t.text_dim));
+            } else if n == 0 {
+                ui.label(egui::RichText::new(tl!("No recent commands")).color(t.text_dim));
+            }
             if !list_open
                 && !history_focused
                 && ui.input(|i| i.key_pressed(egui::Key::Enter))
@@ -1416,6 +1429,89 @@ mod tests {
         h.run_steps(2);
         assert!(h.get_by_label(tl!("No recent commands")).accesskit_node().is_disabled());
         assert!(h.state().ui.palette_open);
+    }
+
+    /// The row labels the palette shows for the commands `ids`, in that order.
+    fn row_labels(ctx: &egui::Context, ids: &[&str]) -> Vec<String> {
+        let entries = entries(ctx, Lang::EN);
+        ids.iter().map(|id| row_label(entries.iter().find(|e| e.id == *id).unwrap())).collect()
+    }
+
+    /// An empty search, or one of spaces only, lists the recent picks under a Recent Commands
+    /// heading, most recent first, with the first highlighted. A pick whose command is gone is left
+    /// out, and no count is shown.
+    #[test]
+    fn an_empty_search_lists_the_recent_picks_most_recent_first() {
+        for query in ["", "   "] {
+            let mut open = Open::new("select", WINDOW);
+            open.app.ui.recent_commands = ["paint.swap", "plugin:test.UI.palette_gone", "object.group"].map(str::to_string).into();
+            open.app.ui.palette_query = query.into();
+            let nodes = open.frame(vec![]);
+            let shown: Vec<(String, bool)> = rows(&nodes).into_iter().map(|r| (r.0, r.1)).collect();
+            let expected = row_labels(&open.ctx, &["paint.swap", "object.group"]);
+            assert_eq!(shown, [(expected[0].clone(), true), (expected[1].clone(), false)], "{query:?}");
+            let labels = labels(&nodes);
+            assert!(labels.iter().any(|l| l == tl!("Recent Commands")), "{query:?}: the heading: {labels:?}");
+            assert!(!labels.iter().any(|l| l.contains("result")), "{query:?}: no count: {labels:?}");
+        }
+    }
+
+    /// An empty search with nothing picked yet lists no rows and says there are no recent commands.
+    #[test]
+    fn an_empty_search_without_picks_says_there_are_none() {
+        let mut open = Open::new("", WINDOW);
+        let nodes = open.frame(vec![]);
+        assert!(rows(&nodes).is_empty(), "{:?}", rows(&nodes));
+        let labels = labels(&nodes);
+        assert!(labels.iter().any(|l| l == tl!("No recent commands")), "{labels:?}");
+        assert!(!labels.iter().any(|l| l == tl!("No commands match") || l == tl!("Recent Commands")), "{labels:?}");
+        assert!(open.app.ui.palette_open);
+    }
+
+    /// Enter on an empty search runs the last pick again, and Recent Commands keeps its order.
+    #[test]
+    fn enter_on_an_empty_search_runs_the_last_pick_again() {
+        let mut open = Open::new("", WINDOW);
+        open.app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        open.app.ui.recent_commands = vec!["paint.swap".into(), "object.group".into()];
+        open.app.ui.palette_open = true;
+        open.frame(vec![]);
+        let before = open.app.session.active().unwrap().history.undo.len();
+        open.press(egui::Key::Enter, 1);
+        assert!(!open.app.ui.palette_open, "the palette closes");
+        assert_eq!(open.app.session.active().unwrap().history.undo.len(), before + 1, "{}", open.app.ui.status);
+        assert_eq!(open.app.ui.recent_commands, ["paint.swap", "object.group"]);
+    }
+
+    /// The palette opens again with its first row highlighted, even when it shows the same rows.
+    #[test]
+    fn the_palette_opens_again_with_its_first_row_highlighted() {
+        let mut open = Open::new("", WINDOW);
+        open.app.ui.recent_commands = vec!["paint.swap".into(), "object.group".into(), "view.zoomIn".into()];
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, 2);
+        assert_eq!(open.highlighted(), 2);
+        open.app.ui.palette_open = false;
+        open.frame(vec![]);
+        open.app.ui.palette_open = true;
+        let nodes = open.frame(vec![]);
+        assert_eq!(open.highlighted(), 0);
+        assert!(rows(&nodes).first().is_some_and(|r| r.1), "{:?}", rows(&nodes));
+        // A list scrolled down shows its first row again, highlighted, when the palette opens with
+        // the same search.
+        open.app.ui.palette_query = "select".into();
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, VISIBLE_ROWS + 5);
+        assert_eq!(open.highlighted(), VISIBLE_ROWS + 5);
+        open.app.ui.palette_open = false;
+        open.frame(vec![]);
+        open.app.ui.palette_open = true;
+        let nodes = open.frame(vec![]);
+        let first = open.listed().first().cloned().unwrap();
+        let shown = rows(&nodes);
+        let top = shown.iter().find(|r| r.1).expect("a row is highlighted");
+        assert_eq!(top.0, row_labels(&open.ctx, &[&first])[0], "{shown:?}");
+        assert!(top.2 >= f64::from(open.popup().top()), "the first row is in view: {shown:?}");
     }
 
     /// #1757: Up and Down move the highlighted result, wrapping at the ends; a new query starts

@@ -1694,6 +1694,8 @@ fn the_command_search_that_opens_while_enter_is_down_waits_for_a_new_press() {
     let held = HeldKey::new(Key::Enter, Modifiers::NONE);
     app.select_tool("rectangle");
     held.press(&mut app);
+    // The empty search lists the recent picks, so the last pick is the highlighted result.
+    app.ui.recent_commands = vec!["paint.swap".into()];
     app.ui.palette_open = true;
     for repeat in 0..4 {
         held.press(&mut app);
