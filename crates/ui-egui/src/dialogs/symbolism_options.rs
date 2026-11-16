@@ -110,10 +110,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// The selected symbol sets.
+/// The selected symbol sets that can be edited (not locked or hidden).
 fn selected_sets(app: &VectorcraftApp) -> Vec<u64> {
     let Some(st) = app.session.active() else { return vec![] };
-    st.selection.objects.iter().filter(|id| st.doc.node(**id).is_some_and(vectorcraft_engine::cmd::is_symbol_set)).map(|id| id.0).collect()
+    let editable = st.doc.editable();
+    st.selection
+        .objects
+        .iter()
+        .filter(|id| st.doc.node(**id).is_some_and(vectorcraft_engine::cmd::is_symbol_set) && editable(**id))
+        .map(|id| id.0)
+        .collect()
 }
 
 /// OK: set the brush the Symbolism tools share (the tool keeps it within its ranges), after giving
@@ -318,5 +324,26 @@ mod tests {
         super::super::confirm(&mut app).unwrap();
         assert_eq!((width(&app), undo(&app)), (was, steps));
         assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(2.0));
+    }
+
+    /// A locked symbol set in the selection keeps its spacing, and OK still sets the options.
+    #[test]
+    fn ok_sets_the_options_with_a_locked_symbol_set_selected() {
+        let mut app = app();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap();
+        app.run("symbol.new", json!({"name": "Dot"})).unwrap();
+        app.run("select.set", json!({"ids": []})).unwrap();
+        let set = app.run("symbol.spray", json!({"name": "Dot", "points": [[40, 150], [120, 150]], "radius": 4})).unwrap()["id"].as_u64().unwrap();
+        app.run("object.lock", json!({})).unwrap();
+        app.session.select(|_, sel| sel.set([vectorcraft_doc::NodeId(set)])).unwrap();
+        let steps = app.session.active().unwrap().history.undo.len();
+        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("density".into(), json!(9));
+        d.fields.insert("diameter".into(), json!(30));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.active().unwrap().history.undo.len(), steps);
+        let o = app.session.tool_options_of("symbolSizer");
+        assert_eq!((o["density"].as_f64(), o["diameter"].as_f64()), (Some(9.0), Some(30.0)));
     }
 }
