@@ -118,13 +118,32 @@ transparent that has the largest share in the blend of them that comes closest t
 
 **Flat Logo with a color between two others.** When a traced color lies between two others, as a gray
 lies between black and white, an anti-aliased edge pixel between the outer two is also a blend of the
-middle color and one of them. Flat Logo then reads the pixel as the blend of the colors that lie nearest
-it in the flat areas within 6 pixels, when the pixel has a neighbor darker and a neighbor lighter than the
-middle color, along the line between the other two. A black disc beside a gray square on white traces
-with one gray shape, the square, and no gray slivers around the disc, when its edges are sharp or blurred
-by up to about half a pixel. An edge blurred by a pixel or more can still leave gray slivers along the
-disc, and so can an image with noise of a level or more in its pixels. A gray stroke two or three pixels
-wide beside black has no darker pixel next to it and stays gray. A soft-edged gray stroke about two
+middle color and one of them. Flat Logo then reads the pixel as a blend of the outer two when the pixel
+lies on an edge between them and that blend lies nearer the pixel than the blend with the middle color.
+The pixel lies on such an edge when, along the line between the outer two colors, it reaches a pixel
+darker than the middle color in at most 5 steps, each to the neighbor that lies farthest toward the
+darker color while the pixels keep getting darker, and reaches a pixel lighter than the middle color the
+same way. A blend lies as near the pixel as the farther of its colors' nearest flat areas within 6
+pixels. The blend of the outer two also lies as near as the larger of the two step counts to a pixel of
+each outer color, when that number is smaller.
+
+A black disc beside a gray square on white traces with one gray shape, the square, and no gray slivers
+around the disc, when its edges are sharp or blurred by up to 2 pixels, with the colors found or named.
+With the colors named and edges blurred by 3 pixels, a gray of 128 is still one shape, a gray of 200
+leaves 4 slivers with no area, and a light gray (230) leaves 8 slivers of up to 21 pixels. An image with
+noise of a level or more in its pixels can still leave gray slivers along the disc.
+
+With sharp edges, a gray stroke two or three pixels wide beside black has no darker pixel next to it and
+stays gray, and so does a gray band along black. On edges blurred by a pixel or more, gray near black
+loses some of its pixels. A soft-edged gray band up to 4 pixels wide lying along black traces as black
+and white at blurs of 1.5 and 2 pixels, and so does one up to 3 pixels wide at blurs of 1 and 3 pixels; a
+wider band loses some of its pixels next to black, and one 8 pixels wide keeps at least half of its gray
+at blurs of 1.5 and 2 pixels. A soft-edged gray stroke 2 pixels from black can lose some or all of its
+gray, one 4 pixels from black loses a few pixels (a light gray stroke 2 pixels wide, blurred by 1.5
+pixels, keeps 28 of 34), and the pixels of one 6 pixels or more from black do not reach black in 5 steps
+and are not read as an edge of black and white. A soft-edged gray
+stroke 2 or 3 pixels wide running straight out of black, blurred by 1 or 1.5 pixels, loses 3 or 4 of
+the 16 pixels nearest black. A soft-edged gray stroke about two
 pixels wide that touches black traces as black and white, and one about three pixels wide that touches
 black can lose most or all of its gray when it is short (12 pixels long or less). A line of gray one
 pixel wide between black and white stays gray when at least 13 of its pixels touch: such a line and a
@@ -133,6 +152,19 @@ trace as gray. A one-pixel gray line between black and white that is shorter tha
 between pixels or is blurred traces as black and white. A flat area whose color lies between two named colors, as when the colors are named
 some levels off, counts as holding the named colors it is a blend of, and so do the pixels of exactly
 its color that touch it.
+
+The same holds when the left-out color lies beyond both colors of the edge, as a pale gray ground lies
+beyond a gray panel and a charcoal disc: an edge pixel between the panel and the disc is also a blend of
+the ground and the disc. Flat Logo reads it as a blend of the panel and the disc when, along the line
+through the three colors, the pixel has a neighbor on each side of it, no neighbor lies past the panel
+toward the ground, and a chain of neighbors, each nearer the panel's color than the one before, leads
+from the pixel, in at most 6 steps, to the panel's color or to a flat area of the panel. The same rule
+applies to a left-out color darker than both colors of the edge, and to colors that are not grays. A
+charcoal disc on a gray panel on a paler ground then traces with no slivers of the ground around it when
+its edges are sharp or blurred by 0.7 pixel. An edge blurred by a pixel or more can still leave slivers
+of the ground. The pixels of a pale line on the disc, whether one pixel wide, blurred over three pixels
+or falling between two pixels, and the edge of a gap of the ground's color between the disc and the
+panel keep the ground in their blends.
 
 **Large images.** An image of more than 1500 pixels on a side is traced as any other, only more
 slowly, and the trace says so: `imageTrace.make` returns the note in `warnings` and the status bar
