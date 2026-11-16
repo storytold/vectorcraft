@@ -660,7 +660,7 @@ font-technology	Variable	Variables
 	Keep existing fields, but replace those the template has	Conserver les champs existants, mais remplacer ceux que contient le modèle
 	Keep existing fields, but append those the template has	Conserver les champs existants, mais ajouter ceux que contient le modèle
 @msg	the template name can't be empty	le nom du modèle ne peut pas être vide
-@msg	the template name isn't usable as a file name	le nom du modèle n'est pas utilisable comme nom de fichier
+@msg	the template name isn't usable as a file name	le nom du modèle n’est pas utilisable comme nom de fichier
 @msg	no metadata templates folder here	aucun dossier de modèles de métadonnées ici
 @msg	give `name` or `path`, not both	indiquez `name` ou `path`, pas les deux
 @msg	give one of `path`, `name` and `data`	indiquez un seul des paramètres `path`, `name` et `data`
@@ -5599,7 +5599,7 @@ effect	Soft	Doux
 	Drag values or labels. Double-click a value to type.	Faites glisser les valeurs ou les libellés. Double-cliquez sur une valeur pour la saisir.
 	Drag rings to rotate. Shift snaps to 15°.	Faites glisser les anneaux pour tourner. Maj contraint par pas de 15°.
 	Track cube	Cube de rotation
-	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Faites glisser une face, une arête ou l'anneau pour tourner. Maj fait tourner autour d'un axe de l'écran.
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Faites glisser une face, une arête ou l’anneau pour tourner. Maj fait tourner autour d’un axe de l’écran.
 	Drag the light, or its rings. Shift snaps to 15°.	Faites glisser la lumière ou ses anneaux. Maj contraint par pas de 15°.
 	Keep visible surfaces only when expanding	Conserver uniquement les surfaces visibles lors de la décomposition
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Découpe la géométrie masquée lors de la décomposition de l’aspect. L’aperçu conserve toute la surface. Les peintures transparentes et les surfaces dépassant les limites de visibilité conservent toutes les faces.
@@ -6335,7 +6335,7 @@ theme	Appearance	Apparence
 	Export Data Sets…	Exporter des jeux de données…
 	Load Variable Library…	Charger une bibliothèque de variables…
 	Save Variable Library…	Enregistrer une bibliothèque de variables…
-@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	« Importer » lit un fichier de source de données d’extension .csv, .tsv, .txt ou .xml
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	« Importer » lit un fichier de source de données d’extension .csv, .tsv, .txt ou .xml
 @msg	a variable library holds text variables, and the document has none	une bibliothèque de variables contient des variables de texte, et le document n’en a aucune
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variable `{name}` ne peut pas être enregistrée dans une bibliothèque de variables : renommez-la pour qu’elle commence par une lettre ou `_`, sans espaces ni symboles autres que `-`, `_` et `.`
 @msg	{k} has control characters	{k} contient des caractères de contrôle
