@@ -93,7 +93,7 @@ pub(crate) fn cleanup(app: &VectorcraftApp, ctx: &Context) {
         });
         // The canvas and the other windows' tiled panes take a release ([`drop_on_pane`]).
         let target = |p: egui::Pos2| app.canvas_rect.is_some_and(|r| r.contains(p)) || app.canvas.panes.last.iter().any(|(_, r)| r.contains(p));
-        let outside_release = ctx.input(|i| i.pointer.primary_released() && !i.pointer.interact_pos().is_some_and(target));
+        let outside_release = ctx.input(|i| i.pointer.primary_released() && !released_at(i).is_some_and(target));
         if !valid || cancel || outside_release || app.ui.dialog.is_some() {
             egui::DragAndDrop::clear_payload(ctx);
         }
@@ -197,10 +197,11 @@ pub(crate) fn drop_on_canvas(app: &mut VectorcraftApp, resp: &Response, xf: &can
         resp.ctx.set_cursor_icon(if same && !copy { egui::CursorIcon::Move } else { egui::CursorIcon::Copy });
     }
     if let Some(art) = resp.dnd_release_payload::<Artwork>()
-        && let Some(at) = resp.ctx.input(|i| i.pointer.interact_pos()).map(|p| xf.to_doc(p))
+        && let Some(at) = resp.ctx.input(released_at).map(|p| xf.to_doc(p))
     {
         let result = if same {
             // Back in the source tab, resume the ordinary move (Alt copies).
+            let copy = release_alt(&resp.ctx);
             app.run("object.move", json!({"ids": art.ids, "dx": at.x-art.origin.grab.x, "dy": at.y-art.origin.grab.y, "copy": copy}))
         } else {
             app.run(
@@ -283,7 +284,7 @@ pub(crate) fn drop_on_pane(app: &mut VectorcraftApp, ctx: &Context, w: crate::do
     app.ui.home = None;
     crate::doc_windows::show_window(app, w);
     let result = if uid == origin.uid {
-        let copy = ctx.input(|i| i.modifiers.alt);
+        let copy = release_alt(ctx);
         app.run("object.move", json!({"ids": ids, "dx": at.x - origin.grab.x, "dy": at.y - origin.grab.y, "copy": copy}))
     } else {
         app.run("edit.dropSelection", json!({"sourceDocument": origin.uid, "ids": ids, "grab": [origin.grab.x, origin.grab.y], "at": [at.x, at.y]}))
@@ -295,4 +296,24 @@ pub(crate) fn drop_on_pane(app: &mut VectorcraftApp, ctx: &Context, w: crate::do
         app.status(e);
     }
     ctx.request_repaint();
+}
+
+/// The primary button's release in this frame: where it went up, and the modifiers held then.
+fn primary_release(i: &egui::InputState) -> Option<(egui::Pos2, egui::Modifiers)> {
+    i.events.iter().find_map(|e| match e {
+        egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers } => Some((*pos, *modifiers)),
+        _ => None,
+    })
+}
+
+/// Where the primary button went up in this frame, else where the pointer is. A pointer move later
+/// in the frame of the release does not change where the artwork is released.
+pub(crate) fn released_at(i: &egui::InputState) -> Option<egui::Pos2> {
+    primary_release(i).map(|(p, _)| p).or(i.pointer.interact_pos())
+}
+
+/// Whether Alt was held when the primary button went up in this frame, else whether it is held now.
+/// Alt let go later in the frame of the release still copies.
+fn release_alt(ctx: &Context) -> bool {
+    ctx.input(|i| primary_release(i).map_or(i.modifiers.alt, |(_, m)| m.alt))
 }

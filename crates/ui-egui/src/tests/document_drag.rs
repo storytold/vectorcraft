@@ -291,6 +291,31 @@ fn hovering_back_to_source_resumes_move_instead_of_copying() {
     assert!((bounds.x0 - 150.0).abs() < 0.001 && (bounds.y0 - 150.0).abs() < 0.001, "{bounds:?}");
 }
 
+/// Verify that a drop back in the source tab lands where the button went up and copies when Alt was
+/// held then, though the pointer moves and Alt is let go later in the frame of the release.
+#[test]
+fn a_drop_back_in_the_source_uses_the_release_position_and_alt() {
+    let (mut app, ctx, _, tabs) = drag_fixture();
+    frame(&mut app, &ctx, 0.2, vec![Event::PointerMoved(tabs[1].center())]);
+    frame(&mut app, &ctx, 0.25, vec![]);
+    frame(&mut app, &ctx, 0.8, vec![]);
+    frame(&mut app, &ctx, 0.9, vec![Event::PointerMoved(tabs[0].center())]);
+    frame(&mut app, &ctx, 1.4, vec![]);
+    assert_eq!(app.session.active_index(), Some(0));
+    let xf = canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let drop = xf.to_screen(Point::new(175.0, 180.0));
+    let later = xf.to_screen(Point::new(300.0, 250.0));
+    let alt = egui::Modifiers::ALT;
+    frame(&mut app, &ctx, 1.5, vec![Event::ModifiersChanged(alt), Event::PointerMoved(drop)]);
+    let up = Event::PointerButton { pos: drop, button: PointerButton::Primary, pressed: false, modifiers: alt };
+    frame(&mut app, &ctx, 1.6, vec![up, Event::PointerMoved(later), Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    let st = app.session.active().unwrap();
+    assert_eq!(st.doc.layers[0].children().map_or(0, Vec::len), 2, "Alt at the release copies the original");
+    assert_eq!(st.selection.objects.len(), 1);
+    let bounds = st.doc.node(st.selection.objects[0]).unwrap().geometric_bounds().unwrap();
+    assert!((bounds.x0 - 150.0).abs() < 0.001 && (bounds.y0 - 150.0).abs() < 0.001, "{bounds:?}");
+}
+
 /// Back in the source tab, the move resumes even when coming to the front measured the source's
 /// type again in its own composite fonts, which replaces the document without editing it.
 #[test]

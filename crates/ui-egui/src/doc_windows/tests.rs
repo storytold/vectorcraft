@@ -1048,6 +1048,23 @@ fn a_release_in_the_first_frame_over_a_floating_window_still_copies_the_art() {
 }
 
 #[test]
+fn a_floating_window_drop_lands_where_the_button_went_up() {
+    let ctx = egui::Context::default();
+    let mut app = floating_pair(&ctx);
+    grab(&mut app, &ctx, vectorcraft_geom::Point::new(325.0, 255.0));
+    let drop = in_noted(&app, (1, 1), vectorcraft_geom::Point::new(200.0, 150.0));
+    let later = in_noted(&app, (1, 1), vectorcraft_geom::Point::new(120.0, 220.0));
+    app_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(drop)]);
+    // A pointer move later in the frame of the release does not move the drop.
+    app_frame(&mut app, &ctx, vec![button(drop, false), egui::Event::PointerMoved(later)]);
+    app_frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.session.active_index(), Some(1));
+    assert_eq!(objects(&app, 1), 2);
+    let placed = selected_center(&app);
+    assert!((placed.x - 200.0).abs() < 0.01 && (placed.y - 150.0).abs() < 0.01, "{placed:?}");
+}
+
+#[test]
 fn art_dragged_from_a_floating_window_drops_into_the_main_windows_document() {
     let ctx = egui::Context::default();
     let mut app = floating_pair(&ctx);

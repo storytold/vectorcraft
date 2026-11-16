@@ -317,6 +317,38 @@ fn a_selection_drag_into_another_view_of_its_document_moves_the_art() {
 }
 
 #[test]
+fn a_pane_drop_lands_where_the_button_went_up_and_copies_when_alt_was_held_then() {
+    // A pointer move later in the frame of the release does not move the drop.
+    let (mut app, ctx) = tiled_pair();
+    grab(&mut app, &ctx, Point::new(100.0, 100.0));
+    let (drop, _) = in_pane(&app, &ctx, (1, 1), Point::new(170.0, 120.0));
+    let (later, _) = in_pane(&app, &ctx, (1, 1), Point::new(80.0, 60.0));
+    app_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(drop), button(drop, false), egui::Event::PointerMoved(later)]);
+    app_frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.session.active_index(), Some(1));
+    let placed = selected_bounds(&app);
+    assert!((placed.center().x - 170.0).abs() < 0.01 && (placed.center().y - 120.0).abs() < 0.01, "{placed:?}");
+    // Alt held at the release and let go later in that frame copies into another view of the source.
+    let (mut app, ctx) = tiled_pair();
+    app.run("window.newWindow", json!({})).unwrap();
+    app.run("window.arrange.tile", json!({})).unwrap();
+    app_frame(&mut app, &ctx, vec![]);
+    app_frame(&mut app, &ctx, vec![]);
+    let current = crate::doc_windows::current(&app).unwrap();
+    let other = app.canvas.panes.last.iter().map(|(w, _)| *w).find(|w| w.0 == 0 && *w != current).unwrap();
+    grab(&mut app, &ctx, Point::new(100.0, 100.0));
+    let (drop, _) = in_pane(&app, &ctx, other, Point::new(250.0, 200.0));
+    let alt = egui::Modifiers::ALT;
+    let cursor = app_frame(&mut app, &ctx, vec![egui::Event::ModifiersChanged(alt), egui::Event::PointerMoved(drop)]);
+    assert_eq!(cursor, egui::CursorIcon::Copy, "Alt shows a copy");
+    let up = egui::Event::PointerButton { pos: drop, button: egui::PointerButton::Primary, pressed: false, modifiers: alt };
+    app_frame(&mut app, &ctx, vec![up, egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    app_frame(&mut app, &ctx, vec![]);
+    assert_eq!(crate::doc_windows::current(&app), Some(other));
+    assert_eq!(objects(&app, 0), 2, "the square was copied, not moved");
+}
+
+#[test]
 fn art_carried_through_a_tab_drops_into_a_third_documents_pane() {
     let (mut app, ctx) = tiled_pair();
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();

@@ -295,7 +295,7 @@ enum Over {
 /// artwork before the canvas sees the release ([`crate::document_drag::take_for_pane`]).
 fn artwork_over(app: &mut VectorcraftApp, ui: &Ui, w: Win, area: egui::Rect) -> Option<Over> {
     let (uid, _) = slot(app, w)?;
-    let p = ui.input(|i| i.pointer.interact_pos())?;
+    let p = ui.input(crate::document_drag::released_at)?;
     if !area.contains(p) || ui.ctx().layer_id_at(p).is_some_and(|l| l != ui.layer_id()) {
         return None;
     }
@@ -327,13 +327,13 @@ fn noted_at(app: &VectorcraftApp, ctx: &egui::Context, p: egui::Pos2) -> Option<
 }
 
 /// A Selection drag's artwork released over a pane the last frame noted ([`note_drop`]) drops into
-/// its document ([`crate::document_drag::drop_on_pane`]), at the document point under the pointer
-/// in that pane's own view. Runs at the start of a frame, before any canvas sees the release.
+/// its document ([`crate::document_drag::drop_on_pane`]), at the document point where the button
+/// went up, in that pane's own view. Runs at the start of a frame, before any canvas sees the release.
 pub(crate) fn release_on_noted(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if app.canvas.windows.drops.is_empty() || !ctx.input(|i| i.pointer.primary_released()) {
         return;
     }
-    let Some(p) = ctx.input(|i| i.pointer.interact_pos()) else { return };
+    let Some(p) = ctx.input(crate::document_drag::released_at) else { return };
     let Some((w, area)) = noted_at(app, ctx, p) else { return };
     let Some(v) = crate::doc_windows::view(app, w).copied() else { return };
     let at = Xf::at(area, &v, ctx.zoom_factor()).to_doc(p);
