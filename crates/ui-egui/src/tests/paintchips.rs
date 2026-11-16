@@ -313,7 +313,7 @@ fn the_popover_swatch_libraries_button_opens_the_libraries_menu() {
     let libraries = *popover_bottom_buttons(&ctx).first().expect("the popover has a bottom bar");
     click(&mut app, &ctx, libraries.center(), Modifiers::NONE, control_bar);
     let shapes = frame(&mut app, &ctx, vec![], Modifiers::NONE, control_bar);
-    assert!(text_rect(&shapes, "Swatch Tiles").is_some(), "the popover stays open");
+    assert_eq!(popover_bottom_buttons(&ctx).first(), Some(&libraries), "the popover stays open");
     let defaults = menu_item_rect(&shapes, "Default Swatches").expect("the libraries menu is open");
     assert!(menu_item_rect(&shapes, "Other Library…").is_some());
     let earth = menu_item_rect(&shapes, "Earth Tones").expect("the menu lists the built-in libraries");
