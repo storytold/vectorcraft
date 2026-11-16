@@ -55,10 +55,19 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         ]);
     } else {
         v.extend([c("Cut", "edit.cut"), c("Copy", "edit.copy"), c("Paste", "edit.paste"), Sep]);
+        // With one group or compound path selected the menu has Isolate Selected Group, and with
+        // one path selected (a member of a group or a compound path too) it has Isolate Selected
+        // Path, as the help page
+        // (https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=324)
+        // lists them. Neither shows for an object that `object.isolate` refuses.
         if let [one] = roots.as_slice()
-            && one.is_container()
+            && isolatable(app, &st.doc, one)
         {
-            v.push(c("Isolate Selected Group", "object.isolate"));
+            if one.is_container() {
+                v.push(c("Isolate Selected Group", "object.isolate"));
+            } else if matches!(one.kind, NodeKind::Path { .. }) {
+                v.push(c("Isolate Selected Path", "object.isolate"));
+            }
         }
         if several {
             v.push(c("Group", "object.group"));
@@ -245,6 +254,18 @@ fn artboard_items(app: &VectorcraftApp) -> Vec<Item> {
         v.extend([Sep, sub("Unlock", locked_art)]);
     }
     v
+}
+
+/// Does `object.isolate` take `n`? It and every group and layer above it are shown and unlocked
+/// (for a Shaper Group, its source group, which is the group isolated), it is not on a locked
+/// artboard, it is not a guide path while Lock Guides is on, and while a symbol is edited it is on
+/// the symbol's editing layer. A selection set by a command can still hold an object that fails
+/// this.
+fn isolatable(app: &VectorcraftApp, doc: &vectorcraft_doc::Document, n: &vectorcraft_doc::Node) -> bool {
+    let target = if n.extras().shaper.is_some() { n.children().and_then(|c| c.first()).map_or(n.id, |c| c.id) } else { n.id };
+    doc.is_editable(target)
+        && !(app.session.guides_locked() && doc.node(target).is_some_and(|t| t.is_guide()))
+        && doc.symbol_edit.as_ref().is_none_or(|e| doc.ancestry(target).is_some_and(|a| a.contains(&e.layer)))
 }
 
 /// `items` without the commands that can't run now (Undo and Redo stay, greyed out), submenus

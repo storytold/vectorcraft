@@ -939,25 +939,17 @@ fn png_takes_icc(img: &image::DynamicImage, icc: &[u8]) -> bool {
 /// can read (a TIFF's read by [`vectorcraft_doc::cmyk::tiff_icc_profile`]); `None` when they
 /// can't be.
 fn decoded(bytes: &[u8], format: image::ImageFormat) -> Option<(image::DynamicImage, Option<Vec<u8>>)> {
-    use image::ImageDecoder as _;
     let max = vectorcraft_doc::MAX_RASTER_ALLOC;
-    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().ok()?;
-    if reader.format().is_none() {
-        reader.set_format(format);
-    }
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(max);
-    reader.limits(limits);
-    let tiff = reader.format() == Some(image::ImageFormat::Tiff);
-    let mut decoder = reader.into_decoder().ok()?;
-    let (w, h) = decoder.dimensions();
-    if decoder.total_bytes() > max || u64::from(w) * u64::from(h) * 4 > max {
+    let kind = craft_image_codecs::detect(bytes).or_else(|| format.extensions_str().iter().find_map(|e| craft_image_codecs::from_extension(e)))?;
+    let (w, h, per_pixel) = vectorcraft_doc::decode::decoded_layout(bytes, kind)?;
+    let pixels = u64::from(w) * u64::from(h);
+    if pixels.saturating_mul(per_pixel) > max || pixels * 4 > max {
         return None;
     }
-    // The image decoder reads a TIFF's tags within the size of its pixels, so a small TIFF's
-    // profile is read by the TIFF decoder itself.
-    let icc = if tiff { vectorcraft_doc::cmyk::tiff_icc_profile(bytes) } else { decoder.icc_profile().ok().flatten() };
-    Some((image::DynamicImage::from_decoder(decoder).ok()?, icc))
+    let (img, icc) = vectorcraft_doc::decode::decode_image(kind, bytes, max).ok()?;
+    // A TIFF's profile is read by the TIFF reader, as before.
+    let icc = if kind == craft_image_codecs::Format::Tiff { vectorcraft_doc::cmyk::tiff_icc_profile(bytes) } else { icc };
+    Some((img, icc))
 }
 
 /// The pixels of TIFF `bytes`, as stored, read as Open and Place read them: a TIFF with extra
@@ -1506,5 +1498,46 @@ mod tests {
                 MAX_NESTED_SVG_TEXT >> 20
             )]
         );
+    }
+
+    /// SVG import's pixels through craft-image-codecs (#778) are those the image crate decoded:
+    /// the same layout and samples for PNG, GIF, WebP, TIFF and BMP at each depth the image
+    /// crate writes, and JPEG samples within two steps.
+    #[test]
+    fn decoded_pixels_are_those_the_image_crate_read() {
+        use image::{DynamicImage as D, ImageFormat as F};
+        let rgba =
+            image::RgbaImage::from_fn(9, 5, |x, y| image::Rgba([(x * 29) as u8, (y * 47) as u8, ((x + 2 * y) * 9) as u8, 255 - (x * y * 6) as u8]));
+        let deep = image::ImageBuffer::<image::Rgba<u16>, _>::from_fn(9, 5, |x, y| {
+            image::Rgba([(x * 7_001) as u16, (y * 12_007) as u16, 5, 65_535 - (x * y) as u16])
+        });
+        let images = [
+            D::ImageRgba8(rgba.clone()),
+            D::ImageRgb8(D::ImageRgba8(rgba.clone()).to_rgb8()),
+            D::ImageLuma8(D::ImageRgba8(rgba.clone()).to_luma8()),
+            D::ImageLumaA8(D::ImageRgba8(rgba).to_luma_alpha8()),
+            D::ImageRgba16(deep.clone()),
+            D::ImageLuma16(D::ImageRgba16(deep).to_luma16()),
+        ];
+        let mut checked = 0;
+        for img in &images {
+            for f in [F::Png, F::Gif, F::WebP, F::Tiff, F::Bmp, F::Jpeg] {
+                let mut bytes = Vec::new();
+                if img.write_to(&mut std::io::Cursor::new(&mut bytes), f).is_err() {
+                    continue;
+                }
+                let what = format!("{f:?} {:?}", img.color());
+                let want = image::load_from_memory_with_format(&bytes, f).unwrap();
+                let (got, _) = super::decoded(&bytes, f).unwrap_or_else(|| panic!("{what}"));
+                let tolerance = if f == F::Jpeg { 2 * 257 } else { 0 };
+                if f != F::Jpeg {
+                    assert_eq!(got.color(), want.color(), "{what}");
+                }
+                let worst = got.to_rgba16().as_raw().iter().zip(want.to_rgba16().as_raw()).map(|(a, b)| a.abs_diff(*b)).max();
+                assert!(worst.is_some_and(|w| w <= tolerance), "{what}: {worst:?}");
+                checked += 1;
+            }
+        }
+        assert!(checked >= 20, "{checked}");
     }
 }

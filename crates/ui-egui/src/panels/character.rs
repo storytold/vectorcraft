@@ -2,14 +2,17 @@
 //! scale, baseline shift, character rotation, the anti-aliasing method and the All Caps, Small Caps,
 //! Superscript, Subscript, Underline and Strikethrough toggles and the Language menu.
 
+use std::cell::RefCell;
 use std::collections::HashSet;
-use std::sync::{Mutex, OnceLock};
+use std::rc::Rc;
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use egui::{Key, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::setup::{LANGUAGES, char_language_name};
 use vectorcraft_doc::text::TypeAntiAlias;
 use vectorcraft_doc::{CharStyle, NodeId, NodeKind};
+use vectorcraft_engine::DocState;
 use vectorcraft_tools::{Mods, ToolKey};
 
 use super::{pstate, set_pstate};
@@ -589,7 +592,62 @@ pub(crate) fn text_story(app: &VectorcraftApp) -> Option<Vec<NodeId>> {
 /// in selected groups, each with every frame of its threaded story (locked and hidden frames
 /// included), each once, the frames of a story in thread order.
 pub(crate) fn selected_stories(app: &VectorcraftApp) -> Vec<NodeId> {
-    let Some(st) = app.session.active() else { return Vec::new() };
+    app.session.active().map_or_else(Vec::new, |st| story_frames(st).to_vec())
+}
+
+/// The last list [`selected_stories`] worked out, with the document version (its address, which
+/// the held `Weak` keeps from being reused, and its revision) and the selected objects it was
+/// worked out for. The Character and Paragraph panels read the list once for each field they show.
+struct StoryFrames {
+    doc: Weak<vectorcraft_doc::Document>,
+    revision: u64,
+    selection: Vec<NodeId>,
+    frames: Rc<[NodeId]>,
+}
+
+thread_local! {
+    static STORY_FRAMES: RefCell<Option<StoryFrames>> = const { RefCell::new(None) };
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times [`build_selected_stories`] ran on this thread.
+    static STORY_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Whether [`story_frames`] builds the list on every read instead of keeping it.
+    static STORIES_UNKEPT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// [`selected_stories`] of `st`: the kept list while `st`'s document, revision and selected
+/// objects are the ones it was worked out for, else a new one, kept in its place.
+fn story_frames(st: &DocState) -> Rc<[NodeId]> {
+    #[cfg(test)]
+    if STORIES_UNKEPT.get() {
+        return build_selected_stories(st).into();
+    }
+    STORY_FRAMES.with_borrow_mut(|kept| {
+        if let Some(k) = kept.as_ref()
+            && k.revision == st.revision
+            && k.doc.strong_count() > 0
+            && std::ptr::eq(k.doc.as_ptr(), Arc::as_ptr(&st.doc))
+            && k.selection == st.selection.objects
+        {
+            return k.frames.clone();
+        }
+        let frames: Rc<[NodeId]> = build_selected_stories(st).into();
+        *kept = Some(StoryFrames {
+            doc: Arc::downgrade(&st.doc),
+            revision: st.revision,
+            selection: st.selection.objects.clone(),
+            frames: frames.clone(),
+        });
+        frames
+    })
+}
+
+/// The list [`selected_stories`] describes, worked out from `st`'s selection.
+fn build_selected_stories(st: &DocState) -> Vec<NodeId> {
+    #[cfg(test)]
+    STORY_BUILDS.set(STORY_BUILDS.get() + 1);
     let mut frames = Vec::new();
     let mut taken = HashSet::new();
     for selected in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
@@ -609,9 +667,9 @@ pub(crate) fn selected_stories(app: &VectorcraftApp) -> Vec<NodeId> {
 /// The type objects of [`selected_stories`].
 pub(crate) fn selected_story_texts(app: &VectorcraftApp) -> Vec<&vectorcraft_doc::TextObject> {
     let Some(st) = app.session.active() else { return Vec::new() };
-    selected_stories(app)
-        .into_iter()
-        .filter_map(|id| match st.doc.node(id).map(|n| &n.kind) {
+    story_frames(st)
+        .iter()
+        .filter_map(|&id| match st.doc.node(id).map(|n| &n.kind) {
             Some(NodeKind::Text(t)) => Some(t.as_ref()),
             _ => None,
         })
