@@ -676,6 +676,10 @@ impl Tool for ShapeTool {
                 self.inner = None;
                 self.before_drag = None;
                 self.clear_copies();
+                // Backtick already held at the press: the copies are measured from there.
+                if ev.backquote {
+                    self.copy_from = Some(ev.pos);
+                }
                 vec![]
             }
             PointerKind::Drag => {

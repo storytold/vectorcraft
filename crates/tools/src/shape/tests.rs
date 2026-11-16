@@ -1433,6 +1433,21 @@ fn backtick_drag_leaves_copies_of_the_rectangle_being_drawn() {
     assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(50.0, 30.0, false))), (false, vec![40.0]));
 }
 
+/// Backtick already held at the press measures the first copy from the pressed spot: the first
+/// drag 10 pt away leaves one, and 5 pt more leaves none.
+#[test]
+fn backtick_held_at_the_press_measures_copies_from_there() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let c = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Down, 0.0, 0.0) });
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(10.0, 10.0, true))), (true, vec![10.0]));
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(15.0, 10.0, true))), (true, vec![10.0, 15.0]));
+    assert_eq!(t.pointer(&c, &PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Up, 15.0, 10.0) }), vec![Action::Commit]);
+}
+
 /// Every shape tool leaves copies of its own shape, drawn with the modifiers held when each copy
 /// was left: Shift's square stays square, and Alt's from the centre stays centred.
 #[test]
