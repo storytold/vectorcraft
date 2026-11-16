@@ -2238,6 +2238,124 @@ fn recolor_notes_on_objects_left_unchanged_translate_with_their_counts() {
     }
 }
 
+/// A script's error about unused `answers` and Liquify's note on the objects it left as they were
+/// are translated whole for one object as well as for several, in every complete-message language,
+/// and keep their counts.
+#[test]
+fn messages_with_one_or_several_items_translate_in_every_complete_catalog() {
+    let notes = [
+        ("`answers` has 1 answer the script did not use", "1"),
+        ("`answers` has 2 answers the script did not use", "2"),
+        ("`answers` has 5 answers the script did not use", "5"),
+        ("Warp left 1 object under the brush as it was (type): it reshapes paths only", "1"),
+        ("Twirl left 2 objects under the brush as they were (type, images): it reshapes paths only", "2"),
+        ("Pucker left 5 objects under the brush as they were (symbols): it reshapes paths only", "5"),
+    ];
+    // Whole words, so that a word such as Swedish "under" or Dutch "object" is not read as English.
+    let english = ["answer", "did", "use", "left", "brush", "was", "they", "were", "reshapes", "paths", "only"];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (note, count) in notes {
+            let shown = message(lang, note);
+            assert_ne!(shown, note, "{code}");
+            assert!(shown.split(|c: char| !c.is_alphabetic()).all(|w| !english.contains(&w)), "{code}: {shown}");
+            assert!(shown.contains(count) && (!note.starts_with('`') || shown.contains("`answers`")), "{code}: {shown}");
+        }
+    }
+    // The count picks the language's form.
+    let cs = cs();
+    assert!(message(cs, "`answers` has 1 answer the script did not use").contains("1 odpověď,"));
+    assert!(message(cs, "`answers` has 2 answers the script did not use").contains("2 odpovědi,"));
+    assert!(message(cs, "`answers` has 5 answers the script did not use").contains("5 odpovědí,"));
+}
+
+/// Liquify's warning about the objects under the brush that it left as they were shows its tool
+/// and each kind of object in the interface language, the kinds in their order and joined as the
+/// language joins a list, in every complete-message language; the count stays.
+#[test]
+fn liquify_warning_translates_its_tool_and_kinds_in_every_complete_catalog() {
+    const TOOLS: [&str; 7] = ["Warp", "Twirl", "Pucker", "Bloat", "Scallop", "Crystallize", "Wrinkle"];
+    const KINDS: [&str; 9] = ["graphs", "type", "symbols", "images", "meshes", "envelopes", "repeats", "placed documents", "blends"];
+    let warning = |tool: &str, n: usize, kinds: &str| {
+        if n == 1 {
+            format!("{tool} left {n} object under the brush as it was ({kinds}): it reshapes paths only")
+        } else {
+            format!("{tool} left {n} objects under the brush as they were ({kinds}): it reshapes paths only")
+        }
+    };
+    let words = |s: &str| s.split(|c: char| !c.is_alphabetic()).filter(|w| !w.is_empty()).map(str::to_string).collect::<Vec<_>>();
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let cat = lang.catalog();
+        for ctx in ["liquify-list-two", "liquify-list-middle", "liquify-list-end"] {
+            assert!(cat.contextual(ctx, "{0}, {1}").is_some(), "{code} has no {ctx} row");
+        }
+        let kind = |k: &str| cat.contextual("liquify-kind", k).unwrap_or_else(|| panic!("{code} has no liquify-kind row for {k}"));
+        // No English word of `sources` is left in `shown`, unless a translation uses it too.
+        let english_left = |shown: &str, sources: &[&str], translated: &[&str]| {
+            let shown = words(shown);
+            for source in sources {
+                let kept = translated.iter().any(|t| words(t).iter().any(|w| words(source).contains(w)));
+                assert!(kept || words(source).iter().all(|w| !shown.contains(w)), "{code}: {source} stays English in {shown:?}");
+            }
+        };
+        for tool in TOOLS {
+            let label = cat.contextual("liquify-tool", tool).unwrap_or_else(|| panic!("{code} has no liquify-tool row for {tool}"));
+            // All nine kinds, in the engine's order and in reverse.
+            for kinds in [KINDS.to_vec(), KINDS.iter().rev().copied().collect()] {
+                let shown = message(lang, &warning(tool, kinds.len(), &kinds.join(", ")));
+                assert!(shown.contains(label) && shown.contains('9'), "{code}: {shown}");
+                let translated: Vec<&str> = kinds.iter().map(|k| kind(k)).collect();
+                let mut from = 0;
+                for t in &translated {
+                    let at = shown[from..].find(t).unwrap_or_else(|| panic!("{code}: {t} missing or out of order in {shown}"));
+                    from += at + t.len();
+                }
+                english_left(&shown, &kinds, &translated);
+                english_left(&shown, &[tool], &[label]);
+            }
+        }
+        // One kind, for one object and for several.
+        for k in KINDS {
+            for n in [1, 2, 5] {
+                let shown = message(lang, &warning("Bloat", n, k));
+                assert!(shown.contains(kind(k)) && shown.contains(&n.to_string()), "{code}: {shown}");
+                english_left(&shown, &[k], &[kind(k)]);
+            }
+        }
+    }
+    let de = Lang::from_code("de").expect("registered");
+    assert_eq!(
+        message(de, &warning("Warp", 1, "symbols")),
+        "Verkrümmung ließ 1 Objekt unter dem Pinsel unverändert (Symbole): es formt nur Pfade um"
+    );
+    assert_eq!(
+        message(de, &warning("Twirl", 2, "type, images")),
+        "Strudel ließ 2 Objekte unter dem Pinsel unverändert (Text und Bilder): es formt nur Pfade um"
+    );
+    assert_eq!(
+        message(de, &warning("Pucker", 4, "graphs, type, symbols, images")),
+        "Zusammenziehen ließ 4 Objekte unter dem Pinsel unverändert (Diagramme, Text, Symbole und Bilder): es formt nur Pfade um"
+    );
+    // The count picks the language's form.
+    assert_eq!(
+        message(cs(), &warning("Crystallize", 5, "meshes, placed documents")),
+        "Nástroj Krystalizace ponechal 5 objektů pod štětcem beze změny (sítě a umístěné dokumenty): mění pouze cesty"
+    );
+    let ja = Lang::from_code("ja").expect("registered");
+    assert_eq!(
+        message(ja, &warning("Wrinkle", 3, "blends, repeats, envelopes")),
+        "しわ はブラシの下にある 3 個のオブジェクトを変更せずに残しました（ブレンド、リピート、エンベロープ）。パスのみを変形します"
+    );
+    // A kind Liquify does not list leaves the tool and the list as they are.
+    assert_eq!(
+        message(de, &warning("Warp", 2, "type, widgets")),
+        "Warp ließ 2 Objekte unter dem Pinsel unverändert (type, widgets): es formt nur Pfade um"
+    );
+    // English shows the warning as the engine wrote it.
+    assert_eq!(message(Lang::EN, &warning("Warp", 2, "type, images")), warning("Warp", 2, "type, images"));
+}
+
 /// `file.info`'s refusal of a value with control characters is two whole messages, one for the
 /// fields that take line breaks and one for the fields that don't, and each is translated in every
 /// complete-message language with the field's key kept as written.
@@ -3742,6 +3860,98 @@ fn wrongly_shaped_plugin_commands_errors_are_translated() {
             let words: String = shown.split('`').step_by(2).collect();
             assert!(words.split(|c: char| !c.is_alphabetic()).all(|w| !english.contains(&w)), "{code}: {e} -> {shown}");
             assert!(numbers.iter().all(|n| shown.contains(n)), "{code}: {e} -> {shown}");
+        }
+    }
+}
+
+/// The errors of the custom toolbar commands (Window › Toolbars, New Toolbar and Manage Toolbars,
+/// `window.toolbar.dock` and `window.toolbar.float`) have an `@msg` row in every complete-message
+/// catalog, and the status bar shows each one in the interface language with the toolbar's name,
+/// the key and the values given kept; the error the command returns stays English.
+#[test]
+fn custom_toolbar_command_errors_are_translated() {
+    use serde_json::json;
+    let scanned = message_literals();
+    let templates = [
+        "toolbar (a toolbar's name) must be a string",
+        "no toolbar named `{name}`",
+        "toolbar name can't be empty",
+        "a toolbar name has at most {MAX_NAME} characters",
+        "there is already a toolbar named `{name}`",
+        "there is already a toolbar named `{to}`",
+        "a workspace keeps at most {MAX} toolbars",
+        "name (a toolbar's name) must be a string",
+        "name (a toolbar's name) is required",
+        "to (the new name) is required",
+        "name must be a toolbar's name",
+        "side is left or right, not `{s}`",
+        "side is left or right, not `{v}`",
+        "order is a whole number from 0 to {others}, not `{v}`",
+        "no dialog open",
+        "`{key}` must be true or false",
+        "x and y must both be numbers",
+    ];
+    for template in templates {
+        assert!(scanned.contains(template), "the scan lists {template}");
+    }
+    let mut missing = vec![];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        let rows: std::collections::BTreeSet<&str> = entries.iter().filter(|(ctx, _, _)| ctx == "@msg").map(|(_, src, _)| src.as_str()).collect();
+        missing.extend(templates.iter().filter(|t| !rows.contains(*t)).map(|t| format!("{code}: {t}")));
+    }
+    assert!(missing.is_empty(), "{} toolbar errors have no @msg row:\n{}", missing.len(), missing.join("\n"));
+
+    let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    for name in ["Mine", "Pens"] {
+        app.run("window.toolbar.new", json!({ "name": name })).unwrap();
+    }
+    app.run("window.toolbar.dock", json!({"name": "Pens", "side": "left"})).unwrap();
+    let cases = [
+        ("window.toolbar.new", json!({"name": 5}), "name (a toolbar's name) must be a string", vec![]),
+        ("window.toolbar.new", json!({"name": "  "}), "toolbar name can't be empty", vec![]),
+        ("window.toolbar.new", json!({"name": "x".repeat(201)}), "a toolbar name has at most 200 characters", vec!["200"]),
+        ("window.toolbar.new", json!({"name": "Mine"}), "there is already a toolbar named `Mine`", vec!["`Mine`"]),
+        ("window.toolbar.rename", json!({"name": "Mine", "to": "Pens"}), "there is already a toolbar named `Pens`", vec!["`Pens`"]),
+        ("window.toolbar.rename", json!({"name": "Mine"}), "to (the new name) is required", vec![]),
+        ("window.toolbar.custom", json!({}), "name (a toolbar's name) is required", vec![]),
+        ("window.toolbar.custom", json!({"name": "Nope"}), "no toolbar named `Nope`", vec!["`Nope`"]),
+        ("window.toolbar.custom", json!({"name": "Mine", "show": "yes"}), "`show` must be true or false", vec!["`show`"]),
+        ("window.toolbar.duplicate", json!({"name": 3}), "name must be a toolbar's name", vec![]),
+        ("toolbar.addTool", json!({"tool": "pen", "toolbar": 5}), "toolbar (a toolbar's name) must be a string", vec![]),
+        ("window.toolbar.dock", json!({"name": "Mine", "side": "up"}), "side is left or right, not `up`", vec!["`up`"]),
+        ("window.toolbar.dock", json!({"name": "Mine", "side": 3}), "side is left or right, not `3`", vec!["`3`"]),
+        (
+            "window.toolbar.dock",
+            json!({"name": "Mine", "side": "left", "order": 9}),
+            "order is a whole number from 0 to 1, not `9`",
+            vec!["1", "`9`"],
+        ),
+        ("window.toolbar.float", json!({"name": "Mine", "x": "a", "y": 1}), "x and y must both be numbers", vec![]),
+    ];
+    let mut errors: Vec<(String, Vec<&str>)> = vec![];
+    for (id, params, want, kept) in cases {
+        let e = app.run(id, params.clone()).unwrap_err();
+        assert_eq!(e, want, "{id} {params}");
+        errors.push((e, kept));
+    }
+    // New Toolbar's OK with no dialog open, and a workspace that holds as many toolbars as it keeps.
+    errors.push((crate::custom_toolbars::confirm(&mut app).unwrap_err(), vec![]));
+    for i in app.ui.custom_toolbars.len()..crate::custom_toolbars::MAX {
+        app.run("window.toolbar.new", json!({ "name": format!("T{i}") })).unwrap();
+    }
+    for (id, params) in [("window.toolbar.new", json!({"name": "Extra"})), ("window.toolbar.duplicate", json!({"name": "Mine"}))] {
+        let e = app.run(id, params).unwrap_err();
+        assert_eq!(e, "a workspace keeps at most 64 toolbars", "{id}");
+        errors.push((e, vec!["64"]));
+    }
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, kept) in &errors {
+            let shown = message(lang, e);
+            assert_ne!(shown, *e, "{code}: shown in English");
+            assert!(kept.iter().all(|k| shown.contains(k)), "{code}: {e} -> {shown}");
         }
     }
 }
