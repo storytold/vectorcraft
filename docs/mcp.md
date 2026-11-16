@@ -1924,7 +1924,7 @@ and the image keeps the size of the crop box. A `rect` over the whole image with
 An image scaled differently across and down is resampled on both sides, so its pixels come out square at `ppi`.
 A turned or skewed image is drawn at the `ppi` given, even its own, and over the whole box around it as well; without
 `ppi` it is drawn at the density of that box. The Crop Image tool's Apply sends such an image's own resolution when
-no other is set, and crops it over the whole box only when a resolution is chosen.
+no other is set and the image can be cropped to it, and crops it over the whole box only when a resolution is chosen.
 The most it takes is the image's own resolution (along the denser side of its pixel grid, however it is turned), or
 300 ppi for a linked image; above that it is refused with `ppi can't be more than {max} for this image`. A value
 outside 1 to 2400 is refused with `ppi must be between 1 and 2400`, and a value that is not a positive number with

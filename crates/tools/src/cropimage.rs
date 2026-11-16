@@ -220,8 +220,8 @@ impl CropImageTool {
                 let [_, b, c, _, _, _] = im.xf.as_coeffs();
                 b.abs() > 1e-9 || c.abs() > 1e-9
             });
-            let own = |im: &ImageObject| Some(image_ppi(im).0).filter(|v| (1.0..=2400.0).contains(v));
-            let send = resample.or_else(|| drawn.and_then(|im| ppi.or_else(|| own(im))).map(|v| v.min(max)));
+            let own = |im: &ImageObject| Some(image_ppi(im).0).filter(|v| (1.0..=2400.0).contains(v) && *v <= max + 1e-6);
+            let send = resample.or_else(|| drawn.and_then(|im| ppi.map(|v| v.min(max)).or_else(|| own(im))));
             if !same(r, image) || resample.is_some() || (drawn.is_some() && ppi.is_some()) {
                 let mut p = json!({ "rect": [r.x0, r.y0, r.width(), r.height()] });
                 if let Some(v) = send {
@@ -716,6 +716,17 @@ mod tests {
         t.set_option("ppi", &json!(36));
         assert!(ppi(&enter(&mut t, &cx)).is_some_and(|v| (v - 36.0).abs() < 1e-9));
         assert!(!enter(&mut t, &cx).iter().any(|a| matches!(a, Action::Exec(..))));
+        // A linked image's own resolution above what it can be cropped to is not sent in its place.
+        let Some(NodeKind::Image(im)) = d.node(id).map(|n| n.kind.clone()) else { panic!("an image") };
+        let mut linked = d.clone();
+        if let Some(NodeKind::Image(l)) = linked.node_mut(id).map(|n| &mut n.kind) {
+            l.link = Some("photo.png".into());
+            l.xf = im.xf * Affine::scale(0.1);
+        }
+        // 0.2 pt a pixel: 360 ppi, above the 300 a linked image is cropped to.
+        let cx = crate::testutil::cx(&linked, &s, &p);
+        t.set_option("rect", &json!([105, 128, 4, 4]));
+        assert_eq!(ppi(&enter(&mut t, &cx)), None);
     }
 
     /// A crop that fails leaves the tool chosen (the switch to the Selection tool is not made), so
