@@ -366,17 +366,30 @@ fn preview(doc: &Document, art: &Node, frame: Rect) -> Option<Vec<u8>> {
         })
         .collect();
     let rgba = image::RgbaImage::from_raw(w, h, px)?;
-    let mut out = vec![];
-    // Opaque but for the edge's anti-aliasing (an artboard drawn to whole pixels) and compositing's
-    // rounding: JPEG.
     let inner = |x: u32, y: u32| x > 0 && y > 0 && x + 1 < w && y + 1 < h;
     if rgba.enumerate_pixels().all(|(x, y, p)| p[3] >= 250 || !inner(x, y)) {
         let rgb = image::DynamicImage::ImageRgba8(rgba).to_rgb8();
-        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 80).encode_image(&rgb).ok()?;
+        let raw = craft_image_codecs::Image::from_raw(
+            rgb.width(),
+            rgb.height(),
+            craft_image_codecs::ChannelLayout::Rgb,
+            craft_image_codecs::SampleType::U8,
+            rgb.into_raw(),
+        )
+        .ok()?;
+        let opts = craft_image_codecs::EncodeOptions { jpeg_quality: 80, ..Default::default() };
+        craft_image_codecs::encode(&raw, craft_image_codecs::Format::Jpeg, &opts).ok()
     } else {
-        rgba.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).ok()?;
+        let raw = craft_image_codecs::Image::from_raw(
+            rgba.width(),
+            rgba.height(),
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            rgba.into_raw(),
+        )
+        .ok()?;
+        craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()
     }
-    Some(out)
 }
 
 /// `s` stored in `d` (objects showing the same thing share one blob).
