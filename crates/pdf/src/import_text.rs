@@ -625,7 +625,8 @@ impl TextLine {
             // Stroked text of its own (stroke rendering): no later stroke goes back over the
             // glyphs filled before it, so no stroke looks through them again.
             self.stroked = self.filled.len();
-            return self.stroke_last(font, at, stroke, overprint);
+            // Nor does a stroke at another opacity join the glyph just filled: the line has one.
+            return opacity == self.opacity && self.stroke_last(font, at, stroke, overprint);
         };
         let continues = self
             .pending

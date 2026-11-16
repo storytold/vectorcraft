@@ -245,3 +245,24 @@ fn a_stroke_over_one_glyph_of_a_filled_word_strokes_only_that_glyph() {
     let content = "0 0 0 RG 1 1 0.8 rg 3 w BT /F1 60 Tf 40 110 Td (WAVE) Tj ET BT 2 Tr /F1 60 Tf 40 110 Td (W) Tj 0 Tr ET";
     assert_eq!(word_runs(content), [("W".to_string(), 60.0, true, true), ("WAVE".to_string(), 60.0, true, false)], "{content}");
 }
+
+/// A glyph filled at one opacity and stroked at another (`ca` and `CA` differ) stays two pieces
+/// of type, each at its own opacity, also when it is shown on its own, so the stroke is drawn
+/// right after its fill (#8015). Two such operators are four pieces in the order they are drawn,
+/// the second glyph's fill over the first one's stroke.
+#[test]
+fn a_glyph_stroked_at_another_opacity_than_its_fill_stays_its_own_type() {
+    let (fill, stroke) = ((64.0 / 255.0, true, false), (191.0 / 255.0, false, true));
+    for (show, want) in [("(A) Tj", vec![fill, stroke]), ("(A) Tj (B) Tj", vec![fill, stroke, fill, stroke])] {
+        let content = format!("/G gs 1 0 0 rg 0 0 1 RG 2 w BT /F1 20 Tf 2 Tr 1 0 0 1 10 20 Tm {show} 0 Tr ET");
+        let d = import(&crate::tests::reader_compat::text_pdf(&content)).unwrap();
+        let mut texts = vec![];
+        d.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                let st = t.first_style();
+                texts.push((n.opacity, !st.fill.is_none(), !st.stroke.is_none()));
+            }
+        });
+        assert_eq!(texts, want, "{content}");
+    }
+}
