@@ -5681,6 +5681,8 @@ mark-style	Japanese	Jepang
 	Reset Tracking and Kerning	Atur ulang tracking dan kerning
 	Reset Horizontal Scale	Atur ulang skala horizontal
 	Highlight Font Name	Sorot nama font
+	Highlight Font Size	Sorot ukuran font
+	Other…	Lainnya…
 	Highlight Kerning	Sorot kerning
 	Highlight Tracking	Sorot tracking
 @msg	span must be "object" or "selection", got {v}	span harus "object" atau "selection", diterima {v}

@@ -397,7 +397,14 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
             vec![
                 sub("Font", font_items(english_names)),
                 sub("Recent Fonts", RECENT_FONT_IDS.iter().map(|id| c("Recent Font", id)).collect()),
-                sub("Size", TYPE_SIZES.iter().map(|(l, n)| cp(l, "text.setStyle", json!({ "size": n }))).collect()),
+                sub(
+                    "Size",
+                    TYPE_SIZES
+                        .iter()
+                        .map(|(l, n)| cp(l, "text.setStyle", json!({ "size": n })))
+                        .chain([Sep, c("Other…", "type.highlightFontSize")])
+                        .collect(),
+                ),
                 c("Bold", "type.bold"),
                 c("Italic", "type.italic"),
                 Sep,

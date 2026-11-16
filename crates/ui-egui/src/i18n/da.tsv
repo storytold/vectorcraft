@@ -8409,6 +8409,8 @@ mark-style	Japanese	Japansk
 	Reset Tracking and Kerning	Nulstil sporing og kerning
 	Reset Horizontal Scale	Nulstil vandret skalering
 	Highlight Font Name	Fremhæv skrifttypenavn
+	Highlight Font Size	Fremhæv skriftstørrelse
+	Other…	Anden…
 	Highlight Kerning	Fremhæv kerning
 	Highlight Tracking	Fremhæv sporing
 @msg	span must be "object" or "selection", got {v}	span skal være "object" eller "selection", fik {v}

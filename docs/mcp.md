@@ -7034,7 +7034,10 @@ Pen's second anchor at (150, 431), in line with the square's centre.
   `type.highlightTracking` (no default key) and `type.highlightFontName` (Cmd+Alt+Shift+F) show the Character panel and
   give its Kerning or Tracking field the keyboard focus with the value selected, or open its font family menu with the
   search field focused; each replies `{field: "kerning" | "tracking" | "fontName"}`. Without selected type or text the
-  Type tool edits, the panel shows and the command fails.
+  Type tool edits, the panel shows and the command fails. Type › Size › Other… runs `type.highlightFontSize` (`{}`, no
+  default key), which gives the Character panel's Font Size field the keyboard focus the same way (blank when the
+  selected sizes differ; the size typed and Enter apply through `text.setStyle {size}` as one undo step) and replies
+  `{field: "fontSize"}`; the menu item is dimmed without selected type or text the Type tool edits.
   The UI command `type.underline` (Cmd+Shift+U,
   in remote mode `press_key {key: "U", mods: {cmd: true, shift: true}}` or `invoke_menu`) does what the Character
   panel's Underline button does: it underlines the Type tool's selected text or the selected type objects, or removes

@@ -8192,6 +8192,8 @@ mark-style	Japanese	Japans
 	Reset Tracking and Kerning	Tracking en kerning herstellen
 	Reset Horizontal Scale	Horizontale schaal herstellen
 	Highlight Font Name	Lettertypenaam markeren
+	Highlight Font Size	Lettertypegrootte markeren
+	Other…	Andere…
 	Highlight Kerning	Kerning markeren
 	Highlight Tracking	Tracking markeren
 @msg	span must be "object" or "selection", got {v}	span moet "object" of "selection" zijn, maar is {v}

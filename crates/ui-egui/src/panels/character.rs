@@ -481,12 +481,14 @@ pub(crate) fn toggle_face(app: &mut VectorcraftApp, face: Face) -> Result<Value,
     Ok(json!({ "style": name }))
 }
 
-/// The Character panel fields that the Highlight Font Name, Highlight Kerning and Highlight
-/// Tracking commands give the keyboard focus ([`highlight`]).
+/// The Character panel fields that the Highlight Font Name, Highlight Font Size (Type › Size ›
+/// Other…), Highlight Kerning and Highlight Tracking commands give the keyboard focus
+/// ([`highlight`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Field {
     /// The font family menu: it opens, and its search field takes the focus.
     FontName,
+    FontSize,
     Kerning,
     Tracking,
 }
@@ -496,6 +498,7 @@ impl Field {
     fn salt(self) -> &'static str {
         match self {
             Field::FontName => "ch-font",
+            Field::FontSize => "ch-size",
             Field::Kerning => "ch-kern",
             Field::Tracking => "ch-track",
         }
@@ -504,17 +507,19 @@ impl Field {
     fn name(self) -> &'static str {
         match self {
             Field::FontName => "fontName",
+            Field::FontSize => "fontSize",
             Field::Kerning => "kerning",
             Field::Tracking => "tracking",
         }
     }
 }
 
-/// `type.highlightFontName`, `type.highlightKerning` and `type.highlightTracking`: show the
-/// Character panel if it is hidden (a shown one is activated, so its floating window comes
-/// forward), and give `field` the keyboard focus when the panel next draws it, a number field with
-/// its value selected (typing replaces it, Enter applies it). Without selected type or text the
-/// Type tool edits, the panel shows, nothing takes the focus and the command fails. → `{field}`.
+/// `type.highlightFontName`, `type.highlightFontSize`, `type.highlightKerning` and
+/// `type.highlightTracking`: show the Character panel if it is hidden (a shown one is activated,
+/// so its floating window comes forward), and give `field` the keyboard focus when the panel next
+/// draws it, a number field with its value selected (typing replaces it, Enter applies it).
+/// Without selected type or text the Type tool edits, the panel shows, nothing takes the focus and
+/// the command fails. → `{field}`.
 pub(crate) fn highlight(app: &mut VectorcraftApp, field: Field) -> Result<Value, String> {
     // `window.panel` would hide a floating panel in front of its window, or an open flyout.
     if crate::panel_docking::visible(&app.ui, "character") {

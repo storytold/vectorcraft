@@ -5936,6 +5936,8 @@ theme	Appearance	Външен вид
 	Reset Tracking and Kerning	Нулиране на разредката и кернинга
 	Reset Horizontal Scale	Нулиране на хоризонталния мащаб
 	Highlight Font Name	Маркиране на името на шрифта
+	Highlight Font Size	Маркиране на размера на шрифта
+	Other…	Друг…
 	Highlight Kerning	Маркиране на кернинга
 	Highlight Tracking	Маркиране на разредката
 @msg	span must be "object" or "selection", got {v}	span трябва да е "object" или "selection", а не {v}
