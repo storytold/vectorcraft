@@ -108,6 +108,24 @@ fn a_group_with_its_own_fill_answers_for_its_contents() {
     assert!((node(&s, g).appearance.items[own].opacity() - 0.3).abs() < 1e-6, "the group's own fill keeps its opacity");
 }
 
+/// A targeted layer without an active Appearance row: `paint.proxies` answers the opacity of the
+/// layer's editable art, which `paint.setFill {opacity}` sets, not that of a locked object before it.
+#[test]
+fn a_targeted_layer_answers_for_its_editable_art() {
+    let mut s = session();
+    let (locked, open) = (rect(&mut s, 10.0), rect(&mut s, 200.0));
+    s.execute("paint.setFill", &json!({"ids": [locked.0], "opacity": 20})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [open.0], "opacity": 80})).unwrap();
+    s.execute("object.lock", &json!({"ids": [locked.0]})).unwrap();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    s.execute("layer.target", &json!({"id": layer.0})).unwrap();
+    assert_eq!(proxies(&mut s)["fillOpacity"], 80.0);
+    s.execute("paint.setFill", &json!({"opacity": 40})).unwrap();
+    assert!((fill_opacity(&s, open) - 0.4).abs() < 1e-6);
+    assert!((fill_opacity(&s, locked) - 0.2).abs() < 1e-6, "the locked object keeps its opacity");
+    assert_eq!(proxies(&mut s)["fillOpacity"], 40.0);
+}
+
 /// With the Appearance panel's lower fill row active, that row takes the opacity and the top fill
 /// keeps its own.
 #[test]

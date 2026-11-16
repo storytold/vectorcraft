@@ -249,7 +249,8 @@ impl Session {
         let editable = |id: &&NodeId| !super::graph::is_design_art(&st.doc, **id);
         // As the command picks its rows (ItemTarget::of_kind): the active item when it is a row of
         // this kind in the first selected object's stack, read in the selected objects' own
-        // stacks; else the topmost one of the painted leaves (a group's contents). A row of a
+        // stacks; else the topmost one of the painted leaves of the selected objects (a group's
+        // contents; for a targeted layer, its editable art, ItemTarget::targets). A row of a
         // graph design's art selected first stands for nothing (item_target_at).
         let first = subjects.first().filter(editable).and_then(|id| st.doc.node(*id));
         let active = item.filter(|i| first.and_then(|n| n.appearance.items.get(*i)).is_some_and(|it| it.is_fill() == !stroke));
@@ -257,7 +258,7 @@ impl Session {
             let targets = super::graph::series_group_marks_where(&st.doc, subjects, |n| n.extras().series_index.is_some());
             return targets.iter().filter(editable).filter_map(|id| st.doc.node(*id)).find_map(|n| of(n, active));
         }
-        let leaves = super::leaf_targets(self, subjects).ok()?;
+        let leaves = super::leaf_targets(self, &st.selection.objects).ok()?;
         leaves.iter().filter(editable).filter_map(|id| st.doc.node(*id)).find_map(|n| of(n, None))
     }
 
