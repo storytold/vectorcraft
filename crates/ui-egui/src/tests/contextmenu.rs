@@ -248,6 +248,109 @@ fn the_menu_follows_the_selection() {
     assert!(items.windows(2).all(|w| !matches!(w, [Item::Sep, Item::Sep])));
 }
 
+/// The labels of the context menu's isolation items.
+fn isolate_labels(app: &VectorcraftApp) -> Vec<&'static str> {
+    labels(&menus::context_items(app)).into_iter().filter(|l| l.starts_with("Isolate Selected")).collect()
+}
+
+/// One selected path has Isolate Selected Path, which isolates that path.
+#[test]
+fn single_path_context_item_enters_isolation() {
+    let mut app = app();
+    let a = rect(&mut app, 0.0, 0.0);
+    app.run("select.set", json!({"ids": [a.0]})).unwrap();
+    assert_eq!(isolate_labels(&app), ["Isolate Selected Path"]);
+    let entries = menus::context_entries(&app);
+    assert!(entries.iter().any(|e| e.command.as_deref() == Some("object.isolate") && e.enabled), "agents see the item");
+    menus::invoke(&mut app, "object.isolate", json!({}));
+    assert_eq!(app.session.active().unwrap().isolation, Some(a), "the path is isolated");
+    assert!(labels(&menus::context_items(&app)).contains(&"Exit Isolation Mode"));
+}
+
+/// The isolation item names the kind of the one selected object: a group or a compound path is a
+/// group, a path (a group's member too) is a path, and no object or two objects have neither.
+#[test]
+fn isolation_context_item_follows_selected_kind() {
+    let mut app = app();
+    let (a, b) = (rect(&mut app, 0.0, 0.0), rect(&mut app, 50.0, 50.0));
+    app.run("select.none", json!({})).unwrap();
+    assert!(isolate_labels(&app).is_empty(), "nothing selected");
+    app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
+    assert!(isolate_labels(&app).is_empty(), "two paths");
+    app.run("object.compoundPath.make", json!({})).unwrap();
+    assert_eq!(isolate_labels(&app), ["Isolate Selected Group"], "a compound path selected whole");
+    let compound = app.session.active().unwrap().selection.objects.clone();
+    app.run("select.set", json!({"ids": [a.0]})).unwrap();
+    assert_eq!(app.session.active().unwrap().selection.objects, [a], "a compound path's member selected on its own");
+    assert_eq!(isolate_labels(&app), ["Isolate Selected Path"], "a path in a compound path");
+    app.run("select.set", json!({"ids": [compound[0].0]})).unwrap();
+    app.run("object.compoundPath.release", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    assert_eq!(isolate_labels(&app), ["Isolate Selected Group"], "a group");
+    app.run("select.set", json!({"ids": [a.0]})).unwrap();
+    assert_eq!(app.session.active().unwrap().selection.objects, [a], "a member selected on its own");
+    assert_eq!(isolate_labels(&app), ["Isolate Selected Path"], "a path in a group");
+    menus::invoke(&mut app, "object.isolate", json!({}));
+    assert_eq!(app.session.active().unwrap().isolation, Some(a), "the member is isolated");
+}
+
+/// Neither isolation item shows for an object `object.isolate` refuses, which a selection set by a
+/// command can still hold: a hidden or locked object, a path in a locked group, and a guide while
+/// guides are locked.
+#[test]
+fn isolation_context_item_skips_objects_that_cannot_be_isolated() {
+    let mut app = app();
+    let (a, b) = (rect(&mut app, 0.0, 0.0), rect(&mut app, 50.0, 50.0));
+    let set = |app: &mut VectorcraftApp, id: NodeId, f: fn(&mut vectorcraft_doc::Node)| {
+        let st = app.session.doc_mut().unwrap();
+        f(std::sync::Arc::make_mut(&mut st.doc).node_mut(id).unwrap());
+        st.selection.set([id]);
+    };
+    set(&mut app, a, |n| n.locked = true);
+    assert!(isolate_labels(&app).is_empty(), "a locked path");
+    set(&mut app, a, |n| {
+        n.locked = false;
+        n.visible = false;
+    });
+    assert!(isolate_labels(&app).is_empty(), "a hidden path");
+    set(&mut app, a, |n| n.visible = true);
+    assert_eq!(isolate_labels(&app), ["Isolate Selected Path"]);
+    app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    let g = app.session.active().unwrap().selection.objects[0];
+    set(&mut app, g, |n| n.locked = true);
+    assert!(isolate_labels(&app).is_empty(), "a locked group");
+    app.session.doc_mut().unwrap().selection.set([a]);
+    assert!(isolate_labels(&app).is_empty(), "a path in a locked group");
+    set(&mut app, g, |n| n.locked = false);
+    app.run("object.ungroup", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a.0]})).unwrap();
+    app.run("view.guides.make", json!({})).unwrap();
+    app.run("view.guides.lock", json!({})).unwrap();
+    assert!(app.session.guides_locked());
+    app.session.doc_mut().unwrap().selection.set([a]);
+    assert!(isolate_labels(&app).is_empty(), "a guide while guides are locked");
+}
+
+/// While a symbol is edited, a path in the symbol's art has Isolate Selected Path, and a path
+/// outside it, which a selection set by a command can still hold, has no isolation item.
+#[test]
+fn isolation_context_item_skips_objects_outside_the_edited_symbol() {
+    let mut app = app();
+    let outside = rect(&mut app, 0.0, 0.0);
+    rect(&mut app, 200.0, 0.0);
+    app.run("symbol.new", json!({"name": "Box"})).unwrap();
+    app.run("symbol.edit", json!({"name": "Box"})).unwrap();
+    assert!(app.session.active().unwrap().doc.symbol_edit.is_some(), "symbol editing mode");
+    let inside = rect(&mut app, 100.0, 100.0);
+    app.session.doc_mut().unwrap().selection.set([inside]);
+    assert_eq!(isolate_labels(&app), ["Isolate Selected Path"], "a path in the symbol's art");
+    app.session.doc_mut().unwrap().selection.set([outside]);
+    assert!(isolate_labels(&app).is_empty(), "a path outside the symbol's art");
+    assert!(app.run("object.isolate", json!({"id": outside.0})).is_err(), "object.isolate refuses it");
+}
+
 /// A closed path of 60 jagged anchors around (150, 150), filled so that a right-click inside it
 /// hits it, with nothing selected.
 fn jagged(app: &mut VectorcraftApp) -> NodeId {
