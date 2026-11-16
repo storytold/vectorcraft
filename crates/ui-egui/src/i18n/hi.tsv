@@ -8221,6 +8221,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	shadings of more than 4096 patches or triangles were left out	4096 से अधिक पैच या त्रिकोणों के छायांकन को छोड़ दिया गया था
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	छायांकन जिसका कार्य अज्ञात प्रकार के होते हैं, उनके मध्य रंग से भरे होते हैं
 @msg	Shape Builder: no region under the pointer	आकृति बिल्डर: सूचक के तहत कोई क्षेत्र नहीं
+@msg	Shape Builder: select all paths you want to merge	आकृति बिल्डर: वे सभी पाथ सिलेक्ट करें जिन्हें आप मर्ज करना चाहते हैं
 @msg	Shape Builder: select paths or compound paths	आकृति बिल्डर: पाथ या मिश्रित पाथ सिलेक्ट करें
 @msg	Shaper needs 1–64 source paths	शेपर के लिए 1–64 स्रोत पाथ चाहिए
 @msg	shortcut for `{k}` must be a string	`{k}` के लिए शॉर्टकट एक स्ट्रिंग होना चाहिए

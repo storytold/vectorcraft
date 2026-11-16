@@ -4638,6 +4638,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	Saved {path}	{path} enregistré
 @msg	Select text or click into text with the Type tool to insert glyphs	Sélectionnez du texte ou cliquez dans un texte avec l’outil Texte pour insérer des glyphes
 @msg	Shape Builder: no region under the pointer	Concepteur de forme : aucune zone sous le pointeur
+@msg	Shape Builder: select all paths you want to merge	Concepteur de forme : sélectionnez tous les tracés à fusionner
 @msg	Shape Builder: select paths or compound paths	Concepteur de forme : sélectionnez des tracés ou des tracés transparents
 @msg	Show All Hidden Attributes: nothing is hidden	Afficher tous les attributs masqués : rien n’est masqué
 @msg	Split Into Grid: select paths large enough for the grid	Découper en grille : sélectionnez des tracés assez grands pour la grille

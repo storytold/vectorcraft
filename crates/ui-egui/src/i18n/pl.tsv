@@ -4795,6 +4795,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	Saved {path}	Zapisano {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Zaznacz tekst lub kliknij w tekst narzędziem Tekst, aby wstawić glify
 @msg	Shape Builder: no region under the pointer	Kreator kształtów: brak obszaru pod wskaźnikiem
+@msg	Shape Builder: select all paths you want to merge	Kreator kształtów: zaznacz wszystkie ścieżki, które chcesz scalić
 @msg	Shape Builder: select paths or compound paths	Kreator kształtów: zaznacz ścieżki lub ścieżki złożone
 @msg	Show All Hidden Attributes: nothing is hidden	Pokaż wszystkie ukryte atrybuty: nic nie jest ukryte
 @msg	Split Into Grid: select paths large enough for the grid	Podziel na siatkę: zaznacz ścieżki wystarczająco duże dla siatki

@@ -4413,6 +4413,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	Saved {path}	{path} kaydedildi
 @msg	Select text or click into text with the Type tool to insert glyphs	Glif eklemek için metni seçin veya Yazım aracıyla metne tıklayın
 @msg	Shape Builder: no region under the pointer	Şekil Oluşturucu: işaretçinin altında bölge yok
+@msg	Shape Builder: select all paths you want to merge	Şekil Oluşturucu: birleştirmek istediğiniz tüm yolları seçin
 @msg	Shape Builder: select paths or compound paths	Şekil Oluşturucu: yolları veya bileşik yolları seçin
 @msg	Show All Hidden Attributes: nothing is hidden	Tüm Gizli Özellikleri Göster: hiçbir şey gizli değildir
 @msg	Split Into Grid: select paths large enough for the grid	Izgaraya Böl: ızgara için yeterince büyük yollar seçin

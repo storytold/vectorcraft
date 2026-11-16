@@ -4570,6 +4570,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Live Paint: select paths or compound paths	ライブペイント: パスまたは複合パスを選択してください
 @msg	Live Paint: these paths are too degenerate to paint	ライブペイント: これらのパスは形状がつぶれすぎていてペイントできません
 @msg	Shape Builder: no region under the pointer	シェイプ形成ツール: ポインターの下に領域がありません
+@msg	Shape Builder: select all paths you want to merge	シェイプ形成ツール: 結合するパスをすべて選択してください
 @msg	Shape Builder: select paths or compound paths	シェイプ形成ツール: パスまたは複合パスを選択してください
 @msg	image data `{_1}` is missing	画像データ `{_1}` が見つかりません
 @msg	no Live Paint edge near that point	その位置の近くにライブペイントのエッジがありません

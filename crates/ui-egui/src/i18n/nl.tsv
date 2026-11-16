@@ -5076,6 +5076,7 @@ imageTrace	Outline	Contour
 @msg	Saved {path}	{path} opgeslagen
 @msg	Select text or click into text with the Type tool to insert glyphs	Selecteer tekst of klik met het tekstgereedschap in tekst om glyphs in te voegen
 @msg	Shape Builder: no region under the pointer	Vormbouwer: geen gebied onder de aanwijzer
+@msg	Shape Builder: select all paths you want to merge	Vormbouwer: selecteer alle paden die je wilt samenvoegen
 @msg	Shape Builder: select paths or compound paths	Vormbouwer: selecteer paden of samengestelde paden
 @msg	Show All Hidden Attributes: nothing is hidden	Alle verborgen kenmerken tonen: er is niets verborgen
 @msg	Split Into Grid: select paths large enough for the grid	In raster verdelen: selecteer paden die groot genoeg zijn voor het raster

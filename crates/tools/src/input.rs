@@ -218,4 +218,8 @@ pub enum Action {
     SwitchTool(String),
     /// Call the tool's `notify` after the preceding actions ran (e.g. to pick up a created object).
     Notify(String),
+    /// Show this English message in the status bar (e.g. why a Shape Builder gesture built
+    /// nothing); an empty message clears the status bar. It changes nothing in the document and
+    /// records no undo step.
+    Status(String),
 }

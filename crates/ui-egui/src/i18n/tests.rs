@@ -451,6 +451,21 @@ fn objects_on_path_detach_strings_are_in_complete_catalogs() {
     }
 }
 
+/// The status messages the Shape Builder tool gives when a gesture builds nothing come from the
+/// tools crate, which [`message_literals`] does not scan, so every complete catalog is checked for
+/// them here.
+#[test]
+fn shape_builder_status_messages_are_in_complete_catalogs() {
+    use vectorcraft_tools::builder::SHAPE_BUILDER_STATUS;
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for s in SHAPE_BUILDER_STATUS {
+            assert_ne!(message(lang, s), s, "{code}: {s}");
+        }
+    }
+    assert_eq!(message(de(), SHAPE_BUILDER_STATUS[1]), "Formerstellung: Wählen Sie alle Pfade aus, die Sie zusammenfügen möchten");
+}
+
 /// The Window › Brush Libraries menu, built from the built-in library table, names each library.
 #[test]
 fn built_in_brush_library_names_are_in_complete_catalogs() {

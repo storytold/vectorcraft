@@ -4700,6 +4700,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	Saved {path}	Сохранено: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Выделите текст или щёлкните внутри текста инструментом «Текст», чтобы вставить глифы
 @msg	Shape Builder: no region under the pointer	Создание фигур: под указателем нет области
+@msg	Shape Builder: select all paths you want to merge	Создание фигур: выделите все контуры, которые нужно объединить
 @msg	Shape Builder: select paths or compound paths	Создание фигур: выделите контуры или составные контуры
 @msg	Show All Hidden Attributes: nothing is hidden	Показать все скрытые атрибуты: ничего не скрыто
 @msg	Split Into Grid: select paths large enough for the grid	Разделение на сетку: выделите контуры, достаточно большие для сетки

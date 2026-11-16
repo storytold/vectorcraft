@@ -6392,6 +6392,7 @@ font-technology	Variable	ცვლადი
 @msg	Saved {path}	შენახულია: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	გლიფების ჩასასმელად მონიშნეთ ტექსტი ან ტექსტის ხელსაწყოთი დაწკაპეთ ტექსტში
 @msg	Shape Builder: no region under the pointer	ფიგურების კონსტრუქტორი: მაჩვენებლის ქვეშ არე არ არის
+@msg	Shape Builder: select all paths you want to merge	ფიგურების კონსტრუქტორი: მონიშნეთ ყველა ტრაექტორია, რომლის გაერთიანებაც გსურთ
 @msg	Shape Builder: select paths or compound paths	ფიგურების კონსტრუქტორი: მონიშნეთ ტრაექტორიები ან შედგენილი ტრაექტორიები
 @msg	Show All Hidden Attributes: nothing is hidden	ყველა დამალული ატრიბუტის ჩვენება: დამალული არაფერია
 @msg	Split Into Grid: select paths large enough for the grid	ბადედ გაყოფა: მონიშნეთ ბადისთვის საკმარისად დიდი ტრაექტორიები

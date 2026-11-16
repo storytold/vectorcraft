@@ -4688,6 +4688,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	Saved {path}	Збережено: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Виділіть текст або клацніть всередині тексту інструментом «Текст», щоб вставити гліфи
 @msg	Shape Builder: no region under the pointer	Створення фігур: під вказівником немає області
+@msg	Shape Builder: select all paths you want to merge	Створення фігур: виділіть усі контури, які потрібно об’єднати
 @msg	Shape Builder: select paths or compound paths	Створення фігур: виділіть контури або складені контури
 @msg	Show All Hidden Attributes: nothing is hidden	Показати всі приховані атрибути: нічого не приховано
 @msg	Split Into Grid: select paths large enough for the grid	Поділ на сітку: виділіть контури, досить великі для сітки

@@ -4570,6 +4570,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	Saved {path}	{path} gespeichert
 @msg	Select text or click into text with the Type tool to insert glyphs	Wählen Sie Text aus oder klicken Sie mit dem Text-Werkzeug in einen Text, um Glyphen einzufügen
 @msg	Shape Builder: no region under the pointer	Formerstellung: kein Bereich unter dem Zeiger
+@msg	Shape Builder: select all paths you want to merge	Formerstellung: Wählen Sie alle Pfade aus, die Sie zusammenfügen möchten
 @msg	Shape Builder: select paths or compound paths	Formerstellung: Wählen Sie Pfade oder zusammengesetzte Pfade aus
 @msg	Show All Hidden Attributes: nothing is hidden	Alle ausgeblendeten Attribute einblenden: Es ist nichts ausgeblendet
 @msg	Split Into Grid: select paths large enough for the grid	In Raster teilen: Wählen Sie Pfade aus, die groß genug für das Raster sind

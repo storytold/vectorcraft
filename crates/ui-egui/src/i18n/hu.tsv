@@ -5904,6 +5904,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	shadings of more than 4096 patches or triangles were left out	kimaradtak a 4096-nál több foltból vagy háromszögből álló árnyalások
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	az ismeretlen típusú függvényt használó árnyalások a középső színükkel kitöltve jelennek meg
 @msg	Shape Builder: no region under the pointer	Alakzatépítő: a mutató alatt nincs terület
+@msg	Shape Builder: select all paths you want to merge	Alakzatépítő: jelöld ki az összes egyesítendő útvonalat
 @msg	Shape Builder: select paths or compound paths	Alakzatépítő: jelölj ki útvonalakat vagy összetett útvonalakat
 @msg	shortcut for `{k}` must be a string	`{k}` billentyűparancsa csak szöveg lehet
 @msg	Show All Hidden Attributes: nothing is hidden	Összes rejtett attribútum megjelenítése: nincs rejtett elem

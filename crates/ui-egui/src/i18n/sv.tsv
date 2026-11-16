@@ -4582,6 +4582,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	Saved {path}	Sparade {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Markera text eller klicka i text med textverktyget för att infoga glyfer
 @msg	Shape Builder: no region under the pointer	Formbyggare: inget område under pekaren
+@msg	Shape Builder: select all paths you want to merge	Formbyggare: markera alla banor du vill sammanfoga
 @msg	Shape Builder: select paths or compound paths	Formbyggare: markera banor eller sammansatta banor
 @msg	Show All Hidden Attributes: nothing is hidden	Visa alla dolda attribut: ingenting är dolt
 @msg	Split Into Grid: select paths large enough for the grid	Dela upp i rutnät: markera banor som är tillräckligt stora för rutnätet

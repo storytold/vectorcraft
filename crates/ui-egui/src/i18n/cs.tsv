@@ -4972,6 +4972,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	Saved {path}	Uloženo: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Glyfy vložíte, když vyberete text nebo do něj kliknete nástrojem Text
 @msg	Shape Builder: no region under the pointer	Tvorba tvarů: pod ukazatelem není žádná oblast
+@msg	Shape Builder: select all paths you want to merge	Tvorba tvarů: vyberte všechny cesty, které chcete sloučit
 @msg	Shape Builder: select paths or compound paths	Tvorba tvarů: vyberte cesty nebo složené cesty
 @msg	Show All Hidden Attributes: nothing is hidden	Zobrazit všechny skryté atributy: nic není skryto
 @msg	Split Into Grid: select paths large enough for the grid	Rozdělit do mřížky: vyberte cesty dost velké pro mřížku

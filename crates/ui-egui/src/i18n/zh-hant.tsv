@@ -1915,6 +1915,7 @@ file-filter	Templates	範本
 @msg	Live Paint: select paths or compound paths	即時上色：請選取路徑或複合路徑
 @msg	Live Paint: these paths are too degenerate to paint	即時上色：這些路徑過度退化，無法上色
 @msg	Shape Builder: no region under the pointer	形狀建立：指標下方沒有區域
+@msg	Shape Builder: select all paths you want to merge	形狀建立：請選取要合併的所有路徑
 @msg	Shape Builder: select paths or compound paths	形狀建立：請選取路徑或複合路徑
 @msg	image data `{_1}` is missing	找不到影像資料 `{_1}`
 @msg	no Live Paint edge near that point	該點附近沒有即時上色邊緣

@@ -4909,6 +4909,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	Saved {path}	Tallennettiin {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Valitse tekstiä tai napsauta tekstiin tekstityökalulla, niin voit lisätä merkkejä
 @msg	Shape Builder: no region under the pointer	Muodonmuodostin: osoittimen alla ei ole aluetta
+@msg	Shape Builder: select all paths you want to merge	Muodonmuodostin: valitse kaikki polut, jotka haluat yhdistää
 @msg	Shape Builder: select paths or compound paths	Muodonmuodostin: valitse polkuja tai yhdistelmäpolkuja
 @msg	Show All Hidden Attributes: nothing is hidden	Näytä kaikki piilotetut attribuutit: mitään ei ole piilotettu
 @msg	Split Into Grid: select paths large enough for the grid	Jaa ruudukoksi: valitse ruudukolle riittävän suuret polut

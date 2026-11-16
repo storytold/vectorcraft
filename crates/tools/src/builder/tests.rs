@@ -471,6 +471,106 @@ fn shape_builder_hover_builds_a_small_map_at_once() {
     assert_eq!((t.cache.builds, t.cache.background), (1, 0));
 }
 
+fn status(msg: &str) -> Vec<Action> {
+    vec![Action::Status(msg.into())]
+}
+
+/// A click or drag with nothing selected shows what to select when it is released, and Escape
+/// during the press keeps the release quiet.
+#[test]
+fn shape_builder_with_nothing_selected_says_what_to_select() {
+    let (d, _, _) = two_rects();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = ShapeBuilderTool::default();
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0)).is_empty());
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0)), status(SELECT_PATHS), "a click");
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 25.0, 50.0)).is_empty());
+    assert!(t.pointer(&cx, &ev(PointerKind::Drag, 125.0, 50.0)).is_empty());
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 125.0, 50.0)), status(SELECT_PATHS), "a drag");
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 125.0, 50.0)).is_empty(), "a release without a press");
+    t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0));
+    assert!(t.claims_key(&cx, ToolKey::Escape));
+    assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0)).is_empty(), "a canceled press");
+    assert!(!t.claims_key(&cx, ToolKey::Escape));
+}
+
+/// With A of the overlapping squares A and B selected, a click on the part of B outside A builds
+/// nothing and says to select every path to merge; a click on empty canvas says there is no
+/// region; a click inside A still merges A alone and clears that status, and the click after it
+/// gives the merge alone.
+#[test]
+fn shape_builder_names_the_unselected_path_under_a_release_that_built_nothing() {
+    let (d, a, _) = two_rects();
+    let mut s = Selection::default();
+    s.set([a]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 125.0, 50.0));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 125.0, 50.0)), status(SELECT_ALL_PATHS));
+    t.pointer(&cx, &ev(PointerKind::Down, 300.0, 300.0));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 300.0)), status(NO_REGION));
+    t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0));
+    let acts = t.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0));
+    assert!(
+        matches!(acts.as_slice(), [Action::Status(m), Action::Exec(id, v)] if m.is_empty() && id == "shapeBuilder.merge" && v["ids"] == json!([a.0])),
+        "{acts:?}"
+    );
+    t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0));
+    let acts = t.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0));
+    assert!(matches!(acts.as_slice(), [Action::Exec(id, _)] if id == "shapeBuilder.merge"), "{acts:?}");
+    // A locked or hidden B cannot be picked, so the release says there is no region.
+    for hide in [false, true] {
+        let (mut d, a, b) = two_rects();
+        let n = d.node_mut(b).unwrap();
+        if hide {
+            n.visible = false;
+        } else {
+            n.locked = true;
+        }
+        let mut s = Selection::default();
+        s.set([a]);
+        let cx = crate::testutil::cx(&d, &s, &p);
+        let mut t = ShapeBuilderTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, 125.0, 50.0));
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 125.0, 50.0)), status(NO_REGION), "hidden: {hide}");
+    }
+}
+
+/// A selection that holds no path or compound path says to select one.
+#[test]
+fn shape_builder_with_no_path_selected_says_to_select_paths() {
+    let (mut d, a, _) = two_rects();
+    d.node_mut(a).unwrap().locked = true;
+    let mut s = Selection::default();
+    s.set([a]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0)), status(SELECT_PATHS));
+}
+
+/// A gesture made while the map of a large selection is being built and released over nothing
+/// gives its status once, when it is replayed.
+#[test]
+fn shape_builder_replayed_gesture_over_nothing_gives_its_status_once() {
+    let (d, s) = square_row(200);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx, &ev(PointerKind::Move, 15.0, 10.0));
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 450.0, 450.0)).is_empty());
+    assert_eq!(t.cache.builds, 0, "the gesture did not wait for the map");
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 450.0, 450.0)).is_empty(), "the gesture waits for the map");
+    assert!(t.editing());
+    assert_eq!(t.finish_edit(&cx), status(NO_REGION));
+    assert!(t.finish_edit(&cx).is_empty() && !t.editing());
+}
+
 #[test]
 fn shape_builder_alt_drag_erases_and_empty_drag_does_nothing() {
     let (d, a, b) = two_rects();
@@ -485,7 +585,7 @@ fn shape_builder_alt_drag_erases_and_empty_drag_does_nothing() {
     let Action::Exec(_, v) = &acts[0] else { panic!() };
     assert_eq!(v["erase"], true);
     t.pointer(&cx, &ev(PointerKind::Down, 300.0, 300.0));
-    assert!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 300.0)).is_empty());
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 300.0)), status(NO_REGION), "the release edits nothing and says why");
 }
 
 /// Squares A (0..100) and B (50..150 both ways), overlapping at a corner, selected.
@@ -998,9 +1098,9 @@ fn shape_builder_stroke_options_round_trip_and_pick_the_side_under_the_pointer()
     let acts = t.pointer(&cx, &ev(PointerKind::Up, 0.5, 27.0));
     let [Action::Exec(_, v)] = acts.as_slice() else { panic!("{acts:?}") };
     assert_eq!((&v["splitStroke"], &v["points"]), (&json!(true), &json!([[-1.0, 25.0]])));
-    // A release farther away is a drag, which splits nothing.
+    // A release farther away is a drag, which splits nothing and says it touched no region.
     t.pointer(&cx, &ev(PointerKind::Down, -1.0, 25.0));
-    assert!(t.pointer(&cx, &ev(PointerKind::Up, -1.0, 30.0)).is_empty());
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, -1.0, 30.0)), status(NO_REGION));
     // So is a Straight Line drag that goes away and ends back near the press.
     t.set_option("selection", &json!("straightLine"));
     t.pointer(&cx, &ev(PointerKind::Down, -1.0, 25.0));
@@ -1008,11 +1108,12 @@ fn shape_builder_stroke_options_round_trip_and_pick_the_side_under_the_pointer()
     let acts = t.pointer(&cx, &ev(PointerKind::Up, -0.5, 25.5));
     assert!(!acts.iter().any(|a| matches!(a, Action::Exec(_, v) if v.get("splitStroke").is_some())), "{acts:?}");
     t.set_option("selection", &json!("freeform"));
-    // A drag merges as before and sends no switch.
+    // A drag merges as before and sends no switch; it clears the status the drag before it gave.
     t.pointer(&cx, &ev(PointerKind::Down, 25.0, 25.0));
     t.pointer(&cx, &ev(PointerKind::Drag, 75.0, 75.0));
     let acts = t.pointer(&cx, &ev(PointerKind::Up, 75.0, 75.0));
-    let [Action::Exec(_, v)] = acts.as_slice() else { panic!("{acts:?}") };
+    let [Action::Status(m), Action::Exec(_, v)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert!(m.is_empty(), "{m}");
     assert!(v.get("splitStroke").is_none(), "{v}");
 }
 

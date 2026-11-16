@@ -7181,6 +7181,7 @@ imageTrace	Outline	Kontur
 @msg	Saved {path}	Gemte {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Markér tekst, eller klik i tekst med tekstværktøjet, for at indsætte glyffer
 @msg	Shape Builder: no region under the pointer	Figurbygger: intet område under markøren
+@msg	Shape Builder: select all paths you want to merge	Figurbygger: markér alle kurver, du vil flette
 @msg	Shape Builder: select paths or compound paths	Figurbygger: markér kurver eller sammensatte kurver
 @msg	Show All Hidden Attributes: nothing is hidden	Vis alle skjulte attributter: intet er skjult
 @msg	Split Into Grid: select paths large enough for the grid	Opdel i gitter: markér kurver, der er store nok til gitteret

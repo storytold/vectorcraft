@@ -3991,6 +3991,7 @@ axis	Both	Ambos
 @msg	Saved {path}	{path} salvo
 @msg	Select text or click into text with the Type tool to insert glyphs	Selecione texto ou clique em um texto com a ferramenta Texto para inserir glifos
 @msg	Shape Builder: no region under the pointer	Criador de formas: nenhuma região sob o ponteiro
+@msg	Shape Builder: select all paths you want to merge	Criador de formas: selecione todos os traçados que deseja mesclar
 @msg	Shape Builder: select paths or compound paths	Criador de formas: selecione traçados ou traçados compostos
 @msg	Show All Hidden Attributes: nothing is hidden	Mostrar todos os atributos ocultos: nada está oculto
 @msg	Split Into Grid: select paths large enough for the grid	Dividir em grade: selecione traçados grandes o bastante para a grade
