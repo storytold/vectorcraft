@@ -142,7 +142,8 @@ pub const FIRST_DRAWING_TOOL: &str = "pencil";
 
 /// A tool of selection mode: one that selects objects or parts of them.
 fn selects(id: &str) -> bool {
-    vectorcraft_tools::catalog::is_selection_tool(id) || matches!(id, "magicWand" | "lasso" | "perspectiveSelection")
+    vectorcraft_tools::catalog::is_selection_tool(id)
+        || matches!(id, "magicWand" | "lasso" | "enclosingLasso" | "polygonalLasso" | "perspectiveSelection")
 }
 
 /// A tool of drawing mode: any tool but those of selection mode and those that only move, turn or
@@ -203,7 +204,8 @@ mod tests {
         for id in ["pencil", "pen", "rectangle", "paintbrush", "type", "eraser", "shapeBuilder"] {
             assert!(is_drawing_tool(id), "{id}");
         }
-        let selecting = ["selection", "directSelection", "groupSelection", "magicWand", "lasso", "perspectiveSelection"];
+        let selecting =
+            ["selection", "directSelection", "groupSelection", "magicWand", "lasso", "enclosingLasso", "polygonalLasso", "perspectiveSelection"];
         for id in selecting.into_iter().chain(["hand", "rotateView", "zoom", "printTiling"]) {
             assert!(!is_drawing_tool(id), "{id}");
         }
