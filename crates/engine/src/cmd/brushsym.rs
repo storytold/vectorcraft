@@ -30,6 +30,9 @@ pub use symbols::reset_transformation_changes;
 /// Whether an object is a symbol set.
 pub use symbols::is_symbol_set;
 
+/// The Symbols panel's current symbol, as `symbol.list` answers it.
+pub use symbols::current_symbol;
+
 mod brushes;
 mod dynamic;
 mod symbolism;

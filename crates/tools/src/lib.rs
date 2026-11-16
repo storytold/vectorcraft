@@ -34,6 +34,7 @@ pub mod pie;
 pub mod place;
 pub mod printtiling;
 pub mod repeat_grid;
+pub mod repeat_radial;
 pub mod rulerguide;
 pub mod select;
 pub mod settings;
@@ -686,6 +687,7 @@ mod cursor_tests {
         for (id, c) in [
             ("lasso", Cursor::Lasso),
             (addons::enclosing_lasso::ID, Cursor::Lasso),
+            (addons::polygonal_lasso::ID, Cursor::Lasso),
             ("magicWand", Cursor::MagicWand),
             ("paintbrush", Cursor::Paintbrush),
             ("blobBrush", Cursor::BlobBrush),
