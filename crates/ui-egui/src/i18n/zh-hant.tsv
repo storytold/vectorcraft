@@ -3177,7 +3177,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Lock Others	鎖定其他
 	Lock Slices	鎖定切片
 	Lock Station Point	鎖定基準點
-	Lossless (lossy WebP isn't available yet)	無失真 (尚未提供有失真的 WebP)
+	Lossless	無失真
+	Lossy	有失真
 	Lossy:	失真度：
 	Low	低
 	lowercase	全部小寫

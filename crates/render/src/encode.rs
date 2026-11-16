@@ -1,6 +1,6 @@
 //! Raster export: render a document region with [`RasterExportOptions`] (resolution, background,
 //! anti-aliasing) and encode it as PNG ([`png`]: resolution in `pHYs`, Adam7 interlacing), JPEG
-//! ([`jpeg`]: RGB, CMYK or grey, progressive, resolution and colour profile), lossless WebP, or
+//! ([`jpeg`]: RGB, CMYK or grey, progressive, resolution and colour profile), lossless or lossy WebP, or
 //! a palette image ([`quantize`]) as PNG-8 or [`gif`], [`tiff`] (RGB, CMYK or grey, LZW, either byte
 //! order, the profile), [`bmp`] (1–32 bits, RLE) or [`tga`]; [`web`] adds what Save for Web optimises
 //! further (web snap, colour table edits, lossy GIF, comments); [`psd`] writes layered bitmaps.
@@ -49,8 +49,10 @@ pub struct RasterExportOptions {
     pub anti_alias: AntiAlias,
     /// PNG, PNG-8: Adam7 interlacing; GIF: interlaced rows.
     pub interlaced: bool,
-    /// JPEG quality 0–100.
+    /// JPEG quality 0–100, and lossy WebP's.
     pub quality: u8,
+    /// WebP: lossless (`true`), or lossy at [`Self::quality`].
+    pub webp_lossless: bool,
     /// JPEG colour model, coding and profile.
     pub jpeg: jpeg::JpegOptions,
     /// PNG-8 and GIF: the colour reduction (also BMP's at 1, 4 and 8 bits).
@@ -76,6 +78,7 @@ impl Default for RasterExportOptions {
             anti_alias: AntiAlias::Art,
             interlaced: false,
             quality: 90,
+            webp_lossless: true,
             jpeg: jpeg::JpegOptions::default(),
             palette: quantize::PaletteOptions::default(),
             tiff: tiff::TiffOptions::default(),
@@ -125,7 +128,7 @@ impl RasterExportOptions {
                 };
                 jpeg::encode(&px, img.width, img.height, self.quality, Some(self.ppi), &self.jpeg)
             }
-            RasterFormat::WebP => webp(img),
+            RasterFormat::WebP => webp(img, (!self.webp_lossless).then_some(self.quality)),
             RasterFormat::Png8 | RasterFormat::Gif => {
                 let ix = quantize::quantize(&img.to_straight(), img.width, img.height, &self.palette);
                 match format {
@@ -184,8 +187,9 @@ pub fn on_white(p: &[u8; 4]) -> [u8; 3] {
     [0, 1, 2].map(|i| ((u32::from(p[i]) * a + 255 * (255 - a) + 127) / 255) as u8)
 }
 
-/// Lossless WebP.
-pub(crate) fn webp(img: &Rendered) -> Result<Vec<u8>, String> {
+/// WebP: lossless (`VP8L`) when `lossy_quality` is `None`, else lossy (`VP8 `, with an `ALPH`
+/// chunk when some pixels are not opaque) at that quality 0–100.
+pub(crate) fn webp(img: &Rendered, lossy_quality: Option<u8>) -> Result<Vec<u8>, String> {
     let src = craft_image_codecs::Image::from_raw(
         img.width,
         img.height,
@@ -194,7 +198,11 @@ pub(crate) fn webp(img: &Rendered) -> Result<Vec<u8>, String> {
         img.to_straight(),
     )
     .map_err(|e| format!("WebP encoding failed: {e}"))?;
-    let opts = craft_image_codecs::EncodeOptions { webp_lossless: true, ..craft_image_codecs::EncodeOptions::default() };
+    let opts = craft_image_codecs::EncodeOptions {
+        webp_lossless: lossy_quality.is_none(),
+        webp_quality: lossy_quality.unwrap_or(100).min(100),
+        ..craft_image_codecs::EncodeOptions::default()
+    };
     craft_image_codecs::encode(&src, craft_image_codecs::Format::WebP, &opts).map_err(|e| format!("WebP encoding failed: {e}"))
 }
 

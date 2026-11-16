@@ -2909,7 +2909,8 @@ digits	Malayalam	Malajálamské
 	Hide Video Rulers	Skrýt video pravítka
 	Client-side (.html)	Na straně klienta (.html)
 	Color Reduction:	Redukce barev:
-	Lossless (lossy WebP isn't available yet)	Bezeztrátový (ztrátový WebP zatím není k dispozici)
+	Lossless	Bezeztrátový
+	Lossy	Ztrátový
 	Scans:	Průchody:
 	Server-side (.map)	Na straně serveru (.map)
 	{format} Options	Možnosti {format}

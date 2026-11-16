@@ -2634,7 +2634,8 @@ digits	Malayalam	Malayalam
 	Hide Video Rulers	Sembunyikan penggaris video
 	Client-side (.html)	Sisi klien (.html)
 	Color Reduction:	Reduksi warna:
-	Lossless (lossy WebP isn't available yet)	Tanpa kehilangan (WebP lossy belum tersedia)
+	Lossless	Tanpa kehilangan
+	Lossy	Dengan kehilangan
 	Scans:	Pemindaian:
 	Server-side (.map)	Sisi server (.map)
 	{format} Options	Opsi {format}

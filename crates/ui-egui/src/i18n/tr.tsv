@@ -1853,7 +1853,8 @@ font-technology	Variable	Değişken
 	Lock Others	Diğerlerini Kilitle
 	Lock Slices	Dilimleri Kilitle
 	Lock Station Point	Kilit İstasyon Noktası
-	Lossless (lossy WebP isn't available yet)	Kayıpsız (kayıplı WebP henüz mevcut değil)
+	Lossless	Kayıpsız
+	Lossy	Kayıplı
 	Lossy:	Kayıplı:
 	Low	Düşük
 	lowercase	küçük harf

@@ -202,6 +202,40 @@ fn backgrounds_are_opaque_or_transparent() {
     assert_eq!(webp.get_pixel(0, 0).0, [0, 0, 0, 255]);
 }
 
+/// The chunk types of RIFF WebP file `file`, in order.
+fn webp_chunks(file: &[u8]) -> Vec<[u8; 4]> {
+    assert_eq!((&file[..4], &file[8..12]), (&b"RIFF"[..], &b"WEBP"[..]));
+    let mut chunks = Vec::new();
+    let mut at = 12;
+    while at + 8 <= file.len() {
+        let len = u32::from_le_bytes([file[at + 4], file[at + 5], file[at + 6], file[at + 7]]) as usize;
+        chunks.push([file[at], file[at + 1], file[at + 2], file[at + 3]]);
+        at += 8 + len + len % 2;
+    }
+    chunks
+}
+
+/// Lossy WebP is a `VP8 ` picture; transparent pixels stay transparent through an `ALPH` chunk
+/// in a `VP8X` file, and opaque art stays opaque.
+#[test]
+fn lossy_webp_keeps_transparent_pixels_transparent() {
+    let d = circle_doc();
+    let lossless = Renderer::new().export_region(&d, d.artboards[0].rect, RasterFormat::WebP, &RasterExportOptions::default()).unwrap();
+    assert_eq!(webp_chunks(&lossless), [*b"VP8L"], "lossless by default");
+    let o = RasterExportOptions { webp_lossless: false, quality: 75, ..Default::default() };
+    let file = Renderer::new().export_region(&d, d.artboards[0].rect, RasterFormat::WebP, &o).unwrap();
+    assert_eq!(webp_chunks(&file), [*b"VP8X", *b"ALPH", *b"VP8 "]);
+    let img = export(&d, RasterFormat::WebP, &o);
+    assert_eq!(img.dimensions(), (40, 30));
+    assert_eq!(img.get_pixel(0, 0)[3], 0, "a corner outside the circle");
+    let middle = img.get_pixel(20, 15);
+    assert!(middle[3] == 255 && middle[0] < 24, "{middle:?}");
+    // Opaque art on a background is a plain `VP8 ` file.
+    let opaque = RasterExportOptions { background: Some([255; 3]), ..o };
+    let file = Renderer::new().export_region(&d, d.artboards[0].rect, RasterFormat::WebP, &opaque).unwrap();
+    assert_eq!(webp_chunks(&file), [*b"VP8 "]);
+}
+
 /// #787: translucent art over opaque art (or a background) stays exactly opaque, its anti-aliased
 /// edges too, so the file is written as RGB.
 #[test]

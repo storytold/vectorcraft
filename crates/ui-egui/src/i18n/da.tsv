@@ -5376,7 +5376,8 @@ digits	Malayalam	Malayalam
 	Hide Video Rulers	Skjul videolinealer
 	Client-side (.html)	Klientbaseret (.html)
 	Color Reduction:	Farvereduktion:
-	Lossless (lossy WebP isn't available yet)	Tabsfri (WebP med tab er ikke tilgængelig endnu)
+	Lossless	Tabsfri
+	Lossy	Med tab
 	Scans:	Scanninger:
 	Server-side (.map)	Serverbaseret (.map)
 	{format} Options	Indstillinger for {format}

@@ -3251,7 +3251,8 @@ digits	Malayalam	Malayalam
 	Hide Video Rulers	Videolinialen verbergen
 	Client-side (.html)	Client-side (.html)
 	Color Reduction:	Kleurreductie:
-	Lossless (lossy WebP isn't available yet)	Verliesvrij (WebP met verlies is nog niet beschikbaar)
+	Lossless	Verliesvrij
+	Lossy	Met verlies
 	Scans:	Scans:
 	Server-side (.map)	Server-side (.map)
 	{format} Options	Opties voor {format}

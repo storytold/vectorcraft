@@ -2032,7 +2032,8 @@ file-filter	Templates	Vorlagen
 	Lock Others	Andere sperren
 	Lock Slices	Slices sperren
 	Lock Station Point	Standpunkt sperren
-	Lossless (lossy WebP isn't available yet)	Verlustfrei (verlustbehaftetes WebP ist noch nicht verfügbar)
+	Lossless	Verlustfrei
+	Lossy	Verlustbehaftet
 	Lossy:	Verlustbehaftet:
 	Low	Niedrig
 	lowercase	kleinbuchstaben

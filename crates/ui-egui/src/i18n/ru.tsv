@@ -2060,7 +2060,8 @@ file-filter	Templates	Шаблоны
 	Lock Others	Заблокировать остальные
 	Lock Slices	Заблокировать фрагменты
 	Lock Station Point	Заблокировать точку стояния
-	Lossless (lossy WebP isn't available yet)	Без потерь (WebP с потерями пока недоступен)
+	Lossless	Без потерь
+	Lossy	С потерями
 	Lossy:	С потерями:
 	Low	Низкая
 	lowercase	строчные

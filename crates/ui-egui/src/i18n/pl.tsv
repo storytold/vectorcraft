@@ -2822,7 +2822,8 @@ digits	Malayalam	Malajalam
 	Hide Video Rulers	Ukryj linijki wideo
 	Client-side (.html)	Po stronie klienta (.html)
 	Color Reduction:	Redukcja kolorów:
-	Lossless (lossy WebP isn't available yet)	Bezstratny (stratny WebP nie jest jeszcze dostępny)
+	Lossless	Bezstratny
+	Lossy	Stratny
 	Scans:	Skany:
 	Server-side (.map)	Po stronie serwera (.map)
 	{format} Options	Opcje: {format}

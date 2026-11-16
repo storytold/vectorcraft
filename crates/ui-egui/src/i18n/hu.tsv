@@ -2539,7 +2539,8 @@ file-filter	Templates	Sablonok
 	Long Lines	Hosszú vonalak
 	Long Strokes	Hosszú vonások
 	Longest:	Leghosszabb:
-	Lossless (lossy WebP isn't available yet)	Veszteségmentes (a veszteséges WebP még nem érhető el)
+	Lossless	Veszteségmentes
+	Lossy	Veszteséges
 	Lossy:	Veszteség:
 	Low	Alacsony
 	Low Fidelity Photo	Kis pontosságú fotó

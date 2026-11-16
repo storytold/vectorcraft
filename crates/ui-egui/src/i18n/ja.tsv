@@ -2326,7 +2326,8 @@ antiAlias	Sharp	シャープ
 	Location	場所
 	Location:	位置:
 	Lock (⌘2)	ロック (⌘2)
-	Lossless (lossy WebP isn't available yet)	ロスレス (非可逆 WebP は未対応)
+	Lossless	ロスレス
+	Lossy	非可逆
 	Lossy:	圧縮率:
 	Luminosity	輝度
 	Magic Wand Options	自動選択オプション

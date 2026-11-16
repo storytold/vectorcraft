@@ -2853,7 +2853,8 @@ digits	Malayalam	Malajalam
 	Hide Video Rulers	Piilota videoviivaimet
 	Client-side (.html)	Asiakaspuoli (.html)
 	Color Reduction:	Värien vähennys:
-	Lossless (lossy WebP isn't available yet)	Häviötön (häviöllinen WebP ei ole vielä käytettävissä)
+	Lossless	Häviötön
+	Lossy	Häviöllinen
 	Scans:	Läpikäynnit:
 	Server-side (.map)	Palvelinpuoli (.map)
 	{format} Options	{format}-asetukset

@@ -2825,7 +2825,8 @@ digits	Malayalam	Malajalam
 	Hide Video Rulers	Sakrij video ravnala
 	Client-side (.html)	Na strani klijenta (.html)
 	Color Reduction:	Smanjenje boja:
-	Lossless (lossy WebP isn't available yet)	Bez gubitaka (WebP s gubicima još nije dostupan)
+	Lossless	Bez gubitaka
+	Lossy	S gubicima
 	Scans:	Skenovi:
 	Server-side (.map)	Na strani servera (.map)
 	{format} Options	Opcije za {format}

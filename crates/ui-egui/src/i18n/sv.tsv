@@ -1968,7 +1968,8 @@ font-technology	Variable	Variabla
 	Lock Others	Lås övriga
 	Lock Slices	Lås skivor
 	Lock Station Point	Lås betraktarpunkt
-	Lossless (lossy WebP isn't available yet)	Förlustfri (förlustbehäftad WebP är inte tillgänglig än)
+	Lossless	Förlustfri
+	Lossy	Förlustbehäftad
 	Lossy:	Förlust:
 	Low	Låg
 	lowercase	gemener
