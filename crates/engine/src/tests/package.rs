@@ -747,6 +747,44 @@ fn package_copies_a_linked_pdf_page_as_it_is() {
 }
 
 #[test]
+fn package_copies_a_linked_eps_file_as_it_is() {
+    let dir = Folder::new("package-placed-eps");
+    let eps = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 50\n%%EndComments\n1 0 0 setrgbcolor\nnewpath 0 0 moveto 100 0 lineto 100 50 lineto 0 50 lineto closepath fill\nshowpage\n%%EOF\n";
+    let src = dir.file("art/seal.eps");
+    write(&src, eps);
+    let mut s = session();
+    let placed = run(&mut s, "file.place", json!({"path": src}));
+    assert_eq!(placed["linked"], true, "{placed}");
+    save(&mut s, &dir.file("poster.vectorcraft"));
+    let r = run(&mut s, "file.package", json!({"folder": dir.file("out")}));
+    assert_eq!((r["links"].as_u64(), r["missingLinks"].clone(), r["warnings"].clone()), (Some(1), json!([]), json!([])), "{r}");
+    let root = dir.0.join("out/poster Folder");
+    assert_eq!(std::fs::read(root.join("Links/seal.eps")).unwrap(), eps, "copied as it is");
+    // The packaged document shows the copy.
+    std::fs::remove_dir_all(dir.0.join("art")).unwrap();
+    let opened = open(&mut s, &root.join("poster.vectorcraft").to_string_lossy());
+    assert_eq!(opened["missingLinks"], json!([]), "{opened}");
+    assert!(s.doc().unwrap().doc.has_placed());
+}
+
+#[test]
+fn package_copies_a_linked_postscript_ai_file_the_document_holds_after_it_is_gone() {
+    let dir = Folder::new("package-placed-ps-ai");
+    let ai = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 50\n%%EndComments\n0 0 1 setrgbcolor\nnewpath 0 0 moveto 100 0 lineto 100 50 lineto 0 50 lineto closepath fill\nshowpage\n%%EOF\n";
+    let src = dir.file("art/badge.ai");
+    write(&src, ai);
+    let mut s = session();
+    let placed = run(&mut s, "file.place", json!({"path": src}));
+    assert_eq!(placed["linked"], true, "{placed}");
+    save(&mut s, &dir.file("poster.vectorcraft"));
+    std::fs::remove_dir_all(dir.0.join("art")).unwrap();
+    let r = run(&mut s, "file.package", json!({"folder": dir.file("out")}));
+    assert_eq!((r["links"].as_u64(), r["missingLinks"].clone()), (Some(1), json!([])), "{r}");
+    let root = dir.0.join("out/poster Folder");
+    assert_eq!(std::fs::read(root.join("Links/badge.ai")).unwrap(), ai, "the bytes the document holds");
+}
+
+#[test]
 fn package_copies_the_fonts_of_the_type_on_a_linked_pdf_page() {
     let dir = Folder::new("package-placed-pdf-type");
     let mut src = session();
