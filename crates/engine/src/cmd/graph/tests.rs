@@ -7905,6 +7905,28 @@ fn recoloring_a_graph_keeps_its_axis_lines_paint() {
     assert!(!label_paint.is_empty() && label_paint.iter().all(|l| *l == ("#ffffff".to_string(), true)), "{label_paint:?}");
 }
 
+/// Swap Fill and Stroke on an axis line keeps the swapped paint for every axis line and leaves the fill opacity the axis
+/// lines keep from another line, though the line swapped still shows 100%.
+#[test]
+fn swapping_an_axis_lines_paint_keeps_the_fill_opacity_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    let (first, second) = (lines[0].id, lines[1].id);
+    s.execute("paint.setFill", &json!({"ids": [first.0], "color": "#00ff00"})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [first.0], "item": top_row(&s, first, true), "opacity": 40})).unwrap();
+    let shown = s.doc().unwrap().doc.node(second).unwrap().appearance.fill().map(|f| f.opacity);
+    assert!(shown.is_none_or(|o| o == 1.0), "the other lines show 100% until the graph is drawn again: {shown:?}");
+    s.execute("paint.swap", &json!({"ids": [second.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    for n in line_nodes(&s, id) {
+        let fill = n.appearance.fill().map(|f| (f.paint.color().map(|c| c.to_hex()), f.opacity));
+        assert!(fill.as_ref().is_some_and(|(c, o)| c.as_deref() == Some("#000000") && (*o - 0.4).abs() < 1e-6), "{fill:?}");
+        assert!(n.appearance.stroke_paint().is_none(), "the swapped line had no fill, so the lines have no stroke");
+    }
+}
+
 /// A stroke given the whole graph, or its Axes group, is kept for its axis lines.
 #[test]
 fn a_stroke_given_the_whole_graph_or_its_axes_group_is_kept_for_its_axis_lines() {
@@ -8045,6 +8067,56 @@ fn an_object_opacity_on_an_axis_line_keeps_the_stroke_its_kind_keeps() {
         let looks = redrawn_line_looks(&mut s, id);
         assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.2 - 0.5).abs() < 1e-6), "{cmd}: {looks:?}");
     }
+}
+
+/// A stroke painted on an axis line after another axis line's stroke was set to None is kept for every axis line with
+/// the painted line's weight, not the zero weight the unpainted stroke left on its kind.
+#[test]
+fn a_stroke_painted_after_an_axis_line_lost_its_stroke_keeps_a_weight() {
+    let cases = ["paint.setStroke", "addon.color.fillToStroke", "appearance.setItem"];
+    every_case(cases, |cmd| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        let weight = line_look(&lines[1]).1;
+        assert!(weight > 0.0, "{cmd}: the line has a stroke weight: {weight}");
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "none": true})).unwrap();
+        let b = lines[1].id.0;
+        match *cmd {
+            "paint.setStroke" => s.execute(cmd, &json!({"ids": [b], "color": "#ff0000"})).unwrap(),
+            "addon.color.fillToStroke" => {
+                s.execute("paint.setFill", &json!({"ids": [b], "color": "#ff0000"})).unwrap();
+                s.execute(cmd, &json!({"ids": [b]})).unwrap()
+            }
+            _ => s.execute(cmd, &json!({"ids": [b], "index": top_row(&s, lines[1].id, false), "color": "#ff0000"})).unwrap(),
+        };
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.1 - weight).abs() < 1e-9), "{cmd}: {looks:?}");
+    });
+}
+
+/// A zero stroke weight set together with a stroke color on an axis line is kept for every axis line as set, also when
+/// a stroke is painted on another axis line before the graph is drawn again.
+#[test]
+fn a_zero_weight_set_with_a_stroke_color_on_an_axis_line_is_kept() {
+    every_case([false, true], |repaint| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "none": true})).unwrap();
+        let at = top_row(&s, lines[1].id, false);
+        s.execute("appearance.setItem", &json!({"ids": [lines[1].id.0], "index": at, "color": "#ff0000", "weight": 0})).unwrap();
+        let color = if *repaint {
+            s.execute("paint.setStroke", &json!({"ids": [lines[2].id.0], "color": "#0000ff"})).unwrap();
+            "#0000ff"
+        } else {
+            "#ff0000"
+        };
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| l.0 == color && l.1 == 0.0), "repaint {repaint}: {looks:?}");
+    });
 }
 
 /// A reorder that leaves an axis line's rows as they were keeps what its kind keeps from another line and is no edit.

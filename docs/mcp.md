@@ -991,7 +991,9 @@ when the line still shows different ones until the graph is drawn again. `paint.
 `addon.color.fillToStroke` and `addon.color.strokeToFill` also store the paint they write on a line's topmost visible
 fill or stroke row when the line already showed it. `appearance.setItem` and an `appearance.copyFrom` of some
 attributes store the paint, stroke weight, and row opacity and blend mode they write to that row in the same way, and
-`stroke.set` stores the weight it writes there. An `appearance.copyFrom` that does not apply
+`stroke.set` stores the weight it writes there. When a kind keeps no stroke paint and a zero weight (a line's stroke was
+set to None), a stroke painted on another line of that kind stores that line's weight for the kind; a zero weight set
+together with a stroke color, or kept with a painted stroke, stays as set. An `appearance.copyFrom` that does not apply
 the object's transparency, and `graphicStyle.apply` with `add`, leave the object opacity and blend mode a kind keeps as
 they are, also when the line still shows other ones. `paint.default` stores the default fill and stroke rows for a
 line's kind even when the line already showed them, and leaves the object opacity and blend mode the kind keeps. Rows
