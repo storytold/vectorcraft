@@ -414,6 +414,21 @@ fn spine_anchor(cx: &ToolContext, (id, ai): (NodeId, usize)) -> Option<vectorcra
     spine_path(cx, id)?.subpaths.first()?.anchors.get(ai).copied()
 }
 
+/// Preview a drag of the clicked blend-spine direction handle.
+fn drag_spine_handle(cx: &ToolContext, ev: &PointerEvent, (id, anchor, out): (NodeId, usize, bool), p: Point) -> Vec<Action> {
+    let symmetric = ev.mods.cmd && !ev.mods.alt;
+    let q = if symmetric && ev.mods.shift {
+        spine_anchor(cx, (id, anchor)).map_or(p, |a| a.p + vectorcraft_geom::constrain_angle_from(p - a.p, 45.0, cx.constrain_angle))
+    } else {
+        p
+    };
+    let mut params = json!({"id": id.0, "anchor": anchor, "handle": if out {"out"} else {"in"}, "x": q.x, "y": q.y, "independent": ev.mods.alt});
+    if symmetric {
+        params["symmetric"] = json!(true);
+    }
+    vec![Action::Preview("object.blend.spine.moveAnchor".into(), params)]
+}
+
 /// Blend `id`'s spine, built once for callers that look up several of its points.
 fn spine_path(cx: &ToolContext, id: NodeId) -> Option<PathData> {
     match &cx.doc.node(id)?.kind {
@@ -958,10 +973,11 @@ impl Tool for DirectSelectionTool {
                 self.snapped = snapped(q.to_vec2(), p.to_vec2(), ev.mods.shift, &guides);
                 self.guides = guides;
                 let cmd = if cx.doc.node(id).is_some_and(is_path_type) { "text.setPathHandle" } else { "path.setHandle" };
-                vec![Action::Preview(
-                    cmd.into(),
-                    json!({"id": id.0, "subpath": si, "anchor": ai, "which": if out {"out"} else {"in"}, "x": q.x, "y": q.y, "independent": ev.mods.alt}),
-                )]
+                let mut params = json!({"id": id.0, "subpath": si, "anchor": ai, "which": if out {"out"} else {"in"}, "x": q.x, "y": q.y, "independent": ev.mods.alt});
+                if ev.mods.cmd && !ev.mods.alt {
+                    params["symmetric"] = json!(true);
+                }
+                vec![Action::Preview(cmd.into(), params)]
             }
             (PointerKind::Drag, State::SpinePoint { id, anchor, from, start, began }) => {
                 let mut out = vec![];
@@ -999,10 +1015,7 @@ impl Tool for DirectSelectionTool {
                 ));
                 out
             }
-            (PointerKind::Drag, State::SpineHandle { id, anchor, out }) => vec![Action::Preview(
-                "object.blend.spine.moveAnchor".into(),
-                json!({"id": id.0, "anchor": anchor, "handle": if out {"out"} else {"in"}, "x": p.x, "y": p.y, "independent": ev.mods.alt}),
-            )],
+            (PointerKind::Drag, State::SpineHandle { id, anchor, out }) => drag_spine_handle(cx, ev, (id, anchor, out), p),
             (PointerKind::Drag, State::Mesh) => self.mesh.drag_to(p).unwrap_or_default(),
             (PointerKind::Up, State::Mesh) => {
                 self.state = State::Idle;
