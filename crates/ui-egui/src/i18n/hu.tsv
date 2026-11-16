@@ -1510,6 +1510,7 @@ font-technology	Variable	Változó
 	Highlight Size	Csillanás mérete
 	Blend Steps	Átmenetlépések
 	Shading Color	Árnyékolás színe
+	Black Overprint	Felülnyomó fekete
 	Draw Hidden Faces	Rejtett lapok rajzolása
 	Eyedropper	Pipetta
 	Sample Color from Screen	Szín mintavétele a képernyőről
@@ -3628,6 +3629,12 @@ mark-style	Japanese	Japán
 	Responsive	Reszponzív
 	Restore	Visszaállít
 	Restore every preference to its default (applied on OK)	Minden beállítás visszaállítása az alapértékre (az OK gombbal lép életbe)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	A beépített, nem pixelben megadott méretű új dokumentumok és a mértékegységet nem rögzítő megnyitott fájlok mértékegysége; ha itt kiválasztja, és az OK gombra kattint, az aktív dokumentum mértékegysége is ez lesz.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	A körvonalvastagságok, a vonalak és a hézagok ebben a mértékegységben jelennek meg, és a hozzájuk beírt számokat is ebben értelmezi a program.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	A betűméretek, a sorköz és az alapvonal-eltolás ebben a mértékegységben jelennek meg, és a hozzájuk beírt számokat is ebben értelmezi a program.
+	The unit for East Asian type measurements, which no field uses yet.	A kelet-ázsiai szöveg méreteinek mértékegysége, amelyet egyelőre egyetlen mező sem használ.
+	When on, a number typed without a unit into a field in picas is read in points.	Bekapcsolva egy pica mértékegységű mezőbe mértékegység nélkül beírt számot pontként értelmez a program.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML-azonosító esetén az objektumnevek XML-azonosítóként jelennek meg a Rétegek, a Változók és a Rétegbeállítások ablakban.
 	Reset all preferences to their defaults?	Visszaállítja az összes beállítást az alapértékre?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Az alapértékek akkor lépnek életbe, amikor a Beállításokban az OK gombra kattint. Az ottani Mégse megtartja a jelenlegi beállításokat.
 	Restore Recovered Documents	Helyreállított dokumentumok visszaállítása
@@ -3672,6 +3679,7 @@ mark-style	Japanese	Japán
 	Roman Hanging Punctuation	Latin függő írásjelek
 	Korean Line Break Anywhere	Koreai sortörés bárhol
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Kelet-ázsiai szedési beállítások
 	Korean Composition Settings	Koreai szedési beállítások
 	Rotate	Elforgatás
@@ -3893,6 +3901,8 @@ mark-style	Japanese	Japán
 @msg	`{key}` must be an array of these names: {_1}	`{key}`: ezen nevek tömbje kell: {_1}
 	Search commands and tools	Parancsok és eszközök keresése
 	Search commands and tools…	Parancsok és eszközök keresése…
+	Recent Commands	Legutóbbi parancsok
+	No recent commands	Nincsenek legutóbbi parancsok
 	Search Commands…	Parancsok keresése…
 	Search Fonts Folder	Keresés betűtípusmappában
 	Searching…	Keresés…
@@ -5286,6 +5296,31 @@ imageTrace	Outline	Körvonal
 @msg	$.evalFile requires a file path	A $.evalFile fájlútvonalat igényel
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: az időkorlátnak véges számú ezredmásodpercnek kell lennie, 0 vagy több
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: egy fájlútvonalat és egy időkorlátot vár
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} nincs definiálva
+@msg	cannot read property '{key}' of {base}	a(z) {base} '{key}' tulajdonsága nem olvasható
+@msg	cannot set property '{key}' of {base}	a(z) {base} '{key}' tulajdonsága nem állítható be
+@msg	cannot read a property of {base}	a(z) {base} tulajdonsága nem olvasható
+@msg	cannot set a property of {base}	a(z) {base} tulajdonsága nem állítható be
+@msg	cannot define property '{key}': {why}	a(z) '{key}' tulajdonság nem definiálható: {why}
+@msg	cannot assign to property '{key}': {why}	a(z) '{key}' tulajdonságnak nem adható érték: {why}
+@msg	cannot delete property '{key}'	a(z) '{key}' tulajdonság nem törölhető
+@msg	cannot declare function {ident}	a(z) {ident} függvény nem deklarálható
+@msg	invalid assignment target	érvénytelen értékadási cél
+@msg	the array's length is read-only	a tömb hossza csak olvasható
+@msg	the property cannot be redefined	a tulajdonság nem definiálható újra
+@msg	the object is not extensible	az objektum nem bővíthető
+@msg	the length cannot be redefined	a hossz nem definiálható újra
+@msg	it is read-only	csak olvasható
+@msg	an element cannot be deleted	elem nem törölhető
+@msg	it has only a getter	csak gettere van
+@msg	the value is a primitive	az érték primitív
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, {line}. sor, {column}. oszlop: {e} (kivétel)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: {line}. sor, {column}. oszlop: {e} (kivétel)
 @msg	{name}: {e} (thrown)	{name}: {e} (kivétel)
@@ -7402,6 +7437,24 @@ breakText	Glyphs	Glifák
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Szaggatások kibontása útvonalakká
 @msg	select paths with dashed strokes to expand	jelöljön ki szaggatott körvonalú útvonalakat a kibontáshoz
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Érintőkör…
+	Tangent Circle	Érintőkör
+	Circle:	Kör:
+@msg	`ids` names an object twice	`ids`: egy objektumot kétszer nevez meg
+@msg	select two or three paths or compound paths	jelölj ki két vagy három útvonalat vagy összetett útvonalat
+@msg	`radius` must be from 0.01 to 1000000 pt	a `radius` értéke 0.01 és 1000000 pt között lehet
+@msg	two shapes need a `radius`	két alakzathoz `radius` kell
+@msg	three shapes set the radius themselves: leave `radius` out	három alakzat maga határozza meg a sugarat: hagyd el a `radius` értéket
+@msg	`circle` must be from 0 to 64	a `circle` értéke 0 és 64 között lehet
+@msg	a shape has no outline	egy alakzatnak nincs körvonala
+@msg	the shapes are too complex: at most 2000 segments in all	az alakzatok túl összetettek: összesen legfeljebb 2000 szakasz
+@msg	these shapes take too long to search	ezeknek az alakzatoknak a keresése túl sokáig tart
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	több mint 64 kör érinti ezeket az alakzatokat: lehet, hogy egy teljes görbe mentén érintik őket
+@msg	no circle touches these shapes	egyetlen kör sem érinti ezeket az alakzatokat
+@msg	`circle` is past the last circle found ({found})	a `circle` az utolsó talált kör után van ({found})
+@msg	object {value} is not a path or compound path	a(z) {value} objektum nem útvonal és nem összetett útvonal
+@msg	these shapes are too small to measure	ezek az alakzatok túl kicsik a méréshez
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentumeszközök
 	Save a Timestamped Copy	Másolat mentése időbélyeggel
@@ -7456,7 +7509,7 @@ breakText	Glyphs	Glifák
 @msg	stroke cannot be set on a symbol instance	a stroke nem állítható be szimbólumpéldányon
 @msg	fill on a symbol instance must be a solid color or none	a szimbólumpéldány fill értéke csak egyszínű szín vagy none lehet
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	a {key} nem állítható be olyan képen, amelyen nincs Átalakítás alakzattá vagy Objektum útvonallá alakítása effektus
-@msg	pass newName, registration, exportType, nineSlice and/or type	adja meg a newName, registration, exportType, nineSlice és/vagy type értékét
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	adja meg a newName, registration, exportType, nineSlice, type és/vagy alignToPixelGrid értékét
 	Text Flow	Szövegfolyás
 	By Rows	Soronként
 	By Columns	Oszloponként

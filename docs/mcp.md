@@ -835,6 +835,20 @@ look was edited keep their look. Read as a source, by `graphicStyle.new`, `graph
 style link of its own gives the look and the style link of the topmost path directly in it, and a move with
 `appearance.transfer` clears each of those paths; a series group that has one of them is read itself.
 
+The commands in the paragraph above read a graph's Axes group and Legend group, given by id or selected with Group
+Selection, as they read a series group: the Axes group stands for the axis lines, tick marks, radar rings and labels
+directly in it, and the Legend group for the legend labels directly in it. The graph stores what they set for every
+line and label of each kind, as described below for a line or label given itself, and the groups keep no rows of their
+own. An Axes or Legend group that has a fill or stroke row of its own, or holds no line or label, is edited itself,
+except by `graphicStyle.redefine`, which passes the style to the lines and labels of a linked group whatever the group
+holds. An `index`, `indices` or fill or stroke `item` given an Axes or Legend group whose lines and labels have
+different rows, as the lines and labels of a new graph do, is an error unless `aligned` is true, which makes it a row
+of the stack of the backmost line or label in the group, and `appearance.moveItem` does not move the rows of such a
+group. With `aligned`, the graph stores the rows of only the lines and labels that have that row; a kind of label none
+of whose labels has it keeps what it stored before. The graph keeps no graphic style link on its lines and
+labels: they keep the look of a style applied to them, and are unlinked when the graph is drawn again. The commands
+find these groups by their names, so a renamed Axes or Legend group is edited itself.
+
 `transparency.set` and `object.setProps` with an opacity, blend mode, isolation, knockout or knockout shape for the
 object, given a series group's id or the selected series group, set them on the group itself, and the graph stores them
 for that series. The series group has them again when the graph is drawn again, and they apply to the group as a whole
@@ -843,10 +857,12 @@ in addition to each path's own opacity and blend mode. `addon.arrange.randomizeO
 what they change on the group the same way. Each of the commands above that clears the group's own opacity, blend mode, isolation
 and knockout also removes what the graph stores for it.
 
-The other commands given a series group's id edit the group itself, and the graph does not store what they set on it:
-the `effect.*` commands and `appearance.addEffect`, and the paint, stroke and gradient commands with a fill or stroke
-`item`, which is a row of the group's own stack. The Appearance panel and `appearance.setActiveItem` read the selected
-group's own rows.
+The other commands given a series group's id, or a graph's Axes or Legend group, edit the group itself, and the graph
+does not store what they set on it: the `effect.*` commands and `appearance.addEffect`, and the paint, stroke and
+gradient commands with a fill or stroke `item`, which is a row of the group's own stack. `transparency.set` and
+`object.setProps` with an opacity or blend mode for the object, given an Axes or Legend group, edit the group itself the
+same way. `paint.setFill`, `paint.setStroke` and the recolor commands given the Axes group store the line rows, as
+described below. The Appearance panel and `appearance.setActiveItem` read the selected group's own rows.
 
 When a graph is drawn again (a change to its data, its type, or its column or marker designs), it draws the art of a
 column or marker design in a series again from the design, and an edit made to that art is lost. The art is any object
@@ -909,9 +925,11 @@ placement they set there. A stroke weight and dashes are stored as the label sho
 scaled. When the characters of labels of one kind change differently, the frontmost label sets what the kind keeps. On
 a pie with Legends in Wedges, a fill a command sets on the legend labels is drawn on every wedge, black included, until
 that command is undone; a size, font or stroke change does not set one. Before that, their fill is stored only when
-every legend label the command reaches ends up with the same fill. Otherwise they are drawn again in black, or white on
-a dark wedge. These commands do not store the colors they give a graph's axis lines, ticks and radar rings, which are
-drawn again with their default paint.
+every legend label the command reaches ends up with the same fill. The recolor commands also need to be given the legend
+labels themselves: a recolor given the graph or a group that holds it does not store their fill. When their fill is not
+stored, they are drawn again in black, or white on a dark wedge. `paint.default` stores the black fill and no stroke for
+the kind of each label it reaches, also when the label already showed them. What these commands change on a graph's
+axis lines, tick marks and radar rings is stored as described below.
 
 `text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
 it sets for each kind of label it reaches (value axis numbers, category labels, legend labels), and every label of that
@@ -935,17 +953,52 @@ The `appearance.*` commands, `graphicStyle.apply` and `graphicStyle.redefine`, a
 transparency commands given an `item` (or the Appearance panel's active row) store a graph label's object rows for its
 kind of label: the paint, weight, opacity and blend mode of its topmost visible fill and stroke row, their order and
 their place relative to the Characters row, and the label's object opacity and blend mode. They store them even when the
-label already showed them. `transparency.set` without an `item`, `object.setProps` with an opacity or blend mode, and
+label already showed them, but an edit of a hidden row that leaves the topmost visible rows as they were, and an
+`appearance.moveItem` of the Contents row that leaves them in place, store nothing. `transparency.set` without an `item`, `object.setProps` with an opacity or blend mode, and
 an `appearance.copyFrom` (Eyedropper) pick of transparency store only the label's object opacity and blend mode;
-`appearance.copyFrom` with `append` stores the rows. When the graph is drawn again, every label of that kind gets what
-is stored, with a placed gradient fitted to each label, and the graph saves it as `valuesRows`, `categoriesRows` and
-`legendRows` in its label styles. Rows below the topmost one of each kind, a row's effects, other stroke options (caps,
+`appearance.copyFrom` with `append` stores the rows of the kinds it adds (fill, stroke or both), and the object opacity
+and blend mode only when it also applies the object's transparency. `graphicStyle.apply` with `add` stores the rows of
+the kinds the style shows. Both leave a row of the other kind as the kind keeps it, and `graphicStyle.apply` with `add`
+also leaves the object opacity and blend mode the kind keeps. When the graph is drawn again, every label of that kind gets what is stored, with a placed
+gradient fitted to each label, and the graph saves it as `valuesRows`, `categoriesRows` and `legendRows` in its label styles. Rows below the topmost one of each kind, a row's effects, other stroke options (caps,
 joins, dashes) and effects applied with `effect.*` are not stored. When labels of one kind are edited together, the
 last one in the order of the targets (`ids` as given, otherwise paint order) sets what the kind keeps.
 `appearance.copyFrom` onto the whole text of a label also stores the character attributes it applies and, from type,
 the paragraph attributes. `paint.setFill` and `paint.setStroke` store a character fill or stroke when the paint goes to
 the label's characters (the whole label, or all of its text highlighted with the Type tool), and the row when it goes to
 a row. A stored character gradient also fits each label.
+
+On a graph's axis lines and tick marks, and separately on a radar graph's rings, `paint.setFill`, `paint.setStroke`,
+`addon.color.fillToStroke`, `addon.color.strokeToFill`, the stroke, gradient and recolor commands above, `paint.swap`,
+`paint.default`, the `appearance.*` commands (`appearance.copyFrom`, the Eyedropper, included), `graphicStyle.apply`,
+`graphicStyle.redefine`, `transparency.set` and `object.setProps` store what a line shows for every line of its kind:
+the paint, weight, opacity and blend mode of its topmost visible fill and stroke row, their order, and the line's object
+opacity and blend mode. `paint.setFill`, `paint.setStroke` and the recolor commands also store them when given the
+graph, its Axes group or a group that holds the graph, so the lines keep the paint those commands give a whole graph.
+The other commands store them when given the line itself, and the `appearance.*` and graphic style commands and
+`transparency.set` with an `item` also when given the Axes group, as described above. `transparency.set` without an
+`item` and `object.setProps` store only the object opacity and blend mode. `appearance.clear`, `appearance.transfer`,
+`graphicStyle.apply`, `graphicStyle.redefine`, and `appearance.copyFrom` with every attribute picked up and applied or
+with `append`, store a line's rows even when the line already showed them; `graphicStyle.apply` with `add` and
+`appearance.copyFrom` with `append` store only the kinds of row they add. `appearance.addFill` and
+`appearance.addStroke` store the row they add when it becomes the line's topmost visible row of its kind, also when the
+line already showed its paint, weight and opacity. The other commands, an `appearance.copyFrom`
+of some attributes included, store only what they change on a line's rows; the kind keeps its other attributes, also
+when the line still shows different ones until the graph is drawn again. `paint.setFill`, `paint.setStroke`,
+`addon.color.fillToStroke` and `addon.color.strokeToFill` also store the paint they write on a line's topmost visible
+fill or stroke row when the line already showed it. `appearance.setItem` and an `appearance.copyFrom` of some
+attributes store the paint, stroke weight, and row opacity and blend mode they write to that row in the same way, and
+`stroke.set` stores the weight it writes there. An `appearance.copyFrom` that does not apply
+the object's transparency, and `graphicStyle.apply` with `add`, leave the object opacity and blend mode a kind keeps as
+they are, also when the line still shows other ones. `paint.default` stores the default fill and stroke rows for a
+line's kind even when the line already showed them, and leaves the object opacity and blend mode the kind keeps. Rows
+equal to a kind's default stroke (0.5 pt black for axis lines and tick marks, 0.25 pt gray for rings) are not saved, and
+an edit of a hidden row that leaves the topmost visible rows as they were stores nothing. When one command reaches
+several lines of one kind, the frontmost line in
+paint order sets what the kind keeps, whatever order the `ids` are in. A gradient is stored without its placement, and
+each line fits it when the graph is drawn again. The graph saves the rows as `axisRows` and `ringRows` in its label
+styles. Other stroke options (caps, joins, miter limit, alignment, dashes and arrowheads), rows below the topmost one of
+each kind, and effects are not stored, so a dash set on a line is drawn solid again.
 
 `effect.apply {"effect": "path.outlineObject"}` (Effect › Path › Outline Object) takes no parameters. Type that carries
 it is drawn, exported and expanded as its glyph outlines and stays editable type, and the effects after it reshape
@@ -3459,7 +3512,7 @@ already walks Image Trace. Short agent entry points:
   `[x, y, pressure, tiltX, tiltY, rotation]` or `{x, y, pressure?, tiltX?, tiltY?, rotation?}`, with `null` for what a
   point lacks, and a `pointer_gesture` event takes `tiltX`, `tiltY` and `rotation`, which the Paintbrush records.
   `tiltX` and `tiltY` are degrees −90..90 in document axes, positive leaning right and leaning down the page (one
-  without the other is 0); `rotation` is the barrel's rotation in degrees clockwise. The stroke keeps how far the pen
+  without the other is 0); `rotation` is the barrel's rotation in degrees clockwise, 0..360. The stroke keeps how far the pen
   leaned (`tilt`, 0 upright to 1 lying flat), which way (`bearing`, degrees counter-clockwise from leaning right; a
   pen within 1° of upright takes the bearing before it, or at the start of the stroke its first one) and how far the
   barrel turned (`rotation`, degrees counter-clockwise). A point without a tilt that other points have counts as
@@ -3879,16 +3932,20 @@ already walks Image Trace. Short agent entry points:
   black ring around a white disc around a black dot, black gets two groups. `layer.releaseToLayers` on the expanded group then
   gives each group a sublayer. A trace made with `autoGrouping` is refused. Expanding by color also refuses a trace
   with a live Pathfinder effect.
-  An Abutting trace with Fills (not Flat Logo) also holds a group named `Seam Fills` under its paths: for each color, a
-  stroke 1.5 image pixels wide (at the image's larger scale, when it is stretched more one way) with butt caps and round joins along the edges where a filled path of that color meets a
-  filled path drawn after it, in that color (a gradient path's stroke takes its gradient). Without it, a renderer that
-  anti-aliases each path on its own shows a light hairline along every shared edge. The traced paths and their shared
-  edges are the same with or without it, and edges against the image's border, a transparent area or a color left out
-  get no stroke. A trace whose paths have more than half of the trace's anchor limit (8,000,000, 2,000,000 on the web)
-  has no seam fills, so that paths and seam fills together stay within the limit. Both Expand commands keep the group, and `byColor` leaves it under every color's group. The strokes
-  are separate objects: after Expand, recoloring, moving or deleting a traced path leaves them as they are, and deleting
-  the group removes them. The reply's
-  `paths` and `anchors` count the traced paths only.
+  An Abutting trace with Fills (not Flat Logo) also holds a clip group named `Seam Fills` under its paths. For each
+  color it holds one stroke along the edges where a filled path of that color meets a filled path drawn after it, in
+  that color (a gradient path's stroke takes its gradient), with butt caps and round joins. The stroke is 1.5 image
+  pixels wide, VectorCraft's own width. On an image stretched more one way than another, the group holds each
+  stroke's outline in image pixels as a filled path instead; the outline covers 0.75 image pixels on each side of its
+  edge. The group clips the strokes or outlines to the image's box within the box of the traced paths, and its
+  bounds lie within that box. Where a shared edge ends at, or runs within 0.75 image pixels of, a
+  transparent area or a color left out, its stroke can reach up to 0.75 image pixels into that area. Paths that
+  became live shapes (`shapes`) take no part. The traced paths and their shared edges are the same with or without
+  the group. A trace whose paths have more than about half of the trace's anchor limit (8,000,000,
+  2,000,000 on the web) has no seam fills. Both Expand commands keep the group, and `byColor` leaves it under every
+  color's group; `byColor` refuses a trace whose seam fills' group was moved above a path. The strokes are separate
+  objects, in a trace and after Expand: recoloring, moving or deleting a traced path leaves them as they are, and
+  deleting the group removes them. The reply's `paths` and `anchors` count the traced paths only.
   With `keepColors` in `params`, the reply's `warnings` name each listed color that no traced color matches, and say
   when nothing was traced.
   `noise` (Color, Grayscale and Black and White, not Flat Logo) merges areas smaller than that many pixels into a
@@ -4417,16 +4474,24 @@ is tall), `bevelInside` (false adds the bevel around the shape, true carves it i
   `softness` are not used). `ambient` (0..100%, default 50) lights every face.
 - `highlightIntensity` (0..100%, default 60) and `highlightSize` (0..100%, default 90; 100 is broad) shape the Plastic
   highlight. `blendSteps` (whole number, 1..256, default 25) is how many levels the shading is rounded to.
-- `shadingColor`: `black` (the default), `custom` (darkens toward `shadingCustom`, a `#rrggbb` color) or `none` (the
-  paint is kept and only the highlight lightens it). `drawHiddenFaces` also draws the faces turned away from the
-  viewer, behind the others.
+- `shadingColor`: `black` (the default), `custom` (darkens toward `shadingCustom`, a `#rrggbb` color), `none` (the
+  paint is kept and only the highlight lightens it) or `blackOverprint`. With `blackOverprint` every face keeps the
+  paint unchanged, and each face that darkens gets overprinting black over it, as strong as `black` would darken it.
+  The paint's own inks print as they are and the shading prints on the black plate. On screen the black is multiplied
+  over the paint, Separations Preview shows it on the Black plate, and `document.exportPdf` writes it as overprinting
+  fills
+  ([Shading Color options](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=188)).
+  The highlight is not drawn with `blackOverprint`; that rule is VectorCraft's own. On a pattern face the black covers
+  the whole face, transparent pattern cells included, as the shading of the other shading colors does.
+  `drawHiddenFaces` also draws the faces turned away from the viewer, behind the others.
 - `preserveSpotColors` (default false) is the Lighting tab's Preserve Spot Colors checkbox. When it is on, a fill or
   stroke linked to a spot or global swatch stays linked on every face, so a spot color prints on its own plate in
   separations and PDF. The highlight lowers the swatch's tint, and a face that darkens gets black at the shade's
   strength over the swatch, multiplied and overprinting. These rules for drawing the shading are VectorCraft's own. The
   option does nothing while `shadingColor` is `custom`, since a custom shading color cannot keep a spot color
   ([Preserve Spot Color](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=260)).
-  Unlinked colors, gradients, patterns and the Wireframe surface draw as they do with it off.
+  Unlinked colors, gradients, patterns and the Wireframe surface draw as they do with it off. With `blackOverprint`
+  every face keeps its paint, swatch link included, whether the option is on or off.
 
 The defaults are VectorCraft's own. An unknown parameter, a number out of range, a flag that is not true or false, or
 an unknown surface or shading color is refused with an error and the document is not changed.
@@ -4569,7 +4634,10 @@ without `groupColors`, its new color then joins `group` after the new colors of 
 new color as it is and shuffles only the rows that hold current colors, and keeps its `added`. A row without `from`, or with
 a current color that is not a color, is refused. With art selected, the Recolor Artwork dialog's New Row button (beside
 Merge) adds such a row above the first selected row, or at the top, with that row's new color, and selects it; Shift-click a row below it and Merge to move that row's colors into it (Merge keeps the topmost selected row's new color). An
-empty row does not count toward Colors. With `limitTo`, a row's `tint` (a percentage, default 100) gives the art
+empty row does not count toward Colors. While it is empty and not `added`, the dialog's Edit tab does not show it (its sliders edit
+the base color when the empty row is selected), the harmony rules,
+linked moves and the Color Theme Picker leave its new color as it is, and Save All Colors and a new color group saved
+from colors alone leave its new color out. With `limitTo`, a row's `tint` (a percentage, default 100) gives the art
 linked to the global or spot swatch its new color is that share of its tint; `tint` must be a number. `recolor.randomize`
 moves a row's `tint` with its new color and removes it from a color it changes, and moves a row's `model` with its new color. `swatch.editGroup {group, colors, rename?}` rewrites a colour group in one undo
 step (art linked to its global swatches follows), and `recolor.apply` with `group` recolours the art and rewrites the
@@ -4615,7 +4683,7 @@ objects are read. As VectorCraft's own rule, each object read weighs the same, s
 among its pixels; the vector art a symbol instance places counts as one object, and each image it places counts on
 its own), and similar colors merge (k-means in Lab) into at most `colors` (1 to 64, default 5), each shown by its
 most used color in its own model. Picks that touch no art return no colors. In the Recolor Artwork dialog the picks are the `themePicks` field: the rows that aren't
-excluded take the palette as their new colors in row order, the colors repeating when the rows outnumber them.
+excluded and hold current colors or were added on the Edit tab take the palette as their new colors in row order, the colors repeating when the rows outnumber them.
 
 ```json
 {"name":"run_command","arguments":{"command":"recolor.pickTheme","params":{"picks":[{"at":[120,80]},{"rect":[200,40,320,140]}],"colors":4}}}
@@ -4641,7 +4709,7 @@ bar sits under the Edit tab's wheel: each row with a share is a part as wide as 
 the largest first. Dragging the edge between two parts moves width between them, and when the drag ends the widths
 become the `weights` field, which moves the rows' current colors and previews the result. The New Color Group menu
 beside the link button runs `swatch.newGroup` right away, as its own undo step: Save All Colors saves the new colors
-of the rows that are not excluded and still have one, in row order, and Save Prominent Colors saves the bar's colors in the bar's order.
+of the rows that are not excluded, hold current colors or were added on the Edit tab, and still have one, in row order, and Save Prominent Colors saves the bar's colors in the bar's order.
 
 ```json
 {"name":"run_command","arguments":{"command":"recolor.weigh","params":{"map":[{"from":["rgb 255 0 0","rgb 128 0 204"],"to":"#00ff00"},{"from":["rgb 0 0 255"],"to":"#ffff00"}],"weights":[1,1]}}}
@@ -5795,11 +5863,24 @@ moves that point alone as the focal point, with or without Shift (Shift keeps th
 focal points stay highlighted where it left them; Escape during a drag puts the path back and keeps them, and
 switching to another tool clears them.
 
+`path.freehand`, `brush.freehand`, `path.knife`, `path.eraseRegion`, `path.eraseSegments`, `path.smoothRegion`,
+`path.joinScrub` and `path.blob` refuse a pen `pressure` outside 0 to 1, a `tiltX` or `tiltY` outside -90 to 90 and a
+`rotation` outside 0 to 360 with an error such as `` `tiltX` must be from -90 to 90 ``, naming the key, and a point
+given as an array of more than six numbers with `` `points[3]` must be an array of at most 6 entries ``, naming the
+point. `path.blob` and `path.eraseRegion` refuse a `size` outside 0.1 to 1000 pt with
+`` `size` must be from 0.1 to 1000 `` and a `sizeVariation` over 1000 pt with
+`` `sizeVariation` must be from 0 to 1000 ``, in every `sizeMode` and when it is left out. `path.blob` refuses a
+negative `sizeVariation` with the same message, and `path.eraseRegion` with "sizeVariation must be 0 or more". The
+document and the selection do not change and no undo step is recorded. A null is read as a key left out, and a point given as `[x, y]`
+has no pen values. The pressure and tilt ranges are those of
+[Pointer Events](https://www.w3.org/TR/pointerevents3/); the rotation, size and size variation ranges are
+VectorCraft's own values.
+
 `path.eraseRegion` (the Eraser) takes a variation mode for each of its tip's values, as the variation menus of
 Eraser Tool Options set them ([Erase paths using the Eraser
 tool](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/erase-paths-using-eraser-tool.html)):
 `angleMode` with `angleVariation` (degrees, 0 to 180), `roundnessMode` with `roundnessVariation` (percent, 0 to 100)
-and `sizeMode` with `sizeVariation` (points, 0 or more), each `"fixed"` (the default), `"random"`, `"pressure"`,
+and `sizeMode` with `sizeVariation` (points, 0 to 1000), each `"fixed"` (the default), `"random"`, `"pressure"`,
 `"tilt"`, `"bearing"` or `"rotation"`. A value that varies takes up to its variation either way. Random draws one
 value for the drag. Pressure goes from the value less the variation where the pen presses lightest to the value plus
 it where the pen presses hardest. Tilt goes from less with the pen lying flat to more with it upright. Bearing and
@@ -5999,12 +6080,21 @@ are converted to, an RGB image that carries an ICC profile is converted from tha
 and then to the destination, instead of having its numbers read as sRGB (a profile the color engine can't read leaves
 them read as sRGB, with a warning); a gray image keeps its profile, as gray is not converted. An RGB destination other
 than sRGB that is the document's own RGB profile leaves RGB colors and RGB images as they are, so a tagged RGB image keeps its profile
-there. Any other image whose colors are converted (a CMYK image, or an RGB image going to a CMYK destination or to an
-RGB one other than sRGB) but whose pixels are more than VectorCraft decodes or can't be written that way is left out with
-the warning "an image couldn't be converted to the Output destination and is missing from the picture", rather than
-written in its own colors. One whose pixel data can't be read is left out with the warning "an image couldn't be decoded
-and is missing from the picture", as without a conversion.
-`preserveNumbers` still reads an image's numbers as sRGB. The destination is any profile `edit.colorSettings` lists (default: the document's
+there.
+`preserveNumbers` (and PDF/X-1a, which converts the same way) keeps the numbers of untagged content only: an RGB image
+that carries an ICC profile is converted from that profile to sRGB with the same intent, and then to a CMYK or other
+RGB destination, the document's own RGB profile included (written as sRGB when colours are ICC-tagged), while an untagged RGB image keeps its numbers in an RGB
+destination and converts from sRGB to a CMYK one. A gray image that carries one is converted to sRGB grays in an
+sRGB destination and keeps its profile in the others, and a profile the color engine can't
+read leaves the image as it is in an RGB destination, with a warning, and its numbers read as sRGB in a CMYK one.
+In both modes, any other image whose colors are converted (a CMYK image, an RGB image going to a CMYK destination, or
+with `destination` an RGB image going to an RGB one other than sRGB) but whose pixels are more than VectorCraft decodes
+or can't be written that way is left out with the warning "an image couldn't be converted to the Output destination and
+is missing from the picture", rather than written in its own colors. One whose pixel data can't be read is left out with
+the warning "an image couldn't be decoded and is missing from the picture", as without a conversion. A tagged RGB image
+that `preserveNumbers` converts in an RGB destination but whose pixels can't be decoded keeps its profile, with a
+warning, as with `destination` and an sRGB destination.
+The destination is any profile `edit.colorSettings` lists (default: the document's
 for its colour mode). `profiles` (`all`, `destination`, or `taggedSource` for a document assigned profiles with
 `edit.assignProfile`) writes colours in ICC-based spaces with their profiles embedded: CMYK with the destination's or
 the document's CMYK profile, RGB as sRGB, grey with the sRGB tone curve (PDF/A, PDF/X-3 and PDF/X-4 files are
@@ -7985,7 +8075,8 @@ Besides SVG, Copy offers other apps PNG and PDF of the copied objects, and their
 preferences: `text/plain` (the text of a type-only copy, else the SVG markup with `copyAsSvg` when the images it
 embeds total at most 1 MiB, so a paste never reads a photo back as text, #2213), `image/svg+xml`
 (`copyAsSvg`), `application/pdf` (`copyAsPdf`) and `image/png` (always; PDF and PNG need objects with an
-area). Each one has a query command:
+area). For a caller with read roots, the list leaves out `image/svg+xml`, and the SVG markup as `text/plain`, when
+`clipboard.exportSvg` would refuse the SVG. Each one has a query command:
 `clipboard.exportSvg`, `clipboard.exportText` (null unless every copied object is type), `clipboard.exportPdf`
 (a one-page PDF, the page the objects' visual bounds) and `clipboard.exportPng {scale?}` (cropped to the objects,
 transparent around them). As in `document.export`, the PDF's and the PNG's replies list their notes in `warnings`
@@ -8717,10 +8808,13 @@ becomes an asset (or one asset with `multiple: false`).
 ### 3D assets
 
 Asset Export's menu item Export 3D Object and the 3D and Materials panel's Export 3D Object button
-(`assets.add3D {ids?, format?}`; the button passes the ids of the selected objects that have a 3D effect and then shows
-the Asset Export panel, [three-d.md](three-d.md#3d-and-materials-panel)) collect each selected object (or `ids`)
+(`assets.add3D {ids?, format?}`; the button then shows the Asset Export panel,
+[three-d.md](three-d.md#3d-and-materials-panel)) collect each selected object (or `ids`)
 that carries Extrude & Bevel, Revolve, Inflate or Rotate as a 3D asset, named after the object; an object already
-collected as a 3D asset keeps it, and an object without such an effect is refused. A 3D asset's Format is `usda` (the
+collected as a 3D asset keeps it. An object in `ids` without such an effect is refused. Without `ids`, the selected
+objects without one are left out, and so are a group or layer whose 3D effect is on a fill or stroke (it draws nothing
+to export) and a selected object inside another selected 3D object; the command is refused when no selected object is
+left. A 3D asset's Format is `usda` (the
 default), `usdz`, `gltf` or `obj`; the panel shows a Format row for the 3D assets it would export, and
 `assets.set3DFormat {assets, format}` sets it (an undo step only when the format changes). `assets.list` gives each
 asset's `format3D` (null for a picture asset).
@@ -8785,6 +8879,28 @@ named as the Layers panel names it (text objects by their text); layers with a c
 appearance of their own or knockout stay one pixel layer. Hidden layers and objects are left out unless
 `hiddenLayers: true` writes them as hidden layers. `layers: false` writes one flat image, on white where nothing is
 drawn. Files are at most 30000 pixels a side.
+
+`preserveText: true` (with layers; refused with `layers: false`) writes horizontal and vertical point type as type
+layers that a reader can edit: each holds the text, its fonts (by PostScript name), sizes, leading, tracking, scaling,
+baseline shift, caps, underline, strikethrough, fill color, Fractional Widths, paragraph alignment, orientation and
+anti-aliasing method (None with `antiAlias: none`), at the export's resolution, and keeps its pixels for readers that
+show them. The font is the installed version the character style names, if any. VectorCraft writes only point type in
+solid colors with whole-number tracking whose characters are all in their own font (none drawn with a fallback font),
+that sets no other character attribute (no stroke, kerning, rotation, OpenType feature, small caps, position, East
+Asian setting or language other than the default English: USA), whose paragraphs set nothing but their alignment
+and line breaking (no indents, spacing, tabs, bullets or numbers, Auto Leading, word or letter spacing, Standard
+composer, and no Mojikumi other than the default in type with Chinese, Japanese or Korean characters) and run left to right (set, or from their first strong
+character), and that has no inline graphics, ruby, System Layout, Optical Margin Alignment, effects, appearance of its
+own or opacity mask as a type layer; other type, area type and type on a path stay pixels. Without `maxEditability`, a
+layer or sublayer that holds such type becomes a group of its type layers and one pixel layer for each stretch of art
+between them, unless other art in it blends in a mode other than Normal: then the layer stays one pixel layer. Hidden
+type counts only with `hiddenLayers`. With `maxEditability`, every object is a layer as above. The PSD Options dialog
+has the option as Preserve Text Editability
+(<https://helpx.adobe.com/illustrator/desktop/save-and-export/export-files-to-different-formats/export-file-format-options-in-illustrator.html>).
+
+```json
+{"name":"export","arguments":{"path":"/tmp/poster.psd","options":{"ppi":300,"preserveText":true}}}
+```
 
 PSD files (`.psd`, and `.psb`, the large document format) place as their merged image, the
 flattened picture every PSD file carries: Bitmap, Grayscale, Duotone, Indexed, RGB, CMYK
@@ -9452,13 +9568,23 @@ a spelling dictionary marks nothing. English words come from the first dictionar
 dictionary in the user's dictionaries folder, the SCOWL dictionary for that English built in from craft-i18n, a
 system Hunspell dictionary, and last the public-domain Moby word list built into craft-proof. Words in capitals, words with digits and web addresses are taken as correct. The result is
 `{words: [{id, start, end, word, lang}], more}`: `start` and `end` are byte offsets in the type object's text, the
-ones `text.editRange` takes, so `text.editRange {id, start, end, insert}` changes a word as one undo step. At most
-10,000 words are listed; `more` is `true` when there were more. `text.spelling.suggest {word, max?, lang?}` gives
-the words the dictionary of `lang` (default English) suggests instead of `word`, best first, at most `max` (1 to 20,
-default 5). Both only read the document.
+ones `text.editRange` takes, so `text.editRange {id, start, end, insert}` changes a word as one undo step, and
+`text.spelling.change {to, words: [{id, start, end}…]}` changes every listed word to `to` as one undo step (Check
+Spelling's Change All; an error, with nothing changed, when a word's bytes are not in its object's text or two words
+overlap). A listed word that already reads as `to` is left alone; when every one does, the command makes no edit and
+no undo step, and `changed` is 0. At most
+`max` words are listed (1 to 10,000, default 10,000); `more` is `true` when there were more. To get the rest, check
+again with `from: {id, byte}` set to the last word's `id` and `end`: that check lists the words of that type object
+that start at `byte` or later, then those of the objects after it, so a type object with more unknown words than one
+check lists is read to its end. `from.id` must be one of the objects checked. The paragraphs before the one that
+holds `from.byte` are not checked again; that paragraph is checked whole. `text.spelling.suggest {word, max?, lang?}`
+gives the words the dictionary of `lang` (default English) suggests instead of `word`, best first, at most `max` (1 to
+20, default 5). `text.spelling.check` and `text.spelling.suggest` only read the document.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.spelling.check","params":{}}}
+{"name":"run_command","arguments":{"command":"text.spelling.check","params":{"from":{"id":12,"byte":340},"max":100}}}
+{"name":"run_command","arguments":{"command":"text.spelling.change","params":{"to":"drawing","words":[{"id":12,"start":4,"end":10}]}}}
 {"name":"run_command","arguments":{"command":"text.spelling.suggest","params":{"word":"drawng","lang":"en"}}}
 ```
 
@@ -9627,6 +9753,32 @@ https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"bunriKinshi":true}}}
+```
+
+## Kurikaeshi Moji Shori
+
+`text.setFormat {kurikaeshiMojiShori: bool}` (Paragraph panel menu › Kurikaeshi Moji Shori, shown with the East Asian
+options) turns it on or off for the paragraphs of the selected type (or `ids`, or the paragraphs a `start` / `end`
+range touches). On, a repeat mark that starts a line of point or area type, horizontal or vertical, or starts a frame
+of type on a path (which holds one line), is drawn as the character it repeats, so both characters show when a line break separates them. The text keeps the mark: copying,
+searching, the caret and the line breaks stay as they were, and the drawn character takes the mark's place and width.
+SVG export with live type writes the drawn character, and embeds its glyph when fonts are embedded; it writes type on a
+path that starts with such a mark as outlines, with a warning.
+VectorCraft's set of marks and its rules: 々 repeats a Han ideograph, ゝ and ゞ a hiragana, and ヽ and ヾ a katakana; the
+repeated character is the last one before the mark in the paragraph that is not a repeat mark, a soft return or a
+combining voicing mark (U+3099, U+309A), looking back into the frames before when threaded type continues a paragraph
+from one frame into the next; ゝ and ヽ draw it without its voicing marks, and ゞ and ヾ draw its voiced form, or the
+plain kana when it has none; ゝ or ヽ followed by a combining voicing mark (U+3099) counts as ゞ or ヾ when the font draws the
+pair as one glyph, and is drawn as it is when the font draws two. A mark is drawn as it is when nothing before it in the paragraph fits, when the font has no glyph for the character, at the start of a
+paragraph, and inside tate-chu-yoko or warichu. Off by default. It is saved with the paragraph
+(`kurikaeshi_moji_shori` in `para`) only when on, paragraph styles carry it (`kurikaeshi_moji_shori` in a paragraph
+style's attributes), and Reset Panel turns it off. A value that is not true, false or null is refused, `null` leaves the
+setting as it is, and a call that gives the value the paragraphs already have records no undo step. One undo step. `.ai` editing data does not hold it, and a
+save reports a paragraph with it on as left out. The help page:
+https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"kurikaeshiMojiShori":true}}}
 ```
 
 ## Korean Line Break Anywhere
@@ -12014,7 +12166,14 @@ Tools:
   screen pixels of the pointer. A drag draws a rectangle and runs it with `rect` on release; once the pointer has
   gone 3 screen pixels from the press, the gesture stays a drag even when it ends near the press. An Alt-drag draws a
   freehand line and runs it with `points` on release; a line of more than 65,536 points is dropped. Nothing changes
-  while dragging, and Escape during a drag removes nothing. The tool has no options.
+  while dragging, and Escape during a drag removes nothing. Hovering draws in red the stretch a click there would
+  remove. It draws nothing when a click would remove nothing, or when finding the path's crossings takes more than a
+  twentieth of the work a click may do. A drag draws in red every stretch its release would remove while it reaches at
+  most 32 paths, the paths it reaches times the paths that can be edited come to at most 10,000,000, and a freehand
+  line has at most 4,096 points; past those limits it draws none. Once finding the crossings takes more than a
+  twentieth of the work a release may do, or checking the line against the paths' segments takes more than 1,000,000
+  box tests, the drag draws none until the next press. A click or a release still removes what it reaches. The tool
+  has no options.
 
 Commands:
 
@@ -12070,6 +12229,26 @@ Commands:
   drawn, and the path's fills stay on it, below its dashes (a path without fills goes). A compound path's dashes are
   plain paths with its appearance. Paths without a dashed stroke stay as they are, and it is an error if none has one.
   The dashes are selected; more than 100,000 (or a pattern too fine to draw) is refused. → `{ids, dashes}`.
+- `addon.pathtools.tangentCircle {ids?, radius?, circle?}` draws the circles that touch two paths or compound paths
+  and have `radius` (0.01 to 1,000,000 pt, needed with two), or that touch three (which set the radius themselves, so
+  `radius` is then an error), as one undo step (Object › Plug-ins › Path Precision Tools › Tangent Circle…). `ids`
+  defaults to the selection. A circle touches a shape when it meets the shape's outline without crossing it, the whole
+  outline lying outside the circle or inside it: at a smooth point it is tangent to the outline, and at a corner or an
+  open end it passes through that point. A compound path's members count as one outline. For shapes that are all
+  circles of four curved segments (as the Ellipse tool draws them) the answers come from the true circles and are then
+  moved onto the drawn Bézier outlines, which differ by up to 0.0273% of the radius; within that much of a tangency
+  threshold the true circles decide. Every circle that touches all the shapes is found (three circles have up to
+  eight); with three shapes, circles up to 64 times the diagonal of the box around the shapes' anchors and handles.
+  They are listed by radius, then top to bottom, then left to right, and `circle` (0 to 64; 0 by default) picks the
+  nth of them, or 0 draws them all. Each circle is a new ellipse with the current paint on top of the current layer,
+  or of the isolated group, and the circles are selected; inside an isolated compound path they join it. Locked and
+  hidden shapes given by `ids` are read and left as they are. It is an error, with the document unchanged, when no
+  circle touches the shapes, when more than 64 do (shapes touched along a whole curve, such as two concentric
+  circles), when `circle` is past the last one, when `ids` names an object twice, when the shapes lie at one point or
+  are too small for the radius, above 2,000 segments in all, and when the search for other shapes goes past its
+  limits. → `{ids, found}` (`found`: how many circles touch the shapes). Tangent Circle… opens a dialog
+  (`ui.menuDialog {command}`, kind `tangentCircle`) with the radius (used with two shapes selected; 36 pt to start), a
+  Circle menu (All, or one circle by number, as many as the last preview found) and Preview, which starts on.
 - `addon.pathtools.cornerSet {ids?, anchors?, items?, radius, kind?, every?, minAngle?, maxAngle?}` cuts live corners, the ones Direct Selection's
   corner widgets and the Corners dialog edit, as one undo step. `ids` (default: the selection) are the paths and
   `anchors` the anchor indices of each path's outline with no corners cut; without `anchors`, a path's direct-selected

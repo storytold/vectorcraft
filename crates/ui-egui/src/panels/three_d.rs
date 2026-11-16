@@ -10,7 +10,7 @@
 
 use egui::Ui;
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::{Effect, Node, NodeId};
+use vectorcraft_doc::{Effect, Node, NodeId, NodeKind};
 use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, THREE_D_TYPES, is_three_d};
 
 use super::{live_run, pstate, set_pstate};
@@ -49,13 +49,6 @@ fn find(n: &Node) -> Option<Target> {
         fx.iter().position(|e| is_three_d(&e.id)).map(|index| Target { item, index, effect: fx[index].id.clone(), params: fx[index].params.clone() })
     };
     in_list(&n.appearance.effects, None).or_else(|| n.appearance.items.iter().enumerate().find_map(|(k, item)| in_list(item.effects(), Some(k))))
-}
-
-/// Does object `n` have a visible 3D effect (where [`find`] looks, in a visible fill or stroke),
-/// the kind Export 3D Object exports, without copying its settings?
-fn has_three_d(n: &Node) -> bool {
-    let in_list = |fx: &[Effect]| fx.iter().any(|e| e.visible && is_three_d(&e.id));
-    in_list(&n.appearance.effects) || n.appearance.items.iter().any(|item| item.visible() && in_list(item.effects()))
 }
 
 /// The panel's object type of effect `id` (`plane`, `extrude`, `revolve` or `inflate`).
@@ -284,10 +277,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     export_button(app, ui, &ctx);
 }
 
-/// The Export 3D Object button, available while a selected object has a 3D effect. An error goes
-/// to the status bar.
+/// The Export 3D Object button, available while a selected object has a 3D effect that
+/// `assets.add3D` exports ([`can_export_3d`]). An error goes to the status bar.
 fn export_button(app: &mut VectorcraftApp, ui: &mut Ui, ctx: &egui::Context) {
-    let any = app.session.active().is_some_and(|st| st.selection.objects.iter().any(|id| st.doc.node(*id).is_some_and(has_three_d)));
+    let any = can_export_3d(app);
     ui.add_space(10.0);
     if ui.add_enabled(any, egui::Button::new(tl!("Export 3D Object"))).clicked() {
         finish(app, ctx);
@@ -297,30 +290,22 @@ fn export_button(app: &mut VectorcraftApp, ui: &mut Ui, ctx: &egui::Context) {
     }
 }
 
-/// The selected objects that have a 3D effect, in tree order, leaving out each one inside another
-/// listed one (that one's asset holds it).
-pub(crate) fn selected_3d_objects(app: &VectorcraftApp) -> Vec<u64> {
-    let Some(st) = app.session.active() else { return vec![] };
-    let found = st.selection.objects.iter().copied().filter(|id| st.doc.node(*id).is_some_and(has_three_d));
-    let mut paths: Vec<(Vec<usize>, NodeId)> = st.doc.index_paths(found).into_iter().map(|(id, path)| (path, id)).collect();
-    paths.sort_by(|a, b| a.0.cmp(&b.0));
-    let mut kept: Vec<(Vec<usize>, NodeId)> = Vec::with_capacity(paths.len());
-    for (path, id) in paths {
-        if !kept.last().is_some_and(|(outer, _)| path.starts_with(outer)) {
-            kept.push((path, id));
-        }
-    }
-    kept.into_iter().map(|(_, id)| id.0).collect()
+/// Does a selected object have a 3D effect that `assets.add3D` exports
+/// ([`vectorcraft_effects::exports_three_d`])? A path of a compound path counts as the compound
+/// path, which holds the effects.
+pub(crate) fn can_export_3d(app: &VectorcraftApp) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    let compound = |id: NodeId| st.doc.parent_of(id).filter(|p| st.doc.node(*p).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })));
+    st.selection.objects.iter().any(|id| st.doc.node(compound(*id).unwrap_or(*id)).is_some_and(vectorcraft_effects::exports_three_d))
 }
 
 /// Export 3D Object: adds the selected objects that have a 3D effect to Asset Export as 3D assets
-/// (`assets.add3D`, one undo step, none when each is an asset already), selects their assets there
-/// and shows the Asset Export panel. Objects without a 3D effect in the selection are left out.
+/// (`assets.add3D` on the selection, one undo step, none when each is an asset already), selects
+/// their assets there and shows the Asset Export panel. The command leaves out the selected
+/// objects without a 3D effect and those inside another selected 3D object.
 pub(crate) fn export_3d_object(app: &mut VectorcraftApp, ctx: &egui::Context) -> Result<(), String> {
     use super::asset_export;
-    let ids = selected_3d_objects(app);
-    // Without one, `assets.add3D` on the selection says why nothing was added.
-    asset_export::add_3d(app, ctx, (!ids.is_empty()).then_some(ids.as_slice()))?;
+    asset_export::add_3d(app, ctx, None)?;
     if !crate::panel_docking::visible(&app.ui, asset_export::ID) {
         app.run("window.panel", json!({"panel": asset_export::ID}))?;
     }

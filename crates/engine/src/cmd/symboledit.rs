@@ -495,7 +495,8 @@ pub(crate) fn sync(before: &Document, d: &mut Document) -> Result<()> {
     let (old, old_group) = match before.symbol_edit.as_ref().filter(|b| b.layer == se.layer) {
         None => return Ok(()),
         Some(b) => match art_of(before) {
-            Some(old) if same(&old) => return Ok(()),
+            // Turning on Align to Pixel Grid writes the art back too, so the layer shows it snapped.
+            Some(old) if same(&old) && (before.symbol_pixel_aligned(&se.symbol) || !d.symbol_pixel_aligned(&se.symbol)) => return Ok(()),
             old => (old.unwrap_or_default(), b.group),
         },
     };
