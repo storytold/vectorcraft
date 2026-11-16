@@ -1063,6 +1063,110 @@ fn renaming_a_missing_name_onto_a_taken_one_reports_the_missing_name() {
     assert!(e.contains("no dataset named `Nope`"), "{e}");
 }
 
+/// Variable Options changes a variable's kind: the objects that can't hold the new kind are
+/// unbound, the ones that can (locked ones too) stay bound, every value of the old kind goes, and
+/// the change is one undo step.
+#[test]
+fn variable_options_changes_the_kind_and_unbinds_what_cant_hold_it() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    let r = rect(&mut s);
+    let other = text(&mut s, "Held");
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Show", "ids": [t.0, r.0, other.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Title", "ids": [other.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Show": false, "Title": "Bob"}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "B", "values": {"Show": true}})).unwrap();
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+
+    let v = s.execute("variable.rename", &json!({"name": "Show", "kind": "text"})).unwrap();
+    // The rectangle isn't type, and the other type object already has the text variable Title.
+    assert_eq!(v["unbound"], json!([r.0, other.0]));
+    assert_eq!((v["name"].clone(), v["kind"].clone(), v["droppedValues"].clone()), (json!("Show"), json!("text"), json!(2)));
+    assert_eq!(steps(&s), before + 1, "one undo step");
+    let vars = &s.doc().unwrap().doc.variables;
+    assert_eq!(vars.objects_of("Show"), [t], "the locked type object stays bound");
+    assert_eq!(vars.objects_of("Title"), [other], "the other variable keeps its binding");
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!((sets["datasets"][0]["values"].clone(), sets["datasets"][1]["values"].clone()), (json!({"Title": {"text": "Bob"}}), json!({})));
+
+    s.execute("edit.undo", &json!({})).unwrap();
+    let vars = &s.doc().unwrap().doc.variables;
+    assert_eq!(vars.variable("Show").map(|v| v.kind), Some(vectorcraft_doc::VariableKind::Visibility));
+    assert_eq!(vars.objects_of("Show"), [t, r, other]);
+    assert_eq!(vars.dataset("A").and_then(|d| d.values.get("Show")), Some(&vectorcraft_doc::DataValue::Visible(false)));
+
+    // A new name and a new kind together are one undo step, and every visibility binding stays.
+    s.execute("variable.rename", &json!({"name": "Title", "newName": "Heading", "kind": "visibility"})).unwrap();
+    assert_eq!(steps(&s), before + 1, "one step after the undo");
+    let vars = &s.doc().unwrap().doc.variables;
+    assert_eq!(
+        (vars.variable("Heading").map(|v| v.kind), vars.objects_of("Heading")),
+        (Some(vectorcraft_doc::VariableKind::Visibility), vec![other])
+    );
+    // An image variable keeps only image objects.
+    let v = s.execute("variable.rename", &json!({"name": "Show", "kind": "image"})).unwrap();
+    assert_eq!(v["unbound"], json!([t.0, r.0, other.0]));
+}
+
+/// Variable Options with the variable's own name and kind changes nothing and adds no undo step;
+/// a bad kind, a taken name, no change asked for and locked variables are refused.
+#[test]
+fn variable_options_refuses_bad_params_and_skips_a_change_that_changes_nothing() {
+    let mut s = session();
+    let r = rect(&mut s);
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Other", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Show", "ids": [r.0]})).unwrap();
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+    for p in [
+        json!({"name": "Show", "newName": "Show"}),
+        json!({"name": "Show", "kind": "visibility"}),
+        json!({"name": "Show", "newName": "Show", "kind": "visible"}),
+    ] {
+        let v = s.execute("variable.rename", &p).unwrap();
+        assert_eq!((v["unbound"].clone(), v["droppedValues"].clone()), (json!([]), json!(0)), "{p}");
+        assert_eq!(steps(&s), before, "{p}: no undo step");
+    }
+    for (p, want) in [
+        (json!({"name": "Show", "kind": "unknown"}), "`kind` must be"),
+        (json!({"name": "Show", "kind": "number"}), "`kind` must be"),
+        (json!({"name": "Show", "kind": 1}), "`kind` must be"),
+        (json!({"name": "Show", "newName": "New", "kind": null}), "`kind` must be"),
+        (json!({"name": "Show", "newName": null, "kind": "text"}), "missing `newName`"),
+        (json!({"name": "Show", "newName": " ", "kind": "text"}), "missing `newName`"),
+        (json!({"name": "Show"}), "missing `newName` or `kind`"),
+        (json!({"name": "Show", "newName": "Other", "kind": "text"}), "already exists"),
+        (json!({"name": "Ghost", "kind": "text"}), "no variable named `Ghost`"),
+    ] {
+        let e = s.execute("variable.rename", &p).unwrap_err().to_string();
+        assert!(e.contains(want), "{p}: {e}");
+    }
+    // A rename alone carries a value that doesn't fit the kind, as a file may hold one.
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc)
+        .variables
+        .datasets
+        .push(vectorcraft_doc::DataSet { name: "Odd".into(), values: [("Show".to_string(), vectorcraft_doc::DataValue::Text("x".into()))].into() });
+    s.execute("variable.rename", &json!({"name": "Show", "newName": "Shown"})).unwrap();
+    let odd = s.doc().unwrap().doc.variables.dataset("Odd").and_then(|d| d.values.get("Shown")).cloned();
+    assert_eq!(odd, Some(vectorcraft_doc::DataValue::Text("x".into())));
+    s.execute("edit.undo", &json!({})).unwrap();
+    // A kind change drops it, though it fits the new kind: nobody gave it for that kind.
+    let v = s.execute("variable.rename", &json!({"name": "Show", "kind": "text"})).unwrap();
+    assert_eq!(v["droppedValues"], 1);
+    assert!(s.doc().unwrap().doc.variables.dataset("Odd").is_some_and(|d| d.values.is_empty()));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("variable.lock", &json!({"locked": true})).unwrap();
+    assert!(s.execute("variable.rename", &json!({"name": "Show", "kind": "text"})).is_err(), "refused while the variables are locked");
+    let vars = &s.doc().unwrap().doc.variables;
+    assert_eq!((vars.variable("Show").map(|v| v.kind), vars.objects_of("Show")), (Some(vectorcraft_doc::VariableKind::Visibility), vec![r]));
+}
+
 /// `dataset.set` is how a value changes after the row exists: replacing it must not need the
 /// dataset to be deleted and rebuilt (which loses its place in the list and the active one).
 #[test]
@@ -2316,6 +2420,69 @@ fn a_variable_library_defines_text_variables_and_data_sets() {
     assert_eq!(s.doc().unwrap().doc.variables.datasets.len(), 2);
 }
 
+/// The Variables panel's Import… reads a data source by its extension, in any case: a .csv, .tsv
+/// or .txt file as Import Data Sets… reads it, and an .xml file as Load Variable Library… reads it.
+/// Any other extension, or none, is refused before the file is read.
+#[test]
+fn variable_import_reads_a_data_source_by_its_extension() {
+    let dir = Folder::new("vars-import");
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+
+    for name in ["rows.csv", "rows.TSV", "rows.txt"] {
+        let path = dir.file(name);
+        write(&path, b"Name\nAnn\nBob\n");
+        let r = s.execute("variable.import", &json!({"path": path})).unwrap();
+        assert_eq!((r["format"].clone(), r["names"].clone()), (json!("csv"), json!(["Data Set 1", "Data Set 2"])), "{name}");
+    }
+    s.execute("dataset.select", &json!({"name": "Data Set 2"})).unwrap();
+    assert_eq!(plain(&s, t), "Bob");
+
+    let xml = r#"<variableSets><variableSet><variables><variable varName="Name" trait="textcontent"/></variables><sampleDataSets><sampleDataSet dataSetName="Row 1"><Name><p>Charlie</p></Name></sampleDataSet></sampleDataSets></variableSet></variableSets>"#;
+    let path = dir.file("library.Xml");
+    write(&path, xml.as_bytes());
+    let r = s.execute("variable.import", &json!({"path": path})).unwrap();
+    assert_eq!((r["format"].clone(), r["names"].clone(), r["deleted"].clone()), (json!("xml"), json!(["Row 1"]), json!([])));
+    // The library declares the bound text variable, so its binding stays.
+    s.execute("dataset.select", &json!({"name": "Row 1"})).unwrap();
+    assert_eq!(plain(&s, t), "Charlie");
+
+    // The extension picks the reader: CSV text in an .xml file goes to the library reader, which
+    // refuses it, and a library in a .csv file goes to the CSV reader.
+    let csv_in_xml = dir.file("rows.xml");
+    write(&csv_in_xml, b"Name\nAnn\n");
+    let e = s.execute("variable.import", &json!({"path": csv_in_xml})).unwrap_err().to_string();
+    assert!(e.contains("variable.loadLibrary"), "{e}");
+    let xml_in_csv = dir.file("library.csv");
+    write(&xml_in_csv, xml.as_bytes());
+    let e = s.execute("variable.import", &json!({"path": xml_in_csv})).unwrap_err().to_string();
+    assert!(e.contains("dataset.import"), "{e}");
+
+    // Other extensions, or none, are refused before the file is read, so a missing file gives the
+    // same error; the data sets stay as they were.
+    let refused = "Import reads a data source file ending in .csv, .tsv, .txt or .xml";
+    for (name, exists) in [("rows.json", true), ("rows", true), ("rows.csv.bak", true), ("missing.ai", false)] {
+        let path = dir.file(name);
+        if exists {
+            write(&path, b"Name\nAnn\n");
+        }
+        let e = s.execute("variable.import", &json!({"path": path})).unwrap_err().to_string();
+        assert!(e.contains(refused), "{name}: {e}");
+    }
+    let names: Vec<String> = s.doc().unwrap().doc.variables.datasets.iter().map(|d| d.name.clone()).collect();
+    assert_eq!(names, ["Row 1"]);
+
+    // `path` is required, and the command takes no other parameter.
+    for bad in [json!({}), json!({"path": 3})] {
+        let e = s.execute("variable.import", &bad).unwrap_err().to_string();
+        assert!(e.contains("missing `path`"), "{bad}: {e}");
+    }
+    let e = s.execute("variable.import", &json!({"path": dir.file("rows.csv"), "csv": "Name\nX\n"})).unwrap_err().to_string();
+    assert!(e.contains("unknown parameter `csv`"), "{e}");
+}
+
 /// Load Variable Library replaces the document's variables and data sets: every variable goes with
 /// its bindings and values, a variable of another kind with a library variable's name included,
 /// and every data set goes, the active one included. A text variable the library also declares
@@ -2561,6 +2728,11 @@ fn malformed_variable_libraries_are_refused() {
     let long_graph = format!("<Shown><data><values>{}</values></data></Shown>", row.repeat(2_000));
     let cases = [
         ("not well-formed XML", "<variableSets><variableSet>".to_string()),
+        ("not well-formed XML", ok.replace("<p>x</p>", "<p>A&missing;B</p>")),
+        ("not well-formed XML", ok.replace("</variableSets>", "")),
+        ("not well-formed XML", ok.replace("varName=\"Name\"", "varName=\"Name\" varName=\"Other\"")),
+        ("not well-formed XML", ok.replace("<variable ", "<variable xmlns:a=\"urn:test\" xmlns:b=\"urn:test\" a:id=\"1\" b:id=\"2\" ")),
+        ("missing `varName`", ok.replace("varName=\"Name\"", "xmlns:m=\"urn:metadata\" m:varName=\"Name\"")),
         ("no `variableSets` element", "<svg><variables/></svg>".to_string()),
         ("declares no variables", "<variableSets><variableSet><variables/></variableSet></variableSets>".to_string()),
         ("is declared twice", library(&[("Name", "textcontent"), ("Name", "textcontent")], &[])),
@@ -3381,4 +3553,105 @@ fn an_svg_without_readable_variable_data_opens_its_art() {
     let d = &o.doc().unwrap().doc;
     assert!(d.variables.variables.is_empty());
     assert_eq!(vectorcraft_testkit::svg_shapes(&vectorcraft_svg::export(d, &Default::default())), 1, "the art opens");
+}
+
+/// Five variables of three kinds, defined out of every order: `beta` (text, on type named Mike),
+/// `Alpha` (visibility, on a rectangle named apple), `gamma` (image, bound to nothing), `Delta`
+/// (visibility, on two rectangles) and `Echo` (text, on type named Bravo).
+fn sortable_variables() -> Session {
+    let mut s = session();
+    let mike = text(&mut s, "m");
+    let bravo = text(&mut s, "b");
+    let apple = rect(&mut s);
+    let (r1, r2) = (rect(&mut s), rect(&mut s));
+    for (id, name) in [(mike, "Mike"), (bravo, "Bravo"), (apple, "apple")] {
+        s.execute("layer.setProps", &json!({"id": id.0, "name": name})).unwrap();
+    }
+    for (name, kind, ids) in [
+        ("beta", "text", vec![mike]),
+        ("Alpha", "visibility", vec![apple]),
+        ("gamma", "image", vec![]),
+        ("Delta", "visibility", vec![r1, r2]),
+        ("Echo", "text", vec![bravo]),
+    ] {
+        s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
+        if !ids.is_empty() {
+            s.execute("variable.bind", &json!({"variable": name, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+        }
+    }
+    s
+}
+
+fn listed_names(s: &mut Session) -> Vec<String> {
+    let list = s.execute("variable.list", &json!({})).unwrap();
+    list["variables"].as_array().unwrap().iter().map(|v| v["name"].as_str().unwrap().to_string()).collect()
+}
+
+/// `variable.sort` orders the Variables panel's list, which `variable.list` follows, by each
+/// column: names without regard to case; by object, unbound first and several objects last; by
+/// type, text, image, graph, visibility. `descending` reverses each order, and `none` goes back
+/// to the order the variables were defined in.
+#[test]
+fn variable_sort_orders_the_list_by_each_column() {
+    let mut s = sortable_variables();
+    let defined = ["beta", "Alpha", "gamma", "Delta", "Echo"];
+    assert_eq!(listed_names(&mut s), defined);
+    assert_eq!(s.execute("variable.list", &json!({})).unwrap()["sort"], json!({"by": "none", "descending": false}));
+    for (by, order) in [
+        ("name", ["Alpha", "beta", "Delta", "Echo", "gamma"]),
+        ("object", ["gamma", "Alpha", "Echo", "beta", "Delta"]),
+        ("type", ["beta", "Echo", "gamma", "Alpha", "Delta"]),
+        ("none", defined),
+    ] {
+        let r = s.execute("variable.sort", &json!({"by": by})).unwrap();
+        assert_eq!(r, json!({"by": by, "descending": false}));
+        assert_eq!(listed_names(&mut s), order, "{by}");
+        s.execute("variable.sort", &json!({"by": by, "descending": true})).unwrap();
+        let reversed: Vec<&str> = order.iter().rev().copied().collect();
+        assert_eq!(listed_names(&mut s), reversed, "{by}, descending");
+        assert_eq!(s.execute("variable.list", &json!({})).unwrap()["sort"], json!({"by": by, "descending": true}));
+    }
+}
+
+#[test]
+fn variable_library_attributes_keep_their_namespace() {
+    let mut s = session();
+    let xml = library(&[("Name", "textcontent")], &[("A", &[("Name", &["x"])])])
+        .replace("varName=\"Name\"", "xmlns:m=\"urn:metadata\" m:varName=\"Other\" varName=\"Name\"");
+    let loaded = s.execute("variable.loadLibrary", &json!({"xml": xml})).unwrap();
+    assert_eq!(loaded["variables"], json!(["Name"]));
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"][0]["values"], json!({"Name": {"text": "x"}}));
+}
+
+/// The sort is panel state: it is not an undo step and does not count as a change to save, and
+/// setting the order the list already has does not redraw anything. A bad `by` or `descending`
+/// is an error that leaves the order as it was.
+#[test]
+fn variable_sort_refuses_bad_params_and_is_not_an_undo_step() {
+    let mut s = sortable_variables();
+    let steps = s.doc().unwrap().history.undo.len();
+    let dirty = s.doc().unwrap().is_dirty();
+    s.execute("variable.sort", &json!({"by": "name", "descending": true})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "no undo step");
+    assert_eq!(s.doc().unwrap().is_dirty(), dirty);
+    let revision = s.doc().unwrap().revision;
+    s.execute("variable.sort", &json!({"by": "name", "descending": true})).unwrap();
+    assert_eq!(s.doc().unwrap().revision, revision, "the same order changes nothing");
+
+    for (p, error) in [
+        (json!({}), "missing `by`"),
+        (json!({"by": null}), "`by` must be one of name, object, type, none"),
+        (json!({"by": "name", "descending": null}), "`descending` must be true or false"),
+        (json!({"by": "size"}), "`by` must be one of name, object, type, none"),
+        (json!({"by": "Name"}), "`by` must be one of name, object, type, none"),
+        (json!({"by": 1}), "`by` must be one of name, object, type, none"),
+        (json!({"by": "type", "descending": "yes"}), "`descending` must be true or false"),
+    ] {
+        let e = s.execute("variable.sort", &p).unwrap_err().to_string();
+        assert!(e.contains(error), "{p}: {e}");
+    }
+    let sort = s.doc().unwrap().variables_sort;
+    assert_eq!((sort.by, sort.descending), (crate::cmd::VariableSortKey::Name, true), "errors leave the order alone");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
 }
