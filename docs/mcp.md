@@ -9561,13 +9561,23 @@ a spelling dictionary marks nothing. English words come from the first dictionar
 dictionary in the user's dictionaries folder, the SCOWL dictionary for that English built in from craft-i18n, a
 system Hunspell dictionary, and last the public-domain Moby word list built into craft-proof. Words in capitals, words with digits and web addresses are taken as correct. The result is
 `{words: [{id, start, end, word, lang}], more}`: `start` and `end` are byte offsets in the type object's text, the
-ones `text.editRange` takes, so `text.editRange {id, start, end, insert}` changes a word as one undo step. At most
-10,000 words are listed; `more` is `true` when there were more. `text.spelling.suggest {word, max?, lang?}` gives
-the words the dictionary of `lang` (default English) suggests instead of `word`, best first, at most `max` (1 to 20,
-default 5). Both only read the document.
+ones `text.editRange` takes, so `text.editRange {id, start, end, insert}` changes a word as one undo step, and
+`text.spelling.change {to, words: [{id, start, end}…]}` changes every listed word to `to` as one undo step (Check
+Spelling's Change All; an error, with nothing changed, when a word's bytes are not in its object's text or two words
+overlap). A listed word that already reads as `to` is left alone; when every one does, the command makes no edit and
+no undo step, and `changed` is 0. At most
+`max` words are listed (1 to 10,000, default 10,000); `more` is `true` when there were more. To get the rest, check
+again with `from: {id, byte}` set to the last word's `id` and `end`: that check lists the words of that type object
+that start at `byte` or later, then those of the objects after it, so a type object with more unknown words than one
+check lists is read to its end. `from.id` must be one of the objects checked. The paragraphs before the one that
+holds `from.byte` are not checked again; that paragraph is checked whole. `text.spelling.suggest {word, max?, lang?}`
+gives the words the dictionary of `lang` (default English) suggests instead of `word`, best first, at most `max` (1 to
+20, default 5). `text.spelling.check` and `text.spelling.suggest` only read the document.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.spelling.check","params":{}}}
+{"name":"run_command","arguments":{"command":"text.spelling.check","params":{"from":{"id":12,"byte":340},"max":100}}}
+{"name":"run_command","arguments":{"command":"text.spelling.change","params":{"to":"drawing","words":[{"id":12,"start":4,"end":10}]}}}
 {"name":"run_command","arguments":{"command":"text.spelling.suggest","params":{"word":"drawng","lang":"en"}}}
 ```
 
