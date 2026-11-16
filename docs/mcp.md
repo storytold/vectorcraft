@@ -7978,7 +7978,8 @@ Besides SVG, Copy offers other apps PNG and PDF of the copied objects, and their
 preferences: `text/plain` (the text of a type-only copy, else the SVG markup with `copyAsSvg` when the images it
 embeds total at most 1 MiB, so a paste never reads a photo back as text, #2213), `image/svg+xml`
 (`copyAsSvg`), `application/pdf` (`copyAsPdf`) and `image/png` (always; PDF and PNG need objects with an
-area). Each one has a query command:
+area). For a caller with read roots, the list leaves out `image/svg+xml`, and the SVG markup as `text/plain`, when
+`clipboard.exportSvg` would refuse the SVG. Each one has a query command:
 `clipboard.exportSvg`, `clipboard.exportText` (null unless every copied object is type), `clipboard.exportPdf`
 (a one-page PDF, the page the objects' visual bounds) and `clipboard.exportPng {scale?}` (cropped to the objects,
 transparent around them). As in `document.export`, the PDF's and the PNG's replies list their notes in `warnings`
