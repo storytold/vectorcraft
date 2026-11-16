@@ -3459,7 +3459,7 @@ already walks Image Trace. Short agent entry points:
   `[x, y, pressure, tiltX, tiltY, rotation]` or `{x, y, pressure?, tiltX?, tiltY?, rotation?}`, with `null` for what a
   point lacks, and a `pointer_gesture` event takes `tiltX`, `tiltY` and `rotation`, which the Paintbrush records.
   `tiltX` and `tiltY` are degrees −90..90 in document axes, positive leaning right and leaning down the page (one
-  without the other is 0); `rotation` is the barrel's rotation in degrees clockwise. The stroke keeps how far the pen
+  without the other is 0); `rotation` is the barrel's rotation in degrees clockwise, 0..360. The stroke keeps how far the pen
   leaned (`tilt`, 0 upright to 1 lying flat), which way (`bearing`, degrees counter-clockwise from leaning right; a
   pen within 1° of upright takes the bearing before it, or at the start of the stroke its first one) and how far the
   barrel turned (`rotation`, degrees counter-clockwise). A point without a tilt that other points have counts as
@@ -5799,11 +5799,24 @@ moves that point alone as the focal point, with or without Shift (Shift keeps th
 focal points stay highlighted where it left them; Escape during a drag puts the path back and keeps them, and
 switching to another tool clears them.
 
+`path.freehand`, `brush.freehand`, `path.knife`, `path.eraseRegion`, `path.eraseSegments`, `path.smoothRegion`,
+`path.joinScrub` and `path.blob` refuse a pen `pressure` outside 0 to 1, a `tiltX` or `tiltY` outside -90 to 90 and a
+`rotation` outside 0 to 360 with an error such as `` `tiltX` must be from -90 to 90 ``, naming the key, and a point
+given as an array of more than six numbers with `` `points[3]` must be an array of at most 6 entries ``, naming the
+point. `path.blob` and `path.eraseRegion` refuse a `size` outside 0.1 to 1000 pt with
+`` `size` must be from 0.1 to 1000 `` and a `sizeVariation` over 1000 pt with
+`` `sizeVariation` must be from 0 to 1000 ``, in every `sizeMode` and when it is left out. `path.blob` refuses a
+negative `sizeVariation` with the same message, and `path.eraseRegion` with "sizeVariation must be 0 or more". The
+document and the selection do not change and no undo step is recorded. A null is read as a key left out, and a point given as `[x, y]`
+has no pen values. The pressure and tilt ranges are those of
+[Pointer Events](https://www.w3.org/TR/pointerevents3/); the rotation, size and size variation ranges are
+VectorCraft's own values.
+
 `path.eraseRegion` (the Eraser) takes a variation mode for each of its tip's values, as the variation menus of
 Eraser Tool Options set them ([Erase paths using the Eraser
 tool](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/erase-paths-using-eraser-tool.html)):
 `angleMode` with `angleVariation` (degrees, 0 to 180), `roundnessMode` with `roundnessVariation` (percent, 0 to 100)
-and `sizeMode` with `sizeVariation` (points, 0 or more), each `"fixed"` (the default), `"random"`, `"pressure"`,
+and `sizeMode` with `sizeVariation` (points, 0 to 1000), each `"fixed"` (the default), `"random"`, `"pressure"`,
 `"tilt"`, `"bearing"` or `"rotation"`. A value that varies takes up to its variation either way. Random draws one
 value for the drag. Pressure goes from the value less the variation where the pen presses lightest to the value plus
 it where the pen presses hardest. Tilt goes from less with the pen lying flat to more with it upright. Bearing and
