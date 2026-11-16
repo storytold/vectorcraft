@@ -7142,6 +7142,7 @@ dependencies = [
  "subsetter",
  "unicode-bidi",
  "unicode-general-category",
+ "unicode-normalization",
  "unicode-script",
  "unicode-segmentation",
  "vectorcraft-doc",

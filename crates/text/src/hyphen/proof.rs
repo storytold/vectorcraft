@@ -5,6 +5,7 @@
 //! word outside its language's script, or one these rules don't cover, stays whole.
 
 use craft_proof::hyphen::{Patterns, ProofLang, Source, word_breaks_in};
+use unicode_normalization::UnicodeNormalization;
 use unicode_script::{Script, UnicodeScript};
 
 pub(super) const TAGS: [&str; 7] = ["de", "pl", "pt", "it", "bg", "tr", "ru"];
@@ -50,14 +51,17 @@ fn cyrillic(c: char) -> bool {
 }
 
 /// Whether `word` is written in the language's script, and the sources of points that come from
-/// the language's own rules or patterns.
+/// the language's own rules or patterns. A Cyrillic word is checked composed, as craft-proof
+/// hyphenates it: `и` + U+0306 is `й`, while a stress mark, which composes with nothing, is not a
+/// letter.
 fn fits(lang: ProofLang, word: &str) -> Option<&'static [Source]> {
     let all = |f: fn(char) -> bool| word.chars().all(f);
+    let composed_cyrillic = || word.nfc().all(cyrillic);
     match lang {
         ProofLang::De | ProofLang::Pl | ProofLang::Pt | ProofLang::It => all(latin).then_some(&[Source::Patterns, Source::Dictionary]),
         ProofLang::Tr => word.chars().all(|c| latin(c) || matches!(c, '\'' | '’')).then_some(&[Source::Rules]),
-        ProofLang::Bg => all(cyrillic).then_some(&[Source::Rules]),
-        ProofLang::Ru => all(cyrillic).then_some(&[Source::Heuristic]),
+        ProofLang::Bg => composed_cyrillic().then_some(&[Source::Rules]),
+        ProofLang::Ru => composed_cyrillic().then_some(&[Source::Heuristic]),
         _ => None,
     }
 }

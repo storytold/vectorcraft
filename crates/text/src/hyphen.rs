@@ -256,8 +256,9 @@ pub(crate) fn points_for(word: &str, opts: &HyphenationOptions, language: Langua
     if n <= longer_than || !c.iter().all(|&ch| is_word_char(ch)) {
         return vec![];
     }
-    // A capitalised run like "NASA" or a proper name stays whole only when all caps.
-    if c.iter().all(|c| c.is_uppercase()) {
+    // A capitalised run like "NASA" or a proper name stays whole only when all caps. Combining
+    // marks have no case, so a decomposed capital ("O" + U+0308) counts by its letter.
+    if c.iter().filter(|&&ch| !unicode_normalization::char::is_combining_mark(ch)).all(|c| c.is_uppercase()) {
         return vec![];
     }
     if !opts.capitalized && c.first().is_some_and(|c| c.is_uppercase()) {
@@ -391,6 +392,22 @@ mod tests {
             assert!(hyphen_points_for_language("typography", &open(), Some(tag)).is_empty(), "{tag}");
             assert!(hyphen_points_for_language("родина", &open(), Some(tag)).is_empty(), "{tag}");
         }
+    }
+
+    /// A decomposed word breaks as its composed spelling does, at the matching characters, and a
+    /// decomposed all-capitals word stays whole as the composed one does.
+    #[test]
+    fn decomposed_words_break_as_composed_ones() {
+        for tag in ["ru", "bg"] {
+            let composed = hyphen_points_for_language("чайник", &open(), Some(tag));
+            assert!(!composed.is_empty(), "{tag}");
+            // `и` + U+0306 is `й`: points after it move one character on.
+            let shifted: Vec<usize> = composed.iter().map(|&p| if p >= 3 { p + 1 } else { p }).collect();
+            assert_eq!(hyphen_points_for_language("чаи\u{306}ник", &open(), Some(tag)), shifted, "{tag}");
+        }
+        assert!(hyphen_points_for_language("ÖĞRENCİ", &open(), Some("tr")).is_empty());
+        assert!(hyphen_points_for_language("O\u{308}ĞRENCİ", &open(), Some("tr")).is_empty(), "decomposed capitals");
+        assert_eq!(hyphen_points_for_language("o\u{308}ğrenci", &open(), Some("tr")), vec![3, 6]);
     }
 
     /// The paragraph's limits and the Preferences exceptions apply to the new languages as they
