@@ -1481,6 +1481,52 @@ fn remapped_source_sans(family: &str, postscript: &str, mapping: &[(char, char)]
     Some(builder.build())
 }
 
+/// The family of [`large_cmap_font`].
+pub const LARGE_CMAP_FAMILY: &str = "Largecmap Sans";
+
+/// The family of [`cmapless_font`].
+pub const CMAPLESS_FAMILY: &str = "Cmapless Sans";
+
+/// The bundled Source Sans 3 Regular with a `cmap` of `count` characters from U+20000 up, about as
+/// many as a large CJK font maps when `count` is 50,000. Each character maps to the font's next
+/// glyph in turn after `.notdef`, so most glyphs have several characters.
+pub fn large_cmap_font(count: u32) -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let glyphs = u32::from(font.maxp().ok()?.num_glyphs()).checked_sub(1).filter(|n| *n > 0)?;
+    let mappings = (0..count).map(|i| Some((char::from_u32(0x2_0000_u32.checked_add(i)?)?, write_fonts::types::GlyphId::new(1 + i % glyphs))));
+    let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
+    source_sans_with_cmap(LARGE_CMAP_FAMILY, "LargecmapSans-Regular", Some(&cmap))
+}
+
+/// The bundled Source Sans 3 Regular without a `cmap` table: it maps no character.
+pub fn cmapless_font() -> Option<Vec<u8>> {
+    source_sans_with_cmap(CMAPLESS_FAMILY, "CmaplessSans-Regular", None)
+}
+
+/// The bundled Source Sans 3 Regular named `family`, with `cmap` in place of its own (none when
+/// `cmap` is `None`), and its other tables kept.
+fn source_sans_with_cmap(family: &str, postscript: &str, cmap: Option<&write_fonts::tables::cmap::Cmap>) -> Option<Vec<u8>> {
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let full = format!("{family} Regular");
+    let name = name_table(&[(1, family), (2, "Regular"), (4, full.as_str()), (6, postscript)])?;
+    let mut builder = FontBuilder::new();
+    if let Some(cmap) = cmap {
+        builder.add_table(cmap).ok()?;
+    }
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if tag != Tag::new(b"cmap") && !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`tall_ideograph_font`].
 pub const TALL_IDEOGRAPH_FAMILY: &str = "Tall Ideograph Sans";
 
