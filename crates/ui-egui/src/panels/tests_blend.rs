@@ -351,9 +351,17 @@ fn blend_panel_bidirectionally_syncs_with_on_canvas_widgets() {
 
     let mut f = Frames::new();
     f.text(&mut app, "Ease Out");
+    f.text(&mut app, "75.0");
+    f.text(&mut app, "35");
+
+    // Verify refreshing when on-canvas widgets / engine update values after initial render
+    app.run("object.blend.setEasing", json!({"id": id.0, "easingType": "easeIn", "ramp": 40.0, "colorShift": -20.0})).unwrap();
+    f.text(&mut app, "Ease In");
+    f.text(&mut app, "40.0");
+    f.text(&mut app, "-20");
 
     // 2. The panel updates parameters -> active blend object and on-canvas widgets reflect them
-    f.click_text(&mut app, "Ease Out");
+    f.click_text(&mut app, "Ease In");
     f.click_text(&mut app, "Linear");
     assert_eq!(spec(&app, id).ease.kind, vectorcraft_doc::BlendEaseType::Linear);
 
@@ -362,7 +370,55 @@ fn blend_panel_bidirectionally_syncs_with_on_canvas_widgets() {
     let widgets = vectorcraft_tools::blendwidget::BlendWidget::of(doc, sel, 1.0, vectorcraft_geom::Vec2::new(0.0, -1.0));
     assert_eq!(widgets.len(), 2);
     assert_eq!(widgets[0].control, vectorcraft_tools::blendwidget::BlendControl::Appearance);
-    assert_eq!(widgets[0].value, 35.0); // Appearance (colorShift)
+    assert_eq!(widgets[0].value, -20.0); // Appearance (colorShift)
     assert_eq!(widgets[1].control, vectorcraft_tools::blendwidget::BlendControl::Easing);
-    assert_eq!(widgets[1].value, 75.0); // Easing (ramp)
+    assert_eq!(widgets[1].value, 40.0); // Easing (ramp)
+}
+
+#[test]
+fn blend_panel_staged_values_persist_across_selection_and_reconcile_external_edits() {
+    let mut app = app();
+    let id_a = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
+
+    // Create a second blend object
+    let r1 = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let r2 = app.run("shape.rectangle", json!({"x": 150, "y": 50, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [r1, r2]})).unwrap();
+    let id_b = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
+
+    // Select Blend A
+    app.run("select.set", json!({"ids": [id_a.0]})).unwrap();
+
+    let mut f = Frames::new();
+    // Turn preview OFF
+    f.click_text(&mut app, "Preview");
+    assert!(!app.ui.blend_preview);
+
+    // Stage Easing on Blend A to "Ease Out In"
+    f.click_text(&mut app, "Ease In");
+    f.click_text(&mut app, "Ease Out In");
+    assert_eq!(spec(&app, id_a).ease.kind, vectorcraft_doc::BlendEaseType::In, "still unchanged because preview is off");
+
+    // Select Blend B: Blend A's staged value must remain in memory
+    app.run("select.set", json!({"ids": [id_b.0]})).unwrap();
+    f.run(&mut app, vec![]);
+
+    // Deselect all
+    app.run("select.none", json!({})).unwrap();
+    f.run(&mut app, vec![]);
+
+    // Reselect Blend A
+    app.run("select.set", json!({"ids": [id_a.0]})).unwrap();
+    f.text(&mut app, "Ease Out In"); // Displays the staged value!
+
+    // External edit on canvas changes ramp:
+    app.run("object.blend.setEasing", json!({"id": id_a.0, "ramp": 60.0})).unwrap();
+    f.run(&mut app, vec![]);
+    f.text(&mut app, "60.0");
+
+    // Turn Preview back on: flushes staged Easing ("Ease Out In") while keeping external ramp (60%)
+    f.click_text(&mut app, "Preview");
+    assert!(app.ui.blend_preview);
+    assert_eq!(spec(&app, id_a).ease.kind, vectorcraft_doc::BlendEaseType::OutIn);
+    assert_eq!(spec(&app, id_a).ease.ramp, 0.6);
 }
