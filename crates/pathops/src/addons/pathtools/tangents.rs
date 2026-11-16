@@ -156,6 +156,16 @@ impl Outline {
         if segments.iter().any(|s| bends_against(s, sign)) {
             return Err(OutlineError::NotConvex);
         }
+        // A corner can also turn inward between two of the points: each join is checked by the
+        // directions the segments leave and reach it in. Segments of no length are passed over.
+        let nonzero = |vs: [Vec2; 3]| vs.into_iter().find(|v| v.hypot() > 1e-9 * size).map(|v| v / v.hypot());
+        let ends: Vec<(Vec2, Vec2)> = segments
+            .iter()
+            .filter_map(|s| nonzero([s.p1 - s.p0, s.p2 - s.p0, s.p3 - s.p0]).zip(nonzero([s.p3 - s.p2, s.p3 - s.p1, s.p3 - s.p0])))
+            .collect();
+        if ends.iter().enumerate().any(|(i, (_, end))| ends[(i + 1) % ends.len()].0.cross(*end) * sign > 1e-9) {
+            return Err(OutlineError::NotConvex);
+        }
         let center = (Vec2::new(cx / (3.0 * area2), cy / (3.0 * area2)) * size + origin).to_point();
         if !center.x.is_finite() || !center.y.is_finite() {
             return Err(OutlineError::Empty);
@@ -982,6 +992,15 @@ mod tests {
         bp.close_path();
         let bend = vectorcraft_geom::PathData::from_bezpath(&bp).subpaths[0].clone();
         assert_eq!(Outline::convex(&bend).err(), Some(OutlineError::NotConvex));
+        // A triangle whose first side is a cubic that leaves its start a little the wrong way: the
+        // corner there turns inward, though the checked points and the curve itself turn one way.
+        let mut bp = vectorcraft_geom::BezPath::new();
+        bp.move_to((0.0, 0.0));
+        bp.curve_to((-1.0, -1.0), (66.0, -2.0), (100.0, 0.0));
+        bp.line_to((50.0, 100.0));
+        bp.close_path();
+        let notch = vectorcraft_geom::PathData::from_bezpath(&bp).subpaths[0].clone();
+        assert_eq!(Outline::convex(&notch).err(), Some(OutlineError::NotConvex));
         // A square traced twice around winds around twice.
         let twice: Vec<Point> = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)].repeat(2).into_iter().map(Point::from).collect();
         assert_eq!(Outline::convex(&SubPath::polyline(&twice, true)).err(), Some(OutlineError::NotConvex));
