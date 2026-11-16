@@ -8,8 +8,6 @@
 //! a blend or two or more objects are selected, and the other buttons are dimmed until a blend is
 //! selected. Easing and Reverse Spine are dimmed for a blend made without a spine.
 
-use std::collections::HashMap;
-
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
@@ -68,68 +66,6 @@ fn spacing_params(mode: &str, steps: f64, distance: f64) -> Value {
     }
 }
 
-#[derive(Clone, Default)]
-struct BlendEaseDraft {
-    easing_type: Option<String>,
-    ramp: Option<f64>,
-    color_shift: Option<f64>,
-    staged_active_easing_type: Option<String>,
-    staged_active_ramp: Option<f64>,
-    staged_active_color_shift: Option<f64>,
-    rejected: bool,
-}
-
-impl BlendEaseDraft {
-    fn is_empty(&self) -> bool {
-        self.easing_type.is_none() && self.ramp.is_none() && self.color_shift.is_none()
-    }
-
-    fn clear(&mut self) {
-        self.easing_type = None;
-        self.ramp = None;
-        self.color_shift = None;
-        self.staged_active_easing_type = None;
-        self.staged_active_ramp = None;
-        self.staged_active_color_shift = None;
-        self.rejected = false;
-    }
-}
-
-#[derive(Clone, Default)]
-struct PendingEaseMap {
-    drafts: HashMap<String, BlendEaseDraft>,
-}
-
-fn flush_pending(app: &mut VectorcraftApp, blend_id: Option<u64>, draft: &mut BlendEaseDraft) {
-    if draft.rejected || draft.is_empty() {
-        return;
-    }
-    let mut p = json!({});
-    if let Some(id) = blend_id {
-        p["id"] = json!(id);
-    }
-    if let Some(ref et) = draft.easing_type {
-        p["easingType"] = json!(et);
-    }
-    if let Some(r) = draft.ramp {
-        p["ramp"] = json!(r);
-    }
-    if let Some(cs) = draft.color_shift {
-        p["colorShift"] = json!(cs);
-    }
-    if p.as_object().is_some_and(|o| !o.is_empty()) {
-        match app.run("object.blend.options", p) {
-            Ok(_) => {
-                draft.clear();
-            }
-            Err(e) => {
-                draft.rejected = true;
-                app.status(e);
-            }
-        }
-    }
-}
-
 /// Spacing and Orientation, as `object.blend.info` reports them; a change runs
 /// `object.blend.options`.
 fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -175,76 +111,34 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 
     let selected = info["target"] == "blend";
-    let doc_uid = app.session.active().map(|d| d.uid);
     let blend_id = info["id"].as_u64();
-    let key = format!("{}:{}", doc_uid.map(|u| u.to_string()).unwrap_or_default(), blend_id.map(|b| b.to_string()).unwrap_or_default());
-
-    let mut pending_map = crate::panels::pstate::<PendingEaseMap>(ui.ctx(), "blend-pending-ease-map");
-    let mut draft = pending_map.drafts.remove(&key).unwrap_or_default();
-
-    let active_easing = info["easingType"].as_str().map(|s| s.to_string());
     let active_ramp = info["ramp"].as_f64().filter(|n| n.is_finite());
     let active_shift = info["colorShift"].as_f64().filter(|n| n.is_finite());
-
-    // Synchronize staged values after external on-canvas edits:
-    // If an active parameter changed externally since staging, invalidate its staged value
-    // so Preview does not overwrite newer on-canvas edits, while retaining unchanged staged parameters.
     let interacting = app.session.in_interaction();
     let blend_interaction = app.session.active().and_then(|doc| doc.interaction.as_ref()).is_some_and(|it| it.label == "Blend Options");
-    if !interacting
-        && let Some(ref staged_active) = draft.staged_active_easing_type
-        && active_easing.as_ref() != Some(staged_active)
-    {
-        draft.easing_type = None;
-        draft.staged_active_easing_type = None;
-    }
-    if !interacting
-        && let Some(staged_active) = draft.staged_active_ramp
-        && active_ramp != Some(staged_active)
-    {
-        draft.ramp = None;
-        draft.staged_active_ramp = None;
-    }
-    if !interacting
-        && let Some(staged_active) = draft.staged_active_color_shift
-        && active_shift != Some(staged_active)
-    {
-        draft.color_shift = None;
-        draft.staged_active_color_shift = None;
-    }
-
-    let preview = app.ui.blend_preview;
-    if preview && selected && !interacting {
-        flush_pending(app, blend_id, &mut draft);
-    }
+    let active_easing = info["easingType"].as_str().unwrap_or("easeIn");
 
     // Position easing needs a spine to run along: a replaced one, or Align to Path. A blend made
     // without a spine has none.
     let spined = info["hasSpine"] != false && (info["spine"]["explicit"] == true || info["orientation"] == "path");
     ui.add_enabled_ui(selected && spined && (!interacting || blend_interaction), |ui| {
-        let modes = ["linear", "easeIn", "easeOut", "easeInOut", "easeOutIn"];
-        let labels = [tl!("Linear"), tl!("Ease In"), tl!("Ease Out"), tl!("Ease In Out"), tl!("Ease Out In")];
-        let current_mode = draft.easing_type.as_deref().or(active_easing.as_deref()).unwrap_or(modes[1]);
-        let index = modes.iter().position(|m| *m == current_mode).unwrap_or(1);
+        let modes = ["easeIn", "easeOut", "easeInOut", "easeOutIn"];
+        let labels = [tl!("Ease In"), tl!("Ease Out"), tl!("Ease In Out"), tl!("Ease Out In")];
+        let index = modes.iter().position(|m| *m == active_easing).unwrap_or(0);
         widgets::label_row(ui, tl!("Type:"), LABEL_W, |ui| {
             if let Some(i) = widgets::dropdown(ui, "blend-panel-easing", labels[index], &labels, ui.available_width().max(FIELD_W))
                 && let Some(mode) = modes.get(i)
+                && (!interacting || blend_interaction)
             {
-                if preview && (!interacting || blend_interaction) {
-                    let mut param = json!({"easingType": mode});
-                    if let Some(id) = blend_id {
-                        param["id"] = json!(id);
-                    }
-                    app.run("object.blend.options", param).ok();
-                } else {
-                    draft.easing_type = Some(mode.to_string());
-                    draft.staged_active_easing_type = active_easing.clone();
-                    draft.rejected = false;
+                let mut param = json!({"easingType": mode});
+                if let Some(id) = blend_id {
+                    param["id"] = json!(id);
                 }
+                app.run("object.blend.options", param).ok();
             }
         });
         widgets::label_row(ui, tl!("Ramp:"), LABEL_W, |ui| {
-            let mut ramp = draft.ramp.or(active_ramp).unwrap_or(0.0).clamp(0.0, 100.0);
+            let mut ramp = active_ramp.unwrap_or(0.0).clamp(0.0, 100.0);
             let resp = widgets::slider(ui, egui::Slider::new(&mut ramp, 0.0..=100.0).suffix("%").step_by(1.0).clamping(egui::SliderClamping::Edits));
             let phase = if resp.drag_stopped() || (resp.changed() && !resp.dragged()) {
                 Live::Released
@@ -254,24 +148,18 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
                 Live::Idle
             };
             let clamped = ramp.clamp(0.0, 100.0);
-            if preview && (!interacting || blend_interaction) {
-                if phase != Live::Idle {
-                    let mut param = json!({"ramp": clamped});
-                    if let Some(id) = blend_id {
-                        param["id"] = json!(id);
-                    }
-                    crate::panels::live_run(app, "Blend Options", "object.blend.options", param, phase);
+            if phase != Live::Idle {
+                let mut param = json!({"ramp": clamped});
+                if let Some(id) = blend_id {
+                    param["id"] = json!(id);
                 }
-            } else if resp.changed() {
-                draft.ramp = Some(clamped);
-                draft.staged_active_ramp = active_ramp;
-                draft.rejected = false;
+                crate::panels::live_run(app, "Blend Options", "object.blend.options", param, phase);
             }
         });
     });
     ui.add_enabled_ui(selected && (!interacting || blend_interaction), |ui| {
         widgets::label_row(ui, tl!("Shift:"), LABEL_W, |ui| {
-            let mut shift = draft.color_shift.or(active_shift).unwrap_or(0.0).clamp(-100.0, 100.0);
+            let mut shift = active_shift.unwrap_or(0.0).clamp(-100.0, 100.0);
             let resp =
                 widgets::slider(ui, egui::Slider::new(&mut shift, -100.0..=100.0).suffix("%").step_by(1.0).clamping(egui::SliderClamping::Edits));
             let phase = if resp.drag_stopped() || (resp.changed() && !resp.dragged()) {
@@ -282,39 +170,15 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
                 Live::Idle
             };
             let clamped = shift.clamp(-100.0, 100.0);
-            if preview && (!interacting || blend_interaction) {
-                if phase != Live::Idle {
-                    let mut param = json!({"colorShift": clamped});
-                    if let Some(id) = blend_id {
-                        param["id"] = json!(id);
-                    }
-                    crate::panels::live_run(app, "Blend Options", "object.blend.options", param, phase);
+            if phase != Live::Idle {
+                let mut param = json!({"colorShift": clamped});
+                if let Some(id) = blend_id {
+                    param["id"] = json!(id);
                 }
-            } else if resp.changed() {
-                draft.color_shift = Some(clamped);
-                draft.staged_active_color_shift = active_shift;
-                draft.rejected = false;
+                crate::panels::live_run(app, "Blend Options", "object.blend.options", param, phase);
             }
         });
     });
-    ui.horizontal(|ui| {
-        ui.add_space(LABEL_W);
-        let cur_preview = app.ui.blend_preview;
-        if widgets::check(ui, tl!("Preview"), cur_preview, true) {
-            let next = !cur_preview;
-            app.ui.blend_preview = next;
-            if next && selected {
-                draft.rejected = false;
-                if !app.session.in_interaction() {
-                    flush_pending(app, blend_id, &mut draft);
-                }
-            }
-        }
-    });
-    if !draft.is_empty() || draft.rejected {
-        pending_map.drafts.insert(key, draft);
-    }
-    crate::panels::set_pstate(ui.ctx(), "blend-pending-ease-map", pending_map);
 }
 
 /// Create Spine: whether new blends get a spine. It shows the setting new blends take, whatever is

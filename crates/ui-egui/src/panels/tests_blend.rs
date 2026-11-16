@@ -282,18 +282,12 @@ fn panel_easing_type_ramp_and_shift_edit_the_blend_and_undo() {
     let mut app = app();
     let id = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
     let mut f = Frames::new();
-    for label in ["Type:", "Ease In", "Ramp:", "Shift:", "Preview"] {
+    for label in ["Type:", "Ease In", "Ramp:", "Shift:"] {
         f.text(&mut app, label);
     }
     f.click_text(&mut app, "Ease In");
     f.click_text(&mut app, "Ease Out In");
     assert_eq!(spec(&app, id).ease.kind, vectorcraft_doc::BlendEaseType::OutIn);
-    f.click_text(&mut app, "Ease Out In");
-    f.click_text(&mut app, "Linear");
-    assert_eq!(spec(&app, id).ease.kind, vectorcraft_doc::BlendEaseType::Linear);
-    f.click_text(&mut app, "Linear");
-    f.click_text(&mut app, "Ease In");
-    assert_eq!(spec(&app, id).ease.kind, vectorcraft_doc::BlendEaseType::In);
     // Click each real slider: its command updates the engine, and Undo restores the old value.
     for (index, key) in [(0, "ramp"), (1, "colorShift")] {
         let out = f.run(&mut app, vec![]);
@@ -311,25 +305,6 @@ fn panel_easing_type_ramp_and_shift_edit_the_blend_and_undo() {
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(app.session.execute("object.blend.info", &json!({})).unwrap()[key], before);
     }
-    // Preview checkbox toggle: when Preview is off, slider changes do not apply to the document.
-    f.click_text(&mut app, "Preview");
-    assert!(!app.ui.blend_preview);
-    let before_shift = app.session.execute("object.blend.info", &json!({})).unwrap()["colorShift"].clone();
-    let out = f.run(&mut app, vec![]);
-    let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
-    let mut sliders: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Slider).collect();
-    sliders.sort_by(|a, b| a.1.bounds().unwrap().y0.total_cmp(&b.1.bounds().unwrap().y0));
-    let shift_slider = sliders[1];
-    let b = shift_slider.1.bounds().unwrap();
-    let at = pos2((b.x0 + 0.3 * (b.x1 - b.x0)) as f32, ((b.y0 + b.y1) * 0.5) as f32);
-    f.click(&mut app, at);
-    let after_shift = app.session.execute("object.blend.info", &json!({})).unwrap()["colorShift"].clone();
-    assert_eq!(after_shift, before_shift, "preview is off, no command runs to mutate the document");
-    f.click_text(&mut app, "Preview");
-    assert!(app.ui.blend_preview);
-    let applied_shift = app.session.execute("object.blend.info", &json!({})).unwrap()["colorShift"].clone();
-    assert_ne!(applied_shift, before_shift, "turning preview back on applies pending slider change");
-
     app.run("ui.blendOptions", json!({})).unwrap();
     let text = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
     assert!(!text.contains("Ease In:") && !text.contains("Ramp:") && !text.contains("Color Ease"), "{text}");
@@ -341,56 +316,10 @@ fn fractional_blend_easing_values_survive_panel_render_without_input() {
     let id = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
     app.run("object.blend.options", json!({"id": id.0, "ramp": 42.5, "colorShift": 12.5})).unwrap();
     let mut f = Frames::new();
-    let depth = undo_depth(&app);
-
     f.run(&mut app, vec![]);
     f.run(&mut app, vec![]);
     let info = app.session.execute("object.blend.info", &json!({})).unwrap();
     assert_eq!((&info["ramp"], &info["colorShift"]), (&json!(42.5), &json!(12.5)));
-    assert_eq!(undo_depth(&app), depth, "rendering with Preview on does not edit the blend");
-
-    app.ui.blend_preview = false;
-    app.run("object.blend.options", json!({"id": id.0, "ramp": 67.5, "colorShift": -31.5})).unwrap();
-    let depth = undo_depth(&app);
-    f.run(&mut app, vec![]);
-    f.run(&mut app, vec![]);
-    let info = app.session.execute("object.blend.info", &json!({})).unwrap();
-    assert_eq!((&info["ramp"], &info["colorShift"]), (&json!(67.5), &json!(-31.5)));
-    assert_eq!(undo_depth(&app), depth, "rendering with Preview off does not edit or stage rounded values");
-
-    f.click_text(&mut app, "Preview");
-    let info = app.session.execute("object.blend.info", &json!({})).unwrap();
-    assert_eq!((&info["ramp"], &info["colorShift"]), (&json!(67.5), &json!(-31.5)));
-    assert_eq!(undo_depth(&app), depth, "turning Preview on has no unsolicited staged changes to commit");
-}
-
-#[test]
-fn blend_panel_keeps_pending_easing_during_canvas_interaction() {
-    let mut app = app();
-    app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap();
-    app.ui.blend_preview = false;
-    let mut f = Frames::new();
-    let before = app.session.execute("object.blend.info", &json!({})).unwrap()["ramp"].clone();
-
-    let out = f.run(&mut app, vec![]);
-    let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
-    let mut sliders: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Slider).collect();
-    sliders.sort_by(|a, b| a.1.bounds().unwrap().y0.total_cmp(&b.1.bounds().unwrap().y0));
-    let b = sliders[0].1.bounds().unwrap();
-    let at = pos2((b.x0 + 0.3 * (b.x1 - b.x0)) as f32, ((b.y0 + b.y1) * 0.5) as f32);
-    f.click(&mut app, at);
-    assert_eq!(app.session.execute("object.blend.info", &json!({})).unwrap()["ramp"], before);
-
-    app.session.begin_interaction("Move").unwrap();
-    app.session.preview("object.blend.options", &json!({"ramp": 80})).unwrap();
-    f.click_text(&mut app, "Preview");
-    assert!(app.ui.blend_preview);
-    assert!(app.session.in_interaction(), "enabling Preview must not flush staged edits into an active interaction");
-    app.session.cancel_interaction().unwrap();
-    f.run(&mut app, vec![]);
-
-    let after = app.session.execute("object.blend.info", &json!({})).unwrap()["ramp"].clone();
-    assert_ne!(after, before, "the staged easing value is applied after the interaction ends");
 }
 
 #[test]
@@ -420,31 +349,6 @@ fn blend_panel_slider_does_not_join_another_active_interaction() {
 }
 
 #[test]
-fn blend_panel_does_not_stage_edits_during_a_foreign_interaction() {
-    let mut app = app();
-    app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap();
-    app.ui.blend_preview = false;
-    let mut f = Frames::new();
-
-    app.session.begin_interaction("Move").unwrap();
-    app.session.preview("object.blend.options", &json!({"ramp": 80})).unwrap();
-    let out = f.run(&mut app, vec![]);
-    let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
-    let mut sliders: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Slider).collect();
-    sliders.sort_by(|a, b| a.1.bounds().unwrap().y0.total_cmp(&b.1.bounds().unwrap().y0));
-    let b = sliders[0].1.bounds().unwrap();
-    let at = pos2((b.x0 + 0.3 * (b.x1 - b.x0)) as f32, ((b.y0 + b.y1) * 0.5) as f32);
-    f.click(&mut app, at);
-    assert!(app.session.in_interaction());
-    app.session.cancel_interaction().unwrap();
-    app.run("object.blend.options", json!({"ramp": 80})).unwrap();
-    f.run(&mut app, vec![]); // A canvas edit matching the canceled preview must not be overwritten by a hidden draft.
-    f.click_text(&mut app, "Preview");
-
-    assert_eq!(app.session.execute("object.blend.info", &json!({})).unwrap()["ramp"], 80.0);
-}
-
-#[test]
 fn blend_panel_bidirectionally_syncs_with_on_canvas_widgets() {
     let mut app = app();
     let id = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
@@ -471,8 +375,8 @@ fn blend_panel_bidirectionally_syncs_with_on_canvas_widgets() {
 
     // 2. The panel updates parameters -> active blend object and on-canvas widgets reflect them
     f.click_text(&mut app, "Ease In");
-    f.click_text(&mut app, "Linear");
-    assert_eq!(spec(&app, id).ease.kind, vectorcraft_doc::BlendEaseType::Linear);
+    f.click_text(&mut app, "Ease Out In");
+    assert_eq!(spec(&app, id).ease.kind, vectorcraft_doc::BlendEaseType::OutIn);
 
     let doc = &app.session.active().unwrap().doc;
     let sel = &app.session.active().unwrap().selection;
@@ -482,110 +386,4 @@ fn blend_panel_bidirectionally_syncs_with_on_canvas_widgets() {
     assert_eq!(widgets[0].value, -20.0); // Appearance (colorShift)
     assert_eq!(widgets[1].control, vectorcraft_tools::blendwidget::BlendControl::Easing);
     assert_eq!(widgets[1].value, 40.0); // Easing (ramp)
-}
-
-#[test]
-fn blend_panel_staged_values_persist_across_selection_and_reconcile_external_edits() {
-    let mut app = app();
-    let id_a = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
-
-    // Create a second blend object
-    let r1 = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-    let r2 = app.run("shape.rectangle", json!({"x": 150, "y": 50, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-    app.run("select.set", json!({"ids": [r1, r2]})).unwrap();
-    let id_b = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
-
-    // Select Blend A
-    app.run("select.set", json!({"ids": [id_a.0]})).unwrap();
-
-    let mut f = Frames::new();
-    // Turn preview OFF
-    f.click_text(&mut app, "Preview");
-    assert!(!app.ui.blend_preview);
-
-    // Stage Easing on Blend A to "Ease Out In"
-    f.click_text(&mut app, "Ease In");
-    f.click_text(&mut app, "Ease Out In");
-    assert_eq!(spec(&app, id_a).ease.kind, vectorcraft_doc::BlendEaseType::In, "still unchanged because preview is off");
-
-    // Select Blend B: Blend A's staged value must remain in memory
-    app.run("select.set", json!({"ids": [id_b.0]})).unwrap();
-    f.run(&mut app, vec![]);
-
-    // Deselect all
-    app.run("select.none", json!({})).unwrap();
-    f.run(&mut app, vec![]);
-
-    // Reselect Blend A
-    app.run("select.set", json!({"ids": [id_a.0]})).unwrap();
-    f.text(&mut app, "Ease Out In"); // Displays the staged value!
-
-    // External edit on canvas changes ramp:
-    app.run("object.blend.setEasing", json!({"id": id_a.0, "ramp": 60.0})).unwrap();
-    f.run(&mut app, vec![]);
-    f.text(&mut app, "60.0");
-
-    // Turn Preview back on: flushes staged Easing ("Ease Out In") while keeping external ramp (60%)
-    f.click_text(&mut app, "Preview");
-    assert!(app.ui.blend_preview);
-    assert_eq!(spec(&app, id_a).ease.kind, vectorcraft_doc::BlendEaseType::OutIn);
-    assert_eq!(spec(&app, id_a).ease.ramp, 0.6);
-}
-
-#[test]
-fn staged_preview_applies_only_to_target_blend_when_multiple_selected() {
-    let mut app = app();
-    // Blend A
-    let id_a = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
-
-    // Blend B with distinct options: 4 steps, align to page, ramp 30, colorShift 25
-    let r1 = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-    let r2 = app.run("shape.rectangle", json!({"x": 150, "y": 50, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-    app.run("select.set", json!({"ids": [r1, r2]})).unwrap();
-    let id_b = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
-    app.run("object.blend.options", json!({"id": id_b.0, "spacing": "steps", "steps": 4, "orientation": "page", "ramp": 30.0, "colorShift": 25.0}))
-        .unwrap();
-
-    let b_spec_before = spec(&app, id_b);
-    assert_eq!(b_spec_before.spacing, vectorcraft_doc::live::BlendSpacing::Steps(4));
-    assert_eq!(b_spec_before.orientation, vectorcraft_doc::live::BlendOrientation::AlignToPage);
-    assert_eq!(b_spec_before.ease.ramp, 0.3);
-    assert_eq!(b_spec_before.color_shift, 25.0);
-
-    // Select only Blend A
-    app.run("select.set", json!({"ids": [id_a.0]})).unwrap();
-
-    let mut f = Frames::new();
-    // Turn preview OFF
-    f.click_text(&mut app, "Preview");
-    assert!(!app.ui.blend_preview);
-
-    // Stage Ramp on Blend A to 80%
-    let out = f.run(&mut app, vec![]);
-    let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
-    let mut sliders: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Slider).collect();
-    sliders.sort_by(|a, b| a.1.bounds().unwrap().y0.total_cmp(&b.1.bounds().unwrap().y0));
-    let ramp_slider = sliders[0];
-    let b = ramp_slider.1.bounds().unwrap();
-    let at = pos2((b.x0 + 0.8 * (b.x1 - b.x0)) as f32, ((b.y0 + b.y1) * 0.5) as f32);
-    f.click(&mut app, at);
-
-    // Both A and B are now selected
-    app.run("select.set", json!({"ids": [id_a.0, id_b.0]})).unwrap();
-    f.run(&mut app, vec![]);
-
-    // Enable Preview
-    f.click_text(&mut app, "Preview");
-    assert!(app.ui.blend_preview);
-
-    // Verify Blend B retains its original ramp, spacing, orientation, and color shift
-    let b_spec_after = spec(&app, id_b);
-    assert_eq!(b_spec_after.spacing, vectorcraft_doc::live::BlendSpacing::Steps(4));
-    assert_eq!(b_spec_after.orientation, vectorcraft_doc::live::BlendOrientation::AlignToPage);
-    assert_eq!(b_spec_after.ease.ramp, 0.3);
-    assert_eq!(b_spec_after.color_shift, 25.0);
-
-    // Verify Blend A has the staged ramp applied
-    let a_spec_after = spec(&app, id_a);
-    assert_ne!(a_spec_after.ease.ramp, 0.0);
 }

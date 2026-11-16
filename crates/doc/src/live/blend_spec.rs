@@ -30,7 +30,6 @@ pub enum BlendOrientation {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BlendEaseType {
-    Linear,
     #[default]
     In,
     Out,
@@ -41,7 +40,6 @@ pub enum BlendEaseType {
 impl BlendEaseType {
     pub fn id(self) -> &'static str {
         match self {
-            Self::Linear => "linear",
             Self::In => "easeIn",
             Self::Out => "easeOut",
             Self::InOut => "easeInOut",
@@ -61,7 +59,7 @@ pub struct BlendEase {
 
 impl BlendEase {
     pub fn is_linear(&self) -> bool {
-        self.kind == BlendEaseType::Linear || self.ramp <= 0.0
+        self.ramp <= 0.0
     }
 
     /// Only the default Type and Ramp can be omitted without losing a chosen Type at Ramp 0.
@@ -75,7 +73,6 @@ impl BlendEase {
         let u = if u.is_finite() { u.clamp(0.0, 1.0) } else { 0.0 };
         let r = if self.ramp.is_finite() { self.ramp.clamp(0.0, 1.0) } else { 0.0 };
         let eased = match self.kind {
-            BlendEaseType::Linear => u,
             BlendEaseType::In => u * u,
             BlendEaseType::Out => u * (2.0 - u),
             BlendEaseType::InOut => u * u * (3.0 - 2.0 * u),

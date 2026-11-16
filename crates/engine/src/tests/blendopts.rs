@@ -352,7 +352,7 @@ fn easing_is_set_validated_saved_and_old_blends_are_even() {
     let g = id_of(&s.execute("object.blend.make", &json!({"steps": 3, "easingType": "easeIn", "ramp": 40})).unwrap());
     assert_eq!(spec(&s, g).1.ease.ramp, 0.4);
     sel(&mut s, &[g]);
-    for kind in ["linear", "easeIn", "easeOut", "easeInOut", "easeOutIn"] {
+    for kind in ["easeIn", "easeOut", "easeInOut", "easeOutIn"] {
         s.execute("object.blend.options", &json!({"easingType": kind, "colorShift": -50})).unwrap();
         let info = s.execute("object.blend.info", &json!({})).unwrap();
         assert_eq!((&info["easingType"], &info["ramp"], &info["colorShift"]), (&json!(kind), &json!(40.0), &json!(-50.0)));
@@ -429,7 +429,7 @@ fn set_easing_edits_one_blend_and_refuses_what_it_cannot_set() {
     assert_eq!((&r["changed"], depth(&s)), (&json!(false), d0 + 1), "an unchanged value records no undo step");
     // Along the spine each of the five types keeps its kind through a ramp change and its undo.
     s.execute("object.blend.options", &json!({"orientation": "path"})).unwrap();
-    for kind in ["linear", "easeIn", "easeOut", "easeInOut", "easeOutIn"] {
+    for kind in ["easeIn", "easeOut", "easeInOut", "easeOutIn"] {
         s.execute("object.blend.setEasing", &json!({"easingType": kind, "ramp": 60})).unwrap();
         let r = s.execute("object.blend.setEasing", &json!({"ramp": 20})).unwrap();
         assert_eq!((&r["easingType"], &r["ramp"], &r["colorShift"]), (&json!(kind), &json!(20.0), &json!(25.0)));

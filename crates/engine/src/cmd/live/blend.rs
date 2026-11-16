@@ -406,10 +406,21 @@ pub(super) fn blend_options(s: &mut Session, p: &Value) -> Result<Value> {
     if has_id {
         s.edit("Blend Options", |d, _| {
             if let Some(NodeKind::Blend { spec, .. }) = d.node_mut(target_id).map(|n| &mut n.kind) {
-                spec.spacing = spacing;
-                spec.orientation = orientation;
-                spec.ease = ease;
-                spec.color_shift = color_shift;
+                if has_spacing {
+                    spec.spacing = spacing;
+                }
+                if has_orientation {
+                    spec.orientation = orientation;
+                }
+                if has_ease_kind {
+                    spec.ease.kind = ease.kind;
+                }
+                if has_ramp {
+                    spec.ease.ramp = ease.ramp;
+                }
+                if has_color_shift {
+                    spec.color_shift = color_shift;
+                }
             }
             Ok(())
         })?;
