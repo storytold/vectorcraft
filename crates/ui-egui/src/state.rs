@@ -695,6 +695,10 @@ pub struct UiState {
     /// Help › Search Commands' Recent Commands list: the ids of the last picks, most recent first.
     #[serde(default)]
     pub recent_commands: Vec<String>,
+    /// How many times each command was picked in Help › Search Commands, which ranks the commands
+    /// picked most often first among results that match as well.
+    #[serde(default, deserialize_with = "crate::palette::deserialize_command_uses")]
+    pub command_uses: crate::palette::CommandUses,
     /// Families starred in the font menus (the ★ filter shows only these).
     #[serde(default)]
     pub favorite_fonts: Vec<String>,
@@ -1232,6 +1236,7 @@ impl Default for UiState {
             recent_files: vec![],
             recent_fonts: vec![],
             recent_commands: vec![],
+            command_uses: Default::default(),
             favorite_fonts: vec![],
             engine_prefs: Value::Null,
             color_guide: Default::default(),
