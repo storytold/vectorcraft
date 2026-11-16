@@ -1136,6 +1136,19 @@ fn hold_shortcut_delay_dims_without_hold_shortcuts() {
     }
 }
 
+/// A restored Hold Shortcut Delay outside its range opens as the delay in use, and OK keeps it.
+#[test]
+fn a_restored_hold_shortcut_delay_outside_its_range_opens_as_the_delay_in_use() {
+    for (saved, used) in [(5.0, 1.0), (0.05, 0.2)] {
+        let mut a = app();
+        a.session.prefs.key_hold_delay = saved;
+        open(&mut a, Some("General"));
+        assert_eq!(a.ui.dialog.as_ref().unwrap().fields["keyHoldDelay"], json!(used), "{saved}");
+        confirm(&mut a).unwrap();
+        assert_eq!(a.session.prefs.key_hold_delay, used, "{saved}");
+    }
+}
+
 /// Type › Show samples on white: its checkbox is dimmed while Enable in-menu font previews is
 /// unchecked in the dialog, and a click on it then leaves the setting as it was.
 #[test]

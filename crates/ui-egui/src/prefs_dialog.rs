@@ -32,6 +32,11 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     // One field per preference key or group (the flattener presets have commands of their own).
     let mut fields: Map<String, Value> = app.session.prefs.to_json().as_object().cloned().unwrap_or_default();
     fields.retain(|k, _| vectorcraft_engine::cmd::prefscmds::spec(k).is_some() || PREF_GROUPS.contains(&k.as_str()));
+    // A restored settings file can hold a Hold Shortcut Delay outside its range: the dialog shows,
+    // and OK sets, the delay in use.
+    if fields.contains_key("keyHoldDelay") {
+        fields.insert("keyHoldDelay".into(), json!(app.session.prefs.key_hold_delay()));
+    }
     // Units ▸ General shows (and OK sets) the open document's units.
     if let Some(st) = app.session.active() {
         fields.insert("unitsGeneral".into(), json!(st.doc.units.key()));
