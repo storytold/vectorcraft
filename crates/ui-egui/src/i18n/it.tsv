@@ -3334,8 +3334,12 @@ digits	Malayalam	Malayalam
 	Filter Layers Panel Rows	Filtra righe del pannello Livelli
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` indica impostazioni modificate: salva il preset con un altro nome
 @msg	`{key}` must be an array of these names: {_1}	`{key}` deve essere un array di questi nomi: {_1}
-	Search commands and tools	Cerca comandi e strumenti
-	Search commands and tools…	Cerca comandi e strumenti…
+	Search commands, tools, panels and effects	Cerca comandi, strumenti, pannelli ed effetti
+	Search commands, tools, panels and effects…	Cerca comandi, strumenti, pannelli ed effetti…
+	No commands match	Nessun comando corrisponde
+	{pos} of {total}: {name}	{pos} di {total}: {name}
+@plural	{n} result|{n} results	{n} risultato|{n} risultati
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} di {n} risultato. Continua a digitare per restringerli.|{shown} di {n} risultati. Continua a digitare per restringerli.
 	Recent Commands	Comandi recenti
 	No recent commands	Nessun comando recente
 	Search Commands…	Cerca comandi…

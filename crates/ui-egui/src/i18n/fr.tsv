@@ -3279,8 +3279,12 @@ digits	Malayalam	Malayalam
 	Filter Layers Panel Rows	Filtrer les lignes du panneau Calques
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` désigne des réglages modifiés : enregistrez le paramètre prédéfini sous un autre nom
 @msg	`{key}` must be an array of these names: {_1}	`{key}` doit être un tableau de noms parmi {_1}
-	Search commands and tools	Chercher commandes et outils
-	Search commands and tools…	Chercher commandes et outils…
+	Search commands, tools, panels and effects	Chercher commandes, outils, panneaux et effets
+	Search commands, tools, panels and effects…	Chercher commandes, outils, panneaux et effets…
+	No commands match	Aucune commande ne correspond
+	{pos} of {total}: {name}	{pos} sur {total} : {name}
+@plural	{n} result|{n} results	{n} résultat|{n} résultats
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} sur {n} résultat. Continuez à taper pour les affiner.|{shown} sur {n} résultats. Continuez à taper pour les affiner.
 	Recent Commands	Commandes récentes
 	No recent commands	Aucune commande récente
 	Search Commands…	Rechercher des commandes…
