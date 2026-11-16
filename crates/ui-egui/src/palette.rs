@@ -1483,6 +1483,41 @@ mod tests {
         assert_eq!(open.app.ui.recent_commands, ["paint.swap", "object.group"]);
     }
 
+    /// A pick of Clear Recent Commands empties the recent picks without keeping itself, so the
+    /// empty search then says there are none, and the saved UI state holds an empty list.
+    #[test]
+    fn clear_recent_commands_empties_the_recent_picks() {
+        const CLEAR: &str = "help.clearRecentCommands";
+        let mut open = Open::new("clear recent commands", WINDOW);
+        open.app.ui.recent_commands = vec!["paint.swap".into(), "object.group".into()];
+        assert!(menus::enabled(&open.app, CLEAR));
+        let k = open.listed().iter().position(|id| id == CLEAR).expect("the command's result");
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, k);
+        assert_eq!(open.highlighted(), k);
+        open.press(egui::Key::Enter, 1);
+        assert!(!open.app.ui.palette_open, "the palette closes");
+        assert!(open.app.ui.recent_commands.is_empty(), "{:?}", open.app.ui.recent_commands);
+        assert!(!menus::enabled(&open.app, CLEAR), "not enabled with nothing to clear");
+        let saved: serde_json::Value = serde_json::to_value(&open.app.ui).unwrap();
+        assert_eq!(saved["recent_commands"], serde_json::json!([]));
+        open.app.ui.palette_query.clear();
+        open.app.ui.palette_open = true;
+        let nodes = open.frame(vec![]);
+        assert!(rows(&nodes).is_empty(), "{:?}", rows(&nodes));
+        let labels = labels(&nodes);
+        assert!(labels.iter().any(|l| l == tl!("No recent commands")), "{labels:?}");
+        // Run as a command, it empties the list too.
+        open.app.ui.recent_commands = vec!["paint.swap".into()];
+        open.app.run(CLEAR, serde_json::json!({})).unwrap();
+        assert!(open.app.ui.recent_commands.is_empty());
+        // A saved id the list leaves out (a plug-in that is not loaded) still counts, and is cleared.
+        open.app.ui.recent_commands = vec!["plugin.notLoaded.filter".into()];
+        assert!(menus::enabled(&open.app, CLEAR));
+        open.app.run(CLEAR, serde_json::json!({})).unwrap();
+        assert!(open.app.ui.recent_commands.is_empty());
+    }
+
     /// The palette opens again with its first row highlighted, even when it shows the same rows.
     #[test]
     fn the_palette_opens_again_with_its_first_row_highlighted() {

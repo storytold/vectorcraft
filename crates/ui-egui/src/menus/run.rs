@@ -733,6 +733,11 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             app.ui.palette_query.clear();
             Ok(Value::Null)
         }
+        // A pick of it in the search is recorded first and then cleared with the rest.
+        "help.clearRecentCommands" => {
+            app.ui.recent_commands.clear();
+            Ok(Value::Null)
+        }
         // Closing asks Save / Don't Save / Cancel for modified documents first (`unsaved`).
         // Without an `index`, the current window closes: one of several views of a document closes
         // without closing the document (Window › New Window).
