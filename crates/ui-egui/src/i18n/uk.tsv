@@ -1039,6 +1039,10 @@ font-technology	Variable	Варіативні
 	Cap Height	Висота великих літер
 	x-Height	Висота малих літер
 	ICF Box	Рамка ICF
+	Show Sample	Показати зразок
+	Hide Sample	Приховати зразок
+	Max Ascent/Descent	Макс. висота/глибина
+	Max Ascender	Макс. виносний елемент вгору
 	Em Dash	Довге тире
 	Em Space	Кругла шпація
 	Embed	Вбудувати
@@ -1209,6 +1213,7 @@ font-technology	Variable	Варіативні
 	Highlight Size	Розмір відблиску
 	Blend Steps	Кроки переходу
 	Shading Color	Колір затінення
+	Black Overprint	Чорний із накладенням
 	Draw Hidden Faces	Малювати приховані грані
 	Eyedropper	Піпетка
 	Sample Color from Screen	Взяти колір з екрана
@@ -1361,6 +1366,8 @@ file-filter	Templates	Шаблони
 	Font Family & Style	Сімейство та стиль шрифту
 	Font Family, Style & Size	Сімейство, стиль та розмір шрифту
 	Font List	Список шрифтів
+	Show Similar Fonts	Показати схожі шрифти
+	Clear Similar Fonts	Скинути схожі шрифти
 	Font Preview Size	Розмір попереднього перегляду шрифту
 	Font Size	Розмір шрифту
 	Variable Font	Варіативний шрифт
@@ -1476,6 +1483,7 @@ file-filter	Templates	Шаблони
 	Connect Data Points	З'єднувати точки даних
 	Edge-to-Edge Lines	Лінії від краю до краю
 	Draw Filled Lines	Малювати заповнені лінії
+	Line Width	Ширина лінії
 	Tick Values	Значення поділок
 	Override Calculated Values	Замінити обчислені значення
 	Divisions	Поділки
@@ -1574,6 +1582,9 @@ file-filter	Templates	Шаблони
 	Show smooth color wheel	Показати плавне колірне коло
 	Show segmented color wheel	Показати сегментоване колірне коло
 	Show color bars	Показати колірні смуги
+	Add Color Tool	Інструмент «Додати колір»
+	Remove Color Tool	Інструмент «Вилучити колір»
+	Remove Color	Вилучити колір
 	Find the selected colors in the artwork	Знайти вибрані кольори в малюнку
 	Harmony Sets	Набори гармонії
 	Height	Висота
@@ -1925,6 +1936,8 @@ file-filter	Templates	Шаблони
 	Lasso Tool	Інструмент «Ласо»
 	Enclosing Lasso Tool	Інструмент «Охоплювальне ласо»
 	Enclosing Lasso	Охоплювальне ласо
+	Polygonal Lasso Tool	Інструмент «Багатокутне ласо»
+	Polygonal Lasso	Багатокутне ласо
 	Last Effect: {name}	Останній ефект: {name}
 	Last Effect: {}	Останній ефект: {}
 	Last Effect…	Останній ефект…
@@ -3074,6 +3087,12 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивний
 	Restore	Відновити
 	Restore every preference to its default (applied on OK)	Відновити всі параметри за промовчанням (застосовується при натисканні ОК)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Одиниця нових документів вбудованих розмірів, крім розмірів у пікселях, і відкритих файлів без записаної одиниці; якщо вибрати її тут і натиснути ОК, вона стане й одиницею активного документа.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Товщина обведення, штрихи й зазори показуються в цій одиниці, і введені для них числа читаються в ній.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Розміри тексту, інтерліньяж і зміщення базової лінії показуються в цій одиниці, і введені для них числа читаються в ній.
+	The unit for East Asian type measurements, which no field uses yet.	Одиниця для розмірів східноазіатського тексту, якої поки не використовує жодне поле.
+	When on, a number typed without a unit into a field in picas is read in points.	Якщо ввімкнено, число, введене без одиниці в поле в піках, читається в пунктах.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	З XML ID назви об’єктів показуються як XML ID у «Шарах», «Змінних» і «Параметрах шару».
 	Reset all preferences to their defaults?	Скинути всі налаштування до значень за промовчанням?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Значення за промовчанням застосовуються, коли ви натискаєте ОК у вікні «Налаштування». Скасувати там зберігає поточні налаштування.
 	Restore Recovered Documents	Відновити відновлені документи
@@ -3107,6 +3126,7 @@ digits	Malayalam	Малаялам
 	Roman Hanging Punctuation	Римська висяча пунктуація
 	Korean Line Break Anywhere	Перенесення корейського тексту будь-де
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Параметри східноазійського набору
 	Korean Composition Settings	Параметри корейського набору
 	Rotate	Повернути
@@ -3301,6 +3321,8 @@ digits	Malayalam	Малаялам
 @msg	`{key}` must be an array of these names: {_1}	`{key}` має бути масивом цих назв: {_1}
 	Search commands and tools	Пошук команд та інструментів
 	Search commands and tools…	Пошук команд та інструментів…
+	Recent Commands	Нещодавні команди
+	No recent commands	Немає нещодавніх команд
 	Search Commands…	Пошук команд…
 	Secondary	Вторинний
 	Section Symbol	Символ параграфа
@@ -4494,6 +4516,31 @@ axis	Both	Обидві
 @msg	$.evalFile requires a file path	$.evalFile потребує шляху до файлу
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: тайм-аут має бути скінченним числом мілісекунд, 0 або більше
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: приймає шлях до файлу і тайм-аут
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} не визначено
+@msg	cannot read property '{key}' of {base}	неможливо прочитати властивість '{key}' у {base}
+@msg	cannot set property '{key}' of {base}	неможливо встановити властивість '{key}' у {base}
+@msg	cannot read a property of {base}	неможливо прочитати властивість у {base}
+@msg	cannot set a property of {base}	неможливо встановити властивість у {base}
+@msg	cannot define property '{key}': {why}	неможливо визначити властивість '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	неможливо присвоїти значення властивості '{key}': {why}
+@msg	cannot delete property '{key}'	неможливо видалити властивість '{key}'
+@msg	cannot declare function {ident}	неможливо оголосити функцію {ident}
+@msg	invalid assignment target	недійсна ціль присвоєння
+@msg	the array's length is read-only	довжина масиву доступна лише для читання
+@msg	the property cannot be redefined	властивість не можна перевизначити
+@msg	the object is not extensible	об'єкт не можна розширювати
+@msg	the length cannot be redefined	довжину не можна перевизначити
+@msg	it is read-only	вона доступна лише для читання
+@msg	an element cannot be deleted	елемент не можна видалити
+@msg	it has only a getter	вона має лише гетер
+@msg	the value is a primitive	значення примітивне
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: рядок {line}, стовпець {column} у {file}: {e} (виняток)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: рядок {line}, стовпець {column}: {e} (виняток)
 @msg	{name}: {e} (thrown)	{name}: {e} (виняток)
@@ -4599,6 +4646,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	Divide Objects Below: select exactly one path	Поділ об’єктів нижче: виділіть рівно один контур
 @msg	Downloaded {what}	Завантажено: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Розбір оформлення: виділення основне оформлення
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	деякі растрові ефекти не перетворено на зображення: для них потрібно понад 1024 зображення або загалом 256 мегапікселів
 @msg	Expand: no brush strokes selected	Розбір: не виділено мазки пензлі
 @msg	Expand: no gradient fills	Розбір: немає градієнтних заливок
 @msg	Expand: nothing to expand	Розбір: нема чого розбирати
@@ -5932,7 +5980,7 @@ lighting	Light	Світло
 @msg	Unknown dimension style	Невідомий стиль розміру
 @msg	Unknown unit	Невідома одиниця
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Закриває круглі торці відкритих профілів. За неповного обертання бічні зрізи залишаються відкритими.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Закриває круглі торці відкритих профілів. За неповного обертання бічні зрізи теж закриваються.
 	Distance	Відстань
 @msg	span must be "object" or "selection", got {v}	span має бути "object" або "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" розміщує `gradient`, а не зразок
@@ -6086,6 +6134,7 @@ lighting	Light	Світло
 	Single Word Justification:	Вирівнювання одного слова:
 	Full Justify	Повне вирівнювання
 	Minimum must not exceed Desired, nor Desired Maximum.	Мінімум не може перевищувати бажане значення, а бажане — максимум.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: мінімум не може перевищувати бажане значення, а бажане — максимум
 	Minimum	Мінімум
 	Justification	Вирівнювання за шириною
 	Add filters from the list above	Додайте фільтри зі списку вище
@@ -7029,9 +7078,43 @@ breakText	Glyphs	Гліфи
 	Remove Gaps	Прибрати проміжки
 @msg	that makes too many pieces (at most 100000): make the dashes longer	так вийде забагато частин (не більше 100000): подовжте штрихи
 @msg	select paths, or segments, to divide	виділіть контури або сегменти для розділення
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Спільні дотичні…
+	Common Tangents	Спільні дотичні
+	Tangents	Дотичні
+	Centerline	Осьова лінія
+	External	Зовнішні
+	Internal	Внутрішні
+@msg	select two closed paths	виділіть два замкнені контури
+@msg	a selected path is open	виділений контур відкритий
+@msg	a selected path is not convex	виділений контур не опуклий
+@msg	a selected path has no area	виділений контур не має площі
+@msg	a selected path has more than 10000 segments	виділений контур містить понад 10000 сегментів
+@msg	the two paths have the same outline	обидва контури мають однакову форму
+@msg	One path lies inside the other, so they have no common tangents	Один контур лежить усередині іншого, тому вони не мають спільних дотичних
+@msg	The paths overlap, so they have no internal tangents	Контури перекриваються, тому вони не мають внутрішніх дотичних
+@msg	One path lies inside the other, so they have no internal tangents	Один контур лежить усередині іншого, тому вони не мають внутрішніх дотичних
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Розібрати штрихи на контури
 @msg	select paths with dashed strokes to expand	виділіть контури зі штриховим обведенням для розбору
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Дотичне коло…
+	Tangent Circle	Дотичне коло
+	Circle:	Коло:
+@msg	`ids` names an object twice	`ids` указує об’єкт двічі
+@msg	select two or three paths or compound paths	виділіть два або три контури чи складені контури
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` має бути від 0.01 до 1000000 pt
+@msg	two shapes need a `radius`	для двох фігур потрібен `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	три фігури самі задають радіус: не вказуйте `radius`
+@msg	`circle` must be from 0 to 64	`circle` має бути від 0 до 64
+@msg	a shape has no outline	фігура не має контуру
+@msg	the shapes are too complex: at most 2000 segments in all	фігури надто складні: загалом не більше 2000 сегментів
+@msg	these shapes take too long to search	пошук для цих фігур триває надто довго
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	цих фігур торкається понад 64 кола: можливо, вони торкаються вздовж цілої кривої
+@msg	no circle touches these shapes	жодне коло не торкається цих фігур
+@msg	`circle` is past the last circle found ({found})	`circle` більше за кількість знайдених кіл ({found})
+@msg	object {value} is not a path or compound path	об’єкт {value} не є контуром чи складеним контуром
+@msg	these shapes are too small to measure	ці фігури замалі для вимірювання
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Інструменти документа
 	Save a Timestamped Copy	Зберегти копію з датою і часом
@@ -7086,7 +7169,7 @@ breakText	Glyphs	Гліфи
 @msg	stroke cannot be set on a symbol instance	stroke не можна задати для екземпляра символу
 @msg	fill on a symbol instance must be a solid color or none	fill екземпляра символу має бути суцільним кольором або none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} не можна задати для зображення без ефекту «Перетворити на фігуру» або «Обвести об’єкт»
-@msg	pass newName, registration, exportType, nineSlice and/or type	вкажіть newName, registration, exportType, nineSlice та/або type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	вкажіть newName, registration, exportType, nineSlice, type та/або alignToPixelGrid
 	Text Flow	Потік тексту
 	By Rows	За рядками
 	By Columns	За стовпцями
@@ -7428,6 +7511,8 @@ breakText	Glyphs	Гліфи
 @msg	No bridge of this width fits across the selected art	Місток такої ширини не вміщується впоперек виділеної графіки
 @msg	Some islands could not be joined to the area around the art	Деякі острівці не вдалося з’єднати з областю навколо графіки
 @msg	`width` must be from {lo} to {hi} pt	`width` має бути від {lo} до {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` має бути від -180 до 180 градусів
+@msg	`roundness` must be from 1 to 100%	`roundness` має бути від 1 до 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` має бути цілим числом від 1 до {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Рамка й лінії вибірки…
 	Weed Box and Lines	Рамка й лінії вибірки
@@ -8669,7 +8754,9 @@ breakText	Glyphs	Гліфи
 @msg	position must be normal, superscript or subscript	position має бути normal, superscript або subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position має бути topLeft, topRight, bottomLeft або bottomRight
 @msg	positions must be between 0 and 100000 pt	positions мають бути від 0 до 100000 pt
+@msg	ppi can't be more than {max} for this image	ppi для цього зображення не може перевищувати {max}
 @msg	ppi must be a positive number, not {ppi}	ppi має бути додатним числом, а не {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim залишає пікселі зображення без змін: не вказуйте ppi
 @msg	ppi must be between 1 and 2400	ppi має бути від 1 до 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` не є transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape має бути clippingMask|transparency

@@ -167,7 +167,7 @@ struct Placing {
     layers: WrittenLayers,
 }
 
-/// The layers an exporter writes besides the shown, printing ones
+/// The layers and objects an exporter writes besides the shown, printing ones
 /// ([`bake_document_placing_symbols`]). Template layers are never written.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct WrittenLayers {
@@ -175,16 +175,19 @@ pub struct WrittenLayers {
     pub hidden: bool,
     /// Layers that do not print.
     pub non_printing: bool,
+    /// Hidden objects other than layers (written hidden, as SVG writes them when it keeps hidden
+    /// layers).
+    pub hidden_objects: bool,
 }
 
 /// Does the export leave `n` and everything in it out, while [`bake_document_placing_symbols`]
-/// bakes? A hidden object other than a layer, a template layer, and a hidden layer or a layer
+/// bakes? A template layer, and a hidden object other than a layer, a hidden layer or a layer
 /// that does not print when the export leaves those out ([`WrittenLayers`]).
 fn unwritten(n: &Node) -> bool {
     PLACING.with(|p| {
         p.borrow().as_ref().is_some_and(|p| match n.kind {
             NodeKind::Layer { template, printable, .. } => template || !(printable || p.layers.non_printing) || !(n.visible || p.layers.hidden),
-            _ => !n.visible,
+            _ => !(n.visible || p.layers.hidden_objects),
         })
     })
 }
@@ -680,9 +683,11 @@ fn apart(offsets: &[Vec2], b: Rect) -> bool {
 
 /// Type `n` whose own geometry effects only move it ([`transform_moves`]) as a group of the moved
 /// type ([`moved_type`]). The group keeps `n`'s id, name, visibility, transparency, opacity mask and
-/// remaining (raster) effects, and the type in it has none of them. `None` otherwise.
+/// remaining (raster) effects, and the type in it has none of them. `None` otherwise, and for type
+/// whose copies each carry the raster effects listed before their Transform effect
+/// ([`crate::outer_effects`]), which is baked through its outlines as the canvas draws it.
 fn moved_type_group(n: &Node) -> Option<Node> {
-    if !matches!(n.kind, NodeKind::Text(_)) {
+    if !matches!(n.kind, NodeKind::Text(_)) || crate::reshape::copied_raster_at(n).is_some() {
         return None;
     }
     let moves = transform_moves(&geometry_effects(n))?;
@@ -1041,13 +1046,14 @@ pub fn bake_document(doc: &Document) -> Option<Document> {
 /// (live geometry effects, color adjustments and the rest [`needs_bake`] counts, in its own art or
 /// in the art of the symbols it places) replaced by that art as the instance places it, baked
 /// ([`placed_symbol_art`]), so the art draws as on the canvas wherever the instance is. For
-/// exporters that write each instance's art in its place (PDF, print, EPS, DXF), rather than
-/// writing each symbol once. `clip_slices`: whether 9-slice cells are clipped
-/// ([`Document::place_symbol_art`]) or not ([`Document::place_symbol_art_unclipped`]), as the
-/// exporter places other instances. `layers`: the hidden layers and layers that do not print
-/// that the exporter writes. Instances the export does not write (hidden ones, those in hidden
-/// objects, on template layers, and on the layers `layers` leaves out) stay as they are. The
-/// symbols' own art is left as it is.
+/// exporters that write each instance's art in its place (PDF, print, EPS, DXF, EMF, WMF), and
+/// for SVG, which writes the instances of other symbols as one shared definition. `clip_slices`:
+/// whether 9-slice cells are clipped ([`Document::place_symbol_art`]) or not
+/// ([`Document::place_symbol_art_unclipped`]), as the exporter places other instances. `layers`:
+/// the hidden layers, layers that do not print and hidden objects that the exporter writes.
+/// Instances the export does not write (template layers, and the hidden objects and layers
+/// `layers` leaves out, with what is in them) stay as they are. The symbols' own art is left as
+/// it is.
 pub fn bake_document_placing_symbols(doc: &Document, clip_slices: bool, layers: WrittenLayers) -> Option<Document> {
     bake(doc, Some((clip_slices, vectorcraft_doc::MAX_SYMBOL_NODES, layers)))
 }

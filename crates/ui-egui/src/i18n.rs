@@ -681,11 +681,12 @@ const MESSAGE_DEPTH: usize = 5;
 
 /// Translate a status or error message for display (see the module docs). Unknown messages, and
 /// parts of them (file names, numbers, a reason with no entry, a JSON object or array such as
-/// `{"objects": [...]}`, a value the message quotes in `"…"`, `“…”` or backticks, such as a
-/// symbol's name), stay as they are. A part that starts with `{` is translated only when it is a
-/// whole message with an exact entry. A part that starts with `[` is translated when it has an
-/// exact entry, such as `[x, y] (two numbers)`, or when it fits a template that starts with `[`
-/// and an index of digits, such as an effect's refusal ``[0] `id`: {why}``.
+/// `{"objects": [...]}`, a value the message quotes in `"…"`, `“…”`, `'…'` or backticks, such as a
+/// symbol's or a script property's name, and an `{ident}` placeholder's value, a script identifier),
+/// stay as they are. A part that starts with `{` is translated only when it is a whole message with
+/// an exact entry. A part that starts with `[` is translated when it has an exact entry, such as
+/// `[x, y] (two numbers)`, or when it fits a template that starts with `[` and an index of digits,
+/// such as an effect's refusal ``[0] `id`: {why}``.
 pub fn message(lang: Lang, s: &str) -> String {
     message_at(lang, s, MESSAGE_DEPTH)
 }
@@ -701,9 +702,15 @@ fn fill_message(lang: Lang, s: &str, found: Option<(&[String], catalog::Captures
     let count = caps.iter().find(|(k, _)| *k == "n").and_then(|(_, v)| v.parse::<u64>().ok());
     let form = count.map_or(forms.len().saturating_sub(1), |n| (lang.0.plural)(n).min(forms.len().saturating_sub(1)));
     let Some(template) = forms.get(form) else { return s.to_string() };
-    let quoted = |v: &str| [('"', '"'), ('“', '”'), ('`', '`')].iter().any(|(a, b)| s.contains(&format!("{a}{v}{b}")));
+    // A value is quoted when quotes surround it at its own place in `s`. The same text quoted at
+    // another place in `s` (a property named like the reason given for it) does not count.
+    let quoted = |v: &str| {
+        let at = (v.as_ptr() as usize).checked_sub(s.as_ptr() as usize);
+        let Some((before, after)) = at.and_then(|at| Some((s.get(..at)?, s.get(at + v.len()..)?))) else { return false };
+        [('"', '"'), ('“', '”'), ('\'', '\''), ('`', '`')].iter().any(|(a, b)| before.ends_with(*a) && after.starts_with(*b))
+    };
     let nested = |v: &str| {
-        if depth <= 1 || quoted(v) {
+        if depth <= 1 || v.is_empty() || quoted(v) {
             v.to_string()
         } else if v.starts_with('{') {
             exact_translation(lang.catalog(), v).unwrap_or_else(|| v.to_string())
@@ -719,6 +726,7 @@ fn fill_message(lang: Lang, s: &str, found: Option<(&[String], catalog::Captures
         .map(|(k, v)| match (&liquify, k) {
             (Some((tool, _)), "_1") => (k, tool.clone()),
             (Some((_, kinds)), "_2") => (k, kinds.clone()),
+            (_, "ident") => (k, v.to_string()),
             _ => (k, nested(v)),
         })
         .collect();
