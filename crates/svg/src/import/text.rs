@@ -29,7 +29,7 @@
 
 use craft_svg::tree::usvg;
 use std::borrow::Cow;
-use std::cell::RefCell;
+use std::cell::{OnceCell, RefCell};
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::ops::{Range, RangeInclusive};
@@ -774,6 +774,10 @@ struct Ctx {
     /// no usable one. The styles of a `<use>` instance share it, so each path is found and parsed
     /// once however many `<use>` elements show its text.
     paths: Rc<RefCell<HashMap<roxmltree::NodeId, Option<Rc<FollowedPath>>>>>,
+    /// Each element id in the document and the first element in document order that carries it
+    /// ([`Self::element`]). It is built when the first `<textPath>` names an element, and the
+    /// styles of a `<use>` instance share it.
+    ids: Rc<OnceCell<HashMap<Box<str>, roxmltree::NodeId>>>,
 }
 
 /// The path a `<textPath>` follows ([`Ctx::text_path`]).
@@ -788,6 +792,11 @@ struct FollowedPath {
 thread_local! {
     /// How many times [`Ctx::read_text_path`] has read a `<textPath>`'s path on this thread.
     static TEXT_PATH_READS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// How many times [`Ctx::element`] has walked a document's elements on this thread.
+    static ID_WALKS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// When set, [`Ctx::element`] walks the document for each id instead of using the map, so
+    /// tests can compare the two.
+    static LINEAR_IDS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 impl Ctx {
@@ -802,6 +811,7 @@ impl Ctx {
             elems: RefCell::default(),
             strong: RefCell::default(),
             paths: Rc::default(),
+            ids: Rc::default(),
         };
         let root = xml.root_element();
         let dim = |a: &str| root.attribute(a).and_then(|v| cx.length(v, DEFAULT_FONT_SIZE, 0.0)).filter(|v| *v > 0.0);
@@ -824,6 +834,7 @@ impl Ctx {
             elems: RefCell::default(),
             strong: RefCell::default(),
             paths: self.paths.clone(),
+            ids: self.ids.clone(),
         }
     }
 
@@ -1219,7 +1230,7 @@ impl Ctx {
             Some(d) => BezPath::from_svg(d).ok()?,
             None => {
                 let id = href(tp)?.trim().strip_prefix('#')?;
-                let el = xml.descendants().find(|n| n.is_element() && n.attribute("id") == Some(id))?;
+                let el = self.element(xml, id)?;
                 let d = match el.tag_name().name() {
                     "path" => el.attribute("d")?.to_string(),
                     _ => self.shape_path(el)?,
@@ -1236,6 +1247,32 @@ impl Ctx {
         }
         let usable = bp.segments().next().is_some();
         usable.then_some(FollowedPath { path: bp, author_length })
+    }
+
+    /// The first element in document order whose `id` is `id`, as the DOM's `getElementById`
+    /// finds it (https://dom.spec.whatwg.org/#dom-nonelementparentnode-getelementbyid). The first
+    /// call walks `xml` once to build [`Self::ids`]; later calls look the id up there. `xml` is
+    /// the document [`Self::new`] read.
+    fn element<'a, 'i>(&self, xml: &'a roxmltree::Document<'i>, id: &str) -> Option<XNode<'a, 'i>> {
+        #[cfg(test)]
+        if LINEAR_IDS.get() {
+            ID_WALKS.set(ID_WALKS.get() + 1);
+            return xml.descendants().find(|n| n.is_element() && n.attribute("id") == Some(id));
+        }
+        let ids = self.ids.get_or_init(|| {
+            #[cfg(test)]
+            ID_WALKS.set(ID_WALKS.get() + 1);
+            let mut ids = HashMap::new();
+            for n in xml.descendants().filter(|n| n.is_element()) {
+                if let Some(id) = n.attribute("id") {
+                    ids.entry(Box::from(id)).or_insert(n.id());
+                }
+            }
+            ids
+        });
+        let el = xml.get_node(*ids.get(id)?)?;
+        debug_assert_eq!(el.attribute("id"), Some(id), "the id map was built from another document");
+        Some(el)
     }
 
     /// The equivalent path of a basic shape (SVG 2 › Basic Shapes), as path data: what a
