@@ -166,7 +166,8 @@ impl SymbolismTool {
                 v["color"] = serde_json::to_value(c).unwrap_or(Value::Null);
                 v["keepModel"] = json!(true);
             }
-            if let Some(s) = &self.style {
+            // A style the document no longer has (a deleted one) is left out: the default style applies.
+            if let Some(s) = self.style.as_ref().filter(|s| cx.doc.graphic_styles.iter().any(|g| g.name == **s)) {
                 v["style"] = json!(s);
             }
             return ("symbol.spray".into(), v);

@@ -3419,7 +3419,8 @@ already walks Image Trace. Short agent entry points:
   `points` as `[x, y, pressure]` (each point's pen pressure, 0..1, is the intensity there), and for `size`
   `proportional` (true) and `affectsDensity` (false). `symbol.spray` takes `attributes`
   `{scrunch?, size?, spin?, screen?, stain?, style?}`, each `average` or `userDefined`, with `color`, `keepModel` and
-  `style` for the User Defined stain and style. `symbol.setDensity {from, to, ids?|id?}` gives the selected symbol
+  `style` for the User Defined stain and style (with `style: userDefined`, a `style` the document does not have is an
+  error). `symbol.setDensity {from, to, ids?|id?}` gives the selected symbol
   sets a new Symbol Set Density. VectorCraft's own rules:
   - `random` gives each instance its own share of the tool's change for the whole stroke, from none of it to twice
     it (the Spinner: a turn either way), the same each time the stroke is applied.

@@ -942,6 +942,10 @@ pub(super) fn symbol_spray(s: &mut Session, p: &Value) -> Result<Value> {
         None => s.paint.fill.color().unwrap_or(Color::BLACK),
     };
     let style = style_paint(&st.doc, p);
+    // Style: User Defined uses the style `style` names, so one the document does not have is an error.
+    if let Some(n) = str_param(p, "style").filter(|_| !modes.style && style.is_none()) {
+        return Err(bad(C, format!("unknown graphic style `{n}`")));
+    }
     let size = natural_size(&st.doc, &name);
     let set = st.selection.objects.first().copied().filter(|id| st.selection.len() == 1 && st.doc.node(*id).is_some_and(is_symbol_set));
     // Only a new Symbol Set needs a layer that takes new art.

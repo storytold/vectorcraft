@@ -124,7 +124,20 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
     // The checkboxes and choices as the fields hold them, so a value the tools do not have is refused.
     values.extend(SWITCHES.iter().chain(&SPRAY).chain(&["method"]).filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))));
     // An option `tool.setOption` refuses leaves the symbol sets as they are too.
-    vectorcraft_tools::symbolism::check_options(&d.str("tool"), &values)?;
+    let tool = d.str("tool");
+    if !SYMBOLISM.contains(&tool.as_str()) {
+        return Err(format!("unknown tool `{tool}`"));
+    }
+    // A number, or text that reads as one (a length with its unit for the diameter).
+    let readable = |v: &Value| match v {
+        Value::Number(_) => true,
+        Value::String(s) => vectorcraft_doc::Unit::Points.parse(s).is_some(),
+        _ => false,
+    };
+    if let Some(k) = NUMBERS.iter().chain(&[DENSITY_WAS]).find(|k| d.fields.get(**k).is_some_and(|v| !readable(v))) {
+        return Err(format!("`{k}` must be a number"));
+    }
+    vectorcraft_tools::symbolism::check_options(&tool, &values)?;
     let (from, to) = (d.f64(DENSITY_WAS, 0.0).clamp(1.0, 10.0), d.f64("density", 0.0).clamp(1.0, 10.0));
     let sets = selected_sets(app);
     if d.fields.contains_key(DENSITY_WAS) && from != to && !sets.is_empty() {
@@ -281,6 +294,20 @@ mod tests {
         d.fields.insert("usePressure".into(), json!(1));
         assert!(super::super::confirm(&mut app).is_err());
         assert_eq!((width(&app), undo(&app)), (was, steps));
+        // A tool that is not a Symbolism tool, or a density that is not a number.
+        for (k, v) in [("tool", json!("pen")), ("density", json!("three")), ("densityWas", json!(null))] {
+            app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("density".into(), json!(3));
+            d.fields.insert(k.into(), v);
+            assert!(super::super::confirm(&mut app).is_err(), "{k}");
+            assert_eq!((width(&app), undo(&app)), (was, steps), "{k}");
+        }
+        // A length with its unit is a diameter.
+        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("diameter".into(), json!("12 pt"));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.tool_options_of("symbolSizer")["diameter"].as_f64(), Some(12.0));
         assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(9.0));
         app.ui.dialog = None;
         // Without a set selected only the option changes.

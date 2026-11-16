@@ -488,6 +488,11 @@ fn bad_sprayer_attributes_are_refused() {
     }
     refused(&mut s, "symbol.spray", json!({"name": "Dot", "points": [[200, 150]], "keepModel": "yes"}), "`keepModel` must be true or false");
     refused(&mut s, "symbol.spray", json!({"name": "Dot", "points": [[200, 150, "x"]]}), "a point's pressure must be a number, not \"x\"");
+    // Style: User Defined with a style the document does not have; Average does not use it.
+    let user = json!({"name": "Dot", "points": [[200, 150]], "attributes": {"style": "userDefined"}, "style": "Nope"});
+    refused(&mut s, "symbol.spray", user, "unknown graphic style `Nope`");
+    let average = json!({"name": "Dot", "points": [[200, 150]], "style": "Nope"});
+    assert_eq!(s.execute("symbol.spray", &average).unwrap()["count"], 1);
     let all = json!({"scrunch": "average", "size": "userDefined", "spin": null, "screen": "average", "stain": "average", "style": "average"});
     assert_eq!(s.execute("symbol.spray", &json!({"name": "Dot", "points": [[200, 150]], "attributes": all})).unwrap()["count"], 1);
 }
