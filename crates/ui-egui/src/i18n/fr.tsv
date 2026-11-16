@@ -4881,7 +4881,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	no anchor points selected	aucun point d’ancrage sélectionné
 @msg	`points` must be three [x, y] pairs of numbers	`points` doit contenir trois paires de nombres [x, y]
 @msg	direct-select three anchor points, or give `points`	sélectionnez trois points d’ancrage avec l’outil Sélection directe, ou indiquez `points`
-@msg	no circle passes through these points: two are the same or all three lie on one line	aucun cercle ne passe par ces points : deux sont identiques ou les trois sont alignés
+@msg	no circle passes through these points: two are the same or all three lie on one line	aucun cercle ne passe par ces points : deux sont identiques ou les trois sont alignés
 @msg	no app to open files here	aucune application pour ouvrir des fichiers ici
 @msg	no artboard	aucun plan de travail
 @msg	no artboard {i} (0-based; the document has {_1})	aucun plan de travail {i} (numérotation à partir de 0 ; le document en a {_1})
