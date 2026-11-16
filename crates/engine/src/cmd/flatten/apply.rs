@@ -5,8 +5,8 @@ use super::compose::{Builder, CLEAR, Composer, Elem, Fill, Kind, Px, WHITE};
 use super::options::FlattenOptions;
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BlendMode, Color, ColorMode, Document, EngineError, FillLayer, FillRule, ImageBlob, ImageObject, Inks,
-    MAX_PIXELS, Node, NodeId, NodeKind, Paint, PathData, Rect, Result, composite, effects, isolated_doc, leaves, outline_strokes, planes_cmyk, po,
-    separate, shape_node, shapes, unique_key,
+    Knockout, MAX_PIXELS, Node, NodeId, NodeKind, Paint, PathData, Rect, Result, composite, effects, isolated_doc, leaves, outline_strokes,
+    planes_cmyk, po, separate, shape_node, shapes, unique_key,
 };
 
 // ---------- plan ----------
@@ -760,21 +760,145 @@ pub(crate) fn flatten_document(doc: &Document, o: &FlattenOptions) -> Result<Opt
 /// ([`expand_transparent_tile_images`]).
 pub(crate) fn flatten_expanded(doc: &Document, o: &FlattenOptions) -> Result<Option<Document>> {
     let outlining = o.text_to_outlines || o.strokes_to_outlines || !o.preserve_overprints;
-    if !outlining && !doc.layers.iter().any(|l| o.shows_transparency(doc, l) || o.draws_see_through_image(l)) {
-        return Ok(None);
-    }
-    let mut roots = vec![];
-    for l in doc.layers.iter().filter(|l| l.visible && !matches!(l.kind, NodeKind::Layer { template: true, .. })) {
-        let children = l.children().map_or(&[][..], Vec::as_slice);
-        roots.extend(children.iter().skip(usize::from(l.clips())).filter(|c| c.visible && !c.is_ruler_guide()).map(|c| c.id));
-    }
-    let plan = plan(doc, &roots, o, true)?;
-    if plan.flat.is_empty() && !plan.work.iter().any(|k| k.changes) {
+    let needs_flatten = outlining
+        || doc
+            .layers
+            .iter()
+            .any(|l| (o.no_transparency.is_some() && !l.has_default_transparency()) || o.shows_transparency(doc, l) || o.draws_see_through_image(l));
+    if !needs_flatten {
         return Ok(None);
     }
     let mut d = doc.clone();
+    let changed = normalize_layer_transparency(&mut d, o);
+    let mut roots = vec![];
+    for l in d.layers.iter().filter(|l| l.visible && !matches!(l.kind, NodeKind::Layer { template: true, .. })) {
+        let children = l.children().map_or(&[][..], Vec::as_slice);
+        roots.extend(children.iter().skip(usize::from(l.clips())).filter(|c| c.visible && !c.is_ruler_guide()).map(|c| c.id));
+    }
+    let plan = plan(&d, &roots, o, true)?;
+    if plan.flat.is_empty() && !plan.work.iter().any(|k| k.changes) {
+        if changed {
+            if o.no_transparency.is_some() {
+                for l in &mut d.layers {
+                    sanitize_container_transparency(Arc::make_mut(l));
+                }
+            }
+            return Ok(Some(d));
+        }
+        return Ok(None);
+    }
     apply(&mut d, &mut vectorcraft_doc::Selection::default(), plan, o)?;
+    if o.no_transparency.is_some() {
+        for l in &mut d.layers {
+            sanitize_container_transparency(Arc::make_mut(l));
+        }
+    }
     Ok(Some(d))
+}
+
+/// Flatten and normalize container-level transparency (on layers and sublayers) into groups
+/// so that the flattener's plan includes them and leaves no container transparency behind.
+fn normalize_layer_transparency(d: &mut Document, o: &FlattenOptions) -> bool {
+    let mut changed = false;
+    let mut layers = std::mem::take(&mut d.layers);
+    for l in &mut layers {
+        changed |= normalize_node_transparency(d, Arc::make_mut(l), o);
+    }
+    d.layers = layers;
+    changed
+}
+
+fn normalize_node_transparency(d: &mut Document, n: &mut Node, o: &FlattenOptions) -> bool {
+    let mut changed = false;
+    let is_layer = n.is_layer();
+    let clips = n.clips();
+
+    if let Some(children) = n.children_mut() {
+        for c in children.iter_mut() {
+            if c.is_layer() {
+                changed |= normalize_node_transparency(d, Arc::make_mut(c), o);
+            }
+        }
+    }
+
+    let has_transparency = !n.has_default_transparency()
+        || !n.appearance.effects.is_empty()
+        || n.appearance.items.iter().any(|i| i.visible() && (i.opacity() < 1.0 || i.blend() != BlendMode::Normal || !i.effects().is_empty()));
+
+    if is_layer && has_transparency {
+        let children = n.children().map_or(&[][..], Vec::as_slice);
+        let (guides, art): (Vec<_>, Vec<_>) = children.iter().cloned().partition(|c| c.is_ruler_guide());
+
+        if art.is_empty() {
+            n.opacity = 1.0;
+            n.blend = BlendMode::Normal;
+            n.isolate = false;
+            n.knockout = Knockout::Neutral;
+            n.knockout_shape = false;
+            n.extras_mut().mask = None;
+            n.appearance = Appearance::default().into();
+            n.set_clips(false);
+            changed = true;
+        } else {
+            let mut g = Node::group(d.alloc_id(), art);
+            if clips {
+                g.set_clips(true);
+            }
+            g.opacity = n.opacity;
+            g.blend = n.blend;
+            g.isolate = n.isolate;
+            g.knockout = n.knockout;
+            g.knockout_shape = n.knockout_shape;
+            g.appearance = n.appearance.clone();
+            g.extras_mut().mask = n.extras_mut().mask.take();
+
+            n.set_clips(false);
+            n.opacity = 1.0;
+            n.blend = BlendMode::Normal;
+            n.isolate = false;
+            n.knockout = Knockout::Neutral;
+            n.knockout_shape = false;
+            n.appearance = Appearance::default().into();
+
+            let mut new_children = vec![Arc::new(g)];
+            new_children.extend(guides);
+            if let Some(ch) = n.children_mut() {
+                *ch = new_children;
+            }
+            changed = true;
+        }
+    } else if is_layer && o.no_transparency.is_some() && !n.visible {
+        n.opacity = 1.0;
+        n.blend = BlendMode::Normal;
+        n.isolate = false;
+        n.knockout = Knockout::Neutral;
+        n.knockout_shape = false;
+        n.extras_mut().mask = None;
+        n.appearance = Appearance::default().into();
+    }
+
+    changed
+}
+
+fn sanitize_container_transparency(n: &mut Node) {
+    if n.is_container() {
+        n.opacity = 1.0;
+        n.blend = BlendMode::Normal;
+        n.isolate = false;
+        n.knockout = Knockout::Neutral;
+        n.knockout_shape = false;
+        if let Some(m) = n.extras_mut().mask.as_mut() {
+            m.disabled = true;
+        }
+        n.extras_mut().mask = None;
+        if let Some(children) = n.children_mut() {
+            for c in children.iter_mut() {
+                if c.is_container() {
+                    sanitize_container_transparency(Arc::make_mut(c));
+                }
+            }
+        }
+    }
 }
 
 // ---------- apply ----------

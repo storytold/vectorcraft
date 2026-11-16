@@ -699,3 +699,56 @@ fn flattening_keeps_the_group_in_the_clipping_layer_when_the_layer_below_differs
     }
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
+
+/// #6861: Layer opacity, blend modes, sublayers with transparency, and empty transparent layers:
+/// PDF/X-1a, PDF/X-3, and PDF 1.3 automatically flatten and reduce transparency without failing,
+/// and the output contains no transparency dictionary or soft mask.
+#[test]
+fn pdfx_flattens_layer_and_sublayer_transparency() {
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200, "colorMode": "cmyk"}));
+
+    // Bottom layer: base artwork
+    let _layer1 = s.doc().unwrap().doc.layers[0].id.0;
+    run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 80, "height": 80}));
+    run(&mut s, "paint.setFill", json!({"color": {"c": 1.0, "m": 0.0, "y": 0.0, "k": 0.0}}));
+
+    // Middle layer with 50% opacity and Multiply blend mode
+    let layer2 = run(&mut s, "layer.new", json!({}))["id"].as_u64().unwrap();
+    run(&mut s, "shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 80}));
+    run(&mut s, "paint.setFill", json!({"color": {"c": 0.0, "m": 1.0, "y": 0.0, "k": 0.0}}));
+    run(&mut s, "transparency.set", json!({"ids": [layer2], "opacity": 50, "blendMode": "multiply"}));
+
+    // Sublayer inside layer2 with 70% opacity
+    let sublayer = run(&mut s, "layer.newSublayer", json!({"parent": layer2}))["id"].as_u64().unwrap();
+    run(&mut s, "shape.rectangle", json!({"x": 60, "y": 60, "width": 80, "height": 80}));
+    run(&mut s, "paint.setFill", json!({"color": {"c": 0.0, "m": 0.0, "y": 1.0, "k": 0.0}}));
+    run(&mut s, "transparency.set", json!({"ids": [sublayer], "opacity": 70}));
+
+    // Empty layer with opacity (must not leave /CA or /ca in output)
+    let empty_layer = run(&mut s, "layer.new", json!({}))["id"].as_u64().unwrap();
+    run(&mut s, "transparency.set", json!({"ids": [empty_layer], "opacity": 40}));
+
+    for standard in ["pdfX1a", "pdfX3"] {
+        let (text, warnings) = pdf(&mut s, json!({"standard": standard}));
+        assert!(text.starts_with("%PDF-1.3"), "{standard}");
+        assert!(warnings.iter().any(|w| w.contains("flattened")), "{standard}: expected flattening warning");
+        for no in ["/SMask", "/S/Transparency", "/ca ", "/CA "] {
+            assert!(!text.contains(no), "{standard}: forbidden token '{no}' found in text:\n{text}");
+        }
+        // Verify it can be imported back
+        let v = s.execute("document.exportPdf", &json!({"standard": standard})).unwrap();
+        let bytes = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
+        let imported = vectorcraft_pdf::import(&bytes).unwrap();
+        assert!(!imported.layers.is_empty());
+    }
+
+    // PDF 1.3 export with compatibility: 1.3
+    let (text, warnings) = pdf(&mut s, json!({"compatibility": "1.3", "preserveEditing": false}));
+    assert!(text.starts_with("%PDF-1.3"));
+    assert!(warnings.iter().any(|w| w.contains("flattened")));
+    for no in ["/SMask", "/S/Transparency", "/ca ", "/CA "] {
+        assert!(!text.contains(no), "PDF 1.3: forbidden token '{no}' found in text");
+    }
+}
