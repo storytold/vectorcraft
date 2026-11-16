@@ -11009,11 +11009,17 @@ Transform Object Only while it is off. Use Registration Point for Symbol is the
 `useRegistrationPointForSymbol` preference: with it on and one symbol instance selected, those panels show and set X
 and Y at the symbol's registration point (`symbol.options` `registration`) where the instance's transform puts it
 (after a flip the art's top-left corner is the box's top-right one), give `reference` as the box's point nearest it
-and turn, shear and flip about it (`origin`).
+and turn, shear and flip about it (`origin`). Show on Shape Creation is the `showOnShapeCreation` preference (off
+until set): with it on, the app shows the Transform panel, as `window.panel {"panel": "transform"}` does, after a
+`shape.rectangle`, `shape.ellipse`, `shape.polygon`, `shape.star` or `shape.line` succeeds, alone or as a
+`command.batch` step, whether a shape tool's drag, its dialog, the Shaper tool or an agent ran it. A panel that is showing already
+stays as it is. Failed commands, saved steps an action plays, a script's commands and Presentation Mode leave the
+panels as they are.
 
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"transformPanelPatterns","value":"pattern"}}}
 {"name":"run_command","arguments":{"command":"object.setBounds","params":{"x":170,"reference":4,"objects":false,"patterns":true}}}
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"showOnShapeCreation","value":true}}}
 ```
 
 ## Plug-ins

@@ -621,6 +621,9 @@ impl VectorcraftApp {
         trace_runs::show(self, &ctx);
         opening::show(self, &ctx);
         palette::show(self, &ctx);
+        // A shape drawn on the canvas, in a dialog or by a command in this pass shows the Transform
+        // panel (Show on Shape Creation).
+        panels::transform::show_on_shape_creation(self, &ctx);
         // After every panel had its chance to draw in this pass.
         crate::panels::three_d::end_stale_drag(self, &ctx);
         if self.custom_titlebar {

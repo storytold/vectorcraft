@@ -436,6 +436,7 @@ impl Session {
             st.last_perspective = perspective_again;
         }
         let (doc, journal, grouped) = (self.active().map(|d| d.uid), self.journal.len(), self.undo_group_docs());
+        self.note_shape_drawn(&preview.0, &preview.1);
         self.journal.push(preview);
         self.journal_in_undo_groups(doc, &grouped, journal);
         if self.depth == 0 {

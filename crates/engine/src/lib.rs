@@ -109,6 +109,9 @@ pub struct Session {
     /// Set while saved steps play ([`Session::replay`]): [`Session::execute`] then takes keys the
     /// command's params description doesn't name instead of refusing them.
     replaying: bool,
+    /// Set when a command that draws a shape was journaled outside saved steps
+    /// ([`Session::take_shape_drawn`]).
+    shape_drawn: bool,
     /// Set when the active tool panicked (see [`guard`]); reported by the next tool event.
     tool_panic: Option<EngineError>,
     /// How many times switching or closing documents, or replacing the active one, has started the
@@ -403,7 +406,7 @@ mod session;
 pub(crate) use command_sets::SELECTS_GIVEN_IDS;
 #[cfg(test)]
 use command_sets::given_ids;
-pub use command_sets::{FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_tool_edit};
+pub use command_sets::{DRAWS_SHAPE, FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_tool_edit};
 pub use doc_state::{DocState, OpenRows, RecalledSelection};
 pub use error::{EngineError, READ_ONLY_LOCATION, Result, SCRIPT_BUSY};
 #[cfg(test)]

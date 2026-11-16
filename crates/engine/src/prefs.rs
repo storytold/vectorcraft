@@ -358,6 +358,11 @@ pub struct Prefs {
     /// selected, the panel and the Properties panel's Transform section measure and transform it
     /// from its symbol's registration point instead of the reference point.
     pub use_registration_point_for_symbol: bool,
+    /// The Transform panel menu's Show on Shape Creation: drawing a shape with the Rectangle,
+    /// Rounded Rectangle, Ellipse, Polygon, Star or Line Segment tool (a drag or OK in the tool's
+    /// dialog), a shape the Shaper tool recognizes, or running one of [`crate::DRAWS_SHAPE`], shows
+    /// the Transform panel.
+    pub show_on_shape_creation: bool,
     /// The tools' persistent options by store (a tool id, or a store a family shares: `liquify`
     /// holds the Liquify tools' Global Brush Dimensions), see [`vectorcraft_tools::settings`]:
     /// kept across tool switches and saved with the preferences. Not a Preferences dialog field:
@@ -559,6 +564,7 @@ impl Default for Prefs {
             single_corner_radius: true,
             transform_panel_patterns: "default".to_string(),
             use_registration_point_for_symbol: false,
+            show_on_shape_creation: false,
             tool_settings: Default::default(),
             perspective_presets: vec![],
             blend_options: None,

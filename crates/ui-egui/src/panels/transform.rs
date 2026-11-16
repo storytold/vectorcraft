@@ -557,6 +557,22 @@ pub fn set_pref(app: &mut VectorcraftApp, key: &str, on: bool) {
     }
 }
 
+/// Show on Shape Creation (`showOnShapeCreation`): after a shape was drawn
+/// ([`vectorcraft_engine::Session::take_shape_drawn`]), the Transform panel shows as Window ›
+/// Transform shows it, unless it can be seen already. In Presentation Mode, or with the option off,
+/// the panels stay as they are. Called once per frame, after the canvas and the dialogs; a frame
+/// that shows the panel asks `ctx` for another, which draws it.
+pub fn show_on_shape_creation(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let drawn = app.session.take_shape_drawn();
+    if !drawn || !app.session.prefs.show_on_shape_creation || app.ui.screen_mode >= 3 || crate::panel_docking::visible(&app.ui, "transform") {
+        return;
+    }
+    match app.run("window.panel", json!({ "panel": "transform" })) {
+        Ok(_) => ctx.request_repaint(),
+        Err(e) => app.status(e),
+    }
+}
+
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let hidden: bool = pstate(ui.ctx(), "xf-hide-options");
     let has = super::selection_len(app) > 0;
@@ -564,6 +580,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let origin = app.selection_box().map(|b| panel_reference(app, ui, &b).origin());
     if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
         set_pstate(ui.ctx(), "xf-hide-options", !hidden);
+    }
+    let on_creation = app.session.prefs.show_on_shape_creation;
+    if menu_item(ui, tl!("Show on Shape Creation"), true, on_creation) {
+        set_pref(app, "showOnShapeCreation", !on_creation);
     }
     ui.separator();
     if menu_item(ui, tl!("Flip Horizontal"), has, false) {
