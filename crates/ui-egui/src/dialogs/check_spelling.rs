@@ -277,9 +277,19 @@ fn queued_word(w: &Value) -> Option<Word> {
     }
 }
 
-/// The check's params for the dialog's scope, going on from `from` ((id, byte)) when given.
-fn check_params(d: &Dialog, from: Option<(u64, usize)>, max: usize) -> Value {
-    let ids = d.fields.get("ids").cloned().unwrap_or(Value::Null);
+/// The check's params for the dialog's scope, going on from `from` ((id, byte)) when given. A
+/// selected object that another command deleted is left out, so the rest of the selection is still
+/// checked; with every one deleted, the list is empty and the check finds nothing (not the whole
+/// document, which `ids` left out would check).
+fn check_params(app: &VectorcraftApp, d: &Dialog, from: Option<(u64, usize)>, max: usize) -> Value {
+    let ids = match d.fields.get("ids") {
+        Some(Value::Array(ids)) => {
+            let exists =
+                |id: &Value| id.as_u64().is_some_and(|id| app.session.doc().is_ok_and(|st| st.doc.node(vectorcraft_doc::NodeId(id)).is_some()));
+            Value::Array(ids.iter().filter(|id| exists(id)).cloned().collect())
+        }
+        _ => Value::Null,
+    };
     match from {
         Some((id, byte)) => json!({ "ids": ids, "from": { "id": id, "byte": byte }, "max": max }),
         None => json!({ "ids": ids, "max": max }),
@@ -293,7 +303,8 @@ fn check_params(d: &Dialog, from: Option<(u64, usize)>, max: usize) -> Value {
 pub fn advance(app: &mut VectorcraftApp, d: &mut Dialog, mut from: Option<(u64, usize)>, mut max: usize) -> Result<(), String> {
     let skipped = get_skipped(d);
     loop {
-        let check_res = match app.run("text.spelling.check", check_params(d, from, max)) {
+        let params = check_params(app, d, from, max);
+        let check_res = match app.run("text.spelling.check", params) {
             Ok(r) => r,
             // The object `from` names left the scope (another command hid, locked or deleted
             // it): start the scope again, where every word before is now right or skipped.
@@ -541,7 +552,8 @@ fn change_all(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     let mut by_node: BTreeMap<u64, Vec<(usize, usize)>> = BTreeMap::new();
     let mut from = None;
     loop {
-        let check_res = app.run("text.spelling.check", check_params(d, from, page())).map_err(|e| e.to_string())?;
+        let params = check_params(app, d, from, page());
+        let check_res = app.run("text.spelling.check", params).map_err(|e| e.to_string())?;
         let words: Vec<Word> = check_res.get("words").and_then(Value::as_array).map(|a| a.iter().filter_map(word_at).collect()).unwrap_or_default();
         let more = check_res.get("more").and_then(Value::as_bool).unwrap_or(false);
         for w in &words {
@@ -978,6 +990,24 @@ mod tests {
         app.run("object.lock", json!({ "ids": [first] })).unwrap();
         act(&mut app, super::ignore);
         assert_eq!(shown(&app), (second, 0, WORD_B.to_string()), "on to the type still in the scope");
+    }
+
+    #[test]
+    fn a_selected_object_deleted_under_the_dialog_leaves_the_scope() {
+        let mut app = app();
+        let first = text(&mut app, 50.0, &format!("{WORD_A} here"));
+        let second = text(&mut app, 100.0, &format!("{WORD_B} there"));
+        let outside = text(&mut app, 150.0, &format!("{WORD_C} elsewhere"));
+        app.run("select.set", json!({ "ids": [first, second] })).unwrap();
+        super::open(&mut app).unwrap();
+        assert_eq!(shown(&app).0, first);
+        app.run("edit.clear", json!({ "ids": [first] })).unwrap();
+        act(&mut app, super::ignore);
+        assert_eq!(shown(&app), (second, 0, WORD_B.to_string()), "on to the selected type that is left");
+        app.run("edit.clear", json!({ "ids": [second] })).unwrap();
+        act(&mut app, super::ignore);
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert!(d.bool("done"), "nothing left in the selection: not the rest of the document ({outside})");
     }
 
     /// Marks the first `n` occurrences of WORD_B in `id` (each WORD_B and a space) as skipped by
