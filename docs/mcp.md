@@ -12324,11 +12324,12 @@ Commands:
   With three or more circles, every two whose outlines are at most `reach` apart (0 to 10,000 pt, 10 by default;
   overlapping ones included) are bridged the same way, and the bridges that connect are united into one shape each,
   which can have holes where bridges enclose space; holes smaller than 1% of the smallest circle's area are filled. A
-  pair within reach but too far apart for the radius or gap gets no bridge. Each shape replaces its circles, painted as
+  pair within reach but too far apart for the radius or gap gets no bridge, and so does a pair whose neck would be
+  thinner than the precision its shape is united at. Each shape replaces its circles, painted as
   the topmost of them and in its place, or with `keepOriginals` goes directly above that circle. A circle bridged to no
   other stays as it is. The shapes and the circles left as they are are selected. It is an error when any pair within
-  reach has one circle inside the other, when no pair within reach can be bridged (with the same suggestion of a larger
-  radius or gap), when no two circles are within reach, and above 2,000 circles or 8,000 bridges. → `{ids, alone}`:
+  reach has one circle inside the other, when no pair within reach can be bridged (suggesting a larger radius or gap
+  only when the largest would bridge a pair of them under these rules), when no two circles are within reach, and above 2,000 circles or 8,000 bridges. → `{ids, alone}`:
   the shapes and the circles left as they are, with `id` as well for two circles. Smooth Bridge… opens a dialog
   (`ui.menuDialog {command}`, kind `smoothBridge`) with Constant Gap (a Gap field in place of the Radius field in
   percent), Reach (unavailable with two circles selected), Keep Originals and Preview.

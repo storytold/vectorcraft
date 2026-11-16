@@ -34,7 +34,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         "Smooth Bridge",
         ["Object", "Plug-ins", "Path Precision Tools"],
         None,
-        "{radius?: % 1..1000 (100; the radius of each bridge's two arcs as a percentage of the smaller circle's radius: larger makes a wider, gentler bridge), gap?: pt 0..1000 (instead of radius: the arcs' radius is the smaller circle's radius plus this gap, so each arc stays this gap away from a circle of the smaller circle's size about the arc's center; for equal circles this gap apart that is where a third circle this gap from both sits, as in a triangular grid, so the channels around an empty place in such a grid are one width; giving both is an error), reach?: pt 0..10000 (10; with three or more circles: how far apart two circles' outlines may be for a bridge between them, overlapping ones included; two circles are bridged at any distance), keepOriginals?: bool (false: each outline replaces its circles, painted as the topmost of them; true: it goes directly above that circle and the circles stay), ids?: [id] (default: the selection)} join circles (paths whose outline is a circle, not hidden or locked) into metaball (aka meatball) shapes. Two circles become one closed outline: around each circle on its side away from the other, and along two concave arcs, one on each side, that touch both circles so the outline runs on smoothly into them. With three or more, every two circles within reach are bridged the same way, and the bridges that connect are united into one shape each (holes smaller than 1% of the smallest circle's area are filled); a pair within reach but too far apart for the radius gets no bridge, and a circle bridged to no other is left as it is. Overlapping and touching circles are joined too. One circle inside another (among three or more, any such pair within reach) is an error; so are two circles too far apart for the radius (the arcs would not reach both, or would cross), or three or more with no pair the arcs can join, which suggests a larger radius or gap when the largest one would bridge them; so are no two circles within reach, more than 2000 circles and more than 8000 bridges. One undo step; the outlines (and the circles left as they are) are selected → {ids, alone}, with {id} too for two circles",
+        "{radius?: % 1..1000 (100; the radius of each bridge's two arcs as a percentage of the smaller circle's radius: larger makes a wider, gentler bridge), gap?: pt 0..1000 (instead of radius: the arcs' radius is the smaller circle's radius plus this gap, so each arc stays this gap away from a circle of the smaller circle's size about the arc's center; for equal circles this gap apart that is where a third circle this gap from both sits, as in a triangular grid, so the channels around an empty place in such a grid are one width; giving both is an error), reach?: pt 0..10000 (10; with three or more circles: how far apart two circles' outlines may be for a bridge between them, overlapping ones included; two circles are bridged at any distance), keepOriginals?: bool (false: each outline replaces its circles, painted as the topmost of them; true: it goes directly above that circle and the circles stay), ids?: [id] (default: the selection)} join circles (paths whose outline is a circle, not hidden or locked) into metaball (aka meatball) shapes. Two circles become one closed outline: around each circle on its side away from the other, and along two concave arcs, one on each side, that touch both circles so the outline runs on smoothly into them. With three or more, every two circles within reach are bridged the same way, and the bridges that connect are united into one shape each (holes smaller than 1% of the smallest circle's area are filled); a pair within reach but too far apart for the radius gets no bridge, and so does one whose neck would be thinner than the precision its shape is united at, and a circle bridged to no other is left as it is. Overlapping and touching circles are joined too. One circle inside another (among three or more, any such pair within reach) is an error; so are two circles too far apart for the radius (the arcs would not reach both, or would cross), or three or more with no pair the arcs can join, which suggests a larger radius or gap when the largest one would bridge them; so are no two circles within reach, more than 2000 circles and more than 8000 bridges. One undo step; the outlines (and the circles left as they are) are selected → {ids, alone}, with {id} too for two circles",
         has_selection,
         bridge
     )]
@@ -80,7 +80,7 @@ fn bridge(s: &mut Session, p: &Value) -> Result<Value> {
     let (shapes, alone): (Vec<(Vec<NodeId>, PathData)>, Vec<NodeId>) = match only.as_slice() {
         [a, b] => match pt::smooth_bridge(*a, *b, arc.between(*a, *b)) {
             Ok(sp) => (vec![(roots_of(&circles, &[0, 1]), PathData::single(sp))], vec![]),
-            Err(e) => return Err(refusal(e, arc, *a, *b)),
+            Err(e) => return Err(refusal(e, arc, |largest| pt::smooth_bridge(*a, *b, largest.between(*a, *b)).is_ok())),
         },
         _ => {
             let made = pt::bridge_many(&only, arc, reach).map_err(|e| match e {
@@ -88,10 +88,9 @@ fn bridge(s: &mut Session, p: &Value) -> Result<Value> {
                 pt::ManyError::TooManyBridges => bad(C, "that makes too many bridges (at most 8000): lower the reach"),
                 pt::ManyError::NoneInReach => bad(C, "no two circles are within reach: raise the reach"),
                 pt::ManyError::TooComplex => bad(C, "the bridged circles are too complex to unite"),
-                pt::ManyError::Pair(i, j, e) => match (only.get(i), only.get(j)) {
-                    (Some(a), Some(b)) => refusal(e, arc, *a, *b),
-                    _ => bad(C, "select two or more circles to bridge"),
-                },
+                // Under the many-circle rules: a pair the largest radius or gap bridges on its own
+                // can still have a neck too thin to unite among the others.
+                pt::ManyError::Pair(_, _, e) => refusal(e, arc, |largest| pt::bridges_any(&only, largest, reach)),
                 pt::ManyError::Bad => bad(C, "select two or more circles to bridge"),
             })?;
             let shapes = made.joined.into_iter().map(|j| (roots_of(&circles, &j.members), j.outline)).collect();
@@ -146,14 +145,14 @@ fn roots_of(circles: &[(NodeId, pt::Circle)], at: &[usize]) -> Vec<NodeId> {
     at.iter().filter_map(|&i| circles.get(i)).map(|(id, _)| *id).collect()
 }
 
-/// The error for circles `a` and `b` that arcs of `arc` can't bridge. A larger radius or gap
-/// bridges circles a smaller one cannot, so it suggests one only when the largest allowed would.
-fn refusal(e: pt::BridgeError, arc: pt::ArcRadius, a: pt::Circle, b: pt::Circle) -> EngineError {
+/// The error for circles that arcs of `arc` can't bridge. A larger radius or gap bridges circles a
+/// smaller one cannot, so it suggests one only when `bridges` says the largest allowed would.
+fn refusal(e: pt::BridgeError, arc: pt::ArcRadius, bridges: impl FnOnce(pt::ArcRadius) -> bool) -> EngineError {
     let largest = match arc {
         pt::ArcRadius::Share(_) => pt::ArcRadius::Share(RADII.1 / 100.0),
         pt::ArcRadius::Gap(_) => pt::ArcRadius::Gap(GAPS.1),
     };
-    let would = pt::smooth_bridge(a, b, largest.between(a, b)).is_ok();
+    let would = e == pt::BridgeError::TooFar && bridges(largest);
     match (e, arc, would) {
         (pt::BridgeError::Inside, ..) => bad(C, "one circle is inside the other"),
         (pt::BridgeError::TooFar, pt::ArcRadius::Share(_), true) => bad(C, "the circles are too far apart for this radius: raise the radius"),

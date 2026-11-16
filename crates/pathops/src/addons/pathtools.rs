@@ -28,7 +28,7 @@ use kurbo::{CubicBez, ParamCurve, ParamCurveArclen, ParamCurveNearest, Point, Ve
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
 
 pub use bridge::{
-    ArcRadius, BridgeError, Bridged, Circle, Joined, MAX_BRIDGED_CIRCLES, MAX_BRIDGES, ManyError, bridge_many, circle_of, smooth_bridge,
+    ArcRadius, BridgeError, Bridged, Circle, Joined, MAX_BRIDGED_CIRCLES, MAX_BRIDGES, ManyError, bridge_many, bridges_any, circle_of, smooth_bridge,
 };
 pub use crossings::{MAX_CROSSED_BY_SEGMENTS, MAX_CROSSING_SEGMENTS, Place, Work, crossings, crossings_on, crossings_on_within, insert_at};
 pub use dashes::{DashSpec, Piece, divide_dashes};

@@ -232,38 +232,7 @@ pub enum ManyError {
 /// too far apart for the arcs gets no bridge; a circle bridged to no other is left alone. One
 /// circle inside another is an error, and so is no pair that the arcs can join.
 pub fn bridge_many(circles: &[Circle], arc: ArcRadius, reach: f64) -> Result<Bridged, ManyError> {
-    if circles.len() > MAX_BRIDGED_CIRCLES {
-        return Err(ManyError::TooManyCircles);
-    }
-    let fine = |c: &Circle| c.center.x.is_finite() && c.center.y.is_finite() && c.radius.is_finite() && c.radius > 0.0;
-    if !(reach.is_finite() && reach >= 0.0) || !circles.iter().all(fine) {
-        return Err(ManyError::Bad);
-    }
-    let (mut pairs, mut too_far) = pairs_within(circles, reach, arc)?;
-    // Each set of connected circles, under its lowest index, is united at a precision fine enough
-    // for its smallest circle. A neck narrower than twice that would not survive the union, so its
-    // pair gets no bridge; that can split a set and make its precision coarser, so the sets are
-    // found again until no neck is dropped.
-    let (roots, precision) = loop {
-        let mut parent: Vec<usize> = (0..circles.len()).collect();
-        for &((i, j), _) in &pairs {
-            let (ri, rj) = (root(&mut parent, i), root(&mut parent, j));
-            parent[ri.max(rj)] = ri.min(rj);
-        }
-        let roots: Vec<usize> = (0..circles.len()).map(|i| root(&mut parent, i)).collect();
-        let mut precision = vec![DEFAULT_PRECISION; circles.len()];
-        for (&r, c) in roots.iter().zip(circles) {
-            precision[r] = precision[r].min(c.radius * 1e-3);
-        }
-        let thin = |&((i, _), waist): &(Pair, f64)| waist < 2.0 * precision[roots[i]];
-        if !pairs.iter().any(thin) {
-            break (roots, precision);
-        }
-        for &(pair, _) in pairs.iter().filter(|&p| thin(p)) {
-            too_far = Some(too_far.map_or(pair, |t| t.min(pair)));
-        }
-        pairs.retain(|p| !thin(p));
-    };
+    let (pairs, too_far, roots, precision) = bridgeable(circles, arc, reach)?;
     match (pairs.is_empty(), too_far) {
         (true, Some((i, j))) => return Err(ManyError::Pair(i, j, BridgeError::TooFar)),
         (true, None) => return Err(ManyError::NoneInReach),
@@ -303,6 +272,55 @@ pub fn bridge_many(circles: &[Circle], arc: ArcRadius, reach: f64) -> Result<Bri
     let joined: HashSet<usize> = necks.iter().flat_map(|&((i, j), _)| [i, j]).collect();
     out.alone = (0..circles.len()).filter(|i| !joined.contains(i)).collect();
     Ok(out)
+}
+
+/// Whether [`bridge_many`] would bridge at least one pair of `circles` with arcs of `arc` and
+/// `reach`, under the same rules (a neck too thin for its shape's precision included), without
+/// making the bridges or uniting them.
+pub fn bridges_any(circles: &[Circle], arc: ArcRadius, reach: f64) -> bool {
+    bridgeable(circles, arc, reach).is_ok_and(|(pairs, ..)| !pairs.is_empty())
+}
+
+/// What [`bridgeable`] finds: the pairs [`bridge_many`] bridges with their necks' widths, the
+/// lowest pair within reach that it can't bridge, each circle's set (its lowest index) and each
+/// set's precision, under its lowest index.
+type Bridgeable = (Vec<(Pair, f64)>, Option<Pair>, Vec<usize>, Vec<f64>);
+
+/// The pairs of `circles` that [`bridge_many`] bridges, and how it sorts them into sets.
+fn bridgeable(circles: &[Circle], arc: ArcRadius, reach: f64) -> Result<Bridgeable, ManyError> {
+    if circles.len() > MAX_BRIDGED_CIRCLES {
+        return Err(ManyError::TooManyCircles);
+    }
+    let fine = |c: &Circle| c.center.x.is_finite() && c.center.y.is_finite() && c.radius.is_finite() && c.radius > 0.0;
+    if !(reach.is_finite() && reach >= 0.0) || !circles.iter().all(fine) {
+        return Err(ManyError::Bad);
+    }
+    let (mut pairs, mut too_far) = pairs_within(circles, reach, arc)?;
+    // Each set of connected circles, under its lowest index, is united at a precision fine enough
+    // for its smallest circle. A neck narrower than twice that would not survive the union, so its
+    // pair gets no bridge; that can split a set and make its precision coarser, so the sets are
+    // found again until no neck is dropped.
+    let (roots, precision) = loop {
+        let mut parent: Vec<usize> = (0..circles.len()).collect();
+        for &((i, j), _) in &pairs {
+            let (ri, rj) = (root(&mut parent, i), root(&mut parent, j));
+            parent[ri.max(rj)] = ri.min(rj);
+        }
+        let roots: Vec<usize> = (0..circles.len()).map(|i| root(&mut parent, i)).collect();
+        let mut precision = vec![DEFAULT_PRECISION; circles.len()];
+        for (&r, c) in roots.iter().zip(circles) {
+            precision[r] = precision[r].min(c.radius * 1e-3);
+        }
+        let thin = |&((i, _), waist): &(Pair, f64)| waist < 2.0 * precision[roots[i]];
+        if !pairs.iter().any(thin) {
+            break (roots, precision);
+        }
+        for &(pair, _) in pairs.iter().filter(|&p| thin(p)) {
+            too_far = Some(too_far.map_or(pair, |t| t.min(pair)));
+        }
+        pairs.retain(|p| !thin(p));
+    };
+    Ok((pairs, too_far, roots, precision))
 }
 
 /// Two circles' indices, the lower first.

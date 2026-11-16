@@ -293,6 +293,23 @@ fn many_circle_and_gap_refusals() {
 }
 
 #[test]
+fn a_larger_radius_is_suggested_only_when_it_bridges_among_the_other_circles() {
+    let mut s = session();
+    // Centers 91.65 apart: the largest radius (1000%, 100 pt) bridges these two on their own, but
+    // with a neck about 0.0007 pt wide, too thin to unite among three or more circles.
+    let a = circle(&mut s, 20.0, 100.0, 10.0);
+    let b = circle(&mut s, 111.65, 100.0, 10.0);
+    let far = circle(&mut s, 380.0, 100.0, 10.0);
+    assert!(s.execute(BRIDGE, &json!({"ids": [a.0, b.0], "radius": 1000})).is_ok());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(err(&mut s, json!({"ids": [a.0, b.0]})).ends_with("too far apart for this radius: raise the radius"));
+    for radius in [100, 1000] {
+        let e = err(&mut s, json!({"ids": [a.0, b.0, far.0], "radius": radius, "reach": 100}));
+        assert!(e.ends_with("the circles are too far apart for this radius"), "{e}");
+    }
+}
+
+#[test]
 fn too_many_circles_or_bridges_are_refused() {
     let mut s = session();
     // 130 overlapping circles in a row: 8,385 pairs within reach.
