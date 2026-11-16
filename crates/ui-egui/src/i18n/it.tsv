@@ -5501,6 +5501,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	a linked JavaScript file is outside the read roots	un file JavaScript collegato è fuori dalle cartelle radice di lettura
 @msg	a linked image file is outside the read roots	un file immagine collegato è fuori dalle cartelle radice di lettura
 @msg	a linked file's export folder is outside the read roots	la cartella di esportazione di un file collegato è fuori dalle cartelle radice di lettura
+@msg	a linked file's editing data can't be read to check it against the read roots	impossibile leggere i dati di modifica di un file collegato per verificarli rispetto alle cartelle radice di lettura
 @msg	automation path rejected: outside the write root {root}: {path}	percorso di automazione rifiutato: fuori dalla cartella radice di scrittura {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	percorso di automazione rifiutato: fuori dalle cartelle radice di scrittura {roots}: {path}
 @msg	automation path rejected: path is empty	percorso di automazione rifiutato: il percorso è vuoto

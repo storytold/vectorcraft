@@ -5195,6 +5195,7 @@ imageTrace	Outline	Körvonal
 @msg	a linked JavaScript file is outside the read roots	egy csatolt JavaScript-fájl kívül esik az olvasási gyökereken
 @msg	a linked image file is outside the read roots	egy csatolt képfájl kívül esik az olvasási gyökereken
 @msg	a linked file's export folder is outside the read roots	egy csatolt fájl exportálási mappája kívül esik az olvasási gyökereken
+@msg	a linked file's editing data can't be read to check it against the read roots	egy csatolt fájl szerkesztési adatai nem olvashatók be az olvasási gyökerekkel való ellenőrzéshez
 @msg	automation path rejected: outside the write root {root}: {path}	az automatizálás útvonala elutasítva: kívül esik az írási gyökéren ({root}): {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	az automatizálás útvonala elutasítva: kívül esik az írási gyökereken ({roots}): {path}
 @msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	az automatizálás útvonala elutasítva: szülőmappára lépés egy nem létező mappa alatt: {path}

@@ -5470,6 +5470,7 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	a linked JavaScript file is outside the read roots	연결된 JavaScript 파일이 읽기 루트 밖에 있습니다
 @msg	a linked image file is outside the read roots	연결된 이미지 파일이 읽기 루트 밖에 있습니다
 @msg	a linked file's export folder is outside the read roots	연결된 파일의 내보내기 폴더가 읽기 루트 밖에 있습니다
+@msg	a linked file's editing data can't be read to check it against the read roots	연결된 파일의 편집 데이터를 읽을 수 없어 읽기 루트와 대조할 수 없습니다
 @msg	automation path rejected: outside the write root {root}: {path}	자동화 경로가 거부되었습니다: 쓰기 루트 {root} 밖입니다: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	자동화 경로가 거부되었습니다: 쓰기 루트 {roots} 밖입니다: {path}
 @msg	automation path rejected: path is empty	자동화 경로가 거부되었습니다: 경로가 비어 있습니다

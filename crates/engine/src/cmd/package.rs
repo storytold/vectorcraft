@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Package",
         [],
         None,
-        "{folder?, name?: (default: \"<document> Folder\"), copyLinks?: true, linksFolder?: true (the linked files go in Links/, else next to the document), relink?: true (the packaged document links to the copies), copyFonts?: true (the fonts its type uses go in Fonts/; fonts whose licence doesn't allow embedding are left out), report?: true (<document> Report.txt)} copy the saved document as it is now into folder/name as <document>.vectorcraft with its linked files and fonts; the open document doesn't change → {folder, files: [paths relative to folder/name], links, fonts (counts copied), missingLinks: [file names not found], skippedFonts: [{font, reason}], warnings: [nested files copied unchanged or cycles/depth stopped]}; no folder → the same with {name: \"<name>.zip\", dataBase64} (a zip of the files in <name>/) instead of folder. The warnings and the report name a file outside the automation read roots by its file name. Under automation read roots, the package is refused, before any file is written, while the document, or a linked native document or a linked PDF, .ai or EPS file's native document, links a JavaScript file outside them (svgInteractivity; a URL is not checked)",
+        "{folder?, name?: (default: \"<document> Folder\"), copyLinks?: true, linksFolder?: true (the linked files go in Links/, else next to the document), relink?: true (the packaged document links to the copies), copyFonts?: true (the fonts its type uses go in Fonts/; fonts whose licence doesn't allow embedding are left out), report?: true (<document> Report.txt)} copy the saved document as it is now into folder/name as <document>.vectorcraft with its linked files and fonts; the open document doesn't change → {folder, files: [paths relative to folder/name], links, fonts (counts copied), missingLinks: [file names not found], skippedFonts: [{font, reason}], warnings: [nested files copied unchanged or cycles/depth stopped]}; no folder → the same with {name: \"<name>.zip\", dataBase64} (a zip of the files in <name>/) instead of folder. The warnings and the report name a file outside the automation read roots by its file name. Under automation read roots, the package is refused, before any file is written, while the document, or a linked native document or a linked PDF, .ai or EPS file's native document, links a JavaScript file outside them (svgInteractivity; a URL is not checked), or while a linked native document, or a linked PDF, .ai or EPS file that carries one, can't be read to check it (a damaged file, or a PDF that needs a password to open); a PDF or EPS file without editing data is copied",
         has_doc,
         package
     )]
@@ -113,27 +113,56 @@ thread_local! {
     pub(crate) static PARTS_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// The native document that the linked file `name` (`bytes`) is, or carries as the editing data of
-/// a PDF, `.ai` or EPS file; `None` for other files and for data that can't be read.
-fn carried_document(name: &str, bytes: &[u8]) -> Option<Document> {
-    if super::place::document::is_native(name, bytes) {
-        return vectorcraft_format::load_file(bytes).ok().map(|f| f.doc);
-    }
-    let data =
-        if super::place::document::is_pdf(name, bytes) { vectorcraft_pdf::editing(bytes).map(|e| e.data) } else { vectorcraft_eps::native(bytes) };
-    vectorcraft_format::load(&data?).ok()
+/// The native document a linked file is or carries ([`carried_document`]).
+enum Carried {
+    /// The file is no native document and carries none: an image, or a PDF, `.ai` or EPS file
+    /// without editing data.
+    Absent,
+    /// The native document, read.
+    Readable(Box<Document>),
+    /// The file is a native document, or carries one, that can't be read: a damaged native file,
+    /// a PDF or `.ai` file that can't be opened without a password or can't be read at all, or
+    /// editing data that doesn't read as a native document.
+    Unreadable,
 }
 
+/// The native document that the linked file `name` (`bytes`) is, or carries as the editing data of
+/// a PDF, `.ai` or EPS file.
+fn carried_document(name: &str, bytes: &[u8]) -> Carried {
+    let read = |data: &[u8]| vectorcraft_format::load(data).map_or(Carried::Unreadable, |d| Carried::Readable(Box::new(d)));
+    if super::place::document::is_native(name, bytes) {
+        return vectorcraft_format::load_file(bytes).map_or(Carried::Unreadable, |f| Carried::Readable(Box::new(f.doc)));
+    }
+    if super::place::document::is_pdf(name, bytes) {
+        // A PDF that can't be opened may carry editing data all the same.
+        return match vectorcraft_pdf::open_pdf(bytes, None) {
+            Ok(opened) => opened.editing().map_or(Carried::Absent, |e| read(&e.data)),
+            Err(_) => Carried::Unreadable,
+        };
+    }
+    if !vectorcraft_eps::has_native(bytes) {
+        return Carried::Absent;
+    }
+    vectorcraft_eps::native(bytes).map_or(Carried::Unreadable, |data| read(&data))
+}
+
+/// The error for a linked file the package would copy whose native document can't be read to
+/// check the files and folders it names against the read roots.
+const UNREADABLE: &str = "a linked file's editing data can't be read to check it against the read roots";
+
 /// Under read roots, the linked file `name` (`bytes`, found at `path`) is copied only when the
-/// native document it is or carries ([`carried_document`]) links no JavaScript file outside them (a
-/// relative path taken from the file's folder): the copy would name it.
+/// native document it is or carries ([`carried_document`]) can be read and links no JavaScript file
+/// outside them (a relative path taken from the file's folder): the copy would name it. A file
+/// whose native document can't be read is refused, as its links can't be checked. The error names
+/// no file or folder.
 fn check_carried_scripts(name: &str, bytes: &[u8], path: &str) -> Result<()> {
     if crate::file_access::current().is_none() {
         return Ok(());
     }
     match carried_document(name, bytes) {
-        Some(carried) => super::fileio::check_scripts_of(C, &carried, Some(path), || true),
-        None => Ok(()),
+        Carried::Readable(carried) => super::fileio::check_scripts_of(C, &carried, Some(path), || true),
+        Carried::Unreadable => Err(bad(C, UNREADABLE)),
+        Carried::Absent => Ok(()),
     }
 }
 
@@ -150,7 +179,10 @@ fn check_carried_folder(name: &str, bytes: &[u8]) -> Result<()> {
         return Ok(());
     }
     match carried_document(name, bytes) {
-        Some(carried) if matches!(super::fileio::with_readable_settings_folder(&carried), std::borrow::Cow::Owned(_)) => Err(bad(C, FOLDER_OUTSIDE)),
+        Carried::Readable(carried) if matches!(super::fileio::with_readable_settings_folder(&carried), std::borrow::Cow::Owned(_)) => {
+            Err(bad(C, FOLDER_OUTSIDE))
+        }
+        Carried::Unreadable => Err(bad(C, UNREADABLE)),
         _ => Ok(()),
     }
 }

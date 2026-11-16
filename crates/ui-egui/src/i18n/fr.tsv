@@ -5457,6 +5457,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	a linked JavaScript file is outside the read roots	un fichier JavaScript lié est hors des dossiers racines de lecture
 @msg	a linked image file is outside the read roots	un fichier image lié est hors des dossiers racines de lecture
 @msg	a linked file's export folder is outside the read roots	le dossier d’exportation d’un fichier lié est hors des dossiers racines de lecture
+@msg	a linked file's editing data can't be read to check it against the read roots	impossible de lire les données d’édition d’un fichier lié pour les vérifier par rapport aux dossiers racines de lecture
 @msg	automation path rejected: outside the write root {root}: {path}	chemin d’automatisation refusé : hors du dossier racine d’écriture {root} : {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	chemin d’automatisation refusé : hors des dossiers racines d’écriture {roots} : {path}
 @msg	automation path rejected: path is empty	chemin d’automatisation refusé : le chemin est vide
