@@ -1343,6 +1343,8 @@ font-technology	Variable	Variables
 	Font Family & Style	Famille et style de police
 	Font Family, Style & Size	Famille, style et taille de police
 	Font List	Liste des polices
+	Show Similar Fonts	Afficher les polices similaires
+	Clear Similar Fonts	Effacer les polices similaires
 	Font Preview Size	Taille de l’aperçu des polices
 	Font Size	Taille de police
 	Variable Font	Police variable
@@ -1458,6 +1460,7 @@ font-technology	Variable	Variables
 	Connect Data Points	Relier les points de données
 	Edge-to-Edge Lines	Lignes bord à bord
 	Draw Filled Lines	Tracer des lignes pleines
+	Line Width	Épaisseur de ligne
 	Tick Values	Valeurs des graduations
 	Override Calculated Values	Remplacer les valeurs calculées
 	Divisions	Divisions
@@ -4587,6 +4590,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	select a path	sélectionnez un tracé
 @msg	Divide Objects Below: select exactly one path	Diviser les objets inférieurs : sélectionnez exactement un tracé
 @msg	Downloaded {what}	{what} téléchargé
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	certains effets pixellisés n’ont pas été convertis en images, car ils occuperaient plus de 1024 images ou 256 mégapixels au total
 @msg	Expand Appearance: the selection has a basic appearance	Décomposer l’aspect : la sélection a un aspect de base
 @msg	Expand: no brush strokes selected	Décomposer : aucun contour de forme sélectionné
 @msg	Expand: no gradient fills	Décomposer : aucun fond en dégradé
@@ -5420,6 +5424,10 @@ liquify-list-end	{0}, {1}	{0} et {1}
 	Em Box	Cadratin
 	x-Height	Hauteur d’x
 	ICF Box	Cadre ICF
+	Show Sample	Afficher l'échantillon
+	Hide Sample	Masquer l'échantillon
+	Max Ascent/Descent	Hauteur/profondeur max.
+	Max Ascender	Jambage ascendant max.
 	ICF Top/Right	ICF haut/droite
 	ICF Bottom/Left	ICF bas/gauche
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` est la référence d’étape {r}, que seuls `run` et `command_batch` résolvent
@@ -6351,7 +6359,7 @@ theme	Appearance	Apparence
 @msg	Unknown dimension style	Style de cote inconnu
 @msg	Unknown unit	Unité inconnue
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Ferme les extrémités circulaires des profils ouverts. Les rotations partielles conservent leurs faces de coupe ouvertes.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Ferme les extrémités circulaires des profils ouverts. Les rotations partielles ferment aussi leurs faces de coupe.
 @msg	span must be "object" or "selection", got {v}	span doit être "object" ou "selection", pas {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" place un `gradient`, pas une nuance
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" place un dégradé : indiquez `gradient`
@@ -6503,6 +6511,7 @@ theme	Appearance	Apparence
 	Single Word Justification:	Justification d’un mot isolé :
 	Full Justify	Justification complète
 	Minimum must not exceed Desired, nor Desired Maximum.	Le minimum ne doit pas dépasser la valeur optimale, ni la valeur optimale le maximum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}` : le minimum ne doit pas dépasser la valeur optimale, ni la valeur optimale le maximum
 	Justification	Justification
 	Add filters from the list above	Ajoutez des filtres à partir de la liste ci-dessus
 	Add to Stack	Ajouter à la pile
@@ -7453,6 +7462,22 @@ breakText	Glyphs	Glyphes
 @msg	select at most 2000 circles to bridge	sélectionnez au plus 2000 cercles à relier
 @msg	that makes too many bridges (at most 8000): lower the reach	cela crée trop de ponts (au plus 8000) : réduisez la portée
 @msg	the bridged circles are too complex to unite	les cercles reliés sont trop complexes pour être réunis
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Tangentes communes…
+	Common Tangents	Tangentes communes
+	Tangents	Tangentes
+	Centerline	Ligne médiane
+	External	Externes
+	Internal	Internes
+@msg	select two closed paths	sélectionnez deux tracés fermés
+@msg	a selected path is open	un tracé sélectionné est ouvert
+@msg	a selected path is not convex	un tracé sélectionné n’est pas convexe
+@msg	a selected path has no area	un tracé sélectionné n’a pas de surface
+@msg	a selected path has more than 10000 segments	un tracé sélectionné a plus de 10000 segments
+@msg	the two paths have the same outline	les deux tracés ont le même contour
+@msg	One path lies inside the other, so they have no common tangents	Un tracé se trouve à l’intérieur de l’autre : ils n’ont donc aucune tangente commune
+@msg	The paths overlap, so they have no internal tangents	Les tracés se chevauchent : ils n’ont donc aucune tangente interne
+@msg	One path lies inside the other, so they have no internal tangents	Un tracé se trouve à l’intérieur de l’autre : ils n’ont donc aucune tangente interne
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Décomposer les tirets en tracés
 @msg	select paths with dashed strokes to expand	sélectionnez des tracés à contour pointillé à décomposer
@@ -7528,7 +7553,7 @@ breakText	Glyphs	Glyphes
 @msg	stroke cannot be set on a symbol instance	stroke ne peut pas être défini sur une instance de symbole
 @msg	fill on a symbol instance must be a solid color or none	le fill d’une instance de symbole doit être une couleur unie ou none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} ne peut pas être défini sur une image sans l’effet Convertir en forme ou Vectoriser l’objet
-@msg	pass newName, registration, exportType, nineSlice and/or type	indiquez newName, registration, exportType, nineSlice et/ou type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	indiquez newName, registration, exportType, nineSlice, type et/ou alignToPixelGrid
 	Text Flow	Flux du texte
 	By Rows	Par lignes
 	By Columns	Par colonnes
@@ -7754,6 +7779,8 @@ breakText	Glyphs	Glyphes
 @msg	No bridge of this width fits across the selected art	Aucun pont de cette largeur ne tient en travers de l’illustration sélectionnée
 @msg	Some islands could not be joined to the area around the art	Certains îlots n’ont pas pu être reliés à la zone autour de l’illustration
 @msg	`width` must be from {lo} to {hi} pt	`width` doit être compris entre {lo} et {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` doit être compris entre -180 et 180 degrés
+@msg	`roundness` must be from 1 to 100%	`roundness` doit être compris entre 1 et 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` doit être un nombre entier compris entre 1 et {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Cadre et lignes d’échenillage…
 	Weed Box and Lines	Cadre et lignes d’échenillage
@@ -8989,7 +9016,9 @@ breakText	Glyphs	Glyphes
 @msg	position must be normal, superscript or subscript	position doit valoir normal, superscript ou subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position doit valoir topLeft, topRight, bottomLeft ou bottomRight
 @msg	positions must be between 0 and 100000 pt	les positions doivent être comprises entre 0 et 100000 pt
+@msg	ppi can't be more than {max} for this image	ppi ne peut pas dépasser {max} pour cette image
 @msg	ppi must be a positive number, not {ppi}	ppi doit être un nombre positif, pas {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim conserve les pixels de l’image tels quels : omettez ppi
 @msg	ppi must be between 1 and 2400	ppi doit être compris entre 1 et 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` n’est pas transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape doit valoir clippingMask|transparency
