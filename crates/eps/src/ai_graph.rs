@@ -233,7 +233,8 @@ fn tick(t: TickLength) -> u8 {
 }
 
 /// Whether `g`'s settings are ones the records give and the reader keeps: a legend beside or across
-/// the top, every series of the graph's type, one value axis on the left, lines not filled, no graph
+/// the top, every series of the graph's type, one value axis on the left, lines not filled and no
+/// Line Width of their own, no graph
 /// designs, label formatting or pie settings, column and cluster widths of 1% to 1000%, and at most
 /// [`MAX_TICK_MARKS`] tick marks a division.
 fn settings_kept(g: &GraphSpec) -> bool {
@@ -244,6 +245,7 @@ fn settings_kept(g: &GraphSpec) -> bool {
         && !g.separate_scales
         && g.right_series.is_empty()
         && !g.filled_lines
+        && g.line_width.is_none()
         && g.series_markers.iter().all(Option::is_none)
         && g.series_columns.iter().all(Option::is_none)
         && g.label_styles == LabelStyles::default()
@@ -514,6 +516,7 @@ pub(crate) mod sample {
         cases.extend([
             ("no legend", with(&|g| g.legend = false)),
             ("filled lines", with(&|g| (g.kind, g.filled_lines) = (GraphKind::Line, true))),
+            ("a filled line width", with(&|g| (g.kind, g.line_width) = (GraphKind::Line, Some(8.0)))),
             ("a series of another type", with(&|g| g.series_kinds = vec![None, Some(GraphKind::Line)])),
             ("a marker design", with(&|g| g.series_markers = vec![Some("Star".into())])),
             ("a column design", with(&|g| g.series_columns = vec![Some(Default::default())])),
