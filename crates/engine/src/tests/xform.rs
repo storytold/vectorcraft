@@ -1255,9 +1255,11 @@ fn direct_selection_shift_marquee_toggles_anchors() {
     let st = s.doc().unwrap();
     assert_eq!(st.selection.objects, vec![a]);
     assert_eq!(st.selection.partial(a), None);
-    // Group Selection's marquee toggles the same way.
+    // Group Selection's marquee toggles the paths it touches whole: a leaves, b joins (#8047).
     gesture(&mut s, "groupSelection", &top, shift);
-    assert_eq!(s.doc().unwrap().selection.partial(a).map(|p| p.len()), Some(2));
+    let st = s.doc().unwrap();
+    assert_eq!(st.selection.objects, vec![b]);
+    assert_eq!(st.selection.partial(b), None);
 }
 
 /// The Lasso: Shift adds anchors, Alt takes them away, and neither drops the rest of the
