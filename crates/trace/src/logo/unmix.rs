@@ -256,17 +256,23 @@ pub(crate) fn unmix(pix: &[Px], width: usize, height: usize, classes: &[[f64; 4]
 /// a class of `best` that `other` leaves out. For a class left out that lies between the classes of
 /// `other` on the line between them, a path of pixels from `i` that keeps going toward one class of
 /// `other` gets past the class left out within [`WALK`] steps through the eight neighbors, and so
-/// does one that keeps going toward the other. For a class left out that lies beyond both classes of
-/// `other` on that line, the pixel has a neighbor on each side of that class, or a neighbor on each
-/// side of the pixel itself, none past the class of `other` nearer the class left out, and a chain
-/// of neighbors from the pixel to that nearer class or a flat area of it (`flat`), each nearer it
-/// than the one before. (A black-to-white edge pixel as light as a gray has a darker neighbor and a
-/// lighter one, or, on an edge blurred over several pixels, reaches darker and lighter pixels through
-/// pixels that keep getting darker or lighter; from a gray stroke on white, a path that keeps getting
-/// darker ends in the stroke, at the gray; a gray-to-black edge pixel has a lighter neighbor and a
-/// darker one, and lighter pixels lead to the flat gray; a pale line one pixel wide on black has only
-/// darker neighbors; the pixels beside a blurred pale line's middle reach no flat gray; and a white
-/// gap between black and gray has a neighbor lighter than the gray.)
+/// does one that keeps going toward the other. When the first step of one path comes to a pixel
+/// that stands for its class of `other` (the edge on that side is sharp), the other path stops at
+/// a pixel within [`PURE`] of the class left out that it comes to before it gets past that class.
+/// For a class left out that lies beyond both classes of `other` on that line, the pixel has a
+/// neighbor on each side of that class, or a neighbor on each side of the pixel itself, none past
+/// the class of `other` nearer the class left out, and a chain of neighbors from the pixel to that
+/// nearer class or a flat area of it (`flat`), each nearer it than the one before.
+///
+/// (A black-to-white edge pixel as light as a gray has a darker neighbor and a lighter one, or, on
+/// an edge blurred over several pixels, reaches darker and lighter pixels through pixels that keep
+/// getting darker or lighter; from a gray stroke on white, a path that keeps getting darker ends in
+/// the stroke, at the gray; from the outer pixels of a gray band along black, with nearly sharp
+/// edges, the first step outward is white and the path toward black comes to the band's gray; a
+/// gray-to-black edge pixel has a lighter neighbor and a darker one, and lighter pixels lead to the
+/// flat gray; a pale line one pixel wide on black has only darker neighbors; the pixels beside a
+/// blurred pale line's middle reach no flat gray; and a white gap between black and gray has a
+/// neighbor lighter than the gray.)
 ///
 /// When it does, the number of steps the longer of the two paths takes to a pixel that stands for its
 /// class of `other` (`stands_for`), the largest over the classes left out. It is `NEARBY + 1` when a
@@ -350,26 +356,39 @@ fn across_edge(
         }
         false
     };
+    // Whether pixel `j` comes within `PURE` of class `c`.
+    let within = |j: usize, c: usize| {
+        let (Some(q), Some(cv)) = (pix.get(j), classes.get(c)) else { return false };
+        (0..4).map(|k| (f64::from(q[k]) - cv[k]).powi(2)).sum::<f64>().sqrt() < PURE
+    };
     // A path from `i` toward `a` (`toward` -1) or `b` (`toward` 1): each step goes to the neighbor
     // near the line that lies farthest that way, while it lies farther than the pixel before (the
     // first step is taken whatever `i` itself is). `None` when it does not get more than `PURE` past
     // `tc` in [`WALK`] steps; otherwise the steps to the first pixel past it that stands for `class`
-    // (`stands_for`), or `NEARBY + 1`.
-    let walk = |toward: f64, tc: f64, class: usize| {
+    // (`stands_for`), or `NEARBY + 1`. With `halt`, the path also ends at a pixel within `PURE` of
+    // that class that it comes to before it gets past `tc`. Also the pixel of the first step.
+    let walk = |toward: f64, tc: f64, class: usize, halt: Option<usize>| {
         let (mut cur, mut t) = (i, f64::NEG_INFINITY * toward);
         let mut past = false;
+        let mut first = None;
         for step in 1..=WALK {
             match around(cur).filter_map(|j| at(j).map(|tj| (j, tj))).max_by(|p, q| (p.1 * toward).total_cmp(&(q.1 * toward))) {
                 Some((j, tj)) if (tj - t) * toward > 0.0 => (cur, t) = (j, tj),
                 _ => break,
             }
+            first = first.or(Some(cur));
             past = past || (t - tc) * toward * len > PURE;
+            if !past && halt.is_some_and(|h| within(cur, h)) {
+                break;
+            }
             if past && stands_for.get(cur).copied().flatten() == Some(class) {
-                return Some(step);
+                return (Some(step), first);
             }
         }
-        past.then_some(NEARBY + 1)
+        (past.then_some(NEARBY + 1), first)
     };
+    // Whether the first step of a path (`first`) stands for `class`: the edge on that side is sharp.
+    let sharp = |first: Option<usize>, class: usize| first.is_some_and(|j| stands_for.get(j).copied().flatten() == Some(class));
     if left_out.is_empty() {
         return None;
     }
@@ -377,9 +396,12 @@ fn across_edge(
     for &c in &left_out {
         let (tc, _) = place(*classes.get(c)?);
         if (0.0..=1.0).contains(&tc) {
-            let ra = walk(-1.0, tc, *a)?;
-            let rb = walk(1.0, tc, *b)?;
-            reach = reach.max(ra.max(rb));
+            // When one side's edge is sharp, the other side's path stops at a pixel of the class left out.
+            let (ra, fa) = walk(-1.0, tc, *a, None);
+            let (rb, fb) = walk(1.0, tc, *b, None);
+            let ra = if sharp(fb, *b) { walk(-1.0, tc, *a, Some(c)).0 } else { ra };
+            let rb = if sharp(fa, *a) { walk(1.0, tc, *b, Some(c)).0 } else { rb };
+            reach = reach.max(ra?.max(rb?));
             continue;
         }
         let beyond = |tn: f64| if tc < 0.0 { -tn * len > PURE } else { (tn - 1.0) * len > PURE };
