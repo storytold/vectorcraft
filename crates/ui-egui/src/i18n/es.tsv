@@ -3303,8 +3303,12 @@ digits	Malayalam	Malayálam
 	Filter Layers Panel Rows	Filtrar filas del panel Capas
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` representa ajustes modificados: guarda el preajuste con otro nombre
 @msg	`{key}` must be an array of these names: {_1}	`{key}` debe ser una lista de estos nombres: {_1}
-	Search commands and tools	Buscar comandos y herramientas
-	Search commands and tools…	Buscar comandos y herramientas…
+	Search commands, tools, panels and effects	Buscar comandos, herramientas, paneles y efectos
+	Search commands, tools, panels and effects…	Buscar comandos, herramientas, paneles y efectos…
+	No commands match	Ningún comando coincide
+	{pos} of {total}: {name}	{pos} de {total}: {name}
+@plural	{n} result|{n} results	{n} resultado|{n} resultados
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Sigue escribiendo para acotarlos.|{shown} de {n} resultados. Sigue escribiendo para acotarlos.
 	Recent Commands	Comandos recientes
 	No recent commands	No hay comandos recientes
 	Search Commands…	Buscar comandos…
