@@ -2542,6 +2542,34 @@ fn confined_screens_rows_check_the_artboard_each_file_holds() {
     }
 }
 
+/// A confined caller's single-file PDF with Preserve Editing of several assets carries the first
+/// asset's document alone, so only that document is checked: an image linked outside the read roots in a later asset does
+/// not refuse it, and one in the first asset does.
+#[test]
+fn confined_single_file_pdf_checks_the_document_it_carries() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("single-pdf-away");
+    let home = Folder::new("single-pdf-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let rect: vectorcraft_doc::NodeId = serde_json::from_value(r["id"].clone()).unwrap();
+    let placed = place(&mut s, &photo);
+    let mut assets = vec![];
+    for id in [rect, placed] {
+        assets.push(s.execute("assets.add", &json!({"ids": [id.0]})).unwrap()["assets"][0].as_u64().unwrap());
+    }
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let p = |ids: &[u64], folder: &str| json!({"assets": ids, "folder": home.file(folder), "pdfs": "single", "formats": [{"format": "pdf", "preserveEditing": true}]});
+    let r = confine(roots.as_ref(), || s.execute("assets.export", &p(&assets, "first-plain"))).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(r["files"].as_array().map(Vec::len), Some(1), "{r}");
+    let reversed = [assets[1], assets[0]];
+    let e = confine(roots.as_ref(), || s.execute("assets.export", &p(&reversed, "first-linked"))).expect_err("first asset links outside").to_string();
+    assert!(e.contains("a linked image file is outside the read roots"), "{e}");
+}
+
 /// A confined caller's native outputs (a native file or template, an EPS or `.ai` file, a PDF with
 /// Preserve Editing, a package's document) carry the document without the Export for Screens
 /// folder when it is outside the read roots, with the other export settings and the art; the open

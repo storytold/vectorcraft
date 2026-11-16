@@ -1181,7 +1181,9 @@ pub(crate) fn export(s: &mut Session, p: &Value, asked: &Value) -> Result<Value>
     if crate::file_access::current().is_some() {
         let mut looked: HashSet<(usize, bool, Option<usize>)> = HashSet::new();
         for r in rows.iter().filter(|r| !matches!(r.format.id, "svg" | "svgz")) {
-            for item in items.iter().filter(|i| names_scripts(i, r, single.as_deref())) {
+            // A single-file PDF carries the first item's document alone, as the writer writes it.
+            let carried = items.iter().enumerate().filter(|(index, _)| !(single.is_some() && r.format.id == "pdf" && *index > 0));
+            for (_, item) in carried.filter(|(_, i)| names_scripts(i, r, single.as_deref())) {
                 let all = item.every_artboard.is_some() && r.format.id == "pdf" && single.is_none();
                 let board = item.artboard.filter(|_| !all && r.whole_document());
                 if looked.insert((Arc::as_ptr(&item.doc) as usize, all, board))
