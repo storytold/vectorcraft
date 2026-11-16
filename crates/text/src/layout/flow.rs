@@ -8,9 +8,9 @@ use super::vertical::{
     EM_CENTER, MojikumiRules, align_shift, compress_punctuation, dot_quarter, glyph_em, halve_punctuation, punct_half, space_japanese_and_latin,
 };
 use super::{
-    Affine, BidiInfo, Burasagari, CharStyle, Composer, Ctx, EPS, Flex, Justify, Kinsoku, KinsokuShoriType, LeadingModel, LineFit, LineInfo,
-    ListMarker, ParaStyle, Params, Point, Punct, Range, SGlyph, SingleWordJustify, TextObject, apply_desired, cap_x_heights, compose, fit_line,
-    hyphen_glyph, is_cjk, is_word_space, kashida, mark_word_ends, no_line_end, no_line_start, style_metrics,
+    Affine, BidiInfo, Burasagari, CharStyle, Ctx, EPS, Flex, Justify, Kinsoku, KinsokuShoriType, LeadingModel, LineFit, LineInfo, ListMarker,
+    ParaStyle, Params, Point, Punct, Range, SGlyph, SingleWordJustify, TextObject, apply_desired, cap_x_heights, compose, fit_line, hyphen_glyph,
+    is_cjk, is_word_space, kashida, mark_word_ends, no_line_end, no_line_start, style_metrics,
 };
 use crate::justify::is_format_control;
 use crate::shape::{keep_inseparable_pairs, keep_korean_words};
@@ -62,7 +62,7 @@ fn compose_para(
     // The tab of a list marker is on the first line, with the marker, and has a fixed width.
     let has_tab = sg.iter().any(|g| g.ch == '\t' && g.len > 0);
     let has_soft_break = sg.iter().any(|g| g.ch == '\u{2028}');
-    if composer != Composer::EveryLine
+    if composer.is_single_line()
         || pen.regions.is_none()
         || sg.len() < 2
         || sg.len() > MAX_COMPOSE_GLYPHS
@@ -177,6 +177,7 @@ pub(super) fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, reg
         fb: cx.opts.first_baseline,
         fb_min: cx.opts.first_baseline_min,
         queued: vec![],
+        above: Default::default(),
         model: t.para_at(0).leading_model,
         next_top: None,
         no_room_for: f64::INFINITY,
@@ -246,7 +247,7 @@ fn prepare_paragraph<'a, 'text>(
     let text = cx.text;
     let bidi = para_bidi_with(text.get(pr.clone()).unwrap_or_default(), para.direction, &cx.char_directions(&pr));
     let rtl = is_rtl(bidi.as_ref());
-    let mut sg = cx.shape_para(pr.clone(), bidi.as_ref());
+    let mut sg = cx.shape_para(pr.clone(), bidi.as_ref(), para);
     // Thai, Lao, Khmer and Myanmar break lines between words, not at spaces.
     mark_word_ends(text.get(pr.clone()).unwrap_or_default(), pr.start, &mut sg);
     // Korean breaks between words, unless Korean Line Break Anywhere lets it break between syllables.
@@ -320,7 +321,7 @@ fn prepare_paragraph<'a, 'text>(
     let composed = compose_para(cx, &sg, &flex, &line_end, para, pen, rtl, continued);
     // Hyphenation options: the Hyphenation Zone applies with the Single-line Composer, and the
     // Hyphen Limit counts the lines in a row that end with a hyphen.
-    let zone = if cx.opts.composer.unwrap_or(para.composer) == Composer::SingleLine { para.hyphenation.zone } else { 0.0 };
+    let zone = if cx.opts.composer.unwrap_or(para.composer).is_single_line() { para.hyphenation.zone } else { 0.0 };
     let hyphen_limit = usize::try_from(para.hyphenation.hyphen_limit).unwrap_or(usize::MAX);
     let mirror = mirrors_indents(para, rtl, cx.vertical);
     ParagraphData {
@@ -473,7 +474,9 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
                         &para.tabs,
                         ind_l,
                         hyphenate,
-                        para.burasagari,
+                        // A right-to-left paragraph draws a burasagari mark inside its line
+                        // ([`prepare_line_geometry`]): the line ends where it fits with the mark.
+                        if *rtl { Burasagari::None } else { para.burasagari },
                         para.kinsoku,
                         ty,
                         *hanging,
@@ -538,6 +541,11 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
             }
         }
         let m = metrics(end);
+        if same_baseline && !pen.clears_above(baseline, m) {
+            // A glyph taller than the first one sets the line lower than the span's baseline: the
+            // span is left empty, and the line goes in the next span or on the next baseline.
+            continue;
+        }
         baseline += if !settle || same_baseline || (pen.regions.is_none() && first_in_region) {
             0.0
         } else if pen.model == LeadingModel::EmBoxTop {

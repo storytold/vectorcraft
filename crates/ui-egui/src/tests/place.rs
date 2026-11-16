@@ -7,6 +7,7 @@ use egui::{Pos2, Shape, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::Session;
+use vectorcraft_testkit::pdf::{PdfPage, pdf};
 
 use crate::VectorcraftApp;
 use crate::canvas::Xf;
@@ -897,6 +898,329 @@ fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, time: &mut f64, secs: f64
 /// while the window sits idle in the background, follows Update Links: Automatically: the app
 /// wakes itself to see the new link before the change, so the change isn't taken for the file as
 /// first seen.
+/// The text of the one selected type object.
+fn selected_text(app: &VectorcraftApp) -> String {
+    let st = app.session.active().unwrap();
+    let NodeKind::Text(t) = &st.doc.node(st.selection.objects[0]).unwrap().kind else { panic!("not type") };
+    t.plain_text()
+}
+
+/// The kind of the open dialog, if any.
+fn dialog_kind(app: &VectorcraftApp) -> Option<&str> {
+    app.ui.dialog.as_ref().map(|d| d.kind.as_str())
+}
+
+const NOTES: &[u8] = b"one\r\ntwo\r\n\r\nthree\r\n";
+
+/// A DXF drawing of one 100 × 50 line.
+const LINE_DXF: &[u8] = b"0\nSECTION\n2\nENTITIES\n0\nLINE\n8\n0\n10\n0\n20\n0\n11\n100\n21\n50\n0\nENDSEC\n0\nEOF\n";
+
+#[test]
+fn show_import_options_is_a_place_option_saved_with_the_preferences() {
+    let mut app = app();
+    let dir = Folder::new("ui-place-show-import-options");
+    let notes = dir.file("notes.txt", NOTES);
+    app.run("file.place", json!({"paths": [notes]})).unwrap();
+    let d = app.ui.dialog.as_ref().expect("the Place dialog");
+    assert!(d.bool("showImportOptions"), "on by default");
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+    assert!(text.contains("Show Import Options"), "{text}");
+    // On: the text file asks for its import options first.
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::text_import::KIND));
+    app.ui.dialog = None;
+    // Off: it is placed at once, and the next Place dialog starts off.
+    app.run("file.place", json!({"paths": [notes]})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("showImportOptions".into(), json!(false));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(dialog_kind(&app), None);
+    assert!(selected_text(&app).contains("three"));
+    assert!(!app.ui.place_import_options);
+    app.run("file.place", json!({"paths": [notes]})).unwrap();
+    assert!(!app.ui.dialog.as_ref().unwrap().bool("showImportOptions"), "remembered");
+    // `showImportOptions` given with `paths` sets the dialog's checkbox.
+    app.run("file.place", json!({"paths": [notes], "showImportOptions": true})).unwrap();
+    assert!(app.ui.dialog.as_ref().unwrap().bool("showImportOptions"));
+    // Saved with the preferences; older preferences without it start on.
+    let saved = serde_json::to_value(&app.ui).unwrap();
+    assert_eq!(saved["place_import_options"], false);
+    let old: crate::UiState = serde_json::from_value(json!({"place_link": false})).unwrap();
+    assert!(old.place_import_options && old.text_import.is_null());
+}
+
+#[test]
+fn with_show_import_options_off_a_file_takes_the_options_confirmed_last() {
+    let mut app = app();
+    let b64 = vectorcraft_format::base64_encode;
+    // Nothing confirmed yet: file.place's defaults.
+    app.run("file.place", json!({"name": "a.txt", "dataBase64": b64(NOTES), "showImportOptions": false})).unwrap();
+    assert_eq!(dialog_kind(&app), None);
+    let plain = selected_text(&app);
+    // Text Import Options remembers what it confirmed, and the next text file starts from it.
+    app.run("file.place", json!({"name": "b.txt", "dataBase64": b64(NOTES)})).unwrap();
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::text_import::KIND));
+    for k in ["removeLineReturns", "removeParagraphReturns", "replaceSpaces"] {
+        app.ui.dialog.as_mut().unwrap().fields.insert(k.into(), json!(true));
+    }
+    app.ui.dialog.as_mut().unwrap().fields.insert("spaces".into(), json!(4));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(selected_text(&app), "one two\nthree");
+    assert_ne!(plain, "one two\nthree");
+    app.run("file.place", json!({"name": "c.txt", "dataBase64": b64(NOTES)})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(d.bool("removeLineReturns") && d.bool("replaceSpaces"));
+    assert_eq!(d.f64("spaces", 0.0), 4.0);
+    app.ui.dialog = None;
+    app.run("file.place", json!({"name": "d.txt", "dataBase64": b64(NOTES), "showImportOptions": false})).unwrap();
+    assert_eq!((dialog_kind(&app), selected_text(&app).as_str()), (None, "one two\nthree"));
+    // A DXF drawing: placed without asking, with the fit chosen last.
+    let width = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        st.doc.node(st.selection.objects[0]).unwrap().geometric_bounds().unwrap().width()
+    };
+    app.run("file.place", json!({"name": "line.dxf", "dataBase64": b64(LINE_DXF), "showImportOptions": false})).unwrap();
+    assert_eq!(dialog_kind(&app), None);
+    let unfitted = width(&app);
+    app.ui.dxf_import = json!({"fit": true});
+    app.run("file.place", json!({"name": "line.dxf", "dataBase64": b64(LINE_DXF), "showImportOptions": false})).unwrap();
+    assert_eq!(dialog_kind(&app), None);
+    assert!(width(&app) > unfitted + 1.0, "fitted: {} vs {unfitted}", width(&app));
+    app.run("file.place", json!({"name": "line.dxf", "dataBase64": b64(LINE_DXF)})).unwrap();
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::dxf_import::KIND), "on: it asks");
+    app.ui.dialog = None;
+    // A PDF with several pages: its first page, without asking.
+    let pages = [PdfPage::new(100.0, 100.0, "0 g 0 0 10 10 re f"), PdfPage::new(300.0, 100.0, "1 0 0 rg 0 0 30 30 re f")];
+    let two = pdf(&pages, None);
+    app.run("file.place", json!({"name": "two.pdf", "dataBase64": b64(&two), "showImportOptions": false})).unwrap();
+    assert_eq!(dialog_kind(&app), None);
+    assert!((width(&app) - 100.0).abs() < 0.01, "page 1: {}", width(&app));
+    // An encrypted PDF still asks for its password, and then places its first page.
+    let locked = pdf(&pages, Some("pw"));
+    app.run("file.place", json!({"name": "locked.pdf", "dataBase64": b64(&locked), "showImportOptions": false})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.bool("__locked")), Some(true));
+    app.ui.dialog.as_mut().unwrap().fields.insert("password".into(), json!("pw"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(dialog_kind(&app), None, "no page to pick");
+    assert!((width(&app) - 100.0).abs() < 0.01, "page 1: {}", width(&app));
+    // Given `page`, it asks for the password and places that page.
+    app.run("file.place", json!({"name": "locked.pdf", "dataBase64": b64(&locked), "page": 2, "showImportOptions": false})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("password".into(), json!("pw"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!((width(&app) - 300.0).abs() < 0.01, "page 2: {}", width(&app));
+    // A page past the last one is refused once the file is unlocked, not placed as another page.
+    app.run("file.place", json!({"name": "locked.pdf", "dataBase64": b64(&locked), "page": 9, "showImportOptions": false})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("password".into(), json!("pw"));
+    assert!(crate::dialogs::confirm(&mut app).is_err());
+    app.ui.dialog = None;
+    // A value that is not true or false is refused, and nothing is placed.
+    let before = app.session.active().unwrap().history.undo.len();
+    for bad in [json!("no"), json!(0)] {
+        let e = app.run("file.place", json!({"name": "e.txt", "dataBase64": b64(NOTES), "showImportOptions": bad})).unwrap_err();
+        assert!(e.contains("`showImportOptions` must be true or false"), "{e}");
+    }
+    assert_eq!((dialog_kind(&app), app.session.active().unwrap().history.undo.len()), (None, before));
+}
+
+#[test]
+fn the_place_cursors_files_ask_for_their_import_options_when_show_import_options_is_on() {
+    let mut app = app();
+    let dir = Folder::new("ui-place-cursor-import-options");
+    let a = dir.file("a.png", &png(10, 10, 72.0));
+    let notes = dir.file("notes.txt", NOTES);
+    let click = json!({"path": notes, "rect": [10, 10, 200, 100]});
+    // On: a click on the text file asks for its import options, and OK places it in the rect.
+    app.run("file.place", json!({"paths": [a, notes]})).unwrap();
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(app.session.tool_options()["count"], 2);
+    crate::place::place_from_cursor(&mut app, &click);
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::text_import::KIND));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["__params"]["rect"], json!([10, 10, 200, 100]));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(selected_text(&app).contains("three"));
+    // A click on a PDF places the page chosen at its own size, centered where the click put the
+    // first page; a drag keeps its box.
+    let pages = [PdfPage::new(100.0, 100.0, "0 g 0 0 10 10 re f"), PdfPage::new(300.0, 100.0, "1 0 0 rg 0 0 30 30 re f")];
+    let two = dir.file("two.pdf", &pdf(&pages, None));
+    app.run("file.place", json!({"paths": [a, two]})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("link".into(), json!(false));
+    crate::dialogs::confirm(&mut app).unwrap();
+    crate::place::place_from_cursor(&mut app, &json!({"path": two, "link": false, "rect": [10, 10, 100, 100]}));
+    assert_eq!(dialog_kind(&app), Some("importPdf"));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["__place"], json!({"link": false, "at": [60.0, 60.0]}));
+    app.ui.dialog.as_mut().unwrap().fields.insert("page".into(), json!(2));
+    crate::dialogs::confirm(&mut app).unwrap();
+    let st = app.session.active().unwrap();
+    let b = st.doc.node(st.selection.objects[0]).unwrap().geometric_bounds().unwrap();
+    assert_eq!((b.width().round(), b.center()), (300.0, vectorcraft_geom::Point::new(60.0, 60.0)));
+    crate::place::place_from_cursor(&mut app, &json!({"path": two, "link": false, "rect": [10, 10, 50, 50]}));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["__place"]["rect"], json!([10, 10, 50, 50]));
+    app.ui.dialog = None;
+    // Off: the cursor's files are placed at once, with the options confirmed last.
+    app.run("file.place", json!({"paths": [a, notes]})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("showImportOptions".into(), json!(false));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(app.session.tool_options()["count"], 2);
+    crate::place::place_from_cursor(&mut app, &click);
+    assert_eq!(dialog_kind(&app), None);
+    assert!(selected_text(&app).contains("three"));
+    // A cursor loaded by file.place.queue places at once, as before.
+    app.run("file.place", json!({"paths": [a, notes]})).unwrap();
+    crate::dialogs::confirm(&mut app).unwrap();
+    app.run("file.place.queue", json!({"paths": [a, notes]})).unwrap();
+    crate::place::place_from_cursor(&mut app, &click);
+    assert_eq!(dialog_kind(&app), None);
+}
+
+/// An encrypted PDF in the place cursor asks for its password when clicked, with Show Import
+/// Options on or off, and the password's OK places it where the click put it.
+#[test]
+fn an_encrypted_pdf_in_the_place_cursor_asks_for_its_password_when_clicked() {
+    let mut app = app();
+    let dir = Folder::new("ui-place-cursor-encrypted-pdf");
+    let a = dir.file("a.png", &png(10, 10, 72.0));
+    let pages = [PdfPage::new(100.0, 100.0, "0 g 0 0 10 10 re f"), PdfPage::new(300.0, 100.0, "1 0 0 rg 0 0 30 30 re f")];
+    let locked = dir.file("locked.pdf", &pdf(&pages, Some("pw")));
+    // The click gives the box of the size the cursor holds it at, a letter page.
+    let click = json!({"path": locked, "link": false, "rect": [10, 10, 612, 792]});
+    let center = vectorcraft_geom::Point::new(316.0, 406.0);
+    let placed = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let b = st.doc.node(st.selection.objects[0]).unwrap().geometric_bounds().unwrap();
+        (b.width().round(), b.center())
+    };
+    for show in [false, true] {
+        app.run("file.place", json!({"paths": [a, locked]})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("showImportOptions".into(), json!(show));
+        d.fields.insert("link".into(), json!(false));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.session.tool_options()["count"], 2, "kept in the cursor");
+        crate::place::place_from_cursor(&mut app, &click);
+        let d = app.ui.dialog.as_mut().expect("the password dialog");
+        assert!(d.bool("__locked"));
+        assert_eq!(d.fields["__place"], json!({"link": false, "at": [316.0, 406.0]}));
+        d.fields.insert("password".into(), json!("pw"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        if show {
+            // Unlocked, it asks for the page.
+            assert_eq!(dialog_kind(&app), Some("importPdf"));
+            crate::dialogs::confirm(&mut app).unwrap();
+        }
+        assert_eq!((dialog_kind(&app), placed(&app)), (None, (100.0, center)), "Show Import Options {show}");
+    }
+    // A cursor loaded by file.place.queue asks too, also with a `page`, which it then places.
+    app.run("file.place.queue", json!({"paths": [a, locked], "link": false, "page": 2})).unwrap();
+    crate::place::place_from_cursor(&mut app, &json!({"path": locked, "link": false, "page": 2, "rect": [10, 10, 612, 792]}));
+    let d = app.ui.dialog.as_mut().expect("the password dialog");
+    assert!(d.bool("__locked"));
+    d.fields.insert("password".into(), json!("pw"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!((dialog_kind(&app), placed(&app).0), (None, 300.0), "page 2");
+    // File › Place of it with a `page` and Show Import Options on asks for the password too.
+    crate::place::run_for_user(&mut app, &json!({"path": locked, "link": false, "page": 1})).unwrap();
+    assert!(app.ui.dialog.as_ref().is_some_and(|d| d.bool("__locked")));
+    app.ui.dialog = None;
+    // An encrypted PDF whose name has no PDF extension is still left out of the cursor.
+    let misnamed = dir.file("locked.dat", &pdf(&pages, Some("pw")));
+    let r = app.run("file.place.queue", json!({"paths": [a, misnamed]})).unwrap();
+    assert_eq!((&r["count"], &r["skipped"][0]["name"]), (&json!(1), &json!("locked.dat")), "{r}");
+}
+
+/// A cursor loaded again after the Place dialog loaded it with Show Import Options on (a queue set
+/// on the Place tool) places its files at once.
+#[test]
+fn a_place_cursor_loaded_again_no_longer_asks_for_import_options() {
+    let mut app = app();
+    let dir = Folder::new("ui-place-cursor-reloaded");
+    let a = dir.file("a.png", &png(10, 10, 72.0));
+    let notes = dir.file("notes.txt", NOTES);
+    app.run("file.place", json!({"paths": [a, notes]})).unwrap();
+    crate::dialogs::confirm(&mut app).unwrap();
+    let entries: Vec<Value> = [(&a, "a.png"), (&notes, "notes.txt")]
+        .iter()
+        .map(|(path, name)| json!({"params": {"path": path}, "name": name, "width": 190, "height": 90}))
+        .collect();
+    assert_eq!(app.session.tool_id(), "place");
+    app.run("tool.setOption", json!({"values": {"queue": {"entries": entries}}})).unwrap();
+    crate::place::place_from_cursor(&mut app, &json!({"path": notes, "rect": [10, 10, 190, 90]}));
+    assert_eq!(dialog_kind(&app), None);
+    assert!(selected_text(&app).contains("three"));
+}
+
+/// The import options a click of a cursor loaded within automation roots asks for place within
+/// those roots when OK is pressed, by the person at the keyboard too: a file outside them is not
+/// read. One inside them is placed.
+#[test]
+fn the_import_options_a_place_cursor_asks_for_place_within_its_roots() {
+    use vectorcraft_engine::file_access::{AutomationRoots, confine, unconfined};
+    let mut app = app();
+    let dir = Folder::new("ui-place-cursor-ask-roots");
+    std::fs::create_dir_all(dir.join("in")).unwrap();
+    let a = dir.file("in/a.png", &png(10, 10, 72.0));
+    let notes = dir.file("in/notes.txt", NOTES);
+    let pages = [PdfPage::new(100.0, 100.0, "0 g 0 0 10 10 re f"), PdfPage::new(300.0, 100.0, "1 0 0 rg 0 0 30 30 re f")];
+    let two = dir.file("in/two.pdf", &pdf(&pages, None));
+    let outside_notes = dir.file("outside.txt", NOTES);
+    let outside_pdf = dir.file("outside.pdf", &pdf(&pages, None));
+    let roots = AutomationRoots::new(&[&dir.join("in")], &[]).unwrap();
+    confine(roots.as_ref(), || {
+        app.run("file.place", json!({"paths": [a, notes, two]})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("link".into(), json!(false));
+        crate::dialogs::confirm(&mut app).unwrap();
+    });
+    assert_eq!(app.session.tool_options()["count"], 3);
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let before = undo(&app);
+    // The text file's OK, its params naming a file outside the roots: nothing is placed.
+    unconfined(|| crate::place::place_from_cursor(&mut app, &json!({"path": notes, "rect": [10, 10, 200, 100]})));
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::text_import::KIND));
+    app.ui.dialog.as_mut().unwrap().fields.get_mut("__params").unwrap()["path"] = json!(outside_notes);
+    let _ = unconfined(|| crate::dialogs::confirm(&mut app));
+    assert_eq!(undo(&app), before, "the text file outside the roots");
+    // The PDF's OK, its file outside the roots: nothing is placed.
+    unconfined(|| crate::place::place_from_cursor(&mut app, &json!({"path": two, "link": false, "rect": [10, 10, 100, 100]})));
+    assert_eq!(dialog_kind(&app), Some("importPdf"));
+    app.ui.dialog.as_mut().unwrap().fields.insert("path".into(), json!(outside_pdf));
+    let _ = unconfined(|| crate::dialogs::confirm(&mut app));
+    assert_eq!(undo(&app), before, "the PDF outside the roots");
+    app.ui.dialog = None;
+    // A caller with roots of its own confirms within those: the file in the cursor's roots but
+    // outside the caller's is not placed.
+    std::fs::create_dir_all(dir.join("b")).unwrap();
+    let narrower = AutomationRoots::new(&[&dir.join("b")], &[]).unwrap();
+    unconfined(|| crate::place::place_from_cursor(&mut app, &json!({"path": notes, "rect": [10, 10, 200, 100]})));
+    let _ = confine(narrower.as_ref(), || crate::dialogs::confirm(&mut app));
+    assert_eq!(undo(&app), before, "outside the caller's roots");
+    // The text file inside the roots is placed.
+    unconfined(|| crate::place::place_from_cursor(&mut app, &json!({"path": notes, "rect": [10, 10, 200, 100]})));
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::text_import::KIND));
+    unconfined(|| crate::dialogs::confirm(&mut app)).unwrap();
+    assert!(selected_text(&app).contains("three"));
+    // Once the cursor is loaded again, the earlier click's import options place nothing.
+    let after = undo(&app);
+    unconfined(|| crate::place::place_from_cursor(&mut app, &json!({"path": notes, "rect": [10, 10, 200, 100]})));
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::text_import::KIND));
+    app.run("file.place.queue", json!({"paths": [a]})).unwrap();
+    assert!(unconfined(|| crate::dialogs::confirm(&mut app)).is_err());
+    assert_eq!(undo(&app), after);
+    // So do those of a click before a queue set on the Place tool.
+    confine(roots.as_ref(), || {
+        app.run("file.place", json!({"paths": [a, notes]})).unwrap();
+        crate::dialogs::confirm(&mut app).unwrap();
+    });
+    unconfined(|| crate::place::place_from_cursor(&mut app, &json!({"path": notes, "rect": [10, 10, 200, 100]})));
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::text_import::KIND));
+    let entry = json!({"params": {"path": a}, "name": "a.png", "width": 10, "height": 10});
+    app.run("tool.setOption", json!({"values": {"queue": {"entries": [entry]}}})).unwrap();
+    let saved = app.ui.dialog.clone();
+    assert!(unconfined(|| crate::dialogs::confirm(&mut app)).is_err());
+    assert_eq!(undo(&app), after);
+    // Also when confirmed by a caller with roots that hold the file.
+    app.ui.dialog = saved;
+    assert!(confine(roots.as_ref(), || crate::dialogs::confirm(&mut app)).is_err());
+    assert_eq!(undo(&app), after);
+}
+
 #[test]
 fn a_file_placed_while_idle_follows_its_changes() {
     let mut app = app();

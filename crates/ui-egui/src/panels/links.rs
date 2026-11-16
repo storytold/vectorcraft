@@ -5,8 +5,8 @@
 //! Go To, Update and Edit Original act on the selected rows (Relink through its dialog, with the
 //! Replace choice: `ui.relinkDialog`); Link Info shows the details of the first. The flyout adds Relink to Folder, Find in Folder (Find Linked Files:
 //! `ui.findLinksInFolder`), Embed / Unembed, Placement Options, Select Linked / Embedded / Missing /
-//! Modified (`addon.select.byLinkStatus`, Shift adds), Show filters, Sort, thumbnail size,
-//! Show in Folder and Show DCS Transparency Interactions (a warning on the rows of images placed
+//! Modified (`addon.select.byLinkStatus`, Shift adds), Show filters, Sort, Copy Info (the selected
+//! rows' file names to the clipboard: `links.copyInfo`), thumbnail size, Show in Folder and Show DCS Transparency Interactions (a warning on the rows of images placed
 //! from DCS files that are transparent or overlap transparent objects).
 //!
 //! Images and placed documents in opacity-mask art and in the art of symbols, graph designs and
@@ -29,7 +29,7 @@ pub const ID: &str = "links";
 /// Seconds between two looks at the linked files (they change outside the app).
 const RECHECK: f64 = 2.0;
 const SHOW: [(&str, &str); 4] = [("all", "Show All"), ("missing", "Show Missing"), ("modified", "Show Modified"), ("embedded", "Show Embedded")];
-const SORT: [(&str, &str); 3] = [("name", "Sort by Name"), ("kind", "Sort by Kind"), ("status", "Sort by Status")];
+const SORT: [(&str, &str); 4] = [("name", "Sort by Name"), ("kind", "Sort by Kind"), ("status", "Sort by Status"), ("size", "Sort by Size")];
 const THUMBS: [(f32, &str); 4] = [(0.0, "No Thumbnails"), (18.0, "Small Thumbnails"), (28.0, "Medium Thumbnails"), (44.0, "Large Thumbnails")];
 
 /// The panel's options (flyout).
@@ -92,28 +92,29 @@ fn cached(app: &mut VectorcraftApp, ctx: &egui::Context, o: &Options) -> Option<
     let mut c: Cache = pstate(ctx, "links-cache");
     let stale = c.key != key || now - c.at > RECHECK;
     if stale {
+        let same_doc = c.key == key;
         c.list = app.session.execute("links.list", &json!({ "show": o.show, "sort": o.sort, "dcsTransparency": o.dcs })).ok()?;
         (c.key, c.at) = (key, now);
         // One pass over the stored art for the rows outside the layer tree and the objects whose
-        // opacity masks hold them, not one per frame.
-        let mut want: std::collections::HashSet<u64> = c.list["links"]
+        // opacity masks hold them, not one per frame. An object in the layer tree is looked up by
+        // its index when drawn.
+        let doc = app.session.active().map(|st| &st.doc);
+        let want: std::collections::HashSet<u64> = c.list["links"]
             .as_array()
             .into_iter()
             .flatten()
             .filter(|r| nested_row(r))
             .flat_map(|r| [r["id"].as_u64(), r["owner"]["maskOf"].as_u64()])
             .flatten()
+            .filter(|id| doc.is_some_and(|d| d.node(NodeId(*id)).is_none()))
             .collect();
-        c.nested.clear();
-        if !want.is_empty()
-            && let Some(st) = app.session.active()
-        {
-            st.doc.visit_stored_arcs(|n, place| {
-                if !place.in_layers() && want.remove(&n.id.0) {
-                    c.nested.push((n.id.0, std::sync::Arc::clone(n)));
-                }
-            });
-            c.nested.sort_by_key(|(id, _)| *id);
+        // The same revision keeps the objects collected for it, so their thumbnails are not drawn
+        // again each time the files are looked at.
+        if !(same_doc && want.iter().all(|id| c.nested_node(*id).is_some())) {
+            c.nested = match doc {
+                Some(d) if !want.is_empty() => stored_objects(d, want),
+                _ => vec![],
+            };
         }
     }
     let want = first.filter(|_| o.info);
@@ -124,6 +125,44 @@ fn cached(app: &mut VectorcraftApp, ctx: &egui::Context, o: &Options) -> Option<
     // Files change on disk without a frame of ours: look again later.
     ctx.request_repaint_after(std::time::Duration::from_secs_f64(RECHECK));
     Some(c)
+}
+
+/// The objects of `doc` outside the layer tree whose ids are in `want`, sorted by id. The art of
+/// the stored brushes is set on `doc` only while a command uses it ([`Document::mounted_art`]), so
+/// when an id is not found otherwise that art is set on a copy of `doc`, which gives its objects
+/// the ids `links.list` reports for them.
+///
+/// [`Document::mounted_art`]: vectorcraft_doc::Document::mounted_art
+pub(super) fn stored_objects(
+    doc: &vectorcraft_doc::Document,
+    mut want: std::collections::HashSet<u64>,
+) -> Vec<(u64, std::sync::Arc<vectorcraft_doc::Node>)> {
+    let mut out = vec![];
+    collect_stored(doc, &mut want, &mut out);
+    if !want.is_empty() && doc.mounted_art.is_empty() {
+        let art = vectorcraft_brush::stored_art::StoredArt::read(doc);
+        if !art.is_empty() {
+            let mut d = doc.clone();
+            art.mount(&mut d);
+            collect_stored(&d, &mut want, &mut out);
+        }
+    }
+    out.sort_by_key(|(id, _)| *id);
+    out
+}
+
+/// Adds the objects of `d` outside the layer tree whose ids are in `want` to `out`, taking their
+/// ids out of `want`.
+fn collect_stored(
+    d: &vectorcraft_doc::Document,
+    want: &mut std::collections::HashSet<u64>,
+    out: &mut Vec<(u64, std::sync::Arc<vectorcraft_doc::Node>)>,
+) {
+    d.visit_stored_arcs(|n, place| {
+        if !place.in_layers() && want.remove(&n.id.0) {
+            out.push((n.id.0, std::sync::Arc::clone(n)));
+        }
+    });
 }
 
 /// The ids of the selected image objects and placed documents.
@@ -177,6 +216,15 @@ fn selected_links(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<u64> {
         }
     }
     ids
+}
+
+/// [`selected_links`] with the app's window context, for a command run outside the panel (the
+/// selected images and placed documents alone when there is no window).
+pub(crate) fn selected_rows_of_app(app: &VectorcraftApp) -> Vec<u64> {
+    match app.ui_ctx.clone() {
+        Some(ctx) => selected_links(app, &ctx),
+        None => selected_images(app),
+    }
 }
 
 /// The rows of `list` whose image is selected.
@@ -316,6 +364,48 @@ pub(crate) fn open_file(app: &mut VectorcraftApp, p: &Value, reveal: bool) -> Re
         crate::io::open_original(app, &path)?;
     }
     Ok(json!({ "path": path }))
+}
+
+/// The UI command `links.copyInfo {ids?}` (the panel menu's Copy Info): copy the file names of
+/// images and placed documents `ids` (default: the selected rows, [`selected_rows_of_app`], in the
+/// order `links.list` gives them; `null` counts as left out) to the clipboard, one per line in that
+/// order → `{text, names}`. An embedded image gives the name its row shows.
+pub(crate) fn copy_info(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let key = "ids";
+    let given = match p.get(key) {
+        None | Some(Value::Null) => None,
+        Some(Value::Array(a)) => {
+            let mut out = Vec::with_capacity(a.len());
+            for (index, value) in a.iter().enumerate() {
+                out.push(value.as_u64().ok_or_else(|| format!("`{key}` entry {index} is {value}, not a non-negative integer object id"))?);
+            }
+            Some(out)
+        }
+        Some(_) => return Err(format!("{key} must be an array of non-negative integer object ids")),
+    };
+    let list = app.session.execute("links.list", &json!({})).map_err(|e| e.to_string())?;
+    let rows: Vec<&Value> = list["links"].as_array().into_iter().flatten().collect();
+    let wanted = match given {
+        Some(wanted) => wanted,
+        None => {
+            let sel = selected_rows_of_app(app);
+            ids(&rows, |r| r["id"].as_u64().is_some_and(|id| sel.contains(&id)))
+        }
+    };
+    let by_id: std::collections::HashMap<u64, &str> =
+        rows.iter().filter_map(|r| Some((r["id"].as_u64()?, r["name"].as_str().unwrap_or_default()))).collect();
+    let mut names = Vec::with_capacity(wanted.len());
+    for id in &wanted {
+        let name = by_id.get(id).ok_or_else(|| format!("object {} is not an image or a linked file", *id))?;
+        names.push((*name).to_string());
+    }
+    if names.is_empty() {
+        return Err("select the images, or pass ids".into());
+    }
+    let text = names.join("\n");
+    app.clipboard_out = Some(text.clone());
+    app.status("Copied the link info");
+    Ok(json!({ "text": text, "names": names }))
 }
 
 /// Whether Edit Original may hand `path` to the system's default app: a regular file (after
@@ -693,7 +783,8 @@ fn link_info(ui: &mut Ui, info: Option<&Value>, units: vectorcraft_doc::Unit) {
 }
 
 /// The panel's flyout menu: the link commands for the selected rows, Select Linked / Embedded /
-/// Missing / Modified for the whole document, and the Show, Sort and thumbnail options.
+/// Missing / Modified for the whole document, the Show and Sort options, Copy Info and the
+/// thumbnail options.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let o = options(ui.ctx());
     // The rows the panel shows (the menu opens from it).
@@ -778,6 +869,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         if menu_item(ui, tl!(label), true, o.sort == Some(id)) {
             set_options(ui.ctx(), |o| o.sort = if o.sort == Some(id) { None } else { Some(id) });
         }
+    }
+    ui.separator();
+    if menu_item(ui, tl!("Copy Info"), any, false) {
+        crate::menus::invoke(app, "links.copyInfo", json!({ "ids": ids(&sel, |_| true) }));
     }
     ui.separator();
     for (px, label) in THUMBS {

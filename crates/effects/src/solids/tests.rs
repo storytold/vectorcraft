@@ -1,5 +1,5 @@
 use serde_json::json;
-use vectorcraft_doc::{Document, NodeId, StrokeLayer};
+use vectorcraft_doc::{Document, FillLayer, NodeId, StrokeLayer};
 use vectorcraft_geom::{Affine, BezPath, Point, Shape};
 
 use super::*;
@@ -1082,7 +1082,8 @@ fn geometry_builds(check: impl FnOnce() -> Result<(), String>) -> (usize, Result
 
 /// The check builds each solid the effect draws once, about the bounds it draws it about: one for
 /// a fill and one for each stroke, on an object, on a group's members and on an appearance item,
-/// with the shadow on or off.
+/// with the shadow on or off. With the shadow on, the shadow is cast from the faces those builds
+/// kept, so no solid is built again for it.
 #[test]
 fn the_check_builds_each_drawn_solid_once() {
     for id in [EXTRUDE, CLASSIC_EXTRUDE, INFLATE] {
@@ -1098,6 +1099,11 @@ fn the_check_builds_each_drawn_solid_once() {
         assert_eq!(geometry_builds(|| validate_three_d_at(&n, id, &json!({}), (Some(0), 0))), (1, Ok(())), "{id}: on the fill");
         let shadow = json!({"shadow": true});
         assert_eq!(geometry_builds(|| validate_solid(&n, id, &shadow)), (2, Ok(())), "{id}: with the shadow on");
+        let mut other = square_node();
+        other.id = NodeId(2);
+        let g = Node::group(NodeId(9999), vec![Arc::new(square_node()), Arc::new(other)]);
+        assert_eq!(geometry_builds(|| validate_solid(&g, id, &shadow)), (4, Ok(())), "{id}: a group with the shadow on");
+        assert_eq!(geometry_builds(|| validate_three_d_at(&n, id, &shadow, (Some(0), 0))), (1, Ok(())), "{id}: the fill with the shadow on");
     }
 }
 
@@ -1113,6 +1119,44 @@ fn the_check_builds_the_profile_of_a_shape_with_no_fill() {
         bare.appearance.items.clear();
         assert_eq!(geometry_builds(|| validate_solid(&bare, id, &json!({}))), (1, Ok(())), "{id}: no paint");
     }
+}
+
+/// A filled shape is checked about the bounds the effect draws its solid about, which take in the
+/// strokes beside it. A shape of many small curves is too complex for Extrude & Bevel about the
+/// shapes' own bounds, where its curves are sampled more finely, and passes about the bounds of a
+/// wide stroke in its group, as its solid draws there.
+#[test]
+fn the_check_builds_a_filled_shape_about_the_bounds_its_solid_draws_about() {
+    // 900 curves about (100, 100), each bulging 1 pt out from a side of a polygon 80 pt across.
+    let corners = 900;
+    let center = Point::new(100.0, 100.0);
+    let corner = |k: usize| {
+        let (s, c) = (k as f64 * std::f64::consts::TAU / corners as f64).sin_cos();
+        Point::new(center.x + 40.0 * c, center.y + 40.0 * s)
+    };
+    let mut b = BezPath::new();
+    b.move_to(corner(0));
+    for k in 0..corners {
+        let (p0, p3) = (corner(k), corner(k + 1));
+        let out = p0.midpoint(p3) - center;
+        let out = out / out.hypot();
+        b.curve_to(p0 + (p3 - p0) / 3.0 + out, p0 + (p3 - p0) * (2.0 / 3.0) + out, p3);
+    }
+    b.close_path();
+    let filled = Node::path(NodeId(1), PathData::from_bezpath(&b), Appearance::basic(Paint::solid(RED), Paint::None, 0.0));
+    let mut line = BezPath::new();
+    line.move_to((80.0, 100.0));
+    line.line_to((120.0, 100.0));
+    let mut wide = Node::path(NodeId(2), PathData::from_bezpath(&line), Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 2000.0));
+    wide.appearance.items.retain(|i| matches!(i, AppearanceItem::Stroke(_)));
+    let p = json!({"bevel": "rounded", "bevelRepeat": 6});
+    let (path, rule) = profile(&filled).unwrap();
+    let own = path.bounds().unwrap().union(wide.path_data().unwrap().bounds().unwrap());
+    assert_eq!(facets(EXTRUDE, &path, rule, own, &p).map(|_| ()), Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string()), "about its own bounds");
+    let mut g = Node::group(NodeId(9999), vec![Arc::new(filled), Arc::new(wide)]);
+    assert_eq!(validate_solid(&g, EXTRUDE, &p), Ok(()));
+    g.appearance.effects.push(fx(EXTRUDE, p));
+    assert!(solid_art(&g).is_some(), "the solid draws");
 }
 
 /// A convex polygon of `corners` corners about (20,000, 20,000), filled red, with no stroke.
@@ -1916,6 +1960,57 @@ fn classic_shading_keeps_a_gradients_transparency() {
     }
 }
 
+/// A gradient without a placement and with a transparent stop, under colored lights or classic
+/// shading, is placed once for the whole surface: every face's color and the surface's opacity mask
+/// share one placement, so the color and transparency ramps line up across the faces. A gradient
+/// placed in the document keeps its placement.
+#[test]
+fn a_transparent_unplaced_gradient_has_one_placement_for_color_and_mask() {
+    use vectorcraft_doc::color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    // The source's stops carry an unusual midpoint, so its color and mask copies can be told from
+    // the light ramps.
+    const MARK: f32 = 0.37;
+    let mut first = GradientStop::new(0.0, RED);
+    first.midpoint = MARK;
+    let mut end = GradientStop::new(1.0, Color::BLACK);
+    end.opacity = 0.25;
+    let unplaced = GradientPaint::new(Gradient::new(GradientKind::Linear, vec![first, end]));
+    let placed = GradientGeom { start: Point::new(90.0, 100.0), end: Point::new(230.0, 140.0), aspect: 1.0, focal: None };
+    // The placement of each copy of the source gradient: its own, else its fit on the path it fills.
+    fn placements(n: &Node, out: &mut Vec<GradientGeom>) {
+        n.walk(&mut |c| {
+            if let Some(mask) = &c.extras().mask {
+                placements(&mask.art, out);
+            }
+            let bounds = c.path_data().and_then(|p| p.bounds()).unwrap_or(Rect::ZERO);
+            for item in &c.appearance.items {
+                if let Paint::Gradient(g) = paint_ref(item)
+                    && g.gradient.stops.first().is_some_and(|s| s.midpoint == MARK)
+                {
+                    out.push(g.resolve(bounds));
+                }
+            }
+        });
+    }
+    let lit = json!({"lights": [{"color": "#ff8080"}]});
+    for (id, params) in [(EXTRUDE, lit.clone()), (INFLATE, lit.clone()), (ROTATE, lit), (CLASSIC_EXTRUDE, json!({}))] {
+        for geom in [None, Some(placed)] {
+            let mut n = square_node();
+            n.appearance.items = vec![AppearanceItem::Fill(FillLayer::new(Paint::Gradient(Box::new(GradientPaint { geom, ..unplaced.clone() }))))];
+            n.appearance.effects.push(fx(id, params.clone()));
+            let art = solid_art(&n).unwrap_or_else(|| panic!("{id}"));
+            let mut masks = 0;
+            art.walk(&mut |c| masks += usize::from(c.extras().mask.is_some()));
+            assert!(masks > 0, "{id}: the surface carries the gradient's transparency as a mask");
+            let mut found = vec![];
+            placements(&art, &mut found);
+            assert!(found.len() > 2, "{id}: the faces' colors and the mask");
+            let expected = geom.unwrap_or(found[0]);
+            assert!(found.iter().all(|g| *g == expected), "{id} {geom:?}: {found:?}");
+        }
+    }
+}
+
 /// A group member in a gradient with transparent stops keeps the shared back-to-front order of
 /// every member's faces: its faces go in runs that carry its opacity mask, and the other member's
 /// faces are drawn between them where they are in front of some and behind others. Here a square
@@ -1977,6 +2072,62 @@ fn a_member_in_a_transparent_gradient_keeps_the_shared_face_order() {
     }
 }
 
+/// The fills of each face of `art`: the first is the face's paint, a second the shadow over it.
+fn face_fills(art: &Node) -> Vec<Vec<FillLayer>> {
+    faces(art)
+        .iter()
+        .map(|f| {
+            f.appearance
+                .items
+                .iter()
+                .filter_map(|i| match i {
+                    AppearanceItem::Fill(f) => Some(f.clone()),
+                    AppearanceItem::Stroke(_) => None,
+                })
+                .collect()
+        })
+        .collect()
+}
+
+#[test]
+fn classic_preserve_spot_colors_keeps_a_linked_fill_on_every_face() {
+    let ink = Color::cmyk(0.0, 1.0, 0.0, 0.2);
+    let art = |params: Value| {
+        let mut n = classic(params);
+        n.appearance.items = vec![AppearanceItem::Fill(FillLayer::new(Paint::Solid { color: ink, swatch: Some("Ink".into()), tint: 1.0 }))];
+        solid_art(&n).unwrap()
+    };
+    let lit = json!({"preserveSpotColors": true, "highlightIntensity": 100, "highlightSize": 100, "lightHeight": 60});
+    let (mut highlighted, mut shaded) = (false, false);
+    for layers in face_fills(&art(lit)) {
+        let Paint::Solid { color, swatch: Some(name), tint } = &layers[0].paint else { panic!("the swatch is kept: {layers:?}") };
+        assert_eq!(name, "Ink");
+        assert_eq!(*color, ink.tinted(*tint), "the color is the swatch at the face's tint");
+        highlighted |= *tint < 1.0;
+        if let Some(shadow) = layers.get(1) {
+            let Some(Color::Gray { k }) = shadow.paint.color() else { panic!("black shading: {:?}", shadow.paint) };
+            assert!(k > 0.0 && k <= 1.0, "{k}");
+            assert_eq!((shadow.blend, shadow.overprint, shadow.opacity), (BlendMode::Multiply, true, 1.0));
+            shaded = true;
+        }
+        assert!(layers.len() <= 2, "{layers:?}");
+    }
+    assert!(highlighted && shaded, "the highlight lowers the tint and the shadow adds black");
+    // No shading color: the highlight only, as tints of the swatch.
+    for layers in face_fills(&art(json!({"preserveSpotColors": true, "shadingColor": "none"}))) {
+        assert!(matches!(&layers[..], [f] if matches!(&f.paint, Paint::Solid { swatch: Some(_), .. })), "{layers:?}");
+    }
+    // Off, or with a custom shading color, shaded faces are process mixes, as before.
+    for params in [json!({}), json!({"preserveSpotColors": true, "shadingColor": "custom", "shadingCustom": "#3366cc"})] {
+        let unlinked = face_fills(&art(params.clone())).iter().filter(|l| matches!(l[0].paint, Paint::Solid { swatch: None, .. })).count();
+        assert!(unlinked > 0, "{params}");
+    }
+    // An unlinked fill is shaded as it is with the option off.
+    let off: Vec<[f32; 3]> = classic_faces(json!({})).iter().map(fill_rgb).collect();
+    let on: Vec<[f32; 3]> = classic_faces(json!({"preserveSpotColors": true})).iter().map(fill_rgb).collect();
+    assert_eq!(off, on);
+}
+
 #[test]
 fn classic_parameters_are_checked() {
     let n = classic(json!({}));
@@ -1996,6 +2147,7 @@ fn classic_parameters_are_checked() {
         (json!({"highlightSize": "big"}), "`highlightSize` must be a number"),
         (json!({"cap": "yes"}), "`cap` must be true or false"),
         (json!({"drawHiddenFaces": 1}), "`drawHiddenFaces` must be true or false"),
+        (json!({"preserveSpotColors": "yes"}), "`preserveSpotColors` must be true or false"),
         (json!({"bevel": "fancy"}), "bevel must be none or one of"),
         (json!({"twist": 10}), "unknown parameter `twist`"),
         (json!({"lights": []}), "lights must contain one to ten lights"),
@@ -2072,6 +2224,7 @@ fn classic_rotate_parameters_are_checked() {
         (json!({"lightIntensity": 101}), "`lightIntensity` must be between 0 and 100 (got 101)"),
         (json!({"blendSteps": 0}), "`blendSteps` must be a whole number between 1 and 256 (got 0)"),
         (json!({"lightBehind": 1}), "`lightBehind` must be true or false"),
+        (json!({"preserveSpotColors": null}), "`preserveSpotColors` must be true or false"),
         (json!({"highlightSize": 50}), "unknown parameter `highlightSize`"),
         (json!({"drawHiddenFaces": true}), "unknown parameter `drawHiddenFaces`"),
         (json!({"shadow": true}), "unknown parameter `shadow`"),

@@ -508,11 +508,69 @@ fn laid_out(t: &vectorcraft_doc::TextObject) -> (Vec<kurbo::BezPath>, kurbo::Bez
     (runs, all, layout.bounds, colours)
 }
 
+/// Paint `piece`, a piece of type's outline in text space (glyphs, ruby glyphs or an underline or
+/// strikethrough bar), with `style`, the fills and strokes of its run, and place it in the document
+/// by `xf`, the type's transform, as the renderer paints the run: its unplaced gradients are fixed
+/// to `bounds`, the layout's bounds in text space, so every piece of the type shows the one
+/// gradient fitted across the whole layout, and the transform also scales its stroke weights and
+/// dashes and transforms its pattern tiles. Placed gradients keep their place in text space and
+/// move with the type.
+///
+/// When `xf` is not a similarity (it scales unevenly, shears or flattens), one weight can't give
+/// the stroke the thickness the canvas paints in each direction: `piece` keeps only the run's fill,
+/// and the returned path is the area the run's stroke paints around `piece` in text space
+/// ([`crate::stroke::outline_region`]: dashes, caps, joins and alignment), placed by `xf` and
+/// filled with the stroke's paint, to paint over `piece`. `None` under a similarity and for a run
+/// without a stroke.
+pub fn paint_type_piece(piece: &mut Node, style: &vectorcraft_doc::CharStyle, bounds: Rect, xf: Affine) -> Option<Node> {
+    let scaling = vectorcraft_doc::Scaling { strokes: true, patterns: true, ..Default::default() };
+    let mut ap = style.appearance();
+    ap.pin_gradients(bounds);
+    let stroke = if is_similarity(xf) { None } else { filled_stroke(piece, &mut ap) };
+    piece.appearance = ap.into();
+    piece.transform(xf, scaling);
+    stroke.map(|mut s| {
+        s.transform(xf, scaling);
+        s
+    })
+}
+
+/// Does `xf` keep angles and scale every direction alike (a move, a rotation, a uniform scale or a
+/// reflection), without flattening?
+fn is_similarity(xf: Affine) -> bool {
+    let [a, b, c, d, ..] = xf.as_coeffs();
+    let (x, y) = (a.hypot(b), c.hypot(d));
+    let tol = 1e-9 * x.max(y);
+    x.is_finite() && y.is_finite() && x > 0.0 && y > 0.0 && (x - y).abs() <= tol && (a * c + b * d).abs() <= tol * x.max(y)
+}
+
+/// Takes the stroke out of `ap`, the appearance of `piece` (a path or compound path in text space),
+/// and returns the area it paints there as a path filled with its paint, opacity, blend mode,
+/// effects and overprint, with `piece`'s id. `None` when `ap` has no stroke or it paints nothing.
+fn filled_stroke(piece: &Node, ap: &mut Appearance) -> Option<Node> {
+    let i = ap.items.iter().position(|i| matches!(i, AppearanceItem::Stroke(_)))?;
+    let AppearanceItem::Stroke(st) = ap.items.remove(i) else { return None };
+    let path = PathData::from_bezpath(&piece.stroke_path()?);
+    let region = crate::stroke::outline_region(&path, FillRule::NonZero, &st);
+    if region.is_empty() {
+        return None;
+    }
+    let fill = vectorcraft_doc::FillLayer {
+        opacity: st.opacity,
+        blend: st.blend,
+        effects: st.effects.clone(),
+        overprint: st.overprint,
+        ..vectorcraft_doc::FillLayer::new(st.paint.stroke_as_fill())
+    };
+    Some(Node::path(piece.id, region, Appearance { items: vec![AppearanceItem::Fill(fill)], ..Default::default() }))
+}
+
 /// Type as glyph outlines in document space: one path per run with the run's fill and stroke,
 /// over its colour glyphs (images, art), and (when the object has its own fills/strokes) the whole
 /// outline with the object's items below the characters under them and the others over them, as
 /// the renderer paints them. Each run's path is placed by the type's transform, which also scales its stroke
-/// weights and dashes and transforms its pattern tiles; its unplaced gradients are first fixed to
+/// weights and dashes and transforms its pattern tiles (a transform that is not a similarity puts
+/// the run's stroke on a filled path over it, [`paint_type_piece`]); its unplaced gradients are first fixed to
 /// the layout's bounds in text space. The object's own unplaced gradients are fixed to the
 /// bounding box of those bounds in the document. The group is marked as type's outlines
 /// ([`vectorcraft_doc::NodeExtras::type_outlines`]).
@@ -520,7 +578,6 @@ pub fn outline_text(n: &Node) -> Option<Node> {
     let NodeKind::Text(t) = &n.kind else { return None };
     let (runs, all, bounds, colours) = laid_out(t);
     let path = |bp: &kurbo::BezPath| PathData::from_bezpath(bp).transformed(t.xf);
-    let scaling = vectorcraft_doc::Scaling { strokes: true, patterns: true, ..Default::default() };
     let mut children: Vec<Arc<Node>> = vec![];
     for (i, (bp, run)) in runs.iter().zip(&t.runs).enumerate() {
         // Colour glyphs paint themselves, under their run's fill, as the renderer paints them.
@@ -528,11 +585,10 @@ pub fn outline_text(n: &Node) -> Option<Node> {
         if bp.elements().is_empty() {
             continue;
         }
-        let mut ap = run.style.appearance();
-        ap.pin_gradients(bounds);
-        let mut piece = Node::path(n.id, PathData::from_bezpath(bp), ap);
-        piece.transform(t.xf, scaling);
+        let mut piece = Node::path(n.id, PathData::from_bezpath(bp), Appearance::default());
+        let stroke = paint_type_piece(&mut piece, &run.style, bounds, t.xf);
         children.push(Arc::new(piece));
+        children.extend(stroke.map(Arc::new));
     }
     if !n.appearance.items.is_empty() && !all.elements().is_empty() {
         let (below, above) = n.appearance.split_contents();
@@ -735,9 +791,13 @@ pub(crate) fn clipping_text_outline(t: &Node) -> Option<Node> {
 
 /// Replace type anywhere inside `n` by its outlines, as art that keeps the type's look
 /// ([`as_art`]). Type in a clip group's clipping path (all of `n` when `clipping` is set) becomes
-/// its outlines with its visibility and effects ([`clipping_text_outline`]). The swatches and
-/// patterns that live-effect plug-ins painting their pieces name are looked up in `doc`.
+/// its outlines with its visibility and effects ([`clipping_text_outline`]), and its fills and
+/// strokes become art of their own ([`paint_type_clip`]). The swatches and patterns that
+/// live-effect plug-ins painting their pieces name are looked up in `doc`.
 pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping: bool) {
+    if !clipping {
+        paint_type_clip(doc, n);
+    }
     let clips = n.clips();
     let Some(ch) = n.children_mut() else { return };
     for (i, c) in ch.iter_mut().enumerate() {
@@ -752,6 +812,36 @@ pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping
         } else if c.children().is_some() {
             outline_nested_text(doc, Arc::make_mut(c), clipping);
         }
+    }
+}
+
+/// When `n` is a clip group or clipping layer whose clipping path is type that paints
+/// ([`Node::clip_paint`]), make it the art the canvas draws for it: the type's outlines clip
+/// ([`clipping_text_outline`]), its fills as art ([`as_art`]) paint behind the clipped art inside
+/// the clip, and its strokes as art paint over it, outside the clip, in a group that `n` becomes
+/// (keeping its id, name and transparency) with the clip group inside. The other members stay as
+/// they are. Hidden type paints nothing.
+pub(crate) fn paint_type_clip(doc: Option<&Document>, n: &mut Node) {
+    let Some((first, rest)) = n.children().and_then(|ch| ch.split_first()) else { return };
+    if !n.clips() || !matches!(first.kind, NodeKind::Text(_)) || !first.visible {
+        return;
+    }
+    let paint = first.clip_paint();
+    if paint.fill.is_none() && paint.stroke.is_none() {
+        return;
+    }
+    let Some(clip) = clipping_text_outline(first) else { return };
+    let art = |part: Option<Node>| part.and_then(|p| as_art(doc, &p, None)).map(Arc::new);
+    let members: Vec<Arc<Node>> = std::iter::once(Arc::new(clip)).chain(art(paint.fill)).chain(rest.iter().cloned()).collect();
+    let stroke = art(paint.stroke);
+    let id = n.id;
+    match (&mut n.kind, stroke) {
+        (NodeKind::Group { children, .. } | NodeKind::Layer { children, .. }, None) => *children = members,
+        (NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. }, Some(stroke)) => {
+            *children = vec![Arc::new(Node::new(id, NodeKind::Group { children: members, clip: true })), stroke];
+            *clip = false;
+        }
+        _ => {}
     }
 }
 

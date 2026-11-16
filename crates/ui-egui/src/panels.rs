@@ -190,6 +190,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         learn::ID => learn::show(app, ui),
         crate::addons::cleanup::ID => crate::addons::cleanup::show(app, ui),
         crate::addons::color::ID => crate::addons::color::show(app, ui),
+        crate::addons::packaging::ID => crate::addons::packaging::show(app, ui),
         crate::addons::pathtools::ID => crate::addons::pathtools::show(app, ui),
         crate::addons::pathtools::shape::ID => crate::addons::pathtools::shape::show(app, ui),
         crate::addons::pen::ID => crate::addons::pen::show(app, ui),
@@ -245,6 +246,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) -> bool
         variables::ID => variables::menu(app, ui),
         script_console::ID => script_console::menu(app, ui),
         "actions" => actions::menu(app, ui),
+        crate::addons::packaging::ID => crate::addons::packaging::panel_menu(app, ui),
         id if library_panel::parse(id).is_some() => library_panel::menu(app, ui, id),
         _ => return false,
     }
@@ -265,7 +267,7 @@ pub fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, rect: Rect) {
     let resp = menu_button(ui, id, rect);
     egui::Popup::menu(&resp).show(|ui| {
         crate::widgets::menu_scroll(ui, |ui| {
-            ui.set_min_width(220.0);
+            crate::widgets::menu_min_width(ui, 220.0);
             if panel_menu_items(app, ui, id) {
                 ui.separator();
             }
@@ -512,6 +514,42 @@ pub(crate) fn pstate<T: Clone + Default + Send + Sync + 'static>(ctx: &egui::Con
 /// Store per-panel UI state in egui temp memory under the `panel-state` namespace.
 pub(crate) fn set_pstate<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, key: &str, v: T) {
     ctx.data_mut(|d| d.insert_temp(egui::Id::unique(("panel-state", key)), v));
+}
+
+/// `ui.panelView {panel, view?}`: set the view of the Swatches, Graphic Styles or Symbols panel
+/// (`panel`: swatches, graphicStyles or symbols), as the view items of its panel menu do; without
+/// `view`, answer the current one. An unknown panel or view is an error, and then nothing changes.
+/// → {panel, view}
+pub(crate) fn set_view(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    fn given<T: serde::de::DeserializeOwned>(p: &Value, err: &str) -> Result<Option<T>, String> {
+        match p.get("view") {
+            None | Some(Value::Null) => Ok(None),
+            Some(v) => serde_json::from_value(v.clone()).map(Some).map_err(|_| err.to_string()),
+        }
+    }
+    let ui = &mut app.ui;
+    let (panel, view) = match p.get("panel").and_then(Value::as_str) {
+        Some("swatches") => {
+            if let Some(v) = given(p, "`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList")? {
+                ui.swatches_view = v;
+            }
+            ("swatches", json!(ui.swatches_view))
+        }
+        Some("graphicStyles") => {
+            if let Some(v) = given(p, "`view` is thumbnail, smallList or largeList")? {
+                ui.graphic_styles_view = v;
+            }
+            ("graphicStyles", json!(ui.graphic_styles_view))
+        }
+        Some("symbols") => {
+            if let Some(v) = given(p, "`view` is thumbnail, smallList or largeList")? {
+                ui.symbols_view = v;
+            }
+            ("symbols", json!(ui.symbols_view))
+        }
+        _ => return Err("`panel` is swatches, graphicStyles or symbols".to_string()),
+    };
+    Ok(json!({ "panel": panel, "view": view }))
 }
 
 /// Whether the panel whose state is `key` has the keyboard for its rows (Delete and Backspace

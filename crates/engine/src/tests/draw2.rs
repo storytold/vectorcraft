@@ -612,6 +612,100 @@ fn eraser_size_follows_the_pen_pressure() {
     assert!(err.to_string().contains("sizeMode"), "{err}");
 }
 
+/// Eraser Tool Options' Angle, Roundness and Size variation menus: a value on Rotation, Bearing,
+/// Tilt or Pressure takes what the pen read along the drag, Random stays within its Variation, a
+/// drag without the reading erases at the value itself, an open path is cut where the varied tip
+/// covers it, and an unknown mode or a variation out of its range is refused with nothing erased.
+#[test]
+fn the_eraser_tip_varies_with_its_modes() {
+    // Which of `probes` a level drag through the middle of a 400 by 200 rectangle erases, each of
+    // its points `[x, 100]` followed by `pen` ([pressure, tiltX, tiltY, rotation]).
+    let erased = |tip: serde_json::Value, pen: serde_json::Value, probes: &[(f64, f64)]| -> Vec<bool> {
+        let mut s = session();
+        rect(&mut s, 0.0, 0.0, 400.0, 200.0);
+        let points: Vec<_> = (0..=20)
+            .map(|i| {
+                let mut p = vec![json!(100.0 + f64::from(i) * 10.0), json!(100.0)];
+                p.extend(pen.as_array().cloned().unwrap_or_default());
+                serde_json::Value::Array(p)
+            })
+            .collect();
+        s.execute("path.eraseRegion", &with(&json!({"points": points, "size": 20}), tip.clone())).unwrap();
+        let filled = |x: f64, y: f64| {
+            paths(&s).iter().any(|(_, pd)| vectorcraft_geom::hit::fill_contains(&pd.to_bezpath(), FillRule::NonZero, Point::new(x, y)))
+        };
+        assert!(filled(200.0, 150.0), "{tip} {pen}: the rest of the rectangle stays");
+        probes.iter().map(|&(x, y)| !filled(x, y)).collect()
+    };
+    let none = json!(null);
+    // A 20 by 2 pt tip lying level erases a band 2 pt tall; standing upright it erases one 20 pt tall.
+    let level = json!({"roundness": 10});
+    let probes = [(200.0, 100.5), (200.0, 108.0)];
+    assert_eq!(erased(level.clone(), json!([]), &probes), [true, false], "Fixed");
+    let on_rotation = with(&level, json!({"angleMode": "rotation", "angleVariation": 90}));
+    // The barrel turned half way round reads the most, which turns the tip upright.
+    assert_eq!(erased(on_rotation.clone(), json!([none, none, none, 180]), &probes), [true, true], "Rotation");
+    assert_eq!(erased(on_rotation.clone(), json!([]), &probes), [true, false], "Rotation without a reading");
+    // Leaning to the left (a bearing of 180°) reads the most too.
+    let on_bearing = with(&level, json!({"angleMode": "bearing", "angleVariation": 90}));
+    assert_eq!(erased(on_bearing.clone(), json!([none, -45, 0, none]), &probes), [true, true], "Bearing");
+    assert_eq!(erased(on_bearing, json!([none, 45, 0, none]), &probes), [true, false], "Bearing at 0°");
+    // A round tip: upright the pen gives 28 pt, nearly flat about 12 pt.
+    let on_tilt = json!({"sizeMode": "tilt", "sizeVariation": 8});
+    let wide = [(200.0, 105.0), (200.0, 113.0)];
+    assert_eq!(erased(on_tilt.clone(), json!([none, 0, 0, none]), &wide), [true, true], "Tilt upright");
+    assert_eq!(erased(on_tilt, json!([none, 89, 0, none]), &wide), [true, false], "Tilt flat");
+    // Roundness from 10 % less 90 (kept to 1 %) at the lightest pressure to 100 % at the heaviest.
+    let on_pressure = with(&level, json!({"roundnessMode": "pressure", "roundnessVariation": 90}));
+    assert_eq!(erased(on_pressure.clone(), json!([1.0]), &probes), [true, true], "Pressure at the heaviest");
+    // At the lightest the tip is 0.2 pt across, narrower than the 2 pt band Fixed erases.
+    assert_eq!(erased(on_pressure, json!([0.0]), &[(200.0, 100.0), (200.0, 100.5)]), [true, false], "Pressure at the lightest");
+    // Random: one size for the drag, from 16 to 24 pt.
+    let random = json!({"sizeMode": "random", "sizeVariation": 4});
+    assert_eq!(erased(random, json!([]), &[(200.0, 107.5), (200.0, 112.5)]), [true, false], "Random");
+    // A press on a line with the tip turned upright by its rotation cuts 5 pt of it, not 20.
+    let left_of_line = |pen: serde_json::Value| {
+        let mut s = session();
+        line(&mut s, 300.0, 150.0, 500.0, 150.0);
+        let mut point = vec![json!(400), json!(150)];
+        point.extend(pen.as_array().cloned().unwrap_or_default());
+        let tip = json!({"points": [point], "size": 20, "roundness": 25, "angleMode": "rotation", "angleVariation": 90});
+        s.execute("path.eraseRegion", &tip).unwrap();
+        paths(&s).iter().map(|p| p.1.length()).sum::<f64>()
+    };
+    let upright = left_of_line(json!([none, none, none, 180]));
+    assert!((upright - 195.0).abs() < 0.3, "the upright tip left {upright} pt of the line");
+    let level_tip = left_of_line(json!([]));
+    assert!((level_tip - 180.0).abs() < 0.3, "the level tip left {level_tip} pt of the line");
+    // A 1500 pt tip on Tilt erases 1500 pt across with a mouse, as it does on Fixed.
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 4000.0, 4000.0);
+    let big = json!({"points": [[1000, 2000], [3000, 2000]], "size": 1500, "sizeMode": "tilt", "sizeVariation": 10});
+    s.execute("path.eraseRegion", &big).unwrap();
+    let filled =
+        |x: f64, y: f64| paths(&s).iter().any(|(_, pd)| vectorcraft_geom::hit::fill_contains(&pd.to_bezpath(), FillRule::NonZero, Point::new(x, y)));
+    assert_eq!((filled(2000.0, 2740.0), filled(2000.0, 2760.0)), (false, true), "a 1500 pt tip");
+    // A Size Variation kept while Size is Fixed leaves the size alone.
+    let kept = with(&on_rotation, json!({"sizeMode": "fixed", "sizeVariation": 1000000}));
+    assert_eq!(erased(kept, json!([]), &probes), [true, false], "Size on Fixed with a Variation");
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let stroke = json!({"points": [[-10, 50], [110, 50]]});
+    let modes = "\"fixed\", \"random\", \"pressure\", \"tilt\", \"bearing\" or \"rotation\"";
+    for (extra, want) in [
+        (json!({"angleMode": "wheel"}), format!("angleMode is one of {modes}, not `wheel`")),
+        (json!({"roundnessMode": 3}), format!("roundnessMode is one of {modes}, not 3")),
+        (json!({"sizeMode": "stylusWheel"}), format!("sizeMode is one of {modes}, not `stylusWheel`")),
+        (json!({"angleVariation": 181}), "angleVariation must be at most 180".to_string()),
+        (json!({"roundnessVariation": 101}), "roundnessVariation must be at most 100".to_string()),
+        (json!({"roundnessVariation": -1}), "roundnessVariation must be 0 or more".to_string()),
+    ] {
+        refuses_with(&mut s, "path.eraseRegion", &with(&stroke, extra), &want);
+    }
+    refuses_a_number_given_as_text(&mut s, "path.eraseRegion", &stroke, "angleVariation");
+}
+
 /// A Blob Brush stroke merges with the topmost matching path it touches and with the touched
 /// matching paths next to it in stacking order in the same group or layer; matching paths in other
 /// layers or groups, or below an object of another kind, are left alone.
@@ -796,7 +890,7 @@ fn curvature_rubber_band_is_the_path_the_click_makes() {
     s.pointer(&PointerEvent::new(PointerKind::Up, 450.0, 400.0), v).unwrap();
     let made = path(&s, id).subpaths[0].clone();
     assert_eq!(made.anchors.len(), 4);
-    let tail = vectorcraft_geom::SubPath::new(made.anchors[1..].to_vec(), false);
+    let tail = vectorcraft_geom::SubPath::new(made.anchors.to_vec()[1..].to_vec(), false);
     assert_eq!(preview, bez(&tail));
 }
 
@@ -1124,7 +1218,7 @@ fn scissors_cut_ellipse_end_drags_alone() {
             s.pointer(&PointerEvent::new(PointerKind::Up, cut.x + 8.0, cut.y + 8.0).with_mods(m), v).unwrap();
             assert_eq!(undo_steps(&s), undo + 1);
             let after = path(&s, id);
-            let (old, new) = (&sp.anchors, &after.subpaths[0].anchors);
+            let (old, new) = (&sp.anchors.to_vec(), &after.subpaths[0].anchors.to_vec());
             assert_eq!(new.len(), old.len());
             assert_eq!(new[1..], old[1..], "only the dragged end moves (at anchor: {at_anchor}, {m:?})");
             let d = Point::new(cut.x + 8.0, cut.y + 8.0) - cut;
@@ -1241,6 +1335,84 @@ fn eraser_removes_small_shape_entirely() {
     s.execute("select.none", &json!({})).unwrap();
     s.execute("path.eraseRegion", &json!({"points": [[102, 102]], "size": 20})).unwrap();
     assert!(paths(&s).is_empty());
+}
+
+/// `path.eraseRegion {rect}` (the Eraser's Alt-drag marquee) erases everything inside the
+/// rectangle: a closed shape loses its area, an open path is cut where it crosses the edges, a
+/// shape wholly inside goes, and only the selected paths take part when something is selected. One
+/// undo step puts everything back, and a rectangle that touches nothing adds no undo step.
+#[test]
+fn erase_region_rect_erases_everything_inside_it() {
+    let filled = |s: &Session, x: f64, y: f64| {
+        paths(s).iter().any(|(_, pd)| pd.is_closed() && vectorcraft_geom::hit::fill_contains(&pd.to_bezpath(), FillRule::NonZero, Point::new(x, y)))
+    };
+    let mut s = session();
+    rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+    rect(&mut s, 180.0, 140.0, 10.0, 10.0);
+    line(&mut s, 50.0, 150.0, 350.0, 150.0);
+    s.execute("select.none", &json!({})).unwrap();
+    let undo = undo_steps(&s);
+    let r = s.execute("path.eraseRegion", &json!({"rect": [150, 120, 100, 60]})).unwrap();
+    assert!(!r["ids"].as_array().unwrap().is_empty(), "{r}");
+    assert_eq!(undo_steps(&s), undo + 1);
+    assert!(!filled(&s, 200.0, 150.0) && !filled(&s, 185.0, 145.0), "the area inside is erased, the small square with it");
+    assert!(filled(&s, 120.0, 150.0) && filled(&s, 200.0, 250.0) && filled(&s, 200.0, 110.0), "the rest stays filled");
+    let ps = paths(&s);
+    assert_eq!(ps.iter().filter(|(_, pd)| pd.is_closed()).count(), 1, "the square keeps the rectangle as a hole: {ps:?}");
+    let open: Vec<f64> = ps.iter().filter(|(_, pd)| !pd.is_closed()).map(|(_, pd)| pd.length()).collect();
+    assert_eq!(open.len(), 2, "the line is cut in two: {open:?}");
+    assert!(open.iter().all(|l| (l - 100.0).abs() < 0.01), "{open:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(paths(&s).len(), 3);
+    assert!(filled(&s, 200.0, 160.0) && filled(&s, 185.0, 145.0));
+    // A rectangle away from the art erases nothing and adds no undo step.
+    let undo = undo_steps(&s);
+    assert_eq!(s.execute("path.eraseRegion", &json!({"rect": [500, 500, 10, 10]})).unwrap(), json!({"ids": []}));
+    assert_eq!(undo_steps(&s), undo);
+    // With the line selected, only the line is erased.
+    let ln = paths(&s).into_iter().find(|(_, pd)| !pd.is_closed()).unwrap().0;
+    s.execute("select.set", &json!({"ids": [ln.0]})).unwrap();
+    let closed: Vec<PathData> = paths(&s).into_iter().filter(|(_, pd)| pd.is_closed()).map(|(_, pd)| pd).collect();
+    s.execute("path.eraseRegion", &json!({"rect": [90, 100, 30, 100]})).unwrap();
+    let after: Vec<PathData> = paths(&s).into_iter().filter(|(_, pd)| pd.is_closed()).map(|(_, pd)| pd).collect();
+    assert_eq!(after, closed, "the unselected squares are unchanged");
+    let open: Vec<f64> = paths(&s).iter().filter(|(_, pd)| !pd.is_closed()).map(|(_, pd)| pd.length()).collect();
+    assert_eq!(open.len(), 2);
+    assert!((open.iter().sum::<f64>() - 270.0).abs() < 0.01, "{open:?}");
+}
+
+/// A narrow `path.eraseRegion {rect}` across a long open path cuts it, wherever the rectangle
+/// falls between the samples the path's length would give.
+#[test]
+fn erase_region_rect_cuts_a_long_line_with_a_narrow_rectangle() {
+    let mut s = session();
+    line(&mut s, 0.0, 100.0, 10000.0, 100.0);
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("path.eraseRegion", &json!({"rect": [5000.3, 90, 1, 20]})).unwrap();
+    let mut open: Vec<f64> = paths(&s).iter().map(|(_, pd)| pd.length()).collect();
+    open.sort_by(f64::total_cmp);
+    assert_eq!(open.len(), 2, "{open:?}");
+    assert!((open[0] - 4998.7).abs() < 0.01 && (open[1] - 5000.3).abs() < 0.01, "{open:?}");
+}
+
+/// `path.eraseRegion` refuses a `rect` that is not four finite numbers with a width and a height
+/// above 0, and `rect` given with `points`, and changes nothing.
+#[test]
+fn erase_region_rect_refuses_bad_values() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let shape = "rect is [x, y, width, height] in points, with a width and a height above 0";
+    for p in [
+        json!({"rect": [10, 10, 0, 20]}),
+        json!({"rect": [10, 10, 20, -5]}),
+        json!({"rect": [10, 10, 20]}),
+        json!({"rect": [10, "10", 20, 20]}),
+        json!({"rect": [1e308, 0, 1e308, 20]}),
+        json!({"rect": {"x": 10, "y": 10, "width": 20, "height": 20}}),
+    ] {
+        refuses_with(&mut s, "path.eraseRegion", &p, shape);
+    }
+    refuses_with(&mut s, "path.eraseRegion", &json!({"rect": [10, 10, 20, 20], "points": [[0, 0]]}), "give `points` or `rect`, not both");
 }
 
 /// #4495: the Eraser cuts a compound path as one shape: its hole stays empty, the erased area is
@@ -1478,7 +1650,7 @@ fn a_short_smooth_drag_leaves_the_rest_of_long_segments_alone() {
     drag(&mut s, "smooth", &[(195.0, 194.0), (205.0, 194.0)], Mods::default());
     let p = path(&s, id);
     assert_ne!(p, before, "the bump is smoothed");
-    let a = &p.subpaths[0].anchors;
+    let a = &p.subpaths[0].anchors.to_vec();
     let (first, second, last) = (a[0], a[1], a[a.len() - 1]);
     assert!(first.p == Point::new(50.0, 200.0) && !first.has_out() && !second.has_in(), "the left side is a line still: {first:?} {second:?}");
     assert!(last.p == Point::new(350.0, 200.0) && !last.has_in() && !a[a.len() - 2].has_out(), "and the right one: {last:?}");
@@ -1689,7 +1861,7 @@ fn smoothing_over_a_closed_paths_first_anchor_keeps_its_start() {
     assert_ne!(after, before, "the bump is smoothed");
     assert_starts_nearest(&after, old, 12.0);
     let kept = &after.subpaths[0].anchors;
-    for a in &before.subpaths[0].anchors[2..=10] {
+    for a in &before.subpaths[0].anchors.to_vec()[2..=10] {
         assert!(kept.iter().any(|k| k.p == a.p), "{:?} is out of reach and stays: {kept:?}", a.p);
     }
     s.execute("edit.undo", &json!({})).unwrap();
@@ -2230,6 +2402,39 @@ fn smoothing_keeps_a_corner_between_curves() {
         let at = smooth_turn_at(&path(&s, id).subpaths[0], v);
         assert!(at.is_some_and(|t| (t - turn).abs() < 0.01), "the corner turning {turn}° is kept: {at:?}");
     }
+}
+
+/// A Smooth drag over a corner of a path cut into very many short segments keeps it, however many
+/// segments twice the reach spans: an open path's 90° corner with legs of 2,000 segments 0.05 pt
+/// long at the default reach, and a corner of a 200 pt square cut into 0.25 pt segments with a 40 pt
+/// reach.
+#[test]
+fn smoothing_keeps_corners_on_a_path_of_many_short_segments() {
+    let mut s = session();
+    let (id, v, drag) = smooth_corner_path(&mut s, 90.0, 2000);
+    smooth_pass(&mut s, &drag);
+    let at = smooth_turn_at(&path(&s, id).subpaths[0], v);
+    assert!(at.is_some_and(|t| (t - 90.0).abs() < 0.01), "the open path's corner is kept: {at:?}");
+
+    let mut s = session();
+    let ends = [Point::new(200.0, 200.0), Point::new(400.0, 200.0), Point::new(400.0, 400.0), Point::new(200.0, 400.0)];
+    let mut anchors = vec![];
+    for k in 0..4 {
+        let (a, b) = (ends[k], ends[(k + 1) % 4]);
+        anchors.extend((0..800).map(|j| {
+            let p = a.lerp(b, f64::from(j) / 800.0);
+            json!({"x": p.x, "y": p.y})
+        }));
+    }
+    let id = smooth_test_path(&mut s, &anchors, true);
+    let v = ends[1];
+    let mut drag: Vec<Point> = (0..8).map(|k| v - kurbo::Vec2::new(40.0 - 5.0 * f64::from(k), 0.0)).collect();
+    drag.extend((0..=8).map(|k| v + kurbo::Vec2::new(0.0, 5.0 * f64::from(k))));
+    let pts: Vec<_> = drag.iter().map(|p| json!([p.x, p.y])).collect();
+    s.execute("path.smoothRegion", &json!({"points": pts, "radius": 40, "fidelity": 2.5})).unwrap();
+    let sp = &path(&s, id).subpaths[0];
+    let at = smooth_turn_at(sp, v);
+    assert!(sp.closed && at.is_some_and(|t| (t - 90.0).abs() < 0.01), "the square's corner is kept: {at:?}");
 }
 
 /// A corner at the first anchor of the stretch a drag smooths, just out of its reach, keeps its
@@ -3791,7 +3996,7 @@ fn pen_cmd_selected_anchors_are_what_copy_and_cut_take() {
     assert!(left.is_empty());
     assert!(s.doc().unwrap().selection.objects.is_empty());
     assert_eq!(s.clipboard.nodes.len(), 1);
-    assert_eq!(s.clipboard.nodes[0].path_data().unwrap().subpaths[0].anchors, original.subpaths[0].anchors[1..3]);
+    assert_eq!(s.clipboard.nodes[0].path_data().unwrap().subpaths[0].anchors, original.subpaths[0].anchors.to_vec()[1..3]);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(paths(&s), vec![(id, original.clone())]);
     assert_eq!(s.doc().unwrap().selection, picked);

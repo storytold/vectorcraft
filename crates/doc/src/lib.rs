@@ -28,6 +28,7 @@ pub mod shared;
 mod symbol_export_type;
 mod symbol_nine_slice;
 pub mod symbol_overrides;
+mod symbol_pixel_aligned;
 mod symbol_registration;
 pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
@@ -37,6 +38,7 @@ pub use symbol_nine_slice::{
     SymbolNineSlice, charge_symbol_art,
 };
 pub use symbol_overrides::SymbolOverride;
+pub use symbol_pixel_aligned::SYMBOL_PIXEL_ALIGNED;
 pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
 pub mod links;
 pub mod live;
@@ -55,6 +57,7 @@ mod pixels;
 pub use pixels::{GraySource, MAX_RASTER_ALLOC, PixelPick};
 pub mod placed_document;
 pub mod plugin_data;
+pub mod ppi;
 pub mod profiles;
 pub mod puppet;
 pub mod range;
@@ -118,6 +121,8 @@ pub use slices::{CellAlign, CellVAlign, Slice, SliceArea, SliceKind, SliceOption
 pub use style_libs::StyleLibrary;
 pub use text::FontHeightReference;
 pub use text::GlyphChoice;
+pub use text::GlyphForm;
+pub use text::PATH_LEAD_MAX;
 pub use text::WarichuAlign;
 pub use text::{
     AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,
@@ -125,7 +130,7 @@ pub use text::{
     RubyPosition, RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextFlow, TextKind, TextObject, TextRun, TextStyleDef, TextWrap,
     VerticalAlign, WrapShape,
 };
-pub use text::{CharClass, CompositeFont, CompositePart, CompositeParts};
+pub use text::{CharClass, CompositeClass, CompositeFont, CompositePart, CompositeParts, CustomCharSet};
 pub use trace::TraceView;
 pub use variables::{DataSet, DataValue, Variable, VariableKind, Variables};
 pub use vectorcraft_color as color;

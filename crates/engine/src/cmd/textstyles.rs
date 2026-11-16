@@ -223,11 +223,14 @@ pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
         ("akiLeft", json!(v.aki_left)),
         ("akiRight", json!(v.aki_right)),
         ("tsume", json!(v.tsume)),
+        ("diacriticHorizontal", json!(v.diacritic_horizontal)),
+        ("diacriticVertical", json!(v.diacritic_vertical)),
         ("standardVerticalRoman", json!(v.standard_vertical_roman)),
         ("noBreak", json!(v.no_break)),
         ("digits", json!(v.digits)),
         ("fontHeightReference", json!(v.font_height_reference)),
         ("language", json!(v.language)),
+        ("glyphForm", json!(v.glyph_form)),
     ] {
         m.insert(k.into(), x);
     }
@@ -582,6 +585,13 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
                     let (key, lo, hi) = ("tsume", 0.0, vectorcraft_doc::text::MAX_TSUME);
                     if changed(key) && !(lo..=hi).contains(&st.tsume) {
                         return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
+                    }
+                    let hi = vectorcraft_doc::text::MAX_DIACRITIC_POSITION;
+                    let lo = -hi;
+                    for (key, value) in [("diacriticHorizontal", st.diacritic_horizontal), ("diacriticVertical", st.diacritic_vertical)] {
+                        if changed(key) && !(lo..=hi).contains(&value) {
+                            return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
+                        }
                     }
                     let lines = vectorcraft_doc::text::WARICHU_LINES;
                     if changed("warichuLines") && !lines.contains(&st.warichu_lines) {
@@ -1080,12 +1090,12 @@ fn unused(s: &mut Session, kind: Kind) -> Result<Value> {
 
 /// The styles of `kind` in `src` that load, with their source names so that art in the file keeps
 /// referring to them: not the Normal style, and not one whose attributes don't read, whose sizes,
-/// scales, leading, shifts, Insert Aki, Tsume, Warichu Settings or stroke width are out of the range `charStyle.new` takes, whose
+/// scales, leading, shifts, Insert Aki, Tsume, diacritic positions, Warichu Settings or stroke width are out of the range `charStyle.new` takes, whose
 /// indents, spacing, Hyphenation or Justification options or tab stops are out of the range
 /// `paraStyle.new` takes, or whose name is empty, which are skipped. → (the styles, the names in
 /// `src` of those skipped)
 fn loadable(src: &Document, kind: Kind) -> (Vec<TextStyleDef>, Vec<String>) {
-    const RANGED: [&str; 22] = [
+    const RANGED: [&str; 24] = [
         "size",
         "h_scale",
         "v_scale",
@@ -1094,6 +1104,8 @@ fn loadable(src: &Document, kind: Kind) -> (Vec<TextStyleDef>, Vec<String>) {
         "akiLeft",
         "akiRight",
         "tsume",
+        "diacriticHorizontal",
+        "diacriticVertical",
         "tcyUpDown",
         "tcyLeftRight",
         "warichuLines",

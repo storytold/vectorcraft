@@ -4,6 +4,8 @@ use egui::{Event, Modifiers, PointerButton, Pos2};
 use vectorcraft_color::Color;
 use vectorcraft_engine::Session;
 
+mod context_menu;
+
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
@@ -489,7 +491,7 @@ fn find_field_filters_and_shift_extends_over_what_is_shown() {
 fn list_view_rows_take_double_clicks_and_folder_clicks_select_the_group() {
     let mut app = app();
     let ctx = context();
-    set_pstate(&ctx, "swatch-view", View::SmallList);
+    app.ui.swatches_view = View::SmallList;
     double_click_tile(&mut app, &ctx, "Red");
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND), "double-click in a list opens Swatch Options");
     let d = &app.session.active().unwrap().doc;
@@ -1013,7 +1015,7 @@ fn the_list_fills_a_tall_panel_above_its_footer() {
         app.run("swatch.new", json!({"name": format!("Tone {i:02}"), "color": format!("#{:02x}3060", i * 4)})).unwrap();
     }
     let ctx = context();
-    set_pstate(&ctx, "swatch-view", View::SmallList);
+    app.ui.swatches_view = View::SmallList;
     // The clip rect of the first swatch row's name: the list's visible area.
     let mut list = |bottom: Option<f32>| {
         let mut clip = None;
