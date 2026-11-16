@@ -555,8 +555,9 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   (`object.intertwine.arrange` with `order` front, forward, backward or back;
   <https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/create-intertwined-objects.html>).
   The group renders, saves and exports through its live expansion; an object brought over another shows no hairline
-  of the one below along that object's edges (#5337). Still missing: adding objects to the group by
-  dragging them in the Layers panel is untested.
+  of the one below along that object's edges (#5337). Objects dragged into the group in the Layers panel become
+  members (`layer.move`), and a group left with one member by a drag out is replaced by that member (or a plain group
+  of it, when the group has an appearance of its own).
 - **Done (from users' reports):** Object › Create Gradient Mesh on an embedded image turns it into a mesh over its
   rectangle, with the image's transform kept; each point takes the average colour and opacity of the picture around it
   (#1676). A linked image is refused, as the public documentation has it.
