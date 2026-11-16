@@ -230,10 +230,11 @@ impl Gen<'_> {
         Arc::new(g)
     }
     /// A series' line joining its data points (Connect Data Points): a 1 pt stroke in the series colour, or with Draw
-    /// Filled Lines a band FILLED_LINE_WIDTH wide filled with it and outlined in black.
+    /// Filled Lines a band as wide as the graph's Line Width ([`GraphSpec::filled_line_width`]) filled with it and outlined
+    /// in black.
     pub(super) fn data_line(&mut self, g: &GraphSpec, s: usize, pd: PathData, filled: bool) -> Arc<Node> {
         let band = if filled {
-            vectorcraft_pathops::outline_stroke(&pd, FILLED_LINE_WIDTH, vectorcraft_pathops::Cap::Butt, vectorcraft_pathops::Join::Miter, 4.0)
+            vectorcraft_pathops::outline_stroke(&pd, g.filled_line_width(), vectorcraft_pathops::Cap::Butt, vectorcraft_pathops::Join::Miter, 4.0)
         } else {
             PathData::default()
         };
@@ -243,7 +244,7 @@ impl Gen<'_> {
             let slot = g.series_paints.get(s);
             let fill =
                 slot.and_then(|p| p.fill.clone().or_else(|| p.stroke.clone().filter(|st| !st.is_none()))).unwrap_or_else(|| default_series_paint(s));
-            return self.path(band, fill, Paint::solid(Color::BLACK), 0.25);
+            return self.path(band, fill, Paint::solid(Color::BLACK), vectorcraft_doc::FILLED_LINE_OUTLINE_WIDTH);
         }
         let (fill, stroke, w) = series_marks(g, s, false, default_series_paint(s), 1.0);
         self.path(pd, fill, stroke, w)
@@ -286,9 +287,6 @@ impl Gen<'_> {
 const SHADOW_OFFSET: f64 = 2.0;
 
 pub(super) const SHADOW_OPACITY: f32 = 0.35;
-
-/// Draw Filled Lines: how wide a filled line is.
-const FILLED_LINE_WIDTH: f64 = 3.0;
 
 const FILLED_LINE_BUDGET: usize = 20_000;
 

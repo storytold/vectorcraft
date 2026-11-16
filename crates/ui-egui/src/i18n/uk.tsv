@@ -1484,6 +1484,7 @@ file-filter	Templates	Шаблони
 	Connect Data Points	З'єднувати точки даних
 	Edge-to-Edge Lines	Лінії від краю до краю
 	Draw Filled Lines	Малювати заповнені лінії
+	Line Width	Ширина лінії
 	Tick Values	Значення поділок
 	Override Calculated Values	Замінити обчислені значення
 	Divisions	Поділки
@@ -1582,6 +1583,11 @@ file-filter	Templates	Шаблони
 	Show smooth color wheel	Показати плавне колірне коло
 	Show segmented color wheel	Показати сегментоване колірне коло
 	Show color bars	Показати колірні смуги
+	Show brightness and hue on wheel	Показати яскравість і відтінок на колі
+	Show saturation and hue on wheel	Показати насиченість і відтінок на колі
+	Add Color Tool	Інструмент «Додати колір»
+	Remove Color Tool	Інструмент «Вилучити колір»
+	Remove Color	Вилучити колір
 	Find the selected colors in the artwork	Знайти вибрані кольори в малюнку
 	Harmony Sets	Набори гармонії
 	Height	Висота
@@ -1933,6 +1939,8 @@ file-filter	Templates	Шаблони
 	Lasso Tool	Інструмент «Ласо»
 	Enclosing Lasso Tool	Інструмент «Охоплювальне ласо»
 	Enclosing Lasso	Охоплювальне ласо
+	Polygonal Lasso Tool	Інструмент «Багатокутне ласо»
+	Polygonal Lasso	Багатокутне ласо
 	Last Effect: {name}	Останній ефект: {name}
 	Last Effect: {}	Останній ефект: {}
 	Last Effect…	Останній ефект…
@@ -2685,6 +2693,10 @@ diagnostics	ui	інтерфейс
 	Play Current Selection	Відтворити поточне виділення
 	Save Actions…	Зберегти дії…
 	Load Actions…	Завантажити дії…
+	Reset Actions	Скинути дії
+	Replace the current actions with the default set?	Замінити поточні дії набором за умовчанням?
+	Append adds the default set after the current sets instead.	Кнопка «Додати» натомість додає набір за умовчанням після поточних наборів.
+	Append	Додати
 	Plug-in Info	Відомості про модуль
 	Plug-ins	Модулі
 	Plug-in…	Модуль…
@@ -3314,8 +3326,12 @@ digits	Malayalam	Малаялам
 	Filter Layers Panel Rows	Фільтрувати рядки панелі «Шари»
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` позначає змінені параметри: збережіть набір під іншим ім’ям
 @msg	`{key}` must be an array of these names: {_1}	`{key}` має бути масивом цих назв: {_1}
-	Search commands and tools	Пошук команд та інструментів
-	Search commands and tools…	Пошук команд та інструментів…
+	Search commands, tools, panels and effects	Пошук команд, інструментів, панелей та ефектів
+	Search commands, tools, panels and effects…	Пошук команд, інструментів, панелей та ефектів…
+	No commands match	Немає відповідних команд
+	{pos} of {total}: {name}	{pos} з {total}: {name}
+@plural	{n} result|{n} results	{n} результат|{n} результати|{n} результатів
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} з {n} результату. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.
 	Recent Commands	Нещодавні команди
 	No recent commands	Немає нещодавніх команд
 	Search Commands…	Пошук команд…
@@ -4346,6 +4362,7 @@ imageTrace	Outline	Контур
 	 to set spacing and orientation	 для завдання інтервалу та орієнтації
 	:	:
 	Isolate Selected Group	Ізолювати обрану групу
+	Isolate Selected Path	Ізолювати обраний контур
 	Isolate Selected Object	Ізолювати обраний об’єкт
 	Release Clipping Mask	Звільнити відсічну маску
 	Make Compound Path	Створити складений контур
@@ -7060,6 +7077,22 @@ breakText	Glyphs	Гліфи
 	Remove Gaps	Прибрати проміжки
 @msg	that makes too many pieces (at most 100000): make the dashes longer	так вийде забагато частин (не більше 100000): подовжте штрихи
 @msg	select paths, or segments, to divide	виділіть контури або сегменти для розділення
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Спільні дотичні…
+	Common Tangents	Спільні дотичні
+	Tangents	Дотичні
+	Centerline	Осьова лінія
+	External	Зовнішні
+	Internal	Внутрішні
+@msg	select two closed paths	виділіть два замкнені контури
+@msg	a selected path is open	виділений контур відкритий
+@msg	a selected path is not convex	виділений контур не опуклий
+@msg	a selected path has no area	виділений контур не має площі
+@msg	a selected path has more than 10000 segments	виділений контур містить понад 10000 сегментів
+@msg	the two paths have the same outline	обидва контури мають однакову форму
+@msg	One path lies inside the other, so they have no common tangents	Один контур лежить усередині іншого, тому вони не мають спільних дотичних
+@msg	The paths overlap, so they have no internal tangents	Контури перекриваються, тому вони не мають внутрішніх дотичних
+@msg	One path lies inside the other, so they have no internal tangents	Один контур лежить усередині іншого, тому вони не мають внутрішніх дотичних
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Розібрати штрихи на контури
 @msg	select paths with dashed strokes to expand	виділіть контури зі штриховим обведенням для розбору
@@ -7102,6 +7135,11 @@ breakText	Glyphs	Гліфи
 	Malayalam	Малаялам
 	Odia	Одія
 	Urdu	Урду
+	Sanskrit	Санскрит
+	Nepali	Непальська
+	Assamese	Ассамська
+	Konkani	Конкані
+	Sindhi	Синдхі
 	VectorCraft {release} and later (version {n})	VectorCraft {release} і новіші (версія {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Експортувати всі відкриті документи як PDF
@@ -7477,6 +7515,8 @@ breakText	Glyphs	Гліфи
 @msg	No bridge of this width fits across the selected art	Місток такої ширини не вміщується впоперек виділеної графіки
 @msg	Some islands could not be joined to the area around the art	Деякі острівці не вдалося з’єднати з областю навколо графіки
 @msg	`width` must be from {lo} to {hi} pt	`width` має бути від {lo} до {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` має бути від -180 до 180 градусів
+@msg	`roundness` must be from 1 to 100%	`roundness` має бути від 1 до 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` має бути цілим числом від 1 до {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Рамка й лінії вибірки…
 	Weed Box and Lines	Рамка й лінії вибірки
@@ -9326,3 +9366,23 @@ breakText	Glyphs	Гліфи
 	No objects are selected.	Об’єкти не виділено.
 	Open a document to mark its fold lines.	Відкрийте документ, щоб позначити його лінії згину.
 	Remove Fold Line Role	Прибрати тип лінії
+	Check	Перевірити
+	Check Fold Lines	Перевірити лінії згину
+@msg	No cut lines are in the selection.	У виділенні немає ліній різу.
+@msg	No cut lines are in the document.	У документі немає ліній різу.
+@msg	The cut lines do not enclose an area.	Лінії різу не обмежують жодної області.
+@msg	A cut line ends without meeting another cut line.	Лінія різу закінчується, не зустрівши іншої лінії різу.
+@msg	A gap between cut lines was closed.	Зазор між лініями різу закрито.
+@msg	The fold lines are too complex to check.	Лінії згину надто складні для перевірки.
+@msg	A cut line and a crease lie on top of each other.	Лінія різу та лінія біговки лежать одна на одній.
+@msg	No cut lines are among the given objects.	Серед указаних об’єктів немає ліній різу.
+@msg	Two fold lines lie on top of each other.	Дві лінії згину лежать одна на одній.
+@msg	A crease ends inside a panel.	Лінія біговки закінчується всередині панелі.
+@msg	A crease does not divide two panels.	Лінія біговки не розділяє двох панелей.
+@msg	A crease lies outside the cut outline, wholly or in part.	Лінія біговки повністю або частково лежить поза контуром різу.
+@msg	The pieces of a hinge are not on one straight line.	Частини шарніра не лежать на одній прямій.
+@msg	A gap between cut lines is too narrow to tell apart.	Зазор між лініями різу надто вузький, щоб його розрізнити.
+@msg	A cut-out area holds other fold lines or another blank.	Вирізана область містить інші лінії згину або іншу розгортку.
+@msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
+@msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}

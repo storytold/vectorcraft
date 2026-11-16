@@ -107,15 +107,66 @@ fn reaches_appearance(e: &Effect) -> bool {
 }
 
 /// Is `n` a path or compound path that its Transform effects make into art of separate objects
-/// ([`has_gradient_copies`], [`has_layered_copies`], [`has_transform_options`], [`copied_raster_at`]),
-/// or whose live-effect plug-ins paint what they return ([`has_painted_effects`])? It is drawn,
-/// baked and expanded through that art ([`reshape`]).
+/// ([`has_gradient_copies`], [`has_layered_copies`], [`has_transform_options`], [`copied_raster_at`],
+/// [`has_copied_row_raster`]), or whose live-effect plug-ins paint what they return
+/// ([`has_painted_effects`])? It is drawn, baked and expanded through that art ([`reshape`]).
 pub fn has_transform_art(n: &Node) -> bool {
     has_gradient_copies(n)
         || has_layered_copies(n)
         || has_transform_options(n)
         || has_painted_effects(n)
         || (matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) && copied_raster_at(n).is_some())
+        || has_copied_row_raster(n)
+}
+
+/// Is `n` a path or compound path with a fill or stroke that paints and whose raster effects are
+/// carried by copies: one whose own effects list a Transform effect that makes copies after a
+/// raster effect that follows it ([`copied_row_raster_at`]), or one with a raster effect that
+/// follows a Transform effect ([`crate::raster::follows`]) on a path whose own Transform effect makes
+/// copies ([`has_transform_copies`])? Each copy is then an object of its own carrying that fill's or
+/// stroke's raster effects, moved, turned, reflected and scaled with it ([`transform_item_leaf`],
+/// [`follow_copies`]).
+pub fn has_copied_row_raster(n: &Node) -> bool {
+    if !matches!(n.kind, NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. }) {
+        return false;
+    }
+    // Checked first: this runs for every object drawn.
+    if !n.appearance.items.iter().any(follows_row_raster) {
+        return false;
+    }
+    n.appearance.items.iter().any(|i| crate::paints(i) && copied_row_raster_at(i.effects()).is_some()) || has_transform_copies(n)
+}
+
+/// Does `item` paint and carry a visible raster effect that follows a Transform effect
+/// ([`crate::raster::follows`])?
+fn follows_row_raster(item: &AppearanceItem) -> bool {
+    crate::paints(item) && item.effects().iter().any(|e| e.visible && crate::raster::follows(&e.id))
+}
+
+/// Where a fill's or stroke's own effects `fx` split so that each copy of a Transform effect carries
+/// the raster effects listed before it: the index of the first visible Transform effect that makes
+/// copies (an earlier one that makes copies included) for which a visible raster effect that
+/// follows a Transform effect ([`crate::raster::follows`]) is listed before it, every other visible
+/// effect before it is a geometry effect or such a raster effect, and no Transform effect before it
+/// that makes copies or moves at random holds those raster effects back
+/// ([`crate::raster::held_back`]). `None` otherwise, and when a raster effect is listed after it
+/// and before a later Transform effect that makes copies or moves at random, which would apply to
+/// the art that raster effect paints.
+fn copied_row_raster_at(fx: &[Effect]) -> Option<usize> {
+    let copying =
+        |e: &Effect| e.visible && e.id == "distort.transform" && crate::distort::transform_map(Rect::ZERO, &merged_params(&e.id, &e.params), 0).1 > 0;
+    // Is a visible raster effect in `rest` listed before its last Transform effect that holds back?
+    let raster_held = |rest: &[Effect]| {
+        rest.iter().rposition(crate::raster::holds_back).is_some_and(|k| rest[..k].iter().any(|e| e.visible && crate::is_raster(&e.id)))
+    };
+    (0..fx.len()).find(|&t| {
+        let before = &fx[..t];
+        copying(&fx[t])
+            && !raster_held(&fx[t + 1..])
+            && crate::raster::held_back(before) == 0
+            && before.iter().any(|e| e.visible && crate::raster::follows(&e.id))
+            && before.iter().all(|e| !e.visible || is_geometry(&e.id) || crate::raster::follows(&e.id))
+    })
 }
 
 /// Where the own effects of `n`, a path, compound path, type, image or symbol instance, split so
@@ -999,7 +1050,7 @@ fn as_art_opts(
         }
         _ => outline_art_with(symbols, paint_doc, n, symbol_art, outline, nodes, apart)?,
     };
-    reshape_leaves_apart(&mut art, &fx, &n.appearance.effects, Budget::EFFECTS, apart, paint_doc);
+    reshape_leaves_apart(&mut art, &fx, &n.appearance.effects, Budget::EFFECTS, (apart, has_copied_row_raster(n)), paint_doc);
     if apart {
         hoist_copies(&mut art);
     }
@@ -1068,7 +1119,8 @@ fn copied_raster_art(doc: Option<&Document>, n: &Node, t: usize, apart: bool, ou
         }
         None => {
             let mut art = one_piece(&source);
-            let carry = reshape_leaves_apart(&mut art, &geometry_effects(&source), &source.appearance.effects, Budget::EFFECTS, apart, doc);
+            let rows = has_copied_row_raster(&source);
+            let carry = reshape_leaves_apart(&mut art, &geometry_effects(&source), &source.appearance.effects, Budget::EFFECTS, (apart, rows), doc);
             if apart {
                 hoist_copies(&mut art);
             }
@@ -1109,7 +1161,7 @@ fn copied_raster_art(doc: Option<&Document>, n: &Node, t: usize, apart: bool, ou
         }
     }
     let later: Vec<&Effect> = rest.iter().skip(1).filter(|e| e.visible && is_geometry(&e.id)).collect();
-    let carry = reshape_leaves_apart(&mut art, &later, &n.appearance.effects, Budget::EFFECTS, apart, doc);
+    let carry = reshape_leaves_apart(&mut art, &later, &n.appearance.effects, Budget::EFFECTS, (apart, has_copied_row_raster(n)), doc);
     let mut ran = n.appearance.effects.clone();
     if carry.skipped() {
         carry.hide_skipped(&mut ran);
@@ -1240,19 +1292,19 @@ pub(crate) fn geometry_effects(n: &Node) -> Vec<&Effect> {
 /// that live-effect plug-ins painting their pieces name are looked up in `doc`, and a deferred one
 /// is listed by its index in `owner`, the effect list `fx` was taken from ([`reshape_leaves_apart`]).
 pub(crate) fn reshape_leaves(art: &mut Node, fx: &[&Effect], owner: &[Effect], doc: Option<&Document>) {
-    reshape_leaves_apart(art, fx, owner, Budget::EFFECTS, false, doc);
+    reshape_leaves_apart(art, fx, owner, Budget::EFFECTS, (false, false), doc);
 }
 
 /// [`reshape_leaves`], and how gradients that paint the art as a whole (a group's own fills and
 /// strokes) follow the effects ([`crate::Carry`]).
 pub(crate) fn reshape_leaves_carrying(art: &mut Node, fx: &[&Effect], owner: &[Effect], doc: Option<&Document>) -> crate::Carry {
-    reshape_leaves_apart(art, fx, owner, Budget::EFFECTS, false, doc)
+    reshape_leaves_apart(art, fx, owner, Budget::EFFECTS, (false, false), doc)
 }
 
 /// [`reshape_leaves_carrying`] whose paths keep to `budget` together, or to what they cost.
 #[cfg(test)]
 pub(crate) fn reshape_leaves_within(art: &mut Node, fx: &[&Effect], budget: Budget, doc: Option<&Document>) -> crate::Carry {
-    reshape_leaves_apart(art, fx, &[], budget, false, doc)
+    reshape_leaves_apart(art, fx, &[], budget, (false, false), doc)
 }
 
 /// `art`, the group of the one piece a path's copies are made from ([`outline_art_with`]), holding
@@ -1273,7 +1325,10 @@ fn hoist_copies(art: &mut Node) {
 
 /// [`reshape_leaves_carrying`] whose paths keep to `budget` together, or to what they cost; with
 /// `apart`, a Transform effect's copies of each path are objects
-/// of their own ([`copy_leaf`]) whatever paints them, as Expand Appearance makes them. A live-effect
+/// of their own ([`copy_leaf`]) whatever paints them, as Expand Appearance makes them. With `rows`,
+/// so are the copies of a path with a fill or stroke whose raster effects follow a Transform effect
+/// ([`crate::raster::follows`]), and each copy's fills and strokes carry those raster effects moved,
+/// turned, reflected and scaled with it ([`follow_copies`]). A live-effect
 /// plug-in that paints what it returns makes each path a group of its pieces ([`paint_leaf`]),
 /// whose swatches and patterns must be in `doc` (without one, pieces that name one are refused).
 /// Returns how gradients that paint the art as a whole follow the effects, and the Transform
@@ -1284,7 +1339,14 @@ fn hoist_copies(art: &mut Node) {
 /// type and live objects in it outlined and evaluated first ([`outlined_members`]). When a mask
 /// stays as it was, or a Transform effect makes fewer copies than it asks for, art with linked
 /// masks keeps its shape under that effect.
-fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], owner: &[Effect], budget: Budget, apart: bool, doc: Option<&Document>) -> crate::Carry {
+fn reshape_leaves_apart(
+    art: &mut Node,
+    fx: &[&Effect],
+    owner: &[Effect],
+    budget: Budget,
+    (apart, rows): (bool, bool),
+    doc: Option<&Document>,
+) -> crate::Carry {
     let mut whole = crate::Carry::default();
     if fx.is_empty() {
         return whole;
@@ -1321,7 +1383,7 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], owner: &[Effect], budget
         let params = merged_params(&e.id, &e.params);
         // Where a live-effect plug-in sits, which it is listed by when it is deferred.
         let effect = owner.iter().position(|x| std::ptr::eq(x, *e)).or_else(|| listed.iter().position(|x| std::ptr::eq(*x, *e)));
-        let step = Step { e, params: &params, bounds, seed, effect, apart, doc, wholes: &wholes, held };
+        let step = Step { e, params: &params, bounds, seed, effect, apart, rows, doc, wholes: &wholes, held };
         // Art with linked masks keeps its shape under an effect that a mask in it could not take
         // as the art it masks did, so no mask is left apart from its art.
         let before = masked.then(|| (art.clone(), used));
@@ -1365,6 +1427,7 @@ struct Step<'a> {
     seed: u64,
     effect: Option<usize>,
     apart: bool,
+    rows: bool,
     doc: Option<&'a Document>,
     wholes: &'a HashMap<NodeId, bool>,
     held: bool,
@@ -1529,8 +1592,12 @@ impl Step<'_> {
                 // make together; and Expand Appearance (`apart`) makes each copy an object.
                 // Fills and strokes that stack paint each copy below the one before (#5920, #6316).
                 // Each copy of a path with a linked mask carries the mask, moved with it.
+                // With `rows`, each copy carries the raster effects of its fills and strokes,
+                // following that copy's map.
+                let rows = self.rows && copies > 0 && leaf.appearance.items.iter().any(follows_row_raster);
                 let separate = copies > 0
                     && (self.apart
+                        || rows
                         || leaf.appearance.has_unplaced_gradient()
                         || leaf.appearance.has_placed_gradient()
                         || paints_copies_apart(&leaf.appearance, rule)
@@ -1538,9 +1605,12 @@ impl Step<'_> {
                 // The copies of a path replace it by a group of them, the path included.
                 let copied = |leaf: &Node| leaf.children().map_or(0, Vec::len);
                 if options.reach_appearance() {
-                    let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room, raster_map.is_some(), None);
+                    let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room, raster_map.is_some() || rows, None);
                     *used = used.minus(before).plus(made);
                     took |= moved;
+                    if moved && rows {
+                        follow_copies(leaf, map, None);
+                    }
                     if moved {
                         // With Transform Objects off the path stays, and its mask takes the
                         // effect's stroke and pattern changes as its own art.
@@ -1556,6 +1626,9 @@ impl Step<'_> {
                 if separate {
                     let scaling = vectorcraft_doc::Scaling { keep_fit_when_flat: true, ..Default::default() };
                     let made = copy_leaf(leaf, &path, m, copies, scaling, room, None);
+                    if rows {
+                        follow_copies(leaf, m, None);
+                    }
                     *used = used.minus(before).plus(made);
                     took = true;
                     moved_ids.insert(leaf.id);
@@ -1947,7 +2020,7 @@ fn transform_leaf(
     kept: Kept,
 ) -> (Budget, bool) {
     let mut scaling = copy_scaling(options);
-    if follows && copies == 0 {
+    if follows {
         scaling.effects = options.strokes.then_some(scale_unfollowed as fn(&mut Effect, f64));
     }
     if !options.objects {
@@ -2263,7 +2336,8 @@ fn paint_piece(
 
 /// Every path and compound path under `art` (other than clipping paths) with a fill or stroke whose
 /// own Transform effect has Transform Patterns or Scale Strokes & Effects on
-/// ([`item_transform_options`]), or whose own live-effect plug-in paints what it returns
+/// ([`item_transform_options`]) or makes copies that carry the raster effects before it
+/// ([`copied_row_raster_at`]), or whose own live-effect plug-in paints what it returns
 /// ([`painted_plugin`]), made into a group of objects of its own ([`transform_item_leaf`]). The
 /// new paths keep to one [`Budget::EFFECTS`] together (or to what `art` costs, when that is more).
 /// The swatches and patterns painted pieces name must be in `doc`; without one they may name none.
@@ -2280,9 +2354,20 @@ fn makes_piece(e: &Effect) -> bool {
     reaches_appearance(e) || painted_plugin(e).is_some()
 }
 
-/// Does `item` paint and carry an effect that [`makes_piece`]?
+/// Where the fill's or stroke's own effects `fx` make its piece of a path an object of its own: the
+/// index of the first effect that [`makes_piece`], or of the Transform effect whose copies carry the
+/// raster effects before it ([`copied_row_raster_at`]), whichever is listed first.
+fn piece_at(fx: &[Effect]) -> Option<usize> {
+    let copied = copied_row_raster_at(fx);
+    match fx.iter().position(makes_piece) {
+        Some(at) => Some(copied.map_or(at, |t| t.min(at))),
+        None => copied,
+    }
+}
+
+/// Does `item` paint and carry an effect that makes its piece an object of its own ([`piece_at`])?
 fn item_makes_piece(item: &AppearanceItem) -> bool {
-    crate::paints(item) && item.effects().iter().any(makes_piece)
+    crate::paints(item) && piece_at(item.effects()).is_some()
 }
 
 /// `leaf`, a path or compound path with a fill or stroke whose own Transform effect has Transform
@@ -2292,12 +2377,17 @@ fn item_makes_piece(item: &AppearanceItem) -> bool {
 /// as [`transform_leaf`] transforms an object with that effect's map, copies and options, so the
 /// stroke's weight and dashes, the distances of the effects before the Transform effect and its
 /// pattern follow the map, and the raster effects before it that follow it take their followed
-/// values ([`follow_piece`]). The effects after it keep their values and apply to what it made
+/// values ([`follow_piece`]), on each copy the values that copy's map gives them
+/// ([`follow_copies`]). The effects after it keep their values and apply to what it made
 /// ([`keep_listed`]), and with Transform Objects off so do the effects before it. The reference box
 /// is that geometry's bounds and the seed is the leaf's id, as the renderer draws a fill's or
-/// stroke's own effects. The geometry effects after the Transform effect then
+/// stroke's own effects. A fill or stroke whose first such Transform effect makes copies that carry
+/// the raster effects before it ([`copied_row_raster_at`]) becomes a path of its own the same way,
+/// with neither option. The geometry effects after the Transform effect then
 /// apply to the transformed path and its copies as one piece ([`transform_piece`]), and its other
-/// effects stay on each of them. The other fills and strokes stay together on paths of the leaf's
+/// effects stay on each of them, except that without either option the raster effects after a
+/// Transform effect that makes copies paint once around all of them ([`lift_later_raster`]). The
+/// other fills and strokes stay together on paths of the leaf's
 /// geometry between them, with their own effects. `max` is the budget of the whole art and `used`
 /// what it has spent.
 ///
@@ -2343,7 +2433,7 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
     let later = |i: usize| (i + 1..transformed.len()).filter(|&j| transformed[j] || j == i + 1 || transformed[j - 1]).count();
     for (i, item) in original.appearance.items.iter().enumerate() {
         let fx = item.effects();
-        let Some(at) = fx.iter().position(makes_piece).filter(|_| crate::paints(item)) else {
+        let Some(at) = piece_at(fx).filter(|_| crate::paints(item)) else {
             plain.push(item.clone());
             continue;
         };
@@ -2421,13 +2511,24 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
         set_geometry(&mut p, g.clone(), rule);
         let after = kept_before.len();
         let keep = |k: usize| k >= after || !options.objects;
-        let (made, moved) = transform_leaf(&mut p, &g, map, copies, options, room, false, Some((&rest, &keep)));
-        *used = used.plus(made);
         let from = crate::raster::held_back(before);
-        if moved && !held_later {
+        // Each copy carries the raster effects before the Transform effect, following that copy's
+        // map, unless a Transform effect before or after it holds them back.
+        let copied = copies > 0 && !held_later && from == 0;
+        let (made, moved) = transform_leaf(&mut p, &g, map, copies, options, room, copied, Some((&rest, &keep)));
+        *used = used.plus(made);
+        if moved && copied {
+            follow_copies(&mut p, map, Some(0..after));
+        } else if moved && !held_later {
             follow_piece(&mut p, kept_before.get(from..).unwrap_or_default(), from, &fx[at]);
         }
         transform_piece(&mut p, (ctx.seed, i, &kept), crate::raster::held_back(&fx[..=at]), false, limit, used, doc);
+        // Without Transform Patterns and Scale Strokes & Effects, the raster effects after the
+        // Transform effect paint once around all the copies, as they paint around the one path of
+        // every copy.
+        if copies > 0 && !options.reach_appearance() {
+            lift_later_raster(&mut p, after);
+        }
         pieces.push(Arc::new(p));
     }
     if !plain.is_empty() {
@@ -2478,6 +2579,7 @@ fn transform_piece(
             count = count.max(item.effects().len());
         }
     });
+    let outer = held;
     // The effects before a Transform effect among the piece's effects that makes copies or moves at
     // random are held back from the Transform effects before it too.
     let mut held = held;
@@ -2498,7 +2600,7 @@ fn transform_piece(
         let from = held.min(j);
         let mut holds = false;
         let stage = vectorcraft_plugins::deferred::Stage { object: seed, effect: kept.get(j).copied().unwrap_or(j), item: Some(source) };
-        let at = PieceStage { j, from, seed, bounds, doc, stage };
+        let at = PieceStage { j, from, outer, seed, bounds, doc, stage };
         // Stage `j` on `leaf`, a path `used` counts at `piece_cost` when `share`: whether `used`
         // counts each path it became so, or `None` when it stays as it was.
         let mut on_leaf = |leaf: &mut Node, share: bool| -> Option<Vec<bool>> {
@@ -2719,12 +2821,14 @@ thread_local! {
 
 /// Where a stage of [`transform_piece`] runs: `j`, the index of its effect among the piece's
 /// effects; `from`, the first of the effects before it whose raster effects follow a Transform
-/// effect; the object's `seed`; the reference box `bounds` of all the piece's paths; the document
-/// that painted pieces' swatches and patterns must be in; and the `stage` a deferred live-effect
-/// plug-in is listed by.
+/// effect; `outer`, how many of the piece's effects a Transform effect before them holds back; the
+/// object's `seed`; the reference box `bounds` of all the piece's paths; the document that painted
+/// pieces' swatches and patterns must be in; and the `stage` a deferred live-effect plug-in is
+/// listed by.
 struct PieceStage<'a> {
     j: usize,
     from: usize,
+    outer: usize,
     seed: u64,
     bounds: Rect,
     doc: Option<&'a Document>,
@@ -2767,15 +2871,30 @@ fn piece_stage(leaf: &mut Node, e: &Effect, at: &PieceStage, (appearance, index)
         let params = merged_params(&e.id, &e.params);
         return paint_piece(leaf, &item, (appearance, index), (plugin, &params), at.bounds, room, at.doc, Some(at.stage));
     }
-    if reaches_appearance(e) {
+    let copied = copies_carry(item.effects(), e, at);
+    if reaches_appearance(e) || copied {
         let params = merged_params(&e.id, &e.params);
         let (_, copies) = crate::distort::transform_map(at.bounds, &params, at.seed);
         let options = crate::distort::TransformOptions::of(&params);
         let map = crate::distort::transform_affine(at.bounds, &params, at.seed);
         let j = at.j;
         let keep = |k: usize| k > j || (k < j && !options.objects);
-        let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room, false, Some((item.effects(), &keep)));
-        if moved {
+        let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room, copied, Some((item.effects(), &keep)));
+        if moved && copied {
+            // Each copy's raster effects before the Transform effect follow that copy's map. The
+            // Transform effects before it have already moved them, so each run between two of
+            // them follows on its own.
+            let fx = item.effects();
+            let mut start = 0;
+            for k in 0..=j {
+                if k == j || fx.get(k).is_some_and(|f| f.id == "distort.transform") {
+                    if start < k {
+                        follow_copies(leaf, map, Some(start..k));
+                    }
+                    start = k + 1;
+                }
+            }
+        } else if moved {
             follow_piece(leaf, was, at.from, e);
         }
         return Some(made);
@@ -2798,6 +2917,37 @@ fn piece_stage(leaf: &mut Node, e: &Effect, at: &PieceStage, (appearance, index)
         follow_piece(leaf, was, at.from, e);
     }
     Some(made)
+}
+
+/// Does Transform effect `e`, at stage `at` of [`transform_piece`] of a fill or stroke whose effects
+/// are `fx`, make copies that each carry the raster effects listed before it, following that copy's
+/// map ([`follow_copies`]), as the copies of the piece's first Transform effect do
+/// ([`transform_item_leaf`])? It does when it makes copies with Transform Objects on, a visible
+/// raster effect that follows a Transform effect ([`crate::raster::follows`]) is listed before it,
+/// and no Transform effect that makes copies or moves at random holds those raster effects back:
+/// none before the piece's effects, none listed before it after such a raster effect, and none
+/// after it. Without Transform Patterns and Scale Strokes & Effects, every other visible effect
+/// before it must also be a geometry effect or such a raster effect, and no visible raster effect
+/// may be listed after it, as for [`copied_row_raster_at`].
+fn copies_carry(fx: &[Effect], e: &Effect, at: &PieceStage) -> bool {
+    if !e.visible || e.id != "distort.transform" || at.outer > 0 {
+        return false;
+    }
+    let params = merged_params(&e.id, &e.params);
+    if !crate::distort::TransformOptions::of(&params).objects || crate::distort::transform_map(Rect::ZERO, &params, 0).1 == 0 {
+        return false;
+    }
+    let before = fx.get(..at.j).unwrap_or_default();
+    let after = fx.get(at.j + 1..).unwrap_or_default();
+    if crate::raster::held_back(before) > 0
+        || !before.iter().any(|f| f.visible && crate::raster::follows(&f.id))
+        || after.iter().any(crate::raster::holds_back)
+    {
+        return false;
+    }
+    reaches_appearance(e)
+        || (before.iter().all(|f| !f.visible || is_geometry(&f.id) || crate::raster::follows(&f.id))
+            && !after.iter().any(|f| f.visible && crate::is_raster(&f.id)))
 }
 
 /// Are `a` and `b` paths or compound paths that differ only in their fills and strokes?
@@ -2869,6 +3019,52 @@ fn follow_piece(leaf: &mut Node, was: &[Effect], from: usize, t: &Effect) {
                 *e = new.clone();
             }
         }
+    }
+}
+
+/// Make the raster effects that follow a Transform effect ([`crate::raster::follows`]) on the fills
+/// and strokes of each copy [`copy_leaf`] made of `leaf` with map `m` follow that copy's map: the
+/// copy `k` places below the original takes the linear part of `m` `k` times
+/// ([`crate::raster::follow_contents`]), and the original, on top, keeps its effects. `range`, when
+/// given, is which of each fill's or stroke's effects follow; the others keep their values.
+fn follow_copies(leaf: &mut Node, m: Affine, range: Option<std::ops::Range<usize>>) {
+    let step = m.with_translation(vectorcraft_geom::Vec2::ZERO);
+    let Some(children) = leaf.children_mut() else { return };
+    let mut a = Affine::IDENTITY;
+    for c in children.iter_mut().rev().skip(1) {
+        a *= step;
+        for item in &mut Arc::make_mut(c).appearance.items {
+            let fx = item.effects_mut();
+            let fx = match &range {
+                Some(r) => fx.get_mut(r.clone()).unwrap_or_default(),
+                None => fx.as_mut_slice(),
+            };
+            crate::raster::follow_contents(fx, a, Affine::IDENTITY);
+        }
+    }
+}
+
+/// Move the raster effects from index `after` on of the fills and strokes of the paths under `p`,
+/// a group of copies of one fill or stroke with the same effects, onto `p` itself, so they paint
+/// once around all of the copies. The other effects stay where they are.
+fn lift_later_raster(p: &mut Node, after: usize) {
+    if p.children().is_none() {
+        return;
+    }
+    let mut lifted: Option<Vec<Effect>> = None;
+    for_each_leaf(p, &mut |l| {
+        for item in &mut l.appearance.items {
+            let fx = item.effects_mut();
+            if fx.len() <= after {
+                continue;
+            }
+            let (raster, other): (Vec<Effect>, Vec<Effect>) = fx.split_off(after).into_iter().partition(|e| crate::is_raster(&e.id));
+            fx.extend(other);
+            lifted.get_or_insert(raster);
+        }
+    });
+    if let Some(raster) = lifted {
+        p.appearance.effects.extend(raster);
     }
 }
 

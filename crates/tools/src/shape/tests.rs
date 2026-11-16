@@ -780,6 +780,259 @@ fn line_segment_options_and_fill_line() {
     assert_eq!(t.command(a, b, Mods::default()).1["fill"], json!(true));
 }
 
+/// A document holding the closed paths `paths`, unselected.
+fn doc_with_paths(paths: Vec<vectorcraft_geom::PathData>) -> vectorcraft_doc::Document {
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    for (k, path) in paths.into_iter().enumerate() {
+        let id = d.alloc_id();
+        d.insert(Some(l), k, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+    }
+    d
+}
+
+/// The circle of radius `r` about `c`, as the Ellipse tool draws it.
+fn circle(c: Point, r: f64) -> vectorcraft_geom::PathData {
+    vectorcraft_geom::shapes::ellipse(Rect::new(c.x - r, c.y - r, c.x + r, c.y + r))
+}
+
+/// The ends of the line a Line Segment drag from `press` through `drag` to `to` (with `mods`)
+/// previews last, and the drag's actions.
+fn line_drag(c: &ToolContext, press: Point, drag: Point, to: Point, mods: Mods) -> ((Point, Point), Vec<Action>) {
+    let mut t = ShapeTool::new("lineSegment");
+    t.pointer(c, &PointerEvent::new(PointerKind::Down, press.x, press.y).with_mods(mods));
+    let mut all = t.pointer(c, &PointerEvent::new(PointerKind::Drag, drag.x, drag.y).with_mods(mods));
+    all.extend(t.pointer(c, &PointerEvent::new(PointerKind::Drag, to.x, to.y).with_mods(mods)));
+    let Some(Action::Preview(cmd, v)) = all.last().cloned() else { panic!("a preview: {all:?}") };
+    assert_eq!(cmd, "shape.line");
+    let f = |k: &str| v[k].as_f64().unwrap();
+    let line = (Point::new(f("x1"), f("y1")), Point::new(f("x2"), f("y2")));
+    all.extend(t.pointer(c, &PointerEvent::new(PointerKind::Up, to.x, to.y).with_mods(mods)));
+    (line, all)
+}
+
+/// Snap to Tangent: a line pressed on one circle and dragged near another lands on a common
+/// tangent of the two, both ends moving to where it touches them. Near the second circle's top it
+/// is the outer tangent, near its bottom left the one crossing between them, each against the
+/// closed form (the drawn circles are within 0.03% of round). The guides show the line and a
+/// "tangent" label at each end, and the length label measures the tangent line.
+#[test]
+fn a_line_from_one_circle_to_another_lands_on_their_common_tangent() {
+    let (c1, r1, c2, r2) = (Point::new(100.0, 250.0), 40.0, Point::new(300.0, 250.0), 60.0);
+    let d = doc_with_paths(vec![circle(c1, r1), circle(c2, r2)]);
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    // A drawn circle's radius is off by up to 0.03%, which moves the touch points along the line by
+    // up to about 0.1 pt here; the line's distance from each center stays within 0.03 pt.
+    let near = |a: Point, b: Point| (a - b).hypot() < 0.15;
+    let off_by = |(a, b): (Point, Point), c: Point| ((b - a).cross(c - a) / (b - a).hypot()).abs();
+    let touches = |line: (Point, Point)| (off_by(line, c1) - r1).abs() < 0.03 && (off_by(line, c2) - r2).abs() < 0.03;
+    // A normal n with n · (c2 - c1) / |c2 - c1| = k: the line touches the first circle at
+    // c1 + r1 n, and the second at c2 + r2 n (outer, k = (r1 - r2) / d) or c2 - r2 n (crossing,
+    // k = (r1 + r2) / d).
+    let normal = |k: f64, up: bool| Vec2::new(k, if up { -1.0 } else { 1.0 } * (1.0 - k * k).sqrt());
+    let outer = normal((r1 - r2) / 200.0, true);
+    let (on_a, on_b) = (c1 + outer * r1, c2 + outer * r2);
+    let press = Point::new(100.0, 210.0);
+    let ((a, b), actions) = line_drag(&c, press, Point::new(200.0, 200.0), on_b + Vec2::new(0.5, 0.7), Mods::default());
+    assert!(near(a, on_a) && near(b, on_b) && touches((a, b)), "{a:?} {b:?}, want {on_a:?} {on_b:?}");
+    // One gesture: one undo step.
+    assert_eq!(actions.iter().filter(|a| matches!(a, Action::Begin(_))).count(), 1, "{actions:?}");
+    assert_eq!(actions.last(), Some(&Action::Commit));
+    let crossing = normal((r1 + r2) / 200.0, false);
+    let (on_a, on_b) = (c1 + crossing * r1, c2 - crossing * r2);
+    let ((a, b), _) = line_drag(&c, press, Point::new(200.0, 260.0), on_b + Vec2::new(-0.6, 0.4), Mods::default());
+    assert!(near(a, on_a) && near(b, on_b) && touches((a, b)), "{a:?} {b:?}, want {on_a:?} {on_b:?}");
+    // The guides and the length label while dragging.
+    let mut t = ShapeTool::new("lineSegment");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, press.x, press.y));
+    let to = on_b + Vec2::new(-0.6, 0.4);
+    t.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x, to.y));
+    let o = t.overlays(&c);
+    let tangents: Vec<Point> = o
+        .iter()
+        .filter_map(|o| match o {
+            Overlay::Label { p, text, .. } if text == "tangent" => Some(*p),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(tangents.len(), 2, "{o:?}");
+    assert!(near(tangents[0], on_a) && near(tangents[1], on_b), "{o:?}");
+    let (a, b) = t.tangent_line.line().unwrap();
+    assert!(o.iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &c.segment_measure_label(a, b))), "{o:?}");
+    // Escape ends it.
+    assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    assert!(t.tangent_line.line().is_none() && t.overlays(&c).is_empty());
+}
+
+/// The tangent of a turned ellipse and a circle, against the ellipse's own closed form: the
+/// support value of the ellipse x = c + M u (|u| = 1) along n is c · n + |Mᵀ n|, touched at
+/// c + M Mᵀ n / |Mᵀ n|; the outer tangents are the n where it equals the circle's c₂ · n + r.
+#[test]
+fn a_line_from_a_turned_ellipse_lands_on_its_tangent_with_a_circle() {
+    let ce = Point::new(100.0, 250.0);
+    let turn = Affine::rotate_about(30f64.to_radians(), ce);
+    let ellipse = vectorcraft_geom::shapes::ellipse(Rect::new(40.0, 220.0, 160.0, 280.0)).transformed(turn);
+    let (c2, r2) = (Point::new(320.0, 260.0), 40.0);
+    let d = doc_with_paths(vec![ellipse, circle(c2, r2)]);
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    // M maps the unit circle onto the ellipse's axes: 60 and 30 long, turned 30°.
+    let (cos, sin) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
+    let m = [[60.0 * cos, -30.0 * sin], [60.0 * sin, 30.0 * cos]];
+    let mt_n = |n: Vec2| Vec2::new(m[0][0] * n.x + m[1][0] * n.y, m[0][1] * n.x + m[1][1] * n.y);
+    let g = |a: f64| {
+        let n = Vec2::new(a.cos(), a.sin());
+        ce.to_vec2().dot(n) + mt_n(n).hypot() - c2.to_vec2().dot(n) - r2
+    };
+    // The roots of g over the angle, by sampling and bisection; the one with n pointing up.
+    let mut roots = vec![];
+    let steps = 3600;
+    for k in 0..steps {
+        let (mut lo, mut hi) = (k as f64 * std::f64::consts::TAU / steps as f64, (k + 1) as f64 * std::f64::consts::TAU / steps as f64);
+        if g(lo).signum() == g(hi).signum() {
+            continue;
+        }
+        for _ in 0..80 {
+            let mid = (lo + hi) / 2.0;
+            if g(mid).signum() == g(lo).signum() { lo = mid } else { hi = mid }
+        }
+        roots.push(lo);
+    }
+    let n = roots.iter().map(|a| Vec2::new(a.cos(), a.sin())).find(|n| n.y < 0.0).unwrap();
+    let w = mt_n(n);
+    let on_a = ce + Vec2::new(m[0][0] * w.x + m[0][1] * w.y, m[1][0] * w.x + m[1][1] * w.y) / w.hypot();
+    let on_b = c2 + n * r2;
+    // The press on the ellipse's turned top anchor.
+    let press = turn * Point::new(100.0, 220.0);
+    let ((a, b), _) = line_drag(&c, press, Point::new(200.0, 200.0), on_b + Vec2::new(0.4, -0.5), Mods::default());
+    assert!((a - on_a).hypot() < 0.05 && (b - on_b).hypot() < 0.05, "{a:?} {b:?}, want {on_a:?} {on_b:?}");
+}
+
+/// The line keeps its start where it was pressed, as before, when Snap to Tangent is off, Smart
+/// Guides are off, Shift or Alt is held, or the pressed path bends inward somewhere (it has no
+/// tangent of this kind). Where the tangent touches the second circle at one of its anchors, the
+/// tangent still wins over that anchor.
+#[test]
+fn a_line_keeps_its_start_without_a_tangent_snap() {
+    use vectorcraft_geom::{BezPath, PathData};
+    let (c1, c2, r) = (Point::new(100.0, 250.0), Point::new(300.0, 250.0), 50.0);
+    let d = doc_with_paths(vec![circle(c1, r), circle(c2, r)]);
+    let (s, p) = (Selection::default(), paint());
+    let on = cx(&d, &s, &p);
+    // The pointer next to the second circle's top anchor, where the outer tangent touches it.
+    let to = Point::new(300.6, 200.4);
+    // A press on the first circle 30° round from its top, away from its anchors.
+    let pressed = c1 + Vec2::new(r * 0.5, -r * 3f64.sqrt() / 2.0);
+    // With Snap to Tangent on, the start moves to the first circle's top.
+    let ((a, b), _) = line_drag(&on, pressed, Point::new(200.0, 190.0), to, Mods::default());
+    assert!((a - Point::new(100.0, 200.0)).hypot() < 0.05 && (b - Point::new(300.0, 200.0)).hypot() < 0.05, "{a:?} {b:?}");
+    let off = [ToolContext { snap_tangent: false, ..cx(&d, &s, &p) }, ToolContext { smart_guides: false, ..cx(&d, &s, &p) }];
+    for c in &off {
+        let ((a, _), _) = line_drag(c, pressed, Point::new(200.0, 190.0), to, Mods::default());
+        assert!((a - pressed).hypot() < 0.05, "{a:?}");
+    }
+    for mods in [Mods { shift: true, ..Mods::default() }, Mods { alt: true, ..Mods::default() }] {
+        let ((a, b), _) = line_drag(&on, pressed, Point::new(200.0, 190.0), to, mods);
+        // Alt draws the line from its middle.
+        let start = if mods.alt { a.midpoint(b) } else { a };
+        assert!((start - pressed).hypot() < 0.05, "{a:?} {b:?}");
+    }
+    // Space moves the line being drawn, its start off the pressed circle: the snap lets go.
+    let mut t = ShapeTool::new("lineSegment");
+    let space = Mods { space: true, ..Mods::default() };
+    t.pointer(&on, &PointerEvent::new(PointerKind::Down, pressed.x, pressed.y));
+    t.pointer(&on, &PointerEvent::new(PointerKind::Drag, 200.0, 170.0));
+    t.pointer(&on, &PointerEvent::new(PointerKind::Drag, 210.0, 160.0).with_mods(space));
+    let a = t.pointer(&on, &PointerEvent::new(PointerKind::Drag, to.x, to.y));
+    let Some(Action::Preview(_, v)) = a.last() else { panic!("a preview: {a:?}") };
+    let start = Point::new(v["x1"].as_f64().unwrap(), v["y1"].as_f64().unwrap());
+    assert!((start - (pressed + Vec2::new(10.0, -10.0))).hypot() < 1.0, "{start:?}");
+    // A crescent: closed and curved, but its lower side bends inward. The press on its top
+    // keeps its start.
+    let mut bp = BezPath::new();
+    bp.move_to((60.0, 250.0));
+    bp.curve_to((60.0, 190.0), (140.0, 190.0), (140.0, 250.0));
+    bp.curve_to((120.0, 220.0), (80.0, 220.0), (60.0, 250.0));
+    bp.close_path();
+    let d = doc_with_paths(vec![PathData::from_bezpath(&bp), circle(c2, r)]);
+    let c = cx(&d, &s, &p);
+    let crest = Point::new(100.0, 205.0);
+    let ((a, _), _) = line_drag(&c, crest, Point::new(200.0, 190.0), to, Mods::default());
+    assert!((a - crest).hypot() < 1e-6, "{a:?}");
+}
+
+/// The upper outer common tangent of the circles about `c1` and `c2` with radii `r1` and `r2`
+/// (`c2` to the right): where it touches each.
+fn upper_outer_tangent(c1: Point, r1: f64, c2: Point, r2: f64) -> (Point, Point) {
+    let d = c2 - c1;
+    let u = d / d.hypot();
+    let k = (r1 - r2) / d.hypot();
+    // n · u = k, with n pointing up (y down).
+    let n = u * k + Vec2::new(u.y, -u.x) * (1.0 - k * k).sqrt();
+    (c1 + n * r1, c2 + n * r2)
+}
+
+/// The pointer only has to come near the second path's outline: anywhere along it, the line takes
+/// the tangent whose touch point is nearest the pointer, here one about 30 pt away. A press on a
+/// straight side of a convex path with curves (a rounded rectangle's top edge) moves the start
+/// onto the corner the tangent touches.
+#[test]
+fn a_line_near_the_second_path_takes_the_tangent_touching_it_nearest() {
+    let (c1, r1, c2, r2) = (Point::new(100.0, 250.0), 40.0, Point::new(300.0, 250.0), 60.0);
+    let d = doc_with_paths(vec![circle(c1, r1), circle(c2, r2)]);
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    let (on_a, on_b) = upper_outer_tangent(c1, r1, c2, r2);
+    // On the second circle's outline, 25° round from its top.
+    let to = c2 + Vec2::new(r2 * 25f64.to_radians().sin(), -r2 * 25f64.to_radians().cos());
+    assert!((to - on_b).hypot() > 25.0);
+    let ((a, b), _) = line_drag(&c, Point::new(100.0, 210.0), Point::new(200.0, 200.0), to, Mods::default());
+    assert!((a - on_a).hypot() < 0.15 && (b - on_b).hypot() < 0.15, "{a:?} {b:?}, want {on_a:?} {on_b:?}");
+
+    // A rounded rectangle whose top right corner is a quarter circle of radius 20 about (140, 220).
+    let rounded = vectorcraft_geom::shapes::rounded_rectangle(Rect::new(40.0, 200.0, 160.0, 300.0), 20.0);
+    let (c2, r2) = (Point::new(320.0, 260.0), 40.0);
+    let d = doc_with_paths(vec![rounded, circle(c2, r2)]);
+    let c = cx(&d, &s, &p);
+    let (on_a, on_b) = upper_outer_tangent(Point::new(140.0, 220.0), 20.0, c2, r2);
+    let press = Point::new(90.0, 200.0);
+    let ((a, b), _) = line_drag(&c, press, Point::new(200.0, 200.0), Point::new(320.0, 220.5), Mods::default());
+    assert!((a - on_a).hypot() < 0.15 && (b - on_b).hypot() < 0.15, "{a:?} {b:?}, want {on_a:?} {on_b:?}");
+}
+
+/// No tangent snap when the second path bends inward somewhere (a crescent), or when the press
+/// snapped to an anchor of other art lying beside the first circle: the start stays where the
+/// press put it.
+#[test]
+fn a_line_to_a_crescent_or_from_an_anchor_beside_the_curve_keeps_its_start() {
+    use vectorcraft_geom::{BezPath, PathData};
+    let (c1, r) = (Point::new(100.0, 250.0), 50.0);
+    let mut bp = BezPath::new();
+    bp.move_to((260.0, 250.0));
+    bp.curve_to((260.0, 190.0), (340.0, 190.0), (340.0, 250.0));
+    bp.curve_to((320.0, 220.0), (280.0, 220.0), (260.0, 250.0));
+    bp.close_path();
+    let d = doc_with_paths(vec![circle(c1, r), PathData::from_bezpath(&bp)]);
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    let pressed = c1 + Vec2::new(r * 0.5, -r * 3f64.sqrt() / 2.0);
+    // Beside the crescent's top, which lies at (300, 205).
+    let to = Point::new(300.4, 205.3);
+    let ((a, b), _) = line_drag(&c, pressed, Point::new(200.0, 190.0), to, Mods::default());
+    assert!((a - pressed).hypot() < 0.05 && (b - to).hypot() < 1.0, "{a:?} {b:?}");
+
+    // A square whose corner (99, 199) lies about 1 pt outside the first circle's top; a second
+    // circle to the right. The press snaps to that corner and the line starts there.
+    let (c2, r2) = (Point::new(300.0, 250.0), 50.0);
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(80.0, 180.0, 99.0, 199.0));
+    let d = doc_with_paths(vec![circle(c1, r), square, circle(c2, r2)]);
+    let c = cx(&d, &s, &p);
+    let corner = Point::new(99.0, 199.0);
+    let ((a, _), _) = line_drag(&c, Point::new(99.3, 199.3), Point::new(200.0, 190.0), Point::new(300.6, 200.4), Mods::default());
+    assert!((a - corner).hypot() < 1e-6, "{a:?}");
+}
+
 /// #5477: with a shape tool, a drag on a selected live rectangle's corner widget rounds its
 /// corners (one undo step) and a drag on a live ellipse's pie widget sets its pie angle, as with
 /// the Selection tool; the pointer over a widget is the Selection tool's. A press anywhere else, or
@@ -1118,4 +1371,186 @@ fn a_move_from_the_centre_point_snaps_and_shows_the_hollow_arrow() {
     let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 160.0, 150.0));
     assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["matrix"][4] == json!(10.0)), "{a:?}");
     assert_eq!(t.cursor(&c, Point::new(160.0, 150.0), Mods::default()), Cursor::Arrow);
+}
+
+/// A drag event to `(x, y)` with Backtick held or not.
+fn quote_drag(x: f64, y: f64, held: bool) -> PointerEvent {
+    PointerEvent { backquote: held, ..PointerEvent::new(PointerKind::Drag, x, y) }
+}
+
+/// The shapes the last preview in `a` draws, as their commands and params: the steps of a
+/// `command.batch`, or the one shape. The bool says whether it was a batch.
+fn previewed_shapes(a: &[Action]) -> (bool, Vec<(String, Value)>) {
+    match a.last() {
+        Some(Action::Preview(c, v)) if c == "command.batch" => {
+            assert!(v.get("commands").and_then(Value::as_array).is_some(), "{v}");
+            let steps = v["commands"].as_array().into_iter().flatten();
+            (true, steps.map(|s| (s["command"].as_str().unwrap_or_default().to_owned(), s["params"].clone())).collect())
+        }
+        Some(Action::Preview(c, v)) => (false, vec![(c.clone(), v.clone())]),
+        _ => panic!("no preview: {a:?}"),
+    }
+}
+
+/// The widths of the rectangles the last preview in `a` draws, and whether it was a batch.
+fn previewed_widths(a: &[Action]) -> (bool, Vec<f64>) {
+    let (batch, shapes) = previewed_shapes(a);
+    (batch, shapes.iter().map(|(_, p)| p["width"].as_f64().unwrap_or(f64::NAN)).collect())
+}
+
+/// Backtick held while a rectangle is dragged out leaves a copy every 8 screen points the pointer
+/// travels from where the key was first held or the last copy was left; the shape being drawn
+/// still follows the pointer. A key press without pointer travel leaves none, letting go stops
+/// the copies and keeps those left, and pressing it again starts measuring afresh. The release
+/// commits once.
+#[test]
+fn backtick_drag_leaves_copies_of_the_rectangle_being_drawn() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let c = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(50.0, 30.0, false))), (false, vec![40.0]));
+    // The key goes down with the pointer still: no copy.
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(50.0, 30.0, true))), (false, vec![40.0]));
+    // 4 pt of travel is short of the spacing.
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(54.0, 30.0, true))), (false, vec![44.0]));
+    // 10 pt: a copy, the same as the shape shown, so the batch draws it once.
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(60.0, 30.0, true))), (true, vec![50.0]));
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(70.0, 30.0, true))), (true, vec![50.0, 60.0]));
+    // 5 pt past the last copy: none left, and the live shape follows.
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(75.0, 30.0, true))), (true, vec![50.0, 60.0, 65.0]));
+    // Let go of the key: the copies stay and no more are left.
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(90.0, 30.0, false))), (true, vec![50.0, 60.0, 80.0]));
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(120.0, 30.0, false))), (true, vec![50.0, 60.0, 110.0]));
+    // Pressed again: measured from where it went down.
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(125.0, 30.0, true))), (true, vec![50.0, 60.0, 115.0]));
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(135.0, 30.0, true))), (true, vec![50.0, 60.0, 125.0]));
+    assert_eq!(t.pointer(&c, &PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Up, 135.0, 30.0) }), vec![Action::Commit]);
+    // The next drag starts with no copies.
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(50.0, 30.0, false))), (false, vec![40.0]));
+}
+
+/// Backtick already held at the press measures the first copy from the pressed spot: the first
+/// drag 10 pt away leaves one, and 5 pt more leaves none.
+#[test]
+fn backtick_held_at_the_press_measures_copies_from_there() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let c = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Down, 0.0, 0.0) });
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(10.0, 10.0, true))), (true, vec![10.0]));
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(15.0, 10.0, true))), (true, vec![10.0, 15.0]));
+    assert_eq!(t.pointer(&c, &PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Up, 15.0, 10.0) }), vec![Action::Commit]);
+}
+
+/// Every shape tool leaves copies of its own shape, drawn with the modifiers held when each copy
+/// was left: Shift's square stays square, and Alt's from the centre stays centred.
+#[test]
+fn backtick_drag_leaves_copies_with_every_shape_tool_and_its_modifiers() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let c = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    for (id, cmd) in [
+        ("rectangle", "shape.rectangle"),
+        ("roundedRectangle", "shape.rectangle"),
+        ("ellipse", "shape.ellipse"),
+        ("polygon", "shape.polygon"),
+        ("star", "shape.star"),
+        ("lineSegment", "shape.line"),
+    ] {
+        let mut t = ShapeTool::new(id);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&c, &quote_drag(140.0, 130.0, true));
+        t.pointer(&c, &quote_drag(160.0, 130.0, true));
+        let (batch, shapes) = previewed_shapes(&t.pointer(&c, &quote_drag(180.0, 140.0, true)));
+        assert!(batch, "{id}");
+        assert_eq!(shapes.len(), 2, "{id}: two copies, the second the shape shown: {shapes:?}");
+        assert!(shapes.iter().all(|(c, _)| c == cmd), "{id}: {shapes:?}");
+        assert_ne!(shapes[0].1, shapes[1].1, "{id}: each copy as the drag showed it then");
+    }
+    // Shift and Alt: each copy is the square drawn from the centre at that moment.
+    let shift_alt = Mods { shift: true, alt: true, ..Default::default() };
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+    t.pointer(&c, &quote_drag(130.0, 120.0, true).with_mods(shift_alt));
+    let (_, shapes) = previewed_shapes(&t.pointer(&c, &quote_drag(150.0, 120.0, true).with_mods(shift_alt)));
+    let (_, r) = &shapes[0];
+    assert_eq!(r["width"], r["height"], "square: {r}");
+    assert_eq!(r["x"].as_f64().unwrap_or_default() + r["width"].as_f64().unwrap_or_default() / 2.0, 100.0, "centred: {r}");
+}
+
+/// ↑ during a polygon drag with copies left changes only the shape being drawn; Escape cancels
+/// the copies with it, and the next drag starts without them.
+#[test]
+fn backtick_copies_keep_their_sides_and_escape_cancels_them() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let c = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = ShapeTool::new("polygon");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+    t.pointer(&c, &quote_drag(140.0, 100.0, true));
+    t.pointer(&c, &quote_drag(150.0, 100.0, true));
+    let (batch, shapes) = previewed_shapes(&t.key(&c, ToolKey::Up, Mods::default()));
+    assert!(batch);
+    let sides: Vec<_> = shapes.iter().map(|(_, p)| p["sides"].clone()).collect();
+    assert_eq!(sides, vec![json!(6), json!(7)], "the copy keeps its sides");
+    assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+    let (batch, _) = previewed_shapes(&t.pointer(&c, &quote_drag(140.0, 100.0, false)));
+    assert!(!batch, "no copies after Escape");
+}
+
+/// No copy is left of a shape without a height or a length, and one drag leaves at most
+/// [`MAX_COPIES`] copies while the shape being drawn still follows the pointer.
+#[test]
+fn backtick_copies_skip_empty_shapes_and_stop_at_the_limit() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let c = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    // A rectangle with no height: nothing is left.
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+    for x in [30.0, 40.0, 50.0, 60.0] {
+        assert!(!previewed_shapes(&t.pointer(&c, &quote_drag(x, 10.0, true))).0, "{x}");
+    }
+    // A line back on its start: no copy there.
+    let mut t = ShapeTool::new("lineSegment");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+    t.pointer(&c, &quote_drag(30.0, 10.0, true));
+    assert!(!previewed_shapes(&t.pointer(&c, &quote_drag(10.0, 10.0, true))).0);
+    // The limit.
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
+    t.pointer(&c, &quote_drag(10.0, 10.0, true));
+    let mut last = vec![];
+    for i in 1..=(MAX_COPIES as u32 + 20) {
+        let at = 10.0 + f64::from(i) * 10.0;
+        last = t.pointer(&c, &quote_drag(at, at, true));
+    }
+    let (batch, widths) = previewed_widths(&last);
+    assert!(batch);
+    assert_eq!(widths.len(), MAX_COPIES + 1, "the copies and the shape being drawn");
+    assert_eq!(widths.last(), Some(&(10.0 + f64::from(MAX_COPIES as u32 + 20) * 10.0)), "the shape follows the pointer");
+}
+
+/// The spacing is measured on screen: at 400% zoom, 2 pt of travel is 8 screen points.
+#[test]
+fn backtick_copy_spacing_is_measured_on_screen() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let c = ToolContext { smart_guides: false, zoom: 4.0, ..cx(&d, &s, &p) };
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+    t.pointer(&c, &quote_drag(20.0, 20.0, true));
+    assert!(!previewed_shapes(&t.pointer(&c, &quote_drag(21.5, 20.0, true))).0, "6 screen points");
+    assert!(previewed_shapes(&t.pointer(&c, &quote_drag(22.0, 20.0, true))).0, "8 screen points");
 }

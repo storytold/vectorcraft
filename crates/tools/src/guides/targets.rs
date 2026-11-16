@@ -64,7 +64,7 @@ pub struct Targets {
 }
 
 /// How many anchors, and how many segments, the targets gather at most.
-const BUDGET: usize = 20_000;
+pub(super) const BUDGET: usize = 20_000;
 
 /// What [`Targets::collect_inner`] gathers from each path besides its anchors and bounds.
 #[derive(Clone, Copy, PartialEq)]
@@ -88,7 +88,7 @@ fn within<T>(sorted: &[T], key: impl Fn(&T) -> f64, v: f64, tol: f64) -> &[T] {
 /// Visit `nodes` and everything inside them, but the nodes in `skip`, the hidden nodes and
 /// everything inside those: one pass, however many are skipped. A Shaper Group's original
 /// shapes, its first child, are not shown and are skipped too.
-fn walk_but<'a>(nodes: &'a [Arc<Node>], skip: &HashSet<NodeId>, f: &mut impl FnMut(&'a Node)) {
+pub(super) fn walk_but<'a>(nodes: &'a [Arc<Node>], skip: &HashSet<NodeId>, f: &mut impl FnMut(&'a Node)) {
     for n in nodes.iter().filter(|n| n.visible && !skip.contains(&n.id)) {
         f(n);
         if let Some(ch) = n.children() {
@@ -1049,7 +1049,7 @@ impl Targets {
 
     /// Where two target paths, a path and a ruler guide, or two ruler guides cross, the crossing
     /// nearest `p` within `tol` ("intersect", #1602).
-    fn crossing(&self, p: Point, tol: f64) -> Option<Point> {
+    pub(super) fn crossing(&self, p: Point, tol: f64) -> Option<Point> {
         self.crossing_with(p, tol, &self.rulers)
     }
 

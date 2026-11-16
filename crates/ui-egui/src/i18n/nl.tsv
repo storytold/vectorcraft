@@ -575,6 +575,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	No bridge of this width fits across the selected art	Geen brug van deze breedte past over de geselecteerde illustratie
 @msg	Some islands could not be joined to the area around the art	Sommige eilanden konden niet worden verbonden met het gebied rond de illustratie
 @msg	`width` must be from {lo} to {hi} pt	`width` moet van {lo} tot {hi} pt zijn
+@msg	`angle` must be from -180 to 180 degrees	`angle` moet van -180 tot 180 graden zijn
+@msg	`roundness` must be from 1 to 100%	`roundness` moet van 1 tot 100% zijn
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` moet een geheel getal van 1 tot {MAX_BRIDGES_PER_ISLAND} zijn
 
 	File	Bestand
@@ -1392,6 +1394,7 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Auto Color	Automatische kleur
 	Automatic	Automatisch
 	Isolate Selected Group	Geselecteerde groep isoleren
+	Isolate Selected Path	Geselecteerd pad isoleren
 	Exit Isolation Mode	Isolatiemodus verlaten
 	Make Clipping Mask	Knipmasker maken
 	Release Clipping Mask	Knipmasker vrijgeven
@@ -1793,7 +1796,7 @@ lighting	Light	Licht
 	Name* @ 66.67% (RGB/Preview)	Naam* @ 66.67% (RGB/Voorbeeld)
 	No Document	Geen document
 	Press 	Druk op 
-	Search commands and tools	Opdrachten en gereedschappen zoeken
+	Search commands, tools, panels and effects	Opdrachten, gereedschappen, panelen en effecten zoeken
 	Style:	Stijl:
 	Switch workspace	Werkruimte wisselen
 	Show all open documents	Alle geopende documenten tonen
@@ -1906,6 +1909,8 @@ lighting	Light	Licht
 	Lasso Tool	Lasso-gereedschap
 	Enclosing Lasso Tool	Omsluitend lassogereedschap
 	Enclosing Lasso	Omsluitende lasso
+	Polygonal Lasso Tool	Veelhoekig lassogereedschap
+	Polygonal Lasso	Veelhoekige lasso
 	Lasso	Lasso
 	Line Cut Tool	Lijnknip-gereedschap
 	Line Graph Tool	Lijndiagram-gereedschap
@@ -1993,6 +1998,10 @@ lighting	Light	Licht
 	Play Current Selection	Huidige selectie afspelen
 	Save Actions…	Acties opslaan…
 	Load Actions…	Acties laden…
+	Reset Actions	Acties opnieuw instellen
+	Replace the current actions with the default set?	De huidige acties vervangen door de standaardset?
+	Append adds the default set after the current sets instead.	Toevoegen voegt in plaats daarvan de standaardset toe na de huidige sets.
+	Append	Toevoegen
 	Reflect Horizontal	Horizontaal spiegelen
 	Rotate 90° CW	90° met de klok mee draaien
 	Set 1	Set 1
@@ -3350,6 +3359,11 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Vloeiend kleurenwiel tonen
 	Show segmented color wheel	Gesegmenteerd kleurenwiel tonen
 	Show color bars	Kleurbalken tonen
+	Show brightness and hue on wheel	Helderheid en tint op het wiel tonen
+	Show saturation and hue on wheel	Verzadiging en tint op het wiel tonen
+	Add Color Tool	Gereedschap Kleur toevoegen
+	Remove Color Tool	Gereedschap Kleur verwijderen
+	Remove Color	Kleur verwijderen
 	Find the selected colors in the artwork	De geselecteerde kleuren zoeken in de artwork
 	Harmony Rules	Harmonieregels
 	Keep this row's colors (exclude)	De kleuren van deze rij behouden (uitsluiten)
@@ -4027,6 +4041,7 @@ theme	Appearance	Vormgeving
 	Connect Data Points	Gegevenspunten verbinden
 	Edge-to-Edge Lines	Lijnen van rand tot rand
 	Draw Filled Lines	Gevulde lijnen tekenen
+	Line Width	Lijndikte
 	Tick Values	Maatstreepwaarden
 	Override Calculated Values	Berekende waarden negeren
 	Divisions	Verdelingen
@@ -4747,7 +4762,11 @@ font-technology	Variable	Variabel
 	Saved {path}	{path} opgeslagen
 	Saving	Bezig met opslaan
 	Saving {}	{} wordt opgeslagen
-	Search commands and tools…	Opdrachten en gereedschappen zoeken…
+	Search commands, tools, panels and effects…	Opdrachten, gereedschappen, panelen en effecten zoeken…
+	No commands match	Geen opdrachten gevonden
+	{pos} of {total}: {name}	{pos} van {total}: {name}
+@plural	{n} result|{n} results	{n} resultaat|{n} resultaten
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} van {n} resultaat. Typ verder om ze te beperken.|{shown} van {n} resultaten. Typ verder om ze te beperken.
 	Recent Commands	Recente opdrachten
 	No recent commands	Geen recente opdrachten
 	Dashed Line	Streepjeslijn
@@ -9327,6 +9346,22 @@ breakText	Glyphs	Glyphs
 	Remove Gaps	Tussenruimten verwijderen
 @msg	that makes too many pieces (at most 100000): make the dashes longer	dat geeft te veel stukken (hoogstens 100000): maak de streepjes langer
 @msg	select paths, or segments, to divide	selecteer paden of segmenten om te verdelen
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Gemeenschappelijke raaklijnen…
+	Common Tangents	Gemeenschappelijke raaklijnen
+	Tangents	Raaklijnen
+	Centerline	Middellijn
+	External	Uitwendige
+	Internal	Inwendige
+@msg	select two closed paths	selecteer twee gesloten paden
+@msg	a selected path is open	een geselecteerd pad is open
+@msg	a selected path is not convex	een geselecteerd pad is niet convex
+@msg	a selected path has no area	een geselecteerd pad heeft geen oppervlak
+@msg	a selected path has more than 10000 segments	een geselecteerd pad heeft meer dan 10000 segmenten
+@msg	the two paths have the same outline	de twee paden hebben dezelfde omtrek
+@msg	One path lies inside the other, so they have no common tangents	Het ene pad ligt binnen het andere, dus ze hebben geen gemeenschappelijke raaklijnen
+@msg	The paths overlap, so they have no internal tangents	De paden overlappen, dus ze hebben geen inwendige raaklijnen
+@msg	One path lies inside the other, so they have no internal tangents	Het ene pad ligt binnen het andere, dus ze hebben geen inwendige raaklijnen
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Streepjes uitbreiden tot paden
 @msg	select paths with dashed strokes to expand	selecteer paden met een streepjeslijn om uit te breiden
@@ -9369,6 +9404,11 @@ breakText	Glyphs	Glyphs
 	Malayalam	Malayalam
 	Odia	Odia
 	Urdu	Urdu
+	Sanskrit	Sanskriet
+	Nepali	Nepalees
+	Assamese	Assamees
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} en nieuwer (versie {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Alle geopende documenten exporteren als PDF
@@ -9752,3 +9792,23 @@ breakText	Glyphs	Glyphs
 	No objects are selected.	Er zijn geen objecten geselecteerd.
 	Open a document to mark its fold lines.	Open een document om de vouwlijnen te markeren.
 	Remove Fold Line Role	Lijnsoort verwijderen
+	Check	Controleren
+	Check Fold Lines	Vouwlijnen controleren
+@msg	No cut lines are in the selection.	De selectie bevat geen snijlijnen.
+@msg	No cut lines are in the document.	Het document bevat geen snijlijnen.
+@msg	The cut lines do not enclose an area.	De snijlijnen sluiten geen gebied in.
+@msg	A cut line ends without meeting another cut line.	Een snijlijn eindigt zonder een andere snijlijn te raken.
+@msg	A gap between cut lines was closed.	Een opening tussen snijlijnen is gesloten.
+@msg	The fold lines are too complex to check.	De vouwlijnen zijn te complex om te controleren.
+@msg	A cut line and a crease lie on top of each other.	Een snijlijn en een rillijn liggen over elkaar.
+@msg	No cut lines are among the given objects.	De opgegeven objecten bevatten geen snijlijnen.
+@msg	Two fold lines lie on top of each other.	Twee vouwlijnen liggen over elkaar.
+@msg	A crease ends inside a panel.	Een rillijn eindigt binnen een paneel.
+@msg	A crease does not divide two panels.	Een rillijn verdeelt geen twee panelen.
+@msg	A crease lies outside the cut outline, wholly or in part.	Een rillijn ligt geheel of gedeeltelijk buiten de snijcontour.
+@msg	The pieces of a hinge are not on one straight line.	De delen van een scharnier liggen niet op één rechte lijn.
+@msg	A gap between cut lines is too narrow to tell apart.	Een opening tussen snijlijnen is te smal om te onderscheiden.
+@msg	A cut-out area holds other fold lines or another blank.	Een uitgesneden gebied bevat andere vouwlijnen of een andere uitslag.
+@msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
+@msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}

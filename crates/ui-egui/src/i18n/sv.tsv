@@ -1424,6 +1424,7 @@ font-technology	Variable	Variabla
 	Connect Data Points	Förbind datapunkter
 	Edge-to-Edge Lines	Linjer från kant till kant
 	Draw Filled Lines	Rita fyllda linjer
+	Line Width	Linjebredd
 	Tick Values	Skalstrecksvärden
 	Override Calculated Values	Åsidosätt beräknade värden
 	Divisions	Indelningar
@@ -1522,6 +1523,11 @@ font-technology	Variable	Variabla
 	Show smooth color wheel	Visa steglöst färghjul
 	Show segmented color wheel	Visa segmenterat färghjul
 	Show color bars	Visa färgstaplar
+	Show brightness and hue on wheel	Visa ljusstyrka och nyans på hjulet
+	Show saturation and hue on wheel	Visa mättnad och nyans på hjulet
+	Add Color Tool	Verktyget Lägg till färg
+	Remove Color Tool	Verktyget Ta bort färg
+	Remove Color	Ta bort färg
 	Find the selected colors in the artwork	Hitta de markerade färgerna i teckningen
 	Harmony Sets	Harmoniuppsättningar
 	Height	Höjd
@@ -1852,6 +1858,8 @@ font-technology	Variable	Variabla
 	Lasso Tool	Lassoverktyg
 	Enclosing Lasso Tool	Omslutande lassoverktyg
 	Enclosing Lasso	Omslutande lasso
+	Polygonal Lasso Tool	Polygonlassoverktyg
+	Polygonal Lasso	Polygonlasso
 	Last Effect: {name}	Senaste effekten: {name}
 	Last Effect: {}	Senaste effekten: {}
 	Last Effect…	Senaste effekten…
@@ -2586,6 +2594,10 @@ font-technology	Variable	Variabla
 	Play Current Selection	Spela upp aktuell markering
 	Save Actions…	Spara åtgärder…
 	Load Actions…	Läs in åtgärder…
+	Reset Actions	Återställ åtgärder
+	Replace the current actions with the default set?	Vill du ersätta de aktuella åtgärderna med standarduppsättningen?
+	Append adds the default set after the current sets instead.	Lägg till lägger i stället till standarduppsättningen efter de aktuella uppsättningarna.
+	Append	Lägg till
 	Plug-in Info	Information om plugin
 	Plug-ins	Plugins
 	Plug-in…	Plugin…
@@ -3197,8 +3209,12 @@ digits	Malayalam	Malayalam
 	Scripts	Skript
 	Search	Sök
 	Search All	Sök i alla
-	Search commands and tools	Sök kommandon och verktyg
-	Search commands and tools…	Sök kommandon och verktyg…
+	Search commands, tools, panels and effects	Sök kommandon, verktyg, paneler och effekter
+	Search commands, tools, panels and effects…	Sök kommandon, verktyg, paneler och effekter…
+	No commands match	Inga kommandon matchar
+	{pos} of {total}: {name}	{pos} av {total}: {name}
+@plural	{n} result|{n} results	{n} resultat|{n} resultat
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.|{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.
 	Recent Commands	Senaste kommandon
 	No recent commands	Inga senaste kommandon
 	Search Commands…	Sök kommandon…
@@ -4222,6 +4238,7 @@ imageTrace	Outline	Kontur
 	 to set spacing and orientation	 för att ange avstånd och orientering
 	:	:
 	Isolate Selected Group	Isolera markerad grupp
+	Isolate Selected Path	Isolera markerad bana
 	Release Clipping Mask	Släpp klippningsmask
 	Make Compound Path	Skapa sammansatt bana
 	Release Compound Path	Släpp sammansatt bana
@@ -7479,6 +7496,22 @@ breakText	Glyphs	Glyfer
 	Remove Gaps	Ta bort mellanrum
 @msg	that makes too many pieces (at most 100000): make the dashes longer	det blir för många delar (högst 100000): gör strecken längre
 @msg	select paths, or segments, to divide	markera banor eller segment att dela upp
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Gemensamma tangenter…
+	Common Tangents	Gemensamma tangenter
+	Tangents	Tangenter
+	Centerline	Mittlinje
+	External	Yttre
+	Internal	Inre
+@msg	select two closed paths	markera två slutna banor
+@msg	a selected path is open	en markerad bana är öppen
+@msg	a selected path is not convex	en markerad bana är inte konvex
+@msg	a selected path has no area	en markerad bana har ingen yta
+@msg	a selected path has more than 10000 segments	en markerad bana har fler än 10000 segment
+@msg	the two paths have the same outline	de två banorna har samma kontur
+@msg	One path lies inside the other, so they have no common tangents	Den ena banan ligger inuti den andra, så de har inga gemensamma tangenter
+@msg	The paths overlap, so they have no internal tangents	Banorna överlappar, så de har inga inre tangenter
+@msg	One path lies inside the other, so they have no internal tangents	Den ena banan ligger inuti den andra, så de har inga inre tangenter
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandera streck till banor
 @msg	select paths with dashed strokes to expand	markera banor med streckad kontur att expandera
@@ -7521,6 +7554,9 @@ breakText	Glyphs	Glyfer
 	Malayalam	Malayalam
 	Odia	Oriya
 	Urdu	Urdu
+	Nepali	Nepalesiska
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} och senare (version {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Exportera alla öppna dokument som PDF
@@ -9218,6 +9254,8 @@ digits	Hindi	Hindi
 @msg	No bridge of this width fits across the selected art	Ingen brygga med den här bredden får plats över den markerade teckningen
 @msg	Some islands could not be joined to the area around the art	Vissa öar kunde inte förbindas med området runt teckningen
 @msg	`width` must be from {lo} to {hi} pt	`width` måste vara från {lo} till {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` måste vara från -180 till 180 grader
+@msg	`roundness` must be from 1 to 100%	`roundness` måste vara från 1 till 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` måste vara ett heltal från 1 till {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Rensningsram och rensningslinjer…
 	Weed Box and Lines	Rensningsram och rensningslinjer
@@ -9402,4 +9440,24 @@ digits	Hindi	Hindi
 	No objects are selected.	Inga objekt är markerade.
 	Open a document to mark its fold lines.	Öppna ett dokument för att markera dess falslinjer.
 	Remove Fold Line Role	Ta bort linjetyp
+	Check	Kontrollera
+	Check Fold Lines	Kontrollera falslinjer
+@msg	No cut lines are in the selection.	Det finns inga skärlinjer i markeringen.
+@msg	No cut lines are in the document.	Det finns inga skärlinjer i dokumentet.
+@msg	The cut lines do not enclose an area.	Skärlinjerna omsluter inget område.
+@msg	A cut line ends without meeting another cut line.	En skärlinje slutar utan att möta en annan skärlinje.
+@msg	A gap between cut lines was closed.	Ett mellanrum mellan skärlinjer stängdes.
+@msg	The fold lines are too complex to check.	Falslinjerna är för komplexa för att kontrollera.
+@msg	A cut line and a crease lie on top of each other.	En skärlinje och en biglinje ligger ovanpå varandra.
+@msg	No cut lines are among the given objects.	Det finns inga skärlinjer bland de angivna objekten.
+@msg	Two fold lines lie on top of each other.	Två falslinjer ligger ovanpå varandra.
+@msg	A crease ends inside a panel.	En biglinje slutar inuti en panel.
+@msg	A crease does not divide two panels.	En biglinje delar inte två paneler.
+@msg	A crease lies outside the cut outline, wholly or in part.	En biglinje ligger helt eller delvis utanför skärkonturen.
+@msg	The pieces of a hinge are not on one straight line.	Delarna av ett gångjärn ligger inte på en rak linje.
+@msg	A gap between cut lines is too narrow to tell apart.	Ett mellanrum mellan skärlinjer är för smalt för att skilja ut.
+@msg	A cut-out area holds other fold lines or another blank.	Ett utskuret område innehåller andra falslinjer eller ett annat ämne.
+@msg	A panel is not joined to the rest by a crease.	En panel är inte förbunden med resten av någon biglinje.
+@msg	A fold line is on a non-printing layer.	En falslinje ligger på ett lager som inte skrivs ut.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, gångjärn: {hinges}, fel: {errors}, varningar: {warnings}
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen

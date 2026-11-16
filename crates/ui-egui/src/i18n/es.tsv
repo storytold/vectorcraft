@@ -1471,6 +1471,7 @@ font-technology	Variable	Variables
 	Connect Data Points	Conectar puntos de datos
 	Edge-to-Edge Lines	Líneas de borde a borde
 	Draw Filled Lines	Dibujar líneas rellenas
+	Line Width	Ancho de línea
 	Tick Values	Valores de marcas
 	Override Calculated Values	Sustituir valores calculados
 	Divisions	Divisiones
@@ -1569,6 +1570,11 @@ font-technology	Variable	Variables
 	Show smooth color wheel	Mostrar rueda de color continua
 	Show segmented color wheel	Mostrar rueda de color segmentada
 	Show color bars	Mostrar barras de color
+	Show brightness and hue on wheel	Mostrar brillo y tono en la rueda
+	Show saturation and hue on wheel	Mostrar saturación y tono en la rueda
+	Add Color Tool	Herramienta Añadir color
+	Remove Color Tool	Herramienta Eliminar color
+	Remove Color	Eliminar color
 	Find the selected colors in the artwork	Buscar los colores seleccionados en la ilustración
 	Harmony Sets	Conjuntos de armonía
 	Height	Altura
@@ -1903,6 +1909,8 @@ font-technology	Variable	Variables
 	Lasso Tool	Herramienta Lazo
 	Enclosing Lasso Tool	Herramienta Lazo envolvente
 	Enclosing Lasso	Lazo envolvente
+	Polygonal Lasso Tool	Herramienta Lazo poligonal
+	Polygonal Lasso	Lazo poligonal
 	Last Effect: {name}	Último efecto: {name}
 	Last Effect: {}	Último efecto: {}
 	Last Effect…	Último efecto…
@@ -2655,6 +2663,10 @@ font-technology	Variable	Variables
 	Play Current Selection	Reproducir la selección actual
 	Save Actions…	Guardar acciones…
 	Load Actions…	Cargar acciones…
+	Reset Actions	Restablecer acciones
+	Replace the current actions with the default set?	¿Reemplazar las acciones actuales por el conjunto predeterminado?
+	Append adds the default set after the current sets instead.	Añadir agrega en su lugar el conjunto predeterminado después de los conjuntos actuales.
+	Append	Añadir
 	Plug-in Info	Información del plugin
 	Plug-ins	Plugins
 	Plug-in…	Plugin…
@@ -3279,8 +3291,12 @@ digits	Malayalam	Malayálam
 	Filter Layers Panel Rows	Filtrar filas del panel Capas
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` representa ajustes modificados: guarda el preajuste con otro nombre
 @msg	`{key}` must be an array of these names: {_1}	`{key}` debe ser una lista de estos nombres: {_1}
-	Search commands and tools	Buscar comandos y herramientas
-	Search commands and tools…	Buscar comandos y herramientas…
+	Search commands, tools, panels and effects	Buscar comandos, herramientas, paneles y efectos
+	Search commands, tools, panels and effects…	Buscar comandos, herramientas, paneles y efectos…
+	No commands match	Ningún comando coincide
+	{pos} of {total}: {name}	{pos} de {total}: {name}
+@plural	{n} result|{n} results	{n} resultado|{n} resultados
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Sigue escribiendo para acotarlos.|{shown} de {n} resultados. Sigue escribiendo para acotarlos.
 	Recent Commands	Comandos recientes
 	No recent commands	No hay comandos recientes
 	Search Commands…	Buscar comandos…
@@ -4305,6 +4321,7 @@ imageTrace	Outline	Contorno
 	 to set spacing and orientation	 para definir espaciado y orientación
 	:	:
 	Isolate Selected Group	Aislar grupo seleccionado
+	Isolate Selected Path	Aislar trazado seleccionado
 	Isolate Selected Object	Aislar objeto seleccionado
 	Release Clipping Mask	Soltar máscara de recorte
 	Make Compound Path	Crear trazado compuesto
@@ -7421,6 +7438,22 @@ breakText	Glyphs	Glifos
 	Remove Gaps	Quitar separaciones
 @msg	that makes too many pieces (at most 100000): make the dashes longer	eso da demasiados trozos (como máximo 100000): alargue los guiones
 @msg	select paths, or segments, to divide	seleccione trazados o segmentos para dividir
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Tangentes comunes…
+	Common Tangents	Tangentes comunes
+	Tangents	Tangentes
+	Centerline	Línea central
+	External	Externas
+	Internal	Internas
+@msg	select two closed paths	seleccione dos trazados cerrados
+@msg	a selected path is open	un trazado seleccionado está abierto
+@msg	a selected path is not convex	un trazado seleccionado no es convexo
+@msg	a selected path has no area	un trazado seleccionado no tiene área
+@msg	a selected path has more than 10000 segments	un trazado seleccionado tiene más de 10000 segmentos
+@msg	the two paths have the same outline	los dos trazados tienen el mismo contorno
+@msg	One path lies inside the other, so they have no common tangents	Un trazado está dentro del otro, por lo que no tienen tangentes comunes
+@msg	The paths overlap, so they have no internal tangents	Los trazados se superponen, por lo que no tienen tangentes internas
+@msg	One path lies inside the other, so they have no internal tangents	Un trazado está dentro del otro, por lo que no tienen tangentes internas
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandir guiones en trazados
 @msg	select paths with dashed strokes to expand	seleccione trazados con trazo discontinuo para expandir
@@ -7463,6 +7496,11 @@ breakText	Glyphs	Glifos
 	Malayalam	Malayálam
 	Odia	Oriya
 	Urdu	Urdu
+	Sanskrit	Sánscrito
+	Nepali	Nepalí
+	Assamese	Asamés
+	Konkani	Konkaní
+	Sindhi	Sindi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} y posteriores (versión {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Exportar todos los documentos abiertos como PDF
@@ -7851,6 +7889,8 @@ breakText	Glyphs	Glifos
 @msg	No bridge of this width fits across the selected art	Ningún puente de este ancho cabe en la ilustración seleccionada
 @msg	Some islands could not be joined to the area around the art	Algunas islas no se pudieron unir al área que rodea la ilustración
 @msg	`width` must be from {lo} to {hi} pt	`width` debe estar entre {lo} y {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` debe estar entre -180 y 180 grados
+@msg	`roundness` must be from 1 to 100%	`roundness` debe estar entre 1 y 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` debe ser un número entero entre 1 y {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Caja y líneas de pelado…
 	Weed Box and Lines	Caja y líneas de pelado
@@ -7883,4 +7923,24 @@ breakText	Glyphs	Glifos
 	No objects are selected.	No hay objetos seleccionados.
 	Open a document to mark its fold lines.	Abre un documento para marcar sus líneas de plegado.
 	Remove Fold Line Role	Quitar tipo de línea
+	Check	Comprobar
+	Check Fold Lines	Comprobar líneas de plegado
+@msg	No cut lines are in the selection.	No hay líneas de corte en la selección.
+@msg	No cut lines are in the document.	No hay líneas de corte en el documento.
+@msg	The cut lines do not enclose an area.	Las líneas de corte no encierran ningún área.
+@msg	A cut line ends without meeting another cut line.	Una línea de corte termina sin llegar a otra línea de corte.
+@msg	A gap between cut lines was closed.	Se cerró un hueco entre líneas de corte.
+@msg	The fold lines are too complex to check.	Las líneas de plegado son demasiado complejas para comprobarlas.
+@msg	A cut line and a crease lie on top of each other.	Una línea de corte y una de hendido están superpuestas.
+@msg	No cut lines are among the given objects.	No hay líneas de corte entre los objetos indicados.
+@msg	Two fold lines lie on top of each other.	Dos líneas de plegado están superpuestas.
+@msg	A crease ends inside a panel.	Una línea de hendido termina dentro de un panel.
+@msg	A crease does not divide two panels.	Una línea de hendido no separa dos paneles.
+@msg	A crease lies outside the cut outline, wholly or in part.	Una línea de hendido está fuera del contorno de corte, total o parcialmente.
+@msg	The pieces of a hinge are not on one straight line.	Los tramos de una bisagra no están en una sola línea recta.
+@msg	A gap between cut lines is too narrow to tell apart.	Un hueco entre líneas de corte es demasiado estrecho para distinguirlo.
+@msg	A cut-out area holds other fold lines or another blank.	Un área recortada contiene otras líneas de plegado u otro troquelado.
+@msg	A panel is not joined to the rest by a crease.	Un panel no está unido al resto por ninguna línea de hendido.
+@msg	A fold line is on a non-printing layer.	Una línea de plegado está en una capa que no se imprime.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneles: {panels}, bisagras: {hinges}, errores: {errors}, advertencias: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"

@@ -434,6 +434,30 @@ fn font_height_reference_labels_are_in_complete_catalogs() {
     }
 }
 
+/// Each catalog's Saved View N and Saved Selection N rows carry the number N, and no two of a
+/// catalog's saved views or saved selections show one name, whatever digits the language uses.
+#[test]
+fn numbered_saved_views_and_selections_keep_their_number() {
+    let mut bad = vec![];
+    for lang in LANGUAGES.iter().filter(|lang| !lang.source.is_empty()) {
+        for kind in ["Saved View", "Saved Selection"] {
+            let mut seen = std::collections::HashMap::new();
+            for n in 1..=25 {
+                let source = format!("{kind} {n}");
+                let Some(row) = lang.catalog().plain(&source) else { continue };
+                let numbers: Vec<&str> = row.split(|c: char| !c.is_ascii_digit()).filter(|s| !s.is_empty()).collect();
+                if !numbers.is_empty() && numbers != [n.to_string().as_str()] {
+                    bad.push(format!("{}: {source} -> {row}", lang.code));
+                }
+                if let Some(earlier) = seen.insert(row, source.clone()) {
+                    bad.push(format!("{}: {earlier} and {source} both show {row}", lang.code));
+                }
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
 /// The Objects on Path Options section's Detach button, its undo step and the message for a
 /// Detach with no object chosen.
 #[test]
@@ -1931,6 +1955,50 @@ fn georgian_rows_have_no_mtavruli() {
     assert!(caps.is_empty(), "Mtavruli in ka.tsv: {caps:?}");
 }
 
+/// French rows follow the typography fr.tsv's header sets: a no-break space before : ; ? ! and inside
+/// « », and the typographic apostrophe ’ in elisions. Text in backticks is code and is not checked, and
+/// a straight apostrophe inside double quotes is a literal value.
+#[test]
+fn french_catalog_uses_nonbreaking_prose_punctuation() {
+    let (entries, _) = parse_entries(fr().0.source);
+    let letter = |c: Option<char>| c.is_some_and(char::is_alphabetic);
+    let mut bad = Vec::new();
+    for (ctx, src, tr) in &entries {
+        let mut code = false;
+        let prose: Vec<char> = tr
+            .chars()
+            .map(|c| {
+                if c == '`' {
+                    code = !code;
+                }
+                if code || c == '`' { '\0' } else { c }
+            })
+            .collect();
+        let mut quoted = false;
+        for (i, &c) in prose.iter().enumerate() {
+            let prev = i.checked_sub(1).map(|j| prose[j]);
+            let next = prose.get(i + 1).copied();
+            if c == '"' {
+                quoted = !quoted;
+            }
+            let fault = match c {
+                ':' | ';' | '?' | '!' if prev == Some(' ') => "has an ordinary space before it",
+                ';' | '?' | '!' if letter(prev) && next.is_none_or(|n| n == ' ') => "has no space before it",
+                '«' if next == Some(' ') => "has an ordinary space after it",
+                '»' if prev == Some(' ') => "has an ordinary space before it",
+                '\'' if !quoted && letter(prev) && letter(next) => "is a straight apostrophe where an elision takes ’",
+                _ => continue,
+            };
+            bad.push(format!("{ctx}\t{src}: `{c}` {fault}"));
+        }
+    }
+    assert!(bad.is_empty(), "{} French spacing faults:\n{}", bad.len(), bad.join("\n"));
+}
+
+fn fr() -> Lang {
+    Lang::from_code("fr").expect("fr registered")
+}
+
 fn de() -> Lang {
     Lang::from_code("de").expect("de registered")
 }
@@ -2750,7 +2818,7 @@ fn plugin_errors_translate_with_their_values() {
     }
     assert_eq!(message(de(), &errors[1].0), "Plug-in-Manifest: das Manifest ist 65537 Byte groß (Grenze 65536)");
     let fr = Lang::from_code("fr").expect("registered");
-    assert!(message(fr, &errors[3].0).ends_with(r#"attendu : {"objects": [...]}"#), "{}", message(fr, &errors[3].0));
+    assert!(message(fr, &errors[3].0).ends_with("attendu\u{a0}: {\"objects\": [...]}"), "{}", message(fr, &errors[3].0));
 }
 
 /// The reasons the plug-in host puts inside its errors (what is wrong with a parameter's spec or
@@ -2849,6 +2917,36 @@ fn three_d_refusals_are_translated_in_every_complete_catalog() {
         missing.extend(refusals.iter().chain(&parts).filter(|m| !rows.contains(m.as_str())).map(|m| format!("{code}: {m}")));
     }
     assert!(missing.is_empty(), "{} 3D messages have no @msg row:\n{}", missing.len(), missing.join("\n"));
+}
+
+/// The Eraser's range refusals (`path.eraseRegion` `angle` and `roundness`) and the Scissors' (`path.split`
+/// `t`) show in every complete-message language with the key and the range numbers as given; the
+/// error the command returns stays English.
+#[test]
+fn eraser_and_scissors_range_refusals_translate_with_their_values() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].clone();
+    let refusals = [
+        ("path.eraseRegion", json!({"points": [[10, 10], [60, 10]], "angle": 200}), "`angle`", ["-180", "180"]),
+        ("path.eraseRegion", json!({"points": [[10, 10], [60, 10]], "roundness": 0}), "`roundness`", ["1", "100"]),
+        ("path.split", json!({"id": id, "segment": 0, "t": 1.5}), "`t`", ["0", "1"]),
+    ];
+    for (cmd, p, key, numbers) in &refusals {
+        let e = s.execute(cmd, p).unwrap_err().to_string();
+        assert!(e.starts_with(&format!("invalid parameters for `{cmd}`: ")) && e.contains(key) && e.contains(" must be from "), "{e}");
+        assert_eq!(message(Lang::EN, &e), e);
+        for code in COMPLETE_MESSAGES {
+            let shown = message(Lang::from_code(code).expect("registered"), &e);
+            assert!(!shown.contains(" must be from ") && shown.contains(&format!("`{cmd}`")) && shown.contains(key), "{code}: {e} -> {shown}");
+            assert!(numbers.iter().all(|n| shown.contains(n)), "{code}: {e} -> {shown}");
+        }
+    }
+    assert_eq!(
+        message(de(), &s.execute("path.eraseRegion", &json!({"points": [[10, 10], [60, 10]], "roundness": 101})).unwrap_err().to_string()),
+        "ungültige Parameter für `path.eraseRegion`: `roundness` muss zwischen 1 und 100 % liegen"
+    );
 }
 
 /// A 3D effect's refusal shows in the interface language whole, with the effect's translated
@@ -4073,7 +4171,41 @@ fn the_keep_colors_trace_warnings_are_translated() {
         image::Rgba(if (10..30).contains(&x) && (10..30).contains(&y) { [0, 0, 0, 255] } else { [255, 255, 255, 255] })
     });
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let data = vectorcraft_format::base64_encode(&png);
     let mut warnings = vec![];
     for (params, shown) in [
