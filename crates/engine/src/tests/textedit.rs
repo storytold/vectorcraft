@@ -2289,6 +2289,20 @@ fn threaded_list_edited_in_its_second_frame() -> (Session, NodeId, NodeId, Strin
     (s, a, b, story)
 }
 
+/// Type › Insert Break Character › Forced Line Break (`type.insert`) after Select All in threaded
+/// text replaces the whole story, every frame's text, as one undo step.
+#[test]
+fn insert_character_replaces_the_whole_story_that_select_all_selected() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let steps = undo_labels(&s).len();
+    s.execute("type.insert", &json!({"char": "forcedLineBreak"})).unwrap();
+    assert_eq!(undo_labels(&s).len(), steps + 1, "one undo step");
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), "\u{2028}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story);
+}
+
 #[test]
 fn remove_breaks_takes_the_whole_story_that_select_all_selected() {
     let (mut s, a, b, story) = threaded_list_edited_in_its_second_frame();

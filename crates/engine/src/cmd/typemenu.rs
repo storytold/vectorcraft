@@ -10,8 +10,8 @@ use super::object::choice;
 use super::threads::ThreadIndex;
 use super::typecmd::{area_text, block_gaps, needed_room, refresh_bounds};
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, checked_ids_param, cmd, find_command, has_clipboard, has_doc, has_selection, number_or,
-    switch_or, targets, text_param,
+    CommandSpec, EngineError, Result, Session, bad, checked_ids_param, cmd, find_command, has_clipboard, has_doc, has_selection, named_ids,
+    number_or, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -111,7 +111,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Insert Character",
             ["Type"],
             None,
-            "{char: \"bullet\"|\"copyright\"|\"ellipsis\"|\"paragraph\"|\"registered\"|\"section\"|\"trademark\"|\"emDash\"|\"enDash\"|\"discretionaryHyphen\"|\"nonBreakingHyphen\"|\"doubleLeftQuote\"|\"doubleRightQuote\"|\"singleLeftQuote\"|\"singleRightQuote\"|\"emSpace\"|\"enSpace\"|\"hairSpace\"|\"sixthSpace\"|\"thinSpace\"|\"nonBreakingSpace\"|\"figureSpace\"|\"punctuationSpace\"|\"thirdSpace\"|\"quarterSpace\"|\"tab\"|\"forcedLineBreak\"|\"paragraphReturn\" | text: string | code: Windows Alt+0 code (0–255 in Windows-1252, a Unicode code point above: 176 → °, 151 → —) | unicode: hex code point (\"00B0\" or \"U+00B0\"), ids?|id?: object ids (default: the selection)} append to the selected text objects",
+            "{char: \"bullet\"|\"copyright\"|\"ellipsis\"|\"paragraph\"|\"registered\"|\"section\"|\"trademark\"|\"emDash\"|\"enDash\"|\"discretionaryHyphen\"|\"nonBreakingHyphen\"|\"doubleLeftQuote\"|\"doubleRightQuote\"|\"singleLeftQuote\"|\"singleRightQuote\"|\"emSpace\"|\"enSpace\"|\"hairSpace\"|\"sixthSpace\"|\"thinSpace\"|\"nonBreakingSpace\"|\"figureSpace\"|\"punctuationSpace\"|\"thirdSpace\"|\"quarterSpace\"|\"tab\"|\"forcedLineBreak\"|\"paragraphReturn\" | text: string | code: Windows Alt+0 code (0–255 in Windows-1252, a Unicode code point above: 176 → °, 151 → —) | unicode: hex code point (\"00B0\" or \"U+00B0\"), ids?|id?: object ids (default: the selection)} insert at the Type tool's caret, replacing its selection, while it edits text and no ids are given; otherwise append to the selected text objects. forcedLineBreak is U+2028, a new line in the same paragraph; paragraphReturn is a line feed, which starts a new paragraph",
             has_selection,
             insert_char
         ),
@@ -1525,8 +1525,9 @@ pub(crate) fn special_char(name: &str) -> Option<&'static str> {
         "thirdSpace" => "\u{2004}",
         "quarterSpace" => "\u{2005}",
         "tab" => "\t",
-        // Our text model breaks lines at paragraph returns only.
-        "forcedLineBreak" | "paragraphReturn" => "\n",
+        // A line break inside the paragraph, as Shift+Enter types it.
+        "forcedLineBreak" => "\u{2028}",
+        "paragraphReturn" => "\n",
         _ => return None,
     })
 }
@@ -1576,6 +1577,11 @@ fn insert_char(s: &mut Session, p: &Value) -> Result<Value> {
         (None, None, None, Some(u)) => unicode_char(u).ok_or_else(|| bad(C, format!("`{u}` is no Unicode character")))?.to_string(),
         (None, None, None, None) => return Err(bad(C, "give `char`, `text`, `code` or `unicode`")),
     };
+    if named_ids(p)?.is_none()
+        && let Some(r) = insert_at_type_caret(s, &text)?
+    {
+        return Ok(r);
+    }
     let ids = texts(s, p, C)?;
     // When `text` is empty and every object ends with a run of text, the document and its undo
     // history stay as they are.
@@ -1604,6 +1610,40 @@ fn insert_char(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(ids_json(&ids))
+}
+
+/// `type.insert` while the Type tool edits text: `text` replaces the tool's selection (inserts at
+/// its caret) as one undo step, and the caret goes after it. `None` when no text is being edited.
+fn insert_at_type_caret(s: &mut Session, text: &str) -> Result<Option<Value>> {
+    let tool = s.tool_options();
+    let Some(id) = tool.get("editing").and_then(Value::as_u64).map(NodeId) else { return Ok(None) };
+    let d = &s.doc()?.doc;
+    let Some(NodeKind::Text(t)) = d.node(id).map(|n| &n.kind) else { return Ok(None) };
+    let len = vectorcraft_text::edit::runs_len(&t.runs);
+    let g = |k: &str| tool.get(k).and_then(Value::as_u64).map_or(len, |v| (v as usize).min(len));
+    let (x, y) = (g("start"), g("end"));
+    let (a, b) = (x.min(y), x.max(y));
+    // After Select All in threaded text the whole story is selected: the other frames' text goes
+    // in the same edit, as when typing replaces it.
+    let story: Vec<NodeId> = tool.get("story").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).map(NodeId).collect();
+    let clear: Vec<u64> = if a == 0 && b == len && story.contains(&id) {
+        let has_text = |f: &NodeId| matches!(d.node(*f).map(|n| &n.kind), Some(NodeKind::Text(o)) if !o.runs.iter().all(|r| r.text.is_empty()));
+        story.iter().filter(|f| **f != id && has_text(f)).map(|f| f.0).collect()
+    } else {
+        vec![]
+    };
+    if text.is_empty() && a == b && clear.is_empty() {
+        return Ok(Some(ids_json(&[id])));
+    }
+    // A typing session ends first: the insertion is a step of its own.
+    if tool.get("typing").and_then(Value::as_bool) == Some(true) {
+        s.set_tool_option("commitTyping", &Value::Bool(true));
+        s.commit_interaction()?;
+    }
+    let r = super::textedit::edit_range(s, &json!({"id": id.0, "start": a, "end": b, "insert": text, "clear": clear}))?;
+    let caret = r.get("caret").cloned().unwrap_or(Value::Null);
+    s.set_tool_option("select", &json!({"start": caret, "end": caret}));
+    Ok(Some(ids_json(&[id])))
 }
 
 // ---------- Find and Replace ----------

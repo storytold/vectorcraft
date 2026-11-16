@@ -9637,6 +9637,20 @@ on again.
 {"name":"run_command","arguments":{"command":"type.convertToAreaType","params":{"ids":[42]}}}
 ```
 
+## Insert Special, Whitespace and Break Characters
+
+`type.insert {char?, text?, code?, unicode?, ids?|id?}` inserts one character (`char` names it, `code` and `unicode` give
+its code) or the string `text`. While the Type tool edits text and neither `ids` nor `id` is given, it replaces the
+tool's selection, or inserts at its caret, and the caret goes after the insertion; otherwise it appends to the end of each
+selected text object. Each call is one undo step; an empty `text` at the Type tool's caret changes nothing and records no undo step.
+`char: "forcedLineBreak"` (Type › Insert Break Character › Forced Line Break) inserts U+2028, which starts a new line in
+the same paragraph, as Shift+Enter does; `char: "paragraphReturn"` inserts a line feed, which starts a new paragraph. A
+`text` that holds U+2028 inserts the same break.
+
+```json
+{"name":"run_command","arguments":{"command":"type.insert","params":{"char":"forcedLineBreak"}}}
+```
+
 ## Smart Punctuation
 
 `type.smartPunctuation` replaces keyboard characters in the selected type, or in every text object with `scope:

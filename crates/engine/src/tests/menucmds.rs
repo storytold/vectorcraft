@@ -4103,6 +4103,76 @@ fn placeholder_and_insert_characters() {
     assert!(s.execute("type.insert", &json!({"char": "nope"})).is_err());
 }
 
+/// Type › Insert Break Character › Forced Line Break (`type.insert {char: "forcedLineBreak"}`)
+/// starts a new line in the same paragraph (U+2028, as Shift+Enter types it), so the paragraph's
+/// space before does not come between the two lines; `paragraphReturn` starts a new paragraph.
+/// Each insert is one undo step.
+#[test]
+fn insert_forced_line_break_differs_from_paragraph_return() {
+    fn second_line_gap(s: &Session, id: NodeId) -> f64 {
+        let NodeKind::Text(t) = &node(s, id).kind else { panic!("not text") };
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        assert_eq!(lay.lines.len(), 2, "{:?}", t.plain_text());
+        lay.lines[1].baseline - lay.lines[0].baseline
+    }
+    let mut s = session();
+    let mut gaps = Vec::new();
+    for (c, want) in [("forcedLineBreak", "ab\u{2028}c"), ("paragraphReturn", "ab\nc")] {
+        let t = text(&mut s, "ab");
+        sel(&mut s, &[t]);
+        s.execute("text.setFormat", &json!({"ids": [t.0], "spaceBefore": 30})).unwrap();
+        let steps = undo_len(&s);
+        s.execute("type.insert", &json!({"char": c})).unwrap();
+        assert_eq!(undo_len(&s), steps + 1, "{c}");
+        s.execute("type.insert", &json!({"text": "c"})).unwrap();
+        assert_eq!(plain(&s, t), want, "{c}");
+        gaps.push(second_line_gap(&s, t));
+    }
+    assert!(gaps[1] - gaps[0] > 29.0, "space before only at the paragraph return: {gaps:?}");
+    // The same character by `unicode` and by `text`.
+    let t = text(&mut s, "");
+    sel(&mut s, &[t]);
+    s.execute("type.insert", &json!({"unicode": "2028"})).unwrap();
+    s.execute("type.insert", &json!({"text": "\u{2028}"})).unwrap();
+    assert_eq!(plain(&s, t), "\u{2028}\u{2028}");
+}
+
+/// While the Type tool edits text, the Insert Special, Whitespace and Break menu items
+/// (`type.insert` without `ids`) insert at its caret or replace its selection, as one undo step,
+/// and the caret goes after the insertion; `ids` still appends to those objects.
+#[test]
+fn insert_character_goes_to_the_type_tool_caret() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, 50.0, 300.0), v).unwrap();
+    }
+    let t = s.doc().unwrap().selection.objects[0];
+    s.tool_text("abcd", v).unwrap();
+    for _ in 0..2 {
+        s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    }
+    let steps = undo_len(&s);
+    s.execute("type.insert", &json!({"text": ""})).unwrap();
+    assert_eq!(undo_len(&s), steps, "an empty insert changes nothing");
+    s.execute("type.insert", &json!({"char": "forcedLineBreak"})).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}cd");
+    assert_eq!(s.tool_options()["caret"], json!(5));
+    s.tool_text("X", v).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}Xcd");
+    s.tool_key(ToolKey::Left, Mods { shift: true, ..Mods::default() }, v).unwrap();
+    s.execute("type.insert", &json!({"char": "paragraphReturn"})).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}\ncd");
+    s.execute("type.insert", &json!({"ids": [t.0], "text": "!"})).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}\ncd!");
+    s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}Xcd", "the replacement is one undo step");
+}
+
 /// `type.insert` by code (#5108): `code` as a Windows Alt+0 code types (Windows-1252 for
 /// 128–159, the code point otherwise), `unicode` as a hex code point.
 #[test]
