@@ -1925,7 +1925,9 @@ An image scaled differently across and down is resampled on both sides, so its p
 The most it takes is the image's own resolution (along the denser side of its pixel grid, however it is turned), or
 300 ppi for a linked image; above that it is refused with `ppi can't be more than {max} for this image`. A value
 outside 1 to 2400 is refused with `ppi must be between 1 and 2400`, and a value that is not a positive number with
-`ppi must be a positive number, not {ppi}`. A null `ppi` keeps the image's own, as a missing one does, and `ppi` with
+`ppi must be a positive number, not {ppi}`. A resample whose working copies would pass the raster allowance (2 GB,
+512 MB in the web app) is refused with `an image of {w} × {h} pixels is too large to resample`, naming the size
+of the pixels being resampled. A null `ppi` keeps the image's own, as a missing one does, and `ppi` with
 `trim` is refused. While the Crop Image tool is chosen, `tool.setOption` sets `ppi` (the resolution Apply sends),
 `reference` (0 to 8, left to right and top to bottom: the point of the box that the Control bar's X and Y name and
 that its W and H resize about; 4, the center, by default) and `linked` (W and H keep the box's proportions; false by

@@ -1031,8 +1031,10 @@ fn check_crop_size(w: f64, h: f64) -> Result<()> {
 
 /// `img` resampled to `w` × `h` with its colors weighted by their alpha, so the color of a fully
 /// transparent pixel does not show at the edges of what is opaque. The weighted colors are held in
-/// 16 bits a channel until the end, so a nearly transparent pixel keeps its color.
-fn resize_premultiplied(img: &image::RgbaImage, w: u32, h: u32) -> image::RgbaImage {
+/// 16 bits a channel until the end, so a nearly transparent pixel keeps its color. An error when
+/// the working copies would not fit ([`check_resample_size`]).
+fn resize_premultiplied(img: &image::RgbaImage, w: u32, h: u32) -> Result<image::RgbaImage> {
+    check_resample_size(img.width(), img.height(), w, h)?;
     let mut pre = image::ImageBuffer::<image::Rgba<u16>, Vec<u16>>::new(img.width(), img.height());
     for (d, s) in pre.pixels_mut().zip(img.pixels()) {
         let a = u32::from(s[3]);
@@ -1052,7 +1054,19 @@ fn resize_premultiplied(img: &image::RgbaImage, w: u32, h: u32) -> image::RgbaIm
         }
         d.0[3] = ((a + 128) / 257).min(255) as u8;
     }
-    res
+    Ok(res)
+}
+
+/// Whether resampling a `sw` × `sh` image to `w` × `h` fits in [`MAX_RASTER_ALLOC`]: the source and
+/// its weighted 16-bit copy (12 bytes a pixel), the resampler's float rows between its two passes
+/// (16 bytes a pixel, `sw` × `h`) and the 16-bit and 8-bit results (12 bytes a pixel of `w` × `h`).
+pub(crate) fn check_resample_size(sw: u32, sh: u32, w: u32, h: u32) -> Result<()> {
+    let (sw, sh, w, h) = (u64::from(sw), u64::from(sh), u64::from(w), u64::from(h));
+    let bytes = (sw * sh).saturating_mul(12).saturating_add((sw * h).saturating_mul(16)).saturating_add((w * h).saturating_mul(12));
+    if bytes > crate::cmd::fileio::MAX_RASTER_ALLOC {
+        return Err(bad("object.cropImage", format!("an image of {sw} × {sh} pixels is too large to resample")));
+    }
+    Ok(())
 }
 
 /// `img` as PNG bytes.
@@ -1118,7 +1132,7 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
             Some(t) => {
                 let (cw, ch) = cut.dimensions();
                 let (w, h) = ((r.width() * t).round().max(1.0) as u32, (r.height() * t).round().max(1.0) as u32);
-                let resized = resize_premultiplied(&cut, w, h);
+                let resized = resize_premultiplied(&cut, w, h)?;
                 (resized, xf * Affine::scale_non_uniform(f64::from(cw) / f64::from(w), f64::from(ch) / f64::from(h)))
             }
             None => (cut, xf),
@@ -1167,9 +1181,11 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     // fitted to the box, so the image keeps its size.
     let (png, w, h, xf) = match target {
         Some(t) => {
-            let drawn = image::load_from_memory(&png).map_err(|e| bad(C, e.to_string()))?.to_rgba8();
+            let drawn = image::load_from_memory(&png).map_err(|e| bad(C, e.to_string()))?.into_rgba8();
+            // Only the decoded pixels are held while they are resampled.
+            drop(png);
             let (tw, th) = ((r.width() * t).round().max(1.0) as u32, (r.height() * t).round().max(1.0) as u32);
-            let resized = resize_premultiplied(&drawn, tw, th);
+            let resized = resize_premultiplied(&drawn, tw, th)?;
             let xf = Affine::translate(r.origin().to_vec2()) * Affine::scale_non_uniform(r.width() / f64::from(tw), r.height() / f64::from(th));
             (encode_png(&resized)?, tw, th, xf)
         }

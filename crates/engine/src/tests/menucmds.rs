@@ -5542,6 +5542,22 @@ fn crop_image_trim_checks_the_rgba_size_before_decoding() {
 }
 
 #[test]
+fn crop_image_resampling_is_held_to_the_raster_allowance() {
+    use crate::cmd::menucmds::check_resample_size;
+    let max = crate::cmd::fileio::MAX_RASTER_ALLOC;
+    // 40 bytes a pixel resampled to the same size (12 + 16 + 12).
+    let side = ((max / 40) as f64).sqrt() as u32;
+    assert!(check_resample_size(side, side, side, side).is_ok());
+    let e = check_resample_size(side + 1, side + 1, side + 1, side + 1).unwrap_err().to_string();
+    assert!(e.contains(&format!("an image of {0} × {0} pixels is too large to resample", side + 1)), "{e}");
+    // A large source counts even when the result is small.
+    let wide = ((max / 12) as f64).sqrt() as u32 + 1;
+    assert!(check_resample_size(wide, wide, 1, 1).is_err());
+    assert!(check_resample_size(u32::MAX, u32::MAX, u32::MAX, u32::MAX).is_err());
+    assert!(check_resample_size(100, 100, 50, 50).is_ok());
+}
+
+#[test]
 fn crop_image_trim_leaves_a_cmyk_image_alone() {
     // CMYK images keep their ink amounts and have no alpha: nothing to cut, and not an error.
     let inks = vectorcraft_doc::cmyk::Inks::new(4, 2, [255, 0, 0, 0].repeat(8)).unwrap();
