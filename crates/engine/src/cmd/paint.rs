@@ -217,7 +217,8 @@ impl Session {
     /// would edit are read in order (a group without an active Appearance row stands for its
     /// contents), and the first that exists answers. `None` with nothing selected, for an object
     /// selected in a symbol instance, while the Type tool has characters selected, and when only
-    /// type characters or objects without that item are selected.
+    /// type characters, objects without that item or the art of graph designs in a graph series
+    /// are selected.
     pub fn proxy_opacity(&self, stroke: bool) -> Option<f32> {
         let st = self.active()?;
         if st.selection.symbol_part.is_some() {
@@ -242,16 +243,22 @@ impl Session {
             if stroke { n.appearance.stroke_at(item).map(|s| s.opacity) } else { n.appearance.fill_at(item).map(|f| f.opacity) }
         };
         let subjects = st.selection.subjects();
+        // The command leaves out the art of a graph design in a series, which the graph draws again
+        // from the design, and a series group stands for the paths directly in it
+        // (graph::paint_targets).
+        let editable = |id: &&NodeId| !super::graph::is_design_art(&st.doc, **id);
         // As the command picks its rows (ItemTarget::of_kind): the active item when it is a row of
         // this kind in the first selected object's stack, read in the selected objects' own
-        // stacks; else the topmost one of the painted leaves (a group's contents).
-        let first = subjects.first().and_then(|id| st.doc.node(*id));
+        // stacks; else the topmost one of the painted leaves (a group's contents). A row of a
+        // graph design's art selected first stands for nothing (item_target_at).
+        let first = subjects.first().filter(editable).and_then(|id| st.doc.node(*id));
         let active = item.filter(|i| first.and_then(|n| n.appearance.items.get(*i)).is_some_and(|it| it.is_fill() == !stroke));
         if active.is_some() {
-            return subjects.iter().filter_map(|id| st.doc.node(*id)).find_map(|n| of(n, active));
+            let targets = super::graph::series_group_marks_where(&st.doc, subjects, |n| n.extras().series_index.is_some());
+            return targets.iter().filter(editable).filter_map(|id| st.doc.node(*id)).find_map(|n| of(n, active));
         }
         let leaves = super::leaf_targets(self, subjects).ok()?;
-        leaves.iter().filter_map(|id| st.doc.node(*id)).find_map(|n| of(n, None))
+        leaves.iter().filter(editable).filter_map(|id| st.doc.node(*id)).find_map(|n| of(n, None))
     }
 
     pub(crate) fn remember_paint_now(&mut self, p: &Paint) {
@@ -553,10 +560,8 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
 fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity: Option<f32>, fill: bool) -> Result<Value> {
     let cmd = if fill { "paint.setFill" } else { "paint.setStroke" };
     let focus = switch_or(p, "focus", true, cmd)?;
-    let span = match &paint {
-        Some(paint) => spans_targets(p, paint).map_err(|e| bad(cmd, e))?,
-        None => false,
-    };
+    // An opacity alone places no gradient, so `span` may only be "object" with it.
+    let span = spans_targets(p, paint.as_ref().unwrap_or(&Paint::None)).map_err(|e| bad(cmd, e))?;
     // Characters selected with the Type tool take the paint, not the whole type object (#1063).
     if p.get("ids").is_none()
         && p.get("id").is_none()
