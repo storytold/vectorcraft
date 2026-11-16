@@ -70,6 +70,11 @@ rustix = { workspace = true, features = ["std", "process"] }
 same-file = "1.0.6"
 
 [dev-dependencies]
+# vectorcraft-doc's Group 3 TIFF reader before craft-stream-codecs, the reference
+# tests/group3_reference.rs compares it with.
+hayro-ccitt = { workspace = true }
+tiff = { workspace = true }
+craft-stream-codecs = { workspace = true }
 vectorcraft-affinity = { workspace = true, features = ["synth"] }
 crc32fast = { workspace = true }
 vectorcraft-testkit = { workspace = true }
