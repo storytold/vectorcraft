@@ -449,6 +449,30 @@ fn first_baseline_choices_are_in_complete_catalogs() {
     assert!(missing.is_empty(), "{missing:?}");
 }
 
+/// Each catalog's Saved View N and Saved Selection N rows carry the number N, and no two of a
+/// catalog's saved views or saved selections show one name, whatever digits the language uses.
+#[test]
+fn numbered_saved_views_and_selections_keep_their_number() {
+    let mut bad = vec![];
+    for lang in LANGUAGES.iter().filter(|lang| !lang.source.is_empty()) {
+        for kind in ["Saved View", "Saved Selection"] {
+            let mut seen = std::collections::HashMap::new();
+            for n in 1..=25 {
+                let source = format!("{kind} {n}");
+                let Some(row) = lang.catalog().plain(&source) else { continue };
+                let numbers: Vec<&str> = row.split(|c: char| !c.is_ascii_digit()).filter(|s| !s.is_empty()).collect();
+                if !numbers.is_empty() && numbers != [n.to_string().as_str()] {
+                    bad.push(format!("{}: {source} -> {row}", lang.code));
+                }
+                if let Some(earlier) = seen.insert(row, source.clone()) {
+                    bad.push(format!("{}: {earlier} and {source} both show {row}", lang.code));
+                }
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
 /// The Objects on Path Options section's Detach button, its undo step and the message for a
 /// Detach with no object chosen.
 #[test]

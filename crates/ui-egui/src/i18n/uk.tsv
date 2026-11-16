@@ -3328,8 +3328,12 @@ digits	Malayalam	Малаялам
 	Filter Layers Panel Rows	Фільтрувати рядки панелі «Шари»
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` позначає змінені параметри: збережіть набір під іншим ім’ям
 @msg	`{key}` must be an array of these names: {_1}	`{key}` має бути масивом цих назв: {_1}
-	Search commands and tools	Пошук команд та інструментів
-	Search commands and tools…	Пошук команд та інструментів…
+	Search commands, tools, panels and effects	Пошук команд, інструментів, панелей та ефектів
+	Search commands, tools, panels and effects…	Пошук команд, інструментів, панелей та ефектів…
+	No commands match	Немає відповідних команд
+	{pos} of {total}: {name}	{pos} з {total}: {name}
+@plural	{n} result|{n} results	{n} результат|{n} результати|{n} результатів
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} з {n} результату. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.
 	Recent Commands	Нещодавні команди
 	No recent commands	Немає нещодавніх команд
 	Search Commands…	Пошук команд…
