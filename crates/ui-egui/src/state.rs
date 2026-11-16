@@ -692,6 +692,9 @@ pub struct UiState {
     /// Type → Recent Fonts, most recent first.
     #[serde(default)]
     pub recent_fonts: Vec<String>,
+    /// Help › Search Commands' Recent Commands list: the ids of the last picks, most recent first.
+    #[serde(default)]
+    pub recent_commands: Vec<String>,
     /// Families starred in the font menus (the ★ filter shows only these).
     #[serde(default)]
     pub favorite_fonts: Vec<String>,
@@ -1228,6 +1231,7 @@ impl Default for UiState {
             workspace_changes: vec![],
             recent_files: vec![],
             recent_fonts: vec![],
+            recent_commands: vec![],
             favorite_fonts: vec![],
             engine_prefs: Value::Null,
             color_guide: Default::default(),

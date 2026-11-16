@@ -59,7 +59,7 @@ mod cursor;
 mod input;
 mod readout;
 
-pub use context::{GlyphSnap, MarqueeMode, PaintDefaults, PixelOp, PixelSnap, ScreenFrame, ToolContext};
+pub use context::{GlyphSnap, MarqueeMode, PaintDefaults, PixelOp, PixelSnap, ScreenFrame, ToolContext, ordinary_isolation};
 pub use cursor::Cursor;
 pub use input::{Action, Mods, PenPose, PointerEvent, PointerKind, ToolKey};
 pub use readout::Readout;
@@ -73,10 +73,13 @@ pub enum Overlay {
     SelectionMarquee { rect: Rect, enclosed: bool, pointer: Point },
     /// A path preview (e.g. pen rubber band) in a colour (RGB).
     Path { path: BezPath, color: [u8; 3], width: f32, dashed: bool },
-    /// A solid path preview that later calls return again, as the same shared `path`, for as long
-    /// as it does not change (the settled outline of a long Blob Brush or Eraser drag). The host
-    /// can keep what it built to draw it while `path` is the same allocation.
-    SharedPath { path: std::sync::Arc<BezPath>, color: [u8; 3], width: f32 },
+    /// A path preview that later calls return again, as the same shared `path`, for as long as it
+    /// does not change (the settled outline of a long Blob Brush or Eraser drag, the pieces of a long
+    /// drag's line). The host can keep what it built to draw it while `path` is the same allocation.
+    /// With `dash`, it is dashed as a dashed [`Overlay::Path`] is, from `dash` document units along
+    /// the dash pattern: the pieces of one line, each starting where the one before it ends, dash
+    /// as the whole line does.
+    SharedPath { path: std::sync::Arc<BezPath>, color: [u8; 3], width: f32, dash: Option<f64> },
     /// A line segment (smart guide, handle line).
     Line { a: Point, b: Point, color: [u8; 3], dashed: bool },
     /// An anchor square: filled = selected.
@@ -291,8 +294,8 @@ pub trait Tool: Send {
     /// another document became active. The Blend tool drops its first pick and stops adding to the
     /// blend it just made.
     fn history_moved(&mut self) {}
-    /// A press on the canvas went to the view tools (held Space, the middle button) and not to the
-    /// tool. The Live Paint Bucket counts it among the clicks a triple-click compares.
+    /// A press on the canvas did not reach the tool: it went to the view tools (held Space, the
+    /// middle button), or with Cmd/Ctrl held to the selection tool the session lends. The Live Paint Bucket counts it among the clicks a triple-click compares.
     fn press_elsewhere(&mut self) {}
     /// Time passes while the pointer button is held (`dt` seconds since the last tick, whether or
     /// not the pointer moved): tools that keep working while the brush holds still (Twirl, Pucker,

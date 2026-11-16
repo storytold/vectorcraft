@@ -344,5 +344,9 @@ pub(super) fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, ids: &[&str],
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let (format, path) = (d.str("format"), d.str("path"));
     app.ui.dialog = None;
-    io::export(app, Some(&format), Some(path), &super::export_as::exported(d, form::params(d)))
+    let mut params = form::params(d);
+    if format == "psd" {
+        psd_options::drop_unused(&mut params);
+    }
+    io::export(app, Some(&format), Some(path), &super::export_as::exported(d, params))
 }
