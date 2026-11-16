@@ -167,7 +167,7 @@ mod tests {
     fn every_tool_takes_the_options_it_reports() {
         const TYPE: &[&str] = &["type", "areaType", "typeOnPath", "verticalType", "verticalAreaType", "verticalTypeOnPath"];
         const READ_ONLY: &[(&[&str], &[&str])] = &[
-            (&["directSelection", "groupSelection", "lasso", "mesh", "magicWand"], &["meshPoints"]),
+            (&["directSelection", "groupSelection", "lasso", "polygonalLasso", "mesh", "magicWand"], &["meshPoints"]),
             (TYPE, &["editing"]),
             (&["puppetWarp"], &["pins", "selected"]),
             // With nothing queued, `current` (0) is no file's index either.
