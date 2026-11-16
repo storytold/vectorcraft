@@ -8888,7 +8888,10 @@ previews one slice; `image: true` adds the file; `warnings` holds the export's w
 Presets: `webExport.presets.list` (built-in ones, then saved ones), `webExport.presets.save {name, newName?, …settings}`,
 `webExport.presets.delete {name}`; any name works as `preset` in the other commands (its settings, then the keys
 given). `webExport.settings {…}` remembers the settings the dialog opens on (`{}` reads them, `reset: true` restores the
-defaults); presets and remembered settings are preferences.
+defaults); presets and remembered settings are preferences. While Alt (Option on macOS) is held, the dialog's Cancel
+button reads Reset. Reset puts the remembered settings (the defaults when none are remembered) back on the document's
+active artboard, drops a pending `preset`, keeps the view, zoom, connection speed and `path`, remembers and writes
+nothing, and keeps the dialog open; `ui.dialogReset` does the same.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.exportForWeb.preview","params":{"format":"gif","colors":32,"dither":"none"}}}
