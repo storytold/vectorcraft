@@ -930,12 +930,16 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             // keep the highlighted result in view.
             let resized = (view - last_view).abs() > 0.5;
             // Screen readers stay on the field: its description names the highlighted result and
-            // its place among every match, as the footer counts them.
+            // its place among every match, as the footer counts them, and on a second line why it
+            // can't run now when it can't.
             if let Some(e) = matches.get(sel) {
                 let rank = if sel + 1 == matches.len() { kept.unwrap_or(sel) } else { sel };
                 let pos = (rank + 1).to_string();
                 let of = total.to_string();
-                let said = crate::i18n::fmt(tl!("{pos} of {total}: {name}"), &[("pos", &pos), ("total", &of), ("name", &row_label(e))]);
+                let mut said = crate::i18n::fmt(tl!("{pos} of {total}: {name}"), &[("pos", &pos), ("total", &of), ("name", &row_label(e))]);
+                if let Some(why) = availability.why(app, &e.id) {
+                    said = format!("{said}\n{why}");
+                }
                 ui.ctx().accesskit_node_builder(r.id, |node| node.set_description(said));
             }
             if n > 0 {
@@ -1648,7 +1652,7 @@ mod tests {
         assert_eq!(after.get(1).map(String::as_str), Some(tool), "only the pick moves");
         let entries = entries(&open.ctx, Lang::EN);
         let label = entries.iter().find(|e| e.id == effect).map(row_label).unwrap();
-        assert_eq!(field_description(&nodes), format!("1 of {}: {label}", after.len()));
+        assert_eq!(field_place(&nodes), format!("1 of {}: {label}", after.len()));
         open.press(egui::Key::Enter, 1);
         assert_eq!(open.app.ui.recent_commands, [effect], "Enter ran the effect again");
     }
@@ -2466,6 +2470,12 @@ mod tests {
         field.description().unwrap_or_default().to_string()
     }
 
+    /// The first line of the search field's description: the highlighted result's place and name,
+    /// without the reason a result that can't run now adds under it.
+    fn field_place(nodes: &[egui::accesskit::Node]) -> String {
+        field_description(nodes).lines().next().unwrap_or_default().to_string()
+    }
+
     const WINDOW: egui::Vec2 = egui::vec2(1280.0, 900.0);
 
     /// Each result is a 20-point row, rows touch, and 12 show at once; the popup is shorter than
@@ -2660,7 +2670,7 @@ mod tests {
         let lit: Vec<String> = rows(&nodes).into_iter().filter(|r| r.1).map(|r| r.0).collect();
         let label = entries.iter().find(|e| e.id == listed[3]).map(row_label).unwrap();
         assert_eq!(lit, std::slice::from_ref(&label));
-        assert_eq!(field_description(&nodes), format!("4 of {}: {label}", matching(&entries, "select", &[]).len()));
+        assert_eq!(field_place(&nodes), format!("4 of {}: {label}", matching(&entries, "select", &[]).len()));
     }
 
     /// A name too long for its row is cut short with "…" and stays inside the width it is given.
@@ -2768,6 +2778,9 @@ mod tests {
         assert_eq!(ungroup.description(), Some(why.as_str()));
         let footer_says = |nodes: &[egui::accesskit::Node]| labels(nodes).contains(&why);
         assert!(footer_says(&nodes), "{:?}", labels(&nodes));
+        // The arrow keys leave screen readers on the search field, so its description says why too.
+        let place = format!("{} of {}: {name}", open.highlighted() + 1, order.len());
+        assert_eq!(field_description(&nodes), format!("{place}\n{why}"));
         let dimmed_rows: Vec<String> = rows(&nodes).into_iter().map(|r| r.0).collect();
 
         open.app.run("select.all", json!({})).unwrap();
@@ -2775,6 +2788,7 @@ mod tests {
         let ungroup = row_named(&nodes, &name);
         assert!(!ungroup.is_disabled() && ungroup.description().is_none(), "{ungroup:?}");
         assert!(!footer_says(&nodes), "{:?}", labels(&nodes));
+        assert_eq!(field_description(&nodes), place);
         // Whether a result can run never moves it.
         assert_eq!(open.listed(), order);
         assert_eq!(rows(&nodes).into_iter().map(|r| r.0).collect::<Vec<_>>(), dimmed_rows);
@@ -2894,19 +2908,19 @@ mod tests {
         // More results match than the list holds: the place counts every match, as the footer does.
         let total = matching(&entries, "show panel", &[]).len();
         assert!(total > MAX_RESULTS && listed.len() == MAX_RESULTS, "{total}");
-        assert_eq!(field_description(&nodes), format!("1 of {total}: {}", label(0)));
+        assert_eq!(field_place(&nodes), format!("1 of {total}: {}", label(0)));
         let lit: Vec<String> = rows(&nodes).into_iter().filter(|r| r.1).map(|r| r.0).collect();
         assert_eq!(lit, [label(0)]);
         assert!(labels(&nodes).contains(&format!("50 of {total} results. Keep typing to narrow them.")), "{:?}", labels(&nodes));
         let nodes = open.press(egui::Key::ArrowDown, 1);
-        assert_eq!(field_description(&nodes), format!("2 of {total}: {}", label(1)));
+        assert_eq!(field_place(&nodes), format!("2 of {total}: {}", label(1)));
         // Fewer results match than the list holds.
         let mut open = Open::new("eyedropper", WINDOW);
         let n = open.listed().len();
         assert!((1..MAX_RESULTS).contains(&n), "{n}");
         let first = entries.iter().find(|e| e.id == open.listed()[0]).map(row_label).unwrap();
         let nodes = open.frame(vec![]);
-        assert_eq!(field_description(&nodes), format!("1 of {n}: {first}"));
+        assert_eq!(field_place(&nodes), format!("1 of {n}: {first}"));
         assert!(labels(&nodes).contains(&footer(n, n)), "{:?}", labels(&nodes));
     }
 
@@ -3293,6 +3307,6 @@ mod tests {
         assert_eq!((sel, &now), (MAX_RESULTS - 1, &id), "the highlight stays on its result, in the last row");
         let label = row_label(ranked[MAX_RESULTS]);
         assert!(rows(&nodes).iter().any(|r| r.1 && r.0 == label), "its row is drawn and highlighted");
-        assert_eq!(field_description(&nodes), format!("{} of {}: {label}", MAX_RESULTS + 1, ranked.len()));
+        assert_eq!(field_place(&nodes), format!("{} of {}: {label}", MAX_RESULTS + 1, ranked.len()));
     }
 }
