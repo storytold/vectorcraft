@@ -613,6 +613,18 @@ font-technology	Variable	Μεταβλητές
 	Copy Width Point	Αντιγραφή σημείου πλάτους
 	Copyright	Πνευματικά δικαιώματα
 	Copyright Info URL:	URL πληροφοριών πνευματικών δικαιωμάτων:
+	Save Metadata Template…	Αποθήκευση προτύπου μεταδεδομένων…
+	Import Options	Επιλογές εισαγωγής
+	Clear existing fields and use the template's	Απαλοιφή των υπαρχόντων πεδίων και χρήση εκείνων του προτύπου
+	Keep existing fields, but replace those the template has	Διατήρηση των υπαρχόντων πεδίων, αλλά αντικατάσταση όσων έχει το πρότυπο
+	Keep existing fields, but append those the template has	Διατήρηση των υπαρχόντων πεδίων, αλλά προσθήκη όσων έχει το πρότυπο
+@msg	the template name can't be empty	το όνομα του προτύπου δεν μπορεί να είναι κενό
+@msg	the template name isn't usable as a file name	το όνομα του προτύπου δεν μπορεί να χρησιμοποιηθεί ως όνομα αρχείου
+@msg	no metadata templates folder here	δεν υπάρχει φάκελος προτύπων μεταδεδομένων εδώ
+@msg	give `name` or `path`, not both	δώστε `name` ή `path`, όχι και τα δύο
+@msg	give one of `path`, `name` and `data`	δώστε ένα από τα `path`, `name` και `data`
+@msg	mode must be replace, keep or append	η λειτουργία πρέπει να είναι replace, keep ή append
+@msg	the file is not an XMP metadata template	το αρχείο δεν είναι πρότυπο μεταδεδομένων XMP
 	Copyright Notice:	Σημείωση πνευματικών δικαιωμάτων:
 	Copyright Status:	Κατάσταση πνευματικών δικαιωμάτων:
 	Copyright Symbol	Σύμβολο πνευματικών δικαιωμάτων
@@ -2221,6 +2233,9 @@ font-technology	Variable	Μεταβλητές
 	Superscript	Εκθέτης
 	Superscript:	Εκθέτης:
 	Stylistic Alternates	Εναλλακτικοί χαρακτήρες στυλ
+	Ligatures	Συμπλέγματα χαρακτήρων
+	Ornaments	Κοσμήματα
+	Figures	Αριθμοί
 	Swash	Διακοσμητικά τελειώματα
 	Swatches	Δείγματα χρωμάτων
 	New Group	Νέα ομάδα
@@ -2495,6 +2510,27 @@ axis	Both	Και τα δύο
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: ένα παράθυρο διαλόγου δεν μπορεί να ανοίξει μέσα σε επανάκληση ενσωματωμένης συνάρτησης, getter, μετατροπή ή αρχείο που εκτελεί το $.evalFile· καλέστε το από τον κώδικα του ίδιου του σεναρίου
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: η επόμενη απάντηση στο `answers` είναι για το {_1}, όχι για το {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: το `answers` δεν έχει άλλη απάντηση για αυτό το παράθυρο διαλόγου
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	Το `answers` περιέχει {n} απάντηση που δεν χρησιμοποίησε το σενάριο|Το `answers` περιέχει {n} απαντήσεις που δεν χρησιμοποίησε το σενάριο
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	Το {_1} άφησε {n} αντικείμενο κάτω από το πινέλο χωρίς αλλαγή ({_2}): αναδιαμορφώνει μόνο διαδρομές|Το {_1} άφησε {n} αντικείμενα κάτω από το πινέλο χωρίς αλλαγή ({_2}): αναδιαμορφώνει μόνο διαδρομές
+liquify-tool	Warp	εργαλείο Παραμόρφωση
+liquify-tool	Twirl	εργαλείο Στροβιλισμός
+liquify-tool	Pucker	εργαλείο Συρρίκνωση
+liquify-tool	Bloat	εργαλείο Διόγκωση
+liquify-tool	Scallop	εργαλείο Κυματιστά άκρα
+liquify-tool	Crystallize	εργαλείο Κρυσταλλοποίηση
+liquify-tool	Wrinkle	εργαλείο Πτυχώσεις
+liquify-kind	graphs	γραφήματα
+liquify-kind	type	κείμενο
+liquify-kind	symbols	σύμβολα
+liquify-kind	images	εικόνες
+liquify-kind	meshes	πλέγματα
+liquify-kind	envelopes	περιβλήματα
+liquify-kind	repeats	επαναλήψεις
+liquify-kind	placed documents	τοποθετημένα έγγραφα
+liquify-kind	blends	αναμείξεις
+liquify-list-two	{0}, {1}	{0} και {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} και {1}
 @msg	vc.document{place} is too large for a script	το vc.document{place} είναι πολύ μεγάλο για σενάριο
 @msg	vc.log: the log of this run is full	vc.log: το αρχείο καταγραφής αυτής της εκτέλεσης είναι γεμάτο
 @msg	this function's script run has ended	η εκτέλεση σεναρίου αυτής της συνάρτησης έχει τελειώσει

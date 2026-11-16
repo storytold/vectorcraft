@@ -608,6 +608,9 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == "preferences" {
         crate::prefs_dialog::note_set(d, &field, &value);
     }
+    if d.kind == new_document::KIND || new_document::popup_open(d) {
+        new_document::note_set(d, &field);
+    }
     // Create Object Mosaic's Resize Using Percentages shows the new size the other way, as its checkbox does.
     if d.kind == object_mosaic::KIND && field == "percentages" {
         object_mosaic::set_percentages(d, &value);

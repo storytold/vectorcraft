@@ -3310,6 +3310,85 @@ fn flare_ring_seed_moves_only_the_rings() {
     assert_eq!(s.doc().unwrap().history.undo.len(), undo);
 }
 
+/// `shape.ellipse` without `anchors`, or with 4, draws the live ellipse it always drew.
+#[test]
+fn ellipse_with_four_anchors_is_the_live_ellipse() {
+    let mut s = session();
+    let draw = |s: &mut Session, extra: Option<u64>| {
+        let mut p = json!({"x": 40, "y": 30, "width": 120, "height": 80});
+        if let Some(n) = extra {
+            p["anchors"] = json!(n);
+        }
+        let id = NodeId(s.execute("shape.ellipse", &p).unwrap()["id"].as_u64().unwrap());
+        s.doc().unwrap().doc.node(id).unwrap().clone()
+    };
+    let (plain, four) = (draw(&mut s, None), draw(&mut s, Some(4)));
+    for n in [&plain, &four] {
+        assert!(matches!(n.live_shape(), Some(vectorcraft_doc::LiveShape::Ellipse { .. })), "{:?}", n.live_shape());
+        assert_eq!(n.path_data().unwrap().anchor_count(), 4);
+    }
+    assert_eq!(plain.path_data(), four.path_data());
+    assert_eq!(plain.live_shape(), four.live_shape());
+}
+
+/// Any other count draws a closed plain path of that many smooth anchors on the ellipse, its
+/// bounds the typed size, as one undo step.
+#[test]
+fn ellipse_anchors_draw_that_many_anchors_on_the_ellipse() {
+    let mut s = session();
+    let (x, y, w, h) = (40.0, 30.0, 120.0, 80.0);
+    let (c, rx, ry) = (Point::new(x + w / 2.0, y + h / 2.0), w / 2.0, h / 2.0);
+    for n in [2u64, 3, 5, 6, 8] {
+        let undo = s.doc().unwrap().history.undo.len();
+        let id = NodeId(s.execute("shape.ellipse", &json!({"x": x, "y": y, "width": w, "height": h, "anchors": n})).unwrap()["id"].as_u64().unwrap());
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{n}: one undo step");
+        let node = s.doc().unwrap().doc.node(id).unwrap();
+        assert!(node.live_shape().is_none(), "{n}: a plain path");
+        let path = node.path_data().unwrap();
+        assert_eq!(path.subpaths.len(), 1);
+        let sp = &path.subpaths[0];
+        assert!(sp.closed, "{n}");
+        assert_eq!(sp.anchors.len() as u64, n);
+        for a in &sp.anchors {
+            assert_eq!(a.kind, vectorcraft_geom::AnchorKind::Smooth, "{n}");
+            let on = ((a.p.x - c.x) / rx).powi(2) + ((a.p.y - c.y) / ry).powi(2);
+            assert!((on - 1.0).abs() < 0.01, "{n}: {:?} is off the ellipse ({on})", a.p);
+        }
+        let b = path.bounds().unwrap();
+        for (got, want) in [(b.x0, x), (b.y0, y), (b.x1, x + w), (b.y1, y + h)] {
+            assert!((got - want).abs() < 1e-6, "{n}: bounds {b:?}");
+        }
+    }
+    // The first anchor is the left one, and they run clockwise on screen, as the live ellipse's do.
+    let id = NodeId(s.execute("shape.ellipse", &json!({"x": x, "y": y, "width": w, "height": h, "anchors": 8})).unwrap()["id"].as_u64().unwrap());
+    let sp = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].clone();
+    assert!(sp.anchors[0].p.distance(Point::new(x, c.y)) < 1e-6, "{:?}", sp.anchors[0].p);
+    assert!(sp.anchors[2].p.distance(Point::new(c.x, y)) < 1e-6, "{:?}", sp.anchors[2].p);
+}
+
+/// An `anchors` that is not a whole number from 2 to 1000 is refused, and nothing is drawn.
+#[test]
+fn ellipse_refuses_a_bad_anchor_count() {
+    let mut s = session();
+    let undo = s.doc().unwrap().history.undo.len();
+    let range = |got: &str| format!("`anchors` must be a whole number between 2 and 1000 (got {got})");
+    for (bad, want) in [
+        (json!(0), range("0")),
+        (json!(1), range("1")),
+        (json!(2.5), range("2.5")),
+        (json!(-3), range("-3")),
+        (json!(1001), range("1001")),
+        (json!("x"), "`anchors` must be a number, not \"x\"".to_string()),
+        (json!("6"), "`anchors` must be a number, not \"6\"".to_string()),
+        (json!(true), "`anchors` must be a number, not true".to_string()),
+    ] {
+        let e = s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 50, "height": 50, "anchors": bad})).unwrap_err().to_string();
+        assert!(e.contains(&want), "{bad}: {e}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    assert!(s.doc().unwrap().doc.layers[0].children().unwrap().is_empty());
+}
+
 /// Through the session, Ctrl/Cmd in the Flare tool's center drag keeps the center's size while the
 /// drag sizes the halo, and the flare drawn keeps both.
 #[test]
