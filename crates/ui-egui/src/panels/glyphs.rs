@@ -2232,10 +2232,15 @@ mod tests {
         use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
         let [_, u2, ..] = unencoded_glyphs().expect("unencoded glyphs");
         FontDb::global().add_font(alternates_font(true).expect("the test font builds"));
+        let face = FontDb::global().face(alternates_family(true), "Regular").expect("the test face");
+        let gid = |c| face.chars().into_iter().find(|(x, _)| *x == c).map(|(_, g)| g).expect("a glyph");
+        let pt = |c| face.advance(gid(c)) * 12.0 / face.units_per_em();
+        // The first frame holds the line "a xx " and not the next word. Every character is in the
+        // test font, so no fallback face measures the line.
+        let width = pt('a') + 2.0 * pt(' ') + 2.0 * pt('x') + pt('x') / 2.0;
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
-        // The first frame is wide enough for "a" and one ideograph only.
-        let area = json!({"x": 10, "y": 10, "text": "a中中中", "size": 12, "area": {"width": 20, "height": 16}});
+        let area = json!({"x": 10, "y": 10, "text": "a xx xx", "size": 12, "area": {"width": width, "height": 16}});
         let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
         let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
         for id in [a, b] {
@@ -2245,17 +2250,17 @@ mod tests {
             NodeKind::Text(t) => t.plain_text(),
             _ => panic!("text"),
         };
-        assert_eq!((plain(&app, a), plain(&app, b)), ("a中".to_string(), "中中".to_string()));
+        assert_eq!((plain(&app, a), plain(&app, b)), ("a xx ".to_string(), "xx".to_string()));
         app.run("select.set", json!({"ids": [a]})).unwrap();
         app.session.select_tool("type", Default::default()).unwrap();
-        let end = "a中".len();
+        let end = "a xx ".len();
         app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": end, "caret": end}));
         let ctx = egui::Context::default();
         set_pstate(&ctx, "gl-subset", 1usize);
         let undo = app.session.active().unwrap().history.undo.len();
         let popup = open_corner_popup(&ctx, &mut app);
         click(&ctx, &mut app, popup[3].center());
-        assert_eq!((plain(&app, a), plain(&app, b)), ("a中".to_string(), "a中中".to_string()), "status: {}", app.ui.status);
+        assert_eq!((plain(&app, a), plain(&app, b)), ("a xx ".to_string(), "axx".to_string()), "status: {}", app.ui.status);
         assert_eq!(glyph_ids(&app, &json!(b))[0], u2);
         assert_eq!(super::super::character::text_editing(&app), Some((NodeId(b), 1, 1)), "the caret is after the character");
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
