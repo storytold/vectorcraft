@@ -106,8 +106,10 @@ fn closed(segs: &[CubicBez], kind: AnchorKind) -> SubPath {
 
 /// Where the arcs of radius `radius` that bridge circles `a` and `b` lie: the unit vector from
 /// `a`'s center to `b`'s, and on each side the arc's center (`p1`, `p2`) and where it touches `a`
-/// and `b`.
+/// and `b`; and the neck's width where the arcs come nearest each other between the circles
+/// (infinite when that is at the circles).
 struct Touches {
+    waist: f64,
     u: Vec2,
     p1: Point,
     a1: Point,
@@ -157,7 +159,8 @@ fn touches(a: Circle, b: Circle, radius: f64) -> Result<Touches, BridgeError> {
         (p, a.center + (p - a.center) * (a.radius / ra), b.center + (p - b.center) * (b.radius / rb))
     };
     let ((p1, a1, b1), (p2, a2, b2)) = (side(1.0), side(-1.0));
-    Ok(Touches { u, p1, a1, b1, p2, a2, b2 })
+    let waist = if along > 0.0 && along < d { 2.0 * (across - radius) } else { f64::INFINITY };
+    Ok(Touches { waist, u, p1, a1, b1, p2, a2, b2 })
 }
 
 /// The most circles [`bridge_many`] takes.
@@ -236,30 +239,50 @@ pub fn bridge_many(circles: &[Circle], arc: ArcRadius, reach: f64) -> Result<Bri
     if !(reach.is_finite() && reach >= 0.0) || !circles.iter().all(fine) {
         return Err(ManyError::Bad);
     }
-    let (pairs, too_far) = pairs_within(circles, reach, arc)?;
+    let (mut pairs, mut too_far) = pairs_within(circles, reach, arc)?;
+    // Each set of connected circles, under its lowest index, is united at a precision fine enough
+    // for its smallest circle. A neck narrower than twice that would not survive the union, so its
+    // pair gets no bridge; that can split a set and make its precision coarser, so the sets are
+    // found again until no neck is dropped.
+    let (roots, precision) = loop {
+        let mut parent: Vec<usize> = (0..circles.len()).collect();
+        for &((i, j), _) in &pairs {
+            let (ri, rj) = (root(&mut parent, i), root(&mut parent, j));
+            parent[ri.max(rj)] = ri.min(rj);
+        }
+        let roots: Vec<usize> = (0..circles.len()).map(|i| root(&mut parent, i)).collect();
+        let mut precision = vec![DEFAULT_PRECISION; circles.len()];
+        for (&r, c) in roots.iter().zip(circles) {
+            precision[r] = precision[r].min(c.radius * 1e-3);
+        }
+        let thin = |&((i, _), waist): &(Pair, f64)| waist < 2.0 * precision[roots[i]];
+        if !pairs.iter().any(thin) {
+            break (roots, precision);
+        }
+        for &(pair, _) in pairs.iter().filter(|&p| thin(p)) {
+            too_far = Some(too_far.map_or(pair, |t| t.min(pair)));
+        }
+        pairs.retain(|p| !thin(p));
+    };
     match (pairs.is_empty(), too_far) {
         (true, Some((i, j))) => return Err(ManyError::Pair(i, j, BridgeError::TooFar)),
         (true, None) => return Err(ManyError::NoneInReach),
         (false, _) => {}
     }
-    // Each set of connected circles, under its lowest index.
-    let mut parent: Vec<usize> = (0..circles.len()).collect();
     let mut necks = Vec::with_capacity(pairs.len());
-    for &(i, j) in &pairs {
+    for &((i, j), _) in &pairs {
         let (a, b) = (circles[i], circles[j]);
         let sp = neck(a, b, arc.between(a, b)).map_err(|e| ManyError::Pair(i, j, e))?;
         necks.push(((i, j), PathData::single(sp)));
-        let (ri, rj) = (root(&mut parent, i), root(&mut parent, j));
-        parent[ri.max(rj)] = ri.min(rj);
     }
     let mut sets: BTreeMap<usize, (Vec<usize>, Vec<&PathData>)> = BTreeMap::new();
     for &((i, j), ref neck) in &necks {
-        let (members, parts) = sets.entry(root(&mut parent, i)).or_default();
+        let (members, parts) = sets.entry(roots[i]).or_default();
         members.extend([i, j]);
         parts.push(neck);
     }
     let mut out = Bridged::default();
-    for (_, (mut members, parts)) in sets {
+    for (set, (mut members, parts)) in sets {
         members.sort_unstable();
         members.dedup();
         // Each circle once, and the necks between them.
@@ -270,9 +293,7 @@ pub fn bridge_many(circles: &[Circle], arc: ArcRadius, reach: f64) -> Result<Bri
             .collect();
         let fills: Vec<(&PathData, FillRule)> = rounds.iter().chain(parts).map(|p| (p, FillRule::NonZero)).collect();
         let smallest = members.iter().filter_map(|&i| circles.get(i)).map(|c| c.radius).fold(f64::INFINITY, f64::min);
-        // Fine enough for the smallest circle, whose bridges are narrower than it.
-        let precision = DEFAULT_PRECISION.min(smallest * 1e-3);
-        let mut outline = try_unite_all_with(&fills, precision).map_err(|_| ManyError::TooComplex)?;
+        let mut outline = try_unite_all_with(&fills, precision[set]).map_err(|_| ManyError::TooComplex)?;
         // Where three bridges' arcs nearly meet, the union leaves a speck of a hole; a contour that
         // encloses a circle is far larger than this.
         let speck = SPECK * PI * smallest * smallest;
@@ -286,6 +307,9 @@ pub fn bridge_many(circles: &[Circle], arc: ArcRadius, reach: f64) -> Result<Bri
 
 /// Two circles' indices, the lower first.
 type Pair = (usize, usize);
+/// What [`pairs_within`] finds: the pairs the arcs can bridge, each with its neck's width, and the
+/// lowest pair too far apart for them.
+type Within = (Vec<(Pair, f64)>, Option<Pair>);
 
 /// The set `i` is in: the lowest index in it, with the path to it shortened on the way.
 fn root(parent: &mut [usize], mut i: usize) -> usize {
@@ -297,11 +321,11 @@ fn root(parent: &mut [usize], mut i: usize) -> usize {
 }
 
 /// Every pair of indices `(i, j)`, `i < j`, ascending, of `circles` whose outlines are at most
-/// `reach` apart and that arcs of `arc` can bridge, and the lowest pair within reach that they
-/// can't because it is too far apart for them. Circles go into a grid of cells as wide as the
-/// farthest two centers within reach can be, so each circle is compared only with those in its own
-/// cell and the eight around it.
-fn pairs_within(circles: &[Circle], reach: f64, arc: ArcRadius) -> Result<(Vec<Pair>, Option<Pair>), ManyError> {
+/// `reach` apart and that arcs of `arc` can bridge, with the width of the neck between them, and
+/// the lowest pair within reach that they can't because it is too far apart for them. Circles go
+/// into a grid of cells as wide as the farthest two centers within reach can be, so each circle is
+/// compared only with those in its own cell and the eight around it.
+fn pairs_within(circles: &[Circle], reach: f64, arc: ArcRadius) -> Result<Within, ManyError> {
     let biggest = circles.iter().map(|c| c.radius).fold(0.0, f64::max);
     let cell = 2.0 * biggest + reach;
     if !(cell.is_finite() && cell > 0.0) {
@@ -325,7 +349,7 @@ fn pairs_within(circles: &[Circle], reach: f64, arc: ArcRadius) -> Result<(Vec<P
                 }
                 // Only the arcs' ends are worked out here; the bridge itself is made later.
                 match touches(c, o, arc.between(c, o)) {
-                    Ok(_) => pairs.push((i, j)),
+                    Ok(t) => pairs.push(((i, j), t.waist)),
                     Err(BridgeError::TooFar) => too_far = Some(too_far.map_or((i, j), |t| t.min((i, j)))),
                     Err(e) => return Err(ManyError::Pair(i, j, e)),
                 }
@@ -336,8 +360,8 @@ fn pairs_within(circles: &[Circle], reach: f64, arc: ArcRadius) -> Result<(Vec<P
             return Err(ManyError::TooManyBridges);
         }
     }
-    pairs.sort_unstable();
-    pairs.dedup();
+    pairs.sort_unstable_by_key(|&(pair, _)| pair);
+    pairs.dedup_by_key(|&mut (pair, _)| pair);
     if pairs.len() > MAX_BRIDGES {
         return Err(ManyError::TooManyBridges);
     }
@@ -662,6 +686,18 @@ mod tests {
         let made = bridge_many(&[a, b, c], ArcRadius::Share(1.0), 10.0).unwrap();
         assert_eq!(made.joined.iter().map(|j| j.members.clone()).collect::<Vec<_>>(), [vec![0, 1]]);
         assert_eq!(made.alone, [2]);
+        // Arcs of radius 10 between circles of radius 10 just under 20√3 apart leave a neck about
+        // 0.00003 pt wide, too thin for the union: that pair is left unbridged too.
+        let (a, b, c) = (circle(0.0, 0.0, 10.0), circle(34.6409, 0.0, 10.0), circle(58.6409, 0.0, 10.0));
+        assert!(smooth_bridge(a, b, 10.0).is_ok(), "two circles alone are bridged");
+        let made = bridge_many(&[a, b, c], ArcRadius::Share(1.0), 20.0).unwrap();
+        assert_eq!(made.joined.iter().map(|j| j.members.clone()).collect::<Vec<_>>(), [vec![1, 2]]);
+        assert_eq!(made.alone, [0]);
+        // Two tiny circles far off are united at a finer precision, which does not change that.
+        let tiny = [circle(500.0, 0.0, 0.01), circle(500.025, 0.0, 0.01)];
+        let made = bridge_many(&[a, b, c, tiny[0], tiny[1]], ArcRadius::Share(1.0), 20.0).unwrap();
+        assert_eq!(made.joined.iter().map(|j| j.members.clone()).collect::<Vec<_>>(), [vec![1, 2], vec![3, 4]]);
+        assert_eq!(made.alone, [0]);
         // 260 touching circles in a row with a wide reach: 33,670 pairs within reach, far more than
         // the bridge limit, but only the 259 touching pairs are near enough for the arcs.
         let row: Vec<Circle> = (0..260).map(|i| circle(f64::from(i) * 20.0, 0.0, 10.0)).collect();
