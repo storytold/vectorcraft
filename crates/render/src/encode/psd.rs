@@ -457,11 +457,13 @@ fn slices(doc: &Document, region: Rect, scale: f64, (w, h): (u32, u32)) -> Resul
             return Err(format!("slice {number} has no finite bounds and can't be written to PSD"));
         }
         let Some(options) = users.get(&id).copied().or_else(|| doc.slice_options(id)) else { continue };
-        let edge = |v: f64, origin: f64, max: u32| ((v - origin) * scale).clamp(0.0, f64::from(max));
-        let (l, t, r, b) = (edge(r.x0, region.x0, w), edge(r.y0, region.y0, h), edge(r.x1, region.x0, w), edge(r.y1, region.y0, h));
-        if !(l < r && t < b) {
+        // The part inside `region`, found before the region is rounded to whole pixels.
+        let (x0, y0, x1, y1) = (r.x0.max(region.x0), r.y0.max(region.y0), r.x1.min(region.x1), r.y1.min(region.y1));
+        if !(x0 < x1 && y0 < y1) {
             continue;
         }
+        let edge = |v: f64, origin: f64, max: u32| ((v - origin) * scale).clamp(0.0, f64::from(max));
+        let (l, t, r, b) = (edge(x0, region.x0, w), edge(y0, region.y0, h), edge(x1, region.x0, w), edge(y1, region.y0, h));
         // Whole pixels, at least one each way.
         let span = |a: f64, b: f64, max: u32| {
             let max = i64::from(max);

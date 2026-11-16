@@ -439,6 +439,17 @@ fn slices_are_cut_to_the_exported_region_in_its_pixels() {
     thin.slices[0].rect = Rect::new(20.0, 5.0, 20.2, 15.0);
     let res = slices_of(&export(&thin, &opts(PsdOptions::default()))).unwrap();
     assert_eq!(res.slices[0].rect, [20, 5, 21, 15]);
+    // The overlap is found before the region is rounded to whole pixels: a slice inside a region
+    // that ends at 10.4 keeps its last pixel, and one past a region that ends at 10.6 isn't written.
+    let o = opts(PsdOptions::default());
+    let mut edge = doc.clone();
+    edge.slices[0].rect = Rect::new(10.1, 5.0, 10.3, 15.0);
+    edge.node_mut(edge.layers[0].children().unwrap()[0].id).unwrap().extras_mut().slice = None;
+    let file = Renderer::new().export_region(&edge, Rect::new(0.0, 0.0, 10.4, 60.0), RasterFormat::Psd, &o).unwrap();
+    assert_eq!(slices_of(&file).unwrap().slices.iter().map(|s| s.rect).collect::<Vec<_>>(), [[9, 5, 10, 15]]);
+    edge.slices[0].rect = Rect::new(10.7, 5.0, 10.9, 15.0);
+    let file = Renderer::new().export_region(&edge, Rect::new(0.0, 0.0, 10.6, 60.0), RasterFormat::Psd, &o).unwrap();
+    assert!(slices_of(&file).is_none());
 }
 
 #[test]
