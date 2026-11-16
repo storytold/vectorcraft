@@ -1098,6 +1098,7 @@ antiAlias	Sharp	Nítido
 	Highlight Size	Tamanho do Realce
 	Blend Steps	Etapas de Mesclagem
 	Shading Color	Cor do Sombreamento
+	Black Overprint	Preto em Sobreimpressão
 	Draw Hidden Faces	Desenhar Faces Ocultas
 	Eyedropper	Conta-gotas
 	Eyedropper Applies:	O Conta-gotas Aplica:
@@ -2533,6 +2534,12 @@ digits	Malayalam	Malaiala
 	Restore	Restaurar
 	Restore Recovered Documents	Restaurar Documentos Recuperados
 	Restore every preference to its default (applied on OK)	Restaurar toda preferência ao padrão (aplicado em OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	A unidade dos novos documentos de tamanhos predefinidos, exceto os tamanhos em pixels, e dos arquivos abertos que não registram nenhuma unidade; escolhê-la aqui e clicar em OK também a define no documento ativo.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	As espessuras de traçado, os traços e as lacunas aparecem nesta unidade, e os números digitados para eles são lidos nela.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Tamanhos de texto, entrelinhamento e deslocamento da linha de base aparecem nesta unidade, e os números digitados para eles são lidos nela.
+	The unit for East Asian type measurements, which no field uses yet.	A unidade das medidas de texto do Leste Asiático, que nenhum campo usa ainda.
+	When on, a number typed without a unit into a field in picas is read in points.	Quando ativado, um número digitado sem unidade em um campo em picas é lido em pontos.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Com ID XML, os nomes dos objetos aparecem como IDs XML em Camadas, Variáveis e Opções de Camada.
 	Reset all preferences to their defaults?	Redefinir todas as preferências para o padrão?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Os padrões são aplicados quando você clica em OK em Preferências. Cancelar ali mantém suas preferências atuais.
 	Restored documents open unsaved: save them to keep them.	Os documentos restaurados abrem sem salvar: salve-os para mantê-los.
@@ -2560,6 +2567,7 @@ digits	Malayalam	Malaiala
 	Roman Hanging Punctuation	Pontuação Pendurada Romana
 	Korean Line Break Anywhere	Quebra de Linha Coreana em Qualquer Lugar
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Configurações de Composição do Leste Asiático
 	Korean Composition Settings	Configurações de Composição Coreana
 	Rotate	Girar
@@ -2725,6 +2733,8 @@ digits	Malayalam	Malaiala
 	Search Commands…	Pesquisar Comandos…
 	Search commands and tools	Pesquisar comandos e ferramentas
 	Search commands and tools…	Pesquisar comandos e ferramentas…
+	Recent Commands	Comandos recentes
+	No recent commands	Nenhum comando recente
 	Secondary	Secundária
 	Section Symbol	Símbolo de Seção
 	Select	Selecionar
@@ -5513,6 +5523,31 @@ variable-list-end	{0}, {1}	{0} e {1}
 @msg	$.evalFile requires a file path	$.evalFile requer um caminho de arquivo
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: o tempo limite deve ser um número finito de milissegundos, 0 ou mais
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: recebe um caminho de arquivo e um tempo limite
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} não está definido
+@msg	cannot read property '{key}' of {base}	não é possível ler a propriedade '{key}' de {base}
+@msg	cannot set property '{key}' of {base}	não é possível gravar a propriedade '{key}' de {base}
+@msg	cannot read a property of {base}	não é possível ler uma propriedade de {base}
+@msg	cannot set a property of {base}	não é possível gravar uma propriedade de {base}
+@msg	cannot define property '{key}': {why}	não é possível definir a propriedade '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	não é possível atribuir à propriedade '{key}': {why}
+@msg	cannot delete property '{key}'	não é possível excluir a propriedade '{key}'
+@msg	cannot declare function {ident}	não é possível declarar a função {ident}
+@msg	invalid assignment target	destino de atribuição inválido
+@msg	the array's length is read-only	o comprimento do array é somente leitura
+@msg	the property cannot be redefined	a propriedade não pode ser redefinida
+@msg	the object is not extensible	o objeto não é extensível
+@msg	the length cannot be redefined	o comprimento não pode ser redefinido
+@msg	it is read-only	ela é somente leitura
+@msg	an element cannot be deleted	um elemento não pode ser excluído
+@msg	it has only a getter	ela tem apenas um getter
+@msg	the value is a primitive	o valor é primitivo
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: linha {line}, coluna {column} de {file}: {e} (lançado)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: linha {line}, coluna {column}: {e} (lançado)
 @msg	{name}: {e} (thrown)	{name}: {e} (lançado)
@@ -7448,6 +7483,24 @@ breakText	Glyphs	Glifos
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandir traços em demarcadores
 @msg	select paths with dashed strokes to expand	selecione demarcadores com traçado tracejado para expandir
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Círculo tangente…
+	Tangent Circle	Círculo tangente
+	Circle:	Círculo:
+@msg	`ids` names an object twice	`ids` indica um objeto duas vezes
+@msg	select two or three paths or compound paths	selecione dois ou três caminhos ou caminhos compostos
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` deve ser de 0.01 a 1000000 pt
+@msg	two shapes need a `radius`	duas formas precisam de um `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	três formas definem o raio sozinhas: omita `radius`
+@msg	`circle` must be from 0 to 64	`circle` deve ser de 0 a 64
+@msg	a shape has no outline	uma forma não tem contorno
+@msg	the shapes are too complex: at most 2000 segments in all	as formas são complexas demais: no máximo 2000 segmentos no total
+@msg	these shapes take too long to search	a busca demora demais para estas formas
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	mais de 64 círculos tocam estas formas: eles podem tocá-las ao longo de uma curva inteira
+@msg	no circle touches these shapes	nenhum círculo toca estas formas
+@msg	`circle` is past the last circle found ({found})	`circle` passa do último círculo encontrado ({found})
+@msg	object {value} is not a path or compound path	o objeto {value} não é um caminho nem um caminho composto
+@msg	these shapes are too small to measure	estas formas são pequenas demais para medir
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Ferramentas de Documento
 	Save a Timestamped Copy	Salvar uma Cópia com Data e Hora

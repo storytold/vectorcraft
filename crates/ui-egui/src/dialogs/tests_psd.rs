@@ -14,8 +14,8 @@ fn psd_options_pick_flat_or_layers_and_the_colour_model() {
     let d = app.ui.dialog.as_ref().unwrap();
     assert_eq!((spec(&d.kind).heading)(d), "PSD Options");
     assert_eq!(
-        (d.str("colorModel"), d.bool("layers"), d.bool("maxEditability"), d.bool("hiddenLayers"), d.bool("embedIcc")),
-        ("rgb".into(), true, false, false, true)
+        (d.str("colorModel"), d.bool("layers"), d.bool("preserveText"), d.bool("maxEditability"), d.bool("hiddenLayers"), d.bool("embedIcc")),
+        ("rgb".into(), true, false, false, false, true)
     );
     assert!(tiff_bmp_tga::keeps_alpha("psd", d), "layers keep transparency");
     frame(&mut app);
@@ -30,9 +30,11 @@ fn psd_options_pick_flat_or_layers_and_the_colour_model() {
     assert_eq!(i16::from_be_bytes([psd[at + 8], psd[at + 9]]), -3);
     assert!(app.ui.dialog.is_none());
 
-    // Flat: flattened on white, so the background list starts at White.
+    // Flat: flattened on white, so the background list starts at White. Preserve Text
+    // Editability, still ticked, isn't sent: the export refuses it without layers.
     app.run("file.exportAs", json!({"format": "psd"})).unwrap();
     confirm(&mut app).unwrap();
+    set(&mut app, "preserveText", json!(true));
     set(&mut app, "layers", json!(false));
     set(&mut app, "colorModel", json!("gray"));
     assert!(!tiff_bmp_tga::keeps_alpha("psd", app.ui.dialog.as_ref().unwrap()));

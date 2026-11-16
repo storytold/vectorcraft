@@ -59,7 +59,7 @@ mod cursor;
 mod input;
 mod readout;
 
-pub use context::{GlyphSnap, MarqueeMode, PaintDefaults, PixelOp, PixelSnap, ScreenFrame, ToolContext};
+pub use context::{GlyphSnap, MarqueeMode, PaintDefaults, PixelOp, PixelSnap, ScreenFrame, ToolContext, ordinary_isolation};
 pub use cursor::Cursor;
 pub use input::{Action, Mods, PenPose, PointerEvent, PointerKind, ToolKey};
 pub use readout::Readout;
