@@ -603,7 +603,8 @@ pub struct CommandUses {
 
 impl CommandUses {
     /// Counts a pick of `id`. A new id when [`MAX_COUNTED_COMMANDS`] are counted first removes
-    /// the id with the lowest count, of those the one picked longest ago, and then counts once.
+    /// one id from the half of the ids picked longest ago: the one with the lowest count, of those
+    /// the one picked longest ago. It then counts once.
     pub(crate) fn count(&mut self, id: &str) {
         self.pick = self.pick.saturating_add(1);
         let pick = self.pick;
@@ -611,10 +612,13 @@ impl CommandUses {
             *n = n.saturating_add(1);
             *last = pick;
         } else {
-            if self.uses.len() >= MAX_COUNTED_COMMANDS
-                && let Some(least) = self.uses.iter().min_by_key(|(_, use_)| **use_).map(|(k, _)| k.clone())
-            {
-                self.uses.remove(&least);
+            if self.uses.len() >= MAX_COUNTED_COMMANDS {
+                let mut by_age: Vec<(u32, u32, &String)> = self.uses.iter().map(|(k, &(n, last))| (last, n, k)).collect();
+                by_age.sort_unstable();
+                let older = by_age.len().div_ceil(2);
+                if let Some(least) = by_age.iter().take(older).min_by_key(|&&(last, n, _)| (n, last)).map(|&(_, _, k)| k.clone()) {
+                    self.uses.remove(&least);
+                }
             }
             self.uses.insert(id.to_string(), (1, pick));
         }
@@ -1647,8 +1651,8 @@ mod tests {
         assert!(CommandUses::default().grades(&[]).is_empty(), "no grades without counts");
     }
 
-    /// A new id when 200 are counted removes the id with the lowest count, of those the one picked
-    /// longest ago, and keeps the new one.
+    /// A new id when 200 are counted removes, of the 100 ids picked longest ago, the id with the
+    /// lowest count, of those the one picked longest ago, and keeps the new one.
     #[test]
     fn the_201st_command_removes_the_least_used_and_keeps_itself() {
         let ids: Vec<String> = (0..MAX_COUNTED_COMMANDS).map(|i| format!("c{i}")).collect();
@@ -1662,6 +1666,26 @@ mod tests {
         assert!(!uses.uses.contains_key("c9"), "c9 was picked before new");
         assert!(uses.uses.contains_key("new") && uses.uses.contains_key("newer"));
         assert_eq!(uses.uses.len(), MAX_COUNTED_COMMANDS);
+    }
+
+    /// When all 200 counted ids have 2 picks or more, new ids picked in turn keep their places and
+    /// their counts grow; the ids removed are the ones picked longest ago.
+    #[test]
+    fn new_commands_build_up_counts_when_every_counted_one_has_more_picks() {
+        let ids: Vec<String> = (0..MAX_COUNTED_COMMANDS).map(|i| format!("c{i}")).collect();
+        let counts: Vec<(&str, u32)> = ids.iter().map(|id| (id.as_str(), 2)).collect();
+        let mut uses = counted(&counts);
+        for _ in 0..3 {
+            for id in ["a", "b", "c"] {
+                uses.count(id);
+            }
+        }
+        assert_eq!(uses.uses.len(), MAX_COUNTED_COMMANDS);
+        for id in ["a", "b", "c"] {
+            assert_eq!(uses.uses.get(id).map(|&(n, _)| n), Some(3), "{id}");
+        }
+        assert!(!uses.uses.contains_key("c0") && !uses.uses.contains_key("c2") && uses.uses.contains_key("c3"));
+        assert!(uses.uses.contains_key("c199"));
     }
 
     /// When a count reaches 1,000, every count is halved and ids left at 0 are removed.
