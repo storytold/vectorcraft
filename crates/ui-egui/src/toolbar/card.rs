@@ -72,6 +72,12 @@ pub(crate) fn hover(resp: Response, tool: &ToolInfo, side: Side, tip: Option<Str
     let prefs = prefs(&ctx);
     let allowed = side == Side::Row || !flyout_drawn(&ctx);
     let description = if prefs.on && allowed { tool_description(tool.id) } else { None };
+    // A button the pointer is not over shows neither a card nor a tool tip: skip measuring its card,
+    // and let `quiet` drop the button's quiet mark.
+    if description.is_some() && !resp.hovered() {
+        quiet(&ctx, &resp);
+        return resp;
+    }
     let place = description.and_then(|d| placement(&ctx, resp.rect, side, height(tool.id, prefs.animated_zoom)).map(|p| (d, p)));
     let Some((description, (align, others, gap))) = place else {
         return match tip {
