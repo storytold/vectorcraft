@@ -43,6 +43,10 @@ font-technology	Variable	가변
 	Cap Height	대문자 높이
 	x-Height	x 높이
 	ICF Box	ICF 박스
+	Show Sample	샘플 표시
+	Hide Sample	샘플 숨기기
+	Max Ascent/Descent	최대 어센트/디센트
+	Max Ascender	최대 어센더
 	Proportional Metrics	비례 메트릭
 	H or V Style	가로 또는 세로 스타일
 	Roman Italics	로마자 이탤릭
@@ -1852,6 +1856,8 @@ antiAlias	Sharp	날카롭게
 	Folder	폴더
 	Folder Name:	폴더 이름:
 	Font List	글꼴 목록
+	Show Similar Fonts	유사한 글꼴 표시
+	Clear Similar Fonts	유사한 글꼴 지우기
 	Font Preview Size	글꼴 미리 보기 크기
 	Font:	글꼴:
 	Fonts	글꼴
@@ -4546,6 +4552,7 @@ theme	Appearance	외관
 @msg	no history to clear	지울 히스토리가 없습니다
 @msg	no history state {v}	히스토리 상태 {v}이(가) 없습니다
 @msg	Expand Appearance: the selection has a basic appearance	모양새 확장: 선택 항목은 기본 모양새입니다
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	일부 래스터 효과는 이미지로 만들지 않았습니다: 이미지 1,024개 또는 총 256메가픽셀을 넘기 때문입니다
 @msg	select (or target) objects whose appearance isn't basic	모양새가 기본이 아닌 개체를 선택(또는 대상 지정)하세요
 @msg	{C}: no effect at index {from}	{C}: 인덱스 {from}에 효과가 없습니다
 @msg	Expand: no gradient fills	확장: 그레이디언트 칠이 없습니다
@@ -5936,7 +5943,7 @@ lighting	Light	광원
 @msg	Unknown dimension style	알 수 없는 치수 스타일
 @msg	Unknown unit	알 수 없는 단위
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	열린 프로파일의 원형 끝을 닫습니다. 부분 회전에서는 절단 측면이 열린 상태로 유지됩니다.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	열린 프로파일의 원형 끝을 닫습니다. 부분 회전에서는 절단 측면도 닫힙니다.
 	Distance	거리
 @msg	span must be "object" or "selection", got {v}	span은 "object" 또는 "selection"이어야 합니다. {v}은(는) 사용할 수 없습니다
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection"은 `gradient`를 배치합니다. 견본은 배치할 수 없습니다
@@ -6090,6 +6097,7 @@ lighting	Light	광원
 	Single Word Justification:	단일 단어 정렬:
 	Full Justify	강제 양쪽 정렬
 	Minimum must not exceed Desired, nor Desired Maximum.	최소값은 희망값을, 희망값은 최대값을 넘을 수 없습니다.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: 최소값은 희망값을, 희망값은 최대값을 넘을 수 없습니다
 	Minimum	최소
 	Justification	양끝 맞춤
 	Add filters from the list above	위 목록에서 필터 추가
@@ -7108,7 +7116,7 @@ breakText	Glyphs	글리프
 @msg	stroke cannot be set on a symbol instance	심볼 인스턴스에는 stroke를 설정할 수 없습니다
 @msg	fill on a symbol instance must be a solid color or none	심볼 인스턴스의 fill은 단색 또는 none이어야 합니다
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	모양으로 변환 또는 개체 윤곽선화 효과가 없는 이미지에는 {key}을(를) 설정할 수 없습니다
-@msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice 및/또는 type을 지정하세요
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	newName, registration, exportType, nineSlice, type 및/또는 alignToPixelGrid을 지정하세요
 	Text Flow	텍스트 흐름
 	By Rows	행 방향
 	By Columns	열 방향
@@ -8708,7 +8716,9 @@ breakText	Glyphs	글리프
 @msg	position must be normal, superscript or subscript	position은 normal, superscript 또는 subscript여야 합니다
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position은 topLeft, topRight, bottomLeft 또는 bottomRight여야 합니다
 @msg	positions must be between 0 and 100000 pt	positions는 0에서 100000 pt 사이여야 합니다
+@msg	ppi can't be more than {max} for this image	이 이미지의 ppi는 {max}보다 클 수 없습니다
 @msg	ppi must be a positive number, not {ppi}	ppi는 양수여야 합니다: {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim은 이미지의 픽셀을 그대로 유지합니다: ppi를 지정하지 마세요
 @msg	ppi must be between 1 and 2400	ppi는 1에서 2400 사이여야 합니다
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}`은(는) transforms|bounds|fileDimensions|fit|fill이 아닙니다
 @msg	preserveShape must be clippingMask|transparency	preserveShape는 clippingMask|transparency여야 합니다

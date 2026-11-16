@@ -1036,6 +1036,10 @@ font-technology	Variable	Variables
 	Em Box	Cuadro eme
 	x-Height	Altura de la x
 	ICF Box	Cuadro ICF
+	Show Sample	Mostrar muestra
+	Hide Sample	Ocultar muestra
+	Max Ascent/Descent	Altura/profundidad máx.
+	Max Ascender	Ascendente máx.
 	Em Dash	Raya
 	Em Space	Espacio eme
 	Embed	Incrustar
@@ -1349,6 +1353,8 @@ font-technology	Variable	Variables
 	Font Family & Style	Familia y estilo de fuente
 	Font Family, Style & Size	Familia, estilo y tamaño de fuente
 	Font List	Lista de fuentes
+	Show Similar Fonts	Mostrar fuentes similares
+	Clear Similar Fonts	Borrar fuentes similares
 	Font Preview Size	Tamaño de vista previa de fuente
 	Font Size	Tamaño de fuente
 	Variable Font	Fuente variable
@@ -4622,6 +4628,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	Divide Objects Below: select exactly one path	Dividir objetos inferiores: selecciona exactamente un trazado
 @msg	Downloaded {what}	Se descargó {what}
 @msg	Expand Appearance: the selection has a basic appearance	Expandir apariencia: la selección tiene una apariencia básica
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	algunos efectos ráster no se convirtieron en imágenes: ocuparían más de 1024 imágenes o 256 megapíxeles en total
 @msg	Expand: no brush strokes selected	Expandir: no hay trazos de pincel seleccionados
 @msg	Expand: no gradient fills	Expandir: no hay rellenos de degradado
 @msg	Expand: nothing to expand	Expandir: no hay nada que expandir
@@ -6323,7 +6330,7 @@ mark-style	Japanese	Japonesas
 @msg	Unknown dimension style	Estilo de cota desconocido
 @msg	Unknown unit	Unidad desconocida
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Cierra los extremos circulares de los perfiles abiertos. Los giros parciales mantienen abiertos sus lados de corte.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Cierra los extremos circulares de los perfiles abiertos. Los giros parciales también cierran sus lados de corte.
 	Distance	Distancia
 @msg	span must be "object" or "selection", got {v}	span debe ser "object" o "selection", no {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" coloca un `gradient`, no una muestra
@@ -6476,6 +6483,7 @@ mark-style	Japanese	Japonesas
 	Single Word Justification:	Justificación de una sola palabra:
 	Full Justify	Justificar completamente
 	Minimum must not exceed Desired, nor Desired Maximum.	El mínimo no puede superar el deseado, ni el deseado el máximo.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: el mínimo no puede superar el deseado, ni el deseado el máximo
 	Justification	Justificación
 	Add filters from the list above	Añada filtros de la lista de arriba
 	Add to Stack	Añadir a la pila
@@ -7487,7 +7495,7 @@ breakText	Glyphs	Glifos
 @msg	stroke cannot be set on a symbol instance	stroke no se puede definir en una instancia de símbolo
 @msg	fill on a symbol instance must be a solid color or none	el fill de una instancia de símbolo debe ser un color sólido o none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} no se puede definir en una imagen sin el efecto Convertir en forma o Contornear objeto
-@msg	pass newName, registration, exportType, nineSlice and/or type	indique newName, registration, exportType, nineSlice y/o type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	indique newName, registration, exportType, nineSlice, type y/o alignToPixelGrid
 	Text Flow	Flujo de texto
 	By Rows	Por filas
 	By Columns	Por columnas
