@@ -1,6 +1,6 @@
 use super::common::{
-    PenRecord, Sample, brush_region, path_kind, path_mut, path_of, poly_bounds, pressure_region, samples_param, size_pressure, stroke_paint,
-    subpath_len, target_paths, within_input_bound,
+    PenRecord, SIZES, Sample, brush_region, path_kind, path_mut, path_of, poly_bounds, pressure_region, ranged, samples_param, size_pressure,
+    stroke_paint, subpath_len, target_paths, within_input_bound,
 };
 use super::{
     Anchor, Appearance, BTreeSet, BoolOp, Cap, Color, Document, EngineError, FillRule, Join, NewArt, Node, NodeId, NodeKind, Paint, PathData, Point,
@@ -486,10 +486,7 @@ fn adjacent_to_topmost(doc: &Document, touched: &[NodeId], paint: &Paint) -> Vec
 pub(super) fn blob(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.blob";
     let samples = samples_param(p, "points", C)?;
-    let size = number_or(p, "size", 10.0, C)?;
-    if !(size.is_finite() && size > 0.0) {
-        return Err(bad(C, "size must be positive"));
-    }
+    let size = ranged(p, "size", 10.0, SIZES, C)?;
     let angle = number_or(p, "angle", 0.0, C)?;
     let roundness = number_or(p, "roundness", 100.0, C)?;
     if !angle.is_finite() || !roundness.is_finite() {

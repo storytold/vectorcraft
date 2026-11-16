@@ -10,6 +10,7 @@ pub mod gif;
 pub mod jpeg;
 pub mod png;
 pub mod psd;
+mod psd_type;
 pub mod quantize;
 pub mod tga;
 pub mod tiff;
