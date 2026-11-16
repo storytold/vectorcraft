@@ -446,6 +446,20 @@ fn edit_color_group_with_its_own_colors_records_no_undo_step() {
 }
 
 #[test]
+fn edit_color_group_with_a_null_removes_that_swatch() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Mine", "colors": ["#ff0000", "#00ff00", "#0000ff"], "keepModel": true}));
+    let undo = undo_len(&s);
+    let r = run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": ["#ff0000", null, "#0000ff"]}));
+    assert_eq!(r["swatches"], json!(["R=255 G=0 B=0", "R=0 G=0 B=255"]));
+    assert_eq!(names(&s, Some("Mine")), ["R=255 G=0 B=0", "R=0 G=0 B=255"]);
+    assert_eq!(undo_len(&s), undo + 1, "a removed swatch is a step");
+    run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": ["#ff0000", "#0000ff", null]}));
+    assert_eq!(undo_len(&s), undo + 1, "a null past the swatches removes nothing and records no step");
+    assert!(s.execute("swatch.editGroup", &json!({"group": "Mine", "colors": ["#ff0000", "nope"]})).is_err());
+}
+
+#[test]
 fn unused_leaves_out_linked_colours_gradients_and_patterns_in_use() {
     let mut s = session();
     let all = run(&mut s, "swatch.unused", json!({}));
