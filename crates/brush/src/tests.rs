@@ -840,6 +840,47 @@ fn tints_colorization_uses_stroke_colour() {
     assert_eq!(white.appearance.fill_paint().color().unwrap().to_rgb(), [1.0, 1.0, 1.0]);
 }
 
+/// Under Tints, a stroke color linked to a swatch gives tints of that swatch, linked to it: black
+/// art the stroke's own tint of it, 60% black ink 60% of that, white none; the colors shown are the
+/// same as for the unlinked color, a process or an RGB swatch. Tints and Shades stay unlinked.
+#[test]
+fn tints_of_a_swatch_stay_linked_to_it() {
+    let spot = Color::cmyk(0.0, 0.5, 1.0, 0.0);
+    let stroke = Paint::Solid { color: spot.tinted(0.8), swatch: Some("Brand orange".into()), tint: 0.8 };
+    let mapped = |art: Color| {
+        let mut n = rect_art(1.0, 1.0);
+        n.appearance.set_fill(Paint::solid(art));
+        colorize(&mut n, Colorization::Tints, &stroke);
+        let mut plain = rect_art(1.0, 1.0);
+        plain.appearance.set_fill(Paint::solid(art));
+        colorize(&mut plain, Colorization::Tints, &Paint::solid(spot.tinted(0.8)));
+        (n.appearance.fill_paint(), plain.appearance.fill_paint().color().unwrap())
+    };
+    for (art, want) in [(Color::cmyk(0.0, 0.0, 0.0, 1.0), 0.8), (Color::cmyk(0.0, 0.0, 0.0, 0.6), 0.48), (Color::cmyk(0.0, 0.0, 0.0, 0.0), 0.0)] {
+        let (paint, shown) = mapped(art);
+        let Paint::Solid { color, swatch: Some(s), tint } = paint else { panic!("linked: {paint:?}") };
+        assert_eq!(s, "Brand orange");
+        assert!((tint - want).abs() < 1e-5, "{art:?}: {tint}");
+        let close = color.to_cmyk().iter().zip(shown.to_cmyk()).all(|(a, b)| (a - b).abs() < 1e-5);
+        assert!(close, "{color:?} {shown:?}");
+    }
+    // An RGB swatch: its tints mix toward white, as the unlinked color's do.
+    let rgb = Color::rgb(1.0, 0.4, 0.0);
+    let mut n = rect_art(1.0, 1.0);
+    n.appearance.set_fill(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 0.5)));
+    colorize(&mut n, Colorization::Tints, &Paint::Solid { color: rgb, swatch: Some("Brand red".into()), tint: 1.0 });
+    let Paint::Solid { color, swatch: Some(s), tint } = n.appearance.fill_paint() else { panic!("linked") };
+    assert_eq!(s, "Brand red");
+    assert!((tint - 0.5).abs() < 1e-5, "{tint}");
+    let [r, g, b] = color.to_rgb();
+    assert!((r - 1.0).abs() < 1e-5 && (g - 0.7).abs() < 1e-5 && (b - 0.5).abs() < 1e-5, "{r} {g} {b}");
+    // Tints and Shades darken past the swatch, which a tint can't: its pieces stay unlinked.
+    let mut n = rect_art(1.0, 1.0);
+    n.appearance.set_fill(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)));
+    colorize(&mut n, Colorization::TintsAndShades, &stroke);
+    assert!(matches!(n.appearance.fill_paint(), Paint::Solid { swatch: None, .. }), "{:?}", n.appearance.fill_paint());
+}
+
 /// Black ink alone is a tint by its amount: a process black stroke leaves it as it is, and another
 /// process stroke color takes that share of its inks. Tints of a process color stay process.
 #[test]

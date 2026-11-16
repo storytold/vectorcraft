@@ -1591,9 +1591,9 @@ const ART_SETTINGS: [(&str, Kind, Option<f64>); 14] = [
 ];
 
 /// An Art brush's filter `f` as the stroke it paints, with its settings: `None` when it isn't a
-/// stroke in a color, names no Art brush, holds an entry that isn't read or a setting that isn't a
-/// number of its kind, or tints its art with a swatch's color: its drawn look stays. Whether the
-/// brush draws as these settings is [`super::brush::draws_as`]'s to say.
+/// stroke in a color, names no Art brush, or holds an entry that isn't read or a setting that isn't
+/// a number of its kind: its drawn look stays. Whether the brush draws as these settings is
+/// [`super::brush::draws_as`]'s to say.
 fn art_stroke(f: &Filter) -> Option<StyleItem> {
     if !f.paints.0
         || f.gradient
@@ -1612,11 +1612,9 @@ fn art_stroke(f: &Filter) -> Option<StyleItem> {
     for (slot, (key, kind, missing)) in settings.iter_mut().zip(ART_SETTINGS) {
         *slot = entry(f, key, kind).ok()?.or(missing)?;
     }
+    // Under Tints, a stroke color linked to a swatch tints the art in that swatch (a spot color's
+    // tints stay on its plate: `vectorcraft_brush::colorize`).
     let paint = f.stroke.clone()?;
-    // The tinted pieces are process colors, so a swatch's ink would be lost.
-    if settings[0] == 1.0 && matches!(paint, Paint::Solid { swatch: Some(_), .. }) {
-        return None;
-    }
     Some(StyleItem::Stroke {
         paint,
         width: f.width,
