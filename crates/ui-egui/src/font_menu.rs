@@ -129,10 +129,34 @@ pub struct MenuLook<'a> {
 /// The current document as the Document filter reads it.
 #[derive(Clone, Copy, Debug)]
 pub struct MenuDocument<'a> {
-    /// The document's identity and revision: its families are listed again when either changes.
+    /// The document's identity.
     pub uid: u64,
-    pub revision: u64,
-    pub doc: &'a vectorcraft_doc::Document,
+    /// Its content: while an interaction is open (a font previewed from the menu), the content it
+    /// started from, so a preview does not change the families listed. Its families are listed
+    /// again when this is another version of the document.
+    pub doc: &'a Arc<vectorcraft_doc::Document>,
+}
+
+impl MenuDocument<'_> {
+    /// Which document and which version of it the families were read from.
+    fn key(&self) -> DocumentKey {
+        DocumentKey { uid: self.uid, doc: Arc::downgrade(self.doc) }
+    }
+}
+
+/// A document and a version of its content, compared by identity. The weak reference keeps the
+/// version's allocation, so a later version is never placed at the same address while the key is
+/// kept.
+#[derive(Clone, Debug)]
+struct DocumentKey {
+    uid: u64,
+    doc: std::sync::Weak<vectorcraft_doc::Document>,
+}
+
+impl PartialEq for DocumentKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.uid == other.uid && std::sync::Weak::ptr_eq(&self.doc, &other.doc)
+    }
 }
 
 impl Default for MenuLook<'static> {
@@ -171,7 +195,10 @@ impl<'a> MenuLook<'a> {
             wheel: false,
             wheel_owner: None,
             name: None,
-            document: app.session.active().map(|state| MenuDocument { uid: state.uid, revision: state.revision, doc: &state.doc }),
+            document: app
+                .session
+                .active()
+                .map(|state| MenuDocument { uid: state.uid, doc: state.interaction.as_ref().map_or(&state.doc, |interaction| &interaction.doc) }),
         }
     }
 }
@@ -327,13 +354,13 @@ fn remap_highlight(before: &[Row], selected: Option<usize>, after: &[Row]) -> Op
 
 /// What the rows were listed for: the query, the script, kind, font technology (variable only) and
 /// favourites filters, Show Font Names in English, the expanded families, favourites, recent
-/// history, font list generation, the family Show Similar Fonts orders by, and the document (its
-/// uid and revision) while the Document filter lists its families.
-type RowsKey = (String, usize, Option<FontClass>, bool, bool, bool, Vec<String>, Vec<String>, Vec<String>, u64, Option<String>, Option<(u64, u64)>);
+/// history, font list generation, the family Show Similar Fonts orders by, and the document version
+/// while the Document filter lists its families.
+type RowsKey = (String, usize, Option<FontClass>, bool, bool, bool, Vec<String>, Vec<String>, Vec<String>, u64, Option<String>, Option<DocumentKey>);
 
-/// The families a [`MenuState`] found in a document (lowercase), and the document's uid, revision
-/// and font list generation they were found for.
-type DocumentFonts = ((u64, u64, u64), Arc<HashSet<String>>);
+/// The families a [`MenuState`] found in a document (lowercase), and the document version and font
+/// list generation they were found for.
+type DocumentFonts = ((DocumentKey, u64), Arc<HashSet<String>>);
 
 /// The menu's state between frames.
 #[derive(Clone, Default)]
@@ -444,10 +471,10 @@ fn document_families(db: &vectorcraft_text::FontDb, doc: &vectorcraft_doc::Docum
 }
 
 /// The families the Document filter lists, when it is on and a document is open: those of
-/// `look`'s document, found again only when the document, its revision or the font list changed.
+/// `look`'s document, found again only when the document, its version or the font list changed.
 fn used_families(db: &vectorcraft_text::FontDb, st: &mut MenuState, look: MenuLook) -> Option<Arc<HashSet<String>>> {
     let document = look.document.filter(|_| st.document_only)?;
-    let key = (document.uid, document.revision, db.generation());
+    let key = (document.key(), db.generation());
     if let Some((k, families)) = &st.document_fonts
         && *k == key
     {
@@ -1176,7 +1203,7 @@ fn header<'s>(ui: &mut Ui, db: &'s vectorcraft_text::FontDb, state_id: egui::Id,
         look.recent.to_vec(),
         db.generation(),
         st.similar.clone(),
-        look.document.filter(|_| st.document_only).map(|d| (d.uid, d.revision)),
+        look.document.filter(|_| st.document_only).map(|d| d.key()),
     );
     if st.rows_key.as_ref() != Some(&key) {
         let used = used_families(db, st, look);

@@ -1252,6 +1252,37 @@ fn the_document_filter_combines_with_the_others_and_follows_edits() {
     assert_eq!(super::wheel_order(&mut st, look), ["Source Serif 4", "Inter"], "the wheel steps through the same families");
 }
 
+/// A font previewed from the menu does not change what the Document filter lists: the family the
+/// previewed text had stays listed, though no other type uses it. A pick lists the families again.
+#[test]
+fn a_preview_keeps_the_document_filters_families() {
+    let mut app = app_with_type(&["Source Serif 4", "Inter"]);
+    let ctx = egui::Context::default();
+    let mut st = super::MenuState { document_only: true, ..Default::default() };
+    let frames = |app: &crate::VectorcraftApp, st: &mut super::MenuState| {
+        let look = super::MenuLook { samples: false, recent: &[], ..super::MenuLook::of(app) };
+        for _ in 0..2 {
+            menu_frame(&ctx, st, look, vec![]);
+        }
+    };
+    frames(&app, &mut st);
+    assert_eq!(listed_families(&st), ["Inter", "Source Serif 4"]);
+    // The selected text, the only type in Inter, previewed in Source Serif 4.
+    super::apply(&mut app, &ctx, super::FontPick::Preview("Source Serif 4".into(), None));
+    assert!(app.session.active().unwrap().interaction.is_some(), "the preview is open");
+    frames(&app, &mut st);
+    assert_eq!(listed_families(&st), ["Inter", "Source Serif 4"], "the preview leaves the list as it was");
+    super::apply(&mut app, &ctx, super::FontPick::Preview("Inter".into(), None));
+    frames(&app, &mut st);
+    assert_eq!(listed_families(&st), ["Inter", "Source Serif 4"], "previewing back changes nothing");
+    super::apply(&mut app, &ctx, super::FontPick::Chosen("Source Serif 4".into(), None));
+    frames(&app, &mut st);
+    assert_eq!(listed_families(&st), ["Source Serif 4"], "the pick is an edit: Inter is no longer used");
+    app.run("edit.undo", serde_json::json!({})).unwrap();
+    frames(&app, &mut st);
+    assert_eq!(listed_families(&st), ["Inter", "Source Serif 4"], "undo lists it again");
+}
+
 /// The Document filter on a document without type lists nothing and says why; without a document
 /// it is unavailable and lists every family; the filter is shared like the others.
 #[test]
