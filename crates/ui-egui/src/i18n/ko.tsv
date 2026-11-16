@@ -49,6 +49,8 @@ font-technology	Variable	가변
 	Insert Aki Left	앞 아키 삽입
 	Insert Aki Right	뒤 아키 삽입
 	Tsume	츠메
+	Adjust Horizontal Diacritic Position	발음 구별 기호 가로 위치 조정
+	Adjust Vertical Diacritic Position	발음 구별 기호 세로 위치 조정
 	Character Direction	문자 방향
 	Digits	숫자
 	Arabic	아라비아어
@@ -570,6 +572,7 @@ digits	Malayalam	말라얄람어
 	Highlight Size	하이라이트 크기
 	Blend Steps	혼합 단계
 	Shading Color	셰이딩 색상
+	Black Overprint	검정 겹쳐찍기
 	Draw Hidden Faces	숨겨진 면 그리기
 	Revolve…	회전체…
 	Inflate…	부풀리기…
@@ -1067,6 +1070,7 @@ digits	Malayalam	말라얄람어
 	Align to Artboard	아트보드에 정렬
 	Align to Glyph Bounds	글리프 경계에 정렬
 	Align to Key Object	키 개체에 정렬
+	Align to Key Anchor	키 앵커 포인트에 정렬
 	Align to Page	페이지에 정렬
 	Align to Path	패스에 정렬
 	Align to Selection	선택 영역에 정렬
@@ -1373,6 +1377,18 @@ antiAlias	Sharp	날카롭게
 	Copy Width Point	너비 점 복사
 	Copyright	저작권
 	Copyright Info URL:	저작권 정보 URL:
+	Save Metadata Template…	메타데이터 템플릿 저장…
+	Import Options	가져오기 옵션
+	Clear existing fields and use the template's	기존 필드를 지우고 템플릿의 필드 사용
+	Keep existing fields, but replace those the template has	기존 필드를 유지하되 템플릿에 있는 필드 바꾸기
+	Keep existing fields, but append those the template has	기존 필드를 유지하되 템플릿에 있는 필드 추가
+@msg	the template name can't be empty	템플릿 이름은 비워 둘 수 없습니다
+@msg	the template name isn't usable as a file name	템플릿 이름은 파일 이름으로 사용할 수 없습니다
+@msg	no metadata templates folder here	여기에는 메타데이터 템플릿 폴더가 없습니다
+@msg	give `name` or `path`, not both	`name` 또는 `path` 중 하나만 지정하세요
+@msg	give one of `path`, `name` and `data`	`path`, `name`, `data` 중 하나를 지정하세요
+@msg	mode must be replace, keep or append	모드는 replace, keep 또는 append여야 합니다
+@msg	the file is not an XMP metadata template	파일이 XMP 메타데이터 템플릿이 아닙니다
 	Copyright Notice:	저작권 고지:
 	Copyright Status:	저작권 상태:
 	Corner Point Angle Threshold:	모퉁이 포인트 각도 임계값:
@@ -1677,7 +1693,10 @@ antiAlias	Sharp	날카롭게
 	Every (minutes)	간격 (분)
 	Every option is at its default.	모든 옵션이 기본값입니다.
 	Every option matches {base}.	모든 옵션이 {base}와(과) 같습니다.
-	Every-line Composer	전체 줄 컴포저
+	Middle Eastern & South Asian Single-line Composer	한 줄 조판 (중동·남아시아)
+	Middle Eastern & South Asian Every-line Composer	전체 줄 컴포저 (중동·남아시아)
+	Standard Single-line Composer	표준 한 줄 조판
+	Standard Every-line Composer	표준 전체 줄 컴포저
 	Exact dash lengths	정확한 대시 길이
 	Exceptions (comma separated)	예외 (쉼표로 구분)
 	Exclusion	제외
@@ -1874,6 +1893,14 @@ antiAlias	Sharp	날카롭게
 	Previous Artboard	이전 아트보드
 	Next Artboard	다음 아트보드
 	Last Artboard	마지막 아트보드
+	Status Bar Show	상태 표시줄 표시
+	Artboard Name	아트보드 이름
+	Current Tool	현재 도구
+	Date and Time	날짜 및 시간
+	Number of Undos	실행 취소 횟수
+	Document Color Profile	문서 색상 프로파일
+	Undos	실행 취소
+	Redos	다시 실행
 	Gradient Fill: click to apply, drag onto art	그레이디언트 칠: 클릭하여 적용, 아트웍에 끌어 놓기
 	Gradient Mesh	그레이디언트 메시
 	Gradient Tool	그레이디언트 도구
@@ -1916,6 +1943,7 @@ antiAlias	Sharp	날카롭게
 	Show smooth color wheel	부드러운 색상환 표시
 	Show segmented color wheel	분할 색상환 표시
 	Show color bars	색상 막대 표시
+	Find the selected colors in the artwork	선택한 색상을 아트웍에서 찾기
 	Height	높이
 	Height:	높이:
 	Help › Search Commands…	도움말 › 명령 검색…
@@ -3021,6 +3049,12 @@ mark-style	Japanese	일본식
 	Restore	복원
 	Restore Recovered Documents	복구된 문서 복원
 	Restore every preference to its default (applied on OK)	모든 환경 설정을 기본값으로 복원(확인 시 적용)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	픽셀 크기가 아닌 기본 제공 크기의 새 문서와 단위가 기록되지 않은 열린 파일에 쓰는 단위이며, 여기서 고르고 확인을 누르면 활성 문서의 단위도 바뀝니다.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	선 두께, 대시, 간격이 이 단위로 표시되며, 입력한 숫자도 이 단위로 읽습니다.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	글자 크기, 행간, 기준선 이동이 이 단위로 표시되며, 입력한 숫자도 이 단위로 읽습니다.
+	The unit for East Asian type measurements, which no field uses yet.	동아시아 문자 측정에 쓰는 단위로, 아직 이 단위를 쓰는 필드는 없습니다.
+	When on, a number typed without a unit into a field in picas is read in points.	켜면 파이카 필드에 단위 없이 입력한 숫자를 포인트로 읽습니다.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID를 고르면 레이어, 변수, 레이어 옵션에서 개체 이름이 XML ID로 표시됩니다.
 	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
 	Restored documents open unsaved: save them to keep them.	복원된 문서는 저장되지 않은 상태로 열립니다. 보존하려면 저장하세요.
@@ -3041,6 +3075,7 @@ mark-style	Japanese	일본식
 	Roman Hanging Punctuation	로마자 걸림 문장 부호
 	Korean Line Break Anywhere	한글 어디서나 줄 바꿈
 	Bunri-Kinshi	분리 금지
+	Kurikaeshi Moji Shori	반복 문자 처리
 	East Asian Composition Settings	동아시아 조판 설정
 	Korean Composition Settings	한글 조판 설정
 	Rotate	회전
@@ -3149,6 +3184,10 @@ mark-style	Japanese	일본식
 @msg	`{key}` must be an array of these names: {_1}	`{key}`은(는) 다음 이름의 배열이어야 합니다: {_1}
 	Search commands, tools, panels and effects	명령, 도구, 패널 및 효과 검색
 	Search commands, tools, panels and effects…	명령, 도구, 패널 및 효과 검색…
+	Search commands and tools	명령 및 도구 검색
+	Search commands and tools…	명령 및 도구 검색…
+	Recent Commands	최근 명령
+	No recent commands	최근 명령 없음
 	Secondary	보조
 	Select All Art on Layer	레이어의 모든 아트웍 선택
 	Select All Assets	모든 에셋 선택
@@ -3270,7 +3309,6 @@ mark-style	Japanese	일본식
 	Simulate Colored Paper	색 용지 시뮬레이션
 	Simulate Paper	용지 시뮬레이션
 	Single Quotes:	작은따옴표:
-	Single-line Composer	한 줄 조판
 	Toggle Line Composer	줄 조판 방식 전환
 	Size Tile to Art	타일을 아트웍 크기에 맞춤
 	Move Tile with Art	아트웍과 함께 타일 이동
@@ -3387,6 +3425,9 @@ mark-style	Japanese	일본식
 	Swap Fill and Stroke	칠과 선 바꾸기
 	Swap start and end arrowheads	시작과 끝 화살촉 바꾸기
 	Stylistic Alternates	스타일 대체 글자
+	Ligatures	합자
+	Ornaments	장식
+	Figures	숫자
 	Swash	스워시
 	Swatch Conflict	견본 충돌
 	Swatch Conflicts	견본 충돌
@@ -3848,6 +3889,8 @@ file-filter	Templates	템플릿
 	Gradient (. or Shift+.)	그레이디언트 (. 또는 Shift+.)
 	Graph Data	그래프 데이터
 	Graph Type	그래프 유형
+	Graph Type…	그래프 유형…
+	Graph Data…	그래프 데이터…
 	Graph Options	그래프 옵션
 	Left Axis	왼쪽 축
 	Right Axis	오른쪽 축
@@ -4149,6 +4192,8 @@ file-filter	Templates	템플릿
 	Kana	가나
 	Numerals	숫자
 	Scale at Center	중심에서 크기 조정
+	Delete Set	집합 삭제
+	Direct Entry	직접 입력
 	Up/Down:	위/아래:
 	Left/Right:	왼쪽/오른쪽:
 	Tate-chu-yoko Up/Down	다테추요코 위/아래
@@ -5022,6 +5067,8 @@ theme	Appearance	외관
 @msg	give only one of onto, below and above	onto, below, above 중 하나만 지정하세요
 @msg	column must be true or a number from 1	column은 true이거나 1 이상의 숫자여야 합니다
 @msg	unknown panel `{raw}`	알 수 없는 패널 `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}`에는 전환할 표시 크기가 없습니다
+@msg	the panels are not shown	패널이 표시되지 않습니다
 @msg	panels can't be shown in Presentation Mode	프레젠테이션 모드에서는 패널을 표시할 수 없습니다
 @msg	x and y must both be numbers	x와 y는 모두 숫자여야 합니다
 @msg	Downloaded {what}	{what}을(를) 다운로드했습니다
@@ -5169,6 +5216,31 @@ theme	Appearance	외관
 @msg	$.evalFile requires a file path	$.evalFile에는 파일 경로가 필요합니다
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: 시간 제한은 0 이상의 유한한 밀리초 수여야 합니다
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: 파일 경로와 시간 제한을 받습니다
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident}이(가) 정의되지 않았습니다
+@msg	cannot read property '{key}' of {base}	{base}의 속성 '{key}'을(를) 읽을 수 없습니다
+@msg	cannot set property '{key}' of {base}	{base}의 속성 '{key}'을(를) 설정할 수 없습니다
+@msg	cannot read a property of {base}	{base}의 속성을 읽을 수 없습니다
+@msg	cannot set a property of {base}	{base}의 속성을 설정할 수 없습니다
+@msg	cannot define property '{key}': {why}	속성 '{key}'을(를) 정의할 수 없습니다: {why}
+@msg	cannot assign to property '{key}': {why}	속성 '{key}'에 대입할 수 없습니다: {why}
+@msg	cannot delete property '{key}'	속성 '{key}'을(를) 삭제할 수 없습니다
+@msg	cannot declare function {ident}	함수 {ident}을(를) 선언할 수 없습니다
+@msg	invalid assignment target	대입 대상이 잘못되었습니다
+@msg	the array's length is read-only	배열의 길이는 읽기 전용입니다
+@msg	the property cannot be redefined	속성을 다시 정의할 수 없습니다
+@msg	the object is not extensible	객체를 확장할 수 없습니다
+@msg	the length cannot be redefined	길이를 다시 정의할 수 없습니다
+@msg	it is read-only	읽기 전용입니다
+@msg	an element cannot be deleted	요소를 삭제할 수 없습니다
+@msg	it has only a getter	getter만 있습니다
+@msg	the value is a primitive	값이 원시 값입니다
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}의 {line}행 {column}열: {e} (발생)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: {line}행 {column}열: {e} (발생)
 @msg	{name}: {e} (thrown)	{name}: {e} (발생)
@@ -5209,6 +5281,27 @@ theme	Appearance	외관
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: 기본 제공 함수의 콜백, getter, 변환 또는 $.evalFile이 실행하는 파일 안에서는 대화 상자를 열 수 없습니다. 스크립트 자체 코드에서 호출하세요
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: `answers`의 다음 답은 {name}이(가) 아니라 {_1}에 대한 것입니다
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers`에 이 대화 상자에 대한 답이 남아 있지 않습니다
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers`에 스크립트가 사용하지 않은 답이 {n}개 있습니다
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1}은(는) 브러시 아래의 개체 {n}개를 변경하지 않았습니다({_2}). 패스만 변형합니다
+liquify-tool	Warp	왜곡
+liquify-tool	Twirl	돌리기
+liquify-tool	Pucker	오므리기
+liquify-tool	Bloat	부풀리기
+liquify-tool	Scallop	스캘럽
+liquify-tool	Crystallize	결정화
+liquify-tool	Wrinkle	주름
+liquify-kind	graphs	그래프
+liquify-kind	type	문자
+liquify-kind	symbols	심볼
+liquify-kind	images	이미지
+liquify-kind	meshes	메시
+liquify-kind	envelopes	엔벨로프
+liquify-kind	repeats	반복
+liquify-kind	placed documents	가져온 문서
+liquify-kind	blends	블렌드
+liquify-list-two	{0}, {1}	{0} 및 {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	vc.document{place} is too large for a script	vc.document{place}이(가) 스크립트에 비해 너무 큽니다
 @msg	vc.log: the log of this run is full	vc.log: 이 실행의 로그가 가득 찼습니다
 @msg	this function's script run has ended	이 함수의 스크립트 실행이 끝났습니다
@@ -5223,6 +5316,7 @@ theme	Appearance	외관
 @msg	`name` must be the name of a script engine	`name`은(는) 스크립트 엔진의 이름이어야 합니다
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	기본 스크립트 엔진은 실행마다 새로 만들어지고 유지되지 않으므로 삭제할 수 없습니다
 @msg	there is no script engine named {name}	이름이 {name}인 스크립트 엔진이 없습니다
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers`는 물어볼 사람이 없는 실행에만 쓰입니다. 앱에서는 사람이 각 대화 상자에 답합니다
 @msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
 @msg	Copied the link info	링크 정보를 복사했습니다
@@ -5414,6 +5508,11 @@ theme	Appearance	외관
 @msg	Imported library {name}	라이브러리 {name}을(를) 가져왔습니다
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB 정책:
+	CMYK Policy:	CMYK 정책:
+	Preserve Embedded Profiles	포함된 프로필 유지
+	Convert to Working Space	작업 공간으로 변환
+	Preserve Numbers	숫자 유지
 	Texture	텍스처
 	Craquelure…	크랙…
 	Grain…	그레인…
@@ -5497,6 +5596,7 @@ effect	Vertical	세로
 	Change Panel Layout	패널 레이아웃 변경
 	Close Panel	패널 닫기
 	Collapse Panel Group	패널 그룹 접기
+	Cycle Display Sizes	표시 크기 전환
 	Move Panel	패널 이동
 	Group with	함께 그룹화
 	Resize panels	패널 크기 조절
@@ -5538,6 +5638,8 @@ effect	Vertical	세로
 	Step up or down	한 단계 올리기 또는 내리기
 	Drag values or labels. Double-click a value to type.	값이나 레이블을 드래그하세요. 값을 더블클릭하면 입력할 수 있습니다.
 	Drag rings to rotate. Shift snaps to 15°.	링을 드래그해 회전하세요. Shift를 누르면 15°씩 스냅됩니다.
+	Track cube	회전 큐브
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	면, 모서리 또는 링을 드래그해 회전하세요. Shift를 누르면 화면의 한 축을 중심으로 회전합니다.
 	Drag the light, or its rings. Shift snaps to 15°.	조명이나 링을 드래그하세요. Shift를 누르면 15°씩 스냅됩니다.
 lighting	Light	광원
 	Keep visible surfaces only when expanding	확장 시 보이는 표면만 유지
@@ -5848,8 +5950,11 @@ lighting	Light	광원
 	Export Data Sets…	데이터 세트 내보내기…
 	Load Variable Library…	변수 라이브러리 불러오기…
 	Save Variable Library…	변수 라이브러리 저장…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	"가져오기"는 확장자가 .csv, .tsv, .txt 또는 .xml인 데이터 소스 파일을 읽습니다
 @msg	a variable library holds text variables, and the document has none	변수 라이브러리에는 텍스트 변수가 들어가는데 문서에 텍스트 변수가 없습니다
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	변수 `{name}`은(는) 변수 라이브러리에 저장할 수 없습니다: 문자나 `_`로 시작하고 공백이나 `-`, `_`, `.` 이외의 기호가 없도록 이름을 바꾸세요
+@msg	{k} has control characters	{k}에 제어 문자가 있습니다
+@msg	{k} has control characters or line breaks	{k}에 제어 문자 또는 줄 바꿈이 있습니다
 @msg	data set `{name}` holds a control character, which a variable library can't hold	데이터 세트 `{name}`에 변수 라이브러리에 담을 수 없는 제어 문자가 있습니다
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	데이터 세트 `{name}`의 앞이나 뒤에 변수 라이브러리에 담을 수 없는 공백이 있습니다
 	Make Graph Dynamic	그래프를 동적으로 만들기
@@ -6181,6 +6286,7 @@ axis	Y Axis	Y축
 @msg	stops must be in order of `offset`	정지점은 `offset` 순서여야 합니다
 @msg	the document has no pattern {pattern}	문서에 패턴 {pattern}이(가) 없습니다
 @msg	the document has no swatch {n}	문서에 견본 {n}이(가) 없습니다
+@msg	`plates` requires a stop linked to a spot swatch	`plates`에는 별색 견본에 연결된 정지점이 필요합니다
 @msg	the output	출력
 @msg	the path has no anchor points	패스에 앵커 포인트가 없습니다
 @msg	too many anchor points (limit {MAX_ANCHORS})	앵커 포인트가 너무 많습니다(한도 {MAX_ANCHORS})
@@ -6932,6 +7038,24 @@ breakText	Glyphs	글리프
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	대시를 패스로 확장
 @msg	select paths with dashed strokes to expand	확장할 점선 획의 패스를 선택하십시오
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	접원…
+	Tangent Circle	접원
+	Circle:	원:
+@msg	`ids` names an object twice	`ids`에 같은 오브젝트가 두 번 있습니다
+@msg	select two or three paths or compound paths	패스나 컴파운드 패스를 두 개 또는 세 개 선택하세요
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius`은(는) 0.01에서 1000000 pt 사이여야 합니다
+@msg	two shapes need a `radius`	모양 두 개에는 `radius`이(가) 필요합니다
+@msg	three shapes set the radius themselves: leave `radius` out	모양 세 개는 반지름을 스스로 정하므로 `radius`을(를) 빼세요
+@msg	`circle` must be from 0 to 64	`circle`은(는) 0에서 64 사이여야 합니다
+@msg	a shape has no outline	윤곽선이 없는 모양이 있습니다
+@msg	the shapes are too complex: at most 2000 segments in all	모양이 너무 복잡합니다: 세그먼트는 모두 합쳐 최대 2000개입니다
+@msg	these shapes take too long to search	이 모양들을 찾는 데 시간이 너무 오래 걸립니다
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	이 모양들에 닿는 원이 64개를 넘습니다: 곡선 전체를 따라 닿아 있을 수 있습니다
+@msg	no circle touches these shapes	이 모양들에 닿는 원이 없습니다
+@msg	`circle` is past the last circle found ({found})	`circle`이(가) 찾은 마지막 원을 넘었습니다({found})
+@msg	object {value} is not a path or compound path	오브젝트 {value}은(는) 패스나 컴파운드 패스가 아닙니다
+@msg	these shapes are too small to measure	이 모양들은 너무 작아서 측정할 수 없습니다
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	문서 도구
 	Save a Timestamped Copy	날짜와 시간이 붙은 사본 저장
@@ -7388,6 +7512,7 @@ breakText	Glyphs	글리프
 @msg	Image Trace failed: {e}	이미지 추적 실패: {e}
 @msg	Image Trace finished, but its document was closed	이미지 추적이 끝났지만 문서가 닫혔습니다
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	이미지 추적이 끝났지만 그 사이에 이미지나 설정이 바뀌었습니다: 다시 추적하세요
+@msg	Image Trace finished, but its document was reverted: trace it again	이미지 추적이 끝났지만 문서가 되돌려졌습니다: 다시 추적하세요
 @msg	Import SVG Filter reads SVG files, not SVGZ	SVG 필터 가져오기는 SVGZ가 아닌 SVG 파일을 읽습니다
 @msg	Invalid dimension offset	잘못된 치수 오프셋
 @msg	Invalid point	잘못된 점
@@ -7561,6 +7686,7 @@ breakText	Glyphs	글리프
 @msg	`names` must be an array of style names	`names`은(는) 스타일 이름의 배열이어야 합니다
 @msg	`new` is a design name, or true	`new`은(는) 디자인 이름 또는 true입니다
 @msg	`origin` must be [x, y] in points	`origin`은(는) 포인트 단위의 [x, y]여야 합니다
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes`은(는) [a, b, c, d]여야 하며, 각 값은 -1000에서 1000 사이이고 a·d - b·c는 0에서 0.001 이상 떨어져야 합니다
 @msg	`path` must be a folder	`path`은(는) 폴더여야 합니다
 @msg	`path` must be a path object	`path`은(는) 패스 개체여야 합니다
 @msg	`picks` must be an array (got {v})	`picks`은(는) 배열이어야 합니다({v} 입력됨)
@@ -7967,7 +8093,7 @@ breakText	Glyphs	글리프
 @msg	column: true floats the whole column and takes no onto, above or below	column: true는 열 전체를 띄우며 onto, above, below와 함께 쓸 수 없습니다
 @msg	command must be a shape.* command	command는 shape.* 명령이어야 합니다
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command`가 없습니다
-@msg	composer must be "singleLine" or "everyLine"	composer는 "singleLine" 또는 "everyLine"이어야 합니다
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer는 "singleLine", "everyLine", "standardSingleLine" 또는 "standardEveryLine"이어야 합니다
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	컴파운드 모양에는 패스, 컴파운드 패스, 그룹, 컴파운드 모양, 문자, 블렌드, 엔벨로프를 넣을 수 있습니다
 @msg	compound {_1} must contain exactly one open path to join	컴파운드 {_1}에는 연결할 열린 패스가 정확히 하나 있어야 합니다
 @msg	connect needs a path other than the one extended	connect에는 연장한 패스가 아닌 다른 패스가 필요합니다
@@ -9162,3 +9288,20 @@ breakText	Glyphs	글리프
 @msg	{what} would print more than {MAX_COPIES_PER_SHEET} copies on a sheet: scale it up	{what}은(는) 한 장에 {MAX_COPIES_PER_SHEET}개보다 많이 인쇄됩니다: 크기를 키우세요
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what}은(는) 타일 {MAX_TILES}개보다 많이 나뉘어 인쇄됩니다: 크기를 줄이세요
 @msg	{what} {i} out of range	{what} {i}이(가) 범위를 벗어났습니다
+	Packaging Tools	패키징 도구
+	Fold Lines	접는 선
+	Make Cut Line	재단선으로 만들기
+	Make Crease Line	오시선으로 만들기
+	Make Partial Cut Line	하프 컷 선으로 만들기
+	Make Perforation Line	미싱선으로 만들기
+	Make Fold Line	접는 선으로 만들기
+	Role Swatches…	선 종류 견본…
+	Role Swatches	선 종류 견본
+	Role	선 종류
+	Cut Line	재단선
+	Crease Line	오시선
+	Partial Cut Line	하프 컷 선
+	Perforation Line	미싱선
+	No objects are selected.	선택한 개체가 없습니다.
+	Open a document to mark its fold lines.	접는 선을 지정하려면 문서를 여세요.
+	Remove Fold Line Role	선 종류 제거

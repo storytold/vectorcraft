@@ -22,7 +22,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     // double-taps) where it was seen last (#491).
     let at = hover.or_else(|| pointer.interact_pos().filter(|p| rect.contains(*p)));
     let view = app.view_info();
-    let (_, backquote_before) = backquote_seen(ui);
+    let (backquote_now, backquote_before) = backquote_seen(ui);
     let f = Pointing { resp, rect, pointer: &pointer, m, space, xf, v, view, backquote_before, modal };
     touch_gestures(app, ui, rect, view, modal);
     // Pressed and held still, a pen or a finger opens the context menu (egui's long touch): the
@@ -31,14 +31,15 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         drop_press(app, ui, view);
     }
     let drag: Option<Drag> = ui.data(|d| d.get_temp(drag_id()));
-    // A modifier pressed or released over the canvas re-hovers the tool, so what it changes shows
-    // without moving the mouse (Alt switches the Shape Builder to erase mode).
+    // A modifier or Backtick pressed or released over the canvas re-hovers the tool, so what it
+    // changes shows without moving the mouse (Alt switches the Shape Builder to erase mode, and ~
+    // places the rings of a flare being drawn anew).
     let mods_changed = ui.data_mut(|d| {
         let id = egui::Id::unique("canvas-mods");
         let prev = d.get_temp::<egui::Modifiers>(id);
         d.insert_temp(id, m);
         prev.is_some_and(|prev| prev != m)
-    });
+    }) || backquote_before.is_some_and(|before| before != backquote_now);
     // Where the tool hovers: the pointer over the canvas itself, not over a floating panel, a menu,
     // a popup or a dialog drawn on top of it ([`on_canvas`]).
     let hover_tool = hover.filter(|p| on_canvas(ui, resp, *p));
@@ -120,6 +121,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     {
         // Middle-button drag pans the view whatever the tool.
         ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::Pan { start, center: v.center, middle: true }));
+        app.session.tool_press_elsewhere();
         app.session.tool_hover_ended(view);
     } else if let Some(d) = drag {
         // The pointer gone (a pen lifted with its press), the drag ends where it was last seen.
@@ -340,6 +342,9 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
     // view tools are not that tool.
     if !space && matches!(d, Drag::ZoomBox { .. } | Drag::ZoomScrub { .. } | Drag::Pan { .. } | Drag::RotateView { .. }) {
         crate::shortcuts::note_tool_use(app);
+    }
+    if !matches!(d, Drag::Tool) {
+        app.session.tool_press_elsewhere();
     }
     // Panning, zooming or turning the view takes the pointer from the tool's hover.
     if !tool_holds(d) {

@@ -135,6 +135,7 @@
 	Align to Artboard	An Zeichenfläche ausrichten
 	Align to Glyph Bounds	An Glyphenbegrenzung ausrichten
 	Align to Key Object	An Basisobjekt ausrichten
+	Align to Key Anchor	An Basisankerpunkt ausrichten
 	Align to Page	An Seite ausrichten
 	Align to Path	An Pfad ausrichten
 	Align to Selection	An Auswahl ausrichten
@@ -631,6 +632,18 @@ font-technology	Variable	Variabel
 	Copy Width Point	Breitenpunkt kopieren
 	Copyright	Copyright
 	Copyright Info URL:	URL für Copyright-Informationen:
+	Save Metadata Template…	Metadatenvorlage speichern…
+	Import Options	Importoptionen
+	Clear existing fields and use the template's	Vorhandene Felder löschen und die der Vorlage verwenden
+	Keep existing fields, but replace those the template has	Vorhandene Felder beibehalten, aber die in der Vorlage enthaltenen ersetzen
+	Keep existing fields, but append those the template has	Vorhandene Felder beibehalten, aber die in der Vorlage enthaltenen anfügen
+@msg	the template name can't be empty	der Vorlagenname darf nicht leer sein
+@msg	the template name isn't usable as a file name	der Vorlagenname ist als Dateiname nicht verwendbar
+@msg	no metadata templates folder here	hier gibt es keinen Ordner für Metadatenvorlagen
+@msg	give `name` or `path`, not both	geben Sie `name` oder `path` an, nicht beides
+@msg	give one of `path`, `name` and `data`	geben Sie einen der Parameter `path`, `name` und `data` an
+@msg	mode must be replace, keep or append	der Modus muss replace, keep oder append sein
+@msg	the file is not an XMP metadata template	die Datei ist keine XMP-Metadatenvorlage
 	Copyright Notice:	Copyright-Vermerk:
 	Copyright Status:	Copyright-Status:
 	Copyright Symbol	Copyright-Symbol
@@ -1055,7 +1068,8 @@ font-technology	Variable	Variabel
 	Every (minutes)	Alle (Minuten)
 	Every option is at its default.	Alle Optionen haben ihren Standardwert.
 	Every option matches {base}.	Alle Optionen entsprechen {base}.
-	Every-line Composer	Alle-Zeilen-Setzer
+	Middle Eastern & South Asian Every-line Composer	Alle-Zeilen-Setzer (Naher Osten und Südasien)
+	Standard Every-line Composer	Standard-Alle-Zeilen-Setzer
 	Exact dash lengths	Exakte Strichlängen
 	Exceptions (comma separated)	Ausnahmen (durch Kommas getrennt)
 	Exclude	Schnittmenge entfernen
@@ -1171,6 +1185,7 @@ font-technology	Variable	Variabel
 	Highlight Size	Glanzpunktgröße
 	Blend Steps	Angleichungsstufen
 	Shading Color	Schattierungsfarbe
+	Black Overprint	Überdruckendes Schwarz
 	Draw Hidden Faces	Verdeckte Flächen zeichnen
 	Eyedropper	Pipette
 	Sample Color from Screen	Farbe vom Bildschirm aufnehmen
@@ -1392,6 +1407,14 @@ file-filter	Templates	Vorlagen
 	Previous Artboard	Vorherige Zeichenfläche
 	Next Artboard	Nächste Zeichenfläche
 	Last Artboard	Letzte Zeichenfläche
+	Status Bar Show	In Statusleiste anzeigen
+	Artboard Name	Name der Zeichenfläche
+	Current Tool	Aktuelles Werkzeug
+	Date and Time	Datum und Uhrzeit
+	Number of Undos	Anzahl der Rückgängig-Schritte
+	Document Color Profile	Farbprofil des Dokuments
+	Undos	Rückgängig
+	Redos	Wiederholen
 	Go To Link	Gehe zu Verknüpfung
 	GPL palettes keep solid colours only, as RGB.	GPL-Paletten enthalten nur einfarbige Farben, als RGB.
 	GPU Performance	GPU-Leistung
@@ -1411,6 +1434,8 @@ file-filter	Templates	Vorlagen
 	Graph	Diagramm
 	Graph Data	Diagrammdaten
 	Graph Type	Diagrammtyp
+	Graph Type…	Diagrammtyp…
+	Graph Data…	Diagrammdaten…
 	Graph Options	Diagrammoptionen
 	Left Axis	Linke Achse
 	Right Axis	Rechte Achse
@@ -1526,6 +1551,7 @@ file-filter	Templates	Vorlagen
 	Show smooth color wheel	Stufenlosen Farbkreis anzeigen
 	Show segmented color wheel	Segmentierten Farbkreis anzeigen
 	Show color bars	Farbbalken anzeigen
+	Find the selected colors in the artwork	Ausgewählte Farben in der Grafik finden
 	Harmony Sets	Harmoniesätze
 	Height	Höhe
 	Height:	Höhe:
@@ -2678,6 +2704,8 @@ mark-style	Japanese	Japanisch
 	Insert Aki Left	Aki links einfügen
 	Insert Aki Right	Aki rechts einfügen
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Horizontale Position diakritischer Zeichen anpassen
+	Adjust Vertical Diacritic Position	Vertikale Position diakritischer Zeichen anpassen
 	Character Direction	Zeichenrichtung
 	Digits	Ziffern
 	Arabic	Arabisch
@@ -2978,6 +3006,12 @@ digits	Malayalam	Malayalam
 	Responsive	Responsiv
 	Restore	Wiederherstellen
 	Restore every preference to its default (applied on OK)	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen (wird bei OK angewendet)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Die Einheit für neue Dokumente in den integrierten Größen außer Pixelgrößen und für geöffnete Dateien ohne gespeicherte Einheit; wenn Sie sie hier wählen und auf OK klicken, erhält auch das aktive Dokument diese Einheit.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Konturstärken, Striche und Lücken werden in dieser Einheit angezeigt, und dafür eingegebene Zahlen werden in ihr gelesen.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Schriftgrade, Zeilenabstand und Grundlinienversatz werden in dieser Einheit angezeigt, und dafür eingegebene Zahlen werden in ihr gelesen.
+	The unit for East Asian type measurements, which no field uses yet.	Die Einheit für Maße in ostasiatischem Text, die noch kein Feld verwendet.
+	When on, a number typed without a unit into a field in picas is read in points.	Wenn aktiviert, wird eine ohne Einheit eingegebene Zahl in einem Feld in Pica als Punkt gelesen.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Mit XML-ID werden Objektnamen in „Ebenen“, „Variablen“ und „Ebenenoptionen“ als XML-IDs angezeigt.
 	Reset all preferences to their defaults?	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Die Standardwerte werden angewendet, wenn Sie in den Voreinstellungen auf OK klicken. Abbrechen dort behält Ihre aktuellen Voreinstellungen.
 	Restore Recovered Documents	Wiederhergestellte Dokumente öffnen
@@ -3011,6 +3045,7 @@ digits	Malayalam	Malayalam
 	Roman Hanging Punctuation	Hängende Interpunktion (lateinisch)
 	Korean Line Break Anywhere	Koreanischer Zeilenumbruch überall
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Einstellungen für ostasiatischen Satz
 	Korean Composition Settings	Einstellungen für koreanischen Satz
 	Rotate	Drehen
@@ -3205,6 +3240,10 @@ digits	Malayalam	Malayalam
 @msg	`{key}` must be an array of these names: {_1}	`{key}` muss ein Array mit diesen Namen sein: {_1}
 	Search commands, tools, panels and effects	Befehle, Werkzeuge, Bedienfelder und Effekte suchen
 	Search commands, tools, panels and effects…	Befehle, Werkzeuge, Bedienfelder und Effekte suchen…
+	Search commands and tools	Befehle und Werkzeuge suchen
+	Search commands and tools…	Befehle und Werkzeuge suchen…
+	Recent Commands	Zuletzt verwendete Befehle
+	No recent commands	Keine zuletzt verwendeten Befehle
 	Search Commands…	Befehle suchen…
 	Secondary	Sekundär
 	Section Symbol	Paragrafenzeichen
@@ -3420,7 +3459,8 @@ digits	Malayalam	Malayalam
 	Single Left Quotation Mark	Einfaches öffnendes Anführungszeichen
 	Single Quotes:	Einfache Anführungszeichen:
 	Single Right Quotation Mark	Einfaches schließendes Anführungszeichen
-	Single-line Composer	Einzeilen-Setzer
+	Middle Eastern & South Asian Single-line Composer	Einzeilen-Setzer (Naher Osten und Südasien)
+	Standard Single-line Composer	Standard-Einzeilen-Setzer
 	Toggle Line Composer	Zeilensetzer umschalten
 	Sixth Space	Sechstelgeviert-Leerzeichen
 	Size	Größe
@@ -3622,6 +3662,9 @@ effect	Points	Punkte
 	Show Import Options	Importoptionen anzeigen
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Vor dem Platzieren nach den Importoptionen jeder PDF-, DXF- oder Textdatei fragen; aus: die zuletzt gewählten Optionen verwenden
 	Stylistic Alternates	Stilistische Varianten
+	Ligatures	Ligaturen
+	Ornaments	Ornamente
+	Figures	Ziffern
 	Swash	Schwungschrift
 	Swatch Conflict	Farbfeldkonflikt
 	Swatch Conflicts	Farbfeldkonflikte
@@ -3738,6 +3781,8 @@ effect	Points	Punkte
 	Kana	Kana
 	Numerals	Ziffern
 	Scale at Center	Von der Mitte aus skalieren
+	Delete Set	Satz löschen
+	Direct Entry	Direkteingabe
 	Up/Down:	Oben/Unten:
 	Left/Right:	Links/Rechts:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko oben/unten
@@ -4347,6 +4392,31 @@ theme	Appearance	Erscheinungsbild
 @msg	$.evalFile requires a file path	$.evalFile erfordert einen Dateipfad
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: Die Zeitüberschreitung muss eine endliche Anzahl von Millisekunden sein, 0 oder mehr
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: nimmt einen Dateipfad und eine Zeitüberschreitung
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} ist nicht definiert
+@msg	cannot read property '{key}' of {base}	die Eigenschaft '{key}' von {base} kann nicht gelesen werden
+@msg	cannot set property '{key}' of {base}	die Eigenschaft '{key}' von {base} kann nicht gesetzt werden
+@msg	cannot read a property of {base}	eine Eigenschaft von {base} kann nicht gelesen werden
+@msg	cannot set a property of {base}	eine Eigenschaft von {base} kann nicht gesetzt werden
+@msg	cannot define property '{key}': {why}	die Eigenschaft '{key}' kann nicht definiert werden: {why}
+@msg	cannot assign to property '{key}': {why}	der Eigenschaft '{key}' kann nichts zugewiesen werden: {why}
+@msg	cannot delete property '{key}'	die Eigenschaft '{key}' kann nicht gelöscht werden
+@msg	cannot declare function {ident}	die Funktion {ident} kann nicht deklariert werden
+@msg	invalid assignment target	ungültiges Zuweisungsziel
+@msg	the array's length is read-only	die Länge des Arrays ist schreibgeschützt
+@msg	the property cannot be redefined	die Eigenschaft kann nicht neu definiert werden
+@msg	the object is not extensible	das Objekt ist nicht erweiterbar
+@msg	the length cannot be redefined	die Länge kann nicht neu definiert werden
+@msg	it is read-only	sie ist schreibgeschützt
+@msg	an element cannot be deleted	ein Element kann nicht gelöscht werden
+@msg	it has only a getter	sie hat nur einen Getter
+@msg	the value is a primitive	der Wert ist ein primitiver Wert
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: Zeile {line}, Spalte {column} in {file}: {e} (ausgelöst)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: Zeile {line}, Spalte {column}: {e} (ausgelöst)
 @msg	{name}: {e} (thrown)	{name}: {e} (ausgelöst)
@@ -4387,6 +4457,27 @@ theme	Appearance	Erscheinungsbild
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: Ein Dialog kann sich nicht in einem Callback einer integrierten Funktion, einem Getter, einer Umwandlung oder einer Datei öffnen, die $.evalFile ausführt; rufen Sie ihn aus dem eigenen Code des Skripts auf
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: Die nächste Antwort in `answers` ist für {_1}, nicht für {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` hat keine Antwort mehr für diesen Dialog
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` enthält {n} Antwort, die das Skript nicht verwendet hat|`answers` enthält {n} Antworten, die das Skript nicht verwendet hat
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} ließ {n} Objekt unter dem Pinsel unverändert ({_2}): es formt nur Pfade um|{_1} ließ {n} Objekte unter dem Pinsel unverändert ({_2}): es formt nur Pfade um
+liquify-tool	Warp	Verkrümmung
+liquify-tool	Twirl	Strudel
+liquify-tool	Pucker	Zusammenziehen
+liquify-tool	Bloat	Aufblasen
+liquify-tool	Scallop	Ausbuchten
+liquify-tool	Crystallize	Kristallisieren
+liquify-tool	Wrinkle	Zerknittern
+liquify-kind	graphs	Diagramme
+liquify-kind	type	Text
+liquify-kind	symbols	Symbole
+liquify-kind	images	Bilder
+liquify-kind	meshes	Gitter
+liquify-kind	envelopes	Hüllen
+liquify-kind	repeats	Wiederholungen
+liquify-kind	placed documents	platzierte Dokumente
+liquify-kind	blends	Angleichungen
+liquify-list-two	{0}, {1}	{0} und {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} und {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} ist zu groß für ein Skript
 @msg	vc.log: the log of this run is full	vc.log: Das Protokoll dieses Laufs ist voll
 @msg	this function's script run has ended	der Skriptlauf dieser Funktion ist beendet
@@ -5029,6 +5120,8 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown option `{path}.{k}`	unbekannte Option `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	unbekannter Wert für overprints `{o}` (preserve, simulate oder discard)
 @msg	unknown panel `{raw}`	unbekanntes Bedienfeld `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` hat keine Anzeigegrößen zum Durchlaufen
+@msg	the panels are not shown	die Bedienfelder werden nicht angezeigt
 @msg	panels can't be shown in Presentation Mode	im Präsentationsmodus können keine Bedienfelder angezeigt werden
 @msg	unknown preference `{key}`	unbekannte Voreinstellung `{key}`
 @msg	Preferences imported.	Voreinstellungen importiert.
@@ -5378,6 +5471,11 @@ theme	Appearance	Erscheinungsbild
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Die Hauptfarbe wird zur Konturfarbe. Die anderen Farben wandern ebenso weit um den Farbkreis wie die Hauptfarbe und behalten ihre Sättigung und Helligkeit.
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB-Richtlinie:
+	CMYK Policy:	CMYK-Richtlinie:
+	Preserve Embedded Profiles	Eingebettete Profile beibehalten
+	Convert to Working Space	In Arbeitsfarbraum konvertieren
+	Preserve Numbers	Werte beibehalten
 # PSD files.
 @msg	not a PSD file	keine PSD-Datei
 @msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	PSD-Dateien im Mehrkanalmodus können nicht gelesen werden: Speichern Sie die Datei im RGB-, CMYK- oder Graustufenmodus
@@ -5483,6 +5581,7 @@ theme	Appearance	Erscheinungsbild
 	Change Panel Layout	Bedienfeldanordnung ändern
 	Close Panel	Bedienfeld schließen
 	Collapse Panel Group	Bedienfeldgruppe minimieren
+	Cycle Display Sizes	Anzeigegrößen durchlaufen
 	Move Panel	Bedienfeld verschieben
 	Group with	Gruppieren mit
 	Resize panel window	Bedienfeldfenster skalieren
@@ -5512,6 +5611,8 @@ theme	Appearance	Erscheinungsbild
 # 3D and Materials › Revolve: its options dialog and gizmos.
 	Axis side	Achsenseite
 	Drag rings to rotate. Shift snaps to 15°.	Ziehen Sie die Ringe, um zu drehen. Mit Shift in 15°-Schritten.
+	Track cube	Rotationswürfel
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Ziehen Sie eine Fläche, eine Kante oder den Ring, um zu drehen. Mit Shift um eine Bildschirmachse.
 	Drag the light, or its rings. Shift snaps to 15°.	Ziehen Sie das Licht oder seine Ringe. Mit Shift in 15°-Schritten.
 lighting	Light	Licht
 	Drag values or labels. Double-click a value to type.	Ziehen Sie Werte oder Beschriftungen. Doppelklicken Sie auf einen Wert, um ihn einzugeben.
@@ -5850,6 +5951,7 @@ effect	Soft	Weich
 	Export Data Sets…	Datensätze exportieren…
 	Load Variable Library…	Variablenbibliothek laden…
 	Save Variable Library…	Variablenbibliothek speichern…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	„Importieren“ liest eine Datenquelldatei mit der Endung .csv, .tsv, .txt oder .xml
 @msg	a variable library holds text variables, and the document has none	eine Variablenbibliothek enthält Textvariablen, und das Dokument hat keine
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	die Variable `{name}` kann nicht in einer Variablenbibliothek gespeichert werden: Benennen Sie sie so um, dass sie mit einem Buchstaben oder `_` beginnt, ohne Leerzeichen oder andere Symbole als `-`, `_` und `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	der Datensatz `{name}` enthält ein Steuerzeichen, das eine Variablenbibliothek nicht enthalten kann
@@ -6184,6 +6286,7 @@ axis	Y Axis	Y-Achse
 @msg	stops must be in order of `offset`	die Farbstopps müssen nach `offset` geordnet sein
 @msg	the document has no pattern {pattern}	das Dokument hat kein Muster {pattern}
 @msg	the document has no swatch {n}	das Dokument hat kein Farbfeld {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` erfordert einen Farbstopp, der mit einem Volltonfarbfeld verknüpft ist
 @msg	the output	die Ausgabe
 @msg	the path has no anchor points	der Pfad hat keine Ankerpunkte
 @msg	too many anchor points (limit {MAX_ANCHORS})	zu viele Ankerpunkte (Grenze {MAX_ANCHORS})
@@ -6935,6 +7038,24 @@ breakText	Glyphs	Glyphen
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Striche in Pfade umwandeln
 @msg	select paths with dashed strokes to expand	wählen Sie Pfade mit gestrichelter Kontur zum Umwandeln aus
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Tangentialkreis…
+	Tangent Circle	Tangentialkreis
+	Circle:	Kreis:
+@msg	`ids` names an object twice	`ids` nennt ein Objekt zweimal
+@msg	select two or three paths or compound paths	wählen Sie zwei oder drei Pfade oder zusammengesetzte Pfade aus
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` muss von 0.01 bis 1000000 pt sein
+@msg	two shapes need a `radius`	zwei Formen brauchen einen `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	drei Formen legen den Radius selbst fest: lassen Sie `radius` weg
+@msg	`circle` must be from 0 to 64	`circle` muss von 0 bis 64 sein
+@msg	a shape has no outline	eine Form hat keinen Umriss
+@msg	the shapes are too complex: at most 2000 segments in all	die Formen sind zu komplex: höchstens 2000 Segmente insgesamt
+@msg	these shapes take too long to search	diese Formen brauchen zu lange für die Suche
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	mehr als 64 Kreise berühren diese Formen: sie berühren sie womöglich entlang einer ganzen Kurve
+@msg	no circle touches these shapes	kein Kreis berührt diese Formen
+@msg	`circle` is past the last circle found ({found})	`circle` liegt hinter dem letzten gefundenen Kreis ({found})
+@msg	object {value} is not a path or compound path	Objekt {value} ist kein Pfad oder zusammengesetzter Pfad
+@msg	these shapes are too small to measure	diese Formen sind zu klein zum Messen
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentwerkzeuge
 	Save a Timestamped Copy	Kopie mit Zeitstempel speichern
@@ -7252,6 +7373,7 @@ breakText	Glyphs	Glyphen
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` für dieses {kind}-Dialogfeld muss eines der folgenden sein: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` hat mehr als {MAX_ANSWERS} Antworten
 @msg	`answers` is larger than 1 MiB	`answers` ist größer als 1 MiB
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` ist nur für einen Lauf ohne jemanden, der gefragt werden kann: In der App beantwortet die Person jeden Dialog
 @msg	`answers` must be a list of answers	`answers` muss eine Liste von Antworten sein
 @msg	`artboard` must be the index of an artboard of the document	`artboard` muss der Index einer Zeichenfläche des Dokuments sein
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` muss [x, y] sein
@@ -7283,6 +7405,7 @@ breakText	Glyphs	Glyphen
 @msg	`name` must be a name that is not empty	`name` muss ein nicht leerer Name sein
 @msg	`name` must not be empty	`name` darf nicht leer sein
 @msg	`origin` must be [x, y] in points	`origin` muss [x, y] in Punkt sein
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` muss [a, b, c, d] sein, jeweils von -1000 bis 1000, mit a·d - b·c mindestens 0,001 von 0 entfernt
 @msg	`picks` must be an array (got {v})	`picks` muss ein Array sein (erhalten: {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` muss 1 bis {MAX_PICKS} Auswahlen enthalten (erhalten: {_1})
 @msg	`radius` must be 0 or more	`radius` muss 0 oder größer sein
@@ -7640,6 +7763,7 @@ breakText	Glyphs	Glyphen
 @msg	Image Trace failed: {e}	Bildnachzeichner fehlgeschlagen: {e}
 @msg	Image Trace finished, but its document was closed	Bildnachzeichner abgeschlossen, aber sein Dokument wurde geschlossen
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Bildnachzeichner abgeschlossen, aber das Bild oder seine Einstellungen haben sich inzwischen geändert: Zeichnen Sie es erneut nach
+@msg	Image Trace finished, but its document was reverted: trace it again	Bildnachzeichner abgeschlossen, aber sein Dokument wurde auf die letzte Version zurückgesetzt: Zeichnen Sie es erneut nach
 @msg	Invalid dimension offset	Ungültiger Bemaßungsversatz
 @msg	Invalid point	Ungültiger Punkt
 @msg	Join: a subpath went missing	Zusammenfügen: Ein Teilpfad ist verloren gegangen
@@ -8054,7 +8178,7 @@ breakText	Glyphs	Glyphen
 @msg	column: true floats the whole column and takes no onto, above or below	column: true macht die ganze Spalte schwebend und nimmt kein onto, above oder below
 @msg	command must be a shape.* command	command muss ein shape.*-Befehl sein
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command` fehlt
-@msg	composer must be "singleLine" or "everyLine"	composer muss „singleLine“ oder „everyLine“ sein
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer muss „singleLine“, „everyLine“, „standardSingleLine“ oder „standardEveryLine“ sein
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	zusammengesetzte Formen nehmen Pfade, zusammengesetzte Pfade, Gruppen, zusammengesetzte Formen, Text, Angleichungen und Verzerrungshüllen
 @msg	compound {_1} must contain exactly one open path to join	zusammengesetzter Pfad {_1} muss genau einen offenen Pfad zum Zusammenfügen enthalten
 @msg	connect end must be "start" or "end"	connect end muss „start“ oder „end“ sein
@@ -8985,7 +9109,8 @@ breakText	Glyphs	Glyphen
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind}-Dateien haben keine Transparenz, und die Datei hätte {what}: Reduzieren Sie sie zuerst (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind}-Bilder können nicht geöffnet werden (siehe document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` ist keine der Auswahlmöglichkeiten
-@msg	{k} has control characters{_1}	{k} enthält Steuerzeichen{_1}
+@msg	{k} has control characters	{k} enthält Steuerzeichen
+@msg	{k} has control characters or line breaks	{k} enthält Steuerzeichen oder Zeilenumbrüche
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} ist zu lang (höchstens {MAX_TEXT} Zeichen)
 @msg	{k} must be > 0	{k} muss > 0 sein
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} muss eine Zahl (pt) oder eine Länge wie „210 mm“ sein
@@ -9166,3 +9291,20 @@ breakText	Glyphs	Glyphen
 	Nest Shapes…	Formen verschachteln…
 	Nest Shapes	Formen verschachteln
 	Roll	Rolle
+	Packaging Tools	Verpackungswerkzeuge
+	Fold Lines	Faltlinien
+	Make Cut Line	Als Schnittlinie festlegen
+	Make Crease Line	Als Rilllinie festlegen
+	Make Partial Cut Line	Als Teilschnittlinie festlegen
+	Make Perforation Line	Als Perforationslinie festlegen
+	Make Fold Line	Als Faltlinie festlegen
+	Role Swatches…	Farbfelder der Linienarten…
+	Role Swatches	Farbfelder der Linienarten
+	Role	Linienart
+	Cut Line	Schnittlinie
+	Crease Line	Rilllinie
+	Partial Cut Line	Teilschnittlinie
+	Perforation Line	Perforationslinie
+	No objects are selected.	Es sind keine Objekte ausgewählt.
+	Open a document to mark its fold lines.	Öffnen Sie ein Dokument, um seine Faltlinien festzulegen.
+	Remove Fold Line Role	Linienart entfernen

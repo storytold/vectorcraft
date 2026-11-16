@@ -773,7 +773,7 @@ fn settle_warped_type(
 }
 
 /// Most anchors copied into the wrap shapes of a file's area type ([`vectorcraft_doc::text::wrap_work`]).
-const MAX_WRAP_WORK: usize = 2_000_000;
+pub(crate) const MAX_WRAP_WORK: usize = 2_000_000;
 
 /// [`relayout_wrapped`], or an error when the wrap shapes would hold more than [`MAX_WRAP_WORK`]
 /// anchors.
