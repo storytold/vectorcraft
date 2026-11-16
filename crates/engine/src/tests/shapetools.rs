@@ -149,6 +149,72 @@ fn a_shape_tool_turns_the_shape_from_just_outside_a_corner() {
     assert_eq!(angle(&s, id), 0.0, "rounding does not turn it");
 }
 
+/// How many objects the first layer holds.
+fn objects(s: &Session) -> usize {
+    s.doc().unwrap().doc.layers[0].children().map(|c| c.len()).unwrap_or_default()
+}
+
+/// Feed the pointer events `(kind, x, y, backtick held)` to the active tool, with no modifier.
+fn quote_gesture(s: &mut Session, events: &[(PointerKind, f64, f64, bool)]) {
+    for (k, x, y, held) in events {
+        s.pointer(&PointerEvent { backquote: *held, ..PointerEvent::new(*k, *x, *y) }, view()).unwrap();
+    }
+}
+
+/// A Rectangle tool drag from (50, 50) with Backtick held from (100, 100) to (140, 100), let go
+/// before (160, 120), all moved by `o` along both axes: two copies, 70 × 50 and 90 × 50 pt, and
+/// the 110 × 70 pt rectangle it ends with. With `release`, the drag is let go; without, it is
+/// still in progress.
+fn trail(s: &mut Session, o: f64, release: bool) {
+    use PointerKind::{Down, Drag, Up};
+    quote_gesture(
+        s,
+        &[
+            (Down, 50.0 + o, 50.0 + o, false),
+            (Drag, 100.0 + o, 100.0 + o, true),
+            (Drag, 120.0 + o, 100.0 + o, true),
+            (Drag, 140.0 + o, 100.0 + o, true),
+        ],
+    );
+    quote_gesture(s, &[(Drag, 160.0 + o, 120.0 + o, false)]);
+    if release {
+        quote_gesture(s, &[(Up, 160.0 + o, 120.0 + o, false)]);
+    }
+}
+
+/// The sizes of the first layer's objects, back to front.
+fn sizes(s: &Session) -> Vec<(f64, f64)> {
+    let ids: Vec<NodeId> = s.doc().unwrap().doc.layers[0].children().map(|c| c.iter().map(|n| n.id).collect()).unwrap_or_default();
+    ids.into_iter().map(|id| bounds(s, id)).map(|r| (r.width(), r.height())).collect()
+}
+
+/// Backtick held while a rectangle is dragged out leaves copies of it along the drag: each its own
+/// object, and the release keeps them with the last rectangle as one undo step, with Real-time
+/// Drawing and Editing on or off. Escape takes the copies back with the shape being drawn.
+#[test]
+fn a_backtick_drag_leaves_copies_of_the_shape_as_one_undo_step() {
+    for real_time in [true, false] {
+        let mut s = new_doc();
+        s.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": real_time})).unwrap();
+        s.select_tool("rectangle", view()).unwrap();
+        let steps = undo_steps(&s);
+        trail(&mut s, 0.0, true);
+        assert_eq!(sizes(&s), vec![(70.0, 50.0), (90.0, 50.0), (110.0, 70.0)], "real time {real_time}");
+        assert_eq!(undo_steps(&s), steps + 1, "one undo step");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(objects(&s), 0, "Undo takes all three back");
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(objects(&s), 3, "Redo puts all three back");
+        // Escape takes back the copies and the shape being drawn, away from the selection.
+        let steps = undo_steps(&s);
+        trail(&mut s, 200.0, false);
+        s.tool_key(ToolKey::Escape, NONE, view()).unwrap();
+        quote_gesture(&mut s, &[(PointerKind::Up, 360.0, 320.0, false)]);
+        assert_eq!(objects(&s), 3, "real time {real_time}: nothing new");
+        assert_eq!(undo_steps(&s), steps, "no step");
+    }
+}
+
 /// The Selection tool takes the centre point of an unfilled shape too: a drag there moves it
 /// instead of starting a marquee.
 #[test]

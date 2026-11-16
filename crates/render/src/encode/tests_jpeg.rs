@@ -108,7 +108,23 @@ fn methods_write_baseline_or_progressive_frames() {
     assert_eq!(frame(&p3).0, 0xC2, "SOF2");
     assert!(sos(&p3) > 1 && sos(&p5) > sos(&p3), "more scans: {} {}", sos(&p3), sos(&p5));
     for f in [&base, &p3, &p5] {
-        let back = image::load_from_memory(f).unwrap();
+        let back = craft_image_codecs::decode(f)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap();
         assert_eq!((back.width(), back.height()), (40, 30));
     }
 }
@@ -184,7 +200,24 @@ fn cmyk_exports_keep_the_inks_of_cmyk_colours() {
     assert!(red[1] > 200 && red[2] > 200 && red[0] < 40, "RGB red separates to magenta and yellow: {red:?}");
     let file = Renderer::new().export_region(&d, d.artboards[0].rect, RasterFormat::Jpeg, &o).unwrap();
     assert_eq!(frame(&file).1, 4, "4 components");
-    let back = image::load_from_memory(&file).unwrap().to_rgb8();
+    let back = craft_image_codecs::decode(&file)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgb8();
     assert!(back.get_pixel(3, 5).0.iter().all(|v| *v < 60), "black reads back dark: {:?}", back.get_pixel(3, 5));
     let r = back.get_pixel(15, 5).0;
     assert!(r[0] > 180 && r[1] < 90, "red reads back red: {r:?}");
@@ -196,7 +229,24 @@ fn gray_exports_keep_the_lightness() {
     let o = RasterExportOptions { jpeg: JpegOptions { color_model: ColorModel::Gray, ..Default::default() }, ..Default::default() };
     let file = Renderer::new().export_region(&d, d.artboards[0].rect, RasterFormat::Jpeg, &o).unwrap();
     assert_eq!(frame(&file).1, 1);
-    let back = image::load_from_memory(&file).unwrap().to_luma8();
+    let back = craft_image_codecs::decode(&file)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_luma8();
     let red = back.get_pixel(15, 5)[0];
     // sRGB red's relative luminance 0.2126, encoded: about 127.
     assert!((115..=140).contains(&red), "{red}");
