@@ -81,7 +81,24 @@ fn public_affinity_documents_render_like_their_affinity_thumbnails() {
         let loaded = vectorcraft_engine::cmd::fileio::load(name, &bytes).unwrap();
         assert!(!loaded.preview_only, "{name} opened as its preview: {:?}", loaded.warnings);
         let d = &loaded.doc;
-        let thumb = image::load_from_memory(vectorcraft_affinity::preview(&bytes).unwrap().png).unwrap().to_rgba8();
+        let thumb = craft_image_codecs::decode(vectorcraft_affinity::preview(&bytes).unwrap().png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8();
         // The embedded thumbnail shows the union of the artboards. Check every board,
         // including small ones that the previous largest-board-only check omitted.
         let union = d.artboards.iter().map(|a| a.rect).reduce(|a, b| a.union(b)).unwrap();
@@ -166,7 +183,24 @@ fn affinity3_all_artboards_survive_native_save_and_export() {
             assert_eq!(vectorcraft_pdf::import(&pdf).unwrap().artboards.len(), 1, "{name} board {index}: PDF reimport");
             let psd = vectorcraft_engine::cmd::fileio::encode(doc, "psd", &params).unwrap();
             let png = vectorcraft_engine::cmd::fileio::encode(doc, "png", &params).unwrap();
-            let png = image::load_from_memory(&png).unwrap().to_rgba8();
+            let png = craft_image_codecs::decode(&png)
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .unwrap()
+                .to_rgba8();
             let (merged, has_alpha) = psd_merged(&psd);
             assert_eq!(merged.dimensions(), png.dimensions(), "{name} board {index}: PSD image dimensions");
             // PSD merged RGB is stored on a white matte for readers that ignore alpha;
