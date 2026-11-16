@@ -209,6 +209,17 @@ impl Frames {
             self.run(app, vec![egui::Event::PointerMoved(at), button]);
         }
     }
+
+    /// Click the text field named `label`, type `text` over its text and press Tab.
+    pub(super) fn type_into(&mut self, app: &mut VectorcraftApp, label: &str, text: &str) {
+        let (_, at) = self.control(app, label, egui::accesskit::Role::TextInput);
+        self.click(app, at);
+        self.run(app, vec![egui::Event::Text(text.into())]);
+        let tab = |pressed| egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+        self.run(app, vec![tab(true)]);
+        self.run(app, vec![tab(false)]);
+        self.run(app, vec![]);
+    }
 }
 
 /// Enter on the focused Custom… button opens the custom options and does not also confirm them.
@@ -254,6 +265,24 @@ fn a_switch_changed_beside_a_bad_value_keeps_the_values_entered() {
     assert!(confirm(&mut app).is_err());
     set(&mut app, "lineArtPpi", json!(300));
     assert!(confirm(&mut app).unwrap_err().contains("resolutions"));
+}
+
+/// A value of the wrong type shows blank, and typing the default preset's value into its field
+/// replaces it, so OK takes the options.
+#[test]
+fn the_default_value_typed_over_a_value_of_the_wrong_type_replaces_it() {
+    let (mut app, _) = app(1);
+    app.run("ui.epsOptionsDialog", json!({"path": "/out/a.eps"})).unwrap();
+    frame(&mut app);
+    open_custom(&mut app);
+    set(&mut app, "lineArtPpi", json!("many"));
+    let default = vectorcraft_engine::cmd::FlattenOptions::default().line_art_ppi;
+    let mut f = Frames::new();
+    f.type_into(&mut app, "Line Art and Text Resolution:", &default.to_string());
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["lineArtPpi"], json!(default));
+    confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some("epsOptions"));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["flattener"]["lineArtPpi"].as_f64(), Some(default));
 }
 
 #[test]

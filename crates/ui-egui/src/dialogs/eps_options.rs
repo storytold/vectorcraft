@@ -197,17 +197,12 @@ fn overprints_kept(d: &Dialog) -> bool {
 /// format (no alpha) and by EPS Options' Overprints.
 fn custom_body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let current = custom_options(d);
-    // Values refused stay as entered, so that changing another option keeps them.
-    let mut o = current.clone().unwrap_or_else(|_| super::flatten::entered_options(&d.fields, &FlattenOptions::default()));
-    let kept = o.preserve_overprints;
+    // Values refused stay as entered, so that changing another option keeps them. The Preserve
+    // switches can't be set here, so the fields keep their own values of them.
+    let (mut o, unread) = super::flatten::shown_options(&d.fields, &current);
     o.preserve_alpha = false;
-    o.preserve_overprints = kept && overprints_kept(d);
-    let mut shown = o.clone();
-    shown.preserve_overprints = kept;
-    if super::flatten::options_editor_fixed_preserve(ui, "eps-flattener", &mut o) {
-        o.preserve_overprints = kept;
-        super::flatten::put_changed_options(&mut d.fields, &shown, &o);
-    }
+    o.preserve_overprints &= overprints_kept(d);
+    super::flatten::fields_editor(ui, "eps-flattener", &mut d.fields, &mut o, &unread, true);
     if let Err(e) = &current {
         ui.label(egui::RichText::new(e).color(Tokens::get(ui.ctx()).text_dim).size(11.5));
     }
