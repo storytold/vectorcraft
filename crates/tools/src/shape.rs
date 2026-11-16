@@ -15,6 +15,10 @@
 //! box's eight handles scales the selection, a press on the selection's centre point (Show Center)
 //! moves it, and one just outside a corner of its box turns it about that centre, as the Selection
 //! tool's handles, centre point and rotate zone do; a press anywhere else draws a new shape (#5477).
+//!
+//! With Smart Guides and Snap to Tangent on, a circle drawn from its center with the Ellipse tool (Alt and Shift)
+//! takes the radius at which it touches a nearby path whenever its radius comes within the
+//! snapping tolerance of it ([`DrawSnap::circle_radius`]).
 
 use serde_json::{Value, json};
 use vectorcraft_doc::OrientedBox;
@@ -84,11 +88,18 @@ pub struct ShapeTool {
     began: bool,
     pub sides: u32,
     pub points: u32,
+    /// The anchors an ellipse made by a click has (the Ellipse dialog opens on it); 4 is a live
+    /// ellipse.
+    pub anchors: u32,
     pub corner_radius: f64,
     /// Star inner radius as a fraction of the outer radius.
     pub star_ratio: f64,
     /// The star's inner radius held while Ctrl/Cmd is down in a drag.
     inner: Option<f64>,
+    /// Where the last drag put the dragged corner of a circle drawn from its center, from the
+    /// center, when Snap to Tangent sized it ([`Self::tangent_circle`]); none when the pointer
+    /// sized it. Space moving the circle moves the corner it was drawn with there and clears it.
+    tangent_corner: Option<Vec2>,
     /// Line Segment Tool Options: the length and angle (degrees) a click's dialog opens with, and
     /// Fill Line (new lines take the current fill).
     pub line_length: f64,
@@ -146,9 +157,11 @@ impl ShapeTool {
             began: false,
             sides: 6,
             points: 5,
+            anchors: 4,
             corner_radius: 12.0,
             star_ratio: 0.5,
             inner: None,
+            tangent_corner: None,
             snap: DrawSnap::default(),
             line_length: 100.0,
             line_angle: 0.0,
@@ -414,6 +427,27 @@ impl ShapeTool {
         }
     }
 
+    /// Snap to Tangent for a circle drawn from its center `s` (the Ellipse tool with Alt and
+    /// Shift): the dragged corner `p` moved toward or away from `s` so that the circle touches a
+    /// nearby path, when its radius is within the snapping tolerance of a touching one
+    /// ([`DrawSnap::circle_radius`]); `raw` is the pointer before snapping. The radius is measured
+    /// along the Constrain Angle's axes, as the drawn box is ([`turned_box`]). None for any other
+    /// shape or modifiers, or with `p` on `s`.
+    fn tangent_circle(&mut self, cx: &ToolContext, s: Point, raw: Point, p: Point, m: Mods) -> Option<Point> {
+        if self.id != "ellipse" || !(m.alt && m.shift) || m.space {
+            return None;
+        }
+        let axes = vectorcraft_geom::constrain_axes(cx.constrain_angle).unwrap_or(Affine::IDENTITY);
+        let back = axes.inverse();
+        let (c, d) = (back * s, back * p - back * s);
+        let r = d.x.abs().max(d.y.abs());
+        if r.is_nan() || r <= 0.0 {
+            return None;
+        }
+        let radius = self.snap.circle_radius(cx, s, raw, p, r)?;
+        Some(axes * (c + d * (radius / r)))
+    }
+
     /// The command for a drag from `start` to `p` (snapped: a line's end already keeps Shift's
     /// angle).
     pub fn command(&self, start: Point, p: Point, m: Mods) -> (String, Value) {
@@ -556,6 +590,7 @@ impl Tool for ShapeTool {
             }
             PointerKind::Drag => {
                 let Some(mut s) = self.start else { return vec![] };
+                let raw = ev.pos;
                 let pos = self.snap.drag(cx, ev.pos, self.leave(cx, s, ev.mods).as_ref());
                 let ev = &PointerEvent { pos, ..*ev };
                 // The inner radius of the star the last drag showed, with the ratio it drew with:
@@ -563,15 +598,28 @@ impl Tool for ShapeTool {
                 // first arrives with the next position.
                 let ratio = if self.mods.alt { straight_ratio(self.points).unwrap_or(self.star_ratio) } else { self.star_ratio };
                 let shown = (self.last - s).hypot() * ratio;
+                // Space moves a circle Snap to Tangent sized from the corner it was drawn with, so
+                // it keeps that size while it moves and after Space is let go.
+                if ev.mods.space
+                    && self.began
+                    && let Some(d) = self.tangent_corner.take()
+                {
+                    self.last = s + d;
+                }
                 space_moves(&mut s, &mut self.last, ev, self.began);
                 self.start = Some(s);
                 self.mods = ev.mods;
                 if self.id == "star" {
                     self.hold_inner(shown, s, ev.pos, ev.mods);
                 }
+                // A circle from its center takes a radius that touches a nearby path. Whether the
+                // drag has begun is judged before that snap.
+                let dragged = ev.pos;
+                self.tangent_corner = self.tangent_circle(cx, s, raw, ev.pos, ev.mods).map(|q| q - s);
+                let ev = &PointerEvent { pos: self.tangent_corner.map_or(ev.pos, |d| s + d), ..*ev };
                 let mut out = vec![];
                 if !self.began {
-                    if ev.pos.distance(s) < cx.tol(2.0) {
+                    if dragged.distance(s) < cx.tol(2.0) {
                         return out;
                     }
                     self.began = true;
@@ -729,7 +777,9 @@ impl Tool for ShapeTool {
                         let (w, h) = match self.id {
                             "polygon" => ((self.last - s).x.abs(), (self.last - s).y.abs()),
                             _ => {
-                                let (r, _) = turned_box(s, self.last, self.mods, cx.constrain_angle);
+                                // The corner Snap to Tangent moved a circle's to, as the preview draws it.
+                                let corner = self.tangent_corner.map_or(self.last, |d| s + d);
+                                let (r, _) = turned_box(s, corner, self.mods, cx.constrain_angle);
                                 (r.width(), r.height())
                             }
                         };
@@ -787,6 +837,7 @@ impl Tool for ShapeTool {
         json!({
             "sides": self.sides,
             "points": self.points,
+            "anchors": self.anchors,
             "cornerRadius": self.corner_radius,
             "starRatio": self.star_ratio,
             "length": self.line_length,
@@ -799,6 +850,7 @@ impl Tool for ShapeTool {
         match key {
             "sides" => self.sides = v.as_u64().unwrap_or(6).clamp(3, 1000) as u32,
             "points" => self.points = v.as_u64().unwrap_or(5).clamp(3, 1000) as u32,
+            "anchors" => self.anchors = v.as_u64().unwrap_or(4).clamp(2, 1000) as u32,
             "cornerRadius" => self.corner_radius = finite.unwrap_or(12.0).clamp(0.0, MAX_CORNER_RADIUS),
             "starRatio" => self.star_ratio = v.as_f64().unwrap_or(0.5).clamp(0.01, 1.0),
             "length" => self.line_length = finite.map_or(self.line_length, |n| n.abs().min(1e6)),

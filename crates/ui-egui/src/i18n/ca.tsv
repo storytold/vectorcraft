@@ -754,7 +754,7 @@ antiAlias	Sharp	Nítid
 	Close Panel	Tanca el panell
 	Close Path	Tanca el traçat
 	Close paths when ends are within:	Tanca els traçats quan els extrems siguin a menys de:
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Tanca els extrems circulars dels perfils oberts. Els escombrats parcials mantenen oberts els costats tallats.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Tanca els extrems circulars dels perfils oberts. Els escombrats parcials també tanquen els costats tallats.
 	Closed	Tancat
 	Closing bracket with no opening one	Delimitador de tancament sense un d’obertura
 	Clumped	Agrupat
@@ -947,6 +947,18 @@ antiAlias	Sharp	Nítid
 	Copyright	Copyright
 	Copyright and Contact Info	Informació de copyright i de contacte
 	Copyright Info URL:	URL de la informació de copyright:
+	Save Metadata Template…	Desa la plantilla de metadades…
+	Import Options	Opcions d’importació
+	Clear existing fields and use the template's	Esborra els camps existents i fes servir els de la plantilla
+	Keep existing fields, but replace those the template has	Conserva els camps existents, però substitueix els que tingui la plantilla
+	Keep existing fields, but append those the template has	Conserva els camps existents, però afegeix els que tingui la plantilla
+@msg	the template name can't be empty	el nom de la plantilla no pot estar buit
+@msg	the template name isn't usable as a file name	el nom de la plantilla no es pot fer servir com a nom de fitxer
+@msg	no metadata templates folder here	aquí no hi ha cap carpeta de plantilles de metadades
+@msg	give `name` or `path`, not both	indiqueu `name` o `path`, no tots dos
+@msg	give one of `path`, `name` and `data`	indiqueu un de `path`, `name` i `data`
+@msg	mode must be replace, keep or append	el mode ha de ser replace, keep o append
+@msg	the file is not an XMP metadata template	el fitxer no és una plantilla de metadades XMP
 	Copyright Notice:	Avís de copyright:
 	Copyright Status:	Estat del copyright:
 	Copyright Symbol	Símbol de copyright
@@ -1645,6 +1657,7 @@ antiAlias	Sharp	Nítid
 	Highlight Size	Mida de la brillantor
 	Blend Steps	Passos de fusió
 	Shading Color	Color de l’ombra
+	Black Overprint	Negre en sobreimpressió
 	Draw Hidden Faces	Dibuixa les cares ocultes
 	Eyedropper	Comptagotes
 	Eyedropper Applies:	El comptagotes aplica:
@@ -1792,6 +1805,8 @@ digits	Malayalam	Malaiàlam
 	Font Family, Style & Size	Família, estil i mida de tipus de lletra
 	Font Family:	Família de tipus de lletra:
 	Font List	Llista de tipus de lletra
+	Show Similar Fonts	Mostra tipus de lletra semblants
+	Clear Similar Fonts	Esborra els tipus de lletra semblants
 	Font Preview Size	Mida de previsualització del tipus de lletra
 	Font Size	Mida del tipus de lletra
 	Font Style:	Estil de tipus de lletra:
@@ -2649,7 +2664,8 @@ digits	Malayalam	Malaiàlam
 	Minimal	Mínim
 	Minimize	Minimitza
 	Minimum	Mínim
-	Minimum must not exceed Desired, nor Desired Maximum.	El mínim no pot superar el desitjat ni el màxim desitjat.
+	Minimum must not exceed Desired, nor Desired Maximum.	El mínim no pot superar el desitjat, ni el desitjat el màxim.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: el mínim no pot superar el desitjat, ni el desitjat el màxim
 	Minus Back	Resta al darrere
 	Minus Front	Resta al davant
 	Mirror	Reflexa
@@ -3771,6 +3787,12 @@ digits	Malayalam	Malaiàlam
 	Responsive	Adaptatiu
 	Restore	Restaura
 	Restore every preference to its default (applied on OK)	Restaura cada preferència al seu valor predeterminat (s’aplica en prémer D’acord)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	La unitat dels documents nous de mides predefinides, excepte les mides en píxels, i dels fitxers oberts que no registren cap unitat; si la trieu aquí i feu clic a D’acord, també passa a ser la unitat del document actiu.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Els gruixos de traç, els guions i els espais es mostren en aquesta unitat, i els nombres que s’hi escriuen es llegeixen en aquesta unitat.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Les mides del text, l’interlineat i el desplaçament de la línia de base es mostren en aquesta unitat, i els nombres que s’hi escriuen es llegeixen en aquesta unitat.
+	The unit for East Asian type measurements, which no field uses yet.	La unitat per a les mesures del text d’Àsia oriental, que encara no fa servir cap camp.
+	When on, a number typed without a unit into a field in picas is read in points.	Quan està activat, un nombre escrit sense unitat en un camp en piques es llegeix en punts.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Amb ID XML, els noms dels objectes es mostren com a ID XML a Capes, Variables i Opcions de la capa.
 	Reset all preferences to their defaults?	Voleu restablir totes les preferències als valors predeterminats?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Els valors predeterminats s’apliquen quan feu clic a D’acord a Preferències. Cancel·la allà conserva les preferències actuals.
 	Restore Recovered Documents	Restaura els documents recuperats
@@ -3819,6 +3841,7 @@ digits	Malayalam	Malaiàlam
 	Roman Hanging Punctuation	Puntuació penjant romana
 	Korean Line Break Anywhere	Salt de línia coreà a qualsevol lloc
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Configuració de composició de l’Àsia oriental
 	Korean Composition Settings	Configuració de composició coreana
 	Rotate	Gira
@@ -4083,6 +4106,8 @@ digits	Malayalam	Malaiàlam
 	Search All	Cerca a tot
 	Search commands and tools	Cerca ordres i eines
 	Search commands and tools…	Cerca ordres i eines…
+	Recent Commands	Ordres recents
+	No recent commands	No hi ha ordres recents
 	Search Commands…	Cerca ordres…
 	Search Fonts Folder	Cerca a la carpeta de tipus de lletra
 	Searching…	Cercant…
@@ -4671,6 +4696,9 @@ digits	Malayalam	Malaiàlam
 	Show Import Options	Mostra les opcions d’importació
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Demana les opcions d’importació de cada fitxer PDF, DXF o de text abans de col·locar-lo; desactivat: s’usen les últimes opcions triades
 	Stylistic Alternates	Alternatives estilístiques
+	Ligatures	Lligadures
+	Ornaments	Ornaments
+	Figures	Xifres
 	Swash	Volada
 	Swatch Conflict	Conflicte de mostres
 	Swatch Conflicts	Conflictes de mostres
@@ -5674,6 +5702,44 @@ digits	Malayalam	Malaiàlam
 @msg	$.evalFile requires a file path	$.evalFile requereix un camí de fitxer
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: el temps d'espera ha de ser un nombre finit de mil·lisegons, 0 o més
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: rep un camí de fitxer i un temps d'espera
+@msg	assignment to a constant binding	assignació a un enllaç constant
+@msg	invalid array length	longitud de matriu no vàlida
+@msg	array literal too long	el literal de matriu és massa llarg
+@msg	the value is not a function	el valor no és una funció
+@msg	apply was called on a value that is not a function	s'ha cridat apply sobre un valor que no és una funció
+@msg	the argument list is not an object	la llista d'arguments no és un objecte
+@msg	too many arguments	massa arguments
+@msg	the value is not a constructor	el valor no és un constructor
+@msg	cannot convert the object to a primitive value	no es pot convertir l'objecte en un valor primitiu
+@msg	cannot convert undefined or null to an object	no es pot convertir undefined ni null en un objecte
+@msg	the right side of 'in' is not an object	el costat dret de 'in' no és un objecte
+@msg	the right side of 'instanceof' is not a function	el costat dret de 'instanceof' no és una funció
+@msg	the function's prototype is not an object	el prototip de la funció no és un objecte
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} no està definit
+@msg	cannot read property '{key}' of {base}	no es pot llegir la propietat '{key}' de {base}
+@msg	cannot set property '{key}' of {base}	no es pot establir la propietat '{key}' de {base}
+@msg	cannot read a property of {base}	no es pot llegir cap propietat de {base}
+@msg	cannot set a property of {base}	no es pot establir cap propietat de {base}
+@msg	cannot define property '{key}': {why}	no es pot definir la propietat '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	no es pot assignar a la propietat '{key}': {why}
+@msg	cannot delete property '{key}'	no es pot suprimir la propietat '{key}'
+@msg	cannot declare function {ident}	no es pot declarar la funció {ident}
+@msg	invalid assignment target	destinació d'assignació no vàlida
+@msg	the array's length is read-only	la longitud de la matriu és només de lectura
+@msg	the property cannot be redefined	la propietat no es pot redefinir
+@msg	the object is not extensible	l'objecte no és extensible
+@msg	the length cannot be redefined	la longitud no es pot redefinir
+@msg	it is read-only	és només de lectura
+@msg	an element cannot be deleted	no es pot suprimir un element
+@msg	it has only a getter	només té un getter
+@msg	the value is a primitive	el valor és primitiu
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: línia {line}, columna {column} de {file}: {e} (llançat)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: línia {line}, columna {column}: {e} (llançat)
 @msg	{name}: {e} (thrown)	{name}: {e} (llançat)
@@ -5714,6 +5780,27 @@ digits	Malayalam	Malaiàlam
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: un quadre de diàleg no es pot obrir dins d'una crida de retorn d'una funció integrada, un getter, una conversió o un fitxer que executa $.evalFile; crideu-lo des del codi propi de l'script
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: la resposta següent d'`answers` és per a {_1}, no per a {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: a `answers` no queden respostes per a aquest quadre de diàleg
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` conté {n} resposta que l'script no ha utilitzat|`answers` conté {n} respostes que l'script no ha utilitzat
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} ha deixat {n} objecte sota el pinzell sense canvis ({_2}): només remodela traçats|{_1} ha deixat {n} objectes sota el pinzell sense canvis ({_2}): només remodela traçats
+liquify-tool	Warp	Deformació
+liquify-tool	Twirl	Remolí
+liquify-tool	Pucker	Arrufament
+liquify-tool	Bloat	Inflament
+liquify-tool	Scallop	Festonat
+liquify-tool	Crystallize	Cristal·lització
+liquify-tool	Wrinkle	Arruga
+liquify-kind	graphs	gràfics
+liquify-kind	type	text
+liquify-kind	symbols	símbols
+liquify-kind	images	imatges
+liquify-kind	meshes	malles
+liquify-kind	envelopes	embolcalls
+liquify-kind	repeats	repeticions
+liquify-kind	placed documents	documents col·locats
+liquify-kind	blends	fusions
+liquify-list-two	{0}, {1}	{0} i {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} i {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} és massa gran per a un script
 @msg	vc.log: the log of this run is full	vc.log: el registre d'aquesta execució és ple
 @msg	this function's script run has ended	l'execució de l'script d'aquesta funció ha acabat
@@ -5789,6 +5876,7 @@ digits	Malayalam	Malaiàlam
 @msg	every numbered name for {name} is taken in the document's folder	tots els noms numerats per a {name} estan ocupats a la carpeta del document
 @msg	every search thread stopped on an internal error (please report this bug)	tots els fils de cerca s’han aturat per un error intern (informeu d’aquest error)
 @msg	Expand Appearance: the selection has a basic appearance	Expandeix l’aparença: la selecció té una aparença bàsica
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	alguns efectes ràster no s’han convertit en imatges: ocuparien més de 1.024 imatges o 256 megapíxels en total
 @msg	Expand: no brush strokes selected	Expandeix: no s’ha seleccionat cap traç de pinzell
 @msg	Expand: no gradient fills	Expandeix: no hi ha farciments de degradat
 @msg	Expand: nothing to expand	Expandeix: no hi ha res per expandir
@@ -6978,6 +7066,10 @@ theme	Appearance	Aparença
 	Em Box	Caixa em
 	x-Height	Alçada de la x
 	ICF Box	Caixa ICF
+	Show Sample	Mostra l'exemple
+	Hide Sample	Amaga l'exemple
+	Max Ascent/Descent	Alçada/profunditat màx.
+	Max Ascender	Ascendent màx.
 # Average & Join (Object › Path, Cmd+Alt+Shift+J).
 	Average & Join…	Mitjana i unió…
 	Average & Join	Mitjana i unió
@@ -7370,6 +7462,24 @@ breakText	Glyphs	Glifs
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandeix els guions en camins
 @msg	select paths with dashed strokes to expand	seleccioneu camins amb traç discontinu per expandir
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Cercle tangent…
+	Tangent Circle	Cercle tangent
+	Circle:	Cercle:
+@msg	`ids` names an object twice	`ids` indica un objecte dues vegades
+@msg	select two or three paths or compound paths	seleccioneu dos o tres camins o camins compostos
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` ha de ser de 0.01 a 1000000 pt
+@msg	two shapes need a `radius`	dues formes necessiten un `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	tres formes fixen el radi per si mateixes: ometeu `radius`
+@msg	`circle` must be from 0 to 64	`circle` ha de ser de 0 a 64
+@msg	a shape has no outline	una forma no té contorn
+@msg	the shapes are too complex: at most 2000 segments in all	les formes són massa complexes: com a màxim 2000 segments en total
+@msg	these shapes take too long to search	la cerca triga massa amb aquestes formes
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	més de 64 cercles toquen aquestes formes: potser les toquen al llarg de tota una corba
+@msg	no circle touches these shapes	cap cercle no toca aquestes formes
+@msg	`circle` is past the last circle found ({found})	`circle` passa de l’últim cercle trobat ({found})
+@msg	object {value} is not a path or compound path	l’objecte {value} no és un camí ni un camí compost
+@msg	these shapes are too small to measure	aquestes formes són massa petites per mesurar-les
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Eines del document
 	Save a Timestamped Copy	Desa una còpia amb data i hora
@@ -7424,7 +7534,7 @@ breakText	Glyphs	Glifs
 @msg	stroke cannot be set on a symbol instance	stroke no es pot definir en una instància de símbol
 @msg	fill on a symbol instance must be a solid color or none	el fill d’una instància de símbol ha de ser un color sòlid o none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} no es pot definir en una imatge sense l’efecte Converteix en forma o Contorneja l’objecte
-@msg	pass newName, registration, exportType, nineSlice and/or type	indiqueu newName, registration, exportType, nineSlice i/o type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	indiqueu newName, registration, exportType, nineSlice, type i/o alignToPixelGrid
 	Text Flow	Flux del text
 	By Rows	Per files
 	By Columns	Per columnes

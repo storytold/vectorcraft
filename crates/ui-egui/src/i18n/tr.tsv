@@ -633,6 +633,18 @@ font-technology	Variable	Değişken
 	Copy Width Point	Genişlik Noktasını Kopyala
 	Copyright	Telif hakkı
 	Copyright Info URL:	Telif Hakkı Bilgisi URL'si:
+	Save Metadata Template…	Meta Veri Şablonunu Kaydet…
+	Import Options	İçe Aktarma Seçenekleri
+	Clear existing fields and use the template's	Mevcut alanları temizle ve şablonunkileri kullan
+	Keep existing fields, but replace those the template has	Mevcut alanları koru, ancak şablonda olanları değiştir
+	Keep existing fields, but append those the template has	Mevcut alanları koru, ancak şablonda olanları ekle
+@msg	the template name can't be empty	şablon adı boş olamaz
+@msg	the template name isn't usable as a file name	şablon adı dosya adı olarak kullanılamaz
+@msg	no metadata templates folder here	burada meta veri şablonları klasörü yok
+@msg	give `name` or `path`, not both	`name` veya `path` verin, ikisini birden değil
+@msg	give one of `path`, `name` and `data`	`path`, `name` ve `data` değerlerinden birini verin
+@msg	mode must be replace, keep or append	mod replace, keep veya append olmalıdır
+@msg	the file is not an XMP metadata template	dosya bir XMP meta veri şablonu değil
 	Copyright Notice:	Telif Hakkı Bildirimi:
 	Copyright Status:	Telif Hakkı Durumu:
 	Copyright Symbol	Telif Hakkı Sembolü
@@ -1167,6 +1179,7 @@ font-technology	Variable	Değişken
 	Highlight Size	Parlama Boyutu
 	Blend Steps	Karışım Adımları
 	Shading Color	Gölgeleme Rengi
+	Black Overprint	Siyah Üst Baskı
 	Draw Hidden Faces	Gizli Yüzleri Çiz
 	Eyedropper	Damlalık
 	Sample Color from Screen	Ekrandan Örnek Renk
@@ -1289,6 +1302,8 @@ font-technology	Variable	Değişken
 	Font Family & Style	Yazı Tipi Ailesi ve Stili
 	Font Family, Style & Size	Yazı Tipi Ailesi, Stili ve Boyutu
 	Font List	Yazı Tipi Listesi
+	Show Similar Fonts	Benzer Yazı Tiplerini Göster
+	Clear Similar Fonts	Benzer Yazı Tiplerini Temizle
 	Font Preview Size	Yazı Tipi Önizleme Boyutu
 	Font Size	Yazı Tipi Boyutu
 	Font:	Yazı tipi:
@@ -2800,6 +2815,12 @@ digits	Malayalam	Malayalam
 	Responsive	duyarlı
 	Restore	Geri yükle
 	Restore every preference to its default (applied on OK)	Her tercihi varsayılana geri yükleyin (Tamam'a uygulanır)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Piksel boyutları dışındaki yerleşik boyutlardaki yeni belgelerin ve birim kaydetmeyen açılan dosyaların birimi; burada seçip Tamam'a tıkladığınızda etkin belgenin birimi de bu olur.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Kontur kalınlıkları, kısa çizgiler ve boşluklar bu birimde gösterilir ve bunlar için yazılan sayılar bu birimde okunur.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Yazı boyutları, satır aralığı ve taban çizgisi kayması bu birimde gösterilir ve bunlar için yazılan sayılar bu birimde okunur.
+	The unit for East Asian type measurements, which no field uses yet.	Doğu Asya metni ölçüleri için henüz hiçbir alanın kullanmadığı birim.
+	When on, a number typed without a unit into a field in picas is read in points.	Açıkken, pika cinsinden bir alana birimsiz yazılan sayı punto olarak okunur.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML kimliği seçiliyken nesne adları Katmanlar, Değişkenler ve Katman Seçenekleri'nde XML kimliği olarak gösterilir.
 	Reset all preferences to their defaults?	Tüm tercihler varsayılanlarına sıfırlansın mı?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Varsayılanlar, Tercihler'de Tamam'a tıkladığınızda uygulanır. Oradaki İptal, mevcut tercihlerinizi korur.
 	Restore Recovered Documents	Kurtarılan Belgeleri Geri Yükle
@@ -2831,6 +2852,7 @@ digits	Malayalam	Malayalam
 	Roman Hanging Punctuation	Roma Asılı Noktalama İşaretleri
 	Korean Line Break Anywhere	Korece Satırı Her Yerde Kes
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Doğu Asya Dizgi Ayarları
 	Korean Composition Settings	Korece Dizgi Ayarları
 	Rotate	Döndür
@@ -3034,6 +3056,7 @@ digits	Malayalam	Malayalam
 	Letter Spacing:	Harf Boşluğu:
 	Lights	Işıklar
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum, İstenen'i; İstenen ise Maksimum'u aşmamalıdır.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Minimum, İstenen'i; İstenen ise Maksimum'u aşmamalıdır
 	Select by Color	Renge Göre Seç
 	Set History Limit…	Geçmiş Sınırını Ayarla…
 	Single Word Justification:	Tek Sözcük Yaslama:
@@ -3047,6 +3070,8 @@ digits	Malayalam	Malayalam
 @msg	`{key}` must be an array of these names: {_1}	`{key}` şu adlardan oluşan bir dizi olmalıdır: {_1}
 	Search commands and tools	Komutları ve araçları arayın
 	Search commands and tools…	Komutları ve araçları arayın…
+	Recent Commands	Son komutlar
+	No recent commands	Son komut yok
 	Search Commands…	Arama Komutları…
 	Secondary	İkincil
 	Section Symbol	Bölüm Sembolü
@@ -3446,6 +3471,9 @@ digits	Malayalam	Malayalam
 	Show Import Options	İçe Aktarma Seçeneklerini Göster
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Her PDF, DXF veya metin dosyasını yerleştirmeden önce içe aktarma seçeneklerini sor; kapalıyken son seçilen seçenekleri kullan
 	Stylistic Alternates	Stilistik Alternatifler
+	Ligatures	Bitişik Harfler
+	Ornaments	Süslemeler
+	Figures	Rakamlar
 	Swash	çalkalama
 	Swatch Conflict	Renk Örneği Çatışması
 	Swatch Conflicts	Renk Örneği Çatışmaları
@@ -4208,6 +4236,31 @@ axis	Both	Her İkisi
 @msg	$.evalFile requires a file path	$.evalFile bir dosya yolu gerektirir
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: zaman aşımı sonlu bir milisaniye sayısı olmalıdır, 0 veya daha fazla
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: bir dosya yolu ve bir zaman aşımı alır
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} tanımlı değil
+@msg	cannot read property '{key}' of {base}	{base} değerinin '{key}' özelliği okunamıyor
+@msg	cannot set property '{key}' of {base}	{base} değerinin '{key}' özelliği ayarlanamıyor
+@msg	cannot read a property of {base}	{base} değerinin bir özelliği okunamıyor
+@msg	cannot set a property of {base}	{base} değerinin bir özelliği ayarlanamıyor
+@msg	cannot define property '{key}': {why}	'{key}' özelliği tanımlanamıyor: {why}
+@msg	cannot assign to property '{key}': {why}	'{key}' özelliğine atama yapılamıyor: {why}
+@msg	cannot delete property '{key}'	'{key}' özelliği silinemiyor
+@msg	cannot declare function {ident}	{ident} işlevi bildirilemiyor
+@msg	invalid assignment target	geçersiz atama hedefi
+@msg	the array's length is read-only	dizinin uzunluğu salt okunur
+@msg	the property cannot be redefined	özellik yeniden tanımlanamaz
+@msg	the object is not extensible	nesne genişletilemez
+@msg	the length cannot be redefined	uzunluk yeniden tanımlanamaz
+@msg	it is read-only	salt okunur
+@msg	an element cannot be deleted	bir öğe silinemez
+@msg	it has only a getter	yalnızca getter'ı var
+@msg	the value is a primitive	değer ilkel
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, satır {line}, sütun {column}: {e} (fırlatıldı)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: satır {line}, sütun {column}: {e} (fırlatıldı)
 @msg	{name}: {e} (thrown)	{name}: {e} (fırlatıldı)
@@ -4248,6 +4301,27 @@ axis	Both	Her İkisi
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: bir iletişim kutusu yerleşik bir işlevin geri çağrısında, bir getter içinde, bir dönüştürmede veya $.evalFile'ın çalıştırdığı bir dosyada açılamaz; bunu betiğin kendi kodundan çağırın
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: `answers` içindeki sonraki yanıt {name} için değil, {_1} için
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` içinde bu iletişim kutusu için yanıt kalmadı
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` içinde betiğin kullanmadığı {n} yanıt var
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1}, fırçanın altındaki {n} nesneyi değiştirmeden bıraktı ({_2}): yalnızca yolları yeniden şekillendirir
+liquify-tool	Warp	Çarpıtma
+liquify-tool	Twirl	Burgu
+liquify-tool	Pucker	Büzülme
+liquify-tool	Bloat	Şişkinlik
+liquify-tool	Scallop	Tarak
+liquify-tool	Crystallize	Kristalleştirme
+liquify-tool	Wrinkle	Kırışıklık
+liquify-kind	graphs	grafikler
+liquify-kind	type	yazı
+liquify-kind	symbols	semboller
+liquify-kind	images	görseller
+liquify-kind	meshes	ağlar
+liquify-kind	envelopes	zarflar
+liquify-kind	repeats	tekrarlar
+liquify-kind	placed documents	yerleştirilen belgeler
+liquify-kind	blends	karışımlar
+liquify-list-two	{0}, {1}	{0} ve {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} bir betik için çok büyük
 @msg	vc.log: the log of this run is full	vc.log: bu çalıştırmanın günlüğü dolu
 @msg	this function's script run has ended	bu işlevin betik çalıştırması sona erdi
@@ -4293,6 +4367,7 @@ axis	Both	Her İkisi
 @msg	Divide Objects Below: select exactly one path	Aşağıdaki Nesneleri Böl: tam olarak bir yol seçin
 @msg	Downloaded {what}	{what} indirildi
 @msg	Expand Appearance: the selection has a basic appearance	Görünümü Genişlet: seçimin temel bir görünümü vardır
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	bazı raster efektleri görüntüye dönüştürülmedi: toplamda 1.024'ten fazla görüntü veya 256 megapiksel gerektirirlerdi
 @msg	Expand: no brush strokes selected	Genişlet: seçili fırça darbesi yok
 @msg	Expand: no gradient fills	Genişlet: degrade dolgu yok
 @msg	Expand: nothing to expand	Genişlet: genişletilecek bir şey yok
@@ -5106,6 +5181,10 @@ axis	Both	Her İkisi
 	Em Box	Em Kutusu
 	x-Height	x-Yüksekliği
 	ICF Box	ICF Kutusu
+	Show Sample	Örneği Göster
+	Hide Sample	Örneği Gizle
+	Max Ascent/Descent	Maks. Yükseklik/Derinlik
+	Max Ascender	Maks. Yükselen
 @msg	`colors` must be an array of colors, not {v}	`colors` {v} değil, bir renk dizisi olmalıdır
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id`, yalnızca `run` ve `command_batch` komutlarının çözümlediği {r} adım referansıdır
 @msg	`ids` must be an array of object ids, not {v}	`ids` bir nesne kimlikleri dizisi olmalıdır, {v} değil
@@ -6039,7 +6118,7 @@ theme	Appearance	Görünüm
 @msg	Unknown dimension orientation	Bilinmeyen boyut yönü
 @msg	Unknown dimension style	Bilinmeyen boyut stili
 @msg	Unknown unit	Bilinmeyen birim
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Açık profillerin dairesel uçlarını kapatın. Kısmi süpürmeler kesik taraflarını açık tutar.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Açık profillerin dairesel uçlarını kapatın. Kısmi süpürmeler kesik taraflarını da kapatır.
 @msg	span must be "object" or "selection", got {v}	span "object" veya "selection" olmalıdır, {v} değil
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" bir renk örneği değil, bir `gradient` yerleştirir
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" bir degrade yerleştirir: `gradient` verin
@@ -8235,7 +8314,9 @@ axis	Y Axis	Y ekseni
 @msg	position must be normal, superscript or subscript	position normal, superscript veya subscript olmalıdır
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position topLeft, topRight, bottomLeft veya bottomRight olmalıdır
 @msg	positions must be between 0 and 100000 pt	konumlar 0 ile 100000 pt arasında olmalıdır
+@msg	ppi can't be more than {max} for this image	bu görüntü için ppi {max} değerinden büyük olamaz
 @msg	ppi must be a positive number, not {ppi}	ppi pozitif bir sayı olmalıdır, {ppi} değil
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim görüntünün piksellerini olduğu gibi korur: ppi belirtmeyin
 @msg	ppi must be between 1 and 2400	ppi 1 ile 2400 arasında olmalıdır
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}`, transforms|bounds|fileDimensions|fit|fill değerlerinden biri değil
 @msg	preserveShape must be clippingMask|transparency	preserveShape clippingMask|transparency olmalıdır
@@ -9252,6 +9333,24 @@ breakText	Glyphs	Glifler
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Tireleri Yollara Genişlet
 @msg	select paths with dashed strokes to expand	genişletilecek kesikli konturlu yolları seçin
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Teğet Daire…
+	Tangent Circle	Teğet Daire
+	Circle:	Daire:
+@msg	`ids` names an object twice	`ids` bir nesneyi iki kez belirtiyor
+@msg	select two or three paths or compound paths	iki veya üç yol ya da bileşik yol seçin
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` 0.01 ile 1000000 pt arasında olmalıdır
+@msg	two shapes need a `radius`	iki şekil için `radius` gerekir
+@msg	three shapes set the radius themselves: leave `radius` out	üç şekil yarıçapı kendisi belirler: `radius` değerini vermeyin
+@msg	`circle` must be from 0 to 64	`circle` 0 ile 64 arasında olmalıdır
+@msg	a shape has no outline	bir şeklin anahattı yok
+@msg	the shapes are too complex: at most 2000 segments in all	şekiller çok karmaşık: toplamda en fazla 2000 bölüm
+@msg	these shapes take too long to search	bu şekiller için arama çok uzun sürüyor
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	bu şekillere 64'ten fazla daire değiyor: bütün bir eğri boyunca değiyor olabilirler
+@msg	no circle touches these shapes	bu şekillere hiçbir daire değmiyor
+@msg	`circle` is past the last circle found ({found})	`circle` bulunan son dairenin ötesinde ({found})
+@msg	object {value} is not a path or compound path	{value} nesnesi bir yol veya bileşik yol değil
+@msg	these shapes are too small to measure	bu şekiller ölçülemeyecek kadar küçük
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Belge Araçları
 	Save a Timestamped Copy	Zaman Damgalı Bir Kopya Kaydet
@@ -9306,7 +9405,7 @@ breakText	Glyphs	Glifler
 @msg	stroke cannot be set on a symbol instance	stroke bir sembol örneğinde ayarlanamaz
 @msg	fill on a symbol instance must be a solid color or none	bir sembol örneğinin fill değeri düz renk veya none olmalıdır
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key}, Şekle Dönüştür veya Anahat Nesnesi efekti olmayan bir görüntüde ayarlanamaz
-@msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice ve/veya type verin
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	newName, registration, exportType, nineSlice, type ve/veya alignToPixelGrid verin
 	Text Flow	Metin Akışı
 	By Rows	Satırlara Göre
 	By Columns	Sütunlara Göre

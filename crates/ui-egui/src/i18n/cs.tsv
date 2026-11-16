@@ -533,6 +533,7 @@
 	Highlight Size	Velikost odlesku
 	Blend Steps	Kroky prolnutí
 	Shading Color	Barva stínování
+	Black Overprint	Přetisk černou
 	Draw Hidden Faces	Kreslit skryté stěny
 	Revolve…	Rotační těleso…
 	Inflate…	Nafouknutí…
@@ -1748,6 +1749,10 @@ digits	Malayalam	Malajálamské
 	Em Box	Čtverčík
 	x-Height	Výška x
 	ICF Box	Rámeček ICF
+	Show Sample	Zobrazit ukázku
+	Hide Sample	Skrýt ukázku
+	Max Ascent/Descent	Max. výška/hloubka
+	Max Ascender	Max. horní dotah
 	Copy Color Value (Hex)	Kopírovat hodnotu barvy (hex)
 	Create New Swatch…	Vytvořit novou položku vzorníku…
 	Name 40%	Název 40 %
@@ -2110,6 +2115,9 @@ digits	Malayalam	Malajálamské
 	Select text to set its OpenType features.	Vyberte text, abyste mohli nastavit jeho funkce OpenType.
 	Standard Ligatures	Standardní ligatury
 	Stylistic Alternates	Stylistické alternativy
+	Ligatures	Ligatury
+	Ornaments	Ornamenty
+	Figures	Číslice
 	Swash	Ozdobné tvary
 	Tabular Lining	Tabulkové verzálkové
 	Tabular Oldstyle	Tabulkové minuskové
@@ -2152,6 +2160,7 @@ digits	Malayalam	Malajálamské
 	Roman Hanging Punctuation	Visící latinková interpunkce
 	Korean Line Break Anywhere	Zalomení korejského řádku kdekoli
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Nastavení východoasijské sazby
 	Korean Composition Settings	Nastavení korejské sazby
 	Select a text object to edit its paragraph attributes.	Vyberte textový objekt, abyste mohli upravit atributy jeho odstavce.
@@ -2648,6 +2657,18 @@ digits	Malayalam	Malajálamské
 	Author Title:	Funkce autora:
 	Author:	Autor:
 	Copyright Info URL:	URL informací o autorských právech:
+	Save Metadata Template…	Uložit šablonu metadat…
+	Import Options	Možnosti importu
+	Clear existing fields and use the template's	Vymazat stávající pole a použít pole ze šablony
+	Keep existing fields, but replace those the template has	Zachovat stávající pole, ale nahradit ta, která šablona obsahuje
+	Keep existing fields, but append those the template has	Zachovat stávající pole, ale připojit ta, která šablona obsahuje
+@msg	the template name can't be empty	název šablony nesmí být prázdný
+@msg	the template name isn't usable as a file name	název šablony nelze použít jako název souboru
+@msg	no metadata templates folder here	zde není žádná složka šablon metadat
+@msg	give `name` or `path`, not both	zadejte `name` nebo `path`, ne obojí
+@msg	give one of `path`, `name` and `data`	zadejte jeden z parametrů `path`, `name` a `data`
+@msg	mode must be replace, keep or append	režim musí být replace, keep nebo append
+@msg	the file is not an XMP metadata template	soubor není šablona metadat XMP
 	Copyright Notice:	Upozornění o autorských právech:
 	Copyright Status:	Stav autorských práv:
 	Created:	Vytvořeno:
@@ -3680,6 +3701,8 @@ theme	Appearance	Motiv
 	Find Font Files	Najít soubory písem
 	Add Font Files	Přidat soubory písem
 	Font List	Seznam písem
+	Show Similar Fonts	Zobrazit podobná písma
+	Clear Similar Fonts	Zrušit podobná písma
 	Fonts in Document	Písma v dokumentu
 	Refresh Font List	Obnovit seznam písem
 	Replace Font	Nahradit písmo
@@ -4458,6 +4481,8 @@ font-technology	Variable	Variabilní
 	Saving	Ukládání
 	Saving {}	Ukládání {}
 	Search commands and tools…	Hledat příkazy a nástroje…
+	Recent Commands	Nedávné příkazy
+	No recent commands	Žádné nedávné příkazy
 	Dashed Line	Čárkovaná čára
 	Panel menu	Nabídka panelu
 	Unembed…	Zrušit vložení…
@@ -4468,6 +4493,12 @@ font-technology	Variable	Variabilní
 	Preferences	Předvolby
 	Previous	Předchozí
 	Restore every preference to its default (applied on OK)	Obnovit všechny předvolby na výchozí hodnoty (použije se po OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Jednotka nových dokumentů z vestavěných velikostí kromě velikostí v obrazových bodech a otevřených souborů bez uložené jednotky; když ji zde zvolíte a kliknete na OK, nastaví se i jako jednotka aktivního dokumentu.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Tloušťky tahů, čárky a mezery se zobrazují v této jednotce a čísla pro ně zadaná se v ní čtou.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Velikosti písma, proklad a posun účaří se zobrazují v této jednotce a čísla pro ně zadaná se v ní čtou.
+	The unit for East Asian type measurements, which no field uses yet.	Jednotka pro míry východoasijského písma, kterou zatím žádné pole nepoužívá.
+	When on, a number typed without a unit into a field in picas is read in points.	Když je zapnuto, číslo zadané bez jednotky do pole v pica se čte v bodech.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	S volbou XML ID se názvy objektů zobrazují jako XML ID ve Vrstvách, Proměnných a Možnostech vrstvy.
 	Reset all preferences to their defaults?	Obnovit všechny předvolby na výchozí hodnoty?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Výchozí hodnoty se použijí po klepnutí na OK v Předvolbách. Zrušit tam zachová vaše současné předvolby.
 	Smaller ↔ Larger	Menší ↔ Větší
@@ -4762,6 +4793,31 @@ imageTrace	Outline	Obrys
 @msg	$.evalFile requires a file path	$.evalFile vyžaduje cestu k souboru
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: časový limit musí být konečný počet milisekund, 0 nebo více
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: přijímá cestu k souboru a časový limit
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} není definováno
+@msg	cannot read property '{key}' of {base}	nelze číst vlastnost '{key}' hodnoty {base}
+@msg	cannot set property '{key}' of {base}	nelze nastavit vlastnost '{key}' hodnoty {base}
+@msg	cannot read a property of {base}	nelze číst vlastnost hodnoty {base}
+@msg	cannot set a property of {base}	nelze nastavit vlastnost hodnoty {base}
+@msg	cannot define property '{key}': {why}	nelze definovat vlastnost '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	nelze přiřadit do vlastnosti '{key}': {why}
+@msg	cannot delete property '{key}'	nelze odstranit vlastnost '{key}'
+@msg	cannot declare function {ident}	nelze deklarovat funkci {ident}
+@msg	invalid assignment target	neplatný cíl přiřazení
+@msg	the array's length is read-only	délka pole je jen pro čtení
+@msg	the property cannot be redefined	vlastnost nelze znovu definovat
+@msg	the object is not extensible	objekt nelze rozšiřovat
+@msg	the length cannot be redefined	délku nelze znovu definovat
+@msg	it is read-only	je jen pro čtení
+@msg	an element cannot be deleted	prvek nelze odstranit
+@msg	it has only a getter	má pouze getter
+@msg	the value is a primitive	hodnota je primitivní
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: řádek {line}, sloupec {column} v {file}: {e} (vyvolána výjimka)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: řádek {line}, sloupec {column}: {e} (vyvolána výjimka)
 @msg	{name}: {e} (thrown)	{name}: {e} (vyvolána výjimka)
@@ -4802,6 +4858,27 @@ imageTrace	Outline	Obrys
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: dialog se nemůže otevřít uvnitř zpětného volání vestavěné funkce, getteru, převodu ani souboru, který spouští $.evalFile; zavolejte jej z vlastního kódu skriptu
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: další odpověď v `answers` je pro {_1}, ne pro {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` už nemá pro tento dialog žádnou odpověď
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	V `answers` je {n} odpověď, kterou skript nepoužil|V `answers` jsou {n} odpovědi, které skript nepoužil|V `answers` je {n} odpovědí, které skript nepoužil
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} ponechal {n} objekt pod štětcem beze změny ({_2}): mění pouze cesty|{_1} ponechal {n} objekty pod štětcem beze změny ({_2}): mění pouze cesty|{_1} ponechal {n} objektů pod štětcem beze změny ({_2}): mění pouze cesty
+liquify-tool	Warp	Nástroj Pokřivení
+liquify-tool	Twirl	Nástroj Zatočení
+liquify-tool	Pucker	Nástroj Smrštění
+liquify-tool	Bloat	Nástroj Vyboulení
+liquify-tool	Scallop	Nástroj Vroubkování
+liquify-tool	Crystallize	Nástroj Krystalizace
+liquify-tool	Wrinkle	Nástroj Zvrásnění
+liquify-kind	graphs	grafy
+liquify-kind	type	text
+liquify-kind	symbols	symboly
+liquify-kind	images	obrazy
+liquify-kind	meshes	sítě
+liquify-kind	envelopes	obálky
+liquify-kind	repeats	opakování
+liquify-kind	placed documents	umístěné dokumenty
+liquify-kind	blends	prolnutí
+liquify-list-two	{0}, {1}	{0} a {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} a {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} je pro skript příliš velký
 @msg	vc.log: the log of this run is full	vc.log: protokol tohoto běhu je plný
 @msg	this function's script run has ended	běh skriptu této funkce skončil
@@ -4847,6 +4924,7 @@ imageTrace	Outline	Obrys
 @msg	Divide Objects Below: select exactly one path	Rozdělit objekty pod: vyberte právě jednu cestu
 @msg	Downloaded {what}	Staženo: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Rozložit vzhled: výběr má základní vzhled
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	některé rastrové efekty nebyly převedeny na obrazy: zabraly by více než 1 024 obrazů nebo celkem 256 megapixelů
 @msg	Expand: no brush strokes selected	Rozložit: nejsou vybrány žádné tahy štětcem
 @msg	Expand: no gradient fills	Rozložit: žádné přechodové výplně
 @msg	Expand: nothing to expand	Rozložit: není co rozložit
@@ -6285,7 +6363,7 @@ mark-style	Japanese	Japonské
 @msg	Unknown dimension style	Neznámý styl kóty
 @msg	Unknown unit	Neznámá jednotka
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Uzavře kruhové konce otevřených profilů. Boční řezy částečného otočení zůstávají otevřené.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Uzavře kruhové konce otevřených profilů. Boční řezy částečného otočení se také uzavřou.
 @msg	span must be "object" or "selection", got {v}	span musí být "object" nebo "selection", ne {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" umísťuje `gradient`, ne vzorník
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" umísťuje přechod: zadejte `gradient`
@@ -6437,6 +6515,7 @@ mark-style	Japanese	Japonské
 	Single Word Justification:	Zarovnání jednoho slova:
 	Full Justify	Zarovnat do bloku
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum nesmí překročit požadovanou hodnotu ani požadovaná hodnota maximum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: minimum nesmí překročit požadovanou hodnotu ani požadovaná hodnota maximum
 	Justification	Zarovnání do bloku
 	Add filters from the list above	Přidejte filtry ze seznamu výše
 	Add to Stack	Přidat na zásobník
@@ -7374,6 +7453,24 @@ breakText	Glyphs	Glyfy
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Rozložit čárky na cesty
 @msg	select paths with dashed strokes to expand	vyberte cesty s čárkovaným tahem k rozložení
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Tečná kružnice…
+	Tangent Circle	Tečná kružnice
+	Circle:	Kružnice:
+@msg	`ids` names an object twice	`ids` uvádí některý objekt dvakrát
+@msg	select two or three paths or compound paths	vyberte dvě nebo tři cesty nebo složené cesty
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` musí být od 0.01 do 1000000 pt
+@msg	two shapes need a `radius`	dva tvary potřebují `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	tři tvary určují poloměr samy: vynechte `radius`
+@msg	`circle` must be from 0 to 64	`circle` musí být od 0 do 64
+@msg	a shape has no outline	tvar nemá obrys
+@msg	the shapes are too complex: at most 2000 segments in all	tvary jsou příliš složité: celkem nejvýše 2000 segmentů
+@msg	these shapes take too long to search	hledání pro tyto tvary trvá příliš dlouho
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	těchto tvarů se dotýká více než 64 kružnic: mohou se jich dotýkat podél celé křivky
+@msg	no circle touches these shapes	žádná kružnice se těchto tvarů nedotýká
+@msg	`circle` is past the last circle found ({found})	`circle` je za poslední nalezenou kružnicí ({found})
+@msg	object {value} is not a path or compound path	objekt {value} není cesta ani složená cesta
+@msg	these shapes are too small to measure	tyto tvary jsou příliš malé na měření
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Nástroje dokumentu
 	Save a Timestamped Copy	Uložit kopii s datem a časem
@@ -7428,7 +7525,7 @@ breakText	Glyphs	Glyfy
 @msg	stroke cannot be set on a symbol instance	stroke nelze nastavit u instance symbolu
 @msg	fill on a symbol instance must be a solid color or none	fill instance symbolu musí být plná barva nebo none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} nelze nastavit u obrazu bez efektu Převést na tvar nebo Převést objekt na obrys
-@msg	pass newName, registration, exportType, nineSlice and/or type	zadejte newName, registration, exportType, nineSlice a/nebo type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	zadejte newName, registration, exportType, nineSlice, type a/nebo alignToPixelGrid
 	Text Flow	Tok textu
 	By Rows	Po řádcích
 	By Columns	Po sloupcích
@@ -9023,7 +9120,9 @@ breakText	Glyphs	Glyfy
 @msg	position must be normal, superscript or subscript	position musí být normal, superscript nebo subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position musí být topLeft, topRight, bottomLeft nebo bottomRight
 @msg	positions must be between 0 and 100000 pt	positions musí být mezi 0 a 100000 pt
+@msg	ppi can't be more than {max} for this image	ppi nemůže být pro tento obrázek víc než {max}
 @msg	ppi must be a positive number, not {ppi}	ppi musí být kladné číslo, ne {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim ponechává pixely obrázku beze změny: vynechte ppi
 @msg	ppi must be between 1 and 2400	ppi musí být mezi 1 a 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` není transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape musí být clippingMask|transparency

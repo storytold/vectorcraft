@@ -652,6 +652,18 @@ font-technology	Variable	Вариативные
 	Copy Width Point	Копировать точку ширины
 	Copyright	Copyright
 	Copyright Info URL:	URL информации об авторских правах:
+	Save Metadata Template…	Сохранить шаблон метаданных…
+	Import Options	Параметры импорта
+	Clear existing fields and use the template's	Очистить существующие поля и использовать поля шаблона
+	Keep existing fields, but replace those the template has	Сохранить существующие поля, но заменить те, что есть в шаблоне
+	Keep existing fields, but append those the template has	Сохранить существующие поля, но добавить те, что есть в шаблоне
+@msg	the template name can't be empty	имя шаблона не может быть пустым
+@msg	the template name isn't usable as a file name	имя шаблона нельзя использовать как имя файла
+@msg	no metadata templates folder here	здесь нет папки шаблонов метаданных
+@msg	give `name` or `path`, not both	укажите `name` или `path`, но не оба
+@msg	give one of `path`, `name` and `data`	укажите один из параметров `path`, `name` и `data`
+@msg	mode must be replace, keep or append	режим должен быть replace, keep или append
+@msg	the file is not an XMP metadata template	файл не является шаблоном метаданных XMP
 	Copyright Notice:	Уведомление об авторских правах:
 	Copyright Status:	Статус авторских прав:
 	Copyright Symbol	Символ авторского права
@@ -1022,6 +1034,10 @@ font-technology	Variable	Вариативные
 	Em Box	Кегельная площадка
 	x-Height	Высота строчных
 	ICF Box	Рамка ICF
+	Show Sample	Показать образец
+	Hide Sample	Скрыть образец
+	Max Ascent/Descent	Макс. высота/глубина
+	Max Ascender	Макс. выносной элемент вверх
 	Em Dash	Длинное тире
 	Em Space	Круглая шпация
 	Embed	Внедрить
@@ -1194,6 +1210,7 @@ font-technology	Variable	Вариативные
 	Highlight Size	Размер блика
 	Blend Steps	Шаги перехода
 	Shading Color	Цвет затенения
+	Black Overprint	Чёрный с наложением
 	Draw Hidden Faces	Рисовать скрытые грани
 	Eyedropper	Пипетка
 	Sample Color from Screen	Взять цвет с экрана
@@ -1346,6 +1363,8 @@ file-filter	Templates	Шаблоны
 	Font Family & Style	Семейство и стиль шрифта
 	Font Family, Style & Size	Семейство, стиль и размер шрифта
 	Font List	Список шрифтов
+	Show Similar Fonts	Показать похожие шрифты
+	Clear Similar Fonts	Сбросить похожие шрифты
 	Font Preview Size	Размер предварительного просмотра шрифта
 	Font Size	Размер шрифта
 	Variable Font	Вариативный шрифт
@@ -3059,6 +3078,12 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивный
 	Restore	Восстановить
 	Restore every preference to its default (applied on OK)	Восстановить все настройки по умолчанию (применяется при нажатии ОК)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Единица новых документов встроенных размеров, кроме размеров в пикселях, и открытых файлов без записанной единицы; если выбрать её здесь и нажать ОК, она станет и единицей активного документа.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Толщина обводки, штрихи и зазоры показываются в этой единице, и введённые для них числа читаются в ней.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Размеры текста, интерлиньяж и смещение базовой линии показываются в этой единице, и введённые для них числа читаются в ней.
+	The unit for East Asian type measurements, which no field uses yet.	Единица для размеров восточноазиатского текста, которую пока не использует ни одно поле.
+	When on, a number typed without a unit into a field in picas is read in points.	Если включено, число, введённое без единицы в поле в пиках, читается в пунктах.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	При XML ID имена объектов показываются как XML ID в «Слоях», «Переменных» и «Параметрах слоя».
 	Reset all preferences to their defaults?	Сбросить все настройки до значений по умолчанию?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Значения по умолчанию применяются, когда вы нажимаете ОК в окне «Настройки». Отмена там сохраняет текущие настройки.
 	Restore Recovered Documents	Восстановить восстановленные документы
@@ -3092,6 +3117,7 @@ digits	Malayalam	Малаялам
 	Roman Hanging Punctuation	Римская висячая пунктуация
 	Korean Line Break Anywhere	Перенос корейского текста в любом месте
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Параметры восточноазиатского набора
 	Korean Composition Settings	Параметры корейского набора
 	Rotate	Повернуть
@@ -3286,6 +3312,8 @@ digits	Malayalam	Малаялам
 @msg	`{key}` must be an array of these names: {_1}	`{key}` должно быть массивом из этих имён: {_1}
 	Search commands and tools	Поиск команд и инструментов
 	Search commands and tools…	Поиск команд и инструментов…
+	Recent Commands	Недавние команды
+	No recent commands	Нет недавних команд
 	Search Commands…	Поиск команд…
 	Secondary	Вторичный
 	Section Symbol	Символ параграфа
@@ -3700,6 +3728,9 @@ digits	Malayalam	Малаялам
 	Show Import Options	Показывать параметры импорта
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Запрашивать параметры импорта каждого файла PDF, DXF или текстового файла перед помещением; если выключено, используются последние выбранные параметры
 	Stylistic Alternates	Стилистические альтернативы
+	Ligatures	Лигатуры
+	Ornaments	Орнаменты
+	Figures	Цифры
 	Swash	Росчерк
 	Swatch Conflict	Конфликт образцов
 	Swatch Conflicts	Конфликты образцов
@@ -4480,6 +4511,31 @@ axis	Both	Оба
 @msg	$.evalFile requires a file path	$.evalFile требует путь к файлу
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: тайм-аут должен быть конечным числом миллисекунд, 0 или больше
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: принимает путь к файлу и тайм-аут
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} не определено
+@msg	cannot read property '{key}' of {base}	невозможно прочитать свойство '{key}' у {base}
+@msg	cannot set property '{key}' of {base}	невозможно задать свойство '{key}' у {base}
+@msg	cannot read a property of {base}	невозможно прочитать свойство у {base}
+@msg	cannot set a property of {base}	невозможно задать свойство у {base}
+@msg	cannot define property '{key}': {why}	невозможно определить свойство '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	невозможно присвоить значение свойству '{key}': {why}
+@msg	cannot delete property '{key}'	невозможно удалить свойство '{key}'
+@msg	cannot declare function {ident}	невозможно объявить функцию {ident}
+@msg	invalid assignment target	недопустимая цель присваивания
+@msg	the array's length is read-only	длина массива доступна только для чтения
+@msg	the property cannot be redefined	свойство нельзя переопределить
+@msg	the object is not extensible	объект нерасширяем
+@msg	the length cannot be redefined	длину нельзя переопределить
+@msg	it is read-only	оно доступно только для чтения
+@msg	an element cannot be deleted	элемент нельзя удалить
+@msg	it has only a getter	у него есть только геттер
+@msg	the value is a primitive	значение примитивное
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: строка {line}, столбец {column} в {file}: {e} (исключение)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: строка {line}, столбец {column}: {e} (исключение)
 @msg	{name}: {e} (thrown)	{name}: {e} (исключение)
@@ -4520,6 +4576,27 @@ axis	Both	Оба
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: диалоговое окно не может открыться внутри обратного вызова встроенной функции, геттера, преобразования или файла, который выполняет $.evalFile; вызовите его из собственного кода скрипта
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: следующий ответ в `answers` предназначен для {_1}, а не для {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: в `answers` не осталось ответа для этого диалогового окна
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	В `answers` остался {n} ответ, который скрипт не использовал|В `answers` осталось {n} ответа, которые скрипт не использовал|В `answers` осталось {n} ответов, которые скрипт не использовал
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} оставил без изменений {n} объект под кистью ({_2}): он изменяет только контуры|{_1} оставил без изменений {n} объекта под кистью ({_2}): он изменяет только контуры|{_1} оставил без изменений {n} объектов под кистью ({_2}): он изменяет только контуры
+liquify-tool	Warp	Инструмент «Деформация»
+liquify-tool	Twirl	Инструмент «Закручивание»
+liquify-tool	Pucker	Инструмент «Сморщивание»
+liquify-tool	Bloat	Инструмент «Раздувание»
+liquify-tool	Scallop	Инструмент «Фестоны»
+liquify-tool	Crystallize	Инструмент «Кристаллизация»
+liquify-tool	Wrinkle	Инструмент «Морщины»
+liquify-kind	graphs	диаграммы
+liquify-kind	type	текст
+liquify-kind	symbols	символы
+liquify-kind	images	изображения
+liquify-kind	meshes	сетки
+liquify-kind	envelopes	оболочки
+liquify-kind	repeats	повторы
+liquify-kind	placed documents	размещённые документы
+liquify-kind	blends	переходы
+liquify-list-two	{0}, {1}	{0} и {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} и {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} слишком велик для скрипта
 @msg	vc.log: the log of this run is full	vc.log: журнал этого запуска заполнен
 @msg	this function's script run has ended	запуск скрипта этой функции завершён
@@ -4575,6 +4652,7 @@ axis	Both	Оба
 @msg	Divide Objects Below: select exactly one path	Разделение объектов ниже: выделите ровно один контур
 @msg	Downloaded {what}	Скачано: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Разбор оформления: у выделения основное оформление
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	некоторые растровые эффекты не преобразованы в изображения: для них нужно больше 1024 изображений или 256 мегапикселей в сумме
 @msg	Expand: no brush strokes selected	Разбор: не выделены мазки кисти
 @msg	Expand: no gradient fills	Разбор: нет градиентных заливок
 @msg	Expand: nothing to expand	Разбор: нечего разбирать
@@ -5901,7 +5979,7 @@ lighting	Light	Свет
 @msg	Unknown dimension style	Неизвестный стиль размера
 @msg	Unknown unit	Неизвестная единица
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Закрывает круглые торцы открытых профилей. При неполном вращении боковые срезы остаются открытыми.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Закрывает круглые торцы открытых профилей. При неполном вращении боковые срезы тоже закрываются.
 	Distance	Расстояние
 @msg	span must be "object" or "selection", got {v}	span должен быть "object" или "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" размещает `gradient`, а не образец
@@ -6055,6 +6133,7 @@ lighting	Light	Свет
 	Single Word Justification:	Выключка одного слова:
 	Full Justify	Полная выключка
 	Minimum must not exceed Desired, nor Desired Maximum.	Минимум не может превышать желательное значение, а желательное — максимум.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: минимум не может превышать желательное значение, а желательное — максимум
 	Minimum	Минимум
 	Justification	Выключка
 	Add filters from the list above	Добавьте фильтры из списка выше
@@ -7364,6 +7443,24 @@ breakText	Glyphs	Глифы
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Разобрать штрихи на контуры
 @msg	select paths with dashed strokes to expand	выделите контуры со штриховой обводкой для разбора
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Касательная окружность…
+	Tangent Circle	Касательная окружность
+	Circle:	Окружность:
+@msg	`ids` names an object twice	`ids` указывает объект дважды
+@msg	select two or three paths or compound paths	выделите два или три контура или составных контура
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` должен быть от 0.01 до 1000000 pt
+@msg	two shapes need a `radius`	для двух фигур нужен `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	три фигуры сами задают радиус: не указывайте `radius`
+@msg	`circle` must be from 0 to 64	`circle` должен быть от 0 до 64
+@msg	a shape has no outline	у фигуры нет контура
+@msg	the shapes are too complex: at most 2000 segments in all	фигуры слишком сложные: всего не более 2000 сегментов
+@msg	these shapes take too long to search	поиск для этих фигур занимает слишком много времени
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	этих фигур касается больше 64 окружностей: возможно, они касаются вдоль целой кривой
+@msg	no circle touches these shapes	ни одна окружность не касается этих фигур
+@msg	`circle` is past the last circle found ({found})	`circle` больше числа найденных окружностей ({found})
+@msg	object {value} is not a path or compound path	объект {value} не является контуром или составным контуром
+@msg	these shapes are too small to measure	эти фигуры слишком малы для измерения
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Инструменты документа
 	Save a Timestamped Copy	Сохранить копию с датой и временем
@@ -7418,7 +7515,7 @@ breakText	Glyphs	Глифы
 @msg	stroke cannot be set on a symbol instance	stroke нельзя задать для экземпляра символа
 @msg	fill on a symbol instance must be a solid color or none	fill экземпляра символа должен быть сплошным цветом или none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} нельзя задать для изображения без эффекта «Преобразовать в фигуру» или «Обвести объект»
-@msg	pass newName, registration, exportType, nineSlice and/or type	укажите newName, registration, exportType, nineSlice и/или type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	укажите newName, registration, exportType, nineSlice, type и/или alignToPixelGrid
 	Text Flow	Поток текста
 	By Rows	По строкам
 	By Columns	По столбцам

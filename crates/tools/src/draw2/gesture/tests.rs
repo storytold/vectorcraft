@@ -1195,7 +1195,14 @@ fn pencil_alt_smooths_within_the_smooth_tools_radius() {
 
 /// The dashed paths among the overlays.
 fn bands(t: &GestureTool, cx: &ToolContext) -> Vec<vectorcraft_geom::BezPath> {
-    t.overlays(cx).into_iter().filter_map(|o| if let Overlay::Path { path, dashed: true, .. } = o { Some(path) } else { None }).collect()
+    t.overlays(cx)
+        .into_iter()
+        .filter_map(|o| match o {
+            Overlay::Path { path, dashed: true, .. } => Some(path),
+            Overlay::SharedPath { path, dash: Some(_), .. } => Some((*path).clone()),
+            _ => None,
+        })
+        .collect()
 }
 
 /// How far `q` is from the polyline through `pts`.
@@ -1344,6 +1351,12 @@ fn smoothing_band_follows_a_long_drag() {
         assert_eq!(frames, (n - 1).div_ceil(BAND_STEP * BAND_STEPS_PER_CALL), "frames for {n} points");
         check_band(&t, &cx, cx.tol(12.0));
         assert!(!t.overlays_pending());
+        // Once finished, the band shows as the same shared path each frame.
+        let band_of = |t: &GestureTool| {
+            t.overlays(&cx).into_iter().find_map(|o| if let Overlay::SharedPath { path, dash: Some(_), .. } = o { Some(path) } else { None })
+        };
+        let (a, b) = (band_of(&t), band_of(&t));
+        assert!(a.zip(b).is_some_and(|(a, b)| std::sync::Arc::ptr_eq(&a, &b)), "the band is not made again");
         let last = pts[pts.len() - 1];
         t.pointer(&cx, &PointerEvent::new(PointerKind::Up, last.x, last.y));
         // The next drag shows only its own band.
@@ -1623,7 +1636,7 @@ fn smoothing_drag_shows_no_band_without_a_path_it_smooths() {
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 300.0));
     t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 400.0, 300.0));
     let o = t.overlays(&cx);
-    assert!(!o.iter().any(|o| matches!(o, Overlay::Path { dashed: true, .. })), "{o:?}");
+    assert!(bands(&t, &cx).is_empty(), "{o:?}");
 }
 
 /// An Alt smoothing drag uses the Smooth tool's Fidelity for Pencil, Paintbrush and Blob Brush.
@@ -2032,6 +2045,152 @@ fn eraser_and_knife_exec_on_release() {
     assert!(matches!(&a[0], Action::Exec(c, v) if c == "path.knife" && v["points"].as_array().unwrap().len() == 3));
 }
 
+/// With Shift held the Eraser's stroke stays on the line from the press point at the 45° step,
+/// from the Constrain Angle, that the pointer lies nearest to once it is 3 screen pixels away:
+/// horizontal, vertical or diagonal. The step holds until Shift is released, the tip outline shows
+/// on the line, and the drag goes on freehand from the last sample on the line without moving it.
+#[test]
+fn eraser_shift_keeps_the_stroke_on_a_45_degree_line() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = GestureTool::new("eraser");
+    let ev = |k, x, y, m| PointerEvent::new(k, x, y).with_mods(m);
+    let on_line = |q: Point, deg: f64| (q.x * deg.to_radians().sin() + q.y * deg.to_radians().cos()).abs() < 1e-9;
+    for zoom in [0.5, 1.0, 4.0] {
+        cx.zoom = zoom;
+        t.pointer(&cx, &ev(PointerKind::Down, 0.0, 0.0, shift));
+        // Within 3 screen pixels of the press the stroke waits there, and so does its tip.
+        t.pointer(&cx, &ev(PointerKind::Drag, 2.0 / zoom, 2.0 / zoom, shift));
+        assert_eq!(t.points, vec![Point::ZERO]);
+        assert_eq!(t.tip_at, Some(Point::ZERO));
+        // 22° below the horizontal: the horizontal step, at the pointer's distance.
+        t.pointer(&cx, &ev(PointerKind::Drag, 10.0 / zoom, 4.0 / zoom, shift));
+        let first = t.points[1];
+        assert!((first.x - 116f64.sqrt() / zoom).abs() < 1e-9 && first.y.abs() < 1e-9, "{first:?}");
+        assert_eq!(t.tip_at, Some(first));
+        // The step holds while Shift stays down.
+        t.pointer(&cx, &ev(PointerKind::Drag, 3.0 / zoom, 20.0 / zoom, shift));
+        assert!(t.points.iter().all(|q| q.y.abs() < 1e-9), "{:?}", t.points);
+        // Released, the drag goes on freehand from there.
+        t.pointer(&cx, &ev(PointerKind::Drag, 30.0 / zoom, 25.0 / zoom, Mods::default()));
+        assert_eq!(t.points.last(), Some(&Point::new(30.0 / zoom, 25.0 / zoom)));
+        assert_eq!(t.tip_at, Some(Point::new(30.0 / zoom, 25.0 / zoom)));
+        assert_eq!(t.points[1], first);
+        // Shift again takes a new step from the press point: the diagonal down and to the right.
+        t.pointer(&cx, &ev(PointerKind::Drag, 40.0 / zoom, 36.0 / zoom, shift));
+        let q = *t.points.last().unwrap();
+        assert!((q.x - q.y).abs() < 1e-9 && q.x > 0.0, "{q:?}");
+        let acts = t.pointer(&cx, &ev(PointerKind::Up, 50.0 / zoom, 44.0 / zoom, shift));
+        let Some(Action::Exec(c, v)) = acts.first() else { panic!("{acts:?}") };
+        assert_eq!(c, "path.eraseRegion");
+        let last = v["points"].as_array().unwrap().last().unwrap().clone();
+        let (x, y) = (last[0].as_f64().unwrap(), last[1].as_f64().unwrap());
+        assert!((x - y).abs() < 1e-9 && x > 0.0, "{last}");
+    }
+    // The steps go from the Constrain Angle, counter-clockwise on the page: at 30°, a drag at 70°
+    // takes the 75° step and one at 105° the 120° step, either way from the press.
+    cx.zoom = 1.0;
+    cx.constrain_angle = 30.0;
+    for (drag, step) in [(70.0_f64, 75.0), (105.0, 120.0), (-150.0, -150.0), (40.0, 30.0)] {
+        t.pointer(&cx, &ev(PointerKind::Down, 100.0, 100.0, shift));
+        let r = drag.to_radians();
+        t.pointer(&cx, &ev(PointerKind::Drag, 100.0 + 20.0 * r.cos(), 100.0 - 20.0 * r.sin(), shift));
+        let q = t.points[1] - Point::new(100.0, 100.0);
+        assert!(on_line(Point::new(q.x, q.y), step), "drag {drag}: {q:?}");
+        assert!((q.hypot() - 20.0).abs() < 1e-9);
+        // Along the step's line both ways: back past the press stays on it.
+        let r = (step + 180.0).to_radians();
+        t.pointer(&cx, &ev(PointerKind::Drag, 100.0 + 5.0 * r.cos() + 3.0, 100.0 - 5.0 * r.sin(), shift));
+        let q = *t.points.last().unwrap() - Point::new(100.0, 100.0);
+        assert!(on_line(Point::new(q.x, q.y), step), "drag {drag} back: {q:?}");
+        t.pointer(&cx, &ev(PointerKind::Up, 100.0, 100.0, Mods::default()));
+    }
+    // A Shift-drag released within 3 pixels of the press erases at the press.
+    cx.constrain_angle = 0.0;
+    t.pointer(&cx, &ev(PointerKind::Down, 20.0, 20.0, shift));
+    let acts = t.pointer(&cx, &ev(PointerKind::Up, 22.0, 21.0, shift));
+    assert!(matches!(&acts[0], Action::Exec(c, v) if c == "path.eraseRegion" && v["points"] == json!([[20.0, 20.0]])), "{acts:?}");
+}
+
+/// An Alt-drag with the Eraser shows a marquee from the press point to the pointer, without the
+/// tip outline, and the release erases that rectangle; a drag back up and left gives the same
+/// kind of rectangle, measured from its top-left corner.
+#[test]
+fn eraser_alt_drag_draws_a_marquee_and_erases_the_rectangle() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let alt = Mods { alt: true, ..Mods::default() };
+    let mut t = GestureTool::new("eraser");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0).with_mods(alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 120.0, 170.0).with_mods(alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 190.0).with_mods(alt));
+    assert_eq!(t.overlays(&cx), vec![Overlay::Marquee(Rect::new(50.0, 150.0, 250.0, 190.0))]);
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 200.0).with_mods(alt));
+    assert_eq!(acts, vec![Action::Exec("path.eraseRegion".into(), json!({"rect": [50.0, 150.0, 200.0, 50.0]}))]);
+    assert!(!t.busy() && t.overlays(&cx).iter().all(|o| !matches!(o, Overlay::Marquee(_))));
+    // A click erases nothing.
+    let acts = drag_held(&mut t, &cx, &[(250.0, 200.0)], alt);
+    assert!(acts.iter().all(Vec::is_empty), "a click: {acts:?}");
+    // Alt only at the press is enough, and the drag can go up and left of the press point.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 250.0, 200.0).with_mods(alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.0, 120.0));
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 100.0, 120.0));
+    assert_eq!(acts, vec![Action::Exec("path.eraseRegion".into(), json!({"rect": [100.0, 120.0, 150.0, 80.0]}))]);
+    // Without Alt the drag is a stroke.
+    let acts = drag(&mut t, &cx, &[(50.0, 150.0), (250.0, 150.0)], Mods::default());
+    assert!(matches!(&acts[2][0], Action::Exec(c, v) if c == "path.eraseRegion" && v.get("rect").is_none() && v["points"].is_array()));
+}
+
+/// Alt+Shift keeps the Eraser's marquee square on its larger side, in the direction the pointer
+/// went; Shift can be pressed or let go during the drag.
+#[test]
+fn eraser_alt_shift_drag_keeps_the_marquee_square() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let alt = Mods { alt: true, ..Mods::default() };
+    let alt_shift = Mods { alt: true, shift: true, ..Mods::default() };
+    let mut t = GestureTool::new("eraser");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 200.0).with_mods(alt_shift));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 260.0, 170.0).with_mods(alt_shift));
+    assert_eq!(t.overlays(&cx), vec![Overlay::Marquee(Rect::new(200.0, 140.0, 260.0, 200.0))]);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 260.0, 170.0).with_mods(alt));
+    assert_eq!(t.overlays(&cx), vec![Overlay::Marquee(Rect::new(200.0, 170.0, 260.0, 200.0))], "Shift let go");
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 190.0, 280.0).with_mods(alt_shift));
+    assert_eq!(acts, vec![Action::Exec("path.eraseRegion".into(), json!({"rect": [120.0, 200.0, 80.0, 80.0]}))]);
+    // A drag along one axis gives a square too.
+    let acts = drag_held(&mut t, &cx, &[(100.0, 100.0), (100.0, 140.0)], alt_shift);
+    assert_eq!(acts[2], vec![Action::Exec("path.eraseRegion".into(), json!({"rect": [100.0, 100.0, 40.0, 40.0]}))]);
+}
+
+/// A marquee that encloses no area erases nothing, and Escape during the drag cancels the marquee:
+/// the release that follows sends nothing.
+#[test]
+fn eraser_marquee_click_or_escape_erases_nothing() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let alt = Mods { alt: true, ..Mods::default() };
+    let mut t = GestureTool::new("eraser");
+    let acts = drag_held(&mut t, &cx, &[(100.0, 100.0), (100.0, 160.0)], alt);
+    assert!(acts.iter().all(Vec::is_empty), "a drag along one axis: {acts:?}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0).with_mods(alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 200.0).with_mods(alt));
+    assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![]);
+    assert!(!t.busy() && t.overlays(&cx).iter().all(|o| !matches!(o, Overlay::Marquee(_))));
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 200.0, 200.0).with_mods(alt)), vec![]);
+    // The next plain drag erases a stroke.
+    let acts = drag(&mut t, &cx, &[(50.0, 150.0), (250.0, 150.0)], Mods::default());
+    assert!(matches!(&acts[2][0], Action::Exec(c, v) if c == "path.eraseRegion" && v["points"].is_array()));
+}
+
 /// The points of the Knife's release command.
 fn knife_points(acts: &[Action]) -> Vec<(f64, f64)> {
     let Some(Action::Exec(c, v)) = acts.first() else { panic!("{acts:?}") };
@@ -2354,7 +2513,7 @@ fn the_blob_brush_sends_its_tip_and_shows_the_area_it_covers() {
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0).with_mods(alt));
     t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0).with_mods(alt));
     let o = t.overlays(&cx);
-    let [Overlay::Path { dashed: true, .. }, Overlay::Path { path, width, dashed: false, .. }] = &o[..] else { panic!("{o:?}") };
+    let [Overlay::SharedPath { dash: Some(_), .. }, Overlay::Path { path, width, dashed: false, .. }] = &o[..] else { panic!("{o:?}") };
     assert_eq!(*width, 1.0);
     assert!(vectorcraft_geom::Shape::bounding_box(path).height() < 0.1, "{o:?}");
 }
@@ -2511,6 +2670,112 @@ fn the_settled_outline_of_a_long_drag_is_the_same_shared_path_each_frame() {
         let after = settled(&t.overlays(&cx));
         let replaced = after.len() - kept(&first, &after);
         assert!((1..=8).contains(&replaced), "{id}: {replaced} of {} settled paths replaced", after.len());
+    }
+}
+
+/// The points the last `overlays` call copied into new paths for a drag's line.
+fn line_built(t: &GestureTool) -> usize {
+    let line = t.line.take();
+    let built = line.as_ref().map_or(0, |l| l.built());
+    t.line.set(line);
+    built
+}
+
+/// The points of piece `k` of the line of a drag through `pts`. A piece other than the first starts
+/// halfway along the segment after its first point, and a piece other than the last (`settled`)
+/// ends halfway along the segment after its last point, where the next piece starts.
+fn piece_points(pts: &[Point], k: usize, settled: bool) -> Vec<Point> {
+    let from = k * line::PIECE_SEGMENTS;
+    let to = if settled { from + line::PIECE_SEGMENTS } else { pts.len() - 1 };
+    let mut want = vec![if k == 0 { pts[0] } else { pts[from].midpoint(pts[from + 1]) }];
+    want.extend_from_slice(&pts[from + 1..=to]);
+    if settled {
+        want.push(pts[to].midpoint(pts[to + 1]));
+    }
+    want
+}
+
+/// The line of a long round Eraser, Knife, Path Eraser or Pencil (Live preview off) drag shows in
+/// pieces, and the steps of a round Eraser drag whose Size follows the pen each as its own path.
+/// They come back from one call to the next, at any zoom, as the same shared paths, which the host
+/// draws again without building them again; the call copies no point into a new path. A step of
+/// the drag builds again only the last piece, or adds one step. The pieces run through every point
+/// of the drag, each from where the one before ends, halfway along a segment, so no part of the
+/// line is drawn twice, and the Knife's dashes go on from one piece to the next.
+#[test]
+fn the_line_of_a_long_drag_is_the_same_shared_pieces_each_frame() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
+    let shared = |o: &[Overlay]| -> Vec<(std::sync::Arc<BezPath>, f32, Option<f64>)> {
+        o.iter()
+            .filter_map(
+                |o| if let Overlay::SharedPath { path, width, dash, .. } = o { Some((std::sync::Arc::clone(path), *width, *dash)) } else { None },
+            )
+            .collect()
+    };
+    let points_of = |p: &BezPath| -> Vec<Point> { p.elements().iter().filter_map(|e| e.end_point()).collect() };
+    let n = 3000;
+    for (id, pressure) in [("eraser", false), ("knife", false), ("pathEraser", false), ("pencil", false), ("eraser", true)] {
+        let mut t = GestureTool::new(id);
+        t.set_option("size", &json!(10));
+        t.set_option("livePreview", &json!(false));
+        if pressure {
+            t.set_option("sizeMode", &json!("pressure"));
+            t.set_option("sizeVariation", &json!(4));
+        }
+        long_area_drag(&mut t, &cx, n, |i| if pressure { 0.3 + 0.6 * ((i % 50) as f32 / 50.0) } else { 1.0 });
+        let first = shared(&t.overlays(&cx));
+        assert!(t.overlays(&cx).iter().all(|o| !matches!(o, Overlay::Path { .. })), "{id}: no path of the drag is built for the call alone");
+        if pressure {
+            assert_eq!(first.len(), n - 1, "{id}: a path for each step");
+            for (j, (path, _, dash)) in first.iter().enumerate() {
+                assert_eq!(points_of(path), t.points[j..=j + 1], "{id}: step {j}");
+                assert_eq!(*dash, None);
+            }
+        } else {
+            assert!(first.len() > 1, "{id}: {} pieces", first.len());
+            let mut along = 0.0;
+            for (k, (path, width, dash)) in first.iter().enumerate() {
+                let got = points_of(path);
+                assert_eq!(got, piece_points(&t.points, k, k + 1 < first.len()), "{id}: piece {k}");
+                assert_eq!(*width, if id == "eraser" { 10.0 } else { 1.0 }, "{id}");
+                match dash {
+                    Some(at) => assert!(id == "knife" && (at - along).abs() < 1e-6, "{id}: piece {k} dashes from {at}, not {along}"),
+                    None => assert_ne!(id, "knife"),
+                }
+                along += got.windows(2).map(|w| w[0].distance(w[1])).sum::<f64>();
+            }
+            assert_eq!(first.len() - 1, (n - 3) / line::PIECE_SEGMENTS, "{id}: the last piece holds the points no settled piece holds");
+        }
+        for zoom in [1.0, 4.0, 1.0] {
+            let again = shared(&t.overlays(&ToolContext { zoom, ..cx }));
+            assert_eq!(line_built(&t), 0, "{id}: at zoom {zoom}, no point is copied into a new path");
+            assert_eq!(again.len(), first.len(), "{id}");
+            assert!(
+                again.iter().zip(&first).all(|(a, b)| std::sync::Arc::ptr_eq(&a.0, &b.0)),
+                "{id}: at zoom {zoom}, every path is the one shown before"
+            );
+        }
+        // One step more along the drag.
+        let s = n as f64;
+        let r = 150.0 + 100.0 * (s * 0.0071).sin();
+        let (x, y) = (300.0 + r * (s * 0.04).cos(), 300.0 + r * (s * 0.04).sin());
+        t.pointer(&cx, &PointerEvent { pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, x, y) });
+        let after = shared(&t.overlays(&cx));
+        let built = line_built(&t);
+        let kept = after.iter().filter(|a| first.iter().any(|f| std::sync::Arc::ptr_eq(&a.0, &f.0))).count();
+        if pressure {
+            assert_eq!((built, after.len(), kept), (2, n, n - 1), "{id}: one step added");
+        } else {
+            assert!(built <= line::PIECE_SEGMENTS + 2, "{id}: {built} points copied");
+            assert_eq!(kept, first.len() - 1, "{id}: only the last piece is built again");
+        }
+        let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y));
+        assert!(!acts.is_empty(), "{id}: the release still acts");
+        assert!(t.line.take().is_none(), "{id}: the release drops the pieces");
     }
 }
 

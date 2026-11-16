@@ -648,6 +648,18 @@ font-technology	Variable	Варіативні
 	Copy Width Point	Копіювати точку ширини
 	Copyright	Авторські права
 	Copyright Info URL:	URL інформації про авторські права:
+	Save Metadata Template…	Зберегти шаблон метаданих…
+	Import Options	Параметри імпорту
+	Clear existing fields and use the template's	Очистити наявні поля й використати поля шаблону
+	Keep existing fields, but replace those the template has	Зберегти наявні поля, але замінити ті, що є в шаблоні
+	Keep existing fields, but append those the template has	Зберегти наявні поля, але додати ті, що є в шаблоні
+@msg	the template name can't be empty	назва шаблону не може бути порожньою
+@msg	the template name isn't usable as a file name	назву шаблону не можна використати як назву файлу
+@msg	no metadata templates folder here	тут немає папки шаблонів метаданих
+@msg	give `name` or `path`, not both	укажіть `name` або `path`, але не обидва
+@msg	give one of `path`, `name` and `data`	укажіть один із параметрів `path`, `name` і `data`
+@msg	mode must be replace, keep or append	режим має бути replace, keep або append
+@msg	the file is not an XMP metadata template	файл не є шаблоном метаданих XMP
 	Copyright Notice:	Повідомлення про авторські права:
 	Copyright Status:	Статус авторських прав:
 	Copyright Symbol	Символ авторського права
@@ -1027,6 +1039,10 @@ font-technology	Variable	Варіативні
 	Cap Height	Висота великих літер
 	x-Height	Висота малих літер
 	ICF Box	Рамка ICF
+	Show Sample	Показати зразок
+	Hide Sample	Приховати зразок
+	Max Ascent/Descent	Макс. висота/глибина
+	Max Ascender	Макс. виносний елемент вгору
 	Em Dash	Довге тире
 	Em Space	Кругла шпація
 	Embed	Вбудувати
@@ -1197,6 +1213,7 @@ font-technology	Variable	Варіативні
 	Highlight Size	Розмір відблиску
 	Blend Steps	Кроки переходу
 	Shading Color	Колір затінення
+	Black Overprint	Чорний із накладенням
 	Draw Hidden Faces	Малювати приховані грані
 	Eyedropper	Піпетка
 	Sample Color from Screen	Взяти колір з екрана
@@ -1349,6 +1366,8 @@ file-filter	Templates	Шаблони
 	Font Family & Style	Сімейство та стиль шрифту
 	Font Family, Style & Size	Сімейство, стиль та розмір шрифту
 	Font List	Список шрифтів
+	Show Similar Fonts	Показати схожі шрифти
+	Clear Similar Fonts	Скинути схожі шрифти
 	Font Preview Size	Розмір попереднього перегляду шрифту
 	Font Size	Розмір шрифту
 	Variable Font	Варіативний шрифт
@@ -3062,6 +3081,12 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивний
 	Restore	Відновити
 	Restore every preference to its default (applied on OK)	Відновити всі параметри за промовчанням (застосовується при натисканні ОК)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Одиниця нових документів вбудованих розмірів, крім розмірів у пікселях, і відкритих файлів без записаної одиниці; якщо вибрати її тут і натиснути ОК, вона стане й одиницею активного документа.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Товщина обведення, штрихи й зазори показуються в цій одиниці, і введені для них числа читаються в ній.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Розміри тексту, інтерліньяж і зміщення базової лінії показуються в цій одиниці, і введені для них числа читаються в ній.
+	The unit for East Asian type measurements, which no field uses yet.	Одиниця для розмірів східноазіатського тексту, якої поки не використовує жодне поле.
+	When on, a number typed without a unit into a field in picas is read in points.	Якщо ввімкнено, число, введене без одиниці в поле в піках, читається в пунктах.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	З XML ID назви об’єктів показуються як XML ID у «Шарах», «Змінних» і «Параметрах шару».
 	Reset all preferences to their defaults?	Скинути всі налаштування до значень за промовчанням?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Значення за промовчанням застосовуються, коли ви натискаєте ОК у вікні «Налаштування». Скасувати там зберігає поточні налаштування.
 	Restore Recovered Documents	Відновити відновлені документи
@@ -3095,6 +3120,7 @@ digits	Malayalam	Малаялам
 	Roman Hanging Punctuation	Римська висяча пунктуація
 	Korean Line Break Anywhere	Перенесення корейського тексту будь-де
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Параметри східноазійського набору
 	Korean Composition Settings	Параметри корейського набору
 	Rotate	Повернути
@@ -3289,6 +3315,8 @@ digits	Malayalam	Малаялам
 @msg	`{key}` must be an array of these names: {_1}	`{key}` має бути масивом цих назв: {_1}
 	Search commands and tools	Пошук команд та інструментів
 	Search commands and tools…	Пошук команд та інструментів…
+	Recent Commands	Нещодавні команди
+	No recent commands	Немає нещодавніх команд
 	Search Commands…	Пошук команд…
 	Secondary	Вторинний
 	Section Symbol	Символ параграфа
@@ -3707,6 +3735,9 @@ effect	Points	Точки
 	Show Import Options	Показувати параметри імпорту
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Запитувати параметри імпорту кожного файлу PDF, DXF чи текстового файлу перед розміщенням; якщо вимкнено, використовуються останні вибрані параметри
 	Stylistic Alternates	Стилістичні альтернативи
+	Ligatures	Лігатури
+	Ornaments	Орнаменти
+	Figures	Цифри
 	Swash	Розчерк
 	Swatch Conflict	Конфлікт зразків
 	Swatch Conflicts	Конфлікти зразків
@@ -4479,6 +4510,31 @@ axis	Both	Обидві
 @msg	$.evalFile requires a file path	$.evalFile потребує шляху до файлу
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: тайм-аут має бути скінченним числом мілісекунд, 0 або більше
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: приймає шлях до файлу і тайм-аут
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} не визначено
+@msg	cannot read property '{key}' of {base}	неможливо прочитати властивість '{key}' у {base}
+@msg	cannot set property '{key}' of {base}	неможливо встановити властивість '{key}' у {base}
+@msg	cannot read a property of {base}	неможливо прочитати властивість у {base}
+@msg	cannot set a property of {base}	неможливо встановити властивість у {base}
+@msg	cannot define property '{key}': {why}	неможливо визначити властивість '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	неможливо присвоїти значення властивості '{key}': {why}
+@msg	cannot delete property '{key}'	неможливо видалити властивість '{key}'
+@msg	cannot declare function {ident}	неможливо оголосити функцію {ident}
+@msg	invalid assignment target	недійсна ціль присвоєння
+@msg	the array's length is read-only	довжина масиву доступна лише для читання
+@msg	the property cannot be redefined	властивість не можна перевизначити
+@msg	the object is not extensible	об'єкт не можна розширювати
+@msg	the length cannot be redefined	довжину не можна перевизначити
+@msg	it is read-only	вона доступна лише для читання
+@msg	an element cannot be deleted	елемент не можна видалити
+@msg	it has only a getter	вона має лише гетер
+@msg	the value is a primitive	значення примітивне
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: рядок {line}, стовпець {column} у {file}: {e} (виняток)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: рядок {line}, стовпець {column}: {e} (виняток)
 @msg	{name}: {e} (thrown)	{name}: {e} (виняток)
@@ -4519,6 +4575,27 @@ axis	Both	Обидві
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: діалогове вікно не може відкритися всередині зворотного виклику вбудованої функції, гетера, перетворення або файлу, який виконує $.evalFile; викличте його з власного коду скрипту
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: наступна відповідь у `answers` призначена для {_1}, а не для {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: у `answers` не залишилося відповіді для цього діалогового вікна
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	У `answers` залишилася {n} відповідь, яку скрипт не використав|У `answers` залишилися {n} відповіді, які скрипт не використав|У `answers` залишилося {n} відповідей, які скрипт не використав
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} залишив без змін {n} об’єкт під пензлем ({_2}): він змінює форму лише контурів|{_1} залишив без змін {n} об’єкти під пензлем ({_2}): він змінює форму лише контурів|{_1} залишив без змін {n} об’єктів під пензлем ({_2}): він змінює форму лише контурів
+liquify-tool	Warp	Інструмент «Деформація»
+liquify-tool	Twirl	Інструмент «Закручування»
+liquify-tool	Pucker	Інструмент «Зморщування»
+liquify-tool	Bloat	Інструмент «Роздування»
+liquify-tool	Scallop	Інструмент «Фестон»
+liquify-tool	Crystallize	Інструмент «Кристалізація»
+liquify-tool	Wrinkle	Інструмент «Зморшки»
+liquify-kind	graphs	діаграми
+liquify-kind	type	текст
+liquify-kind	symbols	символи
+liquify-kind	images	зображення
+liquify-kind	meshes	сітки
+liquify-kind	envelopes	оболонки
+liquify-kind	repeats	повтори
+liquify-kind	placed documents	розміщені документи
+liquify-kind	blends	переходи
+liquify-list-two	{0}, {1}	{0} і {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} і {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} завеликий для скрипту
 @msg	vc.log: the log of this run is full	vc.log: журнал цього запуску заповнений
 @msg	this function's script run has ended	запуск скрипту цієї функції завершився
@@ -4563,6 +4640,7 @@ axis	Both	Обидві
 @msg	Divide Objects Below: select exactly one path	Поділ об’єктів нижче: виділіть рівно один контур
 @msg	Downloaded {what}	Завантажено: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Розбір оформлення: виділення основне оформлення
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	деякі растрові ефекти не перетворено на зображення: для них потрібно понад 1024 зображення або загалом 256 мегапікселів
 @msg	Expand: no brush strokes selected	Розбір: не виділено мазки пензлі
 @msg	Expand: no gradient fills	Розбір: немає градієнтних заливок
 @msg	Expand: nothing to expand	Розбір: нема чого розбирати
@@ -5883,7 +5961,7 @@ lighting	Light	Світло
 @msg	Unknown dimension style	Невідомий стиль розміру
 @msg	Unknown unit	Невідома одиниця
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Закриває круглі торці відкритих профілів. За неповного обертання бічні зрізи залишаються відкритими.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Закриває круглі торці відкритих профілів. За неповного обертання бічні зрізи теж закриваються.
 	Distance	Відстань
 @msg	span must be "object" or "selection", got {v}	span має бути "object" або "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" розміщує `gradient`, а не зразок
@@ -6037,6 +6115,7 @@ lighting	Light	Світло
 	Single Word Justification:	Вирівнювання одного слова:
 	Full Justify	Повне вирівнювання
 	Minimum must not exceed Desired, nor Desired Maximum.	Мінімум не може перевищувати бажане значення, а бажане — максимум.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: мінімум не може перевищувати бажане значення, а бажане — максимум
 	Minimum	Мінімум
 	Justification	Вирівнювання за шириною
 	Add filters from the list above	Додайте фільтри зі списку вище
@@ -6983,6 +7062,24 @@ breakText	Glyphs	Гліфи
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Розібрати штрихи на контури
 @msg	select paths with dashed strokes to expand	виділіть контури зі штриховим обведенням для розбору
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Дотичне коло…
+	Tangent Circle	Дотичне коло
+	Circle:	Коло:
+@msg	`ids` names an object twice	`ids` указує об’єкт двічі
+@msg	select two or three paths or compound paths	виділіть два або три контури чи складені контури
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` має бути від 0.01 до 1000000 pt
+@msg	two shapes need a `radius`	для двох фігур потрібен `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	три фігури самі задають радіус: не вказуйте `radius`
+@msg	`circle` must be from 0 to 64	`circle` має бути від 0 до 64
+@msg	a shape has no outline	фігура не має контуру
+@msg	the shapes are too complex: at most 2000 segments in all	фігури надто складні: загалом не більше 2000 сегментів
+@msg	these shapes take too long to search	пошук для цих фігур триває надто довго
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	цих фігур торкається понад 64 кола: можливо, вони торкаються вздовж цілої кривої
+@msg	no circle touches these shapes	жодне коло не торкається цих фігур
+@msg	`circle` is past the last circle found ({found})	`circle` більше за кількість знайдених кіл ({found})
+@msg	object {value} is not a path or compound path	об’єкт {value} не є контуром чи складеним контуром
+@msg	these shapes are too small to measure	ці фігури замалі для вимірювання
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Інструменти документа
 	Save a Timestamped Copy	Зберегти копію з датою і часом
@@ -7037,7 +7134,7 @@ breakText	Glyphs	Гліфи
 @msg	stroke cannot be set on a symbol instance	stroke не можна задати для екземпляра символу
 @msg	fill on a symbol instance must be a solid color or none	fill екземпляра символу має бути суцільним кольором або none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} не можна задати для зображення без ефекту «Перетворити на фігуру» або «Обвести об’єкт»
-@msg	pass newName, registration, exportType, nineSlice and/or type	вкажіть newName, registration, exportType, nineSlice та/або type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	вкажіть newName, registration, exportType, nineSlice, type та/або alignToPixelGrid
 	Text Flow	Потік тексту
 	By Rows	За рядками
 	By Columns	За стовпцями
@@ -8620,7 +8717,9 @@ breakText	Glyphs	Гліфи
 @msg	position must be normal, superscript or subscript	position має бути normal, superscript або subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position має бути topLeft, topRight, bottomLeft або bottomRight
 @msg	positions must be between 0 and 100000 pt	positions мають бути від 0 до 100000 pt
+@msg	ppi can't be more than {max} for this image	ppi для цього зображення не може перевищувати {max}
 @msg	ppi must be a positive number, not {ppi}	ppi має бути додатним числом, а не {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim залишає пікселі зображення без змін: не вказуйте ppi
 @msg	ppi must be between 1 and 2400	ppi має бути від 1 до 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` не є transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape має бути clippingMask|transparency

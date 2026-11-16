@@ -520,6 +520,7 @@
 	Highlight Size	Veličina odsjaja
 	Blend Steps	Koraci prelaza
 	Shading Color	Boja sjenčenja
+	Black Overprint	Crni pretisak
 	Draw Hidden Faces	Crtaj skrivene strane
 	Revolve…	Rotaciono tijelo…
 	Inflate…	Napuhni…
@@ -1677,6 +1678,10 @@ digits	Malayalam	Malajalam
 	Em Box	Em okvir
 	x-Height	Visina malih slova
 	ICF Box	ICF okvir
+	Show Sample	Prikaži uzorak
+	Hide Sample	Sakrij uzorak
+	Max Ascent/Descent	Maks. visina gore/dolje
+	Max Ascender	Maks. gornji produžetak
 	Copy Color Value (Hex)	Kopiraj vrijednost boje (hex)
 	Create New Swatch…	Kreiraj novi uzorak boje…
 	Name 40%	Naziv 40%
@@ -2036,6 +2041,9 @@ digits	Malayalam	Malajalam
 	Select text to set its OpenType features.	Odaberite tekst da postavite njegove OpenType mogućnosti.
 	Standard Ligatures	Standardne ligature
 	Stylistic Alternates	Stilske alternative
+	Ligatures	Ligature
+	Ornaments	Ornamenti
+	Figures	Brojke
 	Set {n}	Skup {n}
 	Swash	Ukrasni potez
 	Tabular Lining	Tabelarne brojke
@@ -2081,6 +2089,7 @@ digits	Malayalam	Malajalam
 	Roman Hanging Punctuation	Latinična viseća interpunkcija
 	Korean Line Break Anywhere	Prelom korejskog reda bilo gdje
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Postavke istočnoazijske kompozicije
 	Korean Composition Settings	Postavke korejske kompozicije
 	Select a text object to edit its paragraph attributes.	Odaberite tekstualni objekat da uredite njegove atribute pasusa.
@@ -2573,6 +2582,11 @@ digits	Malayalam	Malajalam
 	Author Title:	Titula autora:
 	Author:	Autor:
 	Copyright Info URL:	URL informacija o autorskim pravima:
+	Save Metadata Template…	Sačuvaj predložak metapodataka…
+	Import Options	Opcije uvoza
+	Clear existing fields and use the template's	Obriši postojeća polja i koristi polja iz predloška
+	Keep existing fields, but replace those the template has	Zadrži postojeća polja, ali zamijeni ona koja predložak sadrži
+	Keep existing fields, but append those the template has	Zadrži postojeća polja, ali dodaj ona koja predložak sadrži
 	Copyright Notice:	Obavještenje o autorskim pravima:
 	Copyright Status:	Status autorskih prava:
 	Created:	Kreirano:
@@ -3584,6 +3598,8 @@ theme	Appearance	Izgled
 	Find Font Files	Pronađi datoteke fontova
 	Add Font Files	Dodaj datoteke fontova
 	Font List	Lista fontova
+	Show Similar Fonts	Prikaži slične fontove
+	Clear Similar Fonts	Očisti slične fontove
 	Fonts in Document	Fontovi u dokumentu
 	Refresh Font List	Osvježi listu fontova
 	Replace Font	Zamijeni font
@@ -4360,6 +4376,8 @@ font-technology	Variable	Varijabilni
 	Saving	Čuvanje
 	Saving {}	Čuvanje {}
 	Search commands and tools…	Pretraži naredbe i alate…
+	Recent Commands	Nedavne naredbe
+	No recent commands	Nema nedavnih naredbi
 	Dashed Line	Isprekidana linija
 	Panel menu	Meni panela
 	Unembed…	Poništi ugrađivanje…
@@ -4370,6 +4388,12 @@ font-technology	Variable	Varijabilni
 	Preferences	Postavke
 	Previous	Prethodno
 	Restore every preference to its default (applied on OK)	Vrati svaku postavku na zadanu vrijednost (primjenjuje se na U redu)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Jedinica za nove dokumente ugrađenih veličina, osim onih u pikselima, i za otvorene datoteke bez zapisane jedinice; ako je odaberete ovdje i kliknete U redu, postaje i jedinica aktivnog dokumenta.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Debljine poteza, crtice i razmaci prikazuju se u ovoj jedinici, a brojevi uneseni za njih čitaju se u njoj.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Veličine teksta, prored i pomak osnovne linije prikazuju se u ovoj jedinici, a brojevi uneseni za njih čitaju se u njoj.
+	The unit for East Asian type measurements, which no field uses yet.	Jedinica za mjere istočnoazijskog teksta, koju još nijedno polje ne koristi.
+	When on, a number typed without a unit into a field in picas is read in points.	Kad je uključeno, broj unesen bez jedinice u polje u picama čita se u tačkama.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Uz XML ID nazivi objekata prikazuju se kao XML ID u Slojevima, Varijablama i Opcijama sloja.
 	Reset all preferences to their defaults?	Vratiti sve postavke na zadane vrijednosti?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Zadane vrijednosti primjenjuju se kada kliknete U redu u Postavkama. Otkaži tamo zadržava vaše trenutne postavke.
 	Smaller ↔ Larger	Manje ↔ veće
@@ -5930,7 +5954,7 @@ mark-style	Japanese	Japanski
 @msg	Unknown dimension orientation	Nepoznata orijentacija kote
 @msg	Unknown dimension style	Nepoznat stil kote
 @msg	Unknown unit	Nepoznata jedinica
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Zatvori kružne krajeve otvorenih profila. Djelimična izvlačenja zadržavaju otvorene rezane strane.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Zatvori kružne krajeve otvorenih profila. Djelimična izvlačenja zatvaraju i svoje rezane strane.
 @msg	span must be "object" or "selection", got {v}	span mora biti "object" ili "selection", dobiveno {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" postavlja `gradient`, a ne uzorak boje
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" postavlja gradijent: navedite `gradient`
@@ -6787,6 +6811,24 @@ shape	Open	Otvoren
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Proširi crtice u putanje
 @msg	select paths with dashed strokes to expand	odaberite putanje s isprekidanim potezom za proširivanje
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Tangentna kružnica…
+	Tangent Circle	Tangentna kružnica
+	Circle:	Kružnica:
+@msg	`ids` names an object twice	`ids` navodi objekat dvaput
+@msg	select two or three paths or compound paths	odaberite dvije ili tri putanje ili složene putanje
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` mora biti od 0.01 do 1000000 pt
+@msg	two shapes need a `radius`	dva oblika trebaju `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	tri oblika sama određuju poluprečnik: izostavite `radius`
+@msg	`circle` must be from 0 to 64	`circle` mora biti od 0 do 64
+@msg	a shape has no outline	oblik nema obris
+@msg	the shapes are too complex: at most 2000 segments in all	oblici su previše složeni: najviše 2000 segmenata ukupno
+@msg	these shapes take too long to search	pretraga za ove oblike traje predugo
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	više od 64 kružnice dodiruje ove oblike: možda ih dodiruju duž cijele krivulje
+@msg	no circle touches these shapes	nijedna kružnica ne dodiruje ove oblike
+@msg	`circle` is past the last circle found ({found})	`circle` je iza posljednje pronađene kružnice ({found})
+@msg	object {value} is not a path or compound path	objekat {value} nije putanja ni složena putanja
+@msg	these shapes are too small to measure	ovi oblici su premali za mjerenje
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Alati za dokument
 	Save a Timestamped Copy	Sačuvaj kopiju s datumom i vremenom
@@ -6841,7 +6883,7 @@ shape	Open	Otvoren
 @msg	stroke cannot be set on a symbol instance	stroke se ne može postaviti na instancu simbola
 @msg	fill on a symbol instance must be a solid color or none	fill instance simbola mora biti puna boja ili none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} se ne može postaviti na sliku bez efekta „Pretvori u oblik“ ili „Objekat u obrisu“
-@msg	pass newName, registration, exportType, nineSlice and/or type	navedite newName, registration, exportType, nineSlice i/ili type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	navedite newName, registration, exportType, nineSlice, type i/ili alignToPixelGrid
 	Text Flow	Tok teksta
 	By Rows	Po redovima
 	By Columns	Po kolonama

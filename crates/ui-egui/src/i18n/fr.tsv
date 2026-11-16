@@ -654,6 +654,18 @@ font-technology	Variable	Variables
 	Copy to User Defined	Copier dans Défini par l’utilisateur
 	Copy Width Point	Copier le point de largeur
 	Copyright	Copyright
+	Save Metadata Template…	Enregistrer le modèle de métadonnées…
+	Import Options	Options d’importation
+	Clear existing fields and use the template's	Effacer les champs existants et utiliser ceux du modèle
+	Keep existing fields, but replace those the template has	Conserver les champs existants, mais remplacer ceux que contient le modèle
+	Keep existing fields, but append those the template has	Conserver les champs existants, mais ajouter ceux que contient le modèle
+@msg	the template name can't be empty	le nom du modèle ne peut pas être vide
+@msg	the template name isn't usable as a file name	le nom du modèle n'est pas utilisable comme nom de fichier
+@msg	no metadata templates folder here	aucun dossier de modèles de métadonnées ici
+@msg	give `name` or `path`, not both	indiquez `name` ou `path`, pas les deux
+@msg	give one of `path`, `name` and `data`	indiquez un seul des paramètres `path`, `name` et `data`
+@msg	mode must be replace, keep or append	le mode doit être replace, keep ou append
+@msg	the file is not an XMP metadata template	le fichier n’est pas un modèle de métadonnées XMP
 	Copyright Info URL:	URL des informations de copyright :
 	Copyright Notice:	Mention de copyright :
 	Copyright Status:	État du copyright :
@@ -1191,6 +1203,7 @@ font-technology	Variable	Variables
 	Highlight Size	Taille de la brillance
 	Blend Steps	Étapes de transition
 	Shading Color	Couleur d’ombrage
+	Black Overprint	Noir en surimpression
 	Draw Hidden Faces	Dessiner les faces cachées
 	Eyedropper	Pipette
 	Sample Color from Screen	Prélever une couleur à l’écran
@@ -1330,6 +1343,8 @@ font-technology	Variable	Variables
 	Font Family & Style	Famille et style de police
 	Font Family, Style & Size	Famille, style et taille de police
 	Font List	Liste des polices
+	Show Similar Fonts	Afficher les polices similaires
+	Clear Similar Fonts	Effacer les polices similaires
 	Font Preview Size	Taille de l’aperçu des polices
 	Font Size	Taille de police
 	Variable Font	Police variable
@@ -3021,6 +3036,12 @@ digits	Malayalam	Malayalam
 	Responsive	Adaptatif
 	Restore	Restaurer
 	Restore every preference to its default (applied on OK)	Rétablir toutes les préférences à leur valeur par défaut (appliqué avec OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	L’unité des nouveaux documents de tailles prédéfinies, sauf les tailles en pixels, et des fichiers ouverts qui n’enregistrent aucune unité, et si vous la choisissez ici puis cliquez sur OK, elle devient aussi l’unité du document actif.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Les épaisseurs de contour, les tirets et les espaces s’affichent dans cette unité, et les nombres saisis pour eux sont lus dans cette unité.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Les tailles de texte, l’interlignage et le décalage de la ligne de base s’affichent dans cette unité, et les nombres saisis pour eux sont lus dans cette unité.
+	The unit for East Asian type measurements, which no field uses yet.	L’unité des mesures du texte d’Asie orientale, qu’aucun champ n’utilise encore.
+	When on, a number typed without a unit into a field in picas is read in points.	Si cette option est activée, un nombre saisi sans unité dans un champ en picas est lu en points.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Avec ID XML, les noms des objets s’affichent sous forme d’ID XML dans Calques, Variables et Options de calque.
 	Reset all preferences to their defaults?	Rétablir toutes les préférences à leur valeur par défaut ?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Les valeurs par défaut sont appliquées lorsque vous cliquez sur OK dans Préférences. Annuler y conserve vos préférences actuelles.
 	Restore Recovered Documents	Restaurer les documents récupérés
@@ -3054,6 +3075,7 @@ digits	Malayalam	Malayalam
 	Roman Hanging Punctuation	Ponctuation romaine hors justification
 	Korean Line Break Anywhere	Saut de ligne coréen n’importe où
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Paramètres de composition d’Asie orientale
 	Korean Composition Settings	Paramètres de composition coréenne
 	Rotate	Rotation
@@ -3246,6 +3268,8 @@ digits	Malayalam	Malayalam
 @msg	`{key}` must be an array of these names: {_1}	`{key}` doit être un tableau de noms parmi {_1}
 	Search commands and tools	Chercher commandes et outils
 	Search commands and tools…	Chercher commandes et outils…
+	Recent Commands	Commandes récentes
+	No recent commands	Aucune commande récente
 	Search Commands…	Rechercher des commandes…
 	Secondary	Secondaire
 	Section Symbol	Symbole de section
@@ -3660,6 +3684,9 @@ digits	Malayalam	Malayalam
 	Show Import Options	Afficher les options d’importation
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Demander les options d’importation de chaque fichier PDF, DXF ou texte avant de le placer, sinon utiliser les dernières options choisies
 	Stylistic Alternates	Variantes stylistiques
+	Ligatures	Ligatures
+	Ornaments	Ornements
+	Figures	Chiffres
 	Swash	Lettres ornées
 	Swatch Conflict	Conflit de nuances
 	Swatch Conflicts	Conflits de nuances
@@ -4432,6 +4459,31 @@ axis	Both	Les deux
 @msg	$.evalFile requires a file path	$.evalFile nécessite un chemin de fichier
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile : le délai doit être un nombre fini de millisecondes, 0 ou plus
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile : prend un chemin de fichier et un délai
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} n'est pas défini
+@msg	cannot read property '{key}' of {base}	impossible de lire la propriété '{key}' de {base}
+@msg	cannot set property '{key}' of {base}	impossible de modifier la propriété '{key}' de {base}
+@msg	cannot read a property of {base}	impossible de lire une propriété de {base}
+@msg	cannot set a property of {base}	impossible de modifier une propriété de {base}
+@msg	cannot define property '{key}': {why}	impossible de définir la propriété '{key}' : {why}
+@msg	cannot assign to property '{key}': {why}	impossible d'affecter la propriété '{key}' : {why}
+@msg	cannot delete property '{key}'	impossible de supprimer la propriété '{key}'
+@msg	cannot declare function {ident}	impossible de déclarer la fonction {ident}
+@msg	invalid assignment target	cible d'affectation non valide
+@msg	the array's length is read-only	la longueur du tableau est en lecture seule
+@msg	the property cannot be redefined	la propriété ne peut pas être redéfinie
+@msg	the object is not extensible	l'objet n'est pas extensible
+@msg	the length cannot be redefined	la longueur ne peut pas être redéfinie
+@msg	it is read-only	elle est en lecture seule
+@msg	an element cannot be deleted	un élément ne peut pas être supprimé
+@msg	it has only a getter	elle n'a qu'un getter
+@msg	the value is a primitive	la valeur est une primitive
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name} : ligne {line}, colonne {column} de {file} : {e} (levée)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name} : ligne {line}, colonne {column} : {e} (levée)
 @msg	{name}: {e} (thrown)	{name} : {e} (levée)
@@ -4472,6 +4524,27 @@ axis	Both	Les deux
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name} : une boîte de dialogue ne peut pas s'ouvrir dans un rappel d'une fonction intégrée, un accesseur, une conversion ou un fichier que $.evalFile exécute ; appelez-la depuis le code du script lui-même
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name} : la réponse suivante de `answers` est pour {_1}, pas pour {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name} : `answers` n'a plus de réponse pour cette boîte de dialogue
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` contient {n} réponse que le script n'a pas utilisée|`answers` contient {n} réponses que le script n'a pas utilisées
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} a laissé {n} objet sous le pinceau sans changement ({_2}) : il ne remodèle que les tracés|{_1} a laissé {n} objets sous le pinceau sans changement ({_2}) : il ne remodèle que les tracés
+liquify-tool	Warp	Déformation
+liquify-tool	Twirl	Tourbillon
+liquify-tool	Pucker	Contraction
+liquify-tool	Bloat	Dilatation
+liquify-tool	Scallop	Feston
+liquify-tool	Crystallize	Cristallisation
+liquify-tool	Wrinkle	Fronces
+liquify-kind	graphs	graphes
+liquify-kind	type	texte
+liquify-kind	symbols	symboles
+liquify-kind	images	images
+liquify-kind	meshes	filets
+liquify-kind	envelopes	enveloppes
+liquify-kind	repeats	répétitions
+liquify-kind	placed documents	documents importés
+liquify-kind	blends	dégradés de formes
+liquify-list-two	{0}, {1}	{0} et {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} et {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} est trop volumineux pour un script
 @msg	vc.log: the log of this run is full	vc.log : le journal de cette exécution est plein
 @msg	this function's script run has ended	l'exécution du script de cette fonction est terminée
@@ -4516,6 +4589,7 @@ axis	Both	Les deux
 @msg	select a path	sélectionnez un tracé
 @msg	Divide Objects Below: select exactly one path	Diviser les objets inférieurs : sélectionnez exactement un tracé
 @msg	Downloaded {what}	{what} téléchargé
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	certains effets pixellisés n’ont pas été convertis en images, car ils occuperaient plus de 1024 images ou 256 mégapixels au total
 @msg	Expand Appearance: the selection has a basic appearance	Décomposer l’aspect : la sélection a un aspect de base
 @msg	Expand: no brush strokes selected	Décomposer : aucun contour de forme sélectionné
 @msg	Expand: no gradient fills	Décomposer : aucun fond en dégradé
@@ -5349,6 +5423,10 @@ axis	Both	Les deux
 	Em Box	Cadratin
 	x-Height	Hauteur d’x
 	ICF Box	Cadre ICF
+	Show Sample	Afficher l'échantillon
+	Hide Sample	Masquer l'échantillon
+	Max Ascent/Descent	Hauteur/profondeur max.
+	Max Ascender	Jambage ascendant max.
 	ICF Top/Right	ICF haut/droite
 	ICF Bottom/Left	ICF bas/gauche
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` est la référence d’étape {r}, que seuls `run` et `command_batch` résolvent
@@ -6280,7 +6358,7 @@ theme	Appearance	Apparence
 @msg	Unknown dimension style	Style de cote inconnu
 @msg	Unknown unit	Unité inconnue
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Ferme les extrémités circulaires des profils ouverts. Les rotations partielles conservent leurs faces de coupe ouvertes.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Ferme les extrémités circulaires des profils ouverts. Les rotations partielles ferment aussi leurs faces de coupe.
 @msg	span must be "object" or "selection", got {v}	span doit être "object" ou "selection", pas {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" place un `gradient`, pas une nuance
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" place un dégradé : indiquez `gradient`
@@ -6432,6 +6510,7 @@ theme	Appearance	Apparence
 	Single Word Justification:	Justification d’un mot isolé :
 	Full Justify	Justification complète
 	Minimum must not exceed Desired, nor Desired Maximum.	Le minimum ne doit pas dépasser la valeur optimale, ni la valeur optimale le maximum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}` : le minimum ne doit pas dépasser la valeur optimale, ni la valeur optimale le maximum
 	Justification	Justification
 	Add filters from the list above	Ajoutez des filtres à partir de la liste ci-dessus
 	Add to Stack	Ajouter à la pile
@@ -7369,6 +7448,24 @@ breakText	Glyphs	Glyphes
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Décomposer les tirets en tracés
 @msg	select paths with dashed strokes to expand	sélectionnez des tracés à contour pointillé à décomposer
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Cercle tangent…
+	Tangent Circle	Cercle tangent
+	Circle:	Cercle :
+@msg	`ids` names an object twice	`ids` désigne deux fois le même objet
+@msg	select two or three paths or compound paths	sélectionnez deux ou trois tracés ou tracés transparents
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` doit être compris entre 0.01 et 1000000 pt
+@msg	two shapes need a `radius`	deux formes demandent un `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	trois formes fixent elles-mêmes le rayon : omettez `radius`
+@msg	`circle` must be from 0 to 64	`circle` doit être compris entre 0 et 64
+@msg	a shape has no outline	une forme n’a pas de contour
+@msg	the shapes are too complex: at most 2000 segments in all	les formes sont trop complexes : 2000 segments au plus au total
+@msg	these shapes take too long to search	la recherche prend trop de temps pour ces formes
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	plus de 64 cercles touchent ces formes : ils les touchent peut-être le long d’une courbe entière
+@msg	no circle touches these shapes	aucun cercle ne touche ces formes
+@msg	`circle` is past the last circle found ({found})	`circle` dépasse le dernier cercle trouvé ({found})
+@msg	object {value} is not a path or compound path	l’objet {value} n’est ni un tracé ni un tracé transparent
+@msg	these shapes are too small to measure	ces formes sont trop petites pour être mesurées
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Outils de document
 	Save a Timestamped Copy	Enregistrer une copie horodatée
@@ -7423,7 +7520,7 @@ breakText	Glyphs	Glyphes
 @msg	stroke cannot be set on a symbol instance	stroke ne peut pas être défini sur une instance de symbole
 @msg	fill on a symbol instance must be a solid color or none	le fill d’une instance de symbole doit être une couleur unie ou none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} ne peut pas être défini sur une image sans l’effet Convertir en forme ou Vectoriser l’objet
-@msg	pass newName, registration, exportType, nineSlice and/or type	indiquez newName, registration, exportType, nineSlice et/ou type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	indiquez newName, registration, exportType, nineSlice, type et/ou alignToPixelGrid
 	Text Flow	Flux du texte
 	By Rows	Par lignes
 	By Columns	Par colonnes
@@ -8884,7 +8981,9 @@ breakText	Glyphs	Glyphes
 @msg	position must be normal, superscript or subscript	position doit valoir normal, superscript ou subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position doit valoir topLeft, topRight, bottomLeft ou bottomRight
 @msg	positions must be between 0 and 100000 pt	les positions doivent être comprises entre 0 et 100000 pt
+@msg	ppi can't be more than {max} for this image	ppi ne peut pas dépasser {max} pour cette image
 @msg	ppi must be a positive number, not {ppi}	ppi doit être un nombre positif, pas {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim conserve les pixels de l’image tels quels : omettez ppi
 @msg	ppi must be between 1 and 2400	ppi doit être compris entre 1 et 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` n’est pas transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape doit valoir clippingMask|transparency

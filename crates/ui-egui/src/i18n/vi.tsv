@@ -754,6 +754,18 @@ font-technology	Variable	Biến thiên
 	Copy Width Point	Sao chép điểm chiều rộng
 	Copyright	Bản quyền
 	Copyright Info URL:	URL thông tin bản quyền:
+	Save Metadata Template…	Lưu mẫu siêu dữ liệu…
+	Import Options	Tùy chọn nhập
+	Clear existing fields and use the template's	Xóa các trường hiện có và dùng các trường của mẫu
+	Keep existing fields, but replace those the template has	Giữ các trường hiện có, nhưng thay thế các trường mà mẫu có
+	Keep existing fields, but append those the template has	Giữ các trường hiện có, nhưng nối thêm các trường mà mẫu có
+@msg	the template name can't be empty	tên mẫu không được để trống
+@msg	the template name isn't usable as a file name	không thể dùng tên mẫu làm tên tệp
+@msg	no metadata templates folder here	không có thư mục mẫu siêu dữ liệu ở đây
+@msg	give `name` or `path`, not both	hãy chỉ định `name` hoặc `path`, không phải cả hai
+@msg	give one of `path`, `name` and `data`	hãy chỉ định một trong `path`, `name` và `data`
+@msg	mode must be replace, keep or append	chế độ phải là replace, keep hoặc append
+@msg	the file is not an XMP metadata template	tệp không phải là mẫu siêu dữ liệu XMP
 	Copyright Notice:	Thông báo bản quyền:
 	Copyright Status:	Trạng thái bản quyền:
 	Copyright Symbol	Ký hiệu bản quyền
@@ -1383,6 +1395,7 @@ font-technology	Variable	Biến thiên
 	Highlight Size	Kích thước điểm sáng
 	Blend Steps	Số bước hòa trộn
 	Shading Color	Màu tô bóng
+	Black Overprint	Đen in chồng
 	Draw Hidden Faces	Vẽ các mặt ẩn
 	Eyedropper	Ống hút màu
 	Sample Color from Screen	Lấy mẫu màu từ màn hình
@@ -1576,6 +1589,8 @@ file-filter	Templates	Mẫu
 	Font Family & Style	Họ phông & kiểu
 	Font Family, Style & Size	Họ phông, kiểu & cỡ
 	Font List	Danh sách phông
+	Show Similar Fonts	Hiển thị phông tương tự
+	Clear Similar Fonts	Xóa phông tương tự
 	Font Preview Size	Cỡ xem trước phông
 	Font Size	Cỡ chữ
 	Variable Font	Phông chữ biến thiên
@@ -1995,6 +2010,10 @@ digits	Hindi	Hindi
 	Cap Height	Chiều cao chữ hoa
 	x-Height	Chiều cao chữ x
 	ICF Box	Ô ICF
+	Show Sample	Hiện mẫu
+	Hide Sample	Ẩn mẫu
+	Max Ascent/Descent	Độ cao/sâu tối đa
+	Max Ascender	Nét chân chữ trên tối đa
 	ICF Top/Right	ICF Trên/Phải
 	Identify Objects By	Nhận diện đối tượng theo
 	Ignore	Bỏ qua
@@ -3376,6 +3395,12 @@ mark-style	Japanese	Kiểu Nhật
 	Responsive	Đáp ứng
 	Restore	Khôi phục
 	Restore every preference to its default (applied on OK)	Khôi phục tất cả tùy chọn về mặc định (áp dụng khi nhấn OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Đơn vị cho tài liệu mới theo kích thước dựng sẵn, trừ kích thước bằng pixel, và cho tệp đã mở không ghi đơn vị; chọn đơn vị ở đây rồi bấm OK cũng đặt nó cho tài liệu đang hoạt động.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Độ dày nét, nét đứt và khoảng cách hiển thị theo đơn vị này, và số nhập cho chúng được đọc theo đơn vị này.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Cỡ chữ, giãn dòng và dịch chuyển đường cơ sở hiển thị theo đơn vị này, và số nhập cho chúng được đọc theo đơn vị này.
+	The unit for East Asian type measurements, which no field uses yet.	Đơn vị cho số đo chữ Đông Á, hiện chưa có trường nào dùng.
+	When on, a number typed without a unit into a field in picas is read in points.	Khi bật, số nhập không có đơn vị vào trường tính bằng pica được đọc theo điểm.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Với XML ID, tên đối tượng hiển thị dưới dạng XML ID trong Các lớp, Biến số và Tùy chọn lớp.
 	Reset all preferences to their defaults?	Đặt lại tất cả tùy chọn về mặc định?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Giá trị mặc định được áp dụng khi bạn nhấn OK trong Tùy chọn. Hủy ở đó giữ nguyên các tùy chọn hiện tại của bạn.
 	Restore Recovered Documents	Khôi phục tài liệu đã phục hồi
@@ -3415,6 +3440,7 @@ mark-style	Japanese	Kiểu Nhật
 	Roman Hanging Punctuation	Dấu câu treo Roman
 	Korean Line Break Anywhere	Ngắt dòng tiếng Hàn ở bất kỳ đâu
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Cài đặt dàn trang Đông Á
 	Korean Composition Settings	Cài đặt dàn trang tiếng Hàn
 	Rotate	Xoay
@@ -3631,6 +3657,8 @@ mark-style	Japanese	Kiểu Nhật
 @msg	`{key}` must be an array of these names: {_1}	`{key}` phải là một mảng gồm các tên sau: {_1}
 	Search commands and tools	Tìm kiếm lệnh và công cụ
 	Search commands and tools…	Tìm kiếm lệnh và công cụ…
+	Recent Commands	Lệnh gần đây
+	No recent commands	Không có lệnh gần đây
 	Search Commands…	Tìm kiếm lệnh…
 	Search Fonts Folder	Tìm kiếm thư mục phông chữ
 	Searching…	Đang tìm kiếm…
@@ -4089,6 +4117,9 @@ mark-style	Japanese	Kiểu Nhật
 	Show Import Options	Hiện tùy chọn nhập
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Hỏi tùy chọn nhập của từng tệp PDF, DXF hoặc văn bản trước khi đặt; khi tắt, dùng các tùy chọn đã chọn gần nhất
 	Stylistic Alternates	Ký tự thay thế theo phong cách
+	Ligatures	Chữ ghép
+	Ornaments	Hoa văn
+	Figures	Chữ số
 	Swash	Swash
 	Swatch Conflict	Xung đột mẫu màu
 	Swatch Conflicts	Xung đột mẫu màu
@@ -4920,6 +4951,44 @@ theme	Appearance	Giao diện
 @msg	$.evalFile requires a file path	$.evalFile cần đường dẫn tệp
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: thời gian chờ phải là một số mili giây hữu hạn, từ 0 trở lên
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: nhận một đường dẫn tệp và một thời gian chờ
+@msg	assignment to a constant binding	gán cho một ràng buộc hằng
+@msg	invalid array length	độ dài mảng không hợp lệ
+@msg	array literal too long	literal mảng quá dài
+@msg	the value is not a function	giá trị không phải là hàm
+@msg	apply was called on a value that is not a function	apply được gọi trên một giá trị không phải là hàm
+@msg	the argument list is not an object	danh sách đối số không phải là đối tượng
+@msg	too many arguments	quá nhiều đối số
+@msg	the value is not a constructor	giá trị không phải là hàm tạo
+@msg	cannot convert the object to a primitive value	không thể chuyển đối tượng thành giá trị nguyên thủy
+@msg	cannot convert undefined or null to an object	không thể chuyển undefined hoặc null thành đối tượng
+@msg	the right side of 'in' is not an object	vế phải của 'in' không phải là đối tượng
+@msg	the right side of 'instanceof' is not a function	vế phải của 'instanceof' không phải là hàm
+@msg	the function's prototype is not an object	nguyên mẫu của hàm không phải là đối tượng
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} chưa được định nghĩa
+@msg	cannot read property '{key}' of {base}	không thể đọc thuộc tính '{key}' của {base}
+@msg	cannot set property '{key}' of {base}	không thể đặt thuộc tính '{key}' của {base}
+@msg	cannot read a property of {base}	không thể đọc thuộc tính của {base}
+@msg	cannot set a property of {base}	không thể đặt thuộc tính của {base}
+@msg	cannot define property '{key}': {why}	không thể định nghĩa thuộc tính '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	không thể gán cho thuộc tính '{key}': {why}
+@msg	cannot delete property '{key}'	không thể xóa thuộc tính '{key}'
+@msg	cannot declare function {ident}	không thể khai báo hàm {ident}
+@msg	invalid assignment target	đích gán không hợp lệ
+@msg	the array's length is read-only	độ dài của mảng là chỉ đọc
+@msg	the property cannot be redefined	không thể định nghĩa lại thuộc tính
+@msg	the object is not extensible	đối tượng không thể mở rộng
+@msg	the length cannot be redefined	không thể định nghĩa lại độ dài
+@msg	it is read-only	nó là chỉ đọc
+@msg	an element cannot be deleted	không thể xóa một phần tử
+@msg	it has only a getter	nó chỉ có getter
+@msg	the value is a primitive	giá trị là kiểu nguyên thủy
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: dòng {line}, cột {column} của {file}: {e} (đã ném)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: dòng {line}, cột {column}: {e} (đã ném)
 @msg	{name}: {e} (thrown)	{name}: {e} (đã ném)
@@ -4960,6 +5029,27 @@ theme	Appearance	Giao diện
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: hộp thoại không thể mở bên trong lệnh gọi lại của hàm dựng sẵn, getter, phép chuyển đổi hoặc tệp mà $.evalFile chạy; hãy gọi nó từ mã của chính tập lệnh
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: câu trả lời tiếp theo trong `answers` dành cho {_1}, không phải {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` không còn câu trả lời nào cho hộp thoại này
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` có {n} câu trả lời mà tập lệnh không dùng
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} giữ nguyên {n} đối tượng dưới cọ ({_2}): chỉ biến dạng đường dẫn
+liquify-tool	Warp	Biến dạng
+liquify-tool	Twirl	Xoáy
+liquify-tool	Pucker	Nhíu
+liquify-tool	Bloat	Phình
+liquify-tool	Scallop	Vỏ sò
+liquify-tool	Crystallize	Kết tinh
+liquify-tool	Wrinkle	Nhăn
+liquify-kind	graphs	biểu đồ
+liquify-kind	type	chữ
+liquify-kind	symbols	ký hiệu
+liquify-kind	images	hình ảnh
+liquify-kind	meshes	lưới
+liquify-kind	envelopes	bao hình
+liquify-kind	repeats	lặp lại
+liquify-kind	placed documents	tài liệu đã đặt
+liquify-kind	blends	hòa trộn
+liquify-list-two	{0}, {1}	{0} và {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} và {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} quá lớn đối với tập lệnh
 @msg	vc.log: the log of this run is full	vc.log: nhật ký của lần chạy này đã đầy
 @msg	this function's script run has ended	lần chạy tập lệnh của hàm này đã kết thúc
@@ -5031,6 +5121,7 @@ theme	Appearance	Giao diện
 @msg	every numbered name for {name} is taken in the document's folder	mọi tên đánh số cho {name} đã được dùng trong thư mục tài liệu
 @msg	every search thread stopped on an internal error (please report this bug)	mọi luồng tìm kiếm đã dừng do lỗi nội bộ (vui lòng báo cáo lỗi này)
 @msg	Expand Appearance: the selection has a basic appearance	Mở rộng diện mạo: vùng chọn có diện mạo cơ bản
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	một số hiệu ứng raster không được chuyển thành hình ảnh: chúng sẽ cần hơn 1.024 hình ảnh hoặc tổng cộng 256 megapixel
 @msg	Expand: no brush strokes selected	Mở rộng: chưa chọn nét cọ
 @msg	Expand: no gradient fills	Mở rộng: không có tô chuyển sắc
 @msg	Expand: nothing to expand	Mở rộng: không có gì để mở rộng
@@ -5899,7 +5990,7 @@ theme	Appearance	Giao diện
 @msg	Unknown dimension style	Kiểu kích thước không xác định
 @msg	Unknown unit	Đơn vị không xác định
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Đóng các đầu tròn của biên dạng mở. Khi xoay một phần, các mặt cắt bên vẫn mở.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Đóng các đầu tròn của biên dạng mở. Khi xoay một phần, các mặt cắt bên cũng được đóng.
 	Distance	Khoảng cách
 @msg	span must be "object" or "selection", got {v}	span phải là "object" hoặc "selection", không phải {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" đặt một `gradient`, không phải mẫu màu
@@ -6053,6 +6144,7 @@ theme	Appearance	Giao diện
 	Single Word Justification:	Căn đều một từ:
 	Full Justify	Căn đều hoàn toàn
 	Minimum must not exceed Desired, nor Desired Maximum.	Giá trị tối thiểu không được vượt quá giá trị mong muốn, và giá trị mong muốn không được vượt quá tối đa.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: giá trị tối thiểu không được vượt quá giá trị mong muốn, và giá trị mong muốn không được vượt quá tối đa
 	Minimum	Tối thiểu
 	Justification	Căn đều
 	Add filters from the list above	Thêm bộ lọc từ danh sách phía trên
@@ -7000,6 +7092,24 @@ breakText	Glyphs	Glyph
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Mở rộng nét đứt thành đường dẫn
 @msg	select paths with dashed strokes to expand	chọn các đường dẫn có nét đứt để mở rộng
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Đường tròn tiếp xúc…
+	Tangent Circle	Đường tròn tiếp xúc
+	Circle:	Đường tròn:
+@msg	`ids` names an object twice	`ids` nêu một đối tượng hai lần
+@msg	select two or three paths or compound paths	chọn hai hoặc ba đường dẫn hoặc đường dẫn phức hợp
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` phải từ 0.01 đến 1000000 pt
+@msg	two shapes need a `radius`	hai hình cần `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	ba hình tự xác định bán kính: hãy bỏ `radius`
+@msg	`circle` must be from 0 to 64	`circle` phải từ 0 đến 64
+@msg	a shape has no outline	một hình không có đường viền
+@msg	the shapes are too complex: at most 2000 segments in all	các hình quá phức tạp: tổng cộng tối đa 2000 đoạn
+@msg	these shapes take too long to search	việc tìm kiếm cho các hình này mất quá nhiều thời gian
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	hơn 64 đường tròn chạm vào các hình này: có thể chúng chạm dọc theo cả một đường cong
+@msg	no circle touches these shapes	không có đường tròn nào chạm vào các hình này
+@msg	`circle` is past the last circle found ({found})	`circle` vượt quá đường tròn cuối cùng tìm được ({found})
+@msg	object {value} is not a path or compound path	đối tượng {value} không phải đường dẫn hay đường dẫn phức hợp
+@msg	these shapes are too small to measure	các hình này quá nhỏ để đo
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Công cụ tài liệu
 	Save a Timestamped Copy	Lưu bản sao có ngày giờ
@@ -7054,7 +7164,7 @@ breakText	Glyphs	Glyph
 @msg	stroke cannot be set on a symbol instance	không thể đặt stroke cho thực thể ký hiệu
 @msg	fill on a symbol instance must be a solid color or none	fill của thực thể ký hiệu phải là màu đặc hoặc none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	không thể đặt {key} cho hình ảnh không có hiệu ứng Chuyển thành hình dạng hoặc Đường bao đối tượng
-@msg	pass newName, registration, exportType, nineSlice and/or type	hãy cung cấp newName, registration, exportType, nineSlice và/hoặc type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	hãy cung cấp newName, registration, exportType, nineSlice, type và/hoặc alignToPixelGrid
 	Text Flow	Luồng văn bản
 	By Rows	Theo hàng
 	By Columns	Theo cột

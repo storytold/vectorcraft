@@ -11634,6 +11634,349 @@ fn same_region(before: &[(Vec<[f64; 4]>, f64, bool)], after: &[(Vec<[f64; 4]>, f
     before.len() == after.len() && before.iter().zip(after).all(|(b, a)| close(&b.0, &a.0) && (b.1 - a.1).abs() < 1e-6 && b.2 == a.2)
 }
 
+/// A `w` × `h` document of area type "Body" in the frame `frame`, with `over` above it (bottom
+/// first), its wrap shapes resolved as the canvas resolves them.
+fn wrapped_body(w: f64, h: f64, frame: Rect, over: impl FnOnce(&mut Document) -> Vec<Node>) -> Document {
+    use vectorcraft_doc::{TextKind, TextObject, TextRun};
+    let mut doc = Document::new(w, h);
+    let layer = doc.layers[0].id;
+    let size = frame.height() / 20.0;
+    let mut body = TextObject::point(vectorcraft_geom::Point::ZERO, "", style(size, Color::BLACK));
+    body.runs = vec![TextRun::new("one two three four five six seven eight nine ten eleven twelve", style(size, Color::BLACK))];
+    body.kind = TextKind::Area { frame: shapes::rectangle(frame) };
+    body.xf = Affine::IDENTITY;
+    let body = named(text_node(&mut doc, body), "Body");
+    let over = over(&mut doc);
+    for n in std::iter::once(body).chain(over) {
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    vectorcraft_doc::text::resolve_wrap(None, &mut doc);
+    doc
+}
+
+/// The characters, frame and wrap shapes of the area type on `doc`'s first layer, as it is (its
+/// shapes not resolved again).
+fn area_type(doc: &Document) -> Option<(String, Option<Rect>, usize)> {
+    use vectorcraft_doc::TextKind;
+    doc.layers[0].children().unwrap().iter().find_map(|n| match &n.kind {
+        NodeKind::Text(t) if matches!(&t.kind, TextKind::Area { .. }) => {
+            let TextKind::Area { frame } = &t.kind else { return None };
+            Some((t.runs.iter().map(|r| r.text.as_str()).collect(), frame.transformed(t.xf).bounds(), t.wrap.len()))
+        }
+        _ => None,
+    })
+}
+
+/// Area type wrapped only by plain paths, compound paths and groups that don't clip is written as
+/// type and reopens as area type with its characters, its frame and the same wrap shapes, which
+/// the reader works out again from the objects above it ([`crate::import`]'s
+/// `resolve_text_wrap`): a filled path with a negative offset and Invert Wrap, a locked path with
+/// only a stroke, a compound path, a group of two squares with a hidden member, an offset of
+/// -1000 pt, and an empty group and an open line with options, which wrap nothing.
+#[test]
+fn area_type_wrapped_by_plain_objects_stays_type() {
+    type Make = fn(&mut Document) -> Vec<Node>;
+    fn ring(doc: &mut Document, r: Rect) -> Node {
+        let outer = Node::path(doc.alloc_id(), shapes::rectangle(r), Appearance::default());
+        let inner = Node::path(doc.alloc_id(), shapes::rectangle(r.inset(-10.0)), Appearance::default());
+        let mut ring = Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(inner)], rule: FillRule::EvenOdd });
+        ring.appearance = Appearance::basic(solid(Color::gray(0.5)), Paint::None, 0.0).into();
+        ring
+    }
+    let cases: [(&str, Make); 6] = [
+        ("a path, a negative offset, Invert Wrap", |doc| {
+            vec![wrapped(square(doc, Rect::new(100.0, 40.0, 160.0, 120.0), Color::gray(0.5)), -4.25, true)]
+        }),
+        ("a locked stroked path", |doc| {
+            let mut n = Node::path(
+                doc.alloc_id(),
+                shapes::ellipse(Rect::new(80.0, 30.0, 180.0, 130.0)),
+                Appearance::basic(Paint::None, solid(Color::BLACK), 2.0),
+            );
+            n.locked = true;
+            vec![wrapped(n, 6.0, false)]
+        }),
+        ("a compound path", |doc| vec![wrapped(ring(doc, Rect::new(80.0, 30.0, 200.0, 150.0)), 7.0, true)]),
+        ("a group", |doc| {
+            let a = square(doc, Rect::new(40.0, 40.0, 80.0, 80.0), Color::gray(0.5));
+            let mut hidden = square(doc, Rect::new(120.0, 40.0, 160.0, 80.0), Color::gray(0.5));
+            hidden.visible = false;
+            let b = square(doc, Rect::new(200.0, 100.0, 240.0, 140.0), Color::gray(0.5));
+            vec![wrapped(group(doc, vec![a, hidden, b], false), -2.0, false)]
+        }),
+        ("an offset of -1000 pt", |doc| vec![wrapped(square(doc, Rect::new(100.0, 40.0, 160.0, 120.0), Color::gray(0.5)), -1000.0, false)]),
+        ("an empty group and an open line", |doc| {
+            let line = Node::path(
+                doc.alloc_id(),
+                shapes::line((20.0, 20.0).into(), (280.0, 180.0).into()),
+                Appearance::basic(Paint::None, solid(Color::BLACK), 1.0),
+            );
+            let empty = group(doc, vec![], false);
+            let n = square(doc, Rect::new(100.0, 40.0, 160.0, 120.0), Color::gray(0.5));
+            vec![wrapped(n, 3.0, false), wrapped(empty, 5.0, false), wrapped(line, 5.0, false)]
+        }),
+    ];
+    for (name, make) in cases {
+        let doc = wrapped_body(300.0, 200.0, Rect::new(10.0, 10.0, 290.0, 190.0), make);
+        let before = area_type(&doc).unwrap();
+        assert_ne!(before.2, 0, "{name}: the type is wrapped");
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        let text_out = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+        assert!(!out.warnings.iter().any(|w| w == writer::TYPE), "{name}: {:?}", out.warnings);
+        assert!(text_out.contains("/AI11Text"), "{name}");
+        let back = read_back(&doc);
+        let after = area_type(&back).unwrap_or_else(|| panic!("{name}: no area type\n{text_out}"));
+        assert_eq!(after.0, before.0, "{name}");
+        let (b, a) = (before.1.unwrap(), after.1.unwrap());
+        assert!([b.x0 - a.x0, b.y0 - a.y0, b.x1 - a.x1, b.y1 - a.y1].iter().all(|d| d.abs() < 1e-3), "{name}: {b:?} {a:?}");
+        assert_eq!(after.2, before.2, "{name}: the reader wrapped it");
+        assert!(same_region(&area_wrap_region(&doc), &area_wrap_region(&back)), "{name}\n{text_out}");
+        // The object that wraps it comes back as the same kind, lock and options.
+        let source = |d: &Document| {
+            let n = d.layers[0].children().unwrap()[1].clone();
+            (std::mem::discriminant(&n.kind), n.locked, n.visible, n.extras().wrap)
+        };
+        assert_eq!(source(&back), source(&doc), "{name}\n{text_out}");
+    }
+}
+
+/// Area type stays outlines when a wrap object above it is not written as itself, or its shapes
+/// are not the ones the objects above it give it: an object with an effect, a blend, a symbol
+/// instance, a path with a gradient, a compound path with a hidden member, a group holding type,
+/// a compound path of one subpath (read back as a path), an offset past 1000 pt, a clipping group, and shapes of an object that has moved since.
+#[test]
+fn area_type_wrapped_by_other_objects_stays_outlines() {
+    type Make = fn(&mut Document) -> Vec<Node>;
+    let cases: [(&str, Make); 10] = [
+        ("an effect", |doc| {
+            let n = styled_rect(doc, "Shadowed", Rect::new(100.0, 40.0, 160.0, 120.0), solid(Color::gray(0.5)), Paint::None, vec![drop_shadow()]);
+            vec![wrapped(n, 4.0, false)]
+        }),
+        ("a blend", |doc| {
+            let keys = vec![
+                Arc::new(square(doc, Rect::new(60.0, 80.0, 70.0, 90.0), Color::gray(0.5))),
+                Arc::new(square(doc, Rect::new(220.0, 110.0, 230.0, 120.0), Color::gray(0.5))),
+            ];
+            let spec = vectorcraft_doc::BlendSpec { spacing: vectorcraft_doc::BlendSpacing::Distance(60.0), ..Default::default() };
+            vec![wrapped(Node::new(doc.alloc_id(), NodeKind::Blend { children: keys, spec: Box::new(spec) }), 4.5, false)]
+        }),
+        ("a symbol instance", |doc| {
+            two_leaves(doc);
+            vec![wrapped(instance(doc, "Leaf", Affine::new([3.0, 0.0, 0.0, 3.0, 150.0, 100.0])), 4.5, false)]
+        }),
+        ("a gradient", |doc| {
+            let g = Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, Color::BLACK), GradientStop::new(1.0, Color::WHITE)]);
+            let ap = Appearance::basic(Paint::Gradient(Box::new(GradientPaint::new(g))), Paint::None, 0.0);
+            vec![wrapped(Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(100.0, 40.0, 160.0, 120.0)), ap), 4.0, false)]
+        }),
+        ("a compound path with a hidden member", |doc| {
+            let outer = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(80.0, 30.0, 200.0, 150.0)), Appearance::default());
+            let mut inner = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(100.0, 50.0, 180.0, 130.0)), Appearance::default());
+            inner.visible = false;
+            let mut ring =
+                Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(inner)], rule: FillRule::EvenOdd });
+            ring.appearance = Appearance::basic(solid(Color::gray(0.5)), Paint::None, 0.0).into();
+            vec![wrapped(ring, 4.0, false)]
+        }),
+        ("a group holding type", |doc| {
+            let label = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(100.0, 100.0), "Label", style(20.0, Color::BLACK));
+            let label = text_node(doc, label);
+            let n = square(doc, Rect::new(100.0, 40.0, 160.0, 120.0), Color::gray(0.5));
+            vec![wrapped(group(doc, vec![n, label], false), 4.0, false)]
+        }),
+        ("a compound path of one subpath", |doc| {
+            let only = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(80.0, 30.0, 200.0, 150.0)), Appearance::default());
+            let mut one = Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(only)], rule: FillRule::NonZero });
+            one.appearance = Appearance::basic(solid(Color::gray(0.5)), Paint::None, 0.0).into();
+            vec![wrapped(one, 4.0, false)]
+        }),
+        ("an offset past 1000 pt", |doc| vec![wrapped(square(doc, Rect::new(100.0, 40.0, 160.0, 120.0), Color::gray(0.5)), 1000.5, false)]),
+        ("a clipping group", |doc| {
+            let clip = clipping(doc, shapes::rectangle(Rect::new(80.0, 30.0, 200.0, 150.0)));
+            let n = square(doc, Rect::new(100.0, 40.0, 160.0, 120.0), Color::gray(0.5));
+            vec![wrapped(group(doc, vec![clip, n], true), 4.0, false)]
+        }),
+        ("a path moved since", |doc| vec![wrapped(square(doc, Rect::new(100.0, 40.0, 160.0, 120.0), Color::gray(0.5)), 4.0, false)]),
+    ];
+    let mut typed = vec![];
+    for (name, make) in cases {
+        let mut doc = wrapped_body(300.0, 200.0, Rect::new(10.0, 10.0, 290.0, 190.0), make);
+        assert_ne!(area_type(&doc).unwrap().2, 0, "{name}: the type is wrapped");
+        if name == "a path moved since" {
+            let id = doc.layers[0].children().unwrap()[1].id;
+            doc.node_mut(id).unwrap().transform(Affine::translate((30.0, 0.0)), false);
+        }
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        if !out.warnings.iter().any(|w| w == writer::TYPE) || area_type(&read_back(&doc)).is_some() {
+            typed.push(name);
+        }
+    }
+    assert!(typed.is_empty(), "written as type: {typed:?}");
+}
+
+/// Each frame of threaded area type is checked on its own: a thread whose first frame is wrapped
+/// by a path and a group and whose second by the group alone is written as type and reopens as the
+/// same thread with the same shapes in each frame; with a blend over the second frame, the whole
+/// thread is written as outlines.
+#[test]
+fn threaded_area_type_wrapped_by_plain_objects_stays_type() {
+    use vectorcraft_doc::{TextKind, TextObject, TextRun};
+    for blend in [false, true] {
+        let mut doc = Document::new(400.0, 200.0);
+        let layer = doc.layers[0].id;
+        let st = style(10.0, Color::BLACK);
+        let mut first = TextObject::point(vectorcraft_geom::Point::ZERO, "", st.clone());
+        first.runs = vec![TextRun::new("one two three four five six seven eight nine ten eleven twelve thirteen fourteen ", st.clone())];
+        first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(10.0, 10.0, 190.0, 90.0)) };
+        first.xf = Affine::IDENTITY;
+        let mut second = first.clone();
+        second.runs = vec![TextRun::new("fifteen sixteen seventeen eighteen nineteen twenty", st.clone())];
+        second.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(210.0, 10.0, 390.0, 90.0)) };
+        let (first, second) = (named(text_node(&mut doc, first), "First"), named(text_node(&mut doc, second), "Second"));
+        doc.text_threads.push(vec![first.id, second.id]);
+        let path = wrapped(square(&mut doc, Rect::new(60.0, 20.0, 100.0, 60.0), Color::gray(0.5)), -3.0, true);
+        let over_second = if blend {
+            let keys = vec![
+                Arc::new(square(&mut doc, Rect::new(250.0, 20.0, 260.0, 30.0), Color::gray(0.5))),
+                Arc::new(square(&mut doc, Rect::new(340.0, 60.0, 350.0, 70.0), Color::gray(0.5))),
+            ];
+            let spec = vectorcraft_doc::BlendSpec { spacing: vectorcraft_doc::BlendSpacing::Distance(30.0), ..Default::default() };
+            wrapped(Node::new(doc.alloc_id(), NodeKind::Blend { children: keys, spec: Box::new(spec) }), 2.0, false)
+        } else {
+            let a = square(&mut doc, Rect::new(250.0, 20.0, 290.0, 60.0), Color::gray(0.5));
+            let b = square(&mut doc, Rect::new(120.0, 50.0, 300.0, 80.0), Color::gray(0.5));
+            wrapped(group(&mut doc, vec![a, b], false), 2.0, false)
+        };
+        // Bottom first: the first frame, the path, the second frame, the group or blend.
+        for n in [first, path, second, over_second] {
+            doc.insert(Some(layer), usize::MAX, n).unwrap();
+        }
+        vectorcraft_doc::text::resolve_wrap(None, &mut doc);
+        type Region = Vec<(Vec<[f64; 4]>, f64, bool)>;
+        let shapes = |d: &Document| -> Vec<Region> {
+            d.layers[0]
+                .children()
+                .unwrap()
+                .iter()
+                .filter_map(|n| match &n.kind {
+                    NodeKind::Text(t) => Some(
+                        t.wrap
+                            .iter()
+                            .map(|s| {
+                                let parts = s
+                                    .path
+                                    .subpaths
+                                    .iter()
+                                    .map(|sp| {
+                                        let b = PathData::new(vec![sp.clone()]).bounds().unwrap_or_default();
+                                        [b.x0, b.y0, b.x1, b.y1]
+                                    })
+                                    .collect();
+                                (parts, s.wrap.offset, s.wrap.invert)
+                            })
+                            .collect(),
+                    ),
+                    _ => None,
+                })
+                .collect()
+        };
+        let before = shapes(&doc);
+        assert_eq!(before.iter().map(Vec::len).collect::<Vec<_>>(), [2, 1], "blend: {blend}");
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        let back = read_back(&doc);
+        if blend {
+            assert!(out.warnings.iter().any(|w| w == writer::TYPE), "{:?}", out.warnings);
+            assert!(back.text_threads.is_empty());
+            continue;
+        }
+        assert!(!out.warnings.iter().any(|w| w == writer::TYPE), "{:?}", out.warnings);
+        assert_eq!(back.text_threads.len(), 1);
+        let names: Vec<_> = back.text_threads[0].iter().map(|id| back.node(*id).and_then(|n| n.name.clone())).collect();
+        assert_eq!(names, [Some("First".to_string()), Some("Second".to_string())]);
+        let after = shapes(&back);
+        assert_eq!(after.len(), 2);
+        for (b, a) in before.iter().zip(&after) {
+            assert!(same_region(b, a), "{before:?}\n{after:?}");
+        }
+    }
+}
+
+/// Wrapped area type is written as type only while the wrap shapes of all the area type the reader
+/// reads stay within what it copies: 150 frames under a wrap object of 10,000 anchors are, and
+/// with 100 more frames under it, none are.
+#[test]
+fn area_type_wrapped_past_the_reader_limit_stays_outlines() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    let area = |doc: &mut Document| {
+        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "Wrapped", style(10.0, Color::BLACK));
+        t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)) };
+        t.xf = Affine::IDENTITY;
+        let n = text_node(doc, t);
+        doc.insert(Some(doc.layers[0].id), 0, n).unwrap()
+    };
+    let mut doc = Document::new(100.0, 100.0);
+    let ids: Vec<_> = (0..150).map(|_| area(&mut doc)).collect();
+    let mut zigzag = vec![(40.0, 0.0).into()];
+    zigzag.extend((1..10_000).map(|i| vectorcraft_geom::Point::new(40.0 + 20.0 * f64::from(i) / 10_000.0, if i % 2 == 0 { 0.0 } else { 100.0 })));
+    let n = wrapped(
+        Node::path(doc.alloc_id(), PathData::new(vec![vectorcraft_geom::SubPath::polyline(&zigzag, true)]), Appearance::default()),
+        6.0,
+        false,
+    );
+    doc.insert(Some(doc.layers[0].id), usize::MAX, n).unwrap();
+    vectorcraft_doc::text::resolve_wrap(None, &mut doc);
+    let held = writer::wraps_held(&doc, &std::collections::HashMap::new());
+    assert!(ids.iter().all(|id| held.contains(id)), "{} of {}", held.len(), ids.len());
+    for _ in 0..100 {
+        area(&mut doc);
+    }
+    assert!(vectorcraft_doc::text::wrap_work(&doc) > crate::import::MAX_WRAP_WORK);
+    assert!(writer::wraps_held(&doc, &std::collections::HashMap::new()).is_empty());
+}
+
+/// Wrapped area type stays type with room for every object, and is written as outlines when art is
+/// left out at the object limit: one object short, the wrap object above it would be left out and
+/// the reader would not wrap the type.
+#[test]
+fn area_type_wrapped_past_the_object_limit_is_written_as_outlines() {
+    let doc = wrapped_body(300.0, 200.0, Rect::new(10.0, 10.0, 290.0, 190.0), |doc| {
+        vec![wrapped(square(doc, Rect::new(100.0, 40.0, 160.0, 120.0), Color::gray(0.5)), 4.0, false)]
+    });
+    let read = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    let all = export_within(&doc, &opts(), read).unwrap();
+    assert!(!all.warnings.iter().any(|w| w == writer::OBJECT_LIMIT || w == writer::TYPE), "{:?}", all.warnings);
+    let short = export_within(&doc, &opts(), read - 1).unwrap();
+    assert!(short.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "{:?}", short.warnings);
+    assert!(short.warnings.iter().any(|w| w == writer::TYPE), "{:?}", short.warnings);
+    let (back, _) = crate::ai_alone(&short.program).unwrap();
+    assert!(area_type(&back).is_none(), "{}", String::from_utf8_lossy(&short.program));
+}
+
+/// On a large canvas, area type wrapped by a plain path is written as type and reopens with the
+/// same wrap shapes, the offset at its size.
+#[test]
+fn area_type_wrapped_on_a_large_canvas_stays_type() {
+    let doc = wrapped_body(20_000.0, 20_000.0, Rect::new(1000.0, 1000.0, 9000.0, 9000.0), |doc| {
+        vec![wrapped(square(doc, Rect::new(3000.0, 3000.0, 5000.0, 6000.0), Color::gray(0.5)), -12.5, true)]
+    });
+    let before = area_type(&doc).unwrap();
+    assert_ne!(before.2, 0);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::TYPE), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let after = area_type(&back).expect("area type");
+    assert_eq!((after.0.as_str(), after.2), (before.0.as_str(), before.2));
+    let (b, a) = (area_wrap_region(&doc), area_wrap_region(&back));
+    let close = b.len() == a.len()
+        && b.iter().zip(&a).all(|(b, a)| {
+            b.0.len() == a.0.len()
+                && b.0.iter().zip(&a.0).all(|(x, y)| x.iter().zip(y).all(|(x, y)| (x - y).abs() < 1e-2))
+                && (b.1 - a.1).abs() < 1e-3
+                && b.2 == a.2
+        });
+    assert!(close, "{b:?}\n{a:?}");
+}
+
 /// Type written as its outlines wraps area type below it by its bounds, as it did before saving,
 /// not by its glyphs: its text wrap options go on an unpainted rectangle of its bounds, the last
 /// member of the outlines' group, which keeps the type's name and has no options of its own.
@@ -11995,8 +12338,8 @@ fn an_envelope_of_area_type_in_written_art_leaves_the_wrap_on_the_bounds() {
 }
 
 /// A clipping path inside art cut to a clipping object is written as its fills and its strokes,
-/// two objects: its text wrap options are written once, whether it has both or only strokes, and
-/// with its strokes when the region outside leaves nothing of its fills.
+/// two objects: its text wrap options are written once, whether it has both, only strokes, or
+/// fills the region outside leaves nothing of.
 #[test]
 fn a_clipping_path_written_as_its_paint_keeps_one_text_wrap() {
     for (fill, left, width) in [(solid(Color::gray(0.5)), 20.0, 2.0), (Paint::None, 20.0, 2.0), (solid(Color::gray(0.5)), 101.0, 4.0)] {
@@ -12105,5 +12448,153 @@ fn a_graph_with_art_left_out_is_written_without_records() {
             out.warnings
         );
         assert!(!text.contains("%_Gs") && !text.contains(" Go\n") && !text.contains("%_GS"), "{max}: {text}");
+    }
+}
+
+/// The wrap shapes [`vectorcraft_doc::text::resolve_wrap`] gives the area type in `doc`.
+fn area_wrap(doc: &Document) -> Vec<vectorcraft_doc::WrapShape> {
+    let mut d = doc.clone();
+    vectorcraft_doc::text::resolve_wrap(None, &mut d);
+    let mut out = vec![];
+    d.layers[0].walk(&mut |n| {
+        if let NodeKind::Text(t) = &n.kind
+            && matches!(t.kind, vectorcraft_doc::TextKind::Area { .. })
+        {
+            out.clone_from(&t.wrap);
+        }
+    });
+    out
+}
+
+/// `got` and `want` are the same wrap shapes: the same options, offsets within `1e-6`, and the
+/// same subpaths with anchors within `1e-3`.
+fn same_shapes(got: &[vectorcraft_doc::WrapShape], want: &[vectorcraft_doc::WrapShape], case: &str) {
+    let same = got.len() == want.len()
+        && got.iter().zip(want).all(|(g, w)| {
+            g.wrap.invert == w.wrap.invert
+                && (g.wrap.offset - w.wrap.offset).abs() < 1e-6
+                && g.path.subpaths.len() == w.path.subpaths.len()
+                && g.path.subpaths.iter().zip(&w.path.subpaths).all(|(a, b)| {
+                    a.closed == b.closed
+                        && a.anchors.len() == b.anchors.len()
+                        && a.anchors.iter().zip(&b.anchors).all(|(p, q)| (p.p - q.p).hypot() < 1e-3)
+                })
+        });
+    assert!(same, "{case}\n{got:?}\n{want:?}");
+}
+
+/// A clipping object that isn't written as an object of its own (a group, an image, a symbol
+/// instance, a path or compound path without paint in art cut to a clipping object) or is written
+/// as its outlines or cut (type, a path the outer clipping object cuts) keeps its text wrap options on one unpainted object
+/// of its wrap outline: area type below it wraps alike after a round trip, and the object stays
+/// locked or hidden as it was. A clipping object without options gets no such object.
+#[test]
+fn a_clipping_object_not_written_whole_keeps_its_text_wrap() {
+    use vectorcraft_doc::{TextKind, TextObject, TextRun};
+    let cases = ["group", "hidden", "locked", "image", "instance", "type", "unpainted path", "unpainted compound", "cut path", "no options"];
+    for case in cases {
+        let mut doc = Document::new(400.0, 200.0);
+        let layer = doc.layers[0].id;
+        let st = style(10.0, Color::BLACK);
+        let mut area = TextObject::point(vectorcraft_geom::Point::ZERO, "", st.clone());
+        area.runs = vec![TextRun::new("One two three four five six", st)];
+        area.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 400.0, 200.0)) };
+        area.xf = Affine::IDENTITY;
+        let area = text_node(&mut doc, area);
+        doc.insert(Some(layer), usize::MAX, area).unwrap();
+        let art = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+        doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(art) });
+        let mut cutter = match case {
+            "group" | "hidden" | "locked" | "no options" => {
+                let mut off = square(&mut doc, Rect::new(200.0, 20.0, 230.0, 60.0), Color::gray(0.5));
+                off.visible = false;
+                let members = vec![
+                    square(&mut doc, Rect::new(20.0, 20.0, 50.0, 60.0), Color::gray(0.5)),
+                    square(&mut doc, Rect::new(60.0, 30.0, 90.0, 70.0), Color::gray(0.5)),
+                    off,
+                ];
+                group(&mut doc, members, false)
+            }
+            "image" => image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), Affine::new([20.0, 0.0, 0.0, 20.0, 30.0, 40.0]), None),
+            "instance" => instance(&mut doc, "Leaf", Affine::translate((40.0, 30.0))),
+            "type" => {
+                let label = TextObject::point(vectorcraft_geom::Point::new(30.0, 50.0), "Clip", style(24.0, Color::BLACK));
+                text_node(&mut doc, label)
+            }
+            "unpainted path" => clipping(&mut doc, shapes::rectangle(Rect::new(20.0, 20.0, 80.0, 80.0))),
+            "unpainted compound" => {
+                let outer = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(20.0, 20.0, 80.0, 80.0)), Appearance::default());
+                let inner = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(30.0, 30.0, 70.0, 70.0)), Appearance::default());
+                Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(inner)], rule: FillRule::EvenOdd })
+            }
+            _ => {
+                let mut c = clipping(&mut doc, shapes::rectangle(Rect::new(50.0, 20.0, 150.0, 80.0)));
+                c.appearance = Appearance::basic(solid(Color::gray(0.5)), Paint::None, 0.0).into();
+                c
+            }
+        };
+        cutter.visible = case != "hidden";
+        cutter.locked = case == "locked";
+        let cutter = if case == "no options" { cutter } else { wrapped(cutter, -4.5, true) };
+        let member = square(&mut doc, Rect::new(30.0, 30.0, 70.0, 50.0), Color::rgb(1.0, 0.0, 0.0));
+        let mut top = group(&mut doc, vec![cutter, member], true);
+        if matches!(case, "unpainted path" | "unpainted compound" | "cut path") {
+            let frame = square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0), Color::gray(0.9));
+            let frame = group(&mut doc, vec![frame], false);
+            top = group(&mut doc, vec![frame, top], true);
+        }
+        doc.insert(Some(layer), usize::MAX, top).unwrap();
+        let text = program(&doc);
+        let back = read_back(&doc);
+        if case == "no options" {
+            assert!(!text.contains("(AI11TextWrapOffset)"), "{text}");
+            assert!(wraps(back.layers[0].children().unwrap()).is_empty());
+            continue;
+        }
+        assert_eq!(text.matches("(AI11TextWrapOffset)").count(), 1, "{case}\n{text}");
+        same_wraps(&wraps(back.layers[0].children().unwrap()), &[(None, -4.5, true)]);
+        let mut carrier = None;
+        back.layers[0].walk(&mut |n| {
+            if n.extras().wrap.is_some() {
+                carrier = Some((n.locked, n.visible));
+            }
+        });
+        assert_eq!(carrier, Some((case == "locked", case != "hidden")), "{case}");
+        let want = area_wrap(&doc);
+        assert_eq!(want.is_empty(), case == "hidden", "{case}");
+        same_shapes(&area_wrap(&back), &want, case);
+    }
+}
+
+/// With too little room for the unpainted object that carries a clipping object's text wrap
+/// options, the options are left out, never written on another object, and the data stays readable.
+#[test]
+fn a_clipping_objects_text_wrap_is_left_out_without_room() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let members = vec![
+        square(&mut doc, Rect::new(20.0, 20.0, 50.0, 60.0), Color::gray(0.5)),
+        square(&mut doc, Rect::new(60.0, 30.0, 90.0, 70.0), Color::gray(0.5)),
+    ];
+    let cutter = wrapped(group(&mut doc, members, false), 2.0, false);
+    let member = square(&mut doc, Rect::new(30.0, 30.0, 70.0, 50.0), Color::rgb(1.0, 0.0, 0.0));
+    let top = group(&mut doc, vec![cutter, member], true);
+    doc.insert(Some(layer), usize::MAX, top).unwrap();
+    let all = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    for room in 0..=all {
+        let out = export_within(&doc, &opts(), room).unwrap();
+        assert!(crate::import::objects_read(&out.program).unwrap() <= room);
+        let text = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+        // The group, then the compound path of the two squares (three objects): with room for all four
+        // the options are written, on that compound path.
+        assert_eq!(text.matches("(AI11TextWrapOffset)").count(), usize::from(room >= 4), "{room}\n{text}");
+        let (back, _) = crate::ai_alone(&out.program).unwrap();
+        let mut carriers = vec![];
+        back.layers[0].walk(&mut |n| {
+            if n.extras().wrap.is_some() {
+                carriers.push(matches!(n.kind, NodeKind::Compound { .. }) && n.appearance.items.is_empty());
+            }
+        });
+        assert_eq!(carriers, if room >= 4 { vec![true] } else { vec![] }, "{room}\n{text}");
     }
 }

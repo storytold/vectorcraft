@@ -8,6 +8,60 @@ fn app() -> VectorcraftApp {
     app
 }
 
+fn painted_spectrum(shape: &egui::Shape) -> Option<Rect> {
+    match shape {
+        egui::Shape::Mesh(mesh) if mesh.vertices.len() > 500 => Some(mesh.calc_bounds()),
+        egui::Shape::Vec(shapes) => shapes.iter().find_map(painted_spectrum),
+        _ => None,
+    }
+}
+
+/// #8005: enlarging the Color panel gives the spectrum the added vertical space.
+#[test]
+fn the_spectrum_grows_with_the_color_panel() {
+    for hidden in [false, true] {
+        let mut app = app();
+        app.ui.color_hide_options = hidden;
+        let ctx = egui::Context::default();
+        let mut rects = Vec::new();
+        for height in [300.0, 480.0] {
+            let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(300.0, height))), ..Default::default() };
+            let mut out = ctx.run_ui(input, |ui| {
+                let info = egui::UiStackInfo::default().with_tag_value(crate::widgets::PANEL_FOOTER, Some(ui.max_rect().bottom()));
+                ui.scope_builder(egui::UiBuilder::new().ui_stack_info(info), |ui| {
+                    crate::dock::panel_body(&mut app, ui, "color", 300.0, height - 20.0);
+                });
+            });
+            rects.push(out.shapes.iter().find_map(|shape| painted_spectrum(&shape.shape)).expect("the spectrum is painted"));
+            out.textures_delta.clear();
+        }
+        assert!((rects[1].top() - rects[0].top()).abs() < 1.0, "resizing keeps the ramp's top stable");
+        assert!((rects[1].height() - rects[0].height() - 180.0).abs() < 1.0, "options hidden={hidden}: {rects:?}");
+    }
+}
+
+#[test]
+fn a_short_color_panel_scrolls_without_stretching_the_spectrum() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    for offset in [0.0, 100.0] {
+        for _ in 0..3 {
+            let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(300.0, 120.0))), ..Default::default() };
+            let mut out = ctx.run_ui(input, |ui| {
+                let info = egui::UiStackInfo::default().with_tag_value(crate::widgets::PANEL_FOOTER, Some(ui.max_rect().bottom()));
+                ui.scope_builder(egui::UiBuilder::new().ui_stack_info(info), |ui| {
+                    widgets::panel_scroll(ui, egui::ScrollArea::vertical().vertical_scroll_offset(offset), |ui| {
+                        crate::dock::panel_body(&mut app, ui, "color", 300.0, 100.0);
+                    });
+                });
+            });
+            let r = out.shapes.iter().find_map(|shape| painted_spectrum(&shape.shape)).expect("the spectrum is painted");
+            assert!((r.height() - 46.0).abs() < 1.0, "offset={offset}: {r:?}");
+            out.textures_delta.clear();
+        }
+    }
+}
+
 /// Run the panel for one frame with `events` and `modifiers`; returns the spectrum's rect (when
 /// the options are shown) and the panel's height.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, modifiers: egui::Modifiers) -> (Option<Rect>, f32) {

@@ -492,6 +492,7 @@
 	Highlight Size	Rozmiar połysku
 	Blend Steps	Kroki przejścia
 	Shading Color	Kolor cieniowania
+	Black Overprint	Czarny nadruk
 	Draw Hidden Faces	Rysuj ukryte ściany
 	Revolve…	Obrót…
 	Inflate…	Nadmuchanie…
@@ -1660,6 +1661,10 @@ digits	Malayalam	Malajalam
 	Em Box	Ramka firetowa
 	x-Height	Wysokość x
 	ICF Box	Ramka ICF
+	Show Sample	Pokaż próbkę
+	Hide Sample	Ukryj próbkę
+	Max Ascent/Descent	Maks. wysokość/głębokość
+	Max Ascender	Maks. wydłużenie górne
 	Copy Color Value (Hex)	Kopiuj wartość koloru (hex)
 	Create New Swatch…	Utwórz nową próbkę…
 	Name 40%	Nazwa 40%
@@ -2028,6 +2033,9 @@ digits	Malayalam	Malajalam
 	Select text to set its OpenType features.	Zaznacz tekst, aby ustawić jego funkcje OpenType.
 	Standard Ligatures	Ligatury standardowe
 	Stylistic Alternates	Alternatywy stylistyczne
+	Ligatures	Ligatury
+	Ornaments	Ornamenty
+	Figures	Cyfry
 	Swash	Ozdobniki
 	Tabular Lining	Tabelaryczne nowoczesne
 	Tabular Oldstyle	Tabelaryczne nautyczne
@@ -2070,6 +2078,7 @@ digits	Malayalam	Malajalam
 	Roman Hanging Punctuation	Wysunięta interpunkcja łacińska
 	Korean Line Break Anywhere	Koreański podział wiersza w dowolnym miejscu
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Ustawienia składu wschodnioazjatyckiego
 	Korean Composition Settings	Ustawienia składu koreańskiego
 	Select a text object to edit its paragraph attributes.	Zaznacz obiekt tekstowy, aby edytować atrybuty akapitu.
@@ -2563,6 +2572,18 @@ digits	Malayalam	Malajalam
 	Author Title:	Stanowisko autora:
 	Author:	Autor:
 	Copyright Info URL:	URL informacji o prawach autorskich:
+	Save Metadata Template…	Zapisz szablon metadanych…
+	Import Options	Opcje importu
+	Clear existing fields and use the template's	Wyczyść istniejące pola i użyj pól z szablonu
+	Keep existing fields, but replace those the template has	Zachowaj istniejące pola, ale zastąp te, które zawiera szablon
+	Keep existing fields, but append those the template has	Zachowaj istniejące pola, ale dołącz te, które zawiera szablon
+@msg	the template name can't be empty	nazwa szablonu nie może być pusta
+@msg	the template name isn't usable as a file name	nazwy szablonu nie można użyć jako nazwy pliku
+@msg	no metadata templates folder here	brak tu folderu szablonów metadanych
+@msg	give `name` or `path`, not both	podaj `name` albo `path`, nie oba
+@msg	give one of `path`, `name` and `data`	podaj jeden z parametrów `path`, `name` i `data`
+@msg	mode must be replace, keep or append	tryb musi mieć wartość replace, keep lub append
+@msg	the file is not an XMP metadata template	plik nie jest szablonem metadanych XMP
 	Copyright Notice:	Informacja o prawach autorskich:
 	Copyright Status:	Status praw autorskich:
 	Created:	Utworzono:
@@ -3559,6 +3580,8 @@ theme	Appearance	Wygląd
 	Find Font Files	Znajdź pliki czcionek
 	Add Font Files	Dodaj pliki czcionek
 	Font List	Lista czcionek
+	Show Similar Fonts	Pokaż podobne czcionki
+	Clear Similar Fonts	Wyczyść podobne czcionki
 	Fonts in Document	Czcionki w dokumencie
 	Refresh Font List	Odśwież listę czcionek
 	Replace Font	Zastąp czcionkę
@@ -4299,6 +4322,8 @@ font-technology	Variable	Zmienne
 	Saving	Zapisywanie
 	Saving {}	Zapisywanie {}
 	Search commands and tools…	Szukaj poleceń i narzędzi…
+	Recent Commands	Ostatnie polecenia
+	No recent commands	Brak ostatnich poleceń
 	Dashed Line	Linia przerywana
 	Panel menu	Menu panelu
 	Unembed…	Wyodrębnij…
@@ -4309,6 +4334,12 @@ font-technology	Variable	Zmienne
 	Preferences	Preferencje
 	Previous	Wstecz
 	Restore every preference to its default (applied on OK)	Przywróć domyślne wartości wszystkich preferencji (zastosowane po OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Jednostka nowych dokumentów o wbudowanych rozmiarach, z wyjątkiem rozmiarów w pikselach, oraz otwartych plików bez zapisanej jednostki; wybranie jej tutaj i kliknięcie OK ustawia ją też w aktywnym dokumencie.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Grubości obrysu, kreski i odstępy są wyświetlane w tej jednostce, a liczby wpisane dla nich są w niej odczytywane.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Rozmiary tekstu, interlinia i przesunięcie linii bazowej są wyświetlane w tej jednostce, a liczby wpisane dla nich są w niej odczytywane.
+	The unit for East Asian type measurements, which no field uses yet.	Jednostka miar tekstu wschodnioazjatyckiego, której żadne pole jeszcze nie używa.
+	When on, a number typed without a unit into a field in picas is read in points.	Gdy opcja jest włączona, liczba wpisana bez jednostki w polu w pica jest odczytywana w punktach.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Przy ID XML nazwy obiektów są wyświetlane jako ID XML w Warstwach, Zmiennych i Opcjach warstwy.
 	Reset all preferences to their defaults?	Przywrócić domyślne wartości wszystkich preferencji?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Wartości domyślne zostaną zastosowane po kliknięciu OK w Preferencjach. Anuluj w tym oknie zachowuje bieżące preferencje.
 	Smaller ↔ Larger	Mniejszy ↔ większy
@@ -4586,6 +4617,31 @@ imageTrace	Outline	Kontur
 @msg	$.evalFile requires a file path	$.evalFile wymaga ścieżki pliku
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: limit czasu musi być skończoną liczbą milisekund, 0 lub więcej
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: przyjmuje ścieżkę pliku i limit czasu
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} nie jest zdefiniowane
+@msg	cannot read property '{key}' of {base}	nie można odczytać właściwości '{key}' wartości {base}
+@msg	cannot set property '{key}' of {base}	nie można ustawić właściwości '{key}' wartości {base}
+@msg	cannot read a property of {base}	nie można odczytać właściwości wartości {base}
+@msg	cannot set a property of {base}	nie można ustawić właściwości wartości {base}
+@msg	cannot define property '{key}': {why}	nie można zdefiniować właściwości '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	nie można przypisać do właściwości '{key}': {why}
+@msg	cannot delete property '{key}'	nie można usunąć właściwości '{key}'
+@msg	cannot declare function {ident}	nie można zadeklarować funkcji {ident}
+@msg	invalid assignment target	nieprawidłowy cel przypisania
+@msg	the array's length is read-only	długość tablicy jest tylko do odczytu
+@msg	the property cannot be redefined	właściwości nie można zdefiniować ponownie
+@msg	the object is not extensible	obiektu nie można rozszerzać
+@msg	the length cannot be redefined	długości nie można zdefiniować ponownie
+@msg	it is read-only	jest tylko do odczytu
+@msg	an element cannot be deleted	elementu nie można usunąć
+@msg	it has only a getter	ma tylko getter
+@msg	the value is a primitive	wartość jest prymitywna
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: wiersz {line}, kolumna {column} w {file}: {e} (zgłoszony wyjątek)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: wiersz {line}, kolumna {column}: {e} (zgłoszony wyjątek)
 @msg	{name}: {e} (thrown)	{name}: {e} (zgłoszony wyjątek)
@@ -4626,6 +4682,27 @@ imageTrace	Outline	Kontur
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: okno dialogowe nie może się otworzyć w wywołaniu zwrotnym funkcji wbudowanej, getterze, konwersji ani pliku uruchamianym przez $.evalFile; wywołaj je z własnego kodu skryptu
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: następna odpowiedź w `answers` jest dla {_1}, nie dla {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: w `answers` nie została żadna odpowiedź dla tego okna dialogowego
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` zawiera {n} odpowiedź, której skrypt nie użył|`answers` zawiera {n} odpowiedzi, których skrypt nie użył|`answers` zawiera {n} odpowiedzi, których skrypt nie użył
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} pozostawił {n} obiekt pod pędzlem bez zmian ({_2}): przekształca tylko ścieżki|{_1} pozostawił {n} obiekty pod pędzlem bez zmian ({_2}): przekształca tylko ścieżki|{_1} pozostawił {n} obiektów pod pędzlem bez zmian ({_2}): przekształca tylko ścieżki
+liquify-tool	Warp	Wypaczenie
+liquify-tool	Twirl	Wir
+liquify-tool	Pucker	Ściągnięcie
+liquify-tool	Bloat	Nadmuchanie
+liquify-tool	Scallop	Ząbkowanie
+liquify-tool	Crystallize	Krystalizacja
+liquify-tool	Wrinkle	Marszczenie
+liquify-kind	graphs	wykresy
+liquify-kind	type	tekst
+liquify-kind	symbols	symbole
+liquify-kind	images	obrazy
+liquify-kind	meshes	siatki
+liquify-kind	envelopes	koperty
+liquify-kind	repeats	powtórzenia
+liquify-kind	placed documents	umieszczone dokumenty
+liquify-kind	blends	przejścia
+liquify-list-two	{0}, {1}	{0} i {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} i {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} jest za duży dla skryptu
 @msg	vc.log: the log of this run is full	vc.log: dziennik tego uruchomienia jest pełny
 @msg	this function's script run has ended	uruchomienie skryptu tej funkcji zakończyło się
@@ -4670,6 +4747,7 @@ imageTrace	Outline	Kontur
 @msg	Divide Objects Below: select exactly one path	Podziel obiekty poniżej: zaznacz dokładnie jedną ścieżkę
 @msg	Downloaded {what}	Pobrano {what}
 @msg	Expand Appearance: the selection has a basic appearance	Rozszerz wygląd: zaznaczenie ma wygląd podstawowy
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	niektóre efekty rastrowe nie zostały zamienione na obrazy: zajęłyby więcej niż 1024 obrazy lub łącznie 256 megapikseli
 @msg	Expand: no brush strokes selected	Rozszerz: nie zaznaczono pociągnięć pędzla
 @msg	Expand: no gradient fills	Rozszerz: brak wypełnień gradientem
 @msg	Expand: nothing to expand	Rozszerz: nie ma czego rozszerzać
@@ -6137,7 +6215,7 @@ mark-style	Japanese	Japońskie
 @msg	Unknown dimension style	Nieznany styl wymiaru
 @msg	Unknown unit	Nieznana jednostka
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Zamknij okrągłe końce otwartych profili. Przy częściowym obrocie boki przekroju pozostają otwarte.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Zamknij okrągłe końce otwartych profili. Przy częściowym obrocie boki przekroju również zostają zamknięte.
 	Distance	Odległość
 @msg	span must be "object" or "selection", got {v}	span musi mieć wartość "object" lub "selection", a nie {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" umieszcza `gradient`, a nie próbkę
@@ -6291,6 +6369,7 @@ mark-style	Japanese	Japońskie
 	Single Word Justification:	Justowanie pojedynczego wyrazu:
 	Full Justify	Pełne justowanie
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum nie może przekraczać wartości optymalnej, a wartość optymalna maksimum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: minimum nie może przekraczać wartości optymalnej, a wartość optymalna maksimum
 	Justification	Justowanie
 	Add filters from the list above	Dodaj filtry z listy powyżej
 	Add to Stack	Dodaj do stosu
@@ -7230,6 +7309,24 @@ breakText	Glyphs	Glify
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Rozszerz kreski na ścieżki
 @msg	select paths with dashed strokes to expand	zaznacz ścieżki z przerywanym konturem do rozszerzenia
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Okrąg styczny…
+	Tangent Circle	Okrąg styczny
+	Circle:	Okrąg:
+@msg	`ids` names an object twice	`ids` wskazuje ten sam obiekt dwa razy
+@msg	select two or three paths or compound paths	zaznacz dwie lub trzy ścieżki lub ścieżki złożone
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` musi wynosić od 0.01 do 1000000 pt
+@msg	two shapes need a `radius`	dwa kształty wymagają `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	trzy kształty same wyznaczają promień: pomiń `radius`
+@msg	`circle` must be from 0 to 64	`circle` musi wynosić od 0 do 64
+@msg	a shape has no outline	kształt nie ma konturu
+@msg	the shapes are too complex: at most 2000 segments in all	kształty są zbyt złożone: łącznie najwyżej 2000 segmentów
+@msg	these shapes take too long to search	wyszukiwanie dla tych kształtów trwa zbyt długo
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	tych kształtów dotyka ponad 64 okręgów: mogą się z nimi stykać wzdłuż całej krzywej
+@msg	no circle touches these shapes	żaden okrąg nie dotyka tych kształtów
+@msg	`circle` is past the last circle found ({found})	`circle` wykracza poza ostatni znaleziony okrąg ({found})
+@msg	object {value} is not a path or compound path	obiekt {value} nie jest ścieżką ani ścieżką złożoną
+@msg	these shapes are too small to measure	te kształty są za małe, aby je zmierzyć
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Narzędzia dokumentu
 	Save a Timestamped Copy	Zapisz kopię z datą i godziną
@@ -7284,7 +7381,7 @@ breakText	Glyphs	Glify
 @msg	stroke cannot be set on a symbol instance	nie można ustawić stroke dla wystąpienia symbolu
 @msg	fill on a symbol instance must be a solid color or none	fill wystąpienia symbolu musi być jednolitym kolorem lub none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	nie można ustawić {key} dla obrazu bez efektu Konwertuj na kształt lub Kontur obiektu
-@msg	pass newName, registration, exportType, nineSlice and/or type	podaj newName, registration, exportType, nineSlice i/lub type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	podaj newName, registration, exportType, nineSlice, type i/lub alignToPixelGrid
 	Text Flow	Przepływ tekstu
 	By Rows	Wierszami
 	By Columns	Kolumnami
@@ -8893,7 +8990,9 @@ breakText	Glyphs	Glify
 @msg	position must be normal, superscript or subscript	position musi mieć wartość normal, superscript lub subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position musi mieć wartość topLeft, topRight, bottomLeft lub bottomRight
 @msg	positions must be between 0 and 100000 pt	positions musi mieścić się w zakresie od 0 do 100000 pt
+@msg	ppi can't be more than {max} for this image	ppi nie może przekraczać {max} dla tego obrazu
 @msg	ppi must be a positive number, not {ppi}	ppi musi być liczbą dodatnią, a nie {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim zachowuje piksele obrazu bez zmian: pomiń ppi
 @msg	ppi must be between 1 and 2400	ppi musi mieścić się w zakresie od 1 do 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` nie jest jedną z wartości transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape musi mieć wartość clippingMask|transparency

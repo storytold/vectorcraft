@@ -530,6 +530,7 @@
 	Highlight Size	Kiillon koko
 	Blend Steps	Sulautusvaiheet
 	Shading Color	Varjostusväri
+	Black Overprint	Päällepainettu musta
 	Draw Hidden Faces	Piirrä piilotetut pinnat
 	Revolve…	Pyöräytä…
 	Inflate…	Täytä ilmalla…
@@ -1721,6 +1722,10 @@ digits	Malayalam	Malajalam
 	Em Box	Em-laatikko
 	x-Height	x-korkeus
 	ICF Box	ICF-laatikko
+	Show Sample	Näytä näyte
+	Hide Sample	Piilota näyte
+	Max Ascent/Descent	Suurin korkeus/syvyys
+	Max Ascender	Suurin yläpidennys
 	Copy Color Value (Hex)	Kopioi väriarvo (heksa)
 	Create New Swatch…	Luo uusi värimalli…
 	Name 40%	Nimi 40%
@@ -2071,6 +2076,9 @@ digits	Malayalam	Malajalam
 	Select text to set its OpenType features.	Valitse teksti, jonka OpenType-ominaisuudet haluat asettaa.
 	Standard Ligatures	Vakioligatuurit
 	Stylistic Alternates	Tyylivaihtoehdot
+	Ligatures	Ligatuurit
+	Ornaments	Ornamentit
+	Figures	Numerot
 	Swash	Koukerot
 	Tabular Lining	Taulukkonumerot
 	Tabular Oldstyle	Vanhanaikaiset taulukkonumerot
@@ -2115,6 +2123,7 @@ digits	Malayalam	Malajalam
 	Roman Hanging Punctuation	Latinalaiset riippuvat välimerkit
 	Korean Line Break Anywhere	Korean rivinvaihto missä tahansa
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Itäaasialaisen ladonnan asetukset
 	Korean Composition Settings	Korean ladonnan asetukset
 	Select a text object to edit its paragraph attributes.	Valitse tekstiobjekti, jonka kappalemääritteitä haluat muokata.
@@ -2603,6 +2612,18 @@ digits	Malayalam	Malajalam
 	Author Title:	Tekijän titteli:
 	Author:	Tekijä:
 	Copyright Info URL:	Tekijänoikeustietojen URL:
+	Save Metadata Template…	Tallenna metatietomallipohja…
+	Import Options	Tuontiasetukset
+	Clear existing fields and use the template's	Tyhjennä nykyiset kentät ja käytä mallipohjan kenttiä
+	Keep existing fields, but replace those the template has	Säilytä nykyiset kentät, mutta korvaa mallipohjassa olevat
+	Keep existing fields, but append those the template has	Säilytä nykyiset kentät, mutta lisää mallipohjassa olevat
+@msg	the template name can't be empty	mallipohjan nimi ei voi olla tyhjä
+@msg	the template name isn't usable as a file name	mallipohjan nimeä ei voi käyttää tiedostonimenä
+@msg	no metadata templates folder here	täällä ei ole metatietomallipohjien kansiota
+@msg	give `name` or `path`, not both	anna `name` tai `path`, ei molempia
+@msg	give one of `path`, `name` and `data`	anna yksi seuraavista: `path`, `name` ja `data`
+@msg	mode must be replace, keep or append	tilan on oltava replace, keep tai append
+@msg	the file is not an XMP metadata template	tiedosto ei ole XMP-metatietomallipohja
 	Copyright Notice:	Tekijänoikeusilmoitus:
 	Copyright Status:	Tekijänoikeuden tila:
 	Created:	Luotu:
@@ -3618,6 +3639,8 @@ theme	Appearance	Ulkoasu
 	Find Font Files	Etsi fonttitiedostoja
 	Add Font Files	Lisää fonttitiedostoja
 	Font List	Fonttiluettelo
+	Show Similar Fonts	Näytä samankaltaiset fontit
+	Clear Similar Fonts	Tyhjennä samankaltaiset fontit
 	Fonts in Document	Asiakirjan fontit
 	Refresh Font List	Päivitä fonttiluettelo
 	Replace Font	Korvaa fontti
@@ -4377,6 +4400,8 @@ font-technology	Variable	Muuttuvat
 	Saving	Tallennetaan
 	Saving {}	Tallennetaan {}
 	Search commands and tools…	Hae komentoja ja työkaluja…
+	Recent Commands	Viimeisimmät komennot
+	No recent commands	Ei viimeisimpiä komentoja
 	Dashed Line	Katkoviiva
 	Panel menu	Paneelivalikko
 	Unembed…	Poista upotus…
@@ -4387,6 +4412,12 @@ font-technology	Variable	Muuttuvat
 	Preferences	Asetukset
 	Previous	Edellinen
 	Restore every preference to its default (applied on OK)	Palauta kaikki asetukset oletuksiin (käytetään, kun valitaan OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Yksikkö uusille asiakirjoille valmiissa kooissa pikselikokoja lukuun ottamatta ja avatuille tiedostoille, joihin ei ole tallennettu yksikköä; kun valitset sen tässä ja napsautat OK, siitä tulee myös aktiivisen asiakirjan yksikkö.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Viivan paksuudet, katkoviivat ja välit näytetään tässä yksikössä, ja niille kirjoitetut luvut luetaan siinä.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Tekstin koot, riviväli ja perusviivan siirto näytetään tässä yksikössä, ja niille kirjoitetut luvut luetaan siinä.
+	The unit for East Asian type measurements, which no field uses yet.	Itä-Aasian tekstin mittojen yksikkö, jota mikään kenttä ei vielä käytä.
+	When on, a number typed without a unit into a field in picas is read in points.	Kun asetus on käytössä, picoina näytettävään kenttään ilman yksikköä kirjoitettu luku luetaan pisteinä.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML-tunnus-asetuksella objektien nimet näytetään XML-tunnuksina kohteissa Tasot, Muuttujat ja Tason asetukset.
 	Reset all preferences to their defaults?	Palautetaanko kaikki asetukset oletuksiin?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Oletukset otetaan käyttöön, kun valitset Asetuksissa OK. Peruuta siellä säilyttää nykyiset asetuksesi.
 	Smaller ↔ Larger	Pienempi ↔ Suurempi
@@ -4676,6 +4707,44 @@ imageTrace	Outline	Ääriviiva
 @msg	$.evalFile requires a file path	$.evalFile vaatii tiedostopolun
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: aikakatkaisun on oltava äärellinen määrä millisekunteja, 0 tai enemmän
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: ottaa tiedostopolun ja aikakatkaisun
+@msg	assignment to a constant binding	sijoitus vakiosidontaan
+@msg	invalid array length	virheellinen taulukon pituus
+@msg	array literal too long	taulukkoliteraali on liian pitkä
+@msg	the value is not a function	arvo ei ole funktio
+@msg	apply was called on a value that is not a function	apply kutsuttiin arvolle, joka ei ole funktio
+@msg	the argument list is not an object	argumenttiluettelo ei ole objekti
+@msg	too many arguments	liikaa argumentteja
+@msg	the value is not a constructor	arvo ei ole konstruktori
+@msg	cannot convert the object to a primitive value	objektia ei voi muuntaa primitiiviarvoksi
+@msg	cannot convert undefined or null to an object	arvoja undefined tai null ei voi muuntaa objektiksi
+@msg	the right side of 'in' is not an object	operaattorin 'in' oikea puoli ei ole objekti
+@msg	the right side of 'instanceof' is not a function	operaattorin 'instanceof' oikea puoli ei ole funktio
+@msg	the function's prototype is not an object	funktion prototyyppi ei ole objekti
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} ei ole määritelty
+@msg	cannot read property '{key}' of {base}	arvon {base} ominaisuutta '{key}' ei voi lukea
+@msg	cannot set property '{key}' of {base}	arvon {base} ominaisuutta '{key}' ei voi asettaa
+@msg	cannot read a property of {base}	arvon {base} ominaisuutta ei voi lukea
+@msg	cannot set a property of {base}	arvon {base} ominaisuutta ei voi asettaa
+@msg	cannot define property '{key}': {why}	ominaisuutta '{key}' ei voi määrittää: {why}
+@msg	cannot assign to property '{key}': {why}	ominaisuuteen '{key}' ei voi sijoittaa: {why}
+@msg	cannot delete property '{key}'	ominaisuutta '{key}' ei voi poistaa
+@msg	cannot declare function {ident}	funktiota {ident} ei voi esitellä
+@msg	invalid assignment target	virheellinen sijoituksen kohde
+@msg	the array's length is read-only	taulukon pituus on vain luku
+@msg	the property cannot be redefined	ominaisuutta ei voi määrittää uudelleen
+@msg	the object is not extensible	objektia ei voi laajentaa
+@msg	the length cannot be redefined	pituutta ei voi määrittää uudelleen
+@msg	it is read-only	se on vain luku
+@msg	an element cannot be deleted	alkiota ei voi poistaa
+@msg	it has only a getter	sillä on vain getter
+@msg	the value is a primitive	arvo on primitiivi
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, rivi {line}, sarake {column}: {e} (heitetty)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: rivi {line}, sarake {column}: {e} (heitetty)
 @msg	{name}: {e} (thrown)	{name}: {e} (heitetty)
@@ -4716,6 +4785,27 @@ imageTrace	Outline	Ääriviiva
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: valintaikkuna ei voi avautua sisäänrakennetun funktion takaisinkutsussa, getterissä, muunnoksessa tai tiedostossa, jonka $.evalFile ajaa; kutsu sitä skriptin omasta koodista
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: seuraava vastaus kohteessa `answers` on kohteelle {_1}, ei kohteelle {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: kohteessa `answers` ei ole enää vastausta tälle valintaikkunalle
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` sisältää {n} vastauksen, jota komentosarja ei käyttänyt|`answers` sisältää {n} vastausta, joita komentosarja ei käyttänyt
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} jätti {n} objektin siveltimen alla muuttamatta ({_2}): se muokkaa vain polkuja|{_1} jätti {n} objektia siveltimen alla muuttamatta ({_2}): se muokkaa vain polkuja
+liquify-tool	Warp	Vääristys
+liquify-tool	Twirl	Pyöritys
+liquify-tool	Pucker	Rypistys
+liquify-tool	Bloat	Pullistus
+liquify-tool	Scallop	Simpukointi
+liquify-tool	Crystallize	Kiteytys
+liquify-tool	Wrinkle	Ryppyistys
+liquify-kind	graphs	kaaviot
+liquify-kind	type	teksti
+liquify-kind	symbols	symbolit
+liquify-kind	images	kuvat
+liquify-kind	meshes	verkot
+liquify-kind	envelopes	vääristyskuoret
+liquify-kind	repeats	toistot
+liquify-kind	placed documents	sijoitetut asiakirjat
+liquify-kind	blends	sulautukset
+liquify-list-two	{0}, {1}	{0} ja {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} on liian suuri skriptille
 @msg	vc.log: the log of this run is full	vc.log: tämän ajon loki on täynnä
 @msg	this function's script run has ended	tämän funktion skriptiajo on päättynyt
@@ -4771,6 +4861,7 @@ imageTrace	Outline	Ääriviiva
 @msg	Divide Objects Below: select exactly one path	Jaa alla olevat objektit: valitse tasan yksi polku
 @msg	Downloaded {what}	Ladattiin {what}
 @msg	Expand Appearance: the selection has a basic appearance	Laajenna ulkoasu: valinnalla on perusulkoasu
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	joitakin rasteritehosteita ei muunnettu kuviksi: ne veisivät yli 1 024 kuvaa tai yhteensä 256 megapikseliä
 @msg	Expand: no brush strokes selected	Laajenna: sivellinviivoja ei ole valittu
 @msg	Expand: no gradient fills	Laajenna: ei liukuväritäyttöjä
 @msg	Expand: nothing to expand	Laajenna: ei laajennettavaa
@@ -6160,7 +6251,7 @@ mark-style	Japanese	Japanilainen
 	By Object	Objektin mukaan
 	Check an artboard to save.	Valitse tallennettava piirtoalusta.
 	Clear All	Tyhjennä kaikki
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Sulje avointen profiilien pyöreät päät. Osittaiset pyöräytykset jättävät leikkauspintansa auki.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Sulje avointen profiilien pyöreät päät. Osittaiset pyöräytykset sulkevat myös leikkauspintansa.
 	Color Panel Options	Väri-paneelin asetukset
 	Color blindness – Tritanopia-type	Värisokeus – tritanopia
 	Create Dimension	Luo mitta
@@ -6414,6 +6505,7 @@ mark-style	Japanese	Japanilainen
 	Single Word Justification:	Yksittäisen sanan tasaus:
 	Full Justify	Täysi tasaus
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimi ei saa ylittää haluttua arvoa eikä haluttu arvo maksimia.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: minimi ei saa ylittää haluttua arvoa eikä haluttu arvo maksimia
 	Justification	Tasaus
 	Add filters from the list above	Lisää suodattimia yllä olevasta luettelosta
 	Add to Stack	Lisää pinoon
@@ -7419,6 +7511,24 @@ breakText	Glyphs	Merkit
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Laajenna viivat poluiksi
 @msg	select paths with dashed strokes to expand	valitse laajennettavat polut, joissa on katkoviiva
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Sivuava ympyrä…
+	Tangent Circle	Sivuava ympyrä
+	Circle:	Ympyrä:
+@msg	`ids` names an object twice	`ids` mainitsee saman objektin kahdesti
+@msg	select two or three paths or compound paths	valitse kaksi tai kolme polkua tai yhdistelmäpolkua
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` on oltava 0.01–1000000 pt
+@msg	two shapes need a `radius`	kaksi muotoa tarvitsee arvon `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	kolme muotoa määrää säteen itse: jätä `radius` pois
+@msg	`circle` must be from 0 to 64	`circle` on oltava 0–64
+@msg	a shape has no outline	muodolla ei ole ääriviivaa
+@msg	the shapes are too complex: at most 2000 segments in all	muodot ovat liian monimutkaisia: enintään 2000 segmenttiä yhteensä
+@msg	these shapes take too long to search	haku kestää liian kauan näille muodoille
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	yli 64 ympyrää sivuaa näitä muotoja: ne saattavat sivuta niitä koko käyrän matkalta
+@msg	no circle touches these shapes	mikään ympyrä ei sivua näitä muotoja
+@msg	`circle` is past the last circle found ({found})	`circle` on viimeisen löydetyn ympyrän jälkeen ({found})
+@msg	object {value} is not a path or compound path	objekti {value} ei ole polku eikä yhdistelmäpolku
+@msg	these shapes are too small to measure	nämä muodot ovat liian pieniä mitattaviksi
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Asiakirjatyökalut
 	Save a Timestamped Copy	Tallenna kopio aikaleimalla
@@ -7473,7 +7583,7 @@ breakText	Glyphs	Merkit
 @msg	stroke cannot be set on a symbol instance	stroke-arvoa ei voi asettaa symbolin ilmentymälle
 @msg	fill on a symbol instance must be a solid color or none	symbolin ilmentymän fill-arvon on oltava tasainen väri tai none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key}-arvoa ei voi asettaa kuvalle, jolla ei ole tehostetta Muunna muodoksi tai Muunna objekti ääriviivoiksi
-@msg	pass newName, registration, exportType, nineSlice and/or type	anna newName, registration, exportType, nineSlice ja/tai type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	anna newName, registration, exportType, nineSlice, type ja/tai alignToPixelGrid
 	Text Flow	Tekstin kulku
 	By Rows	Riveittäin
 	By Columns	Sarakkeittain

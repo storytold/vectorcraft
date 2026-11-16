@@ -641,6 +641,18 @@ font-technology	Variable	Variabla
 	Copy Width Point	Kopiera breddpunkt
 	Copyright	Upphovsrätt
 	Copyright Info URL:	URL för upphovsrättsinformation:
+	Save Metadata Template…	Spara metadatamall…
+	Import Options	Importalternativ
+	Clear existing fields and use the template's	Rensa befintliga fält och använd mallens
+	Keep existing fields, but replace those the template has	Behåll befintliga fält, men ersätt dem som mallen har
+	Keep existing fields, but append those the template has	Behåll befintliga fält, men lägg till dem som mallen har
+@msg	the template name can't be empty	mallnamnet får inte vara tomt
+@msg	the template name isn't usable as a file name	mallnamnet kan inte användas som filnamn
+@msg	no metadata templates folder here	det finns ingen mapp för metadatamallar här
+@msg	give `name` or `path`, not both	ange `name` eller `path`, inte båda
+@msg	give one of `path`, `name` and `data`	ange en av `path`, `name` och `data`
+@msg	mode must be replace, keep or append	läget måste vara replace, keep eller append
+@msg	the file is not an XMP metadata template	filen är inte en XMP-metadatamall
 	Copyright Notice:	Upphovsrättsmeddelande:
 	Copyright Status:	Upphovsrättsstatus:
 	Copyright Symbol	Upphovsrättssymbol
@@ -1173,6 +1185,7 @@ font-technology	Variable	Variabla
 	Highlight Size	Högdagerstorlek
 	Blend Steps	Övergångssteg
 	Shading Color	Skuggningsfärg
+	Black Overprint	Svart övertryck
 	Draw Hidden Faces	Rita dolda ytor
 	Eyedropper	Pipett
 	Eyedropper Applies:	Pipetten tillämpar:
@@ -1293,6 +1306,8 @@ font-technology	Variable	Variabla
 	Font Family & Style	Typsnittsfamilj och stil
 	Font Family, Style & Size	Typsnittsfamilj, stil och storlek
 	Font List	Typsnittslista
+	Show Similar Fonts	Visa liknande typsnitt
+	Clear Similar Fonts	Rensa liknande typsnitt
 	Font Preview Size	Storlek på typsnittsförhandsgranskning
 	Font Size	Teckenstorlek
 	Variable Font	Variabelt typsnitt
@@ -2963,6 +2978,12 @@ digits	Malayalam	Malayalam
 	Responsive	Responsiv
 	Restore	Återställ
 	Restore every preference to its default (applied on OK)	Återställ alla inställningar till standard (verkställs vid OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Enheten för nya dokument i de inbyggda storlekarna, utom storlekar i pixlar, och för öppnade filer som inte anger någon enhet; om du väljer den här och klickar på OK får även det aktiva dokumentet den enheten.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Konturtjocklekar, streck och mellanrum visas i den här enheten, och tal som skrivs för dem läses i den.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Teckenstorlekar, radavstånd och baslinjeförskjutning visas i den här enheten, och tal som skrivs för dem läses i den.
+	The unit for East Asian type measurements, which no field uses yet.	Enheten för mått i östasiatisk text, som inget fält använder ännu.
+	When on, a number typed without a unit into a field in picas is read in points.	När det är på läses ett tal som skrivs utan enhet i ett fält i pica i punkter.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Med XML-id visas objektnamn som XML-id:n i Lager, Variabler och Lageralternativ.
 	Reset all preferences to their defaults?	Återställa alla inställningar till standard?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Standardvärdena verkställs när du klickar på OK i Inställningar. Avbryt där behåller dina nuvarande inställningar.
 	Restore Recovered Documents	Återställ återskapade dokument
@@ -2996,6 +3017,7 @@ digits	Malayalam	Malayalam
 	Roman Hanging Punctuation	Hängande interpunktion (roman)
 	Korean Line Break Anywhere	Koreansk radbrytning var som helst
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Inställningar för östasiatisk sättning
 	Korean Composition Settings	Inställningar för koreansk sättning
 	Rotate	Rotera
@@ -3176,6 +3198,8 @@ digits	Malayalam	Malayalam
 	Search All	Sök i alla
 	Search commands and tools	Sök kommandon och verktyg
 	Search commands and tools…	Sök kommandon och verktyg…
+	Recent Commands	Senaste kommandon
+	No recent commands	Inga senaste kommandon
 	Search Commands…	Sök kommandon…
 	Secondary	Sekundär
 	Section Symbol	Paragraftecken
@@ -3590,6 +3614,9 @@ digits	Malayalam	Malayalam
 	Show Import Options	Visa importalternativ
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Fråga efter importalternativ för varje PDF-, DXF- eller textfil innan den placeras; av: använd de senast valda alternativen
 	Stylistic Alternates	Stilistiska alternativ
+	Ligatures	Ligaturer
+	Ornaments	Ornament
+	Figures	Siffror
 	Swash	Swash
 	Swatch Conflict	Färgrutekonflikt
 	Swatch Conflicts	Färgrutekonflikter
@@ -4353,6 +4380,44 @@ axis	Both	Båda
 @msg	$.evalFile requires a file path	$.evalFile kräver en filsökväg
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: tidsgränsen måste vara ett ändligt antal millisekunder, 0 eller mer
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: tar en filsökväg och en tidsgräns
+@msg	assignment to a constant binding	tilldelning till en konstant bindning
+@msg	invalid array length	ogiltig arraylängd
+@msg	array literal too long	arrayliteralen är för lång
+@msg	the value is not a function	värdet är inte en funktion
+@msg	apply was called on a value that is not a function	apply anropades på ett värde som inte är en funktion
+@msg	the argument list is not an object	argumentlistan är inte ett objekt
+@msg	too many arguments	för många argument
+@msg	the value is not a constructor	värdet är inte en konstruktor
+@msg	cannot convert the object to a primitive value	objektet kan inte konverteras till ett primitivt värde
+@msg	cannot convert undefined or null to an object	undefined eller null kan inte konverteras till ett objekt
+@msg	the right side of 'in' is not an object	högersidan av 'in' är inte ett objekt
+@msg	the right side of 'instanceof' is not a function	högersidan av 'instanceof' är inte en funktion
+@msg	the function's prototype is not an object	funktionens prototyp är inte ett objekt
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} är inte definierat
+@msg	cannot read property '{key}' of {base}	det går inte att läsa egenskapen '{key}' för {base}
+@msg	cannot set property '{key}' of {base}	det går inte att sätta egenskapen '{key}' för {base}
+@msg	cannot read a property of {base}	det går inte att läsa en egenskap för {base}
+@msg	cannot set a property of {base}	det går inte att sätta en egenskap för {base}
+@msg	cannot define property '{key}': {why}	det går inte att definiera egenskapen '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	det går inte att tilldela egenskapen '{key}': {why}
+@msg	cannot delete property '{key}'	det går inte att ta bort egenskapen '{key}'
+@msg	cannot declare function {ident}	det går inte att deklarera funktionen {ident}
+@msg	invalid assignment target	ogiltigt tilldelningsmål
+@msg	the array's length is read-only	arrayens längd är skrivskyddad
+@msg	the property cannot be redefined	egenskapen kan inte definieras om
+@msg	the object is not extensible	objektet kan inte utökas
+@msg	the length cannot be redefined	längden kan inte definieras om
+@msg	it is read-only	den är skrivskyddad
+@msg	an element cannot be deleted	ett element kan inte tas bort
+@msg	it has only a getter	den har bara en getter
+@msg	the value is a primitive	värdet är primitivt
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: rad {line}, kolumn {column} i {file}: {e} (kastat)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: rad {line}, kolumn {column}: {e} (kastat)
 @msg	{name}: {e} (thrown)	{name}: {e} (kastat)
@@ -4393,6 +4458,27 @@ axis	Both	Båda
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: en dialogruta kan inte öppnas i ett återanrop från en inbyggd funktion, en getter, en konvertering eller en fil som $.evalFile kör; anropa den från skriptets egen kod
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: nästa svar i `answers` gäller {_1}, inte {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` har inget svar kvar för den här dialogrutan
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` har {n} svar som skriptet inte använde|`answers` har {n} svar som skriptet inte använde
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} lämnade {n} objekt under penseln utan ändring ({_2}): bara banor formas om|{_1} lämnade {n} objekt under penseln utan ändring ({_2}): bara banor formas om
+liquify-tool	Warp	Förvräng
+liquify-tool	Twirl	Virvel
+liquify-tool	Pucker	Dra ihop
+liquify-tool	Bloat	Svullnad
+liquify-tool	Scallop	Bågkant
+liquify-tool	Crystallize	Kristallisera
+liquify-tool	Wrinkle	Skrynkla
+liquify-kind	graphs	diagram
+liquify-kind	type	text
+liquify-kind	symbols	symboler
+liquify-kind	images	bilder
+liquify-kind	meshes	nät
+liquify-kind	envelopes	kuvert
+liquify-kind	repeats	upprepningar
+liquify-kind	placed documents	placerade dokument
+liquify-kind	blends	blandningar
+liquify-list-two	{0}, {1}	{0} och {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} och {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} är för stort för ett skript
 @msg	vc.log: the log of this run is full	vc.log: loggen för den här körningen är full
 @msg	this function's script run has ended	skriptkörningen för den här funktionen har avslutats
@@ -4448,6 +4534,7 @@ axis	Both	Båda
 @msg	Divide Objects Below: select exactly one path	Dela objekt under: markera exakt en bana
 @msg	Downloaded {what}	Hämtade {what}
 @msg	Expand Appearance: the selection has a basic appearance	Expandera utseende: markeringen har ett grundläggande utseende
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	vissa rastereffekter gjordes inte om till bilder: de skulle kräva mer än 1 024 bilder eller totalt 256 megapixlar
 @msg	Expand: no brush strokes selected	Expandera: inga penseldrag är markerade
 @msg	Expand: no gradient fills	Expandera: inga gradientfyllningar
 @msg	Expand: nothing to expand	Expandera: ingenting att expandera
@@ -5265,6 +5352,10 @@ axis	Both	Båda
 	Em Box	Em-ruta
 	x-Height	x-höjd
 	ICF Box	ICF-ruta
+	Show Sample	Visa exempel
+	Hide Sample	Dölj exempel
+	Max Ascent/Descent	Max höjd/djup
+	Max Ascender	Max uppstapel
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` är stegreferensen {r}, som bara `run` och `command_batch` löser upp
 @msg	`ids` must be an array of object ids, not {v}	`ids` måste vara en array med objekt-id:n, inte {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` måste vara en array med färger, inte {v}
@@ -6145,7 +6236,7 @@ theme	Appearance	Utseende
 	By Object	Efter objekt
 	Check an artboard to save.	Markera en rityta som ska sparas.
 	Clear All	Rensa alla
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Stäng de cirkulära ändarna på öppna profiler. Partiella svep behåller sina snittsidor öppna.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Stäng de cirkulära ändarna på öppna profiler. Partiella svep stänger även sina snittsidor.
 	Color Panel Options	Alternativ för panelen Färg
 	Color blindness – Tritanopia-type	Färgblindhet – tritanopi
 	Create Dimension	Skapa mått
@@ -7390,6 +7481,24 @@ breakText	Glyphs	Glyfer
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandera streck till banor
 @msg	select paths with dashed strokes to expand	markera banor med streckad kontur att expandera
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Tangentcirkel…
+	Tangent Circle	Tangentcirkel
+	Circle:	Cirkel:
+@msg	`ids` names an object twice	`ids` anger ett objekt två gånger
+@msg	select two or three paths or compound paths	markera två eller tre banor eller sammansatta banor
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` måste vara från 0.01 till 1000000 pt
+@msg	two shapes need a `radius`	två former kräver en `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	tre former bestämmer radien själva: utelämna `radius`
+@msg	`circle` must be from 0 to 64	`circle` måste vara från 0 till 64
+@msg	a shape has no outline	en form har ingen kontur
+@msg	the shapes are too complex: at most 2000 segments in all	formerna är för komplexa: högst 2000 segment totalt
+@msg	these shapes take too long to search	sökningen tar för lång tid för formerna
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	fler än 64 cirklar rör vid formerna: de kan röra vid dem längs en hel kurva
+@msg	no circle touches these shapes	ingen cirkel rör vid formerna
+@msg	`circle` is past the last circle found ({found})	`circle` ligger efter den sista funna cirkeln ({found})
+@msg	object {value} is not a path or compound path	objekt {value} är inte en bana eller sammansatt bana
+@msg	these shapes are too small to measure	formerna är för små för att mätas
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentverktyg
 	Save a Timestamped Copy	Spara en kopia med tidsstämpel
@@ -7444,7 +7553,7 @@ breakText	Glyphs	Glyfer
 @msg	stroke cannot be set on a symbol instance	stroke kan inte anges för en symbolinstans
 @msg	fill on a symbol instance must be a solid color or none	fill för en symbolinstans måste vara en enfärgad färg eller none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kan inte anges för en bild utan effekten Konvertera till form eller Konvertera objekt till konturer
-@msg	pass newName, registration, exportType, nineSlice and/or type	ange newName, registration, exportType, nineSlice och/eller type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	ange newName, registration, exportType, nineSlice, type och/eller alignToPixelGrid
 	Text Flow	Textflöde
 	By Rows	Radvis
 	By Columns	Kolumnvis
@@ -8597,7 +8706,9 @@ digits	Hindi	Hindi
 @msg	position must be normal, superscript or subscript	position måste vara normal, superscript eller subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position måste vara topLeft, topRight, bottomLeft eller bottomRight
 @msg	positions must be between 0 and 100000 pt	positionerna måste vara mellan 0 och 100 000 pt
+@msg	ppi can't be more than {max} for this image	ppi kan inte vara mer än {max} för den här bilden
 @msg	ppi must be a positive number, not {ppi}	ppi måste vara ett positivt tal, inte {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim behåller bildens pixlar som de är: utelämna ppi
 @msg	ppi must be between 1 and 2400	ppi måste vara mellan 1 och 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` är inte transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape måste vara clippingMask|transparency

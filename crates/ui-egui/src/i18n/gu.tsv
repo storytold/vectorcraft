@@ -556,6 +556,7 @@
 	Chosen: {n} of {total}	પસંદ કરેલ: {total} માંથી {n}
 	Chrome…	ક્રોમ…
 	Circle	વર્તુળ
+	Circle:	વર્તુળ:
 	Classic	ક્લાસિક
 	Clean Up	સાફ કરો
 	Clean Up…	સાફ કરો…
@@ -607,7 +608,7 @@
 	Close Path…	પાથ બંધ કરો…
 	Close or Join	બંધ કરો અથવા જોડો
 	Close paths when ends are within:	છેડા આ અંતરમાં હોય ત્યારે પાથ બંધ કરો:
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	ખુલ્લી પ્રોફાઇલના ગોળ છેડા બંધ કરો. આંશિક સ્વીપ તેમની કાપેલી બાજુઓ ખુલ્લી રાખે છે.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	ખુલ્લી પ્રોફાઇલના ગોળ છેડા બંધ કરો. આંશિક સ્વીપ તેમની કાપેલી બાજુઓ પણ બંધ કરે છે.
 	Closing bracket with no opening one	ખુલતા કૌંસ વગરનો બંધ થતો કૌંસ
 	Coincidence:	સંયોગ:
 	Collapse Panel Group	પેનલ ગ્રૂપ સંકોચો
@@ -762,6 +763,12 @@
 	Copy to User Defined	વપરાશકર્તા-વ્યાખ્યાયિતમાં નકલ કરો
 	Copyright	કૉપીરાઇટ
 	Copyright Info URL:	કૉપીરાઇટ માહિતી URL:
+	Templates	ટેમ્પલેટ
+	Save Metadata Template…	મેટાડેટા ટેમ્પલેટ સાચવો…
+	Import Options	આયાત વિકલ્પો
+	Clear existing fields and use the template's	હાલના ફીલ્ડ સાફ કરો અને ટેમ્પલેટના ફીલ્ડ વાપરો
+	Keep existing fields, but replace those the template has	હાલના ફીલ્ડ રાખો, પણ ટેમ્પલેટમાં હોય તે બદલો
+	Keep existing fields, but append those the template has	હાલના ફીલ્ડ રાખો, પણ ટેમ્પલેટમાં હોય તે ઉમેરો
 	Copyright Notice:	કૉપીરાઇટ સૂચના:
 	Copyright Status:	કૉપીરાઇટ સ્થિતિ:
 	Copyright Symbol	કૉપીરાઇટ ચિહ્ન
@@ -1451,6 +1458,8 @@
 	Font Family, Style & Size	ફોન્ટ ફેમિલી, સ્ટાઇલ અને સાઇઝ
 	Font Family:	ફોન્ટ ફેમિલી:
 	Font List	ફોન્ટ યાદી
+	Show Similar Fonts	સમાન ફોન્ટ બતાવો
+	Clear Similar Fonts	સમાન ફોન્ટ સાફ કરો
 	Font Preview Size	ફોન્ટ પૂર્વાવલોકન સાઇઝ
 	Font Size	ફોન્ટ સાઇઝ
 	Font Style:	ફોન્ટ સ્ટાઇલ:
@@ -1732,6 +1741,10 @@
 	ICC Profile	ICC પ્રોફાઇલ
 	ICF Bottom/Left	ICF નીચે/ડાબે
 	ICF Box	ICF બૉક્સ
+	Show Sample	નમૂનો બતાવો
+	Hide Sample	નમૂનો છુપાવો
+	Max Ascent/Descent	મહત્તમ એસેન્ટ/ડિસેન્ટ
+	Max Ascender	મહત્તમ એસેન્ડર
 	ICF Top/Right	ICF ઉપર/જમણે
 	ID: {id}	ID: {id}
 	Identify Objects By	ઑબ્જેક્ટ્સ આ રીતે ઓળખો
@@ -3090,6 +3103,12 @@
 	Restore	પુનઃસ્થાપિત કરો
 	Restore Recovered Documents	પુનઃપ્રાપ્ત દસ્તાવેજો પુનઃસ્થાપિત કરો
 	Restore every preference to its default (applied on OK)	દરેક પસંદગી તેના ડિફોલ્ટ પર પુનઃસ્થાપિત કરો (ઠીક પર લાગુ થશે)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	પિક્સેલ સિવાયના બિલ્ટ-ઇન કદના નવા દસ્તાવેજો અને કોઈ એકમ ન નોંધતી ખોલેલી ફાઇલો માટેનો એકમ; અહીં તેને પસંદ કરીને ઠીક ક્લિક કરવાથી સક્રિય દસ્તાવેજનો એકમ પણ તે બને છે.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	સ્ટ્રોકની જાડાઈ, ડૅશ અને અંતર આ એકમમાં દેખાય છે, અને તેમના માટે ટાઇપ કરેલી સંખ્યાઓ આ એકમમાં વંચાય છે.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	ટાઇપના કદ, લીડિંગ અને બેઝલાઇન શિફ્ટ આ એકમમાં દેખાય છે, અને તેમના માટે ટાઇપ કરેલી સંખ્યાઓ આ એકમમાં વંચાય છે.
+	The unit for East Asian type measurements, which no field uses yet.	પૂર્વ એશિયાઈ ટાઇપના માપ માટેનો એકમ, જેનો હજી કોઈ ફીલ્ડ ઉપયોગ કરતું નથી.
+	When on, a number typed without a unit into a field in picas is read in points.	ચાલુ હોય ત્યારે, પાઇકામાં હોય તેવા ફીલ્ડમાં એકમ વિના ટાઇપ કરેલી સંખ્યા પોઇન્ટ્સમાં વંચાય છે.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID પસંદ હોય ત્યારે ઑબ્જેક્ટનાં નામ લેયર્સ, વેરિએબલ્સ અને લેયર વિકલ્પોમાં XML ID તરીકે દેખાય છે.
 	Restored documents open unsaved: save them to keep them.	પુનઃસ્થાપિત દસ્તાવેજો અસાચવેલા ખુલશે: તેમને રાખવા માટે સાચવો.
 	Restrict printing, editing and other tasks	છાપકામ, સંપાદન અને અન્ય કાર્યો પર પ્રતિબંધ મૂકો
 	Reticulation…	રેટિક્યુલેશન…
@@ -3352,6 +3371,8 @@
 	Search Preferences	પસંદગીઓ શોધો
 	Search commands and tools	આદેશો અને ટૂલ્સ શોધો
 	Search commands and tools…	આદેશો અને ટૂલ્સ શોધો…
+	Recent Commands	તાજેતરના આદેશો
+	No recent commands	કોઈ તાજેતરના આદેશો નથી
 	Search images	છબીઓ શોધો
 	Searching…	શોધી રહ્યા છીએ…
 	Secondary	ગૌણ
@@ -3467,6 +3488,7 @@
 	Setup…	સેટઅપ…
 	Shading	શેડિંગ
 	Shading Color	શેડિંગ રંગ
+	Black Overprint	કાળો ઓવરપ્રિન્ટ
 	Shadows and Glows	પડછાયા અને ગ્લો
 	Shape	શેપ
 	Shape Builder	શેપ બિલ્ડર
@@ -3771,6 +3793,9 @@
 	Styling:	સ્ટાઇલિંગ:
 	Stylistic	સ્ટાઇલિસ્ટિક
 	Stylistic Alternates	સ્ટાઇલિસ્ટિક વિકલ્પી
+	Ligatures	લિગેચર્સ
+	Ornaments	અલંકારો
+	Figures	અંકો
 	Stylistic Sets	સ્ટાઇલિસ્ટિક સેટ
 	Stylize	સ્ટાઇલાઇઝ
 	Subdivisions	ઉપવિભાગો
@@ -3840,6 +3865,8 @@
 	Table	ટેબલ
 	Tabs	ટૅબ
 	Tamil	તમિલ
+	Tangent Circle	સ્પર્શક વર્તુળ
+	Tangent Circle…	સ્પર્શક વર્તુળ…
 	Taper	ટેપર
 	Target	લક્ષ્ય
 	Target Contents	લક્ષ્ય સામગ્રી
@@ -4473,6 +4500,7 @@ antiAlias	Sharp	શાર્પ
 	Save Prominent Colors	મુખ્ય રંગો સાચવો
 	Korean Line Break Anywhere	કોરિયન લાઇન ગમે ત્યાં તોડો
 	Bunri-Kinshi	બુનરી-કિન્શી
+	Kurikaeshi Moji Shori	કુરિકાએશી મોજી શોરી
 	East Asian Composition Settings	પૂર્વ એશિયાઈ કમ્પોઝિશન સેટિંગ્સ
 	Korean Composition Settings	કોરિયન કમ્પોઝિશન સેટિંગ્સ
 	Show Bounding Box While Moving and Drawing	ખસેડતી અને દોરતી વખતે બાઉન્ડિંગ બોક્સ બતાવો

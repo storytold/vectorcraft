@@ -256,12 +256,20 @@ enum LpDragFrom {
 /// The faces among `faces` (a Live Paint group's faces, back to front) that a drag along the path
 /// chunks `chunks` crosses, as `livePaint.fill` finds them, each with its fill.
 fn crossed_faces(faces: &[Arc<Node>], chunks: &[Vec<Point>]) -> Vec<(NodeId, Paint)> {
+    // Only a face whose bounds meet the drag's bounds can be crossed.
+    let Some(drag) = chunks.iter().flatten().fold(None, |r: Option<Rect>, p| Some(r.map_or(Rect::from_points(*p, *p), |r| r.union_pt(*p)))) else {
+        return vec![];
+    };
     let mut hit = vec![];
     let mut regions = vec![];
     // Front first, as visible_face_at looks.
     for f in faces.iter().rev().filter(|f| f.visible) {
         if let Some(path) = f.path_data()
             && let Some(bounds) = path.bounds()
+            && bounds.x0 <= drag.x1
+            && drag.x0 <= bounds.x1
+            && bounds.y0 <= drag.y1
+            && drag.y0 <= bounds.y1
         {
             hit.push(f);
             regions.push((po::Region { path: path.clone(), sources: vec![] }, path.to_bezpath(), bounds));
@@ -487,8 +495,8 @@ impl LivePaintBucketTool {
     /// The paint `part` had before the first press of a click sequence of `clicks` presses that
     /// painted `part`, or before the double-click after a press when that double-click reached it
     /// (the sequence's first press counts when it made the group `part` is in and the face it
-    /// filled there is `part`), a press's drag or release crossing `part` included; `now` when the
-    /// last press did not paint it.
+    /// filled there is `part`), a press's drag or release crossing `part` included; `now` when no
+    /// press of the sequence painted `part` and the last press's drag did not cross it.
     fn before(&self, cx: &ToolContext, part: NodeId, clicks: usize, now: Paint) -> Paint {
         let Some(run) = self.presses.len().checked_sub(clicks).and_then(|from| self.presses.get(from..)) else { return now };
         let made_part = |at: Point| live_paint_at(cx.doc, at).and_then(|g| visible_face_at(cx.doc.node(g)?, at)).is_some_and(|f| f.id == part);
@@ -541,8 +549,11 @@ impl LivePaintBucketTool {
             if clicks == 2
                 && let Some(group) = cx.doc.node(g)
             {
-                // The other edge either click painted joins as the stroke paint it had before.
-                let through: Vec<NodeId> = self
+                // The other edge of this group either click painted joins as the stroke paint it
+                // had before. A face either click filled is not an edge and does not join.
+                let group_edges: std::collections::HashSet<NodeId> = edges(group).iter().map(|x| x.id).collect();
+                let mut through: Vec<NodeId> = vec![];
+                for id in self
                     .presses
                     .len()
                     .checked_sub(2)
@@ -552,8 +563,11 @@ impl LivePaintBucketTool {
                     .flatten()
                     .filter(|q| q.before == like)
                     .filter_map(|q| q.part)
-                    .filter(|id| *id != e.id)
-                    .collect();
+                {
+                    if id != e.id && group_edges.contains(&id) && !through.contains(&id) {
+                        through.push(id);
+                    }
+                }
                 self.note_reached(group, connected_edges_through(group, e.id, &like, &through), true);
                 if !through.is_empty() {
                     v["through"] = json_ids(&through);
@@ -797,7 +811,7 @@ impl Tool for LivePaintBucketTool {
         self.at = None;
     }
 
-    /// A press the view tools took counts as a press that paints no face or edge, for the clicks
+    /// A press that did not reach the tool counts as a press that paints no face or edge, for the clicks
     /// a double-click or triple-click compares.
     fn press_elsewhere(&mut self) {
         self.note_press(None);

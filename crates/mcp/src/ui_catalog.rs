@@ -188,7 +188,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "shortcuts.exportText",
         "Export Keyboard Shortcuts as Text…",
         "",
-        "{path?} save the current set's tools and menu commands with their shortcuts as a UTF-8 text file (Keyboard Shortcuts › Export Text…): the set's name, then a Tools and a Menu Commands section in the dialog's order, one `name<TAB>shortcut` line per row, empty after the tab when it has none; without `path`, pick a file",
+        "{path?, format?: \"text\"|\"sheet\"|\"csv\" (default text), pageSize?: \"letter\"|\"a4\" (sheet only; default A4 when the current document prints on A4, else letter)} save the current set's tools and menu commands with their shortcuts (Keyboard Shortcuts › Export Text…). text: a UTF-8 text file: the set's name, then a Tools and a Menu Commands section in the dialog's order, one `name<TAB>shortcut` line per row, empty after the tab when it has none. sheet: a printable PDF on landscape pages that lists the rows with a shortcut, Tools and then a group per top-level menu, under a colored band per group, shortcut then name, in four columns. csv: a UTF-8 CSV file (RFC 4180 quoting, CRLF) with a `Group,Command,Shortcut` header and one record per row in the sheet's groups, in the UI language; a field that starts with = + - @ and has more after it starts with '. A `path` is written as given. Without it, pick a file: the desktop save dialog offers the three formats (text first) unless `format` names one, and the file type picked decides and gives the name its extension; with no dialog, writer or download, returns {text} (text, csv) or {pdf: base64} (sheet); a bad `format` or `pageSize` is an error",
     ),
     ("shortcuts.import", "Import Keyboard Shortcuts…", "", "{path? | data?}"),
     (
@@ -854,7 +854,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.cropImage",
         "Crop Image",
         "",
-        "{} show a crop box on the selected image (tool `cropImage`): it starts on the part over the image's artboard; drag its handles or inside it, then Enter or the Control bar's Apply crops the image to it (object.cropImage {rect}), Escape or Cancel leaves it as it is, both back to the Selection tool. tool.setOption {key: \"rect\", value: [x, y, width, height]} sets the box. → {tool}; a tool that cannot be chosen returns the error",
+        "{} show a crop box on the selected image (tool `cropImage`): it starts on the part over the image's artboard; drag its handles or inside it, then Enter or the Control bar's Apply crops the image to it (object.cropImage {rect, ppi?}: ppi when a resolution that changes the image's pixels is set, and for a turned or skewed image its own when none is and it can be cropped to it), Escape or Cancel leaves it as it is, both back to the Selection tool. tool.setOption {key: \"rect\", value: [x, y, width, height]} sets the box; {key: \"ppi\", value: 1 to 2400 and at most the selected image's own resolution (300 for a linked image), or null for the image's own} the cropped image's resolution; {key: \"reference\", value: 0 to 8, left to right and top to bottom; 4, the center, by default} the point the Control bar's X and Y name and its W and H resize about; {key: \"linked\", value: true or false (default false)} whether W and H keep the box's proportions. → {tool}; a tool that cannot be chosen returns the error",
     ),
     ("effect.applyLast", "Apply Last Effect", "Cmd+Shift+E", "{}"),
     (

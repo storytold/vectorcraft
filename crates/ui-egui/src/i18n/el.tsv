@@ -613,6 +613,18 @@ font-technology	Variable	Μεταβλητές
 	Copy Width Point	Αντιγραφή σημείου πλάτους
 	Copyright	Πνευματικά δικαιώματα
 	Copyright Info URL:	URL πληροφοριών πνευματικών δικαιωμάτων:
+	Save Metadata Template…	Αποθήκευση προτύπου μεταδεδομένων…
+	Import Options	Επιλογές εισαγωγής
+	Clear existing fields and use the template's	Απαλοιφή των υπαρχόντων πεδίων και χρήση εκείνων του προτύπου
+	Keep existing fields, but replace those the template has	Διατήρηση των υπαρχόντων πεδίων, αλλά αντικατάσταση όσων έχει το πρότυπο
+	Keep existing fields, but append those the template has	Διατήρηση των υπαρχόντων πεδίων, αλλά προσθήκη όσων έχει το πρότυπο
+@msg	the template name can't be empty	το όνομα του προτύπου δεν μπορεί να είναι κενό
+@msg	the template name isn't usable as a file name	το όνομα του προτύπου δεν μπορεί να χρησιμοποιηθεί ως όνομα αρχείου
+@msg	no metadata templates folder here	δεν υπάρχει φάκελος προτύπων μεταδεδομένων εδώ
+@msg	give `name` or `path`, not both	δώστε `name` ή `path`, όχι και τα δύο
+@msg	give one of `path`, `name` and `data`	δώστε ένα από τα `path`, `name` και `data`
+@msg	mode must be replace, keep or append	η λειτουργία πρέπει να είναι replace, keep ή append
+@msg	the file is not an XMP metadata template	το αρχείο δεν είναι πρότυπο μεταδεδομένων XMP
 	Copyright Notice:	Σημείωση πνευματικών δικαιωμάτων:
 	Copyright Status:	Κατάσταση πνευματικών δικαιωμάτων:
 	Copyright Symbol	Σύμβολο πνευματικών δικαιωμάτων
@@ -1140,6 +1152,7 @@ font-technology	Variable	Μεταβλητές
 	Highlight Size	Μέγεθος ανταύγειας
 	Blend Steps	Βήματα ανάμειξης
 	Shading Color	Χρώμα σκίασης
+	Black Overprint	Μαύρο με υπερεκτύπωση
 	Draw Hidden Faces	Σχεδίαση κρυφών εδρών
 	Eyedropper	Σταγονόμετρο (Eyedropper Tool)
 	Eyedropper Applies:	Το σταγονόμετρο εφαρμόζει:
@@ -1260,6 +1273,8 @@ font-technology	Variable	Μεταβλητές
 	Font Family & Style	Οικογένεια και στυλ γραμματοσειράς
 	Font Family, Style & Size	Οικογένεια, στυλ και μέγεθος γραμματοσειράς
 	Font List	Λίστα γραμματοσειρών
+	Show Similar Fonts	Εμφάνιση παρόμοιων γραμματοσειρών
+	Clear Similar Fonts	Απαλοιφή παρόμοιων γραμματοσειρών
 	Font Preview Size	Μέγεθος προεπισκόπησης γραμματοσειράς
 	Font Size	Μέγεθος γραμματοσειράς
 	Variable Font	Μεταβλητή γραμματοσειρά
@@ -2076,6 +2091,7 @@ font-technology	Variable	Μεταβλητές
 	Roman Hanging Punctuation	Κρεμαστή στίξη όρθιας γραφής
 	Korean Line Break Anywhere	Αλλαγή γραμμής κορεατικών οπουδήποτε
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Ρυθμίσεις σύνθεσης ανατολικής Ασίας
 	Korean Composition Settings	Ρυθμίσεις κορεατικής σύνθεσης
 	Rotate	Περιστροφή
@@ -2211,6 +2227,9 @@ font-technology	Variable	Μεταβλητές
 	Superscript	Εκθέτης
 	Superscript:	Εκθέτης:
 	Stylistic Alternates	Εναλλακτικοί χαρακτήρες στυλ
+	Ligatures	Συμπλέγματα χαρακτήρων
+	Ornaments	Κοσμήματα
+	Figures	Αριθμοί
 	Swash	Διακοσμητικά τελειώματα
 	Swatches	Δείγματα χρωμάτων
 	New Group	Νέα ομάδα
@@ -2445,6 +2464,44 @@ axis	Both	Και τα δύο
 @msg	$.evalFile requires a file path	Το $.evalFile απαιτεί διαδρομή αρχείου
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: το χρονικό όριο πρέπει να είναι πεπερασμένος αριθμός χιλιοστών του δευτερολέπτου, 0 ή περισσότερο
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: δέχεται μια διαδρομή αρχείου και ένα χρονικό όριο
+@msg	assignment to a constant binding	ανάθεση σε σταθερή δέσμευση
+@msg	invalid array length	μη έγκυρο μήκος πίνακα
+@msg	array literal too long	η κυριολεκτική τιμή πίνακα είναι πολύ μεγάλη
+@msg	the value is not a function	η τιμή δεν είναι συνάρτηση
+@msg	apply was called on a value that is not a function	η apply κλήθηκε σε τιμή που δεν είναι συνάρτηση
+@msg	the argument list is not an object	η λίστα ορισμάτων δεν είναι αντικείμενο
+@msg	too many arguments	πάρα πολλά ορίσματα
+@msg	the value is not a constructor	η τιμή δεν είναι κατασκευαστής
+@msg	cannot convert the object to a primitive value	το αντικείμενο δεν μπορεί να μετατραπεί σε πρωτογενή τιμή
+@msg	cannot convert undefined or null to an object	το undefined ή το null δεν μπορεί να μετατραπεί σε αντικείμενο
+@msg	the right side of 'in' is not an object	η δεξιά πλευρά του 'in' δεν είναι αντικείμενο
+@msg	the right side of 'instanceof' is not a function	η δεξιά πλευρά του 'instanceof' δεν είναι συνάρτηση
+@msg	the function's prototype is not an object	το πρωτότυπο της συνάρτησης δεν είναι αντικείμενο
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	το {ident} δεν έχει οριστεί
+@msg	cannot read property '{key}' of {base}	δεν είναι δυνατή η ανάγνωση της ιδιότητας '{key}' του {base}
+@msg	cannot set property '{key}' of {base}	δεν είναι δυνατός ο ορισμός της ιδιότητας '{key}' του {base}
+@msg	cannot read a property of {base}	δεν είναι δυνατή η ανάγνωση ιδιότητας του {base}
+@msg	cannot set a property of {base}	δεν είναι δυνατός ο ορισμός ιδιότητας του {base}
+@msg	cannot define property '{key}': {why}	δεν είναι δυνατός ο καθορισμός της ιδιότητας '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	δεν είναι δυνατή η ανάθεση στην ιδιότητα '{key}': {why}
+@msg	cannot delete property '{key}'	δεν είναι δυνατή η διαγραφή της ιδιότητας '{key}'
+@msg	cannot declare function {ident}	δεν είναι δυνατή η δήλωση της συνάρτησης {ident}
+@msg	invalid assignment target	μη έγκυρος στόχος ανάθεσης
+@msg	the array's length is read-only	το μήκος του πίνακα είναι μόνο για ανάγνωση
+@msg	the property cannot be redefined	η ιδιότητα δεν μπορεί να οριστεί ξανά
+@msg	the object is not extensible	το αντικείμενο δεν είναι επεκτάσιμο
+@msg	the length cannot be redefined	το μήκος δεν μπορεί να οριστεί ξανά
+@msg	it is read-only	είναι μόνο για ανάγνωση
+@msg	an element cannot be deleted	ένα στοιχείο δεν μπορεί να διαγραφεί
+@msg	it has only a getter	έχει μόνο getter
+@msg	the value is a primitive	η τιμή είναι πρωτογενής
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: γραμμή {line}, στήλη {column} στο {file}: {e} (εξαίρεση)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: γραμμή {line}, στήλη {column}: {e} (εξαίρεση)
 @msg	{name}: {e} (thrown)	{name}: {e} (εξαίρεση)
@@ -2485,6 +2542,27 @@ axis	Both	Και τα δύο
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: ένα παράθυρο διαλόγου δεν μπορεί να ανοίξει μέσα σε επανάκληση ενσωματωμένης συνάρτησης, getter, μετατροπή ή αρχείο που εκτελεί το $.evalFile· καλέστε το από τον κώδικα του ίδιου του σεναρίου
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: η επόμενη απάντηση στο `answers` είναι για το {_1}, όχι για το {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: το `answers` δεν έχει άλλη απάντηση για αυτό το παράθυρο διαλόγου
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	Το `answers` περιέχει {n} απάντηση που δεν χρησιμοποίησε το σενάριο|Το `answers` περιέχει {n} απαντήσεις που δεν χρησιμοποίησε το σενάριο
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	Το {_1} άφησε {n} αντικείμενο κάτω από το πινέλο χωρίς αλλαγή ({_2}): αναδιαμορφώνει μόνο διαδρομές|Το {_1} άφησε {n} αντικείμενα κάτω από το πινέλο χωρίς αλλαγή ({_2}): αναδιαμορφώνει μόνο διαδρομές
+liquify-tool	Warp	εργαλείο Παραμόρφωση
+liquify-tool	Twirl	εργαλείο Στροβιλισμός
+liquify-tool	Pucker	εργαλείο Συρρίκνωση
+liquify-tool	Bloat	εργαλείο Διόγκωση
+liquify-tool	Scallop	εργαλείο Κυματιστά άκρα
+liquify-tool	Crystallize	εργαλείο Κρυσταλλοποίηση
+liquify-tool	Wrinkle	εργαλείο Πτυχώσεις
+liquify-kind	graphs	γραφήματα
+liquify-kind	type	κείμενο
+liquify-kind	symbols	σύμβολα
+liquify-kind	images	εικόνες
+liquify-kind	meshes	πλέγματα
+liquify-kind	envelopes	περιβλήματα
+liquify-kind	repeats	επαναλήψεις
+liquify-kind	placed documents	τοποθετημένα έγγραφα
+liquify-kind	blends	αναμείξεις
+liquify-list-two	{0}, {1}	{0} και {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} και {1}
 @msg	vc.document{place} is too large for a script	το vc.document{place} είναι πολύ μεγάλο για σενάριο
 @msg	vc.log: the log of this run is full	vc.log: το αρχείο καταγραφής αυτής της εκτέλεσης είναι γεμάτο
 @msg	this function's script run has ended	η εκτέλεση σεναρίου αυτής της συνάρτησης έχει τελειώσει
@@ -2541,6 +2619,7 @@ axis	Both	Και τα δύο
 @msg	Divide Objects Below: select exactly one path	Διαίρεση αντικειμένων από κάτω: επιλέξτε ακριβώς μία διαδρομή
 @msg	Downloaded {what}	Έγινε λήψη του {what}
 @msg	Expand Appearance: the selection has a basic appearance	Επέκταση εμφάνισης: η επιλογή έχει βασική εμφάνιση
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	ορισμένα εφέ ράστερ δεν μετατράπηκαν σε εικόνες: θα χρειάζονταν περισσότερες από 1.024 εικόνες ή συνολικά 256 megapixel
 @msg	Expand: no brush strokes selected	Επέκταση: δεν επιλέχθηκαν πινελιές
 @msg	Expand: no gradient fills	Επέκταση: δεν υπάρχουν γεμίσματα ντεγκραντέ
 @msg	Expand: nothing to expand	Επέκταση: δεν υπάρχει περιεχόμενο προς επέκταση
@@ -3744,6 +3823,12 @@ digits	Malayalam	Μαλαγιάλαμ
 	Reshape Type Area	Αναδιαμόρφωση περιοχής κειμένου
 	Responsive	Αποκρινόμενο
 	Restore every preference to its default (applied on OK)	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους (εφαρμογή με το Εντάξει)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Η μονάδα για τα νέα έγγραφα από ενσωματωμένα μεγέθη, εκτός από μεγέθη σε εικονοστοιχεία, και για τα ανοιγμένα αρχεία χωρίς καταγεγραμμένη μονάδα· αν την επιλέξετε εδώ και πατήσετε Εντάξει, γίνεται και μονάδα του ενεργού εγγράφου.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Τα πάχη περιγράμματος, οι παύλες και τα διάκενα εμφανίζονται σε αυτή τη μονάδα και οι αριθμοί που πληκτρολογούνται γι’ αυτά διαβάζονται σε αυτή.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Τα μεγέθη κειμένου, το διάστιχο και η μετατόπιση γραμμής βάσης εμφανίζονται σε αυτή τη μονάδα και οι αριθμοί που πληκτρολογούνται γι’ αυτά διαβάζονται σε αυτή.
+	The unit for East Asian type measurements, which no field uses yet.	Η μονάδα για τις μετρήσεις κειμένου Ανατολικής Ασίας, την οποία δεν χρησιμοποιεί ακόμη κανένα πεδίο.
+	When on, a number typed without a unit into a field in picas is read in points.	Όταν είναι ενεργό, ένας αριθμός που πληκτρολογείται χωρίς μονάδα σε πεδίο σε πίκες διαβάζεται σε σημεία.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Με το Αναγνωριστικό XML, τα ονόματα αντικειμένων εμφανίζονται ως αναγνωριστικά XML στα Επίπεδα, στις Μεταβλητές και στις Επιλογές επιπέδου.
 	Reset all preferences to their defaults?	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους;
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Οι προεπιλογές εφαρμόζονται όταν κάνετε κλικ στο Εντάξει στις Προτιμήσεις. Το Ακύρωση εκεί διατηρεί τις τρέχουσες προτιμήσεις σας.
 	Restore Recovered Documents	Επαναφορά ανακτημένων εγγράφων
@@ -3859,6 +3944,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Search All	Αναζήτηση όλων
 	Search commands and tools	Αναζήτηση εντολών και εργαλείων
 	Search commands and tools…	Αναζήτηση εντολών και εργαλείων…
+	Recent Commands	Πρόσφατες εντολές
+	No recent commands	Δεν υπάρχουν πρόσφατες εντολές
 	Search Commands…	Αναζήτηση εντολών…
 	Secondary	Δευτερεύον
 	Section Symbol	Σύμβολο ενότητας
@@ -5319,6 +5406,10 @@ digits	Malayalam	Μαλαγιάλαμ
 	Em Box	Τετράγωνο em
 	x-Height	Ύψος x
 	ICF Box	Πλαίσιο ICF
+	Show Sample	Εμφάνιση δείγματος
+	Hide Sample	Απόκρυψη δείγματος
+	Max Ascent/Descent	Μέγ. ύψος/βάθος
+	Max Ascender	Μέγ. άνω επέκταση
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	το `id` είναι η αναφορά βήματος {r}, την οποία αναλύουν μόνο τα `run` και `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	το `ids` πρέπει να είναι πίνακας αναγνωριστικών αντικειμένων, όχι {v}
 @msg	`colors` must be an array of colors, not {v}	το `colors` πρέπει να είναι πίνακας χρωμάτων, όχι {v}
@@ -6150,7 +6241,7 @@ effect	Points	Σημεία
 	By Object	Ανά αντικείμενο
 	Check an artboard to save.	Επιλέξτε έναν πίνακα σχεδίασης για αποθήκευση.
 	Clear All	Εκκαθάριση όλων
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Κλείσιμο των κυκλικών άκρων των ανοιχτών προφίλ. Οι μερικές περιστροφές κρατούν ανοιχτές τις πλευρές τομής τους.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Κλείσιμο των κυκλικών άκρων των ανοιχτών προφίλ. Οι μερικές περιστροφές κλείνουν επίσης τις πλευρές τομής τους.
 	Color Panel Options	Επιλογές πίνακα χρώματος
 	Color blindness – Tritanopia-type	Αχρωματοψία – τύπου τριτανοπίας
 	Create Dimension	Δημιουργία διάστασης
@@ -6404,6 +6495,7 @@ effect	Points	Σημεία
 	Single Word Justification:	Στοίχιση μεμονωμένης λέξης:
 	Full Justify	Στοίχιση και στα δύο άκρα
 	Minimum must not exceed Desired, nor Desired Maximum.	Το ελάχιστο δεν πρέπει να υπερβαίνει το επιθυμητό, ούτε το επιθυμητό το μέγιστο.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: το ελάχιστο δεν πρέπει να υπερβαίνει το επιθυμητό, ούτε το επιθυμητό το μέγιστο
 	Justification	Πλήρης στοίχιση
 	Add filters from the list above	Προσθέστε φίλτρα από τη λίστα παραπάνω
 	Add to Stack	Προσθήκη στη στοίβα
@@ -7343,6 +7435,24 @@ breakText	Glyphs	Γλύφοι
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Επέκταση παυλών σε διαδρομές
 @msg	select paths with dashed strokes to expand	επιλέξτε διαδρομές με διακεκομμένο περίγραμμα για επέκταση
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Εφαπτόμενος κύκλος…
+	Tangent Circle	Εφαπτόμενος κύκλος
+	Circle:	Κύκλος:
+@msg	`ids` names an object twice	το `ids` αναφέρει ένα αντικείμενο δύο φορές
+@msg	select two or three paths or compound paths	επιλέξτε δύο ή τρεις διαδρομές ή σύνθετες διαδρομές
+@msg	`radius` must be from 0.01 to 1000000 pt	το `radius` πρέπει να είναι από 0.01 έως 1000000 pt
+@msg	two shapes need a `radius`	δύο σχήματα χρειάζονται `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	τρία σχήματα ορίζουν μόνα τους την ακτίνα: παραλείψτε το `radius`
+@msg	`circle` must be from 0 to 64	το `circle` πρέπει να είναι από 0 έως 64
+@msg	a shape has no outline	ένα σχήμα δεν έχει περίγραμμα
+@msg	the shapes are too complex: at most 2000 segments in all	τα σχήματα είναι υπερβολικά σύνθετα: το πολύ 2000 τμήματα συνολικά
+@msg	these shapes take too long to search	η αναζήτηση για αυτά τα σχήματα διαρκεί υπερβολικά πολύ
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	περισσότεροι από 64 κύκλοι αγγίζουν αυτά τα σχήματα: ίσως τα αγγίζουν κατά μήκος μιας ολόκληρης καμπύλης
+@msg	no circle touches these shapes	κανένας κύκλος δεν αγγίζει αυτά τα σχήματα
+@msg	`circle` is past the last circle found ({found})	το `circle` είναι μετά τον τελευταίο κύκλο που βρέθηκε ({found})
+@msg	object {value} is not a path or compound path	το αντικείμενο {value} δεν είναι διαδρομή ή σύνθετη διαδρομή
+@msg	these shapes are too small to measure	αυτά τα σχήματα είναι πολύ μικρά για να μετρηθούν
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Εργαλεία εγγράφου
 	Save a Timestamped Copy	Αποθήκευση αντιγράφου με ημερομηνία και ώρα
@@ -7397,7 +7507,7 @@ breakText	Glyphs	Γλύφοι
 @msg	stroke cannot be set on a symbol instance	το stroke δεν μπορεί να οριστεί σε στιγμιότυπο συμβόλου
 @msg	fill on a symbol instance must be a solid color or none	το fill ενός στιγμιότυπου συμβόλου πρέπει να είναι συμπαγές χρώμα ή none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	το {key} δεν μπορεί να οριστεί σε εικόνα χωρίς το εφέ «Μετατροπή σε σχήμα» ή «Μετατροπή αντικειμένου σε περιγράμματα»
-@msg	pass newName, registration, exportType, nineSlice and/or type	δώστε newName, registration, exportType, nineSlice ή/και type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	δώστε newName, registration, exportType, nineSlice, type ή/και alignToPixelGrid
 	Text Flow	Ροή κειμένου
 	By Rows	Κατά γραμμές
 	By Columns	Κατά στήλες

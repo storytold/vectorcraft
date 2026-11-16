@@ -616,6 +616,18 @@ font-technology	Variable	可變
 	Copy Width Point	複製寬度點
 	Copyright	版權
 	Copyright Info URL:	著作權資訊網址：
+	Save Metadata Template…	儲存中繼資料範本…
+	Import Options	匯入選項
+	Clear existing fields and use the template's	清除現有欄位並使用範本的欄位
+	Keep existing fields, but replace those the template has	保留現有欄位，但取代範本中包含的欄位
+	Keep existing fields, but append those the template has	保留現有欄位，但附加範本中包含的欄位
+@msg	the template name can't be empty	範本名稱不能空白
+@msg	the template name isn't usable as a file name	範本名稱無法用作檔案名稱
+@msg	no metadata templates folder here	這裡沒有中繼資料範本資料夾
+@msg	give `name` or `path`, not both	請提供 `name` 或 `path`，不可同時提供
+@msg	give one of `path`, `name` and `data`	請提供 `path`、`name` 和 `data` 其中之一
+@msg	mode must be replace, keep or append	模式必須是 replace、keep 或 append
+@msg	the file is not an XMP metadata template	這個檔案不是 XMP 中繼資料範本
 	Copyright Notice:	著作權聲明：
 	Copyright Status:	著作權狀態：
 	Copyright Symbol	著作權符號
@@ -995,6 +1007,10 @@ font-technology	Variable	可變
 	Cap Height	大寫字母高度
 	x-Height	x 字高
 	ICF Box	ICF 框
+	Show Sample	顯示樣本
+	Hide Sample	隱藏樣本
+	Max Ascent/Descent	最大上升/下降
+	Max Ascender	最大上伸部
 	Em Dash	長破折號
 	Em Space	全形空格
 	Embed	嵌入
@@ -1167,6 +1183,7 @@ font-technology	Variable	可變
 	Highlight Size	亮部大小
 	Blend Steps	漸變階數
 	Shading Color	網底顏色
+	Black Overprint	黑色疊印
 	Draw Hidden Faces	繪製隱藏表面
 	Eyedropper	滴管
 	Sample Color from Screen	從螢幕取樣顏色
@@ -1319,6 +1336,8 @@ file-filter	Templates	範本
 	Font Family & Style	字體家族與樣式
 	Font Family, Style & Size	字體家族、樣式與大小
 	Font List	字體清單
+	Show Similar Fonts	顯示相似字體
+	Clear Similar Fonts	清除相似字體
 	Font Preview Size	字體預覽大小
 	Font Size	字體大小
 	Variable Font	可變字體
@@ -1940,6 +1959,7 @@ file-filter	Templates	範本
 @msg	no history to clear	沒有可清除的步驟記錄
 @msg	no history state {v}	沒有步驟記錄 {v}
 @msg	Expand Appearance: the selection has a basic appearance	展開外觀：選取範圍只有基本外觀
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	部分點陣效果未轉換為影像：它們會超過 1,024 個影像或總計 256 百萬像素
 @msg	select (or target) objects whose appearance isn't basic	請選取 (或指定目標) 外觀不是基本外觀的物件
 @msg	{C}: no effect at index {from}	{C}：索引 {from} 處沒有效果
 @msg	Expand: no gradient fills	展開：沒有漸層填色
@@ -2586,6 +2606,31 @@ file-filter	Templates	範本
 @msg	$.evalFile requires a file path	$.evalFile 需要檔案路徑
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile：逾時必須是 0 或更大的有限毫秒數
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile：接受一個檔案路徑和一個逾時值
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} 未定義
+@msg	cannot read property '{key}' of {base}	無法讀取 {base} 的屬性 '{key}'
+@msg	cannot set property '{key}' of {base}	無法設定 {base} 的屬性 '{key}'
+@msg	cannot read a property of {base}	無法讀取 {base} 的屬性
+@msg	cannot set a property of {base}	無法設定 {base} 的屬性
+@msg	cannot define property '{key}': {why}	無法定義屬性 '{key}'：{why}
+@msg	cannot assign to property '{key}': {why}	無法為屬性 '{key}' 賦值：{why}
+@msg	cannot delete property '{key}'	無法刪除屬性 '{key}'
+@msg	cannot declare function {ident}	無法宣告函式 {ident}
+@msg	invalid assignment target	賦值目標無效
+@msg	the array's length is read-only	陣列的長度是唯讀的
+@msg	the property cannot be redefined	屬性無法重新定義
+@msg	the object is not extensible	物件不可擴充
+@msg	the length cannot be redefined	長度無法重新定義
+@msg	it is read-only	它是唯讀的
+@msg	an element cannot be deleted	無法刪除元素
+@msg	it has only a getter	它只有 getter
+@msg	the value is a primitive	該值是基本值
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}：{file} 第 {line} 行，第 {column} 欄：{e}（擲回）
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}：第 {line} 行，第 {column} 欄：{e}（擲回）
 @msg	{name}: {e} (thrown)	{name}：{e}（擲回）
@@ -2626,6 +2671,27 @@ file-filter	Templates	範本
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}：對話框不能在內建函式的回呼、getter、轉換或 $.evalFile 執行的檔案中開啟；請從指令碼本身的程式碼呼叫
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}：`answers` 中的下一個回答是給 {_1} 的，而不是給 {name} 的
 @msg	{name}: `answers` has no answer left for this dialog	{name}：`answers` 中已沒有此對話框的回答
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` 中有 {n} 個指令碼未使用的回答
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} 未變更筆刷下的 {n} 個物件（{_2}）：它只重塑路徑
+liquify-tool	Warp	彎曲
+liquify-tool	Twirl	旋轉扭曲
+liquify-tool	Pucker	縮攏
+liquify-tool	Bloat	膨脹
+liquify-tool	Scallop	扇形化
+liquify-tool	Crystallize	結晶化
+liquify-tool	Wrinkle	皺摺
+liquify-kind	graphs	圖表
+liquify-kind	type	文字
+liquify-kind	symbols	符號
+liquify-kind	images	影像
+liquify-kind	meshes	網格
+liquify-kind	envelopes	封套
+liquify-kind	repeats	重複
+liquify-kind	placed documents	已置入的文件
+liquify-kind	blends	漸變
+liquify-list-two	{0}, {1}	{0}和{1}
+liquify-list-middle	{0}, {1}	{0}、{1}
+liquify-list-end	{0}, {1}	{0}和{1}
 @msg	vc.document{place} is too large for a script	vc.document{place}對指令碼來說太大
 @msg	vc.log: the log of this run is full	vc.log：本次執行的記錄已滿
 @msg	this function's script run has ended	此函式的指令碼執行已結束
@@ -4150,6 +4216,12 @@ digits	Malayalam	馬來亞拉姆數字
 	Responsive	回應式
 	Restore	還原
 	Restore every preference to its default (applied on OK)	將所有偏好設定還原為預設值 (按下確定後套用)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	除像素尺寸外，以內建尺寸新增的文件及未記錄單位的已開啟檔案使用此單位；在此選擇並按下確定，也會變更目前文件的單位。
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	筆畫寬度、虛線和間隙以此單位顯示，為其輸入的數字也以此單位讀取。
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	字體大小、行距和基線位移以此單位顯示，為其輸入的數字也以此單位讀取。
+	The unit for East Asian type measurements, which no field uses yet.	用於東亞文字度量的單位，目前還沒有欄位使用。
+	When on, a number typed without a unit into a field in picas is read in points.	開啟後，在以派卡為單位的欄位中輸入的不含單位數字以點讀取。
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	選擇 XML ID 時，圖層、變數和圖層選項中的物件名稱會顯示為 XML ID。
 	Reset all preferences to their defaults?	要將所有偏好設定重設為預設值嗎？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在偏好設定中按下確定後才會套用預設值。在那裡按下取消會保留目前的偏好設定。
 	Restore Recovered Documents	還原找回的文件
@@ -4183,6 +4255,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Roman Hanging Punctuation	羅馬懸掛標點
 	Korean Line Break Anywhere	韓文任意位置換行
 	Bunri-Kinshi	分離禁止
+	Kurikaeshi Moji Shori	重複字元處理
 	East Asian Composition Settings	東亞排版設定
 	Korean Composition Settings	韓文排版設定
 	Rotate	旋轉
@@ -4375,6 +4448,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Filter Layers Panel Rows	篩選圖層面板列
 	Search commands and tools	搜尋指令與工具
 	Search commands and tools…	搜尋指令與工具…
+	Recent Commands	最近使用的指令
+	No recent commands	沒有最近使用的指令
 	Search Commands…	搜尋指令…
 	Secondary	次要
 	Section Symbol	章節符號
@@ -4792,6 +4867,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Show Import Options	顯示讀入選項
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	置入前詢問每個 PDF、DXF 或文字檔案的讀入選項；關閉時使用上次選擇的選項
 	Stylistic Alternates	風格替代字
+	Ligatures	連字
+	Ornaments	裝飾字
+	Figures	數字
 	Swash	花體字
 	Swatch Conflict	色票衝突
 	Swatch Conflicts	色票衝突
@@ -5965,7 +6043,7 @@ lighting	Light	光源
 	X:	X：
 	Y:	Y：
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	封閉開放輪廓的圓形端部。部分旋轉的切割側面保持開放。
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	封閉開放輪廓的圓形端部。部分旋轉的切割側面也會封閉。
 	Distance	距離
 	Make Image Dynamic	使影像動態化
 	Import Data Sets…	匯入資料集…
@@ -6071,6 +6149,7 @@ lighting	Light	光源
 	Single Word Justification:	單字對齊：
 	Full Justify	全部強迫齊行
 	Minimum must not exceed Desired, nor Desired Maximum.	最小值不可超過所需值，所需值不可超過最大值。
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`：最小值不可超過所需值，所需值不可超過最大值
 	Minimum	最小值
 	Justification	對齊設定
 	Add filters from the list above	從上方清單新增濾鏡
@@ -7024,6 +7103,24 @@ breakText	Glyphs	字符
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	將短破折號展開為路徑
 @msg	select paths with dashed strokes to expand	請選取要展開的虛線筆畫路徑
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	相切圓…
+	Tangent Circle	相切圓
+	Circle:	圓：
+@msg	`ids` names an object twice	`ids` 將同一個物件指定了兩次
+@msg	select two or three paths or compound paths	請選取兩個或三個路徑或複合路徑
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` 必須為 0.01 到 1000000 pt
+@msg	two shapes need a `radius`	兩個形狀需要 `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	三個形狀會自行決定半徑：請勿指定 `radius`
+@msg	`circle` must be from 0 to 64	`circle` 必須為 0 到 64
+@msg	a shape has no outline	有一個形狀沒有外框
+@msg	the shapes are too complex: at most 2000 segments in all	形狀過於複雜：總共最多 2000 個線段
+@msg	these shapes take too long to search	這些形狀的搜尋耗時過長
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	與這些形狀相切的圓超過 64 個：它們可能沿整條曲線相接
+@msg	no circle touches these shapes	沒有與這些形狀相切的圓
+@msg	`circle` is past the last circle found ({found})	`circle` 超出了找到的最後一個圓（{found}）
+@msg	object {value} is not a path or compound path	物件 {value} 不是路徑或複合路徑
+@msg	these shapes are too small to measure	這些形狀太小，無法測量
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	文件工具
 	Save a Timestamped Copy	儲存附時間戳記的拷貝
@@ -7078,7 +7175,7 @@ breakText	Glyphs	字符
 @msg	stroke cannot be set on a symbol instance	無法為符號範例設定 stroke
 @msg	fill on a symbol instance must be a solid color or none	符號範例的 fill 必須是純色或 none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	無法為沒有「轉換為形狀」或「外框物件」效果的影像設定 {key}
-@msg	pass newName, registration, exportType, nineSlice and/or type	請提供 newName、registration、exportType、nineSlice 和/或 type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	請提供 newName、registration、exportType、nineSlice、type 和/或 alignToPixelGrid
 	Text Flow	文字流向
 	By Rows	依列
 	By Columns	依欄
@@ -8807,7 +8904,9 @@ breakText	Glyphs	字符
 @msg	position must be normal, superscript or subscript	position 必須是 normal、superscript 或 subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position 必須是 topLeft、topRight、bottomLeft 或 bottomRight
 @msg	positions must be between 0 and 100000 pt	positions 必須介於 0 到 100000 pt 之間
+@msg	ppi can't be more than {max} for this image	此影像的 ppi 不能超過 {max}
 @msg	ppi must be a positive number, not {ppi}	ppi 必須是正數，而非 {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim 會保持影像像素不變：請勿指定 ppi
 @msg	ppi must be between 1 and 2400	ppi 必須介於 1 和 2400 之間
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` 不是 transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape 必須是 clippingMask|transparency

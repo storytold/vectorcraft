@@ -2544,6 +2544,7 @@
 	Highlight Size	ელვარების ზომა
 	Blend Steps	შერევის საფეხურები
 	Shading Color	დაჩრდილვის ფერი
+	Black Overprint	ზედდაბეჭდილი შავი
 	Draw Hidden Faces	დამალული წახნაგების დახატვა
 	Revolve…	ბრუნვა…
 	Inflate…	გაბერვა…
@@ -3669,6 +3670,10 @@ digits	Malayalam	მალაიალამური
 	Em Box	Em-ბლოკი
 	x-Height	x-სიმაღლე
 	ICF Box	ICF-ბლოკი
+	Show Sample	ნიმუშის ჩვენება
+	Hide Sample	ნიმუშის დამალვა
+	Max Ascent/Descent	მაქს. სიმაღლე/სიღრმე
+	Max Ascender	მაქს. ზედა გამონაშვერი
 	Copy Color Value (Hex)	ფერის მნიშვნელობის კოპირება (Hex)
 	Create New Swatch…	ახალი ფერის ნიმუშის შექმნა…
 	Name 40%	სახელი 40%
@@ -3924,6 +3929,9 @@ digits	Malayalam	მალაიალამური
 	Select text to set its OpenType features.	OpenType შესაძლებლობების დასაყენებლად მონიშნეთ ტექსტი.
 	Standard Ligatures	სტანდარტული ლიგატურები
 	Stylistic Alternates	სტილისტური ალტერნატივები
+	Ligatures	ლიგატურები
+	Ornaments	ორნამენტები
+	Figures	ციფრები
 	Swash	მოხატული ასოები (swash)
 	Tabular Lining	ცხრილური ხაზოვანი
 	Tabular Oldstyle	ცხრილური ძველებური
@@ -3960,6 +3968,7 @@ digits	Malayalam	მალაიალამური
 	Roman Hanging Punctuation	რომაული გამოწეული პუნქტუაცია
 	Korean Line Break Anywhere	კორეული სტრიქონის გადატანა ნებისმიერ ადგილას
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	აღმოსავლეთ აზიური აწყობის პარამეტრები
 	Korean Composition Settings	კორეული აწყობის პარამეტრები
 	Select a text object to edit its paragraph attributes.	აბზაცის ატრიბუტების რედაქტირებისთვის მონიშნეთ ტექსტური ობიექტი.
@@ -4444,6 +4453,18 @@ digits	Malayalam	მალაიალამური
 	Author Title:	ავტორის თანამდებობა:
 	Author:	ავტორი:
 	Copyright Info URL:	საავტორო უფლების ინფორმაციის URL:
+	Save Metadata Template…	მეტამონაცემების შაბლონის შენახვა…
+	Import Options	იმპორტის პარამეტრები
+	Clear existing fields and use the template's	არსებული ველების გასუფთავება და შაბლონის ველების გამოყენება
+	Keep existing fields, but replace those the template has	არსებული ველების შენარჩუნება, მაგრამ შაბლონში არსებულების ჩანაცვლება
+	Keep existing fields, but append those the template has	არსებული ველების შენარჩუნება, მაგრამ შაბლონში არსებულების დამატება
+@msg	the template name can't be empty	შაბლონის სახელი ცარიელი ვერ იქნება
+@msg	the template name isn't usable as a file name	შაბლონის სახელი ფაილის სახელად ვერ გამოდგება
+@msg	no metadata templates folder here	აქ მეტამონაცემების შაბლონების საქაღალდე არ არის
+@msg	give `name` or `path`, not both	მიუთითეთ `name` ან `path`, არა ორივე
+@msg	give one of `path`, `name` and `data`	მიუთითეთ ერთ-ერთი: `path`, `name` და `data`
+@msg	mode must be replace, keep or append	რეჟიმი უნდა იყოს replace, keep ან append
+@msg	the file is not an XMP metadata template	ფაილი არ არის XMP მეტამონაცემების შაბლონი
 	Copyright Notice:	საავტორო უფლების შენიშვნა:
 	Copyright Status:	საავტორო უფლების სტატუსი:
 	Created:	შექმნილია:
@@ -5334,6 +5355,8 @@ theme	Appearance	იერსახე
 	Find Font Files	შრიფტის ფაილების ძებნა
 	Add Font Files	შრიფტის ფაილების დამატება
 	Font List	შრიფტების სია
+	Show Similar Fonts	მსგავსი შრიფტების ჩვენება
+	Clear Similar Fonts	მსგავსი შრიფტების გასუფთავება
 	Fonts in Document	დოკუმენტის შრიფტები
 	Refresh Font List	შრიფტების სიის განახლება
 	Replace Font	შრიფტის ჩანაცვლება
@@ -6061,6 +6084,8 @@ font-technology	Variable	ცვლადი
 	Saving	შენახვა
 	Saving {}	ინახება: {}
 	Search commands and tools…	ბრძანებებისა და ხელსაწყოების ძიება…
+	Recent Commands	ბოლო ბრძანებები
+	No recent commands	ბოლო ბრძანებები არ არის
 	Dashed Line	ტირეებიანი ხაზი
 	Panel menu	პანელის მენიუ
 	Unembed…	ჩაშენების მოხსნა…
@@ -6071,6 +6096,12 @@ font-technology	Variable	ცვლადი
 	Preferences	პარამეტრები
 	Previous	წინა
 	Restore every preference to its default (applied on OK)	ყველა პარამეტრის ნაგულისხმევ მნიშვნელობაზე დაბრუნება (გამოიყენება OK-ზე დაჭერისას)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	ახალი დოკუმენტების ერთეული ჩაშენებული ზომებით, პიქსელური ზომების გარდა, და გახსნილი ფაილებისა, რომლებიც ერთეულს არ ინახავს; თუ აქ აირჩევთ და OK-ს დააწკაპუნებთ, ის აქტიური დოკუმენტის ერთეულიც გახდება.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	კონტურის სისქე, ტირეები და შუალედები ამ ერთეულში ჩანს, და მათთვის აკრეფილი რიცხვები ამ ერთეულში იკითხება.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	ტექსტის ზომა, სტრიქონთა დაშორება და საბაზისო ხაზის წანაცვლება ამ ერთეულში ჩანს, და მათთვის აკრეფილი რიცხვები ამ ერთეულში იკითხება.
+	The unit for East Asian type measurements, which no field uses yet.	აღმოსავლეთაზიური ტექსტის ზომების ერთეული, რომელსაც ჯერჯერობით არცერთი ველი არ იყენებს.
+	When on, a number typed without a unit into a field in picas is read in points.	ჩართვისას პიკებში მოცემულ ველში ერთეულის გარეშე აკრეფილი რიცხვი პუნქტებში იკითხება.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID-ის არჩევისას ობიექტების სახელები შრეებში, ცვლადებსა და შრის პარამეტრებში XML ID-ად ჩანს.
 	Reset all preferences to their defaults?	დავაბრუნოთ ყველა პარამეტრი ნაგულისხმევ მნიშვნელობებზე?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	ნაგულისხმევი მნიშვნელობები გამოიყენება, როცა პარამეტრებში OK-ს დააჭერთ. იქ გაუქმება ინარჩუნებს თქვენს მიმდინარე პარამეტრებს.
 	Smaller ↔ Larger	უფრო პატარა ↔ უფრო დიდი
@@ -6316,6 +6347,7 @@ font-technology	Variable	ცვლადი
 @msg	Divide Objects Below: select exactly one path	ქვედა ობიექტების დაყოფა: მონიშნეთ ზუსტად ერთი ტრაექტორია
 @msg	Downloaded {what}	ჩამოტვირთულია: {what}
 @msg	Expand Appearance: the selection has a basic appearance	იერსახის გაშლა: მონიშნულს საბაზისო იერსახე აქვს
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	ზოგიერთი რასტრული ეფექტი გამოსახულებად არ გადაიქცა: მათ დასჭირდებოდა 1024-ზე მეტი გამოსახულება ან ჯამში 256 მეგაპიქსელი
 @msg	Expand: no brush strokes selected	გაშლა: ფუნჯის შტრიხები მონიშნული არ არის
 @msg	Expand: no gradient fills	გაშლა: გრადიენტული შევსებები არ არის
 @msg	Expand: nothing to expand	გაშლა: გასაშლელი არაფერია
@@ -7759,6 +7791,31 @@ imageTrace	Outline	კონტური
 @msg	$.evalFile requires a file path	$.evalFile-ს სჭირდება ფაილის მისამართი
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: დროის ლიმიტი უნდა იყოს მილიწამების სასრული რიცხვი, 0 ან მეტი
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: იღებს ფაილის მისამართს და დროის ლიმიტს
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} არ არის განსაზღვრული
+@msg	cannot read property '{key}' of {base}	{base} მნიშვნელობის თვისება '{key}' ვერ წაიკითხება
+@msg	cannot set property '{key}' of {base}	{base} მნიშვნელობის თვისება '{key}' ვერ დაყენდება
+@msg	cannot read a property of {base}	{base} მნიშვნელობის თვისება ვერ წაიკითხება
+@msg	cannot set a property of {base}	{base} მნიშვნელობის თვისება ვერ დაყენდება
+@msg	cannot define property '{key}': {why}	თვისება '{key}' ვერ განისაზღვრება: {why}
+@msg	cannot assign to property '{key}': {why}	თვისებას '{key}' მნიშვნელობა ვერ მიენიჭება: {why}
+@msg	cannot delete property '{key}'	თვისება '{key}' ვერ წაიშლება
+@msg	cannot declare function {ident}	ფუნქცია {ident} ვერ გამოცხადდება
+@msg	invalid assignment target	მინიჭების არასწორი სამიზნე
+@msg	the array's length is read-only	მასივის სიგრძე მხოლოდ წასაკითხია
+@msg	the property cannot be redefined	თვისება ხელახლა ვერ განისაზღვრება
+@msg	the object is not extensible	ობიექტი არ არის გაფართოებადი
+@msg	the length cannot be redefined	სიგრძე ხელახლა ვერ განისაზღვრება
+@msg	it is read-only	ის მხოლოდ წასაკითხია
+@msg	an element cannot be deleted	ელემენტი ვერ წაიშლება
+@msg	it has only a getter	მას მხოლოდ getter აქვს
+@msg	the value is a primitive	მნიშვნელობა პრიმიტიულია
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, სტრიქონი {line}, სვეტი {column}: {e} (გამონაკლისი)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: სტრიქონი {line}, სვეტი {column}: {e} (გამონაკლისი)
 @msg	{name}: {e} (thrown)	{name}: {e} (გამონაკლისი)
@@ -7799,6 +7856,27 @@ imageTrace	Outline	კონტური
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: დიალოგი ვერ გაიხსნება ჩაშენებული ფუნქციის უკუძახილში, getter-ში, გარდაქმნაში ან ფაილში, რომელსაც $.evalFile უშვებს; გამოიძახეთ ის სკრიპტის საკუთარი კოდიდან
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: შემდეგი პასუხი `answers`-ში არის {_1}-ისთვის და არა {name}-ისთვის
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers`-ში ამ დიალოგისთვის პასუხი აღარ დარჩა
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers`-ში დარჩა {n} პასუხი, რომელიც სკრიპტს არ გამოუყენებია
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1}-მა ფუნჯის ქვეშ უცვლელი დატოვა {n} ობიექტი ({_2}): ის მხოლოდ ტრაექტორიებს ცვლის
+liquify-tool	Warp	გაღუნვა
+liquify-tool	Twirl	დახვევა
+liquify-tool	Pucker	შეკუმშვა
+liquify-tool	Bloat	გაბერვა
+liquify-tool	Scallop	დაკბილვა
+liquify-tool	Crystallize	კრისტალიზაცია
+liquify-tool	Wrinkle	დანაოჭება
+liquify-kind	graphs	დიაგრამები
+liquify-kind	type	ტექსტი
+liquify-kind	symbols	სიმბოლოები
+liquify-kind	images	გამოსახულებები
+liquify-kind	meshes	ბადეები
+liquify-kind	envelopes	გარსები
+liquify-kind	repeats	გამეორებები
+liquify-kind	placed documents	განთავსებული დოკუმენტები
+liquify-kind	blends	გადასვლები
+liquify-list-two	{0}, {1}	{0} და {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} და {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} ზედმეტად დიდია სკრიპტისთვის
 @msg	vc.log: the log of this run is full	vc.log: ამ გაშვების ჟურნალი სავსეა
 @msg	this function's script run has ended	ამ ფუნქციის სკრიპტის გაშვება დასრულდა
@@ -7990,7 +8068,7 @@ imageTrace	Outline	კონტური
 @msg	Unknown dimension orientation	ზომის უცნობი ორიენტაცია
 @msg	Unknown dimension style	ზომის უცნობი სტილი
 @msg	Unknown unit	უცნობი ერთეული
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	ღია პროფილების წრიული ბოლოების დახურვა. ნაწილობრივი ბრუნვისას ჭრის მხარეები ღია რჩება.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	ღია პროფილების წრიული ბოლოების დახურვა. ნაწილობრივი ბრუნვისას ჭრის მხარეებიც იხურება.
 	Distance	მანძილი
 # Upstream sync 2026-10-16 (2): Smart Blur modes, Layers panel filter, Color panel options, templates, PostScript files.
 	Mode	რეჟიმი
@@ -9490,6 +9568,24 @@ breakText	Glyphs	გლიფები
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	ტირეების ტრაექტორიებად გაშლა
 @msg	select paths with dashed strokes to expand	აირჩიეთ გასაშლელი ტირეებიანი ხაზის კონტურები
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	მხები წრე…
+	Tangent Circle	მხები წრე
+	Circle:	წრე:
+@msg	`ids` names an object twice	`ids` ერთსა და იმავე ობიექტს ორჯერ მიუთითებს
+@msg	select two or three paths or compound paths	მონიშნეთ ორი ან სამი ტრაექტორია ან შედგენილი ტრაექტორია
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` უნდა იყოს 0.01-დან 1000000 pt-მდე
+@msg	two shapes need a `radius`	ორ ფიგურას `radius` სჭირდება
+@msg	three shapes set the radius themselves: leave `radius` out	სამი ფიგურა რადიუსს თავად ადგენს: გამოტოვეთ `radius`
+@msg	`circle` must be from 0 to 64	`circle` უნდა იყოს 0-დან 64-მდე
+@msg	a shape has no outline	ერთ-ერთ ფიგურას კონტური არ აქვს
+@msg	the shapes are too complex: at most 2000 segments in all	ფიგურები ზედმეტად რთულია: სულ არაუმეტეს 2000 სეგმენტი
+@msg	these shapes take too long to search	ამ ფიგურების ძიებას ზედმეტად დიდი დრო სჭირდება
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	ამ ფიგურებს 64-ზე მეტი წრე ეხება: შესაძლოა მთელი მრუდის გასწვრივ ეხებოდნენ
+@msg	no circle touches these shapes	ამ ფიგურებს არცერთი წრე არ ეხება
+@msg	`circle` is past the last circle found ({found})	`circle` ბოლო ნაპოვნი წრის შემდეგაა ({found})
+@msg	object {value} is not a path or compound path	ობიექტი {value} არ არის ტრაექტორია ან შედგენილი ტრაექტორია
+@msg	these shapes are too small to measure	ეს ფიგურები ზედმეტად პატარაა გასაზომად
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	დოკუმენტის ხელსაწყოები
 	Save a Timestamped Copy	ასლის შენახვა თარიღითა და დროით
@@ -9563,7 +9659,7 @@ breakText	Glyphs	გლიფები
 @msg	stroke cannot be set on a symbol instance	stroke ვერ დაყენდება სიმბოლოს ეგზემპლარზე
 @msg	fill on a symbol instance must be a solid color or none	სიმბოლოს ეგზემპლარის fill უნდა იყოს ერთფეროვანი ფერი ან none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} ვერ დაყენდება გამოსახულებაზე „ფიგურად გარდაქმნის“ ან „ობიექტის კონტურებად გარდაქმნის“ ეფექტის გარეშე
-@msg	pass newName, registration, exportType, nineSlice and/or type	მიუთითეთ newName, registration, exportType, nineSlice და/ან type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	მიუთითეთ newName, registration, exportType, nineSlice, type და/ან alignToPixelGrid
 	Text Flow	ტექსტის დინება
 	By Rows	სტრიქონების მიხედვით
 	By Columns	სვეტების მიხედვით

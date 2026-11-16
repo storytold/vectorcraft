@@ -854,6 +854,18 @@ font-technology	Variable	Változó
 	Copyright	Szerzői jog
 	Copyright and Contact Info	Szerzői jogi és kapcsolati adatok
 	Copyright Info URL:	Szerzői jogi információ URL-je:
+	Save Metadata Template…	Metaadatsablon mentése…
+	Import Options	Importálási beállítások
+	Clear existing fields and use the template's	Meglévő mezők törlése és a sablon mezőinek használata
+	Keep existing fields, but replace those the template has	Meglévő mezők megtartása, de a sablonban szereplők cseréje
+	Keep existing fields, but append those the template has	Meglévő mezők megtartása, de a sablonban szereplők hozzáfűzése
+@msg	the template name can't be empty	a sablon neve nem lehet üres
+@msg	the template name isn't usable as a file name	a sablon neve nem használható fájlnévként
+@msg	no metadata templates folder here	itt nincs metaadatsablon-mappa
+@msg	give `name` or `path`, not both	adja meg a `name` vagy a `path` paramétert, de ne mindkettőt
+@msg	give one of `path`, `name` and `data`	adja meg a `path`, a `name` és a `data` paraméterek egyikét
+@msg	mode must be replace, keep or append	a mód értéke replace, keep vagy append lehet
+@msg	the file is not an XMP metadata template	a fájl nem XMP-metaadatsablon
 	Copyright Notice:	Szerzői jogi közlemény:
 	Copyright Status:	Szerzői jogi állapot:
 	Copyright Symbol	Szerzői jogi jel
@@ -1498,6 +1510,7 @@ font-technology	Variable	Változó
 	Highlight Size	Csillanás mérete
 	Blend Steps	Átmenetlépések
 	Shading Color	Árnyékolás színe
+	Black Overprint	Felülnyomó fekete
 	Draw Hidden Faces	Rejtett lapok rajzolása
 	Eyedropper	Pipetta
 	Sample Color from Screen	Szín mintavétele a képernyőről
@@ -1665,6 +1678,8 @@ file-filter	Templates	Sablonok
 	Font Family & Style	Betűcsalád és stílus
 	Font Family, Style & Size	Betűcsalád, stílus és méret
 	Font List	Betűtípuslista
+	Show Similar Fonts	Hasonló betűtípusok megjelenítése
+	Clear Similar Fonts	Hasonló betűtípusok törlése
 	Font Preview Size	Betűtípus-előnézet mérete
 	Font Size	Betűméret
 	Variable Font	Változó betűtípus
@@ -2142,6 +2157,10 @@ file-filter	Templates	Sablonok
 	Em Box	Kvirtmező
 	x-Height	x-magasság
 	ICF Box	ICF-mező
+	Show Sample	Minta megjelenítése
+	Hide Sample	Minta elrejtése
+	Max Ascent/Descent	Max. magasság/mélység
+	Max Ascender	Max. felnyúló szár
 	ICF Top/Right	ICF teteje/jobb oldala
 	Identify Objects By	Objektumok azonosítása
 	Ignore	Kihagy
@@ -3609,6 +3628,12 @@ mark-style	Japanese	Japán
 	Responsive	Reszponzív
 	Restore	Visszaállít
 	Restore every preference to its default (applied on OK)	Minden beállítás visszaállítása az alapértékre (az OK gombbal lép életbe)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	A beépített, nem pixelben megadott méretű új dokumentumok és a mértékegységet nem rögzítő megnyitott fájlok mértékegysége; ha itt kiválasztja, és az OK gombra kattint, az aktív dokumentum mértékegysége is ez lesz.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	A körvonalvastagságok, a vonalak és a hézagok ebben a mértékegységben jelennek meg, és a hozzájuk beírt számokat is ebben értelmezi a program.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	A betűméretek, a sorköz és az alapvonal-eltolás ebben a mértékegységben jelennek meg, és a hozzájuk beírt számokat is ebben értelmezi a program.
+	The unit for East Asian type measurements, which no field uses yet.	A kelet-ázsiai szöveg méreteinek mértékegysége, amelyet egyelőre egyetlen mező sem használ.
+	When on, a number typed without a unit into a field in picas is read in points.	Bekapcsolva egy pica mértékegységű mezőbe mértékegység nélkül beírt számot pontként értelmez a program.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML-azonosító esetén az objektumnevek XML-azonosítóként jelennek meg a Rétegek, a Változók és a Rétegbeállítások ablakban.
 	Reset all preferences to their defaults?	Visszaállítja az összes beállítást az alapértékre?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Az alapértékek akkor lépnek életbe, amikor a Beállításokban az OK gombra kattint. Az ottani Mégse megtartja a jelenlegi beállításokat.
 	Restore Recovered Documents	Helyreállított dokumentumok visszaállítása
@@ -3653,6 +3678,7 @@ mark-style	Japanese	Japán
 	Roman Hanging Punctuation	Latin függő írásjelek
 	Korean Line Break Anywhere	Koreai sortörés bárhol
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Kelet-ázsiai szedési beállítások
 	Korean Composition Settings	Koreai szedési beállítások
 	Rotate	Elforgatás
@@ -3874,6 +3900,8 @@ mark-style	Japanese	Japán
 @msg	`{key}` must be an array of these names: {_1}	`{key}`: ezen nevek tömbje kell: {_1}
 	Search commands and tools	Parancsok és eszközök keresése
 	Search commands and tools…	Parancsok és eszközök keresése…
+	Recent Commands	Legutóbbi parancsok
+	No recent commands	Nincsenek legutóbbi parancsok
 	Search Commands…	Parancsok keresése…
 	Search Fonts Folder	Keresés betűtípusmappában
 	Searching…	Keresés…
@@ -4364,6 +4392,9 @@ mark-style	Japanese	Japán
 	Show Import Options	Importálási beállítások megjelenítése
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Elhelyezés előtt rákérdez minden PDF-, DXF- vagy szövegfájl importálási beállításaira; kikapcsolva a legutóbb választott beállításokat használja
 	Stylistic Alternates	Stilisztikai változatok
+	Ligatures	Ligatúrák
+	Ornaments	Díszek
+	Figures	Számjegyek
 	Swash	Cifra változatok
 	Swatch Conflict	Színminta-ütközés
 	Swatch Conflicts	Színminta-ütközések
@@ -5264,6 +5295,31 @@ imageTrace	Outline	Körvonal
 @msg	$.evalFile requires a file path	A $.evalFile fájlútvonalat igényel
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: az időkorlátnak véges számú ezredmásodpercnek kell lennie, 0 vagy több
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: egy fájlútvonalat és egy időkorlátot vár
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} nincs definiálva
+@msg	cannot read property '{key}' of {base}	a(z) {base} '{key}' tulajdonsága nem olvasható
+@msg	cannot set property '{key}' of {base}	a(z) {base} '{key}' tulajdonsága nem állítható be
+@msg	cannot read a property of {base}	a(z) {base} tulajdonsága nem olvasható
+@msg	cannot set a property of {base}	a(z) {base} tulajdonsága nem állítható be
+@msg	cannot define property '{key}': {why}	a(z) '{key}' tulajdonság nem definiálható: {why}
+@msg	cannot assign to property '{key}': {why}	a(z) '{key}' tulajdonságnak nem adható érték: {why}
+@msg	cannot delete property '{key}'	a(z) '{key}' tulajdonság nem törölhető
+@msg	cannot declare function {ident}	a(z) {ident} függvény nem deklarálható
+@msg	invalid assignment target	érvénytelen értékadási cél
+@msg	the array's length is read-only	a tömb hossza csak olvasható
+@msg	the property cannot be redefined	a tulajdonság nem definiálható újra
+@msg	the object is not extensible	az objektum nem bővíthető
+@msg	the length cannot be redefined	a hossz nem definiálható újra
+@msg	it is read-only	csak olvasható
+@msg	an element cannot be deleted	elem nem törölhető
+@msg	it has only a getter	csak gettere van
+@msg	the value is a primitive	az érték primitív
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, {line}. sor, {column}. oszlop: {e} (kivétel)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: {line}. sor, {column}. oszlop: {e} (kivétel)
 @msg	{name}: {e} (thrown)	{name}: {e} (kivétel)
@@ -5304,6 +5360,27 @@ imageTrace	Outline	Körvonal
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: párbeszédpanel nem nyílhat meg beépített függvény visszahívásában, getterben, átalakításban vagy a $.evalFile által futtatott fájlban; hívja a parancsfájl saját kódjából
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: a következő válasz az `answers` listában ehhez tartozik: {_1}, nem ehhez: {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: az `answers` listában nem maradt válasz ehhez a párbeszédpanelhez
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	Az `answers` listában {n} válasz maradt, amelyet a parancsfájl nem használt fel
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1}: az ecset alatt {n} objektum változatlan maradt ({_2}); csak útvonalakat alakít át
+liquify-tool	Warp	Hajlítás
+liquify-tool	Twirl	Örvénylés
+liquify-tool	Pucker	Összehúzás
+liquify-tool	Bloat	Felfújás
+liquify-tool	Scallop	Csipkézés
+liquify-tool	Crystallize	Kristályosítás
+liquify-tool	Wrinkle	Gyűrés
+liquify-kind	graphs	grafikonok
+liquify-kind	type	szöveg
+liquify-kind	symbols	szimbólumok
+liquify-kind	images	képek
+liquify-kind	meshes	rácsok
+liquify-kind	envelopes	burkolók
+liquify-kind	repeats	ismétlések
+liquify-kind	placed documents	elhelyezett dokumentumok
+liquify-kind	blends	összemosások
+liquify-list-two	{0}, {1}	{0} és {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} és {1}
 @msg	vc.document{place} is too large for a script	a vc.document{place} túl nagy egy parancsfájlhoz
 @msg	vc.log: the log of this run is full	vc.log: ennek a futásnak a naplója megtelt
 @msg	this function's script run has ended	ennek a függvénynek a parancsfájl-futása véget ért
@@ -5369,6 +5446,7 @@ imageTrace	Outline	Körvonal
 @msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	egy diagram adatsorában a diagramminta grafikája a mintából rajzolódik újra: a módosításához szerkeszd a mintát
 @msg	every search thread stopped on an internal error (please report this bug)	minden keresési szál belső hibával leállt (kérjük, jelentsd ezt a hibát)
 @msg	Expand Appearance: the selection has a basic appearance	Megjelenés kibontása: a kijelölésnek alapmegjelenése van
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	néhány raszteres effektus nem lett képpé alakítva: több mint 1024 képet vagy összesen 256 megapixelt foglalnának
 @msg	Expand: no brush strokes selected	Kibontás: nincs kijelölt ecsetvonás
 @msg	Expand: no gradient fills	Kibontás: nincs színátmenetes kitöltés
 @msg	Expand: nothing to expand	Kibontás: nincs mit kibontani
@@ -6268,7 +6346,7 @@ imageTrace	Outline	Körvonal
 @msg	Unknown dimension style	Ismeretlen méretezési stílus
 @msg	Unknown unit	Ismeretlen mértékegység
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Nyitott profilok kör alakú végeinek lezárása. Részleges körforgatás esetén a vágott oldalak nyitva maradnak.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Nyitott profilok kör alakú végeinek lezárása. Részleges körforgatás esetén a vágott oldalak is lezáródnak.
 	Distance	Távolság
 @msg	span must be "object" or "selection", got {v}	a span értéke "object" vagy "selection" lehet, nem {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" egy `gradient` értéket helyez el, nem színmintát
@@ -6421,6 +6499,7 @@ imageTrace	Outline	Körvonal
 	Single Word Justification:	Egyetlen szó igazítása:
 	Full Justify	Teljes sorkizárás
 	Minimum must not exceed Desired, nor Desired Maximum.	A minimum nem haladhatja meg a kívánt értéket, sem a kívánt érték a maximumot.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: a minimum nem haladhatja meg a kívánt értéket, sem a kívánt érték a maximumot
 	Justification	Sorkizárás
 	Add filters from the list above	Adjon hozzá szűrőket a fenti listából
 	Add to Stack	Hozzáadás a veremhez
@@ -7359,6 +7438,24 @@ breakText	Glyphs	Glifák
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Szaggatások kibontása útvonalakká
 @msg	select paths with dashed strokes to expand	jelöljön ki szaggatott körvonalú útvonalakat a kibontáshoz
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Érintőkör…
+	Tangent Circle	Érintőkör
+	Circle:	Kör:
+@msg	`ids` names an object twice	`ids`: egy objektumot kétszer nevez meg
+@msg	select two or three paths or compound paths	jelölj ki két vagy három útvonalat vagy összetett útvonalat
+@msg	`radius` must be from 0.01 to 1000000 pt	a `radius` értéke 0.01 és 1000000 pt között lehet
+@msg	two shapes need a `radius`	két alakzathoz `radius` kell
+@msg	three shapes set the radius themselves: leave `radius` out	három alakzat maga határozza meg a sugarat: hagyd el a `radius` értéket
+@msg	`circle` must be from 0 to 64	a `circle` értéke 0 és 64 között lehet
+@msg	a shape has no outline	egy alakzatnak nincs körvonala
+@msg	the shapes are too complex: at most 2000 segments in all	az alakzatok túl összetettek: összesen legfeljebb 2000 szakasz
+@msg	these shapes take too long to search	ezeknek az alakzatoknak a keresése túl sokáig tart
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	több mint 64 kör érinti ezeket az alakzatokat: lehet, hogy egy teljes görbe mentén érintik őket
+@msg	no circle touches these shapes	egyetlen kör sem érinti ezeket az alakzatokat
+@msg	`circle` is past the last circle found ({found})	a `circle` az utolsó talált kör után van ({found})
+@msg	object {value} is not a path or compound path	a(z) {value} objektum nem útvonal és nem összetett útvonal
+@msg	these shapes are too small to measure	ezek az alakzatok túl kicsik a méréshez
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentumeszközök
 	Save a Timestamped Copy	Másolat mentése időbélyeggel
@@ -7413,7 +7510,7 @@ breakText	Glyphs	Glifák
 @msg	stroke cannot be set on a symbol instance	a stroke nem állítható be szimbólumpéldányon
 @msg	fill on a symbol instance must be a solid color or none	a szimbólumpéldány fill értéke csak egyszínű szín vagy none lehet
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	a {key} nem állítható be olyan képen, amelyen nincs Átalakítás alakzattá vagy Objektum útvonallá alakítása effektus
-@msg	pass newName, registration, exportType, nineSlice and/or type	adja meg a newName, registration, exportType, nineSlice és/vagy type értékét
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	adja meg a newName, registration, exportType, nineSlice, type és/vagy alignToPixelGrid értékét
 	Text Flow	Szövegfolyás
 	By Rows	Soronként
 	By Columns	Oszloponként
@@ -8894,7 +8991,9 @@ breakText	Glyphs	Glifák
 @msg	position must be normal, superscript or subscript	position: normal, superscript vagy subscript kell
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position: topLeft, topRight, bottomLeft vagy bottomRight kell
 @msg	positions must be between 0 and 100000 pt	positions: 0 és 100000 pt közötti értékek kellenek
+@msg	ppi can't be more than {max} for this image	ppi: ennél a képnél legfeljebb {max} lehet
 @msg	ppi must be a positive number, not {ppi}	ppi: pozitív szám kell, ez nem az: {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	a trim változatlanul hagyja a kép képpontjait: hagyja el a ppi értéket
 @msg	ppi must be between 1 and 2400	ppi: 1 és 2400 közötti érték kell
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}`: nem transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape: clippingMask|transparency kell

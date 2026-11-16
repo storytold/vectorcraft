@@ -49,6 +49,10 @@ font-technology	Variable	バリアブル
 	Cap Height	キャップハイト
 	x-Height	x ハイト
 	ICF Box	平均字面
+	Show Sample	サンプルを表示
+	Hide Sample	サンプルを隠す
+	Max Ascent/Descent	最大アセント/ディセント
+	Max Ascender	最大アセンダ
 	Proportional Metrics	プロポーショナルメトリクス
 	H or V Style	横組み・縦組み用かな
 	Roman Italics	欧文イタリック
@@ -579,6 +583,7 @@ digits	Malayalam	マラヤーラム数字
 	Highlight Size	ハイライトのサイズ
 	Blend Steps	ブレンドの階調
 	Shading Color	陰影のカラー
+	Black Overprint	ブラックオーバープリント
 	Draw Hidden Faces	隠れた面を描画
 	Revolve…	回転体…
 	Inflate…	膨張…
@@ -1386,6 +1391,18 @@ antiAlias	Sharp	シャープ
 	Copy Width Point	幅ポイントをコピー
 	Copyright	著作権
 	Copyright Info URL:	著作権情報の URL:
+	Save Metadata Template…	メタデータテンプレートを保存…
+	Import Options	読み込みオプション
+	Clear existing fields and use the template's	既存のフィールドを消去してテンプレートのフィールドを使用
+	Keep existing fields, but replace those the template has	既存のフィールドを保持し、テンプレートにあるフィールドを置換
+	Keep existing fields, but append those the template has	既存のフィールドを保持し、テンプレートにあるフィールドを追加
+@msg	the template name can't be empty	テンプレート名は空にできません
+@msg	the template name isn't usable as a file name	テンプレート名はファイル名として使用できません
+@msg	no metadata templates folder here	ここにはメタデータテンプレートのフォルダーがありません
+@msg	give `name` or `path`, not both	`name` と `path` のどちらか一方を指定してください
+@msg	give one of `path`, `name` and `data`	`path`、`name`、`data` のいずれか 1 つを指定してください
+@msg	mode must be replace, keep or append	モードは replace、keep、append のいずれかにしてください
+@msg	the file is not an XMP metadata template	このファイルは XMP メタデータテンプレートではありません
 	Copyright Notice:	著作権表示:
 	Copyright Status:	著作権の状態:
 	Corner Point Angle Threshold:	コーナーポイントの角度のしきい値:
@@ -1849,6 +1866,8 @@ antiAlias	Sharp	シャープ
 	Folder	フォルダー
 	Folder Name:	フォルダー名:
 	Font List	フォントリスト
+	Show Similar Fonts	類似フォントを表示
+	Clear Similar Fonts	類似フォントの表示を解除
 	Font Preview Size	フォントプレビューのサイズ
 	Font:	フォント:
 	Fonts	フォント
@@ -3047,6 +3066,12 @@ mark-style	Japanese	日本式
 	Restore	復元
 	Restore Recovered Documents	復帰したドキュメントを復元
 	Restore every preference to its default (applied on OK)	すべての環境設定を初期値に戻す (OK で適用)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	ピクセル以外の組み込みサイズの新規ドキュメントと、単位を記録していない開いたファイルに使う単位で、ここで選んで OK をクリックすると作業中のドキュメントの単位も変わります。
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	線幅、線分、間隔はこの単位で表示され、入力した数値もこの単位で読み取られます。
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	フォントサイズ、行送り、ベースラインシフトはこの単位で表示され、入力した数値もこの単位で読み取られます。
+	The unit for East Asian type measurements, which no field uses yet.	東アジア言語の文字の測定に使う単位で、まだどのフィールドも使っていません。
+	When on, a number typed without a unit into a field in picas is read in points.	オンのとき、パイカのフィールドに単位なしで入力した数値はポイントとして読み取られます。
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID を選ぶと、レイヤー、変数、レイヤーオプションでオブジェクト名が XML ID として表示されます。
 	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	初期値は環境設定で OK をクリックすると適用されます。そこでキャンセルすると現在の環境設定が保たれます。
 	Restored documents open unsaved: save them to keep them.	復元したドキュメントは未保存の状態で開きます。保存して残してください。
@@ -3067,6 +3092,7 @@ mark-style	Japanese	日本式
 	Roman Hanging Punctuation	欧文ぶら下がり
 	Korean Line Break Anywhere	韓国語の任意位置での改行
 	Bunri-Kinshi	分離禁止
+	Kurikaeshi Moji Shori	繰り返し文字処理
 	East Asian Composition Settings	東アジア言語の組版設定
 	Korean Composition Settings	韓国語の組版設定
 	Rotate	回転
@@ -3175,6 +3201,8 @@ mark-style	Japanese	日本式
 @msg	`{key}` must be an array of these names: {_1}	`{key}` には {_1} の中の名前の配列を指定してください
 	Search commands and tools	コマンドとツールを検索
 	Search commands and tools…	コマンドとツールを検索…
+	Recent Commands	最近使ったコマンド
+	No recent commands	最近使ったコマンドはありません
 	Secondary	セカンダリ
 	Select All Art on Layer	レイヤー上のすべてのアートを選択
 	Select All Assets	すべてのアセットを選択
@@ -3412,6 +3440,9 @@ mark-style	Japanese	日本式
 	Swap Fill and Stroke	塗りと線を入れ替え
 	Swap start and end arrowheads	始点と終点の矢印を入れ替え
 	Stylistic Alternates	スタイル代替字
+	Ligatures	合字
+	Ornaments	装飾
+	Figures	数字
 	Swash	スワッシュ
 	Swatch Conflict	スウォッチの競合
 	Swatch Conflicts	スウォッチの競合
@@ -4594,6 +4625,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no history to clear	消去するヒストリーがありません
 @msg	no history state {v}	ヒストリーの状態 {v} はありません
 @msg	Expand Appearance: the selection has a basic appearance	アピアランスを分割: 選択範囲は基本アピアランスです
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	一部のラスター効果は画像になりませんでした: 1,024 枚または合計 256 メガピクセルを超えるためです
 @msg	select (or target) objects whose appearance isn't basic	基本アピアランスではないオブジェクトを選択するか、ターゲットに指定してください
 @msg	{C}: no effect at index {from}	{C}: インデックス {from} に効果がありません
 @msg	Expand: no gradient fills	拡張: グラデーションの塗りがありません
@@ -5262,6 +5294,31 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	$.evalFile requires a file path	$.evalFile にはファイルパスが必要です
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: タイムアウトは 0 以上の有限のミリ秒数にしてください
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: ファイルパスとタイムアウトを指定します
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} は定義されていません
+@msg	cannot read property '{key}' of {base}	{base} のプロパティ '{key}' を読み取れません
+@msg	cannot set property '{key}' of {base}	{base} のプロパティ '{key}' を設定できません
+@msg	cannot read a property of {base}	{base} のプロパティを読み取れません
+@msg	cannot set a property of {base}	{base} のプロパティを設定できません
+@msg	cannot define property '{key}': {why}	プロパティ '{key}' を定義できません: {why}
+@msg	cannot assign to property '{key}': {why}	プロパティ '{key}' に代入できません: {why}
+@msg	cannot delete property '{key}'	プロパティ '{key}' を削除できません
+@msg	cannot declare function {ident}	関数 {ident} を宣言できません
+@msg	invalid assignment target	代入先が無効です
+@msg	the array's length is read-only	配列の長さは読み取り専用です
+@msg	the property cannot be redefined	プロパティは再定義できません
+@msg	the object is not extensible	オブジェクトは拡張できません
+@msg	the length cannot be redefined	長さは再定義できません
+@msg	it is read-only	読み取り専用です
+@msg	an element cannot be deleted	要素は削除できません
+@msg	it has only a getter	ゲッターしかありません
+@msg	the value is a primitive	値はプリミティブです
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file} の {line} 行目、{column} 列目: {e} (スロー)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: {line} 行目、{column} 列目: {e} (スロー)
 @msg	{name}: {e} (thrown)	{name}: {e} (スロー)
@@ -5302,6 +5359,27 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: 組み込み関数のコールバック、getter、変換、または $.evalFile が実行するファイルの中ではダイアログを開けません。スクリプト自身のコードから呼び出してください
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: `answers` の次の回答は {name} ではなく {_1} のものです
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` にこのダイアログの回答が残っていません
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` にスクリプトが使用しなかった回答が {n} 件あります
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} はブラシの下にある {n} 個のオブジェクトを変更せずに残しました（{_2}）。パスのみを変形します
+liquify-tool	Warp	ワープ
+liquify-tool	Twirl	旋回
+liquify-tool	Pucker	収縮
+liquify-tool	Bloat	膨張
+liquify-tool	Scallop	ギザギザ
+liquify-tool	Crystallize	結晶化
+liquify-tool	Wrinkle	しわ
+liquify-kind	graphs	グラフ
+liquify-kind	type	テキスト
+liquify-kind	symbols	シンボル
+liquify-kind	images	画像
+liquify-kind	meshes	メッシュ
+liquify-kind	envelopes	エンベロープ
+liquify-kind	repeats	リピート
+liquify-kind	placed documents	配置ドキュメント
+liquify-kind	blends	ブレンド
+liquify-list-two	{0}, {1}	{0}、{1}
+liquify-list-middle	{0}, {1}	{0}、{1}
+liquify-list-end	{0}, {1}	{0}、{1}
 @msg	vc.document{place} is too large for a script	vc.document{place} はスクリプトには大きすぎます
 @msg	vc.log: the log of this run is full	vc.log: この実行のログがいっぱいです
 @msg	this function's script run has ended	この関数のスクリプトの実行は終了しています
@@ -5948,7 +6026,7 @@ lighting	Light	ライト
 @msg	Unknown dimension style	寸法のスタイルが不明です
 @msg	Unknown unit	単位が不明です
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	開いたプロファイルの円形の端を閉じます。部分的な回転では切断面は開いたままです。
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	開いたプロファイルの円形の端を閉じます。部分的な回転では切断面も閉じます。
 	Distance	距離
 @msg	span must be "object" or "selection", got {v}	span は "object" または "selection" で指定してください ({v} は指定できません)
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" は `gradient` を配置します。スウォッチは配置できません
@@ -6102,6 +6180,7 @@ lighting	Light	ライト
 	Single Word Justification:	単語のみの行の揃え:
 	Full Justify	両端揃え
 	Minimum must not exceed Desired, nor Desired Maximum.	最小値は最適値を、最適値は最大値を超えることはできません。
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: 最小値は最適値を、最適値は最大値を超えることはできません
 	Minimum	最小
 	Justification	文字組み
 	Add filters from the list above	上のリストからフィルターを追加
@@ -7854,7 +7933,9 @@ axis	Y Axis	Y 軸
 @msg	position must be normal, superscript or subscript	position には normal、superscript、subscript のいずれかを指定してください
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position には topLeft、topRight、bottomLeft、bottomRight のいずれかを指定してください
 @msg	positions must be between 0 and 100000 pt	positions には 0 から 100000 pt までの値を指定してください
+@msg	ppi can't be more than {max} for this image	この画像の ppi には {max} 以下の値を指定してください
 @msg	ppi must be a positive number, not {ppi}	ppi には正の数値を指定してください ({ppi} は指定できません)
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim は画像のピクセルをそのまま残します: ppi は指定しないでください
 @msg	ppi must be between 1 and 2400	ppi には 1 から 2400 までの値を指定してください
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` は transforms|bounds|fileDimensions|fit|fill のいずれでもありません
 @msg	preserveShape must be clippingMask|transparency	preserveShape には clippingMask|transparency のいずれかを指定してください
@@ -8878,6 +8959,24 @@ breakText	Glyphs	字形
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	破線をパスに拡張
 @msg	select paths with dashed strokes to expand	拡張する破線のパスを選択してください
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	接円…
+	Tangent Circle	接円
+	Circle:	円:
+@msg	`ids` names an object twice	`ids` に同じオブジェクトが 2 回指定されています
+@msg	select two or three paths or compound paths	パスまたは複合パスを 2 つか 3 つ選択してください
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` は 0.01 から 1000000 pt にしてください
+@msg	two shapes need a `radius`	2 つのシェイプには `radius` が必要です
+@msg	three shapes set the radius themselves: leave `radius` out	3 つのシェイプでは半径が決まるため、`radius` は指定しないでください
+@msg	`circle` must be from 0 to 64	`circle` は 0 から 64 にしてください
+@msg	a shape has no outline	アウトラインのないシェイプがあります
+@msg	the shapes are too complex: at most 2000 segments in all	シェイプが複雑すぎます：セグメントは合計 2000 個までです
+@msg	these shapes take too long to search	これらのシェイプの検索に時間がかかりすぎます
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	これらのシェイプに接する円が 64 個を超えています：曲線全体に沿って接している可能性があります
+@msg	no circle touches these shapes	これらのシェイプに接する円はありません
+@msg	`circle` is past the last circle found ({found})	`circle` が見つかった最後の円を超えています（{found}）
+@msg	object {value} is not a path or compound path	オブジェクト {value} はパスでも複合パスでもありません
+@msg	these shapes are too small to measure	これらのシェイプは小さすぎて測定できません
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	ドキュメントツール
 	Save a Timestamped Copy	日時付きのコピーを保存
@@ -8932,7 +9031,7 @@ breakText	Glyphs	字形
 @msg	stroke cannot be set on a symbol instance	シンボルインスタンスには stroke を設定できません
 @msg	fill on a symbol instance must be a solid color or none	シンボルインスタンスの fill は単色または none にしてください
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	「シェイプに変換」または「オブジェクトのアウトライン」効果のない画像には {key} を設定できません
-@msg	pass newName, registration, exportType, nineSlice and/or type	newName、registration、exportType、nineSlice、type のいずれかを指定してください
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	newName、registration、exportType、nineSlice、type、alignToPixelGrid のいずれかを指定してください
 	Text Flow	テキストの流れ
 	By Rows	行方向
 	By Columns	列方向

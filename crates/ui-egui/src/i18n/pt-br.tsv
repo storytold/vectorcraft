@@ -590,6 +590,18 @@ antiAlias	Sharp	Nítido
 	Copy to User Defined	Copiar para Definido pelo Usuário
 	Copyright	Direitos Autorais
 	Copyright Info URL:	URL de Informações de Direitos Autorais:
+	Save Metadata Template…	Salvar Modelo de Metadados…
+	Import Options	Opções de Importação
+	Clear existing fields and use the template's	Limpar os campos existentes e usar os do modelo
+	Keep existing fields, but replace those the template has	Manter os campos existentes, mas substituir os que o modelo tiver
+	Keep existing fields, but append those the template has	Manter os campos existentes, mas acrescentar os que o modelo tiver
+@msg	the template name can't be empty	o nome do modelo não pode ficar vazio
+@msg	the template name isn't usable as a file name	o nome do modelo não pode ser usado como nome de arquivo
+@msg	no metadata templates folder here	não há pasta de modelos de metadados aqui
+@msg	give `name` or `path`, not both	informe `name` ou `path`, não ambos
+@msg	give one of `path`, `name` and `data`	informe um de `path`, `name` e `data`
+@msg	mode must be replace, keep or append	o modo deve ser replace, keep ou append
+@msg	the file is not an XMP metadata template	o arquivo não é um modelo de metadados XMP
 	Copyright Notice:	Aviso de Direitos Autorais:
 	Copyright Status:	Status de Direitos Autorais:
 	Copyright Symbol	Símbolo de Direitos Autorais
@@ -917,6 +929,10 @@ antiAlias	Sharp	Nítido
 	Em Box	Caixa Eme
 	x-Height	Altura do x
 	ICF Box	Caixa ICF
+	Show Sample	Mostrar Amostra
+	Hide Sample	Ocultar Amostra
+	Max Ascent/Descent	Altura/Profundidade Máx.
+	Max Ascender	Ascendente Máx.
 	Em Dash	Travessão
 	Em Space	Espaço Em
 	Embed	Incorporar
@@ -1086,6 +1102,7 @@ antiAlias	Sharp	Nítido
 	Highlight Size	Tamanho do Realce
 	Blend Steps	Etapas de Mesclagem
 	Shading Color	Cor do Sombreamento
+	Black Overprint	Preto em Sobreimpressão
 	Draw Hidden Faces	Desenhar Faces Ocultas
 	Eyedropper	Conta-gotas
 	Eyedropper Applies:	O Conta-gotas Aplica:
@@ -1195,6 +1212,8 @@ antiAlias	Sharp	Nítido
 	Font Family & Style	Família e Estilo da Fonte
 	Font Family, Style & Size	Família, Estilo e Tamanho da Fonte
 	Font List	Lista de Fontes
+	Show Similar Fonts	Mostrar Fontes Semelhantes
+	Clear Similar Fonts	Limpar Fontes Semelhantes
 	Font Preview Size	Tamanho da Visualização da Fonte
 	Font Size	Tamanho da Fonte
 	Variable Font	Fonte Variável
@@ -2521,6 +2540,12 @@ digits	Malayalam	Malaiala
 	Restore	Restaurar
 	Restore Recovered Documents	Restaurar Documentos Recuperados
 	Restore every preference to its default (applied on OK)	Restaurar toda preferência ao padrão (aplicado em OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	A unidade dos novos documentos de tamanhos predefinidos, exceto os tamanhos em pixels, e dos arquivos abertos que não registram nenhuma unidade; escolhê-la aqui e clicar em OK também a define no documento ativo.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	As espessuras de traçado, os traços e as lacunas aparecem nesta unidade, e os números digitados para eles são lidos nela.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Tamanhos de texto, entrelinhamento e deslocamento da linha de base aparecem nesta unidade, e os números digitados para eles são lidos nela.
+	The unit for East Asian type measurements, which no field uses yet.	A unidade das medidas de texto do Leste Asiático, que nenhum campo usa ainda.
+	When on, a number typed without a unit into a field in picas is read in points.	Quando ativado, um número digitado sem unidade em um campo em picas é lido em pontos.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Com ID XML, os nomes dos objetos aparecem como IDs XML em Camadas, Variáveis e Opções de Camada.
 	Reset all preferences to their defaults?	Redefinir todas as preferências para o padrão?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Os padrões são aplicados quando você clica em OK em Preferências. Cancelar ali mantém suas preferências atuais.
 	Restored documents open unsaved: save them to keep them.	Os documentos restaurados abrem sem salvar: salve-os para mantê-los.
@@ -2548,6 +2573,7 @@ digits	Malayalam	Malaiala
 	Roman Hanging Punctuation	Pontuação Pendurada Romana
 	Korean Line Break Anywhere	Quebra de Linha Coreana em Qualquer Lugar
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Configurações de Composição do Leste Asiático
 	Korean Composition Settings	Configurações de Composição Coreana
 	Rotate	Girar
@@ -2713,6 +2739,8 @@ digits	Malayalam	Malaiala
 	Search Commands…	Pesquisar Comandos…
 	Search commands and tools	Pesquisar comandos e ferramentas
 	Search commands and tools…	Pesquisar comandos e ferramentas…
+	Recent Commands	Comandos recentes
+	No recent commands	Nenhum comando recente
 	Secondary	Secundária
 	Section Symbol	Símbolo de Seção
 	Select	Selecionar
@@ -3051,6 +3079,9 @@ digits	Malayalam	Malaiala
 	Swap Fill and Stroke	Trocar Preenchimento e Traçado
 	Swap start and end arrowheads	Trocar pontas de seta inicial e final
 	Stylistic Alternates	Variantes Estilísticas
+	Ligatures	Ligações
+	Ornaments	Ornamentos
+	Figures	Algarismos
 	Swash	Ornamento
 	Swatch Conflict	Conflito de Amostra
 	Swatch Conflicts	Conflitos de Amostra
@@ -3913,6 +3944,7 @@ axis	Both	Ambos
 @msg	Divide Objects Below: select exactly one path	Dividir objetos abaixo: selecione exatamente um traçado
 @msg	Downloaded {what}	{what} baixado
 @msg	Expand Appearance: the selection has a basic appearance	Expandir aparência: a seleção tem uma aparência básica
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	alguns efeitos de raster não foram transformados em imagens: ocupariam mais de 1.024 imagens ou 256 megapixels no total
 @msg	Expand: no brush strokes selected	Expandir: nenhum traço de pincel selecionado
 @msg	Expand: no gradient fills	Expandir: nenhum preenchimento em gradiente
 @msg	Expand: nothing to expand	Expandir: nada para expandir
@@ -5491,6 +5523,31 @@ axis	Both	Ambos
 @msg	$.evalFile requires a file path	$.evalFile requer um caminho de arquivo
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: o tempo limite deve ser um número finito de milissegundos, 0 ou mais
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: recebe um caminho de arquivo e um tempo limite
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} não está definido
+@msg	cannot read property '{key}' of {base}	não é possível ler a propriedade '{key}' de {base}
+@msg	cannot set property '{key}' of {base}	não é possível gravar a propriedade '{key}' de {base}
+@msg	cannot read a property of {base}	não é possível ler uma propriedade de {base}
+@msg	cannot set a property of {base}	não é possível gravar uma propriedade de {base}
+@msg	cannot define property '{key}': {why}	não é possível definir a propriedade '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	não é possível atribuir à propriedade '{key}': {why}
+@msg	cannot delete property '{key}'	não é possível excluir a propriedade '{key}'
+@msg	cannot declare function {ident}	não é possível declarar a função {ident}
+@msg	invalid assignment target	destino de atribuição inválido
+@msg	the array's length is read-only	o comprimento do array é somente leitura
+@msg	the property cannot be redefined	a propriedade não pode ser redefinida
+@msg	the object is not extensible	o objeto não é extensível
+@msg	the length cannot be redefined	o comprimento não pode ser redefinido
+@msg	it is read-only	ela é somente leitura
+@msg	an element cannot be deleted	um elemento não pode ser excluído
+@msg	it has only a getter	ela tem apenas um getter
+@msg	the value is a primitive	o valor é primitivo
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: linha {line}, coluna {column} de {file}: {e} (lançado)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: linha {line}, coluna {column}: {e} (lançado)
 @msg	{name}: {e} (thrown)	{name}: {e} (lançado)
@@ -5531,6 +5588,27 @@ axis	Both	Ambos
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: uma caixa de diálogo não pode abrir dentro de um callback de uma função interna, um getter, uma conversão ou um arquivo que $.evalFile executa; chame-a a partir do próprio código do script
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: a próxima resposta em `answers` é para {_1}, não para {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` não tem mais respostas para esta caixa de diálogo
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` contém {n} resposta que o script não usou|`answers` contém {n} respostas que o script não usou
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} deixou {n} objeto sob o pincel sem alteração ({_2}): remodela apenas caminhos|{_1} deixou {n} objetos sob o pincel sem alteração ({_2}): remodela apenas caminhos
+liquify-tool	Warp	Distorcer
+liquify-tool	Twirl	Redemoinho
+liquify-tool	Pucker	Encolher
+liquify-tool	Bloat	Estufar
+liquify-tool	Scallop	Vieira
+liquify-tool	Crystallize	Cristalizar
+liquify-tool	Wrinkle	Rugas
+liquify-kind	graphs	gráficos
+liquify-kind	type	texto
+liquify-kind	symbols	símbolos
+liquify-kind	images	imagens
+liquify-kind	meshes	malhas
+liquify-kind	envelopes	envelopes
+liquify-kind	repeats	repetições
+liquify-kind	placed documents	documentos colocados
+liquify-kind	blends	mesclagens
+liquify-list-two	{0}, {1}	{0} e {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} e {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} é grande demais para um script
 @msg	vc.log: the log of this run is full	vc.log: o registro desta execução está cheio
 @msg	this function's script run has ended	a execução do script desta função terminou
@@ -6166,7 +6244,7 @@ mark-style	Japanese	Japonesas
 	Create Dimension	Criar Cota
 	Update Dimensions	Atualizar Cotas
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Fecha as extremidades circulares dos perfis abertos. Giros parciais mantêm as faces de corte abertas.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Fecha as extremidades circulares dos perfis abertos. Giros parciais também fecham as faces de corte.
 @msg	span must be "object" or "selection", got {v}	span deve ser "object" ou "selection", não {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" posiciona um `gradient`, não uma amostra
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" posiciona um degradê: informe `gradient`
@@ -6349,6 +6427,7 @@ mark-style	Japanese	Japonesas
 	Single Word Justification:	Justificação de Palavra Única:
 	Full Justify	Justificação Completa
 	Minimum must not exceed Desired, nor Desired Maximum.	O mínimo não pode passar do desejado, nem o desejado do máximo.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: o mínimo não pode passar do desejado, nem o desejado do máximo
 	Justification	Justificação
 	Add filters from the list above	Adicione filtros da lista acima
 	Add to Stack	Adicionar à Pilha
@@ -7405,6 +7484,24 @@ breakText	Glyphs	Glifos
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandir traços em demarcadores
 @msg	select paths with dashed strokes to expand	selecione demarcadores com traçado tracejado para expandir
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Círculo tangente…
+	Tangent Circle	Círculo tangente
+	Circle:	Círculo:
+@msg	`ids` names an object twice	`ids` indica um objeto duas vezes
+@msg	select two or three paths or compound paths	selecione dois ou três caminhos ou caminhos compostos
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` deve ser de 0.01 a 1000000 pt
+@msg	two shapes need a `radius`	duas formas precisam de um `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	três formas definem o raio sozinhas: omita `radius`
+@msg	`circle` must be from 0 to 64	`circle` deve ser de 0 a 64
+@msg	a shape has no outline	uma forma não tem contorno
+@msg	the shapes are too complex: at most 2000 segments in all	as formas são complexas demais: no máximo 2000 segmentos no total
+@msg	these shapes take too long to search	a busca demora demais para estas formas
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	mais de 64 círculos tocam estas formas: eles podem tocá-las ao longo de uma curva inteira
+@msg	no circle touches these shapes	nenhum círculo toca estas formas
+@msg	`circle` is past the last circle found ({found})	`circle` passa do último círculo encontrado ({found})
+@msg	object {value} is not a path or compound path	o objeto {value} não é um caminho nem um caminho composto
+@msg	these shapes are too small to measure	estas formas são pequenas demais para medir
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Ferramentas de Documento
 	Save a Timestamped Copy	Salvar uma Cópia com Data e Hora
@@ -7459,7 +7556,7 @@ breakText	Glyphs	Glifos
 @msg	stroke cannot be set on a symbol instance	stroke não pode ser definido em uma instância de símbolo
 @msg	fill on a symbol instance must be a solid color or none	o fill de uma instância de símbolo deve ser uma cor sólida ou none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} não pode ser definido em uma imagem sem o efeito Converter em Forma ou Contornar Objeto
-@msg	pass newName, registration, exportType, nineSlice and/or type	informe newName, registration, exportType, nineSlice e/ou type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	informe newName, registration, exportType, nineSlice, type e/ou alignToPixelGrid
 # Strings the sibling catalogs translate that pt-BR did not yet cover (translated 2026-10-31).
 	 on the canvas to create one	 na tela para criar um
 	1 Layer	1 camada
@@ -9084,7 +9181,9 @@ swatch	Yellow Green	Verde-amarelado
 @msg	position must be normal, superscript or subscript	position deve ser normal, superscript ou subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position deve ser topLeft, topRight, bottomLeft ou bottomRight
 @msg	positions must be between 0 and 100000 pt	positions deve estar entre 0 e 100000 pt
+@msg	ppi can't be more than {max} for this image	ppi não pode ser maior que {max} para esta imagem
 @msg	ppi must be a positive number, not {ppi}	ppi deve ser um número positivo, não {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim mantém os pixels da imagem como estão: omita ppi
 @msg	ppi must be between 1 and 2400	ppi deve estar entre 1 e 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` não é transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape deve ser clippingMask|transparency
