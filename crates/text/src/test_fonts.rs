@@ -534,7 +534,8 @@ pub fn half_form_font(half: bool) -> Option<Vec<u8>> {
 pub const CONJUNCT_FAMILY: &str = "Conjuncttest Sans";
 
 /// A test-only cmap over bundled Source Sans 3: Devanagari Ka uses K, the halant uses a period and
-/// the vowel sign I (drawn before its syllable) uses i. The `GSUB` table's `dev2` script has an
+/// the vowel sign I (drawn before its syllable) uses i; Gujarati Ka, virama and vowel sign I use the
+/// same glyphs. The `GSUB` table's `dev2` and `gjr2` scripts have an
 /// `aalt` single substitution of K by k and a `salt` one of K by i, which list k and the vowel
 /// sign's glyph as alternates of Ka, and a `half` ligature of K and the period into k (Ka's half
 /// form). Family [`CONJUNCT_FAMILY`]. `None` when it can't be built.
@@ -549,7 +550,7 @@ pub fn conjunct_font() -> Option<Vec<u8>> {
     const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
     let font = skrifa::FontRef::new(BASE).ok()?;
     let charmap = font.charmap();
-    let mapping = [('क', 'K'), ('\u{094D}', '.'), ('\u{093F}', 'i')];
+    let mapping = [('क', 'K'), ('\u{094D}', '.'), ('\u{093F}', 'i'), ('ક', 'K'), ('\u{0ACD}', '.'), ('\u{0ABF}', 'i')];
     let mappings = mapping.into_iter().map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
     let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
     let family = CONJUNCT_FAMILY;
@@ -574,7 +575,8 @@ pub fn conjunct_font() -> Option<Vec<u8>> {
         SubstitutionLookup::Ligature(Lookup::new(Default::default(), vec![half])),
         SubstitutionLookup::Single(Lookup::new(Default::default(), vec![salt.into()])),
     ]);
-    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"dev2"), Script::new(Some(LangSys::new(vec![0, 1, 2])), vec![]))]);
+    let langsys = || Script::new(Some(LangSys::new(vec![0, 1, 2])), vec![]);
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"dev2"), langsys()), ScriptRecord::new(Tag::new(b"gjr2"), langsys())]);
     builder.add_table(&Gsub::new(scripts, features, lookups)).ok()?;
     for r in font.table_directory.table_records() {
         let tag = Tag::new(&r.tag().to_be_bytes());
@@ -889,6 +891,66 @@ pub fn capped_candidates_font() -> Option<Vec<u8>> {
     let records =
         vec![FeatureRecord::new(Tag::new(b"aalt"), Feature::new(None, vec![0])), FeatureRecord::new(Tag::new(b"salt"), Feature::new(None, vec![1]))];
     let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), Script::new(Some(LangSys::new(vec![0, 1])), vec![]))]);
+    builder.add_table(&Gsub::new(scripts, FeatureList::new(records), lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family of [`categories_font`].
+pub const CATEGORIES_FAMILY: &str = "Categorytest Sans";
+
+/// The bundled Source Sans 3 Regular, its `cmap` kept, with a `GSUB` table of a `liga` ligature of
+/// f and i into L, an `onum` alternate substitution of 1 by 7 and 8, an `smcp` single substitution
+/// of a by B (a second subtable's substitution of a by C is shadowed by it), an `ss02` single substitution of g by G named "Round Dots" (name id 256), and a
+/// `cswh` feature without lookups. Family [`CATEGORIES_FAMILY`]. `None` when it can't be built.
+pub fn categories_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::gsub::{
+        AlternateSet, AlternateSubstFormat1, Gsub, Ligature, LigatureSet, LigatureSubstFormat1, SingleSubst, SingleSubstFormat2, SubstitutionLookup,
+        SubstitutionLookupList,
+    };
+    use write_fonts::tables::layout::{
+        CoverageFormat1, Feature, FeatureList, FeatureParams, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord, StylisticSetParams,
+    };
+    use write_fonts::types::GlyphId16;
+
+    let font = skrifa::FontRef::new(SOURCE_SANS).ok()?;
+    let charmap = font.charmap();
+    let name = name_table(&[
+        (1, CATEGORIES_FAMILY),
+        (2, "Regular"),
+        (4, "Categorytest Sans Regular"),
+        (6, "CategorytestSans-Regular"),
+        (256, "Round Dots"),
+    ])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    let gid = |c| Some(GlyphId16::new(u16::try_from(charmap.map(c)?.to_u32()).ok()?));
+    let cover = |c| Some(CoverageFormat1::new(vec![gid(c)?]));
+    let single = |from, to| Some(SingleSubst::from(SingleSubstFormat2::new(cover(from)?.into(), vec![gid(to)?])));
+    let liga = LigatureSubstFormat1::new(cover('f')?.into(), vec![LigatureSet::new(vec![Ligature::new(gid('L')?, vec![gid('i')?])])]);
+    let onum = AlternateSubstFormat1::new(cover('1')?.into(), vec![AlternateSet::new(vec![gid('7')?, gid('8')?])]);
+    let lookups = SubstitutionLookupList::new(vec![
+        SubstitutionLookup::Ligature(Lookup::new(Default::default(), vec![liga])),
+        SubstitutionLookup::Alternate(Lookup::new(Default::default(), vec![onum])),
+        // The second subtable's substitution of a is never made: the first one covers a.
+        SubstitutionLookup::Single(Lookup::new(Default::default(), vec![single('a', 'B')?, single('a', 'C')?])),
+        SubstitutionLookup::Single(Lookup::new(Default::default(), vec![single('g', 'G')?])),
+    ]);
+    let named = Some(FeatureParams::StylisticSet(StylisticSetParams::new(NameId::new(256))));
+    // Features sorted by tag, as OpenType requires.
+    let records = vec![
+        FeatureRecord::new(Tag::new(b"cswh"), Feature::new(None, vec![])),
+        FeatureRecord::new(Tag::new(b"liga"), Feature::new(None, vec![0])),
+        FeatureRecord::new(Tag::new(b"onum"), Feature::new(None, vec![1])),
+        FeatureRecord::new(Tag::new(b"smcp"), Feature::new(None, vec![2])),
+        FeatureRecord::new(Tag::new(b"ss02"), Feature::new(named, vec![3])),
+    ];
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), Script::new(Some(LangSys::new(vec![0, 1, 2, 3, 4])), vec![]))]);
     builder.add_table(&Gsub::new(scripts, FeatureList::new(records), lookups)).ok()?;
     for r in font.table_directory.table_records() {
         let tag = Tag::new(&r.tag().to_be_bytes());

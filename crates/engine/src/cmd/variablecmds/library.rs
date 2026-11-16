@@ -60,8 +60,8 @@ fn library_bytes(p: &Value, cmd: &str) -> Result<Vec<u8>> {
 /// up to [`MAX_LIBRARY_ENTITIES`] entity declarations, each with a name of at most [`MAX_NAME`]
 /// bytes and a quoted value that holds no `<`, `&` or `%`. Anything else in it is refused, and so is
 /// a text that the replacements make longer than [`MAX_LIBRARY_BYTES`]. The XML parser then refuses
-/// any other document type declaration, so [`nesting`](super::place::docx::nesting) counts the
-/// elements the parser reads.
+/// any other document type declaration, so its depth and node limits count the elements it
+/// reads.
 fn without_doctype(xml: &str, cmd: &str) -> Result<String> {
     let b = xml.as_bytes();
     let past = |from: usize, end: &str| xml.get(from..).and_then(|rest| rest.find(end)).map(|at| from + at + end.len());
@@ -240,22 +240,25 @@ impl Library {
 /// type declaration defines are read as [`without_doctype`] says.
 fn parse_library(xml: &str, cmd: &str, text_only: bool) -> Result<Library> {
     let xml = without_doctype(xml, cmd)?;
-    // roxmltree parses nested elements recursively.
-    if crate::cmd::place::docx::nesting(&xml) > MAX_LIBRARY_NESTING {
-        return Err(bad(cmd, format!("the variable library nests elements more than {MAX_LIBRARY_NESTING} deep")));
+    let opts = craft_xml::Options {
+        names: craft_xml::Names::AsWritten,
+        limits: craft_xml::Limits { max_depth: MAX_LIBRARY_NESTING, max_nodes: MAX_LIBRARY_NODES as usize, ..craft_xml::Limits::DEFAULT },
+        ..craft_xml::Options::default()
     }
-    let opts = roxmltree::ParsingOptions { nodes_limit: MAX_LIBRARY_NODES, ..roxmltree::ParsingOptions::default() };
-    let doc =
-        roxmltree::Document::parse_with_options(&xml, opts).map_err(|e| bad(cmd, format!("the variable library is not well-formed XML: {e}")))?;
-    let is = |n: &roxmltree::Node, name: &str| n.is_element() && n.tag_name().name() == name;
-    let Some(root) = doc.descendants().find(|n| is(n, "variableSets")) else {
+    .strict();
+    let doc = opts.parse(xml.as_bytes()).map_err(|e| match e {
+        craft_xml::Error::TooDeep(_) => bad(cmd, format!("the variable library nests elements more than {MAX_LIBRARY_NESTING} deep")),
+        _ => bad(cmd, format!("the variable library is not well-formed XML: {e}")),
+    })?;
+    crate::cmd::xmlattrs::validate(xml.as_bytes(), opts.limits).map_err(|e| bad(cmd, format!("the variable library is not well-formed XML: {e}")))?;
+    let Some(root) = std::iter::once(&doc).chain(doc.descendants()).find(|n| n.is(craft_xml::Local("variableSets"))) else {
         return Err(bad(cmd, "the file holds no `variableSets` element"));
     };
-    let sets: Vec<roxmltree::Node> = root.children().filter(|n| is(n, "variableSet")).collect();
+    let sets: Vec<&craft_xml::El> = root.children(craft_xml::Local("variableSet")).collect();
     let (mut variables, mut kinds, mut refs) = (Vec::new(), BTreeMap::new(), Vec::new());
-    for var in sets.iter().flat_map(|s| s.children()).filter(|n| is(n, "variables")).flat_map(|v| v.children()).filter(|n| is(n, "variable")) {
-        let name = named(var.attribute("varName"), "varName", cmd)?;
-        let trait_name = var.attribute("trait").map(|t| t.chars().take(MAX_NAME).collect::<String>());
+    for var in sets.iter().flat_map(|s| s.children(craft_xml::Local("variables"))).flat_map(|v| v.children(craft_xml::Local("variable"))) {
+        let name = named(var.attr("varName"), "varName", cmd)?;
+        let trait_name = var.attr("trait").map(|t| t.chars().take(MAX_NAME).collect::<String>());
         let kind = trait_kind(trait_name.as_deref());
         if kinds.insert(name.clone(), kind).is_some() {
             return Err(bad(cmd, format!("variable `{name}` is declared twice")));
@@ -265,7 +268,7 @@ fn parse_library(xml: &str, cmd: &str, text_only: bool) -> Result<Library> {
         }
         if kind == VariableKind::Text {
             // `docRef="id('…')"` names the element of the variable's bound object.
-            let element = var.attribute("docRef").and_then(|r| r.trim().strip_prefix("id('")?.strip_suffix("')")).filter(|e| !e.is_empty());
+            let element = var.attr("docRef").and_then(|r| r.trim().strip_prefix("id('")?.strip_suffix("')")).filter(|e| !e.is_empty());
             if let Some(element) = element {
                 refs.push((name.clone(), element.to_string()));
             }
@@ -276,10 +279,8 @@ fn parse_library(xml: &str, cmd: &str, text_only: bool) -> Result<Library> {
         return Err(bad(cmd, "the variable library declares no variables"));
     }
     let (mut datasets, mut seen) = (Vec::new(), BTreeSet::new());
-    for row in
-        sets.iter().flat_map(|s| s.children()).filter(|n| is(n, "sampleDataSets")).flat_map(|d| d.children()).filter(|n| is(n, "sampleDataSet"))
-    {
-        let name = named(row.attribute("dataSetName"), "dataSetName", cmd)?;
+    for row in sets.iter().flat_map(|s| s.children(craft_xml::Local("sampleDataSets"))).flat_map(|d| d.children(craft_xml::Local("sampleDataSet"))) {
+        let name = named(row.attr("dataSetName"), "dataSetName", cmd)?;
         if !seen.insert(name.clone()) {
             return Err(bad(cmd, format!("data set `{name}` is declared twice")));
         }
@@ -287,8 +288,8 @@ fn parse_library(xml: &str, cmd: &str, text_only: bool) -> Result<Library> {
             return Err(bad(cmd, format!("the variable library declares more than {MAX_LIBRARY_DATASETS} data sets")));
         }
         let (mut values, mut held) = (BTreeMap::new(), BTreeSet::new());
-        for el in row.children().filter(roxmltree::Node::is_element) {
-            let var = el.tag_name().name();
+        for el in row.elements() {
+            let var = el.local();
             let Some(kind) = kinds.get(var) else {
                 return Err(bad(cmd, format!("data set `{name}` holds a value for `{var}`, which the library doesn't declare")));
             };
@@ -315,12 +316,12 @@ fn parse_library(xml: &str, cmd: &str, text_only: bool) -> Result<Library> {
 /// white space round them, and an element holding only white space gives none. A variable of
 /// unknown kind takes no value, so what its element holds is passed over. `set` names the data set
 /// in the errors.
-fn library_value(el: roxmltree::Node, kind: VariableKind, set: &str, cmd: &str) -> Result<Option<DataValue>> {
-    let refused = |what: &str| bad(cmd, format!("data set `{set}` holds a value for `{}` that isn't {what}", el.tag_name().name()));
-    let text = || if elements(el).next().is_some() { None } else { Some(deep_text(el)) };
+fn library_value(el: &craft_xml::El, kind: VariableKind, set: &str, cmd: &str) -> Result<Option<DataValue>> {
+    let refused = |what: &str| bad(cmd, format!("data set `{set}` holds a value for `{}` that isn't {what}", el.local()));
+    let text = || if el.elements().next().is_some() { None } else { Some(el.deep_text()) };
     match kind {
         VariableKind::Text => {
-            let paras: Vec<String> = elements(el).filter(|n| n.tag_name().name() == "p").map(deep_text).collect();
+            let paras: Vec<String> = el.children(craft_xml::Local("p")).map(craft_xml::El::deep_text).collect();
             Ok((!paras.is_empty()).then(|| DataValue::Text(paras.join("\n"))))
         }
         VariableKind::Visibility => {
@@ -344,16 +345,6 @@ fn library_value(el: roxmltree::Node, kind: VariableKind, set: &str, cmd: &str) 
         VariableKind::Graph => graph_value(el, set, cmd),
         VariableKind::Unknown => Ok(None),
     }
-}
-
-/// The elements among `n`'s children.
-fn elements<'a, 'i>(n: roxmltree::Node<'a, 'i>) -> impl Iterator<Item = roxmltree::Node<'a, 'i>> {
-    n.children().filter(roxmltree::Node::is_element)
-}
-
-/// The text of every text node inside `n`, in order.
-fn deep_text(n: roxmltree::Node) -> String {
-    n.descendants().filter(roxmltree::Node::is_text).filter_map(|t| t.text()).collect()
 }
 
 /// The absolute path a library's image value `text` names: a `file:` URL's path (`file:///…`,
@@ -428,29 +419,28 @@ fn library_file(path: &str) -> String {
 /// series, or when `el` holds only white space, there is no value. Anything else in `el`, more than
 /// [`MAX_GRAPH_CATEGORIES`] rows or [`MAX_GRAPH_SERIES`] series (what a graph holds), and CSV longer
 /// than graph values hold, are refused.
-fn graph_value(el: roxmltree::Node, set: &str, cmd: &str) -> Result<Option<DataValue>> {
-    let var = el.tag_name().name();
+fn graph_value(el: &craft_xml::El, set: &str, cmd: &str) -> Result<Option<DataValue>> {
+    let var = el.local();
     let refused = || bad(cmd, format!("data set `{set}` holds a value for `{var}` that isn't a graph's `data` element"));
-    let named = |name: &'static str| move |n: &roxmltree::Node| n.tag_name().name() == name;
-    let mut children = elements(el);
+    let named = |name: &'static str| craft_xml::Local(name);
+    let mut children = el.elements();
     let data = match (children.next(), children.next()) {
-        (None, _) if deep_text(el).trim_matches(XML_SPACE).is_empty() => return Ok(None),
-        (Some(data), None) if data.tag_name().name() == "data" => data,
+        (None, _) if el.deep_text().trim_matches(XML_SPACE).is_empty() => return Ok(None),
+        (Some(data), None) if data.local() == "data" => data,
         _ => return Err(refused()),
     };
     // Labels keep their white space; numbers are read without it.
     let series: Vec<String> =
-        elements(data).find(named("propertyRow")).map(|r| elements(r).filter(named("value")).skip(1).map(deep_text).collect()).unwrap_or_default();
-    let rows: Vec<roxmltree::Node> =
-        elements(data).filter(named("values")).flat_map(elements).filter(named("row")).take(MAX_GRAPH_CATEGORIES + 1).collect();
+        data.child(named("propertyRow")).map(|r| r.children(named("value")).skip(1).map(craft_xml::El::deep_text).collect()).unwrap_or_default();
+    let rows: Vec<&craft_xml::El> = data.children(named("values")).flat_map(|v| v.children(named("row"))).take(MAX_GRAPH_CATEGORIES + 1).collect();
     if rows.is_empty() && series.is_empty() {
         return Ok(None);
     }
     let too_many = || bad(cmd, format!("data set `{set}` holds a graph value for `{var}` with {}", graph_limits()));
     // A row's values after its name.
-    let wide = |row: &roxmltree::Node| {
-        let mut values = elements(*row).filter(named("value")).peekable();
-        let _name = values.next_if(|v| v.attribute("key") == Some("name"));
+    let wide = |row: &&craft_xml::El| {
+        let mut values = row.children(named("value")).peekable();
+        let _name = values.next_if(|v| v.attr("key") == Some("name"));
         values.count() > MAX_GRAPH_SERIES
     };
     if rows.len() > MAX_GRAPH_CATEGORIES || series.len() > MAX_GRAPH_SERIES || rows.iter().any(wide) {
@@ -462,12 +452,12 @@ fn graph_value(el: roxmltree::Node, set: &str, cmd: &str) -> Result<Option<DataV
     let read: Vec<(Option<String>, Vec<Option<f64>>)> = rows
         .iter()
         .map(|row| {
-            let mut values = elements(*row).filter(named("value")).peekable();
-            let name = values.next_if(|v| v.attribute("key") == Some("name"));
-            labelled |= name.is_some_and(|v| v.attribute("type") == Some("string") || !deep_text(v).is_empty());
-            let name = name.map(deep_text);
-            let number = |v: roxmltree::Node| deep_text(v).trim_matches(XML_SPACE).parse::<f64>().ok().filter(|n| n.is_finite());
-            let numbers = values.map(|v| if v.attribute("type") == Some("string") { None } else { number(v) });
+            let mut values = row.children(named("value")).peekable();
+            let name = values.next_if(|v| v.attr("key") == Some("name"));
+            labelled |= name.is_some_and(|v| v.attr("type") == Some("string") || !v.deep_text().is_empty());
+            let name = name.map(craft_xml::El::deep_text);
+            let number = |v: &craft_xml::El| v.deep_text().trim_matches(XML_SPACE).parse::<f64>().ok().filter(|n| n.is_finite());
+            let numbers = values.map(|v| if v.attr("type") == Some("string") { None } else { number(v) });
             (name, numbers.collect())
         })
         .collect();

@@ -18,12 +18,12 @@ mod wrap;
 pub use area::{AreaFit, AreaOptions, PathAlign, PathEffect, TextFlow, TextWrap, VerticalAlign, WrapShape};
 use char_style::yes;
 pub use char_style::{
-    CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, GlyphChoice, GlyphForm, MAX_AKI, MAX_TSUME, MAX_WARICHU_GAP, ScriptMetrics,
-    WARICHU_LINES, WARICHU_SCALE, WarichuAlign,
+    CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, GlyphChoice, GlyphForm, MAX_AKI, MAX_DIACRITIC_POSITION, MAX_TSUME,
+    MAX_WARICHU_GAP, ScriptMetrics, WARICHU_LINES, WARICHU_SCALE, WarichuAlign,
 };
 pub use composite::{
-    COMPOSITE_BASELINE, COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, COMPOSITE_SCALE, COMPOSITE_SIZE, CharClass, CompositeFont, CompositePart,
-    CompositeParts,
+    COMPOSITE_BASELINE, COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, COMPOSITE_SCALE, COMPOSITE_SIZE, CUSTOM_CHARS_MAX, CUSTOM_SETS_MAX, CharClass,
+    CompositeClass, CompositeClasses, CompositeFont, CompositePart, CompositeParts, CustomCharSet,
 };
 pub use para_style::{
     Burasagari, Composer, FirstBaseline, HyphenationOptions, JustificationOptions, Justify, Kashida, Kinsoku, KinsokuShoriType, LeadingModel,
@@ -35,7 +35,7 @@ pub use tabs_lists::{
     Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, LIST_LEVEL_INDENT, LIST_LEVELS, ListAlign, ListCounts, NumberStyle, ParaList, TabAlign,
     TabStop,
 };
-pub use wrap::{resolve_wrap, wrap_work};
+pub use wrap::{resolve_wrap, wrap_sources, wrap_work};
 
 /// A text object. `runs` split into paragraphs at `\n`.
 ///

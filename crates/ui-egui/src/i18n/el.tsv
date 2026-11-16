@@ -140,6 +140,7 @@
 	Align to Artboard	Στοίχιση ως προς τον πίνακα σχεδίασης
 	Align to Glyph Bounds	Στοίχιση στα όρια των γλυφών
 	Align to Key Object	Στοίχιση ως προς το βασικό αντικείμενο
+	Align to Key Anchor	Στοίχιση ως προς το βασικό σημείο αγκύρωσης
 	Align to Page	Στοίχιση ως προς τη σελίδα
 	Align to Path	Στοίχιση ως προς τη διαδρομή
 	Align to Selection	Στοίχιση ως προς την επιλογή
@@ -612,6 +613,18 @@ font-technology	Variable	Μεταβλητές
 	Copy Width Point	Αντιγραφή σημείου πλάτους
 	Copyright	Πνευματικά δικαιώματα
 	Copyright Info URL:	URL πληροφοριών πνευματικών δικαιωμάτων:
+	Save Metadata Template…	Αποθήκευση προτύπου μεταδεδομένων…
+	Import Options	Επιλογές εισαγωγής
+	Clear existing fields and use the template's	Απαλοιφή των υπαρχόντων πεδίων και χρήση εκείνων του προτύπου
+	Keep existing fields, but replace those the template has	Διατήρηση των υπαρχόντων πεδίων, αλλά αντικατάσταση όσων έχει το πρότυπο
+	Keep existing fields, but append those the template has	Διατήρηση των υπαρχόντων πεδίων, αλλά προσθήκη όσων έχει το πρότυπο
+@msg	the template name can't be empty	το όνομα του προτύπου δεν μπορεί να είναι κενό
+@msg	the template name isn't usable as a file name	το όνομα του προτύπου δεν μπορεί να χρησιμοποιηθεί ως όνομα αρχείου
+@msg	no metadata templates folder here	δεν υπάρχει φάκελος προτύπων μεταδεδομένων εδώ
+@msg	give `name` or `path`, not both	δώστε `name` ή `path`, όχι και τα δύο
+@msg	give one of `path`, `name` and `data`	δώστε ένα από τα `path`, `name` και `data`
+@msg	mode must be replace, keep or append	η λειτουργία πρέπει να είναι replace, keep ή append
+@msg	the file is not an XMP metadata template	το αρχείο δεν είναι πρότυπο μεταδεδομένων XMP
 	Copyright Notice:	Σημείωση πνευματικών δικαιωμάτων:
 	Copyright Status:	Κατάσταση πνευματικών δικαιωμάτων:
 	Copyright Symbol	Σύμβολο πνευματικών δικαιωμάτων
@@ -1020,7 +1033,10 @@ font-technology	Variable	Μεταβλητές
 	Every (minutes)	Κάθε (λεπτά)
 	Every option is at its default.	Όλες οι επιλογές έχουν τις προεπιλεγμένες τιμές τους.
 	Every option matches {base}.	Όλες οι επιλογές ταιριάζουν με το {base}.
-	Every-line Composer	Σύνθεση όλων των γραμμών
+	Middle Eastern & South Asian Single-line Composer	Σύνθεση μονής γραμμής (Μέση Ανατολή και Νότια Ασία)
+	Middle Eastern & South Asian Every-line Composer	Σύνθεση όλων των γραμμών (Μέση Ανατολή και Νότια Ασία)
+	Standard Single-line Composer	Τυπική σύνθεση μονής γραμμής
+	Standard Every-line Composer	Τυπική σύνθεση όλων των γραμμών
 	Exact dash lengths	Ακριβή μήκη παυλών
 	Exceptions (comma separated)	Εξαιρέσεις (χωρισμένες με κόμμα)
 	Exclude	Εξαίρεση
@@ -1322,6 +1338,14 @@ font-technology	Variable	Μεταβλητές
 	Previous Artboard	Προηγούμενος πίνακας σχεδίασης
 	Next Artboard	Επόμενος πίνακας σχεδίασης
 	Last Artboard	Τελευταίος πίνακας σχεδίασης
+	Status Bar Show	Εμφάνιση στη γραμμή κατάστασης
+	Artboard Name	Όνομα πίνακα σχεδίασης
+	Current Tool	Τρέχον εργαλείο
+	Date and Time	Ημερομηνία και ώρα
+	Number of Undos	Αριθμός αναιρέσεων
+	Document Color Profile	Χρωματικό προφίλ εγγράφου
+	Undos	Αναιρέσεις
+	Redos	Επαναλήψεις
 	Go To Link	Μετάβαση στη σύνδεση
 	GPL palettes keep solid colours only, as RGB.	Οι παλέτες GPL διατηρούν μόνο συμπαγή χρώματα σε RGB.
 	GPU Performance	Απόδοση GPU
@@ -1341,6 +1365,8 @@ font-technology	Variable	Μεταβλητές
 	Graph	Γράφημα
 	Graph Data	Δεδομένα γραφήματος
 	Graph Type	Τύπος γραφήματος
+	Graph Type…	Τύπος γραφήματος…
+	Graph Data…	Δεδομένα γραφήματος…
 	Graph Options	Επιλογές γραφήματος
 	Left Axis	Αριστερός άξονας
 	Right Axis	Δεξιός άξονας
@@ -1456,6 +1482,7 @@ font-technology	Variable	Μεταβλητές
 	Show smooth color wheel	Εμφάνιση ομαλού χρωματικού τροχού
 	Show segmented color wheel	Εμφάνιση τμηματοποιημένου χρωματικού τροχού
 	Show color bars	Εμφάνιση χρωματικών ράβδων
+	Find the selected colors in the artwork	Εύρεση των επιλεγμένων χρωμάτων στο σχέδιο
 	Harmony Sets	Σύνολα χρωματικής αρμονίας
 	Height	Ύψος
 	Height:	Ύψος:
@@ -2196,6 +2223,9 @@ font-technology	Variable	Μεταβλητές
 	Superscript	Εκθέτης
 	Superscript:	Εκθέτης:
 	Stylistic Alternates	Εναλλακτικοί χαρακτήρες στυλ
+	Ligatures	Συμπλέγματα χαρακτήρων
+	Ornaments	Κοσμήματα
+	Figures	Αριθμοί
 	Swash	Διακοσμητικά τελειώματα
 	Swatches	Δείγματα χρωμάτων
 	New Group	Νέα ομάδα
@@ -2470,6 +2500,27 @@ axis	Both	Και τα δύο
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: ένα παράθυρο διαλόγου δεν μπορεί να ανοίξει μέσα σε επανάκληση ενσωματωμένης συνάρτησης, getter, μετατροπή ή αρχείο που εκτελεί το $.evalFile· καλέστε το από τον κώδικα του ίδιου του σεναρίου
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: η επόμενη απάντηση στο `answers` είναι για το {_1}, όχι για το {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: το `answers` δεν έχει άλλη απάντηση για αυτό το παράθυρο διαλόγου
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	Το `answers` περιέχει {n} απάντηση που δεν χρησιμοποίησε το σενάριο|Το `answers` περιέχει {n} απαντήσεις που δεν χρησιμοποίησε το σενάριο
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	Το {_1} άφησε {n} αντικείμενο κάτω από το πινέλο χωρίς αλλαγή ({_2}): αναδιαμορφώνει μόνο διαδρομές|Το {_1} άφησε {n} αντικείμενα κάτω από το πινέλο χωρίς αλλαγή ({_2}): αναδιαμορφώνει μόνο διαδρομές
+liquify-tool	Warp	εργαλείο Παραμόρφωση
+liquify-tool	Twirl	εργαλείο Στροβιλισμός
+liquify-tool	Pucker	εργαλείο Συρρίκνωση
+liquify-tool	Bloat	εργαλείο Διόγκωση
+liquify-tool	Scallop	εργαλείο Κυματιστά άκρα
+liquify-tool	Crystallize	εργαλείο Κρυσταλλοποίηση
+liquify-tool	Wrinkle	εργαλείο Πτυχώσεις
+liquify-kind	graphs	γραφήματα
+liquify-kind	type	κείμενο
+liquify-kind	symbols	σύμβολα
+liquify-kind	images	εικόνες
+liquify-kind	meshes	πλέγματα
+liquify-kind	envelopes	περιβλήματα
+liquify-kind	repeats	επαναλήψεις
+liquify-kind	placed documents	τοποθετημένα έγγραφα
+liquify-kind	blends	αναμείξεις
+liquify-list-two	{0}, {1}	{0} και {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} και {1}
 @msg	vc.document{place} is too large for a script	το vc.document{place} είναι πολύ μεγάλο για σενάριο
 @msg	vc.log: the log of this run is full	vc.log: το αρχείο καταγραφής αυτής της εκτέλεσης είναι γεμάτο
 @msg	this function's script run has ended	η εκτέλεση σεναρίου αυτής της συνάρτησης έχει τελειώσει
@@ -2484,6 +2535,18 @@ axis	Both	Και τα δύο
 @msg	`name` must be the name of a script engine	το `name` πρέπει να είναι το όνομα μιας μηχανής σεναρίων
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	η κύρια μηχανή σεναρίων είναι νέα σε κάθε εκτέλεση και δεν διατηρείται ποτέ, οπότε δεν μπορεί να απορριφθεί
 @msg	there is no script engine named {name}	δεν υπάρχει μηχανή σεναρίων με όνομα {name}
+@msg	`answers` must be a list of answers	το `answers` πρέπει να είναι λίστα απαντήσεων
+@msg	`answers` has more than {MAX_ANSWERS} answers	το `answers` έχει περισσότερες από {MAX_ANSWERS} απαντήσεις
+@msg	`answers` is larger than 1 MiB	το `answers` είναι μεγαλύτερο από 1 MiB
+@msg	`answers[{i}]` {e}	το `answers[{i}]` {e}
+@msg	must be an object with `kind` and `value`	πρέπει να είναι αντικείμενο με `kind` και `value`
+@msg	must have exactly `kind` and `value`	πρέπει να έχει ακριβώς `kind` και `value`
+@msg	is an alert's answer, whose `value` must be "ok"	είναι απάντηση σε alert, οπότε το `value` πρέπει να είναι "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	είναι απάντηση σε confirm, οπότε το `value` πρέπει να είναι true ή false
+@msg	is longer than 16 KiB	είναι μεγαλύτερο από 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	είναι απάντηση σε prompt, οπότε το `value` πρέπει να είναι συμβολοσειρά ή null
+@msg	must have `kind` alert, confirm or prompt	πρέπει να έχει `kind` alert, confirm ή prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	το `answers` είναι μόνο για εκτέλεση χωρίς κανέναν να ερωτηθεί: στην εφαρμογή, το άτομο απαντά σε κάθε παράθυρο διαλόγου
 @msg	Running a script	Εκτελείται σενάριο
 @msg	Copied the script report	Η αναφορά του σεναρίου αντιγράφηκε
 @msg	Copied the link info	Οι πληροφορίες συνδέσμου αντιγράφηκαν
@@ -2702,6 +2765,7 @@ effect	Soft	Απαλό
 	Change Panel Layout	Αλλαγή διάταξης πάνελ
 	Close Panel	Κλείσιμο πάνελ
 	Collapse Panel Group	Σύμπτυξη ομάδας πάνελ
+	Cycle Display Sizes	Εναλλαγή μεγεθών εμφάνισης
 	Move Panel	Μετακίνηση πάνελ
 	Group with	Ομαδοποίηση με
 	Resize panels	Αλλαγή μεγέθους πάνελ
@@ -3476,6 +3540,8 @@ theme	Appearance	Εμφάνιση
 	Insert Aki Left	Εισαγωγή aki αριστερά
 	Insert Aki Right	Εισαγωγή aki δεξιά
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Προσαρμογή οριζόντιας θέσης διακριτικών
+	Adjust Vertical Diacritic Position	Προσαρμογή κατακόρυφης θέσης διακριτικών
 	Arabic	Αραβικά
 	Hindi	Χίντι
 	Farsi	Περσικά
@@ -4005,7 +4071,6 @@ digits	Malayalam	Μαλαγιάλαμ
 	Single Left Quotation Mark	Μονό αριστερό εισαγωγικό
 	Single Quotes:	Μονά εισαγωγικά:
 	Single Right Quotation Mark	Μονό δεξί εισαγωγικό
-	Single-line Composer	Σύνθεση μονής γραμμής
 	Toggle Line Composer	Εναλλαγή σύνθεσης γραμμών
 	Sixth Space	Διάστημα ενός έκτου
 	Size Tile to Art	Προσαρμογή μεγέθους πλακιδίου στο σχέδιο
@@ -4273,6 +4338,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Kana	Κάνα
 	Numerals	Αριθμοί
 	Scale at Center	Κλιμάκωση από το κέντρο
+	Delete Set	Διαγραφή συνόλου
+	Direct Entry	Άμεση καταχώριση
 	Up/Down:	Πάνω/Κάτω:
 	Left/Right:	Αριστερά/Δεξιά:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko πάνω/κάτω
@@ -5057,6 +5124,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	unknown option `{path}.{k}`	άγνωστη επιλογή `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	άγνωστη επιλογή υπερεκτύπωσης `{o}` (preserve, simulate ή discard)
 @msg	unknown panel `{raw}`	άγνωστος πίνακας `{raw}`
+@msg	`{panel}` has no display sizes to cycle	ο πίνακας `{panel}` δεν έχει μεγέθη εμφάνισης για εναλλαγή
+@msg	the panels are not shown	οι πίνακες δεν εμφανίζονται
 @msg	panels can't be shown in Presentation Mode	τα πλαίσια δεν μπορούν να εμφανιστούν στη λειτουργία παρουσίασης
 @msg	unknown preference `{key}`	άγνωστη προτίμηση `{key}`
 @msg	Preferences imported.	Οι προτιμήσεις εισήχθησαν.
@@ -5350,6 +5419,11 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	Imported library {name}	Εισήχθη η βιβλιοθήκη {name}
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Πολιτική RGB:
+	CMYK Policy:	Πολιτική CMYK:
+	Preserve Embedded Profiles	Διατήρηση ενσωματωμένων προφίλ
+	Convert to Working Space	Μετατροπή στον χώρο εργασίας
+	Preserve Numbers	Διατήρηση αριθμών
 	System Title Bar	Γραμμή τίτλου συστήματος
 	VectorCraft Title Bar on Every Desktop	Γραμμή τίτλου του VectorCraft σε κάθε επιφάνεια εργασίας
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Όσο είναι ορισμένη, η μεταβλητή περιβάλλοντος VECTORCRAFT_TITLEBAR επιλέγει τη γραμμή τίτλου.
@@ -5402,6 +5476,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Step up or down	Ένα βήμα πάνω ή κάτω
 	Drag values or labels. Double-click a value to type.	Σύρετε τιμές ή ετικέτες. Κάντε διπλό κλικ σε μια τιμή για πληκτρολόγηση.
 	Drag rings to rotate. Shift snaps to 15°.	Σύρετε τους δακτυλίους για περιστροφή. Με Shift γίνεται προσκόλληση ανά 15°.
+	Track cube	Κύβος περιστροφής
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Σύρετε μια έδρα, μια ακμή ή τον δακτύλιο για περιστροφή. Με Shift η περιστροφή γίνεται γύρω από έναν άξονα της οθόνης.
 	Drag the light, or its rings. Shift snaps to 15°.	Σύρετε την πηγή φωτός ή τους δακτυλίους της. Με Shift γίνεται προσκόλληση ανά 15°.
 	Keep visible surfaces only when expanding	Διατήρηση μόνο ορατών επιφανειών κατά την ανάπτυξη
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Αποκοπή καλυμμένης γεωμετρίας κατά την Ανάπτυξη εμφάνισης. Η ζωντανή προεπισκόπηση διατηρεί ολόκληρη την επιφάνεια. Διαφανή γεμίσματα και επιφάνειες που υπερβαίνουν τα όρια ορατότητας διατηρούν όλες τις έδρες.
@@ -6124,8 +6200,11 @@ effect	Points	Σημεία
 	Export Data Sets…	Εξαγωγή συνόλων δεδομένων…
 	Load Variable Library…	Φόρτωση βιβλιοθήκης μεταβλητών…
 	Save Variable Library…	Αποθήκευση βιβλιοθήκης μεταβλητών…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	Η «Εισαγωγή» διαβάζει αρχείο προέλευσης δεδομένων με κατάληξη .csv, .tsv, .txt ή .xml
 @msg	a variable library holds text variables, and the document has none	μια βιβλιοθήκη μεταβλητών περιέχει μεταβλητές κειμένου και το έγγραφο δεν έχει καμία
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	η μεταβλητή `{name}` δεν μπορεί να αποθηκευτεί σε βιβλιοθήκη μεταβλητών: μετονομάστε την ώστε να ξεκινά με γράμμα ή `_`, χωρίς κενά ή σύμβολα εκτός από `-`, `_` και `.`
+@msg	{k} has control characters	{k} περιέχει χαρακτήρες ελέγχου
+@msg	{k} has control characters or line breaks	{k} περιέχει χαρακτήρες ελέγχου ή αλλαγές γραμμής
 @msg	data set `{name}` holds a control character, which a variable library can't hold	το σύνολο δεδομένων `{name}` περιέχει χαρακτήρα ελέγχου, τον οποίο δεν μπορεί να περιέχει μια βιβλιοθήκη μεταβλητών
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	το σύνολο δεδομένων `{name}` ξεκινά ή τελειώνει με κενό διάστημα, το οποίο δεν μπορεί να περιέχει μια βιβλιοθήκη μεταβλητών
 	Filter	Φίλτρο
@@ -6498,6 +6577,7 @@ axis	Y Axis	Άξονας Y
 @msg	{what} points outside memory	το {what} δείχνει εκτός μνήμης
 @msg	`angle` must be a number	το `angle` πρέπει να είναι αριθμός
 @msg	`aspect` must be from 0.01 to 100	το `aspect` πρέπει να είναι από 0.01 έως 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	το `axes` πρέπει να είναι [a, b, c, d], καθένα από -1000 έως 1000, με το a·d - b·c να απέχει τουλάχιστον 0.001 από το 0
 @msg	`cap` must be "butt", "round" or "square"	το `cap` πρέπει να είναι "butt", "round" ή "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	το `fillRule` πρέπει να είναι "nonzero" ή "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	το `helpUrl` πρέπει να είναι διεύθυνση https:// έως {MAX_HELP_URL} byte
@@ -6550,6 +6630,7 @@ axis	Y Axis	Άξονας Y
 @msg	stops must be in order of `offset`	τα σημεία χρώματος πρέπει να είναι ταξινομημένα κατά `offset`
 @msg	the document has no pattern {pattern}	το έγγραφο δεν έχει μοτίβο {pattern}
 @msg	the document has no swatch {n}	το έγγραφο δεν έχει δείγμα χρώματος {n}
+@msg	`plates` requires a stop linked to a spot swatch	το `plates` απαιτεί σημείο χρώματος συνδεδεμένο με δείγμα πλακάτου χρώματος
 @msg	the output	η έξοδος
 @msg	the path has no anchor points	η διαδρομή δεν έχει σημεία αγκύρωσης
 @msg	too many anchor points (limit {MAX_ANCHORS})	πάρα πολλά σημεία αγκύρωσης (όριο {MAX_ANCHORS})
@@ -7497,6 +7578,19 @@ breakText	Glyphs	Γλύφοι
 	Not Aligned to Pixel Grid	Μη στοιχισμένα στο πλέγμα εικονοστοιχείων
 @msg	only paths and compound paths can be aligned to the pixel grid	μόνο διαδρομές και σύνθετες διαδρομές μπορούν να στοιχιστούν στο πλέγμα εικονοστοιχείων
 @msg	side is left or right, not `{s}`	το side είναι left ή right, όχι `{s}`
+@msg	side is left or right, not `{v}`	το side είναι left ή right, όχι `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	το order είναι ακέραιος αριθμός από 0 έως {others}, όχι `{v}`
+@msg	toolbar (a toolbar's name) must be a string	το toolbar (το όνομα μιας γραμμής εργαλείων) πρέπει να είναι συμβολοσειρά
+@msg	no toolbar named `{name}`	δεν υπάρχει γραμμή εργαλείων με όνομα `{name}`
+@msg	toolbar name can't be empty	το όνομα της γραμμής εργαλείων δεν μπορεί να είναι κενό
+@msg	a toolbar name has at most {MAX_NAME} characters	ένα όνομα γραμμής εργαλείων έχει το πολύ {MAX_NAME} χαρακτήρες
+@msg	there is already a toolbar named `{name}`	υπάρχει ήδη γραμμή εργαλείων με όνομα `{name}`
+@msg	there is already a toolbar named `{to}`	υπάρχει ήδη γραμμή εργαλείων με όνομα `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	ένας χώρος εργασίας κρατά το πολύ {MAX} γραμμές εργαλείων
+@msg	name (a toolbar's name) must be a string	το name (το όνομα μιας γραμμής εργαλείων) πρέπει να είναι συμβολοσειρά
+@msg	name (a toolbar's name) is required	απαιτείται το name (το όνομα μιας γραμμής εργαλείων)
+@msg	to (the new name) is required	απαιτείται το to (το νέο όνομα)
+@msg	name must be a toolbar's name	το name πρέπει να είναι όνομα γραμμής εργαλείων
 	Ignore All	Παράβλεψη όλων
 	Add to Dictionary	Προσθήκη στο λεξικό
 	No Suggestions	Καμία πρόταση
@@ -7710,3 +7804,21 @@ breakText	Glyphs	Γλύφοι
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	τα {width} × {height} εικονοστοιχεία είναι υπερβολικό μέγεθος για JPEG (το πολύ 65535 εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	τα {width} × {height} εικονοστοιχεία είναι υπερβολικό μέγεθος για Targa (το πολύ 65535 εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	τα {w} × {h} εικονοστοιχεία είναι υπερβολικό μέγεθος για PSD (το πολύ {MAX_SIDE} εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
+	Packaging Tools	Εργαλεία συσκευασίας
+	Fold Lines	Γραμμές δίπλωσης
+	Make Cut Line	Δημιουργία γραμμής κοπής
+	Make Crease Line	Δημιουργία γραμμής πτύχωσης
+	Make Partial Cut Line	Δημιουργία γραμμής μερικής κοπής
+	Make Perforation Line	Δημιουργία γραμμής διάτρησης
+	Make Fold Line	Δημιουργία γραμμής δίπλωσης
+	Role Swatches…	Δείγματα χρωμάτων τύπων γραμμής…
+	Role Swatches	Δείγματα χρωμάτων τύπων γραμμής
+	Role	Τύπος γραμμής
+	Cut Line	Γραμμή κοπής
+	Crease Line	Γραμμή πτύχωσης
+	Partial Cut Line	Γραμμή μερικής κοπής
+	Perforation Line	Γραμμή διάτρησης
+	No objects are selected.	Δεν έχουν επιλεγεί αντικείμενα.
+	Open a document to mark its fold lines.	Ανοίξτε ένα έγγραφο για να σημειώσετε τις γραμμές δίπλωσής του.
+	Remove Fold Line Role	Αφαίρεση τύπου γραμμής
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"

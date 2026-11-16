@@ -164,6 +164,7 @@
 	Align to Artboard	Alinhar à Mesa de Trabalho
 	Align to Glyph Bounds	Alinhar aos Limites do Glifo
 	Align to Key Object	Alinhar ao Objeto-Chave
+	Align to Key Anchor	Alinhar ao Ponto de Ancoragem-Chave
 	Align to Page	Alinhar à Página
 	Align to Path	Alinhar ao Caminho
 	Align to Selection	Alinhar à Seleção
@@ -589,6 +590,18 @@ antiAlias	Sharp	Nítido
 	Copy to User Defined	Copiar para Definido pelo Usuário
 	Copyright	Direitos Autorais
 	Copyright Info URL:	URL de Informações de Direitos Autorais:
+	Save Metadata Template…	Salvar Modelo de Metadados…
+	Import Options	Opções de Importação
+	Clear existing fields and use the template's	Limpar os campos existentes e usar os do modelo
+	Keep existing fields, but replace those the template has	Manter os campos existentes, mas substituir os que o modelo tiver
+	Keep existing fields, but append those the template has	Manter os campos existentes, mas acrescentar os que o modelo tiver
+@msg	the template name can't be empty	o nome do modelo não pode ficar vazio
+@msg	the template name isn't usable as a file name	o nome do modelo não pode ser usado como nome de arquivo
+@msg	no metadata templates folder here	não há pasta de modelos de metadados aqui
+@msg	give `name` or `path`, not both	informe `name` ou `path`, não ambos
+@msg	give one of `path`, `name` and `data`	informe um de `path`, `name` e `data`
+@msg	mode must be replace, keep or append	o modo deve ser replace, keep ou append
+@msg	the file is not an XMP metadata template	o arquivo não é um modelo de metadados XMP
 	Copyright Notice:	Aviso de Direitos Autorais:
 	Copyright Status:	Status de Direitos Autorais:
 	Copyright Symbol	Símbolo de Direitos Autorais
@@ -965,7 +978,8 @@ antiAlias	Sharp	Nítido
 	Every (minutes)	A cada (minutos)
 	Every option is at its default.	Todas as opções estão no padrão.
 	Every option matches {base}.	Todas as opções correspondem a {base}.
-	Every-line Composer	Compositor de Todas as Linhas
+	Middle Eastern & South Asian Every-line Composer	Compositor de Todas as Linhas (Oriente Médio e Sul da Ásia)
+	Standard Every-line Composer	Compositor Padrão de Todas as Linhas
 	Exact dash lengths	Comprimentos de tracejado exatos
 	Exceptions (comma separated)	Exceções (separadas por vírgula)
 	Exclude	Excluir
@@ -1040,6 +1054,7 @@ antiAlias	Sharp	Nítido
 	Export Data Sets…	Exportar Conjuntos de Dados…
 	Load Variable Library…	Carregar Biblioteca de Variáveis…
 	Save Variable Library…	Salvar Biblioteca de Variáveis…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	"Importar" lê um arquivo de fonte de dados com extensão .csv, .tsv, .txt ou .xml
 @msg	a variable library holds text variables, and the document has none	uma biblioteca de variáveis contém variáveis de texto, e o documento não tem nenhuma
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	a variável `{name}` não pode ser salva em uma biblioteca de variáveis: renomeie-a para começar com uma letra ou `_`, sem espaços nem símbolos além de `-`, `_` e `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	o conjunto de dados `{name}` contém um caractere de controle, que uma biblioteca de variáveis não pode conter
@@ -1257,6 +1272,14 @@ antiAlias	Sharp	Nítido
 	Previous Artboard	Mesa de trabalho anterior
 	Next Artboard	Próxima mesa de trabalho
 	Last Artboard	Última mesa de trabalho
+	Status Bar Show	Mostrar na barra de status
+	Artboard Name	Nome da prancheta
+	Current Tool	Ferramenta atual
+	Date and Time	Data e hora
+	Number of Undos	Número de ações desfeitas
+	Document Color Profile	Perfil de cor do documento
+	Undos	Desfazer
+	Redos	Refazer
 	Gradient	Gradiente
 	Gradient Fill: click to apply, drag onto art	Preenchimento de Gradiente: clique para aplicar, arraste sobre a arte
 	Gradient Finishes	Finalizações de Gradiente
@@ -1324,6 +1347,7 @@ antiAlias	Sharp	Nítido
 	Show smooth color wheel	Mostrar roda de cores contínua
 	Show segmented color wheel	Mostrar roda de cores segmentada
 	Show color bars	Mostrar barras de cores
+	Find the selected colors in the artwork	Localizar as cores selecionadas na arte
 	Harmony Sets	Conjuntos de Harmonia
 	Height	Altura
 	Height:	Altura:
@@ -2242,6 +2266,8 @@ antiAlias	Sharp	Nítido
 	Insert Aki Left	Inserir Aki à Esquerda
 	Insert Aki Right	Inserir Aki à Direita
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Ajustar Posição Horizontal dos Diacríticos
+	Adjust Vertical Diacritic Position	Ajustar Posição Vertical dos Diacríticos
 	Character Direction	Direção de Caracteres
 	Digits	Dígitos
 	Arabic	Arábicos
@@ -2889,7 +2915,8 @@ digits	Malayalam	Malaiala
 	Single Left Quotation Mark	Aspa Esquerda Única
 	Single Quotes:	Aspas Simples:
 	Single Right Quotation Mark	Aspa Direita Única
-	Single-line Composer	Compositor de Linha Única
+	Middle Eastern & South Asian Single-line Composer	Compositor de Linha Única (Oriente Médio e Sul da Ásia)
+	Standard Single-line Composer	Compositor Padrão de Linha Única
 	Toggle Line Composer	Alternar Compositor de Linhas
 	Sixth Space	Espaço de Sexto
 	Size	Tamanho
@@ -3036,6 +3063,9 @@ digits	Malayalam	Malaiala
 	Swap Fill and Stroke	Trocar Preenchimento e Traçado
 	Swap start and end arrowheads	Trocar pontas de seta inicial e final
 	Stylistic Alternates	Variantes Estilísticas
+	Ligatures	Ligações
+	Ornaments	Ornamentos
+	Figures	Algarismos
 	Swash	Ornamento
 	Swatch Conflict	Conflito de Amostra
 	Swatch Conflicts	Conflitos de Amostra
@@ -3505,6 +3535,11 @@ imageTrace	Outline	Contorno
 	NTSC Colors	Cores NTSC
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Política RGB:
+	CMYK Policy:	Política CMYK:
+	Preserve Embedded Profiles	Preservar perfis incorporados
+	Convert to Working Space	Converter para espaço de trabalho
+	Preserve Numbers	Preservar números
 	Texture	Textura
 	Craquelure…	Craquelê…
 	Grain…	Granulação…
@@ -3528,6 +3563,7 @@ imageTrace	Outline	Contorno
 	Change Panel Layout	Alterar Layout dos Painéis
 	Close Panel	Fechar Painel
 	Collapse Panel Group	Recolher Grupo de Painéis
+	Cycle Display Sizes	Alternar Tamanhos de Exibição
 	Move Panel	Mover Painel
 	Group with	Agrupar com
 	Resize panels	Redimensionar painéis
@@ -3548,6 +3584,8 @@ imageTrace	Outline	Contorno
 	Step up or down	Aumentar ou diminuir um passo
 	Drag values or labels. Double-click a value to type.	Arraste os valores ou rótulos. Clique duas vezes em um valor para digitá-lo.
 	Drag rings to rotate. Shift snaps to 15°.	Arraste os anéis para girar. Shift ajusta em incrementos de 15°.
+	Track cube	Cubo de rotação
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Arraste uma face, uma aresta ou o anel para girar. Shift gira em torno de um eixo da tela.
 	Drag the light, or its rings. Shift snaps to 15°.	Arraste a luz ou seus anéis. Shift ajusta em incrementos de 15°.
 lighting	Light	Luz
 	Keep visible surfaces only when expanding	Manter apenas as superfícies visíveis ao expandir
@@ -4474,6 +4512,8 @@ axis	Both	Ambos
 @msg	unknown option `{path}.{k}`	opção desconhecida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressões desconhecidas `{o}` (preserve, simulate ou discard)
 @msg	unknown panel `{raw}`	painel desconhecido `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` não tem tamanhos de exibição para alternar
+@msg	the panels are not shown	os painéis não estão sendo exibidos
 @msg	panels can't be shown in Presentation Mode	os painéis não podem ser mostrados no Modo de Apresentação
 @msg	unknown preference `{key}`	preferência desconhecida `{key}`
 @msg	Preferences imported.	Preferências importadas.
@@ -4972,6 +5012,8 @@ axis	Both	Ambos
 	Gradient (. or Shift+.)	Gradiente (. ou Shift+.)
 	Graph Data	Dados do Gráfico
 	Graph Type	Tipo de Gráfico
+	Graph Type…	Tipo de Gráfico…
+	Graph Data…	Dados do Gráfico…
 	Graph Options	Opções do Gráfico
 	Left Axis	Eixo Esquerdo
 	Right Axis	Eixo Direito
@@ -5353,6 +5395,8 @@ axis	Both	Ambos
 	Kana	Kana
 	Numerals	Números
 	Scale at Center	Dimensionar a partir do centro
+	Delete Set	Excluir conjunto
+	Direct Entry	Entrada direta
 	Up/Down:	Para Cima/Para Baixo:
 	Left/Right:	Esquerda/Direita:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko Para Cima/Para Baixo
@@ -5502,6 +5546,27 @@ axis	Both	Ambos
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: uma caixa de diálogo não pode abrir dentro de um callback de uma função interna, um getter, uma conversão ou um arquivo que $.evalFile executa; chame-a a partir do próprio código do script
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: a próxima resposta em `answers` é para {_1}, não para {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` não tem mais respostas para esta caixa de diálogo
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` contém {n} resposta que o script não usou|`answers` contém {n} respostas que o script não usou
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} deixou {n} objeto sob o pincel sem alteração ({_2}): remodela apenas caminhos|{_1} deixou {n} objetos sob o pincel sem alteração ({_2}): remodela apenas caminhos
+liquify-tool	Warp	Distorcer
+liquify-tool	Twirl	Redemoinho
+liquify-tool	Pucker	Encolher
+liquify-tool	Bloat	Estufar
+liquify-tool	Scallop	Vieira
+liquify-tool	Crystallize	Cristalizar
+liquify-tool	Wrinkle	Rugas
+liquify-kind	graphs	gráficos
+liquify-kind	type	texto
+liquify-kind	symbols	símbolos
+liquify-kind	images	imagens
+liquify-kind	meshes	malhas
+liquify-kind	envelopes	envelopes
+liquify-kind	repeats	repetições
+liquify-kind	placed documents	documentos colocados
+liquify-kind	blends	mesclagens
+liquify-list-two	{0}, {1}	{0} e {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} e {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} é grande demais para um script
 @msg	vc.log: the log of this run is full	vc.log: o registro desta execução está cheio
 @msg	this function's script run has ended	a execução do script desta função terminou
@@ -6509,6 +6574,7 @@ axis	Y Axis	Eixo Y
 @msg	stops must be in order of `offset`	as paradas devem estar em ordem de `offset`
 @msg	the document has no pattern {pattern}	o documento não tem o padrão {pattern}
 @msg	the document has no swatch {n}	o documento não tem a amostra {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` requer uma parada vinculada a uma amostra de cor spot
 @msg	the output	a saída
 @msg	the path has no anchor points	o caminho não tem pontos de ancoragem
 @msg	too many anchor points (limit {MAX_ANCHORS})	pontos de ancoragem demais (limite {MAX_ANCHORS})
@@ -7857,6 +7923,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	Image Trace failed: {e}	O Rastreamento de Imagem falhou: {e}
 @msg	Image Trace finished, but its document was closed	O Rastreamento de Imagem terminou, mas o documento dele foi fechado
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	O Rastreamento de Imagem terminou, mas a imagem ou as configurações dela mudaram nesse meio-tempo: rastreie-a novamente
+@msg	Image Trace finished, but its document was reverted: trace it again	O Rastreamento de Imagem terminou, mas o documento dele foi revertido: rastreie-a novamente
 @msg	Import SVG Filter reads SVG files, not SVGZ	Importar Filtro SVG lê arquivos SVG, não SVGZ
 @msg	Invalid dimension offset	Deslocamento de cota inválido
 @msg	Invalid point	Ponto inválido
@@ -7904,6 +7971,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` para esta caixa de diálogo {kind} deve ser um de: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` tem mais de {MAX_ANSWERS} respostas
 @msg	`answers` is larger than 1 MiB	`answers` tem mais de 1 MiB
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` é só para uma execução sem ninguém a quem perguntar: no app, a pessoa responde a cada caixa de diálogo
 @msg	`answers` must be a list of answers	`answers` deve ser uma lista de respostas
 @msg	`artboard` must be the index of an artboard of the document	`artboard` deve ser o índice de uma prancheta do documento
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` deve ser [x, y]
@@ -8030,6 +8098,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	`names` must be an array of style names	`names` deve ser uma matriz de nomes de estilos
 @msg	`new` is a design name, or true	`new` é o nome de um projeto, ou true
 @msg	`origin` must be [x, y] in points	`origin` deve ser [x, y] em pontos
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` deve ser [a, b, c, d], cada um de -1000 a 1000, com a·d - b·c a pelo menos 0.001 de 0
 @msg	`path` must be a folder	`path` deve ser uma pasta
 @msg	`path` must be a path object	`path` deve ser um objeto de caminho
 @msg	`picks` must be an array (got {v})	`picks` deve ser uma matriz (recebido {v})
@@ -8435,7 +8504,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	column: true floats the whole column and takes no onto, above or below	column: true torna flutuante a coluna inteira e não aceita onto, above nem below
 @msg	command must be a shape.* command	command deve ser um comando shape.*
 @msg	commands[{i}]: missing `command`	commands[{i}]: falta `command`
-@msg	composer must be "singleLine" or "everyLine"	composer deve ser "singleLine" ou "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer deve ser "singleLine", "everyLine", "standardSingleLine" ou "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	formas compostas aceitam caminhos, caminhos compostos, grupos, formas compostas, texto, mesclagens e envelopes
 @msg	compound {_1} must contain exactly one open path to join	o composto {_1} deve conter exatamente um caminho aberto para unir
 @msg	connect needs a path other than the one extended	connect precisa de um caminho diferente do que foi estendido
@@ -9579,7 +9648,8 @@ swatch	Yellow Green	Verde-amarelado
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	os arquivos {kind} não têm transparência, e o arquivo teria {what}: achate-a primeiro (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	as imagens {kind} não podem ser abertas (veja document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` não é uma das opções
-@msg	{k} has control characters{_1}	{k} tem caracteres de controle{_1}
+@msg	{k} has control characters	{k} tem caracteres de controle
+@msg	{k} has control characters or line breaks	{k} tem caracteres de controle ou quebras de linha
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} é longo demais (no máximo {MAX_TEXT} caracteres)
 @msg	{k} must be > 0	{k} deve ser > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} deve ser um número (pt) ou um comprimento como "210 mm"
@@ -9639,3 +9709,20 @@ swatch	Yellow Green	Verde-amarelado
 	Nest Shapes…	Aninhar formas…
 	Nest Shapes	Aninhar formas
 	Roll	Rolo
+	Packaging Tools	Ferramentas de Embalagem
+	Fold Lines	Linhas de Dobra
+	Make Cut Line	Transformar em Linha de Corte
+	Make Crease Line	Transformar em Linha de Vinco
+	Make Partial Cut Line	Transformar em Linha de Meio-Corte
+	Make Perforation Line	Transformar em Linha de Perfuração
+	Make Fold Line	Transformar em Linha de Dobra
+	Role Swatches…	Amostras dos Tipos de Linha…
+	Role Swatches	Amostras dos Tipos de Linha
+	Role	Tipo de Linha
+	Cut Line	Linha de Corte
+	Crease Line	Linha de Vinco
+	Partial Cut Line	Linha de Meio-Corte
+	Perforation Line	Linha de Perfuração
+	No objects are selected.	Nenhum objeto selecionado.
+	Open a document to mark its fold lines.	Abra um documento para marcar suas linhas de dobra.
+	Remove Fold Line Role	Remover Tipo de Linha
