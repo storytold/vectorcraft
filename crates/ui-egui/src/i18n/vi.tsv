@@ -3684,8 +3684,12 @@ mark-style	Japanese	Kiểu Nhật
 	Filter Layers Panel Rows	Lọc hàng bảng Lớp
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` biểu thị các cài đặt đã thay đổi: hãy lưu thiết lập sẵn với tên khác
 @msg	`{key}` must be an array of these names: {_1}	`{key}` phải là một mảng gồm các tên sau: {_1}
-	Search commands and tools	Tìm kiếm lệnh và công cụ
-	Search commands and tools…	Tìm kiếm lệnh và công cụ…
+	Search commands, tools, panels and effects	Tìm kiếm lệnh, công cụ, bảng và hiệu ứng
+	Search commands, tools, panels and effects…	Tìm kiếm lệnh, công cụ, bảng và hiệu ứng…
+	No commands match	Không có lệnh nào khớp
+	{pos} of {total}: {name}	{pos} trên {total}: {name}
+@plural	{n} result|{n} results	{n} kết quả
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} trên {n} kết quả. Tiếp tục gõ để thu hẹp.
 	Recent Commands	Lệnh gần đây
 	No recent commands	Không có lệnh gần đây
 	Search Commands…	Tìm kiếm lệnh…

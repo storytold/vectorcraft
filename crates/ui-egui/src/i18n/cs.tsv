@@ -1330,7 +1330,7 @@ lighting	Light	Světlo
 	Name* @ 66.67% (RGB/Preview)	Název* @ 66,67 % (RGB/náhled)
 	No Document	Žádný dokument
 	Press 	Klávesou 
-	Search commands and tools	Hledat příkazy a nástroje
+	Search commands, tools, panels and effects	Hledat příkazy, nástroje, panely a efekty
 	Style:	Styl:
 	Switch workspace	Přepnout pracovní prostor
 	Show all open documents	Zobrazit všechny otevřené dokumenty
@@ -4509,7 +4509,11 @@ font-technology	Variable	Variabilní
 	Saved {path}	Uloženo: {path}
 	Saving	Ukládání
 	Saving {}	Ukládání {}
-	Search commands and tools…	Hledat příkazy a nástroje…
+	Search commands, tools, panels and effects…	Hledat příkazy, nástroje, panely a efekty…
+	No commands match	Žádný příkaz neodpovídá
+	{pos} of {total}: {name}	{pos} z {total}: {name}
+@plural	{n} result|{n} results	{n} výsledek|{n} výsledky|{n} výsledků
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} výsledku. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.
 	Recent Commands	Nedávné příkazy
 	No recent commands	Žádné nedávné příkazy
 	Dashed Line	Čárkovaná čára

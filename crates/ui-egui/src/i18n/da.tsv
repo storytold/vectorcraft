@@ -3907,7 +3907,7 @@ lighting	Light	Lys
 	Name* @ 66.67% (RGB/Preview)	Navn* @ 66.67% (RGB/forhåndsvisning)
 	No Document	Intet dokument
 	Press 	Tryk på 
-	Search commands and tools	Søg i kommandoer og værktøjer
+	Search commands, tools, panels and effects	Søg i kommandoer, værktøjer, paneler og effekter
 	Style:	Typografi:
 	Switch workspace	Skift arbejdsområde
 	Show all open documents	Vis alle åbne dokumenter
@@ -6883,7 +6883,11 @@ font-technology	Variable	Variable
 	Saved {path}	Gemte {path}
 	Saving	Gemmer
 	Saving {}	Gemmer {}
-	Search commands and tools…	Søg i kommandoer og værktøjer…
+	Search commands, tools, panels and effects…	Søg i kommandoer, værktøjer, paneler og effekter…
+	No commands match	Ingen kommandoer passer
+	{pos} of {total}: {name}	{pos} af {total}: {name}
+@plural	{n} result|{n} results	{n} resultat|{n} resultater
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} af {n} resultat. Skriv videre for at indsnævre dem.|{shown} af {n} resultater. Skriv videre for at indsnævre dem.
 	Recent Commands	Seneste kommandoer
 	No recent commands	Ingen seneste kommandoer
 	Dashed Line	Stiplet linje
