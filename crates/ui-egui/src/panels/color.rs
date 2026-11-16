@@ -881,6 +881,27 @@ pub(crate) fn show_sized(app: &mut VectorcraftApp, ui: &mut Ui, height: f32) {
     }
 }
 
+/// The Color panel's mode choices, also used by the gradient stop editor.
+fn mode_items(app: &mut VectorcraftApp, ui: &mut Ui, tgt: &Target) {
+    // Tint mode checks no colour mode: picking one makes the tint a process colour.
+    let cur = shown_mode(app, tgt.color().as_ref());
+    for m in Mode::ALL {
+        if menu_item(ui, tl!(m.label()), true, m == cur && tgt.tint().is_none()) {
+            set_mode(app, tgt, m);
+        }
+    }
+}
+
+/// A compact mode chooser. Reports pointer ownership of its dropdown so an enclosing popover
+/// does not mistake a click on one of its rows for a click elsewhere.
+pub(crate) fn mode_button(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
+    let tgt = target(app, ui);
+    let mode = shown_mode(app, tgt.color().as_ref());
+    let label = if tgt.tint().is_some() { tl!("Tint") } else { tl!(mode.label()) };
+    let (_, menu) = egui::containers::menu::MenuButton::from_button(egui::Button::new(label).small()).ui(ui, |ui| mode_items(app, ui, &tgt));
+    menu.is_some_and(|m| m.response.container_contains_pointer())
+}
+
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let hidden = app.ui.color_hide_options;
     if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
@@ -893,13 +914,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.separator();
     let tgt = target(app, ui);
     let color = tgt.color();
-    // Tint mode checks no colour mode: picking one makes the tint a process colour.
-    let cur = shown_mode(app, color.as_ref());
-    for m in Mode::ALL {
-        if menu_item(ui, tl!(m.label()), true, m == cur && tgt.tint().is_none()) {
-            set_mode(app, &tgt, m);
-        }
-    }
+    mode_items(app, ui, &tgt);
     ui.separator();
     let enabled = color.is_some() || super::active_mixed(app, ui.ctx());
     for (label, invert) in [(tl!("Invert"), true), (tl!("Complement"), false)] {

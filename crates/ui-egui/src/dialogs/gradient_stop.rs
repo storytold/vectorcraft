@@ -102,6 +102,7 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let swatches = d.str("tab") == "swatches";
     let mut tab = None;
     let mut eyedropper = false;
+    let mut mode_menu_pointer = false;
     let resp = egui::Area::new(area)
         .order(egui::Order::Foreground)
         .fixed_pos(pos)
@@ -120,6 +121,9 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         && widgets::icon_button(ui, "pipette", tl!("Eyedropper: click the art to sample the stop's colour"), false, 24.0).clicked()
                     {
                         eyedropper = true;
+                    }
+                    if !swatches {
+                        mode_menu_pointer = crate::panels::color::mode_button(app, ui);
                     }
                 });
                 ui.add_space(6.0);
@@ -163,7 +167,12 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     // The click that opened the popover (the Gradient panel's colour chip) or the double-click
     // (a stop's chip) lands outside it: only a later click elsewhere closes it (#577).
-    if frame > opened && resp.clicked_elsewhere() && !ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary)) {
+    // The mode dropdown is a child of this popover, even where it extends beyond its rectangle.
+    if frame > opened
+        && !mode_menu_pointer
+        && resp.clicked_elsewhere()
+        && !ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary))
+    {
         app.ui.dialog = None;
     }
 }
