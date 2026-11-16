@@ -2956,6 +2956,16 @@ records no undo step.
 among the objects beside it in its group or layer, passing over hidden and locked objects and sublayers. When there
 is no such object, the selection stays as it is.
 
+`select.magicWand` compares fill and stroke colors by the active document's color mode. In an RGB document
+`fillTolerance` and `strokeTolerance` run from 0 to 255 and measure the Euclidean distance between the display RGB
+values. In a CMYK document they run from 0 to 100 and measure the Euclidean distance between the C, M, Y and K
+percentages: a CMYK color's own values, and RGB, Gray and Lab colors converted to CMYK. Ten points of one ink matches
+at 10, and ten points of each of two inks does not. A tolerance above 100 set in an RGB document is kept and applies
+as 100 while a CMYK document is active; `magicWand.options` and `magicWand.set` report that value. `magicWand.set`
+returns an error and changes no setting, `reset` included, when a given tolerance is not a number or is out of its
+range (the color tolerances by the active document, 0 to 255 with no document open; `weightTolerance` 0 to 1000 pt;
+`opacityTolerance` 0 to 100 %). An omitted value keeps its setting.
+
 `select.same.textFillAndStrokeColor` (Select › Same › Text Fill & Stroke Color) selects the type objects that have
 characters whose fill and stroke both match the first character of the first selected type, and returns `{count}`.
 `select.same.textFillColor` and `select.same.textStrokeColor` compare the fill or the stroke alone. In type with
