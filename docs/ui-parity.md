@@ -385,7 +385,7 @@ next unit in the order a right-click on a ruler lists them, from Feet back to Po
 | Interaction | Status | Evidence |
 |---|---|---|
 | Ordinary Save refused by filesystem permissions/read-only storage offers Save As | focused UI regressions passed; native acceptance pending | #6146; `io::tests_read_only_save`; same name/format suggested; unchanged format keeps options, changed format opens its Save options; Documents folder, UID-bound continuation; cancellation and automation isolation |
-| Selection artwork drag hovers a visible document tab to activate it, then drops editable artwork on its canvas | done | `tests_document_drag`, `edit.dropSelection`, lossless resource and one-step Undo regressions; overflow and cross-window drag remain separate |
+| Selection artwork drag hovers a visible document tab to activate it, then drops editable artwork on its canvas | done | `tests_document_drag`, `edit.dropSelection`, lossless resource and one-step Undo regressions; a release over another document's tiled pane copies it there too (`canvas::panes` tests), and so does a release over a floating window drawn inside the main window (`doc_windows` tests); overflow-menu drag and floating OS windows remain separate |
 | A document tab dragged along the tab strip moves its document; a line marks where it goes, the current document and every document's view stay as they were, and a drag off the strip still floats it | done | #5663, [public source](https://helpx.adobe.com/illustrator/using/customizing-workspace.html); `document.move`; `tests::tab_reorder`, `chrome::tests` (drop index with floating and view tabs), `engine` `tests::document_move` |
 | A middle-click on a document tab or its × closes it as the × does; closing a modified document's last view asks to save first (VectorCraft addition, as in PhotoCraft) | done | #6506; `chrome::tests::a_middle_click_on_a_tab_closes_it_as_the_close_box_does`; not scored |
 | Panels hidden by Tab or Shift+Tab show for a while when the pointer rests on the left or right edge of the window, over the canvas, and hide again when it moves away; Tab shows them for good | done | Part of #5661; `window.panels.peek` ([Workspace basics](https://web.archive.org/web/2014/https://helpx.adobe.com/illustrator/using/workspace-basics.html), "Hide or show all panels"); VectorCraft's own choices: the 6 pt band and the 0.3 s delays, only the docked panels on that side show (floating panels, Tools and the Control bar stay hidden), and nothing shows in Presentation Mode; `panel_docking::tests::resting_on_the_right_edge_shows_the_hidden_panels_over_the_canvas_until_the_pointer_leaves` and the tests after it |
@@ -543,8 +543,12 @@ sampling coexistence. Scores and estimates unchanged. See [development.md](devel
 Selection drags activate another visible document tab after 400 ms, then copy editable artwork
 on canvas release with the original grab point. Source and clipboard preservation, resource
 rendering, swatch conflicts, cancellation, rotated/zoomed views and target Undo/Redo have regression
-coverage (`tests_document_drag`, `tests_clipboard`). Overflow-menu and cross-window drag remain
-separate. Scores and hours unchanged. [Behavior and command details](development.md#drag-artwork-between-document-tabs-2026-10-22).
+coverage (`tests_document_drag`, `tests_clipboard`). Under Window › Arrange › Tile, a release over
+another document's pane copies the artwork into that document as well, and a release over another
+view of the source document moves it (`canvas::panes` tests). A release over a floating document
+window drawn inside the main window, or over the main window's pane while the current document
+floats, does the same (`doc_windows` tests); a floating window that is an OS window of its own does
+not take the artwork yet. Overflow-menu drag remains separate. Scores and hours unchanged. [Behavior and command details](development.md#drag-artwork-between-document-tabs-2026-10-22).
 
 ## Live Paint Bucket
 
