@@ -249,6 +249,61 @@ fn an_opacity_edit_keeps_the_oklch_hue_picked_for_a_white_stop() {
     assert_eq!(hue_row(&h).1, Some(120.0), "the Hue row keeps the hue after the opacity edit");
 }
 
+/// Asks screen readers to set the opacity row to `opacity` and `label`'s slider to `value` in one
+/// frame (`Harness::event` would give each request a frame of its own).
+fn set_both(h: &mut Harness<'static, VectorcraftApp>, opacity: f64, (label, value): (&str, f64)) {
+    let (target_node, target_tree) = h.get_by_role_and_label(Role::Slider, "Opacity").accesskit_node().locate();
+    let data = Some(ActionData::NumericValue(opacity));
+    let set_opacity = Event::AccessKitActionRequest(ActionRequest { target_node, target_tree, action: Action::SetValue, data });
+    let node = h.query_all_by_label(label).find(|n| n.accesskit_node().role() == Role::Slider).expect("the slider");
+    let (target_node, target_tree) = node.accesskit_node().locate();
+    let data = Some(ActionData::NumericValue(value));
+    let set_value = Event::AccessKitActionRequest(ActionRequest { target_node, target_tree, action: Action::SetValue, data });
+    h.input_mut().events.extend([set_opacity, set_value]);
+    h.run_steps(2);
+}
+
+/// A gradient stop with stops red and blue, the first selected.
+fn stop_app() -> VectorcraftApp {
+    let mut app = app();
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+    app.run("paint.setFill", json!({"gradient": {"stops": stops, "start": [10, 35], "end": [60, 35]}})).unwrap();
+    app.select_tool("gradient");
+    app.run("gradient.selectStop", json!({"index": 0})).unwrap();
+    app
+}
+
+/// An opacity edit and a pick on the ring in one frame: the stop keeps both.
+#[test]
+fn an_opacity_edit_and_a_ring_pick_in_one_frame_keep_both() {
+    let mut h = harness(stop_app());
+    set_both(&mut h, 30.0, ("Hue ring", 120.0));
+    let Paint::Gradient(g) = crate::panels::current_paints(h.state()).0 else { panic!("still a gradient") };
+    let stop = &g.gradient.stops[0];
+    assert!((stop.opacity - 0.3).abs() < 1e-6, "the stop keeps the opacity: {:?}", g.gradient.stops);
+    assert_ne!(super::color::hex_digits(&stop.color), "FF0000", "the stop takes the pick: {:?}", g.gradient.stops);
+}
+
+/// An opacity edit and an OKLCH Hue edit in one frame: the stop keeps both.
+#[test]
+fn an_opacity_edit_and_an_oklch_edit_in_one_frame_keep_both() {
+    let mut app = stop_app();
+    app.run("ui.colorWheel", json!({"sliders": "oklch"})).unwrap();
+    let mut h = Harness::builder().with_size(vec2(260.0, 480.0)).build_ui_state(
+        |ui, app: &mut VectorcraftApp| {
+            show(app, ui);
+            crate::shortcuts::handle(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(2);
+    set_both(&mut h, 30.0, ("Hue", 140.0));
+    let Paint::Gradient(g) = crate::panels::current_paints(h.state()).0 else { panic!("still a gradient") };
+    let stop = &g.gradient.stops[0];
+    assert!((stop.opacity - 0.3).abs() < 1e-6, "the stop keeps the opacity: {:?}", g.gradient.stops);
+    assert_ne!(super::color::hex_digits(&stop.color), "FF0000", "the stop takes the edit: {:?}", g.gradient.stops);
+}
+
 /// A drag across the slider previews and ends as one undo step named Opacity.
 #[test]
 fn a_drag_is_one_undo_step() {

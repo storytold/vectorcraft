@@ -365,8 +365,9 @@ fn apply_opacity(app: &mut VectorcraftApp, tgt: &Target, o: f32, phase: Live) {
 }
 
 /// The Show Opacity row: the Transparency panel's icon, a slider whose track shows `color` from
-/// clear to solid, and a percent field. Gray when [`shown_opacity`] finds nothing to set.
-fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, tgt: &Target, color: &Color) {
+/// clear to solid, and a percent field. Gray when [`shown_opacity`] finds nothing to set. True when
+/// it set the opacity.
+fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, tgt: &Target, color: &Color) -> bool {
     let (o, live) = shown_opacity(app, tgt);
     let percent = f64::from(o) * 100.0;
     let mut edit: Option<(f32, Live)> = None;
@@ -386,9 +387,9 @@ fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, tgt: &Target, color: &Colo
             }
         });
     });
-    if let Some((v, phase)) = edit.filter(|_| live) {
-        apply_opacity(app, tgt, v, phase);
-    }
+    let Some((v, phase)) = edit.filter(|_| live) else { return false };
+    apply_opacity(app, tgt, v, phase);
+    true
 }
 
 /// The text the hex field shows for `color` and the opacity `o` the row of Show Opacity edits
@@ -732,10 +733,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The hex field compares its text with what it showed before an opacity edit of this frame, so
     // a text committed when a press on the opacity row takes the focus is not dropped.
     let hex = app.ui.color_wheel.hex_field.then(|| hex_shown(app, &tgt, color.as_ref()));
+    let mut opacity_set = false;
     if app.ui.color_wheel.opacity {
         let shown = color.unwrap_or(app.session.last_solid);
         let owner = color.map(|c| Owner::of(app, &tgt, c));
-        opacity_row(app, ui, &tgt, &shown);
+        opacity_set = opacity_row(app, ui, &tgt, &shown);
         // An opacity edit of a gradient stop or point changes the gradient its owner holds, and the
         // HSB and the OKLCH picked last stay with the new gradient.
         if let (Some(c), Some(was)) = (color, owner) {
@@ -762,6 +764,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             return;
         }
     }
+    // A pick or an OKLCH edit read in the frame of an opacity edit goes to the stops as that edit
+    // left them, so the stop keeps both.
+    let tgt = if opacity_set { wheel_target(app, ui) } else { tgt };
     let behind = super::alt_held(ui);
     let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);
     if let Some((lch, phase)) = picked_lch {
