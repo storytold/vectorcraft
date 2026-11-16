@@ -204,14 +204,14 @@ enum DistanceTo {
 }
 
 /// Distance Guides: with Smart Guides and Smart Guides → Invoke Distance Guides on, something
-/// selected and Alt held (`m`), the object under `p` unless it is selected, or over no object the
-/// artboard `p` is on.
+/// selected and Alt held (`m`), the object under `p` unless it or selected art inside it is under
+/// `p` ([`selected_under`]), or over no object the artboard `p` is on.
 fn distance_target(cx: &ToolContext, p: Point, m: Mods) -> Option<DistanceTo> {
     if !(cx.smart_guides && cx.distance_guides && m.alt) || cx.selection.objects.is_empty() {
         return None;
     }
-    match hit_test(cx.doc, p, cx.selection_hit_options()).map(|h| h.top_object(cx.isolation)) {
-        Some(id) => (!cx.selection.contains(id)).then_some(DistanceTo::Object(id)),
+    match hit_test(cx.doc, p, cx.selection_hit_options()).map(|h| (h.top_object(cx.isolation), h)) {
+        Some((id, h)) => selected_under(cx, &h, id).is_none().then_some(DistanceTo::Object(id)),
         None => cx.doc.artboard_at(p).map(DistanceTo::Artboard),
     }
 }
@@ -1347,16 +1347,17 @@ fn selected_under(cx: &ToolContext, h: &Hit, top: NodeId) -> Option<NodeId> {
     below.iter().copied().chain(std::iter::once(h.leaf)).find(|id| whole(*id))
 }
 
-/// A Shift-press on `top` (hit by `h`): a Shift-click takes a selected object out of the selection
-/// when it is released, and a Shift-drag moves the selection, constrained. On an object of the
+/// A Shift-press on `top` (hit by `h`): a Shift-click takes a selected object, or the selected art
+/// inside it that the press lands on ([`selected_under`]), out of the selection when it is
+/// released, and a Shift-drag moves the selection, constrained. On an object of the
 /// Global Edit that is highlighted, the release leaves that object out of the edit instead, and a
 /// drag selects `top` when it starts. Returns the object to deselect and the object to leave out
 /// on release (with `top`); adds to `out` the action that selects `top` at once.
 fn shift_press(cx: &ToolContext, h: &Hit, top: NodeId, out: &mut Vec<Action>) -> (Option<NodeId>, Option<(NodeId, NodeId)>) {
     if let Some(member) = global_edit_member(cx, h) {
         (None, Some((member, top)))
-    } else if cx.selection.contains(top) {
-        (Some(top), None)
+    } else if let Some(picked) = selected_under(cx, h, top) {
+        (Some(picked), None)
     } else {
         out.push(Action::Exec("select.toggle".into(), json!({ "id": top.0 })));
         (None, None)
