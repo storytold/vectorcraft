@@ -1855,6 +1855,7 @@ antiAlias	Sharp	शार्प
 	Highlight Size	हाइलाइट आकार
 	Blend Steps	ब्लेंड चरण
 	Shading Color	शेडिंग रंग
+	Black Overprint	काला ओवरप्रिंट
 	Draw Hidden Faces	छिपे हुए फलक बनाएँ
 	Map Art…	आर्टवर्क मैप करें…
 	Map Art	आर्टवर्क मैप करें
@@ -4163,6 +4164,12 @@ antiAlias	Sharp	शार्प
 	Responsive	उत्तरदायी
 	Restore	पुनर्स्थापित करें
 	Restore every preference to its default (applied on OK)	प्रत्येक वरीयता को उसके डिफ़ॉल्ट में पुनर्स्थापित करें ( OK पर लागू)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	पिक्सेल को छोड़कर बिल्ट-इन साइज़ वाले नए डॉक्यूमेंट और कोई इकाई दर्ज न करने वाली खोली गई फ़ाइलों की इकाई; इसे यहाँ चुनकर ठीक है पर क्लिक करने से यह सक्रिय डॉक्यूमेंट की इकाई भी बन जाती है।
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	स्ट्रोक की मोटाई, डैश और गैप इस इकाई में दिखते हैं, और उनके लिए टाइप की गई संख्याएँ इसी इकाई में पढ़ी जाती हैं।
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	टाइप साइज़, लीडिंग और बेसलाइन शिफ़्ट इस इकाई में दिखते हैं, और उनके लिए टाइप की गई संख्याएँ इसी इकाई में पढ़ी जाती हैं।
+	The unit for East Asian type measurements, which no field uses yet.	पूर्वी एशियाई टाइप के माप की इकाई, जिसका अभी कोई फ़ील्ड उपयोग नहीं करता।
+	When on, a number typed without a unit into a field in picas is read in points.	चालू होने पर, पाइका वाले फ़ील्ड में बिना इकाई के टाइप की गई संख्या पॉइंट्स में पढ़ी जाती है।
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID चुनने पर ऑब्जेक्ट के नाम लेयर्स, वेरिएबल्स और लेयर ऑप्शन्स में XML ID के रूप में दिखते हैं।
 	Reset all preferences to their defaults?	सभी प्रेफ़रेंसेज़ को उनके डिफ़ॉल्ट पर रीसेट करें?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	डिफ़ॉल्ट तब लागू होते हैं जब आप प्रेफ़रेंसेज़ में ठीक है पर क्लिक करते हैं। वहाँ रद्द करें आपकी मौजूदा प्रेफ़रेंसेज़ बनाए रखता है।
 	Restore Recovered Documents	पुनर्स्थापना डॉक्यूमेंट
@@ -4215,6 +4222,7 @@ antiAlias	Sharp	शार्प
 	Roman Hanging Punctuation	रोमन हैंगिंग विराम चिह्न
 	Korean Line Break Anywhere	कोरियाई लाइन ब्रेक कहीं भी
 	Bunri-Kinshi	बुनरी-किंशी
+	Kurikaeshi Moji Shori	कुरिकाएशी मोजी शोरी
 	East Asian Composition Settings	पूर्वी एशियाई संरचना सेटिंग्स
 	Korean Composition Settings	कोरियाई संरचना सेटिंग्स
 	Rotate	घुमाएँ

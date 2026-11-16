@@ -579,6 +579,7 @@ digits	Malayalam	マラヤーラム数字
 	Highlight Size	ハイライトのサイズ
 	Blend Steps	ブレンドの階調
 	Shading Color	陰影のカラー
+	Black Overprint	ブラックオーバープリント
 	Draw Hidden Faces	隠れた面を描画
 	Map Art…	アートをマップ…
 	Map Art	アートをマップ
@@ -3068,6 +3069,12 @@ mark-style	Japanese	日本式
 	Restore	復元
 	Restore Recovered Documents	復帰したドキュメントを復元
 	Restore every preference to its default (applied on OK)	すべての環境設定を初期値に戻す (OK で適用)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	ピクセル以外の組み込みサイズの新規ドキュメントと、単位を記録していない開いたファイルに使う単位で、ここで選んで OK をクリックすると作業中のドキュメントの単位も変わります。
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	線幅、線分、間隔はこの単位で表示され、入力した数値もこの単位で読み取られます。
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	フォントサイズ、行送り、ベースラインシフトはこの単位で表示され、入力した数値もこの単位で読み取られます。
+	The unit for East Asian type measurements, which no field uses yet.	東アジア言語の文字の測定に使う単位で、まだどのフィールドも使っていません。
+	When on, a number typed without a unit into a field in picas is read in points.	オンのとき、パイカのフィールドに単位なしで入力した数値はポイントとして読み取られます。
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID を選ぶと、レイヤー、変数、レイヤーオプションでオブジェクト名が XML ID として表示されます。
 	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	初期値は環境設定で OK をクリックすると適用されます。そこでキャンセルすると現在の環境設定が保たれます。
 	Restored documents open unsaved: save them to keep them.	復元したドキュメントは未保存の状態で開きます。保存して残してください。
@@ -3088,6 +3095,7 @@ mark-style	Japanese	日本式
 	Roman Hanging Punctuation	欧文ぶら下がり
 	Korean Line Break Anywhere	韓国語の任意位置での改行
 	Bunri-Kinshi	分離禁止
+	Kurikaeshi Moji Shori	繰り返し文字処理
 	East Asian Composition Settings	東アジア言語の組版設定
 	Korean Composition Settings	韓国語の組版設定
 	Rotate	回転

@@ -1146,6 +1146,7 @@ antiAlias	Sharp	锐利
 	Highlight Size	高光大小
 	Blend Steps	混合步骤
 	Shading Color	底纹颜色
+	Black Overprint	黑色叠印
 	Draw Hidden Faces	绘制隐藏表面
 	Map Art…	贴图…
 	Map Art	贴图
@@ -2942,6 +2943,12 @@ digits	Malayalam	马拉雅拉姆数字
 	Responsive	响应式
 	Restore	恢复
 	Restore every preference to its default (applied on OK)	把所有首选项恢复为默认值 (点击确定后应用)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	除像素尺寸外，以内置尺寸新建的文档和未记录单位的已打开文件使用此单位；在此选择并点击确定，也会更改当前文档的单位。
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	描边粗细、虚线和间隔以此单位显示，为其输入的数字也按此单位读取。
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	字号、行距和基线偏移以此单位显示，为其输入的数字也按此单位读取。
+	The unit for East Asian type measurements, which no field uses yet.	用于东亚文字度量的单位，目前还没有字段使用。
+	When on, a number typed without a unit into a field in picas is read in points.	开启后，在以派卡为单位的字段中输入的不带单位的数字按点读取。
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	选择 XML ID 时，图层、变量和图层选项中的对象名称显示为 XML ID。
 	Reset all preferences to their defaults?	将所有首选项重置为默认值？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在首选项中点击确定后才会应用默认值。在那里点击取消会保留当前首选项。
 	Restore Recovered Documents	恢复已恢复的文档
@@ -2974,6 +2981,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Roman Hanging Punctuation	西文悬挂标点
 	Korean Line Break Anywhere	韩文任意位置换行
 	Bunri-Kinshi	分离禁止
+	Kurikaeshi Moji Shori	重复字符处理
 	East Asian Composition Settings	东亚排版设置
 	Korean Composition Settings	韩文排版设置
 	Rotate	旋转

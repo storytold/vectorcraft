@@ -1510,6 +1510,7 @@ font-technology	Variable	Változó
 	Highlight Size	Csillanás mérete
 	Blend Steps	Átmenetlépések
 	Shading Color	Árnyékolás színe
+	Black Overprint	Felülnyomó fekete
 	Draw Hidden Faces	Rejtett lapok rajzolása
 	Map Art…	Grafika leképezése…
 	Map Art	Grafika leképezése
@@ -3630,6 +3631,12 @@ mark-style	Japanese	Japán
 	Responsive	Reszponzív
 	Restore	Visszaállít
 	Restore every preference to its default (applied on OK)	Minden beállítás visszaállítása az alapértékre (az OK gombbal lép életbe)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	A beépített, nem pixelben megadott méretű új dokumentumok és a mértékegységet nem rögzítő megnyitott fájlok mértékegysége; ha itt kiválasztja, és az OK gombra kattint, az aktív dokumentum mértékegysége is ez lesz.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	A körvonalvastagságok, a vonalak és a hézagok ebben a mértékegységben jelennek meg, és a hozzájuk beírt számokat is ebben értelmezi a program.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	A betűméretek, a sorköz és az alapvonal-eltolás ebben a mértékegységben jelennek meg, és a hozzájuk beírt számokat is ebben értelmezi a program.
+	The unit for East Asian type measurements, which no field uses yet.	A kelet-ázsiai szöveg méreteinek mértékegysége, amelyet egyelőre egyetlen mező sem használ.
+	When on, a number typed without a unit into a field in picas is read in points.	Bekapcsolva egy pica mértékegységű mezőbe mértékegység nélkül beírt számot pontként értelmez a program.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML-azonosító esetén az objektumnevek XML-azonosítóként jelennek meg a Rétegek, a Változók és a Rétegbeállítások ablakban.
 	Reset all preferences to their defaults?	Visszaállítja az összes beállítást az alapértékre?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Az alapértékek akkor lépnek életbe, amikor a Beállításokban az OK gombra kattint. Az ottani Mégse megtartja a jelenlegi beállításokat.
 	Restore Recovered Documents	Helyreállított dokumentumok visszaállítása
@@ -3674,6 +3681,7 @@ mark-style	Japanese	Japán
 	Roman Hanging Punctuation	Latin függő írásjelek
 	Korean Line Break Anywhere	Koreai sortörés bárhol
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Kelet-ázsiai szedési beállítások
 	Korean Composition Settings	Koreai szedési beállítások
 	Rotate	Elforgatás

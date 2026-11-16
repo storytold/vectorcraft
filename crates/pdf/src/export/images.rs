@@ -143,7 +143,9 @@ impl Exporter<'_> {
         let doc = self.doc;
         let out = self.out.clone();
         let profiles = out.source_profiles();
-        let to_srgb = out.image_srgb_intent().map(|intent| crate::images::ToSrgb { intent, sixteen_bit: self.sixteen_bit });
+        let then = out.converts_tagged_pixels().then_some(&*out);
+        let grey = out.converts_grey_images();
+        let to_srgb = out.image_srgb_intent().map(|intent| crate::images::ToSrgb { intent, sixteen_bit: self.sixteen_bit, then, grey });
         let mut unconverted = false;
         let img = doc.image_blob(im).filter(|_| !self.left_out.contains(key)).and_then(|blob| {
             let cmyk_image = blob.is_cmyk();
