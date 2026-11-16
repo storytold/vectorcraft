@@ -688,6 +688,16 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
                 _ => None,
             };
             let reshaped = effects::reshape(Some(symbols.document()), n, symbol.as_ref());
+            // Copies that each carry the raster effects listed before their Transform effect reach
+            // as far as each copy's raster effects paint, and the raster effects after it spread
+            // them all: the art and each copy in it are groups with those raster effects, measured
+            // with their reach ([`effects::has_container_appearance`]).
+            if effects::outer_effects(n).len() < n.appearance.effects.len()
+                && let Some(r) = &reshaped
+            {
+                let a = live_content_reach(symbols, n);
+                return cull_bounds_in(symbols, r, after_reshape, false).map(|b| b.inflate(a, a));
+            }
             let b = match &reshaped {
                 Some(r) if has_instance_row_effects(n) => instance_piece_bounds(symbols, r),
                 Some(r) if matches!(n.kind, NodeKind::Text(_)) || (matches!(n.kind, NodeKind::Image(_)) && !r.clips()) => {
