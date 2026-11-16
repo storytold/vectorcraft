@@ -517,13 +517,22 @@ fn apply_plan(s: &mut Session, label: &str, plan: Vec<(NodeId, Vec<PathData>)>) 
         return Ok(json!({ "ids": [] }));
     }
     let ids = s.edit(label, |d, sel| {
-        // Pin paint owners before any member changes their original bounds.
-        for (id, _) in &plan {
-            let owner = crate::cmd::path::compound_or_self(d, *id);
-            for target in [owner, *id] {
-                if let Some(node) = d.node_mut(target) {
-                    node.pin_gradients();
+        // Measure every original painting owner before any geometry or appearance changes.
+        // This includes a Compound above a Path Eraser target and containers above live art.
+        let owners: std::collections::BTreeSet<_> = plan.iter().flat_map(|(id, _)| d.ancestry(*id).unwrap_or_default()).collect();
+        let pinned: Vec<_> = owners
+            .into_iter()
+            .filter_map(|id| {
+                let node = d.node(id)?;
+                if !node.appearance.has_unplaced_gradient() {
+                    return None;
                 }
+                vectorcraft_render::pinned_appearance_for_geometry_edit(d, node).map(|appearance| (id, appearance))
+            })
+            .collect();
+        for (id, appearance) in pinned {
+            if let Some(node) = d.node_mut(id) {
+                node.appearance = appearance.into();
             }
         }
         let mut all = vec![];

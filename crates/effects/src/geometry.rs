@@ -312,6 +312,36 @@ impl Carry {
         }
     }
 
+    /// Undo the actual maps of already placed gradients. Failure only changes this temporary
+    /// appearance; callers retain the stored row unchanged when a map cannot be inverted.
+    pub(crate) fn unapply_placed(&self, ap: &mut Appearance) -> Option<()> {
+        for step in self.0.iter().rev() {
+            for item in &mut ap.items {
+                if !matches!(item.paint(), vectorcraft_doc::color::Paint::Gradient(_)) {
+                    continue;
+                }
+                let map = match *step {
+                    CarryStep::Affine { m, .. } => m,
+                    CarryStep::Boxes { from, to } => match item {
+                        AppearanceItem::Fill(_) => crate::reshape::box_map(from, to),
+                        AppearanceItem::Stroke(s) => crate::reshape::box_map(s.paint_bounds(from), s.paint_bounds(to)),
+                    },
+                };
+                if vectorcraft_doc::node::flattens(map) {
+                    return None;
+                }
+                let inverse = map.inverse();
+                if !inverse.is_finite() {
+                    return None;
+                }
+                if let vectorcraft_doc::color::Paint::Gradient(g) = item.paint_mut() {
+                    g.transform(inverse);
+                }
+            }
+        }
+        Some(())
+    }
+
     pub(crate) fn push(&mut self, more: Carry) {
         self.0.extend(more.0);
         self.1.extend(more.1);

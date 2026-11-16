@@ -45,6 +45,7 @@ mod lighting_presets;
 mod live;
 mod marks;
 pub mod pixel;
+mod placement;
 pub mod preview;
 mod raster;
 mod reshape;
@@ -75,12 +76,13 @@ pub use bake::{
 pub use clip::{WarpSeams, clip_outline, knockout_silhouette, reshaped_clip_outline, warp_pieces_translucent};
 pub use group::{
     OutlineHook, PATHFINDER_EFFECTS, compound_shape_area, compound_shape_art, evaluate_container, has_container_appearance, has_pathfinder,
-    is_pathfinder, member_leaves, member_shapes, paints, pathfinder_children, shape_art,
+    is_pathfinder, member_leaves, member_shapes, paints, pathfinder_children, pinned_container_appearance, shape_art,
 };
 pub use lighting_presets::{LIGHTING_PRESETS, LightingPreset, lighting_preset_params, matching_lighting_preset};
 pub use live::{expand_live, expand_live_deep, expanded_live_group, outline_object, text_outliner};
 pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
 pub use pixel::{PIXEL_EFFECTS, PixelFx, PixelSpace};
+pub use placement::pinned_gradient_item;
 pub use raster::{
     RASTERIZE, RasterFx, Rasterize, color_param, follow_items, item_effects_in, outset, raster_effects, rasterize_stage, stage_map, staged_effects,
     without_geometry,

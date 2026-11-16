@@ -881,3 +881,372 @@ fn eraser_gradient_compound_owner_keeps_page_colors_and_holes() {
         }
     }
 }
+
+fn eraser_container_gradient_fixture(s: &mut Session, placed: bool, nested: bool) -> (NodeId, NodeId, NodeId, Value) {
+    let mut ids = vec![];
+    for anchors in [
+        json!([{"x": 100, "y": 100}, {"x": 150, "y": 100}, {"x": 150, "y": 140}, {"x": 100, "y": 140}]),
+        json!([{"x": 170, "y": 160}, {"x": 220, "y": 160}, {"x": 220, "y": 200}, {"x": 170, "y": 200}]),
+    ] {
+        let id = s.execute("path.create", &json!({"anchors": anchors, "closed": true})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"ids": [id], "color": "#000000"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [id], "none": true})).unwrap();
+        ids.push(id);
+    }
+    let edited = NodeId(ids[0]);
+    let sibling = NodeId(ids[1]);
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    let inner = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let owner = if nested { NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap()) } else { inner };
+    s.execute("appearance.addFill", &json!({"ids": [owner.0], "target": "object"})).unwrap();
+    let mut gradient = json!({"kind": "linear", "angle": 90, "dither": false, "stops": [
+        {"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}
+    ]});
+    if placed {
+        gradient["start"] = json!([160, 200]);
+        gradient["end"] = json!([160, 100]);
+    }
+    s.execute("appearance.setItem", &json!({"ids": [owner.0], "target": "object", "index": 0, "gradient": gradient})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let n = d.node(owner).unwrap();
+    assert!(matches!(n.kind, NodeKind::Group { clip: false, .. }));
+    assert_eq!(n.appearance.items.len(), 1, "the Group owns one fill row");
+    assert_eq!(n.appearance.contents_at(), 0, "the own fill paints above the children's black fills");
+    let vectorcraft_doc::color::Paint::Gradient(g) = n.appearance.fill_paint() else { panic!("the Group itself owns the gradient") };
+    assert_eq!(g.geom.is_some(), placed);
+    assert!(!g.gradient.dither);
+    let geom = serde_json::to_value(g.geom).unwrap();
+    assert_eq!(n.geometric_bounds().unwrap(), vectorcraft_geom::Rect::new(100.0, 100.0, 220.0, 200.0));
+    for id in [edited, sibling] {
+        assert!(!d.node(id).unwrap().appearance.has_unplaced_gradient(), "the gradient is not on a leaf");
+    }
+    assert_eq!(d.parent_of(edited), Some(inner));
+    if nested {
+        assert_eq!(d.parent_of(inner), Some(owner));
+        assert!(d.node(inner).unwrap().appearance.items.is_empty(), "the intervening Group has no own paint");
+    }
+    s.execute("select.set", &json!({"ids": [edited.0]})).unwrap();
+    (edited, sibling, owner, geom)
+}
+
+fn eraser_container_gradient_restore(s: &mut Session, before: &Value, selection: &vectorcraft_doc::Selection, history: usize) {
+    let after = serde_json::to_value(&s.doc().unwrap().doc).unwrap();
+    let after_selection = s.doc().unwrap().selection.clone();
+    let after_pixels = eraser_gradient_image(s).pixels;
+    assert_eq!(s.doc().unwrap().history.undo.len(), history + 1, "one erase remains one edit");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), *before);
+    assert_eq!(&s.doc().unwrap().selection, selection);
+    assert_eq!(s.doc().unwrap().history.undo.len(), history);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), after);
+    assert_eq!(s.doc().unwrap().selection, after_selection);
+    assert_eq!(s.doc().unwrap().history.undo.len(), history + 1);
+    assert_eq!(eraser_gradient_image(s).pixels, after_pixels);
+}
+
+fn eraser_container_gradient_case(placed: bool, nested: bool) {
+    let mut s = session();
+    let (edited, sibling, owner, geom) = eraser_container_gradient_fixture(&mut s, placed, nested);
+    let before_image = eraser_gradient_image(&s);
+    assert_eq!(before_image.pixel(125, 105)[3], 255, "the extremal child really paints the erase region");
+    assert_eq!(before_image.pixel(190, 175)[3], 255);
+    assert_ne!(before_image.pixel(190, 175), before_image.pixel(190, 185), "the owner's paint varies on the untouched sibling");
+    assert_ne!(before_image.pixel(190, 175), [0, 0, 0, 255], "the Group's top paint actually covers the black child");
+    let before = s.doc().unwrap().doc.clone();
+    let before_json = serde_json::to_value(&before).unwrap();
+    let sibling_before = serde_json::to_value(before.node(sibling).unwrap()).unwrap();
+    let ancestry = before.ancestry(edited).unwrap();
+    let selection = s.doc().unwrap().selection.clone();
+    let history = s.doc().unwrap().history.undo.len();
+    let miss = eraser_gradient_region(&mut s, "rect", true, true);
+    assert_eq!(miss["ids"], json!([]));
+    assert!(std::sync::Arc::ptr_eq(&s.doc().unwrap().doc, &before), "a miss must not replace any ancestor");
+    assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before_json);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!(s.doc().unwrap().history.undo.len(), history);
+    let result = eraser_gradient_region(&mut s, "rect", true, false);
+    assert_eq!(result["ids"].as_array().unwrap().len(), 1, "trim keeps one piece, not a split");
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.ancestry(edited).unwrap(), ancestry, "the child and every original container retain their roles");
+    assert_eq!(serde_json::to_value(d.node(sibling).unwrap()).unwrap(), sibling_before, "the sibling itself was not edited");
+    let n = d.node(owner).unwrap();
+    assert!(matches!(n.kind, NodeKind::Group { clip: false, .. }));
+    assert!((n.geometric_bounds().unwrap().y0 - 110.0).abs() < 1e-5, "the owner's original minimum y really shrinks");
+    let after_image = eraser_gradient_image(&s);
+    assert_eq!(after_image.pixel(125, 105)[3], 0, "the intended band is erased through the Group's paint");
+    assert_eq!(
+        after_image.pixel(190, 175),
+        before_image.pixel(190, 175),
+        "placed={placed}, nested={nested}: erasing one child must not recolor its untouched sibling"
+    );
+    if placed {
+        let vectorcraft_doc::color::Paint::Gradient(g) = n.appearance.fill_paint() else { panic!("the own fill stays a gradient") };
+        assert_eq!(serde_json::to_value(g.geom).unwrap(), geom, "an explicitly placed owner is not refitted");
+    }
+    eraser_container_gradient_restore(&mut s, &before_json, &selection, history);
+}
+
+#[test]
+fn eraser_container_gradient_keeps_untouched_sibling_colors() {
+    // Positive control runs before the unchanged-product fitted-paint failure.
+    eraser_container_gradient_case(true, false);
+    eraser_container_gradient_case(false, false);
+    eraser_container_gradient_case(false, true);
+}
+
+fn eraser_container_effect_gradient_case(group: bool, placed: bool) {
+    let mut s = session();
+    let (edited, owner, geom) = if group {
+        let (edited, _, owner, geom) = eraser_container_gradient_fixture(&mut s, placed, false);
+        (edited, owner, geom)
+    } else {
+        let id = marquee_rectangle(&mut s, true, false);
+        let geom = eraser_gradient_fill(&mut s, id, placed);
+        (id, id, geom)
+    };
+    s.execute(
+        "effect.apply",
+        &json!({
+            "ids": [owner.0], "target": "object", "item": null,
+            "effect": "path.offsetPath", "params": {"offset": 10, "joins": "round"}
+        }),
+    )
+    .unwrap();
+    let d = &s.doc().unwrap().doc;
+    let n = d.node(owner).unwrap();
+    assert_eq!(n.appearance.effects.len(), 1);
+    let effect = &n.appearance.effects[0];
+    assert_eq!(effect.id, "path.offsetPath");
+    assert!(effect.visible);
+    assert_eq!(effect.params["offset"].as_f64(), Some(10.0));
+    assert_eq!(effect.params["joins"], json!("round"));
+    let effect_before = serde_json::to_value(&n.appearance.effects).unwrap();
+    let vectorcraft_doc::color::Paint::Gradient(g) = n.appearance.fill_paint() else { panic!("the effect owner really owns the gradient") };
+    assert_eq!(g.geom.is_some(), placed);
+    assert!(!g.gradient.dither);
+    assert_eq!(g.gradient.stops.len(), 2);
+    assert_ne!(g.gradient.stops[0].color, g.gradient.stops[1].color, "the own paint is a real nonconstant ramp before rendering");
+    let original_bounds = n.geometric_bounds().unwrap();
+    assert_eq!((original_bounds.y0, original_bounds.y1), (100.0, 200.0));
+    let before_image = eraser_gradient_image(&s);
+    assert_eq!(before_image.pixel(125, 105)[3], 255);
+    assert_eq!(before_image.pixel(190, 175)[3], 255);
+    assert_eq!(before_image.pixel(190, 185)[3], 255);
+    assert_ne!(before_image.pixel(190, 175), before_image.pixel(190, 185), "the rendered own gradient is nonconstant");
+    assert_eq!(before_image.pixel(190, 205)[3], 255, "the live positive offset paints beyond the source's y=200 bounds");
+    let before = s.doc().unwrap().doc.clone();
+    let before_json = serde_json::to_value(&before).unwrap();
+    let selection = s.doc().unwrap().selection.clone();
+    let history = s.doc().unwrap().history.undo.len();
+    let ancestry = before.ancestry(edited).unwrap();
+    let miss = s.execute("path.eraseRegion", &json!({"rect": [10, 10, 10, 10]})).unwrap();
+    assert_eq!(miss["ids"], json!([]));
+    assert!(std::sync::Arc::ptr_eq(&s.doc().unwrap().doc, &before));
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!(s.doc().unwrap().history.undo.len(), history);
+
+    // Remove 30 pt of source height: the remaining +10 pt live offset cannot
+    // repaint the cleared (125,105) pixel. The offset itself remains live.
+    let result = s.execute("path.eraseRegion", &json!({"rect": [50, 80, 200, 50]})).unwrap();
+    assert_eq!(result["ids"].as_array().unwrap().len(), 1, "this is a one-piece extremal trim");
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.ancestry(edited).unwrap(), ancestry);
+    let n = d.node(owner).unwrap();
+    assert!((n.geometric_bounds().unwrap().y0 - 130.0).abs() < 1e-5, "the original owner bounds really shrink");
+    assert_eq!(serde_json::to_value(&n.appearance.effects).unwrap(), effect_before, "the edit must not flatten or remove the live effect");
+    let after_image = eraser_gradient_image(&s);
+    assert_eq!(after_image.pixel(125, 105)[3], 0, "the +10 offset cannot repaint this deliberately deep erased band");
+    assert_eq!(
+        after_image.pixel(190, 175),
+        before_image.pixel(190, 175),
+        "group={group}, placed={placed}: freezing the raw Node box must not recolor retained effected art"
+    );
+    if placed {
+        let vectorcraft_doc::color::Paint::Gradient(g) = n.appearance.fill_paint() else { panic!("the placed fill remains a gradient") };
+        assert_eq!(serde_json::to_value(g.geom).unwrap(), geom);
+    }
+    eraser_container_gradient_restore(&mut s, &before_json, &selection, history);
+}
+
+#[test]
+fn eraser_container_gradient_keeps_evaluated_offset_fit() {
+    // Establish ordinary legal placement through the SAME live offset first.
+    eraser_container_effect_gradient_case(true, true);
+    eraser_container_effect_gradient_case(false, true);
+    eraser_container_effect_gradient_case(true, false);
+    eraser_container_effect_gradient_case(false, false);
+}
+
+fn eraser_placement_ramp(placed: bool, bottom: f64, top: f64) -> Value {
+    let mut gradient = json!({"kind": "linear", "angle": 90, "dither": false, "stops": [
+        {"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}
+    ]});
+    if placed {
+        gradient["start"] = json!([160, bottom]);
+        gradient["end"] = json!([160, top]);
+    }
+    gradient
+}
+
+fn eraser_placement_effects(s: &Session, owner: NodeId) -> Value {
+    let n = s.doc().unwrap().doc.node(owner).unwrap();
+    json!({"object": n.appearance.effects,
+        "items": n.appearance.items.iter().map(|item| item.effects()).collect::<Vec<_>>()})
+}
+
+fn eraser_placement_trim(
+    s: &mut Session,
+    edited: NodeId,
+    owner: NodeId,
+    clear: (u32, u32),
+) -> (vectorcraft_render::Rendered, vectorcraft_render::Rendered) {
+    let before_image = eraser_gradient_image(s);
+    assert_eq!(before_image.pixel(clear.0, clear.1)[3], 255, "the actual effected art paints the erase witness");
+    let before = s.doc().unwrap().doc.clone();
+    let before_json = serde_json::to_value(&before).unwrap();
+    let selection = s.doc().unwrap().selection.clone();
+    let history = s.doc().unwrap().history.undo.len();
+    let ancestry = before.ancestry(edited).unwrap();
+    let effects = eraser_placement_effects(s, owner);
+    let bounds = before.node(owner).unwrap().geometric_bounds().unwrap();
+    assert_eq!((bounds.y0, bounds.y1), (100.0, 200.0));
+    let miss = s.execute("path.eraseRegion", &json!({"rect": [10, 10, 10, 10]})).unwrap();
+    assert_eq!(miss["ids"], json!([]));
+    assert!(std::sync::Arc::ptr_eq(&s.doc().unwrap().doc, &before));
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!(s.doc().unwrap().history.undo.len(), history);
+    let result = s.execute("path.eraseRegion", &json!({"rect": [50, 80, 200, 50]})).unwrap();
+    assert_eq!(result["ids"].as_array().unwrap().len(), 1, "the extremal trim keeps one piece");
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.ancestry(edited).unwrap(), ancestry);
+    assert!((d.node(owner).unwrap().geometric_bounds().unwrap().y0 - 130.0).abs() < 1e-5);
+    assert_eq!(eraser_placement_effects(s, owner), effects, "stored object and item effects stay live and identical");
+    let after_image = eraser_gradient_image(s);
+    assert_eq!(after_image.pixel(clear.0, clear.1)[3], 0, "the witness really leaves the effected art");
+    eraser_container_gradient_restore(s, &before_json, &selection, history);
+    (before_image, after_image)
+}
+
+fn eraser_placement_matches(
+    placed: &(vectorcraft_render::Rendered, vectorcraft_render::Rendered),
+    fitted: &(vectorcraft_render::Rendered, vectorcraft_render::Rendered),
+    samples: &[(u32, u32)],
+) {
+    for &(x, y) in samples {
+        assert_eq!(placed.0.pixel(x, y)[3], 255);
+        assert_eq!(placed.1.pixel(x, y)[3], 255, "the equivalent placed control retains the sample");
+        assert_eq!(fitted.0.pixel(x, y), placed.0.pixel(x, y), "the public placed vector is equivalent BEFORE the edit at ({x},{y})");
+        assert_eq!(
+            fitted.1.pixel(x, y),
+            placed.1.pixel(x, y),
+            "fitted and equivalent placed paint follow the SAME live effects AFTER the edit at ({x},{y})"
+        );
+    }
+    assert_ne!(placed.0.pixel(samples[0].0, samples[0].1), placed.0.pixel(samples[1].0, samples[1].1));
+}
+
+fn eraser_placement_affine_scene(placed: bool) -> (vectorcraft_render::Rendered, vectorcraft_render::Rendered) {
+    let mut s = session();
+    let (edited, _, owner, _) = eraser_container_gradient_fixture(&mut s, false, false);
+    // Offset10 makes the original aggregate fit y=90..210. The explicit control
+    // fixes THAT frame before the following Transform carries it, not the raw box.
+    s.execute(
+        "appearance.setItem",
+        &json!({"ids": [owner.0], "target": "object", "index": 0,
+        "gradient": eraser_placement_ramp(placed, 210.0, 90.0)}),
+    )
+    .unwrap();
+    s.execute(
+        "effect.apply",
+        &json!({"ids": [owner.0], "target": "object", "item": null,
+        "effect": "path.offsetPath", "params": {"offset": 10, "joins": "round"}}),
+    )
+    .unwrap();
+    s.execute(
+        "effect.apply",
+        &json!({"ids": [owner.0], "target": "object", "item": null,
+        "effect": "distort.transform", "params": {"scaleH": 100, "scaleV": 150,
+            "reference": 8, "objects": true, "copies": 0, "random": false,
+            "rotate": 0, "moveH": 0, "moveV": 0, "patterns": false, "strokes": false}}),
+    )
+    .unwrap();
+    let n = s.doc().unwrap().doc.node(owner).unwrap();
+    assert_eq!(n.appearance.effects.len(), 2);
+    let transform = &n.appearance.effects[1];
+    assert_eq!(transform.id, "distort.transform");
+    assert!(transform.visible);
+    assert_eq!(transform.params["scaleV"].as_f64(), Some(150.0));
+    assert_eq!(transform.params["reference"].as_f64(), Some(8.0));
+    assert_eq!(transform.params["objects"].as_bool(), Some(true));
+    assert_eq!(transform.params["copies"].as_f64(), Some(0.0));
+    let vectorcraft_doc::color::Paint::Gradient(g) = n.appearance.fill_paint() else { panic!("own Group gradient missing") };
+    assert_eq!(g.geom.is_some(), placed);
+    // Reference8 is the bottom-right of the effected aggregate (230,210),
+    // unchanged by the top trim. V150 sends the original y90 edge to y30;
+    // without this actual affine action pixel(125,60) would be transparent.
+    eraser_placement_trim(&mut s, edited, owner, (125, 60))
+}
+
+#[test]
+fn eraser_placement_control_affine_carry_matches_equivalent_placed() {
+    let placed = eraser_placement_affine_scene(true);
+    let fitted = eraser_placement_affine_scene(false);
+    eraser_placement_matches(&placed, &fitted, &[(190, 175), (190, 185)]);
+}
+
+fn eraser_placement_item_stroke_scene(placed: bool) -> (vectorcraft_render::Rendered, vectorcraft_render::Rendered) {
+    let mut s = session();
+    let id = marquee_rectangle(&mut s, true, false);
+    s.execute("paint.setFill", &json!({"ids": [id.0], "none": true})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [id.0], "weight": 10})).unwrap();
+    // The row's +10 geometry expands y100..200 to y90..210; Within stroke
+    // weight10 fits its gradient to the inflated y85..215 paint box.
+    s.execute(
+        "paint.setStroke",
+        &json!({"ids": [id.0],
+        "gradient": eraser_placement_ramp(placed, 215.0, 85.0)}),
+    )
+    .unwrap();
+    let index = s
+        .doc()
+        .unwrap()
+        .doc
+        .node(id)
+        .unwrap()
+        .appearance
+        .items
+        .iter()
+        .position(|item| matches!(item, vectorcraft_doc::AppearanceItem::Stroke(_)))
+        .unwrap();
+    s.execute("paint.editGradient", &json!({"ids": [id.0], "item": index, "stroke": true, "strokeMode": "within"})).unwrap();
+    s.execute(
+        "effect.apply",
+        &json!({"ids": [id.0], "target": "object", "item": index,
+        "effect": "path.offsetPath", "params": {"offset": 10, "joins": "round"}}),
+    )
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap();
+    assert!(matches!(n.kind, NodeKind::Path { .. }));
+    assert!(n.appearance.fill_paint().is_none());
+    assert!(n.appearance.effects.is_empty(), "this effect belongs only to the stroke row");
+    let vectorcraft_doc::AppearanceItem::Stroke(st) = &n.appearance.items[index] else { panic!("public stroke row missing") };
+    assert_eq!(st.width, 10.0);
+    assert_eq!(st.gradient_mode, vectorcraft_doc::StrokeGradientMode::Within);
+    assert!(st.path_gradient().is_none(), "the test excludes Along/Across path-coordinate paint");
+    assert_eq!(st.effects.len(), 1);
+    assert_eq!(st.effects[0].id, "path.offsetPath");
+    assert!(st.effects[0].visible);
+    let vectorcraft_doc::color::Paint::Gradient(g) = &st.paint else { panic!("stroke gradient missing") };
+    assert_eq!(g.geom.is_some(), placed);
+    assert!(!g.gradient.dither);
+    eraser_placement_trim(&mut s, id, id, (150, 90))
+}
+
+#[test]
+fn eraser_placement_control_item_within_stroke_matches_equivalent_placed() {
+    let placed = eraser_placement_item_stroke_scene(true);
+    let fitted = eraser_placement_item_stroke_scene(false);
+    eraser_placement_matches(&placed, &fitted, &[(210, 175), (210, 185)]);
+}
