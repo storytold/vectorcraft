@@ -9538,11 +9538,20 @@ fn a_drawn_graph_with_filled_lines_saved_as_ai_opens_with_them() {
             let mut again = Session::new();
             again.execute("document.open", &json!({"path": path})).unwrap();
             let mut graphs = vec![];
-            again.doc().unwrap().doc.walk(|n| graphs.extend(n.extras().graph.as_deref().cloned()));
+            again.doc().unwrap().doc.walk(|n| graphs.extend(n.extras().graph.as_deref().map(|g| (n.id, g.clone()))));
             assert_eq!(graphs.len(), usize::from(live), "{width:?} {name}");
-            if let Some(g) = graphs.first() {
+            if let Some((gid, g)) = graphs.first() {
                 assert_eq!((g.kind, g.cells(), g.filled_lines, g.line_width), (written.kind, written.cells(), true, width), "{width:?} {name}");
                 assert_eq!(g.filled_line_width(), written.filled_line_width(), "{width:?} {name}");
+                // With Draw Filled Lines turned off, each series draws its thin 1 pt line again.
+                again.execute("select.set", &json!({"ids": [gid.0]})).unwrap();
+                again.execute("graph.setType", &json!({"id": gid.0, "filledLines": false})).unwrap();
+                for series in 0..2 {
+                    let line = series_parts(&again, *gid, series)
+                        .into_iter()
+                        .any(|p| p.appearance.fill_paint().is_none() && !p.appearance.stroke_paint().is_none() && p.appearance.stroke_width() == 1.0);
+                    assert!(line, "{width:?} {name}: series {series} draws no thin line");
+                }
             }
         }
     }

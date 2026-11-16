@@ -11408,7 +11408,7 @@ fn a_line_graph_drawn_with_filled_lines_keeps_them_and_their_width() {
     let (g, tagged) = live(band_graph("%_7 0 0 14 1 1 1 0 8 44 Gy\n"));
     assert_eq!((g.kind, g.filled_lines, g.line_width, tagged), (GraphKind::Line, true, Some(8.0), 2));
     let fill = Some(Paint::solid(Color::cmyk(0.5, 0.0, 0.0, 0.0)));
-    assert!(g.series_paints.iter().all(|p| p.fill == fill && p.stroke == Some(Paint::None) && p.stroke_width.is_none()), "{:?}", g.series_paints);
+    assert!(g.series_paints.iter().all(|p| p.fill == fill && p.stroke.is_none() && p.stroke_width.is_none()), "{:?}", g.series_paints);
     assert_eq!(live(band_graph("%_7 0 0 14 1 1 1 0 3 44 Gy\n")).0.line_width, None, "3 pt");
     assert_eq!(live(band_graph("%_7 0 0 14 1 1 1 0 6 44 Gy\n")).0.line_width, Some(6.0), "6 pt");
     assert_eq!(live(band_graph("%_7 0 0 14 1 1 1 0 100 44 Gy\n")).0.line_width, Some(100.0), "100 pt");

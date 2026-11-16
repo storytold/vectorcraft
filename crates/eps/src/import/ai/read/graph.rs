@@ -487,7 +487,9 @@ fn as_drawn(n: &Node) -> bool {
 /// graph (`line`) has paths without a fill: its lines. With filled lines (`bands`), a filled path
 /// outlined as [`band_outline`] says is a band or a mark drawn like one and gives no stroke; any
 /// other filled path but a [`square`] marker or legend swatch is a band outlined otherwise. The
-/// other paths give the series' stroke, and without them the series has none. `None` when they
+/// other paths give the series' stroke, and without them the series has none. A series with a band
+/// and no stroke on its other paths keeps no stroke at all, so with filled lines turned off its thin
+/// line is drawn in the series color at 1 pt, as for a graph drawn here. `None` when they
 /// differ, a band has another outline, or the group, its own appearance or a path is drawn
 /// otherwise than [`as_drawn`].
 fn series_paints(art: &Node, tags: &HashMap<NodeId, u32>, line: bool, bands: bool) -> Option<Vec<SeriesPaint>> {
@@ -497,13 +499,14 @@ fn series_paints(art: &Node, tags: &HashMap<NodeId, u32>, line: bool, bands: boo
         (as_drawn(group) && *group.appearance == Appearance::default()).then_some(())?;
         let paths: Vec<&Arc<Node>> = group.children().into_iter().flatten().collect();
         (!paths.is_empty() && paths.iter().all(|p| matches!(p.kind, NodeKind::Path { .. }))).then_some(())?;
-        let (mut fills, mut strokes) = (vec![], vec![]);
+        let (mut fills, mut strokes, mut banded) = (vec![], vec![], false);
         for p in &paths {
             as_drawn(p).then_some(())?;
             let filled = shown(p, true).ok()?;
             let outline = shown(p, false).ok()?;
             if bands && filled.is_some() && band_outline(&outline) {
                 // A band, or a mark outlined as one: the graph keeps no stroke for a series that draws bands.
+                banded = true;
             } else if bands && filled.is_some() && !square(p) {
                 // A band outlined otherwise: the graph draws it again with the thin black outline only.
                 return None;
@@ -520,6 +523,7 @@ fn series_paints(art: &Node, tags: &HashMap<NodeId, u32>, line: bool, bands: boo
         slot.fill = fill;
         (slot.stroke, slot.stroke_width) = match stroke {
             Some((paint, width)) => (Some(paint), Some(width)),
+            None if banded => (None, None),
             None => (Some(Paint::None), None),
         };
     }
@@ -699,7 +703,8 @@ mod tests {
     }
 
     /// With filled lines, a band's thin black outline is not the series' stroke: its markers' stroke
-    /// is, or none. A band outlined otherwise than its markers has no one stroke.
+    /// is, and with unstroked markers or none the series keeps no stroke. A band outlined otherwise
+    /// than its markers has no one stroke.
     #[test]
     fn a_filled_line_bands_outline_is_not_its_series_stroke() {
         let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
@@ -712,7 +717,7 @@ mod tests {
         let outlined = Appearance::basic(red.clone(), Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)), FILLED_LINE_OUTLINE_WIDTH);
         let marker = Appearance::basic(red.clone(), Paint::None, 0.0);
         let kept = series_paints(&series(outlined.clone(), marker.clone()), &tags, true, true).expect("a band and a marker");
-        assert_eq!((kept[0].fill.as_ref(), kept[0].stroke.as_ref(), kept[0].stroke_width), (Some(&red), Some(&Paint::None), None));
+        assert_eq!((kept[0].fill.as_ref(), kept[0].stroke.as_ref(), kept[0].stroke_width), (Some(&red), None, None));
         let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
         let stroked = Appearance::basic(red.clone(), blue.clone(), 2.0);
         let kept = series_paints(&series(outlined.clone(), stroked), &tags, true, true).expect("a band and a stroked marker");
@@ -725,7 +730,7 @@ mod tests {
             ))],
         );
         let kept = series_paints(&bands_only, &tags, true, true).expect("a band alone");
-        assert_eq!((kept[0].stroke.as_ref(), kept[0].stroke_width), (Some(&Paint::None), None), "a band alone");
+        assert_eq!((kept[0].stroke.as_ref(), kept[0].stroke_width), (None, None), "a band alone");
         // A band as long as it is wide is a square, and still a band: its outline is not the series' stroke.
         let square_band = |marker: Appearance| {
             let band = Arc::new(Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 3.0, 3.0)), outlined.clone()));
@@ -733,7 +738,7 @@ mod tests {
             Node::group(NodeId(1), vec![Arc::new(Node::group(NodeId(2), vec![band, marker]))])
         };
         let kept = series_paints(&square_band(marker.clone()), &tags, true, true).expect("a square band and a marker");
-        assert_eq!((kept[0].stroke.as_ref(), kept[0].stroke_width), (Some(&Paint::None), None), "a square band");
+        assert_eq!((kept[0].stroke.as_ref(), kept[0].stroke_width), (None, None), "a square band");
         assert!(series_paints(&series(outlined, marker.clone()), &tags, true, false).is_none(), "lines not filled");
         let thick = Appearance::basic(red.clone(), Paint::solid(Color::BLACK), 1.0);
         assert!(series_paints(&series(thick, marker), &tags, true, true).is_none(), "a 1 pt outline");
