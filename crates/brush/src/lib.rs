@@ -804,10 +804,16 @@ impl BrushKind {
         }
     }
 
-    /// The values of [`Self::stroke_option_keys`], as a JSON object.
+    /// The values of [`Self::stroke_option_keys`], as a JSON object. Calligraphic modes left to the
+    /// values are a `null` `modes`, so a stroke that sets them so keeps that setting.
     fn option_values(&self) -> serde_json::Value {
         let v = match self {
-            BrushKind::Calligraphic(c) => serde_json::to_value(c),
+            BrushKind::Calligraphic(c) => serde_json::to_value(c).map(|mut v| {
+                if let Some(o) = v.as_object_mut() {
+                    o.entry("modes").or_insert(serde_json::Value::Null);
+                }
+                v
+            }),
             BrushKind::Scatter(s) => serde_json::to_value(ScatterOptions {
                 size: s.size,
                 spacing: s.spacing,

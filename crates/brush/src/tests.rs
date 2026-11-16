@@ -2118,3 +2118,20 @@ fn null_stroke_option_items_keep_the_items_the_stroke_has() {
     let same = b.stroke_options_that_differ(&map(json!({"modes": [null, null, null, null]}))).unwrap();
     assert!(same.is_empty(), "{same:?}");
 }
+
+#[test]
+fn a_null_calligraphic_modes_setting_stays_when_another_value_changes() {
+    let map = |v: serde_json::Value| v.as_object().cloned().unwrap_or_default();
+    // A brush whose modes are its own, and a stroke whose modes follow its values instead.
+    let mut b = calli(0.0, 100.0, 3.0);
+    if let BrushKind::Calligraphic(c) = &mut b.kind {
+        c.modes = Some([Variation::Pressure; 3]);
+    }
+    let got = b.stroke_options_that_differ(&map(json!({"modes": null, "angle": 30.0}))).unwrap();
+    assert_eq!(serde_json::Value::Object(got), json!({"modes": null, "angle": 30.0}));
+    let BrushKind::Calligraphic(c) = b.with_stroke_options(&map(json!({"modes": null, "angle": 30.0}))).unwrap().kind else { panic!("calligraphic") };
+    assert_eq!(c.modes(), [Variation::Fixed; 3], "the stroke draws with the modes its values give");
+    // A brush whose modes follow its values: a null `modes` is the brush's own and is left out.
+    let plain = calli(0.0, 100.0, 3.0).stroke_options_that_differ(&map(json!({"modes": null}))).unwrap();
+    assert!(plain.is_empty(), "{plain:?}");
+}

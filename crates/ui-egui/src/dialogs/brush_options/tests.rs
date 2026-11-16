@@ -999,3 +999,23 @@ fn options_of_selected_object_show_what_a_path_can_set_for_each_type() {
     app.run("select.none", json!({})).unwrap();
     assert!(!object_available(&app));
 }
+
+#[test]
+fn options_of_selected_object_change_nothing_after_another_document_became_active() {
+    let mut app = app();
+    let a = brushed_line(&mut app, 50.0, "Arrow");
+    select(&mut app, &[a]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    set(&mut app, json!({"width": 50}));
+    // A second document with a brushed path of the same id becomes the active one.
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let other = brushed_line(&mut app, 50.0, "Arrow");
+    assert_eq!(other, a);
+    // OK closes the dialog as Cancel does.
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(own_options(&app, other), json!({}), "the second document's path keeps the brush's settings");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert_eq!(own_options(&app, a), json!({}), "the first document's path keeps the brush's settings");
+}

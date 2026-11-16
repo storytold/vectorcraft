@@ -207,6 +207,41 @@ fn options_of_selected_object_keep_the_modes_each_path_draws_with() {
     assert_eq!((confetti_size_mode(&s, a), confetti_size_mode(&s, b)), (Variation::Fixed, Variation::Fixed));
 }
 
+/// The widths (%) the first stroke of `id`, painted with Arrow, draws with at the lightest and the
+/// heaviest pressure.
+fn arrow_width_range(s: &Session, id: NodeId) -> (f64, f64) {
+    let lib = vectorcraft_brush::library(&s.doc().unwrap().doc);
+    let b = lib.iter().find(|b| b.name == "Arrow").unwrap();
+    match b.with_stroke_options(own_options(s, id).as_object().unwrap()).unwrap().kind {
+        vectorcraft_brush::BrushKind::Art(a) => a.width_range(),
+        k => panic!("not an art brush: {k:?}"),
+    }
+}
+
+#[test]
+fn options_of_selected_object_keep_each_paths_largest_width_when_the_width_changes() {
+    let mut s = session();
+    let a = line(&mut s);
+    let b = line(&mut s);
+    s.execute("brush.apply", &json!({"name": "Arrow", "ids": [a.0, b.0]})).unwrap();
+    // Both widths follow the pressure; the first path's largest width is its width, the second
+    // path's is its own.
+    s.execute("brush.objectOptions", &json!({"ids": [a.0], "params": {"width": 100, "width_mode": "pressure"}})).unwrap();
+    s.execute("brush.objectOptions", &json!({"ids": [b.0], "params": {"width": 100, "width_mode": "pressure", "width_max": 150}})).unwrap();
+    assert_eq!((arrow_width_range(&s, a), arrow_width_range(&s, b)), ((100.0, 100.0), (100.0, 150.0)));
+    // The width the path has already changes nothing.
+    let steps = undo_steps(&s);
+    assert_eq!(s.execute("brush.objectOptions", &json!({"ids": [a.0], "params": {"width": 100}})).unwrap()["changed"], json!([]));
+    assert_eq!(own_options(&s, a), json!({"width_mode": "pressure"}));
+    assert_eq!(undo_steps(&s), steps);
+    // A new smallest width leaves each path's largest width as it was.
+    s.execute("brush.objectOptions", &json!({"ids": [a.0, b.0], "params": {"width": 50}})).unwrap();
+    assert_eq!((arrow_width_range(&s, a), arrow_width_range(&s, b)), ((50.0, 100.0), (50.0, 150.0)));
+    // A largest width the params give is set on each path.
+    s.execute("brush.objectOptions", &json!({"ids": [a.0, b.0], "params": {"width": 40, "width_max": 120}})).unwrap();
+    assert_eq!((arrow_width_range(&s, a), arrow_width_range(&s, b)), ((40.0, 120.0), (40.0, 120.0)));
+}
+
 #[test]
 fn options_of_selected_object_go_when_a_freehand_stroke_changes_the_brush() {
     let mut s = session();

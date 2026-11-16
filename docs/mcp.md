@@ -3468,7 +3468,9 @@ already walks Image Trace. Short agent entry points:
   equal to the brush's own value is dropped. The dialog sends only the items and fields changed in it, so editing one
   end of a range leaves each selected path's other end as it was. A mode that `params` does not set (no `modes`, or
   a `null` item) stays the one each path draws with, so a changed calligraphic variation or scatter range does not
-  change it. `reset: true` clears a path's settings. The command
+  change it. An art `width` without a `width_max` keeps the largest width of each path whose width follows the pen,
+  and a calligraphic path's `modes: null` (modes that follow its values) stays when another value changes. The dialog
+  changes nothing when another document has become the active one. `reset: true` clears a path's settings. The command
   refuses `params` together with `reset`, a selection with no brushed path, paths whose brushes are of different
   types, a bristle brush and a field the type does not take. It records one undo step, and none when nothing changes.
   `brush.options` edits still reach the settings a path does not set, `brush.apply`, a brush change in

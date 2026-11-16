@@ -574,6 +574,7 @@ pub(super) fn brush_object_options(s: &mut Session, p: &Value) -> Result<Value> 
                 merged.insert(k.clone(), next);
             }
             keep_drawn_modes(b, &was, &params, &mut merged);
+            keep_largest_width(b, &was, &params, &mut merged);
             b.stroke_options_that_differ(&merged).map_err(|e| bad(C, e))?
         };
         options.get_or_insert_with(|| next.clone());
@@ -634,6 +635,30 @@ fn keep_drawn_modes(
     }
     let kept = before.into_iter().zip(after).enumerate().map(|(j, (w, a))| if given.get(j).is_some_and(|g| !g.is_null()) { a } else { w }).collect();
     merged.insert("modes".into(), Value::Array(kept));
+}
+
+/// Keep the largest width a stroke of art brush `b` draws with (with its own settings `was`) when
+/// `params` sets `width` and no `width_max`. Without a `width_max` of its own the largest width is
+/// the width, so without this a changed width would also change the largest width.
+fn keep_largest_width(
+    b: &Brush,
+    was: &serde_json::Map<String, Value>,
+    params: &serde_json::Map<String, Value>,
+    merged: &mut serde_json::Map<String, Value>,
+) {
+    if params.get("width").is_none_or(Value::is_null) || params.get("width_max").is_some_and(|m| !m.is_null()) {
+        return;
+    }
+    let art = |o: &serde_json::Map<String, Value>| match b.with_stroke_options(o).ok().map(|b| b.kind) {
+        Some(BrushKind::Art(a)) => Some(a),
+        _ => None,
+    };
+    let (Some(before), Some(after)) = (art(was), art(merged)) else { return };
+    let follows_pen = |a: &brush::ArtBrush| a.width_mode.is_some_and(|m| m.follows_pen());
+    // Only a width that followed the pen has a largest width, and only one that still does uses it.
+    if before.width_max.is_none() && follows_pen(&before) && follows_pen(&after) && after.width != before.width {
+        merged.insert("width_max".into(), json!(before.width));
+    }
 }
 
 /// The name `brush.placeArt` gives each pattern brush tile it places, by tile, in the order it

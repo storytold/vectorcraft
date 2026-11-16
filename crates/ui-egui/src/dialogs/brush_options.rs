@@ -20,9 +20,10 @@
 //!
 //! The panel menu's Options of Selected Object opens the dialog on the brush of the first selected
 //! brushed path, with that path's own settings ([`open_object`]), with `__object`, `__targets` (the
-//! brushed paths) and `__opened` (the values it opened with). It has no name, and of the Art and
-//! Pattern brush options only those a path can set for itself. OK runs `brush.objectOptions` with
-//! the values changed since it opened: the paths change and the brush stays as it is.
+//! brushed paths), `__opened` (the values it opened with) and `__doc` (the uid of the document). It
+//! has no name, and of the Art and Pattern brush options only those a path can set for itself. OK
+//! runs `brush.objectOptions` with the values changed since it opened: the paths change and the
+//! brush stays as it is. OK after another document has become the active one changes nothing.
 
 use egui::{Color32, Sense, Stroke, pos2, vec2};
 use serde_json::{Map, Value, json};
@@ -54,6 +55,9 @@ const TARGETS: &str = "__targets";
 
 /// The field of such a dialog holding the `brush.objectOptions` params it opened with.
 const OPENED: &str = "__opened";
+
+/// The field of such a dialog holding the uid of the document it opened in.
+const DOC: &str = "__doc";
 
 /// Calligraphic values: (field, label, suffix, decimals), in [`Calligraphic::RANGES`] order.
 const CALLI: [(&str, &str, &str, usize); 3] = [("angle", "Angle:", "°", 0), ("roundness", "Roundness:", "%", 0), ("size", "Size:", " pt", 1)];
@@ -216,7 +220,8 @@ pub fn open_object(app: &mut VectorcraftApp) -> Result<Value, String> {
     let r = app.run("brush.objectOptions", json!({}))?;
     let targets = r["ids"].clone();
     let first = targets.get(0).and_then(Value::as_u64).map(NodeId).ok_or("no path painted with a brush is selected")?;
-    let lib = vectorcraft_brush::library(&app.session.active().ok_or("no document open")?.doc);
+    let st = app.session.active().ok_or("no document open")?;
+    let (lib, doc) = (vectorcraft_brush::library(&st.doc), st.uid);
     let b = stroke_brush(app, &lib, first).ok_or("no path painted with a brush is selected")?;
     let own: Map<String, Value> = serde_json::from_value(r["options"].clone()).unwrap_or_default();
     let edited = b.with_stroke_options(&own)?;
@@ -225,6 +230,7 @@ pub fn open_object(app: &mut VectorcraftApp) -> Result<Value, String> {
     f.insert("__brush".into(), json!(b.name));
     f.insert(OBJECT.into(), json!(true));
     f.insert(TARGETS.into(), targets);
+    f.insert(DOC.into(), json!(doc));
     let mut d = Dialog { kind: KIND.into(), fields: f };
     let opened = object_params(&d, b.kind.stroke_option_keys());
     d.fields.insert(OPENED.into(), Value::Object(opened));
@@ -256,8 +262,13 @@ fn changed_part(was: Option<&Value>, now: Value) -> Option<Value> {
 }
 
 /// OK of Options of Selected Object: `brush.objectOptions` on the paths it opened for, with the
-/// values changed since it opened ([`changed_part`]). The dialog closes when they are set.
+/// values changed since it opened ([`changed_part`]). The dialog closes when they are set. When
+/// another document has become the active one, it closes as Cancel does and changes nothing.
 fn confirm_object(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    if d.fields.get(DOC).and_then(Value::as_u64) != app.session.active().map(|doc| doc.uid) {
+        app.ui.dialog = None;
+        return Ok(json!({}));
+    }
     let keys: Vec<String> = d.fields.get("__keys").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
     let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
     let opened = d.fields.get(OPENED).and_then(Value::as_object).cloned().unwrap_or_default();
