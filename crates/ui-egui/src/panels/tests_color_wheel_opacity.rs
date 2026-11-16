@@ -216,6 +216,39 @@ fn an_opacity_edit_keeps_the_hue_picked_for_a_white_stop() {
     assert_eq!(ring(&h), Some(120.0), "the ring keeps the hue after the opacity edit");
 }
 
+/// The OKLCH hue picked last for a white gradient stop stays on the OKLCH Hue row after the row
+/// sets the stop's opacity.
+#[test]
+fn an_opacity_edit_keeps_the_oklch_hue_picked_for_a_white_stop() {
+    let mut app = app();
+    let stops = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#0000ff"}]);
+    app.run("paint.setFill", json!({"gradient": {"stops": stops, "start": [10, 35], "end": [60, 35]}})).unwrap();
+    app.select_tool("gradient");
+    app.run("gradient.selectStop", json!({"index": 0})).unwrap();
+    app.run("ui.colorWheel", json!({"sliders": "oklch"})).unwrap();
+    let mut h = Harness::builder().with_size(vec2(260.0, 480.0)).build_ui_state(
+        |ui, app: &mut VectorcraftApp| {
+            show(app, ui);
+            crate::shortcuts::handle(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(2);
+    let hue_row = |h: &Harness<'static, VectorcraftApp>| {
+        let node = h.query_all_by_label("Hue").find(|n| n.accesskit_node().role() == Role::Slider).expect("the OKLCH Hue row");
+        (node.accesskit_node().locate(), node.accesskit_node().numeric_value())
+    };
+    let ((target_node, target_tree), _) = hue_row(&h);
+    let data = Some(ActionData::NumericValue(120.0));
+    h.event(Event::AccessKitActionRequest(ActionRequest { target_node, target_tree, action: Action::SetValue, data }));
+    h.run_steps(2);
+    assert_eq!(hue_row(&h).1, Some(120.0), "the Hue row shows the hue picked for white");
+    action(&mut h, Action::SetValue, Some(ActionData::NumericValue(30.0)));
+    let Paint::Gradient(g) = crate::panels::current_paints(h.state()).0 else { panic!("still a gradient") };
+    assert!((g.gradient.stops[0].opacity - 0.3).abs() < 1e-6, "{:?}", g.gradient.stops);
+    assert_eq!(hue_row(&h).1, Some(120.0), "the Hue row keeps the hue after the opacity edit");
+}
+
 /// A drag across the slider previews and ends as one undo step named Opacity.
 #[test]
 fn a_drag_is_one_undo_step() {

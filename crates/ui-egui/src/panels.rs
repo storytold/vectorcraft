@@ -784,6 +784,8 @@ mod tests_color_wheel;
 #[cfg(test)]
 mod tests_color_wheel_box;
 #[cfg(test)]
+mod tests_color_wheel_hex;
+#[cfg(test)]
 mod tests_color_wheel_opacity;
 #[cfg(test)]
 mod tests_constrain;

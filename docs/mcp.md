@@ -656,12 +656,36 @@ selected gradient stop or the selected freeform point (the first stop or point w
 hides the row. The row is gray with nothing selected, for an object selected in a symbol instance, and when the fill
 or stroke row it would set is on type characters or missing. Keys left out keep their values.
 Params that are not an object, another key or a value off the list return an error and change nothing. The command
-returns `{view, channel, opacity, sliders}`, and the settings are kept with the preferences.
+returns `{view, channel, opacity, hexField, sliders}`, and the settings are kept with the preferences.
 
 `ui.colorWheel {"sliders": "oklch"}` shows the Color Wheel panel's OKLCH Sliders (L, C and H rows under the wheel or
 the box), and `"none"` hides them; `"oklch"` is an error while the working RGB space is not sRGB.
 `color.convert {"to": "oklch"}` answers the color's OKLCH as `[L %, C, H°]` of its display sRGB. A color outside sRGB
 (a Lab or CMYK color, or an RGB color in a wider working RGB space) is clipped to sRGB first.
+
+`ui.colorWheel {"hexField": true}` checks Show Hex Field, as the panel menu does, and `false` unchecks it. The field
+under the wheel or the box shows the color's six hex digits, and two more for the opacity while the opacity that Show
+Opacity edits is under 100 %. A text typed into it is read as `color.parse` reads it. The color is applied as a pick
+on the wheel is, and an alpha in the text sets the opacity that Show Opacity edits, whether or not that row shows.
+Where that row is gray (nothing selected, an object selected in a symbol instance, or a fill or stroke row on type
+characters or missing), only the color is applied. Text without an alpha keeps the opacity. Text that gives the
+color and opacity already there records no undo step, unless the color is a tint of a global swatch. A text `color.parse` refuses changes nothing, and its
+error shows in the status bar.
+
+`color.parse {"text": "#33669980"}` answers `{"color": {"model": "rgb", …}, "hex": "#336699", "opacity": 50.2}`.
+The text is a [hex color](https://www.w3.org/TR/css-color-4/#hex-notation) of 3, 4, 6 or 8 digits, with or without
+the `#`, or a CSS [`rgb()` or `rgba()`](https://www.w3.org/TR/css-color-4/#rgb-functions),
+[`hsl()` or `hsla()`](https://www.w3.org/TR/css-color-4/#the-hsl-notation) or
+[`oklch()`](https://www.w3.org/TR/css-color-4/#specifying-oklab-oklch) color. The functions take the
+space-separated form with an optional `/ alpha`, and `rgb()` and `hsl()` also take the comma-separated legacy form.
+Hues take `deg`, `grad`, `rad` and `turn`, and `none` reads as 0. The text has at most 48 characters, not counting spaces around it. A hex
+color, `rgb()` and `hsl()` give their numbers as the document's RGB numbers, as `#rrggbb` does in every command, and
+`oklch()` gives its sRGB color, with the chroma lowered to fit sRGB as OKLCH Sliders lower it; `oklch()` is an error
+while the working RGB space is not sRGB. Values are clamped where CSS clamps them when it parses them (red, green
+and blue to 0 to 255, the alpha to 0 to 1, a negative saturation to 0, OKLCH lightness to 0 to 1 and a negative
+chroma to 0), and an `hsl()` color's red, green or blue outside 0 to 255 is clipped. `opacity` is the alpha
+as a percentage, or `null` when the text gives none. Any other text is an error. The color parameters of the other
+commands still refuse `#rrggbbaa` and `#rgba`.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop

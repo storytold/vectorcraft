@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::cms::Model;
+use vectorcraft_color::css;
 use vectorcraft_color::harmony::{Guide, GuideOptions, Harmony, Variation};
 use vectorcraft_color::{Color, Paint, keep_model};
 use vectorcraft_doc::live::lerp_color;
@@ -135,7 +136,31 @@ pub fn specs() -> Vec<CommandSpec> {
             always,
             harmony
         ),
+        cmd!(
+            query "color.parse",
+            "Parse Color",
+            [],
+            None,
+            "{text: a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa; the # may be left out) or a CSS color: rgb() or rgba(), hsl() or hsla() (space-separated with an optional / alpha, or the comma-separated legacy form), or oklch(), as CSS Color 4 defines them (https://www.w3.org/TR/css-color-4/#hex-notation, https://www.w3.org/TR/css-color-4/#rgb-functions, https://www.w3.org/TR/css-color-4/#the-hsl-notation, https://www.w3.org/TR/css-color-4/#specifying-oklab-oklch); at most 48 characters, spaces around it not counted} the color the text gives → {color: an RGB color, the numbers written for a hex color, rgb() or hsl() and the sRGB of an oklch() color, whose chroma is lowered to fit sRGB; hex: \"#rrggbb\" of it; opacity: 0..100, the text's alpha, or null when the text gives none (CSS reads that as 100)}; values are clamped where CSS clamps them when it parses them, and an hsl() channel outside 0..255 is clipped; any other text is an error, and so is oklch() while the working RGB space is not sRGB",
+            always,
+            parse_color
+        ),
     ]
+}
+
+fn parse_color(_: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "color.parse";
+    let text = text_param(p, "text", C)?.ok_or_else(|| bad(C, "missing `text`"))?;
+    let parsed = css::parse(text).ok_or_else(|| {
+        bad(C, "`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters")
+    })?;
+    if parsed.space == css::Space::Oklch && !vectorcraft_color::cms::active().rgb_is_srgb() {
+        return Err(bad(C, "OKLCH needs sRGB as the working RGB space"));
+    }
+    let [r, g, b] = parsed.rgb;
+    // As paint.proxies answers an opacity: a percentage to two places.
+    let opacity = parsed.alpha.map(|a| (f64::from(a) * 10_000.0).round() / 100.0);
+    Ok(json!({ "color": Color::rgb(r, g, b), "hex": css::hex_of(parsed.rgb), "opacity": opacity }))
 }
 
 /// The RGB inverse of `c`, expressed in `c`'s colour model.

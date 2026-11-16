@@ -6,6 +6,7 @@
 
 pub mod blend;
 pub mod cms;
+pub mod css;
 pub mod freeform;
 pub mod gradient;
 pub mod harmony;

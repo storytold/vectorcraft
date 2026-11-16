@@ -431,6 +431,9 @@
 	Fill Color	Warna isian
 	Opacity	Opasitas
 	Show Opacity	Tampilkan opasitas
+	Show Hex Field	Tampilkan bidang hex
+	Hex or CSS color	Warna hex atau CSS
+	Parse Color	Urai warna
 	Stroke Color	Warna stroke
 	Fill Gradient	Gradien isian
 	Stroke Gradient	Gradien stroke
@@ -5752,6 +5755,7 @@ mark-style	Japanese	Jepang
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` harus hue, saturation, brightness, red, green atau blue
 @msg	`sliders` must be none or oklch	`sliders` harus none atau oklch
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH memerlukan sRGB sebagai ruang RGB kerja
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` harus berupa warna hex (#rgb, #rgba, #rrggbb, atau #rrggbbaa) atau warna CSS rgb(), hsl(), atau oklch() dengan paling banyak 48 karakter
 @msg	the Color Picker is not open	Pemilih Warna tidak terbuka
 @msg	the screen color sampler is already open	pengambil warna layar sudah terbuka
 @msg	this system has no screen color sampler	sistem ini tidak memiliki pengambil warna layar

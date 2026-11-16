@@ -841,7 +841,7 @@ fn ui_color_wheel_sets_and_reads_the_sliders() {
     assert_eq!(app.run("ui.colorWheel", json!({})).unwrap()["sliders"], json!("none"));
     assert_eq!(app.run("ui.colorWheel", json!({"sliders": "hsl"})).unwrap_err(), "`sliders` must be none or oklch");
     let got = app.run("ui.colorWheel", json!({"sliders": "oklch"})).unwrap();
-    assert_eq!(got, json!({"view": "box", "channel": "red", "opacity": false, "sliders": "oklch"}));
+    assert_eq!(got, json!({"view": "box", "channel": "red", "opacity": false, "hexField": false, "sliders": "oklch"}));
     let e = app.run("ui.colorWheel", json!({"view": "wheel", "sliders": "hsl"})).unwrap_err();
     assert_eq!(e, "`sliders` must be none or oklch");
     assert_eq!(app.ui.color_wheel.view, crate::panels::color_wheel::View::Box, "an error changes nothing");
