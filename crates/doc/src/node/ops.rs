@@ -804,6 +804,45 @@ impl Node {
         }
     }
 
+    /// Whether this object is marked as the clipping path of the clip group or clipping layer that
+    /// holds it. A path keeps the mark in its kind, where files write it; other objects (compound
+    /// paths, type, a group of the pieces a clipping path's effects draw) keep it in their extras,
+    /// which files don't write. A path made from another object may carry the mark in either.
+    pub fn is_clipping_path(&self) -> bool {
+        matches!(self.kind, NodeKind::Path { clipping: true, .. }) || self.extras().clipping
+    }
+
+    /// Mark this object as a clipping path, or take the mark off ([`Self::is_clipping_path`]).
+    pub fn set_clipping_path(&mut self, on: bool) {
+        let in_kind = if let NodeKind::Path { clipping, .. } = &mut self.kind {
+            *clipping = on;
+            true
+        } else {
+            false
+        };
+        // Other objects keep it in their extras; taking it off clears a mark a path carried there.
+        if (on && !in_kind) || (!on && self.extras().clipping) {
+            self.extras_mut().clipping = on;
+        }
+    }
+
+    /// The index among its children of this clip group's or clipping layer's clipping path: its
+    /// first marked child ([`Self::is_clipping_path`]), else its first (bottom-most) child, as a
+    /// clip group built in code or read from a file without marks has it. None when it doesn't
+    /// clip or holds nothing.
+    pub fn clipping_path_index(&self) -> Option<usize> {
+        if !self.clips() {
+            return None;
+        }
+        let children = self.children().filter(|c| !c.is_empty())?;
+        Some(children.iter().position(|c| c.is_clipping_path()).unwrap_or(0))
+    }
+
+    /// This clip group's or clipping layer's clipping path ([`Self::clipping_path_index`]).
+    pub fn clipping_path(&self) -> Option<&Arc<Node>> {
+        self.children()?.get(self.clipping_path_index()?)
+    }
+
     /// Where the ruler guides at the end of `children` (a layer's) begin: the index past the last
     /// child that is not one. Art goes below this index and ruler guides at or above it.
     pub fn guide_run_start(children: &[Arc<Node>]) -> usize {

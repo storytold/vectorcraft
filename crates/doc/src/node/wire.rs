@@ -284,6 +284,8 @@ impl From<NodeWire> for Node {
             color_mask: w.color_mask,
             warp_piece: w.warp_piece,
             clip_pieces: w.clip_pieces,
+            // Not in files: a clip group without a marked member clips by its first one.
+            clipping: false,
         };
         Node {
             id: w.id,

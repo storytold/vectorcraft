@@ -63,7 +63,8 @@ pub enum NodeKind {
         /// Boxed: few paths are live shapes, and the shape is larger than the rest of the variant.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         live: Option<Box<LiveShape>>,
-        /// This path acts as a clipping path inside a clip group.
+        /// This path is marked as the clipping path of the clip group or clipping layer that holds
+        /// it ([`Node::is_clipping_path`]).
         #[serde(default, skip_serializing_if = "crate::skip::is_default")]
         clipping: bool,
         /// Guide (non-printing) path.

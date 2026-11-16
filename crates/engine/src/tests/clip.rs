@@ -282,3 +282,49 @@ fn arranging_inside_a_clip_group_keeps_the_clipping_path_at_the_bottom() {
     send(&mut s, &[clip, a], "object.arrange.bringToFront");
     assert_eq!(child_ids(&s, g), [clip, b, a], "the art selected with it still moves");
 }
+
+/// Make Clipping Mask marks the clipping path whatever its kind (a compound path and type too, which
+/// had no mark), so that the clip group knows it wherever it is; Release, Ungroup, Deep Ungroup and
+/// the Layers panel's button take the mark off.
+#[test]
+fn the_clipping_path_is_marked_whatever_its_kind_until_the_clip_goes() {
+    let marked = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().is_clipping_path();
+    let clips_by = |s: &Session, g: NodeId| s.doc().unwrap().doc.node(g).unwrap().clipping_path().map(|c| c.id);
+    // A compound path, then Release.
+    let mut s = session();
+    let (art, donut) = art_and_donut(&mut s);
+    select(&mut s, &[art, donut]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    assert!(marked(&s, donut) && !marked(&s, art));
+    assert_eq!(clips_by(&s, g), Some(donut));
+    select(&mut s, &[g]);
+    s.execute("object.clippingMask.release", &json!({})).unwrap();
+    assert!(!marked(&s, donut), "Release takes it off");
+    // Type, then Ungroup.
+    let mut s = session();
+    let art = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap());
+    let t = id_of(&s.execute("text.create", &json!({"x": 5, "y": 80, "text": "O", "size": 90})).unwrap());
+    select(&mut s, &[art, t]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    assert!(marked(&s, t) && !marked(&s, art));
+    assert_eq!(clips_by(&s, g), Some(t));
+    select(&mut s, &[g]);
+    s.execute("object.ungroup", &json!({})).unwrap();
+    assert!(!marked(&s, t), "Ungroup takes it off");
+    // A compound path, then Deep Ungroup with its clip groups.
+    let mut s = session();
+    let (art, donut) = art_and_donut(&mut s);
+    select(&mut s, &[art, donut]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    s.execute("addon.cleanup.deepUngroup", &json!({"includeClipGroups": true, "ids": [g.0]})).unwrap();
+    assert!(!marked(&s, donut), "Deep Ungroup takes it off");
+    // The Layers panel's button: the layer's top object, a compound path, clips the layer.
+    let mut s = session();
+    let (_, donut) = art_and_donut(&mut s);
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    s.execute("layer.clippingMask.toggle", &json!({"id": layer.0})).unwrap();
+    assert!(marked(&s, donut));
+    assert_eq!(clips_by(&s, layer), Some(donut));
+    s.execute("layer.clippingMask.toggle", &json!({"id": layer.0})).unwrap();
+    assert!(!marked(&s, donut), "releasing the layer's clip takes it off");
+}

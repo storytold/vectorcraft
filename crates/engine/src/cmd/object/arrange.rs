@@ -131,14 +131,12 @@ pub(super) fn ungroup(s: &mut Session, _: &Value) -> Result<Value> {
                 continue;
             };
             let mut out = Vec::with_capacity(children.len());
-            for (k, c) in children.iter().enumerate() {
+            for c in children {
                 let mut c = (**c).clone();
-                // The clipping path keeps its paint (none, unless painted after Make).
-                if *clip
-                    && k == 0
-                    && let NodeKind::Path { clipping, .. } = &mut c.kind
-                {
-                    *clipping = false;
+                // The clipping path keeps its paint (none, unless painted after Make) and loses the
+                // mark only a clip holds.
+                if *clip {
+                    c.set_clipping_path(false);
                 }
                 // Each member keeps its own opacity; the group's opacity goes with the group.
                 new_sel.push(c.id);

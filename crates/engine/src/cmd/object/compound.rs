@@ -151,27 +151,25 @@ pub(in super::super) fn as_clipping_path(c: &mut Node) -> Result<()> {
         return Err(EngineError::Other("the top object must be a path, compound path or text object to use as a clipping mask".into()));
     }
     c.appearance = Appearance::basic(Paint::None, Paint::None, 0.0).into();
-    match &mut c.kind {
-        NodeKind::Path { clipping, .. } => *clipping = true,
-        NodeKind::Text(t) => {
-            for r in &mut t.runs {
-                (r.style.fill, r.style.stroke) = (Paint::None, Paint::None);
-            }
+    if let NodeKind::Text(t) = &mut c.kind {
+        for r in &mut t.runs {
+            (r.style.fill, r.style.stroke) = (Paint::None, Paint::None);
         }
-        _ => {}
     }
+    c.set_clipping_path(true);
     Ok(())
 }
 
-/// Stop clip group or clipped layer `id` clipping; its clipping path stays, with its paint.
+/// Stop clip group or clipped layer `id` clipping; its clipping path stays, with its paint, and its
+/// members lose the clipping path mark ([`Node::is_clipping_path`]), which only a clip holds.
 pub(in super::super) fn release_clip(d: &mut Document, id: NodeId) {
     let Some(n) = d.node_mut(id).filter(|n| n.clips()) else { return };
     n.set_clips(false);
-    let clip = n.children().and_then(|c| c.first()).map(|c| c.id);
-    if let Some(c) = clip.and_then(|c| d.node_mut(c))
-        && let NodeKind::Path { clipping, .. } = &mut c.kind
-    {
-        *clipping = false;
+    let marked: Vec<NodeId> = n.children().into_iter().flatten().filter(|c| c.is_clipping_path()).map(|c| c.id).collect();
+    for c in marked {
+        if let Some(c) = d.node_mut(c) {
+            c.set_clipping_path(false);
+        }
     }
 }
 

@@ -286,13 +286,10 @@ fn flatten(n: Node, clips: bool, named: bool, out: &mut Vec<Node>, count: &mut u
     }
     let NodeKind::Group { children, clip } = &n.kind else { return };
     *count += 1;
-    for (k, c) in children.iter().enumerate() {
+    for c in children {
         let mut c = (**c).clone();
-        if *clip
-            && k == 0
-            && let NodeKind::Path { clipping, .. } = &mut c.kind
-        {
-            *clipping = false;
+        if *clip {
+            c.set_clipping_path(false);
         }
         c.opacity *= n.opacity;
         c.visible &= n.visible;
