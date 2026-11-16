@@ -67,8 +67,8 @@ fn spacing_params(mode: &str, steps: f64, distance: f64) -> Value {
 }
 
 /// The Ramp or Shift slider: `key` of `object.blend.options` as a percentage from `min` to 100.
-/// A drag previews the selected blends and its release records one undo step; a click on the
-/// rail or an arrow key records one at once.
+/// A drag, a press on the rail included, previews the selected blends and its release records one
+/// undo step; a change without a drag, from the keyboard, records one at once.
 fn percent_slider(app: &mut VectorcraftApp, ui: &mut Ui, key: &str, value: Option<f64>, min: f64) {
     let mut v = value.unwrap_or(0.0).clamp(min, 100.0);
     let resp = widgets::slider(ui, egui::Slider::new(&mut v, min..=100.0).suffix("%"));
@@ -124,8 +124,9 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     let selected = info["target"] == "blend";
     // Position easing needs a spine to run along: a replaced one, or Align to Path. A blend made
-    // without a spine has none.
-    let spined = info["hasSpine"] != false && (info["spine"]["explicit"] == true || info["orientation"] == "path");
+    // without a spine has none, and easing is refused while one is selected.
+    let spined =
+        info["hasSpine"] != false && (info["spine"]["explicit"] == true || info["orientation"] == "path") && !selects_blend_without_spine(app);
     ui.add_enabled_ui(selected && spined, |ui| {
         let modes = ["easeIn", "easeOut", "easeInOut", "easeOutIn"];
         let labels = [tl!("Ease In"), tl!("Ease Out"), tl!("Ease In Out"), tl!("Ease Out In")];

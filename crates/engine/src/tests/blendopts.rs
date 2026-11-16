@@ -811,6 +811,14 @@ fn options_on_several_blends_set_only_the_values_given() {
         s.execute("object.blend.options", &p).unwrap();
         assert_eq!((spec(&s, b1).1, spec(&s, b2).1), (want1, want2), "{p}");
     }
+    // A spacing mode without a count keeps the count of a blend already in that mode; a blend in
+    // another mode takes the mode's starting count.
+    s.execute("object.blend.options", &json!({"id": b2.0, "spacing": "distance", "value": 12})).unwrap();
+    s.execute("object.blend.options", &json!({"spacing": "steps"})).unwrap();
+    assert_eq!((spec(&s, b1).1.spacing, spec(&s, b2).1.spacing), (BlendSpacing::Steps(7), BlendSpacing::Steps(5)));
+    s.execute("object.blend.options", &json!({"id": b2.0, "spacing": "steps", "value": 12})).unwrap();
+    s.execute("object.blend.options", &json!({"spacing": "steps"})).unwrap();
+    assert_eq!((spec(&s, b1).1.spacing, spec(&s, b2).1.spacing), (BlendSpacing::Steps(7), BlendSpacing::Steps(12)));
     // The whole edit of both blends is one undo step.
     let depth = undo_len(&s);
     s.execute("object.blend.options", &json!({"colorShift": -5, "ramp": 5})).unwrap();
@@ -872,7 +880,7 @@ fn options_that_change_nothing_or_are_refused_record_no_undo_step() {
     let before = (spec(&s, b1).1, spec(&s, b2).1);
     let depth = undo_len(&s);
     // Values the blends already have, and no values at all.
-    for p in [json!({}), json!({"orientation": "page", "id": b2.0}), json!({"colorShift": 10, "id": b1.0})] {
+    for p in [json!({}), json!({"smooth": false}), json!({"orientation": "page", "id": b2.0}), json!({"colorShift": 10, "id": b1.0})] {
         s.execute("object.blend.options", &p).unwrap();
         assert_eq!(undo_len(&s), depth, "{p}");
     }
@@ -886,8 +894,20 @@ fn options_that_change_nothing_or_are_refused_record_no_undo_step() {
         json!({"ramp": 50, "spacing": "steps", "value": 0}),
         json!({"ramp": 50, "spacing": "distance", "value": -3}),
         json!({"ramp": 50, "id": "b1"}),
+        json!({"ramp": 50, "orientation": "sideways"}),
+        json!({"ramp": 50, "orientation": 1}),
+        json!({"ramp": 50, "value": 3}),
+        json!({"ramp": 50, "spacing": 123}),
     ] {
         assert!(s.execute("object.blend.options", &p).is_err(), "{p}");
         assert_eq!((spec(&s, b1).1, spec(&s, b2).1, undo_len(&s)), (before.0.clone(), before.1.clone(), depth), "{p}");
     }
+    // Make and the options new blends start with refuse an unknown orientation too.
+    let error = s.execute("object.blend.make", &json!({"orientation": "sideways"})).unwrap_err().to_string();
+    assert!(error.contains("orientation must be page or path"), "{error}");
+    assert_eq!(undo_len(&s), depth);
+    s.execute("select.none", &json!({})).unwrap();
+    let defaults = s.execute("object.blend.info", &json!({})).unwrap();
+    assert!(s.execute("object.blend.options", &json!({"orientation": "sideways"})).is_err());
+    assert_eq!(s.execute("object.blend.info", &json!({})).unwrap(), defaults);
 }

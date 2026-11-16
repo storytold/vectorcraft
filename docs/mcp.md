@@ -11814,10 +11814,13 @@ so its point at `t` moves by (dx, dy), turning a straight spine into a curve (`p
 `object.blend.options {id?, spacing?, value?, steps?, distance?, orientation?, smooth?, easingType?, ramp?, colorShift?}`
 sets the options of every selected blend, or of the blend `id` alone. Each blend takes only the options given and
 keeps its own value for the others, so a call with `colorShift` alone leaves each blend's spacing, orientation, type
-and ramp as they were. A hidden or locked `id`, an `id` that is not a blend and a value out of range are errors that
-change nothing, and a call that changes no blend records no undo step. With no blend selected and no `id`, the call
-sets the spacing and orientation new blends start with. The Blend panel's Ramp and Shift sliders run it on the
-selected blends: a drag previews and its release records one undo step.
+and ramp as they were. `spacing` without `value`, `steps` or `distance` keeps the count of a blend already in that
+mode, and a blend in another mode takes 5 steps or 10 pt. A hidden or locked `id`, an `id` that is not a blend, a
+value out of range, a `spacing` that is not a string, an `orientation` other than `page` or `path`, and `value`
+without `spacing` are errors that change
+nothing, and a call that changes no blend records no undo step. With no blend selected and no `id`, the call sets the
+spacing and orientation new blends start with. The Blend panel's Ramp and Shift sliders run it on the selected blends:
+a drag previews and its release records one undo step. Blend Options sends only the spacing or orientation set in the dialog.
 
 `object.blend.setEasing {id?, easingType?, ramp?, colorShift?}` sets one blend's easing and color shift (the
 first selected blend without `id`) and returns `{id, easingType, ramp, colorShift, changed}`; omitted values are kept.

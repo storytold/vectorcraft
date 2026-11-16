@@ -92,7 +92,7 @@ pub(super) fn blend_make(s: &mut Session, p: &Value) -> Result<Value> {
         _ => defaults,
     };
     let spacing = spacing_param(p, C, cur.spacing)?;
-    let orientation = orientation_param(p, cur.orientation);
+    let orientation = orientation_param(p, C, cur.orientation)?;
     let (ease0, color0, no_spine) = match base.as_ref().map(|n| &n.kind) {
         Some(NodeKind::Blend { spec, .. }) => (spec.ease, spec.color_shift, spec.no_spine),
         _ => (Default::default(), 0.0, !create_spine.creates_spine()),
@@ -383,7 +383,8 @@ pub(super) fn blend_options(s: &mut Session, p: &Value) -> Result<Value> {
         // Nothing to set them on: the options new blends start with (easing is per blend).
         let d = s.prefs.blend_options.unwrap_or_default();
         let spacing = spacing_param(p, C, d.spacing)?;
-        s.prefs.blend_options = Some(BlendDefaults { spacing, orientation: orientation_param(p, d.orientation), ..d });
+        let orientation = orientation_param(p, C, d.orientation)?;
+        s.prefs.blend_options = Some(BlendDefaults { spacing, orientation, ..d });
         return Ok(json!({ "defaults": true }));
     };
     let no_spine = if id.is_some() { cur.no_spine } else { any_without_spine(s) };
@@ -394,13 +395,22 @@ pub(super) fn blend_options(s: &mut Session, p: &Value) -> Result<Value> {
     // were given and keeps its own for the rest, so editing several blends does not copy the first
     // one's options onto the others.
     let given = |key: &str| p.get(key).is_some_and(|v| !v.is_null());
-    spacing_param(p, C, cur.spacing)?;
+    let has_count = given("value") || given("steps") || given("distance");
+    let has_spacing = given("spacing") || has_count || p.get("smooth").and_then(Value::as_bool) == Some(true);
+    let spacing = spacing_param(p, C, cur.spacing)?;
+    let orientation = orientation_param(p, C, cur.orientation)?;
     let ease = ease_param(p, C, cur.ease)?;
     let color_shift = percent_param(p, C, "colorShift", cur.color_shift, -100.0)?;
-    let (has_kind, has_ramp, has_shift) = (given("easingType"), given("ramp"), given("colorShift"));
+    let (has_orientation, has_kind, has_ramp, has_shift) = (given("orientation"), given("easingType"), given("ramp"), given("colorShift"));
     let set = |spec: &mut BlendSpec| {
-        spec.spacing = spacing_param(p, C, spec.spacing).unwrap_or(spec.spacing);
-        spec.orientation = orientation_param(p, spec.orientation);
+        // A spacing mode without a count keeps the count of a blend already in that mode.
+        let same_mode = std::mem::discriminant(&spacing) == std::mem::discriminant(&spec.spacing);
+        if has_spacing && (has_count || !same_mode) {
+            spec.spacing = spacing;
+        }
+        if has_orientation {
+            spec.orientation = orientation;
+        }
         if has_kind {
             spec.ease.kind = ease.kind;
         }

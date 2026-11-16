@@ -78,15 +78,18 @@ impl Frames {
         self.run(app, vec![]);
     }
 
-    /// Press at `from`, move to `to` in four steps, a frame each, and release there.
-    fn drag(&mut self, app: &mut VectorcraftApp, from: Pos2, to: Pos2) {
-        let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    /// Press at `from` and move to `to` in four steps, a frame each, keeping the button down.
+    fn press_and_move(&mut self, app: &mut VectorcraftApp, from: Pos2, to: Pos2) {
         self.run(app, vec![Event::PointerMoved(from)]);
-        self.run(app, vec![button(from, true)]);
+        self.run(app, vec![primary(from, true)]);
         for i in 1..=4 {
             self.run(app, vec![Event::PointerMoved(from + (to - from) * (i as f32 / 4.0))]);
         }
-        self.run(app, vec![button(to, false)]);
+    }
+
+    /// Release the button at `at`.
+    fn release(&mut self, app: &mut VectorcraftApp, at: Pos2) {
+        self.run(app, vec![primary(at, false)]);
         self.run(app, vec![]);
     }
 
@@ -108,6 +111,11 @@ impl Frames {
         let at = self.text(app, label);
         self.click(app, at);
     }
+}
+
+/// A press (`pressed`) or release of the primary button at `pos`.
+fn primary(pos: Pos2, pressed: bool) -> Event {
+    Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE }
 }
 
 /// A document with two 20 pt squares 200 pt apart, both selected.
@@ -343,7 +351,13 @@ fn a_ramp_or_shift_drag_is_one_undo_step() {
     for index in [0, 1] {
         let (left, right) = f.slider(&mut app, index);
         let (before, depth) = (spec(&app, id), undo_depth(&app));
-        f.drag(&mut app, left + (right - left) * 0.6, left + (right - left) * 0.9);
+        let (from, to) = (left + (right - left) * 0.6, left + (right - left) * 0.9);
+        f.press_and_move(&mut app, from, to);
+        // While the button is down the blend shows the new value, and no undo step is recorded yet.
+        assert!(app.session.in_interaction(), "the drag is in progress");
+        assert_ne!(spec(&app, id), before, "the drag previews on the blend");
+        assert_eq!(undo_depth(&app), depth);
+        f.release(&mut app, to);
         let after = spec(&app, id);
         assert!(!app.session.in_interaction(), "the release ends the drag");
         if index == 0 {
@@ -386,6 +400,29 @@ fn ramp_and_shift_edit_every_selected_blend_and_keep_their_other_options() {
         assert_eq!((after_a.spacing, after_b.spacing), (BlendSpacing::Steps(3), BlendSpacing::Distance(12.0)));
         assert_eq!((after_a.ease.kind, after_b.ease.kind), (before_a.ease.kind, before_b.ease.kind));
     }
+}
+
+#[test]
+fn ramp_is_dimmed_while_a_selected_blend_has_no_spine() {
+    // The first selected blend has a spine and the second has none: the engine refuses easing for
+    // the pair, so the Ramp slider does not take a drag; Shift still edits both.
+    let mut app = app();
+    let a = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
+    let ids: Vec<Value> =
+        [0, 200].map(|x| app.run("shape.rectangle", json!({"x": x, "y": 100, "width": 20, "height": 20})).unwrap()["id"].clone()).into();
+    app.run("select.set", json!({"ids": ids})).unwrap();
+    let b = NodeId(app.run("object.blend.make", json!({"smooth": true, "createSpine": "never"})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
+    let mut f = Frames::new();
+    let (left, right) = f.slider(&mut app, 0);
+    let (before_a, before_b, depth) = (spec(&app, a), spec(&app, b), undo_depth(&app));
+    let (from, to) = (left + (right - left) * 0.6, left + (right - left) * 0.9);
+    f.press_and_move(&mut app, from, to);
+    f.release(&mut app, to);
+    assert_eq!((spec(&app, a), spec(&app, b), undo_depth(&app), app.ui.status.as_str()), (before_a, before_b, depth, ""), "Ramp did nothing");
+    let (left, right) = f.slider(&mut app, 1);
+    f.click(&mut app, left + (right - left) * 0.75);
+    assert!(spec(&app, a).color_shift > 0.0 && spec(&app, b).color_shift == spec(&app, a).color_shift);
 }
 
 #[test]
