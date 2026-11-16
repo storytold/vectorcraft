@@ -279,3 +279,37 @@ fn an_editing_file_whose_data_cannot_be_resolved_is_still_listed() {
     let opened = open_pdf(&pdf_with(Some(b"native"), false).bytes, None).unwrap();
     assert!(opened.editing().is_some() && opened.has_editing_file());
 }
+
+#[test]
+fn an_editing_file_deep_in_the_name_tree_is_found() {
+    // Objects 4..=203 are a chain of 200 name tree nodes, each listing the next one; the editing
+    // file sits in the leaf (object 204), with its data or naming data that can't be resolved.
+    for ef in ["/EF << /F 206 0 R >>", "/EF << /F 999 0 R >>"] {
+        let mut objects = vec![
+            "<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 3 0 R >> >>".to_string(),
+            "<< /Type /Pages /Kids [207 0 R] /Count 1 >>".to_string(),
+            "<< /Kids [4 0 R] >>".to_string(),
+        ];
+        for node in 4..=203 {
+            objects.push(format!("<< /Kids [{} 0 R] >>", node + 1));
+        }
+        objects.push("<< /Names [(a) 205 0 R] >>".to_string());
+        objects.push(format!("<< /Type /Filespec /UF ({EDITING_FILE}) {ef} >>"));
+        objects.push("<< /Length 5 >>\nstream\nhello\nendstream".to_string());
+        objects.push("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>".to_string());
+        let opened = open_pdf(&raw_pdf(&objects), None).unwrap();
+        assert!(opened.has_editing_file(), "{ef}");
+        let data = opened.editing().map(|e| e.data);
+        assert_eq!(data.as_deref(), ef.contains("206").then_some(&b"hello"[..]), "{ef}");
+    }
+    // A name tree with more nodes than are searched may list it.
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 3 0 R >> >>".to_string(),
+        "<< /Type /Pages /Kids [4 0 R] /Count 1 >>".to_string(),
+        format!("<< /Kids [{}] >>", "<< /Names [] >> ".repeat(70_000)),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>".to_string(),
+    ];
+    let opened = open_pdf(&raw_pdf(&objects), None).unwrap();
+    assert_eq!(opened.editing(), None);
+    assert!(opened.has_editing_file());
+}

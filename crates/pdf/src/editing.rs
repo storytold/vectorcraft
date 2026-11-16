@@ -27,8 +27,8 @@ const DESCRIPTION: &str = "VectorCraft editing data; page hash ";
 /// Stands for the hash while the PDF is written: as long as a hash, so writing the hash over it
 /// keeps every offset.
 const PLACEHOLDER: &str = "0000000000000000";
-/// Deepest name tree searched for the editing file.
-const MAX_DEPTH: usize = 16;
+/// The most name tree nodes searched for the editing file.
+const MAX_NODES: usize = 1 << 16;
 
 /// The native document a PDF carries ([`crate::PdfSettings::preserve_editing`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -78,7 +78,8 @@ pub fn editing_with(bytes: &[u8], password: Option<&str>) -> Option<Editing> {
 }
 
 /// The file specification of the editing file among a parsed PDF's attachments, if any, and whether
-/// a name tree key names the editing file (set also when its file specification can't be read).
+/// the attachments may list it: a name tree key names the editing file (set also when its file
+/// specification can't be read), or the name tree has more than [`MAX_NODES`] nodes to search.
 fn editing_file_spec(pdf: &Pdf) -> (Option<Dict<'_>>, bool) {
     let xref = pdf.xref();
     let Some(tree) = xref
@@ -88,17 +89,17 @@ fn editing_file_spec(pdf: &Pdf) -> (Option<Dict<'_>>, bool) {
     else {
         return (None, false);
     };
-    let mut keyed = false;
-    let spec = editing_spec(&tree, 0, &mut HashSet::new(), &mut keyed, xref);
-    (spec, keyed)
+    let mut maybe = false;
+    let spec = editing_spec(tree, &mut maybe, xref);
+    (spec, maybe)
 }
 
 /// Does a parsed PDF list the editing file among its attachments, also when [`editing_in`] can't
 /// read it (its file specification, its `EF` dictionary or its `F` or `UF` stream can't be
-/// resolved)?
+/// resolved)? Also true when the name tree is too large to search to its end.
 pub(crate) fn has_editing_file_in(pdf: &Pdf) -> bool {
-    let (spec, keyed) = editing_file_spec(pdf);
-    spec.is_some() || keyed
+    let (spec, maybe) = editing_file_spec(pdf);
+    spec.is_some() || maybe
 }
 
 /// [`editing`] of a parsed PDF.
@@ -117,10 +118,43 @@ pub(crate) fn editing_in(pdf: &Pdf) -> Option<Editing> {
     Some(Editing { data, intact })
 }
 
-/// The file specification of the editing file in the name tree node `node`. `seen` holds the indirect
-/// nodes already searched, so a node shared by many `Kids` arrays is searched once, not once per path.
-/// `keyed` is set when a key searched names the editing file.
-fn editing_spec<'a>(node: &Dict<'a>, depth: usize, seen: &mut HashSet<ObjectIdentifier>, keyed: &mut bool, xref: &'a XRef) -> Option<Dict<'a>> {
+/// The file specification of the editing file in the name tree `tree`, searched in order at any
+/// depth, [`MAX_NODES`] nodes at most. An indirect node is searched once, so a node shared by many
+/// `Kids` arrays is not searched once per path. `maybe` is set when a key searched names the editing
+/// file, or when nodes are left unsearched.
+fn editing_spec<'a>(tree: Dict<'a>, maybe: &mut bool, xref: &'a XRef) -> Option<Dict<'a>> {
+    let mut seen = HashSet::<ObjectIdentifier>::new();
+    let mut nodes = vec![tree];
+    // Nodes still to be searched, counting the ones waiting in `nodes`.
+    let mut left = MAX_NODES - 1;
+    while let Some(node) = nodes.pop() {
+        if let Some(spec) = node_spec(&node, maybe, xref) {
+            return Some(spec);
+        }
+        let Some(kids) = node.get::<Array<'a>>(b"Kids") else { continue };
+        // Only a referenced kid can be shared (a direct kid's `obj_id` is the object holding it). The
+        // reference is checked before the kid is read, so a shared kid is read once.
+        let mut kids: Vec<Dict<'a>> = items(&kids)
+            .filter_map(|raw| match raw {
+                MaybeRef::Ref(r) if seen.insert(r.into()) => xref.get::<Dict<'a>>(r.into()),
+                MaybeRef::NotRef(Object::Dict(kid)) => Some(kid),
+                _ => None,
+            })
+            .take(left.saturating_add(1))
+            .collect();
+        if kids.len() > left {
+            *maybe = true;
+            kids.truncate(left);
+        }
+        left -= kids.len();
+        nodes.extend(kids.into_iter().rev());
+    }
+    None
+}
+
+/// The file specification of the editing file among the name tree node `node`'s own `Names`.
+/// `keyed` is set when a key names the editing file.
+fn node_spec<'a>(node: &Dict<'a>, keyed: &mut bool, xref: &'a XRef) -> Option<Dict<'a>> {
     if let Some(names) = node.get::<Array<'a>>(b"Names") {
         // The keys read as written, so a value that can't be resolved doesn't shift the pairs.
         let mut raw = items(&names);
@@ -143,20 +177,7 @@ fn editing_spec<'a>(node: &Dict<'a>, depth: usize, seen: &mut HashSet<ObjectIden
             }
         }
     }
-    if depth >= MAX_DEPTH {
-        return None;
-    }
-    let kids = node.get::<Array<'a>>(b"Kids")?;
-    // Only a referenced kid can be shared (a direct kid's `obj_id` is the object holding it). The
-    // reference is checked before the kid is read, so a shared kid is read once.
-    items(&kids).find_map(|raw| {
-        let kid = match raw {
-            MaybeRef::Ref(r) if seen.insert(r.into()) => xref.get::<Dict<'a>>(r.into())?,
-            MaybeRef::NotRef(Object::Dict(kid)) => kid,
-            _ => return None,
-        };
-        editing_spec(&kid, depth + 1, seen, keyed, xref)
-    })
+    None
 }
 
 /// A file specification naming the editing file (current or legacy name), in any text string

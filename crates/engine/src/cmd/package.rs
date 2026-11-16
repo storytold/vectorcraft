@@ -521,6 +521,9 @@ pub struct Package {
     root: Option<PathBuf>,
     info: Option<String>,
     doc: std::sync::Arc<Document>,
+    /// The read roots in force where the package was prepared: [`Package::write`] collects under
+    /// them.
+    scope: crate::file_access::ScopeHandle,
 }
 
 impl Session {
@@ -567,21 +570,22 @@ fn prepare(s: &mut Session, p: &Value) -> Result<Package> {
     let doc = s.doc()?.doc.clone();
     let doc = if let std::borrow::Cow::Owned(kept) = super::fileio::with_readable_settings_folder(&doc) { std::sync::Arc::new(kept) } else { doc };
     let links_from = s.doc()?.links_from.clone().unwrap_or_else(|| doc_path.clone());
-    Ok(Package { o, doc_path, links_from, stem, name, root, info, doc })
+    let scope = crate::file_access::ScopeHandle::capture();
+    Ok(Package { o, doc_path, links_from, stem, name, root, info, doc, scope })
 }
 
 impl Package {
     /// Collect the linked files and fonts and write the package's files with `write` into
     /// `folder/name`, making its folders first, or into the zip without a folder → the reply of
-    /// `file.package`.
+    /// `file.package`, with the read roots in force where it was prepared, on any thread.
     pub fn write(self, write: &mut dyn FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
-        collect_and_write(self, write)
+        self.scope.clone().run(|| collect_and_write(self, write))
     }
 }
 
 /// [`Package::write`].
 fn collect_and_write(package: Package, write: &mut dyn FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
-    let Package { o, doc_path, links_from, stem, name, root, info, doc: original } = package;
+    let Package { o, doc_path, links_from, stem, name, root, info, doc: original, scope: _ } = package;
     let mut doc = (*original).clone();
     let doc_name = format!("{stem}.{}", vectorcraft_format::EXTENSION);
     let base = LinkBase { doc: Some(&doc_path), relative: Some(&links_from) };

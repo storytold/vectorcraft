@@ -508,6 +508,12 @@ fn a_confined_package_refuses_a_linked_file_whose_editing_data_cannot_be_read() 
     write(&pdf, &locked);
     refused(&mut s, json!({"folder": out}));
     refused(&mut s, json!({"relink": false}));
+    // A package prepared in the confined request and written on another thread.
+    let prepared = crate::file_access::confine(Some(&roots), || s.prepare_package(&json!({"folder": out}))).unwrap();
+    let e =
+        std::thread::spawn(move || prepared.write(&mut |_, _| Ok(())).map(|_| ()).map_err(|e| e.to_string())).join().unwrap().expect_err("refused");
+    assert!(e.contains("a linked file's editing data can't be read to check it against the read roots"), "{e}");
+    assert!(!std::path::Path::new(&out).exists());
     assert_eq!(run(&mut s, "file.package", json!({}))["links"], 1, "the person's package");
     // A PDF listing the editing file without its data (`EF` renamed, the same length).
     let at = editable.windows(4).position(|w| w.starts_with(b"/EF") && !w[3].is_ascii_alphanumeric()).expect("the editing file's EF");
