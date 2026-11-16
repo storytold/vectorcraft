@@ -78,7 +78,8 @@ impl Outline {
         let [a, b, c, d, e, f] = unit.as_coeffs();
         let norm = a.abs().max(b.abs()).max(c.abs()).max(d.abs());
         // The determinant is rounded by about `f64::EPSILON * norm²`; one no larger than that may
-        // belong to a map with no area. Any thinner ellipse is measured exactly.
+        // belong to a map with no area. An ellipse whose determinant is larger is measured
+        // exactly.
         if !unit.as_coeffs().iter().all(|v| v.is_finite()) || norm <= 0.0 || (a * d - b * c).abs() <= f64::EPSILON * norm * norm {
             return Err(OutlineError::Empty);
         }
@@ -313,8 +314,6 @@ impl Outline {
     }
 }
 
-/// Calls `f` with each point of `s` where `p · n` can be largest (its ends and the places where
-/// the curve runs square to `n`) and the value there.
 /// Whether cubic `s` bends against `sign` (the way its outline turns) anywhere. The cross product
 /// of its first and second derivatives is a quadratic in t; its lowest value on [0, 1] is compared
 /// with the segment's control polygon length squared.
@@ -341,9 +340,17 @@ fn bends_against(s: &CubicBez, sign: f64) -> bool {
     low < -1e-9 * scale
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many times [`each_extreme`] has measured a segment on this thread, for the tests.
+    static EXTREMES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Calls `f` with each point of `s` where `p · n` can be largest (its ends and the places where
+/// the curve runs square to `n`) and the value there.
 fn each_extreme(s: &CubicBez, n: Vec2, mut f: impl FnMut(Point, f64)) {
     #[cfg(test)]
-    tests::EXTREMES.with(|c| c.set(c.get() + 1));
+    EXTREMES.with(|n| n.set(n.get() + 1));
     let [v0, v1, v2, v3] = [s.p0, s.p1, s.p2, s.p3].map(|p| p.to_vec2().dot(n));
     f(s.p0, v0);
     f(s.p3, v3);
@@ -631,11 +638,6 @@ mod tests {
 
     use super::*;
 
-    thread_local! {
-        /// How many times [`each_extreme`] has measured a segment on this thread.
-        pub(super) static EXTREMES: Cell<usize> = const { Cell::new(0) };
-    }
-
     fn circle(cx: f64, cy: f64, r: f64) -> Outline {
         Outline::ellipse(Affine::new([r, 0.0, 0.0, r, cx, cy])).unwrap()
     }
@@ -909,7 +911,7 @@ mod tests {
     #[test]
     fn each_tangent_measures_only_the_segments_near_where_it_touches() {
         // Two regular 2,000-gons about one center, one turned half a step: 4,000 external
-        // tangents. Measuring every segment of both outlines for every tangent takes about 16,000
+        // tangents. Measuring every segment of both outlines for every tangent takes about 8,000
         // measurements per tangent.
         let sides = 2_000;
         let gon = |turn: f64| {
@@ -928,19 +930,28 @@ mod tests {
 
     #[test]
     fn a_very_thin_ellipse_is_measured_exactly() {
-        // Semi-axes 1e6 and 1e-7, a ratio of 1e13, beside a circle: the tangents run from the
-        // ellipse's tips to the circle.
-        let thin = Affine::scale_non_uniform(1e6, 1e-7);
-        let all = common_tangents(&Outline::ellipse(thin).unwrap(), &circle(0.0, 100.0, 10.0)).unwrap();
-        assert_eq!(all.iter().filter(|t| t.kind == TangentKind::External).count(), 2, "{all:?}");
-        assert_eq!(all.iter().filter(|t| t.kind == TangentKind::Internal).count(), 2, "{all:?}");
-        let (sa, sb) = (sample_ellipse(thin, 20_000), sample_ellipse(Affine::new([10.0, 0.0, 0.0, 10.0, 0.0, 100.0]), 5_000));
-        for t in &all {
-            check_against_samples(t, &sa, &sb, 1e-3);
-            let tip = if (t.from - Point::new(1e6, 0.0)).hypot() < 1e-3 || (t.from - Point::new(-1e6, 0.0)).hypot() < 1e-3 { t.from } else { t.to };
-            assert!((tip.x.abs() - 1e6).abs() < 1e-3 && tip.y.abs() < 1e-6, "{t:?}");
+        // Semi-axes 1e6 and 1e-7, a ratio of 1e13, beside a circle, then the whole figure turned
+        // 30 degrees: the tangents run from the ellipse's tips to the circle.
+        for deg in [0.0, 30.0] {
+            let turn = Affine::rotate(f64::to_radians(deg));
+            let thin = turn * Affine::scale_non_uniform(1e6, 1e-7);
+            let round = turn * Affine::new([10.0, 0.0, 0.0, 10.0, 0.0, 100.0]);
+            let all = common_tangents(&Outline::ellipse(thin).unwrap(), &Outline::ellipse(round).unwrap()).unwrap();
+            assert_eq!(all.iter().filter(|t| t.kind == TangentKind::External).count(), 2, "{all:?}");
+            assert_eq!(all.iter().filter(|t| t.kind == TangentKind::Internal).count(), 2, "{all:?}");
+            let (sa, sb) = (sample_ellipse(thin, 20_000), sample_ellipse(round, 5_000));
+            for t in &all {
+                check_against_samples(t, &sa, &sb, 1e-3);
+                // The end on the ellipse, taken back to the unturned figure.
+                let (from, to) = (turn.inverse() * t.from, turn.inverse() * t.to);
+                let tip = if (from.x.abs() - 1e6).abs() < 1e-3 { from } else { to };
+                assert!((tip.x.abs() - 1e6).abs() < 1e-3 && tip.y.abs() < 1e-6, "{deg} {t:?}");
+            }
         }
-        // A map whose determinant is lost in the rounding of its entries is still refused.
+        // A determinant a few times its rounding is taken; one lost in the rounding of the map's
+        // entries is still refused.
+        assert!(Outline::ellipse(Affine::new([1.0, 0.0, 0.0, 4.0 * f64::EPSILON, 0.0, 0.0])).is_ok());
+        assert_eq!(Outline::ellipse(Affine::new([1.0, 0.0, 0.0, f64::EPSILON, 0.0, 0.0])).err(), Some(OutlineError::Empty));
         assert_eq!(Outline::ellipse(Affine::new([1.0, 1.0, 1.0, 1.0 + f64::EPSILON, 0.0, 0.0])).err(), Some(OutlineError::Empty));
     }
 
