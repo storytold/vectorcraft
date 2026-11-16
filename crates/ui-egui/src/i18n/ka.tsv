@@ -2544,6 +2544,7 @@
 	Highlight Size	ელვარების ზომა
 	Blend Steps	შერევის საფეხურები
 	Shading Color	დაჩრდილვის ფერი
+	Black Overprint	ზედდაბეჭდილი შავი
 	Draw Hidden Faces	დამალული წახნაგების დახატვა
 	Revolve…	ბრუნვა…
 	Inflate…	გაბერვა…
@@ -3924,6 +3925,9 @@ digits	Malayalam	მალაიალამური
 	Select text to set its OpenType features.	OpenType შესაძლებლობების დასაყენებლად მონიშნეთ ტექსტი.
 	Standard Ligatures	სტანდარტული ლიგატურები
 	Stylistic Alternates	სტილისტური ალტერნატივები
+	Ligatures	ლიგატურები
+	Ornaments	ორნამენტები
+	Figures	ციფრები
 	Swash	მოხატული ასოები (swash)
 	Tabular Lining	ცხრილური ხაზოვანი
 	Tabular Oldstyle	ცხრილური ძველებური
@@ -3960,6 +3964,7 @@ digits	Malayalam	მალაიალამური
 	Roman Hanging Punctuation	რომაული გამოწეული პუნქტუაცია
 	Korean Line Break Anywhere	კორეული სტრიქონის გადატანა ნებისმიერ ადგილას
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	აღმოსავლეთ აზიური აწყობის პარამეტრები
 	Korean Composition Settings	კორეული აწყობის პარამეტრები
 	Select a text object to edit its paragraph attributes.	აბზაცის ატრიბუტების რედაქტირებისთვის მონიშნეთ ტექსტური ობიექტი.
@@ -4444,6 +4449,18 @@ digits	Malayalam	მალაიალამური
 	Author Title:	ავტორის თანამდებობა:
 	Author:	ავტორი:
 	Copyright Info URL:	საავტორო უფლების ინფორმაციის URL:
+	Save Metadata Template…	მეტამონაცემების შაბლონის შენახვა…
+	Import Options	იმპორტის პარამეტრები
+	Clear existing fields and use the template's	არსებული ველების გასუფთავება და შაბლონის ველების გამოყენება
+	Keep existing fields, but replace those the template has	არსებული ველების შენარჩუნება, მაგრამ შაბლონში არსებულების ჩანაცვლება
+	Keep existing fields, but append those the template has	არსებული ველების შენარჩუნება, მაგრამ შაბლონში არსებულების დამატება
+@msg	the template name can't be empty	შაბლონის სახელი ცარიელი ვერ იქნება
+@msg	the template name isn't usable as a file name	შაბლონის სახელი ფაილის სახელად ვერ გამოდგება
+@msg	no metadata templates folder here	აქ მეტამონაცემების შაბლონების საქაღალდე არ არის
+@msg	give `name` or `path`, not both	მიუთითეთ `name` ან `path`, არა ორივე
+@msg	give one of `path`, `name` and `data`	მიუთითეთ ერთ-ერთი: `path`, `name` და `data`
+@msg	mode must be replace, keep or append	რეჟიმი უნდა იყოს replace, keep ან append
+@msg	the file is not an XMP metadata template	ფაილი არ არის XMP მეტამონაცემების შაბლონი
 	Copyright Notice:	საავტორო უფლების შენიშვნა:
 	Copyright Status:	საავტორო უფლების სტატუსი:
 	Created:	შექმნილია:
@@ -6071,6 +6088,12 @@ font-technology	Variable	ცვლადი
 	Preferences	პარამეტრები
 	Previous	წინა
 	Restore every preference to its default (applied on OK)	ყველა პარამეტრის ნაგულისხმევ მნიშვნელობაზე დაბრუნება (გამოიყენება OK-ზე დაჭერისას)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	ახალი დოკუმენტების ერთეული ჩაშენებული ზომებით, პიქსელური ზომების გარდა, და გახსნილი ფაილებისა, რომლებიც ერთეულს არ ინახავს; თუ აქ აირჩევთ და OK-ს დააწკაპუნებთ, ის აქტიური დოკუმენტის ერთეულიც გახდება.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	კონტურის სისქე, ტირეები და შუალედები ამ ერთეულში ჩანს, და მათთვის აკრეფილი რიცხვები ამ ერთეულში იკითხება.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	ტექსტის ზომა, სტრიქონთა დაშორება და საბაზისო ხაზის წანაცვლება ამ ერთეულში ჩანს, და მათთვის აკრეფილი რიცხვები ამ ერთეულში იკითხება.
+	The unit for East Asian type measurements, which no field uses yet.	აღმოსავლეთაზიური ტექსტის ზომების ერთეული, რომელსაც ჯერჯერობით არცერთი ველი არ იყენებს.
+	When on, a number typed without a unit into a field in picas is read in points.	ჩართვისას პიკებში მოცემულ ველში ერთეულის გარეშე აკრეფილი რიცხვი პუნქტებში იკითხება.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID-ის არჩევისას ობიექტების სახელები შრეებში, ცვლადებსა და შრის პარამეტრებში XML ID-ად ჩანს.
 	Reset all preferences to their defaults?	დავაბრუნოთ ყველა პარამეტრი ნაგულისხმევ მნიშვნელობებზე?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	ნაგულისხმევი მნიშვნელობები გამოიყენება, როცა პარამეტრებში OK-ს დააჭერთ. იქ გაუქმება ინარჩუნებს თქვენს მიმდინარე პარამეტრებს.
 	Smaller ↔ Larger	უფრო პატარა ↔ უფრო დიდი
@@ -7799,6 +7822,27 @@ imageTrace	Outline	კონტური
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: დიალოგი ვერ გაიხსნება ჩაშენებული ფუნქციის უკუძახილში, getter-ში, გარდაქმნაში ან ფაილში, რომელსაც $.evalFile უშვებს; გამოიძახეთ ის სკრიპტის საკუთარი კოდიდან
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: შემდეგი პასუხი `answers`-ში არის {_1}-ისთვის და არა {name}-ისთვის
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers`-ში ამ დიალოგისთვის პასუხი აღარ დარჩა
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers`-ში დარჩა {n} პასუხი, რომელიც სკრიპტს არ გამოუყენებია
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1}-მა ფუნჯის ქვეშ უცვლელი დატოვა {n} ობიექტი ({_2}): ის მხოლოდ ტრაექტორიებს ცვლის
+liquify-tool	Warp	გაღუნვა
+liquify-tool	Twirl	დახვევა
+liquify-tool	Pucker	შეკუმშვა
+liquify-tool	Bloat	გაბერვა
+liquify-tool	Scallop	დაკბილვა
+liquify-tool	Crystallize	კრისტალიზაცია
+liquify-tool	Wrinkle	დანაოჭება
+liquify-kind	graphs	დიაგრამები
+liquify-kind	type	ტექსტი
+liquify-kind	symbols	სიმბოლოები
+liquify-kind	images	გამოსახულებები
+liquify-kind	meshes	ბადეები
+liquify-kind	envelopes	გარსები
+liquify-kind	repeats	გამეორებები
+liquify-kind	placed documents	განთავსებული დოკუმენტები
+liquify-kind	blends	გადასვლები
+liquify-list-two	{0}, {1}	{0} და {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} და {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} ზედმეტად დიდია სკრიპტისთვის
 @msg	vc.log: the log of this run is full	vc.log: ამ გაშვების ჟურნალი სავსეა
 @msg	this function's script run has ended	ამ ფუნქციის სკრიპტის გაშვება დასრულდა

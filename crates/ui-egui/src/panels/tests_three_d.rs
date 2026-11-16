@@ -426,6 +426,49 @@ fn a_mixed_checkbox_shows_a_dash_and_another_change_keeps_each_effects_value() {
     assert!(named(&controls(&mut app, &ctx), "Add Light").is_disabled());
 }
 
+/// The Bevel heading's Reset sets every bevel setting back to its default on each selected Extrude &
+/// Bevel, as one undo step, and leaves Depth and the rotation as each effect has them. With every
+/// bevel setting at its default it is off and records nothing.
+#[test]
+fn the_bevel_reset_restores_only_the_bevel_settings_of_each_selected_effect() {
+    use crate::panels::tests_appearance::click;
+    let mut app = app();
+    let bevelled = json!({"bevel": "rounded", "bevelWidth": 9.0, "bevelHeight": 6.0, "bevelRepeat": 3, "bevelSpace": 20.0, "bevelInside": true, "bevelBothSides": true, "depth": 70.0, "rotationX": 15.0});
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": bevelled})).unwrap();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"bevel": "cove", "bevelWidth": 2.0, "depth": 30.0}}))
+        .unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.enable_accesskit();
+    let nodes = controls(&mut app, &ctx);
+    let reset = named(&nodes, "Reset");
+    assert!(!reset.is_disabled(), "changed bevel settings turn Reset on");
+    let at = reset.bounds().map(|r| egui::pos2(((r.x0 + r.x1) / 2.0) as f32, ((r.y0 + r.y1) / 2.0) as f32)).unwrap();
+    let history = undo_len(&app);
+    click(&ctx, &mut app, at, show);
+    assert_eq!(undo_len(&app), history + 1, "one undo step for both objects");
+    let defaults = vectorcraft_effects::default_params("threeD.extrude").unwrap();
+    let merged = |app: &VectorcraftApp, id: u64| {
+        let params = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params.clone();
+        vectorcraft_effects::merged_params("threeD.extrude", &params)
+    };
+    for id in [a, b] {
+        for key in ["bevel", "bevelWidth", "bevelHeight", "bevelRepeat", "bevelSpace", "bevelInside", "bevelBothSides"] {
+            assert_eq!(merged(&app, id)[key], defaults[key], "{key} of {id}");
+        }
+    }
+    assert_eq!((merged(&app, a)["depth"].clone(), merged(&app, b)["depth"].clone()), (json!(70.0), json!(30.0)));
+    assert_eq!(merged(&app, a)["rotationX"], 15.0);
+    let nodes = controls(&mut app, &ctx);
+    assert!(named(&nodes, "Reset").is_disabled(), "every bevel setting at its default: Reset is off");
+    let history = undo_len(&app);
+    click(&ctx, &mut app, at, show);
+    assert_eq!(undo_len(&app), history, "an unavailable Reset records nothing");
+}
+
 /// Revolve's Cap checkbox shows a dash when the selected effects disagree on it.
 #[test]
 fn a_mixed_revolve_cap_shows_a_dash() {
@@ -1122,8 +1165,9 @@ fn export_3d_object_adds_the_selected_3d_objects_to_asset_export() {
     let mut app = app();
     assert!(painted_text(&mut app, show).contains("Export 3D Object"));
     let ctx = egui::Context::default();
-    // Without a 3D object: an error, nothing recorded, no asset.
+    // Without a 3D object: the button is dimmed, and an error, nothing recorded, no asset.
     let history = undo_len(&app);
+    assert!(!super::can_export_3d(&app));
     assert!(super::export_3d_object(&mut app, &ctx).is_err());
     assert_eq!((undo_len(&app), assets(&mut app).len()), (history, 0));
     let a = app.session.active().unwrap().selection.objects[0].0;
@@ -1135,9 +1179,10 @@ fn export_3d_object_adds_the_selected_3d_objects_to_asset_export() {
     let hidden = app.run("shape.rectangle", json!({"x": 100, "y": 250, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
     app.run("effect.setParams", json!({"index": 0, "item": null, "visible": false})).unwrap();
+    assert!(!super::can_export_3d(&app));
     assert!(super::export_3d_object(&mut app, &ctx).is_err());
     app.run("select.set", json!({"ids": [plain, a, hidden]})).unwrap();
-    assert_eq!(super::selected_3d_objects(&app), [a]);
+    assert!(super::can_export_3d(&app));
     assert!(!crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
     let history = undo_len(&app);
     super::export_3d_object(&mut app, &ctx).unwrap();
@@ -1174,7 +1219,44 @@ fn export_3d_object_leaves_out_a_3d_object_inside_another() {
     app.run("select.set", json!({"ids": [inner, group]})).unwrap();
     let selected: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
     assert!(selected.contains(&inner) && selected.contains(&group), "{selected:?}");
-    assert_eq!(super::selected_3d_objects(&app), [group]);
+    super::export_3d_object(&mut app, &egui::Context::default()).unwrap();
+    let list = assets(&mut app);
+    assert_eq!(list.iter().map(|a| a["nodes"].clone()).collect::<Vec<_>>(), [json!([group])]);
+}
+
+/// A 3D effect on a group's fill draws nothing to export: the button is dimmed for that group
+/// alone, and beside a 3D object the group is left out instead of refusing them both.
+#[test]
+fn export_3d_object_leaves_out_a_group_with_a_3d_fill() {
+    let mut app = app();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    let other = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [other]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    app.run("appearance.addFill", json!({})).unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude"})).unwrap();
+    // `effect.apply` puts a group's 3D effect on the group itself; a file can hold one on its fill.
+    app.session
+        .edit("fill", |d, _| {
+            let n = d.node_mut(vectorcraft_doc::NodeId(group)).unwrap();
+            let fx = n.appearance.effects.remove(0);
+            n.appearance.items[0].effects_mut().push(fx);
+            Ok(())
+        })
+        .unwrap();
+    assert!(
+        vectorcraft_effects::has_solid(app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(group)).unwrap()),
+        "the fill holds the effect"
+    );
+    assert!(!super::can_export_3d(&app));
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    set_type(&mut app, "extrude").unwrap();
+    app.run("select.set", json!({"ids": [a, group]})).unwrap();
+    assert!(super::can_export_3d(&app));
+    super::export_3d_object(&mut app, &egui::Context::default()).unwrap();
+    let list = assets(&mut app);
+    assert_eq!(list.iter().map(|a| a["nodes"].clone()).collect::<Vec<_>>(), [json!([a])]);
 }
 
 #[test]

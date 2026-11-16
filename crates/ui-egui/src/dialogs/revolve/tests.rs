@@ -579,6 +579,42 @@ fn extrude_bevel_options_enable_with_a_bevel_shape() {
 }
 
 #[test]
+fn the_bevel_reset_restores_the_bevel_settings_and_keeps_the_others() {
+    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", vectorcraft_effects::EXTRUDE, vec2(1400.0, 1000.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    let enabled = |h: &Harness| h.ctx.read_response(Id::unique("revolve-reset-bevel")).unwrap().enabled();
+    assert!(!enabled(&h), "every bevel setting at its default: Reset is off");
+    let changed = json!({"bevel": "step", "bevelWidth": 12.0, "bevelHeight": 3.0, "bevelRepeat": 4, "bevelSpace": 30.0, "bevelInside": true, "bevelBothSides": true, "depth": 90.0, "twist": 45.0, "rotationX": 10.0});
+    h.app.ui.dialog.as_mut().unwrap().fields.extend(changed.as_object().unwrap().clone());
+    h.settle();
+    assert!(enabled(&h));
+    h.click(h.response("revolve-reset-bevel").center());
+    let defaults = vectorcraft_effects::default_params(vectorcraft_effects::EXTRUDE).unwrap();
+    let dialog = h.app.ui.dialog.as_ref().unwrap();
+    for key in ["bevel", "bevelWidth", "bevelHeight", "bevelRepeat", "bevelSpace", "bevelInside", "bevelBothSides"] {
+        assert_eq!(dialog.fields.get(key), defaults.get(key), "reset: {key}");
+    }
+    for key in ["depth", "twist", "rotationX"] {
+        assert_eq!(dialog.fields.get(key), changed.get(key), "kept: {key}");
+    }
+    assert!(!enabled(&h), "Reset turns itself off");
+    // One bevel setting off its default is enough to turn Reset on again.
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("bevelBothSides".into(), json!(true));
+    h.settle();
+    assert!(enabled(&h));
+    dialogs::confirm(&mut h.app).unwrap();
+    let state = h.app.session.doc().unwrap();
+    let params = vectorcraft_effects::merged_params(
+        vectorcraft_effects::EXTRUDE,
+        &state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0].params,
+    );
+    assert_eq!((params["depth"].clone(), params["bevelBothSides"].clone(), params["bevel"].clone()), (json!(90.0), json!(true), json!("none")));
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
+}
+
+#[test]
 fn cap_checkbox_previews_resets_and_respects_cancel_and_one_step_undo() {
     for confirm in [false, true] {
         let mut h = Harness::new(vec2(1280.0, 1000.0));
