@@ -9350,7 +9350,7 @@ breakText	Glyphs	Glifler
 @msg	stroke cannot be set on a symbol instance	stroke bir sembol örneğinde ayarlanamaz
 @msg	fill on a symbol instance must be a solid color or none	bir sembol örneğinin fill değeri düz renk veya none olmalıdır
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key}, Şekle Dönüştür veya Anahat Nesnesi efekti olmayan bir görüntüde ayarlanamaz
-@msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice ve/veya type verin
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	newName, registration, exportType, nineSlice, type ve/veya alignToPixelGrid verin
 	Text Flow	Metin Akışı
 	By Rows	Satırlara Göre
 	By Columns	Sütunlara Göre

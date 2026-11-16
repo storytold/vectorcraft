@@ -9510,7 +9510,7 @@ breakText	Glyphs	Glyffer
 @msg	stroke cannot be set on a symbol instance	stroke kan ikke angives for en symbolforekomst
 @msg	fill on a symbol instance must be a solid color or none	fill på en symbolforekomst skal være en ensfarvet farve eller none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kan ikke angives for et billede uden effekten Konvertér til form eller Objekt til kontur
-@msg	pass newName, registration, exportType, nineSlice and/or type	angiv newName, registration, exportType, nineSlice og/eller type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	angiv newName, registration, exportType, nineSlice, type og/eller alignToPixelGrid
 	Text Flow	Tekstflow
 	By Rows	Efter rækker
 	By Columns	Efter kolonner

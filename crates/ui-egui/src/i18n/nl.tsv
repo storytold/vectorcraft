@@ -9346,7 +9346,7 @@ breakText	Glyphs	Glyphs
 @msg	stroke cannot be set on a symbol instance	stroke kan niet worden ingesteld op een symboolinstantie
 @msg	fill on a symbol instance must be a solid color or none	fill van een symboolinstantie moet een egale kleur of none zijn
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kan niet worden ingesteld op een afbeelding zonder het effect Converteren naar vorm of Object omtrekken
-@msg	pass newName, registration, exportType, nineSlice and/or type	geef newName, registration, exportType, nineSlice en/of type op
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	geef newName, registration, exportType, nineSlice, type en/of alignToPixelGrid op
 	Text Flow	Tekstdoorloop
 	By Rows	Per rij
 	By Columns	Per kolom

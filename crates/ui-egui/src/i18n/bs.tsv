@@ -6857,7 +6857,7 @@ shape	Open	Otvoren
 @msg	stroke cannot be set on a symbol instance	stroke se ne može postaviti na instancu simbola
 @msg	fill on a symbol instance must be a solid color or none	fill instance simbola mora biti puna boja ili none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} se ne može postaviti na sliku bez efekta „Pretvori u oblik“ ili „Objekat u obrisu“
-@msg	pass newName, registration, exportType, nineSlice and/or type	navedite newName, registration, exportType, nineSlice i/ili type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	navedite newName, registration, exportType, nineSlice, type i/ili alignToPixelGrid
 	Text Flow	Tok teksta
 	By Rows	Po redovima
 	By Columns	Po kolonama

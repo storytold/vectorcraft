@@ -7868,7 +7868,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	parameters must be an object	parameters एक ऑब्जेक्ट होना चाहिए
 @msg	params must be an object	params एक ऑब्जेक्ट होना चाहिए
 @msg	part of the program isn't valid PostScript text	कार्यक्रम का हिस्सा मान्य नहीं है PostScript टेक्स्ट
-@msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice और/या type दें
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	newName, registration, exportType, nineSlice, type और/या alignToPixelGrid दें
 @msg	passwords can have up to {MAX_PASSWORD} bytes	पासवर्ड {MAX_PASSWORD} बाइट्स तक हो सकता है
 @msg	paste unavailable	पेस्ट करें अनुपलब्ध
 @msg	Pasting	चिपकाना

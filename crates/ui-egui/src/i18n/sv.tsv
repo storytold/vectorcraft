@@ -7488,7 +7488,7 @@ breakText	Glyphs	Glyfer
 @msg	stroke cannot be set on a symbol instance	stroke kan inte anges för en symbolinstans
 @msg	fill on a symbol instance must be a solid color or none	fill för en symbolinstans måste vara en enfärgad färg eller none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kan inte anges för en bild utan effekten Konvertera till form eller Konvertera objekt till konturer
-@msg	pass newName, registration, exportType, nineSlice and/or type	ange newName, registration, exportType, nineSlice och/eller type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	ange newName, registration, exportType, nineSlice, type och/eller alignToPixelGrid
 	Text Flow	Textflöde
 	By Rows	Radvis
 	By Columns	Kolumnvis

@@ -7063,7 +7063,7 @@ breakText	Glyphs	글리프
 @msg	stroke cannot be set on a symbol instance	심볼 인스턴스에는 stroke를 설정할 수 없습니다
 @msg	fill on a symbol instance must be a solid color or none	심볼 인스턴스의 fill은 단색 또는 none이어야 합니다
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	모양으로 변환 또는 개체 윤곽선화 효과가 없는 이미지에는 {key}을(를) 설정할 수 없습니다
-@msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice 및/또는 type을 지정하세요
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	newName, registration, exportType, nineSlice, type 및/또는 alignToPixelGrid을 지정하세요
 	Text Flow	텍스트 흐름
 	By Rows	행 방향
 	By Columns	열 방향

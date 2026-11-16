@@ -7503,7 +7503,7 @@ breakText	Glyphs	Glifos
 @msg	stroke cannot be set on a symbol instance	stroke não pode ser definido em uma instância de símbolo
 @msg	fill on a symbol instance must be a solid color or none	o fill de uma instância de símbolo deve ser uma cor sólida ou none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} não pode ser definido em uma imagem sem o efeito Converter em Forma ou Contornar Objeto
-@msg	pass newName, registration, exportType, nineSlice and/or type	informe newName, registration, exportType, nineSlice e/ou type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	informe newName, registration, exportType, nineSlice, type e/ou alignToPixelGrid
 # Strings the sibling catalogs translate that pt-BR did not yet cover (translated 2026-10-31).
 	 on the canvas to create one	 na tela para criar um
 	1 Layer	1 camada

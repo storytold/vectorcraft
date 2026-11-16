@@ -6820,7 +6820,7 @@ breakText	Glyphs	Glif
 @msg	stroke cannot be set on a symbol instance	stroke tidak dapat diatur pada instans simbol
 @msg	fill on a symbol instance must be a solid color or none	fill pada instans simbol harus berupa warna solid atau none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} tidak dapat diatur pada gambar tanpa efek Konversi ke bentuk atau Kerangka objek
-@msg	pass newName, registration, exportType, nineSlice and/or type	berikan newName, registration, exportType, nineSlice dan/atau type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	berikan newName, registration, exportType, nineSlice, type dan/atau alignToPixelGrid
 	Text Flow	Alur teks
 	By Rows	Per baris
 	By Columns	Per kolom

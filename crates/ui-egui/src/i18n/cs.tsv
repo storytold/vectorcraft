@@ -7472,7 +7472,7 @@ breakText	Glyphs	Glyfy
 @msg	stroke cannot be set on a symbol instance	stroke nelze nastavit u instance symbolu
 @msg	fill on a symbol instance must be a solid color or none	fill instance symbolu musí být plná barva nebo none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} nelze nastavit u obrazu bez efektu Převést na tvar nebo Převést objekt na obrys
-@msg	pass newName, registration, exportType, nineSlice and/or type	zadejte newName, registration, exportType, nineSlice a/nebo type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	zadejte newName, registration, exportType, nineSlice, type a/nebo alignToPixelGrid
 	Text Flow	Tok textu
 	By Rows	Po řádcích
 	By Columns	Po sloupcích
