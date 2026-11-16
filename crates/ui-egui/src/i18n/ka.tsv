@@ -3376,6 +3376,8 @@ lighting	Light	სინათლე
 	Lasso Tool	ლასოს ხელსაწყო
 	Enclosing Lasso Tool	შემომსაზღვრელი ლასოს ხელსაწყო
 	Enclosing Lasso	შემომსაზღვრელი ლასო
+	Polygonal Lasso Tool	მრავალკუთხა ლასოს ხელსაწყო
+	Polygonal Lasso	მრავალკუთხა ლასო
 	Line Cut Tool	ხაზით ჭრის ხელსაწყო
 	Line Graph Tool	ხაზოვანი დიაგრამის ხელსაწყო
 	Line Segment Tool	ხაზის სეგმენტის ხელსაწყო
@@ -4786,6 +4788,9 @@ digits	Malayalam	მალაიალამური
 	Show smooth color wheel	გლუვი ფერთა წრის ჩვენება
 	Show segmented color wheel	სეგმენტირებული ფერთა წრის ჩვენება
 	Show color bars	ფერთა ზოლების ჩვენება
+	Add Color Tool	ფერის დამატების ხელსაწყო
+	Remove Color Tool	ფერის წაშლის ხელსაწყო
+	Remove Color	ფერის წაშლა
 	Find the selected colors in the artwork	არჩეული ფერების პოვნა ნახატში
 	Keep this row's colors (exclude)	ამ სტრიქონის ფერების შენარჩუნება (გამორიცხვა)
 	Limit to Library:	ბიბლიოთეკით შეზღუდვა:

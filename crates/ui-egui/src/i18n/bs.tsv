@@ -1413,6 +1413,8 @@ lighting	Light	Svjetlo
 	Lasso Tool	Alat laso
 	Enclosing Lasso Tool	Alat laso za obuhvatanje
 	Enclosing Lasso	Laso za obuhvatanje
+	Polygonal Lasso Tool	Alat poligonalni laso
+	Polygonal Lasso	Poligonalni laso
 	Lasso	Laso
 	Line Cut Tool	Alat za rez linijom
 	Line Graph Tool	Alat za linijski grafikon
@@ -2925,6 +2927,9 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Prikaži glatki kotač boja
 	Show segmented color wheel	Prikaži segmentirani kotač boja
 	Show color bars	Prikaži trake boja
+	Add Color Tool	Alat za dodavanje boje
+	Remove Color Tool	Alat za uklanjanje boje
+	Remove Color	Ukloni boju
 	Find the selected colors in the artwork	Pronađi odabrane boje u crtežu
 	Harmony Rules	Pravila harmonije
 	Keep this row's colors (exclude)	Zadrži boje ovog reda (isključi)

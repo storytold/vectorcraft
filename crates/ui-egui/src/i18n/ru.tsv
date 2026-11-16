@@ -1579,6 +1579,9 @@ file-filter	Templates	Шаблоны
 	Show smooth color wheel	Показать плавный цветовой круг
 	Show segmented color wheel	Показать сегментированный цветовой круг
 	Show color bars	Показать цветовые полосы
+	Add Color Tool	Инструмент «Добавить цвет»
+	Remove Color Tool	Инструмент «Удалить цвет»
+	Remove Color	Удалить цвет
 	Find the selected colors in the artwork	Найти выбранные цвета в рисунке
 	Harmony Sets	Наборы гармонии
 	Height	Высота
@@ -1930,6 +1933,8 @@ file-filter	Templates	Шаблоны
 	Lasso Tool	Инструмент «Лассо»
 	Enclosing Lasso Tool	Инструмент «Охватывающее лассо»
 	Enclosing Lasso	Охватывающее лассо
+	Polygonal Lasso Tool	Инструмент «Многоугольное лассо»
+	Polygonal Lasso	Многоугольное лассо
 	Last Effect: {name}	Последний эффект: {name}
 	Last Effect: {}	Последний эффект: {}
 	Last Effect…	Последний эффект…

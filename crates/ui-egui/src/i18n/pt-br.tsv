@@ -1354,6 +1354,9 @@ antiAlias	Sharp	Nítido
 	Show smooth color wheel	Mostrar roda de cores contínua
 	Show segmented color wheel	Mostrar roda de cores segmentada
 	Show color bars	Mostrar barras de cores
+	Add Color Tool	Ferramenta Adicionar cor
+	Remove Color Tool	Ferramenta Remover cor
+	Remove Color	Remover cor
 	Find the selected colors in the artwork	Localizar as cores selecionadas na arte
 	Harmony Sets	Conjuntos de Harmonia
 	Height	Altura
@@ -1603,6 +1606,8 @@ antiAlias	Sharp	Nítido
 	Lasso Tool	Ferramenta Laço
 	Enclosing Lasso Tool	Ferramenta Laço envolvente
 	Enclosing Lasso	Laço envolvente
+	Polygonal Lasso Tool	Ferramenta Laço poligonal
+	Polygonal Lasso	Laço poligonal
 	Last Effect: {name}	Último Efeito: {name}
 	Last Effect…	Último Efeito…
 	Last Page	Última Página

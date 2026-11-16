@@ -1522,6 +1522,9 @@ font-technology	Variable	Variabla
 	Show smooth color wheel	Visa steglöst färghjul
 	Show segmented color wheel	Visa segmenterat färghjul
 	Show color bars	Visa färgstaplar
+	Add Color Tool	Verktyget Lägg till färg
+	Remove Color Tool	Verktyget Ta bort färg
+	Remove Color	Ta bort färg
 	Find the selected colors in the artwork	Hitta de markerade färgerna i teckningen
 	Harmony Sets	Harmoniuppsättningar
 	Height	Höjd
@@ -1852,6 +1855,8 @@ font-technology	Variable	Variabla
 	Lasso Tool	Lassoverktyg
 	Enclosing Lasso Tool	Omslutande lassoverktyg
 	Enclosing Lasso	Omslutande lasso
+	Polygonal Lasso Tool	Polygonlassoverktyg
+	Polygonal Lasso	Polygonlasso
 	Last Effect: {name}	Senaste effekten: {name}
 	Last Effect: {}	Senaste effekten: {}
 	Last Effect…	Senaste effekten…

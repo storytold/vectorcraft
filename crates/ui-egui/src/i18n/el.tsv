@@ -1486,6 +1486,9 @@ font-technology	Variable	Μεταβλητές
 	Show smooth color wheel	Εμφάνιση ομαλού χρωματικού τροχού
 	Show segmented color wheel	Εμφάνιση τμηματοποιημένου χρωματικού τροχού
 	Show color bars	Εμφάνιση χρωματικών ράβδων
+	Add Color Tool	Εργαλείο προσθήκης χρώματος
+	Remove Color Tool	Εργαλείο αφαίρεσης χρώματος
+	Remove Color	Αφαίρεση χρώματος
 	Find the selected colors in the artwork	Εύρεση των επιλεγμένων χρωμάτων στο σχέδιο
 	Harmony Sets	Σύνολα χρωματικής αρμονίας
 	Height	Ύψος
@@ -1806,6 +1809,8 @@ font-technology	Variable	Μεταβλητές
 	Lasso Tool	Λάσο (Lasso Tool)
 	Enclosing Lasso Tool	Εργαλείο περικλείοντος λάσου
 	Enclosing Lasso	Περικλείον λάσο
+	Polygonal Lasso Tool	Εργαλείο πολυγωνικού λάσου
+	Polygonal Lasso	Πολυγωνικό λάσο
 	Last Effect: {name}	Τελευταίο εφέ: {name}
 	Last Effect: {}	Τελευταίο εφέ: {}
 	Last Effect…	Τελευταίο εφέ…
