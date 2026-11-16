@@ -1158,3 +1158,35 @@ fn a_noisy_hard_edged_gray_between_black_and_white_is_one_shape() {
         }
     }
 }
+
+#[test]
+fn a_disc_on_a_gray_panel_on_a_paler_ground_has_no_slivers_of_the_ground() {
+    // The panel's gray lies on the line from the ground's gray to the disc's charcoal, so the disc's
+    // edge pixels are also a mix of the ground and the disc.
+    let (ground, panel, disc) = ([240, 240, 240], [200, 200, 200], [60, 60, 60]);
+    for blur in [0.0, 0.7] {
+        let grays = render(150, 150, blur, move |x, y| {
+            let (cx, cy) = (x.clamp(35.0, 115.0), y.clamp(35.0, 115.0));
+            Some(if (x - 75.0).hypot(y - 75.0) < 30.0 {
+                disc
+            } else if (20.0..130.0).contains(&x) && (20.0..130.0).contains(&y) && (x - cx).hypot(y - cy) < 15.0 {
+                panel
+            } else {
+                ground
+            })
+        });
+        for named in [false, true] {
+            let logo_colors = if named { vec!["#F0F0F0".into(), "#C8C8C8".into(), "#3C3C3C".into()] } else { Vec::new() };
+            let res = trace(&grays, &TraceParams { logo_colors, ..logo_params() });
+            let paths: Vec<_> = res.paths.iter().map(|t| (t.color, t.pixels)).collect();
+            assert_eq!(res.paths.len(), 3, "blur {blur}, named {named}: one path per color; {paths:?}");
+            for k in 0..16 {
+                let a = f64::from(k) * std::f64::consts::TAU / 16.0;
+                let at = Point::new(75.0 + 31.0 * a.cos(), 75.0 + 31.0 * a.sin());
+                assert_eq!(top_color(&res, at), Some(panel), "blur {blur}, named {named}: beside the disc at {at:?}");
+            }
+            assert_eq!(top_color(&res, Point::new(8.0, 75.0)), Some(ground), "blur {blur}, named {named}: the ground");
+            assert_eq!(top_color(&res, Point::new(75.0, 75.0)), Some(disc), "blur {blur}, named {named}: the disc");
+        }
+    }
+}

@@ -134,6 +134,19 @@ between pixels or is blurred traces as black and white. A flat area whose color 
 some levels off, counts as holding the named colors it is a blend of, and so do the pixels of exactly
 its color that touch it.
 
+The same holds when the left-out color lies beyond both colors of the edge, as a pale gray ground lies
+beyond a gray panel and a charcoal disc: an edge pixel between the panel and the disc is also a blend of
+the ground and the disc. Flat Logo reads it as a blend of the panel and the disc when, along the line
+through the three colors, the pixel has a neighbor on each side of it, no neighbor lies past the panel
+toward the ground, and a chain of neighbors, each nearer the panel's color than the one before, leads
+from the pixel, in at most 6 steps, to the panel's color or to a flat area of the panel. The same rule
+applies to a left-out color darker than both colors of the edge, and to colors that are not grays. A
+charcoal disc on a gray panel on a paler ground then traces with no slivers of the ground around it when
+its edges are sharp or blurred by 0.7 pixel. An edge blurred by a pixel or more can still leave slivers
+of the ground. The pixels of a pale line on the disc, whether one pixel wide, blurred over three pixels
+or falling between two pixels, and the edge of a gap of the ground's color between the disc and the
+panel keep the ground in their blends.
+
 **Large images.** An image of more than 1500 pixels on a side is traced as any other, only more
 slowly, and the trace says so: `imageTrace.make` returns the note in `warnings` and the status bar
 shows it (the [results optimization](https://helpx.adobe.com/illustrator/using/image-trace-results-optimization.html)

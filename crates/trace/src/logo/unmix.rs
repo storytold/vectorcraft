@@ -5,7 +5,8 @@
 //! runs, so each pixel is instead explained as a mix of at most three classes, whichever mix
 //! reproduces the pixel best. When another mix also reproduces it (with a gray between black and
 //! white among the classes, a black-to-white edge pixel is a mix of black and gray as well as of
-//! black and white), the pixel takes the mix whose classes lie nearest it in the flat areas around it,
+//! black and white, and a gray-to-black edge pixel is a mix of white and black as well as of gray
+//! and black), the pixel takes the mix whose classes lie nearest it in the flat areas around it,
 //! when its neighbors show an edge between those classes.
 
 use std::collections::{HashMap, HashSet};
@@ -217,7 +218,7 @@ pub(crate) fn unmix(pix: &[Px], width: usize, height: usize, classes: &[[f64; 4]
             continue;
         }
         let Some(mixes) = mixed.get(&key) else { continue };
-        let edges: Vec<&Weights> = mixes.tied.iter().filter(|m| across_edge(pix, width, height, i, classes, &mixes.best, m)).collect();
+        let edges: Vec<&Weights> = mixes.tied.iter().filter(|m| across_edge(pix, &flat, (width, height), i, classes, &mixes.best, m)).collect();
         if edges.is_empty() {
             continue;
         }
@@ -244,10 +245,24 @@ pub(crate) fn unmix(pix: &[Px], width: usize, height: usize, classes: &[[f64; 4]
 
 /// Whether pixel `i` lies on an edge between the two classes of `other`, rather than in an area of
 /// a class of `best` that `other` leaves out: for each such class, the pixel has a neighbor beyond
-/// it toward each class of `other`, along the line between them. (A black-to-white edge pixel as
-/// light as a gray has a darker neighbor and a lighter one; a gray stroke on white has no neighbor
-/// darker than the gray.)
-fn across_edge(pix: &[Px], width: usize, height: usize, i: usize, classes: &[[f64; 4]], best: &Weights, other: &Weights) -> bool {
+/// it toward each class of `other`, along the line between them, or, for a class that lies beyond
+/// both classes of `other` on that line, a neighbor on each side of the pixel itself, none past
+/// the class of `other` nearer the class left out, and a chain of neighbors from the pixel to that
+/// nearer class or a flat area of it (`flat`), each nearer it than the one before. (A black-to-white
+/// edge pixel as light as a gray has a darker neighbor and a lighter one; a gray stroke on white
+/// has no neighbor darker than the gray; a gray-to-black edge pixel has a lighter neighbor and a
+/// darker one, and lighter pixels lead to the flat gray; a pale line one pixel wide on black has
+/// only darker neighbors; the pixels beside a blurred pale line's middle reach no flat gray; and a
+/// white gap between black and gray has a neighbor lighter than the gray.)
+fn across_edge(
+    pix: &[Px],
+    flat: &[Option<usize>],
+    (width, height): (usize, usize),
+    i: usize,
+    classes: &[[f64; 4]],
+    best: &Weights,
+    other: &Weights,
+) -> bool {
     let [(a, _), (b, _)] = other.as_slice() else { return false };
     let (Some(ca), Some(cb)) = (classes.get(*a), classes.get(*b)) else { return false };
     let ab: [f64; 4] = std::array::from_fn(|j| cb[j] - ca[j]);
@@ -262,21 +277,75 @@ fn across_edge(pix: &[Px], width: usize, height: usize, i: usize, classes: &[[f6
         let off = (0..4).map(|j| (v[j] - ca[j] - t * ab[j]).powi(2)).sum::<f64>().sqrt();
         (t, off)
     };
-    let (x, y) = (i % width.max(1), i / width.max(1));
-    let neighbors: Vec<f64> = (y.saturating_sub(1)..(y + 2).min(height))
-        .flat_map(|yy| (x.saturating_sub(1)..(x + 2).min(width)).map(move |xx| yy * width + xx))
-        .filter(|&j| j != i)
-        .filter_map(|j| pix.get(j))
-        .map(|q| place([f64::from(q[0]), f64::from(q[1]), f64::from(q[2]), f64::from(q[3])]))
-        .filter(|&(_, off)| off <= 2.0 * PURE)
-        .map(|(t, _)| t)
-        .collect();
+    // Where pixel `j` lies along the line, when it lies within `2 * PURE` of it.
+    let at = |j: usize| {
+        pix.get(j)
+            .map(|q| place([f64::from(q[0]), f64::from(q[1]), f64::from(q[2]), f64::from(q[3])]))
+            .filter(|&(_, off)| off <= 2.0 * PURE)
+            .map(|(t, _)| t)
+    };
+    // The pixels around pixel `j`.
+    let around = |j: usize| {
+        let (x, y) = (j % width.max(1), j / width.max(1));
+        (y.saturating_sub(1)..(y + 2).min(height))
+            .flat_map(move |yy| (x.saturating_sub(1)..(x + 2).min(width)).map(move |xx| yy * width + xx))
+            .filter(move |&n| n != j)
+    };
+    let neighbors: Vec<f64> = around(i).filter_map(at).collect();
     let left_out: Vec<usize> = best.iter().filter(|&&(c, w)| w > 0.0 && c != *a && c != *b).map(|&(c, _)| c).collect();
+    // Whether the pixel has a neighbor on each side of place `t` along the line.
+    let straddled = |t: f64| neighbors.iter().any(|&tn| (t - tn) * len > PURE) && neighbors.iter().any(|&tn| (tn - t) * len > PURE);
+    // Whether pixel `j`, at place `t`, lies within `PURE` of class `c` (at place `to`), or in a flat
+    // area of class `c` ([`flat_classes`]), or beside one and within `PURE` of its color along the
+    // line (as when `c` is named some levels off the area's color).
+    let touches = |j: usize, t: f64, c: usize, to: f64| {
+        let in_c = |n: usize| flat.get(n).copied().flatten() == Some(c);
+        (t - to).abs() * len <= PURE || in_c(j) || around(j).any(|n| in_c(n) && at(n).is_some_and(|tn| (tn - t).abs() * len <= PURE))
+    };
+    // Whether a chain of neighbors from the pixel, each nearer place `to` than the one before and
+    // none past it (`past`), comes to class `c` ([`touches`]) in at most `NEARBY` steps. (From a
+    // pixel beside a pale line's middle, the middle is the only neighbor nearer the gray, and it has
+    // none, and it is far from the gray.)
+    let reaches = |to: f64, c: usize, past: &dyn Fn(f64) -> bool| {
+        let Some(t) = at(i) else { return false };
+        let mut front = vec![(i, t)];
+        let mut seen = HashSet::from([i]);
+        for step in 0..=NEARBY {
+            let mut next = Vec::new();
+            for &(j, t) in &front {
+                if touches(j, t, c, to) {
+                    return true;
+                }
+                if step < NEARBY {
+                    for n in around(j) {
+                        if let Some(tn) = at(n).filter(|&tn| !past(tn) && (tn - to).abs() < (t - to).abs())
+                            && seen.insert(n)
+                        {
+                            next.push((n, tn));
+                        }
+                    }
+                }
+            }
+            if next.is_empty() {
+                return false;
+            }
+            front = next;
+        }
+        false
+    };
     !left_out.is_empty()
         && left_out.iter().all(|&c| {
             let Some(&cv) = classes.get(c) else { return false };
             let (tc, _) = place(cv);
-            neighbors.iter().any(|&t| (tc - t) * len > PURE) && neighbors.iter().any(|&t| (t - tc) * len > PURE)
+            if straddled(tc) {
+                return true;
+            }
+            if (0.0..=1.0).contains(&tc) {
+                return false;
+            }
+            let beyond = |tn: f64| if tc < 0.0 { -tn * len > PURE } else { (tn - 1.0) * len > PURE };
+            let (to, near) = if tc < 0.0 { (0.0, *a) } else { (1.0, *b) };
+            !neighbors.iter().any(|&tn| beyond(tn)) && at(i).is_some_and(straddled) && reaches(to, near, &beyond)
         })
 }
 
@@ -667,6 +736,80 @@ mod tests {
             for y in 0..rows {
                 assert_eq!(pl[0][y * 11 + 5], gray, "{rows} rows: gray in row {y}");
             }
+        }
+    }
+
+    #[test]
+    fn an_edge_pixel_takes_no_class_beyond_both_classes_beside_it() {
+        // A pale ground, a gray and a charcoal on one line: a row of flat gray, one edge pixel halfway
+        // to charcoal, flat charcoal. The edge pixel is a mix of the gray and the charcoal, with none
+        // of the ground in it.
+        let g = |v: f64| [v / 255.0, v / 255.0, v / 255.0, 1.0];
+        let classes = vec![g(240.0), g(200.0), g(60.0), [1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 0.0]];
+        let px = |v: f32| [v / 255.0, v / 255.0, v / 255.0, 1.0];
+        let mut pix = vec![px(200.0); 5];
+        pix.push(px(130.0));
+        pix.extend([px(60.0); 5]);
+        let (pl, _, _) = unmix(&pix, 11, 1, &classes);
+        assert_eq!(pl[0][5], 0.0, "ground in the edge pixel");
+        assert!((pl[1][5] - 0.5).abs() < 0.02 && (pl[2][5] - 0.5).abs() < 0.02, "gray {} charcoal {}", pl[1][5], pl[2][5]);
+        // The cases below are vertical lines: three rows alike, read in the middle row.
+        // The same edge with the panel's pixels three levels darker than the named gray.
+        let mut pix = vec![px(197.0); 5];
+        pix.push(px(130.0));
+        pix.extend([px(60.0); 5]);
+        let (pl, _, _) = unmix(&pix.repeat(3), 11, 3, &classes);
+        assert_eq!(pl[0][11 + 5], 0.0, "ground in the edge pixel beside a gray three levels off");
+        // An edge pixel whose lightest neighbor leads nowhere, with another chain of lighter pixels
+        // to the gray.
+        let outer = [vec![px(200.0); 5], vec![px(170.0)], vec![px(60.0); 7]].concat();
+        let middle = [vec![px(200.0); 5], vec![px(170.0), px(130.0), px(180.0)], vec![px(60.0); 5]].concat();
+        let (pl, _, _) = unmix(&[outer.clone(), middle, outer].concat(), 13, 3, &classes);
+        assert_eq!(pl[0][13 + 6], 0.0, "ground in the edge pixel beside a dead end");
+        // A pixel half ground and half charcoal between charcoal pixels, flat gray three pixels off:
+        // a thin pale line on the charcoal, kept.
+        let mut pix = vec![px(200.0); 3];
+        pix.extend([px(60.0); 2]);
+        pix.push(px(150.0));
+        pix.extend([px(60.0); 5]);
+        let (pl, _, _) = unmix(&pix.repeat(3), 11, 3, &classes);
+        assert!((pl[0][11 + 5] - 0.5).abs() < 0.02, "the line: ground {}", pl[0][11 + 5]);
+        // A gap of the ground's color one pixel wide between flat charcoal and flat gray: the pixel
+        // half charcoal and half ground beside it keeps its ground.
+        let mut pix = vec![px(60.0); 5];
+        pix.extend([px(150.0), px(236.0)]);
+        pix.extend([px(200.0); 5]);
+        let (pl, _, _) = unmix(&pix.repeat(3), 12, 3, &classes);
+        assert!((pl[0][12 + 5] - 0.5).abs() < 0.02, "the gap: ground {}", pl[0][12 + 5]);
+        // A pale line blurred over three pixels on the charcoal, flat gray five pixels off: the pixels
+        // beside its middle have a lighter neighbor and a darker one, and keep their ground.
+        let mut pix = vec![px(200.0); 5];
+        pix.extend([px(60.0); 3]);
+        pix.extend([px(103.0), px(154.0), px(103.0)]);
+        pix.extend([px(60.0); 9]);
+        let (pl, _, _) = unmix(&pix.repeat(3), 20, 3, &classes);
+        for j in [20 + 8, 20 + 10] {
+            assert!((pl[0][j] - 43.0 / 180.0).abs() < 0.02 && pl[1][j] == 0.0, "the blurred line at {j}: ground {} gray {}", pl[0][j], pl[1][j]);
+        }
+        // A pale line one pixel wide that falls between two pixels, covering half of one and three
+        // quarters of the other: both pixels keep their ground.
+        let mut pix = vec![px(200.0); 5];
+        pix.extend([px(60.0); 3]);
+        pix.extend([px(150.0), px(195.0)]);
+        pix.extend([px(60.0); 10]);
+        let (pl, _, _) = unmix(&pix.repeat(3), 20, 3, &classes);
+        for (j, want) in [(20 + 8, 0.5), (20 + 9, 0.75)] {
+            let (ground, gray) = (pl[0][j], pl[1][j]);
+            assert!((ground - want).abs() < 0.02 && gray == 0.0, "the line between pixels at {j}: ground {ground} gray {gray}");
+        }
+        // An edge from the gray to the charcoal blurred by 0.7 pixel: the pixels between take no
+        // ground.
+        let mut pix = vec![px(200.0); 5];
+        pix.extend([px(199.97), px(197.8), px(166.7), px(93.3), px(62.2)]);
+        pix.extend([px(60.0); 5]);
+        let (pl, _, _) = unmix(&pix.repeat(3), 15, 3, &classes);
+        for j in [15 + 7, 15 + 8] {
+            assert_eq!(pl[0][j], 0.0, "the blurred edge at {j}: ground");
         }
     }
 
