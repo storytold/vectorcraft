@@ -488,8 +488,14 @@ fn selection_attrs(s: &Session, p: &Value, kind: Kind, verb: &str) -> Result<Opt
             };
             char_attrs(&style)
         }
-        // The paragraph at `start`.
-        Kind::Para => para_attrs(t.para_at(t.paragraphs_in(at, at).start)),
+        // The paragraph at `start`, without the number its list gives that paragraph alone.
+        Kind::Para => {
+            let mut para = t.para_at(t.paragraphs_in(at, at).start).clone();
+            if let Some(l) = para.list.as_mut() {
+                l.start = None;
+            }
+            para_attrs(&para)
+        }
     }))
 }
 
@@ -639,6 +645,11 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
                 }
                 Kind::Para => {
                     let mut st = with_attrs(&ParaStyle::default(), m, &c)?;
+                    // A list's number belongs to one paragraph, not to a style.
+                    if st.list.is_some_and(|l| l.start.is_some()) {
+                        let k = "list.start";
+                        return Err(bad(&c, format!("unknown attribute `{k}`")));
+                    }
                     para_ranges(&st, m, kept, &c)?;
                     sort_tabs(&mut st, m, kept);
                     para_attrs(&st)
