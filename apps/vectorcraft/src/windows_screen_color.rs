@@ -82,6 +82,18 @@ fn srgb(colorref: u32) -> Option<[f32; 3]> {
     (high == 0).then(|| [r, g, b].map(|v| f32::from(v) / 255.0))
 }
 
+/// The client point of a mouse message. Its `lParam` holds each coordinate as a signed 16-bit
+/// value (`GET_X_LPARAM` and `GET_Y_LPARAM`,
+/// <https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-lbuttonup>), so a coordinate past
+/// 32,767 pixels in a wide virtual screen loses its high bits. Each coordinate becomes the value
+/// with the same low 16 bits nearest to `near`, the message's own pointer position (`MSG.pt`,
+/// <https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-msg>) in client
+/// coordinates.
+fn message_point(lparam: isize, near: (i32, i32)) -> (i32, i32) {
+    let widen = |low: i16, near: i32| near.saturating_add(i32::from(i32::from(low).wrapping_sub(near) as i16));
+    (widen(lparam as i16, near.0), widen((lparam >> 16) as i16, near.1))
+}
+
 /// A mouse button: the left one picks, and any other one cancels.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Button {
@@ -199,7 +211,7 @@ mod overlay {
     };
     use windows::core::{PCWSTR, w};
 
-    use super::{Button, Input, Press, Step, VirtualScreen, srgb};
+    use super::{Button, Input, Press, Step, VirtualScreen, message_point, srgb};
 
     /// The window class of the sampler's window.
     const CLASS: PCWSTR = w!("VectorCraftScreenColor");
@@ -288,6 +300,8 @@ mod overlay {
         screen: VirtualScreen,
         cursor: HCURSOR,
         press: Press,
+        /// The pointer position, in screen coordinates, of the message being dispatched (`MSG.pt`).
+        message_pt: Option<POINT>,
         /// The answer, set once.
         answer: Option<Picked>,
         /// The window has been destroyed.
@@ -326,7 +340,7 @@ mod overlay {
         // SAFETY: a system cursor, loaded by its id.
         let cursor = unsafe { LoadCursorW(None, IDC_CROSS) }.map_err(|e| format!("LoadCursorW: {e}"))?;
         // Each sampler runs on a thread of its own, so the thread has no session yet.
-        let _ = put(Some(Session { snapshot, screen, cursor, press: Press::default(), answer: None, destroyed: false }));
+        let _ = put(Some(Session { snapshot, screen, cursor, press: Press::default(), message_pt: None, answer: None, destroyed: false }));
         let shown = show(screen, cursor);
         if let Ok(hwnd) = shown {
             pump();
@@ -401,6 +415,7 @@ mod overlay {
         // SAFETY: `msg` is a valid `MSG` for each call. `GetMessageW` answers 0 for `WM_QUIT` and -1
         // for an error; both end the loop.
         while unsafe { GetMessageW(&mut msg, None, 0, 0) }.0 > 0 {
+            with(|s| s.message_pt = Some(msg.pt));
             // SAFETY: the message `GetMessageW` just filled in.
             unsafe {
                 let _ = TranslateMessage(&msg);
@@ -428,12 +443,27 @@ mod overlay {
         }
     }
 
-    /// The copy's color under the pointer.
-    fn pick(s: &mut Session) -> Picked {
-        let mut at = POINT::default();
-        // SAFETY: `at` is a valid `POINT`.
-        unsafe { GetCursorPos(&mut at) }.map_err(|e| format!("GetCursorPos: {e}"))?;
-        let (x, y) = s.screen.pixel(at.x, at.y).ok_or_else(|| format!("the pointer at ({}, {}) is outside the virtual screen", at.x, at.y))?;
+    /// The copy's color at the point where the left button was released: `lparam` of that
+    /// `WM_LBUTTONUP`, in `hwnd`'s client coordinates, not where the pointer is now. The pointer's
+    /// current position stands in for `MSG.pt` only when the release was not dispatched by
+    /// [`pump`].
+    fn pick(s: &mut Session, hwnd: HWND, lparam: LPARAM) -> Picked {
+        let mut origin = POINT::default();
+        // SAFETY: the window on this thread and a valid `POINT`; the call sends no message.
+        unsafe { ClientToScreen(hwnd, &mut origin) }.ok().map_err(|e| format!("ClientToScreen: {e}"))?;
+        let pt = match s.message_pt {
+            Some(pt) => pt,
+            None => {
+                let mut now = POINT::default();
+                // SAFETY: `now` is a valid `POINT`.
+                unsafe { GetCursorPos(&mut now) }.map_err(|e| format!("GetCursorPos: {e}"))?;
+                now
+            }
+        };
+        let near = (pt.x.wrapping_sub(origin.x), pt.y.wrapping_sub(origin.y));
+        let (cx, cy) = message_point(lparam.0, near);
+        let at = POINT { x: cx.saturating_add(origin.x), y: cy.saturating_add(origin.y) };
+        let (x, y) = s.screen.pixel(at.x, at.y).ok_or_else(|| format!("the release at ({}, {}) is outside the virtual screen", at.x, at.y))?;
         let colorref = s.snapshot.colorref(x, y);
         srgb(colorref).map(Some).ok_or_else(|| format!("GetPixel({x}, {y}) answered {colorref:#010x}"))
     }
@@ -482,7 +512,7 @@ mod overlay {
         let result = if msg == WM_ACTIVATE { unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) } } else { LRESULT(0) };
         if let Some(input) = input(hwnd, msg, wparam, lparam) {
             match with(|s| s.press.step(input)) {
-                Some(Step::Pick) => finish(hwnd, pick),
+                Some(Step::Pick) => finish(hwnd, |s| pick(s, hwnd, lparam)),
                 Some(Step::Cancel) => finish(hwnd, |_| Ok(None)),
                 Some(Step::Wait) | None => {}
             }
@@ -556,6 +586,25 @@ mod tests {
         let s = VirtualScreen::new(i32::MIN, i32::MIN, 10, 10).unwrap();
         assert_eq!(s.pixel(i32::MIN + 9, i32::MIN), Some((9, 0)));
         assert_eq!(s.pixel(i32::MAX, 0), None);
+    }
+
+    /// The release's own point picks, with signed coordinates: left of or above the client area
+    /// they are negative. Past 32,767 pixels they are widened by the message's pointer position.
+    #[test]
+    fn the_release_point_comes_from_the_message() {
+        let lparam = |x: i32, y: i32| ((y as u16 as isize) << 16) | x as u16 as isize;
+        assert_eq!(message_point(lparam(100, 200), (140, 260)), (100, 200), "the lParam point wins over a nearby position");
+        assert_eq!(message_point(lparam(65_636, 0), (65_636, 0)), (65_636, 0), "MSG.pt gives the high bits past 65,535 pixels");
+        assert_eq!(message_point(lparam(100, 0), (100, 0)), (100, 0));
+        assert_eq!(message_point(lparam(-5, -1), (10, 10)), (-5, -1));
+        assert_eq!(message_point(lparam(0, 0), (0, 0)), (0, 0));
+        assert_eq!(message_point(lparam(32_767, -32_768), (32_767, -32_768)), (32_767, -32_768));
+        assert_eq!(message_point(lparam(40_010, 2_000), (40_000, 2_100)), (40_010, 2_000), "eight 8K monitors in a row");
+        assert_eq!(message_point(lparam(61_439, 0), (61_000, 0)), (61_439, 0));
+        assert_eq!(message_point(lparam(32_770, 0), (32_760, 0)), (32_770, 0));
+        // A negative `lParam` on 64-bit Windows keeps only its low 32 bits as the point.
+        assert_eq!(message_point(lparam(-3, -4) | !0xFFFF_FFFF, (0, 0)), (-3, -4));
+        assert_eq!(message_point(lparam(5, 5), (i32::MAX, i32::MIN)), (i32::MAX, i32::MIN + 5), "saturates at the coordinate range");
     }
 
     /// The size is checked before the copy is made: an empty, negative, oversized or out-of-range
