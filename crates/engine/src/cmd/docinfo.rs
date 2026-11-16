@@ -857,14 +857,12 @@ mod tests {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
         let r = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
-        s.execute(
-            "paint.setFill",
-            &json!({"gradient": {"kind": "linear", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]}}),
-        )
-        .unwrap();
+        let gradient = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]});
+        s.execute("paint.setFill", &json!({"gradient": gradient})).unwrap();
         let t = s.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi"})).unwrap()["id"].clone();
+        // New type starts black (#7975); filled with the gradient, its characters make it a gradient object too.
+        s.execute("paint.setFill", &json!({"gradient": gradient, "ids": [t]})).unwrap();
         let i = s.execute("document.info", &json!({})).unwrap();
-        // The type's characters take the current gradient fill, so it is a gradient object too.
         assert_eq!(
             (i["objects"]["paths"].as_u64(), i["objects"]["textObjects"].as_u64(), i["objects"]["gradients"].as_u64()),
             (Some(1), Some(1), Some(2))

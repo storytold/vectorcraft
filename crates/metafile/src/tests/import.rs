@@ -85,6 +85,43 @@ fn wmf_output_round_trips() {
     assert!(near(ellipse.geometric_bounds().unwrap(), Rect::new(100.0, 20.0, 180.0, 80.0), 0.1));
 }
 
+/// A symbol's square that a Transform effect moves 100 pt right is written where the canvas draws
+/// it, in EMF and in WMF, read back: art whose own place is off the artboard is written where the
+/// effect moves it onto it, and an instance that doubles the art's width places it first, so the
+/// effect still moves it 100 pt (to x = 120, not 220). A stained instance keeps its stain.
+#[test]
+fn symbol_art_effects_are_written_where_they_draw() {
+    let moved = |rect: Rect| {
+        let mut art = path(shapes::rectangle(rect), red(), Paint::None, 0.0);
+        art.appearance.effects.push(vectorcraft_doc::Effect {
+            id: "distort.transform".into(),
+            params: [("moveH", 100.0)].into_iter().collect(),
+            visible: true,
+        });
+        art
+    };
+    // The art's square, the instance's transform and fill, and the square and color it draws.
+    let cases = [
+        (Rect::new(-90.0, 10.0, -80.0, 20.0), Affine::IDENTITY, None, Rect::new(10.0, 10.0, 20.0, 20.0), [255, 0, 0]),
+        (Rect::new(10.0, 30.0, 20.0, 40.0), Affine::scale_non_uniform(2.0, 1.0), Some(blue()), Rect::new(120.0, 30.0, 140.0, 40.0), [0, 0, 255]),
+    ];
+    for (square, xf, stain, want, rgb) in cases {
+        let mut inst = Node::new(vectorcraft_doc::NodeId(0), NodeKind::SymbolInstance { symbol: "Moved".into(), xf });
+        if let Some(p) = stain {
+            inst.appearance = vectorcraft_doc::Appearance::basic(p, Paint::None, 0.0).into();
+        }
+        let mut d = doc_with(200.0, 100.0, vec![inst]);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: std::sync::Arc::new(moved(square)) });
+        for kind in [Kind::Emf, Kind::Wmf] {
+            let back = import(&export(&d, d.artboards[0].rect, kind).unwrap().bytes).unwrap();
+            let drawn: Vec<(Option<Rect>, Option<[u8; 3]>)> = paths(&back.document).iter().map(|n| (n.geometric_bounds(), fill_rgb(n))).collect();
+            assert_eq!(drawn.len(), 1, "{kind:?} {xf:?}: {drawn:?}");
+            assert!(drawn[0].0.is_some_and(|b| near(b, want, 0.1)), "{kind:?} {xf:?}: {drawn:?}");
+            assert_eq!(drawn[0].1, Some(rgb), "{kind:?} {xf:?}");
+        }
+    }
+}
+
 #[test]
 fn freeform_points_that_share_a_model_are_written_as_their_mix() {
     use vectorcraft_color::{Color, Freeform, FreeformPoint, GradientKind};

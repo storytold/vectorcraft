@@ -764,9 +764,11 @@ pub fn image_summary(i: &Value) -> (String, String) {
 
 /// The Control bar for the one selected image: Linked File or Embedded, its file name, colour mode
 /// and effective resolution, Embed or Unembed, Edit Original (a linked file), Image Trace, Mask,
-/// Crop Image and Remove Background. Whether one image is selected. A file name the row has no room
-/// for is left out alone; after it, each control shows only while the row has room for it and
-/// `reserve` after it, and the controls after one left out are left out too.
+/// Crop Image and Remove Background. While the Crop Image tool is in use, the bar shows the file
+/// name, colour mode and resolution only, and the tool's cropping options follow them. Whether one
+/// image is selected. A file name the row has no room for is left out alone; after it, each control
+/// shows only while the row has room for it and `reserve` after it, and the controls after one left
+/// out are left out too.
 pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui, reserve: f32) -> bool {
     let Some(i) = selected_image_info(app) else { return false };
     let (name, details) = image_summary(i);
@@ -786,6 +788,9 @@ pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui, reserve:
         ui.label(details);
     }
     fit.separator(ui);
+    if app.session.tool_id() == vectorcraft_tools::cropimage::ID {
+        return true;
+    }
     link_buttons(app, ui, id, linked, &name, LinkButtons::Fit(&mut fit));
     // The Image Trace button grows past its usual width for a longer translated label.
     let arrow = widgets::SPLIT_ARROW;
