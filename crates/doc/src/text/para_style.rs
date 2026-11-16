@@ -278,6 +278,9 @@ pub struct ParaStyle {
     /// dashes, two ellipses, two two-dot leaders, a vertical kana repeat mark's two halves). Kept
     /// with kinsoku None, where it has no effect. Off by default.
     pub bunri_kinshi: bool,
+    /// Kurikaeshi Moji Shori (Paragraph panel menu): a repeat mark (々, ゝ, ゞ, ヽ or ヾ) that starts
+    /// a line is drawn as the character it repeats, and the text keeps the mark. Off by default.
+    pub kurikaeshi_moji_shori: bool,
     /// Roman Hanging Punctuation (Paragraph panel menu): quotation marks, hyphens, full stops and
     /// commas starting or ending a line hang outside the margin, and asterisks, tildes, ellipses,
     /// dashes, colons and semicolons hang by half. East Asian punctuation hangs by burasagari.
@@ -399,6 +402,8 @@ struct ParaStyleFile {
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     bunri_kinshi: bool,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    kurikaeshi_moji_shori: bool,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     roman_hanging: bool,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     kashida: Kashida,
@@ -437,6 +442,7 @@ impl From<ParaStyle> for ParaStyleFile {
             kinsoku_set,
             kinsoku_type,
             bunri_kinshi,
+            kurikaeshi_moji_shori,
             roman_hanging,
             kashida,
             korean_line_break_anywhere,
@@ -465,6 +471,7 @@ impl From<ParaStyle> for ParaStyleFile {
             kinsoku_set,
             kinsoku_type,
             bunri_kinshi,
+            kurikaeshi_moji_shori,
             roman_hanging,
             kashida,
             korean_line_break_anywhere,
@@ -497,6 +504,7 @@ impl From<ParaStyleFile> for ParaStyle {
             kinsoku_set,
             kinsoku_type,
             bunri_kinshi,
+            kurikaeshi_moji_shori,
             roman_hanging,
             kashida,
             korean_line_break_anywhere,
@@ -529,6 +537,7 @@ impl From<ParaStyleFile> for ParaStyle {
             kinsoku_set,
             kinsoku_type,
             bunri_kinshi,
+            kurikaeshi_moji_shori,
             roman_hanging,
             kashida,
             korean_line_break_anywhere,

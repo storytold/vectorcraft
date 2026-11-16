@@ -8449,7 +8449,102 @@ fn a_drawn_graph_saved_as_ai_opens_as_a_graph_unless_the_save_warns() {
             }
         }
     }
-    assert!(live.contains(&"column v7.ai".to_string()) && live.contains(&"column pdf.ai".to_string()), "{live:?}");
+    for ty in ["column", "stackedColumn", "area"] {
+        assert!(live.contains(&format!("{ty} v7.ai")) && live.contains(&format!("{ty} pdf.ai")), "{ty}: {live:?}");
+    }
+}
+
+/// A default legend swatch has the stroke paint and weight of its series' marks, beside the plot or across the top: the
+/// thin white line of stacked columns and bars, areas and pie wedges, and none on columns and bars. A stroke color kept
+/// on the series, with or without a weight of its own, is on the swatch too.
+#[test]
+fn a_legend_swatch_has_the_stroke_of_its_series_marks() {
+    let white = |w: f64| (Paint::solid(vectorcraft_color::Color::WHITE), w);
+    let cases = [
+        ("stackedColumn", white(0.25)),
+        ("stackedBar", white(0.25)),
+        ("area", white(0.25)),
+        ("pie", white(0.5)),
+        ("column", (Paint::None, 0.0)),
+        ("bar", (Paint::None, 0.0)),
+    ];
+    for (ty, stroke) in cases {
+        for across_top in [false, true] {
+            let mut s = Session::new();
+            s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+            let csv = ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,1,6";
+            let id = NodeId(
+                s.execute("graph.create", &json!({"type": ty, "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+                    .as_u64()
+                    .unwrap(),
+            );
+            s.execute("graph.setType", &json!({"id": id.0, "legendAcrossTop": across_top})).unwrap();
+            for i in 0..2 {
+                let marks = marks_of(&s, id, i);
+                assert!(marks.len() > 1, "{ty} {i}: marks and a swatch");
+                assert!(marks.iter().all(|m| (m.1.clone(), m.2) == stroke), "{ty} across top {across_top}, series {i}: {marks:?}");
+            }
+            // A stroke color kept on series 0 without a weight keeps the default weight, then with one.
+            let bar = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].clone();
+            let row = bar.appearance.items.iter().rposition(|it| !it.is_fill());
+            let Some(row) = row else { continue };
+            s.execute("appearance.setItem", &json!({"ids": [bar.id.0], "index": row, "color": "#ff0000"})).unwrap();
+            s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+            let marks = marks_of(&s, id, 0);
+            assert!(marks.iter().all(|m| *m == marks[0]) && marks[0].1 != stroke.0, "{ty} across top {across_top}, red: {marks:?}");
+            let bar = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+            s.execute("appearance.setItem", &json!({"ids": [bar.0], "index": row, "weight": 3})).unwrap();
+            s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+            let marks = marks_of(&s, id, 0);
+            assert!(marks.iter().all(|m| *m == marks[0]) && marks[0].2 == 3.0, "{ty} across top {across_top}, 3 pt: {marks:?}");
+        }
+    }
+}
+
+/// A stacked column graph the graph tools draw, saved as `.ai` in either form, opens again as the same graph without a
+/// warning, and its data can be edited there.
+#[test]
+fn a_drawn_stacked_column_graph_saved_as_ai_opens_as_a_graph_that_takes_new_data() {
+    let dir = vectorcraft_testkit::temp_dir("graph-ai-stacked");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let csv = ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,1,6";
+    let id = s.execute("graph.create", &json!({"type": "stackedColumn", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let written = spec(&s, NodeId(id));
+    for (name, version) in [("v7.ai", Some("7")), ("pdf.ai", None)] {
+        let path = dir.join(name);
+        let mut p = json!({"path": path, "format": "ai"});
+        if let Some(v) = version {
+            p["aiVersion"] = json!(v);
+        }
+        let r = s.execute("file.saveAs", &p).unwrap();
+        let notes = r["warnings"].as_array().cloned().unwrap_or_default();
+        assert!(!notes.iter().any(|w| w.as_str().is_some_and(|w| w.starts_with("graphs are written as their art"))), "{name}: {r}");
+        let mut again = Session::new();
+        again.execute("document.open", &json!({"path": path})).unwrap();
+        let mut found = vec![];
+        again.doc().unwrap().doc.walk(|n| {
+            if n.extras().graph.is_some() {
+                found.push(n.id);
+            }
+        });
+        assert_eq!(found.len(), 1, "{name}");
+        let g = spec(&again, found[0]);
+        assert_eq!((g.kind, g.cells()), (written.kind, written.cells()), "{name}");
+        assert_eq!((g.series.as_slice(), g.categories.as_slice()), (&written.series[..], &written.categories[..]), "{name}");
+        again.execute("select.set", &json!({"ids": [found[0].0]})).unwrap();
+        again.execute("graph.setData", &json!({"id": found[0].0, "csv": ",2024,2025\nQ1,8,1\nQ2,2,7"})).unwrap();
+        let after = spec(&again, found[0]);
+        assert_eq!((after.kind, after.rows.as_slice()), (written.kind, &[vec![8.0, 1.0], vec![2.0, 7.0]][..]), "{name}");
+        // Each series keeps one fill and the thin white stroke on its marks and its swatch.
+        for i in 0..2 {
+            let marks = marks_of(&again, found[0], i);
+            let white = Paint::solid(vectorcraft_color::Color::WHITE);
+            assert!(marks.len() > 1 && marks.iter().all(|m| *m == marks[0] && (&m.1, m.2) == (&white, 0.25)), "{name} series {i}: {marks:?}");
+        }
+    }
 }
 
 /// A graph opened from a `.ai` keeps the bounds of its art without type, so moving one of its labels on its own

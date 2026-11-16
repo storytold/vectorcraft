@@ -608,6 +608,9 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == "preferences" {
         crate::prefs_dialog::note_set(d, &field, &value);
     }
+    if d.kind == new_document::KIND || new_document::popup_open(d) {
+        new_document::note_set(d, &field);
+    }
     let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
     let graph = (d.kind == graph_data::KIND).then(|| field.clone());
     d.fields.insert(field, value);

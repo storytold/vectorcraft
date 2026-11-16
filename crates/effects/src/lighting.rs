@@ -176,6 +176,20 @@ pub(crate) fn footprint(path: &vectorcraft_geom::BezPath, seam: f64) -> vectorcr
 /// in a clip of its footprint, neither with an opacity mask.
 pub(crate) fn sealed(id: vectorcraft_doc::NodeId, faces: &[std::sync::Arc<vectorcraft_doc::Node>]) -> Option<vectorcraft_doc::Node> {
     use std::sync::Arc;
+    use vectorcraft_doc::{Node, NodeKind};
+    let (clip, mut underlay) = underlay(id, faces)?;
+    underlay.extend(faces.iter().cloned());
+    Some(Node::new(id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(Node::group(id, underlay))], clip: true }))
+}
+
+/// The parts of [`sealed`] for `faces`: a path of the union of the facets' footprints, to clip to,
+/// and the facets grown to seams [`UNDERLAY_SEAM`] wide, in the same order. `None` under the same
+/// conditions as [`sealed`].
+pub(crate) fn underlay(
+    id: vectorcraft_doc::NodeId,
+    faces: &[std::sync::Arc<vectorcraft_doc::Node>],
+) -> Option<(vectorcraft_doc::Node, Vec<std::sync::Arc<vectorcraft_doc::Node>>)> {
+    use std::sync::Arc;
     use vectorcraft_doc::{Appearance, Node, NodeKind};
     let mut outline = vectorcraft_geom::BezPath::new();
     let mut underlay = Vec::with_capacity(faces.len());
@@ -207,9 +221,7 @@ pub(crate) fn sealed(id: vectorcraft_doc::NodeId, faces: &[std::sync::Arc<vector
             _ => return None,
         }
     }
-    let clip = Node::path(id, vectorcraft_geom::PathData::from_bezpath(&outline), Appearance::default());
-    underlay.extend(faces.iter().cloned());
-    Some(Node::new(id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(Node::group(id, underlay))], clip: true }))
+    Some((Node::path(id, vectorcraft_geom::PathData::from_bezpath(&outline), Appearance::default()), underlay))
 }
 
 /// Composite smooth solid-fill facets with one clip and three channel groups per surface. In each

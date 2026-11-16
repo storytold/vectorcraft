@@ -28,6 +28,7 @@ pub mod shared;
 mod symbol_export_type;
 mod symbol_nine_slice;
 pub mod symbol_overrides;
+mod symbol_pixel_aligned;
 mod symbol_registration;
 pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
@@ -37,6 +38,7 @@ pub use symbol_nine_slice::{
     SymbolNineSlice, charge_symbol_art,
 };
 pub use symbol_overrides::SymbolOverride;
+pub use symbol_pixel_aligned::SYMBOL_PIXEL_ALIGNED;
 pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
 pub mod links;
 pub mod live;

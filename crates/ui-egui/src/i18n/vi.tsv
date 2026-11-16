@@ -754,6 +754,18 @@ font-technology	Variable	Biến thiên
 	Copy Width Point	Sao chép điểm chiều rộng
 	Copyright	Bản quyền
 	Copyright Info URL:	URL thông tin bản quyền:
+	Save Metadata Template…	Lưu mẫu siêu dữ liệu…
+	Import Options	Tùy chọn nhập
+	Clear existing fields and use the template's	Xóa các trường hiện có và dùng các trường của mẫu
+	Keep existing fields, but replace those the template has	Giữ các trường hiện có, nhưng thay thế các trường mà mẫu có
+	Keep existing fields, but append those the template has	Giữ các trường hiện có, nhưng nối thêm các trường mà mẫu có
+@msg	the template name can't be empty	tên mẫu không được để trống
+@msg	the template name isn't usable as a file name	không thể dùng tên mẫu làm tên tệp
+@msg	no metadata templates folder here	không có thư mục mẫu siêu dữ liệu ở đây
+@msg	give `name` or `path`, not both	hãy chỉ định `name` hoặc `path`, không phải cả hai
+@msg	give one of `path`, `name` and `data`	hãy chỉ định một trong `path`, `name` và `data`
+@msg	mode must be replace, keep or append	chế độ phải là replace, keep hoặc append
+@msg	the file is not an XMP metadata template	tệp không phải là mẫu siêu dữ liệu XMP
 	Copyright Notice:	Thông báo bản quyền:
 	Copyright Status:	Trạng thái bản quyền:
 	Copyright Symbol	Ký hiệu bản quyền
@@ -1383,6 +1395,7 @@ font-technology	Variable	Biến thiên
 	Highlight Size	Kích thước điểm sáng
 	Blend Steps	Số bước hòa trộn
 	Shading Color	Màu tô bóng
+	Black Overprint	Đen in chồng
 	Draw Hidden Faces	Vẽ các mặt ẩn
 	Eyedropper	Ống hút màu
 	Sample Color from Screen	Lấy mẫu màu từ màn hình
@@ -3385,6 +3398,12 @@ mark-style	Japanese	Kiểu Nhật
 	Responsive	Đáp ứng
 	Restore	Khôi phục
 	Restore every preference to its default (applied on OK)	Khôi phục tất cả tùy chọn về mặc định (áp dụng khi nhấn OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Đơn vị cho tài liệu mới theo kích thước dựng sẵn, trừ kích thước bằng pixel, và cho tệp đã mở không ghi đơn vị; chọn đơn vị ở đây rồi bấm OK cũng đặt nó cho tài liệu đang hoạt động.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Độ dày nét, nét đứt và khoảng cách hiển thị theo đơn vị này, và số nhập cho chúng được đọc theo đơn vị này.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Cỡ chữ, giãn dòng và dịch chuyển đường cơ sở hiển thị theo đơn vị này, và số nhập cho chúng được đọc theo đơn vị này.
+	The unit for East Asian type measurements, which no field uses yet.	Đơn vị cho số đo chữ Đông Á, hiện chưa có trường nào dùng.
+	When on, a number typed without a unit into a field in picas is read in points.	Khi bật, số nhập không có đơn vị vào trường tính bằng pica được đọc theo điểm.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Với XML ID, tên đối tượng hiển thị dưới dạng XML ID trong Các lớp, Biến số và Tùy chọn lớp.
 	Reset all preferences to their defaults?	Đặt lại tất cả tùy chọn về mặc định?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Giá trị mặc định được áp dụng khi bạn nhấn OK trong Tùy chọn. Hủy ở đó giữ nguyên các tùy chọn hiện tại của bạn.
 	Restore Recovered Documents	Khôi phục tài liệu đã phục hồi
@@ -3424,6 +3443,7 @@ mark-style	Japanese	Kiểu Nhật
 	Roman Hanging Punctuation	Dấu câu treo Roman
 	Korean Line Break Anywhere	Ngắt dòng tiếng Hàn ở bất kỳ đâu
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Cài đặt dàn trang Đông Á
 	Korean Composition Settings	Cài đặt dàn trang tiếng Hàn
 	Rotate	Xoay
@@ -4098,6 +4118,9 @@ mark-style	Japanese	Kiểu Nhật
 	Show Import Options	Hiện tùy chọn nhập
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Hỏi tùy chọn nhập của từng tệp PDF, DXF hoặc văn bản trước khi đặt; khi tắt, dùng các tùy chọn đã chọn gần nhất
 	Stylistic Alternates	Ký tự thay thế theo phong cách
+	Ligatures	Chữ ghép
+	Ornaments	Hoa văn
+	Figures	Chữ số
 	Swash	Swash
 	Swatch Conflict	Xung đột mẫu màu
 	Swatch Conflicts	Xung đột mẫu màu
@@ -4969,6 +4992,27 @@ theme	Appearance	Giao diện
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: hộp thoại không thể mở bên trong lệnh gọi lại của hàm dựng sẵn, getter, phép chuyển đổi hoặc tệp mà $.evalFile chạy; hãy gọi nó từ mã của chính tập lệnh
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: câu trả lời tiếp theo trong `answers` dành cho {_1}, không phải {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` không còn câu trả lời nào cho hộp thoại này
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` có {n} câu trả lời mà tập lệnh không dùng
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} giữ nguyên {n} đối tượng dưới cọ ({_2}): chỉ biến dạng đường dẫn
+liquify-tool	Warp	Biến dạng
+liquify-tool	Twirl	Xoáy
+liquify-tool	Pucker	Nhíu
+liquify-tool	Bloat	Phình
+liquify-tool	Scallop	Vỏ sò
+liquify-tool	Crystallize	Kết tinh
+liquify-tool	Wrinkle	Nhăn
+liquify-kind	graphs	biểu đồ
+liquify-kind	type	chữ
+liquify-kind	symbols	ký hiệu
+liquify-kind	images	hình ảnh
+liquify-kind	meshes	lưới
+liquify-kind	envelopes	bao hình
+liquify-kind	repeats	lặp lại
+liquify-kind	placed documents	tài liệu đã đặt
+liquify-kind	blends	hòa trộn
+liquify-list-two	{0}, {1}	{0} và {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} và {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} quá lớn đối với tập lệnh
 @msg	vc.log: the log of this run is full	vc.log: nhật ký của lần chạy này đã đầy
 @msg	this function's script run has ended	lần chạy tập lệnh của hàm này đã kết thúc
