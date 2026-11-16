@@ -76,13 +76,7 @@ pub fn rasterize_stage(doc: &Document, n: &Node) -> Option<(Node, vectorcraft_ge
 /// The outline, with `n`'s geometry effects applied, that the canvas clips `n`'s Rasterize with
 /// Create Clipping Mask to. Object › Rasterize's clipping mask follows it.
 pub fn drawn_outline(doc: &Document, n: &Node) -> Option<(BezPath, FillRule)> {
-    drawn_outline_with(&doc.symbol_boxes(), n)
-}
-
-/// [`drawn_outline`] with the symbols of instances found in `symbols` (made with
-/// [`Document::symbol_boxes`]).
-pub fn drawn_outline_with(symbols: &SymbolBoxes, n: &Node) -> Option<(BezPath, FillRule)> {
-    fx::drawn_outline(symbols, n)
+    fx::drawn_outline(&doc.symbol_boxes(), n)
 }
 
 /// The outlines a drag draws for `nodes` with Real-time Drawing off: one for each object in them,

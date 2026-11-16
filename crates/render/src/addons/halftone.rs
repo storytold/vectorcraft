@@ -57,7 +57,7 @@ pub fn sample(doc: &Document, nodes: Vec<Node>, region: Rect, scale: f64, mono: 
 /// take too many cells: `n` then draws as it is.
 pub fn art(doc: &Document, n: &Node) -> Option<Node> {
     let ht = Halftone::of(n)?;
-    let found = Renderer::new().live_found(doc, &Arc::new(n.clone()));
+    let found = Renderer::new().live_found(&doc.symbol_boxes(), &Arc::new(n.clone()));
     let mut cache = CACHE.lock().unwrap_or_else(PoisonError::into_inner);
     if let Some(at) = cache.iter().position(|(node, was, _)| was.0 == found.0 && node == n) {
         let kept = cache.remove(at);

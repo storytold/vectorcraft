@@ -75,6 +75,9 @@ pub mod style_libs;
 pub mod swatches;
 mod symbols;
 pub use symbols::SymbolBoxes;
+#[cfg(any(test, feature = "symbol-read-count"))]
+#[doc(hidden)]
+pub use symbols::symbols_read;
 pub mod text;
 pub mod trace;
 pub mod twist;

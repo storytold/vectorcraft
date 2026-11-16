@@ -54,6 +54,8 @@ vectorcraft-text = { workspace = true, features = ["test-fonts"] }
 serde_json = { workspace = true }
 # `draw_text`, to write test files with live text as other writers do.
 krilla = { workspace = true, features = ["simple-text"] }
+# How many times the symbol list is read to find symbols by name.
+vectorcraft-doc = { workspace = true, features = ["symbol-read-count"] }
 
 # An independent raster oracle for gradient placement in PDF forms. These are test-only macOS
 # bindings; the exporter stays portable Rust and does not depend on an OS PDF renderer.

@@ -349,6 +349,40 @@ fn instances_draw_the_first_symbol_of_their_name() {
     assert!(img.pixels == render(&marks("Other")).pixels, "the pixels differ");
 }
 
+/// A frame that draws 300 instances with drop shadows, among 2,000 symbols, and an envelope around
+/// instances reads the symbol list once to find their symbols.
+#[test]
+fn a_frame_reads_the_symbol_list_once() {
+    let mut d = marks("Other");
+    let l = d.layers[0].id;
+    for i in 0..300 {
+        let xf = Affine::translate((f64::from(i % 20) * 5.0, f64::from(i / 20) * 5.0)) * Affine::scale(0.2);
+        let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf });
+        n.appearance.effects.push(vectorcraft_doc::Effect {
+            id: "stylize.dropShadow".into(),
+            params: serde_json::json!({"x": 1, "y": 1, "blur": 0}),
+            visible: true,
+        });
+        d.insert(Some(l), usize::MAX, n).unwrap();
+    }
+    let content = Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((50.0, 50.0)) }));
+    let kind = vectorcraft_doc::live::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
+    let envelope = NodeKind::Envelope {
+        content: vec![content],
+        kind: Box::new(kind),
+        fidelity: 50.0,
+        editing: false,
+        options: Default::default(),
+        frame: Box::new(Affine::IDENTITY),
+    };
+    let envelope = Node::new(d.alloc_id(), envelope);
+    d.insert(Some(l), usize::MAX, envelope).unwrap();
+    let before = vectorcraft_doc::symbols_read();
+    render(&d);
+    let read = vectorcraft_doc::symbols_read() - before;
+    assert!(read <= d.symbols.len(), "{read} symbols read, {} in the document", d.symbols.len());
+}
+
 /// Symbols 0 to 29 each hold two instances of the next, sheared two ways, so that the 2^30
 /// instances drawn from the first are all placed differently. Symbol 30 holds a square with a drop
 /// shadow. An instance of symbol 0 lies far left of the view. With `effect`, every instance has

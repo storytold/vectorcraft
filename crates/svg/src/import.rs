@@ -202,7 +202,7 @@ pub(crate) fn import_finding(
         hidden: found.hidden,
         uses: found.uses,
         symbols: HashMap::new(),
-        symbol_names: HashSet::new(),
+        symbol_names: HashMap::new(),
         symbol_suffixes: HashMap::new(),
         pattern_suffixes: HashMap::new(),
         blends: fx::blends(&xml, &scan.markers),
@@ -360,8 +360,8 @@ struct Importer {
     uses: HashMap<String, String>,
     /// The symbols made so far, by `<symbol>` id.
     symbols: HashMap<String, SymbolMade>,
-    /// The names of the symbols made so far.
-    symbol_names: HashSet<String>,
+    /// The names of the symbols made so far, each with its index in the document's symbols.
+    symbol_names: HashMap<String, usize>,
     /// Where the suffixes of each symbol and pattern name base go on from (`unique_name`).
     symbol_suffixes: HashMap<String, usize>,
     pattern_suffixes: HashMap<String, usize>,

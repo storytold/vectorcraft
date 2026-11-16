@@ -680,7 +680,7 @@ impl Writer<'_> {
             }
             return 0;
         }
-        let bounds = n.visual_bounds_with(&self.doc.symbol_boxes());
+        let bounds = n.visual_bounds_with(&self.symbol_lookup.unmeasured());
         // An Outer Glow's silhouette grows by a quarter of a pixel of the document's raster grid first.
         let grow = 18.0 / self.doc.raster_ppi();
         let reach: f64 =
@@ -705,7 +705,7 @@ impl Writer<'_> {
                 // object's geometry turned into it, grown by what its strokes and other paint add
                 // around it in the document: a square that far to each side, as it measures in
                 // user space along each axis (a miter corner reaches that far along both).
-                let symbols = self.doc.symbol_boxes();
+                let symbols = self.symbol_lookup.unmeasured();
                 let visual = input.visual_bounds_with(&symbols).unwrap_or_default();
                 let user_box = if sf.moves_only() {
                     visual - sf.origin()

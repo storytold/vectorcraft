@@ -542,7 +542,6 @@ impl Renderer {
     /// colors shaded through the color settings ([`reads_outside`]), is kept only while what it
     /// reads from outside `a` stays the same ([`Self::live_found`]).
     pub(super) fn fx_art(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>, cache: bool) -> Arc<Node> {
-        let doc = symbols.document();
         let key = Arc::as_ptr(a) as usize;
         let mut kept = None;
         if cache
@@ -554,7 +553,7 @@ impl Renderer {
                 Some(was) => kept = Some((art.clone(), was.0)),
             }
         }
-        let found = (kept.is_some() || (cache && (evaluates_live(a) || reads_outside(a)))).then(|| self.live_found(doc, a));
+        let found = (kept.is_some() || (cache && (evaluates_live(a) || reads_outside(a)))).then(|| self.live_found(symbols, a));
         if let Some((art, was)) = kept
             && found.as_ref().is_some_and(|f| f.0 == was)
         {
@@ -570,7 +569,7 @@ impl Renderer {
             Some((art, was)) => {
                 let now = match &found {
                     Some(f) => Some(f.0),
-                    None => self.outside_key(doc, a),
+                    None => self.outside_key(symbols, a),
                 };
                 if was == now { art } else { self.make_fx_art(symbols, a) }
             }
@@ -588,17 +587,16 @@ impl Renderer {
     /// drawn. What is measured but never drawn (culled, off the view) is let go, and isn't kept in
     /// place of what is drawn.
     pub(crate) fn measured_fx_art(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>) -> Arc<Node> {
-        let doc = symbols.document();
         let key = Arc::as_ptr(a) as usize;
         if let Some((node, art, found)) = self.fx_arts.get(&key, self.stamp)
             && Arc::ptr_eq(node, a)
         {
             let (art, was) = (art.clone(), found.as_ref().map(|f| f.0));
-            if was.is_none_or(|was| self.live_found(doc, a).0 == was) {
+            if was.is_none_or(|was| self.live_found(symbols, a).0 == was) {
                 return art;
             }
         }
-        let now = self.outside_key(doc, a);
+        let now = self.outside_key(symbols, a);
         if let Some((node, art, was)) = self.measured.get(&key)
             && Arc::ptr_eq(node, a)
             && *was == now
@@ -638,8 +636,8 @@ impl Renderer {
 
     /// The key of what `a`'s art reads from outside it ([`Self::live_found`]), `None` when it reads
     /// nothing.
-    fn outside_key(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>) -> Option<u64> {
-        (evaluates_live(a) || reads_outside(a)).then(|| self.live_found(doc, a).0)
+    fn outside_key(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>) -> Option<u64> {
+        (evaluates_live(a) || reads_outside(a)).then(|| self.live_found(symbols, a).0)
     }
 
     /// The art [`Self::fx_art`] draws for `a`, made now.

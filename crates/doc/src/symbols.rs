@@ -134,7 +134,7 @@ impl Document {
     /// Each symbol name of this document → the index of the first symbol of that name (the one a
     /// name finds).
     pub(crate) fn symbol_names(&self) -> SymbolNames {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "symbol-read-count"))]
         SYMBOLS_READ.with(|c| c.set(c.get() + self.symbols.len()));
         let mut names = HashMap::with_capacity(self.symbols.len());
         for (i, s) in self.symbols.iter().enumerate() {
@@ -144,16 +144,35 @@ impl Document {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "symbol-read-count"))]
 thread_local! {
     /// How many symbols [`Document::symbol_names`] has read on this thread.
     pub(crate) static SYMBOLS_READ: Cell<usize> = const { Cell::new(0) };
+}
+
+/// How many symbols [`Document::symbol_names`] has read on this thread, for other crates' tests
+/// that count how often the symbol list is read to find symbols by name (the `symbol-read-count`
+/// feature, dev-dependencies only).
+#[cfg(any(test, feature = "symbol-read-count"))]
+#[doc(hidden)]
+pub fn symbols_read() -> usize {
+    SYMBOLS_READ.with(Cell::get)
 }
 
 impl<'a> SymbolBoxes<'a> {
     /// The document whose symbols these are.
     pub fn document(&self) -> &'a Document {
         self.doc
+    }
+
+    /// New boxes for the same document, none measured yet and with none of the options set, that
+    /// find symbols by name through the same index as these boxes ([`Self::symbol`]). Measuring
+    /// objects one at a time in boxes of their own made this way measures them as boxes made by
+    /// [`Document::symbol_boxes`] do, without reading the symbol list again.
+    pub fn unmeasured(&self) -> SymbolBoxes<'a> {
+        let doc: &'a Document = self.doc;
+        let names = self.names.get_or_init(|| Arc::new(doc.symbol_names()));
+        doc.symbol_boxes().with_names(names)
     }
 
     /// Makes these boxes find symbols by `names` ([`Document::symbol_names`]), made from the
@@ -747,6 +766,35 @@ mod tests {
             assert!(s.symbol("Nowhere").is_none());
         }
         assert_eq!(read() - before, d.symbols.len());
+    }
+
+    #[test]
+    fn unmeasured_boxes_share_the_index_and_nothing_measured() {
+        // 2,000 symbols, then a 9-slice frame held, scaled, by "Holder", whose instances spend
+        // the boxes' budget of placed objects.
+        let mut d = Document::new(200.0, 200.0);
+        for i in 0..2000 {
+            let r = rect(&mut d, Rect::new(0.0, 0.0, 1.0, 1.0), 0.0);
+            symbol(&mut d, &format!("Filler {i}"), vec![r]);
+        }
+        let frame = rect(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0), 1.0);
+        symbol(&mut d, "Panel", vec![frame]);
+        d.set_symbol_nine_slice("Panel", Some(crate::SymbolNineSlice::default()));
+        let wide = instance(&mut d, "Panel", Affine::scale_non_uniform(2.0, 1.0));
+        symbol(&mut d, "Holder", vec![wide]);
+        let holder = instance(&mut d, "Holder", Affine::scale_non_uniform(1.5, 1.5));
+        let fresh = holder.visual_bounds_with(&d.symbol_boxes().quick());
+        let read = || SYMBOLS_READ.with(Cell::get);
+        let s = d.symbol_boxes().quick();
+        assert_eq!(holder.visual_bounds_with(&s), fresh);
+        assert!(s.sliced_placed.get() > 0);
+        let before = read();
+        let u = s.unmeasured();
+        assert_eq!(read(), before, "the index is shared");
+        assert!(u.measured.borrow().is_empty() && u.sliced.borrow().is_empty() && u.reaches.borrow().is_empty());
+        assert_eq!((u.sliced_placed.get(), u.holders.get(), u.quick.get()), (0, 0, false));
+        assert_eq!(holder.visual_bounds_with(&u.quick()), fresh);
+        assert_eq!(read(), before);
     }
 
     #[test]

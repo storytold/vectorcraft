@@ -535,7 +535,8 @@ pub(super) fn export_overflow_warning(d: &Document, layers: &[Arc<Node>], areas:
 /// The walk of [`printed_type`].
 struct Printed<'a> {
     d: &'a Document,
-    /// `d`'s symbols, found by name and measured once for the walk.
+    /// `d`'s symbols, found by name. Each object is measured in boxes of its own made from these
+    /// ([`vectorcraft_doc::SymbolBoxes::unmeasured`]).
     boxes: vectorcraft_doc::SymbolBoxes<'a>,
     /// Whether the walk is among the objects of the document, not in art drawn for one.
     own: bool,
@@ -634,7 +635,7 @@ impl<'a> Printed<'a> {
                 let clipped = match (clip, areas) {
                     (false, _) => None,
                     (true, Some(a)) => Some(self.clip(n, a)),
-                    (true, None) => vectorcraft_render::painted_bounds_with(&self.boxes, n).map(|c| vec![c]),
+                    (true, None) => vectorcraft_render::painted_bounds_with(&self.boxes.unmeasured(), n).map(|c| vec![c]),
                 };
                 for c in children {
                     self.node(c, clipped.as_deref().or(areas));
@@ -668,13 +669,13 @@ impl<'a> Printed<'a> {
 
     /// Whether what `n` paints, its effects applied, meets one of `areas`.
     fn meets(&self, n: &Node, areas: &[Rect]) -> bool {
-        vectorcraft_render::painted_bounds_with(&self.boxes, n)
+        vectorcraft_render::painted_bounds_with(&self.boxes.unmeasured(), n)
             .is_some_and(|b| areas.iter().any(|r| b.intersect(*r).area() > 0.0 || r.contains_rect(b)))
     }
 
     /// The parts of `areas` inside the bounds of clip group `n` (its clipping path's).
     fn clip(&self, n: &Node, areas: &[Rect]) -> Vec<Rect> {
-        let Some(c) = vectorcraft_render::painted_bounds_with(&self.boxes, n) else { return areas.to_vec() };
+        let Some(c) = vectorcraft_render::painted_bounds_with(&self.boxes.unmeasured(), n) else { return areas.to_vec() };
         areas.iter().filter(|r| c.intersect(**r).area() > 0.0 || r.contains_rect(c)).map(|r| r.intersect(c)).collect()
     }
 }
@@ -2386,5 +2387,41 @@ mod dirty_tests {
         assert!(s.doc().unwrap().is_dirty());
         s.execute("edit.undo", &json!({})).unwrap();
         assert!(!s.doc().unwrap().is_dirty(), "back to the saved state");
+    }
+
+    /// The walk Print and the exports make over 300 instances with drop shadows, among 2,000
+    /// symbols, reads the symbol list once to find their symbols.
+    #[test]
+    fn printed_type_reads_the_symbol_list_once() {
+        let mut d = Document::new(200.0, 200.0);
+        for i in 0..2000 {
+            let art = Node::path(
+                d.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)),
+                vectorcraft_doc::Appearance::basic(Paint::None, Paint::None, 0.0),
+            );
+            d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("Filler {i}"), art: Arc::new(art) });
+        }
+        let art = Node::path(
+            d.alloc_id(),
+            vectorcraft_geom::shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)),
+            vectorcraft_doc::Appearance::basic(Paint::solid(vectorcraft_color::Color::BLACK), Paint::None, 0.0),
+        );
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(art) });
+        let l = d.layers[0].id;
+        for i in 0..300 {
+            let xf = vectorcraft_geom::Affine::translate((f64::from(i % 20) * 10.0, f64::from(i / 20) * 10.0));
+            let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf });
+            n.appearance.effects.push(vectorcraft_doc::Effect {
+                id: "stylize.dropShadow".into(),
+                params: json!({"x": 1, "y": 1, "blur": 0}),
+                visible: true,
+            });
+            d.insert(Some(l), usize::MAX, n).unwrap();
+        }
+        let before = vectorcraft_doc::symbols_read();
+        printed_type(&d, &d.layers, &[Rect::new(0.0, 0.0, 100.0, 100.0)]);
+        let read = vectorcraft_doc::symbols_read() - before;
+        assert!(read <= d.symbols.len(), "{read} symbols read, {} in the document", d.symbols.len());
     }
 }

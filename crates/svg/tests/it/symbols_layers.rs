@@ -105,6 +105,28 @@ fn instances_are_written_with_the_first_symbol_of_their_name() {
     assert!(svg.contains("#ff0000") && !svg.contains("#0000ff"), "{svg}");
 }
 
+/// An export of 300 instances with drop shadows, among 2,000 symbols, reads the symbol list once
+/// to find their symbols.
+#[test]
+fn an_export_reads_the_symbol_list_once() {
+    let mut d = marks("Other");
+    for i in 0..300 {
+        let xf = Affine::translate((f64::from(i % 20) * 10.0, f64::from(i / 20) * 8.0)) * Affine::scale(0.2);
+        let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf });
+        n.appearance.effects.push(vectorcraft_doc::Effect {
+            id: "stylize.dropShadow".into(),
+            params: serde_json::json!({"x": 1, "y": 1, "blur": 0}),
+            visible: true,
+        });
+        let l = d.layers[0].id;
+        d.insert(Some(l), usize::MAX, n).unwrap();
+    }
+    let before = vectorcraft_doc::symbols_read();
+    export(&d, &ExportOptions::default());
+    let read = vectorcraft_doc::symbols_read() - before;
+    assert!(read <= d.symbols.len(), "{read} symbols read, {} in the document", d.symbols.len());
+}
+
 /// A scaled instance of a symbol with 9-slice guides is written as the canvas draws it, with no
 /// `<use>`: at 200 × 150 its 10 × 10 corner square stays 10 × 10 and its center square becomes
 /// 30 × 20. An instance at the natural size still uses the def.

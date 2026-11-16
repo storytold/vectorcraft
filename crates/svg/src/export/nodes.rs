@@ -2,8 +2,8 @@ use super::output::{sanitize_id, valid_xml_value, xml_attr_escape, xml_attr_vali
 use super::paint::{StrokePlan, has_raster, pixel_gradient};
 use super::text::OUTLINE_TOLERANCE;
 use super::{
-    Affine, AppearanceItem, BezPath, BlendMode, FillRule, HashMap, Node, NodeKind, Paint, PathData, Props, Rect, StrokeAlign, StrokeLayer, Writer,
-    Written, WrittenShape, blend_css, css, fmt_num, stroke, xml_escape,
+    Affine, AppearanceItem, BezPath, BlendMode, Document, FillRule, HashMap, Node, NodeKind, Paint, PathData, Props, Rect, StrokeAlign, StrokeLayer,
+    Writer, Written, WrittenShape, blend_css, css, fmt_num, stroke, xml_escape,
 };
 
 /// A symbol's `<symbol>` def and the instance transforms that can `<use>` it.
@@ -51,16 +51,16 @@ fn export_shape_bounds(n: &Node) -> Option<Rect> {
 impl Reuse {
     const NONE: Self = Self { moves: false, turns: false, scales: false };
 
-    /// What a def of symbol art `art` stands for, the symbols it holds instances of found in
-    /// `symbols`.
-    pub(crate) fn of(symbols: &vectorcraft_doc::SymbolBoxes, art: &Node) -> Self {
+    /// What a def of symbol art `art` stands for, in `doc`. `find` finds the symbol of each
+    /// instance in it by name.
+    pub(crate) fn of<'d>(doc: &'d Document, find: &dyn Fn(&str) -> Option<&'d vectorcraft_doc::Symbol>, art: &Node) -> Self {
         let mut r = Self { moves: true, turns: true, scales: true };
-        r.scan(symbols, art, 0);
+        r.scan(doc, find, art, 0);
         r
     }
 
     /// Narrow down to what `n` (inside symbols nested `depth` deep) allows.
-    fn scan(&mut self, symbols: &vectorcraft_doc::SymbolBoxes, n: &Node, depth: u32) {
+    fn scan<'d>(&mut self, doc: &'d Document, find: &dyn Fn(&str) -> Option<&'d vectorcraft_doc::Symbol>, n: &Node, depth: u32) {
         let pattern = |p: &Paint| matches!(p, Paint::Pattern { .. });
         let text_patterns = matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(|r| pattern(&r.style.fill) || pattern(&r.style.stroke)));
         let unlinked_mask = n.extras().mask.as_ref().is_some_and(|m| !m.linked);
@@ -93,20 +93,20 @@ impl Reuse {
             NodeKind::SymbolInstance { symbol, .. } => {
                 // A scale reaching an instance of a symbol with 9-slice guides changes how its
                 // cells are sized.
-                if symbols.document().symbol_nine_slice(symbol).is_some() {
+                if doc.symbol_nine_slice(symbol).is_some() {
                     self.scales = false;
                 }
-                if let Some(s) = symbols.symbol(symbol) {
-                    self.scan(symbols, &s.art, depth + 1);
+                if let Some(s) = find(symbol) {
+                    self.scan(doc, find, &s.art, depth + 1);
                 }
             }
             _ => {}
         }
         if let Some(m) = &n.extras().mask {
-            self.scan(symbols, &m.art, depth);
+            self.scan(doc, find, &m.art, depth);
         }
         for c in n.children().into_iter().flatten() {
-            self.scan(symbols, c, depth);
+            self.scan(doc, find, c, depth);
         }
     }
 
@@ -519,7 +519,7 @@ impl Writer<'_> {
     /// its geometry, so the region also covers the geometry's box, placed, grown by the strokes'
     /// and effects' reach unscaled.
     fn region_attrs(&mut self, nodes: &[&Node]) -> String {
-        let symbols = self.region_boxes.take().unwrap_or_else(|| self.doc.symbol_boxes());
+        let symbols = self.region_boxes.take().unwrap_or_else(|| self.symbol_lookup.unmeasured());
         let mut art_reach = std::mem::take(&mut self.art_reach);
         let region = self.region_of(&symbols, &mut art_reach, nodes);
         self.region_boxes = Some(symbols);
@@ -529,7 +529,7 @@ impl Writer<'_> {
 
     /// The box of what each of `nodes` paints, as [`Self::paint_box`] measures it.
     fn paint_boxes(&mut self, nodes: &[&Node]) -> Vec<Option<Option<Rect>>> {
-        let symbols = self.region_boxes.take().unwrap_or_else(|| self.doc.symbol_boxes());
+        let symbols = self.region_boxes.take().unwrap_or_else(|| self.symbol_lookup.unmeasured());
         let mut art_reach = std::mem::take(&mut self.art_reach);
         let boxes = nodes.iter().map(|n| self.paint_box(&symbols, &mut art_reach, n)).collect();
         self.region_boxes = Some(symbols);
@@ -1114,7 +1114,8 @@ impl Writer<'_> {
             return None;
         }
         if !self.symbols.contains_key(&sym.name) {
-            let reuse = Reuse::of(&self.symbol_lookup, &sym.art);
+            let lookup = &self.symbol_lookup;
+            let reuse = Reuse::of(self.doc, &|name| lookup.symbol(name), &sym.art);
             self.symbols.insert(sym.name.clone(), SymbolDef { id: None, reuse, nodes: 0 });
         }
         let def = self.symbols.get(&sym.name)?;
