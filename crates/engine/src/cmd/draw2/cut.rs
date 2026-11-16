@@ -508,6 +508,15 @@ fn apply_plan(s: &mut Session, label: &str, plan: Vec<(NodeId, Vec<PathData>)>) 
         return Ok(json!({ "ids": [] }));
     }
     let ids = s.edit(label, |d, sel| {
+        // Pin paint owners before any member changes their original bounds.
+        for (id, _) in &plan {
+            let owner = crate::cmd::path::compound_or_self(d, *id);
+            for target in [owner, *id] {
+                if let Some(node) = d.node_mut(target) {
+                    node.pin_gradients();
+                }
+            }
+        }
         let mut all = vec![];
         let mut cut = Beside::replacing(d, &plan.iter().map(|(id, _)| *id).collect::<Vec<_>>());
         for (id, pieces) in plan {
