@@ -736,3 +736,38 @@ fn optimize_to_file_size_starts_at_the_size_of_the_slices_files() {
     assert_eq!(d.fields.get("__optimizeK"), Some(&k(slices["bytes"].as_u64().unwrap())));
     assert_eq!((d.fields.get("__optimizeUse"), d.fields.get("__optimizeOpen")), (Some(&json!("allSlices")), None));
 }
+
+#[test]
+fn optimize_to_file_size_starts_at_the_size_of_the_art_as_it_is_now() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-optimize-revision");
+    let (mut app, _) = app(&dir, false);
+    // One context for every frame, so the preview cache of the first frame is still there.
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |app: &mut VectorcraftApp| ctx.run_ui(Default::default(), |ui| show(app, ui.ctx())).textures_delta.clear();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("png24"));
+    frame(&mut app);
+    let bytes = |app: &mut VectorcraftApp| {
+        app.session.execute("document.exportForWeb.preview", &json!({"format": "png24"})).unwrap()["bytes"].as_u64().unwrap()
+    };
+    let before = bytes(&mut app);
+    // The art changes after the preview drew and before the button's click is handled.
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 60, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"color": "#3366ff"})).unwrap();
+    let after = bytes(&mut app);
+    assert_ne!(save_for_web::size_k(before as usize), save_for_web::size_k(after as usize));
+    set(&mut app, "__optimizeOpen", json!(true));
+    frame(&mut app);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields.get("__optimizeK"), Some(&json!(save_for_web::size_k(after as usize))));
+}
+
+#[test]
+fn size_in_k_holds_sizes_past_4_mib_on_every_target() {
+    assert_eq!(save_for_web::size_k(5 * 1024 * 1024), 5120.0);
+    assert_eq!(save_for_web::size_k(0), 0.001);
+    assert_eq!(save_for_web::size_k(1), 0.001);
+    // The largest size a target can hold still rounds up to a size that holds it.
+    assert!(save_for_web::size_k(usize::MAX) * 1024.0 >= usize::MAX as f64 * 0.999);
+}

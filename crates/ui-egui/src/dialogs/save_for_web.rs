@@ -401,13 +401,11 @@ fn texture(ctx: &egui::Context, name: &str, px: &[u8], [w, h]: [u32; 2]) -> egui
     ctx.load_texture(name, img, opts)
 }
 
-/// The rendering for `s` and the optimised image for each of `panes`, from the cache when nothing
-/// they depend on changed.
-fn previews(app: &VectorcraftApp, ctx: &egui::Context, s: &WebSettings, panes: &[WebSettings]) -> (Result<Shot, String>, Vec<Result<Shot, String>>) {
-    let Some(st) = app.session.active() else { return (Err("no document".into()), vec![]) };
-    let doc = &st.doc;
-    let mut cache: Cache = ctx.data(|m| m.get_temp(cache_id())).unwrap_or_default();
-    let render_key = format!(
+/// What the rendering for `s` depends on: the active document, its revision and the settings that
+/// change the image's pixels.
+fn render_key(app: &VectorcraftApp, s: &WebSettings) -> Option<String> {
+    let st = app.session.active()?;
+    Some(format!(
         "{}:{}:{:?}:{:?}:{:?}:{}:{}:{:?}:{:?}",
         st.uid,
         st.revision,
@@ -418,7 +416,15 @@ fn previews(app: &VectorcraftApp, ctx: &egui::Context, s: &WebSettings, panes: &
         s.clip_to_artboard,
         s.artboard,
         (!s.clip_to_artboard).then_some(s.slices)
-    );
+    ))
+}
+
+/// The rendering for `s` and the optimised image for each of `panes`, from the cache when nothing
+/// they depend on changed.
+fn previews(app: &VectorcraftApp, ctx: &egui::Context, s: &WebSettings, panes: &[WebSettings]) -> (Result<Shot, String>, Vec<Result<Shot, String>>) {
+    let (Some(st), Some(render_key)) = (app.session.active(), render_key(app, s)) else { return (Err("no document".into()), vec![]) };
+    let doc = &st.doc;
+    let mut cache: Cache = ctx.data(|m| m.get_temp(cache_id())).unwrap_or_default();
     if cache.render_key != render_key || cache.render.is_none() {
         let r = webexport::render(doc, s).map(Arc::new);
         cache.original = r.as_ref().ok().map(|r| Shot {
@@ -803,11 +809,18 @@ fn presets_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: O
     }
 }
 
-/// The optimized file size of the settings `s`, from the preview cache.
-fn previewed_bytes(ui: &egui::Ui, s: Option<&WebSettings>) -> Option<usize> {
-    let key = s?.to_json().to_string();
-    let cache: Cache = ui.ctx().data(|m| m.get_temp(cache_id()))?;
-    cache.shots.into_iter().find(|(k, _)| *k == key).and_then(|(_, shot)| shot.ok()).and_then(|shot| shot.bytes)
+/// The optimized file size of the settings `s` on the active document as it is now: from the preview
+/// cache when the cache holds that document at its current revision, else made through [`previews`],
+/// which keeps the image for the preview drawn later in the same frame.
+fn previewed_bytes(app: &VectorcraftApp, ui: &egui::Ui, s: &WebSettings) -> Option<usize> {
+    let key = s.to_json().to_string();
+    let cache: Option<Cache> = ui.ctx().data(|m| m.get_temp(cache_id()));
+    let cached = cache
+        .filter(|c| Some(&c.render_key) == render_key(app, s).as_ref())
+        .and_then(|c| c.shots.into_iter().find(|(k, _)| *k == key))
+        .and_then(|(_, shot)| shot.ok())
+        .and_then(|shot| shot.bytes);
+    cached.or_else(|| previews(app, ui.ctx(), s, std::slice::from_ref(s)).1.into_iter().next()?.ok()?.bytes)
 }
 
 /// Optimize to File Size…: the button opens rows ([`open_optimize_rows`]) for the desired size in
@@ -871,9 +884,9 @@ pub(super) fn art_key(app: &VectorcraftApp) -> String {
 }
 
 /// `bytes` in K, rounded up to the Desired File Size field's 0.001 K so the size it asks for holds
-/// them.
+/// them. The product is taken in `u128`, which holds any `usize` times 1000 on every target.
 pub(super) fn size_k(bytes: usize) -> f64 {
-    bytes.saturating_mul(1000).div_ceil(1024).max(1) as f64 / 1000.0
+    (bytes as u128 * 1000).div_ceil(1024).max(1) as f64 / 1000.0
 }
 
 /// Optimize to File Size… (`__optimizeOpen`): opens the rows with Current Settings and Total of All
@@ -890,7 +903,7 @@ fn open_optimize_rows(app: &mut VectorcraftApp, ui: &egui::Ui, d: &mut Dialog) {
         let r = app.run("webExport.optimizeToFileSize", p).ok();
         r.filter(|r| r["achieved"] == json!(true)).and_then(|r| r["bytes"].as_u64()).map(|b| b as usize)
     } else {
-        previewed_bytes(ui, settings_of(app, d).ok().as_ref())
+        settings_of(app, d).ok().and_then(|s| previewed_bytes(app, ui, &s))
     };
     let k = bytes.map_or(32.0, size_k);
     d.fields.insert("__optimizeK".into(), json!(k));
