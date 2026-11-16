@@ -405,7 +405,7 @@ fn height_label_button(ui: &mut egui::Ui, label: &str) -> (egui::Response, bool)
 }
 
 /// Height takes the Width the dialog holds (help page "Draw ellipses",
-/// <https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=90>).
+/// <https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=140>).
 /// A Width that is missing, empty, not a distance or not finite leaves Height as it is. With the
 /// link on, the link keeps the circle from then on (proportions 1 : 1), or keeps no proportions
 /// when Width is 0; the link stays on.
