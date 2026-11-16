@@ -432,7 +432,7 @@ fn group_colors<'a>(app: &VectorcraftApp, d: &Dialog, rs: impl Iterator<Item = &
     let palette = Some(limit).filter(|l| !l.is_empty()).and_then(|l| swatchlib::limit_palette(&app.session, &l));
     rs.filter_map(|r| match to_color(r) {
         None => from_colors(r).first().map(key),
-        Some(_) if adjust.is_identity() => Some(r["to"].clone()),
+        Some(_) if adjust.is_identity() && palette.is_none() => Some(r["to"].clone()),
         Some(c) => {
             let c = adjust.apply(c);
             Some(key(&palette.as_ref().map_or(c, |p| p.nearest(c))))
@@ -4127,6 +4127,36 @@ mod tests {
         assert!(!saved.contains(&"#ff0000".to_string()), "the save darkened the group: {saved:?}");
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!(group_hex(&app, "Plain").unwrap(), saved, "OK does not darken the group again");
+    }
+
+    /// With Limit to Library, Save Changes gives the group the library's nearest color to a row's
+    /// new color, as OK does, also when the rows were set without being snapped.
+    #[test]
+    fn saving_a_group_snaps_its_colors_to_the_library() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let doc = &app.session.doc().unwrap().doc;
+        let names: Vec<_> = doc
+            .swatches
+            .iter()
+            .filter(|s| !s.is_reserved())
+            .map(|s| s.name.clone())
+            .chain(doc.swatch_groups.iter().map(|g| g.name.clone()))
+            .collect();
+        app.run("swatch.delete", json!({"names": names})).unwrap();
+        app.run("swatch.new", json!({"name": "Only Yellow", "color": "#ffff00"})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "Plain", "colors": ["#ffff00"], "keepModel": true})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "Plain"})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("limitTo".into(), json!("document"));
+        frame(&mut app, &ctx, 0.0, vec![], 0);
+        let d = app.ui.dialog.as_mut().unwrap();
+        let mut rs = super::rows(d);
+        rs[0]["to"] = json!("rgb 250 250 10");
+        d.fields.insert("rows".into(), Value::Array(rs));
+        act(&mut app, &ctx, 0.1, "save").unwrap();
+        assert_eq!(group_hex(&app, "Plain"), Some(vec!["#ffff00".into()]), "the saved color is the library's");
     }
 
     /// Without art, Save Changes removes a removed color's swatch and adds a color added on the Edit
