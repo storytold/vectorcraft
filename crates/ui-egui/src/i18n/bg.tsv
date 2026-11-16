@@ -1765,6 +1765,7 @@ font-technology	Variable	Променливи
 	Knockout Group	Група с изрязване
 	Lab	Lab
 	OKLCH Sliders	Плъзгачи OKLCH
+	HSL Sliders	Плъзгачи HSL
 	Chroma	Хрома
 	The largest chroma sRGB holds at this lightness and hue	Най-голямата хрома, която sRGB побира при тази светлина и този оттенък
 	OKLCH needs sRGB as the working RGB space	OKLCH изисква sRGB като работно RGB пространство
@@ -4264,7 +4265,7 @@ axis	Both	И двете
 @msg	`aspect` must be a number (%)	`aspect` трябва да бъде число (%)
 @msg	`at` must be [x, y]	`at` трябва да бъде [x, y]
 @msg	`color` must be a colour	`color` трябва да бъде цвят
-@msg	`sliders` must be none or oklch	`sliders` трябва да бъде none или oklch
+@msg	`sliders` must be none, oklch or hsl	`sliders` трябва да бъде none, oklch или hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH изисква sRGB като работно RGB пространство
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` трябва да бъде команда, чийто елемент от менюто отваря диалогов прозорец (вижте ui.menuDialog)
 @msg	`freeform.points` must be an array	`freeform.points` трябва да бъде масив

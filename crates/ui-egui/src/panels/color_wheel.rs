@@ -15,14 +15,17 @@
 //! Panel menu › OKLCH Sliders shows L, C and H rows under the wheel or the box that edit the color
 //! by OKLCH lightness, chroma and hue (CSS Color 4:
 //! <https://www.w3.org/TR/css-color-4/#specifying-oklab-oklch>), while the working RGB space is
-//! sRGB. The choice is kept with the preferences too.
+//! sRGB. Panel menu › HSL Sliders shows H, S and L rows in their place that edit the color by the
+//! hue, saturation and lightness of CSS Color 4's HSL
+//! (<https://www.w3.org/TR/css-color-4/#the-hsl-notation>). The choice is kept with the
+//! preferences too.
 
 use egui::{Color32, Rect, Stroke, Ui, UiBuilder, pos2, vec2};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, Cms};
 use vectorcraft_color::oklab::{self, CHROMA_FULL};
-use vectorcraft_color::{Color, Paint, hsb_to_rgb, rgb_to_hsb};
+use vectorcraft_color::{Color, Paint, hsb_to_rgb, hsl_to_rgb, rgb_to_hsb, rgb_to_hsl};
 use vectorcraft_doc::{ColorMode, NodeId};
 
 use super::color::{Target, apply, wheel_target};
@@ -86,16 +89,19 @@ pub enum Sliders {
     None,
     /// OKLCH Sliders: lightness, chroma and hue.
     Oklch,
+    /// HSL Sliders: hue, saturation and lightness.
+    Hsl,
 }
 
 impl Sliders {
-    pub const ALL: [Sliders; 2] = [Sliders::None, Sliders::Oklch];
+    pub const ALL: [Sliders; 3] = [Sliders::None, Sliders::Oklch, Sliders::Hsl];
 
     /// The id `ui.colorWheel` and the preferences use.
     pub fn id(self) -> &'static str {
         match self {
             Sliders::None => "none",
             Sliders::Oklch => "oklch",
+            Sliders::Hsl => "hsl",
         }
     }
 
@@ -131,9 +137,9 @@ pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Se
 }
 
 /// `ui.colorWheel {view?, channel?, sliders?}`: show the wheel or the box, pick the box's channel,
-/// and show or hide OKLCH Sliders. Keys left out keep their values; params that are not an object,
-/// another key or a value off the list are an error and change nothing. `sliders: "oklch"` is an
-/// error while the working RGB space is not sRGB. → the settings.
+/// and show OKLCH Sliders, HSL Sliders or neither. Keys left out keep their values; params that
+/// are not an object, another key or a value off the list are an error and change nothing.
+/// `sliders: "oklch"` is an error while the working RGB space is not sRGB. → the settings.
 pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     set(&mut app.ui.color_wheel, p, &cms::active())?;
     Ok(json!(app.ui.color_wheel))
@@ -164,7 +170,7 @@ pub(crate) fn set(settings: &mut Settings, p: &Value, cms: &Cms) -> Result<(), S
     match p.get("sliders") {
         None | Some(Value::Null) => {}
         Some(v) => {
-            let sliders = v.as_str().and_then(Sliders::parse).ok_or("`sliders` must be none or oklch")?;
+            let sliders = v.as_str().and_then(Sliders::parse).ok_or("`sliders` must be none, oklch or hsl")?;
             if sliders == Sliders::Oklch && !cms.rgb_is_srgb() {
                 return Err(OKLCH_NEEDS_SRGB.to_string());
             }
@@ -175,7 +181,8 @@ pub(crate) fn set(settings: &mut Settings, p: &Value, cms: &Cms) -> Result<(), S
     Ok(())
 }
 
-/// The panel menu: Wheel View and Box View, Box Channel while the box shows, and OKLCH Sliders.
+/// The panel menu: Wheel View and Box View, Box Channel while the box shows, HSL Sliders and OKLCH
+/// Sliders.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let set = app.ui.color_wheel.clone();
     for (label, view) in [(tl!("Wheel View"), View::Wheel), (tl!("Box View"), View::Box)] {
@@ -193,6 +200,13 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     });
     ui.separator();
+    let on = set.sliders == Sliders::Hsl;
+    if menu_item(ui, tl!("HSL Sliders"), true, on) {
+        let sliders = if on { Sliders::None } else { Sliders::Hsl };
+        if let Err(e) = app.run("ui.colorWheel", json!({ "sliders": sliders.id() })) {
+            app.status(e);
+        }
+    }
     let on = set.sliders == Sliders::Oklch;
     // While the rows show, the item stays enabled so that they can be hidden.
     let enabled = on || cms::active().rgb_is_srgb();
@@ -280,6 +294,9 @@ const MEMORY: &str = "color-wheel-hsb";
 const OKLCH_MEMORY: &str = "color-wheel-oklch";
 /// The message for OKLCH Sliders while the working RGB space is not sRGB.
 const OKLCH_NEEDS_SRGB: &str = "OKLCH needs sRGB as the working RGB space";
+/// Panel state: the HSL the slider rows asked for last, the [`Owner`] of the color they stored and
+/// its display sRGB.
+const HSL_MEMORY: &str = "color-wheel-hsl";
 
 /// What the HSB picked last belongs to: the document, the selected objects or text characters,
 /// the appearance item, the proxy, the gradient stop or freeform point, its paint, and the color
@@ -475,6 +492,75 @@ pub(crate) fn oklch_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color:
     out.filter(|_| enabled)
 }
 
+/// The HSL `[h°, s, l]` the rows show for `c` through `cms` when `hsl` was asked for last and `c`
+/// then displayed as the sRGB `shown`: `hsl` while `c` still displays as `shown` (the hue of a gray
+/// and the saturation of black and white stay), else `c`'s own.
+pub(crate) fn remembered_hsl(cms: &Cms, c: &Color, shown: [f32; 3], hsl: [f32; 3]) -> [f32; 3] {
+    if cms.display_rgb(c) == shown { hsl } else { rgb_to_hsl(cms.display_rgb(c)) }
+}
+
+/// The color a track shows at HSL `hsl`.
+fn hsl32(hsl: [f32; 3]) -> Color32 {
+    let [r, g, b] = hsl_to_rgb(hsl).map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+    Color32::from_rgb(r, g, b)
+}
+
+/// The H, S and L rows of HSL Sliders for the target's `color` through `cms`: hue from 0 to 360°,
+/// saturation and lightness from 0 to 100 %, CSS Color 4's HSL of the display sRGB. Each track
+/// shows the colors its slider reaches. The rows are gray with no color to edit. Returns the HSL a
+/// drag, an arrow key, a screen reader or a field asks for, and its phase.
+pub(crate) fn hsl_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color: Option<Color>, cms: &Cms) -> Option<([f32; 3], Live)> {
+    let t = Tokens::get(ui.ctx());
+    let enabled = color.is_some();
+    let hsl = match (color, pstate::<Option<(Owner, [f32; 3], [f32; 3])>>(ui.ctx(), HSL_MEMORY)) {
+        (Some(c), Some((owner, shown, hsl))) if owner == Owner::of(app, tgt, c) => remembered_hsl(cms, &c, shown, hsl),
+        (Some(c), _) => rgb_to_hsl(cms.display_rgb(&c)),
+        (None, _) => [0.0; 3],
+    };
+    // Each row: its letter, its screen-reader name, the end of its range and the field's suffix. The
+    // names start with "HSL" so that they differ from the box strip's HSB Hue and Saturation.
+    let hsl_name = |name: &str| format!("HSL {name}");
+    let rows =
+        [("H", hsl_name(tl!("Hue")), 360.0, "°"), ("S", hsl_name(tl!("Saturation")), 100.0, "%"), ("L", hsl_name(tl!("Lightness")), 100.0, "%")];
+    let shown = [f64::from(hsl[0]), f64::from(hsl[1]) * 100.0, f64::from(hsl[2]) * 100.0];
+    // The HSL with row `i` set to `v` in the row's units.
+    let with = |i: usize, v: f64| {
+        let mut out = hsl;
+        match i {
+            0 => out[0] = v.clamp(0.0, 360.0) as f32,
+            1 => out[1] = (v / 100.0).clamp(0.0, 1.0) as f32,
+            _ => out[2] = (v / 100.0).clamp(0.0, 1.0) as f32,
+        }
+        out
+    };
+    let mut out = None;
+    ui.add_enabled_ui(enabled, |ui| {
+        let field_w = 48.0;
+        let slider_w = (ui.available_width() - field_w - 12.0 - 3.0 * ui.spacing().item_spacing.x).max(60.0);
+        for (i, (letter, name, max, suffix)) in rows.into_iter().enumerate() {
+            ui.horizontal(|ui| {
+                ui.add_sized(vec2(12.0, 22.0), egui::Label::new(egui::RichText::new(letter).size(12.5).color(t.text)));
+                let v = shown[i].clamp(0.0, max);
+                let at = |x: f32| with(i, f64::from(x) * max);
+                let track = |x: f32| if enabled { hsl32(at(x)) } else { t.input };
+                let value = SliderValue::field(v, 0.0..=max, suffix, 0);
+                let (dragged, phase, keyed) =
+                    widgets::color_slider_stepped(ui, ("color-wheel-hsl", i), &name, Some(value), (v / max) as f32, slider_w, &track);
+                if let Some(x) = dragged {
+                    out = Some((at(x), phase));
+                }
+                if let Some(k) = keyed {
+                    out = Some((with(i, k), Live::Released));
+                }
+                if let Some(f) = widgets::plain_field_named(ui, ("color-wheel-hsl-field", i), Some(&name), v, suffix, 0, field_w) {
+                    out = Some((with(i, f), Live::Released));
+                }
+            });
+        }
+    });
+    out.filter(|_| enabled)
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let tgt = wheel_target(app, ui);
     let color = tgt.color();
@@ -520,13 +606,28 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             pick = Some(([hsb[0], x, 1.0 - y], field_phase));
         }
     });
-    let mut picked_lch = None;
-    if app.ui.color_wheel.sliders == Sliders::Oklch {
-        ui.add_space(4.0);
-        picked_lch = oklch_rows(app, ui, &tgt, color, &cms);
+    let (mut picked_lch, mut picked_hsl) = (None, None);
+    match app.ui.color_wheel.sliders {
+        Sliders::None => {}
+        Sliders::Oklch => {
+            ui.add_space(4.0);
+            picked_lch = oklch_rows(app, ui, &tgt, color, &cms);
+        }
+        Sliders::Hsl => {
+            ui.add_space(4.0);
+            picked_hsl = hsl_rows(app, ui, &tgt, color, &cms);
+        }
     }
     let behind = super::alt_held(ui);
     let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);
+    if let Some((hsl, phase)) = picked_hsl {
+        let c = stored_srgb(&cms, hsl_to_rgb(hsl), replaced(app, &tgt, behind).as_ref(), cmyk_doc);
+        apply(app, &tgt, c, phase, behind);
+        if !behind {
+            set_pstate(ui.ctx(), HSL_MEMORY, Some((Owner::of(app, &tgt, c), cms.display_rgb(&c), hsl)));
+        }
+        return;
+    }
     if let Some((lch, phase)) = picked_lch {
         let (srgb, _) = oklab::from_oklch(lch[0], lch[1], lch[2]);
         let c = stored_srgb(&cms, srgb, replaced(app, &tgt, behind).as_ref(), cmyk_doc);

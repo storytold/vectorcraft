@@ -3905,6 +3905,7 @@ file-filter	Templates	템플릿
 	Keep:	유지:
 	Lab	Lab
 	OKLCH Sliders	OKLCH 슬라이더
+	HSL Sliders	HSL 슬라이더
 	Chroma	크로마
 	The largest chroma sRGB holds at this lightness and hue	이 명도와 색조에서 sRGB가 담을 수 있는 최대 크로마
 	OKLCH needs sRGB as the working RGB space	OKLCH를 사용하려면 작업 RGB 공간이 sRGB여야 합니다
@@ -4966,7 +4967,7 @@ theme	Appearance	외관
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`은(는) grayscale, rgb, hsb, cmyk, websafe 중 하나여야 합니다
 @msg	`view` must be wheel or box	`view`은(는) wheel, box 중 하나여야 합니다
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`은(는) hue, saturation, brightness, red, green, blue 중 하나여야 합니다
-@msg	`sliders` must be none or oklch	`sliders`는 none 또는 oklch여야 합니다
+@msg	`sliders` must be none, oklch or hsl	`sliders`는 none, oklch 또는 hsl이어야 합니다
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH를 사용하려면 작업 RGB 공간이 sRGB여야 합니다
 @msg	`{key}` must be true or false	`{key}`은(는) true 또는 false여야 합니다
 @msg	`top` and `below` can't both be true	`top`과 `below`를 동시에 true로 지정할 수 없습니다

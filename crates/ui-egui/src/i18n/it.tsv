@@ -1859,6 +1859,7 @@ file-filter	Templates	Modelli
 	Knockout Group	Gruppo con foratura
 	Lab	Lab
 	OKLCH Sliders	Cursori OKLCH
+	HSL Sliders	Cursori HSL
 	Chroma	Croma
 	The largest chroma sRGB holds at this lightness and hue	Il croma più alto che sRGB contiene con questa luminosità e tonalità
 	OKLCH needs sRGB as the working RGB space	OKLCH richiede sRGB come spazio di lavoro RGB
@@ -4578,7 +4579,7 @@ axis	Both	Entrambi
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` deve essere grayscale, rgb, hsb, cmyk o websafe
 @msg	`view` must be wheel or box	`view` deve essere wheel o box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` deve essere hue, saturation, brightness, red, green o blue
-@msg	`sliders` must be none or oklch	`sliders` deve essere none o oklch
+@msg	`sliders` must be none, oklch or hsl	`sliders` deve essere none, oklch o hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH richiede sRGB come spazio di lavoro RGB
 @msg	`{k}` must be [x, y]	`{k}` deve essere [x, y]
 @msg	`{name}` has no options	`{name}` non ha opzioni

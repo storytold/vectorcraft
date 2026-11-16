@@ -4213,6 +4213,7 @@ axis	Both	Obje
 	Ink	Tinta
 	Lab	Lab
 	OKLCH Sliders	OKLCH klizači
+	HSL Sliders	HSL klizači
 	Chroma	Hroma
 	The largest chroma sRGB holds at this lightness and hue	Najveća hroma koju sRGB obuhvata pri ovoj svjetloći i nijansi
 	OKLCH needs sRGB as the working RGB space	OKLCH zahtijeva sRGB kao radni RGB prostor
@@ -4673,7 +4674,7 @@ imageTrace	Outline	Obris
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` mora biti grayscale, rgb, hsb, cmyk ili websafe
 @msg	`view` must be wheel or box	`view` mora biti wheel ili box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` mora biti hue, saturation, brightness, red, green ili blue
-@msg	`sliders` must be none or oklch	`sliders` mora biti none ili oklch
+@msg	`sliders` must be none, oklch or hsl	`sliders` mora biti none, oklch ili hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH zahtijeva sRGB kao radni RGB prostor
 @msg	`{k}` must be [x, y]	`{k}` mora biti [x, y]
 @msg	`{name}` has no options	`{name}` nema opcija

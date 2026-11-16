@@ -4269,6 +4269,7 @@ axis	Both	Obě
 	Ink	Inkoust
 	Lab	Lab
 	OKLCH Sliders	Posuvníky OKLCH
+	HSL Sliders	Posuvníky HSL
 	Chroma	Chroma
 	The largest chroma sRGB holds at this lightness and hue	Největší chroma, kterou sRGB obsáhne při této světlosti a odstínu
 	OKLCH needs sRGB as the working RGB space	OKLCH vyžaduje sRGB jako pracovní prostor RGB
@@ -4836,7 +4837,7 @@ imageTrace	Outline	Obrys
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` musí být grayscale, rgb, hsb, cmyk nebo websafe
 @msg	`view` must be wheel or box	`view` musí být wheel nebo box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` musí být hue, saturation, brightness, red, green nebo blue
-@msg	`sliders` must be none or oklch	`sliders` musí být none nebo oklch
+@msg	`sliders` must be none, oklch or hsl	`sliders` musí být none, oklch nebo hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH vyžaduje sRGB jako pracovní prostor RGB
 @msg	`{k}` must be [x, y]	`{k}` musí být [x, y]
 @msg	`{name}` has no options	`{name}` nemá žádné možnosti

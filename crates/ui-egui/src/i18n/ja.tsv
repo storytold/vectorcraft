@@ -3917,6 +3917,7 @@ file-filter	Templates	テンプレート
 	Keep:	保持:
 	Lab	Lab
 	OKLCH Sliders	OKLCH スライダー
+	HSL Sliders	HSL スライダー
 	Chroma	クロマ
 	The largest chroma sRGB holds at this lightness and hue	この明度と色相で sRGB に収まる最大のクロマ
 	OKLCH needs sRGB as the working RGB space	OKLCH には作業用 RGB スペースとして sRGB が必要です
@@ -5039,7 +5040,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` には grayscale、rgb、hsb、cmyk、websafe のいずれかを指定してください
 @msg	`view` must be wheel or box	`view` には wheel、box のいずれかを指定してください
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` には hue、saturation、brightness、red、green、blue のいずれかを指定してください
-@msg	`sliders` must be none or oklch	`sliders` は none または oklch でなければなりません
+@msg	`sliders` must be none, oklch or hsl	`sliders` には none、oklch、hsl のいずれかを指定してください
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH には作業用 RGB スペースとして sRGB が必要です
 @msg	`{key}` must be true or false	`{key}` には true または false を指定してください
 @msg	`top` and `below` can't both be true	`top` と `below` を同時に true にすることはできません

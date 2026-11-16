@@ -5059,6 +5059,7 @@ axis	Both	Ambos
 @plural	{n} part of the file wasn't read|{n} parts of the file weren't read	{n} parte do arquivo não foi lida|{n} partes do arquivo não foram lidas
 	Lab	Lab
 	OKLCH Sliders	Controles Deslizantes OKLCH
+	HSL Sliders	Controles Deslizantes HSL
 	Chroma	Croma
 	The largest chroma sRGB holds at this lightness and hue	O maior croma que o sRGB comporta nesta luminosidade e neste tom
 	OKLCH needs sRGB as the working RGB space	OKLCH requer sRGB como espaço de trabalho RGB
@@ -6121,7 +6122,7 @@ mark-style	Japanese	Japonesas
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` deve ser grayscale, rgb, hsb, cmyk ou websafe
 @msg	`view` must be wheel or box	`view` deve ser wheel ou box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` deve ser hue, saturation, brightness, red, green ou blue
-@msg	`sliders` must be none or oklch	`sliders` deve ser none ou oklch
+@msg	`sliders` must be none, oklch or hsl	`sliders` deve ser none, oklch ou hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH requer sRGB como espaço de trabalho RGB
 @msg	the image can't be read as a texture	a imagem não pode ser lida como textura
 

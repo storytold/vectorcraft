@@ -2263,6 +2263,7 @@ digits	Malayalam	Malaiàlam
 	Knockout Group	Grup knockout
 	Lab	Lab
 	OKLCH Sliders	Controls lliscants OKLCH
+	HSL Sliders	Controls lliscants HSL
 	Chroma	Croma
 	The largest chroma sRGB holds at this lightness and hue	El croma més gran que sRGB admet amb aquesta lluminositat i aquest to
 	OKLCH needs sRGB as the working RGB space	OKLCH necessita sRGB com a espai RGB de treball
@@ -5294,7 +5295,7 @@ digits	Malayalam	Malaiàlam
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` ha de ser grayscale, rgb, hsb, cmyk o websafe
 @msg	`view` must be wheel or box	`view` ha de ser wheel o box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` ha de ser hue, saturation, brightness, red, green o blue
-@msg	`sliders` must be none or oklch	`sliders` ha de ser none o oklch
+@msg	`sliders` must be none, oklch or hsl	`sliders` ha de ser none, oklch o hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH necessita sRGB com a espai RGB de treball
 @msg	`name` is empty	`name` és buit
 @msg	`newName` is empty	`newName` és buit

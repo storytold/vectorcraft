@@ -1827,6 +1827,7 @@ file-filter	Templates	Vorlagen
 	Knockout Group	Aussparungsgruppe
 	Lab	Lab
 	OKLCH Sliders	OKLCH-Regler
+	HSL Sliders	HSL-Regler
 	Chroma	Chroma
 	The largest chroma sRGB holds at this lightness and hue	Das größte Chroma, das sRGB bei dieser Helligkeit und diesem Farbton enthält
 	OKLCH needs sRGB as the working RGB space	OKLCH erfordert sRGB als RGB-Arbeitsfarbraum
@@ -4449,7 +4450,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` muss grayscale, rgb, hsb, cmyk oder websafe sein
 @msg	`view` must be wheel or box	`view` muss wheel oder box sein
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` muss hue, saturation, brightness, red, green oder blue sein
-@msg	`sliders` must be none or oklch	`sliders` muss none oder oklch sein
+@msg	`sliders` must be none, oklch or hsl	`sliders` muss none, oklch oder hsl sein
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH erfordert sRGB als RGB-Arbeitsfarbraum
 @msg	`{k}` must be [x, y]	`{k}` muss [x, y] sein
 @msg	`{name}` has no options	`{name}` hat keine Optionen

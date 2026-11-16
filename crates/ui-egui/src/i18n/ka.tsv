@@ -3799,6 +3799,7 @@ axis	Both	ორივე
 	Ink	მელანი
 	Lab	Lab
 	OKLCH Sliders	OKLCH სლაიდერები
+	HSL Sliders	HSL სლაიდერები
 	Chroma	ქრომა
 	The largest chroma sRGB holds at this lightness and hue	უდიდესი ქრომა, რომელსაც sRGB იტევს ამ სიღიავესა და ფერის ტონზე
 	OKLCH needs sRGB as the working RGB space	OKLCH-ს სამუშაო RGB სივრცედ sRGB სჭირდება
@@ -5819,7 +5820,7 @@ imageTrace	Outline	კონტური
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` უნდა იყოს grayscale, rgb, hsb, cmyk ან websafe
 @msg	`view` must be wheel or box	`view` უნდა იყოს wheel ან box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` უნდა იყოს hue, saturation, brightness, red, green ან blue
-@msg	`sliders` must be none or oklch	`sliders` უნდა იყოს none ან oklch
+@msg	`sliders` must be none, oklch or hsl	`sliders` უნდა იყოს none, oklch ან hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH-ს სამუშაო RGB სივრცედ sRGB სჭირდება
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	ეს PostScript ფაილია (ძველ ფორმატში ან PDF-თან თავსებადობის გარეშე შენახული .ai, ან EPS ფაილი) და არა PDF: ფაილი › გახსნა და ფაილი › განთავსება მას EPS-ად კითხულობს
 # Upstream sync 2026-10-16 (3): Intertwine, symbol registration, gradient span, data sets, Batch.

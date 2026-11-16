@@ -4110,6 +4110,7 @@ axis	Both	Obie
 	Ink	Farba
 	Lab	Lab
 	OKLCH Sliders	Suwaki OKLCH
+	HSL Sliders	Suwaki HSL
 	Chroma	Chroma
 	The largest chroma sRGB holds at this lightness and hue	Największa chroma, jaką sRGB mieści przy tej jasności i barwie
 	OKLCH needs sRGB as the working RGB space	OKLCH wymaga sRGB jako roboczej przestrzeni RGB
@@ -4660,7 +4661,7 @@ imageTrace	Outline	Kontur
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` musi mieć wartość grayscale, rgb, hsb, cmyk lub websafe
 @msg	`view` must be wheel or box	`view` musi mieć wartość wheel lub box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` musi mieć wartość hue, saturation, brightness, red, green lub blue
-@msg	`sliders` must be none or oklch	`sliders` musi mieć wartość none lub oklch
+@msg	`sliders` must be none, oklch or hsl	`sliders` musi mieć wartość none, oklch lub hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH wymaga sRGB jako roboczej przestrzeni RGB
 @msg	`{k}` must be [x, y]	`{k}` musi mieć postać [x, y]
 @msg	`{name}` has no options	`{name}` nie ma opcji

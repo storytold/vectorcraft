@@ -1737,6 +1737,7 @@ file-filter	Templates	模板
 	Knockout Group	挖空组
 	Lab	Lab
 	OKLCH Sliders	OKLCH 滑块
+	HSL Sliders	HSL 滑块
 	Chroma	色度
 	The largest chroma sRGB holds at this lightness and hue	sRGB 在此亮度和色相下可容纳的最大色度
 	OKLCH needs sRGB as the working RGB space	OKLCH 需要将 sRGB 用作 RGB 工作空间
@@ -4722,7 +4723,7 @@ imageTrace	Outline	轮廓
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` 必须是 grayscale、rgb、hsb、cmyk 或 websafe
 @msg	`view` must be wheel or box	`view` 必须是 wheel 或 box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` 必须是 hue、saturation、brightness、red、green 或 blue
-@msg	`sliders` must be none or oklch	`sliders` 必须是 none 或 oklch
+@msg	`sliders` must be none, oklch or hsl	`sliders` 必须是 none、oklch 或 hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH 需要将 sRGB 用作 RGB 工作空间
 @msg	`{key}` must be true or false	`{key}` 必须是 true 或 false
 @msg	`top` and `below` can't both be true	`top` 和 `below` 不能同时为 true
