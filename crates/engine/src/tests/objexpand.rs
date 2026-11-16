@@ -278,6 +278,35 @@ fn each_copys_shadow_expands_as_the_canvas_draws_it() {
     assert_eq!(diff, 0, "{diff} pixels differ");
 }
 
+/// Each copy of type's Transform effect draws the drop shadow listed before the effect under
+/// itself, scaled with it, and Expand Appearance keeps those shadows: the type's copy, scaled 200 %
+/// and moved 80 pt down, has its shadow 40 pt to the right of its letters rather than the type's
+/// own 20 pt.
+#[test]
+fn each_copys_shadow_on_type_expands_as_the_canvas_draws_it() {
+    let mut s = session();
+    let t = run(&mut s, "text.create", json!({"x": 20, "y": 60, "text": "I", "size": 40}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids": [t]}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    let shadow = json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+    run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "params": shadow}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"scaleH": 200, "scaleV": 200, "moveV": 80, "copies": 1}}));
+    let before = render(&s);
+    if !(0..100u32).any(|y| (0..200u32).any(|x| before.pixel(x, y) == [255, 0, 0, 255])) {
+        eprintln!("skipped: built without a font that draws the type");
+        return;
+    }
+    // The rightmost red pixel of the copy, below the type, and 38 pt right of it the copy's shadow.
+    let red =
+        (100..200u32).flat_map(|y| (0..200u32).map(move |x| (x, y))).filter(|&(x, y)| before.pixel(x, y) == [255, 0, 0, 255]).max_by_key(|p| p.0);
+    let (x, y) = red.expect("the copy");
+    assert_eq!(before.pixel(x + 38, y), [0, 255, 0, 255], "the copy's shadow, 40 pt to the right of ({x}, {y})");
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let after = render(&s);
+    let diff = differing(&before, &after, 64);
+    assert_eq!(diff, 0, "{diff} pixels differ");
+}
+
 /// A group's Transform effect runs after its member's own Offset Path in Expand Appearance as on
 /// the canvas: the 100 pt square offset to 120 pt and scaled by half expands 60 pt wide.
 #[test]

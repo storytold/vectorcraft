@@ -82,9 +82,49 @@ fn kept_rows(styles: &vectorcraft_doc::LabelStyles, role: Role) -> Option<&vecto
     }
 }
 
-/// Give label `n` the object rows `kept` keeps: a fill row and a stroke row for the kept paints, in their kept order and
-/// place relative to the characters, and the object opacity and blend mode. An opacity read from a file is held to 0..1
-/// and a weight to 0..1000 pt; one that is not a number is left out (a stroke then takes 1 pt).
+/// What a graph line is, for the rows it keeps: an axis line or tick mark, or a ring of a radar graph.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Line {
+    Axis,
+    Ring,
+}
+
+impl Line {
+    /// The stroke and weight the graph draws lines of this kind with when they keep no rows. They have no fill.
+    fn default_stroke(self) -> (Paint, f64) {
+        match self {
+            Line::Axis => (Paint::solid(Color::BLACK), 0.5),
+            Line::Ring => (Paint::solid(Color::rgb(0.6, 0.6, 0.6)), 0.25),
+        }
+    }
+
+    /// The rows ([`super::series::label_rows`]) a line of this kind shows as the graph draws it with no kept rows.
+    pub(super) fn default_rows(self) -> vectorcraft_doc::LabelRows {
+        let (stroke, width) = self.default_stroke();
+        let paint = vectorcraft_doc::SeriesPaint { fill: Some(Paint::None), stroke: Some(stroke), stroke_width: Some(width), ..Default::default() };
+        vectorcraft_doc::LabelRows { paint, ..Default::default() }
+    }
+}
+
+/// The rows lines of kind `line` keep, if any.
+pub(super) fn kept_line_rows(styles: &vectorcraft_doc::LabelStyles, line: Line) -> Option<&vectorcraft_doc::LabelRows> {
+    match line {
+        Line::Axis => styles.axis_rows.as_ref(),
+        Line::Ring => styles.ring_rows.as_ref(),
+    }
+}
+
+/// The slot of `styles` that holds the rows lines of kind `line` keep.
+pub(super) fn line_slot(styles: &mut vectorcraft_doc::LabelStyles, line: Line) -> &mut Option<vectorcraft_doc::LabelRows> {
+    match line {
+        Line::Axis => &mut styles.axis_rows,
+        Line::Ring => &mut styles.ring_rows,
+    }
+}
+
+/// Give label or graph line `n` the object rows `kept` keeps: a fill row and a stroke row for the kept paints, in their
+/// kept order and place relative to the contents, and the object opacity and blend mode. An opacity read from a file is
+/// held to 0..1 and a weight to 0..1000 pt; one that is not a number is left out (a stroke then takes 1 pt).
 fn apply_label_rows(n: &mut Node, kept: &vectorcraft_doc::LabelRows) {
     use vectorcraft_doc::{AppearanceItem, FillLayer, StrokeLayer};
     let rows = &kept.paint;
@@ -124,7 +164,20 @@ impl Gen<'_> {
         let mut bp = BezPath::new();
         bp.move_to(a);
         bp.line_to(b);
-        self.path(PathData::from_bezpath(&bp), Paint::None, Paint::solid(Color::BLACK), 0.5)
+        self.kept_line(Line::Axis, PathData::from_bezpath(&bp))
+    }
+    /// A ring of a radar graph through `pd`.
+    pub(super) fn ring(&mut self, pd: PathData) -> Arc<Node> {
+        self.kept_line(Line::Ring, pd)
+    }
+    /// A graph line of kind `line` through `pd`, with the rows lines of its kind keep, else its default stroke.
+    fn kept_line(&mut self, line: Line, pd: PathData) -> Arc<Node> {
+        let (stroke, width) = line.default_stroke();
+        let mut n = Node::path(self.d.alloc_id(), pd, Appearance::basic(Paint::None, stroke, width));
+        if let Some(rows) = kept_line_rows(self.styles, line) {
+            apply_label_rows(&mut n, rows);
+        }
+        Arc::new(n)
     }
     pub(super) fn text(&mut self, role: Role, at: Point, s: &str, justify: Justify) -> Arc<Node> {
         let t = self.text_object(role, at, s, justify);

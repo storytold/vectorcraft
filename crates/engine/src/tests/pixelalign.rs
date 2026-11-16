@@ -1436,6 +1436,40 @@ fn an_instance_in_an_opacity_mask_snaps_with_its_symbol() {
     assert!(whole(&[(e, f)]), "{e} {f}");
 }
 
+/// An instance snapped to whole points takes the art of its linked opacity mask along by the same
+/// amount, as a move does; the art of an unlinked mask stays where it is.
+#[test]
+fn an_instance_snapped_to_the_grid_moves_its_linked_mask() {
+    let mut s = new_doc();
+    path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 2.0);
+    s.execute("symbol.new", &json!({"name": "Px"})).unwrap();
+    let place = |s: &mut Session, x: f64, linked: bool| {
+        let inst = s.execute("symbol.place", &json!({"name": "Px", "x": x, "y": 200.7})).unwrap()["id"].as_u64().unwrap();
+        let m = path(s, "M80.25 180.5 L160.25 180.5 L160.25 240.5 L80.25 240.5 Z", 1.0);
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let art = d.remove(NodeId(m)).unwrap();
+        let mask = vectorcraft_doc::OpacityMask { linked, ..vectorcraft_doc::OpacityMask::new((*art).clone(), true) };
+        d.node_mut(NodeId(inst)).unwrap().extras_mut().mask = Some(Box::new(mask));
+        inst
+    };
+    let (linked, unlinked) = (place(&mut s, 100.3, true), place(&mut s, 300.3, false));
+    let mask_points = |s: &Session, inst: u64| {
+        let d = &s.doc().unwrap().doc;
+        let mask = d.node(NodeId(inst)).unwrap().extras().mask.clone().unwrap();
+        mask.art.path_data().unwrap().anchors().map(|(_, _, a)| (a.p.x, a.p.y)).collect::<Vec<_>>()
+    };
+    let (xf_before, mask_before, unlinked_before) = (instance_xf(&s, linked), mask_points(&s, linked), mask_points(&s, unlinked));
+    s.execute("symbol.options", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap();
+    let [.., e0, f0] = xf_before.as_coeffs();
+    let [.., e, f] = instance_xf(&s, linked).as_coeffs();
+    assert!(whole(&[(e, f)]) && (e, f) != (e0, f0), "{e} {f}");
+    let moved: Vec<_> = mask_before.iter().map(|(x, y)| (x + e - e0, y + f - f0)).collect();
+    let after = mask_points(&s, linked);
+    assert!(moved.iter().zip(&after).all(|(a, b)| close(*a, *b)), "{after:?} != {moved:?}");
+    assert!(whole(&placed_points(&s, unlinked)));
+    assert_eq!(mask_points(&s, unlinked), unlinked_before);
+}
+
 /// While a pixel-aligned symbol is edited, the art written back from the editing layer is stored
 /// on the pixel grid, so its instances stay on it.
 #[test]
@@ -1458,4 +1492,50 @@ fn art_edited_in_symbol_editing_mode_stays_on_the_pixel_grid() {
     s.execute("symbol.exitEditing", &json!({})).unwrap();
     let pts = placed_points(&s, inst);
     assert!(whole(&pts), "{pts:?}");
+}
+
+/// Turning it on while the symbol is open in symbol editing mode shows its art on the pixel grid
+/// on the editing layer at once, and its instance stays on it after editing ends.
+#[test]
+fn turning_it_on_in_symbol_editing_mode_snaps_the_editing_layer() {
+    let mut s = new_doc();
+    path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 2.0);
+    let inst = s.execute("symbol.new", &json!({"name": "Px"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("symbol.edit", &json!({"ids": [inst]})).unwrap();
+    let st = s.doc().unwrap();
+    let layer = st.doc.symbol_edit.as_ref().unwrap().layer;
+    let part = st.doc.node(layer).unwrap().children().unwrap()[0].id.0;
+    let before = points(&s, part);
+    s.execute("symbol.options", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let xf = d.symbol_edit.as_ref().unwrap().xf;
+    let art = &d.symbols.iter().find(|x| x.name == "Px").unwrap().art;
+    let stored: Vec<_> = art.path_data().unwrap().anchors().map(|(_, _, a)| xf * a.p).map(|p| (p.x, p.y)).collect();
+    let shown = points(&s, part);
+    assert!(shown.iter().zip(&stored).all(|(a, b)| close(*a, *b)) && shown != before, "{shown:?} != {stored:?}");
+    s.execute("symbol.exitEditing", &json!({})).unwrap();
+    let pts = placed_points(&s, inst);
+    assert!(whole(&pts), "{pts:?}");
+}
+
+/// An instance of a pixel-aligned symbol on the editing layer of another symbol is part of that
+/// symbol's art, so turning it on leaves the instance and the other symbol's art where they are.
+#[test]
+fn an_instance_on_another_symbols_editing_layer_is_left_as_it_is() {
+    let mut s = new_doc();
+    path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 2.0);
+    let a = s.execute("symbol.new", &json!({"name": "Px"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    let b = s.execute("symbol.new", &json!({"name": "Outer"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("symbol.edit", &json!({"ids": [b]})).unwrap();
+    let st = s.doc().unwrap();
+    let layer = st.doc.symbol_edit.as_ref().unwrap().layer;
+    let inner = st.doc.node(layer).unwrap().children().unwrap()[0].id.0;
+    let outer_art = st.doc.symbols.iter().find(|x| x.name == "Outer").unwrap().art.clone();
+    let shown = instance_xf(&s, inner);
+    assert!(!whole(&placed_points(&s, inner)));
+    s.execute("symbol.options", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap();
+    assert_eq!(instance_xf(&s, inner), shown);
+    let d = &s.doc().unwrap().doc;
+    assert!(std::sync::Arc::ptr_eq(&d.symbols.iter().find(|x| x.name == "Outer").unwrap().art, &outer_art));
 }
