@@ -453,6 +453,20 @@ fn slices_are_cut_to_the_exported_region_in_its_pixels() {
 }
 
 #[test]
+fn an_html_text_slice_writes_one_break_for_each_line_ending() {
+    use vectorcraft_doc::{CharStyle, NodeKind, TextObject};
+    use vectorcraft_geom::Point;
+    let mut d = DocBuilder::new(100.0, 60.0).build();
+    let t = TextObject::point(Point::new(10.0, 30.0), "A\r\nB\rC\nD\u{2029}E", CharStyle { size: 12.0, ..CharStyle::default() });
+    let mut n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    n.extras_mut().slice = Some(Box::new(SliceOptions { kind: SliceKind::HtmlText, ..SliceOptions::default() }));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let res = slices_of(&export(&d, &opts(PsdOptions::default()))).unwrap();
+    assert_eq!(res.slices[0].cell_text, "A<br>B<br>C<br>D<br>E");
+}
+
+#[test]
 fn slice_ids_count_from_1_and_the_limits_are_errors() {
     let mut doc = doc();
     for i in 0..20 {

@@ -541,10 +541,11 @@ fn background(o: &SliceOptions) -> [u8; 4] {
 }
 
 /// The text of type object `n` as the HTML an HTML Text slice shows: `&`, `<` and `>` escaped, a
-/// line break as `<br>`. Empty for anything but type.
+/// line break as `<br>` (CR LF is one break). Empty for anything but type.
 fn html_text(n: &Node) -> String {
     let NodeKind::Text(t) = &n.kind else { return String::new() };
     t.plain_text()
+        .replace("\r\n", "\n")
         .split(['\n', '\r', '\u{2029}'])
         .map(|l| l.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;"))
         .collect::<Vec<_>>()
