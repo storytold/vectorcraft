@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Direction Handle",
             [],
             None,
-            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool}",
+            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool, symmetric?: bool} move a direction handle; independent moves only that side and makes the anchor a corner; symmetric mirrors the other handle about the anchor without changing its kind (independent takes precedence); both default false",
             has_doc,
             set_handle
         ),
@@ -314,12 +314,14 @@ fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
     let out = str_param(p, "which") != Some("in");
     let pos = Point::new(f64_req(p, "x", "path.setHandle")?, f64_req(p, "y", "path.setHandle")?);
     let independent = switch_or(p, "independent", false, "path.setHandle")?;
+    let symmetric = switch_or(p, "symmetric", false, "path.setHandle")? && !independent;
     // A handle already there, on an anchor already of the kind it would get, changes nothing and
     // records no undo step. The handle is compared directly: `set_handle` would recompute the
     // other handle of a smooth anchor, which need not give back the same value.
     if let Some(a) = anchor_of(s, id, si, ai)?
         && (if out { a.h_out } else { a.h_in }) == pos
         && !(independent && a.kind != AnchorKind::Corner)
+        && (!symmetric || (if out { a.h_in } else { a.h_out }) == a.p - (pos - a.p))
     {
         return ok();
     }
@@ -327,6 +329,10 @@ fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
         let path = path_mut(d, id)?;
         let a = path.anchor_mut(si, ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
         a.set_handle(out, pos, independent);
+        if symmetric {
+            let opposite = a.p - (pos - a.p);
+            if out { a.h_in = opposite } else { a.h_out = opposite }
+        }
         Ok(())
     })?;
     ok()
