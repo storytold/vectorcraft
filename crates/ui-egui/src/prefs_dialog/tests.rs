@@ -20,6 +20,29 @@ fn marquee_selection_choices_are_saved_from_preferences() {
     assert!(text.contains("Drag Direction"), "{text}");
 }
 
+/// Plug-ins & Scratch Disks › Plug-in Instruction Budget: shown with its choices, applied by OK,
+/// saved with the UI state and read back from it when the app starts again.
+#[test]
+fn plugin_instruction_budget_shows_applies_and_restores() {
+    let mut a = app();
+    open(&mut a, Some("Plug-ins & Scratch Disks"));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Plug-in Instruction Budget") && text.contains("Normal"), "{text}");
+    a.ui.dialog.as_mut().unwrap().fields.insert("pluginInstructionBudget".into(), json!("large"));
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.plugin_instruction_budget, vectorcraft_engine::PluginBudget::Large);
+    let saved: Value = serde_json::from_slice(&serde_json::to_vec(&a.ui).unwrap()).unwrap();
+    assert_eq!(saved["engine_prefs"]["pluginInstructionBudget"], json!("large"));
+    let mut b = app();
+    b.ui.engine_prefs = saved["engine_prefs"].clone();
+    restore(&mut b);
+    assert_eq!(b.session.prefs.plugin_instruction_budget, vectorcraft_engine::PluginBudget::Large);
+    // A saved value this version doesn't offer reads as Normal, and the other preferences stay.
+    b.ui.engine_prefs = json!({"keyboardIncrement": 4, "pluginInstructionBudget": 7});
+    restore(&mut b);
+    assert_eq!((b.session.prefs.plugin_instruction_budget, b.session.prefs.keyboard_increment), (vectorcraft_engine::PluginBudget::Normal, 4.0));
+}
+
 #[test]
 fn geometric_snapping_is_a_saved_smart_guides_preference() {
     let mut a = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());

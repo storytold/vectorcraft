@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 use vectorcraft_plugins::storage::{Meter, Storage, StorageError};
-use vectorcraft_plugins::{Error, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Kind, Limits, Plugin, Report, heavy_terms, registry, wat as tpl};
+use vectorcraft_plugins::{Error, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Kind, LARGE_FUEL, Limits, Plugin, Report, heavy_terms, registry, wat as tpl};
 
 /// The example Desaturate plug-in, built from `crates/plugins/example`.
 const DESATURATE: &[u8] = include_bytes!("fixtures/desaturate.wasm");
@@ -257,6 +257,23 @@ fn a_heavy_filter_finishes_what_a_light_one_cannot() {
     assert_eq!((p.limits().fuel_base, p.limits().wall_time_ms), (HEAVY_FUEL, HEAVY_WALL_TIME_MS));
     assert_eq!(heavy_terms(), (5, 20));
     assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
+}
+
+/// The Large instruction budget gives a light filter 5 times the instructions besides those for
+/// each byte of input, so it finishes 20 million steps of a loop that its own budget can't, in the
+/// same time budget. A heavy filter keeps its larger budget, and every other limit stays.
+#[test]
+fn the_large_budget_finishes_what_a_light_one_cannot_and_keeps_a_heavy_one() {
+    let light = Plugin::load(&build(&tpl::spinning(MANIFEST, 20_000_000, INPUT)), Limits::default()).unwrap();
+    assert_eq!(light.run(INPUT.as_bytes(), b"{}"), Err(Error::Limit("instruction budget".into())));
+    let large = light.large_limits();
+    assert_eq!(large, Limits { fuel_base: LARGE_FUEL, ..Limits::default() });
+    assert_eq!(LARGE_FUEL, 5 * Limits::default().fuel_base);
+    assert_eq!(light.run_limited(INPUT.as_bytes(), b"{}", &large).unwrap(), INPUT.as_bytes());
+    let heavy = r#"{"id":"test.heavy","name":"Heavy","version":"1","kind":"filter","budget":"heavy"}"#;
+    let heavy = Plugin::load(&build(&tpl::spinning(heavy, 1, INPUT)), Limits::default()).unwrap();
+    assert_eq!(heavy.large_limits(), *heavy.limits());
+    assert_eq!((heavy.large_limits().fuel_base, heavy.large_limits().wall_time_ms), (HEAVY_FUEL, HEAVY_WALL_TIME_MS));
 }
 
 #[test]

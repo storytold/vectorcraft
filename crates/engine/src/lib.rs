@@ -411,7 +411,7 @@ use history::history_budget_for;
 pub use history::{History, HistoryEntry, NamedStep, default_history_budget};
 pub(crate) use interaction::PreviewCopies;
 pub use interaction::{Interaction, LastTransform, UndoGroup, UndoScope};
-pub use prefs::{DrawMode, Prefs};
+pub use prefs::{DrawMode, PluginBudget, Prefs};
 pub use sanity::TOO_DEEP;
 pub(crate) use sanity::{deselect_hidden, is_guide_path};
 #[cfg(test)]

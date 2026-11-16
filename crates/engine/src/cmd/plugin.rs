@@ -161,6 +161,8 @@ pub struct FilterRun {
     parent: Option<NodeId>,
     /// The document it was made from, and that document's revision then.
     document: (u64, u64),
+    /// The plug-in's limits with the Plug-in Instruction Budget in force when it was made.
+    limits: vectorcraft_plugins::Limits,
 }
 
 /// A filter's output handed in by a [`FilterRun`] made away from `plugin.run`, with what the run
@@ -245,7 +247,11 @@ impl FilterRun {
         let capacity = (plugin.limits().max_memory_bytes / 2).min(i32::MAX as usize).saturating_sub(params.len());
         let (input, read_only) = objects::encode_input_with(&st.doc, &inputs, &kinds, capacity).map_err(err)?;
         let document = (st.uid, st.revision);
-        Ok(FilterRun { plugin, command, input, params, inputs, read_only, parent, document })
+        let limits = match s.prefs.plugin_instruction_budget {
+            crate::PluginBudget::Normal => plugin.limits().clone(),
+            crate::PluginBudget::Large => plugin.large_limits(),
+        };
+        Ok(FilterRun { plugin, command, input, params, inputs, read_only, parent, document, limits })
     }
 
     /// The plug-in, for its name and budget.
@@ -274,7 +280,13 @@ impl FilterRun {
     /// can run on any thread; inside a [`vectorcraft_doc::cancel::scope`] Cancel stops it between
     /// two slices of its budget.
     pub fn run(&self) -> Result<Vec<u8>> {
-        self.plugin.run(&self.input, &self.params).map_err(err)
+        self.plugin.run_limited(&self.input, &self.params, &self.limits).map_err(err)
+    }
+
+    /// The limits it runs under: the plug-in's, with the Plug-in Instruction Budget in force when
+    /// it was made.
+    pub fn limits(&self) -> &vectorcraft_plugins::Limits {
+        &self.limits
     }
 
     /// Does the plug-in call commands (its manifest's `commandAllowlist`)? Then it runs only in the
@@ -289,7 +301,7 @@ impl FilterRun {
         let may = self.plugin.manifest().permissions();
         let calls = super::plugin_call::Calls::of(s, may.contains(&Permission::DocRead), may.contains(&Permission::DocWrite));
         let mut bridge = |id: &str, args: &Value| super::plugin_call::call(s, &calls, id, args);
-        self.plugin.run_calling(&self.input, &self.params, self.plugin.limits(), &mut bridge).0.map_err(err)
+        self.plugin.run_calling(&self.input, &self.params, &self.limits, &mut bridge).0.map_err(err)
     }
 
     /// Runs a plug-in that calls commands and applies its output: the calls and the output are one

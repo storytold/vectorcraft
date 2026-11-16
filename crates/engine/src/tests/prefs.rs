@@ -447,6 +447,38 @@ fn gpu_preference_defaults_to_automatic_and_validates() {
     assert_eq!(s.prefs.gpu_preference, "automatic");
 }
 
+/// Plug-ins & Scratch Disks › Plug-in Instruction Budget: Normal by default, Large by value or
+/// label, kept through a save and load, and reset with its category. Setting another value is an
+/// error that changes nothing; a saved value that is missing, unknown or of another type reads as
+/// Normal and leaves the other saved preferences as they are.
+#[test]
+fn plugin_instruction_budget_defaults_to_normal_and_validates() {
+    let mut s = Session::new();
+    assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Normal);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "pluginInstructionBudget"})).unwrap(), json!("normal"));
+    set_pref(&mut s, "pluginInstructionBudget", json!("Large"));
+    assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Large);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "pluginInstructionBudget"})).unwrap(), json!("large"));
+    for bad in [json!("unlimited"), json!(""), json!(5), json!(null), json!(true), json!(["large"])] {
+        assert!(s.execute("prefs.set", &json!({"key": "pluginInstructionBudget", "value": bad})).is_err(), "{bad}");
+        assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Large, "{bad}");
+    }
+    let back: Prefs = serde_json::from_value(s.prefs.to_json()).unwrap();
+    assert_eq!(back.plugin_instruction_budget, PluginBudget::Large);
+    let other_values = [json!("unlimited"), json!(5), json!(null), json!(["large"]), json!({"large": true}), json!("LARGE")];
+    let saved_files = other_values.map(|v| json!({"keyboardIncrement": 4, "pluginInstructionBudget": v}));
+    for saved in std::iter::once(json!({"keyboardIncrement": 4})).chain(saved_files) {
+        let read: Prefs = serde_json::from_value(saved.clone()).unwrap();
+        assert_eq!((read.plugin_instruction_budget, read.keyboard_increment), (PluginBudget::Normal, 4.0), "{saved}");
+    }
+    let l = s.execute("prefs.list", &json!({})).unwrap();
+    let row = l.as_array().unwrap().iter().find(|e| e["key"] == "pluginInstructionBudget").unwrap().clone();
+    assert_eq!((row["category"].as_str(), row["section"].as_str()), (Some("Plug-ins & Scratch Disks"), Some("Plug-ins")));
+    assert_eq!((&row["options"], &row["value"]), (&json!(["normal", "large"]), &json!("large")));
+    s.execute("prefs.reset", &json!({"category": "Plug-ins & Scratch Disks"})).unwrap();
+    assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Normal);
+}
+
 /// Performance › Linux Display Server (#1151): automatic by default, X11 by value or label, and
 /// anything else is an error that changes nothing.
 #[test]

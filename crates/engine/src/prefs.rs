@@ -10,6 +10,26 @@ pub enum DrawMode {
     Inside,
 }
 
+/// Plug-ins & Scratch Disks › Plug-in Instruction Budget: the instructions an object filter's run
+/// may use ([`vectorcraft_plugins::Plugin::large_limits`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PluginBudget {
+    /// The plug-in's own limits.
+    #[default]
+    Normal,
+    /// At least [`vectorcraft_plugins::LARGE_FUEL`] instructions besides those for each byte of
+    /// input; the time budget is unchanged.
+    Large,
+}
+
+/// A saved Plug-in Instruction Budget: any value but `large`, of any type, reads as Normal, and the
+/// other preferences are read as they are.
+fn plugin_budget<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<PluginBudget, D::Error> {
+    let saved = <Value as serde::Deserialize>::deserialize(d)?;
+    Ok(if saved.as_str() == Some("large") { PluginBudget::Large } else { PluginBudget::Normal })
+}
+
 /// A saved Default Language as its tag: older preferences hold the language's name, and one the list
 /// no longer has reads as the default.
 fn language_tag<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<String, D::Error> {
@@ -173,6 +193,11 @@ pub struct Prefs {
     pub fonts_folder: String,
     // Plug-ins & Scratch Disks
     pub plugins_folder: String,
+    /// Plug-in Instruction Budget: the instructions each object filter run gets, from
+    /// `plugin.run`, a plug-in command and the app alike. Live effects, exporters and importers
+    /// keep their own budgets.
+    #[serde(deserialize_with = "plugin_budget")]
+    pub plugin_instruction_budget: PluginBudget,
     pub scratch_primary: String,
     pub scratch_secondary: String,
     // User Interface
@@ -485,6 +510,7 @@ impl Default for Prefs {
             hyphenation_exceptions: String::new(),
             fonts_folder: String::new(),
             plugins_folder: String::new(),
+            plugin_instruction_budget: PluginBudget::Normal,
             scratch_primary: s("Startup"),
             scratch_secondary: s("None"),
             ui_brightness: s("mediumDark"),
