@@ -2487,13 +2487,13 @@ mod tests {
         }
     }
 
-    /// The click on the app bar's search button that opens the palette leaves it open; the next
-    /// click on the button closes it.
+    /// The click on the app bar's search field that opens the palette leaves it open; the next
+    /// click on the field closes it.
     #[test]
     fn the_click_that_opens_the_palette_does_not_close_it() {
         let mut window = Window::new();
         let nodes = window.frame(vec![]);
-        let at = button_at(&nodes, "Search commands, tools, panels and effects");
+        let at = button_at(&nodes, "Search commands");
         window.click(at);
         assert!(window.app.ui.palette_open, "the click opens the palette");
         window.frame(vec![]);
