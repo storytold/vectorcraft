@@ -7784,6 +7784,31 @@ imageTrace	Outline	კონტური
 @msg	$.evalFile requires a file path	$.evalFile-ს სჭირდება ფაილის მისამართი
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: დროის ლიმიტი უნდა იყოს მილიწამების სასრული რიცხვი, 0 ან მეტი
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: იღებს ფაილის მისამართს და დროის ლიმიტს
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} არ არის განსაზღვრული
+@msg	cannot read property '{key}' of {base}	{base} მნიშვნელობის თვისება '{key}' ვერ წაიკითხება
+@msg	cannot set property '{key}' of {base}	{base} მნიშვნელობის თვისება '{key}' ვერ დაყენდება
+@msg	cannot read a property of {base}	{base} მნიშვნელობის თვისება ვერ წაიკითხება
+@msg	cannot set a property of {base}	{base} მნიშვნელობის თვისება ვერ დაყენდება
+@msg	cannot define property '{key}': {why}	თვისება '{key}' ვერ განისაზღვრება: {why}
+@msg	cannot assign to property '{key}': {why}	თვისებას '{key}' მნიშვნელობა ვერ მიენიჭება: {why}
+@msg	cannot delete property '{key}'	თვისება '{key}' ვერ წაიშლება
+@msg	cannot declare function {ident}	ფუნქცია {ident} ვერ გამოცხადდება
+@msg	invalid assignment target	მინიჭების არასწორი სამიზნე
+@msg	the array's length is read-only	მასივის სიგრძე მხოლოდ წასაკითხია
+@msg	the property cannot be redefined	თვისება ხელახლა ვერ განისაზღვრება
+@msg	the object is not extensible	ობიექტი არ არის გაფართოებადი
+@msg	the length cannot be redefined	სიგრძე ხელახლა ვერ განისაზღვრება
+@msg	it is read-only	ის მხოლოდ წასაკითხია
+@msg	an element cannot be deleted	ელემენტი ვერ წაიშლება
+@msg	it has only a getter	მას მხოლოდ getter აქვს
+@msg	the value is a primitive	მნიშვნელობა პრიმიტიულია
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, სტრიქონი {line}, სვეტი {column}: {e} (გამონაკლისი)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: სტრიქონი {line}, სვეტი {column}: {e} (გამონაკლისი)
 @msg	{name}: {e} (thrown)	{name}: {e} (გამონაკლისი)

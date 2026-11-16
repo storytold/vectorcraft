@@ -4233,6 +4233,31 @@ axis	Both	Her İkisi
 @msg	$.evalFile requires a file path	$.evalFile bir dosya yolu gerektirir
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: zaman aşımı sonlu bir milisaniye sayısı olmalıdır, 0 veya daha fazla
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: bir dosya yolu ve bir zaman aşımı alır
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} tanımlı değil
+@msg	cannot read property '{key}' of {base}	{base} değerinin '{key}' özelliği okunamıyor
+@msg	cannot set property '{key}' of {base}	{base} değerinin '{key}' özelliği ayarlanamıyor
+@msg	cannot read a property of {base}	{base} değerinin bir özelliği okunamıyor
+@msg	cannot set a property of {base}	{base} değerinin bir özelliği ayarlanamıyor
+@msg	cannot define property '{key}': {why}	'{key}' özelliği tanımlanamıyor: {why}
+@msg	cannot assign to property '{key}': {why}	'{key}' özelliğine atama yapılamıyor: {why}
+@msg	cannot delete property '{key}'	'{key}' özelliği silinemiyor
+@msg	cannot declare function {ident}	{ident} işlevi bildirilemiyor
+@msg	invalid assignment target	geçersiz atama hedefi
+@msg	the array's length is read-only	dizinin uzunluğu salt okunur
+@msg	the property cannot be redefined	özellik yeniden tanımlanamaz
+@msg	the object is not extensible	nesne genişletilemez
+@msg	the length cannot be redefined	uzunluk yeniden tanımlanamaz
+@msg	it is read-only	salt okunur
+@msg	an element cannot be deleted	bir öğe silinemez
+@msg	it has only a getter	yalnızca getter'ı var
+@msg	the value is a primitive	değer ilkel
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, satır {line}, sütun {column}: {e} (fırlatıldı)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: satır {line}, sütun {column}: {e} (fırlatıldı)
 @msg	{name}: {e} (thrown)	{name}: {e} (fırlatıldı)
