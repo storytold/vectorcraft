@@ -339,7 +339,9 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
         }
         let bar = egui::Rect::from_min_size(area.min, vec2(area.width(), 24.0));
         // Keeps the pointer off the canvas; not focusable (`click_and_drag` is), so Tab skips it.
-        ui.interact(bar, ui.scope_id().with("iso-bar"), Sense::CLICK | Sense::DRAG);
+        // A click on it, the current object's name included, outside the back arrow, the crumbs of
+        // the levels above and the pattern buttons leaves isolation mode.
+        let background = ui.interact(bar, ui.scope_id().with("iso-bar"), Sense::CLICK | Sense::DRAG);
         ui.painter().rect_filled(bar, 0.0, t.panel);
         let back = egui::Rect::from_min_size(bar.min + vec2(6.0, 3.0), vec2(18.0, 18.0));
         let bresp = ui.interact(back, ui.scope_id().with("iso-back"), Sense::click());
@@ -406,11 +408,37 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
                 });
             }
         }
+        // A click on the background leaves isolation mode altogether, symbol editing mode included.
+        // While a pattern is edited it does nothing: Save a Copy, Done and Cancel end pattern editing.
+        let leave = background.clicked() && nav_cmd.is_none() && pattern_cmd.is_none() && pattern_edit.is_none();
         if let Some((cmd, params)) = nav_cmd {
             app.run(cmd, params).ok();
         }
         if let Some(cmd) = pattern_cmd {
             app.run(cmd, json!({})).ok();
+        }
+        if leave {
+            leave_isolation(app);
+        }
+    }
+}
+
+/// Runs `object.exitIsolation` until the current document is out of isolation mode. Leaving symbol
+/// editing mode from a group isolated inside the symbol's art first goes back to the art, and leaving
+/// the mode restores the isolation it was entered from; each of these is left in turn. It stops at
+/// pattern editing, which only its own buttons end, and when a step fails or changes nothing.
+fn leave_isolation(app: &mut VectorcraftApp) {
+    // Each step leaves one level; a document has far fewer levels than this.
+    const MAX_STEPS: usize = 64;
+    let state = |app: &VectorcraftApp| {
+        app.session
+            .active()
+            .map(|d| (d.isolation, d.doc.symbol_edit.as_ref().map(|e| e.layer), d.doc.mask_edit.is_some(), d.doc.pattern_edit.is_some()))
+    };
+    for _ in 0..MAX_STEPS {
+        let Some(before) = state(app) else { return };
+        if before.0.is_none() || before.3 || app.run("object.exitIsolation", json!({})).is_err() || state(app) == Some(before) {
+            return;
         }
     }
 }

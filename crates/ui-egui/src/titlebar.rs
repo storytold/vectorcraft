@@ -331,7 +331,7 @@ mod tests {
                 assert!(has("Search commands"), "the search field shows at {width}: {texts:?}");
             }
             // The search's tooltip text is not painted in the bar.
-            assert!(!has("Search commands and tools"), "{width}: {texts:?}");
+            assert!(!has("Search commands, tools, panels and effects"), "{width}: {texts:?}");
         }
     }
 

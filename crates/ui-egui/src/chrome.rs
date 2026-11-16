@@ -134,7 +134,7 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 Some(sc) => format!("{text}  ({sc})"),
                 None => text.to_string(),
             };
-            let tip = with_shortcut(tl!("Search commands and tools"));
+            let tip = with_shortcut(tl!("Search commands, tools, panels and effects"));
             let name = with_shortcut(tl!("Search commands"));
             // The field and the icon toggle the palette as its shortcut does, and like the shortcut
             // they do nothing while a dialog is open, so they are drawn disabled then.
