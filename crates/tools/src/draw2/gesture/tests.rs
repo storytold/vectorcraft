@@ -2535,13 +2535,27 @@ fn line_built(t: &GestureTool) -> usize {
     built
 }
 
+/// The points of piece `k` of the line of a drag through `pts`. A piece other than the first starts
+/// halfway along the segment after its first point, and a piece other than the last (`settled`)
+/// ends halfway along the segment after its last point, where the next piece starts.
+fn piece_points(pts: &[Point], k: usize, settled: bool) -> Vec<Point> {
+    let from = k * line::PIECE_SEGMENTS;
+    let to = if settled { from + line::PIECE_SEGMENTS } else { pts.len() - 1 };
+    let mut want = vec![if k == 0 { pts[0] } else { pts[from].midpoint(pts[from + 1]) }];
+    want.extend_from_slice(&pts[from + 1..=to]);
+    if settled {
+        want.push(pts[to].midpoint(pts[to + 1]));
+    }
+    want
+}
+
 /// The line of a long round Eraser, Knife, Path Eraser or Pencil (Live preview off) drag shows in
 /// pieces, and the steps of a round Eraser drag whose Size follows the pen each as its own path.
 /// They come back from one call to the next, at any zoom, as the same shared paths, which the host
 /// draws again without building them again; the call copies no point into a new path. A step of
 /// the drag builds again only the last piece, or adds one step. The pieces run through every point
-/// of the drag, each from where the one before ends and on over the next segment, and the
-/// Knife's dashes go on from one piece to the next.
+/// of the drag, each from where the one before ends, halfway along a segment, so no part of the
+/// line is drawn twice, and the Knife's dashes go on from one piece to the next.
 #[test]
 fn the_line_of_a_long_drag_is_the_same_shared_pieces_each_frame() {
     let (d, id) = doc_with_rect();
@@ -2579,15 +2593,14 @@ fn the_line_of_a_long_drag_is_the_same_shared_pieces_each_frame() {
             assert!(first.len() > 1, "{id}: {} pieces", first.len());
             let mut along = 0.0;
             for (k, (path, width, dash)) in first.iter().enumerate() {
-                let from = k * line::PIECE_SEGMENTS;
-                let to = (from + line::PIECE_SEGMENTS + 1).min(n - 1);
-                assert_eq!(points_of(path), t.points[from..=to], "{id}: piece {k}");
+                let got = points_of(path);
+                assert_eq!(got, piece_points(&t.points, k, k + 1 < first.len()), "{id}: piece {k}");
                 assert_eq!(*width, if id == "eraser" { 10.0 } else { 1.0 }, "{id}");
                 match dash {
                     Some(at) => assert!(id == "knife" && (at - along).abs() < 1e-6, "{id}: piece {k} dashes from {at}, not {along}"),
                     None => assert_ne!(id, "knife"),
                 }
-                along += t.points[from..=(from + line::PIECE_SEGMENTS).min(n - 1)].windows(2).map(|w| w[0].distance(w[1])).sum::<f64>();
+                along += got.windows(2).map(|w| w[0].distance(w[1])).sum::<f64>();
             }
             assert_eq!(first.len() - 1, (n - 3) / line::PIECE_SEGMENTS, "{id}: the last piece holds the points no settled piece holds");
         }
