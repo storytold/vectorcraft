@@ -267,6 +267,12 @@ impl VectorcraftApp {
                 {
                     self.ui.status = w.to_string();
                 }
+                // A renamed spot color swatch stays the Color Guide's base.
+                if id == "swatch.edit"
+                    && let (Some(from), Some(to)) = (params["name"].as_str(), v["name"].as_str())
+                {
+                    crate::panels::color_guide::swatch_renamed(self, from, to);
+                }
                 if id == "file.new" {
                     self.ui.status.clear();
                     // New Document's Pixel preview mode (Overprint Preview is the engine's).
