@@ -6229,7 +6229,7 @@ theme	Appearance	Utseende
 	By Object	Efter objekt
 	Check an artboard to save.	Markera en rityta som ska sparas.
 	Clear All	Rensa alla
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Stäng de cirkulära ändarna på öppna profiler. Partiella svep behåller sina snittsidor öppna.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Stäng de cirkulära ändarna på öppna profiler. Partiella svep stänger även sina snittsidor.
 	Color Panel Options	Alternativ för panelen Färg
 	Color blindness – Tritanopia-type	Färgblindhet – tritanopi
 	Create Dimension	Skapa mått

@@ -5937,7 +5937,7 @@ effect	Soft	Weich
 @msg	Unknown dimension style	Unbekannter Bemaßungsstil
 @msg	Unknown unit	Unbekannte Einheit
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Schließt die kreisförmigen Enden offener Profile. Bei einer Teildrehung bleiben die Schnittseiten offen.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Schließt die kreisförmigen Enden offener Profile. Bei einer Teildrehung werden auch die Schnittseiten geschlossen.
 	Distance	Abstand
 @msg	span must be "object" or "selection", got {v}	span muss "object" oder "selection" sein, nicht {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" platziert einen `gradient`, kein Farbfeld

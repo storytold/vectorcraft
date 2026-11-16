@@ -6339,7 +6339,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	Unknown dimension style	Ismeretlen méretezési stílus
 @msg	Unknown unit	Ismeretlen mértékegység
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Nyitott profilok kör alakú végeinek lezárása. Részleges körforgatás esetén a vágott oldalak nyitva maradnak.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Nyitott profilok kör alakú végeinek lezárása. Részleges körforgatás esetén a vágott oldalak is lezáródnak.
 	Distance	Távolság
 @msg	span must be "object" or "selection", got {v}	a span értéke "object" vagy "selection" lehet, nem {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" egy `gradient` értéket helyez el, nem színmintát

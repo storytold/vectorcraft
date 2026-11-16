@@ -6201,7 +6201,7 @@ lighting	Light	光源
 @msg	Choose a circle or a perfect arc	请选择圆或标准圆弧
 @msg	Choose a precision from 0 to 6	请选择 0 到 6 之间的精度
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	封闭开放轮廓的圆形端部。部分旋转的切割侧面保持开放。
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	封闭开放轮廓的圆形端部。部分旋转的切割侧面也会封闭。
 	Distance	距离
 	Make Image Dynamic	使图像动态化
 	Import Data Sets…	导入数据集…

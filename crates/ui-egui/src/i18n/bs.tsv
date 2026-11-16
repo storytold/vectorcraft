@@ -5948,7 +5948,7 @@ mark-style	Japanese	Japanski
 @msg	Unknown dimension orientation	Nepoznata orijentacija kote
 @msg	Unknown dimension style	Nepoznat stil kote
 @msg	Unknown unit	Nepoznata jedinica
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Zatvori kružne krajeve otvorenih profila. Djelimična izvlačenja zadržavaju otvorene rezane strane.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Zatvori kružne krajeve otvorenih profila. Djelimična izvlačenja zatvaraju i svoje rezane strane.
 @msg	span must be "object" or "selection", got {v}	span mora biti "object" ili "selection", dobiveno {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" postavlja `gradient`, a ne uzorak boje
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" postavlja gradijent: navedite `gradient`

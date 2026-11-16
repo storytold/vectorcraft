@@ -881,7 +881,7 @@ antiAlias	Sharp	शार्प
 	Close Path:	बंद पाथ:
 	Close Path…	बंद पाथ…
 	Close paths when ends are within:	जब समाप्त होता है तो बंद पाथ भीतर होते हैं:
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	खुली प्रोफ़ाइल के गोल सिरे बंद करें। आंशिक स्वीप की कटी हुई साइड खुली रहती हैं।
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	खुली प्रोफ़ाइल के गोल सिरे बंद करें। आंशिक स्वीप की कटी हुई साइड भी बंद होती हैं।
 	Closed	बंद
 	Closing bracket with no opening one	बंद करने वाला ब्रैकेट, जिसका कोई खोलने वाला ब्रैकेट नहीं है
 	Clumped	गुच्छेदार

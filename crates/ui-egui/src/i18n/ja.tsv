@@ -6019,7 +6019,7 @@ lighting	Light	ライト
 @msg	Unknown dimension style	寸法のスタイルが不明です
 @msg	Unknown unit	単位が不明です
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	開いたプロファイルの円形の端を閉じます。部分的な回転では切断面は開いたままです。
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	開いたプロファイルの円形の端を閉じます。部分的な回転では切断面も閉じます。
 	Distance	距離
 @msg	span must be "object" or "selection", got {v}	span は "object" または "selection" で指定してください ({v} は指定できません)
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" は `gradient` を配置します。スウォッチは配置できません

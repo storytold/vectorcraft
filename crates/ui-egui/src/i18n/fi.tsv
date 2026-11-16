@@ -6244,7 +6244,7 @@ mark-style	Japanese	Japanilainen
 	By Object	Objektin mukaan
 	Check an artboard to save.	Valitse tallennettava piirtoalusta.
 	Clear All	Tyhjennä kaikki
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Sulje avointen profiilien pyöreät päät. Osittaiset pyöräytykset jättävät leikkauspintansa auki.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Sulje avointen profiilien pyöreät päät. Osittaiset pyöräytykset sulkevat myös leikkauspintansa.
 	Color Panel Options	Väri-paneelin asetukset
 	Color blindness – Tritanopia-type	Värisokeus – tritanopia
 	Create Dimension	Luo mitta

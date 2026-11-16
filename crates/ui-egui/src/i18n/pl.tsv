@@ -6208,7 +6208,7 @@ mark-style	Japanese	Japońskie
 @msg	Unknown dimension style	Nieznany styl wymiaru
 @msg	Unknown unit	Nieznana jednostka
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Zamknij okrągłe końce otwartych profili. Przy częściowym obrocie boki przekroju pozostają otwarte.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Zamknij okrągłe końce otwartych profili. Przy częściowym obrocie boki przekroju również zostają zamknięte.
 	Distance	Odległość
 @msg	span must be "object" or "selection", got {v}	span musi mieć wartość "object" lub "selection", a nie {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" umieszcza `gradient`, a nie próbkę
