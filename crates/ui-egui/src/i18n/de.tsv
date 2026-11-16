@@ -4223,6 +4223,7 @@ imageTrace	Outline	Kontur
 	 to set spacing and orientation	 legt Abstand und Ausrichtung fest
 	:	:
 	Isolate Selected Group	Ausgewählte Gruppe isolieren
+	Isolate Selected Path	Ausgewählten Pfad isolieren
 	Isolate Selected Object	Ausgewähltes Objekt isolieren
 	Release Clipping Mask	Schnittmaske zurückwandeln
 	Make Compound Path	Zusammengesetzten Pfad erstellen

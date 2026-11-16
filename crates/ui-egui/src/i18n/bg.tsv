@@ -4165,6 +4165,7 @@ imageTrace	Outline	Контур
 	 to set spacing and orientation	 за задаване на разстояние и ориентация
 	:	:
 	Isolate Selected Group	Изолиране на избраната група
+	Isolate Selected Path	Изолиране на избрания път
 	Release Clipping Mask	Освобождаване на маска за изрязване
 	Make Compound Path	Създаване на съставен път
 	Release Compound Path	Освобождаване на съставен път

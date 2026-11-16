@@ -4351,6 +4351,7 @@ imageTrace	Outline	Контур
 	 to set spacing and orientation	 для завдання інтервалу та орієнтації
 	:	:
 	Isolate Selected Group	Ізолювати обрану групу
+	Isolate Selected Path	Ізолювати обраний контур
 	Isolate Selected Object	Ізолювати обраний об’єкт
 	Release Clipping Mask	Звільнити відсічну маску
 	Make Compound Path	Створити складений контур

@@ -5504,6 +5504,7 @@ imageTrace	Outline	輪廓
 	 to set spacing and orientation	可設定間距與方向
 	:	：
 	Isolate Selected Group	隔離選取的群組
+	Isolate Selected Path	隔離選取的路徑
 	Isolate Selected Object	隔離選取的物件
 	Release Clipping Mask	釋放剪裁遮色片
 	Make Compound Path	製作複合路徑

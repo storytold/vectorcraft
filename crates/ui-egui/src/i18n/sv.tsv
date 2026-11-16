@@ -4227,6 +4227,7 @@ imageTrace	Outline	Kontur
 	 to set spacing and orientation	 för att ange avstånd och orientering
 	:	:
 	Isolate Selected Group	Isolera markerad grupp
+	Isolate Selected Path	Isolera markerad bana
 	Release Clipping Mask	Släpp klippningsmask
 	Make Compound Path	Skapa sammansatt bana
 	Release Compound Path	Släpp sammansatt bana

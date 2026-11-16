@@ -4358,6 +4358,7 @@ imageTrace	Outline	Contorno
 	 to set spacing and orientation	 per impostare spaziatura e orientamento
 	:	:
 	Isolate Selected Group	Isola gruppo selezionato
+	Isolate Selected Path	Isola tracciato selezionato
 	Isolate Selected Object	Isola oggetto selezionato
 	Release Clipping Mask	Rilascia maschera di ritaglio
 	Make Compound Path	Crea tracciato composto
