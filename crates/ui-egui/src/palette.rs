@@ -389,8 +389,11 @@ pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
         app.select_tool(tool);
     } else if let Some(panel) = id.strip_prefix("panel:") {
         // A panel that can be seen stays as it is, where `window.panel` would put an open flyout or
-        // a floating panel away.
-        if let Err(e) = crate::panel_docking::reveal_panel(app, panel) {
+        // a floating panel away. In Presentation Mode the pick fails and changes nothing, as
+        // `window.panel` does.
+        if app.ui.screen_mode >= 3 {
+            app.status("panels can't be shown in Presentation Mode");
+        } else if let Err(e) = crate::panel_docking::reveal_panel(app, panel) {
             app.status(e);
         }
     } else if id.starts_with("plugin:") || id.starts_with("effect:") {
@@ -1776,6 +1779,20 @@ mod tests {
             run_pick(&mut app, &format!("panel:{id}"));
             assert!(crate::panel_docking::showing(&app.ui, id), "{id}: picked twice, still showing");
         }
+    }
+
+    /// In Presentation Mode a panel's pick fails as `window.panel` does: the status line says why,
+    /// and the panel does not show when the mode ends.
+    #[test]
+    fn a_panel_pick_in_presentation_mode_changes_nothing() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let (open_panel, dock) = (app.ui.open_panel.clone(), app.ui.dock);
+        app.ui.screen_mode = 3;
+        run_pick(&mut app, "panel:swatches");
+        assert_eq!(app.ui.status, "panels can't be shown in Presentation Mode");
+        assert_eq!((app.ui.open_panel.clone(), app.ui.dock), (open_panel, dock));
+        app.ui.screen_mode = 0;
+        assert!(!crate::panel_docking::showing(&app.ui, "swatches"), "the pick did not place the panel");
     }
 
     /// Each Effect menu item is a result under its menu path, with its shortcut. With a document
