@@ -964,3 +964,177 @@ fn menu_access_select_save_and_edit_use_reported_letters() {
     assert_eq!(after_cancel.selection, selection);
     assert_eq!((after_cancel.history.undo.len(), after_cancel.history.redo.len()), history);
 }
+
+// Review regressions use real App input and painted menu targets, including the native parent
+// focus left by Right. The original nine cases above remain unchanged.
+#[test]
+fn menu_access_review_bare_alt_outside_panel_click_releases_tool_shortcuts() {
+    let _global = GlobalState::new();
+    let mut s = Scene::new();
+    let state = s.app.session.active().unwrap();
+    let (doc, selection, history) = (state.doc.clone(), state.selection.clone(), (state.history.undo.len(), state.history.redo.len()));
+    s.bare_alt();
+    assert!(s.cues().iter().any(|c| !c.popup && c.label == "File"), "bare Alt must first expose the File root cue");
+    assert!(!egui::Popup::is_any_open(&s.ctx), "this is closed access mode, not an open popup");
+    // The actual Layers tab/header is panel chrome. Unlike the earlier canvas click, this
+    // cannot accidentally satisfy cancellation by starting a busy drawing/selection gesture.
+    let header = s.point("Layers", false);
+    assert!(header.y > 40.0, "the actual Layers header is outside the main menu bar");
+    s.click(header);
+    assert!(!s.app.session.tool_busy(), "the non-canvas header click must leave the tool idle");
+    assert!(!s.cues().iter().any(|c| !c.popup && c.label == "File"), "an outside panel click must cancel even closed access mode");
+    assert!(!egui::Popup::is_any_open(&s.ctx));
+    assert!(s.app.ui.dialog.is_none());
+    let state = s.app.session.active().unwrap();
+    assert_eq!(state.doc, doc);
+    assert_eq!(state.selection, selection);
+    assert_eq!((state.history.undo.len(), state.history.redo.len()), history);
+    s.letter(Key::P, "p", Modifiers::NONE);
+    assert_eq!(s.app.session.tool_id(), "pen", "ordinary P must reach the tool shortcut after panel dismissal");
+    assert!(!egui::Popup::is_any_open(&s.ctx), "the same P must not navigate a menu");
+    assert!(s.app.ui.dialog.is_none());
+}
+
+#[test]
+fn menu_access_review_font_mnemonic_after_right_uses_open_child_level() {
+    let _global = GlobalState::new();
+    let mut s = Scene::new();
+    let id = s.app.run("text.create", json!({"x": 250, "y": 200, "text": "Menu", "font": "Inter", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    s.app.run("select.set", json!({"ids": [id]})).unwrap();
+    s.settle();
+    let font_rows = |scene: &Scene| {
+        vectorcraft_ui_egui::menus::menu_entries(&scene.app)
+            .into_iter()
+            .filter(|e| {
+                e.path.first().is_some_and(|p| p == "Type") && e.path.iter().any(|p| p == "Font") && e.command.as_deref() == Some("text.setStyle")
+            })
+            .map(|e| (e.label, e.params["font"].as_str().expect("Font family rows supply the canonical family").to_owned()))
+            .collect::<Vec<_>>()
+    };
+    let family = |scene: &Scene| {
+        let node = scene.app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap();
+        let vectorcraft_doc::NodeKind::Text(text) = &node.kind else { panic!("the selected original object remains text") };
+        text.runs.first().unwrap().style.font_family.clone()
+    };
+    let initial_rows = font_rows(&s);
+    assert!(initial_rows.len() > 1, "the inherited font fixture has distinct real families");
+    // Set a real family from the end of the same public menu, so its first row can make a
+    // meaningful font change without guessing a host-installed family or a private font API.
+    let initial = initial_rows.last().unwrap().1.clone();
+    s.app.run("text.setStyle", json!({"font": initial})).unwrap();
+    s.settle();
+    let before = family(&s);
+    let selection = s.app.session.active().unwrap().selection.clone();
+    let history = s.app.session.active().unwrap().history.undo.len();
+    let size = vec2(640.0, 420.0);
+    for _ in 0..4 {
+        s.at_size(vec![], size);
+    }
+    let pointer = s.ctx.pointer_hover_pos();
+    // Match the existing narrow-menu witness exactly; the wide Scene convenience methods
+    // would reset the viewport and could change egui's Right/focus transition.
+    s.at_size(vec![Event::ModifiersChanged(Modifiers::ALT), key(Key::T, true, Modifiers::ALT), Event::Text("t".into())], size);
+    s.at_size(vec![key(Key::T, false, Modifiers::ALT), Event::ModifiersChanged(Modifiers::NONE)], size);
+    let type_cues = s.at_size(vec![], size);
+    let font_cue = type_cues.iter().find(|c| c.popup && c.label == "Font").expect("the actual narrow Type menu exposes Font");
+    let font_text = font_cue.character.to_lowercase().collect::<String>();
+    let font_key = Key::from_name(&font_cue.character.to_uppercase().collect::<String>()).unwrap();
+    s.at_size(vec![key(font_key, true, Modifiers::NONE), Event::Text(font_text)], size);
+    s.at_size(vec![key(font_key, false, Modifiers::NONE)], size);
+    s.at_size(vec![key(Key::ArrowRight, true, Modifiers::NONE)], size);
+    s.at_size(vec![key(Key::ArrowRight, false, Modifiers::NONE)], size);
+    // No Down and no pointer movement: this is the actual parent-focus state the former
+    // long-menu test skipped before switching to pointer/wheel interaction.
+    let cues = s.at_size(vec![], size);
+    // Exercise the actual Right transition without forcing global focus onto its parent.
+    // The unchanged implementation already focuses a family in this native App route.
+    assert_eq!(s.ctx.pointer_hover_pos(), pointer, "opening Font and choosing its letter use keyboard input only");
+    let rows = font_rows(&s);
+    let (label, expected) = rows.first().expect("the open Font list has an actual first family").clone();
+    assert_ne!(before, expected, "the chosen family must actually change the text's font");
+    let target = s.point(&label, true);
+    assert!(Rect::from_min_size(Pos2::ZERO, size).contains(target), "the first real family is visible");
+    let cue = cues.iter().find(|c| c.popup && c.label == label).expect("the actual visible family advertises its mnemonic");
+    let text = cue.character.to_lowercase().collect::<String>();
+    let key_id = Key::from_name(&cue.character.to_uppercase().collect::<String>()).expect("the English family cue has a native key");
+    s.at_size(vec![Event::ModifiersChanged(Modifiers::NONE), key(key_id, true, Modifiers::NONE), Event::Text(text)], size);
+    s.at_size(vec![key(key_id, false, Modifiers::NONE)], size);
+    for _ in 0..3 {
+        s.at_size(vec![], size);
+    }
+    assert!(s.app.ui.dialog.is_none(), "a family letter cannot invoke a command from the parent Type level");
+    if family(&s) != expected {
+        // A shared cue selects the first matching row and requires Enter. The first family
+        // is also the first possible match; never substitute Down or pointer selection.
+        assert_eq!(
+            focused_label(&s, &[label.as_str()]),
+            Some(label.clone()),
+            "the delivered family mnemonic must focus inside Font, not Type: {}",
+            s.menu_diagnostic()
+        );
+        s.at_size(vec![key(Key::Enter, true, Modifiers::NONE)], size);
+        s.at_size(vec![key(Key::Enter, false, Modifiers::NONE)], size);
+        for _ in 0..3 {
+            s.at_size(vec![], size);
+        }
+    }
+    assert_eq!(family(&s), expected, "the advertised child mnemonic must apply its real text.setStyle target");
+    assert_eq!(s.app.session.active().unwrap().selection, selection);
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history + 1, "one family choice makes one font edit");
+    assert!(!egui::Popup::is_any_open(&s.ctx));
+    assert!(s.app.ui.dialog.is_none());
+}
+
+#[test]
+fn menu_access_review_fresh_alt_reselects_root_from_open_submenu() {
+    let _global = GlobalState::new();
+    for pointer_movement in [true, false] {
+        let mut s = Scene::new();
+        if pointer_movement {
+            // Establish a real previous position before opening the menus, so the later movement
+            // is nonzero rather than the pointer's first appearance.
+            s.frame(vec![Event::PointerMoved(s.point("Layers", false))]);
+            s.settle();
+        }
+        let state = s.app.session.active().unwrap();
+        let (doc, selection, history) = (state.doc.clone(), state.selection.clone(), (state.history.undo.len(), state.history.redo.len()));
+        s.root("Object");
+        s.letter(Key::P, "p", Modifiers::NONE);
+        s.arrow(Key::ArrowRight);
+        s.settle();
+        assert!(s.cues().iter().any(|c| c.popup && c.label == "Offset Path\u{2026}"), "the actual Object > Path submenu must be open first");
+        assert!(s.app.ui.dialog.is_none());
+        // A fresh physical Alt chord names a top-level root even while a descendant popup is
+        // open; unmodified letters below still address the selected submenu normally.
+        if pointer_movement {
+            let title = s.point("Object", false);
+            assert_ne!(s.ctx.pointer_hover_pos(), Some(title), "the same-batch pointer must actually move");
+            s.frame(vec![
+                Event::ModifiersChanged(Modifiers::ALT),
+                Event::PointerMoved(title),
+                key(Key::O, true, Modifiers::ALT),
+                Event::Text("o".into()),
+            ]);
+            s.frame(vec![key(Key::O, false, Modifiers::ALT), Event::ModifiersChanged(Modifiers::NONE)]);
+            s.settle();
+        } else {
+            s.root("Object");
+        }
+        assert!(s.app.ui.dialog.is_none(), "fresh Alt+O must select Object, not invoke Offset Path");
+        s.assert_root_contents("Object");
+        assert!(
+            !s.shown.iter().any(|(text, point)| clean_label(text) == "Offset Path\u{2026}"
+                && s.ctx.layer_id_at(*point).is_some_and(|layer| layer.order == egui::Order::Foreground)),
+            "reselecting Object closes its old Path descendant"
+        );
+        s.letter(Key::P, "p", Modifiers::NONE);
+        s.arrow(Key::ArrowRight);
+        s.letter(Key::O, "o", Modifiers::NONE);
+        s.settle();
+        s.assert_offset_dialog();
+        let state = s.app.session.active().unwrap();
+        assert_eq!(state.doc, doc);
+        assert_eq!(state.selection, selection);
+        assert_eq!((state.history.undo.len(), state.history.redo.len()), history);
+    }
+}

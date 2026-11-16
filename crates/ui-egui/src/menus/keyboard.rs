@@ -210,6 +210,9 @@ fn choose_root(app: &VectorcraftApp, ctx: &Context, state: &mut State, root: Str
     for (_, _, popup) in &state.titles {
         egui::Popup::close_id(ctx, *popup);
     }
+    // Closing a popup alone keeps egui's open-submenu state for the next pass. A newly
+    // selected root must discard those descendants before reopening in this same pass.
+    ctx.data_mut(|data| data.remove_by_type::<egui::containers::menu::MenuState>());
     state.root = Some(root.clone());
     state.invalidated = false;
     state.open = open;
@@ -391,8 +394,9 @@ fn mnemonic(rows: &[AccessRow], text: &str) -> Vec<TargetKey> {
     rows.iter().filter(|r| r.enabled && r.cue.as_ref().is_some_and(|c| c.folded == folded)).map(|r| r.key.clone()).collect()
 }
 
-fn letter(app: &VectorcraftApp, ctx: &Context, state: &mut State, text: &str, fallback: Option<&str>) -> bool {
-    let rows = if state.active && state.open { current_rows(app, state) } else { Some(root_rows(&roots(app))) };
+fn letter(app: &VectorcraftApp, ctx: &Context, state: &mut State, text: &str, fallback: Option<&str>, root_chord: bool) -> bool {
+    // A newly pressed Alt chord addresses the bar, even while a submenu is open.
+    let rows = if state.active && state.open && !root_chord { current_rows(app, state) } else { Some(root_rows(&roots(app))) };
     let Some(rows) = rows else {
         cancel(ctx, state, true);
         return true;
@@ -406,7 +410,7 @@ fn letter(app: &VectorcraftApp, ctx: &Context, state: &mut State, text: &str, fa
     if matches.is_empty() {
         return state.active;
     }
-    if !state.active || !state.open {
+    if root_chord || !state.active || !state.open {
         if let Some(target) = matches.first() {
             choose_root(app, ctx, state, target.path.root.clone(), true);
         }
@@ -686,6 +690,7 @@ fn pressed_key(app: &VectorcraftApp, ctx: &Context, state: &mut State, events: &
             return;
         }
     }
+    let root_chord = modifiers.alt && !state.alt_used;
     state.alt_used = true;
     state.alt_armed = false;
     // Native input is Key then Text. Prefer its delivered Unicode text, while keeping
@@ -698,7 +703,7 @@ fn pressed_key(app: &VectorcraftApp, ctx: &Context, state: &mut State, events: &
         .find_map(|(i, e)| matches!(e, Event::Text(_)).then_some(i));
     let text = text_at.and_then(|i| events.get(i)).and_then(|e| if let Event::Text(t) = e { Some(t.as_str()) } else { None });
     let fallback = key.name();
-    if !*repeat && letter(app, ctx, state, text.unwrap_or(fallback), Some(fallback)) || state.active {
+    if !*repeat && letter(app, ctx, state, text.unwrap_or(fallback), Some(fallback), root_chord) || state.active {
         *owned = true;
         consume_event(consumed, at);
         if let Some(i) = text_at {
@@ -717,9 +722,10 @@ fn text_event(app: &VectorcraftApp, ctx: &Context, state: &mut State, text: &str
         *owned = false;
         // AltGr/Ctrl text belongs downstream, even without a Key event.
     } else if state.active || state.alt_down && state.alt_armed {
+        let root_chord = state.alt_down && !state.alt_used;
         state.alt_used = true;
         state.alt_armed = false;
-        if letter(app, ctx, state, text, None) || state.active {
+        if letter(app, ctx, state, text, None, root_chord) || state.active {
             *owned = true;
             consume_event(consumed, at);
         }
@@ -901,7 +907,8 @@ pub(super) fn finish_bar(ctx: &Context, open: bool, command_chosen: bool) {
             state.open = true;
             state.path =
                 state.shown.iter().filter(|p| p.root == source).max_by_key(|p| p.parents.len()).map(|p| p.parents.clone()).unwrap_or_default();
-        } else if state.open && !open {
+        } else if !open && (state.open || ctx.input(|i| i.pointer.any_click())) {
+            // Bare Alt exposes cues without a popup; an outside click still ends access mode.
             let restore = !command_chosen && !ctx.input(|i| i.pointer.any_click());
             cancel(ctx, &mut state, restore);
         }
