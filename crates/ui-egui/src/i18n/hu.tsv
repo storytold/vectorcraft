@@ -1819,6 +1819,7 @@ file-filter	Templates	Sablonok
 	Connect Data Points	Adatpontok összekötése
 	Edge-to-Edge Lines	Széltől szélig érő vonalak
 	Draw Filled Lines	Kitöltött vonalak rajzolása
+	Line Width	Vonalvastagság
 	Tick Values	Osztásértékek
 	Override Calculated Values	Számított értékek felülírása
 	Divisions	Osztások
@@ -1971,6 +1972,9 @@ file-filter	Templates	Sablonok
 	Show smooth color wheel	Folytonos színkör megjelenítése
 	Show segmented color wheel	Szegmentált színkör megjelenítése
 	Show color bars	Színsávok megjelenítése
+	Add Color Tool	Szín hozzáadása eszköz
+	Remove Color Tool	Szín eltávolítása eszköz
+	Remove Color	Szín eltávolítása
 	Find the selected colors in the artwork	A kijelölt színek keresése a grafikában
 	Harmony Sets	Harmóniakészletek
 	HDTV 1080p	HDTV 1080p
@@ -2371,6 +2375,8 @@ file-filter	Templates	Sablonok
 	Lasso Tool	Lasszó
 	Enclosing Lasso Tool	Körülzáró lasszó
 	Enclosing Lasso	Körülzáró lasszó
+	Polygonal Lasso Tool	Sokszöglasszó
+	Polygonal Lasso	Sokszöglasszó
 	Last	Utolsó
 	Last commit	Utolsó commit
 	Last Effect: {name}	Legutóbbi effektus: {name}
@@ -7435,6 +7441,22 @@ breakText	Glyphs	Glifák
 	Remove Gaps	Hézagok eltávolítása
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ez túl sok darabot adna (legfeljebb 100000): hosszabbítsa meg a szaggatásokat
 @msg	select paths, or segments, to divide	jelöljön ki felosztandó útvonalakat vagy szakaszokat
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Közös érintők…
+	Common Tangents	Közös érintők
+	Tangents	Érintők
+	Centerline	Középvonal
+	External	Külső
+	Internal	Belső
+@msg	select two closed paths	jelöljön ki két zárt útvonalat
+@msg	a selected path is open	egy kijelölt útvonal nyitott
+@msg	a selected path is not convex	egy kijelölt útvonal nem konvex
+@msg	a selected path has no area	egy kijelölt útvonalnak nincs területe
+@msg	a selected path has more than 10000 segments	egy kijelölt útvonalnak több mint 10000 szakasza van
+@msg	the two paths have the same outline	a két útvonal körvonala azonos
+@msg	One path lies inside the other, so they have no common tangents	Az egyik útvonal a másikon belül van, így nincsenek közös érintőik
+@msg	The paths overlap, so they have no internal tangents	Az útvonalak átfedik egymást, így nincsenek belső érintőik
+@msg	One path lies inside the other, so they have no internal tangents	Az egyik útvonal a másikon belül van, így nincsenek belső érintőik
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Szaggatások kibontása útvonalakká
 @msg	select paths with dashed strokes to expand	jelöljön ki szaggatott körvonalú útvonalakat a kibontáshoz
@@ -7736,6 +7758,8 @@ breakText	Glyphs	Glifák
 @msg	No bridge of this width fits across the selected art	Ilyen széles híd nem fér el a kijelölt grafikán
 @msg	Some islands could not be joined to the area around the art	Egyes szigeteket nem sikerült összekötni a grafikát körülvevő területtel
 @msg	`width` must be from {lo} to {hi} pt	A `width` értéke {lo} és {hi} pt között lehet
+@msg	`angle` must be from -180 to 180 degrees	Az `angle` értéke -180 és 180 fok között lehet
+@msg	`roundness` must be from 1 to 100%	A `roundness` értéke 1 és 100% között lehet
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`: 1 és {MAX_BRIDGES_PER_ISLAND} közötti egész szám kell
 	Weed Box and Lines…	Gyomláló keret és vonalak…
 	Weed Box and Lines	Gyomláló keret és vonalak

@@ -1391,6 +1391,7 @@ font-technology	Variable	Değişken
 	Connect Data Points	Veri Noktalarını Bağla
 	Edge-to-Edge Lines	Kenardan Kenara Çizgiler
 	Draw Filled Lines	Dolgulu Çizgiler Çiz
+	Line Width	Çizgi Genişliği
 	Tick Values	Onay İşareti Değerleri
 	Override Calculated Values	Hesaplanan Değerleri Geçersiz Kıl
 	Divisions	Bölümler
@@ -1478,6 +1479,9 @@ font-technology	Variable	Değişken
 	Show smooth color wheel	Kesintisiz renk tekerleğini göster
 	Show segmented color wheel	Bölümlü renk tekerleğini göster
 	Show color bars	Renk çubuklarını göster
+	Add Color Tool	Renk Ekle aracı
+	Remove Color Tool	Renk Kaldır aracı
+	Remove Color	Rengi kaldır
 	Find the selected colors in the artwork	Seçili renkleri resimde bul
 	Harmony Sets	Armoni Setleri
 	Height	Yükseklik
@@ -1724,6 +1728,8 @@ font-technology	Variable	Değişken
 	Lasso Tool	Kement Aracı
 	Enclosing Lasso Tool	Çevreleyen Kement Aracı
 	Enclosing Lasso	Çevreleyen Kement
+	Polygonal Lasso Tool	Çokgen Kement Aracı
+	Polygonal Lasso	Çokgen Kement
 	Last Effect: {name}	Son Etki: {name}
 	Last Effect: {}	Son Etki: {}
 	Last Effect…	Son Etki…
@@ -9330,6 +9336,22 @@ breakText	Glyphs	Glifler
 	Remove Gaps	Boşlukları Kaldır
 @msg	that makes too many pieces (at most 100000): make the dashes longer	bu çok fazla parça oluşturur (en fazla 100000): tireleri uzatın
 @msg	select paths, or segments, to divide	bölünecek yolları veya bölümleri seçin
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Ortak Teğetler…
+	Common Tangents	Ortak Teğetler
+	Tangents	Teğetler
+	Centerline	Merkez Çizgisi
+	External	Dış
+	Internal	İç
+@msg	select two closed paths	iki kapalı yol seçin
+@msg	a selected path is open	seçili bir yol açık
+@msg	a selected path is not convex	seçili bir yol dışbükey değil
+@msg	a selected path has no area	seçili bir yolun alanı yok
+@msg	a selected path has more than 10000 segments	seçili bir yolun 10000'den fazla bölümü var
+@msg	the two paths have the same outline	iki yolun ana hattı aynı
+@msg	One path lies inside the other, so they have no common tangents	Bir yol diğerinin içinde, bu yüzden ortak teğetleri yok
+@msg	The paths overlap, so they have no internal tangents	Yollar örtüşüyor, bu yüzden iç teğetleri yok
+@msg	One path lies inside the other, so they have no internal tangents	Bir yol diğerinin içinde, bu yüzden iç teğetleri yok
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Tireleri Yollara Genişlet
 @msg	select paths with dashed strokes to expand	genişletilecek kesikli konturlu yolları seçin
@@ -9631,6 +9653,8 @@ breakText	Glyphs	Glifler
 @msg	No bridge of this width fits across the selected art	Bu genişlikte bir köprü seçili çizime sığmıyor
 @msg	Some islands could not be joined to the area around the art	Bazı adalar çizimin çevresindeki alana bağlanamadı
 @msg	`width` must be from {lo} to {hi} pt	`width` {lo} ile {hi} pt arasında olmalıdır
+@msg	`angle` must be from -180 to 180 degrees	`angle` -180 ile 180 derece arasında olmalıdır
+@msg	`roundness` must be from 1 to 100%	`roundness` %1 ile %100 arasında olmalıdır
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 ile {MAX_BRIDGES_PER_ISLAND} arasında bir tam sayı olmalıdır
 	Weed Box and Lines…	Ayıklama Kutusu ve Çizgileri…
 	Weed Box and Lines	Ayıklama Kutusu ve Çizgileri

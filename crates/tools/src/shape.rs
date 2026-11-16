@@ -5,7 +5,9 @@
 //! Illustrator). ↑/↓ during a polygon/star drag change the side/point count; during a star drag,
 //! Ctrl/Cmd keeps the inner radius where it is while the outer one follows the pointer, and Alt
 //! keeps the star's shoulders straight (#812). The start point and
-//! the dragged corner snap to Smart Guides ([`DrawSnap`]), hovering before the press too.
+//! the dragged corner snap to Smart Guides ([`DrawSnap`]), hovering before the press too. With Snap
+//! to Tangent on, a line pressed on one convex curved path and dragged near another lands on a
+//! common tangent of the two, both its ends moving to the touch points ([`TangentLine`]).
 //! Escape cancels the drag and puts back the options its keys and Ctrl/Cmd changed.
 //!
 //! The selection keeps its bounding box and its Live Shape widgets on show with the Rectangle,
@@ -26,7 +28,7 @@ use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use crate::bbox::{Handle, move_delta, rotate_for_drag, scale_for_drag};
 use crate::corners::{self, CornerDrag};
-use crate::guides::{DrawSnap, Leave, PointSnap, Targets, square};
+use crate::guides::{DrawSnap, Leave, PointSnap, TangentLine, Targets, square};
 use crate::pie::{self, PieDrag};
 use crate::select::{MoveSnap, handle_cursor, hit_center, is_area_type, matrix_json, rotate_zone, shown_box};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
@@ -106,6 +108,8 @@ pub struct ShapeTool {
     pub line_angle: f64,
     pub fill_line: bool,
     snap: DrawSnap,
+    /// Snap to Tangent for a line from one curve to another: both ends on a common tangent.
+    tangent_line: TangentLine,
     /// The options a drag's keys and Ctrl/Cmd change, as they were when the drag began: Escape
     /// puts them back.
     before_drag: Option<DragOptions>,
@@ -163,6 +167,7 @@ impl ShapeTool {
             inner: None,
             tangent_corner: None,
             snap: DrawSnap::default(),
+            tangent_line: TangentLine::default(),
             line_length: 100.0,
             line_angle: 0.0,
             fill_line: false,
@@ -581,6 +586,12 @@ impl Tool for ShapeTool {
                     return out;
                 }
                 let p = self.snap.press(cx, ev.pos, &[], None);
+                if self.id == "lineSegment" {
+                    // The pressed spot finds the curve; a press that snapped to an anchor, center
+                    // or crossing off that curve keeps the line's start there.
+                    let held = self.snap.snapped_to_point(cx, ev.pos, p).then_some(p);
+                    self.tangent_line.press(cx, ev.pos, held);
+                }
                 self.start = Some(p);
                 self.last = ev.pos;
                 self.began = false;
@@ -607,6 +618,10 @@ impl Tool for ShapeTool {
                     self.last = s + d;
                 }
                 space_moves(&mut s, &mut self.last, ev, self.began);
+                if ev.mods.space && self.began {
+                    // The start no longer lies on the pressed path.
+                    self.tangent_line.clear();
+                }
                 self.start = Some(s);
                 self.mods = ev.mods;
                 if self.id == "star" {
@@ -626,13 +641,25 @@ impl Tool for ShapeTool {
                     self.before_drag = Some(self.drag_options());
                     out.push(Action::Begin(self.label().into()));
                 }
-                let (c, v) = self.command_at(s, ev.pos, ev.mods, cx.constrain_angle);
+                // Snap to Tangent: a line pressed on one curve and ending near another moves both
+                // its ends onto a common tangent of the two, unless Shift, Alt or Space is held or
+                // an anchor or crossing nearer the pointer pulls it.
+                let tangent = if self.id == "lineSegment" && !(ev.mods.shift || ev.mods.alt || ev.mods.space) {
+                    let rival = self.snap.point_within_reach(cx, raw);
+                    self.tangent_line.snap(cx, raw, rival)
+                } else {
+                    self.tangent_line.drop_line();
+                    None
+                };
+                let (a, b) = tangent.unwrap_or((s, ev.pos));
+                let (c, v) = self.command_at(a, b, ev.mods, cx.constrain_angle);
                 out.push(Action::Preview(c, v));
                 out
             }
             PointerKind::Up => {
                 let Some(s) = self.start.take() else { return vec![] };
                 self.snap.clear();
+                self.tangent_line.clear();
                 self.inner = None;
                 self.before_drag = None;
                 if self.began {
@@ -706,6 +733,7 @@ impl Tool for ShapeTool {
                 self.restore_drag_options(o);
             }
             self.snap.clear();
+            self.tangent_line.clear();
             vec![Action::Cancel]
         } else {
             vec![]
@@ -754,7 +782,9 @@ impl Tool for ShapeTool {
             Some(WidgetDrag::Pie(d)) => return d.overlays(cx),
             None => {}
         }
-        let mut o = self.snap.guides().to_vec();
+        // A line on a common tangent shows that snap's guides, and its length and angle.
+        let tangent = self.tangent_line.line().filter(|_| self.start.is_some());
+        let mut o = if tangent.is_some() { self.tangent_line.guides(cx) } else { self.snap.guides().to_vec() };
         o.extend(self.guides.iter().cloned());
         if let Some((p, text)) = &self.measure {
             o.push(Overlay::Measure { p: *p, text: text.clone() });
@@ -762,7 +792,8 @@ impl Tool for ShapeTool {
         if let Some(s) = self.start.filter(|_| self.began && cx.measurement_labels) {
             let p = self.last + Vec2::new(cx.tol(12.0), cx.tol(12.0));
             let text = if self.id == "lineSegment" {
-                cx.segment_measure_label(s, self.last)
+                let (a, b) = tangent.unwrap_or((s, self.last));
+                cx.segment_measure_label(a, b)
             } else {
                 // A box's size as drawn (from its centre with Alt, square with Shift).
                 match self.id {

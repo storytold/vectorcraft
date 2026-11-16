@@ -780,6 +780,259 @@ fn line_segment_options_and_fill_line() {
     assert_eq!(t.command(a, b, Mods::default()).1["fill"], json!(true));
 }
 
+/// A document holding the closed paths `paths`, unselected.
+fn doc_with_paths(paths: Vec<vectorcraft_geom::PathData>) -> vectorcraft_doc::Document {
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    for (k, path) in paths.into_iter().enumerate() {
+        let id = d.alloc_id();
+        d.insert(Some(l), k, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+    }
+    d
+}
+
+/// The circle of radius `r` about `c`, as the Ellipse tool draws it.
+fn circle(c: Point, r: f64) -> vectorcraft_geom::PathData {
+    vectorcraft_geom::shapes::ellipse(Rect::new(c.x - r, c.y - r, c.x + r, c.y + r))
+}
+
+/// The ends of the line a Line Segment drag from `press` through `drag` to `to` (with `mods`)
+/// previews last, and the drag's actions.
+fn line_drag(c: &ToolContext, press: Point, drag: Point, to: Point, mods: Mods) -> ((Point, Point), Vec<Action>) {
+    let mut t = ShapeTool::new("lineSegment");
+    t.pointer(c, &PointerEvent::new(PointerKind::Down, press.x, press.y).with_mods(mods));
+    let mut all = t.pointer(c, &PointerEvent::new(PointerKind::Drag, drag.x, drag.y).with_mods(mods));
+    all.extend(t.pointer(c, &PointerEvent::new(PointerKind::Drag, to.x, to.y).with_mods(mods)));
+    let Some(Action::Preview(cmd, v)) = all.last().cloned() else { panic!("a preview: {all:?}") };
+    assert_eq!(cmd, "shape.line");
+    let f = |k: &str| v[k].as_f64().unwrap();
+    let line = (Point::new(f("x1"), f("y1")), Point::new(f("x2"), f("y2")));
+    all.extend(t.pointer(c, &PointerEvent::new(PointerKind::Up, to.x, to.y).with_mods(mods)));
+    (line, all)
+}
+
+/// Snap to Tangent: a line pressed on one circle and dragged near another lands on a common
+/// tangent of the two, both ends moving to where it touches them. Near the second circle's top it
+/// is the outer tangent, near its bottom left the one crossing between them, each against the
+/// closed form (the drawn circles are within 0.03% of round). The guides show the line and a
+/// "tangent" label at each end, and the length label measures the tangent line.
+#[test]
+fn a_line_from_one_circle_to_another_lands_on_their_common_tangent() {
+    let (c1, r1, c2, r2) = (Point::new(100.0, 250.0), 40.0, Point::new(300.0, 250.0), 60.0);
+    let d = doc_with_paths(vec![circle(c1, r1), circle(c2, r2)]);
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    // A drawn circle's radius is off by up to 0.03%, which moves the touch points along the line by
+    // up to about 0.1 pt here; the line's distance from each center stays within 0.03 pt.
+    let near = |a: Point, b: Point| (a - b).hypot() < 0.15;
+    let off_by = |(a, b): (Point, Point), c: Point| ((b - a).cross(c - a) / (b - a).hypot()).abs();
+    let touches = |line: (Point, Point)| (off_by(line, c1) - r1).abs() < 0.03 && (off_by(line, c2) - r2).abs() < 0.03;
+    // A normal n with n · (c2 - c1) / |c2 - c1| = k: the line touches the first circle at
+    // c1 + r1 n, and the second at c2 + r2 n (outer, k = (r1 - r2) / d) or c2 - r2 n (crossing,
+    // k = (r1 + r2) / d).
+    let normal = |k: f64, up: bool| Vec2::new(k, if up { -1.0 } else { 1.0 } * (1.0 - k * k).sqrt());
+    let outer = normal((r1 - r2) / 200.0, true);
+    let (on_a, on_b) = (c1 + outer * r1, c2 + outer * r2);
+    let press = Point::new(100.0, 210.0);
+    let ((a, b), actions) = line_drag(&c, press, Point::new(200.0, 200.0), on_b + Vec2::new(0.5, 0.7), Mods::default());
+    assert!(near(a, on_a) && near(b, on_b) && touches((a, b)), "{a:?} {b:?}, want {on_a:?} {on_b:?}");
+    // One gesture: one undo step.
+    assert_eq!(actions.iter().filter(|a| matches!(a, Action::Begin(_))).count(), 1, "{actions:?}");
+    assert_eq!(actions.last(), Some(&Action::Commit));
+    let crossing = normal((r1 + r2) / 200.0, false);
+    let (on_a, on_b) = (c1 + crossing * r1, c2 - crossing * r2);
+    let ((a, b), _) = line_drag(&c, press, Point::new(200.0, 260.0), on_b + Vec2::new(-0.6, 0.4), Mods::default());
+    assert!(near(a, on_a) && near(b, on_b) && touches((a, b)), "{a:?} {b:?}, want {on_a:?} {on_b:?}");
+    // The guides and the length label while dragging.
+    let mut t = ShapeTool::new("lineSegment");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, press.x, press.y));
+    let to = on_b + Vec2::new(-0.6, 0.4);
+    t.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x, to.y));
+    let o = t.overlays(&c);
+    let tangents: Vec<Point> = o
+        .iter()
+        .filter_map(|o| match o {
+            Overlay::Label { p, text, .. } if text == "tangent" => Some(*p),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(tangents.len(), 2, "{o:?}");
+    assert!(near(tangents[0], on_a) && near(tangents[1], on_b), "{o:?}");
+    let (a, b) = t.tangent_line.line().unwrap();
+    assert!(o.iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &c.segment_measure_label(a, b))), "{o:?}");
+    // Escape ends it.
+    assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    assert!(t.tangent_line.line().is_none() && t.overlays(&c).is_empty());
+}
+
+/// The tangent of a turned ellipse and a circle, against the ellipse's own closed form: the
+/// support value of the ellipse x = c + M u (|u| = 1) along n is c · n + |Mᵀ n|, touched at
+/// c + M Mᵀ n / |Mᵀ n|; the outer tangents are the n where it equals the circle's c₂ · n + r.
+#[test]
+fn a_line_from_a_turned_ellipse_lands_on_its_tangent_with_a_circle() {
+    let ce = Point::new(100.0, 250.0);
+    let turn = Affine::rotate_about(30f64.to_radians(), ce);
+    let ellipse = vectorcraft_geom::shapes::ellipse(Rect::new(40.0, 220.0, 160.0, 280.0)).transformed(turn);
+    let (c2, r2) = (Point::new(320.0, 260.0), 40.0);
+    let d = doc_with_paths(vec![ellipse, circle(c2, r2)]);
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    // M maps the unit circle onto the ellipse's axes: 60 and 30 long, turned 30°.
+    let (cos, sin) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
+    let m = [[60.0 * cos, -30.0 * sin], [60.0 * sin, 30.0 * cos]];
+    let mt_n = |n: Vec2| Vec2::new(m[0][0] * n.x + m[1][0] * n.y, m[0][1] * n.x + m[1][1] * n.y);
+    let g = |a: f64| {
+        let n = Vec2::new(a.cos(), a.sin());
+        ce.to_vec2().dot(n) + mt_n(n).hypot() - c2.to_vec2().dot(n) - r2
+    };
+    // The roots of g over the angle, by sampling and bisection; the one with n pointing up.
+    let mut roots = vec![];
+    let steps = 3600;
+    for k in 0..steps {
+        let (mut lo, mut hi) = (k as f64 * std::f64::consts::TAU / steps as f64, (k + 1) as f64 * std::f64::consts::TAU / steps as f64);
+        if g(lo).signum() == g(hi).signum() {
+            continue;
+        }
+        for _ in 0..80 {
+            let mid = (lo + hi) / 2.0;
+            if g(mid).signum() == g(lo).signum() { lo = mid } else { hi = mid }
+        }
+        roots.push(lo);
+    }
+    let n = roots.iter().map(|a| Vec2::new(a.cos(), a.sin())).find(|n| n.y < 0.0).unwrap();
+    let w = mt_n(n);
+    let on_a = ce + Vec2::new(m[0][0] * w.x + m[0][1] * w.y, m[1][0] * w.x + m[1][1] * w.y) / w.hypot();
+    let on_b = c2 + n * r2;
+    // The press on the ellipse's turned top anchor.
+    let press = turn * Point::new(100.0, 220.0);
+    let ((a, b), _) = line_drag(&c, press, Point::new(200.0, 200.0), on_b + Vec2::new(0.4, -0.5), Mods::default());
+    assert!((a - on_a).hypot() < 0.05 && (b - on_b).hypot() < 0.05, "{a:?} {b:?}, want {on_a:?} {on_b:?}");
+}
+
+/// The line keeps its start where it was pressed, as before, when Snap to Tangent is off, Smart
+/// Guides are off, Shift or Alt is held, or the pressed path bends inward somewhere (it has no
+/// tangent of this kind). Where the tangent touches the second circle at one of its anchors, the
+/// tangent still wins over that anchor.
+#[test]
+fn a_line_keeps_its_start_without_a_tangent_snap() {
+    use vectorcraft_geom::{BezPath, PathData};
+    let (c1, c2, r) = (Point::new(100.0, 250.0), Point::new(300.0, 250.0), 50.0);
+    let d = doc_with_paths(vec![circle(c1, r), circle(c2, r)]);
+    let (s, p) = (Selection::default(), paint());
+    let on = cx(&d, &s, &p);
+    // The pointer next to the second circle's top anchor, where the outer tangent touches it.
+    let to = Point::new(300.6, 200.4);
+    // A press on the first circle 30° round from its top, away from its anchors.
+    let pressed = c1 + Vec2::new(r * 0.5, -r * 3f64.sqrt() / 2.0);
+    // With Snap to Tangent on, the start moves to the first circle's top.
+    let ((a, b), _) = line_drag(&on, pressed, Point::new(200.0, 190.0), to, Mods::default());
+    assert!((a - Point::new(100.0, 200.0)).hypot() < 0.05 && (b - Point::new(300.0, 200.0)).hypot() < 0.05, "{a:?} {b:?}");
+    let off = [ToolContext { snap_tangent: false, ..cx(&d, &s, &p) }, ToolContext { smart_guides: false, ..cx(&d, &s, &p) }];
+    for c in &off {
+        let ((a, _), _) = line_drag(c, pressed, Point::new(200.0, 190.0), to, Mods::default());
+        assert!((a - pressed).hypot() < 0.05, "{a:?}");
+    }
+    for mods in [Mods { shift: true, ..Mods::default() }, Mods { alt: true, ..Mods::default() }] {
+        let ((a, b), _) = line_drag(&on, pressed, Point::new(200.0, 190.0), to, mods);
+        // Alt draws the line from its middle.
+        let start = if mods.alt { a.midpoint(b) } else { a };
+        assert!((start - pressed).hypot() < 0.05, "{a:?} {b:?}");
+    }
+    // Space moves the line being drawn, its start off the pressed circle: the snap lets go.
+    let mut t = ShapeTool::new("lineSegment");
+    let space = Mods { space: true, ..Mods::default() };
+    t.pointer(&on, &PointerEvent::new(PointerKind::Down, pressed.x, pressed.y));
+    t.pointer(&on, &PointerEvent::new(PointerKind::Drag, 200.0, 170.0));
+    t.pointer(&on, &PointerEvent::new(PointerKind::Drag, 210.0, 160.0).with_mods(space));
+    let a = t.pointer(&on, &PointerEvent::new(PointerKind::Drag, to.x, to.y));
+    let Some(Action::Preview(_, v)) = a.last() else { panic!("a preview: {a:?}") };
+    let start = Point::new(v["x1"].as_f64().unwrap(), v["y1"].as_f64().unwrap());
+    assert!((start - (pressed + Vec2::new(10.0, -10.0))).hypot() < 1.0, "{start:?}");
+    // A crescent: closed and curved, but its lower side bends inward. The press on its top
+    // keeps its start.
+    let mut bp = BezPath::new();
+    bp.move_to((60.0, 250.0));
+    bp.curve_to((60.0, 190.0), (140.0, 190.0), (140.0, 250.0));
+    bp.curve_to((120.0, 220.0), (80.0, 220.0), (60.0, 250.0));
+    bp.close_path();
+    let d = doc_with_paths(vec![PathData::from_bezpath(&bp), circle(c2, r)]);
+    let c = cx(&d, &s, &p);
+    let crest = Point::new(100.0, 205.0);
+    let ((a, _), _) = line_drag(&c, crest, Point::new(200.0, 190.0), to, Mods::default());
+    assert!((a - crest).hypot() < 1e-6, "{a:?}");
+}
+
+/// The upper outer common tangent of the circles about `c1` and `c2` with radii `r1` and `r2`
+/// (`c2` to the right): where it touches each.
+fn upper_outer_tangent(c1: Point, r1: f64, c2: Point, r2: f64) -> (Point, Point) {
+    let d = c2 - c1;
+    let u = d / d.hypot();
+    let k = (r1 - r2) / d.hypot();
+    // n · u = k, with n pointing up (y down).
+    let n = u * k + Vec2::new(u.y, -u.x) * (1.0 - k * k).sqrt();
+    (c1 + n * r1, c2 + n * r2)
+}
+
+/// The pointer only has to come near the second path's outline: anywhere along it, the line takes
+/// the tangent whose touch point is nearest the pointer, here one about 30 pt away. A press on a
+/// straight side of a convex path with curves (a rounded rectangle's top edge) moves the start
+/// onto the corner the tangent touches.
+#[test]
+fn a_line_near_the_second_path_takes_the_tangent_touching_it_nearest() {
+    let (c1, r1, c2, r2) = (Point::new(100.0, 250.0), 40.0, Point::new(300.0, 250.0), 60.0);
+    let d = doc_with_paths(vec![circle(c1, r1), circle(c2, r2)]);
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    let (on_a, on_b) = upper_outer_tangent(c1, r1, c2, r2);
+    // On the second circle's outline, 25° round from its top.
+    let to = c2 + Vec2::new(r2 * 25f64.to_radians().sin(), -r2 * 25f64.to_radians().cos());
+    assert!((to - on_b).hypot() > 25.0);
+    let ((a, b), _) = line_drag(&c, Point::new(100.0, 210.0), Point::new(200.0, 200.0), to, Mods::default());
+    assert!((a - on_a).hypot() < 0.15 && (b - on_b).hypot() < 0.15, "{a:?} {b:?}, want {on_a:?} {on_b:?}");
+
+    // A rounded rectangle whose top right corner is a quarter circle of radius 20 about (140, 220).
+    let rounded = vectorcraft_geom::shapes::rounded_rectangle(Rect::new(40.0, 200.0, 160.0, 300.0), 20.0);
+    let (c2, r2) = (Point::new(320.0, 260.0), 40.0);
+    let d = doc_with_paths(vec![rounded, circle(c2, r2)]);
+    let c = cx(&d, &s, &p);
+    let (on_a, on_b) = upper_outer_tangent(Point::new(140.0, 220.0), 20.0, c2, r2);
+    let press = Point::new(90.0, 200.0);
+    let ((a, b), _) = line_drag(&c, press, Point::new(200.0, 200.0), Point::new(320.0, 220.5), Mods::default());
+    assert!((a - on_a).hypot() < 0.15 && (b - on_b).hypot() < 0.15, "{a:?} {b:?}, want {on_a:?} {on_b:?}");
+}
+
+/// No tangent snap when the second path bends inward somewhere (a crescent), or when the press
+/// snapped to an anchor of other art lying beside the first circle: the start stays where the
+/// press put it.
+#[test]
+fn a_line_to_a_crescent_or_from_an_anchor_beside_the_curve_keeps_its_start() {
+    use vectorcraft_geom::{BezPath, PathData};
+    let (c1, r) = (Point::new(100.0, 250.0), 50.0);
+    let mut bp = BezPath::new();
+    bp.move_to((260.0, 250.0));
+    bp.curve_to((260.0, 190.0), (340.0, 190.0), (340.0, 250.0));
+    bp.curve_to((320.0, 220.0), (280.0, 220.0), (260.0, 250.0));
+    bp.close_path();
+    let d = doc_with_paths(vec![circle(c1, r), PathData::from_bezpath(&bp)]);
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    let pressed = c1 + Vec2::new(r * 0.5, -r * 3f64.sqrt() / 2.0);
+    // Beside the crescent's top, which lies at (300, 205).
+    let to = Point::new(300.4, 205.3);
+    let ((a, b), _) = line_drag(&c, pressed, Point::new(200.0, 190.0), to, Mods::default());
+    assert!((a - pressed).hypot() < 0.05 && (b - to).hypot() < 1.0, "{a:?} {b:?}");
+
+    // A square whose corner (99, 199) lies about 1 pt outside the first circle's top; a second
+    // circle to the right. The press snaps to that corner and the line starts there.
+    let (c2, r2) = (Point::new(300.0, 250.0), 50.0);
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(80.0, 180.0, 99.0, 199.0));
+    let d = doc_with_paths(vec![circle(c1, r), square, circle(c2, r2)]);
+    let c = cx(&d, &s, &p);
+    let corner = Point::new(99.0, 199.0);
+    let ((a, _), _) = line_drag(&c, Point::new(99.3, 199.3), Point::new(200.0, 190.0), Point::new(300.6, 200.4), Mods::default());
+    assert!((a - corner).hypot() < 1e-6, "{a:?}");
+}
+
 /// #5477: with a shape tool, a drag on a selected live rectangle's corner widget rounds its
 /// corners (one undo step) and a drag on a live ellipse's pie widget sets its pie angle, as with
 /// the Selection tool; the pointer over a widget is the Selection tool's. A press anywhere else, or

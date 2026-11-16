@@ -1453,6 +1453,7 @@ file-filter	Templates	範本
 	Connect Data Points	連接資料點
 	Edge-to-Edge Lines	邊到邊線條
 	Draw Filled Lines	繪製填色線條
+	Line Width	線寬
 	Tick Values	刻度值
 	Override Calculated Values	覆寫計算值
 	Divisions	刻度數
@@ -1552,6 +1553,9 @@ file-filter	Templates	範本
 	Show smooth color wheel	顯示平滑色輪
 	Show segmented color wheel	顯示分段色輪
 	Show color bars	顯示顏色條
+	Add Color Tool	新增顏色工具
+	Remove Color Tool	移除顏色工具
+	Remove Color	移除顏色
 	Find the selected colors in the artwork	在圖稿中尋找所選顏色
 	Harmony Sets	色彩調和組
 	Height	高度
@@ -3045,6 +3049,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Lasso Tool	套索工具
 	Enclosing Lasso Tool	包圍套索工具
 	Enclosing Lasso	包圍套索
+	Polygonal Lasso Tool	多邊形套索工具
+	Polygonal Lasso	多邊形套索
 	Last Effect: {name}	最後一次效果：{name}
 	Last Effect: {}	上次效果：{}
 	Last Effect…	最後一次效果…
@@ -7100,6 +7106,22 @@ breakText	Glyphs	字符
 	Remove Gaps	移除間隙
 @msg	that makes too many pieces (at most 100000): make the dashes longer	這會產生過多片段（最多 100000 個）：請加長短破折號
 @msg	select paths, or segments, to divide	請選取要分割的路徑或線段
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	公切線…
+	Common Tangents	公切線
+	Tangents	切線
+	Centerline	中心線
+	External	外部
+	Internal	內部
+@msg	select two closed paths	請選取兩條封閉路徑
+@msg	a selected path is open	所選路徑是開放的
+@msg	a selected path is not convex	所選路徑不是凸形
+@msg	a selected path has no area	所選路徑沒有面積
+@msg	a selected path has more than 10000 segments	所選路徑的線段超過 10000 條
+@msg	the two paths have the same outline	兩條路徑的輪廓相同
+@msg	One path lies inside the other, so they have no common tangents	一條路徑位於另一條之內，因此它們沒有公切線
+@msg	The paths overlap, so they have no internal tangents	路徑互相重疊，因此它們沒有內公切線
+@msg	One path lies inside the other, so they have no internal tangents	一條路徑位於另一條之內，因此它們沒有內公切線
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	將短破折號展開為路徑
 @msg	select paths with dashed strokes to expand	請選取要展開的虛線筆畫路徑
@@ -7398,6 +7420,8 @@ breakText	Glyphs	字符
 @msg	No bridge of this width fits across the selected art	此寬度的連接橋無法放入所選圖稿
 @msg	Some islands could not be joined to the area around the art	部分孤島無法連接到圖稿周圍的區域
 @msg	`width` must be from {lo} to {hi} pt	`width` 必須介於 {lo} 到 {hi} pt 之間
+@msg	`angle` must be from -180 to 180 degrees	`angle` 必須介於 -180 到 180 度之間
+@msg	`roundness` must be from 1 to 100%	`roundness` 必須介於 1 到 100% 之間
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必須是介於 1 到 {MAX_BRIDGES_PER_ISLAND} 的整數
 	Weed Box and Lines…	除廢框與除廢線…
 	Weed Box and Lines	除廢框與除廢線

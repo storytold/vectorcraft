@@ -1439,6 +1439,8 @@ lighting	Light	Světlo
 	Lasso Tool	Nástroj Laso
 	Enclosing Lasso Tool	Nástroj obklopující laso
 	Enclosing Lasso	Obklopující laso
+	Polygonal Lasso Tool	Nástroj Mnohoúhelníkové laso
+	Polygonal Lasso	Mnohoúhelníkové laso
 	Lasso	Laso
 	Line Cut Tool	Nástroj Řez čarou
 	Line Graph Tool	Nástroj Spojnicový graf
@@ -3010,6 +3012,9 @@ digits	Malayalam	Malajálamské
 	Show smooth color wheel	Zobrazit plynulé barevné kolo
 	Show segmented color wheel	Zobrazit segmentované barevné kolo
 	Show color bars	Zobrazit barevné pruhy
+	Add Color Tool	Nástroj Přidat barvu
+	Remove Color Tool	Nástroj Odstranit barvu
+	Remove Color	Odstranit barvu
 	Find the selected colors in the artwork	Najít vybrané barvy v kresbě
 	Harmony Rules	Pravidla harmonie
 	Keep this row's colors (exclude)	Ponechat barvy tohoto řádku (vyloučit)
@@ -3738,6 +3743,7 @@ theme	Appearance	Motiv
 	Connect Data Points	Spojit datové body
 	Edge-to-Edge Lines	Čáry od okraje k okraji
 	Draw Filled Lines	Kreslit vyplněné čáry
+	Line Width	Šířka čáry
 	Tick Values	Hodnoty značek
 	Override Calculated Values	Přepsat vypočítané hodnoty
 	Divisions	Dílky
@@ -7450,6 +7456,22 @@ breakText	Glyphs	Glyfy
 	Remove Gaps	Odstranit mezery
 @msg	that makes too many pieces (at most 100000): make the dashes longer	tím vznikne příliš mnoho dílů (nejvýše 100000): prodlužte čárky
 @msg	select paths, or segments, to divide	vyberte cesty nebo segmenty k rozdělení
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Společné tečny…
+	Common Tangents	Společné tečny
+	Tangents	Tečny
+	Centerline	Středová čára
+	External	Vnější
+	Internal	Vnitřní
+@msg	select two closed paths	vyberte dvě uzavřené cesty
+@msg	a selected path is open	vybraná cesta je otevřená
+@msg	a selected path is not convex	vybraná cesta není konvexní
+@msg	a selected path has no area	vybraná cesta nemá žádnou plochu
+@msg	a selected path has more than 10000 segments	vybraná cesta má více než 10000 segmentů
+@msg	the two paths have the same outline	obě cesty mají stejný obrys
+@msg	One path lies inside the other, so they have no common tangents	Jedna cesta leží uvnitř druhé, takže nemají žádné společné tečny
+@msg	The paths overlap, so they have no internal tangents	Cesty se překrývají, takže nemají žádné vnitřní tečny
+@msg	One path lies inside the other, so they have no internal tangents	Jedna cesta leží uvnitř druhé, takže nemají žádné vnitřní tečny
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Rozložit čárky na cesty
 @msg	select paths with dashed strokes to expand	vyberte cesty s čárkovaným tahem k rozložení
@@ -7867,6 +7889,8 @@ breakText	Glyphs	Glyfy
 @msg	No bridge of this width fits across the selected art	Přes vybranou kresbu se nevejde žádný můstek této šířky
 @msg	Some islands could not be joined to the area around the art	Některé ostrůvky nebylo možné připojit k oblasti kolem kresby
 @msg	`width` must be from {lo} to {hi} pt	`width` musí být od {lo} do {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` musí být od -180 do 180 stupňů
+@msg	`roundness` must be from 1 to 100%	`roundness` musí být od 1 do 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` musí být celé číslo od 1 do {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Rámeček a linie pro vybírání…
 	Weed Box and Lines	Rámeček a linie pro vybírání
