@@ -2528,8 +2528,8 @@ font-technology	Variable	Variables
 	Outline Text	Vectoriser le texte
 	Outlines and Rules	Contours et filets
 	Output	Sortie
-	Output All Blacks Accurately	Rendre tous les noirs avec précision
-	Output All Blacks as Rich Black	Rendre tous les noirs en noir intense
+	Output All Blacks Accurately	Reproduire tous les noirs avec précision
+	Output All Blacks as Rich Black	Reproduire tous les noirs en noir intense
 	Output Black	Noir de sortie
 	Output condition:	Condition de sortie :
 	Output Intent	Mode de sortie
@@ -3260,7 +3260,7 @@ digits	Malayalam	Malayalam
 	Screen	Superposition
 	Screen (72 ppi)	Écran (72 ppp)
 	Screen Mode	Mode d’affichage
-	Screens	Écrans
+	Screens	Trames
 	Scribble…	Gribouillage…
 	Script / Brush	Manuscrite / Pinceau
 	Scripts	Scripts
