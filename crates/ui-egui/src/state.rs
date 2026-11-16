@@ -869,6 +869,9 @@ pub struct UiState {
     /// Trace object again at once. Off, the changes wait in the panel until Trace applies them.
     #[serde(default = "yes")]
     pub image_trace_preview: bool,
+    /// The Blend panel's Preview: whether panel adjustments preview live on the canvas.
+    #[serde(default = "yes")]
+    pub blend_preview: bool,
     /// Glyphs panel preview step, kept with the other panel choices. `0` is the default 30 pt
     /// cell; `1`..=`7` is a step from smallest to largest (`crates/ui-egui/src/panels/glyphs.rs`).
     #[serde(default, skip_serializing_if = "is_zero_u8")]
@@ -1275,6 +1278,7 @@ impl Default for UiState {
             symbols_view: Default::default(),
             image_trace_advanced: true,
             image_trace_preview: true,
+            blend_preview: true,
             glyphs_preview: 0,
             window: None,
         }

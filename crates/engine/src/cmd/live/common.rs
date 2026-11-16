@@ -170,11 +170,12 @@ pub(super) fn ease_param(p: &Value, cmd: &str, current: BlendEase) -> Result<Ble
     let kind = match p.get("easingType").filter(|v| !v.is_null()) {
         None => current.kind,
         Some(v) => match v.as_str() {
+            Some("linear") => BlendEaseType::Linear,
             Some("easeIn") => BlendEaseType::In,
             Some("easeOut") => BlendEaseType::Out,
             Some("easeInOut") => BlendEaseType::InOut,
             Some("easeOutIn") => BlendEaseType::OutIn,
-            _ => return Err(bad(cmd, "easingType must be easeIn, easeOut, easeInOut or easeOutIn")),
+            _ => return Err(bad(cmd, "easingType must be linear, easeIn, easeOut, easeInOut or easeOutIn")),
         },
     };
     Ok(BlendEase { kind, ramp: percent_param(p, cmd, "ramp", current.ramp * 100.0, 0.0)? / 100.0 })

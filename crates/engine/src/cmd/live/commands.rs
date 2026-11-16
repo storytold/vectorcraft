@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Blend"],
             Some("Cmd+Alt+B"),
-            "{ids?, steps?: n | distance?: pt | smooth?: bool, orientation?: page|path (default: the Blend Options set with nothing selected, else smooth colour and page), starts?: [anchor index | null, …] (per object of `ids`, else of the selection in paint order: the anchor of its first subpath the blend starts from; an open path's last anchor runs it the other way), spacing?: smooth|steps|distance (with value), value?: n, easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct (0..100), colorShift?: pct (-100..100; 0: even), createSpine?: auto|always|never (default: the mode object.blend.createSpine sets; never: a blend without a spine, which takes no easing)} blend the selected objects (paint order) into a live blend; a blend among them takes the others in as more key objects (keeping its options, name, transparency and whether it has a spine) instead of nesting → {id}",
+            "{ids?, steps?: n | distance?: pt | smooth?: bool, orientation?: page|path (default: the Blend Options set with nothing selected, else smooth colour and page), starts?: [anchor index | null, …] (per object of `ids`, else of the selection in paint order: the anchor of its first subpath the blend starts from; an open path's last anchor runs it the other way), spacing?: smooth|steps|distance (with value), value?: n, easingType?: linear|easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct (0..100), colorShift?: pct (-100..100; 0: even), createSpine?: auto|always|never (default: the mode object.blend.createSpine sets; never: a blend without a spine, which takes no easing)} blend the selected objects (paint order) into a live blend; a blend among them takes the others in as more key objects (keeping its options, name, transparency and whether it has a spine) instead of nesting → {id}",
             has_doc,
             blend_make
         ),
@@ -36,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Options…",
             ["Object", "Blend"],
             None,
-            "{spacing?: smooth|steps|distance, value?: n, steps?: n, distance?: pt, orientation?: page|path, smooth?: bool, easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct} set the options of the selected blends; easingType chooses the distribution, ramp sets its strength (0..100; 0 = even), colorShift (-100..100; 0 = even) shifts colours independently of shape/position easing (omitted ones keep their value; out of range is an error); with no blend selected, the options new blends start with (spacing and orientation only; a tool setting, not an undo step) → {defaults?: true}",
+            "{spacing?: smooth|steps|distance, value?: n, steps?: n, distance?: pt, orientation?: page|path, smooth?: bool, easingType?: linear|easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct} set the options of the selected blends; easingType chooses the distribution, ramp sets its strength (0..100; 0 = even), colorShift (-100..100; 0 = even) shifts colours independently of shape/position easing (omitted ones keep their value; out of range is an error); with no blend selected, the options new blends start with (spacing and orientation only; a tool setting, not an undo step) → {defaults?: true}",
             always,
             blend_options
         ),
@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Easing",
             [],
             None,
-            "{id? (default: the first selected blend), easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct (0..100), colorShift?: pct (-100..100)} set one blend's easing and color shift, as the blend widgets on the canvas do; omitted ones keep their value. easingType and ramp need a blend whose steps follow a spine (a replaced or edited spine, or Align to Path); a blend made without a spine takes them once Replace Spine has given it one; out of range, a hidden or locked blend and a blend with no spine are errors. A value that changes nothing records no undo step → {id, easingType, ramp, colorShift, changed}",
+            "{id? (default: the first selected blend), easingType?: linear|easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct (0..100), colorShift?: pct (-100..100)} set one blend's easing and color shift, as the blend widgets on the canvas do; omitted ones keep their value. easingType and ramp need a blend whose steps follow a spine (a replaced or edited spine, or Align to Path); a blend made without a spine takes them once Replace Spine has given it one; out of range, a hidden or locked blend and a blend with no spine are errors. A value that changes nothing records no undo step → {id, easingType, ramp, colorShift, changed}",
             has_doc,
             blend_set_easing
         ),
@@ -90,7 +90,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Info",
             [],
             None,
-            "{} the options of the first selected blend, else those new blends start with → {target: blend|defaults, id?, spacing: smooth|steps|distance, steps, distance, orientation: page|path, easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct, keys?: [ids], starts?: [anchor|null], hasSpine?: false for a blend made without a spine (no `spine` then), spine?: {anchors: [{x, y, in: [x, y], out: [x, y]}], closed, keyAnchors: [anchor each key sits on] | null (keys spread evenly: a spine from Replace Spine), explicit: false for the straight lines between the key centres}}",
+            "{} the options of the first selected blend, else those new blends start with → {target: blend|defaults, id?, spacing: smooth|steps|distance, steps, distance, orientation: page|path, easingType?: linear|easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct, keys?: [ids], starts?: [anchor|null], hasSpine?: false for a blend made without a spine (no `spine` then), spine?: {anchors: [{x, y, in: [x, y], out: [x, y]}], closed, keyAnchors: [anchor each key sits on] | null (keys spread evenly: a spine from Replace Spine), explicit: false for the straight lines between the key centres}}",
             always,
             blend_info
         ),

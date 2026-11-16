@@ -66,6 +66,15 @@ fn spacing_params(mode: &str, steps: f64, distance: f64) -> Value {
     }
 }
 
+#[derive(Clone, Default)]
+struct PendingEase {
+    doc_uid: Option<u64>,
+    id: Option<u64>,
+    easing_type: Option<String>,
+    ramp: Option<f64>,
+    color_shift: Option<f64>,
+}
+
 /// Spacing and Orientation, as `object.blend.info` reports them; a change runs
 /// `object.blend.options`.
 fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -75,26 +84,26 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     let steps = info["steps"].as_f64().unwrap_or(5.0);
     let distance = info["distance"].as_f64().unwrap_or(10.0);
     let path = info["orientation"] == "path";
-    let mut change = None;
+    let mut spacing_change = None;
     let shown = SPACING.iter().find(|(v, _)| *v == mode).map_or(SPACING[0].1, |(_, l)| l);
     let labels = SPACING.map(|(_, l)| l);
     widgets::label_row(ui, tl!("Spacing:"), LABEL_W, |ui| {
         let width = ui.available_width().max(FIELD_W);
         if let Some((value, _)) = widgets::dropdown(ui, "blend-panel-spacing", shown, &labels, width).and_then(|i| SPACING.get(i)) {
-            change = Some(spacing_params(value, steps, distance));
+            spacing_change = Some(spacing_params(value, steps, distance));
         }
     });
     ui.horizontal(|ui| {
         ui.add_space(LABEL_W);
         if mode == "distance" {
             if let Some(d) = widgets::num_field(ui, "blend-panel-distance", Some(distance), unit, FIELD_W) {
-                change = Some(spacing_params("distance", steps, d));
+                spacing_change = Some(spacing_params("distance", steps, d));
             }
         } else {
             // Smooth Color picks the count itself: the field shows the steps, disabled.
             ui.add_enabled_ui(mode == "steps", |ui| {
                 if let Some(n) = widgets::range_field(ui, "blend-panel-steps", steps, 1.0..=1000.0, "", 0, FIELD_W) {
-                    change = Some(spacing_params("steps", n, distance));
+                    spacing_change = Some(spacing_params("steps", n, distance));
                 }
             });
         }
@@ -102,44 +111,117 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     widgets::label_row(ui, tl!("Orientation:"), LABEL_W, |ui| {
         for (value, along, tip) in [("page", false, tl!("Align to Page")), ("path", true, tl!("Align to Path"))] {
             if orientation_button(ui, along, path == along, tip) {
-                change = Some(json!({ "orientation": value }));
+                spacing_change = Some(json!({ "orientation": value }));
             }
         }
     });
+    if let Some(p) = spacing_change {
+        app.run("object.blend.options", p).ok();
+    }
+
     let selected = info["target"] == "blend";
+    let doc_uid = app.session.active().map(|d| d.uid);
+    let blend_id = info["id"].as_u64();
+    let mut pending = crate::panels::pstate::<PendingEase>(ui.ctx(), "blend-pending-ease");
+    if pending.doc_uid != doc_uid || pending.id != blend_id {
+        pending = PendingEase { doc_uid, id: blend_id, ..Default::default() };
+    }
+
+    let preview = app.ui.blend_preview;
+    if preview && selected {
+        let mut p = json!({});
+        if let Some(et) = pending.easing_type.take() {
+            p["easingType"] = json!(et);
+        }
+        if let Some(r) = pending.ramp.take() {
+            p["ramp"] = json!(r);
+        }
+        if let Some(cs) = pending.color_shift.take() {
+            p["colorShift"] = json!(cs);
+        }
+        if p.as_object().is_some_and(|o| !o.is_empty()) {
+            app.run("object.blend.options", p).ok();
+        }
+    }
+
     // Position easing needs a spine to run along: a replaced one, or Align to Path. A blend made
     // without a spine has none.
     let spined = info["hasSpine"] != false && (info["spine"]["explicit"] == true || info["orientation"] == "path");
     ui.add_enabled_ui(selected && spined, |ui| {
-        let modes = ["easeIn", "easeOut", "easeInOut", "easeOutIn"];
-        let labels = [tl!("Ease In"), tl!("Ease Out"), tl!("Ease In Out"), tl!("Ease Out In")];
-        let mode = info["easingType"].as_str().unwrap_or(modes[0]);
-        let index = modes.iter().position(|m| *m == mode).unwrap_or(0);
+        let modes = ["linear", "easeIn", "easeOut", "easeInOut", "easeOutIn"];
+        let labels = [tl!("Linear"), tl!("Ease In"), tl!("Ease Out"), tl!("Ease In Out"), tl!("Ease Out In")];
+        let current_mode = pending
+            .easing_type
+            .as_deref()
+            .or_else(|| info["easingType"].as_str())
+            .unwrap_or(modes[1]);
+        let index = modes.iter().position(|m| *m == current_mode).unwrap_or(1);
         widgets::label_row(ui, tl!("Type:"), LABEL_W, |ui| {
             if let Some(i) = widgets::dropdown(ui, "blend-panel-easing", labels[index], &labels, ui.available_width().max(FIELD_W))
                 && let Some(mode) = modes.get(i)
             {
-                change = Some(json!({"easingType": mode}));
+                if preview {
+                    app.run("object.blend.options", json!({"easingType": mode})).ok();
+                } else {
+                    pending.easing_type = Some(mode.to_string());
+                }
             }
         });
         widgets::label_row(ui, tl!("Ramp:"), LABEL_W, |ui| {
-            let mut ramp = info["ramp"].as_f64().unwrap_or(0.0);
-            if ui.add(egui::Slider::new(&mut ramp, 0.0..=100.0).suffix("%")).changed() {
-                change = Some(json!({"ramp": ramp}));
+            let mut ramp = pending
+                .ramp
+                .or_else(|| info["ramp"].as_f64().filter(|n| n.is_finite()))
+                .map_or(0.0, |n| n.clamp(0.0, 100.0));
+            if widgets::slider(ui, egui::Slider::new(&mut ramp, 0.0..=100.0).suffix("%").step_by(1.0)).changed() {
+                let clamped = ramp.clamp(0.0, 100.0);
+                if preview {
+                    app.run("object.blend.options", json!({"ramp": clamped})).ok();
+                } else {
+                    pending.ramp = Some(clamped);
+                }
             }
         });
     });
     ui.add_enabled_ui(selected, |ui| {
         widgets::label_row(ui, tl!("Shift:"), LABEL_W, |ui| {
-            let mut shift = info["colorShift"].as_f64().unwrap_or(0.0);
-            if ui.add(egui::Slider::new(&mut shift, -100.0..=100.0).suffix("%")).changed() {
-                change = Some(json!({"colorShift": shift}));
+            let mut shift = pending
+                .color_shift
+                .or_else(|| info["colorShift"].as_f64().filter(|n| n.is_finite()))
+                .map_or(0.0, |n| n.clamp(-100.0, 100.0));
+            if widgets::slider(ui, egui::Slider::new(&mut shift, -100.0..=100.0).suffix("%").step_by(1.0)).changed() {
+                let clamped = shift.clamp(-100.0, 100.0);
+                if preview {
+                    app.run("object.blend.options", json!({"colorShift": clamped})).ok();
+                } else {
+                    pending.color_shift = Some(clamped);
+                }
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.add_space(LABEL_W);
+            let cur_preview = app.ui.blend_preview;
+            if widgets::check(ui, tl!("Preview"), cur_preview, true) {
+                let next = !cur_preview;
+                app.ui.blend_preview = next;
+                if next {
+                    let mut p = json!({});
+                    if let Some(et) = pending.easing_type.take() {
+                        p["easingType"] = json!(et);
+                    }
+                    if let Some(r) = pending.ramp.take() {
+                        p["ramp"] = json!(r);
+                    }
+                    if let Some(cs) = pending.color_shift.take() {
+                        p["colorShift"] = json!(cs);
+                    }
+                    if p.as_object().is_some_and(|o| !o.is_empty()) {
+                        app.run("object.blend.options", p).ok();
+                    }
+                }
             }
         });
     });
-    if let Some(p) = change {
-        app.run("object.blend.options", p).ok();
-    }
+    crate::panels::set_pstate(ui.ctx(), "blend-pending-ease", pending);
 }
 
 /// Create Spine: whether new blends get a spine. It shows the setting new blends take, whatever is

@@ -2089,7 +2089,7 @@ fn set_ui(app: &mut VectorcraftApp, req: &ControlRequest) -> Outcome {
     let p = &req.params;
     let s = |k: &str| p.get(k).and_then(Value::as_str);
     // A flag of the wrong type is refused before anything is set.
-    let flags = ["rulers", "outline", "grid", "smartGuides", "boundingBox", "controlBar", "imageTracePreview"];
+    let flags = ["rulers", "outline", "grid", "smartGuides", "boundingBox", "controlBar", "imageTracePreview", "blendPreview"];
     if let Some(e) = flags.iter().find_map(|k| crate::menus::opt_bool(p, k).err()) {
         return err(e);
     }
@@ -2132,6 +2132,9 @@ fn set_ui(app: &mut VectorcraftApp, req: &ControlRequest) -> Outcome {
     }
     if let Some(v) = p.get("imageTracePreview").and_then(Value::as_bool) {
         r = app.run("imageTrace.preview", json!({"on": v}));
+    }
+    if let Some(v) = p.get("blendPreview").and_then(Value::as_bool) {
+        app.ui.blend_preview = v;
     }
     if p.get("closePanel").is_some() {
         app.ui.open_panel = None;

@@ -282,12 +282,18 @@ fn panel_easing_type_ramp_and_shift_edit_the_blend_and_undo() {
     let mut app = app();
     let id = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
     let mut f = Frames::new();
-    for label in ["Type:", "Ease In", "Ramp:", "Shift:"] {
+    for label in ["Type:", "Ease In", "Ramp:", "Shift:", "Preview"] {
         f.text(&mut app, label);
     }
     f.click_text(&mut app, "Ease In");
     f.click_text(&mut app, "Ease Out In");
     assert_eq!(spec(&app, id).ease.kind, vectorcraft_doc::BlendEaseType::OutIn);
+    f.click_text(&mut app, "Ease Out In");
+    f.click_text(&mut app, "Linear");
+    assert_eq!(spec(&app, id).ease.kind, vectorcraft_doc::BlendEaseType::Linear);
+    f.click_text(&mut app, "Linear");
+    f.click_text(&mut app, "Ease In");
+    assert_eq!(spec(&app, id).ease.kind, vectorcraft_doc::BlendEaseType::In);
     // Click each real slider: its command updates the engine, and Undo restores the old value.
     for (index, key) in [(0, "ramp"), (1, "colorShift")] {
         let out = f.run(&mut app, vec![]);
@@ -305,7 +311,58 @@ fn panel_easing_type_ramp_and_shift_edit_the_blend_and_undo() {
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(app.session.execute("object.blend.info", &json!({})).unwrap()[key], before);
     }
+    // Preview checkbox toggle: when Preview is off, slider changes do not apply to the document.
+    f.click_text(&mut app, "Preview");
+    assert!(!app.ui.blend_preview);
+    let before_shift = app.session.execute("object.blend.info", &json!({})).unwrap()["colorShift"].clone();
+    let out = f.run(&mut app, vec![]);
+    let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
+    let mut sliders: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Slider).collect();
+    sliders.sort_by(|a, b| a.1.bounds().unwrap().y0.total_cmp(&b.1.bounds().unwrap().y0));
+    let shift_slider = sliders[1];
+    let b = shift_slider.1.bounds().unwrap();
+    let at = pos2((b.x0 + 0.3 * (b.x1 - b.x0)) as f32, ((b.y0 + b.y1) * 0.5) as f32);
+    f.click(&mut app, at);
+    let after_shift = app.session.execute("object.blend.info", &json!({})).unwrap()["colorShift"].clone();
+    assert_eq!(after_shift, before_shift, "preview is off, no command runs to mutate the document");
+    f.click_text(&mut app, "Preview");
+    assert!(app.ui.blend_preview);
+    let applied_shift = app.session.execute("object.blend.info", &json!({})).unwrap()["colorShift"].clone();
+    assert_ne!(applied_shift, before_shift, "turning preview back on applies pending slider change");
+
     app.run("ui.blendOptions", json!({})).unwrap();
     let text = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
     assert!(!text.contains("Ease In:") && !text.contains("Ramp:") && !text.contains("Color Ease"), "{text}");
+}
+
+#[test]
+fn blend_panel_bidirectionally_syncs_with_on_canvas_widgets() {
+    let mut app = app();
+    let id = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
+
+    // 1. On-canvas widgets / engine commands update the active blend object's parameters
+    app.run("object.blend.setEasing", json!({"id": id.0, "easingType": "easeOut", "ramp": 75.0, "colorShift": 35.0})).unwrap();
+
+    // The panel reads from object.blend.info and reflects the values
+    let info = app.session.execute("object.blend.info", &json!({})).unwrap();
+    assert_eq!(info["easingType"], "easeOut");
+    assert_eq!(info["ramp"], 75.0);
+    assert_eq!(info["colorShift"], 35.0);
+
+    let mut f = Frames::new();
+    f.text(&mut app, "Ease Out");
+
+    // 2. The panel updates parameters -> active blend object and on-canvas widgets reflect them
+    f.click_text(&mut app, "Ease Out");
+    f.click_text(&mut app, "Linear");
+    assert_eq!(spec(&app, id).ease.kind, vectorcraft_doc::BlendEaseType::Linear);
+
+    let doc = &app.session.active().unwrap().doc;
+    let sel = &app.session.active().unwrap().selection;
+    let widgets = vectorcraft_tools::blendwidget::BlendWidget::of(doc, sel, 1.0, vectorcraft_geom::Vec2::new(0.0, -1.0));
+    assert_eq!(widgets.len(), 2);
+    assert_eq!(widgets[0].control, vectorcraft_tools::blendwidget::BlendControl::Appearance);
+    assert_eq!(widgets[0].value, 35.0); // Appearance (colorShift)
+    assert_eq!(widgets[1].control, vectorcraft_tools::blendwidget::BlendControl::Easing);
+    assert_eq!(widgets[1].value, 75.0); // Easing (ramp)
 }
