@@ -7553,11 +7553,25 @@ is placed as one). Off, each
 file is placed with the options last confirmed for its format. The default, and the options a file is placed with
 when the checkbox is off, are VectorCraft's own choices.
 
+A Shift-click with the loaded place cursor opens the current file's import options before it is placed, however the
+cursor was loaded (the Place dialog with Show Import Options on or off, or `file.place.queue`); OK places the file at
+the click, and the cursor goes on to the next file. The help page
+([Place multiple files](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf))
+describes a Shift-click on the file shown in the cursor as the way to change its import options. The rest are
+VectorCraft's own rules: with Show Import Options on, the Shift-click opens one dialog, not two; the dialog opens even
+when the cursor was loaded with `text`, `dxf`, `page`, `crop`, `layers`, `hiddenLayers` or `importSlices`, and a file
+whose format has no import options dialog in VectorCraft (a PNG image, a one-page PDF, a PSD file that is linked or
+has one layer and no slices) is placed as a click places it, with the options the cursor was loaded with; Cancel
+leaves the file unplaced, as for a click with Show Import Options on; a Shift-drag places at the dragged size, as a
+drag does. Over MCP the Shift-click is a `pointer_gesture` with `mods: {shift: true}`; the place tool's `file.place`
+then carries `showImportOptions: true`. Headless, where no dialog can open, it places the file as a click does.
+
 ```json
 {"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/photo.jpg","at":[300,200]}}}
 {"name":"run_command","arguments":{"command":"file.place","params":{"name":"logo.svg","dataBase64":"PHN2Zy…","rect":[0,0,100,100]}}}
 {"name":"run_command","arguments":{"command":"file.place.queue","params":{"paths":["/tmp/a.png","/tmp/b.pdf"]}}}
 {"name":"pointer_gesture","arguments":{"events":[{"kind":"down","x":40,"y":40},{"kind":"up","x":40,"y":40}]}}
+{"name":"pointer_gesture","arguments":{"mods":{"shift":true},"events":[{"kind":"down","x":40,"y":40},{"kind":"up","x":40,"y":40}]}}
 ```
 
 ## Copy and paste between documents
