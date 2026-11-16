@@ -17,21 +17,51 @@ pub enum Justify {
     JustifyAll,
 }
 
-/// Paragraph composer (Paragraph panel menu): how lines are broken.
+/// Paragraph composer (Paragraph panel menu): how lines are broken, and whether complex scripts
+/// (Indic, Arabic, Hebrew) are shaped. `SingleLine` and `EveryLine` are the Middle Eastern & South
+/// Asian composers: they shape complex scripts with the font's layout tables, as all type is set
+/// here, and are what documents saved before the four composers existed use. The `Standard`
+/// composers break lines the same way but set a complex script glyph by glyph as the font maps its
+/// characters, with no conjuncts, marks placed or joining forms: what fonts that keep a script's
+/// glyphs on Latin character codes (legacy ANSI Indic fonts) need.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Composer {
-    /// Break each line as soon as it is full.
+    /// Middle Eastern & South Asian Single-line Composer: break each line as soon as it is full.
     SingleLine,
-    /// Total fit over the whole paragraph (Illustrator's default): justified lines get even word
-    /// spacing, ragged lines an even rag.
+    /// Middle Eastern & South Asian Every-line Composer: total fit over the whole paragraph
+    /// (Illustrator's default): justified lines get even word spacing, ragged lines an even rag.
     #[default]
     EveryLine,
+    /// Standard Single-line Composer: [`Composer::SingleLine`]'s breaks, complex scripts not shaped.
+    StandardSingleLine,
+    /// Standard Every-line Composer: [`Composer::EveryLine`]'s breaks, complex scripts not shaped.
+    StandardEveryLine,
 }
 
 impl Composer {
     fn is_default(&self) -> bool {
         *self == Self::default()
+    }
+
+    /// Does this composer break lines one at a time (as opposed to a total fit)?
+    pub fn is_single_line(self) -> bool {
+        matches!(self, Self::SingleLine | Self::StandardSingleLine)
+    }
+
+    /// Does this composer shape complex scripts ([`Composer::SingleLine`], [`Composer::EveryLine`])?
+    pub fn shapes_complex_scripts(self) -> bool {
+        matches!(self, Self::SingleLine | Self::EveryLine)
+    }
+
+    /// The same shaping with the other line breaking (`single_line`: one line at a time).
+    pub fn with_breaking(self, single_line: bool) -> Self {
+        match (single_line, self.shapes_complex_scripts()) {
+            (true, true) => Self::SingleLine,
+            (true, false) => Self::StandardSingleLine,
+            (false, true) => Self::EveryLine,
+            (false, false) => Self::StandardEveryLine,
+        }
     }
 }
 
@@ -241,6 +271,9 @@ pub struct ParaStyle {
     /// dashes, two ellipses, two two-dot leaders, a vertical kana repeat mark's two halves). Kept
     /// with kinsoku None, where it has no effect. Off by default.
     pub bunri_kinshi: bool,
+    /// Kurikaeshi Moji Shori (Paragraph panel menu): a repeat mark (々, ゝ, ゞ, ヽ or ヾ) that starts
+    /// a line is drawn as the character it repeats, and the text keeps the mark. Off by default.
+    pub kurikaeshi_moji_shori: bool,
     /// Roman Hanging Punctuation (Paragraph panel menu): quotation marks, hyphens, full stops and
     /// commas starting or ending a line hang outside the margin, and asterisks, tildes, ellipses,
     /// dashes, colons and semicolons hang by half. East Asian punctuation hangs by burasagari.
@@ -345,6 +378,8 @@ struct ParaStyleFile {
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     bunri_kinshi: bool,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    kurikaeshi_moji_shori: bool,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     roman_hanging: bool,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     kashida: Kashida,
@@ -382,6 +417,7 @@ impl From<ParaStyle> for ParaStyleFile {
             kinsoku,
             kinsoku_type,
             bunri_kinshi,
+            kurikaeshi_moji_shori,
             roman_hanging,
             kashida,
             korean_line_break_anywhere,
@@ -409,6 +445,7 @@ impl From<ParaStyle> for ParaStyleFile {
             kinsoku,
             kinsoku_type,
             bunri_kinshi,
+            kurikaeshi_moji_shori,
             roman_hanging,
             kashida,
             korean_line_break_anywhere,
@@ -440,6 +477,7 @@ impl From<ParaStyleFile> for ParaStyle {
             kinsoku,
             kinsoku_type,
             bunri_kinshi,
+            kurikaeshi_moji_shori,
             roman_hanging,
             kashida,
             korean_line_break_anywhere,
@@ -466,6 +504,7 @@ impl From<ParaStyleFile> for ParaStyle {
             kinsoku,
             kinsoku_type,
             bunri_kinshi,
+            kurikaeshi_moji_shori,
             roman_hanging,
             kashida,
             korean_line_break_anywhere,

@@ -139,6 +139,57 @@ pub fn check_linked_scripts(cmd: &str, format: &str, st: &crate::DocState) -> Re
     Ok(())
 }
 
+/// The error for an SVG that would name a linked image's file outside the read roots.
+pub(crate) const IMAGE_OUTSIDE: &str = "a linked image file is outside the read roots";
+
+/// `cmd` may write `d`, the document an output of `st` writes (all of it, or the objects it
+/// exports), in format `format` (a format id) with options `p`: any format but SVG and SVGZ, and
+/// those too unless read roots are in force and the file would name a linked image's file outside
+/// them (a relative path taken from `st`'s folder; a URL is not checked). An `<image>` names the
+/// file with SVG Options › Images set to Link, and with Embed when the document holds no pixels for
+/// the image, for the images of the art each file draws (with chosen artboards, the art over each
+/// one; hidden layers and objects only with `hiddenLayers`, template layers and the opacity-mask
+/// and symbol editing layers never, opacity masks not with SVG Tiny 1.2, and objects with effects
+/// SVG has no filters for as the images the file draws of them), of the art the file draws for each
+/// placed document, and of the symbols, patterns and brushes that art uses; with
+/// Preserve Editing Capabilities, the native document the file carries names every linked file, the relative paths kept of them
+/// and each data set's image. The error names no file or folder.
+pub fn check_linked_images(cmd: &str, format: &str, st: &crate::DocState, d: &vectorcraft_doc::Document, p: &Value) -> Result<()> {
+    check_images_in(cmd, format, d, crate::cmd::links::LinkBase::of(st), p)
+}
+
+/// [`check_linked_images`] for `d`, a document whose links are looked for from `base` (the
+/// objects on the clipboard, looked for from the document they came from).
+pub(crate) fn check_images_in(cmd: &str, format: &str, d: &vectorcraft_doc::Document, base: crate::cmd::links::LinkBase, p: &Value) -> Result<()> {
+    if !matches!(format, "svg" | "svgz") || crate::file_access::current().is_none() {
+        return Ok(());
+    }
+    // Options that don't read as the encoder's choices count as Link, Preserve Editing, hidden
+    // layers kept and SVG 1.1: the encoder refuses them anyway.
+    let (link, preserve, hidden, tiny) = match super::svg::options_map(p) {
+        Ok(m) => {
+            let on = |k: &str| m.get(k).is_some_and(|v| v.as_bool() != Some(false));
+            let tiny = m.get("profile").and_then(Value::as_str) == Some("tiny12");
+            (m.get("images").is_some_and(|v| v.as_str() != Some("embed")), on("preserveEditing"), on("hiddenLayers"), tiny)
+        }
+        Err(_) => (true, true, true, false),
+    };
+    // The opacity-mask and symbol editing layers are never written.
+    let d = &*d.without_edit_modes();
+    let names = |d: &vectorcraft_doc::Document| crate::cmd::links::svg_names_hidden_image(d, base, link, hidden, tiny);
+    // The SVG draws the objects with effects it has no filters for as images of them, as the
+    // encoder and the clipboard prepare them.
+    let drawing_names = || {
+        let flat = crate::cmd::rasterfx::flatten_pixel_effects_for(d, !tiny);
+        let d = flat.as_ref().unwrap_or(d);
+        names(d) && super::svg::drawn(d, p).is_none_or(|files| files.iter().any(|f| names(f)))
+    };
+    if preserve && crate::cmd::links::names_hidden_file(d, base) || names(d) && drawing_names() {
+        return Err(bad(cmd, IMAGE_OUTSIDE));
+    }
+    Ok(())
+}
+
 /// `path` checked for writing against the automation roots in force.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn may_write(path: &str) -> Result<()> {

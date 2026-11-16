@@ -53,7 +53,7 @@ heic-rs = { version = "=0.1.4", default-features = false, features = ["std"], op
 flate2 = { workspace = true }
 chrono = { workspace = true }
 # The XML parts of Word documents placed as type (place/docx.rs).
-roxmltree = "0.21"
+craft-xml = { workspace = true }
 # The compound file that holds a Word 97-2003 document placed as type (place/doc.rs).
 cfb = "0.15"
 kurbo = { workspace = true }
