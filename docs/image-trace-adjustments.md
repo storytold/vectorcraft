@@ -139,19 +139,22 @@ area, and a light gray leaves 8 slivers of up to 21 pixels. An image with noise 
 pixels can still leave gray slivers along the disc.
 
 With sharp edges, a gray stroke two or three pixels wide beside black has no darker pixel next to it and
-stays gray, and so does a gray band along black. With edges blurred by 0.6 pixel, as by ordinary
-anti-aliasing, a gray band 3 to 8 pixels wide along black keeps at least 4 of every 5 of its pixels gray.
-On edges blurred by a pixel or more, gray near black loses pixels. A soft-edged gray band along black
-traces as black and white, with at most 1 of every 16 of its pixels left gray, when it is up to 4 pixels
-wide at blurs of 1.5 and 2 pixels, up to 3 pixels wide at a blur of 3 pixels, or 2 pixels wide at a blur
-of 1 pixel. A wider band loses part of its gray next to black, and one 8 pixels wide keeps at least half
-of it at blurs of 1 to 3 pixels. A light gray stroke 2 pixels wide, blurred by 1.5 pixels, keeps about 10
-of 34 pixels gray when it lies 2 pixels from black and about 25 when it lies 4 pixels away. It keeps all
-of them 6 or 8 pixels away, where the path toward black ends at the gray, before the white that lies
-between the stroke and black. A soft-edged gray stroke 2 or 3 pixels wide running straight out of black,
-blurred by 1 or 1.5 pixels, loses 3 or 4 of the 16 pixels nearest black. Blurred by 2 pixels, one 3
-pixels wide loses 2 or 3 of them, and one 2 pixels wide traces as black and white along its whole
-length. A soft-edged gray stroke about two pixels wide lying along black traces as black and white, and
+stays gray, and so does a gray band along black. The counts below are of pixel centers that trace gray. With
+edges blurred by 0.6 pixels, as by ordinary anti-aliasing,
+a gray band 3 to 8 pixels wide along black traces gray at no fewer than 4 of every 5 of its pixel
+centers. On edges blurred by a pixel or more, gray near black loses pixels. A soft-edged gray band along
+black traces as black and white, with gray at no more than 1 of every 16 of its pixel centers, when it is
+up to 4 pixels wide at blurs of 1.5 and 2 pixels, up to 3 pixels wide at a blur of 3 pixels, or 2 pixels
+wide at a blur of 1 pixel. A wider band loses part of its gray next to black. Bands 3 and 4 pixels wide
+blurred by 1 pixel trace gray at about 60 of their 336 pixel centers (over grays of 230, 200 and 128), bands 4
+pixels wide blurred by 3 pixels at about 39 of 192, and a band 8 pixels wide at no fewer than half of its
+pixel centers at blurs of 1 to 3 pixels. A light gray stroke 2 pixels wide, blurred by 1.5 pixels, traces
+gray at about 10 of the 34 pixel centers along its middle when it lies 2 pixels from black and at about 25
+when it lies 4 pixels away. At 6 or 8 pixels from black it traces gray at all 34: its pixels do not reach
+black in 5 steps and are not read as an edge of black and white. A soft-edged gray stroke 2 or 3 pixels
+wide running straight out of black, blurred by 1 or 1.5 pixels, loses 3 or 4 of the 16 pixel centers
+along its middle nearest black. Blurred by 2 pixels, one 3 pixels wide loses 2 or 3 of them, and one 2
+pixels wide traces as black and white along its whole length. A soft-edged gray stroke about two pixels wide lying along black traces as black and white, and
 one about three pixels wide lying along black can lose most or all of its gray when it is short (12
 pixels long or less). A line of gray one
 pixel wide between black and white stays gray when at least 13 of its pixels touch: such a line and a

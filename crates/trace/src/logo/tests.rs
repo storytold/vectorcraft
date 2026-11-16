@@ -1042,15 +1042,19 @@ fn blurred_black_edges_beside_gray_leave_no_gray_slivers() {
 /// 3 pixels wide and blurred by 3 pixels, or 2 pixels wide and blurred by 1 pixel: its pixels are
 /// reached from the disc and from the white through pixels that keep getting darker and lighter, as
 /// across a blurred black-to-white edge. A band 8 pixels wide keeps at least half of its gray at
-/// blurs of 1 to 3 pixels. With sharp edges every band stays gray, and with edges blurred by 0.6
-/// pixels a band 3 to 8 pixels wide keeps at least 4 of every 5 samples gray, and the bands 2 to 4
-/// pixels wide of the three grays keep about 306 of their 432 samples gray: beside a sharp edge, a
-/// path that comes to a pixel of the gray stops there.
+/// blurs of 1 to 3 pixels. The bands 3 and 4 pixels wide of the three grays, blurred by 1 pixel,
+/// keep about 60 of their 336 samples gray, and those 4 pixels wide, blurred by 3 pixels, about 39
+/// of 192. With sharp edges every band stays gray, and with edges blurred by 0.6 pixels a band 3 to
+/// 8 pixels wide keeps at least 4 of every 5 samples gray, and the bands 2 to 4 pixels wide of the
+/// three grays keep about 306 of their 432 samples gray: beside a sharp edge, a path that comes to a
+/// pixel of the gray stops there.
 #[test]
 fn a_soft_gray_band_along_black_traces_as_black_and_white() {
     const INK: [u8; 3] = [4, 4, 3];
-    // The samples of the bands 2 to 4 pixels wide blurred by 0.6 pixels traced gray, over the three grays.
-    let mut nearly_sharp = 0;
+    // The samples traced gray over the three grays: of the bands 2 to 4 pixels wide blurred by 0.6
+    // pixels, of the bands 3 and 4 pixels wide blurred by 1 pixel, and of the bands 4 pixels wide
+    // blurred by 3 pixels.
+    let (mut nearly_sharp, mut blur_one, mut blur_three) = (0, 0, 0);
     for gray in [[230u8, 230, 230], [200, 200, 200], [128, 128, 128]] {
         for blur in [0.0, 0.6, 1.0, 1.5, 2.0, 3.0] {
             for wide in [2u8, 3, 4, 8] {
@@ -1091,11 +1095,17 @@ fn a_soft_gray_band_along_black_traces_as_black_and_white() {
                     assert!(16 * kept <= all, "{what}");
                 } else if wide == 8 {
                     assert!(2 * kept >= all, "{what}");
+                } else if blur == 1.0 {
+                    blur_one += kept;
+                } else if blur == 3.0 {
+                    blur_three += kept;
                 }
             }
         }
     }
     assert!((300..=312).contains(&nearly_sharp), "bands 2 to 4 px wide blurred by 0.6 px: {nearly_sharp} of 432 samples traced gray");
+    assert!((56..=64).contains(&blur_one), "bands 3 and 4 px wide blurred by 1 px: {blur_one} of 336 samples traced gray");
+    assert!((36..=42).contains(&blur_three), "bands 4 px wide blurred by 3 px: {blur_three} of 192 samples traced gray");
 }
 
 /// A soft-edged gray spoke two or three pixels wide running straight out of a black disc, blurred

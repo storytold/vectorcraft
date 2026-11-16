@@ -361,34 +361,35 @@ fn across_edge(
         let (Some(q), Some(cv)) = (pix.get(j), classes.get(c)) else { return false };
         (0..4).map(|k| (f64::from(q[k]) - cv[k]).powi(2)).sum::<f64>().sqrt() < PURE
     };
-    // A path from `i` toward `a` (`toward` -1) or `b` (`toward` 1): each step goes to the neighbor
-    // near the line that lies farthest that way, while it lies farther than the pixel before (the
-    // first step is taken whatever `i` itself is). `None` when it does not get more than `PURE` past
-    // `tc` in [`WALK`] steps; otherwise the steps to the first pixel past it that stands for `class`
-    // (`stands_for`), or `NEARBY + 1`. With `halt`, the path also ends at a pixel within `PURE` of
-    // that class that it comes to before it gets past `tc`. Also the pixel of the first step.
+    // The neighbor of pixel `j` near the line that lies farthest toward `a` (`toward` -1) or `b`
+    // (`toward` 1), with its place.
+    let next = |j: usize, toward: f64| around(j).filter_map(|n| at(n).map(|tn| (n, tn))).max_by(|p, q| (p.1 * toward).total_cmp(&(q.1 * toward)));
+    // A path from `i` toward `a` or `b`: each step goes to [`next`], while it lies farther than the
+    // pixel before (the first step is taken whatever `i` itself is). `None` when it does not get more
+    // than `PURE` past `tc` in [`WALK`] steps; otherwise the steps to the first pixel past it that
+    // stands for `class` (`stands_for`), or `NEARBY + 1`. With `halt`, the path also ends at a pixel
+    // within `PURE` of that class that it comes to before it gets past `tc`.
     let walk = |toward: f64, tc: f64, class: usize, halt: Option<usize>| {
         let (mut cur, mut t) = (i, f64::NEG_INFINITY * toward);
         let mut past = false;
-        let mut first = None;
         for step in 1..=WALK {
-            match around(cur).filter_map(|j| at(j).map(|tj| (j, tj))).max_by(|p, q| (p.1 * toward).total_cmp(&(q.1 * toward))) {
+            match next(cur, toward) {
                 Some((j, tj)) if (tj - t) * toward > 0.0 => (cur, t) = (j, tj),
                 _ => break,
             }
-            first = first.or(Some(cur));
             past = past || (t - tc) * toward * len > PURE;
             if !past && halt.is_some_and(|h| within(cur, h)) {
                 break;
             }
             if past && stands_for.get(cur).copied().flatten() == Some(class) {
-                return (Some(step), first);
+                return Some(step);
             }
         }
-        (past.then_some(NEARBY + 1), first)
+        past.then_some(NEARBY + 1)
     };
-    // Whether the first step of a path (`first`) stands for `class`: the edge on that side is sharp.
-    let sharp = |first: Option<usize>, class: usize| first.is_some_and(|j| stands_for.get(j).copied().flatten() == Some(class));
+    // Whether the first step of a path toward `class` (`toward` as in [`walk`]) comes to a pixel that
+    // stands for it: the edge on that side is sharp.
+    let sharp = |toward: f64, class: usize| next(i, toward).is_some_and(|(j, _)| stands_for.get(j).copied().flatten() == Some(class));
     if left_out.is_empty() {
         return None;
     }
@@ -397,11 +398,9 @@ fn across_edge(
         let (tc, _) = place(*classes.get(c)?);
         if (0.0..=1.0).contains(&tc) {
             // When one side's edge is sharp, the other side's path stops at a pixel of the class left out.
-            let (ra, fa) = walk(-1.0, tc, *a, None);
-            let (rb, fb) = walk(1.0, tc, *b, None);
-            let ra = if sharp(fb, *b) { walk(-1.0, tc, *a, Some(c)).0 } else { ra };
-            let rb = if sharp(fa, *a) { walk(1.0, tc, *b, Some(c)).0 } else { rb };
-            reach = reach.max(ra?.max(rb?));
+            let ra = walk(-1.0, tc, *a, sharp(1.0, *b).then_some(c))?;
+            let rb = walk(1.0, tc, *b, sharp(-1.0, *a).then_some(c))?;
+            reach = reach.max(ra.max(rb));
             continue;
         }
         let beyond = |tn: f64| if tc < 0.0 { -tn * len > PURE } else { (tn - 1.0) * len > PURE };
