@@ -5423,8 +5423,8 @@ liquify-list-end	{0}, {1}	{0} et {1}
 	Em Box	Cadratin
 	x-Height	Hauteur d’x
 	ICF Box	Cadre ICF
-	Show Sample	Afficher l'échantillon
-	Hide Sample	Masquer l'échantillon
+	Show Sample	Afficher l’échantillon
+	Hide Sample	Masquer l’échantillon
 	Max Ascent/Descent	Hauteur/profondeur max.
 	Max Ascender	Jambage ascendant max.
 	ICF Top/Right	ICF haut/droite
@@ -6510,7 +6510,7 @@ theme	Appearance	Apparence
 	Single Word Justification:	Justification d’un mot isolé :
 	Full Justify	Justification complète
 	Minimum must not exceed Desired, nor Desired Maximum.	Le minimum ne doit pas dépasser la valeur optimale, ni la valeur optimale le maximum.
-@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}` : le minimum ne doit pas dépasser la valeur optimale, ni la valeur optimale le maximum
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}` : le minimum ne doit pas dépasser la valeur optimale, ni la valeur optimale le maximum
 	Justification	Justification
 	Add filters from the list above	Ajoutez des filtres à partir de la liste ci-dessus
 	Add to Stack	Ajouter à la pile
@@ -8983,7 +8983,7 @@ breakText	Glyphs	Glyphes
 @msg	positions must be between 0 and 100000 pt	les positions doivent être comprises entre 0 et 100000 pt
 @msg	ppi can't be more than {max} for this image	ppi ne peut pas dépasser {max} pour cette image
 @msg	ppi must be a positive number, not {ppi}	ppi doit être un nombre positif, pas {ppi}
-@msg	trim keeps the image's pixels as they are: leave out ppi	trim conserve les pixels de l’image tels quels : omettez ppi
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim conserve les pixels de l’image tels quels : omettez ppi
 @msg	ppi must be between 1 and 2400	ppi doit être compris entre 1 et 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` n’est pas transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape doit valoir clippingMask|transparency
