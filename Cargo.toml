@@ -116,9 +116,9 @@ flate2 = { version = "1", default-features = false, features = ["rust_backend"] 
 rustix = { version = "1.1", default-features = false }
 # Zstandard decoder (pure Rust, builds for wasm32 too): the editing copy an EPS carries of its art.
 ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
-# vectorcraft-doc's CMYK reader (src/cmyk.rs, with main's CMYK fixes) and the EPS reader's
-# CCITTFaxDecode still read through these; moving them to craft-tiff and craft-stream-codecs is a
-# follow-up of #7669 (craft-stream-codecs' CCITT decoder gives other rows for K -1 data).
+# vectorcraft-doc's CMYK TIFF reader and writer (src/cmyk.rs) and its Group 3 TIFF reader still use
+# `tiff` and `hayro-ccitt`; `zune-jpeg` is only the reference vectorcraft-doc's tests compare
+# craft-image-codecs' CMYK JPEG inks with.
 tiff = "0.11"
 zune-jpeg = "0.5"
 hayro-ccitt = "0.3"

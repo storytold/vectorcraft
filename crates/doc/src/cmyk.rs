@@ -9,10 +9,6 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use zune_jpeg::zune_core::bytestream::ZCursor;
-use zune_jpeg::zune_core::colorspace::ColorSpace;
-use zune_jpeg::zune_core::options::DecoderOptions;
-
 use crate::ImageBlob;
 
 /// Most pixels a CMYK image is decoded with (256 MB of samples): larger ones decode as RGB.
@@ -44,12 +40,7 @@ fn pixels(width: u32, height: u32) -> Option<u64> {
 /// The number of colour components of JPEG `bytes` (its frame header); `None` when they aren't a
 /// JPEG.
 pub fn jpeg_components(bytes: &[u8]) -> Option<usize> {
-    if !bytes.starts_with(&[0xFF, 0xD8]) {
-        return None;
-    }
-    let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
-    d.decode_headers().ok()?;
-    Some(d.info()?.components as usize)
+    craft_image_codecs::jpeg_inks::jpeg_components(bytes)
 }
 
 fn is_tiff(bytes: &[u8]) -> bool {
@@ -645,9 +636,7 @@ pub fn tiff_icc_profile(bytes: &[u8]) -> Option<Vec<u8>> {
 /// The ICC profile of a JPEG, put together from all its numbered `ICC_PROFILE` APP2 segments;
 /// `None` without one.
 fn jpeg_icc(bytes: &[u8]) -> Option<Vec<u8>> {
-    let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
-    d.decode_headers().ok()?;
-    d.icc_profile().filter(|icc| !icc.is_empty())
+    craft_image_codecs::jpeg_inks::jpeg_icc_profile(bytes)
 }
 
 /// The bytes after an `ICC_PROFILE` APP2 segment's length: its name, then the segment's number and
@@ -851,10 +840,7 @@ impl ImageBlob {
     pub fn header_size(&self) -> Option<(u32, u32)> {
         let bytes = self.bytes.as_slice();
         if bytes.starts_with(&[0xFF, 0xD8]) {
-            let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
-            d.decode_headers().ok()?;
-            let (w, h) = d.dimensions()?;
-            return Some((u32::try_from(w).ok()?, u32::try_from(h).ok()?));
+            return craft_image_codecs::jpeg_inks::jpeg_dimensions(bytes);
         }
         tiff(bytes).and_then(|(_, mut d)| d.dimensions().ok())
     }
@@ -932,30 +918,10 @@ fn sample_inks(inks: &Inks, x: f64, y: f64, size: u32) -> Option<[u8; 4]> {
 /// The ink amounts of a four-component JPEG (its samples inverted back; YCCK converted to CMYK
 /// first, as JPEG readers do).
 fn jpeg_inks(bytes: &[u8]) -> Option<Inks> {
-    let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
-    d.decode_headers().ok()?;
-    let space = d.input_colorspace()?;
-    if d.info()?.components != 4 || !matches!(space, ColorSpace::CMYK | ColorSpace::YCCK) {
-        return None;
-    }
-    let (w, h) = d.dimensions()?;
-    let (w, h) = (u32::try_from(w).ok()?, u32::try_from(h).ok()?);
-    pixels(w, h)?;
-    d.set_options(DecoderOptions::default().jpeg_set_out_colorspace(space));
-    let mut data = d.decode().ok()?;
-    for p in data.as_chunks_mut::<4>().0 {
-        if space == ColorSpace::YCCK {
-            let [y, cb, cr] = [p[0], p[1], p[2]].map(f32::from);
-            // libjpeg's YCCK → CMYK: the complement of the YCbCr colour's RGB.
-            p[0] = (434.456 - y - 1.402 * cr).clamp(0.0, 255.0) as u8;
-            p[1] = (119.541 - y + 0.344 * cb + 0.714 * cr).clamp(0.0, 255.0) as u8;
-            p[2] = (481.816 - y - 1.772 * cb).clamp(0.0, 255.0) as u8;
-        }
-        for v in p.iter_mut() {
-            *v = 255 - *v;
-        }
-    }
-    Inks::new(w, h, data)
+    let limits = craft_image_codecs::Limits { max_pixels: MAX_CMYK_PIXELS, ..craft_image_codecs::Limits::default() };
+    let image = craft_image_codecs::jpeg_inks::decode_jpeg_inks(bytes, &limits).ok()?;
+    let (w, h) = image.dimensions();
+    Inks::new(w, h, image.into_data())
 }
 
 /// The ink amounts of a CMYK TIFF (16-bit samples to 8 bits), its inks stored together or one plane
@@ -2208,5 +2174,94 @@ mod tests {
         assert_eq!(Inks::new(2, 2, vec![0; 15]), None, "too few samples");
         assert_eq!(Inks::new(0, 2, vec![]), None, "empty");
         assert_eq!(Inks::new(1 << 14, 1 << 13, vec![]), None, "too large");
+    }
+
+    /// The CMYK JPEG reader before craft-image-codecs read the inks (zune-jpeg, every sample
+    /// inverted, libjpeg's truncating YCCK conversion), the reference [`jpeg_inks`] matches.
+    fn zune_inks(bytes: &[u8]) -> Option<Inks> {
+        use zune_jpeg::zune_core::{bytestream::ZCursor, colorspace::ColorSpace, options::DecoderOptions};
+        let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
+        d.decode_headers().ok()?;
+        let space = d.input_colorspace()?;
+        if d.info()?.components != 4 || !matches!(space, ColorSpace::CMYK | ColorSpace::YCCK) {
+            return None;
+        }
+        let (w, h) = d.dimensions()?;
+        let (w, h) = (u32::try_from(w).ok()?, u32::try_from(h).ok()?);
+        pixels(w, h)?;
+        d.set_options(DecoderOptions::default().jpeg_set_out_colorspace(space));
+        let mut data = d.decode().ok()?;
+        for p in data.as_chunks_mut::<4>().0 {
+            if space == ColorSpace::YCCK {
+                let [y, cb, cr] = [p[0], p[1], p[2]].map(f32::from);
+                p[0] = (434.456 - y - 1.402 * cr).clamp(0.0, 255.0) as u8;
+                p[1] = (119.541 - y + 0.344 * cb + 0.714 * cr).clamp(0.0, 255.0) as u8;
+                p[2] = (481.816 - y - 1.772 * cb).clamp(0.0, 255.0) as u8;
+            }
+            for v in p.iter_mut() {
+                *v = 255 - *v;
+            }
+        }
+        Inks::new(w, h, data)
+    }
+
+    /// CMYK and YCCK JPEGs of many sizes, samplings and qualities, baseline and progressive, with
+    /// and without Adobe's marker and an ICC profile, read the inks, size, component count and
+    /// profile the zune-jpeg reader read; so do gray and RGB JPEGs (no inks) and cut-off files.
+    /// The frames it panicked on (progressive 4:2:0 CMYK, whose C, M and Y `jpeg-encoder` writes at
+    /// 1×1 and K at 2×2) read as no inks.
+    #[test]
+    fn cmyk_jpegs_read_as_the_zune_reader_read_them() {
+        use jpeg_encoder::{ColorType, Encoder, SamplingFactor};
+        let reference_size = |bytes: &[u8]| {
+            use zune_jpeg::zune_core::{bytestream::ZCursor, options::DecoderOptions};
+            let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
+            d.decode_headers().ok()?;
+            let (w, h) = d.dimensions()?;
+            Some((u32::try_from(w).ok()?, u32::try_from(h).ok()?, usize::from(d.info()?.components), d.icc_profile().filter(|i| !i.is_empty())))
+        };
+        let (mut files, mut read, mut panicked) = (0, 0, 0);
+        for (i, (w, h)) in [(1u16, 1u16), (7, 3), (16, 16), (33, 31), (100, 77)].into_iter().enumerate() {
+            let n = usize::from(w) * usize::from(h);
+            let px: Vec<u8> = (0..n * 4).map(|k| ((k * 2_654_435_761 + i * 97) >> 7) as u8).collect();
+            for ty in [ColorType::Cmyk, ColorType::CmykAsYcck, ColorType::Rgba, ColorType::Luma] {
+                for (q, sampling, progressive, icc) in [
+                    (100, SamplingFactor::R_4_4_4, false, false),
+                    (70, SamplingFactor::R_4_2_0, true, true),
+                    (40, SamplingFactor::R_4_2_2, false, false),
+                ] {
+                    let mut out = Vec::new();
+                    let mut e = Encoder::new(&mut out, q);
+                    e.set_sampling_factor(sampling);
+                    e.set_progressive(progressive);
+                    if icc {
+                        let mut icc = vec![4; 70_000];
+                        icc[16..20].copy_from_slice(b"CMYK");
+                        e.add_icc_profile(&icc).unwrap();
+                    }
+                    let samples = if ty == ColorType::Luma { &px[..n] } else { &px[..] };
+                    e.encode(samples, w, h, ty).unwrap();
+                    let cut = out[..out.len() * 2 / 3].to_vec();
+                    for file in [out, cut] {
+                        let b = ImageBlob::new("image/jpeg", file.clone());
+                        // The zune-jpeg reader panicked on some subsampled CMYK frames; those
+                        // read as no inks now.
+                        let inks = std::panic::catch_unwind(|| zune_inks(&file)).unwrap_or_else(|_| {
+                            panicked += 1;
+                            None
+                        });
+                        read += usize::from(inks.is_some());
+                        assert_eq!(b.cmyk(), inks, "{w}x{h} {ty:?} q{q}");
+                        let r = reference_size(&file);
+                        assert_eq!(b.header_size(), r.as_ref().map(|r| (r.0, r.1)));
+                        assert_eq!(jpeg_components(&file), r.as_ref().map(|r| r.2));
+                        assert_eq!(jpeg_icc(&file), r.and_then(|r| r.3));
+                        files += 1;
+                    }
+                }
+            }
+        }
+        assert_eq!(files, 5 * 4 * 3 * 2);
+        assert!(read > 20 && panicked > 0, "{read} read as inks, {panicked} panicked");
     }
 }
