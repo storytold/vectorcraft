@@ -4319,6 +4319,10 @@ digits	Malayalam	Malayalam
 	Em Box	Em-felt
 	x-Height	x-højde
 	ICF Box	ICF-felt
+	Show Sample	Vis eksempel
+	Hide Sample	Skjul eksempel
+	Max Ascent/Descent	Maks. højde/dybde
+	Max Ascender	Maks. overhøjde
 	Copy Color Value (Hex)	Kopiér farveværdi (hex)
 	Create New Swatch…	Opret ny farveprøve…
 	Name 40%	Navn 40%
@@ -6092,6 +6096,8 @@ theme	Appearance	Udseende
 	Find Font Files	Find skrifttypefiler
 	Add Font Files	Tilføj skrifttypefiler
 	Font List	Skrifttypeliste
+	Show Similar Fonts	Vis lignende skrifttyper
+	Clear Similar Fonts	Ryd lignende skrifttyper
 	Fonts in Document	Skrifttyper i dokumentet
 	Refresh Font List	Opdatér skrifttypeliste
 	Replace Font	Erstat skrifttype
@@ -7127,6 +7133,7 @@ imageTrace	Outline	Kontur
 @msg	Divide Objects Below: select exactly one path	Opdel objekter nedenunder: markér præcis én kurve
 @msg	Downloaded {what}	Downloadede {what}
 @msg	Expand Appearance: the selection has a basic appearance	Udvid udseende: markeringen har et grundlæggende udseende
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	nogle rastereffekter blev ikke lavet om til billeder: de ville kræve mere end 1.024 billeder eller i alt 256 megapixel
 @msg	Expand: no brush strokes selected	Udvid: ingen penselstrøg er markeret
 @msg	Expand: no gradient fills	Udvid: ingen gradientfyld
 @msg	Expand: nothing to expand	Udvid: intet at udvide
@@ -8382,7 +8389,7 @@ mark-style	Japanese	Japansk
 @msg	Unknown dimension orientation	Ukendt målretning
 @msg	Unknown dimension style	Ukendt målstil
 @msg	Unknown unit	Ukendt enhed
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Luk de runde ender af åbne profiler. Delvise omdrejninger beholder deres skårne sider åbne.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Luk de runde ender af åbne profiler. Delvise omdrejninger lukker også deres skårne sider.
 	Darkness	Mørke
 	Isolate Selected Object	Isolér markeret objekt
 	Keep selected	Behold markeret
@@ -8787,6 +8794,7 @@ swatch	Bright Violet	Kraftig violet
 	Single Word Justification:	Justering af enkeltord:
 	Full Justify	Lige margener
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum må ikke overstige Ønsket, og Ønsket ikke Maksimum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Minimum må ikke overstige Ønsket, og Ønsket ikke Maksimum
 	Justification	Justering
 	Add filters from the list above	Tilføj filtre fra listen ovenfor
 	Add to Stack	Tilføj til stak
@@ -9568,7 +9576,7 @@ breakText	Glyphs	Glyffer
 @msg	stroke cannot be set on a symbol instance	stroke kan ikke angives for en symbolforekomst
 @msg	fill on a symbol instance must be a solid color or none	fill på en symbolforekomst skal være en ensfarvet farve eller none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kan ikke angives for et billede uden effekten Konvertér til form eller Objekt til kontur
-@msg	pass newName, registration, exportType, nineSlice and/or type	angiv newName, registration, exportType, nineSlice og/eller type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	angiv newName, registration, exportType, nineSlice, type og/eller alignToPixelGrid
 	Text Flow	Tekstflow
 	By Rows	Efter rækker
 	By Columns	Efter kolonner
