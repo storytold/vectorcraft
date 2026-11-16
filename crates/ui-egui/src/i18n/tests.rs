@@ -434,19 +434,23 @@ fn font_height_reference_labels_are_in_complete_catalogs() {
     }
 }
 
-/// Each catalog's Saved View N and Saved Selection N rows carry the number N, so no two saved views
-/// or saved selections show one name.
+/// Each catalog's Saved View N and Saved Selection N rows carry the number N, and no two of a
+/// catalog's saved views or saved selections show one name, whatever digits the language uses.
 #[test]
 fn numbered_saved_views_and_selections_keep_their_number() {
     let mut bad = vec![];
     for lang in LANGUAGES.iter().filter(|lang| !lang.source.is_empty()) {
         for kind in ["Saved View", "Saved Selection"] {
+            let mut seen = std::collections::HashMap::new();
             for n in 1..=25 {
                 let source = format!("{kind} {n}");
                 let Some(row) = lang.catalog().plain(&source) else { continue };
                 let numbers: Vec<&str> = row.split(|c: char| !c.is_ascii_digit()).filter(|s| !s.is_empty()).collect();
                 if !numbers.is_empty() && numbers != [n.to_string().as_str()] {
                     bad.push(format!("{}: {source} -> {row}", lang.code));
+                }
+                if let Some(earlier) = seen.insert(row, source.clone()) {
+                    bad.push(format!("{}: {earlier} and {source} both show {row}", lang.code));
                 }
             }
         }

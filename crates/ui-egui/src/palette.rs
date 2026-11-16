@@ -588,6 +588,25 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let entries = entries_in(ctx, crate::i18n::current(), app.services.native_menu.is_some());
     let mut matches = matching(&entries, &q);
     let total = matches.len();
+    // The highlighted result (#1757): Up and Down move it (wrapping), Page Up and Page Down move it
+    // by a page, the pointer over a result takes it, and a new query starts again from the first.
+    let sel_id = egui::Id::unique("palette-selected");
+    let (mut sel, last_q, mut offset, last_view, last_id) = ctx.data(|d| d.get_temp::<Highlight>(sel_id)).unwrap_or_default();
+    let mut view = last_view;
+    let new_query = last_q != q;
+    // A result that ranks above the highlighted one when the results change under the same query
+    // can push it past the last shown result; it then takes the last shown row instead, and
+    // `kept` holds its place among every match.
+    let mut kept = None;
+    if !new_query
+        && let Some(at) = matches.iter().position(|e| e.id == last_id)
+        && at >= MAX_RESULTS
+    {
+        let held_result = matches.remove(at);
+        matches.truncate(MAX_RESULTS - 1);
+        matches.push(held_result);
+        kept = Some(at);
+    }
     matches.truncate(MAX_RESULTS);
     let recent = recent(&entries.list, &app.ui.recent_commands);
     // While the Recent Commands list is open, the arrow keys and Enter go to its rows, and the
@@ -595,12 +614,6 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let list_open = recent_list_open(ctx);
     let mut run: Option<String> = None;
     let mut history_focused = false;
-    // The highlighted result (#1757): Up and Down move it (wrapping), Page Up and Page Down move it
-    // by a page, the pointer over a result takes it, and a new query starts again from the first.
-    let sel_id = egui::Id::unique("palette-selected");
-    let (mut sel, last_q, mut offset, last_view, last_id) = ctx.data(|d| d.get_temp::<Highlight>(sel_id)).unwrap_or_default();
-    let mut view = last_view;
-    let new_query = last_q != q;
     // The highlight stays on its result when the results change under the same query, as when a
     // plug-in is installed, a shortcut changes or the language changes; it goes to the first
     // result when its result is gone.
@@ -716,7 +729,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             // Screen readers stay on the field: its description names the highlighted result and
             // its place among every match, as the footer counts them.
             if let Some(e) = matches.get(sel) {
-                let pos = (sel + 1).to_string();
+                let rank = if sel + 1 == matches.len() { kept.unwrap_or(sel) } else { sel };
+                let pos = (rank + 1).to_string();
                 let of = total.to_string();
                 let said = crate::i18n::fmt(tl!("{pos} of {total}: {name}"), &[("pos", &pos), ("total", &of), ("name", &row_label(e))]);
                 ui.ctx().accesskit_node_builder(r.id, |node| node.set_description(said));
@@ -2557,5 +2571,36 @@ mod tests {
         let de_listed: Vec<String> = matching(&de, "group").iter().map(|e| e.id.clone()).collect();
         crate::i18n::set_current(Lang::EN);
         assert_eq!((de_listed.get(sel), &now), (Some(&id), &id), "after the language changed");
+    }
+
+    /// A highlighted last shown result that a new result pushes past the limit stays shown and
+    /// highlighted, in the last row, so Enter still runs it; screen readers hear its place among
+    /// every match.
+    #[test]
+    fn the_highlighted_last_result_stays_shown_when_a_result_ranks_above_it() {
+        use vectorcraft_plugins::wat as tpl;
+        // A query no other test searches for, so the plug-in below leaves their results alone.
+        let mut open = Open::new("path", WINDOW);
+        assert!(matching(&entries(&open.ctx, Lang::EN), "path").len() > MAX_RESULTS);
+        open.press(egui::Key::ArrowUp, 1);
+        let held = |open: &Open| open.ctx.data(|d| d.get_temp::<Highlight>(egui::Id::unique("palette-selected"))).unwrap();
+        let (sel, .., id) = held(&open);
+        assert_eq!(sel, MAX_RESULTS - 1);
+        let filter = "test.UI.palette_last-highlight-path";
+        let manifest = format!(r#"{{"id":"{filter}","name":"Path Last Highlight Probe","version":"1","kind":"filter","params":{{}}}}"#);
+        vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+        open.frame(vec![]);
+        let entries = entries(&open.ctx, Lang::EN);
+        let ranked: Vec<&Entry> = matching(&entries, "path");
+        let nodes = open.frame(vec![]);
+        let (sel, .., now) = held(&open);
+        vectorcraft_plugins::registry::remove(filter);
+        let plugin = ranked.iter().position(|e| e.id == format!("plugin:{filter}"));
+        assert!(plugin.is_some_and(|p| p < MAX_RESULTS), "the plug-in is shown: {plugin:?}");
+        assert_eq!(ranked.iter().position(|e| e.id == id), Some(MAX_RESULTS), "the plug-in pushed the highlight past the limit");
+        assert_eq!((sel, &now), (MAX_RESULTS - 1, &id), "the highlight stays on its result, in the last row");
+        let label = row_label(ranked[MAX_RESULTS]);
+        assert!(rows(&nodes).iter().any(|r| r.1 && r.0 == label), "its row is drawn and highlighted");
+        assert_eq!(field_description(&nodes), format!("{} of {}: {label}", MAX_RESULTS + 1, ranked.len()));
     }
 }
