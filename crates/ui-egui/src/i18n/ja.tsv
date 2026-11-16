@@ -3110,6 +3110,20 @@ mark-style	Japanese	日本式
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	シンボルインスタンスを 1 つ選択したとき、変形パネルはシンボルの基準点を基準点として使います。
 	Darkens the canvas outside the artboards while the Artboard tool is active.	アートボードツールを使っている間、アートボードの外側のカンバスを暗く表示します。
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	アートボードの外側を暗く表示がオンのとき、アートボードツールでドラッグしている間もアートボードの外側を暗いままにします。
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	クリックでオブジェクト、アンカーポイント、ハンドルを選択できる、ポインターからの距離（ピクセル）です。
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	選択ツールのボックスが、触れたオブジェクトを選択するか、完全に内側のものだけを選択するかです。ドラッグ方向では右へドラッグすると内側のものを選択します。ドラッグ中に E を押すとルールが反転します。
+	A click selects a filled object only on its path, not inside its fill.	塗りのあるオブジェクトを、塗りの内側ではなくパス上のクリックでのみ選択します。
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	ポイントにスナップでポイントがスナップされる、アンカーポイントや定規ガイドまでの距離（ピクセル）です。スマートガイドがオンのときは、代わりにスマートガイドのスナップ許容値を使います。
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	選択ツールで Cmd/Ctrl キーを押しながらクリックすると、ポインター位置で選択中のオブジェクトの下にあるオブジェクトを選択します。クリックするたびに 1 つ下へ進みます。
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	ズームインとズームアウトで、選択範囲の中心をビューの中央に移動します。
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	アートボード内のロックされたアートワークと非表示のアートワークも、ほかのアートワークと同じくアートボードと一緒に移動、拡大・縮小、複製されます。
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	カンバス上のアンカーポイントと方向ハンドルの先端のサイズです。大きいアンカーポイントは、より離れた位置からもつかめます。
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	方向ハンドルの先端を、塗りつぶしの点、中空の点、大きい塗りつぶしの点のいずれかで描きます。
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	ダイレクト選択ツールで、ポインターの下にあるアンカーポイントを強調表示します。
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	複数のアンカーポイントを選択したときに方向ハンドルを表示します。オフのときは、アンカーポイントを 1 つだけ選択したときにのみ表示します。
+	Corner widgets hide on corners whose angle is greater than this many degrees.	角度がこの値（度）より大きいコーナーでは、コーナーウィジェットを隠します。
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	クリックする前に、ペンツールで最後のアンカーポイントからポインターまでの次のセグメントをプレビューします。
+	The Curvature tool previews the curve to the pointer before you place the next point.	次のポイントを置く前に、カーブツールでポインターまでのカーブをプレビューします。
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	ピクセル以外の組み込みサイズの新規ドキュメントと、単位を記録していない開いたファイルに使う単位で、ここで選んで OK をクリックすると作業中のドキュメントの単位も変わります。
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	線幅、線分、間隔はこの単位で表示され、入力した数値もこの単位で読み取られます。
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	フォントサイズ、行送り、ベースラインシフトはこの単位で表示され、入力した数値もこの単位で読み取られます。

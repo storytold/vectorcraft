@@ -61,6 +61,36 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "artboardUpdateWhileDragging",
         "With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.",
     ),
+    // Selection & Anchor Display
+    ("selectionTolerance", "How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it."),
+    (
+        "marqueeSelection",
+        "Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.",
+    ),
+    ("objectSelectionByPathOnly", "A click selects a filled object only on its path, not inside its fill."),
+    (
+        "snapToPointTolerance",
+        "How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.",
+    ),
+    (
+        "ctrlClickSelectsBehind",
+        "With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.",
+    ),
+    ("zoomToSelection", "Zoom In and Zoom Out bring the center of the selection to the middle of the view."),
+    (
+        "moveLockedWithArtboard",
+        "Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.",
+    ),
+    ("anchorSize", "The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away."),
+    ("handleStyle", "Draws the ends of direction handles as solid dots, hollow dots or larger solid dots."),
+    ("highlightAnchorsOnHover", "With the Direct Selection tool, the anchor under the pointer is highlighted."),
+    (
+        "showHandlesMultipleAnchors",
+        "Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.",
+    ),
+    ("hideCornerWidgetAbove", "Corner widgets hide on corners whose angle is greater than this many degrees."),
+    ("penRubberBand", "The Pen tool previews the next segment from the last anchor to the pointer before you click."),
+    ("curvatureRubberBand", "The Curvature tool previews the curve to the pointer before you place the next point."),
     // Units
     (
         "unitsGeneral",

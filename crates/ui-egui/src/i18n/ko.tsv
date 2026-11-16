@@ -3099,6 +3099,20 @@ mark-style	Japanese	일본식
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	심볼 인스턴스 하나를 선택하면 변형 패널은 심볼의 등록 지점을 참조점으로 사용합니다.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	아트보드 도구를 사용하는 동안 아트보드 바깥의 캔버스를 어둡게 표시합니다.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	아트보드 외부 영역 어둡게 표시가 켜져 있으면 아트보드 도구로 드래그하는 동안에도 아트보드 바깥 영역이 어둡게 유지됩니다.
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	클릭으로 개체, 고정점 또는 핸들을 선택하려면 포인터가 얼마나 가까이(픽셀) 있어야 하는지입니다.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	선택 도구의 상자가 닿은 개체를 선택할지, 완전히 안에 있는 개체만 선택할지입니다. 드래그 방향은 오른쪽으로 드래그하면 안쪽 개체를 선택합니다. 드래그 중 E를 누르면 규칙이 반대로 바뀝니다.
+	A click selects a filled object only on its path, not inside its fill.	칠이 있는 개체를 칠 안쪽이 아니라 패스를 클릭할 때만 선택합니다.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	포인트에 스냅이 점을 스냅하려면 점이 고정점이나 눈금자 안내선에 얼마나 가까이(픽셀) 와야 하는지입니다. 스마트 안내선이 켜져 있으면 대신 스마트 안내선의 스냅 허용 오차를 씁니다.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	선택 도구에서 Cmd/Ctrl-클릭하면 포인터 위치에서 선택한 개체 아래의 개체를 선택하며, 클릭할 때마다 한 개체씩 더 아래로 내려갑니다.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	확대와 축소가 선택 영역의 중심을 보기의 가운데로 가져옵니다.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	아트보드 안의 잠긴 아트워크와 숨겨진 아트워크도 다른 아트워크처럼 아트보드와 함께 이동, 크기 조정, 복사됩니다.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	캔버스에 표시되는 고정점과 방향 핸들 끝의 크기입니다. 고정점이 클수록 더 먼 곳에서도 잡을 수 있습니다.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	방향 핸들 끝을 채워진 점, 속이 빈 점 또는 더 큰 채워진 점으로 그립니다.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	직접 선택 도구에서 포인터 아래의 고정점을 강조 표시합니다.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	고정점을 둘 이상 선택했을 때 방향 핸들을 표시합니다. 끄면 고정점을 하나만 선택했을 때만 표시됩니다.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	각도가 이 값(도)보다 큰 모퉁이에서는 모퉁이 위젯을 숨깁니다.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	펜 도구가 클릭하기 전에 마지막 고정점에서 포인터까지 다음 세그먼트를 미리 보여 줍니다.
+	The Curvature tool previews the curve to the pointer before you place the next point.	곡률 도구가 다음 점을 놓기 전에 포인터까지 곡선을 미리 보여 줍니다.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	픽셀 크기가 아닌 기본 제공 크기의 새 문서와 단위가 기록되지 않은 열린 파일에 쓰는 단위이며, 여기서 고르고 확인을 누르면 활성 문서의 단위도 바뀝니다.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	선 두께, 대시, 간격이 이 단위로 표시되며, 입력한 숫자도 이 단위로 읽습니다.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	글자 크기, 행간, 기준선 이동이 이 단위로 표시되며, 입력한 숫자도 이 단위로 읽습니다.
