@@ -4,11 +4,13 @@
 //! dialogs' own Object, Rotation and Lighting controls and the panel's Materials tab
 //! ([`materials`]); each change runs `effect.setParams` as one undo step, and a drag previews and
 //! commits once, when the pointer is released. While the Materials tab is open, the artboard shows
-//! a handle on each mapped graphic, which drags it over its face.
+//! a handle on each mapped graphic, which drags it over its face. At the bottom, Export 3D Object
+//! adds the selected objects that have a 3D effect to Asset Export as 3D assets (`assets.add3D`)
+//! and shows that panel with their assets selected.
 
 use egui::Ui;
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::{Effect, Node};
+use vectorcraft_doc::{Effect, Node, NodeId, NodeKind};
 use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, THREE_D_TYPES, is_three_d};
 
 use super::{live_run, pstate, set_pstate};
@@ -229,6 +231,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if let Some(action) = materials::library(app, ui, false) {
             run_action(app, &ctx, action);
         }
+        export_button(app, ui, &ctx);
         return;
     };
     if takes_render(&t.effect) {
@@ -271,6 +274,42 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(action) = action {
         run_action(app, &ctx, action);
     }
+    export_button(app, ui, &ctx);
+}
+
+/// The Export 3D Object button, available while a selected object has a 3D effect that
+/// `assets.add3D` exports ([`can_export_3d`]). An error goes to the status bar.
+fn export_button(app: &mut VectorcraftApp, ui: &mut Ui, ctx: &egui::Context) {
+    let any = can_export_3d(app);
+    ui.add_space(10.0);
+    if ui.add_enabled(any, egui::Button::new(tl!("Export 3D Object"))).clicked() {
+        finish(app, ctx);
+        if let Err(e) = export_3d_object(app, ctx) {
+            app.ui.status = e;
+        }
+    }
+}
+
+/// Does a selected object have a 3D effect that `assets.add3D` exports
+/// ([`vectorcraft_effects::exports_three_d`])? A path of a compound path counts as the compound
+/// path, which holds the effects.
+pub(crate) fn can_export_3d(app: &VectorcraftApp) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    let compound = |id: NodeId| st.doc.parent_of(id).filter(|p| st.doc.node(*p).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })));
+    st.selection.objects.iter().any(|id| st.doc.node(compound(*id).unwrap_or(*id)).is_some_and(vectorcraft_effects::exports_three_d))
+}
+
+/// Export 3D Object: adds the selected objects that have a 3D effect to Asset Export as 3D assets
+/// (`assets.add3D` on the selection, one undo step, none when each is an asset already), selects
+/// their assets there and shows the Asset Export panel. The command leaves out the selected
+/// objects without a 3D effect and those inside another selected 3D object.
+pub(crate) fn export_3d_object(app: &mut VectorcraftApp, ctx: &egui::Context) -> Result<(), String> {
+    use super::asset_export;
+    asset_export::add_3d(app, ctx, None)?;
+    if !crate::panel_docking::visible(&app.ui, asset_export::ID) {
+        app.run("window.panel", json!({"panel": asset_export::ID}))?;
+    }
+    Ok(())
 }
 
 /// Does 3D effect `id` take render settings (`render`)? Extrude & Bevel, Revolve, Inflate and Rotate

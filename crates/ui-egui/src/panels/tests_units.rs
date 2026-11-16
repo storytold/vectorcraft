@@ -174,15 +174,17 @@ fn new_document_cards_follow_the_chosen_units() {
 
 /// Choosing units in Preset Details changes the chosen document, not every recent one: each card
 /// keeps the units its document was made in, so switching between inches and millimetres leaves the
-/// other templates as they were; choosing another card brings its units back.
+/// other templates as they were; choosing another card brings its units back while no units were
+/// chosen in the Units menu.
 #[test]
 fn recent_cards_keep_their_own_units() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    // 8.5 × 11 in, then 210 × 297 mm, which Recent lists first and the dialog opens on.
+    // 8.5 × 11 in, then 210 × 297 mm, which Recent lists first and the dialog opens on, in
+    // Preferences › Units › General (points).
     run(&mut app, "file.new", json!({"width": "8.5 in", "height": "11 in", "units": "Inches"}));
     run(&mut app, "file.new", json!({"width": "210 mm", "height": "297 mm", "units": "Millimeters"}));
     app.run("file.newDialog", json!({})).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["units"], json!("Millimeters"));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["units"], json!("Points"));
     app.ui.dialog.as_mut().unwrap().fields.insert("units".into(), json!("Points"));
     let t = dialog_texts(&mut app);
     assert!(shows(&t, "595.276 × 841.89 pt"), "the chosen entry in points: {t:?}");
@@ -198,6 +200,54 @@ fn recent_cards_keep_their_own_units() {
     let d = app.ui.dialog.as_ref().unwrap();
     assert_eq!(d.fields["units"], json!("Inches"));
     assert_eq!((d.fields["width"].clone(), d.fields["height"].clone()), (json!(612.0), json!(792.0)));
+}
+
+/// Units chosen in the Units menu (here through `ui.dialog.set`) stay chosen when a Recent card made
+/// in other units is clicked, and the document is made in them.
+#[test]
+fn a_recent_card_keeps_the_units_chosen_in_the_menu() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    run(&mut app, "file.new", json!({"width": "8.5 in", "height": "11 in", "units": "Inches"}));
+    run(&mut app, "file.new", json!({"width": "210 mm", "height": "297 mm", "units": "Millimeters"}));
+    app.run("file.newDialog", json!({})).unwrap();
+    crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "units".into(), json!("Millimeters"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut draw = |app: &mut VectorcraftApp, ui: &mut Ui| crate::dialogs::show(app, ui.ctx());
+    frame_events(&ctx, &mut app, vec![], &mut draw); // the window sizes itself here
+    let inches = text_rect(&frame_events(&ctx, &mut app, vec![], &mut draw), "8.5 × 11 in").center();
+    click(&ctx, &mut app, inches, &mut draw);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.fields["width"].clone(), d.fields["units"].clone()), (json!(612.0), json!("Millimeters")));
+    crate::dialogs::confirm(&mut app).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!((doc.units, doc.artboards[0].rect.width()), (Unit::Millimeters, 612.0));
+}
+
+/// A double-click on a Recent or Saved card made in inches creates the document in the millimeters
+/// chosen in the Units menu (here through `ui.dialog.set`) before it.
+#[test]
+fn a_double_clicked_card_keeps_the_units_chosen_in_the_menu() {
+    for category in ["Recent", "Saved"] {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        run(&mut app, "file.newPresets.save", json!({"name": "Letter in", "width": "8.5 in", "height": "11 in", "units": "Inches"}));
+        run(&mut app, "file.new", json!({"width": "8.5 in", "height": "11 in", "units": "Inches"}));
+        run(&mut app, "file.new", json!({"width": "210 mm", "height": "297 mm", "units": "Millimeters"}));
+        app.run("file.newDialog", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("category".into(), json!(category));
+        crate::dialogs::set_field(d, "units".into(), json!("Millimeters"));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut draw = |app: &mut VectorcraftApp, ui: &mut Ui| crate::dialogs::show(app, ui.ctx());
+        frame_events(&ctx, &mut app, vec![], &mut draw); // the window sizes itself here
+        let card = text_rect(&frame_events(&ctx, &mut app, vec![], &mut draw), "8.5 × 11 in").center();
+        click(&ctx, &mut app, card, &mut draw);
+        click(&ctx, &mut app, card, &mut draw);
+        assert!(app.ui.dialog.is_none(), "the {category} card's double-click creates: {:?}", app.ui.status);
+        let doc = &app.session.active().unwrap().doc;
+        assert_eq!((doc.units, doc.artboards[0].rect.width()), (Unit::Millimeters, 612.0), "the {category} card");
+    }
 }
 
 /// A saved preset keeps the units it was saved in too, whichever units the dialog is showing.

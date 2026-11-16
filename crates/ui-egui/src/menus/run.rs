@@ -455,6 +455,7 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "view.goToArtboard" => go_to_artboard(app, p),
+        "view.statusBarShow" => crate::chrome::set_status_bar_show(app, p),
         // The navigator's four buttons as commands of their own, so Edit › Keyboard Shortcuts lists
         // them (view.goToArtboard needs an index, so a key alone can't run it).
         "view.firstArtboard" => go_to_artboard(app, &json!({ "index": "first" })),
@@ -1089,6 +1090,7 @@ fn run_ui_part13(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.blendOptions" => crate::dialogs::blend_options::open(app),
         "ui.livePaintGapOptions" => crate::dialogs::live_paint_gaps::open(app),
         "ui.perspectivePlane" => crate::dialogs::perspective_plane::open(app, p),
+        crate::dialogs::check_spelling::COMMAND => crate::dialogs::check_spelling::open(app),
 
         _ => return None,
     };

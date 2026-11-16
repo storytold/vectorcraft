@@ -536,3 +536,93 @@ fn other_panes_draw_through_their_documents_profiles() {
     assert!(close(shown, device), "the back CMYK document draws through its Device CMYK: {shown:?}, not {device:?} (front: {front:?})");
     assert!(near(cms::active().display_rgb(&color).map(|v| (v * 255.0).round() as u8), p3), "the front document's profile stays active");
 }
+
+/// With a display profile, the tiled pane of a document behind the front one blends its
+/// translucent art with that document's own simulated paper in sRGB, then converts the blend:
+/// drawn over its converted paper, the pane shows the converted blend, not the art converted alone
+/// and not a blend with the front document's paper. Opaque and empty pixels convert as before.
+#[test]
+fn tiled_documents_blend_translucent_art_over_their_own_paper_before_display_conversion() {
+    use crate::display_profile::{Found, Reading};
+    let mut app = app_with(2);
+    app.canvas.panes.worker_started = true; // every pane renders on this thread
+    let (front_paper, back_paper) = ([0x20, 0x40, 0xc0], [0xe0, 0xc0, 0x20]);
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("document.setup", json!({"gridColors": ["#2040c0", "#ffffff"], "simulatePaper": true})).unwrap();
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.run("document.setup", json!({"gridColors": ["#e0c020", "#ffffff"], "simulatePaper": true})).unwrap();
+    let half = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 300, "height": 200})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [half], "color": "#ff0000"})).unwrap();
+    app.run("transparency.set", json!({"ids": [half], "opacity": 50})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    app.run("window.arrange.tile", json!({})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let uid = app.session.documents()[1].uid;
+    let ctx = egui::Context::default();
+    // The second document's pane: the raster one frame uploads, its width, and the key it was rendered for.
+    let pane = |app: &mut VectorcraftApp| -> (Vec<Color32>, usize, CacheKey) {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
+            max_texture_side: Some(8192),
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| app.canvas_area(ui));
+        let (key, tex) = app.canvas.panes.shown.iter().find(|(slot, _)| slot.0 == uid).map(|(_, s)| s).expect("the second document's pane rendered");
+        let id = tex.id();
+        let up = out.textures_delta.set.iter().find(|e| e.0.eq(&id)).and_then(|e| e.1.last()).map(|d| {
+            let egui::ImageData::Color(img) = &d.image;
+            (img.pixels.clone(), img.width())
+        });
+        let key = key.clone();
+        out.textures_delta.clear();
+        let (pixels, width) = up.expect("the pane uploads");
+        (pixels, width, key)
+    };
+    app.session.prefs.monitor_profile_display = false;
+    let (srgb, width, key) = pane(&mut app);
+    assert!(key.backdrop.is_none(), "no display profile: nothing to blend");
+    let p3 = crate::display_profile::tests::p3();
+    let t = vectorcraft_color::cms::display::DisplayTransform::from_icc(&p3).unwrap();
+    app.display_profile.report(Reading { display: Some("DP-1".into()), found: Found::Profile { icc: p3, from: "test".into() } });
+    app.session.prefs.monitor_profile_display = true;
+    let (shown, _, key) = pane(&mut app);
+    let backdrop = key.backdrop.as_deref().expect("the pane's Preview blends with its paper");
+    assert!(
+        !backdrop.artboards.is_empty() && backdrop.artboards.iter().all(|(_, c)| *c == back_paper),
+        "the pane blends with its own document's paper: {backdrop:?}"
+    );
+    assert_eq!(srgb.len(), shown.len());
+    // What the canvas shows of pixel `c` over the converted paper `under`, as egui blends it.
+    let over = |c: Color32, under: [u8; 3]| {
+        let k = 255 - u32::from(c.a());
+        [0, 1, 2].map(|i| u32::from(c.to_array()[i]) + (u32::from(under[i]) * k + 127) / 255)
+    };
+    let plain = |s: Color32| {
+        let mut px = s.to_array();
+        t.apply_premultiplied(&mut px);
+        Color32::from_rgba_premultiplied(px[0], px[1], px[2], px[3])
+    };
+    // Pixel `s` over the paper `paper` in sRGB, converted.
+    let blend = |s: Color32, paper: [u8; 3]| {
+        let k = 255 - u32::from(s.a());
+        t.apply8([0, 1, 2].map(|j| (u32::from(s.to_array()[j]) + (u32::from(paper[j]) * k + 127) / 255).min(255) as u8)).map(u32::from)
+    };
+    let differs = |a: [u32; 3], b: [u32; 3]| (0..3).any(|j| a[j].abs_diff(b[j]) > 2);
+    let under = t.apply8(back_paper);
+    for (s, c) in srgb.iter().zip(&shown) {
+        if s.a() == 0 || s.a() == 255 {
+            assert_eq!(*c, plain(*s), "opaque and empty pixels convert as before");
+        }
+    }
+    // The middle of the pane is the middle of the document, inside the 50% fill.
+    let at = srgb.len() / width / 2 * width + width / 2;
+    let (s, c) = (srgb[at], shown[at]);
+    assert!((50..=205).contains(&s.a()), "the 50% fill at the middle: {s:?}");
+    assert_eq!(c.a(), s.a(), "the alpha is kept");
+    let want = blend(s, back_paper);
+    let got = over(c, under);
+    assert!((0..3).all(|j| got[j].abs_diff(want[j]) <= 1), "{got:?} shown, {want:?} wanted");
+    // The check tells the two papers and the plain conversion apart.
+    assert!(differs(want, blend(s, front_paper)), "the front document's paper blends to another color");
+    assert!(differs(got, over(plain(s), under)), "the art converted alone shows another color");
+}

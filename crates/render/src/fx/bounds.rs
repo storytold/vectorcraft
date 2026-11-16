@@ -6,7 +6,7 @@ use super::{
 };
 use vectorcraft_doc::symbol_overrides::dynamic_art;
 
-fn node_bezpath(n: &Node) -> Option<BezPath> {
+pub(super) fn node_bezpath(n: &Node) -> Option<BezPath> {
     match &n.kind {
         NodeKind::Path { path, .. } => Some(path.to_bezpath()),
         NodeKind::Compound { children, .. } => {
@@ -48,6 +48,34 @@ pub(crate) fn effected_path_carrying(doc: &Document, n: &Node, bp: &BezPath) -> 
     apply_carrying(&n.appearance.effects, bp, &GeomContext { doc: Some(doc), ..GeomContext::of(n) })
 }
 
+/// `n`, a path or compound path whose own Rasterize effect is followed by Transform effects that
+/// move its image ([`effects::rasterize_stage`]), with those Transform effects hidden, and the map
+/// they move the image by ([`effects::stage_map`]): the image is made of that node's art on its
+/// own pixel grid, then drawn through the map. `None` for any other object, when the node without
+/// those Transform effects is drawn through its art ([`has_object_fx`]: a Transform effect that
+/// copies it, Crop Marks, a 3D effect…), and when the art before the Transform effects is empty.
+pub(crate) fn rasterize_stage(doc: &Document, n: &Node) -> Option<(Node, Affine)> {
+    if !has_fx(n) {
+        return None;
+    }
+    let at = effects::rasterize_stage(&n.appearance.effects)?;
+    let mut stage = n.clone();
+    stage.appearance.effects = effects::staged_effects(&n.appearance.effects, &at);
+    if has_object_fx(&stage) {
+        return None;
+    }
+    let g = effected_path(doc, &stage, &node_bezpath(n)?);
+    let map = effects::stage_map(&n.appearance.effects, &at, &vectorcraft_geom::PathData::from_bezpath(&g))?;
+    Some((stage, map))
+}
+
+/// The box `map` ([`rasterize_stage`]) takes `b` to; `None` when it flattens it to a line or a
+/// point, which leaves nothing to draw.
+pub(crate) fn staged_reach(map: Affine, b: Rect) -> Option<Rect> {
+    let det = map.determinant();
+    (det.is_finite() && det.abs() > 1e-12).then(|| map.transform_rect_bbox(b))
+}
+
 pub(super) fn item_effects(item: &AppearanceItem) -> &[Effect] {
     match item {
         AppearanceItem::Fill(f) => &f.effects,
@@ -73,6 +101,11 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
         && let Some(art) = effects::reshape(Some(symbols.document()), n, None)
     {
         return cull_bounds(symbols, &art);
+    }
+    // A Rasterize image moved by the Transform effects after it reaches as far as the map takes
+    // what the art before them reaches, the image included.
+    if let Some((stage, map)) = rasterize_stage(symbols.document(), n) {
+        return staged_reach(map, visual_bounds(symbols, &stage)?);
     }
     let bp = node_bezpath(n)?;
     let ctx = GeomContext { doc: Some(symbols.document()), ..GeomContext::of(n) };
@@ -449,6 +482,9 @@ pub(crate) fn painted_reach(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     if let Some(art) = effects::crop_marks_art(n) {
         return drawn_bounds(symbols, &art);
     }
+    if let Some((stage, map)) = rasterize_stage(symbols.document(), n) {
+        return staged_reach(map, painted_reach(symbols, &stage)?);
+    }
     let ran = ran(symbols.document(), n);
     let b = drawn_bounds_ran(symbols, n, Some(&ran))?;
     Some(spread(symbols, &ran.appearance.effects, b))
@@ -652,6 +688,16 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
                 _ => None,
             };
             let reshaped = effects::reshape(Some(symbols.document()), n, symbol.as_ref());
+            // Copies that each carry the raster effects listed before their Transform effect reach
+            // as far as each copy's raster effects paint, and the raster effects after it spread
+            // them all: the art and each copy in it are groups with those raster effects, measured
+            // with their reach ([`effects::has_container_appearance`]).
+            if effects::outer_effects(n).len() < n.appearance.effects.len()
+                && let Some(r) = &reshaped
+            {
+                let a = live_content_reach(symbols, n);
+                return cull_bounds_in(symbols, r, after_reshape, false).map(|b| b.inflate(a, a));
+            }
             let b = match &reshaped {
                 Some(r) if has_instance_row_effects(n) => instance_piece_bounds(symbols, r),
                 Some(r) if matches!(n.kind, NodeKind::Text(_)) || (matches!(n.kind, NodeKind::Image(_)) && !r.clips()) => {
