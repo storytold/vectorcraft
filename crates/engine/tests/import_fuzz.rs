@@ -2776,6 +2776,32 @@ proptest! {
         paste_from_elsewhere("clipboard.importEps", json!({"dataBase64": vectorcraft_format::base64_encode(ps.as_bytes())}))?;
     }
 
+    /// Any bytes read by `readhexstring` or `readline` into strings of any length, from the
+    /// program's own file, through a filter decoded when first read, or from a file being run:
+    /// read as data, or as an error.
+    #[test]
+    fn eps_readhexstring_and_readline_data_never_panic(
+        data in prop::collection::vec(prop::sample::select(vec![b'0', b'9', b'a', b'F', b'g', b' ', b'\t', b'\r', b'\n', b'>', b'%', b'(', 0u8, 0xff]), 0..300),
+        len in 0usize..40,
+        line in any::<bool>(),
+        source in 0usize..3,
+    ) {
+        let op = if line { "readline" } else { "readhexstring" };
+        let file = if source == 1 { "currentfile /ASCIIHexDecode filter" } else { "currentfile" };
+        let reads = format!("/s {len} string def /f {file} def 30 {{ f s {op} pop pop }} repeat");
+        let mut bytes = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n".to_vec();
+        if source == 2 {
+            bytes.extend_from_slice(format!("currentfile 0 (endstream) /SubFileDecode filter cvx exec\n{reads}\n").as_bytes());
+            bytes.extend_from_slice(&data);
+            bytes.extend_from_slice(b"\nendstream\nshowpage\n");
+        } else {
+            bytes.extend_from_slice(format!("{reads}\n").as_bytes());
+            bytes.extend_from_slice(&data);
+            bytes.extend_from_slice(b"\nshowpage\n");
+        }
+        survive("readhexstring and readline data", || vectorcraft_eps::import(&bytes).ok().map(|r| r.document))?;
+    }
+
     /// Damaged or hostile CMYK images (a CMYK JPEG, an image with a key color): read as images,
     /// or as an error.
     #[test]
@@ -3004,7 +3030,7 @@ fn arb_ps_token() -> impl Strategy<Value = String> {
             "gsave", "grestore", "save", "restore", "concat", "translate", "scale", "rotate", "setlinewidth", "setdash", "setgray",
             "setrgbcolor", "setcmykcolor", "sethsbcolor", "setcolorspace", "setcolor", "setpattern", "makepattern", "shfill", "arc", "arcn",
             "arct", "arcto", "rectfill", "rectclip", "rectstroke", "image", "imagemask", "colorimage", "currentfile", "filter",
-            "readhexstring", "readstring", "show", "stringwidth", "charpath", "findfont", "scalefont", "makefont", "setfont", "selectfont",
+            "readhexstring", "readstring", "readline", "show", "stringwidth", "charpath", "findfont", "scalefont", "makefont", "setfont", "selectfont",
             "def", "bind", "load", "dup", "exch", "pop", "roll", "index", "copy", "for", "repeat", "loop", "exit", "if", "ifelse", "exec",
             "stopped", "begin", "end", "dict", "array", "string", "get", "put", "getinterval", "putinterval", "aload", "astore", "forall",
             "[", "]", "<<", ">>", "{", "}", "matrix", "currentmatrix", "setmatrix", "transform", "itransform", "invertmatrix", "pathbbox",
