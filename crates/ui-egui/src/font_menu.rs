@@ -6,13 +6,15 @@
 //! back. The Glyphs panel and Find Font only pick a font ([`picked`]): nothing is previewed on the
 //! document. A star marks a favourite family, and the ★ filter lists only those. The Document
 //! filter lists only the families that type in the current document is set in
-//! ([`document_families`]), and is unavailable while no document is open. The ≈ button
-//! before a family's star (Show Similar Fonts) orders the listed families by how alike they look to
-//! it ([`vectorcraft_text::FontDb::similar_families`]), that family first and without the Recent
+//! ([`document_families`]), and is unavailable while no document is open. The Recently Added
+//! filter lists only the installed families with a font file created in the last 30 days, the
+//! newest first and without the Recent Fonts section ([`vectorcraft_text::FontDb::recently_added`]).
+//! The ≈ button before a family's star (Show Similar Fonts) orders the listed families by how alike
+//! they look to it ([`vectorcraft_text::FontDb::similar_families`]), that family first and without the Recent
 //! Fonts section, until the ≈ chip under the filters clears it or the menu closes. The Font
 //! Technology filter's Variable lists only variable font families. Preferences › Type › Enable
 //! in-menu font previews and Font Preview Size turn the samples off or size the rows. The menu lays
-//! out its filters on the same four rows wherever it opens. However narrow its field, it opens at
+//! out its filters on the same five rows wherever it opens. However narrow its field, it opens at
 //! least wide enough for those rows and for a family name up to 220 points wide with its sample
 //! beside it, up to 60% of the window; each sample fills its row's height. Recently used families
 //! appear first, in the order they were last applied, within the same search and filters as the
@@ -124,6 +126,8 @@ pub struct MenuLook<'a> {
     /// The current document, which the Document filter lists the families of. `None`: no document
     /// is open, and the filter is unavailable.
     pub document: Option<MenuDocument<'a>>,
+    /// The time the Recently Added filter counts back from. `None`: the system clock.
+    pub clock: Option<std::time::SystemTime>,
 }
 
 /// The current document as the Document filter reads it.
@@ -161,7 +165,7 @@ impl PartialEq for DocumentKey {
 
 impl Default for MenuLook<'static> {
     /// Samples on in the theme's colors, English names, medium rows, no favorites, no wheel, no
-    /// document.
+    /// document, the system clock.
     fn default() -> Self {
         Self {
             samples: true,
@@ -174,6 +178,7 @@ impl Default for MenuLook<'static> {
             wheel_owner: None,
             name: None,
             document: None,
+            clock: None,
         }
     }
 }
@@ -199,6 +204,7 @@ impl<'a> MenuLook<'a> {
                 .session
                 .active()
                 .map(|state| MenuDocument { uid: state.uid, doc: state.interaction.as_ref().map_or(&state.doc, |interaction| &interaction.doc) }),
+            clock: None,
         }
     }
 }
@@ -354,9 +360,47 @@ fn remap_highlight(before: &[Row], selected: Option<usize>, after: &[Row]) -> Op
 
 /// What the rows were listed for: the query, the script, kind, font technology (variable only) and
 /// favourites filters, Show Font Names in English, the expanded families, favourites, recent
-/// history, font list generation, the family Show Similar Fonts orders by, and the document version
-/// while the Document filter lists its families.
-type RowsKey = (String, usize, Option<FontClass>, bool, bool, bool, Vec<String>, Vec<String>, Vec<String>, u64, Option<String>, Option<DocumentKey>);
+/// history, font list generation, the family Show Similar Fonts orders by, the document version
+/// while the Document filter lists its families, and the recently added families while the
+/// Recently Added filter lists them.
+type RowsKey = (
+    String,
+    usize,
+    Option<FontClass>,
+    bool,
+    bool,
+    bool,
+    Vec<String>,
+    Vec<String>,
+    Vec<String>,
+    u64,
+    Option<String>,
+    (Option<DocumentKey>, Option<Arc<AddedFonts>>),
+);
+
+/// The installed families the Recently Added filter lists: each one's place in the list
+/// (lowercase name to place, newest first), and the instant from which they are to be found again
+/// ([`vectorcraft_text::RecentlyAdded::recheck_at`]).
+#[derive(Debug, Default, PartialEq, Eq)]
+struct AddedFonts {
+    place: HashMap<String, usize>,
+    recheck_at: Option<std::time::SystemTime>,
+}
+
+impl AddedFonts {
+    fn of(list: &vectorcraft_text::RecentlyAdded) -> Self {
+        Self { place: list.families.iter().enumerate().map(|(i, f)| (f.to_lowercase(), i)).collect(), recheck_at: list.recheck_at }
+    }
+
+    /// Orders `families` (the listed ones) newest first.
+    fn order(&self, families: &mut [String]) {
+        families.sort_by_cached_key(|f| self.place.get(&f.to_lowercase()).copied().unwrap_or(usize::MAX));
+    }
+}
+
+/// The recently added families a [`MenuState`] found, and the database and font list generation
+/// they were found in ([`vectorcraft_text::FontDb::id`], [`vectorcraft_text::FontDb::generation`]).
+type RecentlyAddedFonts = ((u64, u64), Arc<AddedFonts>);
 
 /// The families a [`MenuState`] found in a document (lowercase), and the document version and font
 /// list generation they were found for.
@@ -377,12 +421,15 @@ struct MenuState {
     query: String,
     /// The filters (kept from one opening to the next, and the same in every font menu:
     /// [`Filters`]): script (0..[`SCRIPTS`]), kind, font technology (variable fonts only),
-    /// favorites only and the current document's families only.
+    /// favorites only, the current document's families only and recently added families only.
     script: usize,
     class: Option<FontClass>,
     variable_only: bool,
     favorites_only: bool,
     document_only: bool,
+    added_only: bool,
+    /// The recently added families the Recently Added filter last listed.
+    added: Option<RecentlyAddedFonts>,
     /// The families of the current document the Document filter last listed.
     document_fonts: Option<DocumentFonts>,
     /// The Document filter lists nothing because the document's type uses none of the menu's
@@ -422,6 +469,7 @@ struct Filters {
     variable_only: bool,
     favorites_only: bool,
     document_only: bool,
+    added_only: bool,
 }
 
 impl Filters {
@@ -432,6 +480,7 @@ impl Filters {
             variable_only: st.variable_only,
             favorites_only: st.favorites_only,
             document_only: st.document_only,
+            added_only: st.added_only,
         }
     }
 
@@ -441,6 +490,7 @@ impl Filters {
         st.variable_only = self.variable_only;
         st.favorites_only = self.favorites_only;
         st.document_only = self.document_only;
+        st.added_only = self.added_only;
     }
 }
 
@@ -483,6 +533,41 @@ fn used_families(db: &vectorcraft_text::FontDb, st: &mut MenuState, look: MenuLo
     let families = Arc::new(document_families(db, document.doc));
     st.document_fonts = Some((key, families.clone()));
     Some(families)
+}
+
+/// The time the Recently Added filter counts back from: `look`'s clock, else the system clock. On
+/// wasm, which has no installed fonts to date, the Unix epoch.
+fn added_clock(look: MenuLook) -> std::time::SystemTime {
+    look.clock.unwrap_or_else(|| {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            std::time::SystemTime::now()
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            std::time::SystemTime::UNIX_EPOCH
+        }
+    })
+}
+
+/// The families the Recently Added filter lists, when it is on: those `db` dates within
+/// [`vectorcraft_text::RECENTLY_ADDED_WITHIN`] before `look`'s clock, found again only when the
+/// font list changed or the clock reached the instant the list may change at.
+fn added_families(db: &vectorcraft_text::FontDb, st: &mut MenuState, look: MenuLook) -> Option<Arc<AddedFonts>> {
+    if !st.added_only {
+        return None;
+    }
+    let now = added_clock(look);
+    let key = (db.id(), db.generation());
+    if let Some((k, added)) = &st.added
+        && *k == key
+        && added.recheck_at.is_none_or(|t| now < t)
+    {
+        return Some(added.clone());
+    }
+    let added = Arc::new(AddedFonts::of(&db.recently_added(now)));
+    st.added = Some((key, added.clone()));
+    Some(added)
 }
 
 /// Where the filters every font menu shares are kept ([`Filters`]).
@@ -592,10 +677,22 @@ pub fn font_menu(
     out
 }
 
-/// Does the menu list family `f` for search `query` (lowercase) under the filters of `st`, and
-/// among `used` (lowercase) while the Document filter lists the document's families?
-fn listed(db: &vectorcraft_text::FontDb, f: &str, query: &str, st: &MenuState, look: MenuLook, used: Option<&HashSet<String>>) -> bool {
+/// Does the menu list family `f` for search `query` (lowercase) under the filters of `st`, among
+/// `used` (lowercase) while the Document filter lists the document's families, and among `added`
+/// while the Recently Added filter lists the recently added ones?
+fn listed(
+    db: &vectorcraft_text::FontDb,
+    f: &str,
+    query: &str,
+    st: &MenuState,
+    look: MenuLook,
+    used: Option<&HashSet<String>>,
+    added: Option<&AddedFonts>,
+) -> bool {
     if used.is_some_and(|used| !used.contains(&f.to_lowercase())) {
+        return false;
+    }
+    if added.is_some_and(|added| !added.place.contains_key(&f.to_lowercase())) {
         return false;
     }
     let label = db.family_display_name(f, look.english_names);
@@ -613,12 +710,22 @@ fn listed(db: &vectorcraft_text::FontDb, f: &str, query: &str, st: &MenuState, l
 }
 
 /// The families the closed field's wheel steps through, in the open menu's order with no search:
-/// the recent families first, then the others, under the menu's filters.
+/// the recent families first, then the others, under the menu's filters; with Recently Added, the
+/// newest first.
 fn wheel_order(st: &mut MenuState, look: MenuLook) -> Vec<String> {
-    let db = vectorcraft_text::FontDb::global();
+    wheel_order_in(vectorcraft_text::FontDb::global(), st, look)
+}
+
+/// [`wheel_order`] of the families in `db`.
+fn wheel_order_in(db: &vectorcraft_text::FontDb, st: &mut MenuState, look: MenuLook) -> Vec<String> {
     let used = used_families(db, st, look);
-    let families: Vec<_> = db.menu_family_list().iter().filter(|f| listed(db, f, "", st, look, used.as_deref())).cloned().collect();
-    grouped_rows(&families, look.recent, &[], |_| vec![])
+    let added = added_families(db, st, look);
+    let mut families: Vec<_> =
+        db.menu_family_list().iter().filter(|f| listed(db, f, "", st, look, used.as_deref(), added.as_deref())).cloned().collect();
+    if let Some(added) = &added {
+        added.order(&mut families);
+    }
+    grouped_rows(&families, if added.is_some() { &[] } else { look.recent }, &[], |_| vec![])
         .into_iter()
         .filter_map(|r| match r {
             Row::Family(f) => Some(f),
@@ -1185,6 +1292,13 @@ fn header<'s>(ui: &mut Ui, db: &'s vectorcraft_text::FontDb, state_id: egui::Id,
     }
     let query = widgets::search_field(ui, field, tl!("Search")).to_lowercase();
     let refilter = filters(ui, st, &t, look.document.is_some());
+    let added = added_families(db, st, look);
+    // On the system clock, the list is drawn again when a family's 30 days end.
+    if let (Some(at), None) = (added.as_ref().and_then(|a| a.recheck_at), look.clock)
+        && let Ok(wait) = at.duration_since(added_clock(look))
+    {
+        ui.ctx().request_repaint_after(wait);
+    }
     let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
     // The current family by its own name (a document may name it in Japanese: ヒラギノ角ゴシック),
     // as it was before any preview.
@@ -1203,16 +1317,26 @@ fn header<'s>(ui: &mut Ui, db: &'s vectorcraft_text::FontDb, state_id: egui::Id,
         look.recent.to_vec(),
         db.generation(),
         st.similar.clone(),
-        look.document.filter(|_| st.document_only).map(|d| d.key()),
+        (look.document.filter(|_| st.document_only).map(|d| d.key()), added.clone()),
     );
     if st.rows_key.as_ref() != Some(&key) {
         let used = used_families(db, st, look);
-        let families: Vec<_> = db.menu_family_list().iter().filter(|f| listed(db, f, &query, st, look, used.as_deref())).cloned().collect();
+        let mut families: Vec<_> =
+            db.menu_family_list().iter().filter(|f| listed(db, f, &query, st, look, used.as_deref(), added.as_deref())).cloned().collect();
         st.none_used = families.is_empty() && used.is_some_and(|used| !db.menu_family_list().iter().any(|f| used.contains(&f.to_lowercase())));
+        // Recently Added lists every family it finds once, newest first: the recent ones among
+        // them, without the Recent Fonts section.
+        let recent = match &added {
+            Some(added) => {
+                added.order(&mut families);
+                &[]
+            }
+            None => look.recent,
+        };
         // Show Similar Fonts orders every listed family by likeness, the recent ones among them.
         let rows = match &st.similar {
             Some(base) => grouped_rows(&db.similar_families(base, &families), &[], &st.expanded, |f| db.styles(f)),
-            None => grouped_rows(&families, look.recent, &st.expanded, |f| db.styles(f)),
+            None => grouped_rows(&families, recent, &st.expanded, |f| db.styles(f)),
         };
         // Filter changes (including un-starring a favourite) may remove rows; expanding
         // another family or a background font scan can insert rows before the highlight.
@@ -1276,6 +1400,8 @@ enum Chip {
     Favorites,
     /// The families the current document's type uses.
     Document,
+    /// The families installed in the last 30 days.
+    Added,
     AnyKind,
     Class(FontClass),
     /// The Font Technology label, which filters nothing.
@@ -1284,14 +1410,16 @@ enum Chip {
 }
 
 /// The filters, row by row, the same wherever the menu opens: the scripts; favorites, the
-/// document's fonts, any kind and the first three kinds; the other kinds; font technology.
-fn filter_rows() -> [Vec<Chip>; 4] {
+/// document's fonts, any kind and the first three kinds; the other kinds; font technology; the
+/// recently added fonts.
+fn filter_rows() -> [Vec<Chip>; 5] {
     let (first, rest) = FontClass::ALL.split_at(3);
     [
         (0..SCRIPTS).map(Chip::Script).collect(),
         [Chip::Favorites, Chip::Document, Chip::AnyKind].into_iter().chain(first.iter().copied().map(Chip::Class)).collect(),
         rest.iter().copied().map(Chip::Class).collect(),
         vec![Chip::Technology, Chip::Variable],
+        vec![Chip::Added],
     ]
 }
 
@@ -1321,6 +1449,9 @@ fn filters(ui: &mut Ui, st: &mut MenuState, t: &Tokens, document: bool) -> bool 
                         resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, document, on, tip));
                         resp
                     }
+                    Chip::Added => {
+                        ui.selectable_label(st.added_only, text(tl!("Recently Added"))).on_hover_text(tl!("Fonts added in the last 30 days"))
+                    }
                     Chip::AnyKind => ui.selectable_label(st.class.is_none(), text(tl!("Any Kind"))),
                     Chip::Class(c) => ui.selectable_label(st.class == Some(c), text(class_label(c))),
                     Chip::Technology => ui.label(text(tl!("Font Technology")).color(t.text_dim)),
@@ -1334,6 +1465,7 @@ fn filters(ui: &mut Ui, st: &mut MenuState, t: &Tokens, document: bool) -> bool 
                     Chip::Script(i) => st.script = i,
                     Chip::Favorites => st.favorites_only = !st.favorites_only,
                     Chip::Document => st.document_only = !st.document_only,
+                    Chip::Added => st.added_only = !st.added_only,
                     Chip::AnyKind => st.class = None,
                     Chip::Class(c) => st.class = if st.class == Some(c) { None } else { Some(c) },
                     Chip::Technology => continue,

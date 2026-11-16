@@ -1314,3 +1314,122 @@ fn the_document_filter_on_an_empty_document_or_none() {
     super::Filters::of(&st).apply(&mut other);
     assert!(other.document_only, "every font menu shares the filter");
 }
+
+/// A fixed time the Recently Added tests count from.
+fn clock() -> std::time::SystemTime {
+    std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_800_000_000)
+}
+
+const DAY: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+
+/// The Recently Added filter's list of `families` (newest first), as found in `db`, to be found
+/// again from `recheck_at` on.
+fn added_in(db: &vectorcraft_text::FontDb, families: &[&str], recheck_at: Option<std::time::SystemTime>) -> Option<super::RecentlyAddedFonts> {
+    let list = vectorcraft_text::RecentlyAdded { families: families.iter().map(|f| f.to_string()).collect(), recheck_at };
+    // The font folders' first scan changes the generation: it runs before the generation is read.
+    db.family_list();
+    Some(((db.id(), db.generation()), std::sync::Arc::new(super::AddedFonts::of(&list))))
+}
+
+/// Draws the open menu of the families in `db` twice for `look` under the filters of `st`, with
+/// `events` in the first pass; returns the shapes of the second.
+fn settle_menu_of(
+    ctx: &egui::Context,
+    db: &vectorcraft_text::FontDb,
+    st: &mut super::MenuState,
+    look: super::MenuLook,
+    events: Vec<egui::Event>,
+) -> Vec<egui::epaint::ClippedShape> {
+    let area = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 900.0));
+    let mut shapes = vec![];
+    for events in [events, vec![]] {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(area), ..Default::default() }, |ui| {
+            let _ = super::list_of(ui, db, egui::Id::unique("recently-added"), st, "Inter", None, look);
+        });
+        out.textures_delta.clear();
+        shapes = out.shapes;
+    }
+    shapes
+}
+
+/// The Recently Added filter lists only the families added recently, the newest first and without
+/// the Recent Fonts section, the recent family among them; it combines with the ★ filter and the
+/// search, Show Similar Fonts orders what it lists, and the closed field's wheel follows its order.
+#[test]
+fn the_recently_added_filter_lists_new_families_newest_first() {
+    // The bundled fonts alone: fonts that tests running alongside add stay out of the rows.
+    let db = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+    let ctx = egui::Context::default();
+    let recent = vec!["Inter".to_string()];
+    let favorites = vec!["Inter".to_string(), "Source Serif 4".to_string()];
+    let look = super::MenuLook { samples: false, recent: &recent, clock: Some(clock()), ..Default::default() };
+    let newest_first = ["Source Serif 4", "JetBrains Mono", "Inter"];
+    let mut st = super::MenuState { added_only: true, added: added_in(&db, &newest_first, None), ..Default::default() };
+    settle_menu_of(&ctx, &db, &mut st, look, vec![]);
+    assert_eq!(listed_families(&st), newest_first, "newest first, the recent family among them");
+    assert!(!st.rows.iter().any(|r| matches!(r, Row::Heading(_))), "no Recent Fonts section: {:?}", st.rows);
+    assert_eq!(super::wheel_order_in(&db, &mut st, look), newest_first, "the wheel steps through the same families");
+    st.favorites_only = true;
+    settle_menu_of(&ctx, &db, &mut st, super::MenuLook { favorites: &favorites, ..look }, vec![]);
+    assert_eq!(listed_families(&st), ["Source Serif 4", "Inter"], "only the favorites among them");
+    st.favorites_only = false;
+    st.similar = Some("Inter".into());
+    settle_menu_of(&ctx, &db, &mut st, look, vec![]);
+    let listed: Vec<String> = newest_first.iter().map(|f| f.to_string()).collect();
+    assert_eq!(listed_families(&st), db.similar_families("Inter", &listed), "Show Similar Fonts orders only these");
+    st.similar = None;
+    settle_menu_of(&ctx, &db, &mut st, look, vec![]);
+    assert_eq!(listed_families(&st), newest_first, "newest first again once it is cleared");
+    settle_menu_of(&ctx, &db, &mut st, look, vec![egui::Event::Text("mono".into())]);
+    assert_eq!(listed_families(&st), ["JetBrains Mono"], "the search narrows the list");
+}
+
+/// A family leaves the list when its 30 days end, while the menu is open; with none left the
+/// filter stays on and the menu says nothing matches. Its chip turns it off, and every font menu
+/// shares it.
+#[test]
+fn the_recently_added_filter_drops_families_as_their_30_days_end() {
+    let db = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let look = super::MenuLook { samples: false, clock: Some(clock()), ..Default::default() };
+    let mut st = super::MenuState { added_only: true, added: added_in(&db, &["Inter"], Some(clock() + DAY)), ..Default::default() };
+    settle_menu_of(&ctx, &db, &mut st, look, vec![]);
+    assert_eq!(listed_families(&st), ["Inter"]);
+    let mut other = super::MenuState::default();
+    super::Filters::of(&st).apply(&mut other);
+    assert!(other.added_only, "every font menu shares the filter");
+    let later = super::MenuLook { clock: Some(clock() + DAY), ..look };
+    let shapes = settle_menu_of(&ctx, &db, &mut st, later, vec![]);
+    assert!(st.rows.is_empty(), "{:?}", st.rows);
+    assert!(st.added_only, "the filter stays on");
+    assert!(text_at(&shapes, |t| t == "No matching fonts").is_some(), "the menu says nothing matches");
+    let chip = text_at(&shapes, |t| t == "Recently Added").expect("the Recently Added chip is drawn");
+    let button = |pressed| egui::Event::PointerButton { pos: chip, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    settle_menu_of(&ctx, &db, &mut st, later, vec![egui::Event::PointerMoved(chip), button(true)]);
+    settle_menu_of(&ctx, &db, &mut st, later, vec![button(false)]);
+    assert!(!st.added_only, "the chip turns the filter off");
+    assert!(listed_families(&st).len() > 1, "every family: {:?}", st.rows);
+}
+
+/// A font file installed just now is recently added by its creation time, and no longer 31 days
+/// later. Where the file system keeps no creation time, the filter lists nothing.
+#[test]
+fn the_recently_added_filter_lists_a_font_installed_just_now() {
+    let dir = std::env::temp_dir().join(format!("vc-font-menu-recently-added-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("SourceSerif4-Regular.ttf");
+    std::fs::copy(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/fonts/SourceSerif4-Regular.ttf"), &file).unwrap();
+    let dated = std::fs::metadata(&file).and_then(|m| m.created()).is_ok();
+    let db = vectorcraft_text::FontDb::with_font_dirs(vec![dir.clone()]);
+    let ctx = egui::Context::default();
+    let now = std::time::SystemTime::now();
+    let mut st = super::MenuState { added_only: true, ..Default::default() };
+    settle_menu_of(&ctx, &db, &mut st, super::MenuLook { samples: false, clock: Some(now), ..Default::default() }, vec![]);
+    let expected: &[&str] = if dated { &["Source Serif 4"] } else { &[] };
+    assert_eq!(listed_families(&st), expected);
+    settle_menu_of(&ctx, &db, &mut st, super::MenuLook { samples: false, clock: Some(now + DAY * 31), ..Default::default() }, vec![]);
+    assert!(st.rows.is_empty(), "31 days later: {:?}", st.rows);
+    std::fs::remove_dir_all(&dir).unwrap();
+}
