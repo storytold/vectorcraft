@@ -454,7 +454,10 @@ struct MenuState {
     filters: f32,
     /// The families the wheel steps through, listed at its first notch over the closed field and
     /// kept for that text selection while the pointer stays on it: each step makes its family a recent one, which would
-    /// otherwise move it in the order.
+    /// otherwise move it in the order. The Document filter's families are kept the same way: a
+    /// step that leaves a family unused keeps it in the order, so turning the wheel back returns
+    /// to it. They are listed again at the first notch after the pointer leaves the field or the
+    /// selection changes.
     wheel_order: Option<Arc<[String]>>,
     wheel_target: Option<WheelTarget>,
 }
@@ -497,16 +500,26 @@ impl Filters {
 /// The families the type in `doc` is set in, lowercase and by the name the menu lists them under
 /// ([`vectorcraft_text::FontDb::canonical`]): the runs of every text object in the layers, symbols,
 /// patterns and graph designs, hidden, locked and masked ones included, with a composite font named
-/// as such. A pattern being edited is read from its editing layer only. Styles no type uses are left
-/// out.
+/// as such. A pattern being edited is read from its editing layer only. Each run's family is looked
+/// up with its style, so a family and style split from a PostScript name (`Honoka`, `Mincho`) find
+/// the installed font of that name. Styles no type uses are left out.
 fn document_families(db: &vectorcraft_text::FontDb, doc: &vectorcraft_doc::Document) -> HashSet<String> {
-    // Each name once, so a document with many runs in a few families looks each family up once.
-    let mut named: HashSet<String> = HashSet::new();
+    // Each family and style once, so a document with many runs in a few fonts looks each one up
+    // once.
+    let mut named: HashMap<String, HashSet<String>> = HashMap::new();
     let mut add = |n: &vectorcraft_doc::Node| {
         if let vectorcraft_doc::NodeKind::Text(t) = &n.kind {
             for r in &t.runs {
-                if !named.contains(&r.style.font_family) {
-                    named.insert(r.style.font_family.clone());
+                let (family, style) = (&r.style.font_family, &r.style.font_style);
+                match named.get_mut(family) {
+                    Some(styles) => {
+                        if !styles.contains(style) {
+                            styles.insert(style.clone());
+                        }
+                    }
+                    None => {
+                        named.insert(family.clone(), HashSet::from([style.clone()]));
+                    }
                 }
             }
         }
@@ -517,7 +530,7 @@ fn document_families(db: &vectorcraft_text::FontDb, doc: &vectorcraft_doc::Docum
     for n in doc.layers.iter().map(|l| &**l).chain(doc.symbols.iter().map(|s| &*s.art)).chain(patterns).chain(designs) {
         vectorcraft_doc::swatches::walk_with_masks(n, &mut add);
     }
-    named.into_iter().map(|f| db.canonical(&f, "").0.to_lowercase()).collect()
+    named.iter().flat_map(|(f, styles)| styles.iter().map(move |s| db.canonical(f, s).0.to_lowercase())).collect()
 }
 
 /// The families the Document filter lists, when it is on and a document is open: those of
@@ -711,7 +724,7 @@ fn listed(
 
 /// The families the closed field's wheel steps through, in the open menu's order with no search:
 /// the recent families first, then the others, under the menu's filters; with Recently Added, the
-/// newest first.
+/// newest first. Listed once per wheel gesture ([`MenuState`]'s `wheel_order`).
 fn wheel_order(st: &mut MenuState, look: MenuLook) -> Vec<String> {
     wheel_order_in(vectorcraft_text::FontDb::global(), st, look)
 }

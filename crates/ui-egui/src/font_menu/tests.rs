@@ -1221,6 +1221,27 @@ fn the_document_filter_counts_type_in_graph_designs() {
     assert_eq!(names, ["inter", "jetbrains mono"]);
 }
 
+/// A run whose family and style were split from a PostScript name (as an importer without the font
+/// splits one) counts under the family of the installed font of that name, found with its style.
+#[test]
+fn the_document_filter_finds_a_postscript_name_split_into_family_and_style() {
+    let mut app = app_with_type(&[]);
+    let id = app.run("text.create", serde_json::json!({"x": 20, "y": 90, "text": "Split", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+    let mut art = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).cloned().expect("the new type");
+    app.run("edit.undo", serde_json::json!({})).unwrap();
+    let vectorcraft_doc::NodeKind::Text(t) = &mut art.kind else { panic!("type") };
+    for r in &mut t.runs {
+        // SourceSans3-Semibold, split after "Semi".
+        r.style.font_family = "SourceSans3Semi".into();
+        r.style.font_style = "bold".into();
+    }
+    let mut doc = (*app.session.active().unwrap().doc).clone();
+    doc.graph_designs.push(vectorcraft_doc::GraphDesign { name: "Split".into(), art: std::sync::Arc::new(art) });
+    let db = vectorcraft_text::FontDb::global();
+    let names: Vec<_> = super::document_families(db, &doc).into_iter().collect();
+    assert_eq!(names, ["source sans 3"]);
+}
+
 /// The Document filter combines with the others and with Recent Fonts, follows edits and undo
 /// without the menu reopening, and steers the closed field's wheel.
 #[test]
