@@ -475,6 +475,27 @@ fn color_wheel_opacity_strings_are_in_complete_catalogs() {
     }
 }
 
+/// The Color Wheel panel's Copy Color As, its status message and the error of `color.format`.
+#[test]
+fn copy_color_as_strings_are_in_complete_catalogs() {
+    let labels = ["Copy Color As", "Hex", "Hex with Alpha", "CSS rgb()", "CSS hsl()", "CSS oklch()", "CMYK Values", "Format Color"];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in labels {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let literals = message_literals();
+    let notation = "`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk";
+    assert!(literals.contains(notation), "{notation}");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, notation), notation, "{code}");
+        let copied = "Copied the color as rgb(51 102 153 / 50%)";
+        let shown = message(lang, copied);
+        assert!(shown != copied && shown.contains("rgb(51 102 153 / 50%)"), "{code}: {shown}");
+    }
+}
+
 /// The Window › Brush Libraries menu, built from the built-in library table, names each library.
 #[test]
 fn built_in_brush_library_names_are_in_complete_catalogs() {

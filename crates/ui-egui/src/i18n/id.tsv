@@ -434,6 +434,14 @@
 	Show Hex Field	Tampilkan bidang hex
 	Hex or CSS color	Warna hex atau CSS
 	Parse Color	Urai warna
+	Format Color	Format warna
+	Copy Color As	Salin warna sebagai
+	Hex	Hex
+	Hex with Alpha	Hex dengan alfa
+	CSS rgb()	CSS rgb()
+	CSS hsl()	CSS hsl()
+	CSS oklch()	CSS oklch()
+	CMYK Values	Nilai CMYK
 	Stroke Color	Warna stroke
 	Fill Gradient	Gradien isian
 	Stroke Gradient	Gradien stroke
@@ -5755,6 +5763,8 @@ mark-style	Japanese	Jepang
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` harus hue, saturation, brightness, red, green atau blue
 @msg	`sliders` must be none or oklch	`sliders` harus none atau oklch
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH memerlukan sRGB sebagai ruang RGB kerja
+@msg	`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk	`notation` harus hex, hexAlpha, rgb, hsl, oklch, atau cmyk
+@msg	Copied the color as {text}	Warna disalin sebagai {text}
 @msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` harus berupa warna hex (#rgb, #rgba, #rrggbb, atau #rrggbbaa) atau warna CSS rgb(), hsl(), atau oklch() dengan paling banyak 48 karakter
 @msg	the Color Picker is not open	Pemilih Warna tidak terbuka
 @msg	the screen color sampler is already open	pengambil warna layar sudah terbuka

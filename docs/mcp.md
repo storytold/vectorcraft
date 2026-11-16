@@ -689,6 +689,23 @@ saturation and lightness are so large that a channel overflows to an infinity is
 as a percentage, or `null` when the text gives none. Any other text is an error. The color parameters of the other
 commands still refuse `#rrggbbaa` and `#rgba`.
 
+`color.format {"color": "#336699", "opacity": 50, "notation": "rgb"}` answers `{"text": "rgb(51 102 153 / 50%)"}`.
+`notation` is `hex` (`#336699`), `hexAlpha` (`#33669980`, and `#336699ff` at 100 % or without `opacity`), `rgb`, `hsl`
+(`hsl(210 50% 40% / 50%)`), `oklch` (`oklch(49.93% 0.0987 250.43 / 50%)`) or `cmyk` (`C=87 M=61 Y=19 K=0` with the
+default color settings). The CSS forms are space-separated and add ` / opacity%` when the opacity is under 100;
+`hex` and `cmyk` leave the opacity out. Every notation but `cmyk` writes the working RGB numbers, the same numbers
+the Color panel's hex field shows, with lowercase hex digits; `oklch` is an error while the working RGB space is not
+sRGB. `hsl()` and `oklch()` give their numbers to two decimal places (chroma to four), and `oklch()` takes up to two
+more where fewer would read back to another color. `cmyk` is the color in the working CMYK space
+through the color settings, written as a new swatch is named; a CMYK color keeps its own values. `color.parse` reads
+every notation but `cmyk` back to the same `#rrggbb`. `opacity` is 0 to 100, and any other value, or another
+`notation`, is an error.
+
+The Color Wheel panel menu's Copy Color As puts the panel's color on the clipboard as Hex, Hex with Alpha, CSS
+rgb(), CSS hsl(), CSS oklch() or CMYK Values, the six `color.format` notations, with the opacity that Show Opacity
+edits when it has one (whether or not that row shows), and the status bar shows what was copied. CSS oklch() is gray
+while the working RGB space is not sRGB, and Copy Color As is gray without a solid color.
+
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop
 portal's [PickColor](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Screenshot.html)

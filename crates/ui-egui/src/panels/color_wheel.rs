@@ -212,7 +212,7 @@ pub(crate) fn set(settings: &mut Settings, p: &Value, cms: &Cms) -> Result<(), S
 }
 
 /// The panel menu: Wheel View and Box View, Box Channel while the box shows, OKLCH Sliders, Show
-/// Opacity and Show Hex Field.
+/// Opacity, Show Hex Field and Copy Color As.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let set = app.ui.color_wheel.clone();
     for (label, view) in [(tl!("Wheel View"), View::Wheel), (tl!("Box View"), View::Box)] {
@@ -245,6 +245,54 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if menu_item(ui, tl!("Show Hex Field"), true, set.hex_field) {
         command(app, &json!({ "hexField": !set.hex_field })).ok();
+    }
+    ui.separator();
+    let has_color = wheel_target(app, ui).color().is_some();
+    ui.add_enabled_ui(has_color, |ui| {
+        ui.menu_button(format!("   {}", tl!("Copy Color As")), |ui| copy_menu(app, ui));
+    });
+}
+
+/// The items of Copy Color As.
+pub(crate) fn copy_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let notations = [
+        (tl!("Hex"), "hex"),
+        (tl!("Hex with Alpha"), "hexAlpha"),
+        (tl!("CSS rgb()"), "rgb"),
+        (tl!("CSS hsl()"), "hsl"),
+        (tl!("CSS oklch()"), "oklch"),
+        (tl!("CMYK Values"), "cmyk"),
+    ];
+    for (label, notation) in notations {
+        let clicked = if notation == "oklch" {
+            widgets::menu_item_hint(ui, label, cms::active().rgb_is_srgb(), false, tl!("OKLCH needs sRGB as the working RGB space"))
+        } else {
+            menu_item(ui, label, true, false)
+        };
+        if clicked {
+            copy_color_as(app, ui, notation);
+        }
+    }
+}
+
+/// Copy Color As: put `color.format`'s text in `notation` of the color the panel shows on the
+/// clipboard, with the opacity of what the row of Show Opacity edits when it has one, and say in
+/// the status bar what was copied. Does nothing without a solid color.
+pub(crate) fn copy_color_as(app: &mut VectorcraftApp, ui: &Ui, notation: &str) {
+    let tgt = wheel_target(app, ui);
+    let Some(color) = tgt.color() else { return };
+    let (o, live) = shown_opacity(app, &tgt);
+    let mut p = json!({ "color": color_json(&color), "notation": notation });
+    if live {
+        p["opacity"] = json!(f64::from(o.clamp(0.0, 1.0)) * 100.0);
+    }
+    match app.run("color.format", p) {
+        Ok(r) => {
+            let text = r["text"].as_str().unwrap_or_default().to_string();
+            ui.ctx().copy_text(text.clone());
+            app.status(format!("Copied the color as {text}"));
+        }
+        Err(e) => app.status(e),
     }
 }
 

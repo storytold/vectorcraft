@@ -390,6 +390,73 @@ fn parse_err(s: &mut Session, p: Value) -> String {
     s.execute("color.parse", &p).unwrap_err().to_string()
 }
 
+/// `color.format` writes each notation, with the opacity only where it belongs, and `color.parse`
+/// reads every notation but CMYK back to the same color and opacity.
+#[test]
+fn format_writes_each_notation_and_parse_reads_it_back() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let s = &mut s;
+    let fmt = |s: &mut Session, color: Value, opacity: Value, notation: &str| {
+        let r = s.execute("color.format", &json!({ "color": color, "opacity": opacity, "notation": notation })).unwrap();
+        r["text"].as_str().unwrap().to_string()
+    };
+    let blue = json!("#336699");
+    for (notation, at_half, at_full) in [
+        ("hex", "#336699", "#336699"),
+        ("hexAlpha", "#33669980", "#336699ff"),
+        ("rgb", "rgb(51 102 153 / 50%)", "rgb(51 102 153)"),
+        ("hsl", "hsl(210 50% 40% / 50%)", "hsl(210 50% 40%)"),
+    ] {
+        assert_eq!(fmt(s, blue.clone(), json!(50), notation), at_half, "{notation}");
+        assert_eq!(fmt(s, blue.clone(), Value::Null, notation), at_full, "{notation}");
+    }
+    let oklch = fmt(s, blue.clone(), json!(25), "oklch");
+    assert!(oklch.starts_with("oklch(") && oklch.ends_with(" / 25%)"), "{oklch}");
+    // The working CMYK numbers through the color settings, as color.convert gives them.
+    let cmyk = s.execute("color.convert", &json!({ "color": "#336699", "to": "cmyk" })).unwrap();
+    let pct: Vec<f64> = cmyk["values"].as_array().unwrap().iter().map(|v| (v.as_f64().unwrap() * 100.0).round() + 0.0).collect();
+    let expected = format!("C={} M={} Y={} K={}", pct[0], pct[1], pct[2], pct[3]);
+    assert_eq!(expected, "C=87 M=61 Y=19 K=0", "the default color settings, as docs/mcp.md gives them");
+    assert_eq!(fmt(s, blue.clone(), json!(50), "cmyk"), expected);
+    assert_eq!(fmt(s, json!({"c": 10, "m": 20, "y": 30, "k": 0}), Value::Null, "cmyk"), "C=10 M=20 Y=30 K=0", "a CMYK color keeps its values");
+    assert_eq!(fmt(s, json!({"gray": 40}), Value::Null, "cmyk"), "C=0 M=0 Y=0 K=40");
+    for color in [json!("#336699"), json!("#0a0b0c"), json!("#ff0000"), json!("#ffffff"), json!({"c": 100, "m": 0, "y": 0, "k": 0})] {
+        for (notation, opacity) in [("hex", Value::Null), ("hexAlpha", json!(40)), ("rgb", json!(12.5)), ("hsl", json!(99.99)), ("oklch", json!(0))] {
+            let text = fmt(s, color.clone(), opacity.clone(), notation);
+            let shown = fmt(s, color.clone(), Value::Null, "hex");
+            let r = s.execute("color.parse", &json!({ "text": text })).unwrap();
+            assert_eq!(r["hex"], json!(shown), "{color} {notation}: {text}");
+            match notation {
+                "hex" => assert_eq!(r["opacity"], Value::Null, "{text}"),
+                "hexAlpha" => assert_eq!(r["opacity"], json!(40.0), "{text}"),
+                _ => assert_eq!(r["opacity"], opacity.as_f64().map_or(Value::Null, |o| json!(o)), "{text}"),
+            }
+        }
+    }
+}
+
+/// `color.format` refuses a missing or wrong color, opacity or notation.
+#[test]
+fn format_refuses_bad_params() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let mut err = |p: Value| s.execute("color.format", &p).unwrap_err().to_string();
+    let notation = "`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk";
+    assert!(err(json!({"color": "#336699"})).ends_with(notation));
+    assert!(err(json!({"color": "#336699", "notation": "css"})).ends_with(notation));
+    assert!(err(json!({"color": "#336699", "notation": "HEX"})).ends_with(notation));
+    assert!(err(json!({"color": "#336699", "notation": 1})).ends_with("`notation` must be a string"));
+    assert!(err(json!({"notation": "hex"})).ends_with("missing or invalid `color`"));
+    assert!(err(json!({"color": "#33669980", "notation": "hex"})).ends_with("missing or invalid `color`"));
+    for opacity in [json!(-1), json!(101), json!("50"), json!(true)] {
+        assert!(
+            err(json!({"color": "#336699", "opacity": opacity, "notation": "rgb"})).ends_with("`opacity` must be a number from 0 to 100"),
+            "{opacity}"
+        );
+    }
+}
+
 #[test]
 fn assign_profile_is_stored_and_undoable() {
     let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());

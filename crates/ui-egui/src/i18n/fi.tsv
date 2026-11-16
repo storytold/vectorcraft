@@ -476,6 +476,14 @@
 	Show Hex Field	Näytä heksakenttä
 	Hex or CSS color	Heksa- tai CSS-väri
 	Parse Color	Jäsennä väri
+	Format Color	Muotoile väri
+	Copy Color As	Kopioi väri muodossa
+	Hex	Heksa
+	Hex with Alpha	Heksa ja alfa
+	CSS rgb()	CSS rgb()
+	CSS hsl()	CSS hsl()
+	CSS oklch()	CSS oklch()
+	CMYK Values	CMYK-arvot
 	Stroke Color	Viivan väri
 	Fill Gradient	Täytön liukuväri
 	Stroke Gradient	Viivan liukuväri
@@ -6365,6 +6373,8 @@ mark-style	Japanese	Japanilainen
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`-arvon on oltava hue, saturation, brightness, red, green tai blue
 @msg	`sliders` must be none or oklch	`sliders` on oltava none tai oklch
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH vaatii sRGB:n RGB-työväriavaruudeksi
+@msg	`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk	`notation` on oltava hex, hexAlpha, rgb, hsl, oklch tai cmyk
+@msg	Copied the color as {text}	Väri kopioitiin muodossa {text}
 @msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` on oltava heksaväri (#rgb, #rgba, #rrggbb tai #rrggbbaa) tai CSS-väri rgb(), hsl() tai oklch(), enintään 48 merkkiä
 @msg	`{key}` must be an array of these names: {_1}	`{key}`-arvon on oltava taulukko, jossa on näitä nimiä: {_1}
 @msg	choose a destination folder	valitse kohdekansio

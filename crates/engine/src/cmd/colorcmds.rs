@@ -145,7 +145,41 @@ pub fn specs() -> Vec<CommandSpec> {
             always,
             parse_color
         ),
+        cmd!(
+            query "color.format",
+            "Format Color",
+            [],
+            None,
+            "{color (#rrggbbaa and #rgba are refused), opacity?: 0..100 (100), notation: \"hex\"|\"hexAlpha\"|\"rgb\"|\"hsl\"|\"oklch\"|\"cmyk\"} the color as text → {text}: hex is #rrggbb and hexAlpha #rrggbbaa (ff at 100) of the working RGB numbers, the same numbers the Color panel's hex field shows, in lowercase; rgb, hsl and oklch are CSS Color 4's rgb(), hsl() and oklch() of the same numbers (https://www.w3.org/TR/css-color-4/#rgb-functions, https://www.w3.org/TR/css-color-4/#the-hsl-notation, https://www.w3.org/TR/css-color-4/#specifying-oklab-oklch), each in the space-separated form with ` / opacity%` added when the opacity is under 100, hsl() and oklch() to two decimal places (chroma to four); cmyk is \"C=0 M=50 Y=100 K=0\", as a new swatch is named, of the color in the working CMYK space through the color settings (a CMYK color keeps its own values); hex and cmyk leave the opacity out. color.parse reads every notation but cmyk back to the same #rrggbb; oklch is an error while the working RGB space is not sRGB",
+            always,
+            format_color
+        ),
     ]
+}
+
+fn format_color(_: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "color.format";
+    let col = p.get("color").and_then(color_value).ok_or_else(|| bad(C, "missing or invalid `color`"))?;
+    let opacity = super::paint::opacity_param(p, C)?;
+    let notation = match text_param(p, "notation", C)? {
+        Some("hex") => Some(css::Notation::Hex),
+        Some("hexAlpha") => Some(css::Notation::HexAlpha),
+        Some("rgb") => Some(css::Notation::Rgb),
+        Some("hsl") => Some(css::Notation::Hsl),
+        Some("oklch") => Some(css::Notation::Oklch),
+        Some("cmyk") => None,
+        _ => return Err(bad(C, "`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk")),
+    };
+    let cms = vectorcraft_color::cms::active();
+    let intent = cms.settings().intent;
+    let text = match notation {
+        None => vectorcraft_doc::swatches::color_name(cms.convert(&col, Model::Cmyk, intent)),
+        Some(css::Notation::Oklch) if !cms.rgb_is_srgb() => return Err(bad(C, "OKLCH needs sRGB as the working RGB space")),
+        // The working RGB numbers, as the Color panel's hex field and color.parse read them; for
+        // oklch() the working RGB space is sRGB.
+        Some(n) => css::format(cms.convert(&col, Model::Rgb, intent).to_rgb_uncalibrated(), opacity, n),
+    };
+    Ok(json!({ "text": text }))
 }
 
 fn parse_color(_: &mut Session, p: &Value) -> Result<Value> {

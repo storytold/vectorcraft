@@ -522,9 +522,9 @@ fn set_paint(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
     apply_paint_opacity(s, p, paint, opacity, fill)
 }
 
-/// The `opacity` param of `paint.setFill` and `paint.setStroke` (a percentage) as 0..1; `None`
-/// when it is left out or null.
-fn opacity_param(p: &Value, cmd: &str) -> Result<Option<f32>> {
+/// The `opacity` param of `paint.setFill`, `paint.setStroke` and `color.format` (a percentage) as
+/// 0..1; `None` when it is left out or null.
+pub(crate) fn opacity_param(p: &Value, cmd: &str) -> Result<Option<f32>> {
     match p.get("opacity") {
         None | Some(Value::Null) => Ok(None),
         Some(v) => match v.as_f64() {

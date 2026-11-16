@@ -140,6 +140,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "charStyle.setAttrs",
     "charStyle.unused",
     "color.convert",
+    "color.format",
     "color.gamutCheck",
     "color.harmony",
     "color.parse",
