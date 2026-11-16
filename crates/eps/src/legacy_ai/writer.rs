@@ -1183,7 +1183,17 @@ impl<'a> Writer<'a> {
         {
             return img.clone();
         }
-        let img = image::load_from_memory(&blob.bytes).ok().map(Arc::new);
+        let too_large = |w: u32, h: u32| w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_IMAGE_PIXELS;
+        let img = if vectorcraft_doc::header_size(&blob.bytes).is_some_and(|(w, h)| too_large(w, h)) {
+            None
+        } else {
+            vectorcraft_doc::decode::decode_within(&blob.bytes, MAX_IMAGE_PIXELS.saturating_mul(8))
+                .ok()
+                .flatten()
+                .map(|(img, _)| img)
+                .filter(|img| !too_large(img.width(), img.height()))
+        }
+        .map(Arc::new);
         self.last_image = Some((blob.clone(), img.clone()));
         self.last_coverage = None;
         img
