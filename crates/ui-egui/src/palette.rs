@@ -404,19 +404,26 @@ fn build_in(lang: crate::i18n::Lang, native: bool) -> Vec<Entry> {
 /// item runs ([`crate::keymap::command_of`]). Returns what the pick did.
 pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) -> Picked {
     let had_dialog = app.ui.dialog.is_some();
-    if let Some(tool) = id.strip_prefix("tool:") {
-        app.select_tool(tool);
+    let ran = if let Some(tool) = id.strip_prefix("tool:") {
+        match app.try_select_tool(tool) {
+            Ok(()) => true,
+            Err(e) => {
+                app.status(e);
+                false
+            }
+        }
     } else if let Some(panel) = id.strip_prefix("panel:") {
         // A panel that can be seen stays as it is, where `window.panel` would put an open flyout or
         // a floating panel away. In Presentation Mode the pick fails and changes nothing, as
         // `window.panel` does.
         if app.ui.screen_mode >= 3 {
             app.status("panels can't be shown in Presentation Mode");
-            return Picked::Refused;
-        }
-        if let Err(e) = crate::panel_docking::reveal_panel(app, panel) {
+            false
+        } else if let Err(e) = crate::panel_docking::reveal_panel(app, panel) {
             app.status(e);
-            return Picked::Refused;
+            false
+        } else {
+            true
         }
     } else if id.starts_with("plugin:") || id.starts_with("effect:") {
         let command = crate::keymap::command_of(id);
@@ -427,31 +434,37 @@ pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) -> Picked {
             if let Err(why) = crate::shortcut_editor::dimmed(app, &command.id) {
                 app.status(why);
             }
-            return Picked::Refused;
+        } else {
+            menus::invoke(app, &command.id, command.params);
         }
-        menus::invoke(app, &command.id, command.params);
-        if !on {
-            return Picked::Refused;
-        }
+        on
     } else {
         match crate::shortcut_editor::menu_target_now(app, id) {
-            Some(Ok((id, p))) => menus::invoke(app, &id, p),
+            Some(Ok((id, p))) => {
+                menus::invoke(app, &id, p);
+                true
+            }
             Some(Err(why)) => {
                 app.status(why);
-                return Picked::Refused;
+                false
             }
             None => {
                 // The command is invoked while its menu item is dimmed too, and its own check
-                // reports why it can't run; the pick counts as refused.
+                // reports why it can't run.
                 let on = menus::enabled(app, id);
                 menus::invoke(app, id, json!({}));
-                if !on {
-                    return Picked::Refused;
-                }
+                on
             }
         }
+    };
+    // A dimmed command that still opens its dialog counts as opening it.
+    if !had_dialog && app.ui.dialog.is_some() {
+        Picked::OpenedDialog
+    } else if ran {
+        Picked::Ran
+    } else {
+        Picked::Refused
     }
-    if !had_dialog && app.ui.dialog.is_some() { Picked::OpenedDialog } else { Picked::Ran }
 }
 
 /// What a pick of a palette result did ([`run_pick`]).
@@ -461,7 +474,8 @@ pub(crate) enum Picked {
     Ran,
     /// The pick opened a dialog, which may still be canceled.
     OpenedDialog,
-    /// The pick's menu item is dimmed now, or its panel can't be shown: the status line says why.
+    /// The pick's menu item is dimmed now, its tool can't be chosen or its panel can't be shown:
+    /// the status line says why.
     Refused,
 }
 
@@ -899,10 +913,17 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     });
     if let Some(id) = run {
         app.ui.palette_open = false;
-        // A pick that ran or opened a dialog goes first in Recent Commands, even when the dialog
-        // is then canceled. A refused pick is not recorded.
-        if run_pick(app, &id) != Picked::Refused && id != PALETTE_TOGGLE {
+        // A pick goes first in Recent Commands before it runs, and stays there when it ran or
+        // opened a dialog, even when the dialog is then canceled. A refused pick puts the list
+        // back as it was.
+        let before = (id != PALETTE_TOGGLE).then(|| app.ui.recent_commands.clone());
+        if before.is_some() {
             remember(&mut app.ui.recent_commands, &id, |c| entries.list.iter().any(|e| e.id == c));
+        }
+        if run_pick(app, &id) == Picked::Refused
+            && let Some(before) = before
+        {
+            app.ui.recent_commands = before;
         }
     } else if outside {
         app.ui.palette_open = false;
@@ -1627,6 +1648,17 @@ mod tests {
         let mut presenting = app(Fixture::Multi.session());
         presenting.ui.screen_mode = 3;
         assert_eq!(run_pick(&mut presenting, "panel:swatches"), Picked::Refused);
+        assert_eq!(run_pick(&mut app(Fixture::Multi.session()), "panel:no-such-panel"), Picked::Refused);
+        let mut stuck = app(Fixture::Multi.session());
+        stuck.fail_next_tool_choice = Some("no switch".into());
+        assert_eq!(run_pick(&mut stuck, "tool:knife"), Picked::Refused);
+        assert_eq!(stuck.ui.status, "no switch");
+        // With nothing selected, the Effect menu dims every effect, and a plug-in's filter is dimmed.
+        let effect = crate::shortcut_editor::effect_items().first().map(|e| format!("effect:{}", e.effect)).expect("an effect");
+        let mut empty = app(vectorcraft_engine::Session::new());
+        assert_eq!(run_pick(&mut empty, &effect), Picked::Refused, "{effect}");
+        assert!(empty.ui.dialog.is_none(), "{effect}");
+        assert_eq!(run_pick(&mut app(vectorcraft_engine::Session::new()), "plugin:test.UI.palette_missing"), Picked::Refused);
     }
 
     /// A pick that is refused while its menu item is dimmed is not recorded in Recent Commands,
@@ -1654,6 +1686,16 @@ mod tests {
         open.press(egui::Key::Enter, 1);
         assert!(!open.app.ui.palette_open, "the palette closes");
         assert_eq!(open.app.ui.recent_commands, ["paint.swap", "object.group"]);
+        // A tool that can't be chosen now is not recorded either.
+        let mut open = Open::new("knife", WINDOW);
+        open.app.ui.recent_commands = vec!["paint.swap".into()];
+        let k = open.listed().iter().position(|c| c == "tool:knife").expect("the search finds the Knife");
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, k);
+        open.app.fail_next_tool_choice = Some("no switch".into());
+        open.press(egui::Key::Enter, 1);
+        assert_eq!(open.app.ui.status, "no switch");
+        assert_eq!(open.app.ui.recent_commands, ["paint.swap"]);
     }
 
     /// A pick that opens a dialog is recorded in Recent Commands when the dialog opens, so it stays
