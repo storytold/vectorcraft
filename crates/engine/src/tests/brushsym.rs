@@ -1037,6 +1037,40 @@ fn brush_freehand_direct_call_has_one_undo_step() {
     assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Paintbrush"), "a stroke with a brush is a Paintbrush step");
 }
 
+/// A `brush.freehand` call that continues a path by one point changes only the path's brush, and
+/// applies `keepSelected` as a longer continuation does: off, the path is deselected while the
+/// rest of the selection stays; on, the path is selected. A call that leaves the brush as it is
+/// changes neither the selection nor the undo history.
+#[test]
+fn brush_freehand_continued_by_one_point_follows_keep_selected() {
+    let mut s = session();
+    let r = s.execute("brush.freehand", &json!({"points": [[10, 10], [60, 40], [120, 10]], "style": "brush", "brush": "Charcoal"})).unwrap();
+    let p = NodeId(r["id"].as_u64().unwrap());
+    let a = rect(&mut s, 200.0, 200.0, 10.0, 10.0);
+    let extend = json!({"id": p.0, "end": "end"});
+
+    select(&mut s, &[p, a]);
+    let off = json!({"points": [[120, 10]], "extend": extend, "brush": "Dots", "keepSelected": false});
+    assert_eq!(s.execute("brush.freehand", &off).unwrap()["id"], json!(p.0));
+    assert_eq!(brush_of(&s, p).as_deref(), Some("Dots"));
+    assert_eq!(selected(&s), [a], "Keep selected off: the path is deselected and the rest stays");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(brush_of(&s, p).as_deref(), Some("Charcoal"), "one Undo takes back the brush");
+    assert_eq!(selected(&s), [p, a], "Undo gives back the earlier selection");
+
+    select(&mut s, &[a]);
+    let on = json!({"points": [[120, 10]], "extend": extend, "brush": "Dots"});
+    s.execute("brush.freehand", &on).unwrap();
+    assert_eq!(brush_of(&s, p).as_deref(), Some("Dots"));
+    assert_eq!(selected(&s), [p], "Keep selected on: the continued path is selected");
+
+    select(&mut s, &[a]);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("brush.freehand", &on).unwrap();
+    assert_eq!(selected(&s), [a], "the same brush again: the selection stays");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "the same brush again: no undo step");
+}
+
 /// `brush.freehand` refuses a brush for a path with no stroke (a continued path, a redrawn one
 /// and a new filled pencil path while the stroke is None) instead of reporting it painted: the
 /// document, the selection and the undo history stay as they were. Without a brush the path is

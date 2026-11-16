@@ -3,9 +3,10 @@ use super::common::{
     pressure_region, ranged, replace_with_pieces, samples_param, sibling_with, size_pressure, target_paths, usize_opt,
 };
 use super::{
-    Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, EngineError, FillRule, Join, NodeId, Paint, ParamCurve, PathData, Point, Result, Session,
+    Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, EngineError, FillRule, Join, NodeId, Paint, ParamCurve, PathData, Point, Rect, Result, Session,
     SubPath, Value, Vec2, bad, eraser_area, eraser_tip, f64_or, fill_contains, json, number_or, object_param, po,
 };
+use kurbo::{CubicBez, Line, PathSeg};
 use vectorcraft_brush::{Brush, BrushKind, Calligraphic, Variation};
 use vectorcraft_doc::StrokeLayer;
 use vectorcraft_tools::draw2::MIN_BRUSH_SIZE;
@@ -46,8 +47,8 @@ pub(in super::super) fn components(pd: &PathData) -> Vec<PathData> {
 
 /// The pieces of `sp` where `remove(point)` is false. `None` when nothing is removed. Each segment
 /// is sampled at least every `step` pt (and at least 24 times), so a removed stretch at least
-/// `step` long is found.
-fn cut_subpath(sp: &SubPath, step: f64, remove: &dyn Fn(Point) -> bool) -> Option<Vec<SubPath>> {
+/// `step` long is found, and also at the parameters `extra` gives for it.
+fn cut_subpath(sp: &SubPath, step: f64, remove: &dyn Fn(Point) -> bool, extra: &dyn Fn(CubicBez) -> Vec<f64>) -> Option<Vec<SubPath>> {
     let nseg = sp.segment_count();
     if nseg == 0 {
         return sp.anchors.first().filter(|a| remove(a.p)).map(|_| vec![]);
@@ -64,6 +65,13 @@ fn cut_subpath(sp: &SubPath, step: f64, remove: &dyn Fn(Point) -> bool) -> Optio
         let edge = (c.p1 - c.p0).hypot().max((c.p2 - c.p1).hypot()).max((c.p3 - c.p2).hypot());
         let wanted = (3.0 * edge / step).ceil();
         let samples = if wanted.is_finite() && wanted > K as f64 { (wanted as usize).min(MAX_SAMPLES) } else { K };
+        let mut ts: Vec<f64> = (1..=samples).map(|k| k as f64 / samples as f64).collect();
+        let more = extra(c);
+        if !more.is_empty() {
+            ts.extend(more.into_iter().filter(|t| t.is_finite() && *t > 0.0 && *t < 1.0));
+            ts.sort_by(f64::total_cmp);
+            ts.dedup();
+        }
         let mut prev_t = 0.0;
         let mut prev_rm = remove(c.eval(0.0));
         let mut start = if prev_rm { None } else { Some(0.0) };
@@ -73,8 +81,7 @@ fn cut_subpath(sp: &SubPath, step: f64, remove: &dyn Fn(Point) -> bool) -> Optio
                 runs.push(std::mem::take(&mut cur));
             }
         }
-        for k in 1..=samples {
-            let t = k as f64 / samples as f64;
+        for t in ts {
             let rm = remove(c.eval(t));
             if rm != prev_rm {
                 let (mut lo, mut hi) = (prev_t, t);
@@ -146,10 +153,15 @@ fn cut_subpath(sp: &SubPath, step: f64, remove: &dyn Fn(Point) -> bool) -> Optio
 /// every `step` pt (`f64::INFINITY` for the fixed sampling). Returns the new geometry per output
 /// object (one object per piece when the path had a single subpath), or None if unchanged.
 pub(in super::super) fn erase_outline(pd: &PathData, step: f64, remove: &dyn Fn(Point) -> bool) -> Option<Vec<PathData>> {
+    erase_outline_at(pd, step, remove, &|_| vec![])
+}
+
+/// [`erase_outline`], also sampling each segment at the parameters `extra` gives for it.
+fn erase_outline_at(pd: &PathData, step: f64, remove: &dyn Fn(Point) -> bool, extra: &dyn Fn(CubicBez) -> Vec<f64>) -> Option<Vec<PathData>> {
     let mut changed = false;
     let mut subs = vec![];
     for sp in &pd.subpaths {
-        match cut_subpath(sp, step, remove) {
+        match cut_subpath(sp, step, remove, extra) {
             Some(pieces) => {
                 changed = true;
                 subs.extend(pieces);
@@ -274,6 +286,12 @@ pub(super) fn knife(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.eraseRegion";
+    if let Some(rect) = p.get("rect").filter(|v| !v.is_null()) {
+        if p.get("points").is_some_and(|v| !v.is_null()) {
+            return Err(bad(C, "give `points` or `rect`, not both"));
+        }
+        return erase_rect(s, marquee_param(rect, C)?);
+    }
     let samples = samples_param(p, "points", C)?;
     let size = ranged(p, "size", 10.0, SIZES, C)?;
     let angle = number_or(p, "angle", 0.0, C)?;
@@ -316,6 +334,58 @@ pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
             }
             plan.push((id, components(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Difference))));
         } else if let Some(pieces) = erase_outline(&pd, short / 2.0, &under) {
+            plan.push((id, pieces));
+        }
+    }
+    apply_plan(s, "Eraser", plan)
+}
+
+/// `path.eraseRegion`'s `rect: [x, y, width, height]`: four finite numbers, with a width and a
+/// height above 0.
+fn marquee_param(v: &Value, cmd: &str) -> Result<Rect> {
+    const SHAPE: &str = "rect is [x, y, width, height] in points, with a width and a height above 0";
+    let n: Vec<f64> = match v.as_array() {
+        Some(a) if a.len() == 4 => a.iter().map(Value::as_f64).collect::<Option<_>>().ok_or_else(|| bad(cmd, SHAPE))?,
+        _ => return Err(bad(cmd, SHAPE)),
+    };
+    let [x, y, w, h] = [n[0], n[1], n[2], n[3]];
+    if !(n.iter().all(|v| v.is_finite()) && w > 0.0 && h > 0.0 && (x + w).is_finite() && (y + h).is_finite()) {
+        return Err(bad(cmd, SHAPE));
+    }
+    Ok(Rect::new(x, y, x + w, y + h))
+}
+
+/// `path.eraseRegion` with a marquee: everything inside `r` is erased from the paths (selected, or
+/// all). Closed paths lose the rectangle's area, and open paths are cut where they cross its edges.
+fn erase_rect(s: &mut Session, r: Rect) -> Result<Value> {
+    let region =
+        PathData::single(SubPath::polyline(&[Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)], true));
+    let inside = |q: Point| q.x >= r.x0 && q.x <= r.x1 && q.y >= r.y0 && q.y <= r.y1;
+    // An open path is sampled at least every half of the rectangle's shorter side, and also where
+    // each segment crosses the rectangle's edges and halfway between those crossings, so a stretch
+    // inside the rectangle is found however long the segment is.
+    let step = r.width().min(r.height()) / 2.0;
+    let corners = [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)];
+    let crossings = |c: CubicBez| {
+        let mut ts: Vec<f64> = (0..4)
+            .flat_map(|k| PathSeg::Cubic(c).intersect_line(Line::new(corners[k], corners[(k + 1) % 4])))
+            .map(|x| x.segment_t)
+            .filter(|t| t.is_finite() && *t > 0.0 && *t < 1.0)
+            .collect();
+        ts.sort_by(f64::total_cmp);
+        let mids: Vec<f64> = [0.0].iter().chain(&ts).zip(ts.iter().chain(&[1.0])).map(|(a, b)| 0.5 * (a + b)).collect();
+        ts.extend(mids);
+        ts
+    };
+    let st = s.doc()?;
+    let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
+    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, r)? {
+        if pd.is_closed() {
+            if po::area(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) <= 1e-6 {
+                continue;
+            }
+            plan.push((id, components(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Difference))));
+        } else if let Some(pieces) = erase_outline_at(&pd, step, &inside, &crossings) {
             plan.push((id, pieces));
         }
     }

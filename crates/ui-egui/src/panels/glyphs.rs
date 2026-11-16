@@ -11,8 +11,11 @@
 //! are drawn dimmed, and their tooltips say why they cannot be applied to the selection.
 //! With Show East Asian Options, the panel menu sets the selected characters' East Asian glyph
 //! form ([`glyph_form_items`]).
+//! After its Unicode ranges and Alternates for Current Selection, the Show menu lists the OpenType
+//! categories the browsed font has ([`vectorcraft_text::FontFace::glyph_categories`]): each shows
+//! the glyphs its features give, as Entire Font shows them.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use egui::{Color32, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::json;
@@ -71,6 +74,75 @@ const SUBSETS: [(&str, u32, u32); 7] = [
 /// (select Alternates For Current Selection from the Show menu; highlight a character, then
 /// double-click the glyph to replace it).
 const ALTERNATES: &str = "Alternates for Current Selection";
+
+/// The Show menu's choice of an OpenType category of the browsed font, after [`ALTERNATES`]; the
+/// panel state `gl-category` holds the category's id ([`vectorcraft_text::GlyphCategoryKind::id`]).
+/// Public behavior: [Glyphs panel overview](https://helpx.adobe.com/illustrator/desktop/design-with-text/special-characters-glyphs/glyphs-panel-overview.html)
+/// (with an OpenType font, a category chosen from the Show menu restricts the kinds of glyphs the
+/// panel displays). Which categories are offered, their names and their order are ours.
+const CATEGORY: usize = SUBSETS.len() + 1;
+
+/// The Show menu label of `category`: a stylistic set by the font's name for it, else `Set N`, as
+/// the OpenType panel names it.
+fn category_label(category: &vectorcraft_text::GlyphCategory) -> String {
+    use vectorcraft_text::GlyphCategoryKind as K;
+    match category.kind {
+        K::Ligatures => tl!("Ligatures").to_string(),
+        K::Swashes => tl!("Swash").to_string(),
+        K::StylisticAlternates => tl!("Stylistic Alternates").to_string(),
+        K::StylisticSet(number) => super::opentype::set_label(&vectorcraft_text::StylisticSet { number, name: category.name.clone() }),
+        K::SmallCaps => tl!("Small Caps").to_string(),
+        K::Ornaments => tl!("Ornaments").to_string(),
+        K::Fractions => tl!("Fractions").to_string(),
+        K::Figures => tl!("Figures").to_string(),
+    }
+}
+
+/// The ids and Show menu labels of `face`'s OpenType categories, in the menu's order.
+fn categories(face: Option<&vectorcraft_text::FontFace>) -> Vec<(String, String)> {
+    face.map(|f| f.glyph_categories().iter().map(|c| (c.kind.id(), category_label(c))).collect()).unwrap_or_default()
+}
+
+/// The Show menu's choice: the entry index (a Unicode range, [`ALTERNATES`] or [`CATEGORY`]) and,
+/// for a category, its place in `cats`. A category the browsed font does not have is Entire Font,
+/// and so is an index past the entries.
+fn shown(ctx: &egui::Context, cats: &[(String, String)]) -> (usize, Option<usize>) {
+    let subset: usize = pstate(ctx, "gl-subset");
+    match subset {
+        CATEGORY => {
+            let id: String = pstate(ctx, "gl-category");
+            match cats.iter().position(|c| c.0 == id) {
+                Some(i) => (CATEGORY, Some(i)),
+                None => (0, None),
+            }
+        }
+        s if s > CATEGORY => (0, None),
+        s => (s, None),
+    }
+}
+
+/// Show category `id` of the browsed font.
+fn show_category(ctx: &egui::Context, id: &str) {
+    set_pstate(ctx, "gl-category", id.to_string());
+    set_pstate(ctx, "gl-subset", CATEGORY);
+}
+
+/// The face the panel browses: the font picked in the panel, else the current text's font, else
+/// the fallback family, with that family and style. The same family and style can have a different
+/// face id at the selection's version or axes; that instance is used when the Type tool's selected
+/// character is set in the font.
+fn browsed_face(app: &VectorcraftApp, ctx: &egui::Context) -> (String, String, Option<std::sync::Arc<vectorcraft_text::FontFace>>) {
+    let db = FontDb::global();
+    let current = super::character::text_style(app).map(|(s, _)| (s.font_family, s.font_style));
+    // The panel browses the current text's font unless another font was picked here.
+    let picked: Option<(String, String)> = pstate(ctx, "gl-font");
+    let (family, style) = picked.or(current).unwrap_or_else(|| (vectorcraft_text::FALLBACK_FAMILY.to_string(), "Regular".to_string()));
+    let face = selected_target(app)
+        .filter(|t| t.style.font_family.eq_ignore_ascii_case(&family) && t.style.font_style.eq_ignore_ascii_case(&style))
+        .and_then(|t| db.style_face(t.style))
+        .or_else(|| db.face(&family, &style));
+    (family, style, face)
+}
 
 thread_local! {
     static TEX: crate::graphics::TexCache<HashMap<(u32, u32, u32), egui::TextureHandle>> = crate::graphics::TexCache::default();
@@ -226,41 +298,58 @@ fn insert(app: &mut VectorcraftApp, ctx: &egui::Context, ch: char) -> bool {
 /// Browse and insert glyphs from the chosen font, with font controls below the glyph grid.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    let db = FontDb::global();
-    let current = super::character::text_style(app).map(|(s, _)| (s.font_family, s.font_style));
-    // The panel browses the current text's font unless another font was picked here.
-    let picked: Option<(String, String)> = pstate(ui.ctx(), "gl-font");
-    let (family, style) = picked.or(current).unwrap_or_else(|| (vectorcraft_text::FALLBACK_FAMILY.to_string(), "Regular".to_string()));
-    let subset: usize = pstate(ui.ctx(), "gl-subset");
+    // The same family and style can have a different face id at the selection's version or axes.
+    // That instance is used for both the previews and Fit's applicability check.
+    let (family, style, face) = browsed_face(app, ui.ctx());
+    let cats = categories(face.as_deref());
+    let (subset, category) = shown(ui.ctx(), &cats);
     let (_, lo, hi) = SUBSETS[subset.min(SUBSETS.len() - 1)];
     let w = ui.available_width();
-    let names: Vec<&str> = SUBSETS.iter().map(|s| s.0).chain([ALTERNATES]).collect();
+    // A stylistic set's name is the font's, shown as it is: the built-in labels are translated here.
+    let labels: Vec<String> =
+        SUBSETS.iter().map(|s| tl!(s.0).to_string()).chain([tl!(ALTERNATES).to_string()]).chain(cats.iter().map(|c| c.1.clone())).collect();
+    let names: Vec<&str> = labels.iter().map(String::as_str).collect();
+    let current = match category {
+        Some(i) => CATEGORY + i,
+        None => subset,
+    };
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(tl!("Show:")).color(t.text_dim));
-        if let Some(i) = widgets::dropdown(ui, "gl-subset", names[subset.min(names.len() - 1)], &names, (w - 50.0).max(80.0)) {
-            set_pstate(ui.ctx(), "gl-subset", i);
+        if let Some(i) = widgets::dropdown_names(ui, "gl-subset", names[current.min(names.len() - 1)], &names, (w - 50.0).max(80.0)) {
+            match i.checked_sub(CATEGORY).and_then(|k| cats.get(k)) {
+                Some((id, _)) => show_category(ui.ctx(), id),
+                None => set_pstate(ui.ctx(), "gl-subset", i),
+            }
         }
     });
-    if subset >= SUBSETS.len() {
+    if subset == SUBSETS.len() {
         alternates(app, ui, w);
         font_row(app, ui, &family, &style, w);
         return;
     }
-    // The same family and style can have a different face id at the selection's version or axes.
-    // Use that instance for both the previews and Fit's applicability check.
-    let face = selected_target(app)
-        .filter(|t| t.style.font_family.eq_ignore_ascii_case(&family) && t.style.font_style.eq_ignore_ascii_case(&style))
-        .and_then(|t| db.style_face(t.style))
-        .or_else(|| db.face(&family, &style));
     let Some(face) = face else {
         ui.label(egui::RichText::new(tl!("No fonts are available.")).color(t.text_dim));
         return;
     };
-    let chars: Vec<(char, u32)> =
-        face.chars().into_iter().filter(|(c, _)| (lo..=hi).contains(&(*c as u32)) && !c.is_control() && !c.is_whitespace()).collect();
-    // Entire Font also lists the glyphs no character maps (positional forms, alternates,
-    // ligatures) by glyph id, after the characters.
-    let unencoded = if subset == 0 { face.unencoded_glyphs() } else { Default::default() };
+    let (chars, unencoded): (Vec<(char, u32)>, Vec<u32>) = match category.and_then(|i| face.glyph_categories().get(i)) {
+        // A category lists its glyphs that a character maps by that character, and the others by
+        // glyph id after them.
+        Some(c) => {
+            let wanted: HashSet<u32> = c.glyphs.iter().copied().collect();
+            // A glyph several characters map is listed once, by the first of them; a glyph only a
+            // space or control character maps is listed by glyph id, as no character it can insert.
+            let mut mapped: HashSet<u32> = HashSet::new();
+            let chars: Vec<(char, u32)> =
+                face.chars().into_iter().filter(|(c, g)| !c.is_control() && !c.is_whitespace() && wanted.contains(g) && mapped.insert(*g)).collect();
+            (chars, c.glyphs.iter().copied().filter(|g| !mapped.contains(g)).collect())
+        }
+        None => {
+            let chars = face.chars().into_iter().filter(|(c, _)| (lo..=hi).contains(&(*c as u32)) && !c.is_control() && !c.is_whitespace()).collect();
+            // Entire Font also lists the glyphs no character maps (positional forms, alternates,
+            // ligatures) by glyph id, after the characters.
+            (chars, if subset == 0 { face.unencoded_glyphs().to_vec() } else { vec![] })
+        }
+    };
     let total = chars.len() + unencoded.len();
     let cell = CELL_STEPS[cell_index(app)];
     let cols = ((w / cell).floor() as usize).max(1);
@@ -1046,15 +1135,24 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         glyph_form_items(app, ui);
         ui.separator();
     }
+    let (_, _, face) = browsed_face(app, ui.ctx());
+    let cats = categories(face.as_deref());
+    let (cur, category) = shown(ui.ctx(), &cats);
     for (i, (name, _, _)) in SUBSETS.iter().enumerate() {
-        let cur: usize = pstate(ui.ctx(), "gl-subset");
         if menu_item(ui, tl!(name), true, cur == i) {
             set_pstate(ui.ctx(), "gl-subset", i);
         }
     }
-    let cur: usize = pstate(ui.ctx(), "gl-subset");
-    if menu_item(ui, tl!("Alternates for Current Selection"), true, cur >= SUBSETS.len()) {
+    if menu_item(ui, tl!("Alternates for Current Selection"), true, cur == SUBSETS.len()) {
         set_pstate(ui.ctx(), "gl-subset", SUBSETS.len());
+    }
+    if !cats.is_empty() {
+        ui.separator();
+    }
+    for (i, (id, label)) in cats.iter().enumerate() {
+        if menu_item(ui, label, true, category == Some(i)) {
+            show_category(ui.ctx(), id);
+        }
     }
 }
 
@@ -1626,6 +1724,34 @@ mod tests {
         let all = texts(&ctx, &mut app);
         assert!(all.iter().any(|s| s == &format!("{} glyphs", encoded + unencoded.len())), "{all:?}");
         assert!(face.glyph_name(unencoded[0]).is_some(), "the font names its glyphs");
+    }
+
+    /// The panel menu lists the browsed font's OpenType categories after Alternates for Current
+    /// Selection, a stylistic set by the font's name for it; choosing one shows the glyphs its
+    /// features give and names it in Show. A font without that category shows Entire Font.
+    #[test]
+    fn the_show_menu_lists_the_fonts_opentype_categories() {
+        use vectorcraft_text::test_fonts::{CATEGORIES_FAMILY, HALF_FORM_FAMILY, categories_font, half_form_font};
+        FontDb::global().add_font(categories_font().expect("the test font builds"));
+        FontDb::global().add_font(half_form_font(false).expect("the test font builds"));
+        let (mut app, _) = editing("a");
+        let ctx = egui::Context::default();
+        set_pstate(&ctx, "gl-font", Some((CATEGORIES_FAMILY.to_string(), "Regular".to_string())));
+        let items: Vec<String> = menu_texts(&ctx, &mut app, vec![]).into_iter().map(|(t, _)| t.trim_start_matches(['✓', ' ']).to_string()).collect();
+        let at = items.iter().position(|t| t == "Alternates for Current Selection").expect("the alternates item");
+        assert_eq!(items[at + 1..], ["Ligatures", "Round Dots", "Small Caps", "Figures"]);
+        choose(&ctx, &mut app, "Figures");
+        assert_eq!(pstate::<String>(&ctx, "gl-category"), "figures");
+        let all = texts(&ctx, &mut app);
+        assert!(all.iter().any(|s| s == "2 glyphs") && all.iter().any(|s| s == "Figures"), "{all:?}");
+        choose(&ctx, &mut app, "Round Dots");
+        let all = texts(&ctx, &mut app);
+        assert!(all.iter().any(|s| s == "1 glyph") && all.iter().any(|s| s == "Round Dots"), "{all:?}");
+        set_pstate(&ctx, "gl-font", Some((HALF_FORM_FAMILY.to_string(), "Regular".to_string())));
+        let all = texts(&ctx, &mut app);
+        assert!(all.iter().any(|s| s == "Entire Font") && !all.iter().any(|s| s == "Round Dots"), "{all:?}");
+        let items: Vec<String> = menu_texts(&ctx, &mut app, vec![]).into_iter().map(|(t, _)| t.trim_start_matches(['✓', ' ']).to_string()).collect();
+        assert_eq!(items.last().map(String::as_str), Some("Alternates for Current Selection"), "{items:?}");
     }
 
     #[test]
