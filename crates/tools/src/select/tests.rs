@@ -2197,6 +2197,110 @@ fn a_click_on_the_out_port_loads_the_text_and_the_next_click_or_drag_threads_it(
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, corner.x, corner.y)), vec![Action::Begin("Resize Type Area".into())]);
 }
 
+/// Loaded text shows the link cursor over an object a click threads it into (a closed path,
+/// area type in no thread), and the loaded text elsewhere: empty canvas, an open path, point type,
+/// the frame it came from and a frame already in a thread, where a click makes a new frame
+/// instead. Held down on a target, the press keeps the link cursor until its drag draws a frame;
+/// placing the text or Escape ends both.
+#[test]
+fn loaded_text_shows_the_link_cursor_where_a_click_threads_it_into_the_object() {
+    use vectorcraft_doc::{Node, NodeKind, TextKind, TextObject};
+    use vectorcraft_geom::shapes;
+    let (mut d, id, rect, port) = overflowing_area_type();
+    let l = d.layers[0].id;
+    let add = |d: &mut vectorcraft_doc::Document, n: NodeKind| {
+        let nid = d.alloc_id();
+        d.insert(Some(l), 0, Node::new(nid, n)).unwrap();
+        nid
+    };
+    let area = |x: f64, y: f64| {
+        let mut t = TextObject::point(Point::new(x, y), "", Default::default());
+        t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 120.0, 40.0)) };
+        NodeKind::Text(Box::new(t))
+    };
+    let free = add(&mut d, area(300.0, 100.0));
+    let threaded = add(&mut d, area(100.0, 380.0));
+    let next = add(&mut d, area(250.0, 440.0));
+    d.text_threads.push(vec![threaded, next]);
+    let line = vectorcraft_geom::kurbo::Line::new((50.0, 250.0), (250.0, 250.0));
+    let open = Node::path(
+        d.alloc_id(),
+        vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::kurbo::Shape::to_path(&line, 0.1)),
+        vectorcraft_doc::Appearance::default_art(),
+    );
+    d.insert(Some(l), 0, open).unwrap();
+    let point = TextObject::point(Point::new(40.0, 480.0), "Point", Default::default());
+    let point_at = point.bounds().expect("point type has bounds").center();
+    add(&mut d, NodeKind::Text(Box::new(point)));
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    let load = |t: &mut SelectionTool| {
+        t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y));
+        t.pointer(&cx, &ev(PointerKind::Up, port.x, port.y));
+    };
+    let at = |t: &SelectionTool, x: f64, y: f64| t.cursor(&cx, Point::new(x, y), Mods::default());
+    let thread = |params: Value| vec![Action::Exec("text.thread.add".into(), params)];
+    load(&mut t);
+    assert_eq!(at(&t, 150.0, 150.0), Cursor::LoadedTextLink, "a closed path");
+    assert_eq!(at(&t, 360.0, 120.0), Cursor::LoadedTextLink, "area type in no thread");
+    assert_eq!(at(&t, 30.0, 420.0), Cursor::LoadedText, "empty canvas");
+    assert_eq!(at(&t, 150.0, 250.0), Cursor::LoadedText, "an open path");
+    assert_eq!(at(&t, point_at.x, point_at.y), Cursor::LoadedText, "point type");
+    assert_eq!(at(&t, 360.0, 320.0), Cursor::LoadedText, "the frame the text came from");
+    assert_eq!(at(&t, 160.0, 400.0), Cursor::LoadedText, "a frame already in a thread");
+    // A click where the pointer shows the loaded text makes a new frame there.
+    t.pointer(&cx, &ev(PointerKind::Down, 160.0, 400.0));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 160.0, 400.0)), thread(json!({"from": id.0, "at": [160.0, 400.0]})));
+    load(&mut t);
+    t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
+    assert_eq!(at(&t, 150.0, 150.0), Cursor::LoadedTextLink, "held down on the path");
+    t.pointer(&cx, &ev(PointerKind::Drag, 151.0, 151.0));
+    assert_eq!(at(&t, 151.0, 151.0), Cursor::LoadedTextLink, "a drag too small to draw a frame");
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 151.0, 151.0)), thread(json!({"from": id.0, "to": rect.0})));
+    assert!(!matches!(at(&t, 150.0, 150.0), Cursor::LoadedText | Cursor::LoadedTextLink), "the text is placed");
+    load(&mut t);
+    t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 230.0, 240.0));
+    assert_eq!(at(&t, 230.0, 240.0), Cursor::LoadedText, "the drag draws a new frame");
+    t.pointer(&cx, &ev(PointerKind::Up, 230.0, 240.0));
+    load(&mut t);
+    t.pointer(&cx, &ev(PointerKind::Down, 360.0, 120.0));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 360.0, 120.0)), thread(json!({"from": id.0, "to": free.0})));
+    load(&mut t);
+    assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
+    assert!(!matches!(at(&t, 150.0, 150.0), Cursor::LoadedText | Cursor::LoadedTextLink), "Escape drops the text");
+}
+
+/// In an isolated compound path, loaded text shows no link cursor over a member path, which
+/// `text.thread.add` does not take for `to`: a click there makes a new frame.
+#[test]
+fn loaded_text_shows_no_link_cursor_over_a_compound_paths_member() {
+    use vectorcraft_doc::{Appearance, Node, NodeKind};
+    let (mut d, id, _, port) = overflowing_area_type();
+    let l = d.layers[0].id;
+    let (c, member) = (d.alloc_id(), d.alloc_id());
+    let path = Node::path(member, vectorcraft_geom::shapes::rectangle(Rect::new(300.0, 100.0, 400.0, 200.0)), Appearance::default_art());
+    let mut compound = Node::new(c, NodeKind::Compound { children: vec![std::sync::Arc::new(path)], rule: Default::default() });
+    compound.appearance = Appearance::default_art().into();
+    d.insert(Some(l), 0, compound).unwrap();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = ToolContext { isolation: Some(c), ..cx(&d, &s, &p) };
+    let mut t = SelectionTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y));
+    t.pointer(&cx, &ev(PointerKind::Up, port.x, port.y));
+    assert_eq!(t.cursor(&cx, Point::new(350.0, 150.0), Mods::default()), Cursor::LoadedText);
+    t.pointer(&cx, &ev(PointerKind::Down, 350.0, 150.0));
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Up, 350.0, 150.0)),
+        vec![Action::Exec("text.thread.add".into(), json!({"from": id.0, "at": [350.0, 150.0]}))]
+    );
+}
+
 /// Loaded text clicked just inside a layer's clipping mask, where art is drawn over the mask's
 /// edge, threads into that art, not into the unpainted mask: placing text acts on what is drawn,
 /// so it takes the ordinary hit, not the selection tools' clipping-path outline.

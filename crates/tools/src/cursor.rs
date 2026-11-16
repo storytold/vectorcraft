@@ -94,6 +94,9 @@ pub enum Cursor {
     /// The Selection tool loaded with the text of area type or type on a path by a click on its out
     /// or in port (a click threads it into a path or a new frame, a drag draws the new frame).
     LoadedText,
+    /// The same loaded Selection tool over a closed path, area type or type on a path that a click
+    /// threads the text into: the loaded text with a link badge.
+    LoadedTextLink,
     /// The Shape Builder: a crosshair with a plus (merge mode)...
     ShapeBuilder,
     /// ...or, with Alt held, a minus (erase mode).

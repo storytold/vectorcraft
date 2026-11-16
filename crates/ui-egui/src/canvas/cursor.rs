@@ -84,6 +84,7 @@ pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         | Cursor::PathBracket
         | Cursor::TypeWidget
         | Cursor::LoadedText
+        | Cursor::LoadedTextLink
         | Cursor::LivePaintSelectFace
         | Cursor::LivePaintSelectEdge
         | Cursor::LivePaintSelectOutside => C::Default,
