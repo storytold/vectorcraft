@@ -231,7 +231,9 @@ fn assign_harness(mut app: VectorcraftApp, open: Value) -> egui_kittest::Harness
     app.run("ui.recolorDialog", open).unwrap();
     set(&mut app, "method", json!("exact"));
     let mut fonts = false;
-    let mut h = egui_kittest::Harness::builder().with_size(vec2(900.0, 800.0)).build_ui_state(
+    let builder = egui_kittest::Harness::builder().with_size(vec2(900.0, 800.0));
+    let builder = if std::env::var_os("VECTORCRAFT_RECOLOR_CAPTURE_DIR").is_some() { builder.wgpu() } else { builder };
+    let mut h = builder.build_ui_state(
         move |ui, app: &mut VectorcraftApp| {
             if !std::mem::replace(&mut fonts, true) {
                 crate::theme::install_fonts(ui.ctx());
@@ -1501,4 +1503,94 @@ fn set_current_color_as_base_color_marks_the_selected_color() {
     h.run_steps(3);
     let rows = field(h.state(), "rows");
     assert_eq!((&rows[0]["base"], rows[2].get("base")), (&json!(true), None), "{rows}");
+}
+
+// Optional local visual QA; these captures are not committed assets.
+fn capture_recolor(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, name: &str) {
+    if let Some(dir) = std::env::var_os("VECTORCRAFT_RECOLOR_CAPTURE_DIR") {
+        let dir = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        h.render().unwrap().save(dir.join(format!("{name}.png"))).unwrap();
+    }
+}
+
+/// Secondary-click the actual New chip; the menu must dispatch through its UI callbacks.
+fn row_context_menu(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, row: usize) {
+    let pos = h.ctx.read_response(egui::Id::unique(("recolor-new", row))).expect("New chip").rect.center();
+    h.event(Event::PointerMoved(pos));
+    h.run_steps(1);
+    for pressed in [true, false] {
+        h.event(Event::PointerButton { pos, button: PointerButton::Secondary, pressed, modifiers: Modifiers::NONE });
+        h.run_steps(1);
+    }
+    h.run_steps(2);
+}
+
+#[test]
+fn row_context_menu_pick_from_swatches_and_limit_to_library() {
+    use egui::accesskit::Role;
+
+    for empty_new in [false, true] {
+        let mut app = app();
+        art(&mut app, &["#ff0000", "#0000ff"]);
+        // A known, single-color palette makes it impossible to pass without snapping the rows.
+        let doc = &app.session.doc().unwrap().doc;
+        let names: Vec<_> = doc
+            .swatches
+            .iter()
+            .filter(|s| !s.is_reserved())
+            .map(|s| s.name.clone())
+            .chain(doc.swatch_groups.iter().map(|g| g.name.clone()))
+            .collect();
+        app.run("swatch.delete", json!({"names": names})).unwrap();
+        app.run("swatch.new", json!({"name": "Only Yellow", "color": "#ffff00"})).unwrap();
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let mut h = assign_harness(app, json!({}));
+        let row = 1;
+        if empty_new {
+            let mut rows = field(h.state(), "rows");
+            rows[row]["to"] = Value::Null;
+            set(h.state_mut(), "rows", rows);
+            h.run_steps(2);
+        }
+        let before = field(h.state(), "rows");
+        let expected = if empty_new { before[row]["from"][0].clone() } else { before[row]["to"].clone() };
+        row_context_menu(&mut h, row);
+        assert_eq!(field(h.state(), "__sel"), json!([row]), "right-click selects the targeted row");
+        capture_recolor(&mut h, "assign-row-menu");
+        h.get_by_label("   Pick from Swatches").click();
+        h.run_steps(3);
+        let picker = h.state().ui.dialog.as_ref().expect("picker opened by menu");
+        assert_eq!(picker.kind, "colorPicker");
+        assert!(picker.bool("swatches"));
+        assert_eq!(picker.fields["__recolorRow"], json!(row));
+        assert_eq!(picker.fields.get("color").and_then(vectorcraft_engine::cmd::color_value), vectorcraft_engine::cmd::color_value(&expected));
+        capture_recolor(&mut h, "picker-swatches");
+        h.get_by_role_and_label(Role::Button, "Cancel").click();
+        h.run_steps(3);
+        assert_eq!(field(h.state(), "rows"), before, "picker Cancel preserves all rows");
+
+        row_context_menu(&mut h, row);
+        h.get_by_label("Limit to Library").click();
+        h.run_steps(3);
+        capture_recolor(&mut h, "assign-library-menu");
+        h.get_by_label("   Document Swatches").click();
+        h.run_steps(3);
+        assert_eq!(field(h.state(), "limitTo"), json!("document"));
+        let snapped = field(h.state(), "rows");
+        for (i, r) in snapped.as_array().unwrap().iter().enumerate() {
+            assert_eq!(r["to"], "rgb 255 255 0", "row {i} snaps to the palette");
+        }
+        assert_ne!(snapped, before, "the menu changes row colors");
+        row_context_menu(&mut h, row);
+        h.get_by_label("Limit to Library").click();
+        h.run_steps(3);
+        h.get_by_label("   None").click();
+        h.run_steps(3);
+        assert_eq!(field(h.state(), "limitTo"), json!(""));
+        assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo, "menu actions remain previews");
+        h.get_by_role_and_label(Role::Button, "Cancel").click();
+        h.run_steps(2);
+        assert_eq!(colors(h.state_mut()), 2, "Recolor Cancel restores the original artwork");
+    }
 }
