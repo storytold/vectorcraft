@@ -3500,6 +3500,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Auto Color	Autofarve
 	Automatic	Automatisk
 	Isolate Selected Group	Isolér valgt gruppe
+	Isolate Selected Path	Isolér valgt kurve
 	Exit Isolation Mode	Afslut isoleringstilstand
 	Make Clipping Mask	Opret beskæringsmask
 	Release Clipping Mask	Frigør beskæringsmask
@@ -4103,6 +4104,10 @@ lighting	Light	Lys
 	Play Current Selection	Afspil aktuel markering
 	Save Actions…	Gem handlinger…
 	Load Actions…	Indlæs handlinger…
+	Reset Actions	Nulstil handlinger
+	Replace the current actions with the default set?	Vil du erstatte de aktuelle handlinger med standardsættet?
+	Append adds the default set after the current sets instead.	Tilføj tilføjer i stedet standardsættet efter de aktuelle sæt.
+	Append	Tilføj
 	Reflect Horizontal	Spejl vandret
 	Rotate 90° CW	Rotér 90° med uret
 	Set 1	Sæt 1
@@ -5460,6 +5465,8 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Vis glat farvehjul
 	Show segmented color wheel	Vis segmenteret farvehjul
 	Show color bars	Vis farvebjælker
+	Show brightness and hue on wheel	Vis lysstyrke og farvetone på hjulet
+	Show saturation and hue on wheel	Vis mætning og farvetone på hjulet
 	Add Color Tool	Værktøjet Tilføj farve
 	Remove Color Tool	Værktøjet Fjern farve
 	Remove Color	Fjern farve
@@ -9851,4 +9858,24 @@ breakText	Glyphs	Glyffer
 	No objects are selected.	Ingen objekter er markeret.
 	Open a document to mark its fold lines.	Åbn et dokument for at markere dets foldelinjer.
 	Remove Fold Line Role	Fjern linjetype
+	Check	Kontrollér
+	Check Fold Lines	Kontrollér foldelinjer
+@msg	No cut lines are in the selection.	Der er ingen skærelinjer i markeringen.
+@msg	No cut lines are in the document.	Der er ingen skærelinjer i dokumentet.
+@msg	The cut lines do not enclose an area.	Skærelinjerne omslutter ikke et område.
+@msg	A cut line ends without meeting another cut line.	En skærelinje slutter uden at møde en anden skærelinje.
+@msg	A gap between cut lines was closed.	Et mellemrum mellem skærelinjer blev lukket.
+@msg	The fold lines are too complex to check.	Foldelinjerne er for komplekse til at kontrollere.
+@msg	A cut line and a crease lie on top of each other.	En skærelinje og en rillelinje ligger oven på hinanden.
+@msg	No cut lines are among the given objects.	Der er ingen skærelinjer blandt de angivne objekter.
+@msg	Two fold lines lie on top of each other.	To foldelinjer ligger oven på hinanden.
+@msg	A crease ends inside a panel.	En rillelinje slutter inde i et panel.
+@msg	A crease does not divide two panels.	En rillelinje deler ikke to paneler.
+@msg	A crease lies outside the cut outline, wholly or in part.	En rillelinje ligger helt eller delvist uden for skærekonturen.
+@msg	The pieces of a hinge are not on one straight line.	Delene af et hængsel ligger ikke på én ret linje.
+@msg	A gap between cut lines is too narrow to tell apart.	Et mellemrum mellem skærelinjer er for smalt til at skelne.
+@msg	A cut-out area holds other fold lines or another blank.	Et udskåret område indeholder andre foldelinjer eller et andet emne.
+@msg	A panel is not joined to the rest by a crease.	Et panel er ikke forbundet med resten af en rillelinje.
+@msg	A fold line is on a non-printing layer.	En foldelinje ligger på et lag, der ikke udskrives.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, hængsler: {hinges}, fejl: {errors}, advarsler: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"

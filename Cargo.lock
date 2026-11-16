@@ -6841,6 +6841,7 @@ dependencies = [
  "vectorcraft-svg",
  "vectorcraft-testkit",
  "vectorcraft-text",
+ "vectorcraft-three-d",
  "vectorcraft-tools",
  "vectorcraft-trace",
  "wat",
@@ -7154,6 +7155,7 @@ dependencies = [
 name = "vectorcraft-three-d"
 version = "0.24.1"
 dependencies = [
+ "proptest",
  "vectorcraft-geom 0.24.1",
  "vectorcraft-pathops 0.24.1",
 ]
