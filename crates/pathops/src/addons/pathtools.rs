@@ -27,7 +27,7 @@ use std::collections::BTreeSet;
 use kurbo::{CubicBez, ParamCurve, ParamCurveArclen, ParamCurveNearest, Point, Vec2};
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
 
-pub use bridge::{BridgeError, Circle, circle_of, smooth_bridge};
+pub use bridge::{BridgeError, circle_of, smooth_bridge};
 pub use crossings::{MAX_CROSSED_BY_SEGMENTS, MAX_CROSSING_SEGMENTS, Place, Work, crossings, crossings_on, crossings_on_within, insert_at};
 pub use dashes::{DashSpec, Piece, divide_dashes};
 pub use extend::{ExtendMode, extend_length_to, extend_open};
@@ -35,9 +35,7 @@ pub use shared_edge::{
     COINCIDENCE, EndSide, Follow, MAX_COINCIDENCE, MergePlan, MergePreview, Stretch, apply_merge, ends_at, merge_preview, stretches_at,
 };
 pub use slide::{MAX_SLIDE, slide_anchor, slide_stops, slide_t_at};
-pub use tangent_circle::{
-    Circle as TangentCircle, MAX_TANGENT_CIRCLE_SEGMENTS, MAX_TANGENT_CIRCLES, TangentCircleError, tangent_circle_segments, tangent_circles,
-};
+pub use tangent_circle::{Circle, MAX_TANGENT_CIRCLE_SEGMENTS, MAX_TANGENT_CIRCLES, TangentCircleError, tangent_circle_segments, tangent_circles};
 pub use tangents::{Coincide, MAX_TANGENT_SEGMENTS, Outline, OutlineError, Tangent, TangentKind, common_tangents};
 pub use trim::{Span, slice, span_at, spans, without_spans};
 

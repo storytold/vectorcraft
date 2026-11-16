@@ -6,18 +6,13 @@ use std::f64::consts::{FRAC_PI_2, PI, TAU};
 use kurbo::{CubicBez, ParamCurve, Point, Shape, Vec2};
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
 
+use super::Circle;
+
 /// How far (as a share of the radius) a path's outline may stray from a circle and still be read
 /// as that circle.
 const ROUND: f64 = 1e-3;
 /// Points [`circle_of`] checks on each segment, its ends included.
 const SAMPLES: usize = 9;
-
-/// A circle: its center and radius (pt).
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Circle {
-    pub center: Point,
-    pub radius: f64,
-}
 
 /// Why [`smooth_bridge`] makes no outline.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
