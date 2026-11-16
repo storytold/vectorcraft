@@ -9708,9 +9708,9 @@ Unicode adds the characters of hexadecimal codes (`3042`, `U+3042`, several sepa
 characters the set already lists. Delete takes the character picked out of the set. Show Sample (Hide Sample when it
 shows) draws the font picked in a line of sample text, with the first character of each custom set added, and a button
 beside it for each line it can mark: ICF Box, Em Box, Baseline, Cap Height, Max Ascent/Descent, Max Ascender and
-x-height ([Creating composite fonts](https://help.adobe.com/archive/en_US/illustrator/cs4/illustrator_cs4_help.pdf#page=300)).
-The em box and ICF box are those of the Kanji part's font, the cap height and x-height those of the face the
-Roman letters are drawn in (a fallback face when the part's font lacks the character), Max Ascent/Descent the highest
+x-height ([Creating composite fonts](https://help.adobe.com/archive/en_US/illustrator/cs4/illustrator_cs4_help.pdf#page=352)).
+The em box and ICF box are those of the font of the part that sets the sample's first Kanji (the Kanji part, or a
+custom set that holds that character), the cap height and x-height those of the face the Roman letters are drawn in (a fallback face when the part's font lacks the character), Max Ascent/Descent the highest
 ascent and lowest descent of the faces the sample uses, and Max Ascender the top of its tallest glyph; each takes its
 part's size, baseline and vertical scale. Zoom draws it at 25% to 800% of 36 pt. The
 sample text, the zoom steps and the size are VectorCraft's own. OK runs `type.compositeFonts.set` with every font as one

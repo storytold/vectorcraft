@@ -3,7 +3,8 @@
 //! ascender and x-height, each shown or hidden by its button, at the size Zoom picks.
 //!
 //! The sample text, the zoom steps, the size at 100% and what each line measures are VectorCraft's
-//! own: the em box and ICF box are those of the Kanji part's face
+//! own: the em box and ICF box are those of the face of the part that sets the sample's first Kanji
+//! (the Kanji part, or a custom set that holds that character)
 //! ([`vectorcraft_text::FontFace::ideographic_centre`], [`vectorcraft_text::FontFace::icf_margins`]),
 //! the cap height and x-height those of the face the Roman letters are drawn in, Max Ascent/Descent
 //! the highest ascent and lowest descent among the faces the sample is drawn in (fallback faces
@@ -11,8 +12,8 @@
 //! baseline and vertical scale.
 //!
 //! Behavior reference (public documentation):
-//! <https://help.adobe.com/archive/en_US/illustrator/cs4/illustrator_cs4_help.pdf#page=300>,
-//! <https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=301>.
+//! <https://help.adobe.com/archive/en_US/illustrator/cs4/illustrator_cs4_help.pdf#page=352>,
+//! <https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=348>.
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 
@@ -225,8 +226,9 @@ pub(super) fn measure(f: &CompositeFont, size: f64) -> (BezPath, Heights) {
         Some((part_face, drawn, em, shift, p.v_scale / 100.0))
     };
     let mut h = Heights::default();
-    // The em box and ICF box are the Kanji part's, the base of the composite font, as layout
-    // measures that part's face for Scale at Center.
+    // The em box and ICF box are those of the part that sets the sample's first Kanji (the Kanji
+    // part, or a custom set that holds that character), as layout measures that part's face for
+    // Scale at Center.
     if let Some((face, _, em, shift, v)) = TEXT.chars().next().and_then(placed) {
         let tall = em * v;
         let mid = shift + face.ideographic_centre() * tall;
