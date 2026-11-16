@@ -2117,6 +2117,35 @@ fn confined_clipboard_svg_refuses_a_linked_image_file_outside_the_read_roots() {
     assert!(svg.contains(&format!("xlink:href=\"{photo}\"")), "{svg}");
 }
 
+/// `clipboard.flavours` and the session's flavors leave out the SVG, and its markup as text, that
+/// `clipboard.exportSvg` withholds from a confined caller; the PNG is still listed. The SVG is listed
+/// while its image's pixels are held, and for a caller with no read roots.
+#[test]
+fn confined_clipboard_flavours_leave_out_a_withheld_svg() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("clip-flavours-away");
+    let home = Folder::new("clip-flavours-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let (text, svg, png) = ("text/plain", "image/svg+xml", "image/png");
+    let listed = |s: &mut Session| confine(roots.as_ref(), || s.execute("clipboard.flavours", &json!({}))).unwrap()["flavours"].clone();
+    assert_eq!(listed(&mut s), json!([text, svg, png]));
+
+    without_pixels(&mut s, a);
+    s.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(listed(&mut s), json!([png]));
+    let made = confine(roots.as_ref(), || s.clipboard_flavours());
+    assert!(made.iter().all(|f| f.mime != svg && f.mime != text), "{:?}", made.iter().map(|f| f.mime).collect::<Vec<_>>());
+    assert_eq!(confine(roots.as_ref(), || s.clipboard_flavour_types()), [png]);
+    assert_eq!(s.execute("clipboard.flavours", &json!({})).unwrap()["flavours"], json!([text, svg, png]));
+}
+
 /// A confined caller's SVG with Preserve Editing Capabilities is refused while the stored brush
 /// library holds an entry that does not read as a brush, or is not a list: the native document
 /// carries it as it is, and its links cannot be checked. Without Preserve Editing the SVG is written.
@@ -2137,6 +2166,64 @@ fn confined_preserve_editing_svg_refuses_a_brush_library_entry_it_cannot_read() 
         assert!(e.contains("a linked image file is outside the read roots"), "{stored}: {e}");
         confine(roots.as_ref(), || s.execute("document.serialize", &json!({"format": "svg"}))).unwrap();
     }
+}
+
+/// A confined caller's SVG and SVGZ with Preserve Editing Capabilities carry a native document
+/// without the Export for Screens folder when it is outside the read roots, with the other export
+/// settings and the art; the open document keeps the folder. A folder inside the roots, and any
+/// folder without roots, stays in the attachment.
+#[test]
+fn confined_preserve_editing_svg_leaves_out_an_export_folder_outside_the_read_roots() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-export-folder-away");
+    let home = Folder::new("svg-export-folder-home");
+    let outside = away.0.to_string_lossy().into_owned();
+    let inside = home.file("screens");
+    let mut s = session();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let rect: vectorcraft_doc::NodeId = serde_json::from_value(r["id"].clone()).unwrap();
+    let set_folder = |s: &mut Session, folder: &str| {
+        let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        doc.export_settings = serde_json::from_value(json!({"folder": folder, "prefix": "web-"})).unwrap();
+    };
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    // The native document an SVG's text carries.
+    let attached = |text: &str| {
+        let data = vectorcraft_svg::editing_data(text).expect("editing data");
+        vectorcraft_format::load(&vectorcraft_format::base64_decode(&data).unwrap()).unwrap()
+    };
+    let check = |d: &Document, folder: Option<&str>, what: &str| {
+        assert_eq!(d.export_settings.get("folder").and_then(Value::as_str), folder, "{what}");
+        assert_eq!(d.export_settings.get("prefix").and_then(Value::as_str), Some("web-"), "{what}");
+        assert!(d.node(rect).is_some(), "{what}: no art");
+    };
+    // Every way an SVG is asked for with Preserve Editing, its text and its native document.
+    let every = |s: &mut Session, confined: bool, folder: Option<&str>| {
+        let run = |s: &mut Session, cmd: &str, p: Value| {
+            let r = if confined { confine(roots.as_ref(), || s.execute(cmd, &p)) } else { s.execute(cmd, &p) };
+            r.unwrap()
+        };
+        for format in ["svg", "svgz"] {
+            let r = run(s, "document.serialize", json!({"format": format, "preserveEditing": true}));
+            check(&attached(&svg_text(&r)), folder, &format!("{format} serialize"));
+            let r = run(s, "document.serialize", json!({"format": format, "svg": {"preserveEditing": true}}));
+            check(&attached(&svg_text(&r)), folder, &format!("{format} options object"));
+            let path = home.file(&format!("export.{format}"));
+            run(s, "document.export", json!({"format": format, "path": path, "preserveEditing": true}));
+            let bytes = std::fs::read(&path).unwrap();
+            check(&attached(&vectorcraft_svg::text_of(&bytes).unwrap()), folder, &format!("{format} export"));
+        }
+    };
+    set_folder(&mut s, &outside);
+    every(&mut s, true, None);
+    assert_eq!(s.doc().unwrap().doc.export_settings.get("folder").and_then(Value::as_str), Some(outside.as_str()));
+    every(&mut s, false, Some(&outside));
+    // Without Preserve Editing the SVG carries no native document.
+    let r = confine(roots.as_ref(), || s.execute("document.serialize", &json!({"format": "svg"}))).unwrap();
+    assert!(vectorcraft_svg::editing_data(&svg_text(&r)).is_none(), "{r}");
+    set_folder(&mut s, &inside);
+    every(&mut s, true, Some(&inside));
 }
 
 /// A confined caller's SVG of a placed document whose art links an image: the file draws that art

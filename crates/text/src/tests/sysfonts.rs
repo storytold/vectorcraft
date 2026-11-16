@@ -428,6 +428,29 @@ fn a_family_with_a_variable_file_beside_static_ones_is_variable() {
     assert!(db.family_traits(FAMILY).variable);
 }
 
+/// Show Similar Fonts: the scan reads the numbers a face is compared by as loading the face does,
+/// and a family's are its Regular face's whichever file is found first.
+#[test]
+fn the_scan_reads_a_familys_likeness_without_loading_it() {
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-likeness", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Sysfont-Italic.ttf"), renamed("SourceSans3-It.ttf")).unwrap();
+    std::fs::write(dir.join("Sysfont-Regular.ttf"), renamed("SourceSans3-Regular.ttf")).unwrap();
+    let scanned = FontDb::with_font_dirs(vec![dir.clone()]);
+    let likeness = scanned.family_traits(FAMILY).likeness;
+    assert!(!scanned.is_loaded(FAMILY), "the scan's numbers, nothing loaded");
+    let loaded = FontDb::with_font_dirs(vec![]);
+    assert_eq!(loaded.add_font(renamed("SourceSans3-Regular.ttf")), 1);
+    assert_eq!(likeness, loaded.face(FAMILY, "Regular").unwrap().traits.likeness);
+    assert!(likeness.avg_width > 0 && likeness.x_height > 0 && likeness.italic_angle == Some(0), "{likeness:?}");
+    // With only the italic loaded, the scanned Regular face still gives the family's numbers.
+    assert_eq!(scanned.add_font(renamed("SourceSans3-It.ttf")), 1);
+    assert!(scanned.is_loaded(FAMILY));
+    assert_eq!(scanned.family_traits(FAMILY).likeness, likeness);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn registered_fonts_outside_the_font_folders_are_their_full_paths() {
     let dir = std::env::temp_dir().join("Fonts");
@@ -697,8 +720,8 @@ fn a_search_reads_at_most_its_share_of_a_font_file() {
         let r = (0..tables).map(|i| 12 + 16 * i).find(|&r| &face[r..r + 4] == tag).unwrap();
         u64::from(u32::from_be_bytes(face[r + 12..r + 16].try_into().unwrap()))
     };
-    // What one face costs: its table directory and its name and OS/2 tables.
-    let per_face = 12 + 16 * tables as u64 + len(b"name") + len(b"OS/2");
+    // What one face costs: its table directory, its name, OS/2 and head tables and the post table's header.
+    let per_face = 12 + 16 * tables as u64 + len(b"name") + len(b"OS/2") + len(b"head") + 32;
     let n = 300;
     let base = 12 + 4 * n;
     let mut ttc = b"ttcf".to_vec();

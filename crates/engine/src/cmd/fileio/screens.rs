@@ -764,7 +764,7 @@ fn leave_out_folder(r: &mut Value, folder: &str) {
 
 /// Export settings kept in the document or a preset, as the request being served may see them: a
 /// `folder` outside the read roots ([`super::access::shown`]) is left out.
-fn leave_out_unreadable_settings_folder(mut settings: Map<String, Value>) -> Map<String, Value> {
+pub(super) fn leave_out_unreadable_settings_folder(mut settings: Map<String, Value>) -> Map<String, Value> {
     if settings.get("folder").and_then(Value::as_str).is_some_and(|f| !f.is_empty() && !super::access::shown(f)) {
         settings.remove("folder");
     }
