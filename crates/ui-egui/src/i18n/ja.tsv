@@ -49,6 +49,9 @@ font-technology	Variable	バリアブル
 	Cap Height	キャップハイト
 	x-Height	x ハイト
 	ICF Box	平均字面
+	Ascent	アセント
+	x Height	x ハイト
+	Em Box Height	仮想ボディの高さ
 	Show Sample	サンプルを表示
 	Hide Sample	サンプルを隠す
 	Max Ascent/Descent	最大アセント/ディセント

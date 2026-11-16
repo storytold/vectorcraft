@@ -5874,6 +5874,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 	Ascent	Wydłużenie górne
 	Cap Height	Wysokość wersalików
 	x Height	Wysokość x
+	Em Box Height	Wysokość ramki firetowej
 	Justify	Justuj
 	First Baseline	Pierwsza linia bazowa
 	Vertical Align	Wyrównanie pionowe

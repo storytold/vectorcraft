@@ -6237,6 +6237,7 @@ lighting	Light	Lumière
 	of	sur
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	x Height	Hauteur d’x
+	Em Box Height	Hauteur du cadratin
 	▾ Default Actions	▾ Scripts par défaut
 	⚠ {chord} was already used by {names} — it has been removed there.	Attention : {chord} était déjà utilisé par {names} ; il en a été retiré.
 @id	file.close	Fermer

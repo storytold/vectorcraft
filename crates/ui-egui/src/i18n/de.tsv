@@ -5366,6 +5366,9 @@ liquify-list-end	{0}, {1}	{0} und {1}
 	Cap Height	Versalhöhe
 	x-Height	x-Höhe
 	ICF Box	ICF-Rahmen
+	Ascent	Oberlänge
+	x Height	x-Höhe
+	Em Box Height	Gevierthöhe
 	Show Sample	Muster einblenden
 	Hide Sample	Muster ausblenden
 	Max Ascent/Descent	Max. Höhe/Tiefe

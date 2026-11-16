@@ -6026,6 +6026,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 	Ascent	Výška nad účařím
 	Cap Height	Výška verzálek
 	x Height	Výška x
+	Em Box Height	Výška čtverčíku
 	Justify	Do bloku
 	First Baseline	První účaří
 	Vertical Align	Svislé zarovnání

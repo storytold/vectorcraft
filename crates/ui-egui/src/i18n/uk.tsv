@@ -1039,6 +1039,9 @@ font-technology	Variable	Варіативні
 	Cap Height	Висота великих літер
 	x-Height	Висота малих літер
 	ICF Box	Рамка ICF
+	Ascent	Підйом
+	x Height	Висота малих літер
+	Em Box Height	Висота кегельного майданчика
 	Show Sample	Показати зразок
 	Hide Sample	Приховати зразок
 	Max Ascent/Descent	Макс. висота/глибина

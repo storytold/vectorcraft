@@ -4352,6 +4352,10 @@
 	tile {number}	ટાઇલ {number}
 	to	થી
 	x-Height	x-ઊંચાઈ
+	Ascent	એસેન્ટ
+	x Height	x ઊંચાઈ
+	Fixed	નિશ્ચિત
+	Em Box Height	Em બૉક્સ ઊંચાઈ
 	{count} of {total} artboards	{total} માંથી {count} આર્ટબોર્ડ
 	{effect} is already applied	{effect} પહેલેથી લાગુ છે
 	{file}, line {line}	{file}, લાઇન {line}

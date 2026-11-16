@@ -9365,6 +9365,23 @@ Native files save it only when it is `rows`, so files from before it open by col
 {"name":"run_command","arguments":{"command":"text.areaOptions","params":{"rows":2,"columns":3,"flow":"rows"}}}
 ```
 
+### First baseline
+
+`text.areaOptions {firstBaseline: ascent|capHeight|xHeight|leading|emBoxHeight|fixed, firstBaselineMin?: pt}` (Area
+Type Options › First Baseline and Min) sets how far below the top of the type area, inside the inset, the first line
+of each row/column cell sits. `emBoxHeight` (Em Box Height) puts the top of the line's ideographic em box at that
+top; on a line of several sizes the largest em box is used, and vertical type measures it from the frame's right
+edge. The em box is the one leading measured from em box top to top uses: an ideograph's cell in the font's
+vertical metrics, or 0.88 em above the baseline when the font has none (VectorCraft's own rule). With every kind but
+`fixed`, `firstBaselineMin` is the least distance from the top to the first baseline; with `fixed` it is the
+distance. Each threaded frame keeps its own setting. Native files and `.ai` files save `emBoxHeight` and open it again; other values are refused. The help
+page describes the option:
+https://helpx.adobe.com/illustrator/desktop/design-with-text/add-manage-text/add-margins-to-text-and-adjust-the-first-baseline.html
+
+```json
+{"name":"run_command","arguments":{"command":"text.areaOptions","params":{"firstBaseline":"emBoxHeight","firstBaselineMin":6}}}
+```
+
 ## Fitting area type: Auto Size, Shrink Text to Fit, overflow
 
 `text.areaOptions` (and `text.create`'s `area`, `text.createInPath` in area mode) take a `fit`:

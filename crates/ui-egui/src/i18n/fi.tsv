@@ -5942,6 +5942,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 	Ascent	Nousu
 	Cap Height	Versaalikorkeus
 	x Height	x-korkeus
+	Em Box Height	Em-laatikon korkeus
 	Justify	Tasaa molemmat reunat
 	First Baseline	Ensimmäinen perusviiva
 	Vertical Align	Pystytasaus

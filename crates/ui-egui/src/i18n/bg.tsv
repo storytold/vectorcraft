@@ -5756,6 +5756,7 @@ lighting	Light	Светлина
 	of	от
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	x Height	Височина на x
+	Em Box Height	Височина на квадратната касетка
 	▾ Default Actions	▾ Действия по подразбиране
 	⚠ {chord} was already used by {names} — it has been removed there.	Внимание: Комбинацията {chord} вече се използва от {names} — премахната е там.
 @id	file.close	file.close

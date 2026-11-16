@@ -976,6 +976,9 @@ antiAlias	Sharp	锐利
 	Cap Height	大写字母高度
 	x-Height	x 字高
 	ICF Box	ICF 框
+	Ascent	上缘
+	x Height	x 字高
+	Em Box Height	全角字框高度
 	Show Sample	显示样本
 	Hide Sample	隐藏样本
 	Max Ascent/Descent	最大上升/下降

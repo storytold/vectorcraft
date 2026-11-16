@@ -6158,6 +6158,7 @@ lighting	Light	Ljus
 	of	av
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	x Height	x-höjd
+	Em Box Height	Em-rutans höjd
 	▾ Default Actions	▾ Standardåtgärder
 	⚠ {chord} was already used by {names} — it has been removed there.	Obs! {chord} användes redan av {names} – det har tagits bort där.
 @id	file.close	Stäng

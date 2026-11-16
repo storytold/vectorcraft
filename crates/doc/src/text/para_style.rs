@@ -631,6 +631,8 @@ pub enum FirstBaseline {
     XHeight,
     /// The first line's leading.
     Leading,
+    /// The top of the first line's ideographic em box touches the frame top.
+    EmBoxHeight,
     /// Exactly `first_baseline_min` below the top.
     Fixed,
 }

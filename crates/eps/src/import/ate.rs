@@ -345,8 +345,9 @@ impl AreaFrame {
                 2 => F::CapHeight,
                 3 => F::Leading,
                 4 => F::XHeight,
-                // Em Box Height (5) and Legacy (6) have no first baseline of their own here: the
-                // first baseline stays as it was.
+                5 => F::EmBoxHeight,
+                // Legacy (6) has no first baseline of its own here: the first baseline stays as it
+                // was.
                 _ => return None,
             };
             Some((kind, length(b.get("1")).unwrap_or(0.0)))
@@ -2936,12 +2937,12 @@ mod tests {
     #[test]
     fn area_frame_first_baseline_kinds_and_minimum_are_read() {
         use vectorcraft_doc::FirstBaseline as F;
-        for (code, kind) in [(0, F::Fixed), (2, F::CapHeight), (3, F::Leading), (4, F::XHeight)] {
+        for (code, kind) in [(0, F::Fixed), (2, F::CapHeight), (3, F::Leading), (4, F::XHeight), (5, F::EmBoxHeight)] {
             let a = area_of(vec![area_frame(&format!("/10 << /0 {code} /1 30 >>"))], 0, 2.0);
             assert_eq!((a.first_baseline, a.first_baseline_min), (kind, 60.0), "code {code}");
         }
         // A kind without its own first baseline here, or none known, leaves Ascent.
-        for code in ["1", "5", "6", "7", "-1", "2.5", "(x)"] {
+        for code in ["1", "6", "7", "-1", "2.5", "(x)"] {
             let a = area_of(vec![area_frame(&format!("/10 << /0 {code} /1 30 >>"))], 0, 1.0);
             assert_eq!((a.first_baseline, a.first_baseline_min), (F::Ascent, 0.0), "code {code}");
         }
@@ -2972,9 +2973,10 @@ mod tests {
         };
         let placed = |options: &str| placed_in(&[options]);
         assert_eq!(placed("/10 << /0 2 /1 0 >>"), (false, vectorcraft_doc::FirstBaseline::CapHeight));
+        assert_eq!(placed("/10 << /0 5 /1 0 >>"), (false, vectorcraft_doc::FirstBaseline::EmBoxHeight));
         // Without one (Ascent), or with one that isn't read, the line goes where the file has it.
         assert_eq!(placed(""), (true, vectorcraft_doc::FirstBaseline::Fixed));
-        assert_eq!(placed("/10 << /0 5 /1 0 >>"), (true, vectorcraft_doc::FirstBaseline::Fixed));
+        assert_eq!(placed("/10 << /0 6 /1 0 >>"), (true, vectorcraft_doc::FirstBaseline::Fixed));
         // Another frame of the thread keeping one doesn't count for the first.
         assert_eq!(placed_in(&["", "/10 << /0 2 /1 0 >>"]), (true, vectorcraft_doc::FirstBaseline::Fixed));
     }

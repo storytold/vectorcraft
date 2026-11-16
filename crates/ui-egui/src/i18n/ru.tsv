@@ -6995,6 +6995,7 @@ axis	Y Axis	Ось Y
 	[Press Quality]	[Типографское качество]
 	of	из
 	x Height	Высота строчных
+	Em Box Height	Высота кегельной площадки
 	▾ Default Actions	▾ Стандартные действия
 	⚠ {chord} was already used by {names} — it has been removed there.	⚠ {chord} уже было назначено: {names}; там оно удалено.
 @plural	{n} shortcut is assigned more than once|{n} shortcuts are assigned more than once	{n} сочетание клавиш назначено несколько раз|{n} сочетания клавиш назначены несколько раз|{n} сочетаний клавиш назначены несколько раз

@@ -7359,6 +7359,7 @@ font-technology	Variable	ცვლადი
 	Ascent	ზედა გამონაშვერი
 	Cap Height	მთავრული ასოს სიმაღლე
 	x Height	x-სიმაღლე
+	Em Box Height	Em-ბლოკის სიმაღლე
 	Justify	ორმხრივი სწორება
 	First Baseline	პირველი საბაზისო ხაზი
 	Vertical Align	ვერტიკალური სწორება

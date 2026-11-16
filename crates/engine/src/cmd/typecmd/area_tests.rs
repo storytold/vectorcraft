@@ -2613,6 +2613,44 @@ fn area_options_columns_change_layout() {
     assert!(s.execute("text.areaOptions", &json!({"firstBaseline": "nope"})).is_err());
 }
 
+/// First Baseline Em Box Height: set, reported and undone like the other kinds, with Min as the
+/// least distance; setting it again adds no undo step, and the refusal of an unknown kind lists it.
+#[test]
+fn area_options_set_the_em_box_height_first_baseline() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "word ".repeat(20), "area": {"width": 300, "height": 120}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let first = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).lines[0].first_baseline,
+        _ => panic!("area type"),
+    };
+    let ascent = first(&s);
+    let r = s.execute("text.areaOptions", &json!({"firstBaseline": "emBoxHeight"})).unwrap();
+    assert_eq!((r["firstBaseline"].as_str(), r["firstBaselineMin"].as_f64()), (Some("emBoxHeight"), Some(0.0)));
+    let em_box = first(&s);
+    assert!(em_box > 0.0 && (em_box - ascent).abs() > 0.1, "{em_box} {ascent}");
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("text.areaOptions", &json!({"firstBaseline": "emBoxHeight"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "no change, no undo step");
+    // A Min nearer the top keeps the em box; one further down is the distance.
+    s.execute("text.areaOptions", &json!({"firstBaselineMin": em_box / 2.0})).unwrap();
+    assert!((first(&s) - em_box).abs() < 1e-9);
+    let r = s.execute("text.areaOptions", &json!({"firstBaselineMin": 30})).unwrap();
+    assert_eq!((r["firstBaseline"].as_str(), r["firstBaselineMin"].as_f64()), (Some("emBoxHeight"), Some(30.0)));
+    assert!((first(&s) - 30.0).abs() < 1e-9);
+    for _ in 0..3 {
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert_eq!(s.execute("text.areaOptions", &json!({})).unwrap()["firstBaseline"], "ascent");
+    assert!((first(&s) - ascent).abs() < 1e-9);
+    let e = s.execute("text.areaOptions", &json!({"firstBaseline": "emBox"})).unwrap_err().to_string();
+    assert!(e.contains("emBoxHeight"), "{e}");
+    assert_eq!(s.execute("text.areaOptions", &json!({})).unwrap()["firstBaseline"], "ascent");
+}
+
 /// `rowGutter` sets a gutter between rows of its own, the reply passes it back, and a gutter
 /// given alone is the rows' and the columns' again.
 #[test]

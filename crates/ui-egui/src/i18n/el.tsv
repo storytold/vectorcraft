@@ -5941,6 +5941,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	[VectorCraft Default]	[Προεπιλογή VectorCraft]
 	of	από
 	x Height	Ύψος x
+	Em Box Height	Ύψος τετραγώνου em
 	▾ Default Actions	▾ Προεπιλεγμένες ενέργειες
 	⚠ {chord} was already used by {names} — it has been removed there.	Προσοχή: το {chord} χρησιμοποιούνταν ήδη από {names} — αφαιρέθηκε από εκεί.
 @msg	give corners of the path: anchors between two straight sides	ορίστε τις γωνίες της διαδρομής: σημεία αγκύρωσης μεταξύ δύο ευθύγραμμων πλευρών
