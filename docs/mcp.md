@@ -5854,7 +5854,13 @@ undo step: the two direct-selected anchors when they are open path ends, else th
 selection (both ends of one, closing it); anything else is refused. `path.convertAnchor {id, subpath?, anchor, to, x?, y?}` and
 `path.split {id, subpath?, anchor}` do the same to one anchor (the Anchor Point and Scissors tools); `path.split`,
 at an anchor or at `segment` and `t`, leaves the first anchor of the piece after the cut selected alone, and a Direct
-Selection press on two anchors on top of each other takes the selected one; the Pen with Alt
+Selection press on two anchors on top of each other takes the selected one. The paths that `path.cutAtAnchors` and
+`path.split` make keep the source path's fill and stroke settings (weight, paint, caps, joins, dashes, width profile,
+effects), but every stroke's alignment becomes Center in the same undo step, so an Inside or Outside stroke is centered
+on the cut paths ([the help page](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/split-paths.html)).
+VectorCraft's own rules: every stroke row is reset, hidden ones included; a path of several subpaths has one appearance,
+so a cut in one subpath centers the strokes of its other subpaths too, closed ones included; a cut member of a compound
+path centers the compound path's strokes; strokes already centered are left as they are. The Pen with Alt
 held over a selected path's handle, anchor or segment works as the Anchor Point tool. `press_key` Escape between two
 `pointer_gesture` calls of an Anchor Point drag cancels it: the path goes back and no undo step is added. `path.reshapeSegment {id,
 subpath?, segment, t, dx, dy, perpendicular?}` (a segment dragged with Direct Selection or the Anchor Point tool) moves the segment's
