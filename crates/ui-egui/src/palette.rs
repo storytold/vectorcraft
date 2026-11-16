@@ -513,6 +513,13 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let screen = ctx.content_rect();
     // The highlighted result the rows and the field's description are drawn with.
     let mut drawn = sel;
+    // The backdrop covers the canvas, the toolbars, the docked panels and the app bar under the
+    // popup, in the order of a modal dialog's backdrop (`dialogs::modal::backdrop`), so the press
+    // that closes the palette does not press a control under it. Windows in the Foreground order
+    // stay above it. Not focusable (`Sense::click()` is): Tab stays in the popup.
+    egui::Area::new(egui::Id::unique("palette-backdrop")).order(egui::Order::Middle).fixed_pos(screen.min).show(ctx, |ui| {
+        ui.allocate_rect(screen, egui::Sense::CLICK);
+    });
     // The area keeps itself inside the window (egui's `Area::constrain` is on), so in a window too
     // short for the field, one row and the footer below TOP, the popup moves up.
     egui::Area::new(egui::Id::unique("palette")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, [0.0, TOP]).show(ctx, |ui| {
@@ -603,6 +610,20 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
         });
     });
+    // A press of any pointer button that the popup's layer does not get closes it: a press on the
+    // backdrop, or on a window above it, which also gets the press, even where that window lies
+    // over the popup.
+    let presses: Vec<egui::Pos2> = ctx.input(|i| {
+        i.events
+            .iter()
+            .filter_map(|e| match e {
+                egui::Event::PointerButton { pos, pressed: true, .. } => Some(*pos),
+                _ => None,
+            })
+            .collect()
+    });
+    let popup = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("palette"));
+    let outside = presses.into_iter().any(|p| ctx.layer_id_at(p) != Some(popup));
     // The pointer or a scroll moved the highlight after the rows were drawn: the next frame draws
     // it where it now is.
     if sel != drawn {
@@ -612,6 +633,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if let Some(id) = run {
         app.ui.palette_open = false;
         run_pick(app, &id);
+    } else if outside {
+        app.ui.palette_open = false;
     }
 }
 
@@ -1787,5 +1810,221 @@ mod tests {
         frame(&mut app, false);
         frame(&mut app, false);
         assert_ne!(ctx.memory(|m| m.focused()), Some(field), "the dialog keeps the focus");
+    }
+
+    /// The whole window, with a document whose rectangle is selected, drawn a frame at a time in
+    /// English with screen readers on.
+    struct Window {
+        app: VectorcraftApp,
+        ctx: egui::Context,
+        time: f64,
+        /// Draw a window with an "Above" button at this place, in the Foreground order after the
+        /// app, as a progress window is drawn, and count its clicks.
+        above: Option<egui::Pos2>,
+        above_clicks: usize,
+    }
+
+    impl Window {
+        fn new() -> Window {
+            crate::i18n::set_current(Lang::EN);
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+            app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+            app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+            assert!(!app.session.doc().unwrap().selection.is_empty());
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            let mut window = Window { app, ctx, time: 0.0, above: None, above_clicks: 0 };
+            window.frame(vec![]);
+            window.frame(vec![]);
+            window
+        }
+
+        /// One frame of the whole window with `events`: its screen-reader tree.
+        fn frame(&mut self, events: Vec<egui::Event>) -> Vec<egui::accesskit::Node> {
+            self.time += 0.1;
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, WINDOW);
+            let input = egui::RawInput { time: Some(self.time), screen_rect: Some(screen), events, ..Default::default() };
+            let app = &mut self.app;
+            let (above, clicks) = (self.above, &mut self.above_clicks);
+            let mut out = self.ctx.run_ui(input, |ui| {
+                app.logic(ui.ctx());
+                app.ui(ui);
+                if let Some(at) = above {
+                    let area = egui::Area::new(egui::Id::unique("test-above")).order(egui::Order::Foreground).fixed_pos(at);
+                    area.show(ui.ctx(), |ui| {
+                        if ui.button("Above").clicked() {
+                            *clicks += 1;
+                        }
+                    });
+                }
+            });
+            out.textures_delta.clear();
+            out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default()
+        }
+
+        /// A primary click at `at`, a frame for the move, the press and the release: the release
+        /// frame's screen-reader tree.
+        fn click(&mut self, at: egui::Pos2) -> Vec<egui::accesskit::Node> {
+            let button =
+                |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+            self.frame(vec![egui::Event::PointerMoved(at)]);
+            self.frame(vec![button(true)]);
+            self.frame(vec![button(false)])
+        }
+
+        /// A press of `button` at `from`, a move to `to` and the release there, a frame each.
+        fn drag(&mut self, button: egui::PointerButton, from: egui::Pos2, to: egui::Pos2) {
+            let event = |pos, pressed| egui::Event::PointerButton { pos, button, pressed, modifiers: egui::Modifiers::NONE };
+            self.frame(vec![egui::Event::PointerMoved(from)]);
+            self.frame(vec![event(from, true)]);
+            self.frame(vec![egui::Event::PointerMoved(to)]);
+            self.frame(vec![event(to, false)]);
+        }
+
+        fn selection(&self) -> String {
+            format!("{:?}", self.app.session.doc().unwrap().selection)
+        }
+
+        fn popup(&self) -> egui::Rect {
+            self.ctx.memory(|m| m.area_rect(egui::Id::unique("palette"))).unwrap()
+        }
+    }
+
+    /// The middle of the button whose screen-reader name is `name`, alone or followed by its
+    /// shortcut in parentheses.
+    fn button_at(nodes: &[egui::accesskit::Node], name: &str) -> egui::Pos2 {
+        let names: Vec<_> = nodes.iter().filter(|n| n.role() == egui::accesskit::Role::Button).filter_map(|n| n.label()).collect();
+        let named = |l: &str| l == name || l.strip_prefix(name).is_some_and(|rest| rest.starts_with(' ') && rest.trim_start().starts_with('('));
+        let node = nodes
+            .iter()
+            .find(|n| n.role() == egui::accesskit::Role::Button && n.label().is_some_and(named))
+            .unwrap_or_else(|| panic!("a button named {name}: {names:?}"));
+        let b = node.bounds().unwrap();
+        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
+    }
+
+    /// A click on the canvas outside the popup closes it and leaves the selection as it was.
+    #[test]
+    fn a_click_on_the_canvas_closes_the_palette() {
+        let mut window = Window::new();
+        let before = window.selection();
+        window.app.ui.palette_open = true;
+        window.frame(vec![]);
+        let canvas = window.app.canvas_rect.expect("the canvas is drawn");
+        let at = canvas.left_bottom() + egui::vec2(30.0, -30.0);
+        assert!(!window.popup().contains(at), "{at:?} is outside {:?}", window.popup());
+        window.click(at);
+        assert!(!window.app.ui.palette_open, "the click outside closes the palette");
+        window.frame(vec![]);
+        assert_eq!(window.selection(), before, "the click does not reach the canvas");
+    }
+
+    /// A click on another control outside the popup closes the popup and does not press the
+    /// control.
+    #[test]
+    fn a_click_on_another_control_closes_the_palette_without_pressing_it() {
+        let mut window = Window::new();
+        let tool = window.app.session.tool_id();
+        window.app.ui.palette_open = true;
+        let nodes = window.frame(vec![]);
+        let at = button_at(&nodes, "Pen Tool");
+        assert!(!window.popup().contains(at), "{at:?} is outside {:?}", window.popup());
+        window.click(at);
+        assert!(!window.app.ui.palette_open, "the click outside closes the palette");
+        window.frame(vec![]);
+        assert_eq!(window.app.session.tool_id(), tool, "the click does not pick the tool");
+        // With the palette closed, the same click picks it.
+        window.click(at);
+        assert_eq!(window.app.session.tool_id(), "pen");
+    }
+
+    /// A right-click outside the popup closes it, and so does a drag that starts outside it.
+    #[test]
+    fn a_right_click_or_a_drag_outside_closes_the_palette() {
+        let mut window = Window::new();
+        let before = window.selection();
+        let canvas = window.app.canvas_rect.expect("the canvas is drawn");
+        let at = canvas.left_bottom() + egui::vec2(30.0, -30.0);
+        window.app.ui.palette_open = true;
+        window.frame(vec![]);
+        assert!(!window.popup().contains(at), "{at:?} is outside {:?}", window.popup());
+        window.drag(egui::PointerButton::Secondary, at, at);
+        assert!(!window.app.ui.palette_open, "the right-click outside closes the palette");
+        window.app.ui.palette_open = true;
+        window.frame(vec![]);
+        window.drag(egui::PointerButton::Primary, at, at + egui::vec2(80.0, -60.0));
+        assert!(!window.app.ui.palette_open, "the drag outside closes the palette");
+        window.frame(vec![]);
+        assert_eq!(window.selection(), before, "the drag does not reach the canvas");
+    }
+
+    /// A click on a window drawn above the backdrop, as a progress window is, closes the palette
+    /// and presses that window's button, beside the popup and where the window lies over it.
+    #[test]
+    fn a_click_on_a_window_above_closes_the_palette_and_reaches_it() {
+        for over in [false, true] {
+            let mut window = Window::new();
+            window.app.ui.palette_open = true;
+            window.frame(vec![]);
+            let popup = window.popup();
+            window.above = Some(if over { popup.center() } else { egui::pos2(40.0, 400.0) });
+            window.frame(vec![]);
+            let nodes = window.frame(vec![]);
+            let at = button_at(&nodes, "Above");
+            assert_eq!(popup.contains(at), over, "{at:?} and the popup {popup:?}");
+            window.click(at);
+            assert!(!window.app.ui.palette_open, "over the popup: {over}; the click on the window closes the palette");
+            assert_eq!(window.above_clicks, 1, "over the popup: {over}; the window gets the click");
+        }
+    }
+
+    /// The click on the app bar's search button that opens the palette leaves it open; the next
+    /// click on the button closes it.
+    #[test]
+    fn the_click_that_opens_the_palette_does_not_close_it() {
+        let mut window = Window::new();
+        let nodes = window.frame(vec![]);
+        let at = button_at(&nodes, "Search commands, tools, panels and effects");
+        window.click(at);
+        assert!(window.app.ui.palette_open, "the click opens the palette");
+        window.frame(vec![]);
+        window.frame(vec![]);
+        assert!(window.app.ui.palette_open, "and it stays open");
+        window.click(at);
+        assert!(!window.app.ui.palette_open, "a second click closes it");
+    }
+
+    /// Clicks inside the popup keep it open: one in the search field, and one on a result, which
+    /// runs that result.
+    #[test]
+    fn clicks_inside_the_palette_keep_it_or_run_a_result() {
+        let mut window = Window::new();
+        window.app.ui.palette_open = true;
+        window.app.ui.palette_query = "show panel".into();
+        window.frame(vec![]);
+        let nodes = window.frame(vec![]);
+        let popup = window.popup();
+        let middle = |b: egui::accesskit::Rect| egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32);
+        let field = nodes
+            .iter()
+            .filter(|n| n.role() == egui::accesskit::Role::TextInput)
+            .filter_map(|n| n.bounds().map(middle))
+            .find(|p| popup.contains(*p))
+            .expect("the search field");
+        window.click(field);
+        window.frame(vec![]);
+        assert!(window.app.ui.palette_open, "a click in the field keeps the palette open");
+        assert_eq!(window.app.ui.palette_query, "show panel");
+        let nodes = window.frame(vec![]);
+        let entries = entries(&window.ctx, Lang::EN);
+        let listed: Vec<_> = matching(&entries, "show panel").into_iter().take(MAX_RESULTS).collect();
+        let hidden = |e: &&&Entry| e.id.strip_prefix("panel:").is_some_and(|p| !crate::panel_docking::showing(&window.app.ui, p));
+        let e = listed.iter().find(hidden).expect("a hidden panel's result");
+        let label = row_label(e);
+        let row = rows(&nodes).into_iter().find(|r| r.0 == label).expect("its row is drawn");
+        let panel = e.id.strip_prefix("panel:").unwrap_or_default().to_string();
+        window.click(egui::pos2(window.popup().center().x, ((row.2 + row.3) / 2.0) as f32));
+        assert!(!window.app.ui.palette_open);
+        assert!(crate::panel_docking::showing(&window.app.ui, &panel), "{panel}: {}", window.app.ui.status);
     }
 }
