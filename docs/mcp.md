@@ -12381,6 +12381,26 @@ Commands:
 - `addon.pathtools.shape.convert {ids?}` makes the selected plain closed paths that are rectangles, ellipses or
   polygons with equal sides and corners (stretched along their own axes at most) parametric shapes with the same
   outline. → `{ids}` (those converted).
+- `addon.pathtools.commonTangents {tangents?, centerline?, ids?}` adds the common tangent lines of two convex closed
+  paths (`ids`, or the two selected objects) as separate open paths: lines that touch both paths without crossing into
+  either. `tangents`: `external` (both paths on the same side of the line), `internal` (lines that run between them)
+  or `all` (default). With `centerline: true` it also adds the line joining the two centers: an ellipse's center, or
+  a path's center of area. Each tangent of paths that do not touch runs from where it touches the lower path to
+  where it touches the upper one; where a straight side of a path lies along the line, the line covers the whole
+  side. An ellipse drawn with the Ellipse tool, then moved, turned or scaled, is measured as an exact ellipse. Any
+  other path must be closed, have one outline, bend the same way all around and have at most 10,000 segments; an open
+  path, a path that bends inward, a path without area, a group, a compound path or type is refused, and so are two
+  paths whose outlines are the same to within the touching tolerance given below. Two separate paths have two
+  external and two internal tangents. Overlapping paths have external tangents only. A path inside the other has
+  none. Paths that touch, from outside or from inside, share one tangent there instead: a line centered on the point
+  where they touch and as long as the narrower path is wide along it. Paths that meet at a corner or along a shared
+  stretch of outline get one such line, at the middle of the directions that touch both. Paths count as touching when
+  the gap between them is less than the tolerance, a billionth of the larger of their sizes and the distance between
+  their centers. The lines are stroked with the current stroke color and weight (black when the stroke is None), have
+  no fill, go directly above the upper of the two paths and are selected; one undo step. When there is no tangent of
+  the kind asked for, nothing changes, and the result's `warning` says why. Common Tangents…
+  opens a dialog (Tangents, Centerline) with Preview. → `{ids, external, internal, centerline, warning?}`
+  (`centerline`: the centerline's id, or null).
 
 A parametric shape is an ordinary path. It keeps its numbers, with a fingerprint of the outline they drew, in one
 entry of its object data (`vc-pathtools-shape`, as `document.node` lists `attrs.data`), which SVG export leaves out;
@@ -12394,6 +12414,7 @@ plain path from then on.
 {"name":"run_command","arguments":{"command":"addon.pathtools.crossings","params":{"cut":true}}}
 {"name":"run_command","arguments":{"command":"addon.pathtools.shape.create","params":{"kind":"star","center":[200,150],"width":120,"height":120,"count":7,"a":0.4}}}
 {"name":"run_command","arguments":{"command":"addon.pathtools.shape.set","params":{"id":14,"kind":"gear","count":16,"radius":2}}}
+{"name":"run_command","arguments":{"command":"addon.pathtools.commonTangents","params":{"ids":[3,4],"tangents":"external","centerline":true}}}
 ```
 
 ### Path Effects (live)

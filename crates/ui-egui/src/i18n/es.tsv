@@ -7420,6 +7420,22 @@ breakText	Glyphs	Glifos
 	Remove Gaps	Quitar separaciones
 @msg	that makes too many pieces (at most 100000): make the dashes longer	eso da demasiados trozos (como máximo 100000): alargue los guiones
 @msg	select paths, or segments, to divide	seleccione trazados o segmentos para dividir
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Tangentes comunes…
+	Common Tangents	Tangentes comunes
+	Tangents	Tangentes
+	Centerline	Línea central
+	External	Externas
+	Internal	Internas
+@msg	select two closed paths	seleccione dos trazados cerrados
+@msg	a selected path is open	un trazado seleccionado está abierto
+@msg	a selected path is not convex	un trazado seleccionado no es convexo
+@msg	a selected path has no area	un trazado seleccionado no tiene área
+@msg	a selected path has more than 10000 segments	un trazado seleccionado tiene más de 10000 segmentos
+@msg	the two paths have the same outline	los dos trazados tienen el mismo contorno
+@msg	One path lies inside the other, so they have no common tangents	Un trazado está dentro del otro, por lo que no tienen tangentes comunes
+@msg	The paths overlap, so they have no internal tangents	Los trazados se superponen, por lo que no tienen tangentes internas
+@msg	One path lies inside the other, so they have no internal tangents	Un trazado está dentro del otro, por lo que no tienen tangentes internas
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandir guiones en trazados
 @msg	select paths with dashed strokes to expand	seleccione trazados con trazo discontinuo para expandir

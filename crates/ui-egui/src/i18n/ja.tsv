@@ -8956,6 +8956,22 @@ breakText	Glyphs	字形
 	Remove Gaps	間隔を削除
 @msg	that makes too many pieces (at most 100000): make the dashes longer	分割数が多すぎます（最大 100000）：ダッシュを長くしてください
 @msg	select paths, or segments, to divide	分割するパスまたはセグメントを選択してください
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	共通接線…
+	Common Tangents	共通接線
+	Tangents	接線
+	Centerline	中心線
+	External	外側
+	Internal	内側
+@msg	select two closed paths	閉じたパスを 2 つ選択してください
+@msg	a selected path is open	選択したパスが開いています
+@msg	a selected path is not convex	選択したパスが凸形ではありません
+@msg	a selected path has no area	選択したパスに面積がありません
+@msg	a selected path has more than 10000 segments	選択したパスのセグメントが 10000 を超えています
+@msg	the two paths have the same outline	2 つのパスの輪郭が同じです
+@msg	One path lies inside the other, so they have no common tangents	一方のパスがもう一方の内側にあるため、共通接線はありません
+@msg	The paths overlap, so they have no internal tangents	パスが重なっているため、内側の接線はありません
+@msg	One path lies inside the other, so they have no internal tangents	一方のパスがもう一方の内側にあるため、内側の接線はありません
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	破線をパスに拡張
 @msg	select paths with dashed strokes to expand	拡張する破線のパスを選択してください

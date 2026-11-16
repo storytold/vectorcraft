@@ -7077,6 +7077,22 @@ breakText	Glyphs	Glifi
 	Remove Gaps	Rimuovi le distanze
 @msg	that makes too many pieces (at most 100000): make the dashes longer	così si ottengono troppi pezzi (al massimo 100000): allunga i trattini
 @msg	select paths, or segments, to divide	seleziona tracciati o segmenti da dividere
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Tangenti comuni…
+	Common Tangents	Tangenti comuni
+	Tangents	Tangenti
+	Centerline	Linea centrale
+	External	Esterne
+	Internal	Interne
+@msg	select two closed paths	seleziona due tracciati chiusi
+@msg	a selected path is open	un tracciato selezionato è aperto
+@msg	a selected path is not convex	un tracciato selezionato non è convesso
+@msg	a selected path has no area	un tracciato selezionato non ha area
+@msg	a selected path has more than 10000 segments	un tracciato selezionato ha più di 10000 segmenti
+@msg	the two paths have the same outline	i due tracciati hanno lo stesso contorno
+@msg	One path lies inside the other, so they have no common tangents	Un tracciato si trova dentro l’altro, quindi non hanno tangenti comuni
+@msg	The paths overlap, so they have no internal tangents	I tracciati si sovrappongono, quindi non hanno tangenti interne
+@msg	One path lies inside the other, so they have no internal tangents	Un tracciato si trova dentro l’altro, quindi non hanno tangenti interne
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Espandi trattini in tracciati
 @msg	select paths with dashed strokes to expand	seleziona tracciati con traccia tratteggiata da espandere

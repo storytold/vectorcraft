@@ -7041,6 +7041,22 @@ breakText	Glyphs	Glyphen
 	Remove Gaps	Lücken entfernen
 @msg	that makes too many pieces (at most 100000): make the dashes longer	das ergibt zu viele Teile (höchstens 100000): machen Sie die Striche länger
 @msg	select paths, or segments, to divide	wählen Sie Pfade oder Segmente zum Aufteilen aus
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Gemeinsame Tangenten…
+	Common Tangents	Gemeinsame Tangenten
+	Tangents	Tangenten
+	Centerline	Mittellinie
+	External	Äußere
+	Internal	Innere
+@msg	select two closed paths	wählen Sie zwei geschlossene Pfade aus
+@msg	a selected path is open	ein ausgewählter Pfad ist offen
+@msg	a selected path is not convex	ein ausgewählter Pfad ist nicht konvex
+@msg	a selected path has no area	ein ausgewählter Pfad hat keine Fläche
+@msg	a selected path has more than 10000 segments	ein ausgewählter Pfad hat mehr als 10000 Segmente
+@msg	the two paths have the same outline	die beiden Pfade haben denselben Umriss
+@msg	One path lies inside the other, so they have no common tangents	Ein Pfad liegt im anderen, daher haben sie keine gemeinsamen Tangenten
+@msg	The paths overlap, so they have no internal tangents	Die Pfade überlappen sich, daher haben sie keine inneren Tangenten
+@msg	One path lies inside the other, so they have no internal tangents	Ein Pfad liegt im anderen, daher haben sie keine inneren Tangenten
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Striche in Pfade umwandeln
 @msg	select paths with dashed strokes to expand	wählen Sie Pfade mit gestrichelter Kontur zum Umwandeln aus
