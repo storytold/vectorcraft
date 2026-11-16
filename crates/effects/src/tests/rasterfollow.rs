@@ -907,6 +907,71 @@ fn a_layers_guides_stay_once_above_copies_that_carry_its_shadow() {
     assert_eq!(shadows_in(&art).len(), 3);
 }
 
+/// The bounds of every node with `id` under `art`, in order.
+fn bounds_of(art: &Node, id: u64) -> Vec<Rect> {
+    let mut out = vec![];
+    art.walk(&mut |m| {
+        if m.id == NodeId(id)
+            && let Some(b) = m.geometric_bounds()
+        {
+            out.push(b);
+        }
+    });
+    out
+}
+
+fn rects_near(a: &[Rect], b: &[Rect]) -> bool {
+    let near = |p: f64, q: f64| (p - q).abs() < 1e-6;
+    a.len() == b.len() && a.iter().zip(b).all(|(p, q)| near(p.x0, q.x0) && near(p.y0, q.y0) && near(p.x1, q.x1) && near(p.y1, q.y1))
+}
+
+/// A group with a fill of its own and only a shadow before its copying Transform effect applies
+/// its members' own effects before it copies them, as a group without a fill does: a member's own
+/// move is turned with each copy.
+#[test]
+fn a_painted_groups_copies_take_their_members_own_effects_first() {
+    let members = || vec![square(171, vec![transform(json!({"moveH": 40}))]), square(172, vec![])];
+    let effects = || vec![shadow(10.0, 0.0, 0.0), transform(json!({"rotate": 90, "copies": 1}))];
+    let plain = crate::evaluate_container(None, &group(170, members(), effects())).unwrap();
+    let mut painted = group(170, members(), effects());
+    *painted.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0);
+    painted.appearance.effects = effects();
+    let art = crate::evaluate_container(None, &painted).unwrap();
+    let (want, got) = (bounds_of(&plain, 171), bounds_of(&art, 171));
+    assert!(!want.is_empty());
+    assert!(rects_near(&got, &want), "{got:?} {want:?}");
+}
+
+/// A layer's copies are made about the bounds of its visible members, as the layer measures them:
+/// a hidden member does not move the center that a reflected copy turns about.
+#[test]
+fn a_layers_copies_leave_its_hidden_members_out_of_their_reference() {
+    let mut hidden = path_node(182, shapes::rectangle(Rect::new(1000.0, 0.0, 1050.0, 50.0)), vec![]);
+    hidden.visible = false;
+    let l = layer(180, vec![square(181, vec![]), hidden], vec![shadow(10.0, 0.0, 0.0), transform(json!({"reflectX": true, "copies": 1}))]);
+    let art = crate::evaluate_container(None, &l).unwrap();
+    let got = bounds_of(&art, 181);
+    assert!(rects_near(&got, &[Rect::new(0.0, 0.0, 50.0, 50.0); 2]), "{got:?}");
+}
+
+/// A shadow carried by the copies of an earlier copying Transform effect of a group turns with each
+/// copy of a later one, drawn and baked.
+#[test]
+fn a_groups_later_copying_transform_turns_the_shadows_of_earlier_copies() {
+    let g = || {
+        group(
+            190,
+            vec![square(191, vec![])],
+            vec![shadow(10.0, 0.0, 0.0), transform(json!({"moveH": 100, "copies": 1})), transform(json!({"rotate": 90, "copies": 1}))],
+        )
+    };
+    let want = [(0.0, -10.0), (0.0, -10.0), (10.0, 0.0), (10.0, 0.0)];
+    let art = crate::evaluate_container(None, &g()).unwrap();
+    assert!(near(&shadows_in(&art), &want), "{:?}", shadows_in(&art));
+    let b = baked(g());
+    assert!(near(&shadows_in(&b), &want), "baked {:?}", shadows_in(&b));
+}
+
 /// A group holding type whose Transform effect only moves its copies, baked for export, gives each
 /// copy the shadow listed before that effect, as the canvas draws it, rather than keeping the type
 /// as type under one shadow around all the copies. Built without fonts, type lays out no glyphs

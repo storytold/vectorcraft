@@ -191,13 +191,17 @@ pub(crate) fn copied_container_raster_at(n: &Node) -> Option<usize> {
 /// turned, reflected and scaled with it ([`crate::raster::follow_contents`]), once, whatever Scale
 /// Strokes & Effects says. The members' own raster effects in each copy stay as a Transform effect
 /// that copies a group leaves them. The geometry effects after `t` then reshape all the copies as
-/// one piece. The copies stop where [`copy_art`]'s do, each with its raster effects. Returns the art
+/// one piece. The copies stop where [`copy_art`]'s do, each with its raster effects. The copies
+/// inside `piece` that an earlier copying Transform effect of `n` made, which carry `n`'s id, have
+/// their raster effects moved, turned, reflected and scaled with each copy in the same way
+/// ([`follow_carried`]). The copies are made about `bounds`, the piece's bounds. Returns the art
 /// and the raster effects from `t` on, as they ran.
-pub(crate) fn copied_container_art(doc: Option<&Document>, n: &Node, t: usize, piece: Node) -> (Node, Vec<Effect>) {
+pub(crate) fn copied_container_art(doc: Option<&Document>, n: &Node, t: usize, piece: Node, bounds: Option<Rect>) -> (Node, Vec<Effect>) {
     let rest = n.appearance.effects.get(t..).unwrap_or_default();
     let own = piece.appearance.effects.clone();
+    let original = piece.clone();
     let mut art = Node::group(n.id, vec![Arc::new(piece)]);
-    if let (Some(e), Some(bounds)) = (rest.first(), art.geometric_bounds()) {
+    if let (Some(e), Some(bounds)) = (rest.first(), bounds) {
         let params = merged_params(&e.id, &e.params);
         let (m, copies) = crate::distort::transform_map(bounds, &params, n.id.0);
         let max = Budget::EFFECTS.at_least(art_cost(&art));
@@ -218,6 +222,7 @@ pub(crate) fn copied_container_art(doc: Option<&Document>, n: &Node, t: usize, p
                     let copy = Arc::make_mut(c);
                     copy.appearance.effects = own.clone();
                     crate::raster::follow_contents(&mut copy.appearance.effects, a, Affine::IDENTITY);
+                    follow_carried(copy, &original, n.id, a);
                 }
             }
         }
@@ -230,6 +235,20 @@ pub(crate) fn copied_container_art(doc: Option<&Document>, n: &Node, t: usize, p
     }
     let effects = crate::raster::without_geometry(ran.get(t..).unwrap_or_default());
     (art, effects)
+}
+
+/// Give the members of `copy` with `id` (the copies that an earlier copying Transform effect of a
+/// group or layer made, [`copied_container_art`]), at every depth below such members, the raster
+/// effects of the matching members of `original`, the piece `copy` was made from, made to follow
+/// `a` ([`crate::raster::follow_contents`]).
+fn follow_carried(copy: &mut Node, original: &Node, id: NodeId, a: Affine) {
+    let (Some(ch), Some(was)) = (copy.children_mut(), original.children()) else { return };
+    for (c, w) in ch.iter_mut().zip(was).filter(|(c, w)| w.id == id && c.id == id) {
+        let c = Arc::make_mut(c);
+        c.appearance.effects = w.appearance.effects.clone();
+        crate::raster::follow_contents(&mut c.appearance.effects, a, Affine::IDENTITY);
+        follow_carried(c, w, id, a);
+    }
 }
 
 /// Is `e` a visible live-effect plug-in whose manifest declares `paintOutput`: its id's plug-in id,

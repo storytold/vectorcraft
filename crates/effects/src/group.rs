@@ -920,13 +920,17 @@ fn copied_container(doc: Option<&Document>, n: &Node, t: usize) -> Node {
     take_sublayer_guides(&mut m, &mut guides, &Node::is_ruler_guide);
     let mut source = m.clone();
     source.appearance.effects = n.appearance.effects.get(..t).unwrap_or_default().to_vec();
+    // With no geometry effect before the Transform effect, `evaluate_container` leaves the members'
+    // own effects live (it only paints the group's own fills and strokes): the members are drawn
+    // first, so their effects apply before the copies are made.
+    if crate::reshape::geometry_effects(&source).is_empty() {
+        source = crate::reshape::outlined_members(doc, &source);
+        // The members' raster effects follow the group's own Transform effects as well.
+        let _later = crate::raster::LaterGroups::enter(&n.appearance.effects);
+        members_as_drawn(doc, &mut source);
+    }
     let mut piece = evaluate_container(doc, &source).unwrap_or_else(|| {
-        let mut p = crate::reshape::outlined_members(doc, &source);
-        {
-            // The members' raster effects follow the group's own Transform effects as well.
-            let _later = crate::raster::LaterGroups::enter(&n.appearance.effects);
-            members_as_drawn(doc, &mut p);
-        }
+        let mut p = source.clone();
         p.appearance.effects = crate::raster::without_geometry(&p.appearance.effects);
         p
     });
@@ -936,11 +940,14 @@ fn copied_container(doc: Option<&Document>, n: &Node, t: usize) -> Node {
     piece.locked = false;
     (piece.opacity, piece.blend, piece.isolate) = (1.0, Default::default(), false);
     piece.extras_mut().mask = None;
+    // The copies are made about the piece's bounds, measured first: a layer leaves its hidden
+    // members out of them, and a group does not.
+    let bounds = piece.geometric_bounds();
     // A layer's copies are groups in it.
     if let NodeKind::Layer { children, clip, .. } = &mut piece.kind {
         piece.kind = NodeKind::Group { children: std::mem::take(children), clip: *clip };
     }
-    let (art, effects) = crate::reshape::copied_container_art(doc, n, t, piece);
+    let (art, effects) = crate::reshape::copied_container_art(doc, n, t, piece, bounds);
     let copies = art.children().cloned().unwrap_or_default();
     if let NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. } = &mut m.kind {
         *children = copies;
