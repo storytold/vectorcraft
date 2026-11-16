@@ -720,9 +720,63 @@ fn fill_message(lang: Lang, s: &str, found: Option<(&[String], catalog::Captures
             message_at(lang, v, depth - 1)
         }
     };
-    let values: Vec<(&str, String)> = caps.into_iter().map(|(k, v)| (k, if k == "ident" { v.to_string() } else { nested(v) })).collect();
+    let liquify = liquify_skip_values(lang, s, &caps);
+    let values: Vec<(&str, String)> = caps
+        .into_iter()
+        .map(|(k, v)| match (&liquify, k) {
+            (Some((tool, _)), "_1") => (k, tool.clone()),
+            (Some((_, kinds)), "_2") => (k, kinds.clone()),
+            (_, "ident") => (k, v.to_string()),
+            _ => (k, nested(v)),
+        })
+        .collect();
     let args: Vec<(&str, &str)> = values.iter().map(|(k, v)| (*k, v.as_str())).collect();
     fill_once(template, &args)
+}
+
+/// The tool labels in Liquify's warning about the objects under the brush that it left as they
+/// were, each translated by its `liquify-tool` row.
+const LIQUIFY_TOOLS: [&str; 7] = ["Warp", "Twirl", "Pucker", "Bloat", "Scallop", "Crystallize", "Wrinkle"];
+
+/// The kinds of object that warning lists (the engine's `not_liquified` in
+/// `crates/engine/src/cmd/distortcmds.rs`), each translated by its `liquify-kind` row.
+const LIQUIFY_KINDS: [&str; 9] = ["graphs", "type", "symbols", "images", "meshes", "envelopes", "repeats", "placed documents", "blends"];
+
+/// The tool and the list of kinds in `lang` when `s` is Liquify's warning about the objects under
+/// the brush that it left as they were and `caps` are its captures. The kinds keep their order and
+/// are joined with the `liquify-list-two` row for two, and the `liquify-list-middle` and
+/// `liquify-list-end` rows for more; a missing row leaves its part in English. `None` for any
+/// other message, or a tool or kind that is not one of Liquify's.
+fn liquify_skip_values(lang: Lang, s: &str, caps: &[(&str, &str)]) -> Option<(String, String)> {
+    let cap = |name: &str| caps.iter().find(|(k, _)| *k == name).map(|(_, v)| *v);
+    let (tool, n, kinds) = (cap("_1")?, cap("n")?, cap("_2")?);
+    let english = if n == "1" {
+        format!("{tool} left {n} object under the brush as it was ({kinds}): it reshapes paths only")
+    } else {
+        format!("{tool} left {n} objects under the brush as they were ({kinds}): it reshapes paths only")
+    };
+    if caps.len() != 3 || english != s || !LIQUIFY_TOOLS.contains(&tool) {
+        return None;
+    }
+    let catalog = lang.catalog();
+    let words = kinds
+        .split(", ")
+        .map(|k| LIQUIFY_KINDS.contains(&k).then(|| catalog.contextual("liquify-kind", k).unwrap_or(k)))
+        .collect::<Option<Vec<&str>>>()?;
+    let join = |context: &str, a: &str, b: &str| {
+        let pattern = "{0}, {1}";
+        fill_once(catalog.contextual(context, pattern).unwrap_or(pattern), &[("0", a), ("1", b)])
+    };
+    let list = match words.as_slice() {
+        [] => return None,
+        [one] => (*one).to_string(),
+        [a, b] => join("liquify-list-two", a, b),
+        [first, middle @ .., last] => {
+            let head = middle.iter().fold((*first).to_string(), |acc, w| join("liquify-list-middle", &acc, w));
+            join("liquify-list-end", &head, last)
+        }
+    };
+    Some((catalog.contextual("liquify-tool", tool).unwrap_or(tool).to_string(), list))
 }
 
 /// The translation of a message with an exact `@msg` row in `catalog`, its `{{` and `}}` shown as

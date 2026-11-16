@@ -934,6 +934,13 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// How many times as long [`Self::space`] makes a length in art space: a Large Canvas copy's
+    /// declared scale in the document, and 1 in a pattern's or a symbol's definition.
+    pub(super) fn space_scale(&mut self) -> f64 {
+        let k = self.space().determinant().abs().sqrt();
+        if k.is_finite() && k > 0.0 { k } else { 1.0 }
+    }
+
     /// The space an image's matrix is in → where the art being read goes: [`Self::space`], and in a
     /// symbol's art (outside a pattern's definition) the canvas's space turned y up about art space's
     /// origin there, as an instance's matrix in it is; `None` there without a template box.
