@@ -92,11 +92,21 @@ fn ask_confirm_flatten(app: &mut VectorcraftApp, d: &Dialog) {
     app.ui.dialog = Some(Dialog::new(CONFIRM_FLATTEN, fields));
 }
 
-fn doc_has_transparency(doc: &vectorcraft_doc::Document) -> bool {
-    fn check_node(n: &vectorcraft_doc::Node) -> bool {
-        !n.has_default_transparency() || n.shows_transparency() || n.children().into_iter().flatten().any(|c| check_node(c))
+fn doc_has_transparency(doc: &vectorcraft_doc::Document, include_non_printing: bool) -> bool {
+    let see_through = vectorcraft_engine::cmd::flatten::see_through_images(doc);
+    fn check_node(n: &vectorcraft_doc::Node, see_through: &std::collections::BTreeSet<String>, include_non_printing: bool) -> bool {
+        if !n.visible {
+            return false;
+        }
+        if matches!(n.kind, vectorcraft_doc::NodeKind::Layer { printable: false, .. }) && !include_non_printing {
+            return false;
+        }
+        !n.has_default_transparency()
+            || n.shows_transparency()
+            || vectorcraft_engine::cmd::flatten::draws_image(n, see_through)
+            || n.children().into_iter().flatten().any(|c| check_node(c, see_through, include_non_printing))
     }
-    doc.layers.iter().any(|l| check_node(l))
+    doc.layers.iter().any(|l| check_node(l, &see_through, include_non_printing))
 }
 
 /// The preset editor's field holding the name of the saved preset it edits (empty: a new one).
@@ -210,7 +220,8 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     }
     let flat = choice::<Compatibility>(d, "compatibility") == Some(Compatibility::Pdf13)
         || choice::<Standard>(d, "standard").is_some_and(Standard::flattens);
-    let has_transparency = app.session.active().is_some_and(|st| doc_has_transparency(&st.doc));
+    let include_non_printing = d.bool("includeNonPrinting") || d.bool("createLayers");
+    let has_transparency = app.session.active().is_some_and(|st| doc_has_transparency(&st.doc, include_non_printing));
     if flat && has_transparency && !d.bool("__confirmed_flatten") {
         ask_confirm_flatten(app, d);
         return Ok(Value::Null);
@@ -223,6 +234,10 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     // A question the write asked (replace the file the document was opened from?) stays open.
     if r.is_ok() && app.ui.dialog.as_ref().is_some_and(|o| o.kind == KIND) {
         app.ui.dialog = None;
+    }
+    // A failed write keeps the dialog open. Drop the approval so the next OK asks again.
+    if let Some(open) = app.ui.dialog.as_mut().filter(|o| o.kind == KIND && r.is_err()) {
+        open.fields.remove("__confirmed_flatten");
     }
     r
 }

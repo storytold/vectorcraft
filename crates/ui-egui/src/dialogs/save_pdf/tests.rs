@@ -553,3 +553,69 @@ fn save_pdf_does_not_prompt_when_compatibility_is_not_flattened() {
     assert_eq!(written.borrow().len(), 1);
     assert!(written.borrow()[0].1.starts_with(b"%PDF-1.7"));
 }
+
+#[test]
+fn save_pdf_clears_confirmed_flatten_when_save_fails() {
+    let (mut app, _, _) = app();
+    app.services.write = Some(Box::new(|_, _| Err("disk full".into())));
+    app.run("transparency.set", json!({"opacity": 50})).unwrap();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/fail.pdf", "compatibility": "1.3"})).unwrap();
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, CONFIRM_FLATTEN);
+
+    // Confirming write when disk write fails keeps Save PDF dialog open without confirmed marker
+    let err = super::super::confirm(&mut app);
+    assert!(err.is_err());
+    let open = app.ui.dialog.as_ref().expect("Save PDF dialog stays open on failure");
+    assert_eq!(open.kind, KIND);
+    assert!(!open.bool("__confirmed_flatten"));
+}
+
+#[test]
+fn save_pdf_prompts_confirmation_for_see_through_image() {
+    let (mut app, written, _) = app();
+    let img_bytes = {
+        let mut buf = std::io::Cursor::new(Vec::new());
+        image::RgbaImage::from_pixel(2, 2, image::Rgba([255, 0, 0, 128])).write_to(&mut buf, image::ImageFormat::Png).unwrap();
+        buf.into_inner()
+    };
+    let blob = vectorcraft_doc::ImageBlob::png(img_bytes);
+    let key = "see_through_img".to_string();
+    app.session
+        .edit("add see-through image", |d, _| {
+            d.images.insert(key.clone(), blob);
+            let id = d.alloc_id();
+            let im = vectorcraft_doc::ImageObject {
+                key,
+                width: 2,
+                height: 2,
+                xf: vectorcraft_geom::Affine::IDENTITY,
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            };
+            d.insert(d.default_layer(), 0, vectorcraft_doc::Node::new(id, vectorcraft_doc::NodeKind::Image(Box::new(im))))?;
+            Ok(())
+        })
+        .unwrap();
+
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/img.pdf", "compatibility": "1.3"})).unwrap();
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, CONFIRM_FLATTEN);
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(written.borrow().len(), 1);
+}
+
+#[test]
+fn save_pdf_does_not_prompt_for_non_printing_layer_transparency() {
+    let (mut app, written, _) = app();
+    let layer_id = app.session.active().unwrap().doc.layers[0].id;
+    app.run("transparency.set", json!({"opacity": 50})).unwrap();
+    app.run("layer.setProps", json!({"id": layer_id.0, "printable": false})).unwrap();
+
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/nonprint.pdf", "compatibility": "1.3"})).unwrap();
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(written.borrow().len(), 1);
+}

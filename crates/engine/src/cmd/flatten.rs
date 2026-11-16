@@ -51,7 +51,8 @@ mod options;
 mod presets;
 mod report;
 
-pub(crate) use analysis::{carry, outlined_text, see_through_images};
+pub(crate) use analysis::{carry, outlined_text};
+pub use analysis::{draws_image, see_through_images};
 pub(crate) use apply::{expand_transparent_tile_images, flatten_document, flatten_expanded, has_transparent_tile_images};
 #[cfg(test)]
 pub(crate) use apply::{with_clips_ignored, with_every_region};
