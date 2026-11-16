@@ -1320,7 +1320,7 @@ lighting	Light	Valo
 	Name* @ 66.67% (RGB/Preview)	Nimi* @ 66.67% (RGB/esikatselu)
 	No Document	Ei asiakirjaa
 	Press 	Paina 
-	Search commands and tools	Hae komentoja ja työkaluja
+	Search commands, tools, panels and effects	Hae komentoja, työkaluja, paneeleita ja tehosteita
 	Style:	Tyyli:
 	Switch workspace	Vaihda työtilaa
 	Show all open documents	Näytä kaikki avoimet asiakirjat
@@ -4433,7 +4433,11 @@ font-technology	Variable	Muuttuvat
 	Saved {path}	Tallennettu {path}
 	Saving	Tallennetaan
 	Saving {}	Tallennetaan {}
-	Search commands and tools…	Hae komentoja ja työkaluja…
+	Search commands, tools, panels and effects…	Hae komentoja, työkaluja, paneeleita ja tehosteita…
+	No commands match	Mikään komento ei vastaa hakua
+	{pos} of {total}: {name}	{pos}/{total}: {name}
+@plural	{n} result|{n} results	{n} tulos|{n} tulosta
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown}/{n} tulosta. Kirjoita lisää rajataksesi tuloksia.|{shown}/{n} tulosta. Kirjoita lisää rajataksesi tuloksia.
 	Recent Commands	Viimeisimmät komennot
 	No recent commands	Ei viimeisimpiä komentoja
 	Dashed Line	Katkoviiva

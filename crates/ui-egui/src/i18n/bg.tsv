@@ -3209,8 +3209,12 @@ digits	Malayalam	Малаялам
 	Scripts	Скриптове
 	Search	Търсене
 	Search All	Търсене във всички
-	Search commands and tools	Търсене на команди и инструменти
-	Search commands and tools…	Търсене на команди и инструменти…
+	Search commands, tools, panels and effects	Търсене на команди, инструменти, панели и ефекти
+	Search commands, tools, panels and effects…	Търсене на команди, инструменти, панели и ефекти…
+	No commands match	Няма съвпадащи команди
+	{pos} of {total}: {name}	{pos} от {total}: {name}
+@plural	{n} result|{n} results	{n} резултат|{n} резултата
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} от {n} резултат. Продължете да пишете, за да ги стесните.|{shown} от {n} резултата. Продължете да пишете, за да ги стесните.
 	Recent Commands	Последни команди
 	No recent commands	Няма последни команди
 	Search Commands…	Търсене на команди…

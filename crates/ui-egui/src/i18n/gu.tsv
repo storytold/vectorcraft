@@ -3410,8 +3410,12 @@
 	Search Commands…	આદેશો શોધો…
 	Search Fonts Folder	ફોન્ટ ફોલ્ડર શોધો
 	Search Preferences	પસંદગીઓ શોધો
-	Search commands and tools	આદેશો અને ટૂલ્સ શોધો
-	Search commands and tools…	આદેશો અને ટૂલ્સ શોધો…
+	Search commands, tools, panels and effects	આદેશો, ટૂલ્સ, પેનલ્સ અને ઇફેક્ટ્સ શોધો
+	Search commands, tools, panels and effects…	આદેશો, ટૂલ્સ, પેનલ્સ અને ઇફેક્ટ્સ શોધો…
+	No commands match	કોઈ આદેશ મેળ ખાતો નથી
+	{pos} of {total}: {name}	{total} માંથી {pos}: {name}
+@plural	{n} result|{n} results	{n} પરિણામ|{n} પરિણામો
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} માંથી {shown} પરિણામ. તેમને સંકુચિત કરવા લખતા રહો.|{n} માંથી {shown} પરિણામો. તેમને સંકુચિત કરવા લખતા રહો.
 	Recent Commands	તાજેતરના આદેશો
 	No recent commands	કોઈ તાજેતરના આદેશો નથી
 	Search images	છબીઓ શોધો

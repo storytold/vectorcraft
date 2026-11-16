@@ -4004,42 +4004,42 @@ digits	Malayalam	Malaiàlam
 	Saved	Desat
 	Saved recovery data for {title}	S’han desat les dades de recuperació de {title}
 	Saved Selection 1	Selecció desada 1
-	Saved Selection 10	Selecció desada 2
-	Saved Selection 11	Selecció desada 3
-	Saved Selection 12	Selecció desada 4
-	Saved Selection 13	Selecció desada 5
-	Saved Selection 14	Selecció desada 6
-	Saved Selection 15	Selecció desada 7
-	Saved Selection 16	Selecció desada 8
-	Saved Selection 17	Selecció desada 9
-	Saved Selection 18	Selecció desada 10
-	Saved Selection 19	Selecció desada 11
-	Saved Selection 2	Selecció desada 12
-	Saved Selection 20	Selecció desada 13
-	Saved Selection 21	Selecció desada 14
-	Saved Selection 22	Selecció desada 15
-	Saved Selection 23	Selecció desada 16
-	Saved Selection 24	Selecció desada 17
-	Saved Selection 25	Selecció desada 18
-	Saved Selection 3	Selecció desada 19
-	Saved Selection 4	Selecció desada 20
-	Saved Selection 5	Selecció desada 21
-	Saved Selection 6	Selecció desada 22
-	Saved Selection 7	Selecció desada 23
-	Saved Selection 8	Selecció desada 24
-	Saved Selection 9	Selecció desada 25
+	Saved Selection 10	Selecció desada 10
+	Saved Selection 11	Selecció desada 11
+	Saved Selection 12	Selecció desada 12
+	Saved Selection 13	Selecció desada 13
+	Saved Selection 14	Selecció desada 14
+	Saved Selection 15	Selecció desada 15
+	Saved Selection 16	Selecció desada 16
+	Saved Selection 17	Selecció desada 17
+	Saved Selection 18	Selecció desada 18
+	Saved Selection 19	Selecció desada 19
+	Saved Selection 2	Selecció desada 2
+	Saved Selection 20	Selecció desada 20
+	Saved Selection 21	Selecció desada 21
+	Saved Selection 22	Selecció desada 22
+	Saved Selection 23	Selecció desada 23
+	Saved Selection 24	Selecció desada 24
+	Saved Selection 25	Selecció desada 25
+	Saved Selection 3	Selecció desada 3
+	Saved Selection 4	Selecció desada 4
+	Saved Selection 5	Selecció desada 5
+	Saved Selection 6	Selecció desada 6
+	Saved Selection 7	Selecció desada 7
+	Saved Selection 8	Selecció desada 8
+	Saved Selection 9	Selecció desada 9
 	Saved Selections	Seleccions desades
 	Saved to User Defined: {}	Desat a Definit per l’usuari: {}
 	Saved View 1	Vista desada 1
-	Saved View 10	Vista desada 2
-	Saved View 11	Vista desada 3
-	Saved View 12	Vista desada 4
-	Saved View 13	Vista desada 5
-	Saved View 14	Vista desada 6
-	Saved View 15	Vista desada 7
-	Saved View 16	Vista desada 8
-	Saved View 17	Vista desada 9
-	Saved View 18	Vista desada 10
+	Saved View 10	Vista desada 10
+	Saved View 11	Vista desada 11
+	Saved View 12	Vista desada 12
+	Saved View 13	Vista desada 13
+	Saved View 14	Vista desada 14
+	Saved View 15	Vista desada 15
+	Saved View 16	Vista desada 16
+	Saved View 17	Vista desada 17
+	Saved View 18	Vista desada 18
 	Saved View 19	Vista desada 19
 	Saved View 2	Vista desada 2
 	Saved View 20	Vista desada 20
@@ -4138,8 +4138,12 @@ digits	Malayalam	Malaiàlam
 	Scrub Numeric Fields by Dragging	Canvia els camps numèrics arrossegant
 	Search	Cerca
 	Search All	Cerca a tot
-	Search commands and tools	Cerca ordres i eines
-	Search commands and tools…	Cerca ordres i eines…
+	Search commands, tools, panels and effects	Cerca ordres, eines, panells i efectes
+	Search commands, tools, panels and effects…	Cerca ordres, eines, panells i efectes…
+	No commands match	Cap ordre coincideix
+	{pos} of {total}: {name}	{pos} de {total}: {name}
+@plural	{n} result|{n} results	{n} resultat|{n} resultats
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultat. Continueu escrivint per reduir-los.|{shown} de {n} resultats. Continueu escrivint per reduir-los.
 	Recent Commands	Ordres recents
 	No recent commands	No hi ha ordres recents
 	Search Commands…	Cerca ordres…

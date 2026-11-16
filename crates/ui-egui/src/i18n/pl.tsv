@@ -1272,7 +1272,7 @@ lighting	Light	Światło
 	Name* @ 66.67% (RGB/Preview)	Nazwa* @ 66,67% (RGB/Podgląd)
 	No Document	Brak dokumentu
 	Press 	Naciśnij 
-	Search commands and tools	Szukaj poleceń i narzędzi
+	Search commands, tools, panels and effects	Szukaj poleceń, narzędzi, paneli i efektów
 	Style:	Styl:
 	Switch workspace	Przełącz obszar roboczy
 	Show all open documents	Pokaż wszystkie otwarte dokumenty
@@ -4355,7 +4355,11 @@ font-technology	Variable	Zmienne
 	Saved {path}	Zapisano {path}
 	Saving	Zapisywanie
 	Saving {}	Zapisywanie {}
-	Search commands and tools…	Szukaj poleceń i narzędzi…
+	Search commands, tools, panels and effects…	Szukaj poleceń, narzędzi, paneli i efektów…
+	No commands match	Żadne polecenie nie pasuje
+	{pos} of {total}: {name}	{pos} z {total}: {name}
+@plural	{n} result|{n} results	{n} wynik|{n} wyniki|{n} wyników
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} wyniku. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.
 	Recent Commands	Ostatnie polecenia
 	No recent commands	Brak ostatnich poleceń
 	Dashed Line	Linia przerywana
