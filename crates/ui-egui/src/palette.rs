@@ -1761,10 +1761,12 @@ mod tests {
         assert_eq!(panels.len(), crate::state::all_panels().count());
         // Many results hold "layers" in their menu path; the panel, named Layers, is shown first, and "color guide" shows the Color Guide panel first too.
         for (query, want) in [("layers", "panel:layers"), ("color guide", "panel:colorGuide"), ("Layers ", "panel:layers")] {
-            let all = entries.iter().filter(|e| query.to_lowercase().split_whitespace().all(|w| e.haystack.contains(w))).count();
+            let all: Vec<&str> =
+                entries.iter().filter(|e| query.to_lowercase().split_whitespace().all(|w| e.haystack.contains(w))).map(|e| e.id.as_str()).collect();
             let shown: Vec<&str> = matching(&entries, &query.to_lowercase()).into_iter().map(|e| e.id.as_str()).collect();
             assert_eq!(shown.first(), Some(&want), "{query}: {shown:?}");
-            assert_eq!(shown.len(), all, "{query}");
+            // English plural and verb forms can find more results than the text alone.
+            assert!(all.iter().all(|id| shown.contains(id)), "{query}");
         }
         let layers = entries.iter().find(|e| e.id == "panel:layers").unwrap();
         assert_eq!(layers.shown, "Window › Show Panel › Layers");
