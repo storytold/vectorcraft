@@ -3500,6 +3500,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Auto Color	Autofarve
 	Automatic	Automatisk
 	Isolate Selected Group	Isolér valgt gruppe
+	Isolate Selected Path	Isolér valgt kurve
 	Exit Isolation Mode	Afslut isoleringstilstand
 	Make Clipping Mask	Opret beskæringsmask
 	Release Clipping Mask	Frigør beskæringsmask

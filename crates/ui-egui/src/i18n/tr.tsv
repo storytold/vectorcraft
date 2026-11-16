@@ -4078,6 +4078,7 @@ imageTrace	Outline	Kontur
 	 to set spacing and orientation	 aralığı ve yönlendirmeyi ayarlamak için
 	:	:
 	Isolate Selected Group	Seçili Grubu İzole Et
+	Isolate Selected Path	Seçili Yolu İzole Et
 	Isolate Selected Object	Seçili Nesneyi Ayır
 	Release Clipping Mask	Kırpma Maskesini Serbest Bırakın
 	Make Compound Path	Bileşik Yol Yap
