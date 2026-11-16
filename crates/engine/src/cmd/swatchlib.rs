@@ -789,7 +789,14 @@ fn copy_to_user(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The library swatches `names` stand for, each once, with the colour group it goes into (`None`:
 /// ungrouped): a group's name brings the group, a swatch's name the swatch alone; no names, all.
+/// A picked group that holds a gradient or pattern swatch is refused.
 fn picked<'a>(lib: &'a SwatchLibrary, names: &[String], cmd: &str) -> Result<Vec<(Option<&'a str>, &'a Swatch)>> {
+    // Color groups hold solid colors only, as swatch.new, swatch.newGroup and swatch.move keep them.
+    // Each picked group is checked whole, so a member also named on its own is not skipped.
+    let solid = |g: &SwatchGroup| match g.swatches.iter().find(|w| w.paint.color().is_none()) {
+        Some(w) => Err(bad(cmd, format!("`{}`: colour groups hold solid colours only", w.name))),
+        None => Ok(()),
+    };
     let mut out: Vec<(Option<&str>, &Swatch)> = vec![];
     let mut seen: HashSet<&str> = HashSet::new();
     let mut push = |g: Option<&'a str>, w: &'a Swatch| {
@@ -798,12 +805,16 @@ fn picked<'a>(lib: &'a SwatchLibrary, names: &[String], cmd: &str) -> Result<Vec
         }
     };
     if names.is_empty() {
+        lib.groups.iter().try_for_each(solid)?;
         lib.swatches.iter().for_each(|w| push(None, w));
         lib.groups.iter().for_each(|g| g.swatches.iter().for_each(|w| push(Some(&g.name), w)));
     }
     for n in names {
         match (lib.group(n), lib.swatch(n)) {
-            (Some(g), _) => g.swatches.iter().for_each(|w| push(Some(&g.name), w)),
+            (Some(g), _) => {
+                solid(g)?;
+                g.swatches.iter().for_each(|w| push(Some(&g.name), w));
+            }
             (None, Some(w)) => push(None, w),
             (None, None) => return Err(bad(cmd, format!("no swatch or colour group `{n}` in `{}`", lib.name))),
         }
@@ -839,10 +850,6 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let focus = switch_or(p, "focus", true, C)?;
     let picked = picked(&lib, &names_param(p, C)?, C)?;
-    // Color groups hold solid colors only, as swatch.new, swatch.newGroup and swatch.move keep them.
-    if let Some((_, w)) = picked.iter().find(|(g, w)| g.is_some() && w.paint.color().is_none()) {
-        return Err(bad(C, format!("`{}`: colour groups hold solid colours only", w.name)));
-    }
     // Swatches the document already has (same name and paint; for a pattern swatch, a swatch of the
     // same pattern) are reused, not added again.
     let patterns = patternlib::library_doc(&info.id);

@@ -178,11 +178,14 @@ fn add_refuses_a_library_color_group_holding_a_gradient() {
     let (_, loaded) = cmd::swatchlib::library(&s, &id).unwrap();
     assert!(matches!(loaded.groups[0].swatches[1].paint, Paint::Gradient(_)), "the reader keeps the gradient in the group");
     run(&mut s, "swatch.delete", json!({"names": ["Brand", "Sunset"]}));
-    let (before, undo) = (doc(&s).swatch_groups.clone(), undo_len(&s));
-    for p in [json!({"library": id}), json!({"library": id, "names": ["Brand"]})] {
+    let (before, swatches, undo) = (doc(&s).swatch_groups.clone(), doc(&s).swatches.len(), undo_len(&s));
+    // A group is refused whole even when its gradient was also named on its own before it.
+    let cases = [json!({"library": id}), json!({"library": id, "names": ["Brand"]}), json!({"library": id, "names": ["Sunset", "Brand"]})];
+    for p in cases {
         let e = s.execute("swatch.library.add", &p).unwrap_err().to_string();
         assert!(e.contains("`Sunset`: colour groups hold solid colours only"), "{p}: {e}");
         assert_eq!(doc(&s).swatch_groups, before, "{p}");
+        assert_eq!(doc(&s).swatches.len(), swatches, "{p}");
         assert_eq!(undo_len(&s), undo, "{p}");
     }
     // The gradient on its own comes in ungrouped.
