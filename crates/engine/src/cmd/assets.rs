@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{ExportAsset, NodeId};
 
-use super::edit::{roots_of, selected_roots};
+use super::edit::{refuse_symbol_part, roots_of, selected_roots};
 use super::fileio::{
     DEFAULT_FORMAT_3D, FORMATS_3D, SCREEN_SETTINGS_KEYS, check_screen_settings, create_dir, export_crop, export_screens, mesh_file_names, mesh_files,
     safe_file_name, store_screen_settings, with_screen_export_preset, write_file,
@@ -62,7 +62,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export 3D Object",
             [],
             None,
-            "{ids?: [id…] (default: the selected objects), format?: usda|usdz|gltf|obj (default usda)} collect each object with an Extrude & Bevel, Revolve, Inflate or Rotate effect as a 3D asset of Window › Asset Export, named after the object (else Asset 1, Asset 2…): assets.export3D writes it as a mesh file. An object already collected as a 3D asset keeps it; an object without such an effect is refused → {assets: [asset id…] (in order), added: n}",
+            "{ids?: [id…] (default: the selected objects), format?: usda|usdz|gltf|obj (default usda)} collect each object with an Extrude & Bevel, Revolve, Inflate or Rotate effect as a 3D asset of Window › Asset Export, named after the object (else Asset 1, Asset 2…): assets.export3D writes it as a mesh file. An object already collected as a 3D asset keeps it; an object in ids without such an effect is refused. Without ids, the selected objects without one (on a group or layer, one on its fill or stroke draws nothing and does not count), and a selected object inside another selected object that has one, are left out; refused when none is left → {assets: [asset id…] (in order), added: n}",
             has_doc,
             add_3d
         ),
@@ -203,10 +203,36 @@ fn three_d_asset_ids(d: &vectorcraft_doc::Document, p: &Value, key: &str, cmd: &
     Ok(ids)
 }
 
+/// The selected objects `assets.add3D` collects without `ids`: those with a 3D effect it exports
+/// ([`vectorcraft_render::effects::exports_three_d`]; a path of a compound path counts as the
+/// compound path), layers included, in tree order, dropping
+/// each one inside another of them (that one's asset holds it). Refused while an object of a
+/// dynamic symbol instance's art is selected, as [`selected_roots`] is.
+fn selected_3d_roots(s: &Session) -> Result<Vec<NodeId>> {
+    refuse_symbol_part(s)?;
+    let st = s.doc()?;
+    // A path of a compound path stands for the compound path, which holds the paint and effects.
+    let found = st
+        .selection
+        .objects
+        .iter()
+        .map(|id| super::path::compound_or_self(&st.doc, *id))
+        .filter(|id| st.doc.node(*id).is_some_and(vectorcraft_render::effects::exports_three_d));
+    let mut paths: Vec<(Vec<usize>, NodeId)> = st.doc.index_paths(found).into_iter().map(|(id, path)| (path, id)).collect();
+    paths.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut kept: Vec<(Vec<usize>, NodeId)> = Vec::with_capacity(paths.len());
+    for (path, id) in paths {
+        if !kept.last().is_some_and(|(outer, _)| path.starts_with(outer)) {
+            kept.push((path, id));
+        }
+    }
+    Ok(kept.into_iter().map(|(_, id)| id).collect())
+}
+
 fn add_3d(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "assets.add3D";
     let format = format_3d_param(p, C, Some(DEFAULT_FORMAT_3D))?;
-    let ids = if p.get("ids").is_some_and(|v| !v.is_null()) { checked_ids_param(s, p, "ids", C)? } else { selected_roots(s)? };
+    let ids = if p.get("ids").is_some_and(|v| !v.is_null()) { checked_ids_param(s, p, "ids", C)? } else { selected_3d_roots(s)? };
     if ids.is_empty() {
         return Err(bad(C, "select an object with a 3D effect (or give its ids)"));
     }
