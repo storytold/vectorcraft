@@ -246,7 +246,13 @@ fn font_widths(f: &Dict<'_>, walk: &mut Walk) -> Option<(String, Vec<(char, f32)
     let name = without_subset_tag(&font_name(f)?).to_string();
     let composite = subtype.as_ref() == b"Type0";
     let encoding = f.get::<Name<'_>>(b"Encoding");
-    let to_unicode = f.get::<Stream<'_>>(b"ToUnicode").and_then(|s| walk.character_map(&s));
+    // Only a font without a `ToUnicode` map falls back to its encoding: one whose map can't be
+    // read gives none.
+    let to_unicode = match f.get::<Stream<'_>>(b"ToUnicode") {
+        Some(s) => Some(walk.character_map(&s)?),
+        None if f.contains_key(b"ToUnicode") => return None,
+        None => None,
+    };
     let win_ansi = !composite && encoding.as_ref().is_some_and(|e| e.as_ref() == b"WinAnsiEncoding");
     if to_unicode.is_none() && !win_ansi {
         return None;
@@ -519,6 +525,36 @@ mod tests {
         assert!(widths.widths("Drift").is_none());
         assert!(widths.widths("Back").is_none());
         assert!(widths.widths("Steady").is_some_and(|w| w.contains_key(&'A')));
+    }
+
+    /// Only a simple font without a `ToUnicode` map takes its characters from `WinAnsiEncoding`:
+    /// one whose map is left unread (longer than [`super::MAX_TO_UNICODE`]) or isn't a stream gives
+    /// no widths.
+    #[test]
+    fn a_to_unicode_map_that_cant_be_read_gives_no_widths() {
+        let mut big = String::from("begincmap\n1 begincodespacerange\n<00> <FF>\nendcodespacerange\n");
+        while big.len() <= super::MAX_TO_UNICODE {
+            big.push_str("1 beginbfchar\n<41> <0042>\nendbfchar\n");
+        }
+        big.push_str("endcmap\n");
+        let extra = first_extra(1);
+        let font = |name: &str, to_unicode: &str| {
+            format!("<< /Type /Font /Subtype /TrueType /BaseFont /{name} /Encoding /WinAnsiEncoding /FirstChar 65 /Widths [600]{to_unicode} >>")
+        };
+        let page = PdfPage {
+            resources: format!(
+                "/Font << /F0 {} /F1 {} /F2 {} >>",
+                font("Unread", &format!(" /ToUnicode {extra} 0 R")),
+                font("Named", " /ToUnicode /Identity-H"),
+                font("Plain", "")
+            ),
+            ..PdfPage::new(100.0, 100.0, "")
+        };
+        let file = pdf_with(&[page], &[&format!("<< /Length {} >>\nstream\n{big}endstream", big.len())], None);
+        let widths = crate::open_pdf(&file, None).unwrap().page_widths();
+        assert!(widths.widths("Unread").is_none());
+        assert!(widths.widths("Named").is_none());
+        assert_eq!(widths.widths("Plain").map(|w| w.get(&'A').copied()), Some(Some(600.0)));
     }
 
     /// [`crate::import_scan::cid_ranges`] gives each CID of a `W` its values, a list's in turn (an
