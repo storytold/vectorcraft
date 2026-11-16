@@ -110,6 +110,7 @@ object is where the art was.
 | Repeat, Space | The cross-section repeated 1–32 times across the width, with a share (0–90 %) of the width flat between repeats. |
 | Bevel Inside | The bevel carved into the shape (the front face shrinks) instead of added around it (the walls stand outside the art). |
 | Bevel both sides | The back is bevelled too. |
+| Reset | Next to the Bevel heading, in the dialog and the panel. It sets every bevel setting above back to its default (Bevel Shape None, Width and Height 4 pt, Repeat 1, Space 0 %, both checkboxes off) and leaves Depth, Twist, Taper, Cap, the rotation, the lights and the graphics as they are, as the public [3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html) page describes. In the panel it sets them on each selected Extrude & Bevel as one undo step. It is unavailable while every bevel setting is at its default. |
 
 Holes stay holes, with walls of their own. Bevels move each corner along its bisector. A corner the bevel opens (a
 sharp point with the bevel outside, a narrow notch with it inside) whose miter would reach past four times the width is

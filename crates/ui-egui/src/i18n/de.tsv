@@ -632,6 +632,18 @@ font-technology	Variable	Variabel
 	Copy Width Point	Breitenpunkt kopieren
 	Copyright	Copyright
 	Copyright Info URL:	URL für Copyright-Informationen:
+	Save Metadata Template…	Metadatenvorlage speichern…
+	Import Options	Importoptionen
+	Clear existing fields and use the template's	Vorhandene Felder löschen und die der Vorlage verwenden
+	Keep existing fields, but replace those the template has	Vorhandene Felder beibehalten, aber die in der Vorlage enthaltenen ersetzen
+	Keep existing fields, but append those the template has	Vorhandene Felder beibehalten, aber die in der Vorlage enthaltenen anfügen
+@msg	the template name can't be empty	der Vorlagenname darf nicht leer sein
+@msg	the template name isn't usable as a file name	der Vorlagenname ist als Dateiname nicht verwendbar
+@msg	no metadata templates folder here	hier gibt es keinen Ordner für Metadatenvorlagen
+@msg	give `name` or `path`, not both	geben Sie `name` oder `path` an, nicht beides
+@msg	give one of `path`, `name` and `data`	geben Sie einen der Parameter `path`, `name` und `data` an
+@msg	mode must be replace, keep or append	der Modus muss replace, keep oder append sein
+@msg	the file is not an XMP metadata template	die Datei ist keine XMP-Metadatenvorlage
 	Copyright Notice:	Copyright-Vermerk:
 	Copyright Status:	Copyright-Status:
 	Copyright Symbol	Copyright-Symbol
@@ -3643,6 +3655,9 @@ effect	Points	Punkte
 	Show Import Options	Importoptionen anzeigen
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Vor dem Platzieren nach den Importoptionen jeder PDF-, DXF- oder Textdatei fragen; aus: die zuletzt gewählten Optionen verwenden
 	Stylistic Alternates	Stilistische Varianten
+	Ligatures	Ligaturen
+	Ornaments	Ornamente
+	Figures	Ziffern
 	Swash	Schwungschrift
 	Swatch Conflict	Farbfeldkonflikt
 	Swatch Conflicts	Farbfeldkonflikte
@@ -4410,6 +4425,27 @@ theme	Appearance	Erscheinungsbild
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: Ein Dialog kann sich nicht in einem Callback einer integrierten Funktion, einem Getter, einer Umwandlung oder einer Datei öffnen, die $.evalFile ausführt; rufen Sie ihn aus dem eigenen Code des Skripts auf
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: Die nächste Antwort in `answers` ist für {_1}, nicht für {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` hat keine Antwort mehr für diesen Dialog
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` enthält {n} Antwort, die das Skript nicht verwendet hat|`answers` enthält {n} Antworten, die das Skript nicht verwendet hat
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} ließ {n} Objekt unter dem Pinsel unverändert ({_2}): es formt nur Pfade um|{_1} ließ {n} Objekte unter dem Pinsel unverändert ({_2}): es formt nur Pfade um
+liquify-tool	Warp	Verkrümmung
+liquify-tool	Twirl	Strudel
+liquify-tool	Pucker	Zusammenziehen
+liquify-tool	Bloat	Aufblasen
+liquify-tool	Scallop	Ausbuchten
+liquify-tool	Crystallize	Kristallisieren
+liquify-tool	Wrinkle	Zerknittern
+liquify-kind	graphs	Diagramme
+liquify-kind	type	Text
+liquify-kind	symbols	Symbole
+liquify-kind	images	Bilder
+liquify-kind	meshes	Gitter
+liquify-kind	envelopes	Hüllen
+liquify-kind	repeats	Wiederholungen
+liquify-kind	placed documents	platzierte Dokumente
+liquify-kind	blends	Angleichungen
+liquify-list-two	{0}, {1}	{0} und {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} und {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} ist zu groß für ein Skript
 @msg	vc.log: the log of this run is full	vc.log: Das Protokoll dieses Laufs ist voll
 @msg	this function's script run has ended	der Skriptlauf dieser Funktion ist beendet

@@ -548,6 +548,49 @@ fn a_mixed_checkbox_shows_a_dash_and_another_change_keeps_each_effects_value() {
     assert!(named(&controls(&mut app, &ctx), "Add Light").is_disabled());
 }
 
+/// The Bevel heading's Reset sets every bevel setting back to its default on each selected Extrude &
+/// Bevel, as one undo step, and leaves Depth and the rotation as each effect has them. With every
+/// bevel setting at its default it is off and records nothing.
+#[test]
+fn the_bevel_reset_restores_only_the_bevel_settings_of_each_selected_effect() {
+    use crate::panels::tests_appearance::click;
+    let mut app = app();
+    let bevelled = json!({"bevel": "rounded", "bevelWidth": 9.0, "bevelHeight": 6.0, "bevelRepeat": 3, "bevelSpace": 20.0, "bevelInside": true, "bevelBothSides": true, "depth": 70.0, "rotationX": 15.0});
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": bevelled})).unwrap();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"bevel": "cove", "bevelWidth": 2.0, "depth": 30.0}}))
+        .unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.enable_accesskit();
+    let nodes = controls(&mut app, &ctx);
+    let reset = named(&nodes, "Reset");
+    assert!(!reset.is_disabled(), "changed bevel settings turn Reset on");
+    let at = reset.bounds().map(|r| egui::pos2(((r.x0 + r.x1) / 2.0) as f32, ((r.y0 + r.y1) / 2.0) as f32)).unwrap();
+    let history = undo_len(&app);
+    click(&ctx, &mut app, at, show);
+    assert_eq!(undo_len(&app), history + 1, "one undo step for both objects");
+    let defaults = vectorcraft_effects::default_params("threeD.extrude").unwrap();
+    let merged = |app: &VectorcraftApp, id: u64| {
+        let params = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params.clone();
+        vectorcraft_effects::merged_params("threeD.extrude", &params)
+    };
+    for id in [a, b] {
+        for key in ["bevel", "bevelWidth", "bevelHeight", "bevelRepeat", "bevelSpace", "bevelInside", "bevelBothSides"] {
+            assert_eq!(merged(&app, id)[key], defaults[key], "{key} of {id}");
+        }
+    }
+    assert_eq!((merged(&app, a)["depth"].clone(), merged(&app, b)["depth"].clone()), (json!(70.0), json!(30.0)));
+    assert_eq!(merged(&app, a)["rotationX"], 15.0);
+    let nodes = controls(&mut app, &ctx);
+    assert!(named(&nodes, "Reset").is_disabled(), "every bevel setting at its default: Reset is off");
+    let history = undo_len(&app);
+    click(&ctx, &mut app, at, show);
+    assert_eq!(undo_len(&app), history, "an unavailable Reset records nothing");
+}
+
 /// Revolve's Cap checkbox shows a dash when the selected effects disagree on it.
 #[test]
 fn a_mixed_revolve_cap_shows_a_dash() {

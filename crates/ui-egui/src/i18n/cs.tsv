@@ -2110,6 +2110,9 @@ digits	Malayalam	Malajálamské
 	Select text to set its OpenType features.	Vyberte text, abyste mohli nastavit jeho funkce OpenType.
 	Standard Ligatures	Standardní ligatury
 	Stylistic Alternates	Stylistické alternativy
+	Ligatures	Ligatury
+	Ornaments	Ornamenty
+	Figures	Číslice
 	Swash	Ozdobné tvary
 	Tabular Lining	Tabulkové verzálkové
 	Tabular Oldstyle	Tabulkové minuskové
@@ -2648,6 +2651,18 @@ digits	Malayalam	Malajálamské
 	Author Title:	Funkce autora:
 	Author:	Autor:
 	Copyright Info URL:	URL informací o autorských právech:
+	Save Metadata Template…	Uložit šablonu metadat…
+	Import Options	Možnosti importu
+	Clear existing fields and use the template's	Vymazat stávající pole a použít pole ze šablony
+	Keep existing fields, but replace those the template has	Zachovat stávající pole, ale nahradit ta, která šablona obsahuje
+	Keep existing fields, but append those the template has	Zachovat stávající pole, ale připojit ta, která šablona obsahuje
+@msg	the template name can't be empty	název šablony nesmí být prázdný
+@msg	the template name isn't usable as a file name	název šablony nelze použít jako název souboru
+@msg	no metadata templates folder here	zde není žádná složka šablon metadat
+@msg	give `name` or `path`, not both	zadejte `name` nebo `path`, ne obojí
+@msg	give one of `path`, `name` and `data`	zadejte jeden z parametrů `path`, `name` a `data`
+@msg	mode must be replace, keep or append	režim musí být replace, keep nebo append
+@msg	the file is not an XMP metadata template	soubor není šablona metadat XMP
 	Copyright Notice:	Upozornění o autorských právech:
 	Copyright Status:	Stav autorských práv:
 	Created:	Vytvořeno:
@@ -4807,6 +4822,27 @@ imageTrace	Outline	Obrys
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: dialog se nemůže otevřít uvnitř zpětného volání vestavěné funkce, getteru, převodu ani souboru, který spouští $.evalFile; zavolejte jej z vlastního kódu skriptu
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: další odpověď v `answers` je pro {_1}, ne pro {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` už nemá pro tento dialog žádnou odpověď
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	V `answers` je {n} odpověď, kterou skript nepoužil|V `answers` jsou {n} odpovědi, které skript nepoužil|V `answers` je {n} odpovědí, které skript nepoužil
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} ponechal {n} objekt pod štětcem beze změny ({_2}): mění pouze cesty|{_1} ponechal {n} objekty pod štětcem beze změny ({_2}): mění pouze cesty|{_1} ponechal {n} objektů pod štětcem beze změny ({_2}): mění pouze cesty
+liquify-tool	Warp	Nástroj Pokřivení
+liquify-tool	Twirl	Nástroj Zatočení
+liquify-tool	Pucker	Nástroj Smrštění
+liquify-tool	Bloat	Nástroj Vyboulení
+liquify-tool	Scallop	Nástroj Vroubkování
+liquify-tool	Crystallize	Nástroj Krystalizace
+liquify-tool	Wrinkle	Nástroj Zvrásnění
+liquify-kind	graphs	grafy
+liquify-kind	type	text
+liquify-kind	symbols	symboly
+liquify-kind	images	obrazy
+liquify-kind	meshes	sítě
+liquify-kind	envelopes	obálky
+liquify-kind	repeats	opakování
+liquify-kind	placed documents	umístěné dokumenty
+liquify-kind	blends	prolnutí
+liquify-list-two	{0}, {1}	{0} a {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} a {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} je pro skript příliš velký
 @msg	vc.log: the log of this run is full	vc.log: protokol tohoto běhu je plný
 @msg	this function's script run has ended	běh skriptu této funkce skončil
