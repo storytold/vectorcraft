@@ -771,6 +771,21 @@ pub fn os_cursors(build: bool, wayland: bool) -> bool {
     build && !wayland
 }
 
+/// The cursor a panel shows where a click adds something, such as a stop under the Gradient
+/// panel's ramp: the white arrow with a plus that Group Selection shows for a click that adds the
+/// next group. Windows has no system copy cursor (winit shows the plain arrow for
+/// `CursorIcon::Copy`), so where the window shows glyphs as OS cursors ([`os_cursors`]) the panel
+/// hands it this glyph; elsewhere (macOS, Wayland, the web, `VECTORCRAFT_SYSTEM_CURSORS`) the
+/// system's copy cursor shows (#8241). Set every frame it shows: the canvas and egui reset it.
+pub(crate) fn set_add_cursor(app: &mut crate::VectorcraftApp, ctx: &egui::Context) {
+    ctx.set_cursor_icon(egui::CursorIcon::Copy);
+    if std::env::var_os("VECTORCRAFT_SYSTEM_CURSORS").is_none() && os_cursors(OS_CURSORS, app.services.wayland) {
+        // As the canvas sizes its glyphs (User Interface › Scale Cursor Proportional to UI).
+        let ui_scale = if app.session.prefs.scale_cursor_with_ui { 1.0 } else { ctx.zoom_factor() };
+        ctx.set_cursor_image(app.canvas.cursors.get(Cursor::GroupSelection, ctx.pixels_per_point() / ui_scale));
+    }
+}
+
 /// Does the window hide the pointer only while it is the key window? macOS does: winit hides it with
 /// a cursor rect holding a transparent cursor, and macOS applies the rect only in the key window.
 /// Over a window behind another app or under a sheet, the system pointer shows (#2020).
