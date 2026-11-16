@@ -3053,6 +3053,12 @@ antiAlias	Sharp	Tajam
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Opsi ekspor teks
+	Chinese Big 5	Tionghoa Big 5
+	Cyrillic	Sirilik
+	Greek	Yunani
+	Turkish	Turki
+	Baltic	Baltik
+	Central European	Eropa Tengah
 	Character Set:	Set karakter:
 	Join the lines of each paragraph	Gabungkan baris setiap paragraf
 	Line Breaks	Pemisah baris

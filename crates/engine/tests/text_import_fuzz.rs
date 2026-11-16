@@ -17,7 +17,9 @@ proptest! {
     fn any_bytes_place_as_text_without_panics(
         bytes in prop::collection::vec(prop_oneof![any::<u8>(), Just(b'\r'), Just(b'\n'), Just(b' ')], 0..400),
         bom in prop::sample::select(vec![&b""[..], b"\xEF\xBB\xBF", b"\xFF\xFE", b"\xFE\xFF"]),
-        ansi in any::<bool>(),
+        set in prop::sample::select(vec![
+            "unicode", "ansi", "shiftJis", "gb2312", "chineseBig5", "cyrillic", "gb18030", "greek", "turkish", "baltic", "centralEuropean",
+        ]),
         mac in any::<bool>(),
         lines in any::<bool>(),
         paras in any::<bool>(),
@@ -31,7 +33,7 @@ proptest! {
             let mut s = vectorcraft_engine::Session::new();
             s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
             let text = json!({
-                "characterSet": if ansi { "ansi" } else { "unicode" },
+                "characterSet": set,
                 "platform": if mac { "mac" } else { "windows" },
                 "removeLineReturns": lines,
                 "removeParagraphReturns": paras,

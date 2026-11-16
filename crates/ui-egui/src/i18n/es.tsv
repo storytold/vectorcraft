@@ -417,6 +417,12 @@ font-technology	Variable	Variables
 	Character Alignment	Alineación de caracteres
 	Character / Paragraph	Carácter / Párrafo
 	Character Rotation	Rotación de caracteres
+	Chinese Big 5	Chino Big 5
+	Cyrillic	Cirílico
+	Greek	Griego
+	Turkish	Turco
+	Baltic	Báltico
+	Central European	Centroeuropeo
 	Character Set:	Juego de caracteres:
 	Character Style	Estilo de carácter
 	Character Style Options	Opciones de estilo de carácter
@@ -7907,3 +7913,4 @@ breakText	Glyphs	Glifos
 	Open a document to mark its fold lines.	Abre un documento para marcar sus líneas de plegado.
 	Remove Fold Line Role	Quitar tipo de línea
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: use "{_1}" o "{_2}"

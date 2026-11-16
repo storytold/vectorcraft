@@ -390,6 +390,12 @@ font-technology	Variable	Μεταβλητές
 	Character Alignment	Στοίχιση χαρακτήρων
 	Character / Paragraph	Χαρακτήρας / Παράγραφος
 	Character Rotation	Περιστροφή χαρακτήρων
+	Chinese Big 5	Κινεζικά Big 5
+	Cyrillic	Κυριλλικά
+	Greek	Ελληνικά
+	Turkish	Τουρκικά
+	Baltic	Βαλτικά
+	Central European	Κεντρικής Ευρώπης
 	Character Set:	Σύνολο χαρακτήρων:
 	Character Style	Στυλ χαρακτήρων
 	Character Style Options	Επιλογές στυλ χαρακτήρων
@@ -7920,3 +7926,4 @@ breakText	Glyphs	Γλύφοι
 	Open a document to mark its fold lines.	Ανοίξτε ένα έγγραφο για να σημειώσετε τις γραμμές δίπλωσής του.
 	Remove Fold Line Role	Αφαίρεση τύπου γραμμής
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: χρησιμοποιήστε "{_1}" ή "{_2}"

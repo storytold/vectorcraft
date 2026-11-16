@@ -5776,6 +5776,12 @@ antiAlias	Sharp	Skarp
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Indstillinger for teksteksport
+	Chinese Big 5	Kinesisk Big 5
+	Cyrillic	Kyrillisk
+	Greek	Græsk
+	Turkish	Tyrkisk
+	Baltic	Baltisk
+	Central European	Centraleuropæisk
 	Character Set:	Tegnsæt:
 	Join the lines of each paragraph	Forbind linjerne i hvert afsnit
 	Line Breaks	Linjeskift

@@ -8055,10 +8055,15 @@ the document; so does `object.expand`.
 ```
 
 Placing a text file (`.txt`) sets it as area type: `file.place {path | name+dataBase64, text?: {characterSet?:
-"unicode" | "ansi", platform?: "windows" | "mac", removeLineReturns?, removeParagraphReturns?, replaceSpaces?: n}}`
+"unicode" | "ansi" | "shiftJis" | "gb2312" | "chineseBig5" | "cyrillic" | "gb18030" | "greek" | "turkish" | "baltic" |
+"centralEuropean", platform?: "windows" | "mac", removeLineReturns?, removeParagraphReturns?, replaceSpaces?: n}}`
 (Text Import Options). Unicode reads UTF-8, or UTF-16 with a byte-order mark; ANSI reads Windows-1252 (Mac Roman on
-`mac`). Unicode reads a file without a byte-order mark as UTF-16 by the rule `dataset.import` uses: at least half of
-its two-byte units hold a NUL byte, in the byte order that reads a line break, or for a file with one line, big-endian
+`mac`). The other sets use the WHATWG Encoding Standard's decoders: `shiftJis` Shift_JIS, `gb2312` GBK, `chineseBig5`
+Big5, `cyrillic` windows-1251 (x-mac-cyrillic on `mac`), `gb18030` gb18030, and `greek`, `turkish`, `baltic` and
+`centralEuropean` windows-1253, 1254, 1257 and 1250 on both platforms. They read a byte-order mark as ordinary bytes
+and a malformed sequence as U+FFFD. An unknown set, or an option of the wrong type (`characterSet: 3`,
+`removeLineReturns: "yes"`), is an error, and nothing is placed. Unicode reads a file without a byte-order mark as
+UTF-16 by the rule `dataset.import` uses: at least half of its two-byte units hold a NUL byte, in the byte order that reads a line break, or for a file with one line, big-endian
 when more of its units start with a NUL byte than end with one, and little-endian otherwise. Any other file is read as
 UTF-8, else as the platform's 8-bit set: one with fewer NUL bytes, one with an odd length, one where both byte orders
 read a line break, and one that isn't valid UTF-16 in that order or holds a NUL character. `removeLineReturns` joins

@@ -723,7 +723,7 @@ folder, then opens the dialog searching it. The web shows a status line instead 
 disabled there.
 
 Text Import Options: placing a `.txt` file through the app (`file.place` with a file and no `text` options, the Place
-dialog, a drop) opens the `textImport` dialog (fields `platform`: `windows`/`mac`, `characterSet`: `unicode`/`ansi`,
+dialog, a drop) opens the `textImport` dialog (fields `platform`: `windows`/`mac`, `characterSet`: a `text.characterSet` value,
 `removeLineReturns`, `removeParagraphReturns`, `replaceSpaces`, `spaces`). `ui.dialog.confirm` places the file as area
 type with those options (`file.place {text: {…}}`).
 

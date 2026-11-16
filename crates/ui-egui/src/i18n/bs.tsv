@@ -3273,6 +3273,12 @@ antiAlias	Sharp	Oštro
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Opcije izvoza teksta
+	Chinese Big 5	Kineski Big 5
+	Cyrillic	Ćirilica
+	Greek	Grčki
+	Turkish	Turski
+	Baltic	Baltički
+	Central European	Srednjoevropski
 	Character Set:	Skup znakova:
 	Join the lines of each paragraph	Spoji redove svakog pasusa
 	Line Breaks	Prelomi reda

@@ -490,6 +490,12 @@ font-technology	Variable	Biến thiên
 	Character options	Tùy chọn ký tự
 	Paragraph options	Tùy chọn đoạn văn
 	Character Rotation	Xoay ký tự
+	Chinese Big 5	Tiếng Trung Big 5
+	Cyrillic	Chữ Kirin
+	Greek	Tiếng Hy Lạp
+	Turkish	Tiếng Thổ Nhĩ Kỳ
+	Baltic	Vùng Baltic
+	Central European	Trung Âu
 	Character Set:	Bộ ký tự:
 	Character Style	Kiểu ký tự
 	Character Style Options	Tùy chọn kiểu ký tự
@@ -7577,3 +7583,4 @@ breakText	Glyphs	Glyph
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} điểm ảnh quá lớn cho Targa (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} điểm ảnh quá lớn cho PSD (tối đa {MAX_SIDE} điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer phải là "singleLine", "everyLine", "standardSingleLine" hoặc "standardEveryLine"
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: hãy dùng "{_1}" hoặc "{_2}"

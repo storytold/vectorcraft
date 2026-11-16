@@ -56,6 +56,9 @@ chrono = { workspace = true }
 craft-xml = { workspace = true }
 # The compound file that holds a Word 97-2003 document placed as type (place/doc.rs).
 cfb = "0.15"
+# The Text Import Options character sets other than Unicode and ANSI (place/text.rs). Already in
+# Cargo.lock (vectorcraft-eps), so this adds no new crate.
+encoding_rs = { workspace = true }
 kurbo = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

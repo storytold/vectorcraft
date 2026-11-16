@@ -3364,6 +3364,12 @@ antiAlias	Sharp	Ostré
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Možnosti exportu textu
+	Chinese Big 5	Čínština Big 5
+	Cyrillic	Cyrilice
+	Greek	Řečtina
+	Turkish	Turečtina
+	Baltic	Baltské jazyky
+	Central European	Středoevropské jazyky
 	Character Set:	Znaková sada:
 	Join the lines of each paragraph	Spojit řádky každého odstavce
 	Line Breaks	Zalomení řádků

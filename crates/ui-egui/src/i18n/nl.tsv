@@ -3670,6 +3670,12 @@ antiAlias	Sharp	Scherp
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Opties tekstexport
+	Chinese Big 5	Chinees Big 5
+	Cyrillic	Cyrillisch
+	Greek	Grieks
+	Turkish	Turks
+	Baltic	Baltisch
+	Central European	Centraal-Europees
 	Character Set:	Tekenset:
 	Join the lines of each paragraph	De regels van elke alinea samenvoegen
 	Line Breaks	Regeleinden

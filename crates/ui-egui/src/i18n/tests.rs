@@ -515,6 +515,22 @@ fn monitor_profile_labels_are_in_complete_catalogs() {
     }
 }
 
+/// Text Import Options' Character Set choices that name a script or a region (Shift JIS, GB2312
+/// and GB18030 are names of their own), and the error for an unknown character set.
+#[test]
+fn text_import_character_sets_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Chinese Big 5", "Cyrillic", "Greek", "Turkish", "Baltic", "Central European"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let unknown = r#"text.characterSet `x`: use "unicode", "ansi", "shiftJis", "gb2312", "chineseBig5", "cyrillic", "gb18030", "greek", "turkish", "baltic" or "centralEuropean""#;
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, unknown), unknown, "{code}");
+    }
+}
+
 /// The Control bar panel menu's items, its groups of options and the edges, and the label of the
 /// command that turns a group on or off.
 #[test]

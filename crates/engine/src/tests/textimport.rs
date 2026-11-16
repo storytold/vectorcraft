@@ -135,6 +135,36 @@ fn text_files_report_and_queue_with_their_options() {
     assert!(close(frame, Rect::new(50.0, 60.0, 130.0, 100.0)), "{frame:?}");
 }
 
+/// Text Import Options' other character sets place their text as area type, and an unknown
+/// character set is refused with the list of sets and places nothing.
+#[test]
+fn text_files_place_in_the_other_character_sets() {
+    let mut s = session();
+    let cases: [(&str, &str, &[u8], &str); 11] = [
+        ("shiftJis", "windows", &[0x93, 0xFA, 0x96, 0x7B], "日本"),
+        ("gb2312", "windows", &[0xD6, 0xD0, 0xCE, 0xC4], "中文"),
+        ("chineseBig5", "mac", &[0xA4, 0xA4, 0xA4, 0xE5], "中文"),
+        ("cyrillic", "windows", &[0xCF, 0xF0, 0xE8, 0xE2, 0xE5, 0xF2], "Привет"),
+        ("cyrillic", "mac", &[0x8F, 0xF0, 0xE8, 0xE2, 0xE5, 0xF2], "Привет"),
+        ("gb18030", "windows", &[0x95, 0x32, 0x82, 0x36], "\u{20000}"),
+        ("greek", "windows", &[0xC5, 0xEB, 0xEB, 0xDC, 0xE4, 0xE1], "Ελλάδα"),
+        ("turkish", "mac", &[0xDD, 0x73, 0x74], "İst"),
+        ("baltic", "windows", &[0x52, 0xEE, 0x67, 0x61], "Rīga"),
+        ("centralEuropean", "windows", &[0xA3, 0xF3, 0x64, 0x9F, b'\r', b'\n', 0xA3], "Łódź\nŁ"),
+        ("shiftJis", "windows", &[0x82, 0x22], "\u{FFFD}\""),
+    ];
+    for (set, platform, bytes, text) in cases {
+        let r = place_text(&mut s, bytes, json!({"text": {"characterSet": set, "platform": platform}}));
+        assert_eq!(placed(&s, &r).0, text, "{set} on {platform}");
+    }
+    let undo = s.doc().unwrap().history.undo.len();
+    let bad = json!({"name": "a.txt", "dataBase64": "YQ==", "text": {"characterSet": "latin9"}});
+    let err = s.execute("file.place", &bad).unwrap_err().to_string();
+    let list = r#""unicode", "ansi", "shiftJis", "gb2312", "chineseBig5", "cyrillic", "gb18030", "greek", "turkish", "baltic" or "centralEuropean""#;
+    assert!(err.contains(&format!("text.characterSet `latin9`: use {list}")), "{err}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "nothing placed");
+}
+
 /// An RTF file with a font table, a color table, a bold run, an italic run, a superscript and a
 /// centered, indented second paragraph.
 const LETTER_RTF: &str = concat!(
