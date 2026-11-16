@@ -1,7 +1,7 @@
 //! Recolor Artwork (M3.78) and Edit or Apply Color Group (M3.79), drawn headlessly.
 
 use egui::{Event, Modifiers, PointerButton, Pos2, Rect, vec2};
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
 use vectorcraft_color::recolor::ColorKey;
@@ -1171,4 +1171,171 @@ fn color_bars_scroll_and_show_when_nothing_is_recolored() {
     h.run_steps(4);
     assert!(h.query_by_role_and_label(egui::accesskit::Role::Button, "Color 1").is_none());
     let _ = h.get_by_label("No colors to recolor (preserved colors are left out).");
+}
+
+/// Where the Edit tab's wheel draws a marker for hue `hue` and saturation `s`.
+fn wheel_at(h: &egui_kittest::Harness<'_, VectorcraftApp>, hue: f32, s: f32) -> Pos2 {
+    let c = widget_of_size(h, vec2(220.0, 220.0)).center();
+    c + vec2(hue.to_radians().cos(), -hue.to_radians().sin()) * 100.0 * s
+}
+
+/// Clicks the Edit tab's button named `name` and lets the dialog settle.
+fn click_button(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, name: &str) {
+    h.get_by_role_and_label(egui::accesskit::Role::Button, name).click();
+    h.run_steps(3);
+}
+
+/// The Add Color tool: a click on the smooth wheel adds the hue and saturation under it, at the
+/// base color's brightness, as a row with no current colors that becomes the selected row; the art
+/// keeps its colors, and the Assign tab shows the row without current colors. A second click on the
+/// button turns the tool off, and a click on the wheel then adds nothing.
+#[test]
+fn the_add_color_tool_adds_a_row_with_no_current_colors() {
+    let mut h = edit_harness(&["rgb 200 100 100", "rgb 100 200 200"]);
+    set(h.state_mut(), "__sel", json!([0]));
+    h.run_steps(4);
+    let (fills_before, v) = (fills(h.state()), new_hsb(h.state())[0][2]);
+    click_button(&mut h, "Add Color Tool");
+    assert_eq!(field(h.state(), "wheelTool"), json!("add"));
+    let at = wheel_at(&h, 120.0, 0.5);
+    h.input_mut().events.extend(press(at, 1));
+    h.run_steps(3);
+    let rows = field(h.state(), "rows");
+    assert_eq!(rows.as_array().unwrap().len(), 3, "a new row: {rows}");
+    assert_eq!(rows[2]["from"], json!([]), "with no current colors");
+    assert_eq!(rows[2]["added"], json!(true), "marked as an added color");
+    let [hue, s, b] = new_hsb(h.state())[2];
+    assert!((hue - 120.0).abs() < 1.0 && (s - 0.5).abs() < 0.01 && (b - v).abs() < 0.01, "{:?}", [hue, s, b]);
+    assert_eq!(field(h.state(), "__sel"), json!([2]), "the new color is selected");
+    assert_eq!(fills(h.state()), fills_before, "a color with no current colors recolors no art");
+    // A second click adds another color; the tool stays on.
+    let next = wheel_at(&h, 240.0, 0.75);
+    h.input_mut().events.extend(press(next, 1));
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "rows").as_array().unwrap().len(), 4);
+    click_button(&mut h, "Add Color Tool");
+    assert_eq!(field(h.state(), "wheelTool"), Value::Null, "a second click turns the tool off");
+    h.input_mut().events.extend(press(at, 1));
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "rows").as_array().unwrap().len(), 4, "without the tool a click adds nothing");
+    assert_eq!(field(h.state(), "__sel"), json!([2]), "it selects the marker clicked");
+    set(h.state_mut(), "tab", json!("assign"));
+    h.run_steps(3);
+    let _ = h.get_by_label("Current Colors (2)");
+    assert!(h.query_by_label("Color 4").is_some(), "the Assign tab has a row for each added color");
+    let app = h.state_mut();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    dialogs::confirm(app).unwrap();
+    assert_eq!(fills(app), fills_before, "OK leaves the art's colors");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "and records no undo step");
+}
+
+/// On the segmented wheel the Add Color tool adds the patch's color. Opened on a color group without
+/// art, OK adds the added color to the group, as one undo step.
+#[test]
+fn an_added_color_joins_the_color_group() {
+    let app = app();
+    let before = group_keys(&app, "Brights");
+    let mut h = assign_harness(app, json!({"group": "Brights"}));
+    set(h.state_mut(), "tab", json!("edit"));
+    h.run_steps(4);
+    show_display(&mut h, "Show segmented color wheel");
+    let v = new_hsb(h.state())[0][2];
+    click_button(&mut h, "Add Color Tool");
+    let patch = wheel_at(&h, 187.0, 0.95);
+    h.input_mut().events.extend(press(patch, 1));
+    h.run_steps(3);
+    let added = field(h.state(), "rows").as_array().unwrap().last().unwrap()["to"].clone();
+    let [hue, s, b] = vectorcraft_engine::cmd::color_value(&added).unwrap().to_hsb();
+    assert!((hue - 180.0).abs() < 1.0 && (s - 0.9).abs() < 0.01 && (b - v).abs() < 0.01, "the patch's color: {:?}", [hue, s, b]);
+    let app = h.state_mut();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    dialogs::confirm(app).unwrap();
+    let mut want = before.clone();
+    want.push(added);
+    assert_eq!(group_keys(app, "Brights"), want);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+}
+
+/// The Remove Color tool: a click on the base color's marker removes nothing; a click on another
+/// marker leaves its row of art's colors with no new color, so OK leaves that art's colors as they
+/// were while the other rows recolor theirs. The tools are off for the color bars.
+#[test]
+fn the_remove_color_tool_removes_a_marker_but_not_the_base_colors() {
+    let mut h = edit_harness(&["rgb 200 100 100", "rgb 100 200 200", "rgb 20 160 20"]);
+    let fills_before = fills(h.state());
+    let mut rows = field(h.state(), "rows");
+    let tos = ["rgb 255 0 0", "rgb 0 255 0", "rgb 0 0 255"];
+    for (r, to) in rows.as_array_mut().unwrap().iter_mut().zip(tos) {
+        r["to"] = json!(to);
+    }
+    set(h.state_mut(), "rows", rows.clone());
+    set(h.state_mut(), "linked", json!(false));
+    set(h.state_mut(), "__sel", json!([0]));
+    h.run_steps(4);
+    click_button(&mut h, "Remove Color Tool");
+    assert_eq!(field(h.state(), "wheelTool"), json!("remove"));
+    let (red, green) = (wheel_at(&h, 0.0, 1.0), wheel_at(&h, 120.0, 1.0));
+    h.input_mut().events.extend(press(red, 1));
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "rows"), rows, "the base color stays");
+    h.input_mut().events.extend(press(green, 1));
+    h.run_steps(3);
+    let now = field(h.state(), "rows");
+    assert_eq!(now.as_array().unwrap().len(), 3, "the row of art's colors stays");
+    assert_eq!((&now[0], &now[1]["to"], &now[2]), (&rows[0], &Value::Null, &rows[2]), "with no new color: {now}");
+    assert_eq!(field(h.state(), "__sel"), json!([0]), "the base color stays selected");
+    show_display(&mut h, "Show color bars");
+    let tool = h.get_by_role_and_label(egui::accesskit::Role::Button, "Remove Color Tool");
+    assert!(tool.accesskit_node().is_disabled(), "the tools are for the wheels");
+    let kept = rows[1]["from"][0].clone();
+    let app = h.state_mut();
+    dialogs::confirm(app).unwrap();
+    let after = fills(app);
+    for (b, a) in fills_before.iter().zip(&after) {
+        let was = json!(ColorKey::of(&b.unwrap()).to_string());
+        if was == kept {
+            assert_eq!(a, b, "the art of the removed color keeps it");
+        } else {
+            assert_ne!(a, b, "the other art takes its new color");
+        }
+    }
+}
+
+/// Right-clicks the color bar named `name`.
+fn right_click_bar(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, name: &str) {
+    let at = h.get_by_role_and_label(egui::accesskit::Role::Button, name).rect().center();
+    h.event(Event::PointerMoved(at));
+    h.event(Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed: true, modifiers: Modifiers::NONE });
+    h.event(Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed: false, modifiers: Modifiers::NONE });
+    h.run_steps(2);
+}
+
+/// A color bar's right-click menu has Remove Color: off for the base color's bar; on an added
+/// color's bar it removes the row, and on a bar of art's colors it leaves the row with no new color
+/// and no bar.
+#[test]
+fn a_color_bars_menu_removes_its_color() {
+    let mut h = edit_harness(&["#ff0000", "#0000ff", "#00ff00"]);
+    let mut rows = field(h.state(), "rows");
+    rows.as_array_mut().unwrap().push(json!({"from": [], "to": "rgb 10 20 30", "added": true}));
+    set(h.state_mut(), "rows", rows.clone());
+    set(h.state_mut(), "__sel", json!([0]));
+    h.run_steps(4);
+    show_display(&mut h, "Show color bars");
+    right_click_bar(&mut h, "Color 1");
+    assert!(h.get_by_label("   Remove Color").accesskit_node().is_disabled(), "the base color can't be removed");
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    right_click_bar(&mut h, "Color 4");
+    h.get_by_label("   Remove Color").click();
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "rows").as_array().unwrap()[..], rows.as_array().unwrap()[..3], "the added row goes");
+    right_click_bar(&mut h, "Color 2");
+    h.get_by_label("   Remove Color").click();
+    h.run_steps(3);
+    let now = field(h.state(), "rows");
+    assert_eq!((&now[1]["from"], &now[1]["to"]), (&rows[1]["from"], &Value::Null), "{now}");
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Button, "Color 2").is_none(), "its bar goes");
+    assert_eq!(field(h.state(), "__sel"), json!([0]));
 }
