@@ -12598,3 +12598,199 @@ fn a_clipping_objects_text_wrap_is_left_out_without_room() {
         assert_eq!(carriers, if room >= 4 { vec![true] } else { vec![] }, "{room}\n{text}");
     }
 }
+
+/// A clipping object written as art cut to it (one that isn't a path or compound path with points,
+/// or any clipping object in art already cut to one) keeps its name, its opacity mask and its
+/// visibility variable on one unpainted object, locked and hidden as it was: the reader reads the
+/// name once, on that object, with the mask, and binds the variable to it. The fills and strokes the
+/// clipping object paints keep its opacity mask, without its name.
+#[test]
+fn a_cut_clipping_object_keeps_its_name_mask_and_variables() {
+    use vectorcraft_doc::{TextObject, Variable, VariableKind};
+    // Each case, with the number of objects written for the clipping object's paint.
+    let cases = [
+        ("group", 0),
+        ("hidden", 0),
+        ("locked", 0),
+        ("image", 0),
+        ("instance", 0),
+        ("blend", 0),
+        ("type", 1),
+        ("unpainted path", 0),
+        ("unpainted compound", 0),
+        ("fill", 1),
+        ("stroke", 1),
+        ("fill and stroke", 2),
+    ];
+    for (case, parts) in cases {
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let art = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+        doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(art) });
+        let rect = Rect::new(20.0, 20.0, 80.0, 80.0);
+        let mut cutter = match case {
+            "image" => image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), Affine::new([20.0, 0.0, 0.0, 20.0, 30.0, 40.0]), None),
+            "instance" => instance(&mut doc, "Leaf", Affine::translate((40.0, 30.0))),
+            "blend" => {
+                let keys = vec![
+                    Arc::new(square(&mut doc, Rect::new(20.0, 20.0, 30.0, 30.0), Color::gray(0.5))),
+                    Arc::new(square(&mut doc, Rect::new(60.0, 20.0, 70.0, 30.0), Color::gray(0.5))),
+                ];
+                let spec = vectorcraft_doc::BlendSpec { spacing: vectorcraft_doc::BlendSpacing::Distance(10.0), ..Default::default() };
+                Node::new(doc.alloc_id(), NodeKind::Blend { children: keys, spec: Box::new(spec) })
+            }
+            "type" => text_node(&mut doc, TextObject::point(vectorcraft_geom::Point::new(30.0, 50.0), "Clip", style(24.0, Color::BLACK))),
+            "unpainted path" => clipping(&mut doc, shapes::rectangle(rect)),
+            "unpainted compound" => {
+                let outer = Node::path(doc.alloc_id(), shapes::rectangle(rect), Appearance::default());
+                let inner = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(30.0, 30.0, 70.0, 70.0)), Appearance::default());
+                Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(inner)], rule: FillRule::EvenOdd })
+            }
+            "fill" | "stroke" | "fill and stroke" => {
+                let mut c = clipping(&mut doc, shapes::rectangle(rect));
+                let fill = if case == "stroke" { Paint::None } else { solid(Color::gray(0.5)) };
+                let stroke = if case == "fill" { Paint::None } else { solid(Color::rgb(0.0, 0.0, 1.0)) };
+                c.appearance = Appearance::basic(fill, stroke, if case == "fill" { 0.0 } else { 2.0 }).into();
+                c
+            }
+            _ => {
+                let members = vec![square(&mut doc, Rect::new(20.0, 20.0, 50.0, 60.0), Color::gray(0.5)), square(&mut doc, rect, Color::gray(0.5))];
+                group(&mut doc, members, false)
+            }
+        };
+        cutter.name = Some("Cutter".into());
+        cutter.visible = case != "hidden";
+        cutter.locked = case == "locked";
+        let veil = square(&mut doc, Rect::new(20.0, 20.0, 60.0, 60.0), Color::rgb(1.0, 1.0, 1.0));
+        cutter.extras_mut().mask = Some(Box::new(OpacityMask::new(veil, false)));
+        let id = cutter.id;
+        let member = square(&mut doc, Rect::new(30.0, 30.0, 70.0, 50.0), Color::rgb(1.0, 0.0, 0.0));
+        let mut top = group(&mut doc, vec![cutter, member], true);
+        if matches!(case, "unpainted path" | "unpainted compound" | "fill" | "stroke" | "fill and stroke") {
+            let frame = square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0), Color::gray(0.9));
+            let frame = group(&mut doc, vec![frame], false);
+            top = group(&mut doc, vec![frame, top], true);
+        }
+        doc.insert(Some(layer), usize::MAX, top).unwrap();
+        doc.variables.variables.push(Variable { name: "show".into(), kind: VariableKind::Visibility });
+        doc.variables.bind(id, "show");
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(out.warnings.iter().all(|w| w != writer::BINDINGS), "{case}: {:?}", out.warnings);
+        let text = String::from_utf8(out.program).unwrap().replace("\r\n", "\n");
+        assert_eq!(text.matches("%_/XMLUID : (Cutter) ; (AI10_ArtUID) ,").count(), 1, "{case}\n{text}");
+        assert_eq!(text.matches("(AI9_Mask)").count(), 1 + parts, "{case}\n{text}");
+        let back = read_back(&doc);
+        let (mut cutters, mut masked) = (vec![], 0);
+        back.layers[0].walk(&mut |n| {
+            masked += usize::from(n.extras().mask.is_some());
+            if n.name.as_deref() == Some("Cutter") {
+                let unpainted = matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) && n.appearance.items.is_empty();
+                cutters.push((n.id, unpainted, n.extras().mask.is_some(), n.locked, n.visible));
+            }
+        });
+        let [(carrier, unpainted, mask, locked, visible)] = cutters[..] else { panic!("{case}: {cutters:?}\n{text}") };
+        assert!(unpainted && mask, "{case}");
+        assert_eq!((locked, visible), (case == "locked", case != "hidden"), "{case}");
+        assert_eq!(masked, 1 + parts, "{case}");
+        assert_eq!(back.variables.objects_of("show"), vec![carrier], "{case}");
+    }
+}
+
+/// With too little room for the unpainted object that carries a cut clipping object's dictionary,
+/// the dictionary is left out, never written on another object; with room for the object but not
+/// for its opacity mask's art, only the mask is left out. The data stays readable.
+#[test]
+fn a_cut_clipping_objects_dictionary_is_left_out_without_room() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let before = named(square(&mut doc, Rect::new(150.0, 10.0, 160.0, 20.0), Color::gray(0.2)), "Before");
+    doc.insert(Some(layer), usize::MAX, before).unwrap();
+    let members = vec![
+        square(&mut doc, Rect::new(20.0, 20.0, 50.0, 60.0), Color::gray(0.5)),
+        square(&mut doc, Rect::new(60.0, 30.0, 90.0, 70.0), Color::gray(0.5)),
+    ];
+    let mut cutter = wrapped(named(group(&mut doc, members, false), "Cutter"), 2.0, false);
+    cutter.locked = true;
+    let veil = vec![
+        square(&mut doc, Rect::new(20.0, 20.0, 40.0, 40.0), Color::rgb(1.0, 1.0, 1.0)),
+        square(&mut doc, Rect::new(40.0, 40.0, 60.0, 60.0), Color::rgb(1.0, 1.0, 1.0)),
+    ];
+    let veil = group(&mut doc, veil, false);
+    cutter.extras_mut().mask = Some(Box::new(OpacityMask::new(veil, false)));
+    let member = square(&mut doc, Rect::new(30.0, 30.0, 70.0, 50.0), Color::rgb(1.0, 0.0, 0.0));
+    let top = group(&mut doc, vec![cutter, member], true);
+    doc.insert(Some(layer), usize::MAX, top).unwrap();
+    let all = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    let mut kept = vec![];
+    for room in 0..=all {
+        let out = export_within(&doc, &opts(), room).unwrap();
+        assert!(crate::import::objects_read(&out.program).unwrap() <= room);
+        let text = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+        let (back, _) = crate::ai_alone(&out.program).unwrap();
+        let mut found = vec![];
+        back.layers[0].walk(&mut |n| {
+            let x = n.extras();
+            if !matches!(n.kind, NodeKind::Layer { .. }) && (n.name.is_some() || x.wrap.is_some() || x.mask.is_some()) {
+                let carrier = matches!(n.kind, NodeKind::Compound { .. }) && n.appearance.items.is_empty();
+                found.push((n.name.clone(), carrier, x.wrap.is_some(), x.mask.is_some(), n.locked));
+            }
+        });
+        let before = (Some("Before".to_string()), false, false, false, false);
+        let rest = match found.split_first() {
+            Some((b, rest)) if room > 0 => {
+                assert_eq!(b, &before, "{room}\n{text}");
+                rest
+            }
+            _ => &found[..],
+        };
+        match rest {
+            [] => kept.push((false, false)),
+            [(name, true, true, mask, true)] if name.as_deref() == Some("Cutter") => kept.push((true, *mask)),
+            _ => panic!("{room}: {found:?}\n{text}"),
+        }
+    }
+    assert_eq!(kept.last(), Some(&(true, true)));
+    // Once the carrier fits it stays, and once its mask fits it stays too.
+    let carrier = kept.iter().position(|k| k.0).unwrap();
+    let mask = kept.iter().position(|k| k.1).unwrap();
+    assert!(carrier < mask, "{kept:?}");
+    assert!(kept[carrier..].iter().all(|k| k.0) && kept[mask..].iter().all(|k| k.1), "{kept:?}");
+}
+
+/// A cut clipping object with an opacity mask alone gets no unpainted object when its mask's art
+/// doesn't fit: an object without the dictionary it was written for would be extra art.
+#[test]
+fn a_cut_clipping_object_without_room_for_its_mask_gets_no_carrier() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let members = vec![
+        square(&mut doc, Rect::new(20.0, 20.0, 50.0, 60.0), Color::gray(0.5)),
+        square(&mut doc, Rect::new(60.0, 30.0, 90.0, 70.0), Color::gray(0.5)),
+    ];
+    let mut cutter = group(&mut doc, members, false);
+    let veil = vec![
+        square(&mut doc, Rect::new(20.0, 20.0, 40.0, 40.0), Color::rgb(1.0, 1.0, 1.0)),
+        square(&mut doc, Rect::new(40.0, 40.0, 60.0, 60.0), Color::rgb(1.0, 1.0, 1.0)),
+    ];
+    let veil = group(&mut doc, veil, false);
+    cutter.extras_mut().mask = Some(Box::new(OpacityMask::new(veil, false)));
+    let top = group(&mut doc, vec![cutter], true);
+    doc.insert(Some(layer), usize::MAX, top).unwrap();
+    let all = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    for room in 0..=all {
+        let out = export_within(&doc, &opts(), room).unwrap();
+        let text = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+        let (back, _) = crate::ai_alone(&out.program).unwrap();
+        let mut carriers = vec![];
+        back.layers[0].walk(&mut |n| {
+            if matches!(n.kind, NodeKind::Compound { .. }) && n.appearance.items.is_empty() {
+                carriers.push(n.extras().mask.is_some());
+            }
+        });
+        assert!(carriers.is_empty() || carriers == [true], "{room}: {carriers:?}\n{text}");
+        assert_eq!(carriers.is_empty(), !text.contains("(AI9_Mask)"), "{room}\n{text}");
+        if room == all {
+            assert_eq!(carriers, [true], "{text}");
+        }
+    }
+}

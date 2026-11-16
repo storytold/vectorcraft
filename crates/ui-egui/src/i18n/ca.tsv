@@ -754,7 +754,7 @@ antiAlias	Sharp	Nítid
 	Close Panel	Tanca el panell
 	Close Path	Tanca el traçat
 	Close paths when ends are within:	Tanca els traçats quan els extrems siguin a menys de:
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Tanca els extrems circulars dels perfils oberts. Els escombrats parcials mantenen oberts els costats tallats.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Tanca els extrems circulars dels perfils oberts. Els escombrats parcials també tanquen els costats tallats.
 	Closed	Tancat
 	Closing bracket with no opening one	Delimitador de tancament sense un d’obertura
 	Clumped	Agrupat
@@ -1805,6 +1805,8 @@ digits	Malayalam	Malaiàlam
 	Font Family, Style & Size	Família, estil i mida de tipus de lletra
 	Font Family:	Família de tipus de lletra:
 	Font List	Llista de tipus de lletra
+	Show Similar Fonts	Mostra tipus de lletra semblants
+	Clear Similar Fonts	Esborra els tipus de lletra semblants
 	Font Preview Size	Mida de previsualització del tipus de lletra
 	Font Size	Mida del tipus de lletra
 	Font Style:	Estil de tipus de lletra:
@@ -1943,6 +1945,7 @@ digits	Malayalam	Malaiàlam
 	Connect Data Points	Connecta els punts de dades
 	Edge-to-Edge Lines	Línies de vora a vora
 	Draw Filled Lines	Dibuixa línies emplenades
+	Line Width	Amplada de línia
 	Tick Values	Valors de les marques
 	Override Calculated Values	Substitueix els valors calculats
 	Divisions	Divisions
@@ -2352,6 +2355,8 @@ digits	Malayalam	Malaiàlam
 	Lasso Tool	Eina de llaç
 	Enclosing Lasso Tool	Eina de llaç envoltant
 	Enclosing Lasso	Llaç envoltant
+	Polygonal Lasso Tool	Eina de llaç poligonal
+	Polygonal Lasso	Llaç poligonal
 	Last	Últim
 	Last Artboard	Últim tauler
 	Status Bar Show	Mostra a la barra d'estat
@@ -2669,7 +2674,8 @@ digits	Malayalam	Malaiàlam
 	Minimal	Mínim
 	Minimize	Minimitza
 	Minimum	Mínim
-	Minimum must not exceed Desired, nor Desired Maximum.	El mínim no pot superar el desitjat ni el màxim desitjat.
+	Minimum must not exceed Desired, nor Desired Maximum.	El mínim no pot superar el desitjat, ni el desitjat el màxim.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: el mínim no pot superar el desitjat, ni el desitjat el màxim
 	Minus Back	Resta al darrere
 	Minus Front	Resta al davant
 	Mirror	Reflexa
@@ -5880,6 +5886,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	every numbered name for {name} is taken in the document's folder	tots els noms numerats per a {name} estan ocupats a la carpeta del document
 @msg	every search thread stopped on an internal error (please report this bug)	tots els fils de cerca s’han aturat per un error intern (informeu d’aquest error)
 @msg	Expand Appearance: the selection has a basic appearance	Expandeix l’aparença: la selecció té una aparença bàsica
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	alguns efectes ràster no s’han convertit en imatges: ocuparien més de 1.024 imatges o 256 megapíxels en total
 @msg	Expand: no brush strokes selected	Expandeix: no s’ha seleccionat cap traç de pinzell
 @msg	Expand: no gradient fills	Expandeix: no hi ha farciments de degradat
 @msg	Expand: nothing to expand	Expandeix: no hi ha res per expandir
@@ -7069,6 +7076,10 @@ theme	Appearance	Aparença
 	Em Box	Caixa em
 	x-Height	Alçada de la x
 	ICF Box	Caixa ICF
+	Show Sample	Mostra l'exemple
+	Hide Sample	Amaga l'exemple
+	Max Ascent/Descent	Alçada/profunditat màx.
+	Max Ascender	Ascendent màx.
 # Average & Join (Object › Path, Cmd+Alt+Shift+J).
 	Average & Join…	Mitjana i unió…
 	Average & Join	Mitjana i unió
@@ -7458,6 +7469,22 @@ breakText	Glyphs	Glifs
 	Remove Gaps	Elimina les separacions
 @msg	that makes too many pieces (at most 100000): make the dashes longer	això fa massa trossos (com a màxim 100000): allargueu els guions
 @msg	select paths, or segments, to divide	seleccioneu camins o segments per dividir
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Tangents comunes…
+	Common Tangents	Tangents comunes
+	Tangents	Tangents
+	Centerline	Línia central
+	External	Externes
+	Internal	Internes
+@msg	select two closed paths	seleccioneu dos camins tancats
+@msg	a selected path is open	un camí seleccionat és obert
+@msg	a selected path is not convex	un camí seleccionat no és convex
+@msg	a selected path has no area	un camí seleccionat no té àrea
+@msg	a selected path has more than 10000 segments	un camí seleccionat té més de 10000 segments
+@msg	the two paths have the same outline	els dos camins tenen el mateix contorn
+@msg	One path lies inside the other, so they have no common tangents	Un camí és dins de l’altre, per tant no tenen tangents comunes
+@msg	The paths overlap, so they have no internal tangents	Els camins se superposen, per tant no tenen tangents internes
+@msg	One path lies inside the other, so they have no internal tangents	Un camí és dins de l’altre, per tant no tenen tangents internes
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandeix els guions en camins
 @msg	select paths with dashed strokes to expand	seleccioneu camins amb traç discontinu per expandir
@@ -7772,6 +7799,8 @@ breakText	Glyphs	Glifs
 @msg	No bridge of this width fits across the selected art	Cap pont d’aquesta amplada no cap a la il·lustració seleccionada
 @msg	Some islands could not be joined to the area around the art	Algunes illes no s’han pogut unir a l’àrea que envolta la il·lustració
 @msg	`width` must be from {lo} to {hi} pt	`width` ha d’estar entre {lo} i {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` ha d’estar entre -180 i 180 graus
+@msg	`roundness` must be from 1 to 100%	`roundness` ha d’estar entre 1 i 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` ha de ser un nombre enter d’1 a {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Caixa i línies de pelat…
 	Weed Box and Lines	Caixa i línies de pelat

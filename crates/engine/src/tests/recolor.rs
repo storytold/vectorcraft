@@ -840,6 +840,34 @@ fn keep_in_group_colors_leaves_that_swatch_as_it_is() {
     assert_ne!(g[1], "#00ff00", "the other new color takes it");
 }
 
+/// A row whose new color was removed keeps its art's colors: art in it linked to another swatch of
+/// the group, which the rewrite gives another color, loses the link instead of following it.
+#[test]
+fn art_of_a_row_without_a_new_color_keeps_its_color_when_its_swatch_takes_another() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Brand", "colors": ["#ff0000", "#0000ff", "#00ff00"]}));
+    let names: Vec<String> =
+        s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Brand").unwrap().swatches.iter().map(|w| w.name.clone()).collect();
+    for name in &names {
+        run(&mut s, "swatch.edit", json!({"name": name, "global": true}));
+    }
+    let blue = rect(&mut s, json!("#000000"));
+    let green = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [blue.0], "swatch": names[1]}));
+    run(&mut s, "paint.setFill", json!({"ids": [green.0], "swatch": names[2]}));
+    select_all(&mut s);
+    // The rows are blue, red and green; the blue row's new color is removed, so the group's first
+    // swatch goes and its second takes the red row's new color.
+    let map = json!([{"from": ["#0000ff"], "to": null}, {"from": ["#ff0000"], "to": "#ff0000"}, {"from": ["#00ff00"], "to": "#00ff00"}]);
+    run(&mut s, "recolor.apply", json!({"map": map, "group": "Brand", "groupColors": [null, "#ff0000", "#00ff00"]}));
+    let link = |s: &Session, id: NodeId| match s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint() {
+        vectorcraft_color::Paint::Solid { color, swatch, .. } => (color.to_hex(), swatch),
+        p => panic!("{p:?}"),
+    };
+    assert_eq!(link(&s, blue), ("#0000ff".into(), None), "the art keeps its color, unlinked");
+    assert_eq!(link(&s, green), ("#00ff00".into(), Some(names[2].clone())), "art of another row keeps its link");
+}
+
 #[test]
 fn recolor_of_everything_does_not_count_locked_art_whose_pattern_the_group_rewrite_recolors() {
     let mut s = session();
