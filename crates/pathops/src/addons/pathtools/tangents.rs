@@ -259,7 +259,7 @@ impl Outline {
     }
 
     /// The diagonal of the bounds (an ellipse's: of the box its axes span).
-    fn size(&self) -> f64 {
+    pub fn size(&self) -> f64 {
         match self {
             Outline::Ellipse { m, .. } => {
                 let [a, b, c, d] = *m;
