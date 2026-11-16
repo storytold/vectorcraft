@@ -6428,6 +6428,25 @@ fn arrowheads_this_does_not_read_keep_the_drawn_look() {
 }
 
 #[test]
+fn heads_whose_placement_the_drawn_bounds_leave_open_keep_the_drawn_look() {
+    // The line bends back so its end, and a head on it either on the end or 4 past it, lie inside
+    // the bounds of its earlier segments: those bounds can't tell the two placements apart.
+    let path = "%_0 50 m\n%_0 0 L\n%_200 0 L\n%_200 100 L\n%_100 100 L\n%_100 50 L\n%_N\n";
+    let look = "0 G\n2 w\n0 50 m\n0 0 l\n200 0 l\n200 100 l\n100 100 l\n100 54 l\nS\n0 g\n97 56 m\n100 50 l\n103 56 l\nf\n";
+    let line = format!("0 Ae\nu\n{look}U\n{path}1 (Arrowed) XW\n");
+    let file = format!(
+        "{}{}{}",
+        symbols(&symbol("Wedge", WEDGE_ART, 5)),
+        styles_and_list(&[arrow_style("Arrowed", END_WEDGE, 2.0)], &["Arrowed"]),
+        layer(&line)
+    );
+    let r = read_ok(&file);
+    let a = art(&r.doc);
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?} {a:#?}", r.warnings);
+    assert!(!matches!(a[0].kind, NodeKind::Path { .. }), "the look, not the object");
+}
+
+#[test]
 fn an_arrowhead_entry_without_heads_leaves_the_stroke_read() {
     // Only beside heads does an arrowhead entry this doesn't read keep the drawn look.
     let r = read_ok(&arrowed_file(WEDGE_ART, "1 /Int (BSArrowSomethingElse) ,\n", 2.0, "0 G\n2 w\n0 50 m\n100 50 l\nS\n"));

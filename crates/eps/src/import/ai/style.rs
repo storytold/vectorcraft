@@ -1557,7 +1557,14 @@ fn symbol_entry(lex: &mut Lexer, operands: &mut Vec<V>, other_entry: &mut Option
     let symbol = operands.iter().rev().find_map(|v| names.text(v));
     (*other_entry, *operands) = (None, vec![]);
     let at = lex.offset();
-    let (close, key) = (lex.next_token().map(|t| t.tok), lex.next_token().map(|t| t.tok));
+    // A comment line is no part of the entry.
+    let mut next = || loop {
+        match lex.next_token().map(|t| t.tok) {
+            Some(Tok::Comment(_)) => continue,
+            tok => return tok,
+        }
+    };
+    let (close, key) = (next(), next());
     // Anything else is read as it comes (a `/KnownStyle` starting the next style, say).
     let (Some(Tok::Word(b";")), Some(Tok::Str(key))) = (close, key) else {
         lex.seek(at);

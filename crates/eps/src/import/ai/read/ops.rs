@@ -1406,7 +1406,8 @@ fn painted_bounds(object: &Node, appearance: &Appearance) -> Option<Rect> {
 /// the path, or past them by the line's length under each head (Extend), whichever gives the
 /// object the look's bounds within a quarter of the least distance a head moves between the two
 /// (at least 0.05 pt, at most 0.5 pt). `None`
-/// when neither does: the file draws the heads elsewhere (on other subpaths, say).
+/// when neither does (the file draws the heads elsewhere: on other subpaths, say), or when both do
+/// and the heads move 0.2 pt or more between them (the bounds can't tell which the file draws).
 fn heads_placed(object: &Node, look: &Node, mut appearance: Appearance, space: Affine) -> Option<Appearance> {
     let k = space.determinant().abs().sqrt();
     let k = if k.is_finite() && k > 0.0 { k } else { 1.0 };
@@ -1427,6 +1428,7 @@ fn heads_placed(object: &Node, look: &Node, mut appearance: Appearance, space: A
     // Well under the distance between the placements, and under half a point: a look without
     // those heads, or with them elsewhere, is off by more.
     let tolerance = (shift / 4.0).clamp(0.05, 0.5);
+    let mut fits = vec![];
     for align in [ArrowAlign::Tip, ArrowAlign::Extend] {
         for item in &mut appearance.items {
             if let AppearanceItem::Stroke(s) = item {
@@ -1438,10 +1440,22 @@ fn heads_placed(object: &Node, look: &Node, mut appearance: Appearance, space: A
         let got = painted_bounds(object, &scaled)?;
         let off = [got.x0 - want.x0, got.y0 - want.y0, got.x1 - want.x1, got.y1 - want.y1].iter().fold(0.0f64, |m, d| m.max(d.abs()));
         if off <= tolerance {
-            return Some(appearance);
+            fits.push(align);
         }
     }
-    None
+    // Both fit when the bounds can't tell the placements apart (the end inside the bounds of the
+    // line's other segments), unless the heads move so little that either draws alike.
+    let align = match fits.as_slice() {
+        [one] => *one,
+        [first, _] if shift < 0.2 => *first,
+        _ => return None,
+    };
+    for item in &mut appearance.items {
+        if let AppearanceItem::Stroke(s) = item {
+            s.arrow_align = align;
+        }
+    }
+    Some(appearance)
 }
 
 /// A graphic style's appearance from art style `st`, on no object: `None` when the style isn't one

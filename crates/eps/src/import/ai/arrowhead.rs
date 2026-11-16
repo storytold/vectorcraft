@@ -20,15 +20,16 @@ const MAX_DEPTH: usize = 16;
 
 /// The head that symbol art `art` (in the document's symbol space) draws, named `name`. `None` when
 /// the art doesn't have exactly one sample of the line, its sample isn't 1 pt wide, it holds
-/// anything but paths, compound paths and groups (a clip group, say), has an effect, a brush or a
-/// group with fills or strokes of its own, paints no head, or is too detailed for one; or when the
+/// anything but paths, compound paths and groups (a clip group, say), has an effect, a brush, an
+/// opacity mask, partial opacity or a group with fills or strokes of its own, paints no head, or is
+/// too detailed for one; or when the
 /// line would stop past the head's tip or farther back than a head can reach
 /// ([`CustomArrowhead::MAX_UNITS`]).
 pub(super) fn head(name: &str, art: &Node) -> Option<CustomArrowhead> {
     let mut parts = Parts::default();
     match &art.kind {
         // The members of the symbol's group are its art's top level, where the sample is.
-        NodeKind::Group { children, clip: false } if art.visible && !paints(art) && art.appearance.effects.is_empty() => {
+        NodeKind::Group { children, clip: false } if art.visible && plain(art) && !paints(art) => {
             for c in children {
                 parts.member(c, true, 1)?;
             }
@@ -70,7 +71,7 @@ impl Parts {
         if !n.visible || n.opacity <= 0.0 {
             return Some(());
         }
-        if !n.appearance.effects.is_empty() {
+        if !plain(n) {
             return None;
         }
         match &n.kind {
@@ -102,13 +103,13 @@ impl Parts {
         for item in &n.appearance.items {
             match item {
                 AppearanceItem::Fill(f) if f.visible && f.opacity > 0.0 && !f.paint.is_none() => {
-                    if !f.effects.is_empty() {
+                    if !f.effects.is_empty() || f.opacity < 1.0 {
                         return None;
                     }
                     filled = true;
                 }
                 AppearanceItem::Stroke(s) if s.visible && s.opacity > 0.0 && !s.paint.is_none() && s.width > 0.0 => {
-                    if !s.effects.is_empty() || s.brush.is_some() {
+                    if !s.effects.is_empty() || s.brush.is_some() || s.opacity < 1.0 {
                         return None;
                     }
                     strokes.push(s);
@@ -149,6 +150,12 @@ impl Parts {
     }
 }
 
+/// Does `n` draw as its shapes alone: fully opaque, with no effects and no opacity mask applied?
+/// A head is one opaque shape, so partly transparent or masked art isn't read as one.
+fn plain(n: &Node) -> bool {
+    n.opacity >= 1.0 && n.appearance.effects.is_empty() && n.extras().mask.as_ref().is_none_or(|m| m.disabled)
+}
+
 /// Does `n` (a group) have fills or strokes of its own that paint?
 fn paints(n: &Node) -> bool {
     n.appearance.items.iter().any(|i| match i {
@@ -171,4 +178,67 @@ fn sample_line(path: &PathData) -> Option<(f64, f64)> {
         return None;
     }
     Some((y, sub.anchors.iter().map(|a| a.p.x).fold(f64::NEG_INFINITY, f64::max)))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::{Appearance, Node, NodeId, OpacityMask};
+    use vectorcraft_geom::{PathData, Point, SubPath};
+
+    use super::head;
+
+    fn path(id: u64, points: &[(f64, f64)], closed: bool, appearance: Appearance) -> Arc<Node> {
+        let points: Vec<Point> = points.iter().map(|(x, y)| Point::new(*x, *y)).collect();
+        Arc::new(Node::path(NodeId(id), PathData::single(SubPath::polyline(&points, closed)), appearance))
+    }
+
+    /// A 1 pt sample of the line from x = −9 to 4 on y = 0.
+    fn sample() -> Arc<Node> {
+        path(1, &[(-9.0, 0.0), (4.0, 0.0)], false, Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0))
+    }
+
+    /// A filled wedge from x = 2 back to its tip at x = 8, 3 either side.
+    fn wedge() -> Arc<Node> {
+        path(2, &[(2.0, -3.0), (8.0, 0.0), (2.0, 3.0)], true, Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 1.0))
+    }
+
+    fn art(members: Vec<Arc<Node>>) -> Node {
+        Node::group(NodeId(10), members)
+    }
+
+    #[test]
+    fn a_wedge_and_its_sample_make_a_head() {
+        let h = head("W", &art(vec![sample(), wedge()])).expect("a head");
+        assert_eq!(h.stop(), 4.0);
+    }
+
+    #[test]
+    fn partly_transparent_or_masked_art_makes_no_head() {
+        // The head would come in opaque and whole, with the bounds of the art.
+        let half = |n: Arc<Node>| Arc::new(Node { opacity: 0.5, ..(*n).clone() });
+        let mut faint_fill = (*wedge()).clone();
+        let mut ap = (*faint_fill.appearance).clone();
+        if let Some(f) = ap.fill_mut() {
+            f.opacity = 0.5;
+        }
+        faint_fill.appearance = ap.into();
+        let mut masked = (*wedge()).clone();
+        masked.extras_mut().mask = Some(Box::new(OpacityMask { art: sample(), clip: true, invert: false, disabled: false, linked: true }));
+        let cases = [
+            ("a head at half opacity", art(vec![sample(), half(wedge())])),
+            ("a fill at half opacity", art(vec![sample(), Arc::new(faint_fill)])),
+            ("a group at half opacity", art(vec![sample(), half(Arc::new(art(vec![wedge()])))])),
+            ("the art at half opacity", Node { opacity: 0.5, ..art(vec![sample(), wedge()]) }),
+            ("a head with an opacity mask", art(vec![sample(), Arc::new(masked.clone())])),
+        ];
+        for (why, a) in cases {
+            assert!(head("W", &a).is_none(), "{why}");
+        }
+        // A disabled mask isn't applied.
+        masked.extras_mut().mask.as_mut().unwrap().disabled = true;
+        assert!(head("W", &art(vec![sample(), Arc::new(masked)])).is_some());
+    }
 }

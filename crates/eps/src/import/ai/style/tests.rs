@@ -1604,3 +1604,15 @@ fn a_symbol_entry_cut_short_leaves_the_next_style_read() {
     assert!(styles.contains_key("Cut") && styles.contains_key("Next"), "{:?}", styles.keys().collect::<Vec<_>>());
     assert!(matches!(styles["Next"].items.as_slice(), [StyleItem::Stroke { arrows: None, .. }]), "{:?}", styles["Next"].items);
 }
+
+/// A comment line inside a `/SymbolArt` entry is skipped: the entry is still read.
+#[test]
+fn a_comment_inside_a_symbol_entry_is_skipped() {
+    let text = "/KnownStyle :\n(Arrowed) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+                /GObjRef : (W) /SymbolArt\n%a comment\n; (BSArrowEndSymbol) ,\n\
+                /StrokeStyle : 0 R\n0 0 0 1 0 0 0 XA\n0 J 0 j 1 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n";
+    let styles = art_styles(text.as_bytes());
+    let [StyleItem::Stroke { arrows: Some(arrows), .. }] = styles["Arrowed"].items.as_slice() else { panic!("{:?}", styles["Arrowed"].items) };
+    assert_eq!(arrows.end, Some(("W".to_string(), 100.0)));
+}
