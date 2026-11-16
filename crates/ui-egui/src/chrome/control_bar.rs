@@ -950,26 +950,26 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
             snapping_menu(app, ui);
         }
         let Some(st) = app.session.active() else { return };
-        let sel = st.selection.objects.clone();
+        let count = st.selection.objects.len();
         let units = app.session.general_unit();
-        let first = sel.first().and_then(|id| st.doc.node(*id));
+        let first = st.selection.objects.first().and_then(|id| st.doc.node(*id));
         let anchors = anchor_controls(app);
         let label = match first {
             _ if app.session.tool_id() == "artboard" => tl!("Artboard"),
-            Some(_) if sel.len() == 1 && anchors != AnchorControls::None => {
+            Some(_) if count == 1 && anchors != AnchorControls::None => {
                 tl!("Anchor Point")
             }
-            Some(vectorcraft_doc::Node { kind: NodeKind::Image(im), .. }) if sel.len() == 1 => {
+            Some(vectorcraft_doc::Node { kind: NodeKind::Image(im), .. }) if count == 1 => {
                 if im.link.is_some() {
                     tl!("Linked File")
                 } else {
                     tl!("Embedded")
                 }
             }
-            Some(n) if sel.len() == 1 && crate::panels::image_trace::is_trace(n) => {
+            Some(n) if count == 1 && crate::panels::image_trace::is_trace(n) => {
                 tl!("Image Tracing")
             }
-            _ => tl!(crate::panels::appearance::object_label(app)),
+            _ => tl!(crate::panels::appearance::summary(app, ui.ctx()).map_or("No Selection", |s| s.label)),
         };
         let has_first = first.is_some();
         let label = egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text);
@@ -996,7 +996,7 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         if ui.available_width() >= 6.0 {
             ui.add_space(6.0);
         }
-        let reserve = transform_reserve(app, ui, !sel.is_empty());
+        let reserve = transform_reserve(app, ui, count > 0);
         // An image or an Image Trace object shows its own controls in place of Fill and Stroke,
         // and leaves Fill and Stroke out while the Image Options group is off too. These groups,
         // the tool options, the envelope's and the symbol instances' each show a control only while
@@ -1017,11 +1017,11 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         if !image && group_on(app, "fillStroke") {
             fill_and_stroke(app, ui, reserve);
         }
-        opacity_and_style(app, ui, t, opacity, !sel.is_empty(), reserve);
+        opacity_and_style(app, ui, t, opacity, count > 0, reserve);
         // The Character group shows whole, with the Transform link's room left after it, or not at
         // all; left out, it leaves out the groups between it and the link too.
         let room = !group_on(app, "character") || crate::panels::character::control_bar(app, ui, reserve);
-        if !groups_before_transform(app, ui, sel.len(), room) {
+        if !groups_before_transform(app, ui, count, room) {
             // With the Transform group off, its link and X/Y/W/H fields take no room.
             trailing_select_similar(app, ui);
             erase_trailing(ui);
