@@ -66,8 +66,8 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 /// grid options lists one, and the radial and mirror pages do not. Type on a Path Options does
 /// too (#5360), as public tutorials of the dialog show, and Type Tools › Release Type on a Path
 /// works the same way (#5532), and so do Image Tools › Remove Background and Color Mask and
-/// Cutting Tools › Weed Box and Lines, Banner Hems and Grommets and Nest Shapes. (Cancel rolls a
-/// preview back whichever dialog started it.)
+/// Cutting Tools › Weed Box and Lines, Banner Hems and Grommets and Nest Shapes, and Path
+/// Precision Tools › Common Tangents. (Cancel rolls a preview back whichever dialog started it.)
 fn previews(d: &Dialog) -> bool {
     match d.str("__command").as_str() {
         "object.repeat.options" => d.fields.contains_key("gridType"),
@@ -77,7 +77,8 @@ fn previews(d: &Dialog) -> bool {
         | crate::addons::image::COLOR_MASK
         | crate::addons::cutting::WEED
         | crate::addons::cutting::BANNER
-        | crate::addons::cutting::NEST => true,
+        | crate::addons::cutting::NEST
+        | crate::addons::pathtools::COMMON_TANGENTS => true,
         _ => false,
     }
 }
@@ -163,6 +164,7 @@ fn order(command: &str) -> &'static [&'static str] {
         }
         crate::addons::cutting::BRIDGES => &["width", "count", "direction", "keepOriginal"],
         crate::addons::packaging::SET_ROLE_SWATCH => &["role", "swatch"],
+        crate::addons::pathtools::COMMON_TANGENTS => &["tangents", "centerline"],
         _ => &[],
     }
 }
@@ -179,6 +181,7 @@ fn choices(command: &str, key: &str) -> Option<form::Choices> {
         ("text.areaOptions", "firstBaseline") => Some(FIRST_BASELINE),
         ("text.areaOptions", "verticalAlign") => Some(VERTICAL_ALIGN),
         (crate::addons::cutting::WEED, "direction") => Some(crate::addons::cutting::WEED_DIRECTIONS),
+        (crate::addons::pathtools::COMMON_TANGENTS, "tangents") => Some(crate::addons::pathtools::TANGENT_KINDS),
         (crate::addons::image::REMOVE_BACKGROUND | crate::addons::image::COLOR_MASK, "background") => Some(crate::addons::image::BACKGROUNDS),
         (crate::addons::image::REMOVE_BACKGROUND | crate::addons::image::COLOR_MASK, "match") => Some(crate::addons::image::MATCHES),
         _ => None,
@@ -382,7 +385,8 @@ mod tests {
             Some(NodeKind::Image(i)) => Some(i.key.clone()),
             _ => None,
         });
-        let img = image::load_from_memory(&st.doc.images[&key.expect("the rectangle became an image")].bytes).unwrap().to_rgba8();
+        let decoded = craft_image_codecs::decode(&st.doc.images[&key.expect("the rectangle became an image")].bytes).unwrap();
+        let img = image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap();
         let p = img.get_pixel(img.width() / 2, img.height() / 2).0;
         assert!(p[0] == p[1] && p[1] == p[2] && p[0] < 128, "red in grayscale: {p:?}");
     }

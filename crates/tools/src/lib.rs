@@ -34,6 +34,7 @@ pub mod pie;
 pub mod place;
 pub mod printtiling;
 pub mod repeat_grid;
+pub mod repeat_radial;
 pub mod rulerguide;
 pub mod select;
 pub mod settings;
@@ -73,10 +74,13 @@ pub enum Overlay {
     SelectionMarquee { rect: Rect, enclosed: bool, pointer: Point },
     /// A path preview (e.g. pen rubber band) in a colour (RGB).
     Path { path: BezPath, color: [u8; 3], width: f32, dashed: bool },
-    /// A solid path preview that later calls return again, as the same shared `path`, for as long
-    /// as it does not change (the settled outline of a long Blob Brush or Eraser drag). The host
-    /// can keep what it built to draw it while `path` is the same allocation.
-    SharedPath { path: std::sync::Arc<BezPath>, color: [u8; 3], width: f32 },
+    /// A path preview that later calls return again, as the same shared `path`, for as long as it
+    /// does not change (the settled outline of a long Blob Brush or Eraser drag, the pieces of a long
+    /// drag's line). The host can keep what it built to draw it while `path` is the same allocation.
+    /// With `dash`, it is dashed as a dashed [`Overlay::Path`] is, from `dash` document units along
+    /// the dash pattern: the pieces of one line, each starting where the one before it ends, dash
+    /// as the whole line does.
+    SharedPath { path: std::sync::Arc<BezPath>, color: [u8; 3], width: f32, dash: Option<f64> },
     /// A line segment (smart guide, handle line).
     Line { a: Point, b: Point, color: [u8; 3], dashed: bool },
     /// An anchor square: filled = selected.
@@ -683,6 +687,7 @@ mod cursor_tests {
         for (id, c) in [
             ("lasso", Cursor::Lasso),
             (addons::enclosing_lasso::ID, Cursor::Lasso),
+            (addons::polygonal_lasso::ID, Cursor::Lasso),
             ("magicWand", Cursor::MagicWand),
             ("paintbrush", Cursor::Paintbrush),
             ("blobBrush", Cursor::BlobBrush),
