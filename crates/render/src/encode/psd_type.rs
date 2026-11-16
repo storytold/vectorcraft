@@ -399,7 +399,7 @@ fn engine_data(t: &TextObject, px: f64, aa: TypeAntiAlias) -> Vec<u8> {
         (
             "Cookie",
             E::Dict(vec![(
-                "Photoshop",
+                "Photoshop", // brand-ok: the key's name in the files
                 E::Dict(vec![
                     ("ShapeType", E::Int(0)),
                     ("PointBase", point(0.0, 0.0)),
