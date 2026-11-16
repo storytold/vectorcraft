@@ -13381,7 +13381,8 @@ fn filled_paths(nodes: &[Arc<Node>], out: &mut Vec<(Rect, Color)>) {
 /// Meshes the reader wouldn't read back as they are, and meshes in places where the writer doesn't
 /// write them as meshes, are written as their drawn look, with a warning: a point in a Lab color;
 /// more than 128 rows (129); more than 128 columns (129); a mesh whose points all lie in one place
-/// (the reader takes its rows for columns); a folded mesh, whose patches turn different ways; a mesh
+/// (the reader takes its rows for columns); a folded mesh, whose patches turn different ways; a
+/// patch folded at one corner, by a point dragged across it or by handles that cross; a mesh
 /// in art cut to a clipping object; and a mesh on a large canvas. The drawn look reads back as
 /// filled paths in more than one color covering the mesh's box, and no mesh.
 #[test]
@@ -13415,6 +13416,33 @@ fn meshes_the_reader_cant_read_are_written_as_their_drawn_look() {
                 for p in &mut m.points {
                     p.handles = [vectorcraft_geom::Vec2::ZERO; 4];
                 }
+                mesh_node(doc, m)
+            }),
+        ),
+        (
+            "folded at a corner",
+            mesh_document(|doc| {
+                let mut m = grid_mesh(r, 1, 1, |_, c| Color::rgb(0.5 * c as f32, 0.0, 0.0));
+                // The bottom right point is dragged across the patch's diagonal; its top left corner
+                // still turns as before.
+                m.points[3].p = vectorcraft_geom::Point::new(30.0, 30.0);
+                for p in &mut m.points {
+                    p.handles = [vectorcraft_geom::Vec2::ZERO; 4];
+                }
+                mesh_node(doc, m)
+            }),
+        ),
+        (
+            "handles crossed",
+            mesh_document(|doc| {
+                let mut m = grid_mesh(r, 1, 1, |_, c| Color::rgb(0.5 * c as f32, 0.0, 0.0));
+                // The top left point's handles cross inside the patch: the one towards the point
+                // below leans right of the one towards the point beside it. The corners stay put.
+                for p in &mut m.points {
+                    p.handles = [vectorcraft_geom::Vec2::ZERO; 4];
+                }
+                m.points[0].handles[vectorcraft_doc::live::H_DOWN] = vectorcraft_geom::Vec2::new(30.0, 10.0);
+                m.points[0].handles[vectorcraft_doc::live::H_RIGHT] = vectorcraft_geom::Vec2::new(10.0, 30.0);
                 mesh_node(doc, m)
             }),
         ),
@@ -13501,6 +13529,21 @@ fn a_reflected_mesh_is_written_with_its_columns_reversed() {
             })
             .collect();
         assert_mesh_exact(mesh_of(&back[0]), &want, name);
+        // It draws the same mesh: each patch's points and opacity, sampled across it, are where they
+        // were, in the patch at the other end of its row with u running the other way.
+        let got = mesh_of(&back[0]);
+        let cols = m.cols as usize;
+        let steps = [0.0, 0.25, 0.5, 0.75, 1.0];
+        for r in 0..m.rows as usize {
+            for c in 0..cols {
+                for (u, v) in steps.iter().flat_map(|u| steps.iter().map(move |v| (*u, *v))) {
+                    let (a, b) = (m.eval(r, c, u, v), got.eval(r, cols - 1 - c, 1.0 - u, v));
+                    assert!((a - b).hypot() < 1e-3, "{name}: patch ({r}, {c}) at ({u}, {v}): {a:?} read back as {b:?}");
+                    let (oa, ob) = (m.color_at(r, c, u, v).1, got.color_at(r, cols - 1 - c, 1.0 - u, v).1);
+                    assert!((oa - ob).abs() < 1e-3, "{name}: patch ({r}, {c}) at ({u}, {v}): opacity {oa} read back as {ob}");
+                }
+            }
+        }
     }
 }
 

@@ -5285,6 +5285,29 @@ fn a_mesh_in_a_symbols_art_is_placed_from_the_canvas() {
 }
 
 #[test]
+fn an_envelope_in_a_symbols_art_is_read_from_the_canvas() {
+    // An envelope's grid in a symbol's art is read in the space a gradient mesh's corners are read
+    // in there. A grid and contents written in the symbol's own space, as earlier VectorCraft builds
+    // wrote them, don't meet there: the envelope opens as the art it draws.
+    let drawn = format!("{RED}{}f\n", rect_path(30.0, 10.0, 170.0, 90.0));
+    let env = envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &drawn);
+    let doc = read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&symbol("Bent", &env, 5)), layer(""))).doc;
+    assert_eq!(doc.symbols.len(), 1);
+    let mut envelopes = 0;
+    doc.symbols[0].art.walk(&mut |n| envelopes += usize::from(matches!(n.kind, NodeKind::Envelope { .. })));
+    assert_eq!(envelopes, 0, "{:?}", doc.symbols[0].art);
+    let mut paths = 0;
+    doc.symbols[0].art.walk(&mut |n| paths += usize::from(matches!(n.kind, NodeKind::Path { .. })));
+    assert!(paths > 0, "{:?}", doc.symbols[0].art);
+    // Without a template box the grid can't be placed, as a gradient mesh there can't: the symbol
+    // isn't read whole and its instance comes in as the page draws it.
+    let group = format!("0 Ae\nu\n{}{RED}{}f\nU\n", instance("Bent", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]), rect_path(10.0, 0.0, 14.0, 4.0));
+    let r = read_ok(&(symbols(&symbol("Bent", &env, 5)) + &layer(&group)));
+    assert!(r.doc.symbols.is_empty(), "{:?}", r.doc.symbols.iter().map(|s| &s.name).collect::<Vec<_>>());
+    assert!(!r.unread.is_empty(), "{:?}", r.warnings);
+}
+
+#[test]
 fn an_instance_keeps_its_hide_lock_transparency_and_clip() {
     let m = [1.0, 0.0, 0.0, -1.0, 20.0, 50.0];
     let art_ = format!(

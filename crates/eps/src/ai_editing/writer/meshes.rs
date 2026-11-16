@@ -14,11 +14,13 @@
 //! (`0 XR`, `Xy`), its name and opacity mask follow `/End X!` in an `/ArtDictionary`, then `0 0 Xd`
 //! and `6 () XW`.
 //!
-//! Each mesh is checked with the reader's own reading ([`crate::import::mesh_reads`]) before it is
-//! written: one the reader would read otherwise is written as its drawn look, as are folded meshes
-//! (patches that turn different ways, or a patch with no area), meshes in pattern tiles and in art
-//! cut to a clipping object, and every mesh on a large canvas. A reflected mesh, whose patches all
-//! turn the negative way, is written with its columns in reverse order.
+//! Each record is read back with the reader's mesh reading ([`crate::import::mesh_reads`], the
+//! patches and how they join; not the rest of the `.ai` reader) before it is written: a mesh it
+//! would read otherwise is written as its drawn look, as are folded meshes (patches whose corners
+//! turn different ways, along the handles there, or a corner with no angle), meshes in pattern
+//! tiles and in art cut to a clipping object, and every mesh on a large canvas. A reflected mesh,
+//! whose patches all turn the negative way, is written with its columns in reverse order: it draws
+//! the same patches, and reads back with each row's points in reverse order.
 
 use std::fmt::Write;
 
@@ -128,24 +130,38 @@ impl Writer<'_> {
     }
 }
 
-/// Which way every patch of `m` turns where `to_art` takes it, from its top left point to the one
-/// below it then to the one beside it, y up: `Some(true)` when all turn anticlockwise,
-/// `Some(false)` when all turn clockwise, and `None` when they differ or one has no area.
+/// Which way every patch of `m` turns where `to_art` takes it, at each of its four corners, from
+/// its top left point to the one below it, then right and up, y up: `Some(true)` when all turn
+/// anticlockwise, `Some(false)` when all turn clockwise, and `None` when they differ (a patch
+/// folded across itself, or patches folded over each other) or a corner has no angle. Each corner
+/// is measured twice: along the straight lines to the next corners, and along its handles (towards
+/// the next corners where a handle is zero), where the patch's edges leave it.
 fn turns(m: &GradientMesh, to_art: Affine) -> Option<bool> {
     let (rows, cols) = (m.rows as usize, m.cols as usize);
-    let at = |r: usize, c: usize| m.points.get(r * (cols + 1) + c).map(|p| to_art * p.p);
+    let at = |r: usize, c: usize| m.points.get(r * (cols + 1) + c);
     let mut way = None;
     for r in 0..rows {
         for c in 0..cols {
-            let (a, b, d) = (at(r, c)?, at(r + 1, c)?, at(r, c + 1)?);
-            let cross = (b - a).cross(d - a);
-            let positive = match cross {
-                x if x > 0.0 => true,
-                x if x < 0.0 => false,
-                _ => return None,
-            };
-            if *way.get_or_insert(positive) != positive {
-                return None;
+            // Each corner with the slots of its handles towards the next corner and the one before it.
+            let corners =
+                [(at(r, c)?, H_DOWN, H_RIGHT), (at(r + 1, c)?, H_RIGHT, H_UP), (at(r + 1, c + 1)?, H_UP, H_LEFT), (at(r, c + 1)?, H_LEFT, H_DOWN)];
+            for i in 0..4 {
+                let (before, (here, next, prev), after) = (corners[(i + 3) % 4].0, corners[i], corners[(i + 1) % 4].0);
+                let line = |to: &MeshPoint| to_art * to.p - to_art * here.p;
+                let along = |h: usize, to: &MeshPoint| -> Option<Vec2> {
+                    let h = *here.handles.get(h)?;
+                    Some(if h == Vec2::ZERO { line(to) } else { to_art * (here.p + h) - to_art * here.p })
+                };
+                for cross in [line(after).cross(line(before)), along(next, after)?.cross(along(prev, before)?)] {
+                    let positive = match cross {
+                        x if x > 0.0 => true,
+                        x if x < 0.0 => false,
+                        _ => return None,
+                    };
+                    if *way.get_or_insert(positive) != positive {
+                        return None;
+                    }
+                }
             }
         }
     }
