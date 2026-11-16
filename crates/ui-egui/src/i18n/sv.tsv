@@ -809,6 +809,7 @@ font-technology	Variable	Variabla
 	Duplicate Action or Action Set	Duplicera åtgärd eller åtgärdsuppsättning
 	Delete the action set “{name}” and its actions?	Radera åtgärdsuppsättningen ”{name}” och dess åtgärder?
 	Delete the selected action sets and their actions?	Radera de markerade åtgärdsuppsättningarna och deras åtgärder?
+	Delete all action sets and their actions?	Radera alla åtgärdsuppsättningar och deras åtgärder?
 	Delete Theme	Radera tema
 	Delete theme	Radera tema
 	Delete these {n} graphic styles?	Radera dessa {n} grafikstilar?
@@ -2594,6 +2595,7 @@ font-technology	Variable	Variabla
 	Save Actions…	Spara åtgärder…
 	Load Actions…	Läs in åtgärder…
 	Replace Actions…	Ersätt åtgärder…
+	Clear Actions	Rensa åtgärder
 	Reset Actions	Återställ åtgärder
 	Replace the current actions with the default set?	Vill du ersätta de aktuella åtgärderna med standarduppsättningen?
 	Append adds the default set after the current sets instead.	Lägg till lägger i stället till standarduppsättningen efter de aktuella uppsättningarna.

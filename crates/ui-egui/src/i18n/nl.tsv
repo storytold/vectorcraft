@@ -1999,6 +1999,7 @@ lighting	Light	Licht
 	Save Actions…	Acties opslaan…
 	Load Actions…	Acties laden…
 	Replace Actions…	Acties vervangen…
+	Clear Actions	Acties wissen
 	Reset Actions	Acties opnieuw instellen
 	Replace the current actions with the default set?	De huidige acties vervangen door de standaardset?
 	Append adds the default set after the current sets instead.	Toevoegen voegt in plaats daarvan de standaardset toe na de huidige sets.
@@ -2343,6 +2344,7 @@ digits	Malayalam	Malayalam
 	Duplicate Action or Action Set	Actie of actieset dupliceren
 	Delete the action set “{name}” and its actions?	De actieset „{name}” en de acties erin verwijderen?
 	Delete the selected action sets and their actions?	De geselecteerde actiesets en de acties erin verwijderen?
+	Delete all action sets and their actions?	Alle actiesets en de acties erin verwijderen?
 	Delete these {n} graphic styles?	Deze {n} grafische stijlen verwijderen?
 	Delete this {n} graphic style?	Deze {n} grafische stijl verwijderen?
 	Graphic Style Libraries Menu	Menu grafische stijlbibliotheken

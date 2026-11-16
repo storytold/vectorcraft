@@ -1532,6 +1532,7 @@ lighting	Light	Světlo
 	Save Actions…	Uložit akce…
 	Load Actions…	Načíst akce…
 	Replace Actions…	Nahradit akce…
+	Clear Actions	Vymazat akce
 	Reset Actions	Obnovit akce
 	Replace the current actions with the default set?	Nahradit aktuální akce výchozí sadou?
 	Append adds the default set after the current sets instead.	Tlačítko Připojit místo toho přidá výchozí sadu za aktuální sady.
@@ -1877,6 +1878,7 @@ digits	Malayalam	Malajálamské
 	Duplicate Action or Action Set	Duplikovat akci nebo sadu akcí
 	Delete the action set “{name}” and its actions?	Odstranit sadu akcí „{name}“ a její akce?
 	Delete the selected action sets and their actions?	Odstranit vybrané sady akcí a jejich akce?
+	Delete all action sets and their actions?	Odstranit všechny sady akcí a jejich akce?
 	Delete these {n} graphic styles?	Odstranit tyto grafické styly ({n})?
 	Delete this {n} graphic style?	Odstranit tento grafický styl ({n})?
 	Graphic Style Libraries Menu	Nabídka knihoven grafických stylů

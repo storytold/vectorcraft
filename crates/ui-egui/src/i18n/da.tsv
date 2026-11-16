@@ -4105,6 +4105,7 @@ lighting	Light	Lys
 	Save Actions…	Gem handlinger…
 	Load Actions…	Indlæs handlinger…
 	Replace Actions…	Erstat handlinger…
+	Clear Actions	Ryd handlinger
 	Reset Actions	Nulstil handlinger
 	Replace the current actions with the default set?	Vil du erstatte de aktuelle handlinger med standardsættet?
 	Append adds the default set after the current sets instead.	Tilføj tilføjer i stedet standardsættet efter de aktuelle sæt.
@@ -4449,6 +4450,7 @@ digits	Malayalam	Malayalam
 	Duplicate Action or Action Set	Duplikér handling eller handlingssæt
 	Delete the action set “{name}” and its actions?	Slet handlingssættet »{name}« og dets handlinger?
 	Delete the selected action sets and their actions?	Slet de markerede handlingssæt og deres handlinger?
+	Delete all action sets and their actions?	Slet alle handlingssæt og deres handlinger?
 	Delete these {n} graphic styles?	Slet disse {n} grafiske typografier?
 	Delete this {n} graphic style?	Slet denne {n} grafiske typografi?
 	Graphic Style Libraries Menu	Menu med biblioteker af grafiske typografier

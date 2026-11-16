@@ -1330,6 +1330,7 @@ antiAlias	Sharp	शार्प
 	Delete the graphic style “{name}”?	ग्राफिक स्टाइल "{name}" को हटा दें?
 	Delete the library “{name}”?	लाइब्रेरी "{name}" को हटा दें?
 	Delete the selected action sets and their actions?	सिलेक्टेड कार्रवाई सेट और उनके कार्यों को हटा दें?
+	Delete all action sets and their actions?	सभी कार्रवाई सेट और उनके कार्यों को हटा दें?
 	Delete the selected brushes?	सिलेक्टेड ब्रश को हटा दें?
 	Delete the selected symbol?	सिलेक्टेड सिंबल हटाएँ?
 	Delete the selected symbols?	सिलेक्टेड सिंबल्स हटाएँ?
@@ -2758,6 +2759,7 @@ antiAlias	Sharp	शार्प
 	Live Shape Properties	लाइव शेप प्रॉपर्टीज़
 	Load Actions…	एक्शन्स लोड करें…
 	Replace Actions…	एक्शन्स रिप्लेस करें…
+	Clear Actions	एक्शन्स क्लियर करें
 	Reset Actions	एक्शन्स रीसेट करें
 	Replace the current actions with the default set?	मौजूदा एक्शन्स को डिफ़ॉल्ट सेट से बदलें?
 	Append adds the default set after the current sets instead.	जोड़ें इसके बजाय डिफ़ॉल्ट सेट को मौजूदा सेट के बाद जोड़ता है।

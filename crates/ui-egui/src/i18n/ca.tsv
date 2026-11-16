@@ -1174,6 +1174,7 @@ antiAlias	Sharp	Nítid
 	Duplicate Action or Action Set	Duplica l’acció o el conjunt d’accions
 	Delete the action set “{name}” and its actions?	Voleu suprimir el conjunt d’accions “{name}” i les seves accions?
 	Delete the selected action sets and their actions?	Voleu suprimir els conjunts d’accions seleccionats i les seves accions?
+	Delete all action sets and their actions?	Voleu suprimir tots els conjunts d’accions i les seves accions?
 	Delete the library “{name}”?	Voleu suprimir la biblioteca “{name}”?
 	Delete Theme	Suprimeix el tema
 	Delete theme	Suprimeix el tema
@@ -3333,6 +3334,7 @@ digits	Malayalam	Malaiàlam
 	Save Actions…	Desa les accions…
 	Load Actions…	Carrega accions…
 	Replace Actions…	Reemplaça les accions…
+	Clear Actions	Esborra les accions
 	Reset Actions	Restableix les accions
 	Replace the current actions with the default set?	Voleu reemplaçar les accions actuals pel conjunt predeterminat?
 	Append adds the default set after the current sets instead.	Amb Afegeix, el conjunt predeterminat s’afegeix després dels conjunts actuals.

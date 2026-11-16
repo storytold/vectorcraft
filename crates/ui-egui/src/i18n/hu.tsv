@@ -1055,6 +1055,7 @@ font-technology	Variable	Változó
 	Duplicate Action or Action Set	Művelet vagy műveletkészlet kettőzése
 	Delete the action set “{name}” and its actions?	Törlöd ezt a műveletkészletet és a műveleteit: „{name}”?
 	Delete the selected action sets and their actions?	Törlöd a kijelölt műveletkészleteket és a műveleteiket?
+	Delete all action sets and their actions?	Törlöd az összes műveletkészletet és a műveleteiket?
 	Delete the library “{name}”?	Törlöd ezt a könyvtárat: „{name}”?
 	Delete Theme	Téma törlése
 	Delete theme	Téma törlése
@@ -3210,6 +3211,7 @@ diagnostics	ui	felület
 	Save Actions…	Műveletek mentése…
 	Load Actions…	Műveletek betöltése…
 	Replace Actions…	Műveletek cseréje…
+	Clear Actions	Műveletek törlése
 	Reset Actions	Műveletek visszaállítása
 	Replace the current actions with the default set?	Lecseréled az aktuális műveleteket az alapértelmezett készletre?
 	Append adds the default set after the current sets instead.	A Hozzáfűzés ehelyett az aktuális készletek után adja hozzá az alapértelmezett készletet.

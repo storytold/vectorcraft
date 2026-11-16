@@ -800,6 +800,7 @@ font-technology	Variable	Променливи
 	Duplicate Action or Action Set	Дублиране на действие или набор от действия
 	Delete the action set “{name}” and its actions?	Изтриване на набора от действия „{name}“ и неговите действия?
 	Delete the selected action sets and their actions?	Изтриване на избраните набори от действия и техните действия?
+	Delete all action sets and their actions?	Изтриване на всички набори от действия и техните действия?
 	Delete Theme	Изтриване на тема
 	Delete theme	Изтриване на тема
 	Delete these {n} graphic styles?	Изтриване на тези {n} графични стила?
@@ -2574,6 +2575,7 @@ font-technology	Variable	Променливи
 	Save Actions…	Запазване на действия…
 	Load Actions…	Зареждане на действия…
 	Replace Actions…	Замяна на действия…
+	Clear Actions	Изчистване на действия
 	Reset Actions	Нулиране на действия
 	Replace the current actions with the default set?	Да се заменят ли текущите действия с набора по подразбиране?
 	Append adds the default set after the current sets instead.	С „Добавяне“ наборът по подразбиране се добавя след текущите набори.

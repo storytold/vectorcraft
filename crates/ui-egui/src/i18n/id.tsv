@@ -1431,6 +1431,7 @@ lighting	Light	Cahaya
 	Save Actions…	Simpan tindakan…
 	Load Actions…	Muat tindakan…
 	Replace Actions…	Ganti tindakan…
+	Clear Actions	Bersihkan tindakan
 	Reset Actions	Atur ulang tindakan
 	Replace the current actions with the default set?	Ganti tindakan saat ini dengan set default?
 	Append adds the default set after the current sets instead.	Tambahkan justru menambahkan set default setelah set saat ini.
@@ -1733,6 +1734,7 @@ digits	Malayalam	Malayalam
 	Duplicate Action or Action Set	Duplikatkan tindakan atau set tindakan
 	Delete the action set “{name}” and its actions?	Hapus set tindakan “{name}” beserta tindakannya?
 	Delete the selected action sets and their actions?	Hapus set tindakan yang dipilih beserta tindakannya?
+	Delete all action sets and their actions?	Hapus semua set tindakan beserta tindakannya?
 	Delete these {n} graphic styles?	Hapus {n} gaya grafis ini?
 	Delete this {n} graphic style?	Hapus {n} gaya grafis ini?
 	Graphic Style Libraries Menu	Menu pustaka gaya grafis

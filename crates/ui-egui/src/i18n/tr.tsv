@@ -801,6 +801,7 @@ font-technology	Variable	Değişken
 	Duplicate Action or Action Set	Eylemi veya Eylem Setini Çoğalt
 	Delete the action set “{name}” and its actions?	“{name}” eylem seti ve eylemleri silinsin mi?
 	Delete the selected action sets and their actions?	Seçili eylem setleri ve eylemleri silinsin mi?
+	Delete all action sets and their actions?	Tüm eylem setleri ve eylemleri silinsin mi?
 	Delete Theme	Temayı Sil
 	Delete theme	Temayı sil
 	Delete these {n} graphic styles?	Bu {n} grafik stilleri silinsin mi?
@@ -2435,6 +2436,7 @@ shape	Open	Açık
 	Save Actions…	Eylemleri Kaydet…
 	Load Actions…	Eylemleri Yükle…
 	Replace Actions…	Eylemleri Değiştir…
+	Clear Actions	Eylemleri Temizle
 	Reset Actions	Eylemleri Sıfırla
 	Replace the current actions with the default set?	Geçerli eylemler varsayılan setle değiştirilsin mi?
 	Append adds the default set after the current sets instead.	Ekle bunun yerine varsayılan seti geçerli setlerin sonuna ekler.

@@ -1506,6 +1506,7 @@ lighting	Light	Valo
 	Save Actions…	Tallenna toiminnot…
 	Load Actions…	Lataa toiminnot…
 	Replace Actions…	Korvaa toiminnot…
+	Clear Actions	Tyhjennä toiminnot
 	Reset Actions	Palauta toiminnot
 	Replace the current actions with the default set?	Korvataanko nykyiset toiminnot oletussarjalla?
 	Append adds the default set after the current sets instead.	Lisää-painike lisää sen sijaan oletussarjan nykyisten sarjojen perään.
@@ -1850,6 +1851,7 @@ digits	Malayalam	Malajalam
 	Duplicate Action or Action Set	Monista toiminto tai toimintosarja
 	Delete the action set “{name}” and its actions?	Poistetaanko toimintosarja ”{name}” ja sen toiminnot?
 	Delete the selected action sets and their actions?	Poistetaanko valitut toimintosarjat ja niiden toiminnot?
+	Delete all action sets and their actions?	Poistetaanko kaikki toimintosarjat ja niiden toiminnot?
 	Delete these {n} graphic styles?	Poistetaanko nämä {n} grafiikkatyyliä?
 	Delete this {n} graphic style?	Poistetaanko tämä {n} grafiikkatyyli?
 	Graphic Style Libraries Menu	Grafiikkatyylikirjastojen valikko

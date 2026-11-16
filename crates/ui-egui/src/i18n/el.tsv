@@ -781,6 +781,7 @@ font-technology	Variable	Μεταβλητές
 	Duplicate Action or Action Set	Δημιουργία αντιγράφου ενέργειας ή συνόλου ενεργειών
 	Delete the action set “{name}” and its actions?	Να διαγραφεί το σύνολο ενεργειών «{name}» και οι ενέργειές του;
 	Delete the selected action sets and their actions?	Να διαγραφούν τα επιλεγμένα σύνολα ενεργειών και οι ενέργειές τους;
+	Delete all action sets and their actions?	Να διαγραφούν όλα τα σύνολα ενεργειών και οι ενέργειές τους;
 	Delete Theme	Διαγραφή θέματος
 	Delete theme	Διαγραφή θέματος
 	Delete these {n} graphic styles?	Να διαγραφούν αυτά τα {n} στυλ γραφικών;
@@ -3528,6 +3529,7 @@ theme	Appearance	Εμφάνιση
 	Save Actions…	Αποθήκευση ενεργειών…
 	Load Actions…	Φόρτωση ενεργειών…
 	Replace Actions…	Αντικατάσταση ενεργειών…
+	Clear Actions	Απαλοιφή ενεργειών
 	Reset Actions	Επαναφορά ενεργειών
 	Replace the current actions with the default set?	Να αντικατασταθούν οι τρέχουσες ενέργειες με το προεπιλεγμένο σύνολο;
 	Append adds the default set after the current sets instead.	Η Προσάρτηση προσθέτει αντί γι’ αυτό το προεπιλεγμένο σύνολο μετά τα τρέχοντα σύνολα.

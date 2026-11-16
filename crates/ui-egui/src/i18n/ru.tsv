@@ -820,6 +820,7 @@ font-technology	Variable	Вариативные
 	Duplicate Action or Action Set	Дублировать действие или набор действий
 	Delete the action set “{name}” and its actions?	Удалить набор действий «{name}» и его действия?
 	Delete the selected action sets and their actions?	Удалить выбранные наборы действий и их действия?
+	Delete all action sets and their actions?	Удалить все наборы действий и их действия?
 	Delete Theme	Удалить тему
 	Delete theme	Удалить тему
 	Delete these {n} graphic styles?	Удалить эти графические стили ({n})?
@@ -2690,6 +2691,7 @@ diagnostics	ui	интерфейс
 	Save Actions…	Сохранить действия…
 	Load Actions…	Загрузить действия…
 	Replace Actions…	Заменить действия…
+	Clear Actions	Очистить действия
 	Reset Actions	Сбросить действия
 	Replace the current actions with the default set?	Заменить текущие действия набором по умолчанию?
 	Append adds the default set after the current sets instead.	Кнопка «Добавить» вместо этого добавляет набор по умолчанию после текущих наборов.
