@@ -35,7 +35,7 @@ pub(super) use texts::wraps_held;
 
 pub(super) use images::PAYLOAD;
 #[cfg(test)]
-pub(super) use images::{IMAGE_DEPTH, IMAGES, LINKS_EMBEDDED};
+pub(super) use images::{IMAGE_DEPTH, IMAGES, LAST_SAMPLES_ONLY, LINKS_EMBEDDED, SAMPLE_LIMITS, SAMPLE_READS, SAMPLES_KEPT};
 #[cfg(test)]
 pub(super) use paints::{GRADIENT_HUE, GRADIENT_MIX, GRADIENT_SHAPES, GRADIENTS, STOP_LINKS, SWATCH_PLACEMENT, free_gradient_name};
 #[cfg(test)]
@@ -308,9 +308,9 @@ pub(super) struct Writer<'a> {
     /// How many more envelopes and images with a Warp may be written live: as many as the reader
     /// checks in one file ([`crate::import::ENVELOPE_CHECKS`]), which it spends on both.
     checks_left: usize,
-    /// The image read last and its pixels ([`images::Samples::of`], `None` when they can't be
-    /// read): the pieces of a warped image, which follow one another, read them once.
-    last_samples: Option<(vectorcraft_doc::ImageBlob, Option<images::Read>)>,
+    /// The images read so far and their pixels: an image placed again, and each piece of a warped
+    /// image, is read once.
+    read_samples: images::SampleCache,
     /// The images written whole so far, by the address of their data (which each entry keeps), each
     /// with the index of its samples in [`Self::payloads`].
     whole_images: HashMap<usize, (Arc<Vec<u8>>, usize)>,
@@ -401,7 +401,7 @@ impl<'a> Writer<'a> {
             definition_links: 0,
             definition_symbol_nodes: 0,
             max_objects: crate::import::MAX_EDITING_OBJECTS,
-            last_samples: None,
+            read_samples: images::SampleCache::default(),
             whole_images: HashMap::new(),
             shown: vec![],
             windowed: None,

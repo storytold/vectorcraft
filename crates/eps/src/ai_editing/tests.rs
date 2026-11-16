@@ -3811,6 +3811,165 @@ fn images_that_cant_be_decoded_are_mid_gray_boxes() {
     assert_eq!(paint(n.appearance.items[0].paint()), paint(&solid(Color::gray(0.5))));
 }
 
+/// A `w` × `h` RGB image whose pixels follow from `seed`, no two of its pixels gray.
+fn seeded_png(seed: u32, (w, h): (u32, u32)) -> Vec<u8> {
+    let px = |x: u32, y: u32| {
+        let v = (x.wrapping_mul(73_856_093) ^ y.wrapping_mul(19_349_663) ^ seed.wrapping_mul(83_492_791)).to_le_bytes();
+        image::Rgb([v[0], v[1] | 1, v[2] & 0xfe])
+    };
+    png_of(image::DynamicImage::ImageRgb8(image::RgbImage::from_fn(w, h, px)))
+}
+
+/// A document placing `blobs` in turn on one layer, each `times` times: the first, the second and
+/// so on, then the first again. Each blob is kept under `keys`' key at its index.
+fn images_in_turn(blobs: &[ImageBlob], keys: &[&str], times: usize) -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    for (blob, key) in blobs.iter().zip(keys) {
+        doc.images.insert((*key).to_string(), blob.clone());
+    }
+    for i in 0..times * blobs.len() {
+        let key = keys[i % blobs.len()].to_string();
+        let xf = Affine::translate((f64::from(u32::try_from(i).unwrap()), 10.0)) * Affine::scale(2.0);
+        let im = ImageObject { key, width: 4, height: 4, xf, link: None, placement: Default::default(), pixels: None };
+        let node = Node::new(doc.alloc_id(), NodeKind::Image(Box::new(im)));
+        doc.insert(Some(layer), usize::MAX, node).unwrap();
+    }
+    doc
+}
+
+/// `doc` written keeping the pixels of each image read (`last_only` false) or of the image read
+/// last alone, and how many times an image's pixels were read.
+fn export_reading(doc: &Document, last_only: bool) -> (AiEditingOutput, usize) {
+    writer::LAST_SAMPLES_ONLY.with(|l| l.set(last_only));
+    writer::SAMPLE_READS.with(|n| n.set(0));
+    let out = export_ai_editing(doc, &opts());
+    writer::LAST_SAMPLES_ONLY.with(|l| l.set(false));
+    (out.unwrap(), writer::SAMPLE_READS.with(std::cell::Cell::get))
+}
+
+/// `doc` written both ways ([`export_reading`]), the files and warnings compared whole, and the
+/// reads of each way.
+fn reads_for_the_same_file(doc: &Document) -> (usize, usize) {
+    let (kept, kept_reads) = export_reading(doc, false);
+    let (last, last_reads) = export_reading(doc, true);
+    assert!(kept.program == last.program, "the files differ");
+    assert_eq!(kept.header, last.header);
+    assert_eq!(kept.warnings, last.warnings);
+    (kept_reads, last_reads)
+}
+
+/// Two images placed one after the other 25 times each are each read once in a save, and the file
+/// is the same as when only the image read last is kept.
+#[test]
+fn images_placed_in_turn_are_read_once_a_save() {
+    // GUARDS: each image was read again whenever the other was placed between its copies.
+    let blobs = [ImageBlob::png(seeded_png(1, (4, 4))), ImageBlob::png(seeded_png(2, (4, 4)))];
+    let doc = images_in_turn(&blobs, &["a", "b"], 25);
+    assert_eq!(reads_for_the_same_file(&doc), (2, 50));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(String::from_utf8_lossy(&out.program).matches("%AI5_BeginRaster").count(), 50);
+}
+
+/// A document of one image placed many times reads it once, and one without images reads none.
+#[test]
+fn one_image_is_read_once_and_no_image_never() {
+    let doc = images_in_turn(&[ImageBlob::png(seeded_png(3, (4, 4)))], &["a"], 10);
+    assert_eq!(reads_for_the_same_file(&doc), (1, 1));
+    assert_eq!(reads_for_the_same_file(&Document::new(200.0, 100.0)), (0, 0));
+}
+
+/// An image that can't be read, placed between copies of another, is read once too, and each copy
+/// is still its gray outline with the same warning.
+#[test]
+fn an_image_that_cant_be_read_is_read_once_a_save() {
+    // GUARDS: an image that can't be read was read again whenever another image came between.
+    let blobs = [ImageBlob::png(b"not an image".to_vec()), ImageBlob::png(seeded_png(4, (4, 4)))];
+    let doc = images_in_turn(&blobs, &["bad", "good"], 3);
+    assert_eq!(reads_for_the_same_file(&doc), (2, 6));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::IMAGES]);
+    assert_eq!(String::from_utf8_lossy(&out.program).matches("%AI5_BeginRaster").count(), 3);
+}
+
+/// The same data under two MIME types is two images: each is read once, apart from the other.
+#[test]
+fn the_same_data_of_another_type_is_read_apart() {
+    let png = ImageBlob::png(seeded_png(5, (4, 4)));
+    let other = ImageBlob { mime: "image/x-other".into(), ..png.clone() };
+    assert!(Arc::ptr_eq(&png.bytes, &other.bytes));
+    let doc = images_in_turn(&[png, other], &["png", "other"], 3);
+    assert_eq!(reads_for_the_same_file(&doc), (2, 6));
+}
+
+/// Past the limits on the samples kept (bytes and images), an image is kept beside them in place
+/// of the one before it, and the others are read again where they come: what is kept stays within
+/// both limits, and the file is the same.
+#[test]
+fn images_past_the_limits_are_read_again_and_written_the_same() {
+    // Images of 48, 75 and 108 bytes of samples, then two of 48: 123 bytes and two images fit.
+    let sizes = [(4, 4), (5, 5), (6, 6), (4, 4), (4, 4)];
+    let blobs: Vec<_> = (0u32..).zip(sizes).map(|(i, s)| ImageBlob::png(seeded_png(10 + i, s))).collect();
+    let doc = images_in_turn(&blobs, &["a", "b", "c", "d", "e"], 3);
+    for (limits, kept_most, reads) in [((130, 8), (123, 2), 2 + 3 * 3), ((10_000, 3), (48 + 75 + 108, 3), 3 + 2 * 3)] {
+        writer::SAMPLE_LIMITS.with(|l| l.set(limits));
+        writer::SAMPLES_KEPT.with(|k| k.set((0, 0, false)));
+        let (kept_reads, last_reads) = reads_for_the_same_file(&doc);
+        let (bytes, images, beside) = writer::SAMPLES_KEPT.with(std::cell::Cell::get);
+        writer::SAMPLE_LIMITS.with(|l| l.set((256 << 20, 256)));
+        assert!(bytes <= limits.0 && images <= limits.1, "{limits:?}: kept {bytes} bytes of {images} images");
+        assert_eq!((bytes, images, beside), (kept_most.0, kept_most.1, true), "{limits:?}");
+        assert_eq!((kept_reads, last_reads), (reads, 15), "{limits:?}");
+    }
+}
+
+/// The time this thread has run, and how it was measured.
+fn thread_time() -> (std::time::Duration, &'static str) {
+    if let Some(ns) = std::fs::read_to_string("/proc/thread-self/schedstat").ok().and_then(|s| s.split_whitespace().next()?.parse::<u64>().ok()) {
+        return (std::time::Duration::from_nanos(ns), "thread CPU time");
+    }
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    (START.get_or_init(std::time::Instant::now).elapsed(), "wall-clock time")
+}
+
+/// The time to write two 2048 × 2048 images placed one after the other 25 times each, keeping the
+/// pixels of each image read and of the image read last alone: the median of 7 runs of each,
+/// alternating, with the files compared. Run with
+/// `cargo test --release -p vectorcraft-eps --lib -- --ignored --nocapture images_placed_in_turn_are_written_quickly`.
+#[test]
+#[ignore = "timing"]
+fn images_placed_in_turn_are_written_quickly() {
+    let blobs = [ImageBlob::png(seeded_png(1, (2048, 2048))), ImageBlob::png(seeded_png(2, (2048, 2048)))];
+    let doc = images_in_turn(&blobs, &["a", "b"], 25);
+    let mut times = [vec![], vec![]];
+    let mut files: [Option<Vec<u8>>; 2] = [None, None];
+    let mut reads = [0, 0];
+    let mut how = "";
+    for _ in 0..7 {
+        for (k, last_only) in [false, true].into_iter().enumerate() {
+            let (start, h) = thread_time();
+            let (out, n) = export_reading(&doc, last_only);
+            times[k].push(thread_time().0.saturating_sub(start));
+            how = h;
+            reads[k] = n;
+            files[k].get_or_insert(out.program);
+        }
+    }
+    assert!(files[0] == files[1], "the files differ");
+    assert_eq!(reads, [2, 50]);
+    for t in &mut times {
+        t.sort();
+    }
+    let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+    println!("50 placements of two 2048 x 2048 images, median of 7 runs ({how}):");
+    println!("| pixels kept | images read | median (ms) | runs (ms) |");
+    println!("|---|---:|---:|---|");
+    for (k, label) in ["each image read", "the image read last"].into_iter().enumerate() {
+        let runs: Vec<String> = times[k].iter().map(|d| format!("{:.0}", ms(*d))).collect();
+        println!("| {label} | {} | {:.0} | {} |", reads[k], ms(times[k][3]), runs.join(", "));
+    }
+}
+
 #[test]
 fn sixteen_bit_images_are_written_at_eight_bits() {
     let mut doc = Document::new(200.0, 100.0);
