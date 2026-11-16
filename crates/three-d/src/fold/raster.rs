@@ -179,7 +179,8 @@ impl Print {
 }
 
 /// What [`render`] draws: a folded blank, its print (if any), the color of the board's back and of
-/// its printed side where the print has no art (straight RGBA), and the view.
+/// its printed side where the print has no art (straight RGBA; the board is opaque, so their alpha
+/// is not used), and the view.
 pub struct Scene<'a> {
     pub blank: &'a Blank,
     pub folded: &'a Folded,
@@ -356,7 +357,9 @@ impl Fill<'_> {
             if !wins {
                 continue;
             }
-            let footprint = self.flat_at(x + 1.0, y).map_or(0.0, |(u2, v2)| (u2 - u).hypot(v2 - v));
+            // The print's footprint is the longer of a pixel's two sides in flat terms.
+            let across = |dx: f64, dy: f64| self.flat_at(x + dx, y + dy).map_or(0.0, |(u2, v2)| (u2 - u).hypot(v2 - v));
+            let footprint = across(1.0, 0.0).max(across(0.0, 1.0));
             let color = self.color(u, v, footprint);
             if let Some(px) = target.color.get_mut(i * 4..i * 4 + 4) {
                 for (o, c) in px.iter_mut().zip(color) {
@@ -408,9 +411,9 @@ impl Fill<'_> {
     }
 }
 
-fn rgba(c: [u8; 4]) -> [f32; 4] {
-    let a = f32::from(c[3]) / 255.0;
-    [f32::from(c[0]) * a, f32::from(c[1]) * a, f32::from(c[2]) * a, f32::from(c[3])]
+/// The board color `c` as drawn: its RGB, opaque.
+fn opaque(c: [u8; 4]) -> [f32; 4] {
+    [f32::from(c[0]), f32::from(c[1]), f32::from(c[2]), 255.0]
 }
 
 /// The outline rings of `panel` in flat terms (u, v), flattened finely enough for `scale` pixels a
@@ -433,7 +436,7 @@ pub fn render(scene: &Scene) -> Option<Image> {
     let pixels = width * height;
     let mut target =
         Target { width, height, color: vec![0; pixels * 4], depth: vec![f64::NEG_INFINITY; pixels], rank: vec![0; pixels], panel: vec![0; pixels] };
-    let (inside, outside) = (rgba(scene.inside), rgba(scene.outside));
+    let (inside, outside) = (opaque(scene.inside), opaque(scene.outside));
     let near = camera.eye().map(|(eye, _)| eye * NEAREST);
     for (rank, &pi) in scene.folded.order.iter().enumerate() {
         let (Some(panel), Some(f)) = (scene.blank.panels.get(pi), scene.folded.panels.get(pi)) else { continue };

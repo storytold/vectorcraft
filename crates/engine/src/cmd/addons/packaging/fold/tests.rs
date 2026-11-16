@@ -38,6 +38,14 @@ fn vector(v: &Value) -> [f64; 3] {
     [a[0].as_f64().unwrap(), a[1].as_f64().unwrap(), a[2].as_f64().unwrap()]
 }
 
+/// The middle of the bounds of the points of SVG path data `d` (absolute moves and lines only).
+fn middle(d: &str) -> [f64; 2] {
+    let n: Vec<f64> = d.split(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-')).filter_map(|t| t.parse().ok()).collect();
+    let span = |k: usize| n.iter().skip(k).step_by(2).fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &t| (lo.min(t), hi.max(t)));
+    let ((x0, x1), (y0, y1)) = (span(0), span(1));
+    [(x0 + x1) / 2.0, (y0 + y1) / 2.0]
+}
+
 fn near(a: [f64; 3], b: [f64; 3]) -> bool {
     a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-9)
 }
@@ -61,9 +69,15 @@ fn a_tray_folds_its_walls_up_round_the_base() {
     assert!(panels[base]["outline"].as_str().unwrap().starts_with('M'), "SVG path data");
     for (i, p) in panels.iter().enumerate().filter(|(i, _)| *i != base) {
         assert_eq!((p["parent"].as_u64(), p["depth"].as_u64()), (Some(base as u64), Some(1)), "{p}");
-        // Each wall stands square to the base, its print facing out.
-        let z = vector(&p["frame"]["z"]);
-        assert!(z[2].abs() < 1e-9 && (z[0].hypot(z[1]) - 1.0).abs() < 1e-9, "wall {i}: {z:?}");
+        // Each wall stands square to the base, below it (away from the print), its print facing out:
+        // away from the base's middle (190, 190), toward the side the wall lies on.
+        let [cx, cy] = middle(p["outline"].as_str().unwrap());
+        let (x, y, o) = (vector(&p["frame"]["x"]), vector(&p["frame"]["y"]), vector(&p["frame"]["origin"]));
+        let placed: [f64; 3] = std::array::from_fn(|k| o[k] + x[k] * cx - y[k] * cy);
+        let (dx, dy) = (cx - 190.0, 190.0 - cy);
+        let out = if dx.abs() > dy.abs() { [dx.signum(), 0.0, 0.0] } else { [0.0, dy.signum(), 0.0] };
+        assert!(near(vector(&p["frame"]["z"]), out), "wall {i}: {p}");
+        assert!((placed[2] + 20.0).abs() < 1e-9, "wall {i}'s middle is 20 pt below the base: {placed:?}");
     }
     let hinges = r["hinges"].as_array().unwrap();
     assert_eq!(hinges.len(), 4);

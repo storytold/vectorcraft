@@ -65,6 +65,49 @@ fn a_flat_panel_takes_the_print_s_color_under_each_pixel() {
 }
 
 #[test]
+fn the_board_is_opaque_whatever_the_alpha_of_its_colors() {
+    let shade = 0.6 + 0.4 * 0.74;
+    let lit = |c: f64| (c * shade).round() as u8;
+    let (b, f) = scene_of(vec![panel(vec![square(0.0, 0.0, 100.0, 100.0)])], vec![Pose::IDENTITY]);
+    for a in [0, 128] {
+        let img = render(&Scene { blank: &b, folded: &f, print: None, inside: [0, 0, 0, 255], outside: [200, 100, 50, a], camera: front() })
+            .expect("drawn");
+        assert_eq!(pixel(&img, 50, 50), [lit(200.0), lit(100.0), lit(50.0), 255], "outside alpha {a}");
+    }
+    // A transparent inside color draws opaque too, on the nearer of two panels seen from the back.
+    let whole = || panel(vec![square(0.0, 0.0, 100.0, 100.0)]);
+    let (b, f) = scene_of(vec![whole(), whole()], vec![Pose::IDENTITY, moved(5.0)]);
+    let camera = Camera { rotate_y: 180.0, ..front() };
+    let img = render(&Scene { blank: &b, folded: &f, print: None, inside: [0, 200, 0, 0], outside: WHITE, camera }).expect("drawn");
+    let [r, g, bl, a] = pixel(&img, 50, 50);
+    assert!(r == 0 && bl == 0 && g > 100 && a == 255, "{:?}", [r, g, bl, a]);
+}
+
+#[test]
+fn a_print_squeezed_only_up_and_down_on_screen_samples_a_halved_level() {
+    // 64 × 64, rows alternating black and white: halved, they average to gray.
+    let mut px = vec![];
+    for y in 0..64 {
+        for _ in 0..64 {
+            px.extend(if y % 2 == 0 { [0, 0, 0, 255] } else { [255, 255, 255, 255] });
+        }
+    }
+    let print = Print::new(Rect::new(0.0, 0.0, 100.0, 100.0), 64, 64, px).expect("a print");
+    let (b, f) = scene_of(vec![panel(vec![square(0.0, 0.0, 100.0, 100.0)])], vec![Pose::IDENTITY]);
+    // Tipped 80°: about 5.8 points a pixel up and down, 1 across.
+    let camera = Camera { rotate_x: 80.0, ..front() };
+    let img = render(&Scene { blank: &b, folded: &f, print: Some(&print), inside: [0; 4], outside: WHITE, camera }).expect("drawn");
+    let reds: Vec<u8> = (0..img.height)
+        .flat_map(|y| (0..img.width).map(move |x| (x, y)))
+        .filter(|&(x, y)| img.panel_at(x, y).is_some())
+        .map(|(x, y)| pixel(&img, x, y)[0])
+        .collect();
+    assert!(!reds.is_empty());
+    let (lo, hi) = (reds.iter().min().copied().unwrap_or(0), reds.iter().max().copied().unwrap_or(0));
+    assert!(hi - lo <= 2, "an even gray, not black and white rows: {lo} to {hi}");
+}
+
+#[test]
 fn the_back_of_a_panel_shows_the_inside_color() {
     let (b, f) = scene_of(vec![panel(vec![square(0.0, 0.0, 100.0, 100.0)])], vec![Pose::IDENTITY]);
     let print = quads();
