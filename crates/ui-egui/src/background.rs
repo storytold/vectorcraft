@@ -97,6 +97,9 @@ pub struct Background {
     next_id: u64,
     /// Work started while this is set runs at once, whatever the preferences ([`in_foreground`]).
     foreground: bool,
+    /// [`crate::state::UiState::status_sets`] right after Cancel Save set its line, or after a save
+    /// it reached set the line that followed it; `None` before any Cancel Save.
+    pub(crate) save_cancel_line: Option<u64>,
 }
 
 impl Background {

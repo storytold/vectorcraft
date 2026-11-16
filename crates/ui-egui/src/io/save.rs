@@ -15,8 +15,15 @@ pub fn cancel_saves(app: &mut VectorcraftApp) -> Value {
     let n = app.background.cancel_saves();
     if n > 0 {
         app.status(SAVE_CANCELED);
+        app.background.save_cancel_line = Some(app.ui.status_sets);
     }
     json!({ "cancelled": n })
+}
+
+/// Does the status bar still show Cancel Save's line, or the line a save it reached set after it?
+/// A line set since by another command or another job stays.
+fn cancel_line_shown(app: &VectorcraftApp) -> bool {
+    app.background.save_cancel_line == Some(app.ui.status_sets)
 }
 
 /// The progress window's Continue in Background for saves: they go on, shown in the status bar
@@ -642,7 +649,14 @@ fn write_plan(
         // Canceled before the file was replaced: the document keeps its file, format and modified
         // state.
         if r.get("cancelled").and_then(Value::as_bool) == Some(true) {
-            app.status(SAVE_CANCELED);
+            // A line set since Cancel Save (another command's, another job's) stays.
+            let owned = cancel_line_shown(app);
+            if owned || background::status_unchanged(app, sets, &started_line) {
+                app.status(SAVE_CANCELED);
+            }
+            if owned {
+                app.background.save_cancel_line = Some(app.ui.status_sets);
+            }
             return Ok(r);
         }
         // Nothing written either: asked first.
@@ -661,9 +675,14 @@ fn write_plan(
             app.picks.written_beside.insert(uid, beside);
         }
         // A line set while the file was written (another command's, another job's) stays. A Cancel
-        // that came once the file was being replaced said it was canceled: the file is saved.
-        if background::status_unchanged(app, sets, &started_line) || asked.cancelled() {
+        // that came once the file was being replaced said it was canceled: the file is saved, which
+        // replaces that line while it is still shown, and only then.
+        let owned = asked.cancelled() && cancel_line_shown(app);
+        if owned || background::status_unchanged(app, sets, &started_line) {
             report_saved(app, &path, &r);
+        }
+        if owned {
+            app.background.save_cancel_line = Some(app.ui.status_sets);
         }
         Ok(r)
     };

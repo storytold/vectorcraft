@@ -246,7 +246,43 @@ fn a_canceled_save_writes_nothing_and_keeps_the_document_modified() {
     assert!(io::recent_files(&app).iter().any(|p| p == "/docs/first.vectorcraft"));
     assert!(!io::recent_files(&app).iter().any(|p| p == "/docs/second.svg"));
     assert!(app.ui.dialog.is_none(), "no error is shown");
+    // The export's line came after the Cancel: the canceled save leaves it.
+    assert_eq!(app.ui.status, "Exported /out/c.svg");
+}
+
+/// A line set after Cancel Save (another command's) stays: neither the save that was already
+/// replacing its file nor the one Cancel stopped writes over it once it finishes.
+#[test]
+fn a_line_set_after_cancel_save_stays() {
+    let (gate, writing) = (Gate::default(), Gate::default());
+    let files = Files::default();
+    let (f, g, w) = (files.clone(), gate.clone(), writing.clone());
+    let services = Services {
+        write_shared: Some(Arc::new(move |p: &str, b: &[u8]| {
+            w.open();
+            g.wait();
+            f.lock().unwrap().push((p.to_string(), b.to_vec()));
+            Ok(())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let first = app.session.active().unwrap().uid;
+    // The first save holds the worker at the gate, past its last check: it still writes.
+    app.run("file.save", json!({"path": "/docs/first.vectorcraft"})).unwrap();
+    writing.wait();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("file.save", json!({"path": "/docs/second.vectorcraft"})).unwrap();
+    assert_eq!(app.run("file.cancelSave", json!({})).unwrap()["cancelled"], 2);
     assert_eq!(app.ui.status, io::SAVE_CANCELED);
+    app.status("Another command's line");
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), ["/docs/first.vectorcraft"]);
+    let st = app.session.documents().iter().find(|d| d.uid == first).unwrap();
+    assert_eq!(st.path.as_deref(), Some("/docs/first.vectorcraft"), "the first save still finished");
+    assert_eq!(app.ui.status, "Another command's line");
 }
 
 #[test]
