@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use vectorcraft_color::cms::{self, Cms, Model, ProfileKind};
 use vectorcraft_color::swatch::REGISTRATION;
-use vectorcraft_color::{BlendMode, Color, Paint};
+use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
 use vectorcraft_doc::inks::{Link, StopPlates, inks, plates, spot_color, stop_inks, visit_node_colors};
 use vectorcraft_doc::overprint::{darken_overprints, is_white};
 use vectorcraft_doc::{AppearanceItem, ColorMode, Document, ImageBlob, Node, NodeKind};
@@ -139,7 +139,7 @@ impl<'a> Separator<'a> {
         const NONE: f32 = 0.005;
         match p {
             Paint::Solid { color, swatch, tint } => self.ink(plate, color, swatch.as_deref().map(|s| (s, *tint))) <= NONE,
-            Paint::Gradient(g) => match g.freeform.as_ref().filter(|f| !f.points.is_empty()) {
+            Paint::Gradient(g) => match g.freeform.as_ref().filter(|f| g.gradient.kind == GradientKind::Freeform && !f.points.is_empty()) {
                 Some(f) => f.points.iter().all(|pt| self.ink(plate, &pt.color, None) <= NONE),
                 None => {
                     !g.gradient.stops.is_empty()
