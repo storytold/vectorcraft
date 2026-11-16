@@ -351,6 +351,60 @@ fn a_confined_package_names_files_outside_the_read_root_by_name() {
     assert!(info.to_string().contains(&dir.file("art/red.png")), "the person's: {info}");
 }
 
+/// A confined request packages no document that links, or places a native document or a PDF with
+/// Preserve Editing that links, a JavaScript file outside its read roots: the package is refused
+/// before anything is written, with an error that names no file or folder. A JavaScript file inside
+/// them is packaged, and so is one outside them when the person packages.
+#[test]
+fn a_confined_package_refuses_a_linked_javascript_file_outside_the_read_root() {
+    let away = Folder::new("package-script-away");
+    let home = Folder::new("package-script-home");
+    let script = away.file("menu.js");
+    let roots = crate::file_access::AutomationRoots::new(&[&home.0], &[&home.0]).unwrap().unwrap();
+    let hidden = [away.0.to_string_lossy().into_owned(), home.0.to_string_lossy().into_owned(), "menu.js".to_string()];
+    let refused = |s: &mut Session, p: Value| {
+        let e = crate::file_access::confine(Some(&roots), || s.execute("file.package", &p)).expect_err("refused");
+        assert!(matches!(e, EngineError::BadParams { .. }), "{p}: {e:?}");
+        let e = e.to_string();
+        assert!(e.contains("a linked JavaScript file is outside the read roots"), "{p}: {e}");
+        for h in &hidden {
+            assert!(!e.contains(h.as_str()), "{p} names {h}: {e}");
+        }
+    };
+    let mut part = session();
+    run(&mut part, "shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 30}));
+    run(&mut part, "svgInteractivity.addFile", json!({"file": script}));
+    std::fs::create_dir_all(home.0.join("art")).unwrap();
+    let native = home.file("art/part.vectorcraft");
+    save(&mut part, &native);
+    let r = run(&mut part, "document.serialize", json!({"format": "pdf"}));
+    let pdf = home.file("art/part.pdf");
+    write(&pdf, &vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap());
+    let out = home.file("out");
+    refused(&mut part, json!({"folder": out}));
+    refused(&mut part, json!({}));
+    for placed in [&native, &pdf] {
+        let mut s = session();
+        let r = run(&mut s, "file.place", json!({"path": placed, "link": true}));
+        assert_eq!(r["linked"], true, "{r}");
+        save(&mut s, &home.file("poster.vectorcraft"));
+        refused(&mut s, json!({"folder": out}));
+        refused(&mut s, json!({}));
+        assert!(!std::path::Path::new(&out).exists(), "{placed}");
+        // The person's package copies it.
+        assert_eq!(run(&mut s, "file.package", json!({}))["links"], 1, "{placed}");
+    }
+    // A JavaScript file inside the read roots.
+    run(&mut part, "svgInteractivity.removeFile", json!({"file": script}));
+    run(&mut part, "svgInteractivity.addFile", json!({"file": home.file("menu.js")}));
+    save(&mut part, &native);
+    let mut s = session();
+    run(&mut s, "file.place", json!({"path": native, "link": true}));
+    save(&mut s, &home.file("poster.vectorcraft"));
+    let r = crate::file_access::confine(Some(&roots), || s.execute("file.package", &json!({"folder": out}))).unwrap();
+    assert_eq!(r["links"], 1, "{r}");
+}
+
 /// A missing link stored as a path relative to the document names a file inside a confined
 /// request's read root: the package report and Document Info give its stored path.
 #[test]
@@ -690,6 +744,87 @@ fn package_copies_a_linked_pdf_page_as_it_is() {
     let opened = open(&mut s, &root.join("poster.vectorcraft").to_string_lossy());
     assert_eq!(opened["missingLinks"], json!([]), "{opened}");
     assert!(s.doc().unwrap().doc.has_placed());
+}
+
+#[test]
+fn package_copies_a_linked_eps_file_as_it_is() {
+    let dir = Folder::new("package-placed-eps");
+    let eps = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 50\n%%EndComments\n1 0 0 setrgbcolor\nnewpath 0 0 moveto 100 0 lineto 100 50 lineto 0 50 lineto closepath fill\nshowpage\n%%EOF\n";
+    let src = dir.file("art/seal.eps");
+    write(&src, eps);
+    let mut s = session();
+    let placed = run(&mut s, "file.place", json!({"path": src}));
+    assert_eq!(placed["linked"], true, "{placed}");
+    save(&mut s, &dir.file("poster.vectorcraft"));
+    let r = run(&mut s, "file.package", json!({"folder": dir.file("out")}));
+    assert_eq!((r["links"].as_u64(), r["missingLinks"].clone(), r["warnings"].clone()), (Some(1), json!([]), json!([])), "{r}");
+    let root = dir.0.join("out/poster Folder");
+    assert_eq!(std::fs::read(root.join("Links/seal.eps")).unwrap(), eps, "copied as it is");
+    // The packaged document shows the copy.
+    std::fs::remove_dir_all(dir.0.join("art")).unwrap();
+    let opened = open(&mut s, &root.join("poster.vectorcraft").to_string_lossy());
+    assert_eq!(opened["missingLinks"], json!([]), "{opened}");
+    assert!(s.doc().unwrap().doc.has_placed());
+}
+
+#[test]
+fn package_copies_a_linked_postscript_ai_file_the_document_holds_after_it_is_gone() {
+    let dir = Folder::new("package-placed-ps-ai");
+    let ai = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 50\n%%EndComments\n0 0 1 setrgbcolor\nnewpath 0 0 moveto 100 0 lineto 100 50 lineto 0 50 lineto closepath fill\nshowpage\n%%EOF\n";
+    let src = dir.file("art/badge.ai");
+    write(&src, ai);
+    let mut s = session();
+    let placed = run(&mut s, "file.place", json!({"path": src}));
+    assert_eq!(placed["linked"], true, "{placed}");
+    save(&mut s, &dir.file("poster.vectorcraft"));
+    std::fs::remove_dir_all(dir.0.join("art")).unwrap();
+    let r = run(&mut s, "file.package", json!({"folder": dir.file("out")}));
+    assert_eq!((r["links"].as_u64(), r["missingLinks"].clone()), (Some(1), json!([])), "{r}");
+    let root = dir.0.join("out/poster Folder");
+    assert_eq!(std::fs::read(root.join("Links/badge.ai")).unwrap(), ai, "the bytes the document holds");
+}
+
+/// The PostScript bytes a document holds are copied for a placed document whose file name is one
+/// PostScript is read from, and not under any other name or for a linked image.
+#[test]
+fn package_copies_held_postscript_only_for_a_placed_document_with_a_postscript_name() {
+    let dir = Folder::new("package-placed-ps-names");
+    let eps = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 50\n%%EndComments\n1 0 0 setrgbcolor\nnewpath 0 0 moveto 100 0 lineto 100 50 lineto 0 50 lineto closepath fill\nshowpage\n%%EOF\n";
+    let ai = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 50\n%%EndComments\n0 0 1 setrgbcolor\nnewpath 0 0 moveto 100 0 lineto 100 50 lineto 0 50 lineto closepath fill\nshowpage\n%%EOF\n";
+    write(&dir.file("art/seal.eps"), eps);
+    write(&dir.file("art/badge.ai"), ai);
+    write(&dir.file("art/logo.png"), &png(8, 8, RED));
+    let mut s = session();
+    let seal = run(&mut s, "file.place", json!({"path": dir.file("art/seal.eps")}));
+    assert_eq!(seal["linked"], true, "{seal}");
+    let seal = vectorcraft_doc::NodeId(seal["ids"][0].as_u64().unwrap());
+    run(&mut s, "file.place", json!({"path": dir.file("art/badge.ai")}));
+    let logo = place(&mut s, &dir.file("art/logo.png"));
+    let (tool, logo_ai) = (dir.file("art/tool.exe"), dir.file("art/logo.ai"));
+    s.edit("names", |d, _| {
+        let vectorcraft_doc::NodeKind::PlacedDocument(p) = &mut d.node_mut(seal).unwrap().kind else { panic!("not a placed document") };
+        p.link.path = tool.clone();
+        p.link.relative = None;
+        let vectorcraft_doc::NodeKind::Image(im) = &mut d.node_mut(logo).unwrap().kind else { panic!("not an image") };
+        im.link.as_mut().unwrap().path = logo_ai.clone();
+        im.link.as_mut().unwrap().relative = None;
+        let key = im.key.clone();
+        d.images
+            .insert(key, vectorcraft_doc::ImageBlob { mime: "application/postscript".into(), bytes: std::sync::Arc::new(eps.to_vec()), proxy: None });
+        Ok(())
+    })
+    .unwrap();
+    save(&mut s, &dir.file("poster.vectorcraft"));
+    std::fs::remove_dir_all(dir.0.join("art")).unwrap();
+    let r = run(&mut s, "file.package", json!({"folder": dir.file("out")}));
+    assert_eq!(r["links"].as_u64(), Some(1), "{r}");
+    let mut missing: Vec<&str> = r["missingLinks"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    missing.sort_unstable();
+    assert_eq!(missing, ["logo.ai", "tool.exe"], "{r}");
+    let links = dir.0.join("out/poster Folder/Links");
+    assert_eq!(std::fs::read(links.join("badge.ai")).unwrap(), ai, "a PostScript .ai under its own name");
+    assert!(!links.join("tool.exe").exists(), "PostScript under a name it isn't read from");
+    assert!(!links.join("logo.ai").exists(), "PostScript held for a linked image");
 }
 
 #[test]

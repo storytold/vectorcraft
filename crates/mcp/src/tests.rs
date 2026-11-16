@@ -498,11 +498,16 @@ fn scaled_down_pictures_keep_the_color_beside_clear_pixels() {
     struct Striped;
     impl Backend for Striped {
         fn call(&mut self, method: &str, _: Value) -> Result<Value, String> {
-            let mut png = std::io::Cursor::new(Vec::new());
-            image::RgbaImage::from_fn(64, 4, |x, _| if x % 2 == 0 { image::Rgba([200, 30, 30, 255]) } else { image::Rgba([0, 0, 0, 0]) })
-                .write_to(&mut png, image::ImageFormat::Png)
+            let mut data = Vec::with_capacity(64 * 4 * 4);
+            for _ in 0..4 {
+                for x in 0..64 {
+                    data.extend_from_slice(&if x % 2 == 0 { [200, 30, 30, 255] } else { [0, 0, 0, 0] });
+                }
+            }
+            let raw = craft_image_codecs::Image::from_raw(64, 4, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, data)
                 .unwrap();
-            let png = vectorcraft_format::base64_encode(png.get_ref());
+            let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+            let png = vectorcraft_format::base64_encode(&png);
             Ok(match method {
                 "document.inspect" => json!({"artboards": [{"width": 64, "height": 4}]}),
                 _ => json!({"pngBase64": png, "width": 64, "height": 4}),
@@ -522,7 +527,8 @@ fn scaled_down_pictures_keep_the_color_beside_clear_pixels() {
         let r = call(&mut s, id, tool, args);
         let data =
             r["content"].as_array().unwrap().iter().find(|c| c["type"] == "image").unwrap_or_else(|| panic!("{tool}: {r}"))["data"].as_str().unwrap();
-        let img = image::load_from_memory(&vectorcraft_format::base64_decode(data).unwrap()).unwrap().into_rgba8();
+        let decoded = craft_image_codecs::decode(&vectorcraft_format::base64_decode(data).unwrap()).unwrap();
+        let img = image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap();
         assert_eq!(img.dimensions(), (16, 1), "{tool}");
         assert!(img.pixels().all(|p| p.0 == [200, 30, 30, 128]), "{tool}: {:?}", img.get_pixel(0, 0));
     }
@@ -536,12 +542,16 @@ fn screenshot_and_render_preview_draw_the_trace_view_with_trace_views() {
     let dir = TempFolder::new("trace-views");
     let mut s = server();
     let png = dir.file("trace-views.png");
-    image::RgbImage::from_fn(100, 100, |x, y| {
-        let (dx, dy) = (f64::from(x) + 0.5 - 50.0, f64::from(y) + 0.5 - 50.0);
-        if dx * dx + dy * dy <= 900.0 { image::Rgb([0, 0, 0]) } else { image::Rgb([170, 210, 255]) }
-    })
-    .save(&png)
-    .unwrap();
+    let mut rgb = Vec::with_capacity(100 * 100 * 3);
+    for y in 0..100 {
+        for x in 0..100 {
+            let (dx, dy) = (f64::from(x) + 0.5 - 50.0, f64::from(y) + 0.5 - 50.0);
+            rgb.extend_from_slice(&if dx * dx + dy * dy <= 900.0 { [0, 0, 0] } else { [170, 210, 255] });
+        }
+    }
+    let raw = craft_image_codecs::Image::from_raw(100, 100, craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, rgb).unwrap();
+    std::fs::write(&png, craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap())
+        .unwrap();
     let ok = |s: &mut Server, id: u64, name: &str, args: Value| {
         let r = call(s, id, name, args);
         assert_eq!(r["isError"], false, "{name}: {r}");
@@ -552,7 +562,8 @@ fn screenshot_and_render_preview_draw_the_trace_view_with_trace_views() {
     ok(&mut s, 3, "run_command", json!({"command": "imageTrace.make", "params": {"params": {"ignoreWhite": true}}}));
     let pixels = |r: &Value| {
         let data = r["content"].as_array().unwrap().iter().find(|c| c["type"] == "image").unwrap()["data"].as_str().unwrap();
-        image::load_from_memory(&vectorcraft_format::base64_decode(data).unwrap()).unwrap().to_rgba8()
+        let decoded = craft_image_codecs::decode(&vectorcraft_format::base64_decode(data).unwrap()).unwrap();
+        image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap()
     };
     let dark = |p: &image::Rgba<u8>| p[0] < 60 && p[1] < 60 && p[2] < 60;
     let white = |p: &image::Rgba<u8>| p[0] > 245 && p[1] > 245 && p[2] > 245;
@@ -1544,6 +1555,8 @@ fn headless_backend_methods() {
         let selected = h.call("ui.tool.select", json!({"tool": tool.id})).unwrap();
         assert_eq!(selected["tool"], tool.id);
     }
+    let polygonal = groups.iter().flat_map(|group| group.as_array().unwrap()).find(|entry| entry["id"] == "polygonalLasso");
+    assert_eq!(polygonal.map(|entry| entry["label"].clone()), Some(json!("Polygonal Lasso Tool")));
     assert!(h.call("ui.resize", json!({})).is_err());
 }
 

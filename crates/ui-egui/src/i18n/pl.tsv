@@ -840,6 +840,7 @@
 	Auto Color	Kolor automatyczny
 	Automatic	Automatycznie
 	Isolate Selected Group	Izoluj zaznaczoną grupę
+	Isolate Selected Path	Izoluj zaznaczoną ścieżkę
 	Isolate Selected Object	Izoluj zaznaczony obiekt
 	Exit Isolation Mode	Wyjdź z trybu izolacji
 	Make Clipping Mask	Utwórz maskę przycinającą
@@ -1254,7 +1255,7 @@ lighting	Light	Światło
 	Name* @ 66.67% (RGB/Preview)	Nazwa* @ 66,67% (RGB/Podgląd)
 	No Document	Brak dokumentu
 	Press 	Naciśnij 
-	Search commands and tools	Szukaj poleceń i narzędzi
+	Search commands, tools, panels and effects	Szukaj poleceń, narzędzi, paneli i efektów
 	Style:	Styl:
 	Switch workspace	Przełącz obszar roboczy
 	Show all open documents	Pokaż wszystkie otwarte dokumenty
@@ -1362,6 +1363,8 @@ lighting	Light	Światło
 	Lasso Tool	Narzędzie Lasso
 	Enclosing Lasso Tool	Narzędzie lassa obejmującego
 	Enclosing Lasso	Lasso obejmujące
+	Polygonal Lasso Tool	Narzędzie lassa wielokątnego
+	Polygonal Lasso	Lasso wielokątne
 	Line Cut Tool	Narzędzie Cięcie linią
 	Line Graph Tool	Narzędzie Wykres liniowy
 	Line Segment Tool	Narzędzie Odcinek
@@ -1441,6 +1444,10 @@ lighting	Light	Światło
 	Play Current Selection	Odtwórz bieżące zaznaczenie
 	Save Actions…	Zapisz operacje…
 	Load Actions…	Wczytaj operacje…
+	Reset Actions	Resetuj operacje
+	Replace the current actions with the default set?	Zastąpić bieżące operacje zestawem domyślnym?
+	Append adds the default set after the current sets instead.	Dołącz dodaje zamiast tego zestaw domyślny po bieżących zestawach.
+	Append	Dołącz
 	Reflect Horizontal	Odbij w poziomie
 	Rotate 90° CW	Obróć o 90° w prawo
 	Set 1	Zestaw 1
@@ -2920,6 +2927,11 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Pokaż płynne koło kolorów
 	Show segmented color wheel	Pokaż segmentowe koło kolorów
 	Show color bars	Pokaż paski kolorów
+	Show brightness and hue on wheel	Pokaż jasność i barwę na kole
+	Show saturation and hue on wheel	Pokaż nasycenie i barwę na kole
+	Add Color Tool	Narzędzie Dodaj kolor
+	Remove Color Tool	Narzędzie Usuń kolor
+	Remove Color	Usuń kolor
 	Find the selected colors in the artwork	Znajdź zaznaczone kolory w kompozycji
 	Keep this row's colors (exclude)	Zachowaj kolory tego wiersza (wyklucz)
 	Limit to Library:	Ogranicz do biblioteki:
@@ -4322,7 +4334,11 @@ font-technology	Variable	Zmienne
 	Saved {path}	Zapisano {path}
 	Saving	Zapisywanie
 	Saving {}	Zapisywanie {}
-	Search commands and tools…	Szukaj poleceń i narzędzi…
+	Search commands, tools, panels and effects…	Szukaj poleceń, narzędzi, paneli i efektów…
+	No commands match	Żadne polecenie nie pasuje
+	{pos} of {total}: {name}	{pos} z {total}: {name}
+@plural	{n} result|{n} results	{n} wynik|{n} wyniki|{n} wyników
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} wyniku. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.
 	Recent Commands	Ostatnie polecenia
 	No recent commands	Brak ostatnich poleceń
 	Dashed Line	Linia przerywana
@@ -7365,6 +7381,11 @@ breakText	Glyphs	Glify
 	Malayalam	Malajalam
 	Odia	Orija
 	Urdu	Urdu
+	Sanskrit	Sanskryt
+	Nepali	Nepalski
+	Assamese	Asamski
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} i nowsze (wersja {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Eksportuj wszystkie otwarte dokumenty jako PDF
@@ -9590,3 +9611,23 @@ breakText	Glyphs	Glify
 	No objects are selected.	Nie zaznaczono żadnych obiektów.
 	Open a document to mark its fold lines.	Otwórz dokument, aby oznaczyć jego linie zgięcia.
 	Remove Fold Line Role	Usuń rodzaj linii
+	Check	Sprawdź
+	Check Fold Lines	Sprawdź linie zgięcia
+@msg	No cut lines are in the selection.	W zaznaczeniu nie ma linii cięcia.
+@msg	No cut lines are in the document.	W dokumencie nie ma linii cięcia.
+@msg	The cut lines do not enclose an area.	Linie cięcia nie obejmują żadnego obszaru.
+@msg	A cut line ends without meeting another cut line.	Linia cięcia kończy się, nie stykając się z inną linią cięcia.
+@msg	A gap between cut lines was closed.	Zamknięto przerwę między liniami cięcia.
+@msg	The fold lines are too complex to check.	Linie zgięcia są zbyt złożone, aby je sprawdzić.
+@msg	A cut line and a crease lie on top of each other.	Linia cięcia i linia bigowania leżą na sobie.
+@msg	No cut lines are among the given objects.	Wśród podanych obiektów nie ma linii cięcia.
+@msg	Two fold lines lie on top of each other.	Dwie linie zgięcia leżą na sobie.
+@msg	A crease ends inside a panel.	Linia bigowania kończy się wewnątrz panelu.
+@msg	A crease does not divide two panels.	Linia bigowania nie rozdziela dwóch paneli.
+@msg	A crease lies outside the cut outline, wholly or in part.	Linia bigowania leży całkowicie lub częściowo poza konturem cięcia.
+@msg	The pieces of a hinge are not on one straight line.	Części zawiasu nie leżą na jednej linii prostej.
+@msg	A gap between cut lines is too narrow to tell apart.	Przerwa między liniami cięcia jest zbyt wąska, aby ją rozróżnić.
+@msg	A cut-out area holds other fold lines or another blank.	Wycięty obszar zawiera inne linie zgięcia lub inny wykrój.
+@msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
+@msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
