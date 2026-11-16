@@ -789,6 +789,11 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
             parent => (parent, Some(target)),
         },
     };
+    // A copy beside a top-level layer it copies, with objects among the rows, would go inside
+    // that layer: into itself.
+    if parent.is_some_and(|p| ids.contains(&p)) {
+        return Err(bad(C, "a row can't go into itself"));
+    }
     if let Some(n) = nodes.iter().find(|n| !accepts(d, parent, n)) {
         let into = parent.and_then(|p| d.node(p)).map_or("the top level", |p| if p.is_layer() { "a layer" } else { p.kind_label() });
         return Err(bad(C, format!("{} can't go into {into}", n.display_name())));

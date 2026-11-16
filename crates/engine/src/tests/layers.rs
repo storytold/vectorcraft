@@ -664,6 +664,24 @@ fn a_copy_goes_above_or_below_a_row_it_copies() {
     assert_eq!(layers(&s), vec![only, above[0]], "each copy is one undo step");
 }
 
+/// #8237 review: rows that hold an object can't sit beside a top-level layer, so copied beside a
+/// top-level layer among them they would go inside it: a copy of that layer inside itself. Refused,
+/// and nothing changes.
+#[test]
+fn a_copy_with_objects_beside_a_copied_top_level_layer_is_refused() {
+    let mut s = session();
+    let bottom = s.doc().unwrap().doc.layers[0].id;
+    let other = id(&run(&mut s, "layer.new", json!({})));
+    let r = rect(&mut s, 0.0);
+    assert_eq!(s.doc().unwrap().doc.parent_of(r), Some(other), "the rectangle is in the other layer");
+    let count = s.doc().unwrap().doc.node_count();
+    for place in ["above", "below"] {
+        let p = json!({"ids": [bottom.0, r.0], "target": bottom.0, "place": place, "copy": true});
+        assert!(s.execute("layer.move", &p).is_err(), "{place}: the layer's copy would go inside it");
+    }
+    assert_eq!(s.doc().unwrap().doc.node_count(), count, "nothing copied");
+}
+
 /// The selected art in rows dragged into a hidden layer or group is deselected, the key object
 /// included. Undo puts the rows back and selects the art again.
 #[test]
