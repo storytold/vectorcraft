@@ -574,27 +574,30 @@ fn group_action(app: &mut VectorcraftApp, d: &mut Dialog, action: &Value) -> Res
             // With art, the group's colors no row took follow, adjusted and snapped as OK gives them,
             // then the colors added on the Edit tab; a row made with New Row that holds no current
             // colors gives the group no color.
-            // An excluded row leaves its swatch its own color.
+            cancel_preview(app, d);
+            let own: Vec<Value> = doc_groups(app)
+                .into_iter()
+                .find(|(n, _)| group.as_deref() == Some(n.as_str()))
+                .map(|g| g.1.iter().map(key).collect())
+                .unwrap_or_default();
+            // An excluded row leaves its swatch the color it has now, as OK's `"keep"` does: with
+            // art, the swatch's color in `__assign`; without art, the swatch's color in the group,
+            // which an earlier Save Changes may have changed.
             let filled: Vec<&Value> = rs.iter().filter(|r| !no_current(r)).collect();
             let rest: Vec<Value> =
                 p["groupColors"].as_array().map(|a| a.iter().skip(filled.len()).map(|k| json!({"from": [k], "to": k})).collect()).unwrap_or_default();
-            let assign: Vec<Value> = d.fields.get("__assign").and_then(Value::as_array).filter(|_| d.bool("__art")).cloned().unwrap_or_default();
+            let assign: Vec<Value> =
+                if d.bool("__art") { d.fields.get("__assign").and_then(Value::as_array).cloned().unwrap_or_default() } else { own.clone() };
             let mut colors: Vec<Value> = filled
                 .iter()
                 .enumerate()
                 .filter_map(|(i, r)| if excluded(r) { kept_color(&assign, i, r).cloned() } else { saved_color(app, d, r) })
                 .chain(group_colors(app, d, rest.iter()))
                 .collect();
-            cancel_preview(app, d);
             // With art in a color of the group, the group keeps its swatch order: a swatch whose row
             // ([`swatch_row`]) is found takes that row's new color (its own color when the row is
             // excluded), so the art linked to it takes the color its row shows, and every other
             // swatch keeps its color. The colors added on the Edit tab follow.
-            let own: Vec<Value> = doc_groups(app)
-                .into_iter()
-                .find(|(n, _)| group.as_deref() == Some(n.as_str()))
-                .map(|g| g.1.iter().map(key).collect())
-                .unwrap_or_default();
             let found: Vec<Option<(Value, &Value)>> = (0..own.len()).map(|i| swatch_row(d, &rs, &own, i)).collect();
             let mut links = None;
             if d.bool("__art") && found.iter().any(Option::is_some) {
@@ -698,6 +701,18 @@ fn saved_color(app: &VectorcraftApp, d: &Dialog, row: &Value) -> Option<Value> {
 fn reread_rows(app: &mut VectorcraftApp, d: &mut Dialog, old: &[Value], before: &[Vec<Value>], gone: &[Value]) {
     let given: Vec<Value> =
         art_colors(app).iter().zip(before).flat_map(|(now, was)| now.iter().zip(was).filter(|(n, w)| n != w).map(|(n, _)| n.clone())).collect();
+    // A swatch whose color the save gave the art is found by that color again: the row its old
+    // color found lists other art now.
+    let group = d.fields.get("group").and_then(Value::as_str).map(str::to_owned);
+    let saved: Vec<Value> =
+        doc_groups(app).into_iter().find(|(n, _)| group.as_deref() == Some(n.as_str())).map(|g| g.1.iter().map(key).collect()).unwrap_or_default();
+    if let Some(Value::Array(links)) = d.fields.get_mut(SWATCH_ROWS) {
+        for (l, c) in links.iter_mut().zip(&saved) {
+            if given.contains(c) {
+                *l = Value::Null;
+            }
+        }
+    }
     d.fields.insert(THEME_PICKS.into(), json!([]));
     d.fields.remove(REDUCED);
     sync(app, d);
@@ -797,8 +812,8 @@ fn swatch_row<'a>(d: &Dialog, rs: &'a [Value], own: &[Value], i: usize) -> Optio
 }
 
 /// The color an excluded row leaves its swatch, the row being the `i`th of the rows with current
-/// colors: the swatch's own color in `assign` (the group's colors, with art), else the row's first
-/// current color, which is its swatch's color without art.
+/// colors: the swatch's own color in `assign` (the group's colors), else the row's first current
+/// color.
 fn kept_color<'a>(assign: &'a [Value], i: usize, row: &'a Value) -> Option<&'a Value> {
     assign.get(i).or_else(|| row["from"].as_array().and_then(|f| f.first()))
 }
@@ -3855,6 +3870,67 @@ mod tests {
         assert_eq!(p["groupColors"][0], "keep", "so the Global Adjust leaves it as it is too: {p}");
         act(&mut app, &ctx, 0.1, "save").unwrap();
         assert_eq!(group_hex(&app, "Plain"), Some(vec!["#ff0000".into(), "#0000ff".into()]), "so does Save Changes");
+    }
+
+    /// Without art, a row excluded after Save Changes gave its swatch a new color leaves the swatch
+    /// that saved color at a second Save Changes, as OK does.
+    #[test]
+    fn saving_a_group_without_art_keeps_a_saved_color_when_its_row_is_excluded() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "Plain", "colors": ["#ff0000", "#0000ff"], "keepModel": true})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "Plain"})).unwrap();
+        frame(&mut app, &ctx, 0.0, vec![], 0);
+        set_row(&mut app, "#ff0000", json!("rgb 0 128 0"));
+        act(&mut app, &ctx, 0.1, "save").unwrap();
+        assert_eq!(group_hex(&app, "Plain"), Some(vec!["#008000".into(), "#0000ff".into()]));
+        let d = app.ui.dialog.as_mut().unwrap();
+        let mut rs = super::rows(d);
+        for r in &mut rs {
+            if r["to"] == json!("rgb 0 128 0") {
+                r["exclude"] = json!(true);
+            }
+        }
+        d.fields.insert("rows".into(), Value::Array(rs));
+        assert_eq!(sent_hex(&app), ["#008000", "#0000ff"], "OK keeps the saved color");
+        act(&mut app, &ctx, 0.2, "save").unwrap();
+        assert_eq!(group_hex(&app, "Plain"), Some(vec!["#008000".into(), "#0000ff".into()]), "so does a second Save Changes");
+    }
+
+    /// Save Changes that recolors linked art so that one swatch takes another swatch's old color:
+    /// read again, the row of the second swatch's new color gives that swatch a later new color.
+    #[test]
+    fn saving_a_group_twice_with_linked_art_finds_the_row_of_a_swatchs_new_color() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        app.run("file.new", json!({"width": 300, "height": 100})).unwrap();
+        let (red, blue) = (square(&mut app, 10.0, "#ff0000"), square(&mut app, 40.0, "#0000ff"));
+        app.run("select.set", json!({"ids": [red, blue]})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "Linked", "fromArtwork": true, "toGlobal": true})).unwrap();
+        assert_eq!(group_hex(&app, "Linked"), Some(vec!["#ff0000".into(), "#0000ff".into()]));
+        app.run("ui.recolorDialog", json!({"group": "Linked"})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("method".into(), json!(Method::Exact.id()));
+        crate::theme::install_fonts(&ctx);
+        frame(&mut app, &ctx, 0.0, vec![], 0);
+        set_row(&mut app, "#ff0000", json!("rgb 0 0 255"));
+        set_row(&mut app, "#0000ff", json!("rgb 0 128 0"));
+        act(&mut app, &ctx, 0.1, "save").unwrap();
+        frame(&mut app, &ctx, 0.2, vec![], 0);
+        assert_eq!(group_hex(&app, "Linked"), Some(vec!["#0000ff".into(), "#008000".into()]));
+        let d = app.ui.dialog.as_mut().unwrap();
+        let mut rs = super::rows(d);
+        for r in &mut rs {
+            if from_colors(r).first().map(|c| c.to_hex()).as_deref() == Some("#008000") {
+                r["to"] = json!("rgb 128 0 128");
+                r["exclude"] = json!(false);
+            }
+        }
+        d.fields.insert("rows".into(), Value::Array(rs));
+        assert_eq!(sent_hex(&app), ["#0000ff", "#800080"], "OK gives the green swatch the green row's new color");
+        act(&mut app, &ctx, 0.3, "save").unwrap();
+        assert_eq!(group_hex(&app, "Linked"), Some(vec!["#0000ff".into(), "#800080".into()]), "so does Save Changes");
     }
 
     /// Save Changes with a Global Adjust: the saved group holds it, the rows' new colors take it and
