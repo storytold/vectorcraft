@@ -49,6 +49,10 @@ font-technology	Variable	バリアブル
 	Cap Height	キャップハイト
 	x-Height	x ハイト
 	ICF Box	平均字面
+	Show Sample	サンプルを表示
+	Hide Sample	サンプルを隠す
+	Max Ascent/Descent	最大アセント/ディセント
+	Max Ascender	最大アセンダ
 	Proportional Metrics	プロポーショナルメトリクス
 	H or V Style	横組み・縦組み用かな
 	Roman Italics	欧文イタリック

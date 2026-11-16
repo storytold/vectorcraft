@@ -1034,6 +1034,10 @@ font-technology	Variable	Вариативные
 	Em Box	Кегельная площадка
 	x-Height	Высота строчных
 	ICF Box	Рамка ICF
+	Show Sample	Показать образец
+	Hide Sample	Скрыть образец
+	Max Ascent/Descent	Макс. высота/глубина
+	Max Ascender	Макс. выносной элемент вверх
 	Em Dash	Длинное тире
 	Em Space	Круглая шпация
 	Embed	Внедрить

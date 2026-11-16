@@ -976,6 +976,10 @@ antiAlias	Sharp	锐利
 	Cap Height	大写字母高度
 	x-Height	x 字高
 	ICF Box	ICF 框
+	Show Sample	显示样本
+	Hide Sample	隐藏样本
+	Max Ascent/Descent	最大上升/下降
+	Max Ascender	最大上伸部
 	Em Dash	长破折号
 	Em Space	全角空格
 	Embed	嵌入

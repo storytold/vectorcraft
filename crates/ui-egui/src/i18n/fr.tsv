@@ -5423,6 +5423,10 @@ liquify-list-end	{0}, {1}	{0} et {1}
 	Em Box	Cadratin
 	x-Height	Hauteur d’x
 	ICF Box	Cadre ICF
+	Show Sample	Afficher l'échantillon
+	Hide Sample	Masquer l'échantillon
+	Max Ascent/Descent	Hauteur/profondeur max.
+	Max Ascender	Jambage ascendant max.
 	ICF Top/Right	ICF haut/droite
 	ICF Bottom/Left	ICF bas/gauche
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` est la référence d’étape {r}, que seuls `run` et `command_batch` résolvent

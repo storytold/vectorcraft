@@ -43,6 +43,10 @@ font-technology	Variable	가변
 	Cap Height	대문자 높이
 	x-Height	x 높이
 	ICF Box	ICF 박스
+	Show Sample	샘플 표시
+	Hide Sample	샘플 숨기기
+	Max Ascent/Descent	최대 어센트/디센트
+	Max Ascender	최대 어센더
 	Proportional Metrics	비례 메트릭
 	H or V Style	가로 또는 세로 스타일
 	Roman Italics	로마자 이탤릭

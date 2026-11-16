@@ -2377,6 +2377,10 @@ antiAlias	Sharp	शार्प
 	ICC Profile	ICC प्रोफ़ाइल
 	ICF Bottom/Left	ICF बॉटम/लेफ्ट
 	ICF Box	ICF बॉक्स
+	Show Sample	नमूना दिखाएँ
+	Hide Sample	नमूना छिपाएँ
+	Max Ascent/Descent	अधिकतम एसेंट/डिसेंट
+	Max Ascender	अधिकतम एसेंडर
 	ICF Top/Right	ICF ऊपर/दाएँ
 	Identify Objects By	ऑब्जेक्ट्स की पहचान करके
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	अगर ड्रॉइंग टैबलेट के पेन से ड्रॉ नहीं हो रहा, तो X11 (XWayland) ऑप्शन चुनें।

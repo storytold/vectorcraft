@@ -7065,6 +7065,10 @@ theme	Appearance	Aparença
 	Em Box	Caixa em
 	x-Height	Alçada de la x
 	ICF Box	Caixa ICF
+	Show Sample	Mostra l'exemple
+	Hide Sample	Amaga l'exemple
+	Max Ascent/Descent	Alçada/profunditat màx.
+	Max Ascender	Ascendent màx.
 # Average & Join (Object › Path, Cmd+Alt+Shift+J).
 	Average & Join…	Mitjana i unió…
 	Average & Join	Mitjana i unió

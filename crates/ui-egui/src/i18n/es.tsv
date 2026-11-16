@@ -1036,6 +1036,10 @@ font-technology	Variable	Variables
 	Em Box	Cuadro eme
 	x-Height	Altura de la x
 	ICF Box	Cuadro ICF
+	Show Sample	Mostrar muestra
+	Hide Sample	Ocultar muestra
+	Max Ascent/Descent	Altura/profundidad máx.
+	Max Ascender	Ascendente máx.
 	Em Dash	Raya
 	Em Space	Espacio eme
 	Embed	Incrustar
