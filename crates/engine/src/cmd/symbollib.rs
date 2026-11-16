@@ -499,12 +499,13 @@ fn instance(name: &str) -> Node {
 }
 
 /// Symbol `from`'s Symbol Options in `src` (natural size, registration, export type, 9-slice
-/// guides) given to symbol `to` of `d`.
+/// guides, Align to Pixel Grid) given to symbol `to` of `d`.
 fn copy_options(src: &Document, from: &str, d: &mut Document, to: &str) {
     set_natural_size(d, to, Some(natural_size(src, from)));
     d.set_symbol_registration(to, src.symbol_registration(from));
     d.set_symbol_export_type(to, src.symbol_export_type(from));
     d.set_symbol_nine_slice(to, src.symbol_nine_slice(from));
+    d.set_symbol_pixel_aligned(to, src.symbol_pixel_aligned(from));
 }
 
 fn builtin_info(b: &BuiltinSymbolLibrary) -> LibraryInfo {
