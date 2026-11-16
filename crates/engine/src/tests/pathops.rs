@@ -534,11 +534,12 @@ fn offset_path_stops_after_the_first_failure() {
 }
 
 /// A straight line, closed as the Shape Modes close open paths, encloses no area, so it does not
-/// change the result: Unite, Minus Front, Exclude and Minus Back still give the 100 pt square's area
+/// change the result's shape: Unite, Minus Front, Exclude and Minus Back still give the 100 pt square's area
 /// (with a line in a group selected beside it, the group's square too), and the reply carries a
-/// warning that names Outline Stroke; where the line leaves nothing (Intersect, or the backmost
-/// object in Minus Front), the error names it, and where the other objects leave nothing anyway, it
-/// doesn't. An open evenodd square traced twice is the same. An open path
+/// warning that names Outline Stroke, as it does with the line in a compound path or in a group
+/// selected alone; where the line leaves nothing (Intersect, the backmost object in Minus Front, or
+/// the frontmost in Minus Back), the error names it, and where the other objects leave nothing
+/// anyway, a flat closed path included, it doesn't. An open evenodd square traced twice is the same. An open path
 /// that encloses an area once closed (a bow tie whose lobes cancel in signed area included), closed
 /// shapes alone, and Divide, where a line cuts, give no warning (#7849).
 #[test]
@@ -569,19 +570,25 @@ fn shape_modes_report_lines_that_enclose_no_area() {
         s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
         id_of(s.execute("object.group", &json!({})).unwrap())
     }
+    fn compound_line_of(s: &mut Session) -> NodeId {
+        let ids = [line_of(s), rect(s, 200.0, 0.0, 100.0, 100.0)];
+        s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+        id_of(s.execute("object.compoundPath.make", &json!({})).unwrap())
+    }
     fn square_of(s: &mut Session) -> NodeId {
         rect(s, 50.0, 0.0, 100.0, 100.0)
     }
     type Build = fn(&mut Session) -> NodeId;
     // (case, command, the other object, whether it goes behind the 100 pt square, warned, area drawn)
     type Case = (&'static str, &'static str, Build, bool, bool, Option<f64>);
-    let cases: [Case; 11] = [
+    let cases: [Case; 12] = [
         ("a line", "unite", line_of, false, true, Some(10_000.0)),
         ("a line in front", "minusFront", line_of, false, true, Some(10_000.0)),
         ("a line", "exclude", line_of, false, true, Some(10_000.0)),
         ("a line behind", "minusBack", line_of, true, true, Some(10_000.0)),
         ("an open evenodd square traced twice", "unite", twice_around_of, false, true, Some(10_000.0)),
         ("a group of a line and a square", "unite", grouped_line_of, false, true, Some(20_000.0)),
+        ("a compound path of a line and a square", "unite", compound_line_of, false, true, Some(20_000.0)),
         ("an open path that encloses an area", "unite", vee_of, false, false, None),
         ("an open bow tie, whose signed area is zero", "unite", bow_tie_of, false, false, None),
         ("a square", "unite", square_of, false, false, Some(15_000.0)),
@@ -606,11 +613,23 @@ fn shape_modes_report_lines_that_enclose_no_area() {
             assert!((got - want).abs() < 1.0, "{what}, {op}: area {got}, want {want}");
         }
     }
-    // A line that leaves nothing (Intersect, or the backmost object in Minus Front) gives an error
-    // that names it; two squares that don't meet give the plain one.
+    // A group of a line and a square selected alone: its members are the shapes, and the line warns.
+    let mut s = session();
+    let group = grouped_line_of(&mut s);
+    s.execute("select.set", &json!({"ids": [group.0]})).unwrap();
+    let r = s.execute("object.pathfinder.unite", &json!({})).unwrap();
+    assert_eq!(r.get("warning").and_then(Value::as_str), Some(SHAPE_MODE_OPEN_PATH_NO_AREA), "{r}");
+    let got = area_of(&s, ids(&r)[0]);
+    assert!((got - 10_000.0).abs() < 1.0, "a group alone: area {got}");
+    // A line that leaves nothing (Intersect, the backmost object in Minus Front, or the frontmost in
+    // Minus Back) gives an error that names it; two squares that don't meet give the plain one.
     // (command, the other object, whether it goes behind the square, whether the error names the line)
-    let cases: [(&str, Build, bool, bool); 3] =
-        [("intersect", line_of, false, true), ("minusFront", line_of, true, true), ("intersect", |s| rect(s, 300.0, 0.0, 50.0, 50.0), false, false)];
+    let cases: [(&str, Build, bool, bool); 4] = [
+        ("intersect", line_of, false, true),
+        ("minusFront", line_of, true, true),
+        ("minusBack", line_of, false, true),
+        ("intersect", |s| rect(s, 300.0, 0.0, 50.0, 50.0), false, false),
+    ];
     for (op, build, behind, named) in cases {
         let mut s = session();
         let (back, front) = if behind {
@@ -631,6 +650,14 @@ fn shape_modes_report_lines_that_enclose_no_area() {
     s.execute("select.set", &json!({"ids": objects.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
     let e = s.execute("object.pathfinder.intersect", &json!({})).unwrap_err().to_string();
     assert!(e.contains("produced an empty result") && !e.contains("Outline Stroke"), "{e}");
+    // A closed path without area (a flat one) leaves Intersect empty with or without the line, so
+    // the error is the plain one.
+    let mut s = session();
+    let flat = id_of(s.execute("path.create", &json!({"d": "M50 0 L50 100 Z"})).unwrap());
+    let objects = [rect(&mut s, 0.0, 0.0, 100.0, 100.0), flat, line_of(&mut s)];
+    s.execute("select.set", &json!({"ids": objects.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    let e = s.execute("object.pathfinder.intersect", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("produced an empty result") && !e.contains("Outline Stroke"), "a flat closed path: {e}");
 }
 
 #[test]

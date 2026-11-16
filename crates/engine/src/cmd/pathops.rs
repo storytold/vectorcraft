@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Unite",
             ["Window", "Pathfinder"],
             None,
-            "{ids?: [id…] (selected first; default: the selection), precision?: pt 0.001..10, removeRedundantPoints?: bool, removeUnpainted?: bool (default: the Pathfinder Options, see object.pathfinder.options; the values used join the journal entry)} operate on the selected objects (back → front) → {ids, warning?: when a selected object is or holds a line or another open path that encloses no area once closed, and so does not change the result (when such a path leaves the result empty, as in Intersect, the error says so)}",
+            "{ids?: [id…] (selected first; default: the selection), precision?: pt 0.001..10, removeRedundantPoints?: bool, removeUnpainted?: bool (default: the Pathfinder Options, see object.pathfinder.options; the values used join the journal entry)} operate on the selected objects (back → front) → {ids, warning?: when a selected object is or holds a line or another open path that encloses no area once closed, and so does not change the result's shape (when such a path leaves the result empty, as in Intersect, the error says so)}",
             has_selection,
             |s, p| run_pf(s, p, PathfinderOp::Unite)
         ),
@@ -36,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Minus Front",
             ["Window", "Pathfinder"],
             None,
-            "{ids?: [id…] (selected first; default: the selection), precision?: pt 0.001..10, removeRedundantPoints?: bool, removeUnpainted?: bool (default: the Pathfinder Options, see object.pathfinder.options; the values used join the journal entry)} operate on the selected objects (back → front) → {ids, warning?: when a selected object is or holds a line or another open path that encloses no area once closed, and so does not change the result (when such a path leaves the result empty, as in Intersect, the error says so)}",
+            "{ids?: [id…] (selected first; default: the selection), precision?: pt 0.001..10, removeRedundantPoints?: bool, removeUnpainted?: bool (default: the Pathfinder Options, see object.pathfinder.options; the values used join the journal entry)} operate on the selected objects (back → front) → {ids, warning?: when a selected object is or holds a line or another open path that encloses no area once closed, and so does not change the result's shape (when such a path leaves the result empty, as in Intersect, the error says so)}",
             has_selection,
             |s, p| run_pf(s, p, PathfinderOp::MinusFront)
         ),
@@ -45,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Intersect",
             ["Window", "Pathfinder"],
             None,
-            "{ids?: [id…] (selected first; default: the selection), precision?: pt 0.001..10, removeRedundantPoints?: bool, removeUnpainted?: bool (default: the Pathfinder Options, see object.pathfinder.options; the values used join the journal entry)} operate on the selected objects (back → front) → {ids, warning?: when a selected object is or holds a line or another open path that encloses no area once closed, and so does not change the result (when such a path leaves the result empty, as in Intersect, the error says so)}",
+            "{ids?: [id…] (selected first; default: the selection), precision?: pt 0.001..10, removeRedundantPoints?: bool, removeUnpainted?: bool (default: the Pathfinder Options, see object.pathfinder.options; the values used join the journal entry)} operate on the selected objects (back → front) → {ids, warning?: when a selected object is or holds a line or another open path that encloses no area once closed, and so does not change the result's shape (when such a path leaves the result empty, as in Intersect, the error says so)}",
             has_selection,
             |s, p| run_pf(s, p, PathfinderOp::Intersect)
         ),
@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Exclude",
             ["Window", "Pathfinder"],
             None,
-            "{ids?: [id…] (selected first; default: the selection), precision?: pt 0.001..10, removeRedundantPoints?: bool, removeUnpainted?: bool (default: the Pathfinder Options, see object.pathfinder.options; the values used join the journal entry)} operate on the selected objects (back → front) → {ids, warning?: when a selected object is or holds a line or another open path that encloses no area once closed, and so does not change the result (when such a path leaves the result empty, as in Intersect, the error says so)}",
+            "{ids?: [id…] (selected first; default: the selection), precision?: pt 0.001..10, removeRedundantPoints?: bool, removeUnpainted?: bool (default: the Pathfinder Options, see object.pathfinder.options; the values used join the journal entry)} operate on the selected objects (back → front) → {ids, warning?: when a selected object is or holds a line or another open path that encloses no area once closed, and so does not change the result's shape (when such a path leaves the result empty, as in Intersect, the error says so)}",
             has_selection,
             |s, p| run_pf(s, p, PathfinderOp::Exclude)
         ),
@@ -108,7 +108,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Minus Back",
             ["Window", "Pathfinder"],
             None,
-            "{ids?: [id…] (selected first; default: the selection), precision?: pt 0.001..10, removeRedundantPoints?: bool, removeUnpainted?: bool (default: the Pathfinder Options, see object.pathfinder.options; the values used join the journal entry)} operate on the selected objects (back → front) → {ids, warning?: when a selected object is or holds a line or another open path that encloses no area once closed, and so does not change the result (when such a path leaves the result empty, as in Intersect, the error says so)}",
+            "{ids?: [id…] (selected first; default: the selection), precision?: pt 0.001..10, removeRedundantPoints?: bool, removeUnpainted?: bool (default: the Pathfinder Options, see object.pathfinder.options; the values used join the journal entry)} operate on the selected objects (back → front) → {ids, warning?: when a selected object is or holds a line or another open path that encloses no area once closed, and so does not change the result's shape (when such a path leaves the result empty, as in Intersect, the error says so)}",
             has_selection,
             |s, p| run_pf(s, p, PathfinderOp::MinusBack)
         ),
@@ -285,11 +285,10 @@ impl Style {
     }
 }
 
-/// All subpaths of a path or compound path node, in document coordinates, with its fill rule.
 /// The Shape Mode commands' warning, which the status bar shows, when a selected object is or holds
-/// a line or another open path that encloses no area once closed, and so does not change the result.
-pub const SHAPE_MODE_OPEN_PATH_NO_AREA: &str =
-    "a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first";
+/// a line or another open path that encloses no area once closed, and so does not change the result's
+/// shape (the result still takes its paint from the frontmost object, as without the warning).
+pub const SHAPE_MODE_OPEN_PATH_NO_AREA: &str = "a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first";
 
 /// `path` has an open subpath that encloses no area once closed (a straight line, or an evenodd
 /// contour traced twice), by the area its fill rule gives, so a self-crossing path whose signed
@@ -317,6 +316,7 @@ fn closed_area(path: &PathData, rule: FillRule) -> f64 {
     po::area(&closed, rule)
 }
 
+/// All subpaths of a path or compound path node, in document coordinates, with its fill rule.
 pub(crate) fn node_path(n: &Node) -> Option<(PathData, FillRule)> {
     match &n.kind {
         NodeKind::Path { path, rule, .. } => Some((path.clone(), *rule)),
@@ -708,10 +708,14 @@ fn run_pf(s: &mut Session, p: &Value, op: PathfinderOp) -> Result<Value> {
             }
         }
         if results.iter().all(|r| r.path.is_empty()) {
-            // The lines left the result empty when the shapes that enclose an area give a result
-            // without them, or when no such shape is selected.
+            // The lines left the result empty when the other shapes give a result without them, or
+            // when nothing else is selected. A closed shape without area stays among the others.
             let lines_emptied = no_area && {
-                let kept: Vec<po::Shape> = shapes.iter().filter(|s| closed_area(&s.path, s.rule) > 0.0).cloned().collect();
+                let kept: Vec<po::Shape> = shapes
+                    .iter()
+                    .filter(|s| closed_area(&s.path, s.rule) > 0.0 || !has_open_subpath_without_area(&s.path, s.rule))
+                    .cloned()
+                    .collect();
                 kept.is_empty() || po::pathfinder_with(op, &kept, options.precision).iter().any(|r| !r.path.is_empty())
             };
             if lines_emptied {

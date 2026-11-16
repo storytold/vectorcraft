@@ -4471,7 +4471,7 @@ imageTrace	Outline	轮廓
 @msg	{label}: lost track of a shape's style	{label}：丢失了某个形状的样式
 @msg	{label}: select paths	{label}：请选择路径
 @msg	{label}: select paths, compound paths, groups or text	{label}：请选择路径、复合路径、编组或文字
-@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	直线或其他不围成区域的开放路径不会改变结果；要包含它，请先对其应用“对象 › 路径 › 轮廓化描边”
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	直线或其他不围成区域的开放路径不会改变结果的形状；要包含它，请先对其应用“对象 › 路径 › 轮廓化描边”
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} 生成了空结果：直线或其他开放路径不围成区域；要包含它，请先对其应用“对象 › 路径 › 轮廓化描边”
 @msg	already editing a pattern	已在编辑图案
 @msg	no pattern `{name}`	没有图案 `{name}`

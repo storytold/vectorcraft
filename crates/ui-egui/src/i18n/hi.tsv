@@ -6048,7 +6048,7 @@ antiAlias	Sharp	शार्प
 @msg	{label}: lost track of a shape's style	{label}: एक आकार की स्टाइल का ट्रैक खो गया
 @msg	{label}: select paths	{label}: चुनें पाथ
 @msg	{label}: select paths, compound paths, groups or text	{label}: चुनें पाथ, यौगिक पाथ, समूह या टेक्स्ट
-@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	कोई रेखा या अन्य खुला पाथ जो कोई क्षेत्र नहीं घेरता, परिणाम को नहीं बदलता; इसे शामिल करने के लिए पहले उस पर ऑब्जेक्ट › पाथ › स्ट्रोक को आउटलाइन में बदलें लागू करें
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	कोई रेखा या अन्य खुला पाथ जो कोई क्षेत्र नहीं घेरता, परिणाम के आकार को नहीं बदलता; इसे शामिल करने के लिए पहले उस पर ऑब्जेक्ट › पाथ › स्ट्रोक को आउटलाइन में बदलें लागू करें
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} ने खाली परिणाम का उत्पादन किया: कोई रेखा या अन्य खुला पाथ कोई क्षेत्र नहीं घेरता; इसे शामिल करने के लिए पहले उस पर ऑब्जेक्ट › पाथ › स्ट्रोक को आउटलाइन में बदलें लागू करें
 @msg	{label}…	{label}...
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}

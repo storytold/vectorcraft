@@ -5009,7 +5009,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	{label}: lost track of a shape's style	{label}: şeklin stilinin izini kaybettirdi
 @msg	{label}: select paths	{label}: yolları seç
 @msg	{label}: select paths, compound paths, groups or text	{label}: yolları, bileşik yolları, grupları veya metni seçin
-@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	alan çevrelemeyen bir çizgi veya başka bir açık yol sonucu değiştirmez; dahil etmek için önce ona Nesne › Yol › Anahat Konturu uygulayın
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	alan çevrelemeyen bir çizgi veya başka bir açık yol sonucun şeklini değiştirmez; dahil etmek için önce ona Nesne › Yol › Anahat Konturu uygulayın
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} boş bir sonuç üretti: bir çizgi veya başka bir açık yol alan çevrelemiyor; dahil etmek için önce ona Nesne › Yol › Anahat Konturu uygulayın
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC uyumsuzluğu

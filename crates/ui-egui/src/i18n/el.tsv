@@ -5239,7 +5239,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	{label}: lost track of a shape's style	{label}: χάθηκε η παρακολούθηση του στυλ σχήματος
 @msg	{label}: select paths	{label}: επιλέξτε διαδρομές
 @msg	{label}: select paths, compound paths, groups or text	{label}: επιλέξτε διαδρομές, σύνθετες διαδρομές, ομάδες ή κείμενο
-@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	μια γραμμή ή άλλη ανοιχτή διαδρομή που δεν περικλείει εμβαδόν δεν αλλάζει το αποτέλεσμα· για να τη συμπεριλάβετε, εφαρμόστε της πρώτα Αντικείμενο › Διαδρομή › Μετατροπή περιγράμματος σε διαδρομή
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	μια γραμμή ή άλλη ανοιχτή διαδρομή που δεν περικλείει εμβαδόν δεν αλλάζει το σχήμα του αποτελέσματος· για να τη συμπεριλάβετε, εφαρμόστε της πρώτα Αντικείμενο › Διαδρομή › Μετατροπή περιγράμματος σε διαδρομή
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	το {label} παρήγαγε κενό αποτέλεσμα: μια γραμμή ή άλλη ανοιχτή διαδρομή δεν περικλείει εμβαδόν· για να τη συμπεριλάβετε, εφαρμόστε της πρώτα Αντικείμενο › Διαδρομή › Μετατροπή περιγράμματος σε διαδρομή
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: ασυμφωνία CRC

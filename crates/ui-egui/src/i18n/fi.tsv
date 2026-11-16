@@ -5508,7 +5508,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	{label}: lost track of a shape's style	{label}: muodon tyyli kadotettiin
 @msg	{label}: select paths	{label}: valitse polkuja
 @msg	{label}: select paths, compound paths, groups or text	{label}: valitse polkuja, yhdistelmäpolkuja, ryhmiä tai tekstiä
-@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	viiva tai muu avoin polku, joka ei rajaa aluetta, ei muuta tulosta; jos haluat sisällyttää sen, käytä siihen ensin komentoa Objekti › Polku › Ääriviivaa viiva
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	viiva tai muu avoin polku, joka ei rajaa aluetta, ei muuta tuloksen muotoa; jos haluat sisällyttää sen, käytä siihen ensin komentoa Objekti › Polku › Ääriviivaa viiva
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} tuotti tyhjän tuloksen: viiva tai muu avoin polku ei rajaa aluetta; jos haluat sisällyttää sen, käytä siihen ensin komentoa Objekti › Polku › Ääriviivaa viiva
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC ei täsmää

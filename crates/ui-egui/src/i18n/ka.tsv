@@ -6953,7 +6953,7 @@ font-technology	Variable	ცვლადი
 @msg	{label}: lost track of a shape's style	{label}: ფიგურის სტილი დაიკარგა
 @msg	{label}: select paths	{label}: მონიშნეთ ტრაექტორიები
 @msg	{label}: select paths, compound paths, groups or text	{label}: მონიშნეთ ტრაექტორიები, შედგენილი ტრაექტორიები, ჯგუფები ან ტექსტი
-@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	ხაზი ან სხვა ღია ტრაექტორია, რომელიც ფართობს არ შემოსაზღვრავს, შედეგს არ ცვლის; მის ჩასართავად ჯერ გამოიყენეთ ობიექტი › ტრაექტორია › კონტურის ფიგურად გარდაქმნა
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	ხაზი ან სხვა ღია ტრაექტორია, რომელიც ფართობს არ შემოსაზღვრავს, შედეგის ფორმას არ ცვლის; მის ჩასართავად ჯერ გამოიყენეთ ობიექტი › ტრაექტორია › კონტურის ფიგურად გარდაქმნა
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label}-მა ცარიელი შედეგი მოგვცა: ხაზი ან სხვა ღია ტრაექტორია ფართობს არ შემოსაზღვრავს; მის ჩასართავად ჯერ გამოიყენეთ ობიექტი › ტრაექტორია › კონტურის ფიგურად გარდაქმნა
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC არ ემთხვევა

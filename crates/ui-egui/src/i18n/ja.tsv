@@ -4773,7 +4773,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{label}: lost track of a shape's style	{label}: シェイプのスタイル情報が失われました
 @msg	{label}: select paths	{label}: パスを選択してください
 @msg	{label}: select paths, compound paths, groups or text	{label}: パス、複合パス、グループ、テキストのいずれかを選択してください
-@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	領域を囲まない直線などのオープンパスは、結果を変えません。含めるには、先にそのパスに「オブジェクト › パス › パスのアウトライン」を適用してください
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	領域を囲まない直線などのオープンパスは、結果の形を変えません。含めるには、先にそのパスに「オブジェクト › パス › パスのアウトライン」を適用してください
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} の結果が空になりました。領域を囲まない直線などのオープンパスがあります。含めるには、先にそのパスに「オブジェクト › パス › パスのアウトライン」を適用してください
 @msg	already editing a pattern	すでにパターンを編集中です
 @msg	no pattern `{name}`	パターン `{name}` が見つかりません

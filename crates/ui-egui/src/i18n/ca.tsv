@@ -6743,7 +6743,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	{label}: lost track of a shape's style	{label}: s’ha perdut el rastre de l’estil d’una forma
 @msg	{label}: select paths	{label}: selecciona traçats
 @msg	{label}: select paths, compound paths, groups or text	{label}: selecciona traçats, traçats compostos, grups o text
-@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	una línia o un altre traçat obert que no tanca cap àrea no canvia el resultat; per incloure’l, apliqueu-hi primer Objecte › Traçat › Contorneja el traç
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	una línia o un altre traçat obert que no tanca cap àrea no canvia la forma del resultat; per incloure’l, apliqueu-hi primer Objecte › Traçat › Contorneja el traç
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} ha produït un resultat buit: una línia o un altre traçat obert no tanca cap àrea; per incloure’l, apliqueu-hi primer Objecte › Traçat › Contorneja el traç
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC no coincideix

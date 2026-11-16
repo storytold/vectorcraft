@@ -5584,7 +5584,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	{label}: lost track of a shape's style	{label}: ztratil se styl tvaru
 @msg	{label}: select paths	{label}: vyberte cesty
 @msg	{label}: select paths, compound paths, groups or text	{label}: vyberte cesty, složené cesty, skupiny nebo text
-@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	čára nebo jiná otevřená cesta, která neohraničuje žádnou plochu, nemění výsledek; chcete-li ji zahrnout, použijte na ni nejprve Objekt › Cesta › Převést tah na obrys
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	čára nebo jiná otevřená cesta, která neohraničuje žádnou plochu, nemění tvar výsledku; chcete-li ji zahrnout, použijte na ni nejprve Objekt › Cesta › Převést tah na obrys
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} vytvořil prázdný výsledek: čára nebo jiná otevřená cesta neohraničuje žádnou plochu; chcete-li ji zahrnout, použijte na ni nejprve Objekt › Cesta › Převést tah na obrys
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: nesouhlasí CRC

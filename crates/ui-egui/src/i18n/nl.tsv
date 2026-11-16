@@ -5584,7 +5584,7 @@ imageTrace	Outline	Contour
 @msg	{label}: lost track of a shape's style	{label}: de stijl van een vorm is kwijtgeraakt
 @msg	{label}: select paths	{label}: selecteer paden
 @msg	{label}: select paths, compound paths, groups or text	{label}: selecteer paden, samengestelde paden, groepen of tekst
-@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	een lijn of ander open pad dat geen oppervlak omsluit, verandert het resultaat niet; pas er eerst Object › Pad › Contour omzetten op toe om het op te nemen
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	een lijn of ander open pad dat geen oppervlak omsluit, verandert de vorm van het resultaat niet; pas er eerst Object › Pad › Contour omzetten op toe om het op te nemen
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} leverde een leeg resultaat op: een lijn of ander open pad omsluit geen oppervlak; pas er eerst Object › Pad › Contour omzetten op toe om het op te nemen
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC komt niet overeen

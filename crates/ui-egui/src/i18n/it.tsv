@@ -5318,7 +5318,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	{label}: lost track of a shape's style	{label}: lo stile di una forma è andato perso
 @msg	{label}: select paths	{label}: seleziona tracciati
 @msg	{label}: select paths, compound paths, groups or text	{label}: seleziona tracciati, tracciati composti, gruppi o testo
-@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	una linea o un altro tracciato aperto che non racchiude alcuna area non modifica il risultato; per includerlo, applica prima Oggetto › Tracciato › Contorna traccia
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	una linea o un altro tracciato aperto che non racchiude alcuna area non modifica la forma del risultato; per includerlo, applica prima Oggetto › Tracciato › Contorna traccia
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} ha prodotto un risultato vuoto: una linea o un altro tracciato aperto non racchiude alcuna area; per includerlo, applica prima Oggetto › Tracciato › Contorna traccia
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC non corrispondente

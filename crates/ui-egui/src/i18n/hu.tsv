@@ -6120,7 +6120,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	{label}: lost track of a shape's style	{label}: egy alakzat stílusa elveszett
 @msg	{label}: select paths	{label}: jelölj ki útvonalakat
 @msg	{label}: select paths, compound paths, groups or text	{label}: jelölj ki útvonalakat, összetett útvonalakat, csoportokat vagy szöveget
-@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	egy vonal vagy más nyitott útvonal, amely nem zár közre területet, nem változtatja meg az eredményt; a felvételéhez előbb alkalmazza rá az Objektum › Útvonal › Körvonal útvonallá alakítása parancsot
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	egy vonal vagy más nyitott útvonal, amely nem zár közre területet, nem változtatja meg az eredmény alakját; a felvételéhez előbb alkalmazza rá az Objektum › Útvonal › Körvonal útvonallá alakítása parancsot
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	üres eredmény: {label}: egy vonal vagy más nyitott útvonal nem zár közre területet; a felvételéhez előbb alkalmazza rá az Objektum › Útvonal › Körvonal útvonallá alakítása parancsot
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC-eltérés

@@ -5316,7 +5316,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	{label}: lost track of a shape's style	{label}: потерян стиль фигуры
 @msg	{label}: select paths	{label}: выделите контуры
 @msg	{label}: select paths, compound paths, groups or text	{label}: выделите контуры, составные контуры, группы или текст
-@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	линия или другой открытый контур, не охватывающий площади, не меняет результат; чтобы включить его, сначала примените к нему Объект › Контур › Обвести обводку
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	линия или другой открытый контур, не охватывающий площади, не меняет форму результата; чтобы включить его, сначала примените к нему Объект › Контур › Обвести обводку
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} дал пустой результат: линия или другой открытый контур не охватывает площади; чтобы включить его, сначала примените к нему Объект › Контур › Обвести обводку
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: несовпадение CRC
