@@ -558,7 +558,7 @@ fn delete_key(app: &mut VectorcraftApp, ui: &mut Ui) {
 fn thumbnail_drag(ui: &mut Ui, th: Rect, id: NodeId) {
     let resp = ui.interact(th, ui.scope_id().with("ap-thumb"), Sense::drag()).on_hover_text(tl!("Drag onto art to apply this appearance"));
     widgets::drag_source(ui, &resp, || PanelDrag::Appearance(id));
-    if resp.dragged() {
+    if resp.dragged_by(egui::PointerButton::Primary) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     }
 }
@@ -704,13 +704,13 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: 
     let lit = |item: Option<usize>, k: usize| effects.as_ref().is_some_and(|(list, ks)| *list == item && ks.contains(&k));
     let mut rows = vec![(Slot::Object { top: true }, object_row)];
     let mut stopped = false;
-    // Starts or ends a row drag.
+    // Starts (primary button only) or ends a row drag.
     let frozen = only.is_some();
     let mut track = |resp: &egui::Response, what: Dragged| {
         if frozen {
             return;
         }
-        if resp.drag_started() {
+        if resp.drag_started_by(egui::PointerButton::Primary) {
             set_pstate(&ctx, "ap-drag", Some(what));
             // Where the row was grabbed, for its dimmed copy under the pointer.
             // (From where the button went down: the drag starts once the pointer has moved on.)

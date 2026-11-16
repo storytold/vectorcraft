@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use super::layers::{Layers, parallel_map_at_most};
 use super::params::{Method, Mode, TraceParams};
 use super::raster::{Raster, TraceError};
-use super::{AtomicUsize, PathData, Quantized, TRANSPARENT, TracedGradient, TracedShape, gradient, group, logo, quantize, smooth};
+use super::{AtomicUsize, PathData, Quantized, TRANSPARENT, TracedGradient, TracedShape, deblock, gradient, group, logo, quantize, smooth};
 
 /// One traced shape: an outer contour plus its holes, filled with `color`, or (with `stroke`)
 /// lines stroked with it.
@@ -167,7 +167,9 @@ pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> R
 
 /// [`trace_within`], telling `steps` how far it has got: `steps(done, total)` after each stage
 /// that prepares the colour layers (`total` 0 while they aren't known yet) and after each colour
-/// layer, from whichever thread traced it. Once `steps` answers `false` the trace stops at the
+/// layer, from whichever thread traced it. Overlapping with Fills (without Create Strokes) counts
+/// in finer units instead: a share of `total` after each pass of each layer, in every round of
+/// enclosed areas (see `Layers::stacked`). Once `steps` answers `false` the trace stops at the
 /// next stage or layer with [`TraceError::Cancelled`].
 pub fn trace_watched(
     img: &Raster,
@@ -207,9 +209,21 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: &(
         Some(name) if params.ignore_white => Some(logo::parse_hex(name).ok_or_else(|| TraceError::BadPalette(name.clone()))?),
         _ => None,
     };
-    // A photo is traced from a copy with its noise smoothed away (see `smooth`).
-    let smoothed = (params.mode != Mode::BlackAndWhite && quantize::continuous_tone(img)).then(|| smooth::smoothed(img));
-    let img = smoothed.as_ref().unwrap_or(img);
+    // A JPEG's 8 x 8 block edges are smoothed away first (see `deblock`).
+    let strength = match params.mode {
+        Mode::BlackAndWhite => deblock::BLACK_AND_WHITE,
+        _ if params.colors > 16 => deblock::MANY_COLORS,
+        _ => deblock::FEW_COLORS,
+    };
+    // A photo is traced from a copy with its noise smoothed away (see `smooth`); the deblocked copy is
+    // dropped once it is smoothed.
+    let photo = |img: &Raster| params.mode != Mode::BlackAndWhite && quantize::continuous_tone(img);
+    let prepared = match deblock::deblocked(img, strength) {
+        Some(deblocked) if photo(&deblocked) => Some(smooth::smoothed(&deblocked)),
+        Some(deblocked) => Some(deblocked),
+        None => photo(img).then(|| smooth::smoothed(img)),
+    };
+    let img = prepared.as_ref().unwrap_or(img);
     go_on()?;
     // Gradients are found first and kept out of the palette: no colour is spent on bands of them.
     // Grayscale finds them in the image's grays (as its flat colours are), so their stops are gray.
@@ -236,9 +250,11 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: &(
     let (mut q, rare) = quantize::quantize_keeping(without.as_ref().unwrap_or(img), params);
     go_on()?;
     // The semi-transparent edge of a cut-out image traces as the color beside it.
-    if matches!(params.mode, Mode::Color | Mode::Grayscale) {
-        quantize::settle_cut_edges(&mut q, img, params.mode == Mode::Grayscale);
-    }
+    let blended = if matches!(params.mode, Mode::Color | Mode::Grayscale) {
+        quantize::settle_cut_edges(&mut q, img, params.mode == Mode::Grayscale)
+    } else {
+        Vec::new()
+    };
     drop(without);
     // Each gradient is a palette entry of its own (its colour: the gradient's middle).
     let mut gradients: Vec<Option<TracedGradient>> = vec![None; q.palette.len()];
@@ -256,7 +272,12 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: &(
     drop(grays);
     // Noise clears specks, not the regions of a rare colour Automatic kept on purpose.
     let keep: Vec<bool> = q.palette.iter().map(|c| rare.contains(c)).collect();
-    quantize::denoise_keeping(&mut q.labels, w, h, params.noise as usize, &keep);
+    // A speck far from the color around it joins the color beside it nearest its own pixels.
+    let labs = quantize::palette_labs(&q.palette);
+    let source =
+        quantize::Source { labs: &labs, rgba: &img.rgba, blended: &blended, gray: matches!(params.mode, Mode::Grayscale | Mode::BlackAndWhite) };
+    quantize::denoise_nearest(&mut q.labels, w, h, params.noise as usize, &keep, Some(&source));
+    drop(blended);
     go_on()?;
     // Ignore Color, background only: the labels traced, with the ignored color's areas that reach
     // the edge left out. Its other areas are traced with the rest. Edges are still placed by
@@ -336,10 +357,23 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: &(
     // A layer takes about ten bytes a pixel of its box while it is traced (its mask, the labels
     // of its components, the stack that fills them, its edges): as many layers at a time as fit
     // in half a gigabyte, so that a large image is not traced at the cost of gigabytes.
-    // (Overlapping labels a layer's mask once more before it is traced, with its labels and stack
-    // freed before the trace starts.)
     let largest = job.boxes.iter().flatten().map(|b| (b.2 - b.0) * (b.3 - b.1)).max().unwrap_or(1).max(1);
     let at_a_time = ((512 << 20) / (largest * 10)).max(1);
+    // Overlapping with Fills: each shape is filled whole, and what it encloses is traced again above it (see
+    // `Layers::stacked`). Lines (Create Strokes) and outlines (no Fills) are stacked as they always were.
+    if params.method == Method::Overlapping && params.fills && !params.strokes {
+        out.paths = job.stacked(&layers, largest, steps)?;
+        // The colors used, bottom layer first.
+        for &(_, ci) in &layers {
+            if let Some(&color) = q.palette.get(ci)
+                && !out.palette.contains(&color)
+                && out.paths.iter().any(|p| p.color == color)
+            {
+                out.palette.push(color);
+            }
+        }
+        return Ok(out);
+    }
     let total = layers.len() as u64;
     if !steps(0, total) {
         return Err(TraceError::Cancelled);

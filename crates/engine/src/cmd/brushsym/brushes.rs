@@ -1,7 +1,6 @@
 use super::{
     AppearanceItem, Arc, BTreeSet, Bristle, Brush, BrushKind, Color, Document, EngineError, Node, NodeId, NodeKind, Paint, Result, Session, Value,
-    anchor, bad, brush, check_numbers, find_command, id_param, ids_json, json, name_param, names_param, ok, roots, selection_art, set_unknown,
-    str_param,
+    anchor, bad, brush, check_numbers, find_command, ids_json, json, name_param, names_param, ok, roots, selection_art, set_unknown, str_param,
 };
 
 // ---------- brushes ----------
@@ -729,16 +728,23 @@ pub(super) fn expand_brush(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids_json(&out) }))
 }
 
+/// Paints a `path.freehand` stroke with the brush `brush` names, in one undo step with the path.
+/// A `brush` left out or null draws the plain path; a `brush` that is not a string or names no
+/// brush in the document, a `style` other than "pencil" or "brush", and a `brush` for a path with
+/// no stroke are errors before anything is drawn.
 pub(super) fn brush_freehand(s: &mut Session, p: &Value) -> Result<Value> {
-    let name = str_param(p, "brush").map(str::to_string).filter(|n| s.doc().is_ok_and(|st| brush::find(&st.doc, n).is_some()));
+    const C: &str = "brush.freehand";
+    let name = match crate::cmd::text_param(p, "brush", C)? {
+        None => None,
+        Some(n) if brush::find(&s.doc()?.doc, n).is_some() => Some(n.to_string()),
+        Some(n) => return Err(bad(C, format!("no brush named `{n}`"))),
+    };
+    match p.get("style") {
+        None | Some(Value::Null) => {}
+        Some(v) if matches!(v.as_str(), Some("pencil" | "brush")) => {}
+        Some(v) => return Err(bad(C, format!("`style` must be \"pencil\" or \"brush\", not {v}"))),
+    }
     let spec = find_command("path.freehand").ok_or_else(|| EngineError::UnknownCommand("path.freehand".into()))?;
-    let r = crate::cmd::run_checked(s, spec, p)?;
-    let (Some(name), Some(id)) = (name, id_param(&r, "id")) else { return Ok(r) };
-    s.edit("Paintbrush", |d, _| {
-        if let Some(st) = d.node_mut(id).and_then(|n| n.appearance.stroke_mut()) {
-            st.brush = Some(name.clone());
-        }
-        Ok(())
-    })?;
-    Ok(r)
+    let checked = crate::schemas::check(spec, p, s.replaying())?;
+    crate::cmd::draw2::freehand_brushed(s, checked.as_ref().unwrap_or(p), name.as_deref())
 }

@@ -22,6 +22,7 @@ pub mod brush_options;
 pub mod brush_replace_art;
 pub mod bullets_numbering;
 pub mod char_style_options;
+pub mod check_spelling;
 pub mod color_balance;
 pub mod color_guide_options;
 mod color_picker;
@@ -56,10 +57,12 @@ pub mod freehand;
 mod gradient_stop;
 pub mod graph_data;
 pub mod graph_design;
+pub mod graph_type;
 pub mod graphic_style_options;
 pub mod halftone;
 pub mod hyphenation;
 pub mod import_pdf;
+pub mod indexed_color;
 pub mod javascript_files;
 pub mod justification;
 pub mod layer_options;
@@ -88,12 +91,14 @@ pub mod perspective_grid;
 pub mod perspective_options;
 pub mod perspective_plane;
 pub mod perspective_presets;
+pub mod pixel_snap_options;
 pub mod place;
 pub mod placement_options;
 pub mod plugin;
 mod png_options;
 pub mod print;
 pub mod print_presets;
+pub mod psd_import;
 mod psd_options;
 pub mod raster_effects;
 pub mod rearrange_artboards;
@@ -103,6 +108,7 @@ pub mod relink;
 pub mod rename_artboards;
 pub(crate) mod revolve;
 pub(crate) mod revolve_gizmo;
+pub(crate) mod revolve_lights;
 pub mod safe_mode;
 pub mod saturate;
 pub mod save_brush_library;
@@ -120,6 +126,7 @@ pub(crate) mod shapes;
 pub mod shortcut_import;
 pub(crate) mod simplify_slider;
 pub mod slices;
+pub mod smart_punctuation;
 pub(crate) mod smooth_slider;
 pub mod spot_colors;
 pub mod svg_filter;
@@ -141,6 +148,7 @@ pub mod trace_presets;
 pub(crate) mod transform;
 pub mod transform_each;
 pub mod variables;
+pub mod warichu;
 mod warp_effect;
 pub mod width_point;
 
@@ -150,13 +158,14 @@ pub use color_picker::open as open_color_picker;
 pub use document_setup::open as open_document_setup;
 pub use effect::open as open_effect_dialog;
 pub(crate) use effect::{FILM_GRAIN_FIELDS, PAINT_DAUB_BRUSH_TYPE_LABELS, SHADES, shown_choices};
-pub use export_as::open as open_export_as;
+pub use export_as::{export_selection, open as open_export_as};
 pub(crate) use export_for_screens::drop_unread_screen_settings;
 pub use export_for_screens::open as open_export_for_screens;
 pub(crate) use export_for_screens::{
-    KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, export_preset as screen_export_preset, formats as screen_formats,
-    import_presets as screen_import_presets, open_assets as open_export_for_screens_assets, preset_list as screen_preset_list,
-    saved_options as screen_saved_options, saved_rows as screen_saved_rows,
+    KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, artboard_name_editing as export_artboard_name_editing,
+    export_preset as screen_export_preset, formats as screen_formats, import_presets as screen_import_presets,
+    open_assets as open_export_for_screens_assets, preset_list as screen_preset_list, saved_options as screen_saved_options,
+    saved_rows as screen_saved_rows, settings_format as screen_settings_format,
 };
 pub(crate) use form::{humanize, number_list_text, plugin_color_button, read_number_list, unit_suffix};
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document, preset_card};
@@ -336,6 +345,7 @@ registry! {
     GraphDesign: [graph_design::DESIGN] => graph_design::DESIGN_SPEC,
     GraphColumn: [graph_design::COLUMN] => graph_design::COLUMN_SPEC,
     GraphMarker: [graph_design::MARKER] => graph_design::MARKER_SPEC,
+    GraphType: [graph_type::KIND] => graph_type::SPEC,
     GradientStop: ["gradientStop"] => gradient_stop::SPEC,
     ColorPicker: [color_picker::KIND] => color_picker::SPEC,
     GraphicStyleOptions: [graphic_style_options::KIND] => graphic_style_options::SPEC,
@@ -346,6 +356,7 @@ registry! {
     ColorGuideOptions: [color_guide_options::KIND] => color_guide_options::SPEC,
     ColorBalance: [color_balance::KIND] => color_balance::SPEC,
     Saturate: [saturate::KIND] => saturate::SPEC,
+    IndexedColor: [indexed_color::KIND] => indexed_color::SPEC,
     SaveSwatchLibrary: [save_swatch_library::KIND] => save_swatch_library::SPEC,
     TileEdgeColor: [tile_edge_color::KIND] => tile_edge_color::SPEC,
     EyedropperOptions: [eyedropper::KIND] => eyedropper::SPEC,
@@ -364,6 +375,7 @@ registry! {
     Justification: [justification::KIND] => justification::SPEC,
     BulletsAndNumbering: [bullets_numbering::KIND] => bullets_numbering::SPEC,
     TateChuYokoSettings: [tate_chu_yoko::KIND] => tate_chu_yoko::SPEC,
+    WarichuSettings: [warichu::KIND] => warichu::SPEC,
     CompositeFonts: [composite_fonts::KIND] => composite_fonts::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
@@ -407,6 +419,7 @@ registry! {
     PluginStopped: [safe_mode::STOPPED] => safe_mode::STOPPED_SPEC,
     SafeMode: [safe_mode::KIND] => safe_mode::SPEC,
     DxfImport: [dxf_import::KIND] => dxf_import::SPEC,
+    PsdImport: [psd_import::KIND] => psd_import::SPEC,
     RasterFormatOptions: ["tiffOptions", "bmpOptions", "tgaOptions"] => png_options::SPEC,
     SaveForWeb: [save_for_web::KIND] => save_for_web::SPEC,
     PsdOptions: ["psdOptions"] => png_options::SPEC,
@@ -425,6 +438,7 @@ registry! {
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
     SmoothSlider: [smooth_slider::KIND] => smooth_slider::SPEC,
+    SmartPunctuation: [smart_punctuation::KIND] => smart_punctuation::SPEC,
     PerspectiveGrid: [perspective_grid::KIND] => perspective_grid::SPEC,
     Envelope: [envelope::WARP, envelope::MESH, envelope::OPTIONS] => envelope::SPEC,
     LiquifyOptions: [liquify::KIND] => liquify::SPEC,
@@ -447,11 +461,13 @@ registry! {
     EditSelection: [edit_selection::KIND] => edit_selection::SPEC,
     EditViews: [edit_views::KIND] => edit_views::SPEC,
     EditCustomDictionary: [custom_dictionary::KIND] => custom_dictionary::SPEC,
+    CheckSpelling: [check_spelling::KIND] => check_spelling::SPEC,
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
     LayerOptions: [layer_options::KIND] => layer_options::SPEC,
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
     NavigatorPanelOptions: [navigator_panel_options::KIND] => navigator_panel_options::SPEC,
     PathfinderOptions: [pathfinder_options::KIND] => pathfinder_options::SPEC,
+    PixelSnapOptions: [pixel_snap_options::KIND] => pixel_snap_options::SPEC,
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
     RenameArtboards: [rename_artboards::KIND] => rename_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,
@@ -508,6 +524,8 @@ fn hidden_controls(d: &Dialog) -> &'static [&'static str] {
         Some(DialogKind::FileInfo) => &["__keyword"],
         // The preset name being typed.
         Some(DialogKind::FlattenTransparency) => &["__presetName"],
+        // The page shown.
+        Some(DialogKind::GraphType) => &[graph_type::PAGE],
         // The Resolution menu's Other.
         Some(DialogKind::RasterOptions | DialogKind::RasterFormatOptions | DialogKind::PsdOptions) => &["__otherPpi"],
         // The category shown, the search text and the three settings kept outside the preferences.
@@ -574,6 +592,7 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 /// Options setting set this way for several rows is sent to every row (Template also sets Lock
 /// and Dim Images, as its checkbox does). A DXF Options preset set this way sets its fields, as
 /// one picked from its menu does, and the preset it shows follows the DXF options set this way.
+/// A Graph Data Column Width set this way sets every column, as Cell Style's does.
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
@@ -587,10 +606,17 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == "preferences" {
         crate::prefs_dialog::note_set(d, &field, &value);
     }
+    if d.kind == new_document::KIND || new_document::popup_open(d) {
+        new_document::note_set(d, &field);
+    }
     let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
+    let graph = (d.kind == graph_data::KIND).then(|| field.clone());
     d.fields.insert(field, value);
     if let Some(field) = dxf {
         dxf_options::note_set(d, &field);
+    }
+    if let Some(field) = graph {
+        graph_data::note_set(d, &field);
     }
 }
 
@@ -671,6 +697,7 @@ pub fn cancel(app: &mut VectorcraftApp) {
         if d.kind == script_run::NOTICE_KIND {
             script_run::notice_cancel(app, &d);
         }
+        missing_links::cancelled(app, &d);
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec
         // without a preview, yet previews some commands (Grid Repeat Options) when asked to.
@@ -713,7 +740,8 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 /// After a dialog closes, and each frame: a Missing Fonts dialog that another dialog replaced waits
 /// for its turn again, the search a Missing Fonts or Find Linked Files dialog started stops once
 /// that dialog is gone, and with no dialog open the choice about a stopped plug-in that another
-/// dialog replaced opens again, else the next document's Missing Fonts dialog (one dialog at a
+/// dialog replaced opens again, else the questions about the next restored document's linked files
+/// ([`crate::recovery::ask_next`]), else the next document's Missing Fonts dialog (one dialog at a
 /// time).
 pub(crate) fn settle(app: &mut VectorcraftApp) {
     crate::placing::settle_swatch_paste(app);
@@ -721,6 +749,7 @@ pub(crate) fn settle(app: &mut VectorcraftApp) {
     missing_fonts::stop_when_closed(app);
     find_links::stop_when_closed(app);
     safe_mode::reopen(app);
+    crate::recovery::ask_next(app);
     missing_fonts::open_next(app);
 }
 
@@ -777,6 +806,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return window(app, ctx);
     }
     let mut ok = false;
+    let mut ok_clicked = false;
     let mut ok_enabled = true;
     let mut cancel = false;
     let mut reset = false;
@@ -837,7 +867,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             if let Some(label) = spec.ok.map(|ok| spec.ok_label.map_or(ok, |f| f(app)))
                 && widgets::primary_button_enabled(ui, label, ok_enabled).clicked()
             {
-                ok = true;
+                ok_clicked = true;
             }
             ui.add_space(8.0);
             // While Alt (Option) is held, Cancel reads Reset on a dialog that has one.
@@ -872,6 +902,20 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         });
     });
     let rejected = ctx.data_mut(|d| d.remove_temp::<bool>(widgets::dialog_reject_commit_flag())).unwrap_or(false);
+    // A field that refused its text when the press on OK took its focus keeps the dialog open, as
+    // Enter does. Only a pointer click has such a press; the keyboard and screen readers press OK
+    // in one frame.
+    let press = egui::Id::unique("dialog-press-pass");
+    let (pressed, released) = ctx.input(|i| (i.pointer.any_pressed(), i.pointer.any_released()));
+    if pressed {
+        let pass = ctx.cumulative_pass_nr();
+        ctx.data_mut(|m| m.insert_temp(press, pass));
+    }
+    let (pressed_at, refused_at) = ctx.data(|m| (m.get_temp::<u64>(press), m.get_temp::<u64>(widgets::dialog_reject_pass())));
+    let refused_during_click = released && matches!((refused_at, pressed_at), (Some(r), Some(p)) if r >= p);
+    if ok_clicked && !rejected && !refused_during_click {
+        ok = true;
+    }
     if spec.ok.is_some() && ok_enabled && !after_panel && !rejected && crate::shortcuts::pressed_anew(ctx, egui::Key::Enter) {
         ok = true;
     }
@@ -923,6 +967,8 @@ mod tests;
 mod tests_accessibility;
 #[cfg(test)]
 mod tests_export;
+#[cfg(test)]
+mod tests_export_selection;
 #[cfg(test)]
 mod tests_import_pdf;
 #[cfg(test)]

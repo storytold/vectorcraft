@@ -5,7 +5,7 @@
 //!   width profiles, fitted or dotted dashes as the canvas's filled outlines and brushed strokes
 //!   as their brush art), opacity and blend modes (transparency groups),
 //!   clip groups, linear/radial gradients (shadings), pattern fills and strokes as their tiles and
-//!   freeform and Perceptual gradients and dithered gradient fills as images at the raster
+//!   freeform and Perceptual gradients, gradients mixed around the hue wheel and dithered gradient fills as images at the raster
 //!   effects resolution (clipped to what they paint), embedded images (resampled and
 //!   compressed as the Compression settings say) and text as outlined glyph paths, or as real
 //!   text in embedded subset fonts (Advanced). Colours are converted, tagged with ICC profiles and
@@ -76,7 +76,7 @@ mod syntax;
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};
 pub use encrypt::Encryption;
 pub use export::{check_page_sizes, export, export_with_report, page_areas};
-pub use file_info::{FileInfo, file_info};
+pub use file_info::{FileInfo, MAX_TEMPLATE_BYTES, file_info, metadata_template, read_template};
 #[cfg(any(test, feature = "read-count"))]
 pub use import::imports_of;
 pub use import::{
@@ -134,7 +134,8 @@ impl PdfOptions {
 pub struct ImportOptions {
     /// Import at most this many pages (of those picked); `None` = all of them.
     pub max_pages: Option<usize>,
-    /// Horizontal gap in points between the artboards created for consecutive pages.
+    /// Horizontal gap in points between the artboards created for consecutive pages (on trim
+    /// boxes, plus the document's bleed on both sides).
     pub artboard_gap: f64,
     /// 0-based pages to import, in this order; `None` = every page.
     pub pages: Option<Vec<usize>>,

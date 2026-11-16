@@ -284,6 +284,87 @@ fn an_unreadable_arrowheads_file_lists_no_heads_and_says_why() {
     assert_eq!(bare.execute("stroke.arrowheads.list", &json!({})).unwrap()["file"], serde_json::Value::Null);
 }
 
+/// Automation roots that grant reading `read` alone.
+fn read_roots(read: &[&std::path::Path]) -> Arc<crate::file_access::AutomationRoots> {
+    crate::file_access::AutomationRoots::new(read, &[]).unwrap().unwrap()
+}
+
+#[test]
+fn an_agent_outside_the_arrowheads_files_folder_sees_its_file_name_alone_and_cannot_reload_it() {
+    let dir = folder("roots-list");
+    let (prefs, other) = (dir.join("prefs"), dir.join("other"));
+    std::fs::create_dir_all(&prefs).unwrap();
+    std::fs::create_dir_all(&other).unwrap();
+    let file = prefs.join(arrowheads::FILE_NAME);
+    std::fs::write(&file, b"not a drawing").unwrap();
+    let (file, prefs_text) = (file.to_string_lossy().to_string(), prefs.to_string_lossy().to_string());
+    let mut s = Session::new();
+    s.attach_arrowheads_file(file.clone());
+    let (outside, inside) = (read_roots(&[&other]), read_roots(&[&prefs]));
+    let list = crate::file_access::confine(Some(&outside), || s.execute("stroke.arrowheads.list", &json!({}))).unwrap();
+    assert_eq!(list["file"], serde_json::Value::Null, "{list}");
+    let error = list["error"].as_str().unwrap();
+    assert!(error.starts_with(arrowheads::FILE_NAME) && !error.contains(&prefs_text), "{error}");
+    let list = crate::file_access::confine(Some(&inside), || s.execute("stroke.arrowheads.list", &json!({}))).unwrap();
+    assert_eq!(list["file"].as_str(), Some(file.as_str()));
+    assert!(list["error"].as_str().unwrap().starts_with(&file), "{list}");
+    // A good file now: an agent outside the folder cannot have it read.
+    std::fs::write(&file, vectorcraft_format::save_file(&arrowheads::starter())).unwrap();
+    let e = crate::file_access::confine(Some(&outside), || s.execute("stroke.arrowheads.reload", &json!({}))).unwrap_err().to_string();
+    assert!(e.contains("outside the read root") && e.ends_with(arrowheads::FILE_NAME) && !e.contains(&prefs_text), "{e}");
+    let list = s.execute("stroke.arrowheads.list", &json!({})).unwrap();
+    assert!(list["arrowheads"].as_array().unwrap().is_empty() && list["error"].is_string(), "not read again: {list}");
+    let r = crate::file_access::confine(Some(&inside), || s.execute("stroke.arrowheads.reload", &json!({}))).unwrap();
+    assert_eq!(r["count"], 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_agent_edits_the_arrowheads_file_only_inside_its_read_roots() {
+    let dir = folder("roots-edit");
+    let (prefs, other) = (dir.join("prefs"), dir.join("other"));
+    std::fs::create_dir_all(&other).unwrap();
+    let file = prefs.join(arrowheads::FILE_NAME).to_string_lossy().to_string();
+    let prefs_text = prefs.to_string_lossy().to_string();
+    let (mut s, _) = session_with_line();
+    s.attach_arrowheads_file(file.clone());
+    let line_doc = s.doc().unwrap().uid;
+    let outside = read_roots(&[&other]);
+    let edit = |s: &mut Session, roots: &Arc<crate::file_access::AutomationRoots>| {
+        crate::file_access::confine(Some(roots), || s.execute("stroke.arrowheads.edit", &json!({})))
+    };
+    // Refused before the folder or the file is made, or anything is opened.
+    let e = edit(&mut s, &outside).unwrap_err().to_string();
+    assert!(e.ends_with(arrowheads::FILE_NAME) && !e.contains(&prefs_text), "{e}");
+    assert!(!prefs.exists(), "no folder made");
+    assert_eq!((s.documents().len(), s.doc().unwrap().uid), (1, line_doc));
+    // From the Stroke panel menu (no roots), the file is made and opened.
+    assert_eq!(s.execute("stroke.arrowheads.edit", &json!({})).unwrap()["created"], true);
+    assert_eq!(s.documents().len(), 2);
+    // Open already: still not brought to the front for an agent outside the folder.
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    assert!(edit(&mut s, &outside).is_err());
+    assert_eq!((s.documents().len(), s.doc().unwrap().uid), (2, line_doc));
+    // Inside the read roots: opened under them, with its path.
+    let inside = read_roots(&[&prefs]);
+    let mut agent = Session::new();
+    agent.attach_arrowheads_file(file.clone());
+    let r = edit(&mut agent, &inside).unwrap();
+    assert_eq!((r["path"].as_str(), &r["created"]), (Some(file.as_str()), &json!(false)));
+    let st = agent.doc().unwrap();
+    assert_eq!(st.path.as_deref(), Some(file.as_str()));
+    assert!(st.opened_by.as_ref().is_some_and(|r| Arc::ptr_eq(r, &inside)), "opened under the agent's roots");
+    // A missing file inside the roots is still made first.
+    let fresh = dir.join("fresh").join(arrowheads::FILE_NAME).to_string_lossy().to_string();
+    let mut agent = Session::new();
+    agent.attach_arrowheads_file(fresh.clone());
+    let r = edit(&mut agent, &read_roots(&[&dir])).unwrap();
+    assert_eq!(r["created"], true);
+    assert!(std::path::Path::new(&fresh).is_file());
+    assert_eq!(agent.doc().unwrap().path.as_deref(), Some(fresh.as_str()));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn the_heads_listed_after_a_save_are_read_from_the_file_and_editing_keeps_it() {
     let dir = folder("saved");

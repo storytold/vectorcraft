@@ -206,11 +206,13 @@ impl Document {
 impl Document {
     /// Visit every paint held by the art (opacity masks included), symbol definitions, pattern
     /// tiles and graphic styles (fills, strokes and text runs), and the colour of every
-    /// gradient-mesh point as a solid paint.
+    /// gradient-mesh point as a solid paint. A graph's default black legend fill is left out.
     pub fn visit_paints(&self, f: &mut dyn FnMut(&Paint)) {
         let mut tree = |n: &Node| {
             walk_with_masks(n, &mut |m| {
-                node_paints(m).chain(override_paints(m)).chain(graph_paints(m)).for_each(&mut *f);
+                node_paints(m).chain(override_paints(m)).for_each(&mut *f);
+                let default_legend = default_legend_fill(m);
+                graph_paints(m).enumerate().filter(|(i, _)| Some(*i) != default_legend).for_each(|(_, p)| f(p));
                 if let NodeKind::Mesh(mesh) = &m.kind {
                     mesh.points.iter().for_each(|p| f(&Paint::solid(p.color)));
                 }
@@ -388,7 +390,9 @@ pub fn graph_paints(n: &Node) -> impl Iterator<Item = &Paint> {
     let g = n.extras().graph.as_deref();
     let series = g.into_iter().flat_map(|g| &g.series_paints).flat_map(|s| [s.fill.as_ref(), s.stroke.as_ref()]).flatten();
     let labels = g.into_iter().flat_map(|g| [&g.label_styles.values, &g.label_styles.categories, &g.label_styles.legend]).flatten();
-    series.chain(labels.flat_map(|st| [&st.fill, &st.stroke]))
+    let l = g.map(|g| &g.label_styles);
+    let rows = l.into_iter().flat_map(|l| [&l.values_rows, &l.categories_rows, &l.legend_rows]).flatten();
+    series.chain(labels.flat_map(|st| [&st.fill, &st.stroke])).chain(rows.flat_map(|r| [r.paint.fill.as_ref(), r.paint.stroke.as_ref()]).flatten())
 }
 
 /// Mutable [`graph_paints`] of graph `g`, in the same order.
@@ -396,7 +400,23 @@ fn graph_paints_mut(g: &mut crate::graph::GraphSpec) -> impl Iterator<Item = &mu
     let series = g.series_paints.iter_mut().flat_map(|s| [s.fill.as_mut(), s.stroke.as_mut()]).flatten();
     let l = &mut g.label_styles;
     let labels = [&mut l.values, &mut l.categories, &mut l.legend].into_iter().flatten();
-    series.chain(labels.flat_map(|st| [&mut st.fill, &mut st.stroke]))
+    let rows = [&mut l.values_rows, &mut l.categories_rows, &mut l.legend_rows].into_iter().flatten();
+    series
+        .chain(labels.flat_map(|st| [&mut st.fill, &mut st.stroke]))
+        .chain(rows.flat_map(|r| [r.paint.fill.as_mut(), r.paint.stroke.as_mut()]).flatten())
+}
+
+/// The place in [`graph_paints`] of the legend fill graph `n` keeps when it is the default black of a graph that picks
+/// its legend labels' fill ([`crate::graph::GraphSpec::picks_legend_fill`]). Other graphs draw the kept fill as it is,
+/// so it is visited and mapped.
+fn default_legend_fill(n: &Node) -> Option<usize> {
+    let g = n.extras().graph.as_deref()?;
+    let l = &g.label_styles;
+    if l.legend.is_none() || !g.picks_legend_fill() {
+        return None;
+    }
+    let series: usize = g.series_paints.iter().map(|s| usize::from(s.fill.is_some()) + usize::from(s.stroke.is_some())).sum();
+    Some(series + 2 * (usize::from(l.values.is_some()) + usize::from(l.categories.is_some())))
 }
 
 /// Mutable [`node_paints`], in the same order.
@@ -441,11 +461,16 @@ fn map_node(n: &Node, f: &mut PaintFn) -> Option<(Node, usize)> {
         }
     }
     // A graph's series and label paints, which its marks and labels take when it is drawn again.
-    let graph: Vec<(usize, Paint)> = graph_paints(n).enumerate().filter_map(|(i, p)| f(p).map(|q| (i, q))).collect();
+    // The default black legend fill, which is not the legend labels' own, stays black.
+    let default_legend = default_legend_fill(n);
+    let graph: Vec<(usize, Paint)> =
+        graph_paints(n).enumerate().filter(|(i, _)| Some(*i) != default_legend).filter_map(|(i, p)| f(p).map(|q| (i, q))).collect();
     if !graph.is_empty() {
         count += graph.len();
         let m = out.get_or_insert_with(|| n.clone());
         if let Some(spec) = m.extras_if_any().and_then(|e| e.graph.as_deref_mut()) {
+            // A legend fill of the labels' own stays theirs when the change makes it black.
+            spec.label_styles.mark_own_legend_fill();
             let mut graph = graph.into_iter().peekable();
             for (i, p) in graph_paints_mut(spec).enumerate() {
                 if graph.peek().is_some_and(|c| c.0 == i)
@@ -689,6 +714,10 @@ mod tests {
             series_paints: vec![crate::SeriesPaint { fill: Some(red.clone()), stroke: Some(red.clone()), ..Default::default() }],
             label_styles: crate::graph::LabelStyles {
                 legend: Some(crate::CharStyle { fill: red.clone(), stroke: Paint::None, ..Default::default() }),
+                values_rows: Some(crate::LabelRows {
+                    paint: crate::SeriesPaint { fill: Some(red.clone()), ..Default::default() },
+                    ..Default::default()
+                }),
                 ..Default::default()
             },
             ..Default::default()
@@ -696,18 +725,75 @@ mod tests {
         d.node_mut(a).unwrap().extras_mut().graph = Some(Box::new(spec));
         let mut seen = 0;
         d.visit_paints(&mut |p| seen += usize::from(*p == red));
-        assert_eq!(seen, 4, "the fill and the graph's series fill, series stroke and legend fill");
+        assert_eq!(seen, 5, "the fill and the graph's series fill, series stroke, legend fill and value label fill row");
         let blue = Color::rgb(0.0, 0.0, 1.0);
         let mut to_blue = |c: &mut Color, s: &mut Option<String>, _: &mut f32| s.as_deref() == Some("Brand") && std::mem::replace(c, blue) != blue;
-        assert_eq!(d.map_solid_paints(&mut to_blue), 4);
+        assert_eq!(d.map_solid_paints(&mut to_blue), 5);
         let g = d.node(a).unwrap().extras().graph.clone().unwrap();
         assert_eq!(g.series_paints[0].fill, Some(linked(blue, "Brand")));
         assert_eq!(g.series_paints[0].stroke, Some(linked(blue, "Brand")));
         let legend = g.label_styles.legend.unwrap();
         assert_eq!((legend.fill, legend.stroke), (linked(blue, "Brand"), Paint::None));
+        assert_eq!(g.label_styles.values_rows.unwrap().paint.fill, Some(linked(blue, "Brand")));
         let mut cleared = |p: &Paint| (*p == linked(blue, "Brand")).then_some(Paint::None);
-        assert_eq!(d.map_paints(&mut cleared), 4, "the fill and the graph's three");
+        assert_eq!(d.map_paints(&mut cleared), 5, "the fill and the graph's four");
         assert!(graph_paints(d.node(a).unwrap()).all(Paint::is_none));
+    }
+
+    #[test]
+    fn a_legend_fill_mapped_to_black_stays_the_labels_own() {
+        let (mut d, a, _) = doc();
+        let red = linked(Color::rgb(1.0, 0.0, 0.0), "Brand");
+        let spec = crate::graph::GraphSpec {
+            label_styles: crate::graph::LabelStyles { legend: Some(crate::CharStyle { fill: red, ..Default::default() }), ..Default::default() },
+            ..Default::default()
+        };
+        assert!(spec.label_styles.legend_fill_is_own() && !spec.label_styles.legend_fill_set, "not black, saved without the mark");
+        d.node_mut(a).unwrap().extras_mut().graph = Some(Box::new(spec));
+        let mut to_black = |c: &mut Color, s: &mut Option<String>, _: &mut f32| {
+            s.as_deref() == Some("Brand") && {
+                *c = Color::BLACK;
+                *s = None;
+                true
+            }
+        };
+        assert_eq!(d.map_solid_paints(&mut to_black), 2, "the rectangle's fill and the legend fill");
+        let styles = d.node(a).unwrap().extras().graph.clone().unwrap().label_styles;
+        assert_eq!(styles.legend.unwrap().fill, Paint::solid(Color::BLACK));
+        assert!(styles.legend_fill_set, "the black fill is still the labels' own");
+    }
+
+    #[test]
+    fn the_default_black_legend_fill_is_left_as_it_is() {
+        use crate::graph::GraphKind;
+        // Only a pie with Legends in Wedges picks its legend labels' fill; the other graphs draw the kept black.
+        for (kind, in_wedges, picks) in [(GraphKind::Pie, true, true), (GraphKind::Pie, false, false), (GraphKind::Column, true, false)] {
+            let (mut d, a, _) = doc();
+            let black = || crate::CharStyle { fill: Paint::solid(Color::BLACK), size: 11.0, ..Default::default() };
+            let spec = crate::graph::GraphSpec {
+                kind,
+                legend: true,
+                pie_legend_in_wedges: in_wedges,
+                series_paints: vec![crate::SeriesPaint { fill: Some(Paint::solid(Color::BLACK)), ..Default::default() }],
+                label_styles: crate::graph::LabelStyles { values: Some(black()), legend: Some(black()), ..Default::default() },
+                ..Default::default()
+            };
+            let blacks = |d: &Document| {
+                let mut seen = 0;
+                d.visit_paints(&mut |p| seen += usize::from(*p == Paint::solid(Color::BLACK)));
+                seen
+            };
+            let before = blacks(&d);
+            d.node_mut(a).unwrap().extras_mut().graph = Some(Box::new(spec));
+            let want = if picks { 2 } else { 3 };
+            assert_eq!(blacks(&d) - before, want, "{kind:?}, in wedges {in_wedges}: the series, value labels' and legend fills visited");
+            let mut link_black = |c: &mut Color, s: &mut Option<String>, _: &mut f32| *c == Color::BLACK && s.replace("Black".into()).is_none();
+            assert_eq!(d.map_solid_paints_in(&[a], &mut link_black), want, "{kind:?}, in wedges {in_wedges}");
+            let styles = d.node(a).unwrap().extras().graph.clone().unwrap().label_styles;
+            let legend = if picks { Paint::solid(Color::BLACK) } else { linked(Color::BLACK, "Black") };
+            assert_eq!(styles.legend.unwrap().fill, legend, "{kind:?}, in wedges {in_wedges}: linked unless the pie picks the fill");
+            assert_eq!(styles.values.unwrap().fill, linked(Color::BLACK, "Black"));
+        }
     }
 
     #[test]

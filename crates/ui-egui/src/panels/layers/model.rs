@@ -62,7 +62,8 @@ pub(super) struct Row {
     pub(super) colour: Color32,
     /// Drawn dimmed: hidden itself or in a hidden layer or group, or a template layer.
     pub(super) dim: bool,
-    /// A ruler guide on the layer `node` (its index in the document's guides): the guide's row.
+    /// A ruler guide on the layer `node` (its index in the document's guides): the guide's row,
+    /// dimmed when the guide or its layer is hidden.
     pub(super) guide: Option<usize>,
     /// The spine of blend `node`: its row, below the blend's key objects (#4820).
     pub(super) spine: bool,
@@ -263,10 +264,15 @@ pub(super) fn push_rows(
     let searching = !query.is_empty();
     let narrowing = searching || filter.is_on();
     // A layer's ruler guides are rows in it, above its art, the highest `guide.list` index first
-    // (not while searching, nor while the filter leaves them out).
-    let guides: Vec<usize> = if n.is_layer() && !opts.layers_only && !searching && filter.keeps_guides() {
-        let mut found: Vec<usize> =
-            n.children().into_iter().flatten().filter(|c| c.is_ruler_guide()).filter_map(|c| all_guides.binary_search(&c.id).ok()).collect();
+    // (not while searching, nor while the filter leaves them out), each with whether it is visible.
+    let guides: Vec<(usize, bool)> = if n.is_layer() && !opts.layers_only && !searching && filter.keeps_guides() {
+        let mut found: Vec<(usize, bool)> = n
+            .children()
+            .into_iter()
+            .flatten()
+            .filter(|c| c.is_ruler_guide())
+            .filter_map(|c| all_guides.binary_search(&c.id).ok().map(|i| (i, c.visible)))
+            .collect();
         found.sort_unstable();
         found
     } else {
@@ -277,7 +283,7 @@ pub(super) fn push_rows(
     let at = out.len();
     out.push(Row { node: n.clone(), depth, clip_path, opens, open, colour, dim: !shown || n.is_template(), guide: None, spine: false });
     if open {
-        for i in guides.into_iter().rev() {
+        for (i, visible) in guides.into_iter().rev() {
             out.push(Row {
                 node: n.clone(),
                 depth: depth + 1,
@@ -285,7 +291,7 @@ pub(super) fn push_rows(
                 opens: false,
                 open: false,
                 colour,
-                dim: !shown,
+                dim: !shown || !visible,
                 guide: Some(i),
                 spine: false,
             });

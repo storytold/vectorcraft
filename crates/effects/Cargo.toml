@@ -29,3 +29,5 @@ serde_json = { workspace = true }
 vectorcraft-color = { workspace = true }
 # A face built in code from the bundled Source Sans 3 (no font file is committed).
 vectorcraft-text = { workspace = true, features = ["test-fonts"] }
+# Test live-effect plug-ins written in WebAssembly text.
+wat = { workspace = true }

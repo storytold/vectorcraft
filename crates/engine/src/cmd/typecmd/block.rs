@@ -220,6 +220,7 @@ pub(crate) fn block_fit(t: &mut TextObject) -> bool {
                 st.baseline_shift *= f;
                 st.tcy_up_down *= f;
                 st.tcy_left_right *= f;
+                st.warichu_gap *= f;
                 st.leading = Some((st.size + gap).max(min_leading));
                 if let Some(art) = &mut piece.inline {
                     art.baseline_shift *= f;

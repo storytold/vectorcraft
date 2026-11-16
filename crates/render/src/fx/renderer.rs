@@ -1,4 +1,4 @@
-use super::bounds::{cull_bounds, effected_path_carrying};
+use super::bounds::{cull_bounds, effected_path_carrying, node_bezpath, rasterize_stage};
 use super::entries::{Content, Drawn, FX_RASTER_BUDGET, FxGeom, Inputs, ItemGeom, Kept, Made, Reads, Shadow, ShadowEntry};
 use super::predicates::{evaluates_live, is_container, rasterize_bounds, reads_outside, shifted};
 use super::raster::{
@@ -330,6 +330,11 @@ impl Renderer {
 
     /// `draw_shape` for nodes with live effects.
     pub(crate) fn draw_shape_fx(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, bp: &BezPath, rule: FillRule) {
+        if !f.opts.outline
+            && let Some(stage) = self.rasterize_stage_of(f, n, self.fx_owner.as_ref().filter(|o| std::ptr::eq(&***o, n)).cloned())
+        {
+            return self.draw_staged(ctx, f, stage, bp, rule);
+        }
         // The node `draw_arc` is drawing gets its geometry from the cache: `bp` is its own path,
         // made from the node alone, so the effects give the same result every frame while the
         // plug-ins installed stay the same (`check_plugins`).
@@ -360,6 +365,47 @@ impl Renderer {
         }
     }
 
+    /// [`rasterize_stage`] of `n`, kept across frames when `owner` is `n` as held in its document
+    /// (then `true` in the third place: the stage is kept, and so are its caches).
+    fn rasterize_stage_of(&mut self, f: &Frame, n: &Node, owner: Option<Arc<Node>>) -> Option<(Arc<Node>, Affine, bool)> {
+        // Checked first: this runs for every path with effects drawn.
+        effects::rasterize_stage(&n.appearance.effects)?;
+        let Some(owner) = owner else {
+            return rasterize_stage(f.symbols.document(), n).map(|(stage, map)| (Arc::new(stage), map, false));
+        };
+        let key = Arc::as_ptr(&owner) as usize;
+        let stamp = self.stamp;
+        if let Some(e) = self.fx_stages.get_mut(&key)
+            && Arc::ptr_eq(&e.0, &owner)
+        {
+            e.3 = stamp;
+            return Some((e.1.clone(), e.2, true));
+        }
+        let (stage, map) = rasterize_stage(f.symbols.document(), n)?;
+        let stage = Arc::new(stage);
+        self.fx_stages.insert(key, (owner, stage.clone(), map, stamp));
+        Some((stage, map, true))
+    }
+
+    /// Draw `stage`, the node a path's Rasterize image is made from ([`rasterize_stage`]), through
+    /// `map`, the Transform effects after that Rasterize effect: its art and its image, on the
+    /// image's own pixel grid, move with the map. A map that flattens the art leaves nothing to
+    /// draw. `bp` is the path's own path; with `kept`, `stage` is kept across frames and so are
+    /// the geometry and rasters drawn for it.
+    fn draw_staged(&mut self, ctx: &mut RenderContext, f: &Frame, (stage, map, kept): (Arc<Node>, Affine, bool), bp: &BezPath, rule: FillRule) {
+        let det = map.determinant();
+        if !(det.is_finite() && det.abs() > 1e-12) {
+            return;
+        }
+        // A pixel's size in document units through the view and the map, measured as a frame
+        // measures it from its view.
+        let px = f.px / det.abs().sqrt();
+        let fr = Frame { view: f.view * map, visible: map.inverse().transform_rect_bbox(f.visible), px, output: f.output * map, ..*f };
+        let outer = if kept { self.fx_owner.replace(stage.clone()) } else { self.fx_owner.take() };
+        self.draw_shape_fx(ctx, &fr, &stage, bp, rule);
+        self.fx_owner = outer;
+    }
+
     /// [`Self::draw_shape_fx`] on the effected geometry `g`, with the items' cached geometry:
     /// `paints` is `n` with the fills and strokes it paints.
     #[allow(clippy::too_many_arguments)]
@@ -381,14 +427,15 @@ impl Renderer {
             return;
         }
         let gctx = GeomContext { doc: Some(f.symbols.document()), ..GeomContext::of(paints) };
-        let rfx = effects::raster_effects(&n.appearance.effects);
+        // `paints` hides the Transform effects that did not move `g`.
+        let rfx = effects::raster_effects(&paints.appearance.effects);
         // Document-space reach of the painted geometry (strokes, arrowheads…).
         let outset = n.appearance.outset();
         let reach = g.bounding_box().inflate(outset, outset);
         let bounds = rasterize_bounds(f.symbols, n, &rfx);
         // Under Rasterize the content reaches as far as its fills' and strokes' raster effects paint.
         let reach = bounds.map_or(reach, |b| reach.union(b));
-        let content = Content { node: n, owner: None, cache: Some(0), reach, outline: Some((g, rule)), bounds, kept: None };
+        let content = Content { node: n, owner: None, cache: Some(0), reach, object: reach, outline: Some((g, rule)), bounds, kept: None };
         let mut items = items;
         self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_items(c, fr, paints, g, rule, &gctx, items.as_deref_mut()));
         ctx.set_transform(Affine::IDENTITY);
@@ -416,17 +463,27 @@ impl Renderer {
         if !self.charge_fx_instance(f.doc, a) {
             return;
         }
+        // A path whose Transform effects after its Rasterize effect hold options that reach its
+        // fills and strokes: its image moves with them as for any other path.
+        if !f.opts.outline
+            && let NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. } = &a.kind
+            && let Some(stage) = self.rasterize_stage_of(f, a, cache.then(|| a.clone()))
+            && let Some(bp) = node_bezpath(a)
+        {
+            return self.draw_staged(ctx, f, stage, &bp, *rule);
+        }
         let art = self.fx_art(f.doc, a, cache);
         // Art the cache did not keep is made again in the next frame.
         let kept = cache && self.fx_arts.get(&(Arc::as_ptr(a) as usize), self.stamp).is_some_and(|e| Arc::ptr_eq(&e.1, &art));
         let outer = self.made_again;
         self.made_again = outer || !kept;
         // With Crop Marks, the object inside the art paints its own raster effects; Vector
-        // Halftone samples them with the object.
+        // Halftone samples them with the object. The copies of a Transform effect that carry the
+        // raster effects listed before it paint those themselves.
         let rfx = if effects::has_crop_marks(a) || effects::addons::halftone::has_halftone(a) {
             vec![]
         } else {
-            effects::raster_effects(&a.appearance.effects)
+            effects::raster_effects(effects::outer_effects(a))
         };
         match cull_bounds(f.symbols, &art) {
             Some(reach) if !f.opts.outline && !rfx.is_empty() => {
@@ -445,7 +502,16 @@ impl Renderer {
                     None => rasterize_bounds(f.symbols, a, &rfx),
                 };
                 let reach = bounds.map_or(reach, |b| reach.union(b));
-                let content = Content { node: a, owner: Some(a), cache, reach, outline: region.as_deref().map(|r| (&r.0, r.1)), bounds, kept: None };
+                let content = Content {
+                    node: a,
+                    owner: Some(a),
+                    cache,
+                    reach,
+                    object: reach,
+                    outline: region.as_deref().map(|r| (&r.0, r.1)),
+                    bounds,
+                    kept: None,
+                };
                 self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.draw_fx_art(c, fr, a, &art));
                 ctx.set_transform(Affine::IDENTITY);
             }
@@ -769,6 +835,7 @@ impl Renderer {
                     owner: content.owner,
                     cache: None,
                     reach: content.reach,
+                    object: content.object,
                     outline: content.outline,
                     bounds: content.bounds,
                     kept: kept.as_ref(),
@@ -781,6 +848,7 @@ impl Renderer {
                     owner: content.owner,
                     cache: content.cache.filter(|_| !over),
                     reach,
+                    object: content.object,
                     outline,
                     bounds: spread,
                     kept: content.kept.filter(|_| split == at),
@@ -926,12 +994,18 @@ impl Renderer {
     }
 }
 
-/// `n` with the gradients of its fills and strokes moved along with its effects by `carry`, or
-/// `None` when they stay where they are.
+/// `n` with the gradients of its fills and strokes moved along with its effects by `carry`, and
+/// the Transform effects the geometry pass left out hidden ([`effects::Carry::hide_skipped`]), so
+/// its raster effects and those of its fills and strokes stay with its art; `None` when it stays
+/// as it is.
 fn carried(n: &Node, carry: &effects::Carry) -> Option<Arc<Node>> {
-    carry.moves(&n.appearance).then(|| {
+    let moves = carry.moves(&n.appearance);
+    (moves || carry.skipped()).then(|| {
         let mut m = n.clone();
-        carry.apply(&mut m.appearance);
+        if moves {
+            carry.apply(&mut m.appearance);
+        }
+        carry.hide_skipped(&mut m.appearance.effects);
         Arc::new(m)
     })
 }
@@ -942,6 +1016,42 @@ mod tests {
     use crate::RenderOptions;
     use vectorcraft_color::Color;
     use vectorcraft_doc::{Document, color::BlendMode};
+
+    /// The node a path is painted from hides a Transform effect left out past the effect budget,
+    /// so the drop shadow before it is drawn with its own offset and blur, as the art stays.
+    #[test]
+    fn a_path_paints_from_the_transforms_that_moved_it() {
+        use vectorcraft_geom::{Anchor, PathData, Point, SubPath};
+        let anchors = (0..=30_000)
+            .map(|i| {
+                let x = 2.0 * f64::from(i);
+                Anchor::with_handles(Point::new(x, 0.0), Point::new(x - 0.5, -20.0), Point::new(x + 0.5, 20.0))
+            })
+            .collect();
+        let path = PathData::single(SubPath::new(anchors, true));
+        let mut n = Node::path(
+            vectorcraft_doc::NodeId(1),
+            path.clone(),
+            vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::solid(Color::rgb(1.0, 0.0, 0.0)), vectorcraft_color::Paint::None, 0.0),
+        );
+        n.appearance.effects = vec![
+            vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 10, "y": 5, "blur": 4}), visible: true },
+            vectorcraft_doc::Effect {
+                id: "distort.transform".into(),
+                params: serde_json::json!({"scaleH": 100000, "scaleV": 100000}),
+                visible: true,
+            },
+        ];
+        let doc = Document::new(100.0, 100.0);
+        let bp = path.to_bezpath();
+        let (g, carry) = effected_path_carrying(&doc, &n, &bp);
+        assert_eq!(g.bounding_box(), bp.bounding_box(), "the art stays where it is");
+        let paints = carried(&n, &carry).expect("the Transform effect is hidden");
+        match effects::raster_effects(&paints.appearance.effects).first() {
+            Some(RasterFx::DropShadow { dx, dy, blur, .. }) => assert!((*dx, *dy, *blur) == (10.0, 5.0, 4.0), "{dx} {dy} {blur}"),
+            other => panic!("expected a drop shadow, got {other:?}"),
+        }
+    }
 
     #[test]
     fn uncached_darkness_shadow_subtracts_before_separate_opacity() {

@@ -1,4 +1,4 @@
-//! DXF import: an ASCII DXF drawing of any version as a document.
+//! DXF import: a DXF drawing (ASCII or binary) of any version as a document.
 //!
 //! The drawing's model space (or a paper layout) comes in at a ratio (1 unit of the art = N
 //! drawing units; by default the drawing's own unit at 1:1) or fitted to an artboard, centred
@@ -10,7 +10,8 @@
 //! lineweights, linetypes and transparency come through layers and blocks as CAD apps resolve
 //! them. What can't come in is listed in the warnings.
 //!
-//! - `reader`: the file's text, group codes, sections, tables, blocks and layouts.
+//! - `reader`: what the import uses of the drawing `craft_dxf::model` reads: header, tables,
+//!   blocks and layouts.
 //! - `entity`: entities to items (geometry and properties).
 //! - `curve`: bulges, arcs, ellipses and NURBS as Bézier paths.
 //! - `text`: text values to plain text.
@@ -30,9 +31,6 @@ use crate::{DxfVersion, INSUNITS, SCALE_RANGE};
 
 /// Letter, the box Fit to Artboard fills unless told otherwise (points).
 pub const FIT_TO: (f64, f64) = (612.0, 792.0);
-
-/// Why a binary DXF can't be opened.
-pub const BINARY: &str = "this is a binary DXF file, which can't be read: save it from the CAD app as an ASCII DXF and open that";
 
 /// How a drawing comes in.
 #[derive(Clone, Debug, PartialEq)]
@@ -104,15 +102,20 @@ pub fn is_dxf(bytes: &[u8]) -> bool {
     false
 }
 
-/// The pairs of a DXF file and where it is damaged (binary and DWG files are refused).
-fn text(bytes: &[u8]) -> Result<std::borrow::Cow<'_, str>, String> {
-    if bytes.starts_with(reader::BINARY_SENTINEL) {
-        return Err(BINARY.into());
-    }
+/// The tags of a DXF file and where it is damaged (DWG files are refused).
+fn tags(bytes: &[u8]) -> Result<(Vec<craft_dxf::Tag>, Option<String>), String> {
     if bytes.starts_with(b"AC10") || bytes.starts_with(b"AC1.") {
-        return Err("this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that".into());
+        return Err("this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that".into());
     }
-    Ok(reader::decode(bytes))
+    let (tags, damaged) = craft_dxf::parse_recovering(bytes).map_err(|e| match e {
+        craft_dxf::DxfError::TooLarge { .. } => "the drawing is too large to open".to_string(),
+        _ if bytes.starts_with(reader::BINARY_SENTINEL) => "this binary DXF file is damaged or cut short".to_string(),
+        _ => "not a DXF drawing".to_string(),
+    })?;
+    if tags.is_empty() {
+        return Err("not a DXF drawing".into());
+    }
+    Ok((tags, damaged.map(|line| format!("the file is damaged at line {line}: what follows is left out"))))
 }
 
 /// The unit of `$INSUNITS` code `code` and the scale that shows the drawing 1:1 in it.
@@ -161,9 +164,8 @@ fn units_name(code: i64) -> &'static str {
 
 /// Read what `bytes` holds: its version, units, layouts and layers.
 pub fn info(bytes: &[u8]) -> Result<DxfInfo, String> {
-    let text = text(bytes)?;
-    let (pairs, _) = reader::pairs(&text)?;
-    let d = reader::Drawing::read(&pairs);
+    let (tags, _) = tags(bytes)?;
+    let d = reader::Drawing::read(craft_dxf::model::Document::read(&tags));
     if d.sections == 0 {
         return Err("not a DXF drawing".into());
     }
@@ -180,7 +182,7 @@ pub fn info(bytes: &[u8]) -> Result<DxfInfo, String> {
     })
 }
 
-/// Import an ASCII DXF drawing with `o`.
+/// Import a DXF drawing with `o`.
 pub fn import(bytes: &[u8], o: &ImportOptions) -> Result<Imported, String> {
     let (w, h) = o.fit_to;
     if !(w > 0.0 && h > 0.0 && w.max(h) <= build::MAX_EXTENT) {
@@ -191,9 +193,8 @@ pub fn import(bytes: &[u8], o: &ImportOptions) -> Result<Imported, String> {
     {
         return Err(format!("scale must be a number from {} to {}, not {s}", SCALE_RANGE.start(), SCALE_RANGE.end()));
     }
-    let text = text(bytes)?;
-    let (pairs, damaged) = reader::pairs(&text)?;
-    let d = reader::Drawing::read(&pairs);
+    let (tags, damaged) = tags(bytes)?;
+    let d = reader::Drawing::read(craft_dxf::model::Document::read(&tags));
     if d.sections == 0 {
         return Err("not a DXF drawing".into());
     }

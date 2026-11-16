@@ -2,8 +2,8 @@ use super::containers::close;
 use super::document::TEXT_SLOT;
 use super::raster::{self, Limits, Shape};
 use super::types::{
-    FLIP, Frame, IMAGE_TOO_LARGE, Kind, LARGE_IMAGES, LINKED_PLACEHOLDERS, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS, MAX_SIDE,
-    NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, PLACED_CROP, PLACED_PAGE, Place, PlacedPage, PlacedTail,
+    FLIP, Frame, GState, IMAGE_TOO_LARGE, Kind, LARGE_IMAGES, LINKED_PLACEHOLDERS, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS,
+    MAX_SIDE, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, PLACED_CROP, PLACED_PAGE, Place, PlacedPage, PlacedTail,
 };
 use super::{
     Affine, AnchorKind, Appearance, AppearanceItem, Arc, BezPath, CANVAS_CENTRE, FillLayer, ImageBlob, ImageObject, Inks, Instance, LinkInfo, Node,
@@ -224,21 +224,15 @@ impl<'a> Reader<'a> {
             items.push(AppearanceItem::Fill(FillLayer { overprint: gs.overprint_fill, ..FillLayer::new(fill_paint.unwrap_or(gs.fill.clone())) }));
         }
         if stroke {
-            let mut st = StrokeLayer::new(stroke_paint.unwrap_or(gs.stroke.clone()), gs.line_width());
-            st.cap = gs.cap;
-            st.join = gs.join;
-            st.miter_limit = gs.miter;
-            st.dash = gs.dash.clone();
-            st.overprint = gs.overprint_stroke;
+            let st = self.stroke_layer(stroke_paint.unwrap_or(gs.stroke.clone()), &gs);
             items.push(AppearanceItem::Stroke(st));
         }
         let kind = NodeKind::Path { path, rule: gs.rule, live: None, clipping: clip, guide };
         let mut node = self.new_node(kind, &gs);
-        // A ruler guide is written as a straight `(N) *` guide path on its layer.
+        // A ruler guide is written as a straight `(N) *` guide path on its layer, shown or hidden.
         if guide
             && op == "N"
             && !hidden
-            && !gs.hidden
             && !clip
             && self.pattern.is_none()
             && matches!(self.frames.last(), Some(Frame { kind: Kind::Layer(_), .. }))
@@ -331,15 +325,27 @@ impl<'a> Reader<'a> {
         if !matches!(n.kind, NodeKind::Path { .. }) || n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_))) {
             return;
         }
-        let mut st = StrokeLayer::new(gs.stroke.clone(), gs.line_width());
-        st.cap = gs.cap;
-        st.join = gs.join;
-        st.miter_limit = gs.miter;
-        st.dash = gs.dash.clone();
-        st.overprint = gs.overprint_stroke;
+        let st = self.stroke_layer(gs.stroke.clone(), &gs);
+        let Some(n) = self.frames.last_mut().and_then(|f| f.children.last_mut()) else { return };
         let mut a = (*n.appearance).clone();
         a.items.push(AppearanceItem::Stroke(st));
         n.appearance = a.into();
+    }
+
+    /// A stroke of `paint` with graphics state `gs`'s weight, caps, joins, miter limit, dashes and
+    /// overprint, its weight and dashes at the scale the art is read at ([`Self::space_scale`]).
+    fn stroke_layer(&mut self, paint: Paint, gs: &GState) -> StrokeLayer {
+        let k = self.space_scale();
+        let mut st = StrokeLayer::new(paint, gs.line_width() * k);
+        st.cap = gs.cap;
+        st.join = gs.join;
+        st.miter_limit = gs.miter;
+        st.dash = gs.dash.clone().map(|mut d| {
+            d.scale(k);
+            d
+        });
+        st.overprint = gs.overprint_stroke;
+        st
     }
 
     pub(super) fn set_instance(&mut self, i: &Instance) {
@@ -370,15 +376,18 @@ impl<'a> Reader<'a> {
 
     // ---- images ----------------------------------------------------------------------------
 
-    /// The samples after `XI`, its operands on the stack.
-    pub(super) fn image(&mut self, data: &[u8]) -> Result<(), String> {
+    /// The samples after `XI`, its operands on the stack; `hidden` when they are on `%_` lines.
+    pub(super) fn image(&mut self, data: &[u8], hidden: bool) -> Result<(), String> {
         let vals = self.operands();
         // Operands that came before an `XI` on their own line.
         let vals = match self.raster.as_mut().and_then(|r| r.operands.take()) {
             Some(before) if !vals.iter().any(|v| matches!(v, V::Arr(_))) => before,
             _ => vals,
         };
-        self.image_from(vals, data, false)
+        self.image_hidden = hidden;
+        let read = self.image_from(vals, data, false);
+        self.image_hidden = false;
+        read
     }
 
     /// The matrix and the numbers of an image's operands (`[a b c d tx ty] llx lly urx ury w h bits
@@ -713,7 +722,8 @@ impl<'a> Reader<'a> {
 
     /// Add the image `blob` (`w` × `h` pixels), which the matrix `m` maps into art space, with
     /// `alpha` (its alpha channel, one byte a pixel) as its opacity mask when it hides part of the
-    /// image, and `colorize` as the color that colorizes it.
+    /// image, and `colorize` as the color that colorizes it. It is on `%_` lines when its samples
+    /// are ([`Self::image`]).
     fn add_raster(&mut self, blob: ImageBlob, alpha: Option<&[u8]>, m: &[f64], (w, h): (u32, u32), colorize: Option<Paint>) -> Result<(), String> {
         // The matrix is an art-space matrix (y up) applied to the pixels with their rows running
         // downwards, (u, -v): pixels → (u, -v) → art space. Flipping the matrix's result instead
@@ -735,7 +745,8 @@ impl<'a> Reader<'a> {
         let key = blob.content_key();
         self.doc.images.entry(key.clone()).or_insert(blob);
         let im = ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None };
-        self.add_image_colorized(im, mask, colorize, false)
+        // An image on `%_` lines is the copy of a styled object, as the other objects there are.
+        self.add_image_colorized(im, mask, colorize, self.image_hidden)
     }
 
     /// An image that isn't read is left out, with `warning`; in a symbol's art, the symbol isn't

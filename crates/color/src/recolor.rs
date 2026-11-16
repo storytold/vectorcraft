@@ -567,6 +567,112 @@ pub fn theme_palette(samples: &[(Color, f32)], n: usize) -> Vec<Color> {
     groups.into_iter().map(|g| g.2).collect()
 }
 
+/// Colors that [`weigh`] moves from one row to another as one: a color they are shown by, how
+/// often the art uses them and the row they are in. A fixed unit (such as the color a row is
+/// shown by) stays in its row.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WeighUnit {
+    pub color: Color,
+    pub uses: f64,
+    pub row: usize,
+    pub fixed: bool,
+}
+
+/// The unit-by-row comparisons one [`weigh`] makes, at most.
+const WEIGH_WORK: usize = 50_000_000;
+
+/// The uses of `u` that count: a positive finite number, else 0.
+fn unit_uses(u: &WeighUnit) -> f64 {
+    if u.uses.is_finite() && u.uses > 0.0 { u.uses } else { 0.0 }
+}
+
+/// Each row's share of the uses of `units`, in percent (0 for every row when nothing is used).
+/// Units whose row is past `rows`, or whose uses are not a positive finite number, count nothing.
+pub fn row_shares(units: &[WeighUnit], rows: usize) -> Vec<f64> {
+    let mut sums = vec![0.0; rows];
+    for u in units {
+        if let Some(s) = sums.get_mut(u.row) {
+            *s += unit_uses(u);
+        }
+    }
+    let total: f64 = sums.iter().sum();
+    if total <= 0.0 {
+        return vec![0.0; rows];
+    }
+    sums.iter().map(|s| s / total * 100.0).collect()
+}
+
+/// For Recolor Artwork's Prominent Colors (our own rule): the row each of `units` goes to so that
+/// each row's share of the uses comes as near its share of `weights` as whole units allow. One
+/// unit moves at a time, while a move brings the rows' shares nearer their weights (the sum of
+/// every row's distance from its weight falls); of those moves, the one taken is the unit nearest
+/// in Lab (CIEDE2000) to the color of the row it goes to (`anchors`), compared with the row it
+/// leaves; on a tie, the move that brings the shares nearest. Fixed units, units in a row past
+/// `anchors` and units used no times stay where they are. Weights that are negative or not finite
+/// count as 0; when no weight is positive, every unit stays. The moves stop after
+/// [`WEIGH_WORK`] comparisons of a unit with a row, and when the movable units times the rows pass
+/// it, every unit stays.
+pub fn weigh(units: &[WeighUnit], anchors: &[Color], weights: &[f64]) -> Vec<usize> {
+    let mut row: Vec<usize> = units.iter().map(|u| u.row).collect();
+    let n = anchors.len();
+    let given = |r: usize| weights.get(r).copied().filter(|x| x.is_finite() && *x > 0.0).unwrap_or(0.0);
+    // Scaled by the largest weight first, so the sum stays finite.
+    let top = (0..n).map(given).fold(0.0, f64::max);
+    let w = |r: usize| if top > 0.0 { given(r) / top } else { 0.0 };
+    let sum_w: f64 = (0..n).map(w).sum();
+    let movable: Vec<usize> = (0..units.len()).filter(|&i| !units[i].fixed && units[i].row < n && unit_uses(&units[i]) > 0.0).collect();
+    let per_pass = movable.len().saturating_mul(n);
+    if sum_w <= 0.0 || n < 2 || movable.is_empty() || per_pass > WEIGH_WORK {
+        return row;
+    }
+    let mut sums = vec![0.0; n];
+    for u in units.iter().filter(|u| u.row < n) {
+        sums[u.row] += unit_uses(u);
+    }
+    let total: f64 = sums.iter().sum();
+    let target: Vec<f64> = (0..n).map(|r| w(r) / sum_w * total).collect();
+    let anchor_labs: Vec<Lab> = anchors.iter().map(|c| c.to_lab()).collect();
+    // Each movable unit's distance to each row's color.
+    let dist: Vec<Vec<f32>> = movable
+        .iter()
+        .map(|&i| {
+            let l = units[i].color.to_lab();
+            anchor_labs.iter().map(|a| delta_e2000(*a, l)).collect()
+        })
+        .collect();
+    // A move must bring the shares nearer by more than rounding.
+    let eps = total * 1e-9;
+    for _ in 0..WEIGH_WORK / per_pass {
+        let mut best: Option<(f32, f64, usize, usize)> = None;
+        for (m, &i) in movable.iter().enumerate() {
+            let (a, x) = (row[i], unit_uses(&units[i]));
+            let before_a = (sums[a] - target[a]).abs();
+            let after_a = (sums[a] - x - target[a]).abs();
+            for b in (0..n).filter(|&b| b != a) {
+                let gain = before_a + (sums[b] - target[b]).abs() - after_a - (sums[b] + x - target[b]).abs();
+                if gain <= eps {
+                    continue;
+                }
+                let cost = dist[m][b] - dist[m][a];
+                let better = match best {
+                    None => true,
+                    Some((c, g, ..)) => cost < c || (cost == c && gain > g),
+                };
+                if better {
+                    best = Some((cost, gain, m, b));
+                }
+            }
+        }
+        let Some((_, _, m, b)) = best else { break };
+        let i = movable[m];
+        let x = unit_uses(&units[i]);
+        sums[row[i]] -= x;
+        sums[b] += x;
+        row[i] = b;
+    }
+    row
+}
+
 /// A set of colours to snap to (Limit to Library), with their Lab values cached.
 #[derive(Clone, Debug, Default)]
 pub struct Palette(Vec<(Color, Lab)>);
@@ -910,5 +1016,56 @@ mod tests {
         assert!(matches!(r, Color::Cmyk { .. }));
         assert!(matches!(Rng::new(3).saturation_brightness(Color::lab(50.0, 40.0, 20.0)), Color::Lab { .. }));
         assert_eq!(Rng::new(3).saturation_brightness(Color::gray(0.4)).to_hsb()[1], 0.0, "greys stay grey");
+    }
+
+    fn unit(color: Color, uses: f64, row: usize, fixed: bool) -> WeighUnit {
+        WeighUnit { color, uses, row, fixed }
+    }
+
+    #[test]
+    fn row_shares_are_percent_of_the_uses() {
+        let units = [unit(Color::rgb(1.0, 0.0, 0.0), 3.0, 0, true), unit(Color::rgb(0.0, 0.0, 1.0), 1.0, 1, true), unit(Color::WHITE, 5.0, 4, false)];
+        assert_eq!(row_shares(&units, 2), vec![75.0, 25.0]);
+        assert_eq!(row_shares(&[], 2), vec![0.0, 0.0]);
+        assert_eq!(row_shares(&[unit(Color::WHITE, f64::NAN, 0, false)], 1), vec![0.0]);
+    }
+
+    #[test]
+    fn weigh_moves_the_nearest_colors_toward_the_weights() {
+        let (red, blue) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+        let units = [
+            unit(red, 1.0, 0, true),
+            unit(Color::rgb(0.9, 0.1, 0.3), 1.0, 0, false),
+            unit(Color::rgb(0.5, 0.0, 0.8), 1.0, 0, false),
+            unit(blue, 1.0, 1, true),
+        ];
+        // Equal weights: the reddish purple, nearer blue than the red-pink is, moves.
+        assert_eq!(weigh(&units, &[red, blue], &[1.0, 1.0]), vec![0, 0, 1, 1]);
+        // Most of the weight on blue: both movable colors go, the row's own color stays.
+        assert_eq!(weigh(&units, &[red, blue], &[0.0, 1.0]), vec![0, 1, 1, 1]);
+        // Weights already met, or none positive: nothing moves.
+        assert_eq!(weigh(&units, &[red, blue], &[3.0, 1.0]), vec![0, 0, 0, 1]);
+        assert_eq!(weigh(&units, &[red, blue], &[0.0, f64::NAN]), vec![0, 0, 0, 1]);
+        assert_eq!(weigh(&units, &[red, blue], &[1e308, 1e308]), vec![0, 0, 1, 1], "huge weights act as equal ones");
+        assert_eq!(weigh(&units, &[red], &[1.0]), vec![0, 0, 0, 1], "a row past the anchors keeps its units");
+    }
+
+    #[test]
+    fn weigh_takes_whole_units_and_stops_when_no_move_helps() {
+        let (red, blue) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+        // A heavy unit: moving it would overshoot by more than staying misses.
+        let units = [unit(red, 1.0, 0, true), unit(Color::rgb(0.8, 0.0, 0.2), 10.0, 0, false), unit(blue, 10.0, 1, true)];
+        assert_eq!(weigh(&units, &[red, blue], &[1.0, 1.4]), vec![0, 0, 1]);
+        assert_eq!(weigh(&units, &[red, blue], &[1.0, 20.0]), vec![0, 1, 1]);
+        // Many units: the result still follows the weights.
+        let many: Vec<WeighUnit> = (0..400).map(|i| unit(Color::rgb(i as f32 / 400.0, 0.2, 1.0 - i as f32 / 400.0), 1.0, 0, i == 0)).collect();
+        let rows = weigh(&many, &[Color::rgb(0.0, 0.2, 1.0), Color::rgb(1.0, 0.2, 0.0)], &[1.0, 3.0]);
+        assert_eq!(rows.iter().filter(|r| **r == 1).count(), 300);
+        assert!(rows[399] == 1 && rows[1] == 0, "the reddest colors go to the red row");
+        // Past the work limit (8,000 units by 7,000 rows) nothing moves.
+        let units: Vec<WeighUnit> = (0..8_000).map(|i| unit(Color::WHITE, 1.0, 0, i == 0)).collect();
+        let anchors = vec![Color::BLACK; 7_000];
+        let weights = vec![1.0; 7_000];
+        assert!(weigh(&units, &anchors, &weights).iter().all(|r| *r == 0));
     }
 }

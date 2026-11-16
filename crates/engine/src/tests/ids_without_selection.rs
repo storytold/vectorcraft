@@ -368,6 +368,7 @@ fn ids_cases(d: u64) -> Vec<(&'static str, &'static str, serde_json::Value, Unse
         ("edit.colors.invert", "ids", json!({}), Selected),
         ("edit.colors.toCMYK", "ids", json!({}), Selected),
         ("edit.colors.toGrayscale", "ids", json!({}), Selected),
+        ("edit.colors.toIndexed", "ids", json!({}), Selected),
         ("edit.colors.toRGB", "ids", json!({}), Selected),
         ("edit.colors.saturate", "ids", json!({"intensity": 50}), Selected),
         ("edit.colors.adjustBalance", "ids", json!({"r": 20}), Selected),

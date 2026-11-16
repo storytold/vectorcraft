@@ -631,6 +631,37 @@ fn brush_options_rename_duplicate_and_delete_update_strokes() {
     assert!(s.execute("brush.delete", &json!({"name": "5 pt. Round"})).is_err());
 }
 
+/// A document whose brushes repeat a name opens with the later brush numbered: strokes of the name
+/// keep the first brush, and renaming or deleting one brush leaves the other and its strokes alone.
+#[test]
+fn a_repeated_brush_name_is_numbered_when_the_document_opens() {
+    use vectorcraft_brush::{Brush, BrushKind, Calligraphic};
+    let nib = |size: f64| Brush { name: "Nib".into(), kind: BrushKind::Calligraphic(Calligraphic { size, ..Default::default() }) };
+    let mut s = session();
+    vectorcraft_brush::store(std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc), &[nib(1.0), nib(2.0)]);
+    let a = rect(&mut s, 10.0, 10.0, 50.0, 50.0);
+    s.execute("brush.apply", &json!({"name": "Nib", "ids": [a.0]})).unwrap();
+    let saved = s.execute("document.serialize", &json!({})).unwrap()["dataBase64"].clone();
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"name": "a.vectorcraft", "dataBase64": saved})).unwrap();
+    let names = |o: &mut Session| -> Vec<String> {
+        let list = o.execute("brush.list", &json!({})).unwrap();
+        list["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap().to_string()).collect()
+    };
+    assert_eq!(names(&mut o), ["Nib", "Nib 2"]);
+    assert_eq!(brush_of(&o, a).as_deref(), Some("Nib"));
+    assert_eq!(o.execute("brush.get", &json!({"name": "Nib"})).unwrap()["size"], json!(1.0));
+    assert_eq!(o.execute("brush.get", &json!({"name": "Nib 2"})).unwrap()["size"], json!(2.0));
+    let b = rect(&mut o, 80.0, 10.0, 50.0, 50.0);
+    o.execute("brush.apply", &json!({"name": "Nib 2", "ids": [b.0]})).unwrap();
+    o.execute("brush.options", &json!({"name": "Nib", "newName": "Pen"})).unwrap();
+    assert_eq!(names(&mut o), ["Pen", "Nib 2"]);
+    assert_eq!((brush_of(&o, a).as_deref(), brush_of(&o, b).as_deref()), (Some("Pen"), Some("Nib 2")));
+    o.execute("brush.delete", &json!({"name": "Nib 2"})).unwrap();
+    assert_eq!(names(&mut o), ["Pen"]);
+    assert_eq!((brush_of(&o, a).as_deref(), brush_of(&o, b)), (Some("Pen"), None));
+}
+
 /// `brush.move`, which the Brushes panel runs when a brush is dragged, reorders brushes among those of
 /// their type in one undo step and refuses to move one into another type.
 #[test]
@@ -930,6 +961,202 @@ fn brush_freehand_paints_with_a_brush_in_one_step() {
     assert_eq!(s.doc().unwrap().history.undo.len(), n + 1);
     let id = s.doc().unwrap().selection.objects[0];
     assert_eq!(brush_of(&s, id).as_deref(), Some("Charcoal"));
+}
+
+/// `brush.freehand` refuses a `brush` that is not a string or names no brush in the document,
+/// and a `style` other than "pencil" or "brush", before it draws: the document, the selection
+/// and the undo history stay as they were. A `brush` left out or null draws the plain path.
+#[test]
+fn brush_freehand_refuses_a_brush_or_style_it_cannot_use() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    select(&mut s, &[a]);
+    let points = json!([[10, 10], [60, 40], [120, 10]]);
+    for (extra, words) in [
+        (json!({"brush": "Nope"}), "no brush named `Nope`"),
+        (json!({"brush": ""}), "no brush named ``"),
+        (json!({"brush": 5}), "`brush` must be a string"),
+        (json!({"brush": {"name": "Charcoal"}}), "`brush` must be a string"),
+        (json!({"brush": true}), "`brush` must be a string"),
+        (json!({"brush": "Charcoal", "style": "marker"}), "`style` must be \"pencil\" or \"brush\", not \"marker\""),
+        (json!({"brush": "Charcoal", "style": 1}), "`style` must be \"pencil\" or \"brush\", not 1"),
+    ] {
+        let mut p = extra.clone();
+        p["points"] = points.clone();
+        let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+        let e = s.execute("brush.freehand", &p).expect_err(&format!("{extra} is refused"));
+        assert!(e.to_string().contains(words), "{extra}: {e}");
+        assert!(*s.doc().unwrap().doc == *before, "{extra} leaves the document");
+        assert_eq!(s.doc().unwrap().selection.objects, [a], "{extra} leaves the selection");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{extra} records no undo step");
+    }
+    for extra in [json!({}), json!({"brush": null, "style": null})] {
+        let mut p = extra.clone();
+        p["points"] = points.clone();
+        let id = NodeId(s.execute("brush.freehand", &p).unwrap()["id"].as_u64().unwrap());
+        assert_eq!(brush_of(&s, id), None, "{extra} draws the plain path");
+    }
+    for style in ["pencil", "brush"] {
+        let r = s.execute("brush.freehand", &json!({"points": points, "style": style, "brush": "Charcoal"})).unwrap();
+        assert!(r["id"].is_u64(), "{style}: {r}");
+    }
+}
+
+/// A `brush.freehand` call outside an interaction draws the path and paints it with the brush in
+/// one undo step: one Undo removes the path and gives back the earlier selection, and one Redo
+/// brings back the brushed path. Continuing a path with a brush is one step too.
+#[test]
+fn brush_freehand_direct_call_has_one_undo_step() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    select(&mut s, &[a]);
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("brush.freehand", &json!({"points": [[10, 10], [60, 40], [120, 10]], "style": "brush", "brush": "Charcoal"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(brush_of(&s, id).as_deref(), Some("Charcoal"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(*s.doc().unwrap().doc == *before, "one Undo removes the brushed path");
+    assert_eq!(selected(&s), [a], "Undo gives back the earlier selection");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(brush_of(&s, id).as_deref(), Some("Charcoal"), "Redo brings back the brush");
+    assert_eq!(selected(&s), [id]);
+
+    let undo = s.doc().unwrap().history.undo.len();
+    let p = json!({"points": [[120, 10], [160, 60], [200, 10]], "extend": {"id": id.0, "end": "end"}, "brush": "Dots"});
+    assert_eq!(s.execute("brush.freehand", &p).unwrap()["id"], json!(id.0));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "continuing is one undo step");
+    assert_eq!(brush_of(&s, id).as_deref(), Some("Dots"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(brush_of(&s, id).as_deref(), Some("Charcoal"), "one Undo takes back the stroke and its brush");
+
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("brush.freehand", &json!({"points": [[10, 100], [60, 140], [120, 100]], "style": "pencil", "brush": "Charcoal"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Paintbrush"), "a stroke with a brush is a Paintbrush step");
+}
+
+/// A `brush.freehand` call that continues a path by one point changes only the path's brush, and
+/// applies `keepSelected` as a longer continuation does: off, the path is deselected while the
+/// rest of the selection stays; on, the path is selected. A call that leaves the brush as it is
+/// changes neither the selection nor the undo history.
+#[test]
+fn brush_freehand_continued_by_one_point_follows_keep_selected() {
+    let mut s = session();
+    let r = s.execute("brush.freehand", &json!({"points": [[10, 10], [60, 40], [120, 10]], "style": "brush", "brush": "Charcoal"})).unwrap();
+    let p = NodeId(r["id"].as_u64().unwrap());
+    let a = rect(&mut s, 200.0, 200.0, 10.0, 10.0);
+    let extend = json!({"id": p.0, "end": "end"});
+
+    select(&mut s, &[p, a]);
+    let off = json!({"points": [[120, 10]], "extend": extend, "brush": "Dots", "keepSelected": false});
+    assert_eq!(s.execute("brush.freehand", &off).unwrap()["id"], json!(p.0));
+    assert_eq!(brush_of(&s, p).as_deref(), Some("Dots"));
+    assert_eq!(selected(&s), [a], "Keep selected off: the path is deselected and the rest stays");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(brush_of(&s, p).as_deref(), Some("Charcoal"), "one Undo takes back the brush");
+    assert_eq!(selected(&s), [p, a], "Undo gives back the earlier selection");
+
+    select(&mut s, &[a]);
+    let on = json!({"points": [[120, 10]], "extend": extend, "brush": "Dots"});
+    s.execute("brush.freehand", &on).unwrap();
+    assert_eq!(brush_of(&s, p).as_deref(), Some("Dots"));
+    assert_eq!(selected(&s), [p], "Keep selected on: the continued path is selected");
+
+    select(&mut s, &[a]);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("brush.freehand", &on).unwrap();
+    assert_eq!(selected(&s), [a], "the same brush again: the selection stays");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "the same brush again: no undo step");
+}
+
+/// `brush.freehand` refuses a brush for a path with no stroke (a continued path, a redrawn one
+/// and a new filled pencil path while the stroke is None) instead of reporting it painted: the
+/// document, the selection and the undo history stay as they were. Without a brush the path is
+/// drawn as `path.freehand` draws it.
+#[test]
+fn brush_freehand_refuses_a_brush_on_a_path_without_a_stroke() {
+    let mut s = session();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    let drawn = json!([[10, 10], [60, 20], [90, 80], [20, 90]]);
+    let p = NodeId(s.execute("path.freehand", &json!({"points": drawn, "fill": true})).unwrap()["id"].as_u64().unwrap());
+    assert!(node(&s, p).appearance.stroke_paint().is_none(), "the path has no stroke");
+    // The redraw below replaces a section of the path rather than drawing a new one.
+    let redraw = json!({"points": [[10, 10], [40, 30], [60, 20]], "redraw": {"id": p.0}});
+    assert_eq!(s.execute("path.freehand", &redraw).unwrap()["id"], json!(p.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    select(&mut s, &[p]);
+    let extend = json!({"id": p.0, "end": "end"});
+    for (what, mut params) in [
+        ("continued", json!({"points": [[20, 90], [0, 120], [-10, 150]], "extend": extend})),
+        ("continued by one point", json!({"points": [[20, 90]], "extend": extend})),
+        ("redrawn", redraw.clone()),
+        ("new filled pencil", json!({"points": [[100, 100], [150, 120], [180, 180]], "style": "pencil", "fill": true})),
+    ] {
+        params["brush"] = json!("Charcoal");
+        let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+        let e = s.execute("brush.freehand", &params).expect_err(&format!("{what}: refused"));
+        assert_eq!(e.to_string(), "invalid parameters for `brush.freehand`: cannot apply brush `Charcoal`: path has no stroke", "{what}");
+        assert!(*s.doc().unwrap().doc == *before, "{what}: the document stays");
+        assert_eq!(selected(&s), [p], "{what}: the selection stays");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{what}: no undo step");
+    }
+    let r = s.execute("brush.freehand", &json!({"points": [[20, 90], [0, 120], [-10, 150]], "extend": extend, "brush": null})).unwrap();
+    assert_eq!(r["id"], json!(p.0));
+    assert_eq!(brush_of(&s, p), None, "without a brush the path is continued as it is");
+}
+
+/// `brush.freehand` takes the keys of `path.freehand` and `brush`, and refuses any other key with
+/// the nearest key it takes, before it draws.
+#[test]
+fn brush_freehand_refuses_unknown_keys() {
+    let spec = crate::cmd::find_command("brush.freehand").unwrap();
+    let mut keys = crate::cmd::params::accepted_keys(spec.params).expect("the description names every key");
+    keys.sort_unstable();
+    assert_eq!(keys, ["brush", "closed", "connect", "extend", "fidelity", "fill", "fit", "keepSelected", "points", "redraw", "style"]);
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    select(&mut s, &[a]);
+    let points = json!([[10, 10], [60, 40], [120, 10]]);
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let e = s.execute("brush.freehand", &json!({"points": points, "brsuh": "Charcoal"})).expect_err("a misspelled key is refused");
+    assert!(e.to_string().contains("unknown parameter `brsuh`; did you mean `brush`?"), "{e}");
+    assert!(*s.doc().unwrap().doc == *before, "the document stays");
+    assert_eq!(selected(&s), [a], "the selection stays");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    let every = json!({
+        "points": points, "fidelity": 2.0, "fit": true, "closed": false, "style": "brush", "fill": false, "keepSelected": true,
+        "extend": null, "connect": null, "redraw": null, "brush": "Charcoal"
+    });
+    let id = NodeId(s.execute("brush.freehand", &every).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(brush_of(&s, id).as_deref(), Some("Charcoal"));
+}
+
+/// The Paintbrush skips a brush deleted after it was chosen: a deleted tool brush gives way to
+/// the document's current brush, and with neither the stroke is drawn without a brush.
+#[test]
+fn paintbrush_tool_skips_a_deleted_brush() {
+    let mut s = session();
+    s.execute("brush.setCurrent", &json!({"name": "Arrow"})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("paintbrush", v).unwrap();
+    s.set_tool_option("brush", &json!("Dots"));
+    s.execute("brush.delete", &json!({"name": "Dots"})).unwrap();
+    let stroke = |s: &mut Session, y: f64| {
+        for (k, x) in [(PointerKind::Down, 10.0), (PointerKind::Drag, 50.0), (PointerKind::Drag, 90.0), (PointerKind::Up, 130.0)] {
+            s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+        }
+        s.doc().unwrap().selection.objects[0]
+    };
+    let id = stroke(&mut s, 10.0);
+    assert_eq!(brush_of(&s, id).as_deref(), Some("Arrow"));
+    s.execute("brush.delete", &json!({"name": "Arrow"})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.unknown.get("currentBrush"), None);
+    let id = stroke(&mut s, 110.0);
+    assert_eq!(brush_of(&s, id), None);
 }
 
 #[test]

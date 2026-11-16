@@ -88,10 +88,10 @@ impl PanelDrag {
     }
 }
 
-/// Make `resp` (which senses drags) a source of the [`PanelDrag`] `drag` builds when a drag starts
-/// on it.
+/// Make `resp` (which senses drags) a source of the [`PanelDrag`] `drag` builds when a drag with the
+/// primary button starts on it. A secondary or middle drag carries nothing.
 pub fn drag_source(ui: &Ui, resp: &Response, drag: impl FnOnce() -> PanelDrag) {
-    if resp.drag_started() {
+    if resp.drag_started_by(egui::PointerButton::Primary) {
         egui::DragAndDrop::set_payload(ui.ctx(), drag());
     }
 }

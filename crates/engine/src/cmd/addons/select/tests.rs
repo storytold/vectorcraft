@@ -108,6 +108,35 @@ fn bad_params_are_errors_and_leave_the_selection() {
     }
 }
 
+/// A malformed `artboards` entry is refused as one, naming the parameter, before any entry is
+/// looked up; a value that is not a list, an empty list, a left-out list and a whole number past
+/// the last artboard each have their own error.
+#[test]
+fn artboard_errors_say_what_is_wrong() {
+    let mut s = three_boards();
+    let a = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    let entries = "invalid parameters for `addon.select.byArtboards`: `artboards` must contain whole numbers";
+    let not_a_list = "invalid parameters for `addon.select.byArtboards`: `artboards` must be a list of artboard indices";
+    for (p, want) in [
+        (json!({"artboards": ["1"]}), entries),
+        (json!({"artboards": [-1]}), entries),
+        (json!({"artboards": [1.5]}), entries),
+        (json!({"artboards": [true]}), entries),
+        (json!({"artboards": [9, "1"]}), entries),
+        (json!({"artboards": "0"}), not_a_list),
+        (json!({"artboards": null}), not_a_list),
+        (json!({"artboards": []}), "invalid parameters for `addon.select.byArtboards`: choose at least one artboard"),
+        (json!({}), "invalid parameters for `addon.select.byArtboards`: missing `artboards`"),
+        (json!({"artboards": [9]}), "no such artboard"),
+        (json!({"artboards": [0, 9]}), "no such artboard"),
+    ] {
+        s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+        assert_eq!(s.execute(C, &p).unwrap_err().to_string(), want, "{p}");
+        assert_eq!(s.doc().unwrap().selection.objects, vec![a], "{p}");
+    }
+    assert_eq!(pick(&mut s, json!({"artboards": [0, 0]})), vec![a]);
+}
+
 #[test]
 fn a_symbol_instance_is_measured_by_its_art() {
     // The symbol's art, (100, 60) to (140, 80), drawn 50 pt up and left: (50, 10) to (90, 30), on

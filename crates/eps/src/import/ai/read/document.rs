@@ -467,6 +467,10 @@ pub struct Symbols {
     /// The global and spot colors the symbols' art is linked to, as swatches, as [`read`] adds
     /// them to a document read from the layers.
     pub swatches: Vec<Swatch>,
+    /// The data's declared large canvas scale (1 when it declares none), not applied to the art.
+    pub canvas_scale: f64,
+    /// [`Structure::symbols_own_size`].
+    pub own_size: bool,
 }
 
 /// The symbols of the editing data `data`, for a file whose layers aren't read (a symbol library
@@ -529,7 +533,7 @@ pub fn symbols(data: &[u8], names: &mut obj::Names) -> Option<Symbols> {
         .chain(art_names(symbols.iter().map(|(s, _)| &*s.art)))
         .collect();
     names.absorb_among(std::mem::take(&mut r.names), &used);
-    Some(Symbols { symbols, images, swatches })
+    Some(Symbols { symbols, images, swatches, canvas_scale: r.canvas_scale, own_size: r.symbols_own_size })
 }
 
 /// [`artboards`] as far as reading `data` from its start gets: those read before an error, and
@@ -867,9 +871,15 @@ impl<'a> Reader<'a> {
     // ---- the document ----------------------------------------------------------------------
 
     /// The artboard of a file without artboards or crop marks: its size around the template
-    /// box's centre (half a point off the grid).
+    /// box's center (half a point off the grid). The program of a `.ai` of versions 3 and 4
+    /// ([`Reader::legacy_ai`], no `%AI5_FileFormat`), which don't record the artboard's size, has
+    /// VectorCraft's own default there, a US Letter artboard (612 × 792 pt); an EPS, or a newer
+    /// file without `%AI5_ArtSize`, has none (its page is its bounding box).
     fn sized_board(&self) -> Option<Rect> {
-        let ((w, h), (cx, cy)) = (self.art_size?, self.template_center?);
+        let (cx, cy) = self.template_center?;
+        let [_, _, letter_w, letter_h] = crate::import::LETTER;
+        let letter = self.legacy_ai && !self.file_format;
+        let (w, h) = self.art_size.or(letter.then_some((letter_w, letter_h)))?;
         // Rounded out, but not off a whole point the decimals in the file only just miss.
         let near = |v: f64| (v - v.round()).abs() < 1e-6;
         let (left, top) = (cx - w / 2.0, cy + h / 2.0);
@@ -922,6 +932,13 @@ impl<'a> Reader<'a> {
         } else {
             self.ensure_space()
         }
+    }
+
+    /// How many times as long [`Self::space`] makes a length in art space: a Large Canvas copy's
+    /// declared scale in the document, and 1 in a pattern's or a symbol's definition.
+    pub(super) fn space_scale(&mut self) -> f64 {
+        let k = self.space().determinant().abs().sqrt();
+        if k.is_finite() && k > 0.0 { k } else { 1.0 }
     }
 
     /// The space an image's matrix is in → where the art being read goes: [`Self::space`], and in a
@@ -1147,7 +1164,7 @@ impl<'a> Reader<'a> {
                 continue;
             }
             let Some(st) = self.styles.get(&name) else { continue };
-            let Some(mut appearance) = appearance_from_art_style(st) else { continue };
+            let Some(mut appearance) = appearance_from_art_style(st, &self.gradients) else { continue };
             // A Large Canvas copy's styles are at its art's scale ([`Self::ensure_space`]).
             if let Some(s) = self.large_canvas.filter(|s| *s != 1.0) {
                 appearance.scale_strokes(s);
@@ -1165,7 +1182,9 @@ impl<'a> Reader<'a> {
     }
 
     pub(super) fn finish(mut self) -> Result<Structure, String> {
-        if self.graph.take().is_some() {
+        if self.graph.is_some() {
+            self.graph_plain();
+            self.graph = None;
             self.warn(super::types::GRAPH_UNENDED);
         }
         // Envelopes whose plugin never closed them keep their drawn art.
@@ -1192,6 +1211,11 @@ impl<'a> Reader<'a> {
         drop_commented_copies(&mut self.doc.layers, &self.hidden_ids);
         super::on_path::apply(&mut self.doc, &self.on_path);
         let mut doc = std::mem::replace(&mut self.doc, Document::new(1.0, 1.0));
+        // A Large Canvas copy's symbols are at its art's scale too ([`Self::ensure_space`]), except
+        // in data VectorCraft wrote.
+        if let Some(s) = self.large_canvas.filter(|s| *s != 1.0 && !self.symbols_own_size) {
+            crate::import::scale_symbols(&mut doc, s);
+        }
         // The active artboard, when it is not the first (the default).
         let active = self.active_board.filter(|i| *i > 0 && *i < self.artboards.len());
         let boards: Vec<AiArtboard> = if self.artboards.is_empty() {
@@ -1367,10 +1391,12 @@ impl<'a> Reader<'a> {
                 checks: self.envelope_checks,
                 spent: self.envelope_spent,
                 page,
+                alone: None,
             },
             styles_read,
             text_patterns,
             canvas_scale: self.canvas_scale,
+            symbols_own_size: self.symbols_own_size,
             xml_ids: self.xml_ids,
             bindings,
             bindings_skipped,
@@ -1380,8 +1406,9 @@ impl<'a> Reader<'a> {
 }
 
 /// Link the objects of `links` among `nodes` to their graphic style's id, each only when it has its
-/// style's appearance and transparency (`styles`, whose ids are 1, 2, … in order). A path, which
-/// has no contents, takes the style's contents slot.
+/// style's appearance and transparency (`styles`, whose ids are 1, 2, … in order), their members
+/// and their opacity masks' art included. A path, which has no contents, takes the style's contents
+/// slot.
 fn link_styles(nodes: &mut [Arc<Node>], links: &HashMap<NodeId, u32>, styles: &[GraphicStyle], depth: usize) {
     if depth > MAX_DEPTH {
         return;
@@ -1399,6 +1426,11 @@ fn link_styles(nodes: &mut [Arc<Node>], links: &HashMap<NodeId, u32>, styles: &[
                 n.appearance = appearance.into();
                 n.extras_mut().graphic_style = Some(*id);
             }
+        }
+        if n.extras().mask.is_some()
+            && let Some(m) = Arc::make_mut(n).extras_mut().mask.as_mut()
+        {
+            link_styles(std::slice::from_mut(&mut m.art), links, styles, depth + 1);
         }
         if n.children().is_some_and(|c| !c.is_empty())
             && let Some(c) = Arc::make_mut(n).children_mut()
@@ -1442,7 +1474,8 @@ fn ruler_guide(a: Point, b: Point, centre: Option<(f64, f64)>, boards: &[Rect]) 
 }
 
 /// Makes the children of the layers and sublayers of `nodes` that `pick` makes a guide of into
-/// ruler guide nodes with the same ids, moved to the top of their layer in their order.
+/// ruler guide nodes with the same ids, names, locks and visibility, moved to the top of their layer
+/// in their order.
 fn take_ruler_guides(nodes: &mut [Arc<Node>], pick: &dyn Fn(NodeId) -> Option<Guide>, depth: usize) {
     if depth > MAX_DEPTH {
         return;
@@ -1455,7 +1488,11 @@ fn take_ruler_guides(nodes: &mut [Arc<Node>], pick: &dyn Fn(NodeId) -> Option<Gu
         let mut guides = vec![];
         kids.retain(|k| match pick(k.id) {
             Some(g) => {
-                guides.push(Arc::new(Node::new(k.id, NodeKind::RulerGuide { vertical: g.vertical, pos: g.pos, artboard: g.artboard })));
+                let mut n = Node::new(k.id, NodeKind::RulerGuide { vertical: g.vertical, pos: g.pos, artboard: g.artboard });
+                n.name = k.name.clone();
+                n.locked = k.locked;
+                n.visible = k.visible;
+                guides.push(Arc::new(n));
                 false
             }
             None => true,

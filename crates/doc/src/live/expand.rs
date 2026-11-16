@@ -207,9 +207,21 @@ pub fn mesh_warp_cost(cells: usize) -> usize {
 /// triangle instead; with `pixelated`, drawn without smoothing). Each piece reaches a little past
 /// its edges (at most half a point) so neighbors overlap and no seams show. Each piece keeps the
 /// color `n` colorizes a grayscale image with, and `n`'s color mask. The result is a group with `n`'s id, name,
-/// transparency, opacity mask and appearance.
+/// transparency, opacity mask and appearance. It is a knockout group and each piece is a
+/// [`crate::NodeExtras::warp_piece`], so where pieces overlap only the top one draws and a
+/// partly transparent image keeps its own alpha there. More cells than [`MAX_GENERATED`] objects
+/// allow make an empty group.
 pub fn mesh_warp_image(n: &Node, im: &ImageObject, f: &dyn Fn(Point) -> Point, cells: usize, pixelated: bool, masked: bool) -> Node {
     let k = cells.max(1);
+    let mut g = n.clone();
+    g.kind = NodeKind::Group { children: vec![], clip: false };
+    g.knockout = crate::Knockout::On;
+    if let Some(e) = g.extras_if_any() {
+        e.colorize = None;
+    }
+    if mesh_warp_cost(k) > MAX_GENERATED {
+        return g;
+    }
     // A grayscale image's fill color colorizes each piece; the group of pieces takes none.
     let colorize = n.extras().colorize.clone();
     // Each piece shows what the image shows: its color mask's masked pixels.
@@ -243,22 +255,22 @@ pub fn mesh_warp_image(n: &Node, im: &ImageObject, f: &dyn Fn(Point) -> Point, c
                     // Preserve Shape Using Transparency: the triangle is the piece's alpha (a
                     // white opacity mask) instead of its clipping path.
                     let white = Node::path(n.id, shape, Appearance::basic(Paint::solid(Color::WHITE), Paint::None, 0.0));
-                    pieces.push(Arc::new(image.with_mask(Some(Box::new(crate::OpacityMask::new(white, true))))));
+                    let mut piece = image.with_mask(Some(Box::new(crate::OpacityMask::new(white, true))));
+                    piece.extras_mut().warp_piece = true;
+                    pieces.push(Arc::new(piece));
                     continue;
                 }
                 let mut clip = Node::path(n.id, shape, Appearance::default());
                 if let NodeKind::Path { clipping, .. } = &mut clip.kind {
                     *clipping = true;
                 }
-                pieces.push(Arc::new(Node::new(n.id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(image)], clip: true })));
+                let mut piece = Node::new(n.id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(image)], clip: true });
+                piece.extras_mut().warp_piece = true;
+                pieces.push(Arc::new(piece));
             }
         }
     }
-    let mut g = n.clone();
     g.kind = NodeKind::Group { children: pieces, clip: false };
-    if let Some(e) = g.extras_if_any() {
-        e.colorize = None;
-    }
     g
 }
 

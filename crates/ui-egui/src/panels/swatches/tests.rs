@@ -4,6 +4,8 @@ use egui::{Event, Modifiers, PointerButton, Pos2};
 use vectorcraft_color::Color;
 use vectorcraft_engine::Session;
 
+mod context_menu;
+
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
@@ -489,7 +491,7 @@ fn find_field_filters_and_shift_extends_over_what_is_shown() {
 fn list_view_rows_take_double_clicks_and_folder_clicks_select_the_group() {
     let mut app = app();
     let ctx = context();
-    set_pstate(&ctx, "swatch-view", View::SmallList);
+    app.ui.swatches_view = View::SmallList;
     double_click_tile(&mut app, &ctx, "Red");
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND), "double-click in a list opens Swatch Options");
     let d = &app.session.active().unwrap().doc;
@@ -531,6 +533,50 @@ fn dragging_tiles_reorders_and_moves_into_groups_as_one_undo_step_each() {
     let white = tile_center(&ctx, "White");
     drag(&mut app, &ctx, white, white + vec2(2.0, 0.0), 7.0);
     assert_eq!((names_of(&app, None), app.session.doc().unwrap().history.undo.len()), (before, undo));
+}
+
+/// Press `pointer` at `from`, drag to `to` and release there, a frame per step from `time`. Returns
+/// whether a drag-and-drop payload was held over `to` before the release.
+fn drag_by(app: &mut VectorcraftApp, ctx: &egui::Context, from: Pos2, to: Pos2, pointer: PointerButton, time: f64) -> bool {
+    let button = |pos, pressed| Event::PointerButton { pos, button: pointer, pressed, modifiers: Modifiers::NONE };
+    frame(app, ctx, vec![Event::PointerMoved(from), button(from, true)], time, show);
+    frame(app, ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], time + 0.1, show);
+    frame(app, ctx, vec![Event::PointerMoved(to)], time + 0.2, show);
+    let held = egui::DragAndDrop::has_any_payload(ctx);
+    frame(app, ctx, vec![Event::PointerMoved(to), button(to, false)], time + 0.3, show);
+    frame(app, ctx, vec![], time + 0.4, show);
+    held
+}
+
+#[test]
+fn only_a_primary_drag_moves_swatches_and_groups() {
+    let mut app = app();
+    let ctx = context();
+    frame(&mut app, &ctx, vec![], 0.0, show);
+    frame(&mut app, &ctx, vec![], 0.5, show);
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let (before, grays) = (names_of(&app, None), names_of(&app, Some("Grays")));
+    let groups = |app: &VectorcraftApp| app.session.active().unwrap().doc.swatch_groups.iter().map(|g| g.name.clone()).collect::<Vec<_>>();
+    let group_order = groups(&app);
+    let mut time = 1.0;
+    for pointer in [PointerButton::Secondary, PointerButton::Middle] {
+        // A swatch onto the left half of Red, and onto a folder.
+        let held = drag_by(&mut app, &ctx, tile_center(&ctx, "Amber"), tile_center(&ctx, "Red") - vec2(4.0, 0.0), pointer, time);
+        assert!(!held, "a {pointer:?} drag carries no swatch");
+        let held = drag_by(&mut app, &ctx, tile_center(&ctx, "Amber"), tile_center(&ctx, "Grays"), pointer, time + 1.0);
+        assert!(!held, "a {pointer:?} drag carries no swatch into a group");
+        // A group onto another group.
+        let held = drag_by(&mut app, &ctx, tile_center(&ctx, "Grays"), tile_center(&ctx, "Brights") - vec2(4.0, 0.0), pointer, time + 2.0);
+        assert!(!held, "a {pointer:?} drag carries no group");
+        assert_eq!((names_of(&app, None), names_of(&app, Some("Grays")), groups(&app)), (before.clone(), grays.clone(), group_order.clone()));
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "a {pointer:?} drag records no undo step");
+        time += 3.0;
+    }
+    // The primary button still moves the swatch.
+    assert!(drag_by(&mut app, &ctx, tile_center(&ctx, "Amber"), tile_center(&ctx, "Red") - vec2(4.0, 0.0), PointerButton::Primary, time));
+    let n = names_of(&app, None);
+    assert_eq!(n[n.iter().position(|x| x == "Red").unwrap() - 1], "Amber");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
 }
 
 #[test]
@@ -969,7 +1015,7 @@ fn the_list_fills_a_tall_panel_above_its_footer() {
         app.run("swatch.new", json!({"name": format!("Tone {i:02}"), "color": format!("#{:02x}3060", i * 4)})).unwrap();
     }
     let ctx = context();
-    set_pstate(&ctx, "swatch-view", View::SmallList);
+    app.ui.swatches_view = View::SmallList;
     // The clip rect of the first swatch row's name: the list's visible area.
     let mut list = |bottom: Option<f32>| {
         let mut clip = None;

@@ -116,8 +116,11 @@ pub(super) fn remove_anchor(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(EngineError::Other("no such anchor".into()));
         }
         let mut emptied = Beside::replacing(d, &[id]);
-        let removed = remove_anchors_of(d, sel, &mut emptied, id, [(si, ai)], curvature)?;
+        let removed = remove_anchors_of(d, sel, &mut emptied, id, vec![(si, ai)], curvature)?;
         emptied.finish(d)?;
+        if removed {
+            sel.remove(id);
+        }
         Ok(removed)
     })?;
     Ok(json!({ "removedObject": removed }))
@@ -136,14 +139,14 @@ pub(super) fn remove_anchors(s: &mut Session, _: &Value) -> Result<Value> {
         return Err(bad("path.removeAnchors", "direct-select anchor points of a path"));
     }
     let removed = s.edit("Remove Anchor Points", |d, sel| {
-        let mut removed = 0;
+        let mut gone = Vec::new();
         let mut emptied = Beside::replacing(d, &jobs.iter().map(|(id, _)| *id).collect::<Vec<_>>());
         for (id, anchors) in jobs {
             let shape: Vec<(usize, bool)> =
                 d.node(id).and_then(Node::path_data).map(|p| p.subpaths.iter().map(|sp| (sp.anchors.len(), sp.closed)).collect()).unwrap_or_default();
             let next = following_anchors(&shape, &anchors);
             if remove_anchors_of(d, sel, &mut emptied, id, anchors, false)? {
-                removed += 1;
+                gone.push(id);
             } else if !next.is_empty() {
                 // The next anchor along is selected, so the next Remove Anchor Points goes on from
                 // there without picking it first (#2241).
@@ -151,7 +154,8 @@ pub(super) fn remove_anchors(s: &mut Session, _: &Value) -> Result<Value> {
             }
         }
         emptied.finish(d)?;
-        Ok(removed)
+        sel.remove_all(gone.iter().copied());
+        Ok(gone.len())
     })?;
     Ok(json!({ "removedObjects": removed }))
 }
@@ -160,19 +164,32 @@ pub(super) fn remove_anchors(s: &mut Session, _: &Value) -> Result<Value> {
 /// path whose subpaths have `shape` (anchor count, closed): in each subpath, the anchor after its
 /// last removed one, round the end of a closed subpath, or the one before it at an open subpath's
 /// end. Indexes are those after the removal, without the subpaths left with fewer than two anchors.
+/// `removed` is in ascending order without repeats, as a selection holds it, and each subpath reads
+/// only its own pairs.
 fn following_anchors(shape: &[(usize, bool)], removed: &[(usize, usize)]) -> BTreeSet<(usize, usize)> {
     let mut next = BTreeSet::new();
     let mut kept = 0;
+    let mut rest = removed;
     for (si, &(n, closed)) in shape.iter().enumerate() {
-        let gone: BTreeSet<usize> = removed.iter().filter(|&&(s, a)| s == si && a < n).map(|&(_, a)| a).collect();
+        let (mine, after) = rest.split_at(rest.iter().take_while(|&&(s, _)| s == si).count());
+        rest = after;
+        let gone = &mine[..mine.partition_point(|&(_, a)| a < n)];
         if n - gone.len() < 2 {
             continue;
         }
-        if let Some(&last) = gone.last() {
-            let wrap = if closed { 0..last } else { 0..0 };
-            let after = (last + 1..n).chain(wrap).find(|a| !gone.contains(a));
-            if let Some(a) = after.or_else(|| (0..last).rev().find(|a| !gone.contains(a))) {
-                next.insert((kept, a - gone.range(..a).count()));
+        if let Some(&(_, last)) = gone.last() {
+            // Anchors past `last` are all left. Below it, the first one left (round a closed
+            // subpath's end) is past the removed run from 0, and the last one left is below the
+            // removed run down from `last`.
+            let a = if last + 1 < n {
+                Some(last + 1)
+            } else if closed {
+                Some(gone.iter().zip(0..).take_while(|&(&(_, g), k)| g == k).count())
+            } else {
+                last.checked_sub(gone.iter().rev().zip((0..=last).rev()).take_while(|&(&(_, g), k)| g == k).count())
+            };
+            if let Some(a) = a {
+                next.insert((kept, a - gone.partition_point(|&(_, g)| g < a)));
             }
         }
         kept += 1;
@@ -183,34 +200,37 @@ fn following_anchors(shape: &[(usize, bool)], removed: &[(usize, usize)]) -> BTr
 /// Remove `anchors` (subpath, anchor) of path `id` without opening it, refitting the curve round
 /// each one, or with `curvature` re-curving it as the Curvature tool curves its points
 /// ([`vectorcraft_tools::draw2::curvature_remove`]). A subpath left with one anchor is removed,
-/// and a path left with no subpath is removed through `emptied`. True when the path went.
+/// and a path left with no subpath is removed through `emptied`; the caller then takes it out of
+/// the selection. True when the path went.
 fn remove_anchors_of(
     d: &mut Document,
     sel: &mut Selection,
     emptied: &mut Beside,
     id: NodeId,
-    anchors: impl IntoIterator<Item = (usize, usize)>,
+    mut anchors: Vec<(usize, usize)>,
     curvature: bool,
 ) -> Result<bool> {
-    let mut anchors: Vec<(usize, usize)> = anchors.into_iter().collect();
     // The last first, so the indexes still to come stay valid.
     anchors.sort_unstable_by(|a, b| b.cmp(a));
     anchors.dedup();
     let path = path_mut(d, id)?;
-    for (si, ai) in anchors {
-        if let Some(sp) = path.subpaths.get_mut(si) {
-            if curvature {
+    let mut rest = &anchors[..];
+    while let Some(&(si, _)) = rest.first() {
+        let (mine, after) = rest.split_at(rest.iter().take_while(|&&(s, _)| s == si).count());
+        rest = after;
+        let Some(sp) = path.subpaths.get_mut(si) else { continue };
+        if curvature {
+            for &(_, ai) in mine {
                 vectorcraft_tools::draw2::curvature_remove(sp, ai);
-            } else {
-                po::remove_anchor(sp, ai);
             }
+        } else {
+            po::remove_anchors(sp, &mine.iter().map(|&(_, ai)| ai).collect::<Vec<_>>());
         }
     }
     path.subpaths.retain(|sp| sp.anchors.len() >= 2);
     let gone = path.is_empty();
     if gone {
         emptied.put(d, id, vec![])?;
-        sel.remove(id);
     } else {
         sel.anchors.remove(&id);
         sel.segments.remove(&id);
@@ -276,4 +296,48 @@ pub(super) fn reshape_segment(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// [`following_anchors`] by its definition: for each subpath, a search of the anchors after
+    /// its last removed one, round a closed end, then before it.
+    fn following_by_search(shape: &[(usize, bool)], removed: &[(usize, usize)]) -> BTreeSet<(usize, usize)> {
+        let mut next = BTreeSet::new();
+        let mut kept = 0;
+        for (si, &(n, closed)) in shape.iter().enumerate() {
+            let gone: BTreeSet<usize> = removed.iter().filter(|&&(s, a)| s == si && a < n).map(|&(_, a)| a).collect();
+            if n - gone.len() < 2 {
+                continue;
+            }
+            if let Some(&last) = gone.last() {
+                let wrap = if closed { 0..last } else { 0..0 };
+                let after = (last + 1..n).chain(wrap).find(|a| !gone.contains(a));
+                if let Some(a) = after.or_else(|| (0..last).rev().find(|a| !gone.contains(a))) {
+                    next.insert((kept, a - gone.range(..a).count()));
+                }
+            }
+            kept += 1;
+        }
+        next
+    }
+
+    #[test]
+    fn following_anchors_matches_a_search_along_each_subpath() {
+        let mut seed = 0x2545_f491_4f6c_dd1d_u64;
+        let mut rnd = |m: u64| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed % m) as usize
+        };
+        for case in 0..2000 {
+            let shape: Vec<(usize, bool)> = (0..rnd(5) + 1).map(|_| (rnd(9), rnd(2) == 0)).collect();
+            let removed: BTreeSet<(usize, usize)> = (0..rnd(14)).map(|_| (rnd(shape.len() as u64 + 1), rnd(11))).collect();
+            let removed: Vec<_> = removed.into_iter().collect();
+            assert_eq!(following_anchors(&shape, &removed), following_by_search(&shape, &removed), "case {case}: {shape:?} removing {removed:?}");
+        }
+    }
 }

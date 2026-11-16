@@ -84,6 +84,9 @@ pub struct ShapeTool {
     began: bool,
     pub sides: u32,
     pub points: u32,
+    /// The anchors an ellipse made by a click has (the Ellipse dialog opens on it); 4 is a live
+    /// ellipse.
+    pub anchors: u32,
     pub corner_radius: f64,
     /// Star inner radius as a fraction of the outer radius.
     pub star_ratio: f64,
@@ -146,6 +149,7 @@ impl ShapeTool {
             began: false,
             sides: 6,
             points: 5,
+            anchors: 4,
             corner_radius: 12.0,
             star_ratio: 0.5,
             inner: None,
@@ -236,7 +240,7 @@ impl ShapeTool {
         self.selection = if let Some((handle, bx)) = self.over_handle(cx, ev.pos) {
             let is_area = |id: &vectorcraft_doc::NodeId| cx.doc.node(*id).is_some_and(is_area_type);
             let areas = cx.selection.objects.iter().any(is_area);
-            Some(SelectionDrag::Scale { handle, bx, areas, snap: Box::new(PointSnap::new(cx, || Targets::for_scale(cx))), last: None })
+            Some(SelectionDrag::Scale { handle, bx, areas, snap: Box::new(PointSnap::scaling(cx, || Targets::for_scale(cx))), last: None })
         } else {
             match hit_center(cx, ev.pos, cx.point_tol()) {
                 Some((_, hold)) => Some(SelectionDrag::Move { start: ev.pos, hold, began: false, snap: Box::new(MoveSnap::new(cx)) }),
@@ -787,6 +791,7 @@ impl Tool for ShapeTool {
         json!({
             "sides": self.sides,
             "points": self.points,
+            "anchors": self.anchors,
             "cornerRadius": self.corner_radius,
             "starRatio": self.star_ratio,
             "length": self.line_length,
@@ -799,6 +804,7 @@ impl Tool for ShapeTool {
         match key {
             "sides" => self.sides = v.as_u64().unwrap_or(6).clamp(3, 1000) as u32,
             "points" => self.points = v.as_u64().unwrap_or(5).clamp(3, 1000) as u32,
+            "anchors" => self.anchors = v.as_u64().unwrap_or(4).clamp(2, 1000) as u32,
             "cornerRadius" => self.corner_radius = finite.unwrap_or(12.0).clamp(0.0, MAX_CORNER_RADIUS),
             "starRatio" => self.star_ratio = v.as_f64().unwrap_or(0.5).clamp(0.01, 1.0),
             "length" => self.line_length = finite.map_or(self.line_length, |n| n.abs().min(1e6)),

@@ -201,3 +201,10 @@ pub fn skill(id: &str) -> Option<&'static Skill> {
 pub fn tutorial(id: &str) -> Option<(&'static Skill, &'static Tutorial)> {
     SKILLS.iter().find_map(|s| s.tutorials.iter().find(|t| t.id == id).map(|t| (s, t)))
 }
+
+/// The tutorial after the one whose id is `id` in the same skill; none for a skill's last tutorial.
+pub fn next(id: &str) -> Option<&'static Tutorial> {
+    let (skill, _) = tutorial(id)?;
+    let at = skill.tutorials.iter().position(|t| t.id == id)?;
+    skill.tutorials.get(at + 1)
+}

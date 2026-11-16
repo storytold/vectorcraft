@@ -61,9 +61,9 @@ pub(super) fn connect(builder: zbus::Result<zbus::blocking::connection::Builder<
 /// after it has no bound, and ends when the portal answers or leaves the bus.
 pub(super) fn pick(conn: &Connection, parent: &str) -> Result<Option<[f32; 3]>, Failure> {
     const DESKTOP: &str = "org.freedesktop.portal.Desktop";
-    let token = super::request::token("vectorcraft_color").map_err(Failure::Failed)?;
+    let token = crate::portal_request::token("vectorcraft_color").map_err(Failure::Failed)?;
     // Made before the call: a portal can send its answer before the call returns.
-    let replies = super::request::Responses::new(conn).map_err(Failure::Failed)?;
+    let replies = crate::portal_request::Responses::new(conn).map_err(Failure::Failed)?;
     let proxy = Proxy::new(conn, DESKTOP, "/org/freedesktop/portal/desktop", "org.freedesktop.portal.Screenshot")
         .map_err(|e| Failure::Failed(e.to_string()))?;
     let options = HashMap::from([("handle_token", Value::from(token.as_str()))]);
@@ -106,6 +106,7 @@ fn answer(code: u32, results: &HashMap<String, OwnedValue>) -> Result<Option<[f3
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::portal_request::test_bus::private_bus;
 
     fn color(rgb: (f64, f64, f64)) -> HashMap<String, OwnedValue> {
         HashMap::from([("color".into(), OwnedValue::try_from(Value::from(rgb)).unwrap())])
@@ -183,35 +184,6 @@ mod tests {
             for failure in [Failure::Unavailable(String::new()), Failure::NoAnswer(String::new()), Failure::Failed(String::new())] {
                 assert_ne!(message(lang, failure.message()), failure.message(), "{}", lang.code());
             }
-        }
-    }
-
-    /// A session bus of its own (`dbus-daemon`), `None` when there is none to run.
-    fn private_bus() -> Option<(Daemon, String)> {
-        use std::io::BufRead as _;
-        let spawning = crate::spawning();
-        let daemon = std::process::Command::new("dbus-daemon")
-            .args(["--session", "--nofork", "--print-address=1"])
-            .stdout(std::process::Stdio::piped())
-            .spawn();
-        drop(spawning);
-        let Ok(daemon) = daemon else {
-            eprintln!("no dbus-daemon: skipped");
-            return None;
-        };
-        let mut daemon = Daemon(daemon);
-        let mut address = String::new();
-        std::io::BufReader::new(daemon.0.stdout.take().unwrap()).read_line(&mut address).unwrap();
-        Some((daemon, address.trim().to_string()))
-    }
-
-    /// Stops the private bus when the test ends, unwinding included.
-    struct Daemon(std::process::Child);
-
-    impl Drop for Daemon {
-        fn drop(&mut self) {
-            let _ = self.0.kill();
-            let _ = self.0.wait();
         }
     }
 

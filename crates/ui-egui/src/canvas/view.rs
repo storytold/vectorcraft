@@ -139,10 +139,18 @@ pub(super) fn whole_pixels(d: egui::Vec2, ppp: f32) -> (f64, f64) {
     ((f64::from(d.x) * f64::from(ppp)).round(), (f64::from(d.y) * f64::from(ppp)).round())
 }
 
+/// The pixels a point that the canvas's art frame renders at ([`super::frame_ppp`]): the display's,
+/// or fewer on a canvas wider than the largest texture side. Pans and scrolls move the view by
+/// whole pixels of that frame.
+pub(super) fn pan_ppp(app: &VectorcraftApp, ui: &Ui) -> f32 {
+    let ppp = ui.ctx().pixels_per_point();
+    app.canvas_rect.map_or(ppp, |r| super::frame_ppp(r.size(), ppp, ui.ctx().input(|i| i.max_texture_side)))
+}
+
 /// What the scrolls of the view have left to move ([`scroll_view`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(super) struct ScrollRest {
-    /// Device pixels along the screen's axes, at most half a pixel each.
+    /// Pixels of the canvas's frame along the screen's axes, at most half a pixel each.
     pub(super) x: f64,
     pub(super) y: f64,
     /// The document, the view's center, zoom and rotation, and the device pixels a point that the
@@ -151,11 +159,11 @@ pub(super) struct ScrollRest {
 }
 
 /// Scroll the active view so that its content moves `by` screen points (the wheel, a trackpad, a
-/// touch screen, a scroll bar), in whole device pixels: the part of a pixel left over is added to
-/// the next scroll. It is dropped when the view changed in between (a zoom, a turn, Fit, a pan
-/// of another kind, another document) or the device pixels a point did.
+/// touch screen, a scroll bar), in whole pixels of the canvas's frame ([`pan_ppp`]): the part of a
+/// pixel left over is added to the next scroll. It is dropped when the view changed in between (a
+/// zoom, a turn, Fit, a pan of another kind, another document) or the pixels a point did.
 pub(super) fn scroll_view(app: &mut VectorcraftApp, ui: &Ui, by: egui::Vec2) {
-    let ppp = ui.ctx().pixels_per_point();
+    let ppp = pan_ppp(app, ui);
     let ui_zoom = app.canvas_ui_zoom;
     let Some(doc) = app.session.active().map(|st| st.uid) else { return };
     let Some(vm) = app.view_mut() else { return };
@@ -344,7 +352,7 @@ pub(super) fn scroll_bars(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, o
         let hot = drag.is_some() || hover.is_some_and(|p| thumb.contains(p));
         painter.rect_filled(thumb, CornerRadius::same(3), if hot { t.text_dim } else { t.text_disabled });
     }
-    let ppp = ui.ctx().pixels_per_point();
+    let ppp = pan_ppp(app, ui);
     if let Some((c, by)) = center
         && let Some(vm) = app.view_mut()
     {
@@ -534,8 +542,16 @@ pub(super) fn wheel(
 /// finger drops the press the first one began (its tool interaction rolled back; the rest of the
 /// gesture presses nothing), and a tap of two fingers undoes, one of three redoes. In the Touch
 /// workspace a tap of two fingers switches between selection and drawing modes instead.
-pub(super) fn touch_gestures(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, view: vectorcraft_engine::ViewInfo) {
+///
+/// While a modal dialog is open (`modal`) the canvas takes no finger contacts: no tap runs a command and no gesture
+/// begins. The fingers already down are forgotten, so lifting them, during the dialog or after it closes, runs nothing.
+pub(super) fn touch_gestures(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, view: vectorcraft_engine::ViewInfo, modal: bool) {
     if !app.session.prefs.touch_gestures {
+        return;
+    }
+    let key = egui::Id::unique("canvas-touch");
+    if modal {
+        ui.data_mut(|d| d.remove::<crate::touch::Taps>(key));
         return;
     }
     let (touches, now): (Vec<_>, f64) = ui.input(|i| {
@@ -548,7 +564,6 @@ pub(super) fn touch_gestures(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect
     if touches.is_empty() {
         return;
     }
-    let key = egui::Id::unique("canvas-touch");
     let mut taps: crate::touch::Taps = ui.data(|d| d.get_temp(key)).unwrap_or_default();
     let mut tap = None;
     for (id, phase, pos) in touches {

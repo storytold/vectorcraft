@@ -10,9 +10,10 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, TextKind, TextObject, TextRun};
 use vectorcraft_geom::Rect;
 
+use super::panelcmds::listed_artboards;
 use super::select::on_artboard;
 use super::typecmd::refresh_bounds;
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, index, str_param};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -39,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Text by Font",
             [],
             None,
-            "{family, style?, scope?: \"document\" (default) | {artboards: [index, …] (0-based)} | {layers: [id, …] (layers or sublayers)}} select the text objects using the font, the instances of the symbols whose art uses it, the text whose inline graphics draw such a symbol, the objects painted with a pattern whose art uses it (by a visible fill or stroke whose opacity is above 0, a stroke wider than 0) and the objects whose opacity mask uses it (in type that is not hidden or locked in that art), that are not hidden or locked, in a hidden or locked group or layer, or on a locked artboard; a pattern swatch that nothing paints, or a layer's mask, selects nothing; with scope, only those on one of the artboards (as All on Active Artboard takes them: their bounds overlap it or their center is on it) or in one of the layers → {count}",
+            "{family, style?, scope?: \"document\" (default) | {artboards: [index, …] (0-based whole numbers)} | {layers: [id, …] (layers or sublayers)}} select the text objects using the font, the instances of the symbols whose art uses it, the text whose inline graphics draw such a symbol, the objects painted with a pattern whose art uses it (by a visible fill or stroke whose opacity is above 0, a stroke wider than 0) and the objects whose opacity mask uses it (in type that is not hidden or locked in that art), that are not hidden or locked, in a hidden or locked group or layer, or on a locked artboard; a pattern swatch that nothing paints, or a layer's mask, selects nothing; with scope, only those on one of the artboards (as All on Active Artboard takes them: their bounds overlap it or their center is on it) or in one of the layers → {count}",
             has_doc,
             select_font
         ),
@@ -51,6 +52,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{family?, style?} → {families: [names]} sorted: the bundled fonts, fonts added and the fonts installed on the system (none on the web), each the family's English (canonical) name for `text.setStyle` and documents (without the system's hidden families, whose names start with a dot; they still resolve by name). Preferences › Type › Show Font Names in English only changes the UI menu labels, not this list; with family: {family, styles: [names] (upright styles by weight, then italics; an error when the family isn't available), axes: [{tag, name, min, default, max, value, hidden}] (a variable font's variation axes, the Character panel's Variable Font sliders, with `value` the setting of `style`, else of the first style; empty for a static font; `hidden`: the font asks for the axis not to be shown)}",
             always,
             font_list
+        ),
+        cmd!(
+            query "text.glyphCategories",
+            "Glyph Categories",
+            [],
+            None,
+            "{family, style?} the OpenType categories of the font's glyphs, what the Glyphs panel's Show menu lists after Alternates for Current Selection: from the font's GSUB table, the glyphs that the single, alternate, multiple and ligature substitutions of each kind's features give, each glyph once by id, in this order: `ligatures` (liga, dlig, hlig), `swashes` (swsh, cswh), `stylisticAlternates` (salt), `ss01` to `ss20`, `smallCaps` (smcp, c2sc), `ornaments` (ornm), `fractions` (frac, afrc, numr, dnom) and `figures` (lnum, onum, pnum, tnum); a kind without glyphs is left out; contextual lookups are not followed → {family, style, categories: [{id, name?: a stylistic set's name in the font, glyphs: [glyph id]}]} (style omitted: the family's first style; an error when the family or style isn't available)",
+            always,
+            glyph_categories
         ),
         cmd!(
             "text.rescanFonts",
@@ -1080,9 +1090,9 @@ impl FontScope {
                 Some(_) => Err(bad(C, format!("`scope.{key}` must be a non-empty array"))),
             }
         };
-        if let Some(a) = list("artboards")? {
-            let rect = |v: &Value| v.as_u64().and_then(|i| d.artboards.get(index(i))).map(|b| b.rect);
-            return a.iter().map(|v| rect(v).ok_or_else(|| bad(C, format!("no such artboard {v}")))).collect::<Result<_>>().map(Self::Artboards);
+        if let (Some(v), Some(_)) = (scope.get("artboards"), list("artboards")?) {
+            let indices = listed_artboards(d, v, "scope.artboards", C)?;
+            return Ok(Self::Artboards(indices.into_iter().filter_map(|i| d.artboards.get(i)).map(|b| b.rect).collect()));
         }
         if let Some(a) = list("layers")? {
             let layer = |v: &Value| v.as_u64().map(NodeId).filter(|id| d.node(*id).is_some_and(Node::is_layer));
@@ -1136,35 +1146,42 @@ fn font_list(_: &mut Session, p: &Value) -> Result<Value> {
     }
 }
 
-/// Gives the inline graphics in the type of [`art_texts_of`] the current bounds of their symbols'
-/// art, and lays out again the type whose inline graphics changed. A symbol drawn inline in the
-/// art of another symbol takes one more round, so there is at most one round per symbol.
-fn resolve_art_inline(doc: &mut Document) {
-    for _ in 0..=doc.symbols.len() {
-        let names: BTreeSet<String> =
-            art_texts_of(doc).iter().flat_map(|(_, t, _)| t.runs.iter().filter_map(|r| r.inline.as_ref().map(|a| a.symbol.clone()))).collect();
-        let bounds: BTreeMap<String, Option<Rect>> = names
-            .into_iter()
-            .map(|name| {
-                let b = doc.symbol_art_bounds(&name);
-                (name, b)
-            })
-            .collect();
-        let stale = |t: &TextObject| t.runs.iter().any(|r| r.inline.as_ref().is_some_and(|a| bounds.get(&a.symbol).is_some_and(|b| *b != a.bounds)));
-        let mut changed = false;
-        edit_art_texts_of(doc, &stale, &mut |t| {
-            for a in t.runs.iter_mut().filter_map(|r| r.inline.as_mut()) {
-                if let Some(b) = bounds.get(&a.symbol) {
-                    a.bounds = *b;
-                }
-            }
-            refresh_bounds(t);
-            changed = true;
-        });
-        if !changed {
-            break;
-        }
+/// `text.glyphCategories`: the OpenType categories of a font's glyphs
+/// ([`vectorcraft_text::FontFace::glyph_categories`]).
+fn glyph_categories(_: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.glyphCategories";
+    let text = |key: &str| match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) => Ok(Some(s.as_str())),
+        Some(_) => Err(bad(C, format!("`{key}` must be a string"))),
+    };
+    let family = text("family")?.ok_or_else(|| bad(C, "missing `family`"))?;
+    let db = vectorcraft_text::FontDb::global();
+    if !db.has_family(family) {
+        return Err(bad(C, format!("font family `{family}` is not available")));
     }
+    let styles = db.styles(family);
+    let style = match text("style")? {
+        Some(style) => styles
+            .iter()
+            .find(|s| s.eq_ignore_ascii_case(style))
+            .cloned()
+            .ok_or_else(|| bad(C, format!("style `{style}` of `{family}` is not available")))?,
+        None => styles.first().cloned().unwrap_or_else(|| "Regular".into()),
+    };
+    let face = db.face(family, &style).ok_or_else(|| bad(C, format!("style `{style}` of `{family}` is not available")))?;
+    let categories: Vec<Value> = face
+        .glyph_categories()
+        .iter()
+        .map(|c| {
+            let mut v = json!({"id": c.kind.id(), "glyphs": c.glyphs});
+            if let Some(name) = &c.name {
+                v["name"] = json!(name);
+            }
+            v
+        })
+        .collect();
+    Ok(json!({"family": face.family, "style": face.style, "categories": categories}))
 }
 
 pub(crate) fn rescan(s: &mut Session, _: &Value) -> Result<Value> {
@@ -1188,8 +1205,7 @@ pub(crate) fn rescan(s: &mut Session, _: &Value) -> Result<Value> {
             d.change_unsaved(|doc| {
                 let doc = std::sync::Arc::make_mut(doc);
                 edit_art_texts_of(doc, &|_| true, &mut refresh_bounds);
-                resolve_art_inline(doc);
-                doc.resolve_inline_art();
+                doc.resolve_inline_art_with(&mut refresh_bounds);
                 for id in texts {
                     if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
                         refresh_bounds(t);
@@ -1322,6 +1338,40 @@ mod tests {
         for bad in [json!({"artboards": [3]}), json!({"artboards": []}), json!({"artboards": ["x"]}), json!({"pages": [0]}), json!("all"), json!(7)] {
             assert!(s.execute("select.font", &json!({"family": "Source Serif 4", "scope": bad})).is_err(), "{bad}");
         }
+    }
+
+    /// Select Text by Font refuses a `scope.artboards` entry that is not a whole number, naming the
+    /// parameter, before it looks at the artboards, and leaves the selection as it was; a whole
+    /// number past the last artboard is `no such artboard`.
+    #[test]
+    fn select_font_refuses_artboards_that_are_not_whole_numbers() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        s.execute("artboard.new", &json!({"x": 300, "y": 0, "width": 200, "height": 200})).unwrap();
+        let text = |s: &mut Session, x: i32| {
+            NodeId(s.execute("text.create", &json!({"x": x, "y": 50, "text": "Serif", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap())
+        };
+        let first = text(&mut s, 10);
+        let second = text(&mut s, 350);
+        let run =
+            |s: &mut Session, artboards: Value| s.execute("select.font", &json!({"family": "Source Serif 4", "scope": {"artboards": artboards}}));
+        let malformed = "invalid parameters for `select.font`: `scope.artboards` must contain whole numbers";
+        for (artboards, want) in [
+            (json!(["1"]), malformed),
+            (json!([-1]), malformed),
+            (json!([1.5]), malformed),
+            (json!([true]), malformed),
+            (json!([null]), malformed),
+            (json!([9, "1"]), malformed),
+            (json!([9]), "no such artboard"),
+            (json!([1, 9]), "no such artboard"),
+        ] {
+            s.execute("select.set", &json!({"ids": [first.0]})).unwrap();
+            assert_eq!(run(&mut s, artboards.clone()).unwrap_err().to_string(), want, "{artboards}");
+            assert_eq!(s.doc().unwrap().selection.objects, [first], "{artboards}");
+        }
+        run(&mut s, json!([1, 1])).unwrap();
+        assert_eq!(s.doc().unwrap().selection.objects, [second]);
     }
 
     /// Select Text by Font with a layer scope takes the text in the layers, their sublayers

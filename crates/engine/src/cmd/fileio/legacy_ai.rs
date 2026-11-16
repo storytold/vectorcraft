@@ -65,6 +65,18 @@ pub(super) fn named(f: &Format) -> Format {
     Format { label: "legacy .ai (version 7)", ..*f }
 }
 
+/// The `.ai` options that only a legacy file reads: a PDF-compatible `.ai` file and a `.ai` file
+/// without PDF content don't.
+pub(super) const LEGACY_ONLY: [&str; 3] = ["transparentImages", "hiddenObjects", "outlineText"];
+
+/// Does an export of a legacy file read option `key`? It reads the version, the file's own
+/// options ([`LEGACY_ONLY`]), the artboards to write, and `useArtboards`, which the export reads
+/// before [`encode`] runs. It reads none of the other `.ai` options and none of the PDF options
+/// that a PDF-compatible `.ai` file takes.
+pub(super) fn reads(key: &str) -> bool {
+    matches!(key, "aiVersion" | "useArtboards") || LEGACY_ONLY.contains(&key) || super::ARTBOARD_PARAMS.contains(&key)
+}
+
 /// What a legacy `.ai` does with the images it can't hold (`transparentImages`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SeeThrough {

@@ -1,9 +1,11 @@
+use std::collections::HashSet;
+
 use super::analysis::{Scratch, finite, flatten_groups, has_effects, masked, outlined_text, overlapping, painted, reach};
 use super::compose::{Builder, CLEAR, Composer, Elem, Fill, Kind, Px, WHITE};
 use super::options::FlattenOptions;
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BlendMode, Color, ColorMode, Document, EngineError, FillLayer, FillRule, ImageBlob, ImageObject, Inks,
-    MAX_PIXELS, Node, NodeId, NodeKind, Paint, PathData, Rect, Result, composite, effects, isolated_doc, outline_strokes_under, planes_cmyk, po,
+    MAX_PIXELS, Node, NodeId, NodeKind, Paint, PathData, Rect, Result, composite, effects, isolated_doc, leaves, outline_strokes, planes_cmyk, po,
     separate, shape_node, shapes, unique_key,
 };
 
@@ -14,6 +16,8 @@ pub(super) struct Plan {
     pub(super) flat: Vec<Flat>,
     /// Objects without transparency (they stay, but for the outline options).
     pub(super) kept: Vec<NodeId>,
+    /// What the outline and overprint options do to each of `kept`, in its order.
+    pub(super) work: Vec<Kept>,
     /// The objects with transparency of their own.
     pub(super) transparent: Vec<NodeId>,
 }
@@ -112,7 +116,12 @@ pub(super) fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions, render:
     let reaches: Vec<Option<Rect>> = plain.iter().zip(&clipped).map(|(n, c)| reach(n).zip(reach(c)).map(|(a, b)| a.intersect(b))).collect();
     let see_through: Vec<bool> = plain.iter().map(|n| o.shows_transparency(&baked, n) || o.draws_see_through_image(n)).collect();
     let cmyk = src.color_mode == ColorMode::Cmyk;
-    let mut out = Plan { flat: vec![], kept: vec![], transparent: roots.iter().zip(&see_through).filter(|(_, t)| **t).map(|(id, _)| *id).collect() };
+    let mut out = Plan {
+        flat: vec![],
+        kept: vec![],
+        work: vec![],
+        transparent: roots.iter().zip(&see_through).filter(|(_, t)| **t).map(|(id, _)| *id).collect(),
+    };
     // Baking above stopped early when cancelled; each group is a place to stop (a plan changes nothing).
     vectorcraft_doc::cancel::check()?;
     let mut queue = groups(src, roots, &plain, &reaches, &see_through, o)?;
@@ -193,7 +202,99 @@ pub(super) fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions, render:
         };
         out.flat.push(Flat { roots: ids, regions, area, raster, lines });
     }
+    out.work = out.kept.iter().map(|id| Kept::of(src, *id, o)).collect();
     Ok(out)
+}
+
+/// What the outline and overprint options do to one object without transparency, found in one
+/// walk of it.
+pub(super) struct Kept {
+    pub(super) id: NodeId,
+    /// Whether the options change it.
+    pub(super) changes: bool,
+    /// The type the text option outlines and the stroked paths the stroke option outlines, those
+    /// that show and are not pieces of a compound path: what the Flattener Preview highlights.
+    pub(super) shown_text: Vec<NodeId>,
+    pub(super) shown_strokes: Vec<NodeId>,
+    /// In paint order: the type the text option outlines and the leaf shapes ([`leaves`]) other
+    /// than type that the stroke option outlines.
+    steps: Vec<Step>,
+    /// The objects with overprints, each with the type or leaf shape that holds it (itself
+    /// included) when a step replaces that.
+    overprinted: Vec<(NodeId, Option<NodeId>)>,
+}
+
+/// One object [`apply`] outlines.
+enum Step {
+    /// Type; `leaf`: only groups and layers hold it, so its outlines are leaf shapes for the
+    /// stroke option.
+    Text { id: NodeId, leaf: bool },
+    /// A leaf shape other than type.
+    Leaf(NodeId),
+}
+
+/// Where [`Kept::visit`] is in the object it walks.
+#[derive(Clone, Copy)]
+struct At {
+    /// Neither the node nor what holds it is hidden, and it is not a piece of a compound path.
+    shown: bool,
+    /// Only groups and layers hold the node.
+    leaf: bool,
+    /// The type or leaf shape holding the node that a step replaces.
+    holder: Option<NodeId>,
+}
+
+impl Kept {
+    /// What the options `o` do to `root` of `d`: nothing when `d` doesn't hold it.
+    fn of(d: &Document, root: NodeId, o: &FlattenOptions) -> Kept {
+        let mut k = Kept { id: root, changes: false, shown_text: vec![], shown_strokes: vec![], steps: vec![], overprinted: vec![] };
+        if let Some(n) = d.node(root) {
+            k.visit(n, o, At { shown: true, leaf: true, holder: None });
+        }
+        k
+    }
+
+    /// Note what the options `o` do to `n` and to everything under it.
+    fn visit(&mut self, n: &Node, o: &FlattenOptions, at: At) {
+        kept_seen(n);
+        let shown = at.shown && n.visible;
+        let mut holder = at.holder;
+        if matches!(n.kind, NodeKind::Text(_)) {
+            if o.text_to_outlines {
+                self.changes = true;
+                if shown {
+                    self.shown_text.push(n.id);
+                }
+                self.steps.push(Step::Text { id: n.id, leaf: at.leaf });
+                holder = Some(n.id);
+            }
+        } else {
+            if o.strokes_to_outlines && stroked(n) {
+                self.changes = true;
+                if shown {
+                    self.shown_strokes.push(n.id);
+                }
+            }
+            if o.strokes_to_outlines && at.leaf && matches!(n.kind, NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. })
+            {
+                self.steps.push(Step::Leaf(n.id));
+                holder = Some(n.id);
+            }
+        }
+        if !o.preserve_overprints && overprints(n) {
+            self.changes = true;
+            self.overprinted.push((n.id, holder));
+        }
+        let Some(children) = n.children() else { return };
+        let inside = At {
+            shown: shown && !matches!(n.kind, NodeKind::Compound { .. }),
+            leaf: at.leaf && matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }),
+            holder,
+        };
+        for c in children {
+            self.visit(c, o, inside);
+        }
+    }
 }
 
 /// `roots` of `src` (`plain`: as plain art; `reaches`: where each can paint, clipped) in the
@@ -668,7 +769,7 @@ pub(crate) fn flatten_expanded(doc: &Document, o: &FlattenOptions) -> Result<Opt
         roots.extend(children.iter().skip(usize::from(l.clips())).filter(|c| c.visible && !c.is_ruler_guide()).map(|c| c.id));
     }
     let plan = plan(doc, &roots, o, true)?;
-    if plan.flat.is_empty() && !plan.kept.iter().any(|id| doc.node(*id).is_some_and(|n| kept_work(n, o))) {
+    if plan.flat.is_empty() && !plan.work.iter().any(|k| k.changes) {
         return Ok(None);
     }
     let mut d = doc.clone();
@@ -753,19 +854,8 @@ pub(super) fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan
         d.insert(Some(layer), usize::MAX, guide)?;
     }
     let brushes = if o.strokes_to_outlines { vectorcraft_brush::library(d) } else { vec![] };
-    for mut id in plan.kept {
-        if o.text_to_outlines {
-            id = outline_texts_under(d, id)?;
-        }
-        if o.strokes_to_outlines {
-            id = outline_strokes_under(d, &brushes, id)?.0;
-        }
-        if !o.preserve_overprints
-            && let Some(n) = d.node_mut(id)
-        {
-            drop_overprints(n);
-        }
-        ids.push(id);
+    for k in plan.work {
+        ids.push(outline_kept(d, &brushes, k, o)?);
     }
     ids.sort_by_key(|id| d.index_path(*id));
     sel.set(ids.iter().copied());
@@ -797,21 +887,61 @@ fn place_of(d: &Document, roots: &[NodeId]) -> Option<NodeId> {
 }
 
 /// The ruler guides of each of `roots` that is a sublayer (in its sublayers too), with the layer
-/// that holds it, in order. Other objects hold none.
+/// that holds it, in order. Other objects hold none. Each root, and each child of it and of its
+/// sublayers, is looked at once.
 fn held_guides(d: &Document, roots: impl IntoIterator<Item = NodeId>) -> Vec<(NodeId, Node)> {
     let mut out = vec![];
     for id in roots {
         let (Some(n), Some(parent)) = (d.node(id), d.parent_of(id)) else { continue };
-        if n.holds_ruler_guides() {
-            n.walk(&mut |c| {
-                if c.is_ruler_guide() {
-                    out.push((parent, c.clone()));
-                }
-            });
+        guide_seen(n);
+        if n.is_layer() {
+            guides_of(n, parent, &mut out);
         }
     }
     out
 }
+
+/// Push each ruler guide of `layer` and of its sublayers onto `out` in paint order, with `parent`.
+fn guides_of(layer: &Node, parent: NodeId, out: &mut Vec<(NodeId, Node)>) {
+    for c in layer.children().into_iter().flatten() {
+        guide_seen(c);
+        if c.is_ruler_guide() {
+            out.push((parent, Node::clone(c)));
+        } else if c.is_layer() {
+            guides_of(c, parent, out);
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The nodes that [`held_guides`] has looked at on this thread, in order.
+    static GUIDES_SEEN: std::cell::RefCell<Vec<NodeId>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Note that [`held_guides`] looked at `n`.
+#[cfg(test)]
+fn guide_seen(n: &Node) {
+    GUIDES_SEEN.with(|s| s.borrow_mut().push(n.id));
+}
+
+#[cfg(not(test))]
+fn guide_seen(_: &Node) {}
+
+#[cfg(test)]
+thread_local! {
+    /// The nodes that [`Kept::of`] has looked at on this thread, in order.
+    static KEPT_SEEN: std::cell::RefCell<Vec<NodeId>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Note that [`Kept::of`] looked at `n`.
+#[cfg(test)]
+fn kept_seen(n: &Node) {
+    KEPT_SEEN.with(|s| s.borrow_mut().push(n.id));
+}
+
+#[cfg(not(test))]
+fn kept_seen(_: &Node) {}
 
 /// An image of `r` (in a clip group when it is clipped).
 fn raster_node(d: &mut Document, r: Raster) -> Node {
@@ -833,38 +963,65 @@ fn raster_node(d: &mut Document, r: Raster) -> Node {
     crate::cmd::rasterfx::clip_group(d, path, FillRule::NonZero, image)
 }
 
-/// Replace the type under `root` by its outlines: → the id now standing for `root`.
-fn outline_texts_under(d: &mut Document, root: NodeId) -> Result<NodeId> {
-    let mut texts = vec![];
-    if let Some(n) = d.node(root) {
-        n.walk(&mut |c| {
-            if matches!(c.kind, NodeKind::Text(_)) {
-                texts.push(c.clone());
+/// Do what [`Kept`] `k` found to its object of `d` (`brushes`: the document's brushes, for the
+/// stroke option): its type outlined, then the strokes of its leaf shapes, the outlines of its
+/// type included, then its overprints dropped. → the id now standing for the object.
+fn outline_kept(d: &mut Document, brushes: &[vectorcraft_brush::Brush], k: Kept, o: &FlattenOptions) -> Result<NodeId> {
+    let mut root = k.id;
+    let mut replaced = HashSet::new();
+    let dropping = !o.preserve_overprints;
+    // Each replacement loses its overprints before it goes in: no new object is looked up.
+    let mut put = |d: &mut Document, old: NodeId, mut new: Node, root: &mut NodeId| -> Result<()> {
+        if dropping {
+            drop_overprints(&mut new);
+        }
+        let nid = new.id;
+        *d.node_mut(old).ok_or(EngineError::NoNode(old))? = new;
+        replaced.insert(old);
+        if old == *root {
+            *root = nid;
+        }
+        Ok(())
+    };
+    // The leaf shapes of each outlined type that only groups and layers hold, by step.
+    let mut outlined: Vec<Vec<Node>> = Vec::with_capacity(k.steps.len());
+    for step in &k.steps {
+        let mut lv = vec![];
+        if let Step::Text { id, leaf } = *step
+            && let Some(out) = d.node(id).and_then(outlined_text)
+        {
+            let out = d.reid(&out);
+            if leaf && o.strokes_to_outlines {
+                leaves(&out, &mut lv);
             }
-        });
+            put(d, id, out, &mut root)?;
+        }
+        outlined.push(lv);
     }
-    let mut out = root;
-    for t in texts {
-        let Some(o) = outlined_text(&t) else { continue };
-        let o = d.reid(&o);
-        let nid = o.id;
-        *d.node_mut(t.id).ok_or(EngineError::NoNode(t.id))? = o;
-        if t.id == root {
-            out = nid;
+    if o.strokes_to_outlines {
+        for (step, lv) in k.steps.iter().zip(outlined) {
+            let shapes = match *step {
+                Step::Leaf(id) => d.node(id).cloned().into_iter().collect(),
+                Step::Text { .. } => lv,
+            };
+            for l in shapes.iter().filter(|l| !matches!(l.kind, NodeKind::Text(_))) {
+                if let Some(new) = outline_strokes(d, brushes, l) {
+                    put(d, l.id, new, &mut root)?;
+                }
+            }
         }
     }
-    Ok(out)
-}
-
-/// Whether the outline and overprint options change `n`, an object without transparency.
-pub(super) fn kept_work(n: &Node, o: &FlattenOptions) -> bool {
-    let mut any = false;
-    n.walk(&mut |c| {
-        any |= (o.text_to_outlines && matches!(c.kind, NodeKind::Text(_)))
-            || (o.strokes_to_outlines && stroked(c))
-            || (!o.preserve_overprints && overprints(c));
-    });
-    any
+    if dropping {
+        for (id, holder) in k.overprinted {
+            if holder.is_some_and(|h| replaced.contains(&h)) {
+                continue;
+            }
+            if let Some(n) = d.node_mut(id) {
+                drop_own_overprints(n);
+            }
+        }
+    }
+    Ok(root)
 }
 
 /// Whether `n` is a path with a visible stroke (outlining turns it into a fill).
@@ -873,12 +1030,8 @@ pub(super) fn stroked(n: &Node) -> bool {
         && n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() && s.width > 0.0))
 }
 
-fn overprints(n: &Node) -> bool {
-    n.appearance.items.iter().any(AppearanceItem::overprint)
-        || matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(|r| r.style.overprint_fill || r.style.overprint_stroke))
-}
-
-fn drop_overprints(n: &mut Node) {
+/// Drop the overprints of `n` itself.
+fn drop_own_overprints(n: &mut Node) {
     if overprints(n) {
         for i in &mut n.appearance.items {
             *i.overprint_mut() = false;
@@ -889,6 +1042,16 @@ fn drop_overprints(n: &mut Node) {
             }
         }
     }
+}
+
+fn overprints(n: &Node) -> bool {
+    n.appearance.items.iter().any(AppearanceItem::overprint)
+        || matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(|r| r.style.overprint_fill || r.style.overprint_stroke))
+}
+
+/// Drop the overprints of `n` and of everything under it.
+fn drop_overprints(n: &mut Node) {
+    drop_own_overprints(n);
     if let Some(ch) = n.children_mut() {
         for c in ch {
             drop_overprints(Arc::make_mut(c));
@@ -920,6 +1083,255 @@ mod tests {
         assert!(flat.node(g).is_some_and(Node::is_ruler_guide), "its guide is kept");
         assert_eq!(flat.parent_of(g), Some(layer));
         assert_eq!(flat.children(Some(layer)).and_then(|c| c.last()).map(|c| c.id), Some(g));
+    }
+
+    /// The guides of a sublayer and of its sublayers are gathered in paint order with the layer
+    /// that holds it, looking at the sublayer and each child of it and of its sublayers once.
+    /// Other roots give none.
+    #[test]
+    fn held_guides_look_at_each_node_once() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let layer = s.doc().unwrap().doc.layers[0].id;
+        let sublayer =
+            |s: &mut Session, parent: NodeId| NodeId(s.execute("layer.newSublayer", &json!({"parent": parent.0})).unwrap()["id"].as_u64().unwrap());
+        let rect = |s: &mut Session, on: NodeId| {
+            s.execute("layer.setCurrent", &json!({"id": on.0})).unwrap();
+            NodeId(s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap())
+        };
+        let sub = sublayer(&mut s, layer);
+        let deep = sublayer(&mut s, sub);
+        let empty = sublayer(&mut s, layer);
+        let (a, b, c) = (rect(&mut s, sub), rect(&mut s, deep), rect(&mut s, empty));
+        let d = Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let mut guide = |on: NodeId, pos: f64| {
+            let g = Node::new(d.alloc_id(), NodeKind::RulerGuide { vertical: true, pos, artboard: None });
+            d.insert(Some(on), usize::MAX, g).unwrap()
+        };
+        let (g1, g2, g3) = (guide(sub, 1.0), guide(deep, 2.0), guide(sub, 3.0));
+        let doc = &s.doc().unwrap().doc;
+        let ids = |n: &Node| {
+            let mut v = vec![];
+            n.walk(&mut |c| v.push(c.id));
+            v
+        };
+        assert_eq!(ids(doc.node(sub).unwrap()), vec![sub, deep, b, g2, a, g1, g3]);
+        let run = |roots: &[NodeId]| {
+            GUIDES_SEEN.with(|v| v.borrow_mut().clear());
+            let got: Vec<_> = held_guides(doc, roots.iter().copied()).into_iter().map(|(p, g)| (p, g.id)).collect();
+            (got, GUIDES_SEEN.with(|v| v.take()))
+        };
+        // Every node of the sublayer is looked at once, and the guides keep their paint order.
+        assert_eq!(run(&[sub]), (vec![(layer, g2), (layer, g1), (layer, g3)], vec![sub, deep, b, g2, a, g1, g3]));
+        // A sublayer that holds none gives none; a path holds none; a missing root and a top-level
+        // layer, which has no parent, are skipped.
+        assert_eq!(run(&[empty]), (vec![], vec![empty, c]));
+        assert_eq!(run(&[a]), (vec![], vec![a]));
+        assert_eq!(run(&[NodeId(u64::MAX), layer]), (vec![], vec![]));
+        // A deeper sublayer gives its guides to the sublayer that holds it.
+        assert_eq!(run(&[deep, deep]).0, vec![(sub, g2), (sub, g2)]);
+    }
+
+    /// The objects [`kept_session`] makes.
+    struct KeptArt {
+        /// Each group with its stroked rectangle (its fill overprints) and its stroked type.
+        groups: Vec<(NodeId, NodeId, NodeId)>,
+        /// A stroked rectangle and stroked type with an overprint, on their own.
+        rect: NodeId,
+        text: NodeId,
+        /// A stroked compound path and its pieces.
+        compound: NodeId,
+        pieces: Vec<NodeId>,
+        /// A group holding an unstroked rectangle and a hidden stroked rectangle.
+        hidden_group: NodeId,
+        hidden: NodeId,
+        /// An unstroked rectangle.
+        plain: NodeId,
+    }
+
+    /// A document without transparency: `n` groups, then the other objects of [`KeptArt`].
+    fn kept_session(n: usize) -> (Session, KeptArt) {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = |v: serde_json::Value| NodeId(v["id"].as_u64().unwrap());
+        let rect = |s: &mut Session, x: f64| id(s.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap());
+        let text = |s: &mut Session, x: f64| {
+            let t = id(s.execute("text.create", &json!({"x": x, "y": 80, "text": "Hi", "size": 24})).unwrap());
+            s.execute("paint.setStroke", &json!({"color": "#000000", "ids": [t.0]})).unwrap();
+            t
+        };
+        let select = |s: &mut Session, ids: &[NodeId]| {
+            s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+        };
+        let overprint = |s: &mut Session, on: NodeId| {
+            s.execute("attributes.set", &json!({"ids": [on.0], "overprintFill": true})).unwrap();
+        };
+        let unstroked = |s: &mut Session, on: NodeId| {
+            s.execute("paint.setStroke", &json!({"none": true, "ids": [on.0]})).unwrap();
+        };
+        let mut groups = vec![];
+        for i in 0..n {
+            let x = (i % 10) as f64 * 30.0;
+            let (r, t) = (rect(&mut s, x), text(&mut s, x));
+            overprint(&mut s, r);
+            select(&mut s, &[r, t]);
+            groups.push((id(s.execute("object.group", &json!({})).unwrap()), r, t));
+        }
+        let (r, t) = (rect(&mut s, 0.0), text(&mut s, 100.0));
+        overprint(&mut s, t);
+        let (a, b) = (rect(&mut s, 200.0), rect(&mut s, 210.0));
+        select(&mut s, &[a, b]);
+        let compound = id(s.execute("object.compoundPath.make", &json!({})).unwrap());
+        s.execute("paint.setStroke", &json!({"color": "#000000", "ids": [compound.0]})).unwrap();
+        let pieces = s.doc().unwrap().doc.node(compound).unwrap().children().unwrap().iter().map(|c| c.id).collect();
+        let (shown, hidden) = (rect(&mut s, 300.0), rect(&mut s, 310.0));
+        unstroked(&mut s, shown);
+        select(&mut s, &[shown, hidden]);
+        let hidden_group = id(s.execute("object.group", &json!({})).unwrap());
+        s.execute("object.hide", &json!({"ids": [hidden.0]})).unwrap();
+        let plain = rect(&mut s, 350.0);
+        unstroked(&mut s, plain);
+        (s, KeptArt { groups, rect: r, text: t, compound, pieces, hidden_group, hidden, plain })
+    }
+
+    /// Every option on: type and strokes outlined, overprints dropped.
+    fn outlining() -> FlattenOptions {
+        FlattenOptions { text_to_outlines: true, strokes_to_outlines: true, preserve_overprints: false, ..FlattenOptions::default() }
+    }
+
+    /// The top-level objects of `d`'s first layer, in paint order.
+    fn top_level(d: &Document) -> Vec<NodeId> {
+        d.layers[0].children().unwrap().iter().map(|c| c.id).collect()
+    }
+
+    fn sorted(mut ids: Vec<NodeId>) -> Vec<NodeId> {
+        ids.sort();
+        ids
+    }
+
+    /// The nodes [`Kept::of`] looked at while `f` ran, sorted.
+    fn kept_seen_by(f: impl FnOnce()) -> Vec<NodeId> {
+        KEPT_SEEN.with(|v| v.borrow_mut().clear());
+        f();
+        sorted(KEPT_SEEN.with(|v| v.take()))
+    }
+
+    /// The Flattener Preview, `object.flattenTransparency` and flattening a whole document each look
+    /// at every node of the objects without transparency once, with type and strokes outlined and
+    /// overprints dropped, an object they leave as it is included.
+    #[test]
+    fn kept_objects_are_looked_at_once() {
+        let (mut s, _) = kept_session(100);
+        let o = outlining();
+        let doc = s.doc().unwrap().doc.clone();
+        let roots = top_level(&doc);
+        let mut nodes = vec![];
+        for r in &roots {
+            doc.node(*r).unwrap().walk(&mut |c| nodes.push(c.id));
+        }
+        nodes.sort();
+        assert_eq!(nodes.len(), 309);
+        let preview = kept_seen_by(|| drop(super::super::report::report(&doc, &roots, &o).unwrap()));
+        assert!(preview == nodes, "the preview looked at {} nodes of {}", preview.len(), nodes.len());
+        let whole = kept_seen_by(|| drop(flatten_document(&doc, &o).unwrap().unwrap()));
+        assert!(whole == nodes, "flattening the document looked at {} nodes of {}", whole.len(), nodes.len());
+        let ids: Vec<u64> = roots.iter().map(|r| r.0).collect();
+        let command = kept_seen_by(|| {
+            s.execute(
+                "object.flattenTransparency",
+                &json!({"ids": ids, "textToOutlines": true, "strokesToOutlines": true, "preserveOverprints": false}),
+            )
+            .unwrap();
+        });
+        assert!(command == nodes, "object.flattenTransparency looked at {} nodes of {}", command.len(), nodes.len());
+    }
+
+    /// [`apply`]'s outlining of `kept` (objects of `d` without transparency) with `o`, done as a
+    /// walk of each object for each option: → the ids standing for them, in paint order.
+    fn outlined_walk_by_walk(d: &mut Document, kept: &[NodeId], o: &FlattenOptions) -> Vec<NodeId> {
+        let brushes = if o.strokes_to_outlines { vectorcraft_brush::library(d) } else { vec![] };
+        let mut ids = vec![];
+        for &root in kept {
+            let mut id = root;
+            if o.text_to_outlines {
+                let mut texts = vec![];
+                d.node(id).unwrap().walk(&mut |c| {
+                    if matches!(c.kind, NodeKind::Text(_)) {
+                        texts.push(c.clone());
+                    }
+                });
+                for t in texts {
+                    let Some(out) = outlined_text(&t) else { continue };
+                    let out = d.reid(&out);
+                    if t.id == root {
+                        id = out.id;
+                    }
+                    *d.node_mut(t.id).unwrap() = out;
+                }
+            }
+            if o.strokes_to_outlines {
+                id = crate::cmd::pathops::outline_strokes_under(d, &brushes, id).unwrap().0;
+            }
+            if !o.preserve_overprints {
+                drop_overprints(d.node_mut(id).unwrap());
+            }
+            ids.push(id);
+        }
+        ids.sort_by_key(|id| d.index_path(*id));
+        ids
+    }
+
+    /// With each mix of the text, stroke and overprint options, the objects without transparency
+    /// end as a walk of each of them for each option leaves them: the same art, ids and selection.
+    #[test]
+    fn kept_objects_change_as_a_walk_per_option_changes_them() {
+        let (s, _) = kept_session(3);
+        let doc = Document::clone(&s.doc().unwrap().doc);
+        let roots = top_level(&doc);
+        for bits in 0..8u8 {
+            let o = FlattenOptions {
+                text_to_outlines: bits & 1 != 0,
+                strokes_to_outlines: bits & 2 != 0,
+                preserve_overprints: bits & 4 != 0,
+                ..FlattenOptions::default()
+            };
+            let p = plan(&doc, &roots, &o, true).unwrap();
+            assert!(p.flat.is_empty(), "{o:?}");
+            // In the order the plan's groups come in.
+            let kept = p.kept.clone();
+            assert_eq!(sorted(kept.clone()), sorted(roots.clone()), "{o:?}");
+            let mut once = doc.clone();
+            let mut sel = vectorcraft_doc::Selection::default();
+            let (ids, ..) = apply(&mut once, &mut sel, p, &o).unwrap();
+            let mut walked = doc.clone();
+            let want = outlined_walk_by_walk(&mut walked, &kept, &o);
+            assert_eq!(ids, want, "{o:?}");
+            assert!(once == walked, "{o:?}");
+            assert_eq!(once == doc, bits == 4, "{o:?}: only with every option off does nothing change");
+        }
+    }
+
+    /// The Flattener Preview lists the kept objects the options change, and of those the type and
+    /// the stroked paths that show and are not pieces of a compound path.
+    #[test]
+    fn the_preview_lists_what_the_options_change_in_kept_objects() {
+        let (s, a) = kept_session(2);
+        let doc = &s.doc().unwrap().doc;
+        let roots = top_level(doc);
+        let r = super::super::report::report(doc, &roots, &outlining()).unwrap();
+        let (g, rects, texts): (Vec<_>, Vec<_>, Vec<_>) =
+            (a.groups.iter().map(|g| g.0).collect(), a.groups.iter().map(|g| g.1).collect(), a.groups.iter().map(|g| g.2).collect());
+        assert_eq!(r.affected, [g.clone(), vec![a.rect, a.text, a.compound, a.hidden_group]].concat());
+        // Both lists come in the order the plan's groups do.
+        assert_eq!(sorted(r.text.clone()), sorted([texts, vec![a.text]].concat()));
+        assert_eq!(sorted(r.strokes.clone()), sorted([rects, vec![a.rect, a.compound]].concat()));
+        assert!(!r.strokes.contains(&a.hidden) && !r.strokes.iter().any(|id| a.pieces.contains(id)) && !r.affected.contains(&a.plain));
+        // Dropping overprints alone changes the objects that overprint.
+        let o = FlattenOptions { preserve_overprints: false, ..FlattenOptions::default() };
+        let r = super::super::report::report(doc, &roots, &o).unwrap();
+        assert_eq!((r.affected, r.text, r.strokes), ([g, vec![a.text]].concat(), vec![], vec![]));
+        // With every option off, nothing.
+        assert!(super::super::report::report(doc, &roots, &FlattenOptions::default()).unwrap().affected.is_empty());
     }
 
     /// In a file without transparency with Clip Complex Regions on, art under a group's opaque

@@ -63,7 +63,7 @@ fn each_member_has_its_value() {
         ("$.memCache", json!(0)),
         ("$.os", json!(os)),
         ("$.screens.length", json!(0)),
-        ("$.stack", json!("[global]:1\n")),
+        ("$.stack", json!("[global]@t.js:1\n")),
         ("$.strict", json!(false)),
         ("$.version", json!(version)),
         ("typeof $.getenv + typeof $.setenv + typeof $.sleep", json!("functionfunctionfunction")),
@@ -165,7 +165,7 @@ fn getenv_reads_only_its_names_and_setenv_changes_only_the_run() {
 fn error_line_and_stack_follow_the_running_code() {
     let mut s = Session::new();
     let source = "try { null.x; } catch (e) {}\nfunction where() {\n  return [$.line, $.stack, $.error instanceof TypeError];\n}\nvc.log(where());";
-    assert_eq!(logged(&mut s, source)[0], json!([3, "[global]:5\nwhere:3\n", true]));
+    assert_eq!(logged(&mut s, source)[0], json!([3, "[global]@t.js:5\nwhere@t.js:3\n", true]));
     assert_eq!(value(&mut s, "$.error"), json!(null), "each run starts without one");
 }
 
