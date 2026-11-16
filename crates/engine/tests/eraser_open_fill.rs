@@ -1250,3 +1250,99 @@ fn eraser_placement_control_item_within_stroke_matches_equivalent_placed() {
     let fitted = eraser_placement_item_stroke_scene(false);
     eraser_placement_matches(&placed, &fitted, &[(210, 175), (210, 185)]);
 }
+
+fn eraser_mixed_gradient_hidden_stroke(s: &mut Session, id: NodeId, rasterize: bool) -> usize {
+    let index = s.doc().unwrap().doc.node(id).unwrap().appearance.items.iter().position(|item| !item.is_fill()).unwrap();
+    s.execute(
+        "appearance.setItem",
+        &json!({"ids": [id.0], "index": index, "weight": 4, "gradient": {
+            "kind": "linear", "stops": [{"offset": 0, "color": "#00ff00"}, {"offset": 1, "color": "#ff00ff"}]
+        }}),
+    )
+    .unwrap();
+    let mode = if rasterize { "within" } else { "along" };
+    s.execute("paint.editGradient", &json!({"ids": [id.0], "item": index, "stroke": true, "strokeMode": mode})).unwrap();
+    if rasterize {
+        s.execute("effect.apply", &json!({"ids": [id.0], "target": "object", "item": index, "effect": "rasterize", "params": {}})).unwrap();
+    }
+    s.execute("appearance.setItem", &json!({"ids": [id.0], "index": index, "visible": false})).unwrap();
+    index
+}
+
+fn eraser_mixed_gradient_rows_case(placed: bool, rasterize: bool) -> ([[u8; 4]; 2], [[u8; 4]; 2]) {
+    let mut s = session();
+    let id = marquee_rectangle(&mut s, false, false);
+    let placed_geom = eraser_gradient_fill(&mut s, id, placed);
+    let index = eraser_mixed_gradient_hidden_stroke(&mut s, id, rasterize);
+    let node = s.doc().unwrap().doc.node(id).unwrap();
+    assert!(!path(&s, id).is_closed(), "the fixture exercises the fill-only open-path route");
+    assert!(node.appearance.has_drawn_fill());
+    let hidden = node.appearance.items[index].clone();
+    let vectorcraft_doc::AppearanceItem::Stroke(stroke) = &hidden else { panic!("the explicit row is a stroke") };
+    assert!(!stroke.visible);
+    assert_eq!(stroke.width, 4.0, "the hidden row has a genuine positive stroke weight");
+    assert!(matches!(stroke.paint, vectorcraft_doc::color::Paint::Gradient(_)));
+    assert_eq!(stroke.path_gradient().is_some(), !rasterize, "the two cases isolate the two owner-wide guard branches");
+    assert_eq!(
+        stroke.gradient_mode,
+        if rasterize { vectorcraft_doc::StrokeGradientMode::Within } else { vectorcraft_doc::StrokeGradientMode::Along }
+    );
+    assert_eq!(stroke.effects.iter().any(|e| e.visible && e.id == "rasterize"), rasterize);
+    assert!(
+        node.appearance
+            .items
+            .iter()
+            .all(|item| { !matches!(item, vectorcraft_doc::AppearanceItem::Stroke(st) if st.visible && !st.paint.is_none() && st.width > 0.0) }),
+        "no visible painted stroke may change Eraser's area eligibility"
+    );
+    let vectorcraft_doc::color::Paint::Gradient(fill) = node.appearance.fill_paint() else { panic!("the visible fill is a gradient") };
+    assert_eq!(fill.geom.is_some(), placed);
+    let before = s.doc().unwrap().doc.clone();
+    let before_json = serde_json::to_value(&before).unwrap();
+    let selection = s.doc().unwrap().selection.clone();
+    let history = s.doc().unwrap().history.undo.len();
+    let before_image = eraser_gradient_image(&s);
+    let before_colors = [before_image.pixel(150, 125), before_image.pixel(150, 175)];
+    assert!(before_colors.iter().all(|color| color[3] == 255));
+    assert_ne!(before_colors[0], before_colors[1], "the visible fill is a genuine nonconstant ramp");
+    assert_eq!(before_image.pixel(150, 150)[3], 255);
+
+    let miss = eraser_gradient_region(&mut s, "rect", false, true);
+    assert_eq!(miss["ids"], json!([]));
+    assert!(std::sync::Arc::ptr_eq(&s.doc().unwrap().doc, &before));
+    assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before_json);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!(s.doc().unwrap().history.undo.len(), history);
+
+    let result = eraser_gradient_region(&mut s, "rect", false, false);
+    let ids = result["ids"].as_array().unwrap();
+    assert_eq!(ids.len(), 2, "the marquee splits the filled area into two retained pieces");
+    for value in ids {
+        let node = s.doc().unwrap().doc.node(NodeId(value.as_u64().unwrap())).unwrap();
+        assert_eq!(node.appearance.items[index], hidden, "the unsupported hidden row stays byte-for-byte unchanged");
+        if placed {
+            let vectorcraft_doc::color::Paint::Gradient(fill) = node.appearance.fill_paint() else { panic!("the fill stays a gradient") };
+            assert_eq!(serde_json::to_value(fill.geom).unwrap(), placed_geom);
+        }
+    }
+    let after_image = eraser_gradient_image(&s);
+    assert_eq!(after_image.pixel(150, 150)[3], 0, "the intended fill band is erased");
+    let after_colors = [after_image.pixel(150, 125), after_image.pixel(150, 175)];
+    eraser_container_gradient_restore(&mut s, &before_json, &selection, history);
+    (before_colors, after_colors)
+}
+
+#[test]
+fn eraser_mixed_gradient_rows_keep_visible_fill_placement() {
+    let placed_along = eraser_mixed_gradient_rows_case(true, false);
+    assert_eq!(placed_along.0, placed_along.1, "an explicitly placed fill with hidden Along stroke is the legitimate control");
+    let placed_rasterize = eraser_mixed_gradient_rows_case(true, true);
+    assert_eq!(placed_rasterize.0, placed_rasterize.1, "an explicitly placed fill with a hidden Rasterize row remains unchanged");
+    // Finish both fitted scenes, including metadata/no-op/Undo controls, before the shared color assertion.
+    let fitted_along = eraser_mixed_gradient_rows_case(false, false);
+    let fitted_rasterize = eraser_mixed_gradient_rows_case(false, true);
+    assert!(
+        fitted_along.0 == fitted_along.1 && fitted_rasterize.0 == fitted_rasterize.1,
+        "hidden rows must not suppress the visible fill's placement: Along {fitted_along:?}; Rasterize {fitted_rasterize:?}"
+    );
+}
