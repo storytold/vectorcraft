@@ -4500,6 +4500,7 @@ digits	Malayalam	მალაიალამური
 	Save As Preset…	შენახვა წინასწარ პარამეტრად…
 	Save Changes	ცვლილებების შენახვა
 	Save Preset…	პრესეტის შენახვა…
+	Save Summary…	შეჯამების შენახვა…
 	Vectors	ვექტორები
 	A saved copy of the selected preset	მონიშნული პრესეტის შენახული ასლი
 	Built-in presets don't change: New makes a copy you can edit.	ჩაშენებული პრესეტები არ იცვლება: „ახალი“ ქმნის რედაქტირებად ასლს.
@@ -6828,6 +6829,7 @@ font-technology	Variable	ცვლადი
 @msg	the PDF is password-protected: give its password	PDF პაროლით არის დაცული: მიუთითეთ პაროლი
 @msg	the PDF password is wrong	PDF-ის პაროლი არასწორია
 @msg	the Save PDF dialog didn't open	PDF-ის შენახვის დიალოგი არ გაიხსნა
+@msg	the Save PDF dialog is not open	PDF-ის შენახვის დიალოგი გახსნილი არ არის
 @msg	the WMF header is damaged	WMF-ის სათაური დაზიანებულია
 @msg	the art could not be sampled	ნახატიდან ნიმუშის აღება ვერ მოხერხდა
 @msg	the art has no bounds	ნახატს საზღვრები არ აქვს

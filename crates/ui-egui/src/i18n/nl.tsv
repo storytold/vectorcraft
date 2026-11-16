@@ -3057,6 +3057,7 @@ digits	Malayalam	Malayalam
 	Save As Preset…	Opslaan als voorinstelling…
 	Save Changes	Wijzigingen opslaan
 	Save Preset…	Voorinstelling opslaan…
+	Save Summary…	Samenvatting opslaan…
 	Vectors	Vectoren
 	A saved copy of the selected preset	Een opgeslagen kopie van de geselecteerde voorinstelling
 	Built-in presets don't change: New makes a copy you can edit.	Ingebouwde voorinstellingen veranderen niet: Nieuw maakt een kopie die je kunt bewerken.
@@ -5463,6 +5464,7 @@ imageTrace	Outline	Contour
 @msg	the PDF is password-protected: give its password	de PDF is met een wachtwoord beveiligd: geef het wachtwoord op
 @msg	the PDF password is wrong	het PDF-wachtwoord is onjuist
 @msg	the Save PDF dialog didn't open	het dialoogvenster PDF opslaan is niet geopend
+@msg	the Save PDF dialog is not open	het dialoogvenster PDF opslaan is niet open
 @msg	the WMF header is damaged	de WMF-header is beschadigd
 @msg	the art could not be sampled	de illustratie kon niet worden bemonsterd
 @msg	the art has no bounds	de illustratie heeft geen begrenzing

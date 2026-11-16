@@ -2704,6 +2704,7 @@ digits	Malayalam	Malajálamské
 	Save As Preset…	Uložit jako předvolbu…
 	Save Changes	Uložit změny
 	Save Preset…	Uložit přednastavení…
+	Save Summary…	Uložit souhrn…
 	Vectors	Vektory
 	A saved copy of the selected preset	Uložená kopie vybraného přednastavení
 	Built-in presets don't change: New makes a copy you can edit.	Vestavěná přednastavení se nemění: tlačítko Nový vytvoří kopii, kterou lze upravit.
@@ -5448,6 +5449,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	the PDF is password-protected: give its password	PDF je chráněno heslem: zadejte heslo
 @msg	the PDF password is wrong	heslo k PDF je chybné
 @msg	the Save PDF dialog didn't open	dialogové okno Uložit PDF se neotevřelo
+@msg	the Save PDF dialog is not open	dialogové okno Uložit PDF není otevřené
 @msg	the WMF header is damaged	hlavička WMF je poškozená
 @msg	the art could not be sampled	z kresby nelze nabrat vzorek
 @msg	the art has no bounds	kresba nemá hranice

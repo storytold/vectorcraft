@@ -3071,6 +3071,7 @@ digits	Malayalam	Малаялам
 	Save Preset	Запази предварителна настройка
 	Save Document Preset	Запази предварителна настройка на документа
 	Save Preset…	Запази предварителна настройка…
+	Save Summary…	Запази обобщението…
 	Save Print Preset	Запази предварителна настройка за печат
 	Save Recovery Data	Запази данни за възстановяване
 	Save Save for Web Preset	Запази предварителна настройка за „Запази за уеб“
@@ -4744,6 +4745,7 @@ axis	Both	И двете
 @msg	the PDF is password-protected: give its password	PDF файлът е защитен с парола: въведете паролата му
 @msg	the PDF password is wrong	паролата за PDF файла е грешна
 @msg	the Save PDF dialog didn't open	диалоговият прозорец за запазване на PDF не се отвори
+@msg	the Save PDF dialog is not open	диалоговият прозорец за запазване на PDF не е отворен
 @msg	the WMF header is damaged	WMF заглавната част е повредена
 @msg	the art could not be sampled	графиката не можа да бъде проучена
 @msg	the art has no bounds	графиката няма граници

@@ -2620,6 +2620,7 @@ digits	Malayalam	Malajalam
 	Rasters	Rasteri
 	Replaces the saved preset of that name.	Zamjenjuje sačuvani predložak tog naziva.
 	Save Preset…	Sačuvaj postavku…
+	Save Summary…	Sačuvaj sažetak…
 	Vectors	Vektori
 	A saved copy of the selected preset	Sačuvana kopija odabranog predloška
 	Built-in presets don't change: New makes a copy you can edit.	Ugrađeni predlošci se ne mijenjaju: Novo pravi kopiju koju možete uređivati.
@@ -5158,6 +5159,7 @@ imageTrace	Outline	Obris
 @msg	the PDF is password-protected: give its password	PDF je zaštićen lozinkom: navedite njegovu lozinku
 @msg	the PDF password is wrong	PDF lozinka je pogrešna
 @msg	the Save PDF dialog didn't open	dijalog Sačuvaj PDF se nije otvorio
+@msg	the Save PDF dialog is not open	dijalog Sačuvaj PDF nije otvoren
 @msg	the WMF header is damaged	WMF zaglavlje je oštećeno
 @msg	the art could not be sampled	crtež nije moguće uzorkovati
 @msg	the art has no bounds	crtež nema granice

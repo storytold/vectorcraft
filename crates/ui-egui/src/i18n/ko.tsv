@@ -3129,6 +3129,7 @@ mark-style	Japanese	일본식
 	Save Document Preset	문서 사전 설정 저장
 	Preset {number}	사전 설정 {number}
 	Save Preset…	사전 설정 저장…
+	Save Summary…	요약 저장…
 	Save Print Preset	인쇄 사전 설정 저장
 	Save Recovery Data	복구 데이터 저장
 	Save Save for Web Preset	웹용 저장 사전 설정 저장
@@ -5092,6 +5093,7 @@ theme	Appearance	외관
 @msg	no file manager here	여기에는 파일 관리자가 없습니다
 @msg	no revert command	되돌리기 명령이 없습니다
 @msg	the Save PDF dialog didn't open	PDF 저장 대화상자가 열리지 않았습니다
+@msg	the Save PDF dialog is not open	PDF 저장 대화상자가 열려 있지 않습니다
 @msg	the document has never been saved	문서가 저장된 적이 없습니다
 @msg	the export returned unreadable data	내보내기가 읽을 수 없는 데이터를 반환했습니다
 @msg	{status} ({e})	{status}({e})

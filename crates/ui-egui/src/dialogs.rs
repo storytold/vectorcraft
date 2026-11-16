@@ -171,6 +171,7 @@ pub(crate) use form::{humanize, number_list_text, plugin_color_button, read_numb
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document, preset_card};
 pub(crate) use new_document::{popup_open as new_document_popup_open, preset_name};
 pub use png_options::open as open_raster_options;
+pub(crate) use save_pdf::{SAVE_SUMMARY as SAVE_PDF_SUMMARY, save_summary as save_pdf_summary, summary_open as pdf_summary_open};
 pub use save_pdf::{open as open_save_pdf, open_preset as open_pdf_preset};
 pub use tools::open_tool_dialog;
 

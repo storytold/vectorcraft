@@ -2619,6 +2619,7 @@ digits	Malayalam	Malajalam
 	Save As Preset…	Zapisz jako ustawienie predefiniowane…
 	Save Changes	Zapisz zmiany
 	Save Preset…	Zapisz ustawienie…
+	Save Summary…	Zapisz podsumowanie…
 	Vectors	Wektory
 	A saved copy of the selected preset	Zapisana kopia zaznaczonego ustawienia
 	Built-in presets don't change: New makes a copy you can edit.	Wbudowanych ustawień nie można zmieniać: Nowe tworzy edytowalną kopię.
@@ -5274,6 +5275,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	the PDF is password-protected: give its password	PDF jest chroniony hasłem: podaj hasło
 @msg	the PDF password is wrong	hasło PDF jest nieprawidłowe
 @msg	the Save PDF dialog didn't open	okno Zapisz PDF nie otworzyło się
+@msg	the Save PDF dialog is not open	okno Zapisz PDF nie jest otwarte
 @msg	the WMF header is damaged	nagłówek WMF jest uszkodzony
 @msg	the art could not be sampled	nie udało się pobrać próbki kompozycji
 @msg	the art has no bounds	kompozycja nie ma granic

@@ -3192,6 +3192,7 @@ digits	Malayalam	Малаялам
 	Save Document Preset	Сохранить набор документа
 	Preset {number}	Набор {number}
 	Save Preset…	Сохранить набор…
+	Save Summary…	Сохранить сводку…
 	Save Print Preset	Сохранить набор печати
 	Save Recovery Data	Сохранить данные восстановления
 	Save Save for Web Preset	Сохранить набор «Сохранить для web»
@@ -5180,6 +5181,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	the PDF is password-protected: give its password	PDF защищён паролем: укажите его пароль
 @msg	the PDF password is wrong	неверный пароль PDF
 @msg	the Save PDF dialog didn't open	диалоговое окно «Сохранить PDF» не открылось
+@msg	the Save PDF dialog is not open	диалоговое окно «Сохранить PDF» не открыто
 @msg	the WMF header is damaged	заголовок WMF повреждён
 @msg	the art could not be sampled	не удалось взять образец рисунка
 @msg	the art has no bounds	у рисунка нет границ

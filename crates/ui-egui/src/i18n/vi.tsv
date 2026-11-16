@@ -3531,6 +3531,7 @@ mark-style	Japanese	Kiểu Nhật
 	Save Document Preset	Lưu thiết lập sẵn tài liệu
 	Preset {number}	Thiết lập sẵn {number}
 	Save Preset…	Lưu thiết lập sẵn…
+	Save Summary…	Lưu tóm tắt…
 	Save Print Preset	Lưu thiết lập sẵn in
 	Save Recovery Data	Lưu dữ liệu khôi phục
 	Save Save for Web Preset	Lưu thiết lập sẵn Lưu cho Web
@@ -5241,6 +5242,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	missing `folder`	thiếu `folder`
 @msg	missing `id` (see plugin.list)	thiếu `id` (xem plugin.list)
 @msg	missing `name`	thiếu `name`
+@msg	missing `path`	thiếu `path`
 @msg	missing `tool`	thiếu `tool`
 @msg	missing id	thiếu id
 @msg	missing index	thiếu chỉ mục
@@ -5752,6 +5754,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	HEIC and HEIF images can't be opened in this build	không thể mở ảnh HEIC và HEIF trong bản dựng này
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	ảnh PSD quá lớn để đọc ({_1} × {_2} pixel)
 @msg	the Save PDF dialog didn't open	hộp thoại Lưu PDF không mở
+@msg	the Save PDF dialog is not open	hộp thoại Lưu PDF chưa được mở
 @msg	the scale is not a usable number	tỷ lệ không phải là số dùng được
 @msg	the search couldn't start: try again in a moment	tìm kiếm không thể bắt đầu: hãy thử lại sau ít lâu
 @msg	the selected stroke's profile is already listed as {_1}	hồ sơ của nét đã chọn đã được liệt kê là {_1}

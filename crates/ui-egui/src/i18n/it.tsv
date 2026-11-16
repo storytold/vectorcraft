@@ -3203,6 +3203,7 @@ digits	Malayalam	Malayalam
 	Save Document Preset	Salva preset documento
 	Preset {number}	Preset {number}
 	Save Preset…	Salva preset…
+	Save Summary…	Salva riepilogo…
 	Save Print Preset	Salva preset di stampa
 	Save Recovery Data	Salva dati di recupero
 	Save Save for Web Preset	Salva preset di Salva per il web
@@ -5182,6 +5183,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	the PDF is password-protected: give its password	il PDF è protetto da password: specifica la password
 @msg	the PDF password is wrong	la password del PDF è errata
 @msg	the Save PDF dialog didn't open	la finestra di dialogo Salva PDF non si è aperta
+@msg	the Save PDF dialog is not open	la finestra di dialogo Salva PDF non è aperta
 @msg	the WMF header is damaged	l'intestazione WMF è danneggiata
 @msg	the art could not be sampled	impossibile campionare la grafica
 @msg	the art has no bounds	la grafica non ha limiti

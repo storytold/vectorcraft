@@ -3050,6 +3050,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Save Document Preset	保存文档预设
 	Preset {number}	预设 {number}
 	Save Preset…	存储预设…
+	Save Summary…	存储摘要…
 	Save Print Preset	保存打印预设
 	Save Recovery Data	保存恢复数据
 	Save Save for Web Preset	保存 Web 预设
@@ -4846,6 +4847,7 @@ imageTrace	Outline	轮廓
 @msg	no file manager here	此处没有文件管理器
 @msg	no revert command	没有恢复命令
 @msg	the Save PDF dialog didn't open	“保存 PDF”对话框未打开
+@msg	the Save PDF dialog is not open	“保存 PDF”对话框没有打开
 @msg	the document has never been saved	该文档从未保存过
 @msg	the export returned unreadable data	导出返回了无法读取的数据
 @msg	{status} ({e})	{status} ({e})

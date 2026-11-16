@@ -4327,6 +4327,7 @@ antiAlias	Sharp	शार्प
 	Save Preset	प्रीसेट सेव करें
 	Save Document Preset	डॉक्यूमेंट प्रीसेट सेव करें
 	Save Preset…	प्रीसेट सेव करें…
+	Save Summary…	सारांश सेव करें…
 	Save Print Preset	सेव करें प्रिंट प्रीसेट
 	Save Recovery Data	रिकवरी डेटा सेव करें
 	Save Save for Web Preset	सेव फॉर वेब प्रीसेट
@@ -8549,6 +8550,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF फ़ाइल टाइप के रूप में प्लेस करने के लिए बहुत बड़ी है (अधिकतम {_1} MB)
 @msg	the runtime panicked	रनटाइम क्रैश हो गया
 @msg	the Save PDF dialog didn't open	सेव करें PDF संवाद खुला नहीं था
+@msg	the Save PDF dialog is not open	सेव करें PDF संवाद खुला नहीं है
 @msg	the scale is not a usable number	स्केल एक प्रयोग योग्य संख्या नहीं है
 @msg	the screen color sampler is already open	स्क्रीन रंग नमूना पहले से ही खुला है
 @msg	the search couldn't start: try again in a moment	खोज शुरू नहीं हो सका: एक पल में फिर से प्रयास करें

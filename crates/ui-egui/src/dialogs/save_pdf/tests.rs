@@ -68,6 +68,284 @@ fn every_section_draws() {
     assert!(warnings.len() == 1 && warnings[0].as_str().unwrap().contains("permissions"), "{warnings:?}");
 }
 
+/// `ui.pdfSummary.save` writes the Summary as the section shows it, as UTF-8 text with LF line
+/// endings: Options with each changed option in the order of the sections, a blank line, then
+/// Warnings. The dialog stays open and the document does not change.
+#[test]
+fn save_summary_writes_the_summary_as_text() {
+    let (mut app, written, _) = app();
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "thumbnails", json!(true));
+    set_field(&mut app, "security.printing", json!("low"));
+    let revision = app.session.active().unwrap().revision;
+    let r = app.run(SAVE_SUMMARY, json!({"path": "/tmp/Ünïcode (1) summary.txt"})).unwrap();
+    assert_eq!(r["path"], "/tmp/Ünïcode (1) summary.txt", "the path is used as given");
+    let w = written.borrow();
+    assert_eq!(w.len(), 1);
+    assert_eq!(w[0].0, "/tmp/Ünïcode (1) summary.txt");
+    assert_eq!(r["bytes"], w[0].1.len());
+    let text = String::from_utf8(w[0].1.clone()).expect("UTF-8");
+    assert!(!text.contains('\r') && text.ends_with('\n'), "LF line endings: {text:?}");
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines[..5], ["Options", "General › Thumbnails: On", "Security › Printing: low", "", "Warnings"], "{text}");
+    assert!(lines.len() == 6 && lines[5].starts_with("⚠ ") && lines[5].contains("permissions"), "{text}");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND), "the dialog stays open");
+    assert_eq!(app.session.active().unwrap().revision, revision, "the document does not change");
+    assert_eq!(app.ui.status, "Saved /tmp/Ünïcode (1) summary.txt");
+}
+
+/// With every option as the preset has it and nothing to warn about, the file holds the lines
+/// that say so, in the interface language.
+#[test]
+fn save_summary_writes_the_lines_for_no_changes_and_no_warnings() {
+    let (mut app, written, _) = app();
+    app.run("file.export.pdf", json!({})).unwrap();
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/summary.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert_eq!(text, "Options\nEvery option matches the preset.\n\nWarnings\nNone.\n");
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+    let r = app.run(SAVE_SUMMARY, json!({"path": "/tmp/zusammenfassung.txt"}));
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    r.unwrap();
+    let de = String::from_utf8(written.borrow()[1].1.clone()).unwrap();
+    let de_lang = crate::i18n::Lang::from_code("de").unwrap();
+    let expected = format!(
+        "{}\n{}\n\n{}\n{}\n",
+        crate::i18n::tr(de_lang, "Options"),
+        crate::i18n::fmt(crate::i18n::tr(de_lang, "Every option matches {base}."), &[("base", crate::i18n::tr(de_lang, "the preset"))]),
+        crate::i18n::tr(de_lang, "Warnings"),
+        crate::i18n::tr(de_lang, "None."),
+    );
+    assert_eq!(de, expected);
+    assert_ne!(de, text, "the labels are translated");
+}
+
+/// The preset editor's Summary is saved too, measured against the app's default preset, and the
+/// editor stays open.
+#[test]
+fn save_summary_writes_the_preset_editors_summary() {
+    let (mut app, written, _) = app();
+    open_preset(&mut app, &json!({})).unwrap();
+    set_field(&mut app, "thumbnails", json!(true));
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/preset summary.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert_eq!(text, "Options\nGeneral › Thumbnails: On\n\nWarnings\nNone.\n");
+    set_field(&mut app, "thumbnails", json!(false));
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/preset summary.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[1].1.clone()).unwrap();
+    assert_eq!(text, format!("Options\nEvery option matches {}.\n\nWarnings\nNone.\n", pdf::DEFAULT_PRESET));
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(PRESET_KIND), "the editor stays open");
+}
+
+/// A path that is empty or not a string, and no Save PDF dialog open, are errors that write
+/// nothing.
+#[test]
+fn save_summary_refuses_a_bad_path_and_a_closed_dialog() {
+    let (mut app, written, _) = app();
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": "/tmp/s.txt"})).unwrap_err(), "the Save PDF dialog is not open");
+    app.run("file.export.pdf", json!({})).unwrap();
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": ""})).unwrap_err(), "path is empty");
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": "  "})).unwrap_err(), "path is empty");
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": 5})).unwrap_err(), "`path` must be a string");
+    assert!(written.borrow().is_empty());
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+}
+
+/// The command needs a path: omitted or null, it is an error that shows no save panel and writes
+/// nothing.
+#[test]
+fn save_summary_requires_a_path() {
+    let (mut app, written, _) = app();
+    let asked: Rc<RefCell<usize>> = Rc::default();
+    let a = asked.clone();
+    app.services.pick_save = Some(Box::new(move |pick: &crate::FilePick| {
+        *a.borrow_mut() += 1;
+        Some(format!("/tmp/{}", pick.name))
+    }));
+    app.run("file.export.pdf", json!({})).unwrap();
+    assert_eq!(app.run(SAVE_SUMMARY, json!({})).unwrap_err(), "missing `path`");
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": null})).unwrap_err(), "missing `path`");
+    assert_eq!(*asked.borrow(), 0, "no save panel");
+    assert!(written.borrow().is_empty());
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+}
+
+/// The command uses the Summary the section drew for the same fields and document, without
+/// computing the settings again (an export in memory), and computes them once a field changes.
+#[test]
+fn save_summary_uses_the_summary_the_section_drew() {
+    let (mut app, written, _) = app();
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "__section", json!("Summary"));
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    app.ui_ctx = Some(ctx.clone());
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::show(&mut app, ui.ctx()));
+    out.textures_delta.clear();
+    // The drawn Summary, replaced with one that no computation gives.
+    let (key, stamp) = summary_key(&app, &params(app.ui.dialog.as_ref().unwrap()));
+    let drawn = ctx.data(|m| m.get_temp::<(egui::Id, Result<Value, String>)>(key)).expect("the section's Summary");
+    assert_eq!(drawn.0, stamp, "drawn for these fields");
+    let kept: Result<Value, String> = Ok(json!({"changed": [{"option": "thumbnails", "value": "kept"}], "warnings": []}));
+    ctx.data_mut(|m| m.insert_temp(key, (stamp, kept)));
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/a.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert_eq!(text, "Options\nGeneral › Thumbnails: kept\n\nWarnings\nNone.\n");
+    set_field(&mut app, "thumbnails", json!(true));
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/b.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[1].1.clone()).unwrap();
+    assert!(text.starts_with("Options\nGeneral › Thumbnails: On\n"), "computed for the changed field: {text}");
+}
+
+/// The Summary drawn for one document is not used for another that becomes active with the same
+/// revision and the same fields.
+#[test]
+fn save_summary_does_not_use_another_documents_summary() {
+    let (mut app, written, _) = app();
+    let first = app.session.active_index().unwrap();
+    let revision = app.session.active().unwrap().revision;
+    app.run("file.new", json!({"width": 120, "height": 90})).unwrap();
+    let second = app.session.active_index().unwrap();
+    app.session.set_active(first);
+    app.run("file.export.pdf", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    app.ui_ctx = Some(ctx.clone());
+    let (key, stamp) = summary_key(&app, &params(app.ui.dialog.as_ref().unwrap()));
+    let kept: Result<Value, String> = Ok(json!({"changed": [{"option": "thumbnails", "value": "kept"}], "warnings": []}));
+    ctx.data_mut(|m| m.insert_temp(key, (stamp, kept)));
+    app.session.set_active(second);
+    app.session.active_mut().unwrap().revision = revision;
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/a.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert!(!text.contains("kept"), "the other document's Summary: {text}");
+}
+
+/// With the desktop's file writer: a file already at the path is replaced whole, a folder's path
+/// is an error that leaves the folder as it was, and under automation write roots a path outside
+/// them is refused without writing.
+#[test]
+fn save_summary_writes_files_on_disk_within_the_automation_roots() {
+    let base = std::env::temp_dir().join(format!("vc-pdf-summary-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    for d in ["out", "outside"] {
+        std::fs::create_dir_all(base.join(d)).unwrap();
+    }
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[], &[&base.join("out")]).unwrap();
+    let services = Services {
+        write: Some(Box::new(|p: &str, b: &[u8]| vectorcraft_format::write_atomic(std::path::Path::new(p), b).map_err(|e| e.to_string()))),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services).with_automation_roots(roots.clone());
+    app.run("file.new", json!({"width": 120, "height": 90})).unwrap();
+    app.run("file.export.pdf", json!({})).unwrap();
+    let mut save = |path: &std::path::Path| {
+        let p = json!({"path": path.to_string_lossy()});
+        vectorcraft_engine::file_access::confine(roots.as_ref(), || app.run(SAVE_SUMMARY, p))
+    };
+    let file = base.join("out").join("Ünïcode (1), summary.txt");
+    std::fs::write(&file, "an older file, longer than the summary\n".repeat(40)).unwrap();
+    save(&file).unwrap();
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "Options\nEvery option matches the preset.\n\nWarnings\nNone.\n");
+    assert!(save(&base.join("out")).is_err(), "a folder is not a file");
+    assert!(base.join("out").is_dir() && file.is_file());
+    let outside = base.join("outside").join("summary.txt");
+    assert!(save(&outside).is_err(), "outside the write roots");
+    assert!(!outside.exists());
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+/// A failed `document.pdfSettings` is the command's error, and nothing is written.
+#[test]
+fn save_summary_reports_a_failed_summary() {
+    let (mut app, written, _) = app();
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "compatibility", json!("bogus"));
+    let p = params(app.ui.dialog.as_ref().unwrap());
+    let expected = summary_settings(&mut app, &p).unwrap_err();
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": "/tmp/s.txt"})).unwrap_err(), expected);
+    assert!(written.borrow().is_empty());
+}
+
+/// The Summary section's Save Summary… button: the save panel suggests `<document> PDF
+/// Summary.txt`, the file holds the text the section shows, and the dialog stays open. A canceled
+/// panel writes nothing; a failed write is told over the dialog, which shows again when the
+/// message closes. The web downloads the file under the suggested name.
+#[test]
+fn the_save_summary_button_writes_the_summary() {
+    let (mut app, written, _) = app();
+    let suggested: Rc<RefCell<Vec<String>>> = Rc::default();
+    let s = suggested.clone();
+    app.services.pick_save = Some(Box::new(move |pick: &crate::FilePick| {
+        s.borrow_mut().push(pick.name.clone());
+        Some(format!("/tmp/{}", pick.name))
+    }));
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "__section", json!("Summary"));
+    set_field(&mut app, "thumbnails", json!(true));
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    click_save_summary(&mut app, &ctx);
+    let title = app.session.active().unwrap().title();
+    let stem = std::path::Path::new(&title).file_stem().unwrap().to_string_lossy().into_owned();
+    let name = format!("{stem} PDF Summary.txt");
+    assert_eq!(suggested.borrow()[..], *std::slice::from_ref(&name));
+    {
+        let w = written.borrow();
+        assert_eq!(w.len(), 1, "written once");
+        assert_eq!(w[0].0, format!("/tmp/{name}"));
+        let text = String::from_utf8(w[0].1.clone()).unwrap();
+        assert!(text.starts_with("Options\nGeneral › Thumbnails: On\n\nWarnings\n"), "{text}");
+    }
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND), "the dialog stays open");
+    // Canceled: nothing written, no status, the dialog stays.
+    app.services.pick_save = Some(Box::new(|_: &crate::FilePick| None));
+    app.ui.status.clear();
+    click_save_summary(&mut app, &ctx);
+    assert_eq!(written.borrow().len(), 1, "a canceled panel writes nothing");
+    assert!(app.ui.status.is_empty(), "{}", app.ui.status);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+    // A failed write: a message names the file, over the dialog.
+    app.services.pick_save = Some(Box::new(|pick: &crate::FilePick| Some(format!("/tmp/{}", pick.name))));
+    app.services.write = Some(Box::new(|_: &str, _: &[u8]| Err("disk full".into())));
+    click_save_summary(&mut app, &ctx);
+    let told = app.ui.dialog.clone().expect("a message");
+    assert_eq!(told.kind, super::super::confirm::MESSAGE, "status {:?}, waiting {:?}", app.ui.status, app.ui.told);
+    assert!(told.str("message").contains(&name), "{:?}", told.fields);
+    assert_eq!(super::super::parent(&told).map(|d| d.kind), Some(KIND.to_string()), "the dialog is under the message");
+    super::super::cancel(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND), "the dialog shows again");
+    // The web downloads it under the suggested name.
+    let downloads: Log = Log::default();
+    let dl = downloads.clone();
+    app.services.download = Some(Box::new(move |n: &str, b: &[u8]| {
+        dl.borrow_mut().push((n.to_string(), b.to_vec()));
+        Ok(())
+    }));
+    click_save_summary(&mut app, &ctx);
+    let d = downloads.borrow();
+    assert_eq!(d.len(), 1);
+    assert_eq!(d[0].0, name);
+    assert!(String::from_utf8(d[0].1.clone()).unwrap().starts_with("Options\n"));
+}
+
+/// Click the Summary section's Save Summary… button in frames of the dialog layer (the dialog's
+/// window draws nothing in its first frame, which sizes it).
+fn click_save_summary(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0));
+    let run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
+    };
+    run(app, vec![]);
+    let labels = run(app, vec![]);
+    let at =
+        labels.iter().find(|(t, _)| t.trim() == "Save Summary…").map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no Save Summary… in {labels:?}"));
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    run(app, vec![egui::Event::PointerMoved(at), button(true)]);
+    run(app, vec![button(false)]);
+}
+
 #[test]
 fn confirm_runs_export_pdf_with_the_dialog_options() {
     let (mut app, written, opened) = app();

@@ -2923,6 +2923,7 @@ digits	Malayalam	Malayalam
 	Save Preset	Ön Ayarı Kaydet
 	Save Document Preset	Belge Ön Ayarını Kaydet
 	Save Preset…	Ön Ayarı Kaydet…
+	Save Summary…	Özeti Kaydet…
 	Save Print Preset	Yazdırma Ön Ayarını Kaydet
 	Save Recovery Data	Kurtarma Verilerini Kaydet
 	Save Save for Web Preset	Kaydet Web Ön Ayarı için Kaydet
@@ -4884,6 +4885,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	the PDF is password-protected: give its password	PDF şifre korumalıdır: şifresini verin
 @msg	the PDF password is wrong	PDF şifresi yanlış
 @msg	the Save PDF dialog didn't open	PDF'yi Kaydet iletişim kutusu açılmadı
+@msg	the Save PDF dialog is not open	PDF'yi Kaydet iletişim kutusu açık değil
 @msg	the WMF header is damaged	WMF başlığı hasarlı
 @msg	the art could not be sampled	sanat örneği alınamadı
 @msg	the art has no bounds	sanatın sınırı yoktur

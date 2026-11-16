@@ -5163,6 +5163,7 @@ digits	Malayalam	Malayalam
 	Save As Preset…	Gem som forudindstilling…
 	Save Changes	Gem ændringer
 	Save Preset…	Gem forudindstilling…
+	Save Summary…	Gem oversigt…
 	Vectors	Vektorer
 	A saved copy of the selected preset	En gemt kopi af den valgte forudindstilling
 	Built-in presets don't change: New makes a copy you can edit.	Indbyggede forudindstillinger ændres ikke: Ny opretter en kopi, du kan redigere.
@@ -7570,6 +7571,7 @@ imageTrace	Outline	Kontur
 @msg	the PDF is password-protected: give its password	PDF'en er beskyttet med adgangskode: angiv dens adgangskode
 @msg	the PDF password is wrong	PDF-adgangskoden er forkert
 @msg	the Save PDF dialog didn't open	dialogen Gem PDF blev ikke åbnet
+@msg	the Save PDF dialog is not open	dialogen Gem PDF er ikke åben
 @msg	the WMF header is damaged	WMF-headeren er beskadiget
 @msg	the art could not be sampled	der kunne ikke tages prøve af grafikken
 @msg	the art has no bounds	grafikken har ingen grænser

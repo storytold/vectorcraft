@@ -3122,6 +3122,7 @@ digits	Malayalam	Malayalam
 	Save Document Preset	Dokumentvorgabe speichern
 	Preset {number}	Vorgabe {number}
 	Save Preset…	Vorgabe speichern…
+	Save Summary…	Übersicht speichern…
 	Save Print Preset	Druckvorgabe speichern
 	Save Recovery Data	Wiederherstellungsdaten speichern
 	Save Save for Web Preset	Vorgabe für „Für Web speichern“ speichern
@@ -5049,6 +5050,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	the PDF is password-protected: give its password	die PDF-Datei ist kennwortgeschützt: Geben Sie ihr Kennwort an
 @msg	the PDF password is wrong	das PDF-Kennwort ist falsch
 @msg	the Save PDF dialog didn't open	das Dialogfeld „PDF speichern“ wurde nicht geöffnet
+@msg	the Save PDF dialog is not open	das Dialogfeld „PDF speichern“ ist nicht geöffnet
 @msg	the WMF header is damaged	der WMF-Header ist beschädigt
 @msg	the art could not be sampled	die Grafik konnte nicht abgetastet werden
 @msg	the art has no bounds	die Grafik hat keine Begrenzung

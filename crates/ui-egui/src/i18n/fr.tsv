@@ -3149,6 +3149,7 @@ digits	Malayalam	Malayalam
 	Save Preset	Enregistrer le paramètre prédéfini
 	Save Document Preset	Enregistrer le paramètre prédéfini du document
 	Save Preset…	Enregistrer le paramètre prédéfini…
+	Save Summary…	Enregistrer le résumé…
 	Save Print Preset	Enregistrer le paramètre prédéfini d’impression
 	Save Recovery Data	Enregistrer les données de récupération
 	Save Save for Web Preset	Enregistrer le paramètre prédéfini d’Enregistrer pour le web
@@ -5116,6 +5117,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	the PDF is password-protected: give its password	le PDF est protégé par un mot de passe : indiquez-le
 @msg	the PDF password is wrong	le mot de passe du PDF est incorrect
 @msg	the Save PDF dialog didn't open	la boîte de dialogue Enregistrer au format PDF ne s’est pas ouverte
+@msg	the Save PDF dialog is not open	la boîte de dialogue Enregistrer au format PDF n’est pas ouverte
 @msg	the WMF header is damaged	l’en-tête WMF est endommagé
 @msg	the art could not be sampled	impossible d’échantillonner l’illustration
 @msg	the art has no bounds	l’illustration n’a pas de limites

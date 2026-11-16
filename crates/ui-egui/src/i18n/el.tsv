@@ -2122,6 +2122,7 @@ font-technology	Variable	Μεταβλητές
 	Save As…	Αποθήκευση ως…
 	Save for Web (Legacy)…	Αποθήκευση για ιστό (παλαιού τύπου)…
 	Save Preset…	Αποθήκευση προεπιλογής…
+	Save Summary…	Αποθήκευση σύνοψης…
 	Save Selection…	Αποθήκευση επιλογής…
 	Update Selection	Ενημέρωση επιλογής
 	Saved	Αποθηκεύτηκε
@@ -4846,6 +4847,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	missing `folder`	λείπει το `folder`
 @msg	missing `id` (see plugin.list)	λείπει το `id` (δείτε plugin.list)
 @msg	missing `name`	λείπει το `name`
+@msg	missing `path`	λείπει το `path`
 @msg	missing `tool`	λείπει το `tool`
 @msg	missing id	λείπει το id
 @msg	missing index	λείπει ο δείκτης
@@ -5103,6 +5105,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	the PDF is password-protected: give its password	το PDF προστατεύεται με κωδικό: πληκτρολογήστε τον κωδικό του
 @msg	the PDF password is wrong	ο κωδικός PDF είναι λανθασμένος
 @msg	the Save PDF dialog didn't open	δεν άνοιξε το παράθυρο Αποθήκευση PDF
+@msg	the Save PDF dialog is not open	το παράθυρο Αποθήκευση PDF δεν είναι ανοιχτό
 @msg	the WMF header is damaged	η κεφαλίδα WMF είναι κατεστραμμένη
 @msg	the art could not be sampled	δεν ήταν δυνατή η δειγματοληψία του σχεδίου
 @msg	the art has no bounds	το σχέδιο δεν έχει όρια

@@ -3140,6 +3140,7 @@ mark-style	Japanese	日本式
 	Save Document Preset	ドキュメントプリセットを保存
 	Preset {number}	プリセット {number}
 	Save Preset…	保存…
+	Save Summary…	サマリーを保存…
 	Save Print Preset	プリントプリセットを保存
 	Save Recovery Data	復帰用データを保存
 	Save Save for Web Preset	Web 用に保存プリセットを保存
@@ -5165,6 +5166,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no file manager here	この環境にはファイルマネージャーがありません
 @msg	no revert command	「保存済みの状態に戻す」コマンドがありません
 @msg	the Save PDF dialog didn't open	PDF 保存ダイアログが開きませんでした
+@msg	the Save PDF dialog is not open	PDF 保存ダイアログが開いていません
 @msg	the document has never been saved	ドキュメントはまだ一度も保存されていません
 @msg	the export returned unreadable data	書き出し処理から読み取れないデータが返されました
 @msg	{status} ({e})	{status} ({e})

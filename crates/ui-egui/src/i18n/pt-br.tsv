@@ -2640,6 +2640,7 @@ digits	Malayalam	Malaiala
 	Save Preset	Salvar Predefinido
 	Save Document Preset	Salvar Predefinido de Documento
 	Save Preset…	Salvar Predefinido…
+	Save Summary…	Salvar Resumo…
 	Save Print Preset	Salvar Predefinido de Impressão
 	Save Recovery Data	Salvar Dados de Recuperação
 	Save Save for Web Preset	Salvar Predefinido de Salvar para Web
@@ -4456,6 +4457,7 @@ axis	Both	Ambos
 @msg	the PDF is password-protected: give its password	o PDF é protegido por senha: informe a senha
 @msg	the PDF password is wrong	a senha do PDF está incorreta
 @msg	the Save PDF dialog didn't open	a caixa de diálogo Salvar PDF não abriu
+@msg	the Save PDF dialog is not open	a caixa de diálogo Salvar PDF não está aberta
 @msg	the WMF header is damaged	o cabeçalho WMF está danificado
 @msg	the art could not be sampled	não foi possível amostrar a arte
 @msg	the art has no bounds	a arte não tem limites

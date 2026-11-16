@@ -2478,6 +2478,7 @@ file-filter	Templates	範本
 @msg	no file manager here	此處沒有檔案管理員
 @msg	no revert command	沒有回復指令
 @msg	the Save PDF dialog didn't open	「儲存 PDF」對話框未開啟
+@msg	the Save PDF dialog is not open	「儲存 PDF」對話框沒有開啟
 @msg	the document has never been saved	文件從未儲存過
 @msg	the export returned unreadable data	匯出傳回了無法讀取的資料
 @msg	{status} ({e})	{status} ({e})
@@ -4330,6 +4331,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Save Document Preset	儲存文件預設集
 	Preset {number}	預設集 {number}
 	Save Preset…	儲存預設集…
+	Save Summary…	儲存摘要…
 	Save Print Preset	儲存列印預設集
 	Save Recovery Data	儲存救援資料
 	Save Save for Web Preset	儲存「儲存為網頁用」預設集

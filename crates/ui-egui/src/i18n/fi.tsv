@@ -2659,6 +2659,7 @@ digits	Malayalam	Malajalam
 	Save As Preset…	Tallenna esiasetuksena…
 	Save Changes	Tallenna muutokset
 	Save Preset…	Tallenna esiasetus…
+	Save Summary…	Tallenna yhteenveto…
 	Vectors	Vektorit
 	A saved copy of the selected preset	Tallennettu kopio valitusta esiasetuksesta
 	Built-in presets don't change: New makes a copy you can edit.	Sisäiset esiasetukset eivät muutu: Uusi luo muokattavan kopion.
@@ -5116,6 +5117,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	missing `folder`	`folder` puuttuu
 @msg	missing `id` (see plugin.list)	`id` puuttuu (ks. plugin.list)
 @msg	missing `name`	`name` puuttuu
+@msg	missing `path`	`path` puuttuu
 @msg	missing `tool`	`tool` puuttuu
 @msg	missing id	id puuttuu
 @msg	missing index	indeksi puuttuu
@@ -5372,6 +5374,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	the PDF is password-protected: give its password	tämä PDF-tiedosto on suojattu salasanalla: anna sen salasana
 @msg	the PDF password is wrong	annettu PDF-salasana on väärä
 @msg	the Save PDF dialog didn't open	valintaikkuna Tallenna PDF ei avautunut
+@msg	the Save PDF dialog is not open	valintaikkuna Tallenna PDF ei ole auki
 @msg	the WMF header is damaged	tiedoston WMF-otsake on vaurioitunut
 @msg	the art could not be sampled	kuvitusta ei voitu näytteistää
 @msg	the art has no bounds	kuvituksella ei ole rajoja

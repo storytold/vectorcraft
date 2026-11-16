@@ -3161,6 +3161,7 @@ digits	Malayalam	Malayálam
 	Save Preset	Guardar preajuste
 	Save Document Preset	Guardar preajuste de documento
 	Save Preset…	Guardar preajuste…
+	Save Summary…	Guardar resumen…
 	Save Print Preset	Guardar preajuste de impresión
 	Save Recovery Data	Guardar datos de recuperación
 	Save Save for Web Preset	Guardar preajuste de Guardar para web
@@ -4892,6 +4893,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	missing `folder`	falta `folder`
 @msg	missing `id` (see plugin.list)	falta `id` (consulta plugin.list)
 @msg	missing `name`	falta `name`
+@msg	missing `path`	falta `path`
 @msg	missing `tool`	falta `tool`
 @msg	missing id	falta id
 @msg	missing index	falta index
@@ -5156,6 +5158,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	the PDF is password-protected: give its password	el PDF está protegido con contraseña: indica su contraseña
 @msg	the PDF password is wrong	la contraseña del PDF es incorrecta
 @msg	the Save PDF dialog didn't open	el cuadro de diálogo Guardar PDF no se abrió
+@msg	the Save PDF dialog is not open	el cuadro de diálogo Guardar PDF no está abierto
 @msg	the WMF header is damaged	el encabezado WMF está dañado
 @msg	the art could not be sampled	no se pudo muestrear la ilustración
 @msg	the art has no bounds	la ilustración no tiene límites

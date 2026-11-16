@@ -1314,6 +1314,13 @@ PDF/X-4): a CMYK JPEG neither resampled nor recompressed is written unchanged, a
 resampled and compressed again (CMYK JPEG or ZIP). `output.conversion` converts them like CMYK colours: `destination`
 to another CMYK profile or to RGB, `preserveNumbers` (and PDF/X-1a) keeps their numbers in a CMYK destination.
 `document.pdfSettings` lists the options that differ from the preset and the warnings without writing a file.
+The Summary section's Save Summary… button writes what the section shows to a text file (UTF-8 without a byte order
+mark, LF line endings), and its save panel suggests `<document> PDF Summary.txt` in the document's folder; the web
+downloads the file under that name. `ui.pdfSummary.save {path}` writes the same text for the open Save PDF dialog or
+PDF preset editor to `path` and returns `{path, bytes}`. It uses the Summary the section last drew for the same fields
+and document, and computes the settings only when there is none. No such dialog open, a `path` that is missing, empty
+or not a string, a path outside the automation write roots and settings that
+`document.pdfSettings` refuses are errors that write nothing. The dialog stays open and the document does not change.
 `thumbnails: true` embeds each page drawn small (106 px on its long side, without the layers the page leaves out) as
 its `/Thumb` image. `fastWebView: true` writes a linearised file (the linearization dictionary first, then the first
 page with hint tables saying where every other page's objects are), which stays linearised when a password encrypts it.

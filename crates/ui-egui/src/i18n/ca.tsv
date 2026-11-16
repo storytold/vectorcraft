@@ -3949,6 +3949,7 @@ digits	Malayalam	Malaiàlam
 	Save Preset	Desa el preajust
 	Save Document Preset	Desa el preajust de document
 	Save Preset…	Desa el preajust…
+	Save Summary…	Desa el resum…
 	Save Print Preset	Desa el preajust d’impressió
 	Save Recovery Data	Desa les dades de recuperació
 	Save Save for Web Preset	Desa el preajust Desa per a web
@@ -6017,6 +6018,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	missing `library` (see brush.libraries)	falta `library` (vegeu brush.libraries)
 @msg	missing `library` (see symbol.libraries)	falta `library` (vegeu symbol.libraries)
 @msg	missing `name`	falta `name`
+@msg	missing `path`	falta `path`
 @msg	missing `tool`	falta `tool`
 @msg	missing index	falta l’index
 @msg	missing integer `{key}`	falta el nombre enter `{key}`
@@ -6576,6 +6578,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	the PSD file's image data uses an unknown compression ({m})	les dades d’imatge del fitxer PSD utilitzen una compressió desconeguda ({m})
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	la imatge PSD és massa gran per llegir-la ({_1} × {_2} píxels)
 @msg	the Save PDF dialog didn't open	el diàleg Desa PDF no s’ha obert
+@msg	the Save PDF dialog is not open	el diàleg Desa PDF no està obert
 @msg	the scale is not a usable number	l’escala no és un nombre utilitzable
 @msg	the screen color sampler is already open	el mostrejador de color de pantalla ja és obert
 @msg	the search couldn't start: try again in a moment	la cerca no s’ha pogut iniciar: torna-ho a provar d’aquí a un moment

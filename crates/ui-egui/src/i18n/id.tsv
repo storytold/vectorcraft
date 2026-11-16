@@ -2440,6 +2440,7 @@ digits	Malayalam	Malayalam
 	Save As Preset…	Simpan sebagai Preset…
 	Save Changes	Simpan Perubahan
 	Save Preset…	Simpan preset…
+	Save Summary…	Simpan ringkasan…
 	Vectors	Vektor
 	A saved copy of the selected preset	Salinan tersimpan dari preset terpilih
 	Built-in presets don't change: New makes a copy you can edit.	Preset bawaan tidak berubah: Baru membuat salinan yang dapat Anda edit.
@@ -4844,6 +4845,7 @@ imageTrace	Outline	Kontur
 @msg	the PDF is password-protected: give its password	PDF dilindungi kata sandi: berikan kata sandinya
 @msg	the PDF password is wrong	kata sandi PDF salah
 @msg	the Save PDF dialog didn't open	dialog Simpan PDF tidak terbuka
+@msg	the Save PDF dialog is not open	dialog Simpan PDF tidak sedang terbuka
 @msg	the WMF header is damaged	header WMF rusak
 @msg	the art could not be sampled	karya seni tidak dapat diambil sampelnya
 @msg	the art has no bounds	karya seni tidak memiliki batas
