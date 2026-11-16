@@ -268,8 +268,7 @@ pick runs the commands the Color panel's sliders run: `paint.setFill` or `paint.
 point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?, opacity?, hexField?, sliders?}`
 shows the wheel or the box (a color field with a channel strip at its right), picks the box's channel, checks or
 unchecks Show Opacity (an opacity row under the wheel or the box) and Show Hex Field (a field for a hex or CSS color),
-and shows or hides OKLCH Sliders (`sliders: "oklch"` is an error
-while the working RGB space is not sRGB); it returns the settings, and `ui.inspect` reports them as `ui.color_wheel`.
+and shows or hides OKLCH Sliders (`sliders: "oklch"` is an error while the working RGB space is not sRGB); it returns the settings, and `ui.inspect` reports them as `ui.color_wheel`.
 
 Edit Colors dialogs: `ui.colorBalanceDialog` opens Adjust Colors (`colorBalance`: fields `mode` `gray`/`rgb`/`cmyk`/
 `global`, the channels `r` `g` `b` / `c` `m` `y` `k` / `gray` / `tint` (global mode) from −100 to 100, `convert`, `fill`, `stroke`,

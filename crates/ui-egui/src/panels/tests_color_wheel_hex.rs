@@ -91,7 +91,7 @@ fn show_hex_field_is_a_setting_of_the_panel() {
     assert!(h.query_by_role_and_label(Role::TextInput, "Hex or CSS color").is_none(), "no field while unchecked");
 }
 
-/// The field shows six digits, and two more while the opacity is under 100 %.
+/// The field shows six digits, and two more when the opacity rounds to less than `ff`.
 #[test]
 fn the_field_shows_the_alpha_only_under_full_opacity() {
     let h = harness(app());
@@ -189,6 +189,21 @@ fn a_selection_mixing_type_and_art_takes_the_color_and_the_alpha_where_it_can() 
     assert_eq!(fill.color().map(|c| c.to_hex()), Some("#336699".into()), "the type's characters take the color: {fill:?}");
 }
 
+/// With only a type object selected, where the opacity row is gray, `#33669980` sets the
+/// characters' color and adds no fill item for the alpha.
+#[test]
+fn with_only_type_selected_the_color_applies_without_the_alpha() {
+    let mut app = app();
+    let text = app.run("text.create", json!({"x": 10, "y": 150, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [text]})).unwrap();
+    let mut h = harness(app);
+    type_in(&mut h, "#33669980");
+    let (fill, _) = h.state().session.proxy_paints();
+    assert_eq!(fill.color().map(|c| c.to_hex()), Some("#336699".into()), "the characters take the color: {fill:?}");
+    let node = h.state().session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(text)).unwrap().appearance.clone();
+    assert!(node.fill_at(None).is_none(), "no fill item for the alpha: {node:?}");
+}
+
 /// Retyping the color and opacity the selection has, in another form, records no undo step; an
 /// alpha that differs from the opacity by less than the field shows is still applied.
 #[test]
@@ -268,6 +283,49 @@ fn a_wheel_click_after_typing_applies_both() {
     let ch = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).unwrap();
     assert!(ch(5) >= ch(3) && ch(3) >= ch(1), "the pick keeps the typed hue: {hex}");
     assert_eq!(undo_count(h.state()), before + 2);
+}
+
+/// A press on the opacity slider that takes the focus from an edited field applies the text and
+/// keeps the opacity the press set: a gradient stop takes both.
+#[test]
+fn an_opacity_press_after_typing_keeps_both() {
+    let mut app = app();
+    app.run("paint.setFill", json!({"gradient": {}})).unwrap();
+    app.run("ui.colorWheel", json!({"opacity": true})).unwrap();
+    let mut h = harness(app);
+    h.get_by_role_and_label(Role::TextInput, "Hex or CSS color").click();
+    h.run_steps(1);
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    h.run_steps(1);
+    h.get_by_role_and_label(Role::TextInput, "Hex or CSS color").type_text("#336699");
+    h.run_steps(1);
+    h.get_by_role_and_label(Role::Slider, "Opacity").click();
+    h.run_steps(2);
+    let Paint::Gradient(g) = crate::panels::current_paints(h.state()).0 else { panic!("still a gradient") };
+    let stop = &g.gradient.stops[0];
+    assert_eq!(stop.color.to_hex(), "#336699", "the text applies");
+    assert!(stop.opacity < 0.9, "the press sets the opacity: {}", stop.opacity);
+}
+
+/// The same for a solid fill: the rectangle takes the typed color and the opacity the press set.
+#[test]
+fn an_opacity_press_after_typing_keeps_both_on_a_solid_fill() {
+    let mut app = app();
+    let rect = selected(&app)[0];
+    app.run("ui.colorWheel", json!({"opacity": true})).unwrap();
+    let mut h = harness(app);
+    h.get_by_role_and_label(Role::TextInput, "Hex or CSS color").click();
+    h.run_steps(1);
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    h.run_steps(1);
+    h.get_by_role_and_label(Role::TextInput, "Hex or CSS color").type_text("#336699");
+    h.run_steps(1);
+    h.get_by_role_and_label(Role::Slider, "Opacity").click();
+    h.run_steps(2);
+    let app = h.state();
+    assert_eq!(rgb8(&fill_color(app, rect)), [0x33, 0x66, 0x99], "the text applies");
+    let fill = app.session.doc().unwrap().doc.node(rect).unwrap().appearance.fill_at(None).map(|f| f.opacity);
+    assert!(fill.is_some_and(|o| o < 0.9), "the press sets the opacity: {fill:?}");
 }
 
 /// A selected gradient stop takes the color and the alpha in one step.

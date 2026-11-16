@@ -25,10 +25,11 @@
 //! sRGB. The choice is kept with the preferences too.
 //!
 //! Panel menu › Show Hex Field adds a field under the wheel or the box that shows the color's six
-//! hex digits, and two more while the opacity that Show Opacity sets is under 100 %. It takes a hex
-//! color of 3, 4, 6 or 8 digits and a CSS `rgb()`, `hsl()` or `oklch()` color (`color.parse`). A
-//! typed color is applied in the same way as a pick, and an alpha sets the opacity that Show
-//! Opacity sets, whether or not that row shows. Where that row is gray, only the color is applied.
+//! hex digits, and two more when the opacity that Show Opacity sets rounds to less than `ff`. It
+//! takes a hex color of 3, 4, 6 or 8 digits and a CSS `rgb()`, `hsl()` or `oklch()` color
+//! (`color.parse`). A typed color is applied in the same way as a pick, and an alpha sets the
+//! opacity that Show Opacity sets, whether or not that row shows. Where that row is gray, only the
+//! color is applied.
 
 use egui::{Color32, Rect, Stroke, Ui, UiBuilder, pos2, vec2};
 use serde::{Deserialize, Serialize};
@@ -392,7 +393,7 @@ fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, tgt: &Target, color: &Colo
 
 /// The text the hex field shows for `color` and the opacity `o` the row of Show Opacity edits
 /// (`None` when it has nothing to edit): six hex digits of the document's RGB numbers, and two more
-/// for an opacity under 100 %. Empty without a solid color.
+/// when the opacity rounds to less than `ff`. Empty without a solid color.
 pub(crate) fn hex_text(color: Option<&Color>, o: Option<f32>) -> String {
     let Some(c) = color else { return String::new() };
     let mut text = super::color::hex_digits(c);
@@ -437,23 +438,30 @@ fn apply_typed(app: &mut VectorcraftApp, tgt: &Target, c: Color, alpha: Option<f
     }
 }
 
-/// The Show Hex Field row: a `#` and a field as wide as the row. A committed text goes through
-/// `color.parse`; a text it refuses shows its error in the status bar and changes nothing. True
-/// when a text was committed.
-fn hex_row(app: &mut VectorcraftApp, ui: &mut Ui, tgt: &Target, color: Option<&Color>) -> bool {
+/// The text the hex field shows for `tgt` and its color, as [`hex_text`] gives it.
+fn hex_shown(app: &VectorcraftApp, tgt: &Target, color: Option<&Color>) -> String {
     let (o, live) = shown_opacity(app, tgt);
-    let shown = hex_text(color, live.then_some(o));
+    hex_text(color, live.then_some(o))
+}
+
+/// The Show Hex Field row: a `#` and a field as wide as the row, showing `shown`. A committed text
+/// goes through `color.parse`; a text it refuses shows its error in the status bar and changes
+/// nothing. True when a text was committed.
+fn hex_row(app: &mut VectorcraftApp, ui: &mut Ui, shown: &str) -> bool {
     let mut typed = None;
     ui.horizontal(|ui| {
         let t = Tokens::get(ui.ctx());
         ui.label(egui::RichText::new("#").size(15.0).color(t.text));
         let width = ui.available_width();
-        typed = widgets::text_field_named(ui, "color-wheel-hex", Some(tl!("Hex or CSS color")), Some(&shown), width, 1);
+        typed = widgets::text_field_named(ui, "color-wheel-hex", Some(tl!("Hex or CSS color")), Some(shown), width, 1);
     });
     let Some(text) = typed else { return false };
     match app.run("color.parse", json!({ "text": text })) {
         Ok(r) => {
             let Ok(rgb) = serde_json::from_value::<Color>(r["color"].clone()) else { return true };
+            // The target is read again, so a text committed when a press on the opacity row takes
+            // the focus keeps the opacity that press set.
+            let tgt = &wheel_target(app, ui);
             // The document's RGB numbers, in the model a pick would store them in.
             let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);
             let c = stored_rgb(&cms::active(), rgb, replaced(app, tgt, false).as_ref(), cmyk_doc);
@@ -721,6 +729,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.add_space(4.0);
         picked_lch = oklch_rows(app, ui, &tgt, color, &cms);
     }
+    // The hex field compares its text with what it showed before an opacity edit of this frame, so
+    // a text committed when a press on the opacity row takes the focus is not dropped.
+    let hex = app.ui.color_wheel.hex_field.then(|| hex_shown(app, &tgt, color.as_ref()));
     if app.ui.color_wheel.opacity {
         let shown = color.unwrap_or(app.session.last_solid);
         let owner = color.map(|c| Owner::of(app, &tgt, c));
@@ -743,11 +754,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     }
-    if app.ui.color_wheel.hex_field {
+    if let Some(hex) = hex {
         ui.add_space(4.0);
         // A pick or an OKLCH edit read in the frame that commits a text was made on the color
         // before the text, so it is not applied.
-        if hex_row(app, ui, &tgt, color.as_ref()) {
+        if hex_row(app, ui, &hex) {
             return;
         }
     }

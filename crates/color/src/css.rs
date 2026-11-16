@@ -35,12 +35,15 @@ pub struct CssColor {
 /// The color `text` gives, or `None` when it is not one of the module's forms or has more than
 /// [`MAX_CHARS`] characters. Values are clamped where CSS clamps them when it parses them: red, green
 /// and blue to 0..=255 (0..=100 %), alpha to 0..=1, a negative HSL saturation to 0, OKLCH lightness
-/// to 0..=1 and chroma to 0 or more. `none` reads as 0. An `hsl()` color whose red, green or blue
-/// falls outside 0..=1 has that channel clipped, and an `oklch()` color outside sRGB keeps its
+/// to 0..=1 and chroma to 0 or more. `none` reads as 0, as CSS reads a missing component when it
+/// converts a color. Spaces, tabs and line breaks may surround the text and its arguments; other
+/// whitespace is not CSS whitespace and makes the text invalid. An `hsl()` color whose red, green or
+/// blue falls outside 0..=1 has that channel clipped, and an `oklch()` color outside sRGB keeps its
 /// lightness and hue and takes the largest chroma that fits ([`oklab::from_oklch`]); CSS maps such
-/// colors into the gamut by its own rules instead.
+/// colors into the gamut by its own rules instead. An `hsl()` color whose saturation and lightness
+/// are so large that a channel overflows to an infinity is refused.
 pub fn parse(text: &str) -> Option<CssColor> {
-    let text = text.trim();
+    let text = css_trim(text);
     if text.chars().nth(MAX_CHARS).is_some() {
         return None;
     }
@@ -61,6 +64,12 @@ pub fn parse(text: &str) -> Option<CssColor> {
             }
         }
     }
+}
+
+/// `s` without the CSS whitespace (spaces, tabs and line breaks) around it
+/// (<https://www.w3.org/TR/css-syntax-3/#whitespace>).
+fn css_trim(s: &str) -> &str {
+    s.trim_matches(|c: char| c.is_ascii_whitespace())
 }
 
 /// `#rrggbb` of red, green and blue from 0 to 1, each rounded to the nearest of 256 steps.
@@ -107,7 +116,7 @@ fn split(args: &str, legacy_allowed: bool) -> Option<([Arg; 3], Option<Arg>, boo
         if !legacy_allowed || args.contains('/') {
             return None;
         }
-        let mut parts: Vec<&str> = args.split(',').map(str::trim).collect();
+        let mut parts: Vec<&str> = args.split(',').map(css_trim).collect();
         let alpha = if parts.len() == 4 { parts.pop() } else { None };
         (parts, alpha, true)
     } else {
@@ -117,7 +126,7 @@ fn split(args: &str, legacy_allowed: bool) -> Option<([Arg; 3], Option<Arg>, boo
         if halves.next().is_some() {
             return None;
         }
-        (colors.split_ascii_whitespace().collect(), alpha.map(str::trim), false)
+        (colors.split_ascii_whitespace().collect(), alpha.map(css_trim), false)
     };
     let [a, b, c] = parts.as_slice() else { return None };
     let one = |s: &str| {
@@ -324,6 +333,15 @@ mod tests {
             "rgb()",
             "rgbx(1 2 3)",
         ] {
+            assert_eq!(parse(bad), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn only_spaces_tabs_and_line_breaks_are_whitespace() {
+        assert_eq!(bytes("\t rgb(51,\n102 ,\t153)\r\n"), ([51, 102, 153], None));
+        assert_eq!(bytes("rgb(51 102 153 /\t0.5 )"), ([51, 102, 153], Some(128)));
+        for bad in ["rgb(51,\u{a0}102,153)", "rgb(51,102,153\u{3000})", "\u{a0}#336699", "#336699\u{2003}", "rgb(0 0 0 /\u{a0}1)"] {
             assert_eq!(parse(bad), None, "{bad:?}");
         }
     }

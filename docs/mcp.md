@@ -664,13 +664,13 @@ the box), and `"none"` hides them; `"oklch"` is an error while the working RGB s
 (a Lab or CMYK color, or an RGB color in a wider working RGB space) is clipped to sRGB first.
 
 `ui.colorWheel {"hexField": true}` checks Show Hex Field, as the panel menu does, and `false` unchecks it. The field
-under the wheel or the box shows the color's six hex digits, and two more for the opacity while the opacity that Show
-Opacity edits is under 100 %. A text typed into it is read as `color.parse` reads it. The color is applied as a pick
-on the wheel is, and an alpha in the text sets the opacity that Show Opacity edits, whether or not that row shows.
-Where that row is gray (nothing selected, an object selected in a symbol instance, or a fill or stroke row on type
-characters or missing), only the color is applied. Text without an alpha keeps the opacity. Text that gives the
-color and opacity already there records no undo step, unless the color is a tint of a global swatch. A text `color.parse` refuses changes nothing, and its
-error shows in the status bar.
+under the wheel or the box shows the color's six hex digits, and two more for the opacity when the opacity that Show
+Opacity edits rounds to less than `ff`. A text typed into it is read as `color.parse` reads it. The color is applied
+as a pick on the wheel is, and an alpha in the text sets the opacity that Show Opacity edits, whether or not that row
+shows. Where that row is gray (nothing selected, an object selected in a symbol instance, or a fill or stroke row on
+type characters or missing), only the color is applied. Text without an alpha keeps the opacity. Text that gives the
+color and opacity already there records no undo step, unless the color is a tint of a global swatch. When
+`color.parse` refuses the text, the field does not change the color and the status bar shows the error.
 
 `color.parse {"text": "#33669980"}` answers `{"color": {"model": "rgb", …}, "hex": "#336699", "opacity": 50.2}`.
 The text is a [hex color](https://www.w3.org/TR/css-color-4/#hex-notation) of 3, 4, 6 or 8 digits, with or without
@@ -678,12 +678,14 @@ the `#`, or a CSS [`rgb()` or `rgba()`](https://www.w3.org/TR/css-color-4/#rgb-f
 [`hsl()` or `hsla()`](https://www.w3.org/TR/css-color-4/#the-hsl-notation) or
 [`oklch()`](https://www.w3.org/TR/css-color-4/#specifying-oklab-oklch) color. The functions take the
 space-separated form with an optional `/ alpha`, and `rgb()` and `hsl()` also take the comma-separated legacy form.
-Hues take `deg`, `grad`, `rad` and `turn`, and `none` reads as 0. The text has at most 48 characters, not counting spaces around it. A hex
-color, `rgb()` and `hsl()` give their numbers as the document's RGB numbers, as `#rrggbb` does in every command, and
+Hues take `deg`, `grad`, `rad` and `turn`, and `none` reads as 0. The text has at most 48 characters, not counting
+the spaces, tabs and line breaks around it; other whitespace makes the text an error. A hex color, `rgb()` and
+`hsl()` give their numbers as the document's RGB numbers, as `#rrggbb` does in every command, and
 `oklch()` gives its sRGB color, with the chroma lowered to fit sRGB as OKLCH Sliders lower it; `oklch()` is an error
 while the working RGB space is not sRGB. Values are clamped where CSS clamps them when it parses them (red, green
 and blue to 0 to 255, the alpha to 0 to 1, a negative saturation to 0, OKLCH lightness to 0 to 1 and a negative
-chroma to 0), and an `hsl()` color's red, green or blue outside 0 to 255 is clipped. `opacity` is the alpha
+chroma to 0), and an `hsl()` color's red, green or blue outside 0 to 255 is clipped. An `hsl()` color whose
+saturation and lightness are so large that a channel overflows to an infinity is an error. `opacity` is the alpha
 as a percentage, or `null` when the text gives none. Any other text is an error. The color parameters of the other
 commands still refuse `#rrggbbaa` and `#rgba`.
 
