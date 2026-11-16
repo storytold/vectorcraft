@@ -1206,6 +1206,33 @@ fn a_groups_solids_together_past_the_limit_draw_the_source() {
     assert_eq!(three_d_wireframe_in(None, &past), Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string()));
 }
 
+/// An Inflate group whose second member's fill is past the limits draws its source art, and its
+/// frame places no graphic handle on the first member's puff.
+#[test]
+fn an_inflate_frame_places_no_handle_when_a_fill_is_past_the_limits() {
+    let mut b = BezPath::new();
+    b.move_to((0.0, 0.0));
+    b.line_to((40_000.0, 0.0));
+    b.line_to((40_000.0, 40_000.0));
+    b.line_to((0.0, 40_000.0));
+    b.close_path();
+    let square = Node::path(NodeId(1), PathData::from_bezpath(&b), Appearance::basic(Paint::solid(RED), Paint::None, 0.0));
+    let view = json!({"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0});
+    let group = |members: Vec<Node>| {
+        let mut g = Node::group(NodeId(9999), members.into_iter().map(Arc::new).collect());
+        g.appearance.effects.push(fx(INFLATE, view.clone()));
+        g
+    };
+    let center = MappedGraphic::from_value(&json!({"symbol": "Mark"})).unwrap();
+    // The square alone builds, and the graphic's handle sits on its puff.
+    let alone = group(vec![square.clone()]);
+    assert!(graphic_frame(None, &alone, None).unwrap().handle(&center).is_some());
+    // 70,000 corners: more points than a fill's solid takes.
+    let past = group(vec![square, polygon_node(2, 70_000)]);
+    assert!(solid_art(&past).is_none(), "the source art draws");
+    assert!(graphic_frame(None, &past, None).unwrap().handle(&center).is_none());
+}
+
 /// A fill and strokes whose solids each fit, but not all of them together, draw the source art,
 /// and the strokes after the one past the limit are not left out to make room.
 #[test]

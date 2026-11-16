@@ -2412,11 +2412,13 @@ fn frame_of(doc: Option<&Document>, n: &Node, item: Option<usize>, pick: &Pick<'
     let (parts, bounds) = solid_parts(&shapes, b);
     if fx.id == INFLATE {
         // Inflate's graphics lie on its puffed front and back: the pieces the viewer sees place
-        // their handles. Solids that can't be built place none.
+        // their handles. A stroke left out places none of its own. When a fill's solid can't be
+        // built, or the solids together pass the limit, the art draws its source and no piece
+        // places a handle.
         let built: Vec<Facet> = built_solids_cast(INFLATE, &p, &parts, bounds, MAX_OBJECT_FACES, false, true)
-            .filter_map(|r| r.ok().flatten())
-            .flat_map(|(f, _)| f)
-            .collect();
+            .collect::<Result<Vec<_>, String>>()
+            .map(|solids| solids.into_iter().flatten().flat_map(|(f, _)| f).collect())
+            .unwrap_or_default();
         return Some(graphics::GraphicFrame::inflated(bounds, graphics::MembraneFrame::of(&built)));
     }
     let options = extrude_options(&p);
