@@ -1,6 +1,6 @@
 use super::*;
 use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{CharStyle, Effect, NodeId, TextObject};
+use vectorcraft_doc::{CharStyle, Effect, FillLayer, NodeId, TextObject};
 use vectorcraft_geom::{Point, Rect, shapes};
 
 /// Type tests need glyph outlines, which only the optional craft-fonts build input provides.
@@ -71,6 +71,33 @@ fn trap_effect_adds_an_overprinting_strip_above_the_members() {
     assert_eq!(fill.paint.color(), Some(yellow));
 }
 
+/// Trap takes each member's top fill that paints: a hidden fill on top is skipped, and a member
+/// whose only fill is hidden does not take part.
+#[test]
+fn trap_skips_a_hidden_fill() {
+    let yellow = Color::cmyk(0.0, 0.0, 1.0, 0.0);
+    let blue = Color::cmyk(1.0, 0.6, 0.0, 0.0);
+    let mut hidden = FillLayer::new(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)));
+    hidden.visible = false;
+    let trap = |members: Vec<Arc<Node>>| {
+        let mut g = Node::group(NodeId(10), members);
+        let params = serde_json::json!({"thickness": 1.0, "tintReduction": 100});
+        g.appearance.effects.push(Effect { id: crate::trap::TRAP.into(), params, visible: true });
+        pathfinder_children(None, &g, None).unwrap()
+    };
+    let mut covered = (*sq(1, 0.0, yellow)).clone();
+    covered.appearance.items.push(AppearanceItem::Fill(hidden.clone()));
+    let out = trap(vec![Arc::new(covered), sq(2, 10.0, blue)]);
+    assert_eq!(out.len(), 3, "both squares and one trap");
+    assert_eq!(out[2].appearance.fill().unwrap().paint.color(), Some(yellow));
+    let only_hidden = Node::path(
+        NodeId(1),
+        shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)),
+        Appearance { items: vec![AppearanceItem::Fill(hidden)], ..Default::default() },
+    );
+    assert_eq!(trap(vec![Arc::new(only_hidden), sq(2, 10.0, blue)]).len(), 2, "no trap");
+}
+
 #[test]
 fn hard_mix_takes_the_highest_of_each_cmyk_channel_and_drops_strokes() {
     let mut g = two_overlapping_cmyk_squares();
@@ -85,6 +112,72 @@ fn soft_mix_blends_cmyk_bottom_to_top_and_drops_strokes() {
     g.appearance.effects.push(Effect { id: "pathfinder.softMix".into(), params: serde_json::json!({"mixingRate": 50.0}), visible: true });
     let [c, m, y, k] = overlap_cmyk(&g);
     assert!((c - 0.3).abs() < 0.02 && (m - 0.43).abs() < 0.02 && (y - 0.35).abs() < 0.02 && (k - 0.05).abs() < 0.02, "{c} {m} {y} {k}");
+}
+
+/// Soft Mix and Hard Mix mix the top fill that paints: a hidden fill above it adds no color.
+#[test]
+fn mixes_skip_a_hidden_fill() {
+    for effect in ["pathfinder.softMix", "pathfinder.hardMix"] {
+        let mut plain = two_overlapping_cmyk_squares();
+        plain.appearance.effects.push(Effect { id: effect.into(), params: serde_json::json!({"mixingRate": 50.0}), visible: true });
+        let mut covered = plain.clone();
+        let NodeKind::Group { children, .. } = &mut covered.kind else { panic!("group") };
+        let mut hidden = FillLayer::new(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)));
+        hidden.visible = false;
+        for c in children.iter_mut() {
+            Arc::make_mut(c).appearance.items.push(AppearanceItem::Fill(hidden.clone()));
+        }
+        assert_eq!(overlap_cmyk(&covered), overlap_cmyk(&plain), "{effect}");
+    }
+}
+
+/// Outline strokes each edge with the top fill that paints, keeping that fill's opacity, blend
+/// mode and overprint. A hidden fill or a fill of no paint gives the edges nothing; with no fill
+/// that paints, the edges take the top stroke that paints, which skips hidden and 0 pt strokes.
+#[test]
+fn outline_edges_keep_the_fill_layers_opacity_blend_and_overprint() {
+    use vectorcraft_doc::StrokeLayer;
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    let mut fill = FillLayer::new(red.clone());
+    (fill.opacity, fill.blend, fill.overprint) = (0.5, BlendMode::Multiply, true);
+    let mut hidden = FillLayer::new(Paint::solid(Color::rgb(0.0, 1.0, 0.0)));
+    hidden.visible = false;
+    let mut stroke = StrokeLayer::new(blue.clone(), 2.0);
+    (stroke.opacity, stroke.blend, stroke.overprint) = (0.5, BlendMode::Multiply, true);
+    let mut hidden_stroke = StrokeLayer::new(Paint::solid(Color::rgb(0.0, 1.0, 0.0)), 2.0);
+    hidden_stroke.visible = false;
+    let zero_stroke = StrokeLayer::new(Paint::solid(Color::rgb(0.0, 1.0, 0.0)), 0.0);
+    let look = |items: Vec<AppearanceItem>| Appearance { items, ..Default::default() };
+    let (f, s) = (AppearanceItem::Fill, AppearanceItem::Stroke);
+    let cases = [
+        (look(vec![f(fill.clone())]), Some(red.clone())),
+        (look(vec![f(fill.clone()), f(hidden.clone())]), Some(red.clone())),
+        (look(vec![f(fill.clone()), f(FillLayer::new(Paint::None))]), Some(red.clone())),
+        (look(vec![f(hidden.clone())]), None),
+        (look(vec![s(stroke.clone())]), Some(blue.clone())),
+        (look(vec![f(hidden.clone()), s(stroke.clone())]), Some(blue.clone())),
+        (look(vec![s(stroke.clone()), s(hidden_stroke), s(zero_stroke.clone())]), Some(blue.clone())),
+        (look(vec![s(zero_stroke)]), None),
+    ];
+    for (appearance, want) in cases {
+        let member = Arc::new(Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), appearance));
+        let mut g = Node::group(NodeId(10), vec![member, sq(2, 5.0, Color::rgb(0.0, 0.0, 1.0))]);
+        g.appearance.effects.push(Effect { id: "pathfinder.outline".into(), params: serde_json::json!({}), visible: true });
+        let out = pathfinder_children(None, &g, None).unwrap();
+        let edges: Vec<_> = out.iter().filter(|n| n.id == NodeId(1)).collect();
+        assert!(!edges.is_empty(), "{out:#?}");
+        for n in edges {
+            let [AppearanceItem::Stroke(s)] = n.appearance.items.as_slice() else { panic!("one stroke: {n:#?}") };
+            match &want {
+                Some(paint) => {
+                    assert_eq!(&s.paint, paint);
+                    assert_eq!((s.opacity, s.blend, s.overprint), (0.5, BlendMode::Multiply, true), "{s:#?}");
+                }
+                None => assert!(s.paint.is_none() && s.opacity == 1.0, "{s:#?}"),
+            }
+        }
+    }
 }
 
 #[test]
@@ -1808,7 +1901,7 @@ fn a_sublayers_ruler_guide_in_a_hidden_or_locked_group_stays_hidden_or_locked() 
 }
 
 /// Gathering the ruler guides of nested sublayers, and of a sublayer inside nested groups, looks
-/// at each member at every depth once at most, and takes the same guides, in the same order and
+/// at each member at every depth once, and takes the same guides, in the same order and
 /// state, as a layer's effects keep.
 #[test]
 fn gathering_sublayer_ruler_guides_looks_at_each_member_once() {
@@ -1840,7 +1933,7 @@ fn gathering_sublayer_ruler_guides_looks_at_each_member_once() {
         groups.locked = depth == 3;
     }
     let free = Arc::new(Node::group(NodeId(500), vec![sq(501, 0.0, Color::BLACK), sq(502, 5.0, Color::BLACK)]));
-    // A sublayer with no guide: the art in its group is not looked at.
+    // A sublayer with no guide, its group holding none either.
     let quiet = Node::group(NodeId(601), vec![sq(602, 0.0, Color::BLACK), sq(603, 5.0, Color::BLACK)]);
     let quiet = Arc::new(layer(600, vec![Arc::new(quiet)]));
     let mut root = layer(10, vec![sq(1, 0.0, Color::rgb(1.0, 0.0, 0.0)), Arc::new(chain), Arc::new(groups), free.clone(), quiet.clone(), guide(20)]);
@@ -1858,15 +1951,16 @@ fn gathering_sublayer_ruler_guides_looks_at_each_member_once() {
     };
     let mut taken = vec![];
     take_sublayer_guides(&mut m, &mut taken, &is_guide);
-    assert_eq!(looked.get(), members(&root) - 2, "each member is looked at once, none in the quiet sublayer's group");
-    assert_eq!(state(&taken), expected, "a sublayer's own guides, then its sublayers', each once");
-    assert!(Arc::ptr_eq(&taken[0], &first_guide), "a guide with nothing to change is not copied");
-    assert!(!Arc::ptr_eq(&taken[1], &second_guide), "a guide made hidden is copied");
+    assert_eq!(looked.get(), members(&root), "each member is looked at once, those of guide-free containers included");
+    assert_eq!(taken[0].id, NodeId(20), "the layer's own guide comes first");
+    assert_eq!(state(&taken[1..]), expected, "a sublayer's own guides, then its sublayers', each once");
+    assert!(Arc::ptr_eq(&taken[1], &first_guide), "a guide with nothing to change is not copied");
+    assert!(!Arc::ptr_eq(&taken[2], &second_guide), "a guide made hidden is copied");
     assert!(second_guide.visible, "the guide as it was stays as it was");
     let ch = m.children().unwrap();
+    assert_eq!(ch.len(), 5, "the layer's own guide is taken");
     assert!(Arc::ptr_eq(&ch[3], &free), "a member with no sublayer guide is not copied");
     assert!(Arc::ptr_eq(&ch[4], &quiet), "a sublayer with no guide is not copied");
-    assert!(ch[5].is_ruler_guide(), "the layer's own guide stays where it is");
     let ids = |n: &Node| n.children().into_iter().flatten().map(|c| c.id).collect::<Vec<_>>();
     assert_eq!(ids(&ch[1]), [NodeId(102), NodeId(301)], "the sublayer's art stays, in order");
     assert_eq!(ids(&root.children().unwrap()[1]), [NodeId(102), NodeId(301), NodeId(201)], "the source keeps its guides");
@@ -1889,6 +1983,140 @@ fn gathering_sublayer_ruler_guides_looks_at_each_member_once() {
         let mut all = vec![];
         found(&art, &mut all);
         assert_eq!(all.len(), expected.len() + 1, "{effect}: each guide once");
+    }
+}
+
+/// Where each ruler guide in `n` is, at every depth, with its position, visibility and lock.
+fn ruler_guides_in(n: &Node, out: &mut Vec<(NodeId, NodeKind, bool, bool)>) {
+    for c in n.children().into_iter().flatten() {
+        if c.is_ruler_guide() {
+            out.push((c.id, c.kind.clone(), c.visible, c.locked));
+        }
+        ruler_guides_in(c, out);
+    }
+}
+
+/// A ruler guide in a layer inside a group inside a sublayer that holds no guide of its own, at
+/// any depth of that pattern, survives its layer's Pathfinder effect or Transform copies once, last
+/// in the layer, hidden or locked when any container on its way was.
+#[test]
+fn a_ruler_guide_below_a_guide_free_sublayer_and_a_group_survives_its_layers_effects() {
+    use vectorcraft_doc::LayerColor;
+    let layer = |id, children: Vec<Arc<Node>>, (hidden, locked): (bool, bool)| {
+        let mut l = Node::layer(NodeId(id), "Sub", LayerColor::Preset(1));
+        if let Some(ch) = l.children_mut() {
+            *ch = children;
+        }
+        (l.visible, l.locked) = (!hidden, locked);
+        Arc::new(l)
+    };
+    let group = |id, children: Vec<Arc<Node>>, (hidden, locked): (bool, bool)| {
+        let mut g = Node::group(NodeId(id), children);
+        (g.visible, g.locked) = (!hidden, locked);
+        Arc::new(g)
+    };
+    let kind = NodeKind::RulerGuide { vertical: false, pos: 7.0, artboard: None };
+    let states = [(false, false), (true, false), (false, true)];
+    for (effect, params) in [("pathfinder.add", serde_json::json!({})), ("distort.transform", serde_json::json!({"moveH": 30, "copies": 2}))] {
+        for depth in 1..=3_u64 {
+            for sub in states {
+                for grp in states {
+                    for inner in states {
+                        // Layer 10 → sublayer → group → … → layer holding the guide, the pattern
+                        // repeated `depth` times; only the innermost layer holds a guide.
+                        let mut n = layer(900, vec![sq(901, 0.0, Color::BLACK), Arc::new(Node::new(NodeId(20), kind.clone()))], inner);
+                        for d in (0..depth).rev() {
+                            let (s, g) = if d == 0 { (sub, grp) } else { ((false, false), (false, false)) };
+                            n = group(700 + d, vec![sq(710 + d, 5.0, Color::BLACK), n], g);
+                            n = layer(800 + d, vec![n, sq(810 + d, 2.0, Color::BLACK)], s);
+                        }
+                        let mut root = Node::layer(NodeId(10), "Layer 1", LayerColor::Preset(0));
+                        if let Some(ch) = root.children_mut() {
+                            *ch = vec![sq(1, 0.0, Color::rgb(1.0, 0.0, 0.0)), n];
+                        }
+                        root.appearance.effects.push(Effect { id: effect.into(), params: params.clone(), visible: true });
+                        let art = evaluate_container(None, &root).unwrap();
+                        let (hidden, locked) = (sub.0 || grp.0 || inner.0, sub.1 || grp.1 || inner.1);
+                        let mut all = vec![];
+                        ruler_guides_in(&art, &mut all);
+                        let case = format!("{effect}, depth {depth}, sublayer {sub:?}, group {grp:?}, layer {inner:?}");
+                        assert_eq!(all, [(NodeId(20), kind.clone(), !hidden, locked)], "{case}: the guide, once, unchanged");
+                        let last = art.children().and_then(|c| c.last()).unwrap();
+                        assert_eq!(last.id, NodeId(20), "{case}: last in the layer");
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A ruler guide directly in a group, in a layer or in a group with a Pathfinder effect or
+/// Transform copies, survives that effect once, last in the container, hidden or locked as its
+/// groups were. So does one among a group's art rather than after it.
+#[test]
+fn a_ruler_guide_in_a_group_survives_its_containers_effects() {
+    use vectorcraft_doc::LayerColor;
+    let kind = NodeKind::RulerGuide { vertical: true, pos: 4.0, artboard: None };
+    let guide = || Arc::new(Node::new(NodeId(20), kind.clone()));
+    for (effect, params) in [("pathfinder.add", serde_json::json!({})), ("distort.transform", serde_json::json!({"moveH": 30, "copies": 2}))] {
+        for (hidden, locked) in [(false, false), (true, false), (false, true)] {
+            let mut inner = Node::group(NodeId(12), vec![sq(2, 5.0, Color::BLACK), guide(), sq(3, 8.0, Color::BLACK)]);
+            (inner.visible, inner.locked) = (!hidden, locked);
+            let outer = Arc::new(Node::group(NodeId(11), vec![Arc::new(inner)]));
+            let fx = Effect { id: effect.into(), params: params.clone(), visible: true };
+            let mut l = Node::layer(NodeId(10), "Layer 1", LayerColor::Preset(0));
+            if let Some(ch) = l.children_mut() {
+                *ch = vec![sq(1, 0.0, Color::rgb(1.0, 0.0, 0.0)), outer.clone()];
+            }
+            l.appearance.effects.push(fx.clone());
+            let mut g = Node::group(NodeId(13), vec![sq(1, 0.0, Color::rgb(1.0, 0.0, 0.0)), outer]);
+            g.appearance.effects.push(fx.clone());
+            for (what, n) in [("layer", l), ("group", g)] {
+                let art = evaluate_container(None, &n).unwrap();
+                let mut all = vec![];
+                ruler_guides_in(&art, &mut all);
+                let case = format!("{effect} on a {what}, hidden {hidden}, locked {locked}");
+                assert_eq!(all, [(NodeId(20), kind.clone(), !hidden, locked)], "{case}: the guide, once, unchanged");
+                assert_eq!(art.children().and_then(|c| c.last()).map(|c| c.id), Some(NodeId(20)), "{case}: last");
+            }
+        }
+        // A group's guide placed before its art.
+        let mut g = Node::group(NodeId(13), vec![guide(), sq(1, 0.0, Color::BLACK), sq(2, 5.0, Color::BLACK)]);
+        g.appearance.effects.push(Effect { id: effect.into(), params: params.clone(), visible: true });
+        let art = evaluate_container(None, &g).unwrap();
+        let mut all = vec![];
+        ruler_guides_in(&art, &mut all);
+        assert_eq!(all, [(NodeId(20), kind.clone(), true, false)], "{effect}: a group's leading guide, once");
+        assert_eq!(art.children().and_then(|c| c.last()).map(|c| c.id), Some(NodeId(20)), "{effect}: moved last");
+    }
+}
+
+/// The ruler guides of a layer or group with a Pathfinder effect or Transform copies, one among
+/// its art and one after it, go after the evaluated art in the order they were in.
+#[test]
+fn a_containers_ruler_guides_keep_their_order_through_its_effects() {
+    use vectorcraft_doc::LayerColor;
+    let guide = |id| Arc::new(Node::new(NodeId(id), NodeKind::RulerGuide { vertical: false, pos: 3.0, artboard: None }));
+    for (effect, params) in [("pathfinder.add", serde_json::json!({})), ("distort.transform", serde_json::json!({"moveH": 30, "copies": 2}))] {
+        let members = || vec![sq(1, 0.0, Color::BLACK), guide(20), sq(2, 5.0, Color::BLACK), guide(21)];
+        let fx = Effect { id: effect.into(), params: params.clone(), visible: true };
+        let mut l = Node::layer(NodeId(10), "Layer 1", LayerColor::Preset(0));
+        if let Some(ch) = l.children_mut() {
+            *ch = members();
+        }
+        l.appearance.effects.push(fx.clone());
+        let mut g = Node::group(NodeId(11), members());
+        g.appearance.effects.push(fx);
+        for (what, n) in [("layer", l), ("group", g)] {
+            let art = evaluate_container(None, &n).unwrap();
+            let mut all = vec![];
+            ruler_guides_in(&art, &mut all);
+            let ids = all.iter().map(|(id, ..)| *id).collect::<Vec<_>>();
+            assert_eq!(ids, [NodeId(20), NodeId(21)], "{effect} on a {what}: the guides, in order");
+            let ch = art.children().unwrap();
+            let tail = ch[ch.len() - 2..].iter().map(|c| c.id).collect::<Vec<_>>();
+            assert_eq!(tail, [NodeId(20), NodeId(21)], "{effect} on a {what}: last, in order");
+        }
     }
 }
 

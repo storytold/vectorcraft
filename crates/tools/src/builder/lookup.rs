@@ -130,7 +130,7 @@ fn lp_cells_around(p: Point) -> impl Iterator<Item = (i64, i64)> {
 /// The stroke paint Live Paint edge `edge` draws with: the paint of its topmost stroke that is shown
 /// with a paint, a weight above 0 and an opacity above 0, or [`Paint::None`] when the edge is fully
 /// transparent or has no such stroke.
-pub(super) fn lp_stroke_paint(edge: &Node) -> Paint {
+pub fn lp_stroke_paint(edge: &Node) -> Paint {
     if edge.opacity <= 0.0 {
         return Paint::None;
     }
@@ -405,8 +405,15 @@ impl LpEdgeGrid {
 /// end of an edge already reached.
 /// Empty when `start` is not an edge of `group` that is not hidden.
 pub fn connected_edges(group: &Node, start: NodeId, paint: &Paint) -> Vec<NodeId> {
+    connected_edges_through(group, start, paint, &[])
+}
+
+/// [`connected_edges`], with the edges in `through` counted as drawing with stroke paint `paint`
+/// whatever paint they draw with now.
+pub fn connected_edges_through(group: &Node, start: NodeId, paint: &Paint, through: &[NodeId]) -> Vec<NodeId> {
     use std::collections::{HashMap, HashSet};
-    let es: Vec<&Arc<Node>> = edges(group).into_iter().filter(|e| e.visible && (e.id == start || lp_stroke_paint(e) == *paint)).collect();
+    let es: Vec<&Arc<Node>> =
+        edges(group).into_iter().filter(|e| e.visible && (e.id == start || through.contains(&e.id) || lp_stroke_paint(e) == *paint)).collect();
     // The first and last points of each subpath of each edge.
     let ends: Vec<Vec<Point>> = es
         .iter()

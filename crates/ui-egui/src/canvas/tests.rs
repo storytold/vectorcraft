@@ -17,6 +17,7 @@ fn marquee_feedback_explains_the_rule_and_stays_on_canvas() {
                 &[Overlay::SelectionMarquee { rect: Rect::new(20.0, y - 60.0, 300.0, y), enclosed, pointer: Point::new(315.0, y) }],
                 &t,
                 overlays::HandleLook::of(&prefs),
+                &mut overlays::SharedPaths::default(),
             );
         }
     };
@@ -58,6 +59,155 @@ fn marquee_feedback_explains_the_rule_and_stays_on_canvas() {
         });
         harness.run_steps(4);
         harness.render().unwrap().save(path).unwrap();
+    }
+}
+
+/// A tool's shared path ([`Overlay::SharedPath`], the settled outline of a long Blob Brush or Eraser
+/// drag) is drawn with the mesh kept from the last frame while the path and the view stay the same,
+/// and that mesh is the one the plain path draws. Another path, even one with the same elements, or
+/// a new view builds a new mesh, and a frame keeps only the meshes it draws.
+#[test]
+fn a_shared_tool_path_is_drawn_with_the_mesh_kept_while_it_and_the_view_stay() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    crate::theme::apply(&ctx, crate::theme::Brightness::MediumDark);
+    let prefs = vectorcraft_engine::Prefs::default();
+    let mut shared = overlays::SharedPaths::default();
+    let frame = |overlays: &[Overlay], zoom: f64, shared: &mut overlays::SharedPaths| {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            let t = Tokens::get(ui.ctx());
+            let xf = Xf { rect: ui.max_rect(), zoom, center: Point::new(200.0, 150.0), rot: 0.3 };
+            overlays::draw_overlays(ui.painter(), &xf, overlays, &t, overlays::HandleLook::of(&prefs), shared);
+        });
+        out.textures_delta.clear();
+        out.shapes
+    };
+    let meshes = |shapes: &[egui::epaint::ClippedShape]| -> Vec<std::sync::Arc<egui::Mesh>> {
+        shapes.iter().filter_map(|c| if let Shape::Mesh(m) = &c.shape { Some(std::sync::Arc::clone(m)) } else { None }).collect()
+    };
+    let one = |shapes: Vec<egui::epaint::ClippedShape>| {
+        let found = meshes(&shapes);
+        assert_eq!(found.len(), 1, "one mesh");
+        std::sync::Arc::clone(&found[0])
+    };
+    let mut path = BezPath::new();
+    path.move_to((60.0, 80.0));
+    path.curve_to((120.0, 20.0), (220.0, 260.0), (330.0, 120.0));
+    path.close_path();
+    path.move_to((150.0, 150.0));
+    path.line_to((250.0, 160.0));
+    let a = std::sync::Arc::new(path.clone());
+    let b = std::sync::Arc::new(path.clone());
+    let shared_of =
+        |p: &std::sync::Arc<BezPath>| Overlay::SharedPath { path: std::sync::Arc::clone(p), color: [0x80, 0x80, 0x80], width: 1.0, dash: None };
+    let first = one(frame(&[shared_of(&a)], 1.0, &mut shared));
+    assert!(!first.vertices.is_empty());
+    let again = one(frame(&[shared_of(&a)], 1.0, &mut shared));
+    assert!(std::sync::Arc::ptr_eq(&first, &again), "the same path at the same view is drawn with the kept mesh");
+    // The plain path draws the same triangles.
+    let plain = frame(&[Overlay::Path { path: path.clone(), color: [0x80, 0x80, 0x80], width: 1.0, dashed: false }], 1.0, &mut shared);
+    assert!(shared.meshes.is_empty(), "a frame that draws no shared path keeps no mesh");
+    let lines: Vec<_> = plain.into_iter().filter(|c| matches!(c.shape, Shape::Path(_))).collect();
+    assert_eq!(lines.len(), 2, "a line for each subpath");
+    let tessellated = ctx.tessellate(lines, ctx.pixels_per_point());
+    let triangles: Vec<_> = tessellated
+        .into_iter()
+        .filter_map(|c| if let egui::epaint::Primitive::Mesh(m) = c.primitive { Some(m) } else { None })
+        .flat_map(|m| m.vertices)
+        .map(|v| (v.pos, v.color))
+        .collect();
+    assert_eq!(triangles, first.vertices.iter().map(|v| (v.pos, v.color)).collect::<Vec<_>>());
+    // A dropped mesh, another allocation of the same path and a new view each build a new mesh.
+    let rebuilt = one(frame(&[shared_of(&a)], 1.0, &mut shared));
+    assert!(!std::sync::Arc::ptr_eq(&first, &rebuilt) && *first == *rebuilt);
+    let other = one(frame(&[shared_of(&b)], 1.0, &mut shared));
+    assert!(!std::sync::Arc::ptr_eq(&rebuilt, &other) && *rebuilt == *other);
+    let zoomed = one(frame(&[shared_of(&b)], 2.0, &mut shared));
+    assert!(!std::sync::Arc::ptr_eq(&other, &zoomed) && *other != *zoomed);
+    // Two paths in one frame: each keeps its own mesh, and only those two are kept.
+    let both = meshes(&frame(&[shared_of(&a), shared_of(&b)], 2.0, &mut shared));
+    let both_again = meshes(&frame(&[shared_of(&a), shared_of(&b)], 2.0, &mut shared));
+    assert_eq!(both.len(), 2);
+    assert!(both.iter().zip(&both_again).all(|(x, y)| std::sync::Arc::ptr_eq(x, y)));
+    assert!(std::sync::Arc::ptr_eq(&both[1], &zoomed), "b at zoom 2 was kept from its frame");
+    assert_eq!(shared.meshes.len(), 2);
+    // A path off the canvas gets no triangles and draws nothing, and the lines of one partly off
+    // it are left out of its mesh.
+    let mut far = path.clone();
+    far.apply_affine(vectorcraft_geom::Affine::translate((5000.0, 5000.0)));
+    let far = std::sync::Arc::new(far);
+    assert!(meshes(&frame(&[shared_of(&far)], 1.0, &mut shared)).is_empty());
+    assert!(shared.meshes.values().all(|m| m.mesh.is_empty()) && shared.meshes.len() == 1);
+    let mut half = path.clone();
+    half.move_to((5000.0, 5000.0));
+    half.line_to((5100.0, 5000.0));
+    let half = one(frame(&[shared_of(&std::sync::Arc::new(half))], 1.0, &mut shared));
+    assert_eq!(*half, *first, "the subpath off the canvas adds no triangles");
+    // A dashed shared path keeps its mesh too, and the place its dashes start is part of it.
+    let dashed_of = |p: &std::sync::Arc<BezPath>, dash: f64| Overlay::SharedPath {
+        path: std::sync::Arc::clone(p),
+        color: [0x80, 0x80, 0x80],
+        width: 1.0,
+        dash: Some(dash),
+    };
+    let dashed = one(frame(&[dashed_of(&a, 0.0)], 1.0, &mut shared));
+    assert!(!dashed.vertices.is_empty() && *dashed != *first, "the dashes leave out parts of the line");
+    assert!(std::sync::Arc::ptr_eq(&dashed, &one(frame(&[dashed_of(&a, 0.0)], 1.0, &mut shared))));
+    let moved = one(frame(&[dashed_of(&a, 2.0)], 1.0, &mut shared));
+    assert!(!std::sync::Arc::ptr_eq(&dashed, &moved) && *dashed != *moved, "dashes that start elsewhere build a new mesh");
+}
+
+/// A line drawn dashed in pieces, each piece's dashes starting as far along the pattern as the
+/// pieces before it are long, shows the dashes the whole line shows dashed in one go, whether a
+/// piece starts within a dash or within a gap, and a pattern started at 0 gives the dashes of
+/// [`Shape::dashed_line`].
+#[test]
+fn a_line_dashed_in_pieces_dashes_as_the_whole_line_does() {
+    // The stretches of x that dashes along the x axis cover, with touching ones joined.
+    let covered = |shapes: &[Shape]| -> Vec<(f32, f32)> {
+        let mut spans: Vec<(f32, f32)> = shapes
+            .iter()
+            .map(|s| {
+                let xs: Vec<f32> = match s {
+                    Shape::LineSegment { points, .. } => points.iter().map(|p| p.x).collect(),
+                    Shape::Path(p) => p.points.iter().map(|p| p.x).collect(),
+                    other => panic!("{other:?}"),
+                };
+                (xs.iter().copied().fold(f32::MAX, f32::min), xs.iter().copied().fold(f32::MIN, f32::max))
+            })
+            .collect();
+        spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut joined: Vec<(f32, f32)> = vec![];
+        for (a, b) in spans {
+            match joined.last_mut() {
+                Some(last) if a - last.1 < 1e-3 => last.1 = last.1.max(b),
+                _ => joined.push((a, b)),
+            }
+        }
+        joined
+    };
+    let s = Stroke::new(1.0, Color32::WHITE);
+    let along = |xs: &[f32]| -> Vec<Pos2> { xs.iter().map(|&x| pos2(x, 10.0)).collect() };
+    let whole = along(&[0.0, 30.0, 61.5, 100.0]);
+    let mut one_go = vec![];
+    overlays::dashes_from(&whole, s, 0.0, &mut one_go);
+    assert_eq!(covered(&one_go), covered(&Shape::dashed_line(&whole, s, 4.0, 3.0)));
+    // Cuts at 50 (within a dash: 50 is 1 past the dash that starts at 49) and at 75 (within a gap).
+    let mut pieces = vec![];
+    overlays::dashes_from(&along(&[0.0, 30.0, 50.0]), s, 0.0, &mut pieces);
+    overlays::dashes_from(&along(&[50.0, 61.5, 75.0]), s, 50.0, &mut pieces);
+    overlays::dashes_from(&along(&[75.0, 100.0]), s, 75.0, &mut pieces);
+    let (want, got) = (covered(&one_go), covered(&pieces));
+    assert_eq!(want.len(), got.len(), "{want:?} {got:?}");
+    assert!(want.iter().zip(&got).all(|(w, g)| (w.0 - g.0).abs() < 1e-3 && (w.1 - g.1).abs() < 1e-3), "{want:?} {got:?}");
+    // Every dash is drawn as line segments with a length, as `Shape::dashed_line` draws them: the
+    // cut first dash, a dash cut on a vertex (at 4) and a line shorter than the rest of a dash too.
+    let mut ends = vec![];
+    overlays::dashes_from(&along(&[0.0, 4.0, 10.0]), s, 0.0, &mut ends);
+    overlays::dashes_from(&along(&[0.0, 1.0, 2.0]), s, 1.0, &mut ends);
+    for shape in one_go.iter().chain(&pieces).chain(&ends) {
+        assert!(matches!(shape, Shape::LineSegment { points: [a, b], .. } if a != b), "{shape:?}");
     }
 }
 
@@ -401,7 +551,41 @@ fn clip_group_app() -> (VectorcraftApp, serde_json::Value, serde_json::Value, se
     app.ui.view.rulers = false;
     let img = image::RgbaImage::from_pixel(320, 40, image::Rgba([200, 120, 40, 255]));
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let data = vectorcraft_format::base64_encode(&png);
     app.run("file.place", json!({"name": "texture.png", "dataBase64": data, "link": false, "at": [150, 150]})).unwrap();
     let image = json!(app.session.active().unwrap().selection.objects[0].0);
@@ -475,7 +659,41 @@ fn a_group_of_clipped_images_shows_its_masks_and_their_bounds() {
     app.ui.view.rulers = false;
     let img = image::RgbaImage::from_pixel(160, 160, image::Rgba([40, 120, 200, 255]));
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let data = vectorcraft_format::base64_encode(&png);
     // Masks 100 × 100 at x = 20, 150, 280, 410; each image reaches 30 past its mask on every side.
     let masks: Vec<Rect> = (0..4).map(|i| Rect::new(20.0 + 130.0 * i as f64, 100.0, 120.0 + 130.0 * i as f64, 200.0)).collect();
@@ -691,6 +909,61 @@ fn bucket_modifier_only_hover_updates_the_visible_cursor() {
     assert_eq!(chips(&mut app), 0);
     assert_eq!(shown(&mut app, vec![Event::ModifiersChanged(Modifiers::NONE)]), Some(Cursor::LivePaintBucket));
     assert!(chips(&mut app) > 0);
+}
+
+/// A press between a Live Paint Bucket triple-click's clicks that the view tools take (a
+/// middle-button pan, a pan with Space held) counts as a press that paints nothing: the
+/// triple-click matches the fill the face had before the first click.
+#[test]
+fn bucket_triple_click_with_a_view_tool_press_between_matches_the_fill_before() {
+    use egui::{Event, Modifiers, PointerButton};
+    use vectorcraft_color::{Color, Paint};
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    for case in ["middle", "space"] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let ids: Vec<u64> = [0.0, 50.0, 100.0]
+            .iter()
+            .map(|x| app.session.execute("shape.rectangle", &json!({"x": x, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap())
+            .collect();
+        app.session.execute("select.set", &json!({"ids": ids})).unwrap();
+        let g = app.session.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+        for (x, hex) in [(25, "#ff0000"), (75, "#ff0000"), (125, "#0000ff")] {
+            app.session.execute("livePaint.fill", &json!({"group": g, "point": [x, 125], "color": hex})).unwrap();
+        }
+        app.session.execute("select.none", &json!({})).unwrap();
+        app.select_tool("livePaintBucket");
+        app.session.paint.fill = green.clone();
+        if let Some(v) = app.view_mut() {
+            v.center = Point::new(200.0, 150.0);
+            v.zoom = 1.0;
+            v.fitted = true;
+        }
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let at = xf.to_screen(Point::new(25.0, 125.0));
+        let click = |app: &mut VectorcraftApp, button, pos, modifiers| {
+            let b = |pressed| Event::PointerButton { pos, button, pressed, modifiers };
+            frame(app, &ctx, vec![Event::PointerMoved(pos), b(true)]);
+            frame(app, &ctx, vec![b(false)]);
+        };
+        click(&mut app, PointerButton::Primary, at, Modifiers::NONE);
+        if case == "middle" {
+            click(&mut app, PointerButton::Middle, at, Modifiers::NONE);
+        } else {
+            let space = |pressed| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: Modifiers::NONE };
+            frame(&mut app, &ctx, vec![space(true)]);
+            click(&mut app, PointerButton::Primary, at, Modifiers::NONE);
+            frame(&mut app, &ctx, vec![space(false)]);
+        }
+        click(&mut app, PointerButton::Primary, at, Modifiers::NONE);
+        frame(&mut app, &ctx, vec![]);
+        let group = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(g)).unwrap().clone();
+        let fill = |x: f64| vectorcraft_tools::builder::face_at(&group, Point::new(x, 125.0)).unwrap().appearance.fill_paint();
+        assert_eq!([fill(25.0), fill(75.0)], [green.clone(), green.clone()], "{case}: the faces that were red");
+        assert_eq!(fill(125.0), Paint::solid(Color::from_hex("#0000ff").unwrap()), "{case}: the blue face");
+    }
 }
 
 /// The Image Trace panel's eye-button hold ends when the pointer is released, even when the
@@ -941,6 +1214,49 @@ fn shift_clicking_canvas_artboard_label_toggles_multi_selection() {
     frame(&mut app, &ctx, vec![plain_btn(false)]);
 
     assert_eq!(app.session.tool_options()["selected"], json!([2]), "Plain click selects that artboard alone");
+}
+
+/// A press on an artboard's name starts no drag. Moving with the button still held is not hover,
+/// so Shift over a gridline intersection does not position the Perspective Selection tool's plane
+/// until the button is up.
+#[test]
+fn moves_while_an_artboard_name_is_pressed_do_not_hover_the_tool() {
+    use vectorcraft_tools::distort::perspective::{PerspectiveGrid, Plane};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300, "artboards": 2})).unwrap();
+    app.select_tool("perspectiveSelection");
+    app.session.execute("perspective.grid.show", &json!({"visible": true})).unwrap();
+    if let Some(v) = app.view_mut() {
+        v.center = Point::new(200.0, 150.0);
+        v.zoom = 1.0;
+        v.fitted = true;
+    }
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let drawn = shapes(&mut app, &ctx);
+    let label = drawn
+        .iter()
+        .find_map(|s| match s {
+            Shape::Text(t) if t.galley.text() == "01 - Artboard 1" => Some(t.pos + vec2(10.0, 5.0)),
+            _ => None,
+        })
+        .unwrap();
+    let rect = app.canvas_rect.unwrap();
+    let xf = Xf::new(rect, app.view().unwrap());
+    let doc = |app: &VectorcraftApp| app.session.active().unwrap().doc.clone();
+    let g = PerspectiveGrid::current(&doc(&app));
+    let target = xf.to_screen(g.to_page(Plane::Left, Point::new(2.0 * g.cell, 3.0 * g.cell)).unwrap());
+    assert!(rect.contains(label) && rect.contains(target), "{label:?} {target:?} {rect:?}");
+
+    let shift = egui::Modifiers::SHIFT;
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: shift };
+    frame(&mut app, &ctx, vec![egui::Event::ModifiersChanged(shift), egui::Event::PointerMoved(label), button(label, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(target)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(target + vec2(0.5, 0.0))]);
+    assert!(!PerspectiveGrid::positioning(&doc(&app)), "the button is still down");
+    frame(&mut app, &ctx, vec![button(target, false)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(target)]);
+    assert!(PerspectiveGrid::positioning(&doc(&app)), "with the button up, Shift over the intersection positions the plane");
 }
 
 /// Enable Touch Gestures (#585): a two-finger tap undoes and a three-finger one redoes, and the
@@ -1328,6 +1644,64 @@ fn switch_selection_and_drawing_modes_command() {
     for id in ["directSelection", "groupSelection", "magicWand", "lasso"] {
         app.select_tool(id);
         assert_eq!(app.run(crate::touch::TOGGLE_MODE, json!({})).unwrap(), json!({"tool": "pen"}), "{id}");
+    }
+}
+
+/// A Switch Selection and Drawing Modes whose tool choice fails returns the error, in both
+/// directions: the tool stays, the drawing tool to return to stays, and no undo step is added.
+#[test]
+fn a_failed_mode_switch_returns_its_error() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 30, "height": 20})).unwrap();
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let steps = undo(&app);
+    app.select_tool("rectangle");
+    app.ui.touch_drawing_tool = Some("pen".into());
+    app.fail_next_tool_choice = Some("no switch".into());
+    let r = app.run(crate::touch::TOGGLE_MODE, json!({}));
+    assert!(r.as_ref().is_err_and(|e| e.contains("no switch")), "{r:?}");
+    assert_eq!((app.session.tool_id(), app.ui.touch_drawing_tool.as_deref(), undo(&app)), ("rectangle", Some("pen"), steps), "drawing mode");
+    app.select_tool("selection");
+    app.fail_next_tool_choice = Some("no switch".into());
+    let r = app.run(crate::touch::TOGGLE_MODE, json!({}));
+    assert!(r.as_ref().is_err_and(|e| e.contains("no switch")), "{r:?}");
+    assert_eq!((app.session.tool_id(), app.ui.touch_drawing_tool.as_deref(), undo(&app)), ("selection", Some("pen"), steps), "selection mode");
+    // The next switch works again.
+    assert_eq!(app.run(crate::touch::TOGGLE_MODE, json!({})).unwrap(), json!({"tool": "pen"}));
+    assert_eq!(undo(&app), steps);
+}
+
+/// The commands that choose a tool (Select Tool, Crop Image, and the Path Precision Tools' Corner
+/// Tool and Shared Edge Merge Tool) return the error when the choice fails, and the tool and the
+/// toolbar group's tool stay as they were.
+#[test]
+fn tool_commands_return_a_failed_choice() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let img = image::RgbaImage::from_pixel(20, 10, image::Rgba([200, 120, 40, 255]));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let data = vectorcraft_format::base64_encode(&png);
+    app.run("file.place", json!({"name": "texture.png", "dataBase64": data, "link": false, "at": [150, 150]})).unwrap();
+    app.select_tool("selection");
+    let group = vectorcraft_tools::catalog::group_of("ellipse").unwrap();
+    let commands = [
+        ("tool.select", json!({"tool": "ellipse"})),
+        ("ui.cropImage", json!({})),
+        (crate::addons::pathtools::corner::COMMAND, json!({})),
+        (crate::addons::pathtools::shared_edge::COMMAND, json!({})),
+    ];
+    for (command, params) in commands {
+        let slot = app.ui.group_tool[group].clone();
+        app.fail_next_tool_choice = Some("no switch".into());
+        let r = app.run(command, params.clone());
+        assert!(r.as_ref().is_err_and(|e| e.contains("no switch")), "{command}: {r:?}");
+        assert_eq!(app.session.tool_id(), "selection", "{command}");
+        assert_eq!(app.ui.group_tool[group], slot, "{command}");
+        app.run(command, params).unwrap();
+        assert_ne!(app.session.tool_id(), "selection", "{command} works again");
+        app.select_tool("selection");
     }
 }
 
@@ -2408,6 +2782,45 @@ fn an_edit_renders_only_its_part_of_the_canvas() {
     assert!(canvas(&app, delta).is_some_and(|(pos, _)| pos.is_none()), "a new view renders all of it");
 }
 
+/// A canvas more device pixels across than the largest texture side the display supports renders
+/// its art at fewer pixels a point, within that size, and draws it over the whole canvas. Pixel
+/// Preview's region of document pixels stays within it too.
+#[test]
+fn the_art_renders_within_the_largest_texture_side() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width":400,"height":300})).unwrap();
+    app.canvas.worker_started = true; // every frame on this thread, however long it takes
+    let ctx = egui::Context::default();
+    ctx.set_pixels_per_point(2.0);
+    // The first frame sets the pixels a point, the second draws at them.
+    for _ in 0..2 {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+            max_texture_side: Some(1024),
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| show(&mut app, ui));
+        out.textures_delta.clear();
+    }
+    let rect = app.canvas_rect.unwrap();
+    assert!(rect.width() * ctx.pixels_per_point() > 1024.0, "the canvas is {rect:?} at {} pixels a point", ctx.pixels_per_point());
+    let size = app.canvas.texture.as_ref().map(|t| t.size()).unwrap();
+    assert_eq!(size[0].max(size[1]), 1024, "the frame is {size:?} pixels");
+    let k = app.canvas.key.clone().unwrap();
+    assert!(
+        (k.w as f32 / k.ppp - rect.width()).abs() < 1.0 && (k.h as f32 / k.ppp - rect.height()).abs() < 1.0,
+        "the frame covers the canvas {rect:?}: {} × {} pixels at {} a point",
+        k.w,
+        k.h,
+        k.ppp
+    );
+
+    let xf = Xf { rect: egui::Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 500.0)), zoom: 0.5, center: Point::new(0.0, 0.0), rot: 0.0 };
+    let [x0, _, x1, _] = pixel_region(&xf, 4096).expect("a region 2,000 document pixels wide");
+    assert_eq!(x1 - x0, 2000);
+    assert_eq!(pixel_region(&xf, 1024), None, "more than the display's largest texture");
+}
+
 /// A placed document's bitmap made in the background renders the canvas again only where the
 /// objects showing its file are: both copies of the file are in the part rendered again.
 #[test]
@@ -2717,6 +3130,140 @@ fn the_canvas_is_drawn_through_the_display_profile_while_the_preference_is_on() 
     assert_eq!(count(&mut app, red), Some(srgb));
 }
 
+/// With a display profile, translucent art and the anti-aliased edges of art over the paper are
+/// blended with the paper in sRGB before the conversion: drawn over the converted paper, each such
+/// pixel shows the converted blend. Opaque art, and art over the pasteboard, convert as before. The
+/// part an edit renders again and the render worker's frame do the same, a change of the
+/// transparency grid renders the art again, and Outline converts the art alone.
+#[test]
+fn translucent_art_over_the_paper_is_blended_before_the_display_profile() {
+    use crate::display_profile::{Found, Reading};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    app.canvas.worker_started = true; // every frame on this thread
+    let half = app.run("shape.rectangle", json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [half], "color": "#ff0000"})).unwrap();
+    app.run("transparency.set", json!({"ids": [half], "opacity": 50})).unwrap();
+    let disc = app.run("shape.ellipse", json!({"x": 20, "y": 20, "width": 60, "height": 60})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [disc], "color": "#2040c0"})).unwrap();
+    // Left of the artboard, over the pasteboard.
+    let outside = app.run("shape.rectangle", json!({"x": -60, "y": 100, "width": 40, "height": 40})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [outside], "color": "#00ff00"})).unwrap();
+    app.run("transparency.set", json!({"ids": [outside], "opacity": 50})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    // The art's raster one frame uploads: where it goes ([x, y] for a part), its width and its pixels.
+    let upload = |app: &mut VectorcraftApp| -> Option<(Option<[usize; 2]>, usize, Vec<egui::Color32>)> {
+        let (_, mut delta) = frame_output(app, &ctx);
+        let art = app.canvas.texture.as_ref()?.id();
+        let up = delta.set.iter().find(|e| e.0.eq(&art)).and_then(|e| e.1.last()).map(|d| {
+            let egui::ImageData::Color(img) = &d.image;
+            (d.pos, img.width(), img.pixels.clone())
+        });
+        delta.clear();
+        up
+    };
+    upload(&mut app).expect("the first frame");
+    let v = app.view_mut().unwrap();
+    (v.zoom, v.center) = (1.0, Point::new(120.0, 150.0));
+    let (_, width, srgb) = upload(&mut app).expect("the view at 100%");
+    let key = app.canvas.key.clone().unwrap();
+    assert!(key.backdrop.is_none(), "no display profile: nothing to blend");
+    let p3 = crate::display_profile::tests::p3();
+    let t = vectorcraft_color::cms::display::DisplayTransform::from_icc(&p3).unwrap();
+    app.display_profile.report(Reading { display: Some("DP-1".into()), found: Found::Profile { icc: p3, from: "test".into() } });
+    let (_, _, shown) = upload(&mut app).expect("drawn again, converted");
+    let key = app.canvas.key.clone().unwrap();
+    assert!(key.backdrop.is_some());
+    let white = t.apply8([255; 3]);
+    // What the canvas shows of pixel `c` over the converted paper `under`, as egui blends it.
+    let over = |c: egui::Color32, under: [u8; 3]| {
+        let k = 255 - u32::from(c.a());
+        [0, 1, 2].map(|i| u32::from(c.to_array()[i]) + (u32::from(under[i]) * k + 127) / 255)
+    };
+    let plain = |s: egui::Color32| {
+        let mut px = s.to_array();
+        t.apply_premultiplied(&mut px);
+        egui::Color32::from_rgba_premultiplied(px[0], px[1], px[2], px[3])
+    };
+    let (view_w, view_h) = (key.w, key.h);
+    let (_, _, view) = frame_view(
+        None,
+        (view_w, view_h),
+        &View { zoom: key.zoom, center: Point::new(key.cx, key.cy), rotation: key.rot, ..View::default() },
+        key.ppp,
+    );
+    let to_doc = view.inverse();
+    let (mut blended, mut beside) = (0, 0);
+    for (i, (s, c)) in srgb.iter().zip(&shown).enumerate() {
+        let p = to_doc * Point::new((i % width) as f64 + 0.5, (i / width) as f64 + 0.5);
+        if s.a() == 0 || s.a() == 255 {
+            assert_eq!(*c, plain(*s), "opaque and empty pixels convert as before, at {p:?}");
+        } else if (1.0..399.0).contains(&p.x) && (1.0..299.0).contains(&p.y) {
+            let k = 255 - u32::from(s.a());
+            let mix = [0, 1, 2].map(|j| (u32::from(s.to_array()[j]) + (255 * k + 127) / 255).min(255) as u8);
+            let want = t.apply8(mix);
+            let got = over(*c, white);
+            assert!((0..3).all(|j| got[j].abs_diff(u32::from(want[j])) <= 1), "at {p:?}: {got:?} shown, {want:?} wanted");
+            blended += 1;
+        } else if p.x < -1.0 {
+            assert_eq!(*c, plain(*s), "over the pasteboard the art converts alone, at {p:?}");
+            beside += 1;
+        }
+    }
+    assert!(blended > 1000 && beside > 500, "{blended} pixels over the paper, {beside} over the pasteboard");
+    // The test tells the two apart: the fill converted alone, over the converted paper, shows another color.
+    let at = view * Point::new(200.0, 150.0);
+    let at = at.y as usize * width + at.x as usize;
+    let (s, c) = (srgb[at], shown[at]);
+    assert!((50..=205).contains(&s.a()), "the 50% fill at the center: {s:?}");
+    let alone = over(plain(s), white);
+    assert!((0..3).any(|j| alone[j].abs_diff(over(c, white)[j]) > 2), "{alone:?} and {:?}", over(c, white));
+    // The render worker's frame of the same key is the same.
+    let opts = app.canvas.shown.as_ref().unwrap().1.clone();
+    let doc = app.session.active().unwrap().doc.clone();
+    let display = app.display_profile.transform(true);
+    let job = |key: &CacheKey, doc: &std::sync::Arc<vectorcraft_doc::Document>| crate::render_worker::Job {
+        key: key.clone(),
+        doc: doc.clone(),
+        w: view_w,
+        h: view_h,
+        view,
+        opts: opts.clone(),
+        scope: vectorcraft_engine::file_access::ScopeHandle::capture(),
+        effects: Default::default(),
+        may_copy: false,
+        may_keep: false,
+        display: display.clone(),
+    };
+    let worker = crate::canvas::render_job(&mut vectorcraft_render::Renderer::new(), &mut None, &job(&key, &doc)).img;
+    let near = |a: &[u8], b: egui::Color32| a.iter().zip(b.to_array()).all(|(x, y)| x.abs_diff(y) <= 1);
+    assert!(worker.pixels.as_chunks::<4>().0.iter().zip(&shown).all(|(a, b)| near(a, *b)), "the worker's frame matches");
+    // An edit renders its part again, blended too.
+    app.run("paint.setFill", json!({"ids": [half], "color": "#0000ff"})).unwrap();
+    let (pos, part_w, part) = upload(&mut app).expect("the edit shows");
+    let [x0, y0] = pos.expect("only its part");
+    let key = app.canvas.key.clone().unwrap();
+    let doc = app.session.active().unwrap().doc.clone();
+    let whole = crate::canvas::render_job(&mut vectorcraft_render::Renderer::new(), &mut None, &job(&key, &doc)).img;
+    let whole = whole.pixels.as_chunks::<4>().0;
+    for (i, c) in part.iter().enumerate() {
+        let at = (y0 + i / part_w) * view_w as usize + x0 + i % part_w;
+        assert!(near(&whole[at], *c), "the part matches the whole frame at {at}: {c:?}, {:?}", whole[at]);
+    }
+    assert!(part.iter().filter(|c| c.a() != 0 && c.a() != 255).count() > 1000, "the blue fill is in the part");
+    // The transparency grid replaces the paper under the art: drawn again.
+    app.run("view.transparencyGrid", json!({"on": true})).unwrap();
+    assert!(upload(&mut app).is_some_and(|(pos, ..)| pos.is_none()), "the grid renders the art again");
+    assert!(app.canvas.key.as_ref().and_then(|k| k.backdrop.as_ref()).is_some_and(|b| b.grid.is_some()));
+    // Outline: the white canvas is the interface's, so the art converts alone.
+    app.run("view.outline", json!({})).unwrap();
+    upload(&mut app).expect("Outline renders again");
+    assert!(app.canvas.key.as_ref().is_some_and(|k| k.outline && k.backdrop.is_none()));
+}
+
 /// View › Hide Template (#2000): a template layer's art leaves the canvas, and Show Template
 /// draws it again, dimmed as before; each re-renders at once.
 #[test]
@@ -2827,7 +3374,41 @@ fn undecodable_images_are_marked_and_reported_once() {
     let cut = |w: u32| {
         let img = image::RgbaImage::from_fn(w, 41, |x, y| image::Rgba([(x * 37 + y * 101) as u8, (x * y) as u8, (x ^ y) as u8, 255]));
         let mut png = vec![];
-        img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        {
+            let __dyn: image::DynamicImage = img.into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| png.extend_from_slice(&__b))
+        }
+        .unwrap();
         png.truncate(png.len() / 2);
         png
     };
@@ -3149,7 +3730,8 @@ fn a_drag_back_to_its_start_renders_again_after_it() {
     assert!(!app.canvas.moved);
 }
 
-/// Cache metadata, worker requests and view transforms use the renderer's bounded raster size.
+/// Cache metadata, worker requests and view transforms use the renderer's bounded raster size,
+/// on a display that reports a larger texture side than that.
 /// Keep the worker controlled so huge virtual viewports never allocate huge test images.
 #[test]
 fn canvas_render_jobs_use_renderer_limited_dimensions() {
@@ -3160,7 +3742,11 @@ fn canvas_render_jobs_use_renderer_limited_dimensions() {
     app.canvas.worker_started = true;
     app.ui.view.rulers = false;
     let frame = |app: &mut VectorcraftApp, size, ppp| {
-        let mut input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(pos2(0.0, 0.0), size)), ..Default::default() };
+        let mut input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(pos2(0.0, 0.0), size)),
+            max_texture_side: Some(1 << 20),
+            ..Default::default()
+        };
         input.viewports.get_mut(&egui::ViewportId::ROOT).unwrap().native_pixels_per_point = Some(ppp);
         let mut output = ctx.run_ui(input, |ui| show(app, ui));
         output.textures_delta.clear();
@@ -4238,6 +4824,189 @@ fn grid_repeat_handles_set_rows_and_spacing_in_one_undo_step_each() {
     assert_eq!((grid(&app).0, grid(&app).2), (5, 10.0), "the spacing's own undo step");
 }
 
+/// A selected radial repeat draws its instances handle and its radius handle (none with the
+/// bounding box hidden). In a zoomed view turned 30°, dragging the instances handle two steps down
+/// adds two instances without scaling the source, and dragging the radius handle 20 pt outward
+/// makes the circle 20 pt larger, as one undo step each; Escape puts a drag back.
+#[test]
+fn radial_repeat_handles_set_instances_and_radius_in_one_undo_step_each() {
+    use vectorcraft_tools::repeat_radial::{HANDLE_RADIUS, INSTANCE_STEP, RadialHandles};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 180, "y": 40, "width": 40, "height": 40})).unwrap();
+    app.run("object.repeat.radial", json!({"instances": 6, "radius": 60})).unwrap();
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    let ctx = egui::Context::default();
+    // The first frame fits the artboard in the window; then zoom to 1.5 px a point and turn 30°.
+    frame(&mut app, &ctx, vec![]);
+    app.view_mut().unwrap().zoom = 1.5;
+    app.view_mut().unwrap().rotation = 30.0;
+    frame(&mut app, &ctx, vec![]);
+    // Instances, radius and the source's bounds.
+    let radial = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let n = st.doc.node(st.selection.objects[0]).unwrap();
+        let vectorcraft_doc::NodeKind::Repeat(spec) = &n.kind else { panic!("a repeat") };
+        let vectorcraft_doc::RepeatKind::Radial { instances, radius, .. } = spec.kind else { panic!("a radial repeat") };
+        (instances, radius, spec.source_bounds().unwrap())
+    };
+    let handles = |app: &mut VectorcraftApp| {
+        let frame = app.selection_box();
+        let st = app.session.active().unwrap();
+        RadialHandles::of(&st.doc, &st.selection, frame, app.view().unwrap().zoom).unwrap()
+    };
+    let before = radial(&app);
+    assert_eq!((before.0, before.1), (6, 60.0));
+    let h = handles(&mut app);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let circle_at =
+        |drawn: &[Shape], at: Pos2| drawn.iter().any(|s| matches!(s, Shape::Circle(c) if c.center.distance(at) < 0.01 && c.radius == HANDLE_RADIUS));
+    let drawn = shapes(&mut app, &ctx);
+    assert!(circle_at(&drawn, xf.to_screen(h.instances_at)), "the instances handle is drawn");
+    assert!(circle_at(&drawn, xf.to_screen(h.radius_at)), "the radius handle is drawn");
+    app.ui.view.bounding_box = false;
+    let drawn = shapes(&mut app, &ctx);
+    assert!(!circle_at(&drawn, xf.to_screen(h.instances_at)) && !circle_at(&drawn, xf.to_screen(h.radius_at)), "hidden with the bounding box");
+    app.ui.view.bounding_box = true;
+    frame(&mut app, &ctx, vec![]);
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let drag = |app: &mut VectorcraftApp, from: Pos2, to: Pos2| {
+        frame(app, &ctx, vec![egui::Event::PointerMoved(from), button(from, true)]);
+        for k in 1..=4 {
+            frame(app, &ctx, vec![egui::Event::PointerMoved(from + (to - from) * k as f32 / 4.0)]);
+        }
+    };
+    let release = |app: &mut VectorcraftApp, at: Pos2| frame(app, &ctx, vec![button(at, false)]);
+    // 2.2 steps down the page (the screen's down turned 30°): two more instances.
+    let to = xf.to_screen(h.instances_at + vectorcraft_geom::Vec2::new(0.0, 2.2 * INSTANCE_STEP / 1.5));
+    drag(&mut app, xf.to_screen(h.instances_at), to);
+    assert_eq!(radial(&app).0, 8, "the drag previews");
+    release(&mut app, to);
+    let after = radial(&app);
+    assert_eq!((after.0, after.1), (8, 60.0));
+    assert_eq!(after.2, before.2, "the source keeps its size");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(radial(&app).0, 6, "one undo step");
+    app.run("edit.redo", json!({})).unwrap();
+    assert_eq!(radial(&app).0, 8);
+    // 20 pt outward from the center.
+    frame(&mut app, &ctx, vec![]);
+    let h = handles(&mut app);
+    let out = (h.radius_at - h.center) / h.radius;
+    let to = xf.to_screen(h.radius_at + out * 20.0);
+    drag(&mut app, xf.to_screen(h.radius_at), to);
+    release(&mut app, to);
+    assert_eq!((radial(&app).0, radial(&app).1), (8, 80.0));
+    assert_eq!(radial(&app).2, before.2, "the source keeps its size");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!((radial(&app).0, radial(&app).1), (8, 60.0), "the radius's own undo step");
+    // Escape during a drag puts the radius back and leaves no undo step.
+    frame(&mut app, &ctx, vec![]);
+    let h = handles(&mut app);
+    drag(&mut app, xf.to_screen(h.radius_at), xf.to_screen(h.radius_at + out * 30.0));
+    assert_eq!(radial(&app).1, 90.0, "the drag previews");
+    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+    let mut full = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events: vec![escape], ..Default::default() }, |ui| {
+        crate::shortcuts::handle(&mut app, ui.ctx());
+        show(&mut app, ui)
+    });
+    full.textures_delta.clear();
+    assert_eq!(radial(&app).1, 60.0);
+    release(&mut app, xf.to_screen(h.radius_at + out * 30.0));
+    assert_eq!(radial(&app).1, 60.0, "the release after Escape changes nothing");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(radial(&app).0, 6, "the instances step is the one before");
+}
+
+/// A selected radial repeat draws its splitter on its circle. In a zoomed view turned 30°,
+/// dragging the splitter back around the circle past two instances hides them while the other
+/// four stay where they were, as one undo step; Escape puts a drag back.
+#[test]
+fn radial_repeat_splitter_hides_instances_in_one_undo_step() {
+    use vectorcraft_geom::Affine;
+    use vectorcraft_tools::repeat_radial::{HANDLE_RADIUS, RadialHandles};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 180, "y": 40, "width": 40, "height": 40})).unwrap();
+    app.run("object.repeat.radial", json!({"instances": 6, "radius": 60})).unwrap();
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.view_mut().unwrap().zoom = 1.5;
+    app.view_mut().unwrap().rotation = 30.0;
+    frame(&mut app, &ctx, vec![]);
+    // Instances shown, end angle and where the instances are.
+    let radial = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let n = st.doc.node(st.selection.objects[0]).unwrap();
+        let vectorcraft_doc::NodeKind::Repeat(spec) = &n.kind else { panic!("a repeat") };
+        let vectorcraft_doc::RepeatKind::Radial { instances, end_angle, .. } = spec.kind else { panic!("a radial repeat") };
+        (instances, end_angle, spec.transforms(Some(&st.doc)))
+    };
+    let handles = |app: &mut VectorcraftApp| {
+        let frame = app.selection_box();
+        let st = app.session.active().unwrap();
+        RadialHandles::of(&st.doc, &st.selection, frame, app.view().unwrap().zoom).unwrap()
+    };
+    // `h`'s splitter turned `deg` degrees about the center (positive: the way the instances run).
+    let around =
+        |h: &RadialHandles, deg: f64| h.center + (Affine::rotate(deg.to_radians()) * (h.splitter_at.unwrap() - h.center).to_point()).to_vec2();
+    let before = radial(&app);
+    assert_eq!((before.0, before.1, before.2.len()), (6, 360.0, 6));
+    let h = handles(&mut app);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let drawn = shapes(&mut app, &ctx);
+    let at = xf.to_screen(h.splitter_at.unwrap());
+    assert!(
+        drawn.iter().any(|s| matches!(s, Shape::Circle(c) if c.center.distance(at) < 0.01 && c.radius == HANDLE_RADIUS)),
+        "the splitter is drawn"
+    );
+    frame(&mut app, &ctx, vec![]);
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let drag = |app: &mut VectorcraftApp, from: Pos2, to: Pos2| {
+        frame(app, &ctx, vec![egui::Event::PointerMoved(from), button(from, true)]);
+        for k in 1..=4 {
+            frame(app, &ctx, vec![egui::Event::PointerMoved(from + (to - from) * k as f32 / 4.0)]);
+        }
+    };
+    let release = |app: &mut VectorcraftApp, at: Pos2| frame(app, &ctx, vec![button(at, false)]);
+    // Back 120° (two instances 60° apart): four shown, the rest in place.
+    let to = xf.to_screen(around(&h, -120.0));
+    drag(&mut app, xf.to_screen(h.splitter_at.unwrap()), to);
+    assert_eq!(radial(&app).0, 4, "the drag previews");
+    release(&mut app, to);
+    let after = radial(&app);
+    assert_eq!((after.0, after.1, after.2.len()), (4, 180.0, 4));
+    for (k, (a, b)) in after.2.iter().zip(&before.2).enumerate() {
+        assert!(a.as_coeffs().iter().zip(b.as_coeffs()).all(|(x, y)| (x - y).abs() < 1e-9), "instance {k} stays where it was");
+    }
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!((radial(&app).0, radial(&app).1), (6, 360.0), "one undo step");
+    app.run("edit.redo", json!({})).unwrap();
+    assert_eq!((radial(&app).0, radial(&app).1), (4, 180.0));
+    // Escape during a drag forward puts the split back and leaves no undo step.
+    frame(&mut app, &ctx, vec![]);
+    let h = handles(&mut app);
+    let to = xf.to_screen(around(&h, 120.0));
+    drag(&mut app, xf.to_screen(h.splitter_at.unwrap()), to);
+    assert_eq!((radial(&app).0, radial(&app).1), (6, 360.0), "the drag previews");
+    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+    let mut full = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events: vec![escape], ..Default::default() }, |ui| {
+        crate::shortcuts::handle(&mut app, ui.ctx());
+        show(&mut app, ui)
+    });
+    full.textures_delta.clear();
+    assert_eq!((radial(&app).0, radial(&app).1), (4, 180.0));
+    release(&mut app, to);
+    assert_eq!(radial(&app).0, 4, "the release after Escape changes nothing");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!((radial(&app).0, radial(&app).1), (6, 360.0), "the split was the step before");
+}
+
 /// While a symbol with 9-slice guides is edited, the canvas draws its four guides dotted across
 /// its art, with ruler guides hidden too, and none once the mode ends. Dragging the left guide in
 /// a zoomed view moves that guide alone, as one undo step.
@@ -4739,6 +5508,67 @@ fn scrolls_and_pans_move_the_view_by_whole_device_pixels() {
         assert!((by.x - want.x).abs() <= 1.0 && (by.y - want.y).abs() <= 1.0, "drag {k}: moved {by:?} device pixels for {want:?}");
     }
     frame(&mut app, vec![primary(p0 + vec2(-5.55, 22.71), false)]);
+}
+
+/// On a canvas whose frame renders at fewer pixels a point than the display's ([`frame_ppp`]),
+/// the wheel and the Hand tool move the view by whole pixels of that frame.
+#[test]
+fn scrolls_and_pans_move_a_lowered_frame_by_whole_pixels() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true; // every frame on this thread
+    let ctx = egui::Context::default();
+    ctx.set_pixels_per_point(2.0);
+    let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+    let mut time = 0.0;
+    let mut frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        time += 0.016;
+        let input = egui::RawInput { time: Some(time), screen_rect: Some(screen), max_texture_side: Some(1024), events, ..Default::default() };
+        ctx.run_ui(input, |ui| show(app, ui)).textures_delta.clear();
+    };
+    frame(&mut app, vec![]);
+    app.view_mut().unwrap().center = Point::new(200.3, 150.7);
+    frame(&mut app, vec![]);
+    let ppp = app.canvas.key.as_ref().map(|k| k.ppp).unwrap();
+    assert!(ppp < 2.0, "the frame renders at {ppp} pixels a point");
+    // The pan of the canvas's render view, in pixels of its frame.
+    let pan = |app: &VectorcraftApp| {
+        let v = app.view().unwrap();
+        (Affine::scale(v.zoom * f64::from(ppp)) * Affine::translate(-v.center.to_vec2())).translation()
+    };
+    let whole = |by: vectorcraft_geom::Vec2| (by - vectorcraft_geom::Vec2::new(by.x.round(), by.y.round())).hypot() < 1e-6;
+    let wheel = |d: egui::Vec2| egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: d,
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    let rect = app.canvas_rect.unwrap();
+    frame(&mut app, vec![egui::Event::PointerMoved(rect.center())]);
+    let start = pan(&app);
+    for (k, d) in [vec2(0.37, 11.13), vec2(-12.71, 0.0), vec2(21.9, -3.83)].into_iter().enumerate() {
+        frame(&mut app, vec![wheel(d)]);
+        let by = pan(&app) - start;
+        assert!(whole(by), "scroll {k}: the view moved {by:?} pixels of the frame");
+    }
+    for k in 0..60 {
+        frame(&mut app, vec![]);
+        let by = pan(&app) - start;
+        assert!(whole(by), "frame {k} after the scrolls: the view moved {by:?} pixels of the frame");
+    }
+    assert!((pan(&app) - start).hypot() > 10.0, "the wheel moved the view");
+    app.select_tool("hand");
+    let p0 = rect.center() + vec2(0.3, 0.1);
+    frame(&mut app, vec![egui::Event::PointerMoved(p0)]);
+    let start = pan(&app);
+    frame(&mut app, vec![primary(p0, true)]);
+    for (k, d) in [vec2(13.37, -7.61), vec2(40.19, 3.33)].into_iter().enumerate() {
+        frame(&mut app, vec![egui::Event::PointerMoved(p0 + d)]);
+        let by = pan(&app) - start;
+        assert!(whole(by), "drag {k}: the view moved {by:?} pixels of the frame");
+    }
+    frame(&mut app, vec![primary(p0 + vec2(40.19, 3.33), false)]);
 }
 
 /// The part of a device pixel a scroll leaves is added to the next scroll of the same view, and
@@ -5525,6 +6355,74 @@ fn a_pane_draws_its_own_views_outline() {
         assert_eq!(fills.first(), Some(&canvas), "pane in Outline: {pane_outline}");
         assert_eq!(names, [name; 2], "pane in Outline: {pane_outline}");
     }
+}
+
+/// With a display profile, a split-view pane or floating window blends translucent art with the
+/// paper before the conversion, as the canvas does, and in its own Outline converts the art alone.
+#[test]
+fn a_pane_blends_translucent_art_before_the_display_profile() {
+    use crate::display_profile::{Found, Reading};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    let half = app.run("shape.rectangle", json!({"x": 50, "y": 25, "width": 100, "height": 50})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [half], "color": "#ff0000"})).unwrap();
+    app.run("transparency.set", json!({"ids": [half], "opacity": 50})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    crate::doc_windows::new_window(&mut app).unwrap();
+    app.canvas.panes.worker_started = true; // every pane render on this thread
+    let p3 = crate::display_profile::tests::p3();
+    let t = vectorcraft_color::cms::display::DisplayTransform::from_icc(&p3).unwrap();
+    app.display_profile.report(Reading { display: Some("DP-1".into()), found: Found::Profile { icc: p3, from: "test".into() } });
+    let ctx = egui::Context::default();
+    let other = (0, 1);
+    let slot = (app.session.documents()[0].uid, 1);
+    // The pane's raster one frame uploads, and the key it was rendered for.
+    let pane = |app: &mut VectorcraftApp| -> (Vec<egui::Color32>, CacheKey) {
+        let cell = egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0));
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            panes::pane(app, ui, other, cell);
+        });
+        let (key, tex) = app.canvas.panes.shown.get(&slot).expect("the pane's render");
+        let id = tex.id();
+        let pixels = out.textures_delta.set.iter().find(|e| e.0.eq(&id)).and_then(|e| e.1.last()).map(|d| {
+            let egui::ImageData::Color(img) = &d.image;
+            img.pixels.clone()
+        });
+        let key = key.clone();
+        out.textures_delta.clear();
+        (pixels.expect("the pane uploads"), key)
+    };
+    app.session.prefs.monitor_profile_display = false;
+    let (srgb, key) = pane(&mut app);
+    assert!(key.backdrop.is_none(), "no display profile: nothing to blend");
+    app.session.prefs.monitor_profile_display = true;
+    let (shown, key) = pane(&mut app);
+    assert!(key.backdrop.is_some(), "the pane's Preview blends with its paper");
+    assert_eq!(srgb.len(), shown.len());
+    let plain = |s: egui::Color32| {
+        let mut px = s.to_array();
+        t.apply_premultiplied(&mut px);
+        egui::Color32::from_rgba_premultiplied(px[0], px[1], px[2], px[3])
+    };
+    let mut blended = 0;
+    for (s, c) in srgb.iter().zip(&shown) {
+        if s.a() == 0 || s.a() == 255 {
+            assert_eq!(*c, plain(*s), "opaque and empty pixels convert as before");
+        } else {
+            assert_eq!(c.a(), s.a(), "the alpha is kept");
+            let p = plain(*s);
+            if (0..3).any(|j| c.to_array()[j].abs_diff(p.to_array()[j]) > 2) {
+                blended += 1;
+            }
+        }
+    }
+    assert!(blended > 100, "{blended} translucent pixels blended with the paper");
+    // The pane's own Outline: the art converts alone, while the current view stays in Preview.
+    crate::doc_windows::view_mut(&mut app, other).unwrap().outline = true;
+    app.view_mut().unwrap().outline = false;
+    let (_, key) = pane(&mut app);
+    assert!(key.outline && key.backdrop.is_none(), "the pane's Outline has no paper to blend with");
 }
 
 /// While the rulers' origin is dragged out of their corner, its crosshair draws over the canvas in
@@ -9195,6 +10093,64 @@ fn backtick_changed_mid_selection_drag_applies_with_the_pointer_held_still() {
     frame(&mut app, &ctx, vec![button(to, false)]);
 }
 
+/// Backtick pressed while a flare's rings' end point is placed places the rings anew, with the
+/// pointer held still.
+#[test]
+fn backtick_places_a_flares_rings_anew_with_the_pointer_held_still() {
+    use egui::Event;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.select_tool("flare");
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    app.ui.view.smart_guides = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let from = xf.to_screen(Point::new(100.0, 100.0));
+    let to = xf.to_screen(Point::new(130.0, 100.0));
+    let end = xf.to_screen(Point::new(180.0, 160.0));
+    assert!(app.canvas_rect.unwrap().contains(end));
+    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let key = |pressed| Event::Key { key: egui::Key::Backtick, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    let rings = |app: &VectorcraftApp| {
+        let st = app.session.doc().unwrap();
+        let g = st.doc.node(st.selection.objects[0]).unwrap();
+        let vectorcraft_doc::NodeKind::Group { children, .. } = &g.kind else { panic!("flare is a group") };
+        children.iter().filter(|c| c.name.as_deref() == Some("Ring")).map(|c| c.geometric_bounds().unwrap()).collect::<Vec<_>>()
+    };
+    // Frames a sixtieth of a second apart while the pointer moves, and a second apart with it
+    // still, so it counts as still once it stops.
+    let mut time = 0.0;
+    let mut step = |app: &mut VectorcraftApp, events: Vec<Event>| {
+        time += if events.iter().any(|e| matches!(e, Event::PointerMoved(_))) { 1.0 / 60.0 } else { 1.0 };
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+            time: Some(time),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    step(&mut app, vec![Event::PointerMoved(from), button(from, true)]);
+    step(&mut app, vec![Event::PointerMoved(to)]);
+    step(&mut app, vec![button(to, false)]);
+    step(&mut app, vec![Event::PointerMoved(end - vec2(5.0, 5.0))]);
+    step(&mut app, vec![Event::PointerMoved(end)]);
+    step(&mut app, vec![]);
+    step(&mut app, vec![]);
+    let before = rings(&app);
+    assert_eq!(before.len(), 10);
+    assert!(before.iter().all(|r| r.center().y > 90.0 && r.center().x > 90.0), "the rings run towards the pointer: {before:?}");
+    step(&mut app, vec![key(true)]);
+    let after = rings(&app);
+    assert_eq!(after.len(), 10);
+    assert_ne!(after, before, "~ places the rings anew");
+    step(&mut app, vec![key(false)]);
+    assert_eq!(rings(&app), after, "letting ~ go keeps the placement");
+}
+
 /// #834 review: a press held still is not a drag. Before the press has dragged, the first held
 /// frame without a delta at the press's own position sends nothing, so a click stays a click;
 /// the first move after it does.
@@ -10322,7 +11278,41 @@ fn the_task_bar_traces_an_image_then_expands_the_trace() {
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let data = vectorcraft_format::base64_encode(&png);
     app.run("file.place", json!({"name": "half.png", "dataBase64": data, "link": false, "at": [200, 150]})).unwrap();
     app.select_tool("selection");
@@ -10364,7 +11354,41 @@ fn the_task_bar_removes_a_selected_images_background() {
     let img =
         image::RgbaImage::from_fn(20, 20, |x, y| image::Rgba(if (6..14).contains(&x) && (6..14).contains(&y) { [200, 0, 0, 255] } else { [255; 4] }));
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let data = vectorcraft_format::base64_encode(&png);
     app.run("file.place", json!({"name": "dot.png", "dataBase64": data, "link": false, "at": [200, 150]})).unwrap();
     app.select_tool("selection");
@@ -10378,7 +11402,24 @@ fn the_task_bar_removes_a_selected_images_background() {
     assert!(app.ui.dialog.is_none(), "it runs at once");
     let st = app.session.active().unwrap();
     let Some(NodeKind::Image(im)) = st.selection.objects.first().and_then(|id| st.doc.node(*id)).map(|n| &n.kind) else { panic!("an image") };
-    let px = image::load_from_memory(&st.doc.images[&im.key].bytes).unwrap().to_rgba8();
+    let px = craft_image_codecs::decode(&st.doc.images[&im.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!((px.get_pixel(0, 0).0[3], px.get_pixel(10, 10).0[3]), (0, 255), "the white background is cleared, the red dot kept");
 }
 

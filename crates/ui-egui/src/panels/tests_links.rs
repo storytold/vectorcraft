@@ -35,9 +35,41 @@ impl Drop for Folder {
 
 fn png(w: u32, h: u32) -> Vec<u8> {
     let mut out = vec![];
-    image::RgbaImage::from_pixel(w, h, image::Rgba([200, 40, 40, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(w, h, image::Rgba([200, 40, 40, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -104,6 +136,42 @@ fn the_panel_lists_the_images_with_link_info_for_the_selected_one() {
     }
 }
 
+/// Copy Info copies the file names of the selected links, or of `ids` in the order given, one per
+/// line; it is off with nothing selected, and a bad `ids` leaves the clipboard as it was.
+#[test]
+fn copy_info_copies_the_file_names_of_the_links() {
+    let dir = Folder::new("copy-info");
+    let (mut app, linked, embedded) = app(&dir);
+    let menu = painted_text(&mut app, super::links::menu);
+    assert!(menu.contains("Copy Info"), "{menu}");
+    // The selection is the embedded image: its row's name.
+    assert!(crate::menus::enabled(&app, "links.copyInfo"));
+    let r = app.run("links.copyInfo", json!({})).unwrap();
+    assert_eq!(r["names"], json!(["embedded.png"]));
+    assert_eq!(app.clipboard_out.take().as_deref(), Some("embedded.png"));
+    // Both selected: in the order the list gives them (the top image first).
+    app.run("select.set", json!({"ids": [linked, embedded]})).unwrap();
+    assert_eq!(app.run("links.copyInfo", json!({})).unwrap()["text"], "embedded.png\nlinked.png");
+    assert_eq!(app.clipboard_out.take().as_deref(), Some("embedded.png\nlinked.png"));
+    // `ids` in the order given, whatever is selected.
+    app.run("select.none", json!({})).unwrap();
+    let r = app.run("links.copyInfo", json!({"ids": [linked, embedded]})).unwrap();
+    assert_eq!(r["names"], json!(["linked.png", "embedded.png"]));
+    assert_eq!(app.clipboard_out.take().as_deref(), Some("linked.png\nembedded.png"));
+    // Errors copy nothing.
+    let rect = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 60, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.none", json!({})).unwrap();
+    for bad in
+        [json!({"ids": [linked, rect]}), json!({"ids": [linked, 999_999]}), json!({"ids": "all"}), json!({"ids": [linked, -1]}), json!({"ids": []})]
+    {
+        assert!(app.run("links.copyInfo", bad.clone()).is_err(), "{bad}");
+        assert!(app.clipboard_out.is_none(), "{bad}");
+    }
+    assert!(!crate::menus::enabled(&app, "links.copyInfo"));
+    assert!(app.run("links.copyInfo", json!({})).is_err());
+    assert!(app.clipboard_out.is_none());
+}
+
 /// Shift-click selects the images of the rows from the last row clicked without Shift; Ctrl/Cmd-click
 /// adds or removes one image, and Ctrl/Cmd-Shift-click adds the rows' images to the selection.
 #[test]
@@ -168,6 +236,11 @@ fn a_link_inside_a_symbol_is_listed_and_picked_in_the_panel() {
     click_row(&mut app, &ctx, "inside.png", egui::Modifiers::NONE, 1.0);
     assert!(selected(&app).is_empty(), "the canvas can't select it");
     assert!(shown(&mut app, 1.5).iter().any(|t| t == "30 × 20 px"), "Link Info of the symbol's image");
+    // Copy Info without ids copies the row picked in the panel.
+    app.ui_ctx = Some(ctx.clone());
+    assert!(crate::menus::enabled(&app, "links.copyInfo"));
+    assert_eq!(app.run("links.copyInfo", json!({})).unwrap()["text"], "inside.png");
+    assert_eq!(app.clipboard_out.take().as_deref(), Some("inside.png"));
     click_row(&mut app, &ctx, "layer.png", egui::Modifiers::COMMAND, 2.0);
     assert_eq!(selected(&app), [layer]);
     // Both rows are selected until the canvas selection changes: then the panel's pick goes too.

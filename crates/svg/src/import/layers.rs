@@ -1,6 +1,7 @@
 use super::convert::made_up;
 use super::importer::{CSS_PX_PER_IN, PT_PER_IN};
 use super::{Affine, Arc, FromStr, HashSet, Node, NodeId, NodeKind, Rect, Unit, XNode, roxmltree};
+use craft_svg::tree::usvg;
 
 /// What marks a nested `<g>` as a sublayer rather than a group: our export writes it on the layers
 /// it writes inside layers. (Inkscape's `inkscape:groupmode="layer"` counts too.)
@@ -94,7 +95,7 @@ impl RootUnits {
 
 /// `'id' (feA, feB)` for each filter: its id and the primitives it uses, for warnings.
 pub(super) fn filter_names(filters: &[Arc<usvg::filter::Filter>]) -> String {
-    use usvg::filter::Kind as K;
+    use craft_svg::tree::usvg::filter::Kind as K;
     let names: Vec<String> = filters
         .iter()
         .map(|f| {

@@ -55,6 +55,47 @@ fn selection_tool_with_selection(app: &VectorcraftApp) -> bool {
         && app.session.active().is_some_and(|st| !st.selection.is_empty())
 }
 
+/// The basic shape tools whose Contextual Task Bar shows Edit Path, Fill, Stroke and the selected
+/// shape's properties. The Line Segment tool is not one of them.
+const SHAPE_TOOLS: [&str; 5] = ["rectangle", "roundedRectangle", "ellipse", "polygon", "star"];
+
+/// Whether a basic shape tool is in use with one closed path selected whole, as each of those tools
+/// leaves the shape it draws.
+fn shape_tool_on_shape(app: &VectorcraftApp) -> bool {
+    SHAPE_TOOLS.contains(&app.session.tool_id())
+        && app.session.active().is_some_and(|st| {
+            st.selection.objects.len() == 1
+                && st.selection.anchors.is_empty()
+                && st
+                    .selection
+                    .objects
+                    .first()
+                    .and_then(|id| st.doc.node(*id))
+                    .is_some_and(|n| matches!(&n.kind, NodeKind::Path { path, .. } if path.is_closed()))
+        })
+}
+
+/// Whether the Smooth tool is in use with a selected path it can smooth
+/// ([`vectorcraft_tools::draw2::can_smooth`]). The answer is kept in `ctx` for the document's
+/// revision, which moves with every change of the document or the selection, so an unchanged
+/// selection is not walked again each frame.
+fn smooth_tool_on_paths(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
+    if app.session.tool_id() != "smooth" {
+        return false;
+    }
+    let Some(st) = app.session.active() else { return false };
+    let id = task_bar_id().with("smooth");
+    let key = (st.uid, st.revision);
+    if let Some((k, found)) = ctx.data(|d| d.get_temp::<((u64, u64), bool)>(id))
+        && k == key
+    {
+        return found;
+    }
+    let found = vectorcraft_tools::draw2::can_smooth(&st.doc, &st.selection);
+    ctx.data_mut(|d| d.insert_temp(id, (key, found)));
+    found
+}
+
 /// Whether the bar shows its blank canvas actions, Draw (Pencil) and Place Image: a selection tool is
 /// in use and the active document has no artwork, only layers and guides.
 fn blank_canvas(app: &VectorcraftApp) -> bool {
@@ -107,7 +148,13 @@ pub(crate) fn task_bar_shows_type(app: &VectorcraftApp) -> bool {
 /// With the Artboard tool it sits under the selected artboards and offers Resize (Artboard
 /// Options), Duplicate, Rearrange All (with two or more artboards) and Export (Export for Screens).
 /// A basic shape selected with the Selection tool shows a Shape Properties button in place of Lock.
-/// Selected type also shows the font family, font style and Font Size controls before its Fill.
+/// While a basic shape tool (Rectangle, Rounded Rectangle, Ellipse, Polygon or Star) has one closed
+/// path selected, as after it draws one, the bar offers Edit Path, Fill and Stroke, and Shape
+/// Properties for a live rectangle, rounded rectangle, ellipse or polygon; with nothing selected, or
+/// any other selection, those tools show no bar. While the Smooth tool has a path it can smooth
+/// selected, the bar shows the tool's Fidelity field and Tool Options…; with no such path it shows
+/// no bar. Selected type also shows the font family, font
+/// style and Font Size controls before its Fill.
 /// While a Type tool edits type, or has type selected, the bar shows only those controls and the
 /// Fill. When one row would be wider than the canvas, the font controls take a row of their own,
 /// narrowed to fit it, and the actions wrap onto rows under the handle's ([`bar_layout`]).
@@ -123,7 +170,13 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let typing = type_tool_on_type(app);
     // A blank canvas offers Draw (Pencil) and Place Image, as the same help page describes.
     let blank = !on_artboards && blank_canvas(app);
-    if !(on_artboards || typing || blank || selection_tool_with_selection(app)) {
+    // A basic shape tool with its shape selected offers Edit Path, Fill, Stroke and the shape's
+    // properties, as the same help page describes.
+    let shaping = shape_tool_on_shape(app);
+    // The Smooth tool with a path to smooth offers its option, Fidelity, as the same help page
+    // describes for the Smooth tool, and Tool Options… for its dialog.
+    let smoothing = smooth_tool_on_paths(app, ui.ctx());
+    if !(on_artboards || typing || blank || shaping || smoothing || selection_tool_with_selection(app)) {
         return;
     }
     // Selected type has the font controls too, as the help page describes
@@ -153,39 +206,38 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             f.name.as_deref() == Some("Image Trace") && f.children().is_some_and(|c| c.first().is_some_and(|i| matches!(i.kind, NodeKind::Image(_))))
         });
     // A basic shape (a live rectangle, rounded rectangle, ellipse or polygon) selected whole with the
-    // Selection tool: its properties take the place of Lock, as in the reference app
-    // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
+    // Selection tool or a basic shape tool: its properties take the place of Lock, as the help page
+    // describes (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
     use vectorcraft_doc::LiveShape;
     let shape = first
         .filter(|f| {
             n == 1
                 && st.selection.anchors.is_empty()
-                && app.session.tool_id() == "selection"
+                && (app.session.tool_id() == "selection" || shaping)
                 && matches!(&f.kind, NodeKind::Path { live: Some(l), .. }
                     if matches!(**l, LiveShape::Rectangle { .. } | LiveShape::Ellipse { .. } | LiveShape::Polygon { .. }))
         })
         .cloned();
     let mut items: Vec<(&str, &str, &str, serde_json::Value)> = vec![]; // (label, icon, command, params)
     let none = || json!({});
+    // Edit Path: the Direct Selection tool, to edit the path's anchors.
+    let edit_path = || (tl!("Edit Path"), "dc-direct", "tool.select", json!({"tool": "directSelection"}));
     if on_artboards {
-        // As in the reference app, the Artboard tool offers to resize, duplicate and export the
-        // artboards (<https://community.adobe.com/questions-652/contextual-task-bar-in-illustrator-2025-quick-actions-when-you-need-them-1546580>),
-        // and to rearrange them (<https://creativepro.com/managing-artboards-in-illustrator/>).
-        items.push((tl!("Resize"), "move-diagonal-2", TASK_BAR_ARTBOARD_OPTIONS, none()));
-        items.push((tl!("Duplicate"), "copy", TASK_BAR_DUPLICATE_ARTBOARDS, none()));
-        if st.doc.artboards.len() > 1 {
-            items.push((tl!("Rearrange All"), "dc-rearrange", TASK_BAR_REARRANGE_ARTBOARDS, none()));
-        }
-        items.push((tl!("Export"), "share-2", "file.exportForScreens", none()));
+        artboard_items(&mut items, st.doc.artboards.len());
     } else if blank {
         // Draw (Pencil) switches to the Pencil tool; Place Image picks files for the Place dialog.
         items.push((tl!("Draw (Pencil)"), "pencil", "tool.select", json!({"tool": "pencil"})));
         items.push((tl!("Place Image"), "image", "file.place", none()));
+    } else if shaping {
+        // A basic shape tool's one action; its Fill, Stroke and Shape Properties follow as chips.
+        items.push(edit_path());
+    } else if smoothing {
+        // The Fidelity field, then Tool Options… for the dialog that shows it with its slider.
+        items.push((tl!("Fidelity:"), "", TASK_BAR_FIDELITY, none()));
+        items.push((tl!("Tool Options…"), "settings", "tool.options", json!({"tool": "smooth"})));
     } else if !typing {
         // The selection tools' object actions. A Type tool's bar leaves them out, Create Outlines
         // and the type conversions included.
-        // Edit Path: the Direct Selection tool, to edit the path's anchors.
-        let edit_path = || (tl!("Edit Path"), "dc-direct", "tool.select", json!({"tool": "directSelection"}));
         // As in the reference app, an image offers Image Trace, Crop Image and Remove Background, and
         // traced art offers Expand (<https://community.adobe.com/announcements-651/contextual-task-bar-in-illustrator-2025-quick-actions-when-you-need-them-1546580>,
         // <https://community.adobe.com/announcements-651/ai-powered-image-editing-features-in-illustrator-1624061>).
@@ -288,14 +340,21 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let fonts = fonts && room >= crate::panels::character::task_bar_min_room();
     // The selected objects' Fill, Stroke, Recolor Artwork (when they have colours to recolour) and
     // Lock (a basic shape's properties instead), left out with the Artboard tool and on a blank
-    // canvas, which have no selected objects. A Type tool's bar has the Fill alone.
-    let objects = !on_artboards && !blank;
-    let chips: Vec<Chip> =
-        [(objects, Chip::Fill), (objects && !typing, Chip::Stroke), (objects && !typing && colored, Chip::Recolor), (objects && !typing, Chip::Lock)]
-            .into_iter()
-            .filter_map(|(shown, chip)| shown.then_some(chip))
-            .collect();
-    let widths: Vec<f32> = items.iter().map(|(label, _, cmd, _)| if icon_only(cmd) { BAR_MORE } else { action_width(ui, label) }).collect();
+    // canvas, which have no selected objects. A Type tool's bar has the Fill alone. A basic shape
+    // tool's bar has the Fill, the Stroke and a live shape's Shape Properties. The Smooth tool's bar
+    // has none of them.
+    let objects = !on_artboards && !blank && !smoothing;
+    let chips: Vec<Chip> = [
+        (objects, Chip::Fill),
+        (objects && !typing, Chip::Stroke),
+        (objects && !typing && !shaping && colored, Chip::Recolor),
+        (objects && !typing && (!shaping || shape.is_some()), Chip::Lock),
+    ]
+    .into_iter()
+    .filter_map(|(shown, chip)| shown.then_some(chip))
+    .collect();
+    let widths: Vec<f32> = items.iter().map(|(label, _, cmd, _)| item_width(ui, label, cmd)).collect();
+    let fidelity = app.session.tool_options()["fidelity"].as_f64();
     let font_w = fonts.then(|| {
         let w = crate::panels::character::TASK_BAR_WIDTHS;
         w.iter().sum::<f32>() + BAR_GAP * (w.len() - 1) as f32
@@ -373,16 +432,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                             if *at != Some(row) {
                                 continue;
                             }
-                            // The convert buttons show their icon alone, named by their hover text, as
-                            // the Control bar's do.
-                            let clicked = if icon_only(cmd) {
-                                widgets::icon_button(ui, icon, label, false, BAR_MORE).clicked()
-                            } else {
-                                action_button(ui, &t, label, icon)
-                            };
-                            if clicked {
-                                run = Some((*cmd, params.clone()));
-                            }
+                            run = bar_item(ui, &t, (*label, *icon, *cmd, params), fidelity).or(run.take());
                         }
                         // Type's font family, font style and Font Size, which act as the Character
                         // panel's do: on the characters a Type tool selects, else on the selected type.
@@ -475,6 +525,9 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         // The convert buttons convert the direct-selected anchors, as the Control bar's buttons do.
         Some((TASK_BAR_TO_CORNER, _)) => crate::menus::invoke(app, "path.convertAnchors", json!({"to": "corner"})),
         Some((TASK_BAR_TO_SMOOTH, _)) => crate::menus::invoke(app, "path.convertAnchors", json!({"to": "smooth"})),
+        // Fidelity listed in More Options, on a canvas too narrow for its field: the Smooth tool's
+        // Tool Options, which show it.
+        Some((TASK_BAR_FIDELITY, _)) => crate::menus::invoke(app, "tool.options", json!({"tool": "smooth"})),
         Some((c, p)) => crate::menus::invoke(app, c, p),
         None => {}
     }
@@ -623,6 +676,61 @@ fn action_width(ui: &Ui, label: &str) -> f32 {
     ui.painter().layout_no_wrap(label.to_string(), egui::FontId::proportional(13.0), Color32::PLACEHOLDER).size().x + 38.0
 }
 
+/// The width of the Smooth tool's Fidelity on the Contextual Task Bar: its label, the gap and the
+/// field.
+fn fidelity_width(ui: &Ui) -> f32 {
+    widgets::text_width(ui, fidelity_label(tl!("Fidelity:"), &Tokens::get(ui.ctx()))) + BAR_GAP + crate::dialogs::freehand::FIDELITY_FIELD_W
+}
+
+/// The Fidelity field's label, `label`, as the bar draws it.
+fn fidelity_label(label: &str, t: &Tokens) -> egui::RichText {
+    egui::RichText::new(label).size(13.0).color(t.text_strong)
+}
+
+/// The width of the Contextual Task Bar's item `label` that runs `cmd`.
+fn item_width(ui: &Ui, label: &str, cmd: &str) -> f32 {
+    match cmd {
+        TASK_BAR_FIDELITY => fidelity_width(ui),
+        _ if icon_only(cmd) => BAR_MORE,
+        _ => action_width(ui, label),
+    }
+}
+
+/// One of the Contextual Task Bar's items, `label` with `icon`, which runs `cmd` with `params`, and
+/// the Smooth tool's `fidelity`. Returns the command to run when it was used.
+fn bar_item(
+    ui: &mut Ui,
+    t: &Tokens,
+    (label, icon, cmd, params): (&str, &str, &'static str, &serde_json::Value),
+    fidelity: Option<f64>,
+) -> Option<(&'static str, serde_json::Value)> {
+    // The Smooth tool's Fidelity, labeled, sets the tool's option as it is typed or stepped.
+    if cmd == TASK_BAR_FIDELITY {
+        return fidelity_slot(ui, t, label, fidelity);
+    }
+    // The convert buttons show their icon alone, named by their hover text, as the Control bar's do.
+    let clicked = if icon_only(cmd) { widgets::icon_button(ui, icon, label, false, BAR_MORE).clicked() } else { action_button(ui, t, label, icon) };
+    clicked.then(|| (cmd, params.clone()))
+}
+
+/// The Smooth tool's Fidelity on the Contextual Task Bar, `label` and a field showing the tool's
+/// `fidelity` (nothing without one). Returns the command that sets a new value typed or stepped to.
+fn fidelity_slot(ui: &mut Ui, t: &Tokens, label: &str, fidelity: Option<f64>) -> Option<(&'static str, serde_json::Value)> {
+    let v = fidelity?;
+    let x = fidelity_field(ui, t, label, v).filter(|x| *x != v)?;
+    Some(("tool.setOption", json!({"tool": "smooth", "values": {"fidelity": x}})))
+}
+
+/// The Smooth tool's Fidelity on the Contextual Task Bar: `label` and a field showing `v`, centered
+/// in a row of the bar. Returns the value typed or stepped to.
+fn fidelity_field(ui: &mut Ui, t: &Tokens, label: &str, v: f64) -> Option<f64> {
+    ui.allocate_ui_with_layout(vec2(fidelity_width(ui), BAR_ROW), egui::Layout::left_to_right(egui::Align::Center), |ui| {
+        widgets::field_label(ui, fidelity_label(label, t));
+        crate::dialogs::freehand::fidelity_field(ui, "task-bar-fidelity", v, "smooth")
+    })
+    .inner
+}
+
 /// One of the Contextual Task Bar's action buttons: `icon` and `label`, named for screen readers.
 /// Returns whether it was clicked.
 fn action_button(ui: &mut Ui, t: &Tokens, label: &str, icon: &str) -> bool {
@@ -708,6 +816,20 @@ fn paint_chip(ui: &mut Ui, t: &Tokens, paint: &vectorcraft_color::Paint, mixed: 
     resp.on_hover_text(tip).clicked()
 }
 
+/// The Contextual Task Bar's items with the Artboard tool in a document of `artboards` artboards:
+/// Resize, Duplicate, Rearrange All (with two or more) and Export.
+fn artboard_items(items: &mut Vec<(&'static str, &'static str, &'static str, serde_json::Value)>, artboards: usize) {
+    // As in the reference app, the Artboard tool offers to resize, duplicate and export the
+    // artboards (<https://community.adobe.com/questions-652/contextual-task-bar-in-illustrator-2025-quick-actions-when-you-need-them-1546580>),
+    // and to rearrange them (<https://creativepro.com/managing-artboards-in-illustrator/>).
+    items.push((tl!("Resize"), "move-diagonal-2", TASK_BAR_ARTBOARD_OPTIONS, json!({})));
+    items.push((tl!("Duplicate"), "copy", TASK_BAR_DUPLICATE_ARTBOARDS, json!({})));
+    if artboards > 1 {
+        items.push((tl!("Rearrange All"), "dc-rearrange", TASK_BAR_REARRANGE_ARTBOARDS, json!({})));
+    }
+    items.push((tl!("Export"), "share-2", "file.exportForScreens", json!({})));
+}
+
 /// The Contextual Task Bar's Center on Top and Center on Bottom, as in the Type menu, for type on a
 /// closed path.
 fn center_on_path_items(app: &VectorcraftApp, items: &mut Vec<(&'static str, &'static str, &'static str, serde_json::Value)>) {
@@ -719,6 +841,9 @@ fn center_on_path_items(app: &VectorcraftApp, items: &mut Vec<(&'static str, &'s
         }
     }
 }
+
+/// The Contextual Task Bar's Fidelity field with the Smooth tool.
+const TASK_BAR_FIDELITY: &str = "taskBar.fidelity";
 
 /// The Contextual Task Bar's Image Trace button: a trace with the Default preset.
 const TASK_BAR_IMAGE_TRACE: &str = "taskBar.imageTrace";
