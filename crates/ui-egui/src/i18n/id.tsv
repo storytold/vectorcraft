@@ -957,6 +957,7 @@
 	Change Panel Layout	Ubah tata letak panel
 	Close Panel	Tutup panel
 	Collapse Panel Group	Ciutkan grup panel
+	Cycle Display Sizes	Ganti ukuran tampilan
 	Move Panel	Pindahkan panel
 	Group with	Grupkan dengan
 	Resize panels	Ubah ukuran panel
@@ -1866,6 +1867,9 @@ digits	Malayalam	Malayalam
 	Select text to set its OpenType features.	Pilih teks untuk mengatur fitur OpenType-nya.
 	Standard Ligatures	Ligatur standar
 	Stylistic Alternates	Alternatif gaya
+	Ligatures	Ligatur
+	Ornaments	Ornamen
+	Figures	Angka
 	Set {n}	Set {n}
 	Swash	Swash
 	Tabular Lining	Lining tabular
@@ -2390,6 +2394,11 @@ digits	Malayalam	Malayalam
 	Author Title:	Judul penulis:
 	Author:	Penulis:
 	Copyright Info URL:	URL info hak cipta:
+	Save Metadata Template…	Simpan templat metadata…
+	Import Options	Opsi impor
+	Clear existing fields and use the template's	Hapus bidang yang ada dan gunakan bidang templat
+	Keep existing fields, but replace those the template has	Pertahankan bidang yang ada, tetapi ganti bidang yang dimiliki templat
+	Keep existing fields, but append those the template has	Pertahankan bidang yang ada, tetapi tambahkan bidang yang dimiliki templat
 	Copyright Notice:	Pemberitahuan hak cipta:
 	Copyright Status:	Status hak cipta:
 	Created:	Dibuat:
@@ -3376,6 +3385,8 @@ theme	Appearance	Tampilan
 	Create Graph	Buat grafik
 	Graph Data	Data grafik
 	Graph Type	Jenis grafik
+	Graph Type…	Jenis grafik…
+	Graph Data…	Data grafik…
 	Graph Options	Opsi grafik
 	Left Axis	Sumbu kiri
 	Right Axis	Sumbu kanan
