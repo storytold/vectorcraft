@@ -387,7 +387,12 @@ pub struct OutputSettings {
     /// Destination profile name (empty: the document's profile; [`DOCUMENT_CMYK`]: the CMYK
     /// profile in effect, whatever the document's colour mode).
     pub destination: String,
-    pub profiles: ProfileInclusion,
+    /// The Profile Inclusion setting; `None` (left out, `null` or `"default"`) when it isn't set:
+    /// colors are then written as with [`ProfileInclusion::None`], while gray and RGB images keep
+    /// the ICC profiles they carry. A set [`ProfileInclusion::None`] also leaves those out (see
+    /// [`crate::output`]).
+    #[serde(deserialize_with = "unset_or_choice")]
+    pub profiles: Option<ProfileInclusion>,
     /// PDF/X output intent profile name.
     pub output_intent: String,
     pub output_condition: String,
@@ -395,6 +400,19 @@ pub struct OutputSettings {
     pub registry: String,
     /// Mark the file as trapped.
     pub trapped: bool,
+}
+
+/// The JSON id of a setting that isn't set ([`OutputSettings::profiles`]), as `null` is.
+pub const UNSET_CHOICE: &str = "default";
+
+/// A choice that may be left unset: `null` and [`UNSET_CHOICE`] are `None`, a choice's id is that
+/// choice.
+fn unset_or_choice<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<T>, D::Error> {
+    match Option::<String>::deserialize(d)? {
+        None => Ok(None),
+        Some(id) if id == UNSET_CHOICE => Ok(None),
+        Some(id) => T::deserialize(serde::de::value::StringDeserializer::<D::Error>::new(id)).map(Some),
+    }
 }
 
 /// The Advanced section.

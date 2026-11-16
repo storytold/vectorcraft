@@ -28,6 +28,7 @@ mod path_joins;
 mod ruby;
 mod scripts;
 mod shape_plans;
+mod similar;
 mod snap;
 mod svg_glyphs;
 mod sysfonts;
@@ -2691,6 +2692,209 @@ fn bunri_kinshi_keeps_two_em_dashes_on_one_line() {
     t.set_paragraph_styles(vec![on, t.para.clone()]);
     let second = text.len() + 1;
     assert_eq!(ends(&t), [kept, text.len(), second + split, second + text.len()]);
+}
+
+/// Kurikaeshi Moji Shori: the character a repeat mark stands for is the last one before it that is
+/// not a repeat mark, in the mark's script; ゝ and ヽ give it without voicing marks, ゞ and ヾ give
+/// its voiced form when it has one.
+#[test]
+fn repeat_marks_stand_for_the_character_before_them() {
+    use crate::shape::repeated_char;
+    for (before, mark, want) in [
+        ("時", '々', Some('時')),
+        ("時々", '々', Some('時')),
+        ("時\u{2028}", '々', Some('時')),
+        ("す", 'ゝ', Some('す')),
+        ("ず", 'ゝ', Some('す')),
+        ("す", 'ゞ', Some('ず')),
+        ("ず", 'ゞ', Some('ず')),
+        ("ぱ", 'ゝ', Some('は')),
+        ("は", 'ゞ', Some('ば')),
+        ("ぽ", 'ゞ', Some('ぼ')),
+        ("つ", 'ゞ', Some('づ')),
+        ("う", 'ゞ', Some('ゔ')),
+        ("あ", 'ゞ', Some('あ')),
+        ("サ", 'ヽ', Some('サ')),
+        ("ザ", 'ヽ', Some('サ')),
+        ("サ", 'ヾ', Some('ザ')),
+        ("ウ", 'ヾ', Some('ヴ')),
+        ("ピ", 'ヾ', Some('ビ')),
+        ("サ", 'ゝ', None),
+        ("す", 'ヽ', None),
+        ("す", '々', None),
+        ("時", 'ゝ', None),
+        ("A", '々', None),
+        ("", '々', None),
+        ("々ゝ", '々', None),
+        ("時", 'x', None),
+        // A kana followed by a combining voicing mark is that kana.
+        ("か\u{3099}\u{2028}", 'ゝ', Some('か')),
+        ("か\u{3099}", 'ゞ', Some('が')),
+        ("ハ\u{309A}", 'ヽ', Some('ハ')),
+    ] {
+        assert_eq!(repeated_char(None, before, mark), want, "{before:?} {mark}");
+    }
+    // The character before a paragraph that continues from the frame before stands in when the text
+    // before the mark in this frame has none.
+    assert_eq!(repeated_char(Some('時'), "", '々'), Some('時'));
+    assert_eq!(repeated_char(Some('時'), "\u{2028}々", '々'), Some('時'));
+    assert_eq!(repeated_char(Some('時'), "日", '々'), Some('日'));
+    assert_eq!(repeated_char(Some('す'), "", '々'), None);
+}
+
+/// Kurikaeshi Moji Shori (a paragraph attribute): on, a repeat mark that starts a line is drawn as
+/// the character it repeats, in point and area type, horizontal and vertical, at a soft return or
+/// where a line wraps; a mark inside a line, one starting a paragraph and every mark with the
+/// setting off keep their own glyph. The line breaks and the glyphs' bytes do not change. Uses a test
+/// font that draws each character with a different Latin glyph.
+#[test]
+fn kurikaeshi_moji_shori_draws_the_repeated_character_at_a_line_start() {
+    use crate::test_fonts::{REPEAT_MARK_FAMILY, repeat_mark_font};
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(repeat_mark_font().expect("test font"));
+    let st = CharStyle { size: 20.0, font_family: REPEAT_MARK_FAMILY.into(), font_style: "Regular".into(), ..CharStyle::default() };
+    let face = db.style_face(&st).expect("face");
+    let glyph = |c: char| Some(face.glyph_for(c));
+    let gid_of = |l: &TextLayout, b: usize| l.glyphs.iter().find(|g| g.byte == b).map(|g| g.gid);
+    let ends = |l: &TextLayout| l.lines.iter().map(|line| line.end).collect::<Vec<_>>();
+    // 時 | 々す | ゞ時々ザ | ヽ, then a paragraph that starts with 々.
+    let text = "時\u{2028}々す\u{2028}ゞ時々ザ\u{2028}ヽ\n々";
+    let at = |s: &str| text.find(s).unwrap();
+    let (first_mark, voiced, inner, katakana, para_start) = (at("々す"), at("ゞ"), at("時々ザ") + "時".len(), at("ヽ"), text.len() - "々".len());
+    for vertical in [false, true] {
+        let mut t = TextObject::point(Point::ZERO, text, st.clone());
+        t.vertical = vertical;
+        let off = layout(&db, &t);
+        t.set_paragraph_styles(vec![
+            vectorcraft_doc::ParaStyle { kurikaeshi_moji_shori: true, ..t.para.clone() },
+            vectorcraft_doc::ParaStyle { kurikaeshi_moji_shori: true, ..t.para.clone() },
+        ]);
+        let on = layout(&db, &t);
+        assert_eq!(ends(&on), ends(&off), "vertical {vertical}");
+        let bytes = |l: &TextLayout| l.glyphs.iter().map(|g| g.byte).collect::<Vec<_>>();
+        assert_eq!(bytes(&on), bytes(&off), "vertical {vertical}");
+        // Off, each mark has its own glyph.
+        for (b, mark) in [(first_mark, '々'), (voiced, 'ゞ'), (inner, '々'), (katakana, 'ヽ'), (para_start, '々')] {
+            assert_eq!(gid_of(&off, b), glyph(mark), "vertical {vertical}: off, {mark} at {b}");
+        }
+        assert_eq!(gid_of(&on, first_mark), glyph('時'), "vertical {vertical}: 々 drawn as 時");
+        assert_eq!(gid_of(&on, voiced), glyph('ず'), "vertical {vertical}: ゞ after す drawn as ず");
+        assert_eq!(gid_of(&on, katakana), glyph('サ'), "vertical {vertical}: ヽ after ザ drawn as サ");
+        assert_eq!(gid_of(&on, inner), glyph('々'), "vertical {vertical}: a mark inside a line keeps its glyph");
+        assert_eq!(gid_of(&on, para_start), glyph('々'), "vertical {vertical}: a paragraph's first mark keeps its glyph");
+        assert!(off.repeat_marks.is_empty());
+        assert_eq!(on.repeat_marks, [(first_mark, '時'), (voiced, 'ず'), (katakana, 'サ')], "vertical {vertical}");
+    }
+    // Where area type wraps: each line holds one character, so 々 starts the second line.
+    let mut t = TextObject::point(Point::ZERO, "時々", st.clone());
+    let both: f64 = layout(&db, &t).glyphs.iter().map(|g| g.advance).sum();
+    t.xf = Affine::IDENTITY;
+    // The Soft set lets 々 start a line.
+    t.para.kinsoku = vectorcraft_doc::Kinsoku::Soft;
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, both - 1.0, 200.0).to_path(0.1)) };
+    let off = layout(&db, &t);
+    assert_eq!(ends(&off), ["時".len(), "時々".len()]);
+    t.para.kurikaeshi_moji_shori = true;
+    let on = layout(&db, &t);
+    assert_eq!(ends(&on), ends(&off));
+    assert_eq!(gid_of(&off, "時".len()), glyph('々'));
+    assert_eq!(gid_of(&on, "時".len()), glyph('時'), "a wrapped line's 々 is drawn as 時");
+    // A threaded frame whose first paragraph continues: a mark that starts the frame is drawn as the
+    // character before it in the frame before, only while the paragraph continues.
+    let mut t = TextObject::point(Point::ZERO, "々す\n々", st.clone());
+    t.para.kurikaeshi_moji_shori = true;
+    t.first_para_lead = Some('時');
+    assert_eq!(gid_of(&layout(&db, &t), 0), glyph('々'), "a frame that does not continue");
+    t.first_para_continues = true;
+    let on = layout(&db, &t);
+    assert_eq!(gid_of(&on, 0), glyph('時'), "the frame's first 々 is drawn as 時");
+    assert_eq!(gid_of(&on, "々す\n".len()), glyph('々'), "the next paragraph's first mark keeps its glyph");
+    assert_eq!(on.repeat_marks, [(0, '時')]);
+    // Type on a path is one line: a threaded frame on a path starts it the same way.
+    let mut line = BezPath::new();
+    line.move_to((0.0, 50.0));
+    line.line_to((500.0, 50.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let on = layout(&db, &t);
+    assert!(on.on_path);
+    assert_eq!(gid_of(&on, 0), glyph('時'), "type on a path: the frame's first 々 is drawn as 時");
+    assert_eq!(gid_of(&on, "々す\n".len()), glyph('々'), "type on a path: the next paragraph's first mark keeps its glyph");
+    assert_eq!(on.repeat_marks, [(0, '時')]);
+    t.para.kurikaeshi_moji_shori = false;
+    let off = layout(&db, &t);
+    assert_eq!(gid_of(&off, 0), glyph('々'), "type on a path with the setting off");
+    assert!(off.repeat_marks.is_empty());
+    t.para.kurikaeshi_moji_shori = true;
+    t.first_para_continues = false;
+    assert_eq!(gid_of(&layout(&db, &t), 0), glyph('々'), "type on a path in a frame that does not continue");
+}
+
+/// Kurikaeshi Moji Shori: ゝ or ヽ typed with a combining voicing mark (U+3099) after it, which the
+/// font draws as one glyph, is drawn as the voiced character at a line start, as ゞ and ヾ are.
+#[test]
+fn kurikaeshi_moji_shori_draws_a_decomposed_voiced_mark_voiced() {
+    use crate::test_fonts::{REPEAT_MARK_FAMILY, repeat_mark_font};
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(repeat_mark_font().expect("test font"));
+    let st = CharStyle { size: 20.0, font_family: REPEAT_MARK_FAMILY.into(), font_style: "Regular".into(), ..CharStyle::default() };
+    let face = db.style_face(&st).expect("face");
+    let glyph = |c: char| Some(face.glyph_for(c));
+    let gid_of = |l: &TextLayout, b: usize| l.glyphs.iter().find(|g| g.byte == b).map(|g| g.gid);
+    for (text, mark, want) in [("す\u{2028}ゝ\u{3099}", 'ゞ', 'ず'), ("サ\u{2028}ヽ\u{3099}", 'ヾ', 'ザ')] {
+        let at = text.find(['ゝ', 'ヽ']).expect("mark");
+        let mut t = TextObject::point(Point::ZERO, text, st.clone());
+        let off = layout(&db, &t);
+        assert_eq!(gid_of(&off, at), glyph(mark), "{text:?}: off, the font draws the voiced mark");
+        t.para.kurikaeshi_moji_shori = true;
+        let on = layout(&db, &t);
+        assert_eq!(gid_of(&on, at), glyph(want), "{text:?}");
+        assert_eq!(on.repeat_marks, [(at, want)], "{text:?}");
+    }
+}
+
+/// Kurikaeshi Moji Shori: a paragraph with a repeat mark at the start of each of many lines is laid
+/// out in one scan of its text, not one scan of everything before each line.
+#[test]
+fn kurikaeshi_moji_shori_scans_a_paragraph_once() {
+    use crate::shape::repeat_scanned;
+    use crate::test_fonts::{REPEAT_MARK_FAMILY, repeat_mark_font};
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(repeat_mark_font().expect("test font"));
+    let st = CharStyle { size: 20.0, font_family: REPEAT_MARK_FAMILY.into(), font_style: "Regular".into(), ..CharStyle::default() };
+    let face = db.style_face(&st).expect("face");
+    let text = format!("時{}", "\u{2028}々".repeat(2000));
+    let mut t = TextObject::point(Point::ZERO, &text, st);
+    t.para.kurikaeshi_moji_shori = true;
+    let before = repeat_scanned();
+    let l = layout(&db, &t);
+    let scanned = repeat_scanned() - before;
+    assert!(scanned <= 2 * text.len(), "{scanned} bytes scanned for a paragraph of {}", text.len());
+    // Every line's 々 is still drawn as 時.
+    assert_eq!(l.repeat_marks.len(), 2000);
+    assert!(l.glyphs.iter().filter(|g| g.byte > 0 && text.get(g.byte..).is_some_and(|s| s.starts_with('々'))).all(|g| g.gid == face.glyph_for('時')));
+}
+
+/// Kurikaeshi Moji Shori: area type in a frame that isn't a rectangle, centered vertically, flows
+/// again until it settles, and keeps one record for each repeat mark it draws as another character.
+#[test]
+fn vertically_centered_repeat_marks_in_a_round_frame_are_recorded_once() {
+    use crate::test_fonts::{REPEAT_MARK_FAMILY, repeat_mark_font};
+    use vectorcraft_doc::VerticalAlign;
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(repeat_mark_font().expect("test font"));
+    let st = CharStyle { size: 20.0, font_family: REPEAT_MARK_FAMILY.into(), font_style: "Regular".into(), ..CharStyle::default() };
+    let text = format!("時{}", "\u{2028}々".repeat(5));
+    let frame = kurbo::Ellipse::new((150.0, 150.0), (150.0, 150.0), 0.0).to_path(0.1);
+    let mut t = area(&text, st, Rect::new(0.0, 0.0, 300.0, 300.0), Justify::Left);
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&frame) };
+    t.para.kurikaeshi_moji_shori = true;
+    let top = layout(&db, &t);
+    let marks: Vec<(usize, char)> = text.match_indices('々').map(|(b, _)| (b, '時')).collect();
+    assert_eq!(top.repeat_marks, marks);
+    t.area.vertical_align = VerticalAlign::Center;
+    let lay = layout(&db, &t);
+    assert!(lay.lines[0].baseline > top.lines[0].baseline + 1.0, "the text moves down");
+    assert_eq!(lay.repeat_marks, marks);
 }
 
 /// Bunri-Kinshi: a justified line spreads its room over the gaps between its CJK characters but not

@@ -350,8 +350,8 @@ struct ScreenParams {
     /// Where files go: `none` (all in the folder), `rows` (the rows' sub-folders, as
     /// `subfolders`), `format` (a folder per extension), `item`, or `itemFormat`.
     folders: Option<String>,
-    /// Export PDFs As: `single` (the artboards a PDF row writes are the pages of one file) or
-    /// `multiple` (a file per artboard, the default).
+    /// Export PDFs As: `single` (the artboards a PDF row writes are the pages of one file; refused
+    /// with assets, layers or `selection: "each"`) or `multiple` (a file per artboard, the default).
     pdfs: Option<String>,
 }
 
@@ -399,11 +399,17 @@ impl ScreenParams {
         if p.is_object() { Self::deserialize(p).map_err(|e| bad(C, e.to_string())) } else { Ok(Self::default()) }
     }
 
-    /// An error when more than one of `assets`, `layers`, `selection` and `fullDocument` is given.
+    /// An error when more than one of `assets`, `layers`, `selection` and `fullDocument` is given,
+    /// and when `pdfs: "single"` is given with `assets`, `layers` or `selection: "each"`, whose
+    /// files each hold the art of one item.
     fn one_source(&self) -> Result<()> {
         let sources = [self.full_document, self.assets.is_some(), self.layers.is_some(), self.selection.is_some()].iter().filter(|b| **b).count();
         if sources > 1 {
             return Err(bad(C, "give one of assets, layers, selection or fullDocument"));
+        }
+        let per_piece = self.assets.is_some() || self.layers.is_some() || self.selection.as_deref() == Some("each");
+        if per_piece && self.pdfs.as_deref() == Some("single") {
+            return Err(bad(C, "pdfs `single` writes artboards as the pages of one PDF: assets, layers and selection `each` write a PDF each"));
         }
         Ok(())
     }
@@ -764,7 +770,7 @@ fn leave_out_folder(r: &mut Value, folder: &str) {
 
 /// Export settings kept in the document or a preset, as the request being served may see them: a
 /// `folder` outside the read roots ([`super::access::shown`]) is left out.
-fn leave_out_unreadable_settings_folder(mut settings: Map<String, Value>) -> Map<String, Value> {
+pub(super) fn leave_out_unreadable_settings_folder(mut settings: Map<String, Value>) -> Map<String, Value> {
     if settings.get("folder").and_then(Value::as_str).is_some_and(|f| !f.is_empty() && !super::access::shown(f)) {
         settings.remove("folder");
     }
@@ -1089,6 +1095,29 @@ pub(crate) fn with_export_preset(s: &Session, cmd: &str, settings: &mut Map<Stri
     Ok(())
 }
 
+/// Does the file of `item` that row `r` writes carry the native document, and with it the
+/// JavaScript files the document links ([`super::access::names_linked_scripts`])? A PDF holds the
+/// artboards it is written with: those of `single` (Export PDFs As › Single file), every artboard
+/// (Full Document), else the item's artboard of its document.
+fn names_scripts(item: &Item, r: &Row, single: Option<&[usize]>) -> bool {
+    if r.format.id != "pdf" {
+        return super::access::names_linked_scripts(C, r.format.id, &r.options, item.doc.artboards.len());
+    }
+    let (doc, options) = match (single, &item.every_artboard) {
+        (Some(boards), _) => {
+            let mut options = r.options.clone();
+            options["range"] = json!(boards.iter().map(|b| (b + 1).to_string()).collect::<Vec<_>>().join(", "));
+            (&item.doc, options)
+        }
+        (None, Some(all)) => (all, r.options.clone()),
+        (None, None) => match r.options_for(item.region, item.artboard) {
+            Ok(options) => (&item.doc, options),
+            Err(_) => return true,
+        },
+    };
+    super::access::names_linked_scripts(C, "pdf", &options, doc.artboards.len())
+}
+
 /// Every chosen artboard (asset, layer, selected object) in every format row, one file each (a PDF
 /// holds its artboard alone), or with `fullDocument` one file per row (a PDF of every artboard,
 /// else the bounds of all art). Items that share a name get `-2`, `-3`… instead of overwriting, and
@@ -1105,10 +1134,6 @@ pub(crate) fn export(s: &mut Session, p: &Value, asked: &Value) -> Result<Value>
     o.one_source()?;
     // `<filename>`: the document's file, as Save names it, or its title before it is saved.
     let st = s.doc()?;
-    // Before the folder is made or any row is written.
-    for r in &rows {
-        super::check_linked_scripts(C, r.format.id, st)?;
-    }
     let naming = Naming::of(&o, st.path.as_deref().unwrap_or(&st.doc.title))?;
     let selection = o.selection_mode()?;
     let selected = if selection.is_some() { selected_artwork(s)? } else { vec![] };
@@ -1125,6 +1150,10 @@ pub(crate) fn export(s: &mut Session, p: &Value, asked: &Value) -> Result<Value>
     };
     let crop = rows.iter().any(|r| r.format.id != "pdf");
     let items = items(&doc, &o, selection, &selected, &naming.filename, crop, true)?;
+    // Before the folder is made or any row is written, with the artboards each file holds.
+    let single: Option<Vec<usize>> = items.iter().map(|i| i.artboard).collect::<Option<Vec<_>>>().filter(|a| naming.single_pdf && a.len() > 1);
+    let st = s.doc()?;
+    super::check_scripts_of(C, &st.doc, st.path.as_deref(), || rows.iter().any(|r| items.iter().any(|i| names_scripts(i, r, single.as_deref()))))?;
     // The file each item writes for each SVG row, before the folder is made or any row is written.
     let base = crate::cmd::links::LinkBase::of(s.doc()?);
     for r in rows.iter().filter(|r| matches!(r.format.id, "svg" | "svgz")) {

@@ -821,6 +821,7 @@ antiAlias	Sharp	शार्प
 	Chrome…	क्रोम…
 	Circle	वृत्त
 	Circle (open)	सर्किल (ओपन)
+	Circle:	वृत्त:
 	Classic	क्लासिक
 	Classic Defaults	क्लासिक डिफ़ॉल्ट
 	Clean Up	क्लीन अप
@@ -880,7 +881,7 @@ antiAlias	Sharp	शार्प
 	Close Path:	बंद पाथ:
 	Close Path…	बंद पाथ…
 	Close paths when ends are within:	जब समाप्त होता है तो बंद पाथ भीतर होते हैं:
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	खुली प्रोफ़ाइल के गोल सिरे बंद करें। आंशिक स्वीप की कटी हुई साइड खुली रहती हैं।
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	खुली प्रोफ़ाइल के गोल सिरे बंद करें। आंशिक स्वीप की कटी हुई साइड भी बंद होती हैं।
 	Closed	बंद
 	Closing bracket with no opening one	बंद करने वाला ब्रैकेट, जिसका कोई खोलने वाला ब्रैकेट नहीं है
 	Clumped	गुच्छेदार
@@ -900,6 +901,7 @@ antiAlias	Sharp	शार्प
 	Coarse Dots	मोटे बिंदु
 	Coincidence:	संयोग:
 	Collapse Panel Group	पैनल समूह संक्षिप्त करें
+	Cycle Display Sizes	प्रदर्शन आकार बदलें
 	Collapse Panels to Icons	सिकोड़ें करने के लिए पैनल
 	Collapse to Icons	प्रतीक के लिए पतन
 	Collate	कोलेट
@@ -1084,6 +1086,18 @@ antiAlias	Sharp	शार्प
 	Copyright	कॉपीराइट
 	Copyright and Contact Info	कॉपीराइट और संपर्क जानकारी
 	Copyright Info URL:	कॉपीराइट जानकारी URL:
+	Save Metadata Template…	मेटाडेटा टेम्पलेट सेव करें…
+	Import Options	इम्पोर्ट विकल्प
+	Clear existing fields and use the template's	मौजूदा फ़ील्ड साफ़ करें और टेम्पलेट के फ़ील्ड उपयोग करें
+	Keep existing fields, but replace those the template has	मौजूदा फ़ील्ड रखें, लेकिन टेम्पलेट में मौजूद फ़ील्ड बदलें
+	Keep existing fields, but append those the template has	मौजूदा फ़ील्ड रखें, लेकिन टेम्पलेट में मौजूद फ़ील्ड जोड़ें
+@msg	the template name can't be empty	टेम्पलेट का नाम खाली नहीं हो सकता
+@msg	the template name isn't usable as a file name	टेम्पलेट का नाम फ़ाइल नाम के रूप में उपयोग नहीं किया जा सकता
+@msg	no metadata templates folder here	यहाँ कोई मेटाडेटा टेम्पलेट फ़ोल्डर नहीं है
+@msg	give `name` or `path`, not both	`name` या `path` दें, दोनों नहीं
+@msg	give one of `path`, `name` and `data`	`path`, `name` और `data` में से एक दें
+@msg	mode must be replace, keep or append	मोड replace, keep या append होना चाहिए
+@msg	the file is not an XMP metadata template	फ़ाइल XMP मेटाडेटा टेम्पलेट नहीं है
 	Copyright Notice:	कॉपीराइट सूचना:
 	Copyright Status:	कॉपीराइट स्थिति:
 	Copyright Symbol	कॉपीराइट सिंबल
@@ -1842,6 +1856,7 @@ antiAlias	Sharp	शार्प
 	Highlight Size	हाइलाइट आकार
 	Blend Steps	ब्लेंड चरण
 	Shading Color	शेडिंग रंग
+	Black Overprint	काला ओवरप्रिंट
 	Draw Hidden Faces	छिपे हुए फलक बनाएँ
 	Eyedropper	आईड्रॉपर
 	Eyedropper Applies:	आईड्रॉपपर लागू होता है:
@@ -1990,6 +2005,8 @@ antiAlias	Sharp	शार्प
 	Font Family, Style & Size	फ़ॉन्ट परिवार, स्टाइल और आकार
 	Font Family:	फ़ॉन्ट परिवार:
 	Font List	फ़ॉन्ट सूची
+	Show Similar Fonts	समान फ़ॉन्ट दिखाएँ
+	Clear Similar Fonts	समान फ़ॉन्ट साफ़ करें
 	Font Preview Size	फ़ॉन्ट प्रीव्यू साइज़
 	Font Size	फ़ॉन्ट साइज़
 	Font Size:	फ़ॉन्ट साइज़:
@@ -2125,6 +2142,8 @@ antiAlias	Sharp	शार्प
 	Graph Design	ग्राफ़ डिजाइन
 	Graph Marker	ग्राफ़ मार्कर
 	Graph Type	ग्राफ़ टाइप
+	Graph Type…	ग्राफ़ टाइप…
+	Graph Data…	ग्राफ़ डेटा…
 	Graph Options	ग्राफ़ विकल्प
 	Left Axis	बायाँ एक्सिस
 	Right Axis	दायाँ एक्सिस
@@ -2142,6 +2161,7 @@ antiAlias	Sharp	शार्प
 	Connect Data Points	डेटा पॉइंट जोड़ें
 	Edge-to-Edge Lines	किनारे से किनारे तक रेखाएँ
 	Draw Filled Lines	भरी हुई रेखाएँ बनाएँ
+	Line Width	रेखा की चौड़ाई
 	Tick Values	टिक मान
 	Override Calculated Values	परिकलित मानों को बदलें
 	Divisions	विभाजन
@@ -2358,6 +2378,10 @@ antiAlias	Sharp	शार्प
 	ICC Profile	ICC प्रोफ़ाइल
 	ICF Bottom/Left	ICF बॉटम/लेफ्ट
 	ICF Box	ICF बॉक्स
+	Show Sample	नमूना दिखाएँ
+	Hide Sample	नमूना छिपाएँ
+	Max Ascent/Descent	अधिकतम एसेंट/डिसेंट
+	Max Ascender	अधिकतम एसेंडर
 	ICF Top/Right	ICF ऊपर/दाएँ
 	Identify Objects By	ऑब्जेक्ट्स की पहचान करके
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	अगर ड्रॉइंग टैबलेट के पेन से ड्रॉ नहीं हो रहा, तो X11 (XWayland) ऑप्शन चुनें।
@@ -2484,6 +2508,7 @@ antiAlias	Sharp	शार्प
 	Isolate Blending	ब्लेंडिंग अलग करें
 	Isolate Group	अलग समूह
 	Isolate Selected Group	सिलेक्टेड समूह अलग करें
+	Isolate Selected Path	सिलेक्टेड पाथ अलग करें
 	Isolate Selected Object	सिलेक्टेड ऑब्जेक्ट को अलग करें
 	Isometric Bottom	आइसोमेट्रिक बॉटम
 	Isometric Left	आइसोमेट्रिक लेफ्ट
@@ -2732,6 +2757,10 @@ antiAlias	Sharp	शार्प
 	Live Shape	लाइव आकार
 	Live Shape Properties	लाइव शेप प्रॉपर्टीज़
 	Load Actions…	एक्शन्स लोड करें…
+	Reset Actions	एक्शन्स रीसेट करें
+	Replace the current actions with the default set?	मौजूदा एक्शन्स को डिफ़ॉल्ट सेट से बदलें?
+	Append adds the default set after the current sets instead.	जोड़ें इसके बजाय डिफ़ॉल्ट सेट को मौजूदा सेट के बाद जोड़ता है।
+	Append	जोड़ें
 	Load Color Profile…	लोड कलर प्रोफ़ाइल…
 	Load EPS into Clipboard	ईपीएस को क्लिपबोर्ड में लोड करें
 	Load Image into Clipboard	क्लिपबोर्ड में इमेज लोड करें
@@ -3658,6 +3687,8 @@ antiAlias	Sharp	शार्प
 	Polygon	बहुभुज
 	Polygon Properties:	बहुभुज प्रॉपर्टीज़:
 	Polygon Tool	पॉलीगोन टूल
+	Polygonal Lasso	बहुभुज लैस्सो
+	Polygonal Lasso Tool	बहुभुज लैस्सो टूल
 	Portrait	पोर्ट्रेट
 	Portrait (flipped)	पोर्ट्रेट (फ्लिप)
 	Portuguese	पुर्तगाली
@@ -3773,6 +3804,8 @@ antiAlias	Sharp	शार्प
 	Insert Aki Left	बाईं ओर आकी जोड़ें
 	Insert Aki Right	दाईं ओर आकी जोड़ें
 	Tsume	त्सुमे
+	Adjust Horizontal Diacritic Position	डायक्रिटिक की क्षैतिज स्थिति समायोजित करें
+	Adjust Vertical Diacritic Position	डायक्रिटिक की लंबवत स्थिति समायोजित करें
 	Proportional Oldstyle	आनुपातिक ओल्डस्टाइल
 	Protect Corners	कॉर्नर को सुरक्षित रखें
 	Proximity Guides	निकटता गाइड
@@ -4137,6 +4170,12 @@ antiAlias	Sharp	शार्प
 	Responsive	उत्तरदायी
 	Restore	पुनर्स्थापित करें
 	Restore every preference to its default (applied on OK)	प्रत्येक वरीयता को उसके डिफ़ॉल्ट में पुनर्स्थापित करें ( OK पर लागू)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	पिक्सेल को छोड़कर बिल्ट-इन साइज़ वाले नए डॉक्यूमेंट और कोई इकाई दर्ज न करने वाली खोली गई फ़ाइलों की इकाई; इसे यहाँ चुनकर ठीक है पर क्लिक करने से यह सक्रिय डॉक्यूमेंट की इकाई भी बन जाती है।
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	स्ट्रोक की मोटाई, डैश और गैप इस इकाई में दिखते हैं, और उनके लिए टाइप की गई संख्याएँ इसी इकाई में पढ़ी जाती हैं।
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	टाइप साइज़, लीडिंग और बेसलाइन शिफ़्ट इस इकाई में दिखते हैं, और उनके लिए टाइप की गई संख्याएँ इसी इकाई में पढ़ी जाती हैं।
+	The unit for East Asian type measurements, which no field uses yet.	पूर्वी एशियाई टाइप के माप की इकाई, जिसका अभी कोई फ़ील्ड उपयोग नहीं करता।
+	When on, a number typed without a unit into a field in picas is read in points.	चालू होने पर, पाइका वाले फ़ील्ड में बिना इकाई के टाइप की गई संख्या पॉइंट्स में पढ़ी जाती है।
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID चुनने पर ऑब्जेक्ट के नाम लेयर्स, वेरिएबल्स और लेयर ऑप्शन्स में XML ID के रूप में दिखते हैं।
 	Reset all preferences to their defaults?	सभी प्रेफ़रेंसेज़ को उनके डिफ़ॉल्ट पर रीसेट करें?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	डिफ़ॉल्ट तब लागू होते हैं जब आप प्रेफ़रेंसेज़ में ठीक है पर क्लिक करते हैं। वहाँ रद्द करें आपकी मौजूदा प्रेफ़रेंसेज़ बनाए रखता है।
 	Restore Recovered Documents	पुनर्स्थापना डॉक्यूमेंट
@@ -4189,6 +4228,7 @@ antiAlias	Sharp	शार्प
 	Roman Hanging Punctuation	रोमन हैंगिंग विराम चिह्न
 	Korean Line Break Anywhere	कोरियाई लाइन ब्रेक कहीं भी
 	Bunri-Kinshi	बुनरी-किंशी
+	Kurikaeshi Moji Shori	कुरिकाएशी मोजी शोरी
 	East Asian Composition Settings	पूर्वी एशियाई संरचना सेटिंग्स
 	Korean Composition Settings	कोरियाई संरचना सेटिंग्स
 	Rotate	घुमाएँ
@@ -4316,6 +4356,7 @@ antiAlias	Sharp	शार्प
 	Save Transparency Flattener Preset	ट्रांसपेरेंसी फ़्लैटनर प्रीसेट सेव करें
 	Save Transparency Flattener Preset…	ट्रांसपेरेंसी फ़्लैटनर प्रीसेट सेव करें…
 	Save Variable Library…	वेरिएबल लाइब्रेरी सेव करें…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	"इम्पोर्ट करें" .csv, .tsv, .txt या .xml एक्सटेंशन वाली डेटा स्रोत फ़ाइल पढ़ता है
 	Save…	सेव…
 	Saved	सेव किए गए
 	SAVED	सेव किए गए
@@ -4428,6 +4469,8 @@ antiAlias	Sharp	शार्प
 	Search artboards	खोज आर्टबोर्ड
 	Search commands and tools	खोज आदेश और टूल
 	Search commands and tools…	आदेश और टूल खोजें…
+	Recent Commands	हाल के आदेश
+	No recent commands	कोई हाल का आदेश नहीं
 	Search Commands…	कमांड खोजें…
 	Search Fonts Folder	खोज फ़ॉन्ट फ़ोल्डर
 	Search images	इमेज खोजना
@@ -4649,6 +4692,12 @@ antiAlias	Sharp	शार्प
 	Show Center Mark	शो सेंटर मार्क
 	Show Code	कोड दिखाएं
 	Show color bars	रंग सलाखों दिखाएँ
+	Show brightness and hue on wheel	व्हील पर ब्राइटनेस और ह्यू दिखाएँ
+	Show saturation and hue on wheel	व्हील पर सैचुरेशन और ह्यू दिखाएँ
+	Add Color Tool	रंग जोड़ें टूल
+	Remove Color Tool	रंग हटाएँ टूल
+	Remove Color	रंग हटाएँ
+	Find the selected colors in the artwork	चयनित रंगों को आर्टवर्क में खोजें
 	Show Color Groups	रंग समूह दिखाएँ
 	Show Color Swatches	रंग स्वॉचेस दिखाएँ
 	Show Corner Widget	शो कॉर्नर विजेट
@@ -5010,6 +5059,9 @@ antiAlias	Sharp	शार्प
 	Styling:	स्टाइल:
 	Stylistic	स्टाइलिस्ट
 	Stylistic Alternates	शैलीगत ऑप्शन
+	Ligatures	लिगेचर
+	Ornaments	अलंकरण
+	Figures	अंक
 	Stylistic Sets	स्टाइलिस्टिक सेट्स
 	Stylize	शैलीबद्ध करें
 	Subdivisions	उप-विभाजन
@@ -5112,6 +5164,8 @@ antiAlias	Sharp	शार्प
 	Tag (open)	टैग (ओपन)
 	Tail:	पूंछ:
 	Tamil	तमिल
+	Tangent Circle	स्पर्शी वृत्त
+	Tangent Circle…	स्पर्शी वृत्त…
 	Taper	टेपर
 	Target	लक्ष्य
 	Target Contents	लक्ष्य सामग्री
@@ -5480,6 +5534,11 @@ antiAlias	Sharp	शार्प
 	Update Modified Links	अद्यतन संशोधित लिंक
 	Update Selection	अद्यतन सिलेक्शन
 	UPPERCASE	अपरकैस
+	Sanskrit	संस्कृत
+	Nepali	नेपाली
+	Assamese	असमिया
+	Konkani	कोंकणी
+	Sindhi	सिंधी
 	Urdu	उर्दू
 	URL:	यूआरएल:
 	Use 	उपयोग 
@@ -6780,6 +6839,44 @@ antiAlias	Sharp	शार्प
 @msg	$.evalFile requires a file path	$.evalFile के लिए फ़ाइल पाथ आवश्यक है
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: टाइमआउट मिलीसेकंड की एक सीमित संख्या होनी चाहिए, 0 या अधिक
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: एक फ़ाइल पाथ और एक टाइमआउट लेता है
+@msg	assignment to a constant binding	स्थिर बाइंडिंग को मान दिया गया
+@msg	invalid array length	ऐरे की लंबाई अमान्य है
+@msg	array literal too long	ऐरे लिटरल बहुत लंबा है
+@msg	the value is not a function	मान कोई फ़ंक्शन नहीं है
+@msg	apply was called on a value that is not a function	apply को ऐसे मान पर कॉल किया गया जो फ़ंक्शन नहीं है
+@msg	the argument list is not an object	आर्गुमेंट सूची कोई ऑब्जेक्ट नहीं है
+@msg	too many arguments	बहुत अधिक आर्गुमेंट
+@msg	the value is not a constructor	मान कोई कंस्ट्रक्टर नहीं है
+@msg	cannot convert the object to a primitive value	ऑब्जेक्ट को प्रिमिटिव मान में नहीं बदला जा सकता
+@msg	cannot convert undefined or null to an object	undefined या null को ऑब्जेक्ट में नहीं बदला जा सकता
+@msg	the right side of 'in' is not an object	'in' का दायाँ पक्ष कोई ऑब्जेक्ट नहीं है
+@msg	the right side of 'instanceof' is not a function	'instanceof' का दायाँ पक्ष कोई फ़ंक्शन नहीं है
+@msg	the function's prototype is not an object	फ़ंक्शन का प्रोटोटाइप कोई ऑब्जेक्ट नहीं है
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} परिभाषित नहीं है
+@msg	cannot read property '{key}' of {base}	{base} की प्रॉपर्टी '{key}' पढ़ी नहीं जा सकती
+@msg	cannot set property '{key}' of {base}	{base} की प्रॉपर्टी '{key}' सेट नहीं की जा सकती
+@msg	cannot read a property of {base}	{base} की कोई प्रॉपर्टी पढ़ी नहीं जा सकती
+@msg	cannot set a property of {base}	{base} की कोई प्रॉपर्टी सेट नहीं की जा सकती
+@msg	cannot define property '{key}': {why}	प्रॉपर्टी '{key}' परिभाषित नहीं की जा सकती: {why}
+@msg	cannot assign to property '{key}': {why}	प्रॉपर्टी '{key}' को मान नहीं दिया जा सकता: {why}
+@msg	cannot delete property '{key}'	प्रॉपर्टी '{key}' हटाई नहीं जा सकती
+@msg	cannot declare function {ident}	फ़ंक्शन {ident} घोषित नहीं किया जा सकता
+@msg	invalid assignment target	मान देने का लक्ष्य अमान्य है
+@msg	the array's length is read-only	ऐरे की लंबाई केवल-पठन है
+@msg	the property cannot be redefined	प्रॉपर्टी को फिर से परिभाषित नहीं किया जा सकता
+@msg	the object is not extensible	ऑब्जेक्ट विस्तार योग्य नहीं है
+@msg	the length cannot be redefined	लंबाई को फिर से परिभाषित नहीं किया जा सकता
+@msg	it is read-only	यह केवल-पठन है
+@msg	an element cannot be deleted	कोई तत्व हटाया नहीं जा सकता
+@msg	it has only a getter	इसमें केवल getter है
+@msg	the value is a primitive	मान प्रिमिटिव है
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file} की लाइन {line}, कॉलम {column}: {e} (थ्रो किया गया)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: लाइन {line}, कॉलम {column}: {e} (थ्रो किया गया)
 @msg	{name}: {e} (thrown)	{name}: {e} (थ्रो किया गया)
@@ -6820,6 +6917,27 @@ antiAlias	Sharp	शार्प
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: कोई डायलॉग किसी बिल्ट-इन फ़ंक्शन के कॉलबैक, getter, रूपांतरण या $.evalFile द्वारा चलाई गई फ़ाइल के भीतर नहीं खुल सकता; इसे स्क्रिप्ट के अपने कोड से कॉल करें
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: `answers` में अगला उत्तर {_1} के लिए है, {name} के लिए नहीं
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` में इस डायलॉग के लिए कोई उत्तर नहीं बचा है
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` में {n} उत्तर है जिसका स्क्रिप्ट ने उपयोग नहीं किया|`answers` में {n} उत्तर हैं जिनका स्क्रिप्ट ने उपयोग नहीं किया
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} ने ब्रश के नीचे {n} ऑब्जेक्ट को अपरिवर्तित छोड़ा ({_2}): यह केवल पाथ को नया आकार देता है|{_1} ने ब्रश के नीचे {n} ऑब्जेक्ट्स को अपरिवर्तित छोड़ा ({_2}): यह केवल पाथ्स को नया आकार देता है
+liquify-tool	Warp	वार्प टूल
+liquify-tool	Twirl	ट्वर्ल टूल
+liquify-tool	Pucker	सिकोड़ें टूल
+liquify-tool	Bloat	फुलाएँ टूल
+liquify-tool	Scallop	स्कैलप टूल
+liquify-tool	Crystallize	क्रिस्टलीकरण टूल
+liquify-tool	Wrinkle	शिकन टूल
+liquify-kind	graphs	ग्राफ़
+liquify-kind	type	टाइप
+liquify-kind	symbols	सिंबल्स
+liquify-kind	images	चित्र
+liquify-kind	meshes	मेश
+liquify-kind	envelopes	एन्वेलप्स
+liquify-kind	repeats	दोहराव
+liquify-kind	placed documents	प्लेस्ड डॉक्यूमेंट्स
+liquify-kind	blends	ब्लेंड्स
+liquify-list-two	{0}, {1}	{0} और {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} और {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} स्क्रिप्ट के लिए बहुत बड़ा है
 @msg	vc.log: the log of this run is full	vc.log: इस रन का लॉग भर गया है
 @msg	this function's script run has ended	इस फ़ंक्शन का स्क्रिप्ट रन समाप्त हो गया है
@@ -6970,6 +7088,7 @@ antiAlias	Sharp	शार्प
 @msg	every search thread stopped on an internal error (please report this bug)	प्रत्येक खोज धागा एक आंतरिक त्रुटि पर बंद कर दिया (कृपया इस बग की रिपोर्ट करें)
 @msg	exit isolation mode first	पहले अलगाव मोड से बाहर निकलें
 @msg	Expand Appearance: the selection has a basic appearance	उपस्थिति का विस्तार: सिलेक्शन में एक बुनियादी उपस्थिति है
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	कुछ रास्टर इफ़ेक्ट इमेज में नहीं बदले गए: उनके लिए 1,024 से अधिक इमेज या कुल 256 मेगापिक्सेल लगते
 @msg	Expand: no brush strokes selected	विस्तार: सिलेक्टेड कोई ब्रश स्ट्रोक नहीं
 @msg	Expand: no gradient fills	एक्सपैंड: कोई ग्रेडिएंट फ़िल नहीं
 @msg	Expand: nothing to expand	विस्तार: विस्तार करने के लिए कुछ नहीं
@@ -7820,7 +7939,7 @@ antiAlias	Sharp	शार्प
 @msg	parameters must be an object	parameters एक ऑब्जेक्ट होना चाहिए
 @msg	params must be an object	params एक ऑब्जेक्ट होना चाहिए
 @msg	part of the program isn't valid PostScript text	कार्यक्रम का हिस्सा मान्य नहीं है PostScript टेक्स्ट
-@msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice और/या type दें
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	newName, registration, exportType, nineSlice, type और/या alignToPixelGrid दें
 @msg	passwords can have up to {MAX_PASSWORD} bytes	पासवर्ड {MAX_PASSWORD} बाइट्स तक हो सकता है
 @msg	paste unavailable	पेस्ट करें अनुपलब्ध
 @msg	Pasting	चिपकाना
@@ -7873,7 +7992,9 @@ antiAlias	Sharp	शार्प
 @msg	position must be normal, superscript or subscript	position normal, superscript या subscript होना चाहिए
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position को topLeft, topRight, bottomLeft या bottomRight होना चाहिए
 @msg	positions must be between 0 and 100000 pt	positions 0 और 100000 pt के बीच होनी चाहिए
+@msg	ppi can't be more than {max} for this image	इस छवि के लिए ppi {max} से अधिक नहीं हो सकता
 @msg	ppi must be a positive number, not {ppi}	ppi एक धनात्मक संख्या होनी चाहिए, {ppi} नहीं
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim छवि के पिक्सेल जैसे हैं वैसे ही रखता है: ppi न दें
 @msg	ppi must be between 1 and 2400	ppi 1 और 2400 के बीच होना चाहिए
 @msg	precision must be from 0.001 to 10 pt	precision 0.001 से 10 pt तक होनी चाहिए
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}`, transforms|bounds|fileDimensions|fit|fill में से नहीं है
@@ -8040,8 +8161,38 @@ antiAlias	Sharp	शार्प
 @msg	select paths to join	जोड़ने के लिए पाथ सिलेक्ट करें
 @msg	select paths with dashed strokes to expand	विस्तृत करने के लिए डैश स्ट्रोक के साथ पाथ सिलेक्ट करें
 @msg	select paths, or segments, to divide	विभाजित करने के लिए पाथ, या खंड चुनें
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	उभयनिष्ठ स्पर्शरेखाएँ…
+	Common Tangents	उभयनिष्ठ स्पर्शरेखाएँ
+	Tangents	स्पर्शरेखाएँ
+	Centerline	केंद्र रेखा
+	External	बाहरी
+	Internal	आंतरिक
+@msg	select two closed paths	दो बंद पाथ चुनें
+@msg	a selected path is open	चुना गया एक पाथ खुला है
+@msg	a selected path is not convex	चुना गया एक पाथ उत्तल नहीं है
+@msg	a selected path has no area	चुने गए एक पाथ का कोई क्षेत्रफल नहीं है
+@msg	a selected path has more than 10000 segments	चुने गए एक पाथ में 10000 से अधिक खंड हैं
+@msg	the two paths have the same outline	दोनों पाथ की रूपरेखा एक जैसी है
+@msg	One path lies inside the other, so they have no common tangents	एक पाथ दूसरे के अंदर है, इसलिए उनकी कोई उभयनिष्ठ स्पर्शरेखा नहीं है
+@msg	The paths overlap, so they have no internal tangents	पाथ एक-दूसरे पर चढ़े हुए हैं, इसलिए उनकी कोई आंतरिक स्पर्शरेखा नहीं है
+@msg	One path lies inside the other, so they have no internal tangents	एक पाथ दूसरे के अंदर है, इसलिए उनकी कोई आंतरिक स्पर्शरेखा नहीं है
 @msg	select plain rectangles, ellipses or regular polygons to convert	बदलने के लिए सादे आयत, अंडाकार या नियमित बहुभुजों सिलेक्ट करें
 @msg	Select point type	पॉइंट टाइप सिलेक्ट करें
+@msg	select two or three paths or compound paths	दो या तीन पाथ या यौगिक पाथ सिलेक्ट करें
+@msg	`ids` names an object twice	`ids` एक ऑब्जेक्ट को दो बार बताता है
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` 0.01 से 1000000 pt तक होना चाहिए
+@msg	two shapes need a `radius`	दो आकृतियों के लिए `radius` चाहिए
+@msg	three shapes set the radius themselves: leave `radius` out	तीन आकृतियाँ त्रिज्या खुद तय करती हैं: `radius` न दें
+@msg	`circle` must be from 0 to 64	`circle` 0 से 64 तक होना चाहिए
+@msg	a shape has no outline	एक आकृति की कोई आउटलाइन नहीं है
+@msg	the shapes are too complex: at most 2000 segments in all	आकृतियाँ बहुत जटिल हैं: कुल मिलाकर अधिकतम 2000 सेगमेंट
+@msg	these shapes take too long to search	इन आकृतियों की खोज में बहुत ज़्यादा समय लगता है
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	इन आकृतियों को 64 से ज़्यादा वृत्त छूते हैं: शायद वे पूरे वक्र के साथ छूते हैं
+@msg	no circle touches these shapes	कोई भी वृत्त इन आकृतियों को नहीं छूता
+@msg	`circle` is past the last circle found ({found})	`circle` मिले हुए आखिरी वृत्त से आगे है ({found})
+@msg	object {value} is not a path or compound path	ऑब्जेक्ट {value} पाथ या यौगिक पाथ नहीं है
+@msg	these shapes are too small to measure	ये आकृतियाँ मापने के लिए बहुत छोटी हैं
 @msg	select rows or objects to collect	इकट्ठा करने के लिए पंक्तियों या ऑब्जेक्ट्स सिलेक्ट करें
 @msg	select segments, or paths, to add points to	पॉइंट्स जोड़ने के लिए सेगमेंट या पाथ सिलेक्ट करें
 @msg	select some type first	पहले कुछ टाइप सिलेक्ट करें
@@ -8625,6 +8776,8 @@ antiAlias	Sharp	शार्प
 @msg	unknown overprints `{v}` (preserve, simulate or discard)	अज्ञात ओवरप्रिंट `{v}` (preserve, simulate या discard)
 @msg	unknown panel	अज्ञात पैनल
 @msg	unknown panel `{raw}`	अज्ञात पैनल `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` के पास बदलने के लिए कोई प्रदर्शन आकार नहीं है
+@msg	the panels are not shown	पैनल नहीं दिखाए गए हैं
 @msg	panels can't be shown in Presentation Mode	प्रस्तुति मोड में पैनल्स नहीं दिखाए जा सकते
 @msg	unknown parameter `{key}`; did you mean `{near}`?	अज्ञात पैरामीटर `{key}`; क्या आपको `{near}` का मतलब है?
 @msg	unknown parameter `{key}`; the command takes no parameters	अज्ञात पैरामीटर `{key}`; कमांड कोई पैरामीटर नहीं लेता है
@@ -8974,6 +9127,8 @@ theme	Appearance	अपीयरेंस
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	इंपोर्टर 1 से {MAX_EXTENSIONS} `extensions` घोषित करता है
 @msg	an importer always gets an import's budget: leave `budget` out	इंपोर्टर को हमेशा इंपोर्ट का बजट मिलता है: `budget` छोड़ दें
 @msg	side is left or right, not `{s}`	side left या right होना चाहिए, `{s}` नहीं
+@msg	side is left or right, not `{v}`	side left या right होना चाहिए, `{v}` नहीं
+@msg	order is a whole number from 0 to {others}, not `{v}`	order 0 से {others} तक की पूर्ण संख्या होनी चाहिए, `{v}` नहीं
 	Ignore All	सभी को अनदेखा करें
 	Add to Dictionary	शब्दकोश में जोड़ें
 	No Suggestions	कोई सुझाव नहीं
@@ -9055,6 +9210,8 @@ theme	Appearance	अपीयरेंस
 @msg	No bridge of this width fits across the selected art	इस चौड़ाई का कोई ब्रिज चुने गए आर्टवर्क के पार नहीं आता
 @msg	Some islands could not be joined to the area around the art	कुछ आइलैंड आर्टवर्क के आसपास के क्षेत्र से नहीं जोड़े जा सके
 @msg	`width` must be from {lo} to {hi} pt	`width` {lo} से {hi} pt तक होना चाहिए
+@msg	`angle` must be from -180 to 180 degrees	`angle` -180 से 180 डिग्री तक होना चाहिए
+@msg	`roundness` must be from 1 to 100%	`roundness` 1 से 100% तक होना चाहिए
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 से {MAX_BRIDGES_PER_ISLAND} तक पूरी संख्या होना चाहिए
 	Weed Box and Lines…	वीड बॉक्स और लाइनें…
 	Weed Box and Lines	वीड बॉक्स और लाइनें
@@ -9188,3 +9345,40 @@ theme	Appearance	अपीयरेंस
 	Nest Shapes…	आकृतियाँ सटाकर रखें…
 	Nest Shapes	आकृतियाँ सटाकर रखें
 	Roll	रोल
+	Packaging Tools	पैकेजिंग टूल्स
+	Fold Lines	फ़ोल्ड लाइनें
+	Make Cut Line	कट लाइन बनाएँ
+	Make Crease Line	क्रीज़ लाइन बनाएँ
+	Make Partial Cut Line	आंशिक कट लाइन बनाएँ
+	Make Perforation Line	परफ़ोरेशन लाइन बनाएँ
+	Make Fold Line	फ़ोल्ड लाइन बनाएँ
+	Role Swatches…	लाइन प्रकार के स्वॉचेस…
+	Role Swatches	लाइन प्रकार के स्वॉचेस
+	Role	लाइन प्रकार
+	Cut Line	कट लाइन
+	Crease Line	क्रीज़ लाइन
+	Partial Cut Line	आंशिक कट लाइन
+	Perforation Line	परफ़ोरेशन लाइन
+	No objects are selected.	कोई ऑब्जेक्ट सिलेक्ट नहीं है।
+	Open a document to mark its fold lines.	फ़ोल्ड लाइनें मार्क करने के लिए कोई डॉक्यूमेंट ओपन करें।
+	Remove Fold Line Role	लाइन प्रकार हटाएँ
+	Check	चेक करें
+	Check Fold Lines	फ़ोल्ड लाइनें चेक करें
+@msg	No cut lines are in the selection.	सिलेक्शन में कोई कट लाइन नहीं है।
+@msg	No cut lines are in the document.	डॉक्यूमेंट में कोई कट लाइन नहीं है।
+@msg	The cut lines do not enclose an area.	कट लाइनें कोई एरिया नहीं घेरतीं।
+@msg	A cut line ends without meeting another cut line.	एक कट लाइन किसी दूसरी कट लाइन से मिले बिना खत्म हो जाती है।
+@msg	A gap between cut lines was closed.	कट लाइनों के बीच का गैप बंद कर दिया गया।
+@msg	The fold lines are too complex to check.	फ़ोल्ड लाइनें चेक करने के लिए बहुत जटिल हैं।
+@msg	A cut line and a crease lie on top of each other.	एक कट लाइन और एक क्रीज़ लाइन एक-दूसरे के ऊपर हैं।
+@msg	No cut lines are among the given objects.	दिए गए ऑब्जेक्ट में कोई कट लाइन नहीं है।
+@msg	Two fold lines lie on top of each other.	दो फ़ोल्ड लाइनें एक-दूसरे के ऊपर हैं।
+@msg	A crease ends inside a panel.	एक क्रीज़ लाइन किसी पैनल के अंदर खत्म होती है।
+@msg	A crease does not divide two panels.	एक क्रीज़ लाइन दो पैनलों को अलग नहीं करती।
+@msg	A crease lies outside the cut outline, wholly or in part.	एक क्रीज़ लाइन पूरी तरह या आंशिक रूप से कट आउटलाइन के बाहर है।
+@msg	The pieces of a hinge are not on one straight line.	एक हिंज के हिस्से एक सीधी लाइन पर नहीं हैं।
+@msg	A gap between cut lines is too narrow to tell apart.	कट लाइनों के बीच का गैप पहचानने के लिए बहुत पतला है।
+@msg	A cut-out area holds other fold lines or another blank.	एक कट-आउट एरिया में दूसरी फ़ोल्ड लाइनें या दूसरा ब्लैंक है।
+@msg	A panel is not joined to the rest by a crease.	कोई पैनल किसी क्रीज़ लाइन से बाकी से जुड़ा नहीं है।
+@msg	A fold line is on a non-printing layer.	एक फ़ोल्ड लाइन नॉन-प्रिंटिंग लेयर पर है।
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	पैनल: {panels}, हिंज: {hinges}, एरर: {errors}, वॉर्निंग: {warnings}
