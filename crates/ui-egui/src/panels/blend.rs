@@ -16,7 +16,7 @@ use vectorcraft_doc::live::BlendSpineMode;
 use super::selection_len;
 use crate::VectorcraftApp;
 use crate::dialogs::blend_options::{SPACING, orientation_button};
-use crate::widgets;
+use crate::widgets::{self, Live};
 
 pub const ID: &str = "blend";
 
@@ -64,6 +64,22 @@ fn spacing_params(mode: &str, steps: f64, distance: f64) -> Value {
         "distance" => json!({"spacing": "distance", "distance": distance}),
         _ => json!({"spacing": "smooth"}),
     }
+}
+
+/// The Ramp or Shift slider: `key` of `object.blend.options` as a percentage from `min` to 100.
+/// A drag previews the selected blends and its release records one undo step; a click on the
+/// rail or an arrow key records one at once.
+fn percent_slider(app: &mut VectorcraftApp, ui: &mut Ui, key: &str, value: Option<f64>, min: f64) {
+    let mut v = value.unwrap_or(0.0).clamp(min, 100.0);
+    let resp = widgets::slider(ui, egui::Slider::new(&mut v, min..=100.0).suffix("%"));
+    let phase = if resp.drag_stopped() || (resp.changed() && !resp.dragged()) {
+        Live::Released
+    } else if resp.changed() {
+        Live::Dragging
+    } else {
+        return;
+    };
+    crate::panels::live_run(app, "Blend Options", "object.blend.options", json!({ key: v }), phase);
 }
 
 /// Spacing and Orientation, as `object.blend.info` reports them; a change runs
@@ -122,20 +138,10 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
                 change = Some(json!({"easingType": mode}));
             }
         });
-        widgets::label_row(ui, tl!("Ramp:"), LABEL_W, |ui| {
-            let mut ramp = info["ramp"].as_f64().unwrap_or(0.0);
-            if ui.add(egui::Slider::new(&mut ramp, 0.0..=100.0).suffix("%")).changed() {
-                change = Some(json!({"ramp": ramp}));
-            }
-        });
+        widgets::label_row(ui, tl!("Ramp:"), LABEL_W, |ui| percent_slider(app, ui, "ramp", info["ramp"].as_f64(), 0.0));
     });
     ui.add_enabled_ui(selected, |ui| {
-        widgets::label_row(ui, tl!("Shift:"), LABEL_W, |ui| {
-            let mut shift = info["colorShift"].as_f64().unwrap_or(0.0);
-            if ui.add(egui::Slider::new(&mut shift, -100.0..=100.0).suffix("%")).changed() {
-                change = Some(json!({"colorShift": shift}));
-            }
-        });
+        widgets::label_row(ui, tl!("Shift:"), LABEL_W, |ui| percent_slider(app, ui, "colorShift", info["colorShift"].as_f64(), -100.0));
     });
     if let Some(p) = change {
         app.run("object.blend.options", p).ok();

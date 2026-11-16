@@ -11811,6 +11811,14 @@ so its point at `t` moves by (dx, dy), turning a straight spine into a curve (`p
 {"name":"run_command","arguments":{"command":"object.blend.spine.moveAnchor","params":{"id":40,"anchor":1,"x":150,"y":20}}}
 ```
 
+`object.blend.options {id?, spacing?, value?, steps?, distance?, orientation?, smooth?, easingType?, ramp?, colorShift?}`
+sets the options of every selected blend, or of the blend `id` alone. Each blend takes only the options given and
+keeps its own value for the others, so a call with `colorShift` alone leaves each blend's spacing, orientation, type
+and ramp as they were. A hidden or locked `id`, an `id` that is not a blend and a value out of range are errors that
+change nothing, and a call that changes no blend records no undo step. With no blend selected and no `id`, the call
+sets the spacing and orientation new blends start with. The Blend panel's Ramp and Shift sliders run it on the
+selected blends: a drag previews and its release records one undo step.
+
 `object.blend.setEasing {id?, easingType?, ramp?, colorShift?}` sets one blend's easing and color shift (the
 first selected blend without `id`) and returns `{id, easingType, ramp, colorShift, changed}`; omitted values are kept.
 `easingType` is `easeIn`, `easeOut`, `easeInOut` or `easeOutIn`, `ramp` is 0 to 100 and `colorShift` -100 to 100.

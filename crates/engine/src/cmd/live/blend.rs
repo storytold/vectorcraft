@@ -364,7 +364,19 @@ fn selected_spec(s: &Session) -> Option<(NodeId, BlendSpec, Vec<NodeId>)> {
 
 pub(super) fn blend_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.blend.options";
-    let Some((_, cur, _)) = selected_spec(s) else {
+    let id = crate::cmd::object_param(p, "id", C)?;
+    let target = match id {
+        Some(id) => {
+            let doc = &s.doc()?.doc;
+            match doc.node(id).map(|n| &n.kind) {
+                Some(NodeKind::Blend { .. }) if !doc.is_editable(id) => return Err(bad(C, "the object is hidden or locked")),
+                Some(NodeKind::Blend { spec, children }) => Some((id, (**spec).clone(), children.iter().map(|c| c.id).collect())),
+                _ => return Err(bad(C, "not a blend")),
+            }
+        }
+        None => selected_spec(s),
+    };
+    let Some((_, cur, _)) = target else {
         if ["easingType", "ramp", "colorShift"].iter().any(|key| p.get(*key).is_some_and(|v| !v.is_null())) {
             return Err(bad(C, "select a blend to set easing or color shift"));
         }
@@ -374,19 +386,59 @@ pub(super) fn blend_options(s: &mut Session, p: &Value) -> Result<Value> {
         s.prefs.blend_options = Some(BlendDefaults { spacing, orientation: orientation_param(p, d.orientation), ..d });
         return Ok(json!({ "defaults": true }));
     };
-    if gives_easing(p) && any_without_spine(s) {
+    let no_spine = if id.is_some() { cur.no_spine } else { any_without_spine(s) };
+    if gives_easing(p) && no_spine {
         return Err(bad(C, "the blend has no spine"));
     }
-    let spacing = spacing_param(p, C, cur.spacing)?;
-    let orientation = orientation_param(p, cur.orientation);
+    // Every value is checked before anything changes. Each blend then takes only the values that
+    // were given and keeps its own for the rest, so editing several blends does not copy the first
+    // one's options onto the others.
+    let given = |key: &str| p.get(key).is_some_and(|v| !v.is_null());
+    spacing_param(p, C, cur.spacing)?;
     let ease = ease_param(p, C, cur.ease)?;
     let color_shift = percent_param(p, C, "colorShift", cur.color_shift, -100.0)?;
-    edit_blends(s, "Blend Options", |_, spec| {
-        spec.spacing = spacing;
-        spec.orientation = orientation;
-        spec.ease = ease;
-        spec.color_shift = color_shift;
-    })
+    let (has_kind, has_ramp, has_shift) = (given("easingType"), given("ramp"), given("colorShift"));
+    let set = |spec: &mut BlendSpec| {
+        spec.spacing = spacing_param(p, C, spec.spacing).unwrap_or(spec.spacing);
+        spec.orientation = orientation_param(p, spec.orientation);
+        if has_kind {
+            spec.ease.kind = ease.kind;
+        }
+        if has_ramp {
+            spec.ease.ramp = ease.ramp;
+        }
+        if has_shift {
+            spec.color_shift = color_shift;
+        }
+    };
+    let targets = match id {
+        Some(id) => vec![id],
+        None => selected_of(s, is_blend),
+    };
+    let doc = &s.doc()?.doc;
+    let changes = |b: &NodeId| match doc.node(*b).map(|n| &n.kind) {
+        Some(NodeKind::Blend { spec, .. }) => {
+            let mut next = (**spec).clone();
+            set(&mut next);
+            next != **spec
+        }
+        _ => false,
+    };
+    if !targets.iter().any(changes) {
+        return ok();
+    }
+    match id {
+        Some(id) => {
+            s.edit("Blend Options", |d, _| {
+                if let Some(NodeKind::Blend { spec, .. }) = d.node_mut(id).map(|n| &mut n.kind) {
+                    set(spec);
+                }
+                Ok(())
+            })?;
+            ok()
+        }
+        None => edit_blends(s, "Blend Options", |_, spec| set(spec)),
+    }
 }
 
 pub(super) fn blend_set_easing(s: &mut Session, p: &Value) -> Result<Value> {
