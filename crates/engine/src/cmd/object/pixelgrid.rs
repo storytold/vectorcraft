@@ -174,7 +174,10 @@ fn refresh_symbols(before: &Document, doc: &mut Document) {
         return;
     }
     let was = before.pixel_aligned_symbols();
+    // The symbol whose editing mode this edit ended, if any.
     let edited_before = before.symbol_edit.as_ref().map(|e| e.symbol.as_str());
+    let edited_now = doc.symbol_edit.as_ref().map(|e| e.symbol.as_str());
+    let edit_ended = edited_before.filter(|b| edited_now != Some(*b)).map(str::to_owned);
     let mut every = false;
     for name in &aligned {
         let art_before = before.symbols.iter().find(|s| &s.name == name).map(|s| &s.art);
@@ -184,7 +187,7 @@ fn refresh_symbols(before: &Document, doc: &mut Document) {
             _ => true,
         };
         let size_changed = before.symbol_natural_xf(name) != doc.symbol_natural_xf(name);
-        if !was.contains(name) || edited_before == Some(name.as_str()) || art_changed || size_changed {
+        if !was.contains(name) || edit_ended.as_deref() == Some(name.as_str()) || art_changed || size_changed {
             snap_symbol_art(doc, name);
             every = true;
         }
