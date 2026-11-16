@@ -695,6 +695,21 @@ fn the_oklch_tracks_dim_the_colors_outside_srgb_and_the_tick_marks_the_largest_c
     assert_eq!((chroma_tick(0.0), chroma_tick(0.5)), (0.0, 1.0));
 }
 
+/// At a dark blue sRGB holds two runs of chroma with a gap between them: the C track dims the gap
+/// and shows there the color a pick stores, the top of the run under it.
+#[test]
+fn the_c_track_dims_a_gap_under_the_largest_chroma() {
+    use vectorcraft_color::oklab;
+    let (l, h) = (0.14, 264.0);
+    let max = oklab::max_chroma(l, h);
+    assert!(max > 0.09 && !oklab::in_srgb(oklab::oklch_to_srgb(l, 0.09, h)), "0.09 is in the gap under {max}");
+    let (stored, lowered) = oklab::from_oklch(l, 0.09, h);
+    let [r, g, b] = stored.map(|v| (f64::from(v).clamp(0.0, 1.0) * 255.0).round() as u8);
+    assert!(lowered);
+    assert_eq!(oklch_track([l, 0.09, h], Some(max)), egui::Color32::from_rgb(r, g, b).gamma_multiply(0.3));
+    assert_eq!(oklch_track([l, max, h], Some(max)).a(), 255, "the top of the upper run is inside sRGB");
+}
+
 /// After Edit › Color Settings picks a working RGB space other than sRGB, Panel menu › OKLCH Sliders
 /// is gray and `ui.colorWheel {sliders: "oklch"}` answers an error; rows already shown are gray.
 #[test]

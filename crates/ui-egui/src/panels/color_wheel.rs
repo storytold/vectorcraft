@@ -590,14 +590,14 @@ pub(crate) fn remembered_oklch(cms: &Cms, c: &Color, shown: [f32; 3], lch: [f64;
 }
 
 /// The color a track shows at OKLCH `lch`: the color itself inside sRGB, and outside it dimmed.
-/// A color outside sRGB shows at the largest chroma that fits at its L and H, the color a pick
-/// there stores. With `max_chroma` (the C track, whose L and H stay fixed) that chroma is given;
-/// without it, it is found for each color.
+/// A color outside sRGB shows at the largest chroma under its own that fits at its L and H, the
+/// color a pick there stores. With `max_chroma` (the C track, whose L and H stay fixed) a chroma
+/// past it shows at it; a chroma under it can still be outside sRGB, in a gap between two runs of
+/// chroma that fit, and is found as without it.
 pub(crate) fn oklch_track(lch: [f64; 3], max_chroma: Option<f64>) -> Color32 {
     let (rgb, outside) = match max_chroma {
         Some(m) if lch[1] > m => (oklab::oklch_to_srgb(lch[0], m, lch[2]), true),
-        Some(_) => (oklab::oklch_to_srgb(lch[0], lch[1], lch[2]), false),
-        None => {
+        _ => {
             let (rgb, lowered) = oklab::from_oklch(lch[0], lch[1], lch[2]);
             (rgb.map(f64::from), lowered)
         }
