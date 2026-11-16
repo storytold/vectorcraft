@@ -1155,7 +1155,9 @@ fn show_tool_cards_dims_without_tool_tips() {
             events,
             ..Default::default()
         };
-        let mut out = ctx.run_ui(raw, |ui| category_fields(ui, &mut a, d, "General"));
+        let mut out = ctx.run_ui(raw, |ui| {
+            category_fields(ui, &mut a, d, "General");
+        });
         out.textures_delta.clear();
         out.shapes.iter().find_map(|c| label(&c.shape, "Show Tool Cards"))
     };
