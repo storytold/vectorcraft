@@ -1185,9 +1185,15 @@ pub(crate) fn export(s: &mut Session, p: &Value, asked: &Value) -> Result<Value>
         .map(|mut r| {
             // Include Bleed: a PDF row that sets no bleed of its own, and whose preset gives none,
             // puts the document's bleed around the artboard, and is the same file as a row that
-            // asks for the document's bleed.
+            // asks for the document's bleed. A saved preset's bleed values stay, as they do in
+            // that row.
             if ungrown.is_some() && r.format.id == "pdf" && !r.bleed_given && !pdf_bleeds(&r.options) {
-                r.options["bleed"] = json!({ "useDocument": true });
+                match r.options.get_mut("bleed").and_then(Value::as_object_mut) {
+                    Some(b) => {
+                        b.insert("useDocument".into(), json!(true));
+                    }
+                    None => r.options["bleed"] = json!({ "useDocument": true }),
+                }
                 r.key = r.file_key();
             }
             Row { options: merge(with_black_output(s, &r.options), fill.clone()), ..r }

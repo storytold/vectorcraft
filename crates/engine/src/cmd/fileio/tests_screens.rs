@@ -683,6 +683,18 @@ fn include_bleed_pdf_pages_trim_at_the_artboard() {
     // So does it with a top-level anti-aliasing mode, which both rows take.
     let r = export(&mut s, json!({"includeBleed": true, "artboard": 0, "antiAlias": "art", "formats": [{"format": "pdf"}, document]}));
     assert_eq!(names(&r).len(), 1, "{:?}", names(&r));
+    // And with a saved PDF preset, which writes out every bleed value for both rows.
+    s.execute("pdf.preset.save", &json!({"name": "Saved Default"})).unwrap();
+    let saved = |bleed: Option<Value>| {
+        let mut row = json!({"format": "pdf", "preset": "Saved Default"});
+        if let Some(b) = bleed {
+            row["bleed"] = b;
+        }
+        row
+    };
+    let r = export(&mut s, json!({"includeBleed": true, "artboard": 0, "formats": [saved(None), saved(Some(json!({"useDocument": true})))]}));
+    assert_eq!(names(&r).len(), 1, "{:?}", names(&r));
+    assert_eq!(pages(&mut s, json!({"includeBleed": true, "artboard": 0, "formats": [saved(None)]})), [one(118.0, 118.0, 100.0)]);
     // A raster row of the same export still holds the bleed in its pixels.
     let r = export(&mut s, json!({"includeBleed": true, "artboard": 0, "formats": [document, {"format": "png"}]}));
     let png = files(&r).into_iter().find(|(n, _)| n.ends_with(".png")).unwrap().1;
