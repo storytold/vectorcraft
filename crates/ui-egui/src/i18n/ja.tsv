@@ -3195,6 +3195,8 @@ mark-style	Japanese	日本式
 @msg	`{key}` must be an array of these names: {_1}	`{key}` には {_1} の中の名前の配列を指定してください
 	Search commands and tools	コマンドとツールを検索
 	Search commands and tools…	コマンドとツールを検索…
+	Recent Commands	最近使ったコマンド
+	No recent commands	最近使ったコマンドはありません
 	Secondary	セカンダリ
 	Select All Art on Layer	レイヤー上のすべてのアートを選択
 	Select All Assets	すべてのアセットを選択
