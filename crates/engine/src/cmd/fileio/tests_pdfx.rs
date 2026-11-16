@@ -737,11 +737,14 @@ fn pdfx_flattens_layer_and_sublayer_transparency() {
         for no in ["/SMask", "/S/Transparency", "/ca ", "/CA "] {
             assert!(!text.contains(no), "{standard}: forbidden token '{no}' found in text:\n{text}");
         }
-        // Verify it can be imported back
+        // Verify it can be imported back and renders artwork
         let v = s.execute("document.exportPdf", &json!({"standard": standard})).unwrap();
         let bytes = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
         let imported = vectorcraft_pdf::import(&bytes).unwrap();
         assert!(!imported.layers.is_empty());
+        let rendered = drawn(&imported);
+        let non_white = rendered.pixels.as_chunks::<4>().0.iter().filter(|p| p[..3].iter().any(|c| *c < 240)).count();
+        assert!(non_white > 1000, "{standard}: flattened artwork failed to render, only {non_white} pixels");
     }
 
     // PDF 1.3 export with compatibility: 1.3

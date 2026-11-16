@@ -760,11 +760,16 @@ pub(crate) fn flatten_document(doc: &Document, o: &FlattenOptions) -> Result<Opt
 /// ([`expand_transparent_tile_images`]).
 pub(crate) fn flatten_expanded(doc: &Document, o: &FlattenOptions) -> Result<Option<Document>> {
     let outlining = o.text_to_outlines || o.strokes_to_outlines || !o.preserve_overprints;
+    let has_layer_container_transparency = |n: &Node| -> bool {
+        fn check(n: &Node) -> bool {
+            !n.has_default_transparency() || n.children().into_iter().flatten().any(|c| c.is_layer() && check(c))
+        }
+        check(n)
+    };
     let needs_flatten = outlining
-        || doc
-            .layers
-            .iter()
-            .any(|l| (o.no_transparency.is_some() && !l.has_default_transparency()) || o.shows_transparency(doc, l) || o.draws_see_through_image(l));
+        || doc.layers.iter().any(|l| {
+            (o.no_transparency.is_some() && has_layer_container_transparency(l)) || o.shows_transparency(doc, l) || o.draws_see_through_image(l)
+        });
     if !needs_flatten {
         return Ok(None);
     }
@@ -821,9 +826,7 @@ fn normalize_node_transparency(d: &mut Document, n: &mut Node, o: &FlattenOption
         }
     }
 
-    let has_transparency = !n.has_default_transparency()
-        || !n.appearance.effects.is_empty()
-        || n.appearance.items.iter().any(|i| i.visible() && (i.opacity() < 1.0 || i.blend() != BlendMode::Normal || !i.effects().is_empty()));
+    let has_transparency = !n.has_default_transparency() || n.shows_own_transparency();
 
     if is_layer && has_transparency {
         let children = n.children().map_or(&[][..], Vec::as_slice);
