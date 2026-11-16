@@ -190,83 +190,7 @@ fn drawn_format(bytes: &[u8]) -> Option<craft_image_codecs::Format> {
 /// `bytes` decoded as `format` within `allowance` bytes: the pixels as stored, not turned upright,
 /// as the image crate gave them.
 fn decode_as(format: craft_image_codecs::Format, bytes: &[u8], allowance: u64) -> Result<image::DynamicImage, craft_image_codecs::CodecError> {
-    decode_image(format, bytes, allowance).map(|(img, _)| img)
-}
-
-/// `bytes` decoded as `format` within `allowance` bytes, the pixels as stored (not turned
-/// upright) and as the image crate gave them ([`dynamic`]), with the ICC profile the file embeds.
-/// File › Open and Place read images with it as the renderer does.
-pub fn decode_image(
-    format: craft_image_codecs::Format,
-    bytes: &[u8],
-    allowance: u64,
-) -> Result<(image::DynamicImage, Option<Vec<u8>>), craft_image_codecs::CodecError> {
-    let opts = craft_image_codecs::DecodeOptions {
-        limits: craft_image_codecs::Limits { max_width: u32::MAX, max_height: u32::MAX, max_pixels: u64::MAX, max_alloc: allowance },
-        keep_orientation: true,
-    };
-    let mut img = craft_image_codecs::decode_as_with(format, bytes, &opts)?;
-    let icc = img.icc.take();
-    let img = dynamic(img).ok_or_else(|| craft_image_codecs::CodecError::InvalidImage("the decoded samples don't fit the image".into()))?;
-    Ok((img, icc))
-}
-
-/// A decoded image as the image crate's: 8- and 16-bit gray, gray and alpha, RGB and RGBA as they
-/// are, 32-bit float RGB and RGBA as they are, anything else as 8-bit RGBA.
-fn dynamic(img: craft_image_codecs::Image) -> Option<image::DynamicImage> {
-    use craft_image_codecs::{ChannelLayout as L, SampleType as S};
-    use image::{DynamicImage as D, ImageBuffer as B};
-    let (w, h) = img.dimensions();
-    Some(match (img.layout(), img.sample_type()) {
-        (L::Gray, S::U8) => D::ImageLuma8(B::from_raw(w, h, img.into_data())?),
-        (L::GrayA, S::U8) => D::ImageLumaA8(B::from_raw(w, h, img.into_data())?),
-        (L::Rgb, S::U8) => D::ImageRgb8(B::from_raw(w, h, img.into_data())?),
-        (L::Rgba, S::U8) => D::ImageRgba8(B::from_raw(w, h, img.into_data())?),
-        (layout @ (L::Gray | L::GrayA | L::Rgb | L::Rgba), S::U16) => {
-            let v = img.to_u16_samples()?;
-            match layout {
-                L::Gray => D::ImageLuma16(B::from_raw(w, h, v)?),
-                L::GrayA => D::ImageLumaA16(B::from_raw(w, h, v)?),
-                L::Rgb => D::ImageRgb16(B::from_raw(w, h, v)?),
-                _ => D::ImageRgba16(B::from_raw(w, h, v)?),
-            }
-        }
-        _ => D::ImageRgba8(B::from_raw(w, h, img.to_rgba8())?),
-    })
-}
-
-/// The image's size and the bytes a pixel of it takes decoded ([`decode_as`]), read from its
-/// header: palettes as RGB (RGBA with a transparent entry; GIF frames always RGBA), bitmaps as 8-bit
-/// gray, 16-bit samples as two bytes. A PNG whose header alone is there is read from its `IHDR`;
-/// a format whose header says only its size (TGA, ICO and the like) counts RGBA.
-pub fn decoded_layout(bytes: &[u8], format: craft_image_codecs::Format) -> Option<(u32, u32, u64)> {
-    use craft_image_codecs::{Format as F, RasterColorType as T};
-    if let Some(i) = craft_image_codecs::inspect_raster(bytes).ok().flatten() {
-        let deep = i.bits_per_sample > 8 && i.color_type != T::Indexed;
-        let channels = match i.color_type {
-            _ if format == F::Gif => 4,
-            T::Indexed => 3 + u64::from(i.transparent_index.is_some()),
-            T::Bitmap => 1,
-            _ => u64::from(i.channels.max(1)),
-        };
-        return Some((i.width, i.height, channels * if deep { 2 } else { 1 }));
-    }
-    if format != F::Png {
-        return vectorcraft_doc::header_size(bytes).map(|(w, h)| (w, h, 4));
-    }
-    if bytes.get(12..16)? != b"IHDR" {
-        return None;
-    }
-    let be = |at: usize| Some(u32::from_be_bytes(bytes.get(at..at + 4)?.try_into().ok()?));
-    let (depth, color) = (*bytes.get(24)?, *bytes.get(25)?);
-    let channels: u64 = match color {
-        0 => 1,
-        2 | 3 => 3,
-        4 => 2,
-        6 => 4,
-        _ => return None,
-    };
-    Some((be(16)?, be(20)?, channels * if depth == 16 { 2 } else { 1 }))
+    vectorcraft_doc::decode::decode_image(format, bytes, allowance).map(|(img, _)| img)
 }
 
 /// `bytes` decoded within [`MAX_DECODE_ALLOC`], counted as RGBA: the image's size is read from its
@@ -293,8 +217,8 @@ fn decode_in_room(bytes: &[u8]) -> Result<image::DynamicImage, (DecodeError, Und
     }
     // Within the allowance as RGBA and as decoded, a limit the decoder meets is a file that can't
     // hold the pixels its header declares: they can't be read.
-    let samples_fit =
-        decoded_layout(bytes, format).is_some_and(|(_, _, per_pixel)| (u64::from(w) * u64::from(h)).saturating_mul(per_pixel) <= allowance);
+    let samples_fit = vectorcraft_doc::decode::decoded_layout(bytes, format)
+        .is_some_and(|(_, _, per_pixel)| (u64::from(w) * u64::from(h)).saturating_mul(per_pixel) <= allowance);
     decode_as(format, bytes, allowance).map_err(|e| match e {
         craft_image_codecs::CodecError::LimitExceeded(m) if !samples_fit => (DecodeError::Limit(m), Undecoded::Unreadable),
         e => unreadable(e.to_string()),
@@ -360,7 +284,7 @@ struct Reduction {
 fn reduction(bytes: &[u8], allowance: u64) -> Option<Reduction> {
     use craft_image_codecs::Format as F;
     let format = drawn_format(bytes).filter(|f| matches!(f, F::Png | F::Jpeg | F::Gif | F::WebP))?;
-    let (w, h, per_pixel) = decoded_layout(bytes, format)?;
+    let (w, h, per_pixel) = vectorcraft_doc::decode::decoded_layout(bytes, format)?;
     let pixels = u64::from(w) * u64::from(h);
     let total_bytes = pixels.saturating_mul(per_pixel);
     // An image of more pixels than the allowance has bytes (four times what it holds as RGBA) is

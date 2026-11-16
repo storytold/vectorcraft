@@ -163,10 +163,10 @@ fn image_format(f: craft_image_codecs::Format) -> Option<&'static Format> {
 }
 
 /// The image's size and the bytes a pixel of it takes decoded, from its header
-/// ([`vectorcraft_render::decoded_layout`]), for bytes in a format craft-image-codecs tells.
+/// ([`vectorcraft_doc::decode::decoded_layout`]), for bytes in a format craft-image-codecs tells.
 fn header_layout(bytes: &[u8]) -> Option<(craft_image_codecs::Format, u32, u32, u64)> {
     let format = craft_image_codecs::detect(bytes)?;
-    let (w, h, per_pixel) = vectorcraft_render::decoded_layout(bytes, format)?;
+    let (w, h, per_pixel) = vectorcraft_doc::decode::decoded_layout(bytes, format)?;
     Some((format, w, h, per_pixel))
 }
 
@@ -1026,12 +1026,12 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
                 // A Targa file's size is read from its header, which no signature points a probe at.
                 let tga = || (kind == craft_image_codecs::Format::Tga).then(|| super::tgaread::size(bytes)).flatten().map(|(w, h)| (w, h, 4));
                 let (w, h, per_pixel) =
-                    vectorcraft_render::decoded_layout(bytes, kind).or_else(tga).ok_or_else(|| err("the image's size can't be read"))?;
+                    vectorcraft_doc::decode::decoded_layout(bytes, kind).or_else(tga).ok_or_else(|| err("the image's size can't be read"))?;
                 let pixels = u64::from(w) * u64::from(h);
                 if pixels.saturating_mul(per_pixel) > MAX_RASTER_ALLOC || pixels * 4 > MAX_RASTER_ALLOC {
                     return Err(err(format!("an image of {w} × {h} pixels is too large to draw")));
                 }
-                let (img, profile) = vectorcraft_render::decode_image(kind, bytes, MAX_RASTER_ALLOC).map_err(err)?;
+                let (img, profile) = vectorcraft_doc::decode::decode_image(kind, bytes, MAX_RASTER_ALLOC).map_err(err)?;
                 // A profile the decoder can't read leaves the image without one. A TIFF's profile is
                 // read by the TIFF reader, as before.
                 icc = match f.id {
@@ -1111,7 +1111,7 @@ pub fn texture_image(bytes: &[u8]) -> Result<String> {
         }
         None => {
             let kind = craft_image_codecs::detect(&blob.bytes).ok_or_else(|| err("the image can't be read as a texture"))?;
-            let img = vectorcraft_render::decode_image(kind, &blob.bytes, MAX_RASTER_ALLOC).map_err(err)?.0.to_rgba8();
+            let img = vectorcraft_doc::decode::decode_image(kind, &blob.bytes, MAX_RASTER_ALLOC).map_err(err)?.0.to_rgba8();
             LoadedTexture::from_rgba(img.width(), img.height(), img.as_raw())
         }
     };

@@ -14,6 +14,7 @@ pub mod cmyk;
 pub mod color_mask;
 pub mod compound_shape;
 pub mod corners;
+pub mod decode;
 pub mod depth;
 pub mod dimension;
 pub mod graph;
