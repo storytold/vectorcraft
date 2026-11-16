@@ -10,6 +10,7 @@ pub mod freeform;
 pub mod gradient;
 pub mod harmony;
 pub mod libraries;
+pub mod oklab;
 pub mod palette_io;
 pub mod recolor;
 pub mod swatch;

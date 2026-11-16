@@ -4320,6 +4320,10 @@ axis	Both	Molemmat
 	Image	Kuva
 	Ink	Muste
 	Lab	Lab
+	OKLCH Sliders	OKLCH-liukusäätimet
+	Chroma	Kroma
+	The largest chroma sRGB holds at this lightness and hue	Suurin kroma, jonka sRGB sisältää tällä vaaleudella ja sävyllä
+	OKLCH needs sRGB as the working RGB space	OKLCH vaatii sRGB:n RGB-työväriavaruudeksi
 	Medium	Keskitaso
 	Name	Nimi
 	None	Ei mitään
@@ -6356,6 +6360,8 @@ mark-style	Japanese	Japanilainen
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`-arvon on oltava grayscale, rgb, hsb, cmyk tai websafe
 @msg	`view` must be wheel or box	`view`-arvon on oltava wheel tai box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`-arvon on oltava hue, saturation, brightness, red, green tai blue
+@msg	`sliders` must be none or oklch	`sliders` on oltava none tai oklch
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH vaatii sRGB:n RGB-työväriavaruudeksi
 @msg	`{key}` must be an array of these names: {_1}	`{key}`-arvon on oltava taulukko, jossa on näitä nimiä: {_1}
 @msg	choose a destination folder	valitse kohdekansio
 @msg	choose a source folder	valitse lähdekansio

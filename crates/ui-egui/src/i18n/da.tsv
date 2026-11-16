@@ -6780,6 +6780,10 @@ axis	Both	Begge
 	Image	Billede
 	Ink	Blæk
 	Lab	Lab
+	OKLCH Sliders	OKLCH-skydere
+	Chroma	Kroma
+	The largest chroma sRGB holds at this lightness and hue	Den største kroma, sRGB kan rumme ved denne lyshed og farvetone
+	OKLCH needs sRGB as the working RGB space	OKLCH kræver sRGB som RGB-arbejdsfarverum
 	Medium	Medium
 	Name	Navn
 	None	Ingen
@@ -8479,6 +8483,8 @@ mark-style	Japanese	Japansk
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` skal være grayscale, rgb, hsb, cmyk eller websafe
 @msg	`view` must be wheel or box	`view` skal være wheel eller box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` skal være hue, saturation, brightness, red, green eller blue
+@msg	`sliders` must be none or oklch	`sliders` skal være none eller oklch
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH kræver sRGB som RGB-arbejdsfarverum
 @msg	the Color Picker is not open	farvevælgeren er ikke åben
 @msg	the screen color sampler is already open	skærmfarvesampleren er allerede åben
 @msg	this system has no screen color sampler	dette system har ingen skærmfarvesampler

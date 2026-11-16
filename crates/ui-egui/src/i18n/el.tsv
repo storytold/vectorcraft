@@ -1793,6 +1793,10 @@ font-technology	Variable	Μεταβλητές
 	Knife	Μαχαίρι (Knife)
 	Knockout Group	Ομάδα διάτρησης
 	Lab	Lab
+	OKLCH Sliders	Ρυθμιστικά OKLCH
+	Chroma	Χρωματική ένταση
+	The largest chroma sRGB holds at this lightness and hue	Η μεγαλύτερη χρωματική ένταση που χωρά το sRGB σε αυτή τη φωτεινότητα και απόχρωση
+	OKLCH needs sRGB as the working RGB space	Το OKLCH απαιτεί sRGB ως χώρο εργασίας RGB
 	Lab Spot Colors:	Πλακάτα χρώματα Lab:
 	Lab Values	Τιμές Lab
 	Landscape	Οριζόντιος προσανατολισμός
@@ -6346,6 +6350,8 @@ effect	Points	Σημεία
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	το `mode` πρέπει να είναι grayscale, rgb, hsb, cmyk ή websafe
 @msg	`view` must be wheel or box	το `view` πρέπει να είναι wheel ή box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	το `channel` πρέπει να είναι hue, saturation, brightness, red, green ή blue
+@msg	`sliders` must be none or oklch	Το `sliders` πρέπει να είναι none ή oklch
+@msg	OKLCH needs sRGB as the working RGB space	Το OKLCH απαιτεί sRGB ως χώρο εργασίας RGB
 @msg	`{key}` must be an array of these names: {_1}	το `{key}` πρέπει να είναι πίνακας με αυτά τα ονόματα: {_1}
 @msg	choose a destination folder	επιλέξτε φάκελο προορισμού
 @msg	choose a source folder	επιλέξτε φάκελο προέλευσης

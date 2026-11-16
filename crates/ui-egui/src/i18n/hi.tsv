@@ -2573,6 +2573,10 @@ antiAlias	Sharp	शार्प
 	Knife	चाकू
 	Knockout Group	नॉकआउट समूह
 	Lab	Lab
+	OKLCH Sliders	OKLCH स्लाइडर्स
+	Chroma	क्रोमा
+	The largest chroma sRGB holds at this lightness and hue	इस लाइटनेस और ह्यू पर sRGB में आने वाला सबसे अधिक क्रोमा
+	OKLCH needs sRGB as the working RGB space	OKLCH के लिए वर्किंग RGB स्पेस sRGB होना चाहिए
 	Lab Spot Colors	लैब स्पॉट रंग
 	Lab Spot Colors:	लैब स्पॉट रंग:
 	Lab Values	लैब मूल्य
@@ -6347,6 +6351,8 @@ antiAlias	Sharp	शार्प
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` को grayscale, rgb, hsb, cmyk या websafe होना चाहिए
 @msg	`view` must be wheel or box	`view` को wheel या box होना चाहिए
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` को hue, saturation, brightness, red, green या blue होना चाहिए
+@msg	`sliders` must be none or oklch	`sliders` none या oklch होना चाहिए
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH के लिए वर्किंग RGB स्पेस sRGB होना चाहिए
 @msg	`mode` must be one of {_1}	`mode` को {_1} में से एक होना चाहिए
 @msg	`mojikumi` must be "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" or "lineEndHalf"	`mojikumi` "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" या "lineEndHalf" होना चाहिए।
 @msg	`name` is empty	`name` खाली है

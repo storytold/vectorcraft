@@ -1839,6 +1839,10 @@ font-technology	Variable	Variabla
 	Knife	Kniv
 	Knockout Group	Utsparningsgrupp
 	Lab	Lab
+	OKLCH Sliders	OKLCH-reglage
+	Chroma	Kroma
+	The largest chroma sRGB holds at this lightness and hue	Den största kroma som sRGB rymmer vid denna ljushet och nyans
+	OKLCH needs sRGB as the working RGB space	OKLCH kräver sRGB som RGB-arbetsfärgrymd
 	Lab Spot Colors:	Lab-dekorfärger:
 	Lab Values	Lab-värden
 	Landscape	Liggande
@@ -6339,6 +6343,8 @@ theme	Appearance	Utseende
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` måste vara grayscale, rgb, hsb, cmyk eller websafe
 @msg	`view` must be wheel or box	`view` måste vara wheel eller box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` måste vara hue, saturation, brightness, red, green eller blue
+@msg	`sliders` must be none or oklch	`sliders` måste vara none eller oklch
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH kräver sRGB som RGB-arbetsfärgrymd
 @msg	`{key}` must be an array of these names: {_1}	`{key}` måste vara en lista med dessa namn: {_1}
 @msg	choose a destination folder	välj en målmapp
 @msg	choose a source folder	välj en källmapp

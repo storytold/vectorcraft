@@ -2350,6 +2350,10 @@ file-filter	Templates	Sablonok
 	Knife	Kés
 	Knockout Group	Kiütő csoport
 	Lab	Lab
+	OKLCH Sliders	OKLCH csúszkák
+	Chroma	Króma
+	The largest chroma sRGB holds at this lightness and hue	A legnagyobb króma, amelyet az sRGB ezen a világosságon és színárnyalaton tartalmaz
+	OKLCH needs sRGB as the working RGB space	Az OKLCH-hoz sRGB munka-RGB-színtér szükséges
 	Lab Spot Colors	Lab-direktszínek
 	Lab Spot Colors:	Lab-direktszínek:
 	Lab Values	Lab-értékek
@@ -5088,6 +5092,8 @@ imageTrace	Outline	Körvonal
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`: grayscale, rgb, hsb, cmyk vagy websafe kell
 @msg	`view` must be wheel or box	`view`: wheel vagy box kell
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`: hue, saturation, brightness, red, green vagy blue kell
+@msg	`sliders` must be none or oklch	A `sliders` értéke none vagy oklch lehet
+@msg	OKLCH needs sRGB as the working RGB space	Az OKLCH-hoz sRGB munka-RGB-színtér szükséges
 @msg	`{k}` must be [x, y]	`{k}`: [x, y] kell
 @msg	`{name}` has no options	ennek nincsenek beállításai: `{name}`
 @msg	`{name}` is a built-in workspace; choose another name	beépített munkaterület: `{name}`; válassz másik nevet

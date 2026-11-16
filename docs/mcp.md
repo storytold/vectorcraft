@@ -656,7 +656,12 @@ selected gradient stop or the selected freeform point (the first stop or point w
 hides the row. The row is gray with nothing selected, for an object selected in a symbol instance, and when the fill
 or stroke row it would set is on type characters or missing. Keys left out keep their values.
 Params that are not an object, another key or a value off the list return an error and change nothing. The command
-returns `{view, channel, opacity}`, and the settings are kept with the preferences.
+returns `{view, channel, opacity, sliders}`, and the settings are kept with the preferences.
+
+`ui.colorWheel {"sliders": "oklch"}` shows the Color Wheel panel's OKLCH Sliders (L, C and H rows under the wheel or
+the box), and `"none"` hides them; `"oklch"` is an error while the working RGB space is not sRGB.
+`color.convert {"to": "oklch"}` answers the color's OKLCH as `[L %, C, H°]` of its display sRGB. A color outside sRGB
+(a Lab or CMYK color, or an RGB color in a wider working RGB space) is clipped to sRGB first.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop

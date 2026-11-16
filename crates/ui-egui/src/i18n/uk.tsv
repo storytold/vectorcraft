@@ -1916,6 +1916,10 @@ file-filter	Templates	Шаблони
 	Knife	Ніж
 	Knockout Group	Група з вирізуванням
 	Lab	Lab
+	OKLCH Sliders	Повзунки OKLCH
+	Chroma	Хрома
+	The largest chroma sRGB holds at this lightness and hue	Найбільша хрома, яку вміщує sRGB за цієї світлоти й відтінку
+	OKLCH needs sRGB as the working RGB space	Для OKLCH робочим простором RGB має бути sRGB
 	Lab Spot Colors:	Плашкові кольори Lab:
 	Lab Values	Значення Lab
 	Landscape	Альбомна
@@ -4738,6 +4742,8 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` має бути grayscale, rgb, hsb, cmyk або websafe
 @msg	`view` must be wheel or box	`view` має бути wheel або box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` має бути hue, saturation, brightness, red, green або blue
+@msg	`sliders` must be none or oklch	`sliders` має бути none або oklch
+@msg	OKLCH needs sRGB as the working RGB space	Для OKLCH робочим простором RGB має бути sRGB
 @msg	`{k}` must be [x, y]	`{k}` має бути [x, y]
 @msg	`{name}` has no options	`{name}` не має параметрів
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` - вбудоване робоче середовище; виберіть інше ім’я

@@ -2484,6 +2484,8 @@ file-filter	Templates	範本
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` 必須是 grayscale、rgb、hsb、cmyk 或 websafe
 @msg	`view` must be wheel or box	`view` 必須是 wheel 或 box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` 必須是 hue、saturation、brightness、red、green 或 blue
+@msg	`sliders` must be none or oklch	`sliders` 必須是 none 或 oklch
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH 需要將 sRGB 用作 RGB 工作空間
 @msg	`{key}` must be true or false	`{key}` 必須是 true 或 false
 @msg	`top` and `below` can't both be true	`top` 和 `below` 不能同時為 true
 @msg	`select` must be true or false	`select` 必須是 true 或 false
@@ -3030,6 +3032,10 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Knife	美工刀
 	Knockout Group	去底群組
 	Lab	Lab
+	OKLCH Sliders	OKLCH 滑桿
+	Chroma	色度
+	The largest chroma sRGB holds at this lightness and hue	sRGB 在此亮度和色相下可容納的最大色度
+	OKLCH needs sRGB as the working RGB space	OKLCH 需要將 sRGB 用作 RGB 工作空間
 	Lab Spot Colors:	Lab 特別色：
 	Lab Values	Lab 值
 	Landscape	橫向

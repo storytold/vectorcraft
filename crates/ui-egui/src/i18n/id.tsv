@@ -4054,6 +4054,10 @@ axis	Both	Keduanya
 	Image	Gambar
 	Ink	Tinta
 	Lab	Lab
+	OKLCH Sliders	Penggeser OKLCH
+	Chroma	Kroma
+	The largest chroma sRGB holds at this lightness and hue	Kroma terbesar yang dapat dimuat sRGB pada kecerahan dan rona ini
+	OKLCH needs sRGB as the working RGB space	OKLCH memerlukan sRGB sebagai ruang RGB kerja
 	Medium	Sedang
 	Name	Nama
 	None	Nihil
@@ -5746,6 +5750,8 @@ mark-style	Japanese	Jepang
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` harus grayscale, rgb, hsb, cmyk atau websafe
 @msg	`view` must be wheel or box	`view` harus wheel atau box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` harus hue, saturation, brightness, red, green atau blue
+@msg	`sliders` must be none or oklch	`sliders` harus none atau oklch
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH memerlukan sRGB sebagai ruang RGB kerja
 @msg	the Color Picker is not open	Pemilih Warna tidak terbuka
 @msg	the screen color sampler is already open	pengambil warna layar sudah terbuka
 @msg	this system has no screen color sampler	sistem ini tidak memiliki pengambil warna layar

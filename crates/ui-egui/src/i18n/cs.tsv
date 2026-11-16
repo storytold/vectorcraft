@@ -4401,6 +4401,10 @@ axis	Both	Obě
 	Image	Obraz
 	Ink	Inkoust
 	Lab	Lab
+	OKLCH Sliders	Posuvníky OKLCH
+	Chroma	Chroma
+	The largest chroma sRGB holds at this lightness and hue	Největší chroma, kterou sRGB obsáhne při této světlosti a odstínu
+	OKLCH needs sRGB as the working RGB space	OKLCH vyžaduje sRGB jako pracovní prostor RGB
 	Medium	Střední
 	Name	Název
 	None	Žádné
@@ -5021,6 +5025,8 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` musí být grayscale, rgb, hsb, cmyk nebo websafe
 @msg	`view` must be wheel or box	`view` musí být wheel nebo box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` musí být hue, saturation, brightness, red, green nebo blue
+@msg	`sliders` must be none or oklch	`sliders` musí být none nebo oklch
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH vyžaduje sRGB jako pracovní prostor RGB
 @msg	`{k}` must be [x, y]	`{k}` musí být [x, y]
 @msg	`{name}` has no options	`{name}` nemá žádné možnosti
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` je vestavěný pracovní prostor; zvolte jiný název

@@ -160,7 +160,7 @@ pub fn opacity_slider(
     // The checkerboard and the ramp go under the rail's thumb and border, which the rail draws.
     let under = ui.painter().add(egui::Shape::Noop);
     let (resp, picked, phase) = color_rail(ui, id, name, shown.clone(), value, width, &|_| Color32::TRANSPARENT);
-    let bar = rail_bar(resp.rect, width);
+    let bar = color_rail_bar(resp.rect);
     let mut shapes = super::chips::checkerboard_shapes(bar, 4.0);
     let [r, g, b, _] = color.to_srgba_unmultiplied();
     let mut ramp = egui::Mesh::default();
@@ -297,6 +297,11 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
     (v != from || (end && v != s.value)).then_some(if exact { v } else { round_to(v, STEP_DECIMALS).clamp(lo, hi) })
 }
 
+/// The colored bar inside the rail `rect` of [`color_slider_stepped`] and its siblings.
+pub(crate) fn color_rail_bar(rect: Rect) -> Rect {
+    Rect::from_min_size(pos2(rect.left() + 4.0, rect.top() + 4.0), vec2(rect.width() - 8.0, 7.0))
+}
+
 /// The rail of [`color_slider_valued`] with the id `id`: its response, the new value from 0 to 1
 /// that a click or drag gives and the phase.
 fn color_rail(
@@ -310,7 +315,7 @@ fn color_rail(
 ) -> (Response, Option<f32>, Live) {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(vec2(width, 22.0), Sense::hover());
-    let bar = rail_bar(rect, width);
+    let bar = color_rail_bar(rect);
     let resp = ui.interact(rect, id, Sense::click_and_drag());
     gradient_strip(ui, bar, (bar.width() / 2.0).ceil().max(2.0) as usize, false, track);
     ui.painter().rect_stroke(bar, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
@@ -326,11 +331,6 @@ fn color_rail(
         None => (None, Live::Idle),
     };
     (resp, picked, phase)
-}
-
-/// The bar of a rail `width` wide in `rect`, above its thumb.
-fn rail_bar(rect: Rect, width: f32) -> Rect {
-    Rect::from_min_size(pos2(rect.left() + 4.0, rect.top() + 4.0), vec2(width - 8.0, 7.0))
 }
 
 /// The pointer of a click or drag on `resp` and its phase (dragging, or released on click/drop).

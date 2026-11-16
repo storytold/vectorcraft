@@ -1880,6 +1880,10 @@ font-technology	Variable	Variables
 	Knife	Cutter
 	Knockout Group	Groupe perçant
 	Lab	Lab
+	OKLCH Sliders	Curseurs OKLCH
+	Chroma	Chroma
+	The largest chroma sRGB holds at this lightness and hue	Le plus grand chroma que sRGB contient à cette luminosité et cette teinte
+	OKLCH needs sRGB as the working RGB space	OKLCH nécessite sRGB comme espace de travail RGB
 	Lab Spot Colors:	Tons directs Lab :
 	Lab Values	Valeurs Lab
 	Landscape	Paysage
@@ -4692,6 +4696,8 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` doit valoir grayscale, rgb, hsb, cmyk ou websafe
 @msg	`view` must be wheel or box	`view` doit valoir wheel ou box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` doit valoir hue, saturation, brightness, red, green ou blue
+@msg	`sliders` must be none or oklch	`sliders` doit valoir none ou oklch
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH nécessite sRGB comme espace de travail RGB
 @msg	`{k}` must be [x, y]	`{k}` doit être [x, y]
 @msg	`{name}` has no options	`{name}` n’a pas d’options
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` est un espace de travail intégré ; choisissez un autre nom
