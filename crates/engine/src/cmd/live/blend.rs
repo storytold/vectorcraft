@@ -396,6 +396,13 @@ pub(super) fn blend_options(s: &mut Session, p: &Value) -> Result<Value> {
     let orientation = orientation_param(p, cur.orientation);
     let ease = ease_param(p, C, cur.ease)?;
     let color_shift = percent_param(p, C, "colorShift", cur.color_shift, -100.0)?;
+    let has_spacing = ["spacing", "steps", "distance"].iter().any(|key| p.get(*key).is_some_and(|v| !v.is_null()))
+        || p.get("smooth").and_then(Value::as_bool) == Some(true)
+        || (p.get("value").is_some_and(|v| !v.is_null()) && matches!(p.get("spacing").and_then(Value::as_str), Some("steps" | "distance")));
+    let has_orientation = p.get("orientation").is_some_and(|v| !v.is_null());
+    let has_ease_kind = p.get("easingType").is_some_and(|v| !v.is_null());
+    let has_ramp = p.get("ramp").is_some_and(|v| !v.is_null());
+    let has_color_shift = p.get("colorShift").is_some_and(|v| !v.is_null());
     if has_id {
         s.edit("Blend Options", |d, _| {
             if let Some(NodeKind::Blend { spec, .. }) = d.node_mut(target_id).map(|n| &mut n.kind) {
@@ -409,10 +416,21 @@ pub(super) fn blend_options(s: &mut Session, p: &Value) -> Result<Value> {
         ok()
     } else {
         edit_blends(s, "Blend Options", |_, spec| {
-            spec.spacing = spacing;
-            spec.orientation = orientation;
-            spec.ease = ease;
-            spec.color_shift = color_shift;
+            if has_spacing {
+                spec.spacing = spacing;
+            }
+            if has_orientation {
+                spec.orientation = orientation;
+            }
+            if has_ease_kind {
+                spec.ease.kind = ease.kind;
+            }
+            if has_ramp {
+                spec.ease.ramp = ease.ramp;
+            }
+            if has_color_shift {
+                spec.color_shift = color_shift;
+            }
         })
     }
 }

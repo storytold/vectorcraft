@@ -801,6 +801,12 @@ fn blend_options_targets_specific_id_when_provided() {
     s.execute("object.blend.options", &json!({"orientation": "path"})).unwrap();
     assert_eq!(spec(&s, b1).1.orientation, BlendOrientation::AlignToPath);
     assert_eq!(spec(&s, b2).1.orientation, BlendOrientation::AlignToPath);
+    assert_eq!(spec(&s, b2).1.spacing, BlendSpacing::Steps(3));
+    assert_eq!(spec(&s, b2).1.ease.ramp, 0.0);
+    assert_eq!(spec(&s, b2).1.color_shift, 0.0);
+    s.execute("object.blend.options", &json!({"value": 5})).unwrap();
+    assert_eq!(spec(&s, b1).1.spacing, BlendSpacing::Distance(15.0));
+    assert_eq!(spec(&s, b2).1.spacing, BlendSpacing::Steps(3));
 
     // An explicit id must not bypass the visibility or lock guard.
     s.execute("select.none", &json!({})).unwrap();

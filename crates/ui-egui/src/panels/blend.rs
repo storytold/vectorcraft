@@ -189,19 +189,23 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Synchronize staged values after external on-canvas edits:
     // If an active parameter changed externally since staging, invalidate its staged value
     // so Preview does not overwrite newer on-canvas edits, while retaining unchanged staged parameters.
-    if let Some(ref staged_active) = draft.staged_active_easing_type
+    let interacting = app.session.in_interaction();
+    if !interacting
+        && let Some(ref staged_active) = draft.staged_active_easing_type
         && active_easing.as_ref() != Some(staged_active)
     {
         draft.easing_type = None;
         draft.staged_active_easing_type = None;
     }
-    if let Some(staged_active) = draft.staged_active_ramp
+    if !interacting
+        && let Some(staged_active) = draft.staged_active_ramp
         && active_ramp != Some(staged_active)
     {
         draft.ramp = None;
         draft.staged_active_ramp = None;
     }
-    if let Some(staged_active) = draft.staged_active_color_shift
+    if !interacting
+        && let Some(staged_active) = draft.staged_active_color_shift
         && active_shift != Some(staged_active)
     {
         draft.color_shift = None;
@@ -209,7 +213,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 
     let preview = app.ui.blend_preview;
-    if preview && selected {
+    if preview && selected && !interacting {
         flush_pending(app, blend_id, &mut draft);
     }
 
@@ -240,7 +244,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
         widgets::label_row(ui, tl!("Ramp:"), LABEL_W, |ui| {
             let mut ramp = draft.ramp.or(active_ramp).unwrap_or(0.0).clamp(0.0, 100.0);
-            let resp = widgets::slider(ui, egui::Slider::new(&mut ramp, 0.0..=100.0).suffix("%").step_by(1.0));
+            let resp = widgets::slider(ui, egui::Slider::new(&mut ramp, 0.0..=100.0).suffix("%").step_by(1.0).clamping(egui::SliderClamping::Edits));
             let phase = if resp.drag_stopped() || (resp.changed() && !resp.dragged()) {
                 Live::Released
             } else if resp.changed() {
@@ -267,7 +271,8 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_enabled_ui(selected, |ui| {
         widgets::label_row(ui, tl!("Shift:"), LABEL_W, |ui| {
             let mut shift = draft.color_shift.or(active_shift).unwrap_or(0.0).clamp(-100.0, 100.0);
-            let resp = widgets::slider(ui, egui::Slider::new(&mut shift, -100.0..=100.0).suffix("%").step_by(1.0));
+            let resp =
+                widgets::slider(ui, egui::Slider::new(&mut shift, -100.0..=100.0).suffix("%").step_by(1.0).clamping(egui::SliderClamping::Edits));
             let phase = if resp.drag_stopped() || (resp.changed() && !resp.dragged()) {
                 Live::Released
             } else if resp.changed() {

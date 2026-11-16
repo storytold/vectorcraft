@@ -336,6 +336,63 @@ fn panel_easing_type_ramp_and_shift_edit_the_blend_and_undo() {
 }
 
 #[test]
+fn fractional_blend_easing_values_survive_panel_render_without_input() {
+    let mut app = app();
+    let id = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
+    app.run("object.blend.options", json!({"id": id.0, "ramp": 42.5, "colorShift": 12.5})).unwrap();
+    let mut f = Frames::new();
+    let depth = undo_depth(&app);
+
+    f.run(&mut app, vec![]);
+    f.run(&mut app, vec![]);
+    let info = app.session.execute("object.blend.info", &json!({})).unwrap();
+    assert_eq!((&info["ramp"], &info["colorShift"]), (&json!(42.5), &json!(12.5)));
+    assert_eq!(undo_depth(&app), depth, "rendering with Preview on does not edit the blend");
+
+    app.ui.blend_preview = false;
+    app.run("object.blend.options", json!({"id": id.0, "ramp": 67.5, "colorShift": -31.5})).unwrap();
+    let depth = undo_depth(&app);
+    f.run(&mut app, vec![]);
+    f.run(&mut app, vec![]);
+    let info = app.session.execute("object.blend.info", &json!({})).unwrap();
+    assert_eq!((&info["ramp"], &info["colorShift"]), (&json!(67.5), &json!(-31.5)));
+    assert_eq!(undo_depth(&app), depth, "rendering with Preview off does not edit or stage rounded values");
+
+    f.click_text(&mut app, "Preview");
+    let info = app.session.execute("object.blend.info", &json!({})).unwrap();
+    assert_eq!((&info["ramp"], &info["colorShift"]), (&json!(67.5), &json!(-31.5)));
+    assert_eq!(undo_depth(&app), depth, "turning Preview on has no unsolicited staged changes to commit");
+}
+
+#[test]
+fn blend_panel_keeps_pending_easing_during_canvas_interaction() {
+    let mut app = app();
+    app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap();
+    app.ui.blend_preview = false;
+    let mut f = Frames::new();
+    let before = app.session.execute("object.blend.info", &json!({})).unwrap()["ramp"].clone();
+
+    let out = f.run(&mut app, vec![]);
+    let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
+    let mut sliders: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Slider).collect();
+    sliders.sort_by(|a, b| a.1.bounds().unwrap().y0.total_cmp(&b.1.bounds().unwrap().y0));
+    let b = sliders[0].1.bounds().unwrap();
+    let at = pos2((b.x0 + 0.3 * (b.x1 - b.x0)) as f32, ((b.y0 + b.y1) * 0.5) as f32);
+    f.click(&mut app, at);
+    assert_eq!(app.session.execute("object.blend.info", &json!({})).unwrap()["ramp"], before);
+
+    app.session.begin_interaction("Move").unwrap();
+    app.session.preview("object.blend.options", &json!({"ramp": 80})).unwrap();
+    app.ui.blend_preview = true;
+    f.run(&mut app, vec![]);
+    app.session.cancel_interaction().unwrap();
+    f.run(&mut app, vec![]);
+
+    let after = app.session.execute("object.blend.info", &json!({})).unwrap()["ramp"].clone();
+    assert_ne!(after, before, "the staged easing value is applied after the interaction ends");
+}
+
+#[test]
 fn blend_panel_bidirectionally_syncs_with_on_canvas_widgets() {
     let mut app = app();
     let id = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
