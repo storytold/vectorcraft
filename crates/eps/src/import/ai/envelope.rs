@@ -980,10 +980,11 @@ pub(super) fn warps(appearance: &Appearance) -> bool {
     appearance.effects.iter().any(warp) || appearance.items.iter().any(|i| i.visible() && i.effects().iter().any(warp))
 }
 
-/// Do `live` and `drawn` draw alike: few of the pixels either inks differ, and fewer still where a
-/// whole patch differs; and, on `page` (when the file has one), do they differ little enough that
-/// with the differences in `spent` the page check still takes the layers' art (it is added to
-/// `spent` when they do)? Both are drawn on `layer`, a layer id no other node has.
+/// Do `live` and `drawn` draw alike? Either neither has any paint ([`paints`]), or few of the
+/// pixels either inks differ and fewer still where a whole patch differs, and, on `page` (when the
+/// file has one), they differ little enough that with the differences in `spent` the page check
+/// still takes the layers' art (it is added to `spent` when they do). Both are drawn on `layer`, a
+/// layer id no other node has.
 pub(super) fn drawn_alike(live: &Node, drawn: &Node, layer: NodeId, shared: &Shared<'_>, page: Option<Rect>, spent: &mut Spent) -> bool {
     alike_within(live, drawn, live.visual_bounds(), layer, shared, page, spent)
 }
@@ -997,6 +998,12 @@ pub(super) fn warped_alike(live: &Node, drawn: &Node, layer: NodeId, shared: &Sh
 
 /// [`drawn_alike`], with `live` measured as `reach`.
 fn alike_within(live: &Node, drawn: &Node, reach: Option<Rect>, layer: NodeId, shared: &Shared<'_>, page: Option<Rect>, spent: &mut Spent) -> bool {
+    // Neither has any paint (type with no fill and no stroke, its drawn art the outlines unpainted):
+    // both draw nothing, so they draw alike and add nothing to what the page check sees. Their
+    // shapes aren't compared. Art that paints, however faintly, is compared as before.
+    if !paints(live, 0) && !paints(drawn, 0) {
+        return true;
+    }
     let (Some(a), Some(b)) = (reach, drawn.visual_bounds()) else { return false };
     let region = a.union(b).inflate(2.0, 2.0);
     if !(region.is_finite() && region.width() > 0.0 && region.height() > 0.0) || region.width().max(region.height()) > 1e6 {
@@ -1029,6 +1036,26 @@ fn alike_within(live: &Node, drawn: &Node, reach: Option<Rect>, layer: NodeId, s
     true
 }
 
+/// Does `n`, shown, paint anything: a fill or stroke of its own or of its type with a paint, an
+/// effect, or an object of another kind than a path, type or container (an image, a mesh, a symbol
+/// instance…)? Hidden objects paint nothing. Past `depth` 64 it is taken to paint.
+fn paints(n: &Node, depth: usize) -> bool {
+    if depth > 64 {
+        return true;
+    }
+    if !n.visible {
+        return false;
+    }
+    if n.appearance.items.iter().any(|i| i.visible() && !i.paint().is_none()) || n.appearance.effects.iter().any(|e| e.visible) {
+        return true;
+    }
+    match &n.kind {
+        NodeKind::Path { .. } => false,
+        NodeKind::Text(t) => t.runs.iter().any(|r| !r.style.fill.is_none() || !r.style.stroke.is_none()),
+        _ => n.children().is_none_or(|c| c.iter().any(|c| paints(c, depth + 1))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1054,6 +1081,41 @@ mod tests {
             Some(NodeKind::Envelope { options, .. }) => Some(options.bounds_margin),
             _ => None,
         }
+    }
+
+    /// A 40 × 40 square at (10, 10) filled black at `opacity`, or with no fill when `None`.
+    fn square_node(id: u64, opacity: Option<f32>) -> Node {
+        let mut bp = BezPath::new();
+        bp.move_to((10.0, 10.0));
+        bp.line_to((50.0, 10.0));
+        bp.line_to((50.0, 50.0));
+        bp.line_to((10.0, 50.0));
+        bp.close_path();
+        let mut n = Node::new(
+            NodeId(id),
+            NodeKind::Path { path: PathData::from_bezpath(&bp), rule: Default::default(), live: None, clipping: false, guide: false },
+        );
+        let mut appearance = (*n.appearance).clone();
+        appearance.items.clear();
+        if let Some(o) = opacity {
+            appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(Paint::solid(Color::BLACK))));
+            n.opacity = o;
+        }
+        n.appearance = appearance.into();
+        n
+    }
+
+    /// Two objects with no paint draw alike; two that paint too faintly to ink a pixel (an alpha of
+    /// 8 or less) aren't taken as alike, nor is one with paint against one without.
+    #[test]
+    fn art_with_no_paint_draws_alike_and_faint_art_is_still_compared() {
+        let shared = Shared { patterns: &[], images: &BTreeMap::new() };
+        let alike = |a: &Node, b: &Node| drawn_alike(a, b, NodeId(999), &shared, None, &mut Spent::default());
+        let (none, other_none) = (square_node(1, None), square_node(2, None));
+        assert!(alike(&none, &other_none));
+        let (faint, other_faint) = (square_node(1, Some(0.02)), square_node(2, Some(0.02)));
+        assert!(!alike(&faint, &other_faint));
+        assert!(!alike(&none, &square_node(2, Some(1.0))));
     }
 
     /// "AVA" at 40 points, at (10, 60).

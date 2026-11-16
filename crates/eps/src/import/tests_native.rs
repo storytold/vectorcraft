@@ -5998,6 +5998,32 @@ fn an_envelope_of_type_that_draws_as_its_drawn_art_opens_live() {
     assert!(super::tests::program_warnings(&r.warnings).is_empty(), "{:?}", r.warnings);
 }
 
+/// An envelope of type with no fill and no stroke, its drawn art the bent outlines unpainted, opens
+/// live: neither draws a pixel, so they draw alike, and the type stays editable.
+#[test]
+fn an_envelope_of_unpainted_type_whose_drawn_art_paints_nothing_opens_live() {
+    let Some(family) = installed_family() else { return };
+    // The outlines come from the type filled; the file's type has its fill turned off (`/56 false`).
+    let filled = type_envelope_text(&family, None);
+    let mut doc = text_document(&[("FLUX\r", 0, (8170.0, 8180.0), (0.0, 0.0), 0.0)])
+        .replace("(Helvetica)", &format!("({family})"))
+        .replace("/53 <<", "/56 false /53 <<");
+    while ascii85(doc.as_bytes()).len() % 60 == 1 {
+        doc.push('\n');
+    }
+    assert_eq!(text_fill(&made_envelope_type(&doc)), None);
+    let (drawn, _) = drawn_envelope(&arc_envelope(&made_envelope_type(&filled), 30.0));
+    assert!(drawn.contains("f\n"), "{drawn}");
+    let unpainted = drawn.replace("f\n", "n\n");
+    let art = native_with_text(&layer("Art", true, &format!("{}\n{}", square(10, 10), type_envelope(&arc_keys(0.3), &unpainted))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let (envelopes, loose) = envelopes_and_type(&r.document);
+    assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{:?}", r.warnings);
+    assert!(loose.is_empty(), "{loose:?}");
+    assert!(super::tests::program_warnings(&r.warnings).is_empty(), "{:?}", r.warnings);
+}
+
 /// An envelope of type whose live envelope draws apart from its drawn art (the file's art bends the
 /// other way) keeps its drawn art and its type, hidden, with a note.
 #[test]
