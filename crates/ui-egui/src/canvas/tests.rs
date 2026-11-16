@@ -6551,6 +6551,48 @@ fn a_selected_ellipse_shows_its_pie_widgets() {
     assert_eq!(widgets(&mut app), 0, "no bounding box, no widgets");
 }
 
+/// A selected live polygon shows its side widget, a white diamond beside its box, with the
+/// Selection tool and the shape tools while the bounding box shows, and hides with the box while
+/// the polygon is moved.
+#[test]
+fn a_selected_polygon_shows_its_side_widget() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.polygon", &json!({"cx": 200, "cy": 150, "radius": 60, "sides": 5})).unwrap();
+    let ctx = egui::Context::default();
+    // A white diamond as wide and tall as the widget.
+    let size = 2.0 * vectorcraft_tools::sidewidget::RADIUS_PX;
+    let diamond = |ps: &egui::epaint::PathShape| {
+        let span = |f: fn(&egui::Pos2) -> f32| {
+            let v: Vec<f32> = ps.points.iter().map(f).collect();
+            v.iter().copied().fold(f32::MIN, f32::max) - v.iter().copied().fold(f32::MAX, f32::min)
+        };
+        ps.closed && ps.points.len() == 4 && ps.fill == Color32::WHITE && (span(|p| p.x) - size).abs() < 0.01 && (span(|p| p.y) - size).abs() < 0.01
+    };
+    let widgets = |app: &mut VectorcraftApp| shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Path(ps) if diamond(ps))).count();
+    app.select_tool("selection");
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("polygon");
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("directSelection");
+    assert_eq!(widgets(&mut app), 0);
+    app.select_tool("lineSegment");
+    assert_eq!(widgets(&mut app), 0);
+    app.select_tool("selection");
+    app.run("view.boundingBox", json!({})).unwrap();
+    assert_eq!(widgets(&mut app), 0, "no bounding box, no widget");
+    app.run("view.boundingBox", json!({})).unwrap();
+    // A move of the polygon hides the box, and the widget with it, until the release.
+    let view = app.view_info();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 150.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 260.0, 150.0), view).unwrap();
+    assert_eq!(widgets(&mut app), 0, "hidden while the polygon moves");
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, 260.0, 150.0), view).unwrap();
+    assert_eq!(widgets(&mut app), 1, "back after the release");
+    app.session.execute("shape.ellipse", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    assert_eq!(widgets(&mut app), 0, "an ellipse has none");
+}
+
 /// A selected Objects on Path group shows its Rotate All widget with the Selection and Objects on
 /// Path tools.
 #[test]

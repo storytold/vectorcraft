@@ -255,6 +255,13 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
             p.circle_filled(c, r, if w.area { color } else { Color32::WHITE });
             p.circle_stroke(c, r, Stroke::new(1.0, color));
         }
+        // A live polygon's side widget: a diamond beside the middle of the box's right side, drawn
+        // only while the box is drawn (the box hides during a turn and during a drag of the widget).
+        if !drawing_boxed && let Some(w) = vectorcraft_tools::sidewidget::SideWidget::of(&st.doc, &st.selection, &b, xf.zoom) {
+            let (c, r) = (xf.to_screen(w.at), vectorcraft_tools::sidewidget::RADIUS_PX);
+            let diamond = vec![c + vec2(0.0, -r), c + vec2(r, 0.0), c + vec2(0.0, r), c + vec2(-r, 0.0)];
+            p.add(Shape::convex_polygon(diamond, Color32::WHITE, Stroke::new(1.0, color)));
+        }
     }
     // Pie widgets (Selection tool, with View › Show Bounding Box, on live ellipses): each joined
     // by a line to the outline's point at its angle. They stay while one is dragged.
