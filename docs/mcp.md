@@ -4583,7 +4583,8 @@ Rotate (Classic) and the other 3D effects take no map.
   through the object's solids in the order they are built: each solid's front cap and back cap, then each side wall
   from corner to corner of the outline, then the bevel above each wall. A hollow solid (`cap` false) has no caps, so
   its numbering starts at its first side wall. Revolve (Classic) has one surface, its swept
-  side. The numbering is VectorCraft's own.
+  side; on a group it is the side of the member with the longest profile, and the other members take no map. The
+  numbering is VectorCraft's own.
 - `symbol` names the symbol mapped onto the surface, and `null` removes the surface's map, also a map kept past the
   object's surface count; `null` with `x`, `y`,
   `scaleX`, `scaleY`, `rotation` or `fit: true` is refused. Omitted, the surface keeps its map's symbol; a surface with
