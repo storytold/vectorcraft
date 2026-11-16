@@ -26,6 +26,9 @@ impl Session {
         vectorcraft_doc::hit::set_image_paint(vectorcraft_render::effects::image_paint);
         // Clicks inside a clip group fall in the region its clipping path's effects give it.
         vectorcraft_doc::hit::set_clip_region(vectorcraft_render::effects::reshaped_clip_outline);
+        // Clicks and marquees find paths, compound paths, groups and layers where their geometry
+        // effects draw them.
+        vectorcraft_doc::hit::set_drawn_art(vectorcraft_render::effects::preview::drawn_art);
         // Clicks find a blend's steps and an envelope's distorted art where the canvas draws them,
         // evaluated again when the fonts, the hyphenation exceptions or the plug-ins change.
         vectorcraft_doc::hit::set_live_art(vectorcraft_render::effects::expand_live, || {
@@ -93,6 +96,7 @@ impl Session {
             color_settings_file: None,
             plugin_dir: None,
             scripts_dir: None,
+            metadata_templates_dir: None,
             new_doc_profile_dir: None,
             plugin_output: None,
             plugin_install_approval: None,

@@ -567,15 +567,31 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
     let tol = number_or(p, "tolerance", 4.0, C)?.clamp(0.0, 1000.0);
     let scope = scope_param(p, C)?;
     let like = match_param(p, C, scope != LpScope::One, "\"connected\" or \"samePaint\"")?;
+    let through: Vec<NodeId> = match p.get("through") {
+        None => vec![],
+        Some(_) if scope != LpScope::Connected => return Err(bad(C, "through applies to scope \"connected\"")),
+        Some(v) => {
+            let ids = v.as_array().filter(|ids| ids.len() <= 4096).ok_or_else(|| bad(C, "through must be an array of at most 4096 edge ids"))?;
+            ids.iter()
+                .map(|id| id.as_u64().map(NodeId).ok_or_else(|| bad(C, "through must be an array of at most 4096 edge ids")))
+                .collect::<Result<_>>()?
+        }
+    };
     let (eid, count, changed) = {
         let d = &s.doc()?.doc;
         let n = d.node(g).filter(|n| is_live_paint(n)).ok_or_else(|| bad(C, format!("{g} is not a Live Paint group")))?;
+        // Each id in `through` is an edge of the group, given once.
+        let group_edges: std::collections::HashSet<NodeId> = b::edges(n).iter().map(|e| e.id).collect();
+        let mut seen = std::collections::HashSet::new();
+        if let Some(id) = through.iter().find(|id| !group_edges.contains(id) || !seen.insert(**id)) {
+            return Err(bad(C, format!("through: {id} is not an edge of {g}, or is given twice")));
+        }
         let start = b::visible_edge_near(n, pt, tol).ok_or_else(|| EngineError::Other("no Live Paint edge near that point".into()))?;
         let eid = start.id;
         let like = like.unwrap_or_else(|| b::lp_stroke_paint(start));
         let targets = match scope {
             LpScope::One => vec![eid],
-            LpScope::Connected => b::connected_edges(n, eid, &like),
+            LpScope::Connected => b::connected_edges_through(n, eid, &like, &through),
             LpScope::SamePaint => std::iter::once(eid)
                 .chain(b::edges(n).into_iter().filter(|e| e.visible && e.id != eid && b::lp_stroke_paint(e) == like).map(|e| e.id))
                 .collect(),

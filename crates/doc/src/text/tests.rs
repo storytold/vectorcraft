@@ -129,6 +129,42 @@ fn insert_aki_is_saved_only_when_set() {
     assert_eq!((d.char_styles[0].attrs["akiLeft"].as_f64(), d.char_styles[0].attrs["akiRight"].as_f64()), (Some(MAX_AKI), Some(0.0)));
 }
 
+/// Adjust Horizontal and Vertical Diacritic Position are 0 by default and saved only when not 0,
+/// each on its own; styles written before them read as 0, and a value out of range from a file is
+/// kept within one em either way.
+#[test]
+fn diacritic_positions_are_saved_only_when_set() {
+    let st = CharStyle::default();
+    assert_eq!((st.diacritic_horizontal, st.diacritic_vertical), (0.0, 0.0));
+    let saved = serde_json::to_value(&st).unwrap();
+    assert!(saved.get("diacriticHorizontal").is_none() && saved.get("diacriticVertical").is_none());
+    for set in [
+        CharStyle { diacritic_horizontal: -250.0, ..CharStyle::default() },
+        CharStyle { diacritic_vertical: 500.0, ..CharStyle::default() },
+        CharStyle { diacritic_horizontal: 12.5, diacritic_vertical: -1000.0, ..CharStyle::default() },
+    ] {
+        let saved = serde_json::to_value(&set).unwrap();
+        assert_eq!(saved.get("diacriticHorizontal").and_then(serde_json::Value::as_f64).unwrap_or(0.0), set.diacritic_horizontal);
+        assert_eq!(saved.get("diacriticVertical").and_then(serde_json::Value::as_f64).unwrap_or(0.0), set.diacritic_vertical);
+        assert_eq!(saved.get("diacriticHorizontal").is_some(), set.diacritic_horizontal != 0.0);
+        assert_eq!(saved.get("diacriticVertical").is_some(), set.diacritic_vertical != 0.0);
+        assert_eq!(serde_json::from_value::<CharStyle>(saved).unwrap(), set);
+    }
+    let mut damaged = CharStyle { diacritic_horizontal: -4000.0, diacritic_vertical: 4000.0, ..CharStyle::default() };
+    damaged.keep_dimensions_in_range();
+    assert_eq!((damaged.diacritic_horizontal, damaged.diacritic_vertical), (-MAX_DIACRITIC_POSITION, MAX_DIACRITIC_POSITION));
+    let mut damaged = CharStyle { diacritic_horizontal: f64::NAN, diacritic_vertical: f64::NEG_INFINITY, ..CharStyle::default() };
+    damaged.keep_dimensions_in_range();
+    assert_eq!((damaged.diacritic_horizontal, damaged.diacritic_vertical), (0.0, -MAX_DIACRITIC_POSITION));
+    // A character style from a file is kept in range the same way.
+    let mut d = crate::Document::new(100.0, 100.0);
+    let attrs = serde_json::json!({"diacriticHorizontal": 5000, "diacriticVertical": -5000});
+    d.char_styles.push(TextStyleDef { name: "Moved".into(), attrs: attrs.as_object().cloned().unwrap_or_default() });
+    d.keep_type_values_in_range();
+    let kept = |key: &str| d.char_styles[0].attrs[key].as_f64();
+    assert_eq!((kept("diacriticHorizontal"), kept("diacriticVertical")), (Some(MAX_DIACRITIC_POSITION), Some(-MAX_DIACRITIC_POSITION)));
+}
+
 /// Tsume is 0 by default and saved only when not 0; styles written before it read as 0, and a
 /// value out of range from a file, in a run or a character style, is kept from 0 to 100.
 #[test]

@@ -287,7 +287,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
     {
         app.status(e);
     }
-    if ui.available_width() >= 4.0 {
+    if ui.available_width() >= reserve + 4.0 {
         ui.add_space(4.0);
     }
 }
@@ -942,6 +942,26 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let nine = app.run("symbol.list", json!({})).unwrap()["symbols"][1]["nineSlice"].clone();
         assert_eq!(nine, json!([-0.123456789, 1.5, -1.255, -2.75]));
+    }
+
+    /// Symbol Options › Align to Pixel Grid is off for a new symbol, OK sends it, and the dialog
+    /// reopens with the symbol's setting.
+    #[test]
+    fn symbol_options_sets_align_to_pixel_grid() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10.3, "y": 10.6, "width": 30, "height": 20})).unwrap();
+        app.run("ui.symbolOptions", json!({})).unwrap();
+        assert!(!app.ui.dialog.as_ref().unwrap().bool("alignToPixelGrid"));
+        app.ui.dialog.as_mut().unwrap().fields.insert("alignToPixelGrid".into(), json!(true));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let name = symbols(&mut app)[0].clone();
+        assert_eq!(app.run("symbol.list", json!({})).unwrap()["symbols"][0]["alignToPixelGrid"], true);
+        app.run("ui.symbolOptions", json!({"edit": true, "name": name})).unwrap();
+        assert!(app.ui.dialog.as_ref().unwrap().bool("alignToPixelGrid"));
+        app.ui.dialog.as_mut().unwrap().fields.insert("alignToPixelGrid".into(), json!(false));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.run("symbol.list", json!({})).unwrap()["symbols"][0]["alignToPixelGrid"], false);
     }
 
     /// F8 is Symbol Options… (`ui.symbolOptions`) by default, on every platform. Shift+F8 and Cmd+F8
@@ -1788,5 +1808,30 @@ mod tests {
         assert!(h.query_by_label("   Place Symbol Instance").is_some());
         h.get_by_label("   Select All Instances").click();
         h.run_steps(2);
+    }
+
+    /// The Control bar's symbol instance controls leave the room `reserve` asks for after them, the
+    /// gap after the controls included, when the row has no room for any of them.
+    #[test]
+    fn control_bar_symbol_controls_leave_the_reserve_when_none_fits() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let art = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+        let instance = app.run("symbol.new", json!({"name": "Mark", "ids": [art]})).unwrap()["id"].clone();
+        app.run("select.set", json!({ "ids": [instance] })).unwrap();
+        let ctx = egui::Context::default();
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(600.0, 100.0))), ..Default::default() };
+        let mut room = None;
+        let mut out = ctx.run_ui(raw, |ui| {
+            ui.horizontal(|ui| {
+                // Two points more than the reserve: too little for Edit Symbol or Replace.
+                let reserve = ui.available_width() - 2.0;
+                control_bar(&mut app, ui, reserve);
+                room = Some((ui.available_width(), reserve));
+            });
+        });
+        out.textures_delta.clear();
+        let (left, reserve) = room.expect("the row was drawn");
+        assert!(left >= reserve, "{left} pt left after the symbol controls, {reserve} pt reserved");
     }
 }

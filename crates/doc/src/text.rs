@@ -19,8 +19,8 @@ mod wrap;
 pub use area::{AreaFit, AreaOptions, PathAlign, PathEffect, TextFlow, TextWrap, VerticalAlign, WrapShape};
 use char_style::yes;
 pub use char_style::{
-    CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, GlyphChoice, GlyphForm, MAX_AKI, MAX_TSUME, MAX_WARICHU_GAP, ScriptMetrics,
-    WARICHU_LINES, WARICHU_SCALE, WarichuAlign,
+    CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, GlyphChoice, GlyphForm, MAX_AKI, MAX_DIACRITIC_POSITION, MAX_TSUME,
+    MAX_WARICHU_GAP, ScriptMetrics, WARICHU_LINES, WARICHU_SCALE, WarichuAlign,
 };
 pub use composite::{
     COMPOSITE_BASELINE, COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, COMPOSITE_SCALE, COMPOSITE_SIZE, CUSTOM_CHARS_MAX, CUSTOM_SETS_MAX, CharClass,
@@ -37,7 +37,7 @@ pub use tabs_lists::{
     Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, LIST_LEVEL_INDENT, LIST_LEVELS, ListAlign, ListCounts, NumberStyle, ParaList, TabAlign,
     TabStop,
 };
-pub use wrap::{resolve_wrap, wrap_work};
+pub use wrap::{resolve_wrap, wrap_outline, wrap_sources, wrap_work};
 
 /// A text object. `runs` split into paragraphs at `\n`.
 ///
@@ -69,6 +69,12 @@ pub struct TextObject {
     /// it on a frame that leaves its thread and on a copy. Not saved.
     #[serde(skip)]
     pub first_para_continues: bool,
+    /// Threaded text whose first paragraph continues ([`TextObject::first_para_continues`]): the
+    /// last character of that paragraph in the frames before that a repeat mark could stand for
+    /// (Kurikaeshi Moji Shori), or None. The engine sets it with `first_para_continues`; layout
+    /// reads it only while `first_para_continues` is on. Not saved.
+    #[serde(skip)]
+    pub first_para_lead: Option<char>,
     /// Area Type Options (area type only).
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub area: AreaOptions,
