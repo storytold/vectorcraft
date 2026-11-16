@@ -201,8 +201,10 @@ sampling coexistence. Scores and estimates unchanged. See [development.md](devel
 Selection drags activate another visible document tab after 400 ms, then copy editable artwork
 on canvas release with the original grab point. Source and clipboard preservation, resource
 rendering, swatch conflicts, cancellation, rotated/zoomed views and target Undo/Redo have regression
-coverage (`tests_document_drag`, `tests_clipboard`). Overflow-menu and cross-window drag remain
-separate. Scores and hours unchanged. [Behavior and command details](development.md#drag-artwork-between-document-tabs-2026-10-22).
+coverage (`tests_document_drag`, `tests_clipboard`). Under Window › Arrange › Tile, a release over
+another document's pane copies the artwork into that document as well, and a release over another
+view of the source document moves it (`canvas::panes` tests). Overflow-menu drag and drag into a
+floating document window remain separate. Scores and hours unchanged. [Behavior and command details](development.md#drag-artwork-between-document-tabs-2026-10-22).
 
 ## Revision history
 

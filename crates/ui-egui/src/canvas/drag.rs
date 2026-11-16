@@ -29,6 +29,11 @@ pub(crate) fn end_document_drag(ctx: &egui::Context) {
     });
 }
 
+/// Whether a Selection tool move has left the canvas ([`drag_art_out`]) and still waits there.
+pub(crate) fn art_out(ctx: &egui::Context) -> bool {
+    matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Art))
+}
+
 /// Temp-memory key for the active canvas drag state.
 pub(super) fn drag_id() -> egui::Id {
     egui::Id::unique("canvas-drag")
@@ -355,8 +360,9 @@ pub(crate) fn release_art_in_window(app: &mut VectorcraftApp, ctx: &egui::Contex
     }
 }
 
-/// Roll back the art move dragged off the canvas; a panel takes the art instead.
-fn end_art_move(app: &mut VectorcraftApp, ctx: &egui::Context) {
+/// Roll back the art move dragged off the canvas, and end the canvas's drag; a panel or another
+/// window's tiled pane takes the art instead.
+pub(crate) fn end_art_move(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // With no document open there is nothing to roll back; the tool still gets its mouse-up.
     let _ = app.session.cancel_interaction();
     let view = app.view_info();

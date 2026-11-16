@@ -497,7 +497,21 @@ to the source tab resumes a move (Alt copies). Escape or release outside the can
 Changing the source revision or unexpectedly changing/closing the destination cancels a stale
 transfer; focus loss, touch cancellation and multitouch cancel too. Moving tabs under a stationary
 pointer does not activate further tabs until the pointer moves. The close icon does not activate a tab during a drag. Overflow-menu hover activation and
-cross-window dragging remain outside this change.
+dragging into a floating document window remain outside this change.
+
+Under Window › Arrange › Tile, a Selection move released over another document's pane copies the
+artwork into that document through `edit.dropSelection`, with no tab hover first. The pane becomes
+the current window, the grab point lands under the pointer in that pane's own zoom and rotation, and
+the source move is rolled back, including when the pointer enters the pane and the button is released
+in the same frame. A release over another view of the source document (Window › New Window) moves the
+artwork there with `object.move`, and Alt copies it. While the artwork is held over a pane, the cursor
+shows a copy or a move. A release over a pane's rulers or scroll bars, or after Escape, changes
+neither document. A press in another pane with no artwork carried still only makes its document
+current. Page 14 of [the help page](https://help.adobe.com/archive/en_US/illustrator/cs4/illustrator_cs4_help.pdf)
+describes documents arranged side by side, with items dragged from one document into another.
+Evidence: the `canvas::panes` tests drive real pointer frames from the current pane into another
+document's pane, back the other way, into another view, through a tab into a third document's pane,
+and off a pane's art area.
 The cited regressions assert the internal clipboard; they do not exercise the native
 system-clipboard adapter. Tab activation resets the Selection tool through
 `Session::set_active`; gesture regressions verify it is idle after switching, dropping

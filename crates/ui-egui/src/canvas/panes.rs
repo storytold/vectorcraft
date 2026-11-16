@@ -1,8 +1,9 @@
 //! Window › Arrange › Tile: every open document in a pane of its own, edge to edge in the document
 //! area. The current document's pane is the canvas ([`super::show`]). Each other pane draws its
 //! document from a render of its own, with its artboards, guides and selected objects, and a press
-//! in it makes its document the current one. Each view Window › New Window opened has a pane of
-//! its own ([`crate::doc_windows`]).
+//! in it makes its document the current one. A Selection drag released in it drops the dragged
+//! artwork into its document ([`crate::document_drag::drop_on_pane`]). Each view Window › New
+//! Window opened has a pane of its own ([`crate::doc_windows`]).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -243,11 +244,17 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     let areas: Vec<(Win, egui::Rect)> = cells.iter().map(|(w, cell)| (*w, view_rects(app, *cell, ppp).1)).collect();
     let unfitted = refit_resized(app, &areas);
     let mut activate = None;
+    let (mut cursor, mut dropped) = (None, None);
     // The other panes first, so that what the canvas draws past its pane (the Contextual Task Bar)
     // stays over them.
-    for (w, cell) in cells.iter().copied().filter(|(w, _)| Some(*w) != active) {
+    for ((w, cell), (_, area)) in cells.iter().copied().zip(areas.iter().copied()).filter(|((w, _), _)| Some(*w) != active) {
         if pane(app, ui, w, cell) {
             activate = Some(w);
+        }
+        match artwork_over(app, ui, w, area) {
+            Some(Over::Held(c)) => cursor = Some(c),
+            Some(Over::Released(at, carried)) => dropped = Some((w, at, carried)),
+            None => {}
         }
         ui.painter().rect_stroke(cell, 0.0, Stroke::new(1.0, t.border), StrokeKind::Inside);
     }
@@ -256,6 +263,10 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
         super::show(app, &mut canvas);
         ui.painter().rect_stroke(cell, 0.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
     }
+    // After the canvas, which sets the cursor of the drag it holds.
+    if let Some(c) = cursor {
+        ui.ctx().set_cursor_icon(c);
+    }
     // Note the fits this frame made, for `refit_resized`.
     for ((w, area), was_unfitted) in areas.iter().zip(unfitted) {
         if let (true, Some(v), Some(s)) = (was_unfitted, crate::doc_windows::view(app, *w).filter(|v| v.fitted).copied(), slot(app, *w)) {
@@ -263,10 +274,38 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
         }
     }
     app.canvas.panes.last = cells;
-    if let Some(w) = activate {
+    if let Some((w, at, carried)) = dropped {
+        crate::document_drag::drop_on_pane(app, ui.ctx(), w, at, carried);
+    } else if let Some(w) = activate {
         crate::doc_windows::show_window(app, w);
     }
     true
+}
+
+/// A Selection drag's artwork over another window's tiled pane.
+enum Over {
+    /// Held there: the cursor that shows whether a release moves or copies it.
+    Held(egui::CursorIcon),
+    /// Released there, at a document point in the pane's own view.
+    Released(Point, crate::document_drag::Carried),
+}
+
+/// A Selection drag's artwork over `area`, the part of window `w`'s pane inside its rulers and
+/// scroll bars, where no panel or floating window is over the pointer. A release there takes the
+/// artwork before the canvas sees the release ([`crate::document_drag::take_for_pane`]).
+fn artwork_over(app: &mut VectorcraftApp, ui: &Ui, w: Win, area: egui::Rect) -> Option<Over> {
+    let (uid, _) = slot(app, w)?;
+    let p = ui.input(|i| i.pointer.interact_pos())?;
+    if !area.contains(p) || ui.ctx().layer_id_at(p).is_some_and(|l| l != ui.layer_id()) {
+        return None;
+    }
+    let cursor = crate::document_drag::pane_cursor(app, ui.ctx(), uid)?;
+    if !ui.input(|i| i.pointer.primary_released()) {
+        return Some(Over::Held(cursor));
+    }
+    let v = crate::doc_windows::view(app, w).copied()?;
+    let at = Xf::at(area, &v, ui.ctx().zoom_factor()).to_doc(p);
+    Some(Over::Released(at, crate::document_drag::take_for_pane(app, ui.ctx())?))
 }
 
 /// Window `w`'s [`Slot`].

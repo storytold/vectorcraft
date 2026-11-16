@@ -1,4 +1,5 @@
-//! A selection dragged across document tabs remains editable and leaves its source intact.
+//! A selection dragged across document tabs, or into another document's tiled pane, remains
+//! editable and leaves its source intact.
 
 use std::sync::Arc;
 
@@ -90,13 +91,15 @@ pub(crate) fn cleanup(app: &VectorcraftApp, ctx: &Context) {
                 || i.multi_touch().is_some()
                 || i.events.iter().any(|e| matches!(e, egui::Event::Touch { phase: egui::TouchPhase::Cancel, .. }))
         });
-        let outside_release =
-            ctx.input(|i| i.pointer.primary_released() && !app.canvas_rect.is_some_and(|r| i.pointer.interact_pos().is_some_and(|p| r.contains(p))));
+        // The canvas and the other windows' tiled panes take a release ([`drop_on_pane`]).
+        let target = |p: egui::Pos2| app.canvas_rect.is_some_and(|r| r.contains(p)) || app.canvas.panes.last.iter().any(|(_, r)| r.contains(p));
+        let outside_release = ctx.input(|i| i.pointer.primary_released() && !i.pointer.interact_pos().is_some_and(target));
         if !valid || cancel || outside_release || app.ui.dialog.is_some() {
             egui::DragAndDrop::clear_payload(ctx);
         }
     }
-    if !ctx.input(|i| i.pointer.primary_down()) {
+    // The source and grab point last through the release, for the pane it is released over.
+    if !ctx.input(|i| i.pointer.primary_down() || i.pointer.primary_released()) {
         ctx.data_mut(|d| {
             d.remove::<Origin>(origin_id());
             d.remove::<Hover>(hover_id());
@@ -209,4 +212,84 @@ pub(crate) fn drop_on_canvas(app: &mut VectorcraftApp, resp: &Response, xf: &can
             app.status(e);
         }
     }
+}
+
+/// The artwork a Selection drag carries out of its canvas, taken by another window's tiled pane
+/// ([`take_for_pane`]): its source and grab point, and the objects that travel.
+pub(crate) struct Carried {
+    origin: Origin,
+    ids: Vec<NodeId>,
+}
+
+/// The artwork a Selection drag carries: the transfer a tab hover started, or a Selection move of
+/// the current document that left its canvas. The canvas hands that move over as a panel drag
+/// ([`widgets::PanelDrag::Art`]) the frame after the pointer leaves, and Escape drops that; until
+/// then the move under way is the drag. Either way the objects the move started with travel, not
+/// an Alt-drag's preview copies.
+fn carried(app: &VectorcraftApp, ctx: &Context) -> Option<Carried> {
+    if ctx.input(|i| !i.focused || i.multi_touch().is_some() || i.key_pressed(egui::Key::Escape)) || app.ui.dialog.is_some() {
+        return None;
+    }
+    if let Some(art) = egui::DragAndDrop::payload::<Artwork>(ctx) {
+        return Some(Carried { origin: art.origin.clone(), ids: art.ids.clone() });
+    }
+    let origin = ctx.data(|d| d.get_temp::<Origin>(origin_id()))?;
+    let st = app.session.active().filter(|d| d.uid == origin.uid)?;
+    let ids = match egui::DragAndDrop::payload::<widgets::PanelDrag>(ctx).as_deref() {
+        Some(widgets::PanelDrag::Art(ids)) => ids.clone(),
+        Some(_) => return None,
+        None if canvas::art_out(ctx) => return None,
+        None => st.interaction.as_ref().filter(|i| i.label == "Move" || i.label == "Copy")?.selection.objects.clone(),
+    };
+    (!ids.is_empty()).then_some(Carried { origin, ids })
+}
+
+/// Over the tiled pane of a window of document `uid`, while a Selection drag carries artwork: the
+/// cursor that shows a move for another view of the source document without Alt, and a copy
+/// otherwise. None when no artwork is carried.
+pub(crate) fn pane_cursor(app: &VectorcraftApp, ctx: &Context, uid: u64) -> Option<egui::CursorIcon> {
+    let c = carried(app, ctx)?;
+    let copy = ctx.input(|i| i.modifiers.alt);
+    Some(if c.origin.uid == uid && !copy { egui::CursorIcon::Move } else { egui::CursorIcon::Copy })
+}
+
+/// A release over another window's tiled pane takes the carried artwork: the drag ends, and a
+/// move still under way on the canvas goes back to where it started, before the canvas sees the
+/// release ([`canvas::end_art_move`]).
+pub(crate) fn take_for_pane(app: &mut VectorcraftApp, ctx: &Context) -> Option<Carried> {
+    let c = carried(app, ctx)?;
+    let moving = !egui::DragAndDrop::has_payload_of_type::<Artwork>(ctx) && app.session.in_interaction();
+    egui::DragAndDrop::clear_payload(ctx);
+    ctx.data_mut(|d| d.remove::<Origin>(origin_id()));
+    if moving {
+        canvas::end_art_move(app, ctx);
+    }
+    Some(c)
+}
+
+/// The artwork `c` taken over window `w`'s tiled pane ([`take_for_pane`]), released at document
+/// point `at` in that pane's view: `w` becomes the current window, and the artwork lands with its
+/// grab point at `at`. Into another document it is copied (`edit.dropSelection`), and the source
+/// stays as it was; in another view of the source document it moves, and Alt copies it
+/// (`object.move`). When the command fails, the window that was current stays current and the
+/// status bar shows the error.
+pub(crate) fn drop_on_pane(app: &mut VectorcraftApp, ctx: &Context, w: crate::doc_windows::Win, at: Point, c: Carried) {
+    let Carried { origin, ids } = c;
+    let Some(uid) = app.session.documents().get(w.0).map(|d| d.uid) else { return };
+    let before = crate::doc_windows::current(app);
+    app.ui.home = None;
+    crate::doc_windows::show_window(app, w);
+    let result = if uid == origin.uid {
+        let copy = ctx.input(|i| i.modifiers.alt);
+        app.run("object.move", json!({"ids": ids, "dx": at.x - origin.grab.x, "dy": at.y - origin.grab.y, "copy": copy}))
+    } else {
+        app.run("edit.dropSelection", json!({"sourceDocument": origin.uid, "ids": ids, "grab": [origin.grab.x, origin.grab.y], "at": [at.x, at.y]}))
+    };
+    if let Err(e) = result {
+        if let Some(b) = before {
+            crate::doc_windows::show_window(app, b);
+        }
+        app.status(e);
+    }
+    ctx.request_repaint();
 }
