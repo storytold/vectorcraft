@@ -768,6 +768,13 @@ Constrain Angle's negative. `shape.arc` takes `rotation` in degrees clockwise on
 reference point `x`, `y`; the arc's bounding box turns with it. Without `rotation`, or at 0° or a whole turn, the arc is
 upright, and a `rotation` that is not a number is an error that adds nothing.
 
+`shape.arc` checks `reference`, `baseAlong` and `slope` in both of its forms. `reference` is a whole number from 0 to 8
+(`4.0` is 4) and is 0 when left out; `baseAlong` is `x` or `y` in either case and is `x` when left out; `slope` is
+from −100 to 100 and is 50 when left out with `lengthX` and `lengthY`, or 100 with `x1`, `y1`, `x2`, `y2`. A
+`reference` or `baseAlong` given as anything else, null included, is an error naming the key (for example
+`` `baseAlong` must be one of x, y ``), as is a `slope` outside its range; the arc is not drawn and no undo step is
+added.
+
 While a spiral is being dragged out with the Spiral tool, a `drag` event with `mods.alt` or `mods.cmd` keeps the
 spiral's inner end at the distance from the center it had on the first modified `drag` event, and the outer end follows
 the pointer. With `mods.alt` alone, dragging outward adds whole winds of four segments and dragging inward removes
@@ -2145,7 +2152,8 @@ and `rotation` in `shape.polygon`; `radius2`, `points` and `rotation` in `shape.
 `brightness`, `growth`, `fuzziness`, `rays`, `longest`, `rayFuzziness`, `rotation`, `rings`, `largest`, `x2`, `y2`, `direction`, `pathLength`, `seed` and
 `ringSeed` in `shape.flare` (`seed` must also be a whole number of at least 0, and `ringSeed` a whole number from
 0 to 2^53 - 1); `decay` and `segments` in `shape.spiral`; `rows` and `columns` in `shape.rectangularGrid`; `concentric`
-and `radial` in `shape.polarGrid`; `size` and the `width`, `height` and `fitMinPercent` of `area` in `text.create`;
+and `radial` in `shape.polarGrid` (the four grid counts must also be whole numbers of at least 0, so `2.5` rows gets
+`` `rows` must be a whole number of at least 0, not 2.5 ``); `size` and the `width`, `height` and `fitMinPercent` of `area` in `text.create`;
 `size` and `fitMinPercent` in `text.createInPath`; `start`, `end`, `size`, `tracking`,
 `baselineShift`, `hScale`, `vScale`, `rotation` and `strokeWidth` in `text.setRangeStyle`; `strokeWidth` in `text.setStyle`; `start` and `end` in
 `text.editRange` and `text.getRange`; `at` in `text.startList`; `start`, `hScale`, `vScale` and `rotation` in `text.touchType`; `start` in
