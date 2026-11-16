@@ -2660,6 +2660,10 @@ font-technology	Variable	Variables
 	Play Current Selection	Reproducir la selección actual
 	Save Actions…	Guardar acciones…
 	Load Actions…	Cargar acciones…
+	Reset Actions	Restablecer acciones
+	Replace the current actions with the default set?	¿Reemplazar las acciones actuales por el conjunto predeterminado?
+	Append adds the default set after the current sets instead.	Añadir agrega en su lugar el conjunto predeterminado después de los conjuntos actuales.
+	Append	Añadir
 	Plug-in Info	Información del plugin
 	Plug-ins	Plugins
 	Plug-in…	Plugin…

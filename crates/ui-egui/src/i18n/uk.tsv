@@ -2690,6 +2690,10 @@ diagnostics	ui	інтерфейс
 	Play Current Selection	Відтворити поточне виділення
 	Save Actions…	Зберегти дії…
 	Load Actions…	Завантажити дії…
+	Reset Actions	Скинути дії
+	Replace the current actions with the default set?	Замінити поточні дії набором за умовчанням?
+	Append adds the default set after the current sets instead.	Кнопка «Додати» натомість додає набір за умовчанням після поточних наборів.
+	Append	Додати
 	Plug-in Info	Відомості про модуль
 	Plug-ins	Модулі
 	Plug-in…	Модуль…

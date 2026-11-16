@@ -3206,6 +3206,10 @@ diagnostics	ui	felület
 	Play Current Selection	Kijelölt művelet lejátszása
 	Save Actions…	Műveletek mentése…
 	Load Actions…	Műveletek betöltése…
+	Reset Actions	Műveletek visszaállítása
+	Replace the current actions with the default set?	Lecseréled az aktuális műveleteket az alapértelmezett készletre?
+	Append adds the default set after the current sets instead.	A Hozzáfűzés ehelyett az aktuális készletek után adja hozzá az alapértelmezett készletet.
+	Append	Hozzáfűzés
 	Plug-in Info	Bővítmény adatai
 	Plug-ins	Bővítmények
 	Plug-in…	Bővítmény…

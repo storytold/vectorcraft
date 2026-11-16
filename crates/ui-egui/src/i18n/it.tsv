@@ -2698,6 +2698,10 @@ diagnostics	ui	interfaccia
 	Play Current Selection	Esegui selezione corrente
 	Save Actions…	Salva azioni…
 	Load Actions…	Carica azioni…
+	Reset Actions	Ripristina azioni
+	Replace the current actions with the default set?	Sostituire le azioni correnti con il set predefinito?
+	Append adds the default set after the current sets instead.	Aggiungi aggiunge invece il set predefinito dopo i set correnti.
+	Append	Aggiungi
 	Plug-in Info	Informazioni plug-in
 	Plug-ins	Plug-in
 	Plug-in…	Plug-in…

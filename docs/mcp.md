@@ -3957,6 +3957,17 @@ already walks Image Trace. Short agent entry points:
   " copy" added, a copied set gets an id of its own, and the copy is selected. An index past the last set or action is an error,
   and so is a copy that would give its set more than 1,000 actions or a file larger than 8 MiB; then nothing is copied. The
   panel menu's Duplicate runs this for the selected action, else the current set.
+  `ui.actionSet.reset {mode?: "replace" | "append"}` is Reset Actions, and returns `{changed, mode, set}` (`set` is
+  the index of the first built-in set). `replace`, the default, replaces every set in the panel with a new copy of
+  VectorCraft's built-in Default Actions set, makes it current and selected, clears the panel's selected action and
+  step and its expanded actions, and closes an open Set Options, New Action, Batch or step dialog that names a set;
+  when the panel already shows only the built-in set as it comes in that state, nothing changes, the sets keep their
+  ids and `changed` is false. `append` adds a new copy of the built-in set after the sets there are, with the
+  next free number when its name is in use (`Default Actions 2`), and keeps the current set and the selection.
+  Omitted params count as `{}`. Params of another type, another key, another `mode`, or a reset while an action
+  records or plays (also while it waits at a stop) is an error and changes nothing. Reset records no undo step. The panel menu's Reset
+  Actions is disabled while an action records or plays; it opens a `resetActions` question (fields `message`,
+  `detail`, `append`): OK runs this with `replace`, Append with `append`, and `ui.dialog.cancel` changes nothing.
 - Image Trace: `imageTrace.presets`, `imageTrace.make {id?, preset?, params?, view?}` (or `imageTrace.makeAndExpand`),
   `imageTrace.setView`, `imageTrace.expand`, `imageTrace.release`. A key inside `params` that is not one of the trace
   settings, such as `colours`, is an error that names it and the nearest setting (`colors`), as for a command's own keys.

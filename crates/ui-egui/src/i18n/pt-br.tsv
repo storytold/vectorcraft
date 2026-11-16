@@ -2194,6 +2194,10 @@ antiAlias	Sharp	Nítido
 	Play Current Selection	Reproduzir Seleção Atual
 	Save Actions…	Salvar Ações…
 	Load Actions…	Carregar Ações…
+	Reset Actions	Redefinir Ações
+	Replace the current actions with the default set?	Substituir as ações atuais pelo conjunto padrão?
+	Append adds the default set after the current sets instead.	Anexar adiciona o conjunto padrão depois dos conjuntos atuais.
+	Append	Anexar
 	Plug-in Info	Informações do Plug-in
 	Plug-ins	Plug-ins
 	Plug-in…	Plug-in…

@@ -1504,6 +1504,10 @@ lighting	Light	Valo
 	Play Current Selection	Toista nykyinen valinta
 	Save Actions…	Tallenna toiminnot…
 	Load Actions…	Lataa toiminnot…
+	Reset Actions	Palauta toiminnot
+	Replace the current actions with the default set?	Korvataanko nykyiset toiminnot oletussarjalla?
+	Append adds the default set after the current sets instead.	Lisää-painike lisää sen sijaan oletussarjan nykyisten sarjojen perään.
+	Append	Lisää
 	Reflect Horizontal	Peilaa vaakasuunnassa
 	Rotate 90° CW	Kierrä 90° myötäpäivään
 	Set 1	Sarja 1

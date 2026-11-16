@@ -2432,6 +2432,10 @@ shape	Open	Açık
 	Play Current Selection	Geçerli Seçimi Oynat
 	Save Actions…	Eylemleri Kaydet…
 	Load Actions…	Eylemleri Yükle…
+	Reset Actions	Eylemleri Sıfırla
+	Replace the current actions with the default set?	Geçerli eylemler varsayılan setle değiştirilsin mi?
+	Append adds the default set after the current sets instead.	Ekle bunun yerine varsayılan seti geçerli setlerin sonuna ekler.
+	Append	Ekle
 	Plug-in Info	Eklenti Bilgisi
 	Plug-ins	Eklentiler
 	Plug-in…	Eklenti…
