@@ -570,6 +570,46 @@ fn ending_during_a_pen_gesture_commits_and_clears_it() {
     }
 }
 
+/// Choosing the Pen again ends the path being drawn as Escape does, with the rubber band on or off
+/// and for a one-anchor path: the preview goes, nothing is added to the document, and the next
+/// click starts a new path. Mid-drag it commits the anchor being placed first. With no path being
+/// drawn it changes nothing.
+#[test]
+fn choosing_the_pen_again_ends_the_path() {
+    let p = paint();
+    let created = |acts: &[Action]| matches!(acts, [Action::Begin(_), Action::Preview(c, _)] if c == "path.create");
+    let preview = |o: &[Overlay]| o.iter().any(|o| matches!(o, Overlay::Path { .. } | Overlay::Measure { .. }));
+    for pts in [vec![Point::new(100.0, 300.0), Point::new(200.0, 300.0)], vec![Point::new(100.0, 300.0)]] {
+        let (d, _, s) = drawing(vectorcraft_geom::SubPath::polyline(&pts, false));
+        for band in [true, false] {
+            let cx = ToolContext { pen_rubber_band: band, ..cx(&d, &s, &p) };
+            let mut t = PenTool { drawing: true, ..PenTool::default() };
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 300.0, 410.0));
+            assert!(preview(&t.overlays(&cx)), "band {band}");
+            assert_eq!(t.cursor(&cx, Point::new(300.0, 410.0), Mods::default()), Cursor::PenDrawing);
+            assert!(t.chosen_again(&cx).is_empty(), "nothing to commit");
+            assert!(!preview(&t.overlays(&cx)), "band {band}");
+            assert_eq!(t.cursor(&cx, Point::new(300.0, 410.0), Mods::default()), Cursor::Pen);
+            let acts = click(&mut t, &cx, 300.0, 410.0, Mods::default());
+            assert!(created(&acts), "{} anchors, band {band}: {acts:?}", pts.len());
+        }
+        // Chosen again (through `tool.select`) while a drag places an anchor: it is committed.
+        let cx = cx(&d, &s, &p);
+        let mut t = PenTool { drawing: true, ..PenTool::default() };
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 410.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 320.0, 440.0));
+        assert_eq!(t.chosen_again(&cx), vec![Action::Commit]);
+        assert!(!t.busy());
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 320.0, 440.0)).is_empty());
+        assert!(created(&click(&mut t, &cx, 300.0, 500.0, Mods::default())));
+    }
+    let (d, _, s) = drawing(vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0)], false));
+    let cx = cx(&d, &s, &p);
+    let mut t = PenTool::default();
+    assert!(t.chosen_again(&cx).is_empty());
+    assert_eq!(t.cursor(&cx, Point::new(300.0, 410.0), Mods::default()), Cursor::Pen);
+}
+
 /// #501: a press on the first anchor closes the path, however far the drag then goes: the
 /// closing preview leaves the path closed (so not one the pen extends), and each move still
 /// previews the close with the incoming handle mirroring the pointer (Alt keeps the outgoing one

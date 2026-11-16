@@ -282,7 +282,8 @@ pub trait Tool: Send {
         vec![]
     }
     /// The tool, already active, is chosen again (its toolbar button, its shortcut, `tool.select`).
-    /// Most tools keep their state; the Blend tool finishes the blend it is adding to.
+    /// Most tools keep their state; the Blend tool finishes the blend it is adding to, and the Pen
+    /// ends the path it is drawing.
     fn chosen_again(&mut self, _cx: &ToolContext) -> Vec<Action> {
         vec![]
     }

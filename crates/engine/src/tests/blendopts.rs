@@ -120,8 +120,9 @@ fn a_blend_and_an_object_make_one_blend_with_more_keys() {
 }
 
 /// Choosing the Blend tool again (its button, W, `tool.select`) finishes the blend: the first
-/// pick and the chain are dropped, and the document and the selection stay. Choosing another
-/// tool again keeps its work: the Pen's open path stays open.
+/// pick and the chain are dropped, and the document and the selection stay. The Pen chosen again
+/// ends the path it is drawing, as Escape does: the path stays open and the next click starts a
+/// new one.
 #[test]
 fn choosing_the_blend_tool_again_finishes_the_blend() {
     let mut s = session();
@@ -148,7 +149,7 @@ fn choosing_the_blend_tool_again_finishes_the_blend() {
     click(&mut s, 20.0, 20.0);
     assert_eq!(s.doc().unwrap().selection.objects, vec![a]);
     assert_eq!(spec(&s, g).0, vec![b, c], "a was not added");
-    // The Pen chosen again goes on drawing its open path.
+    // The Pen chosen again ends its open path; the next click starts a new one.
     s.select_tool("pen", v).unwrap();
     s.execute("select.none", &json!({})).unwrap();
     let pen = |s: &mut Session, x: f64, y: f64| {
@@ -156,16 +157,27 @@ fn choosing_the_blend_tool_again_finishes_the_blend() {
             s.pointer(&PointerEvent::new(kind, x, y), ViewInfo::default()).unwrap();
         }
     };
+    let anchors = |s: &Session, id| match node(s, id).kind {
+        NodeKind::Path { path, .. } => path.subpaths.iter().map(|sp| (sp.anchors.len(), sp.closed)).collect(),
+        _ => vec![],
+    };
+    // With no path being drawn, choosing the Pen again changes nothing.
+    let depth = s.doc().unwrap().history.undo.len();
+    s.select_tool("pen", v).unwrap();
+    assert_eq!((s.doc().unwrap().history.undo.len(), s.doc().unwrap().selection.objects.len()), (depth, 0));
     pen(&mut s, 100.0, 300.0);
     pen(&mut s, 200.0, 300.0);
     let p = s.doc().unwrap().selection.objects[0];
+    let depth = s.doc().unwrap().history.undo.len();
     s.select_tool("pen", v).unwrap();
+    assert_eq!(s.tool_id(), "pen", "the Pen stays chosen");
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth, "ending the path adds no undo step");
+    assert_eq!(s.doc().unwrap().selection.objects, vec![p], "the path stays selected");
     pen(&mut s, 300.0, 300.0);
-    let anchors = match node(&s, p).kind {
-        NodeKind::Path { path, .. } => path.subpaths[0].anchors.len(),
-        _ => 0,
-    };
-    assert_eq!(anchors, 3, "the Pen keeps drawing the same path");
+    assert_eq!(anchors(&s, p), vec![(2, false)], "the path stays open with its two anchors");
+    let q = s.doc().unwrap().selection.objects[0];
+    assert_ne!(q, p, "the click starts a new path");
+    assert_eq!(anchors(&s, q), vec![(1, false)]);
 }
 
 #[test]

@@ -2536,6 +2536,36 @@ fn the_blend_tool_shortcut_finishes_the_blend() {
     assert_eq!(app.session.active().unwrap().doc.layers, layers, "no blend was made");
 }
 
+/// P, the Pen's shortcut, pressed between clicks while the Pen draws a path ends that path: the Pen
+/// stays chosen, the path stays open, and the next click starts a new path.
+#[test]
+fn the_pen_shortcut_ends_the_path_being_drawn() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    app.select_tool("pen");
+    let click = |app: &mut VectorcraftApp, x: f64| {
+        let v = app.view_info();
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, x, 100.0), v).unwrap();
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, x, 100.0), v).unwrap();
+    };
+    let press = |key| egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: Modifiers::NONE };
+    let anchors = |app: &VectorcraftApp, id| {
+        let path = app.session.active().unwrap().doc.node(id).and_then(|n| n.path_data());
+        path.map(|pd| pd.subpaths.iter().map(|sp| sp.anchors.len()).collect::<Vec<_>>())
+    };
+    click(&mut app, 100.0);
+    click(&mut app, 200.0);
+    let first = app.session.active().unwrap().selection.objects[0];
+    frame(&mut app, vec![press(Key::P), egui::Event::Text("p".into())]);
+    assert_eq!(app.session.tool_id(), "pen");
+    click(&mut app, 300.0);
+    assert_eq!(anchors(&app, first), Some(vec![2]), "the path keeps its two anchors");
+    let second = app.session.active().unwrap().selection.objects[0];
+    assert_ne!(second, first, "the click starts a new path");
+    assert_eq!(anchors(&app, second), Some(vec![1]));
+}
+
 /// A Blend tool shortcut that arrives only as text (Shift+~ types `~`) also finishes the blend,
 /// while another tool's shifted shortcut does not.
 #[test]
