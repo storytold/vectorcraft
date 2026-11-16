@@ -1819,6 +1819,9 @@ file-filter	Templates	Mẫu
 	Show smooth color wheel	Hiện bánh xe màu liền mạch
 	Show segmented color wheel	Hiện bánh xe màu phân đoạn
 	Show color bars	Hiện các thanh màu
+	Add Color Tool	Công cụ Thêm màu
+	Remove Color Tool	Công cụ Xóa màu
+	Remove Color	Xóa màu
 	Find the selected colors in the artwork	Tìm các màu đã chọn trong tác phẩm
 	Harmony Sets	Bộ hài hòa màu
 	Height	Chiều cao

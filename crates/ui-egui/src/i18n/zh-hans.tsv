@@ -1516,6 +1516,9 @@ file-filter	Templates	模板
 	Show smooth color wheel	显示平滑色轮
 	Show segmented color wheel	显示分段色轮
 	Show color bars	显示颜色条
+	Add Color Tool	添加颜色工具
+	Remove Color Tool	删除颜色工具
+	Remove Color	删除颜色
 	Find the selected colors in the artwork	在图稿中查找所选颜色
 	Harmony Sets	色彩调和组
 	Height	高度

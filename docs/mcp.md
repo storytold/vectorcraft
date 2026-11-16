@@ -4665,8 +4665,10 @@ darker than the row's average become tints and shades) or `hueShift` (the most s
 the others turn by the same hue). `limitTo` snaps new colours to a swatch library's nearest colour;
 `recolor.randomize {map, order?, saturationBrightness?, seed?}` shuffles or varies new colours; a row with
 `exclude: true` keeps its colours. A row's `from` may be an empty list: the row recolors nothing, adds no library swatch with
-`limitTo` and gives `group` no color, and `recolor.randomize` and `recolor.weigh` keep it; `recolor.randomize` leaves its
-new color as it is and shuffles only the rows that hold current colors. A row without `from`, or with
+`limitTo` and gives `group` no color, unless it has `added: true` (a color the Edit tab's Add Color tool added):
+without `groupColors`, its new color then joins `group` after the new colors of the rows with current colors.
+`recolor.randomize` leaves a row without current colors as it is and shuffles only the rows that hold current colors.
+`recolor.randomize` and `recolor.weigh` keep such a row, and `recolor.randomize` keeps its `added`. A row without `from`, or with
 a current color that is not a color, is refused. With art selected, the Recolor Artwork dialog's New Row button (beside
 Merge) adds such a row above the first selected row, or at the top, with that row's new color, and selects it; Shift-click a row below it and Merge to move that row's colors into it (Merge keeps the topmost selected row's new color). An
 empty row does not count toward Colors. While it is empty, the dialog's Edit tab does not show it (its sliders edit
@@ -4676,7 +4678,8 @@ from colors alone leave its new color out. With `limitTo`, a row's `tint` (a per
 linked to the global or spot swatch its new color is that share of its tint; `tint` must be a number. `recolor.randomize`
 moves a row's `tint` with its new color and removes it from a color it changes, and moves a row's `model` with its new color. `swatch.editGroup {group, colors, rename?}` rewrites a colour group in one undo
 step (art linked to its global swatches follows), and `recolor.apply` with `group` recolours the art and rewrites the
-group together. Art linked to one of the group's global swatches stays linked when the swatch is rewritten with its
+group together. A `null` in `groupColors` removes the group's swatch at that place, and the swatches after it keep
+their colors and names; art linked to a removed global swatch keeps its color and is no longer linked to it. Art linked to one of the group's global swatches stays linked when the swatch is rewritten with its
 row's new color (the default without `groupColors` when the rows follow the group's order), so a later `swatch.edit` still
 reaches it; the reply's `relinked` counts the other linked paints that took the group's new colors. Art in a row that
 is linked to a swatch rewritten with another color keeps its row's new color, even an unchanged one, and is no longer

@@ -1959,6 +1959,9 @@ antiAlias	Sharp	シャープ
 	Show smooth color wheel	滑らかなカラーホイールを表示
 	Show segmented color wheel	分割カラーホイールを表示
 	Show color bars	カラーバーを表示
+	Add Color Tool	カラー追加ツール
+	Remove Color Tool	カラー削除ツール
+	Remove Color	カラーを削除
 	Find the selected colors in the artwork	選択したカラーをアートワーク内で検索
 	Height	高さ
 	Height:	高さ:
