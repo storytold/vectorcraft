@@ -618,11 +618,11 @@ pub(crate) fn label_or_name(s: &str, built_in: bool) -> &str {
     crate::i18n::label_or_name(crate::i18n::current(), s, built_in)
 }
 
-/// Rows of chips (the Session's recent colours, which every paint command feeds), wrapped onto as
+/// Rows of chips (the Session's recent colors, which every paint command feeds), wrapped onto as
 /// many rows as the panel's width needs, under a "Recent Colors" header when `heading` is set;
 /// returns the one clicked, for the caller to apply. The chips sit in a group that, without the
-/// header, screen readers name "Recent Colors". A chip drags its color as a solid paint, which the Swatches panel
-/// makes a swatch of.
+/// header, screen readers name "Recent Colors". A chip drags its color as a solid paint, which
+/// the Swatches panel makes a swatch of.
 pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui, heading: bool) -> Option<Color> {
     let t = Tokens::get(ui.ctx());
     if heading {

@@ -1006,10 +1006,11 @@ fn show_recent_colors_hides_and_shows_the_swatches_row() {
     assert_eq!((saved(json!(false)), saved(json!(true)), saved(json!("no"))), (false, true, true));
 }
 
-/// The panel draws no "Recent Colors" or "Swatch Tiles" heading (#8041): the Recent Colors row
-/// sits under the proxy row, empty or not, the swatch list just under it, and the list moves up
-/// under the proxy row when Show Recent Colors hides the row. Screen readers still find both
-/// parts by those names.
+/// The panel, and the Fill/Stroke chip popover that shows the same body, draw no "Recent Colors"
+/// or "Swatch Tiles" heading (#8041): the Recent Colors row sits under the proxy row, empty or not,
+/// the swatch list just under it, and the list moves up under the proxy row when Show Recent
+/// Colors hides the row. Screen readers find both parts by those names, with the chips in the
+/// Recent Colors group and the tiles in the Swatch Tiles list.
 #[test]
 fn the_list_sits_under_the_recent_colors_row_without_headings() {
     fn texts(shapes: &[egui::Shape], out: &mut Vec<String>) {
@@ -1023,14 +1024,14 @@ fn the_list_sits_under_the_recent_colors_row_without_headings() {
     }
     // The visible texts, and the bounds of the parts screen readers name "Recent Colors" and
     // "Swatch Tiles", of the second of two frames.
-    let look = |app: &mut VectorcraftApp| {
+    let look = |app: &mut VectorcraftApp, draw: fn(&mut VectorcraftApp, &mut Ui), salt: &'static str| {
         crate::i18n::set_current(crate::i18n::Lang::EN);
         let ctx = context();
         ctx.enable_accesskit();
         let mut last = None;
         for time in [0.0, 0.5] {
             let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0)));
-            let mut out = ctx.run_ui(egui::RawInput { time: Some(time), screen_rect, ..Default::default() }, |ui| show(app, ui));
+            let mut out = ctx.run_ui(egui::RawInput { time: Some(time), screen_rect, ..Default::default() }, |ui| draw(app, ui));
             out.textures_delta.clear();
             last = Some(out);
         }
@@ -1040,9 +1041,17 @@ fn the_list_sits_under_the_recent_colors_row_without_headings() {
         let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
         let named =
             |label: &str| nodes.iter().find(|(_, n)| n.label() == Some(label)).and_then(|(_, n)| n.bounds()).map(|b| (b.y0 as f32, b.y1 as f32));
-        // The list is the node that holds the tiles, not an empty node beside them.
-        let list = nodes.iter().find(|(_, n)| n.label() == Some("Swatch Tiles"));
-        assert!(list.is_some_and(|(_, n)| n.role() == egui::accesskit::Role::List && !n.children().is_empty()), "the list holds the tiles");
+        // The list is the node that holds the tiles, not an empty node beside them: the first
+        // tile's node is inside it.
+        let (list, node) = nodes.iter().find(|(_, n)| n.label() == Some("Swatch Tiles")).expect("screen readers find the swatch list");
+        assert_eq!(node.role(), egui::accesskit::Role::List);
+        let first = entries(app, Kind::All, "").first().map(|e| tiles::tile_id(salt, e).accesskit_id()).expect("the document has swatches");
+        let (mut inside, mut stack) = (false, vec![*list]);
+        while let Some(id) = stack.pop() {
+            inside |= id == first;
+            stack.extend(nodes.iter().filter(|(n, _)| *n == id).flat_map(|(_, n)| n.children().iter().copied()));
+        }
+        assert!(inside, "the list holds the tiles");
         // Likewise the Recent Colors group holds its chips, one child per recent color.
         let chips = nodes.iter().find(|(_, n)| n.label() == Some("Recent Colors")).map(|(_, n)| n.children().len());
         if let Some(chips) = chips {
@@ -1050,23 +1059,25 @@ fn the_list_sits_under_the_recent_colors_row_without_headings() {
         }
         (shown, named("Recent Colors"), named("Swatch Tiles"))
     };
-    let mut app = app();
-    for applied in [false, true] {
-        if applied {
-            app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    for (draw, salt) in [(show as fn(&mut VectorcraftApp, &mut Ui), TILE), (popover, POPOVER_TILE)] {
+        let mut app = app();
+        for applied in [false, true] {
+            if applied {
+                app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+            }
+            let (shown, recent, list) = look(&mut app, draw, salt);
+            assert!(!shown.iter().any(|t| t == "Recent Colors" || t == "Swatch Tiles"), "{salt}: no headings: {shown:?}");
+            let (row_top, row_bottom) = recent.expect("screen readers find the Recent Colors row");
+            let (top, _) = list.expect("screen readers find the swatch list");
+            assert!(row_top < 50.0, "{salt}: the row sits under the proxy row: {row_top}");
+            assert!(top > row_bottom && top - row_bottom < 12.0, "{salt}: the list sits under the row: {row_bottom} {top}");
         }
-        let (shown, recent, list) = look(&mut app);
-        assert!(!shown.iter().any(|t| t == "Recent Colors" || t == "Swatch Tiles"), "no headings: {shown:?}");
-        let (row_top, row_bottom) = recent.expect("screen readers find the Recent Colors row");
+        app.ui.swatches_show_recent_colors = false;
+        let (_, recent, list) = look(&mut app, draw, salt);
+        assert_eq!(recent, None, "{salt}: Show Recent Colors unchecked hides the row");
         let (top, _) = list.expect("screen readers find the swatch list");
-        assert!(row_top < 50.0, "the row sits under the proxy row: {row_top}");
-        assert!(top > row_bottom && top - row_bottom < 12.0, "the list sits under the row: {row_bottom} {top}");
+        assert!(top < 50.0, "{salt}: the list starts under the proxy row: {top}");
     }
-    app.ui.swatches_show_recent_colors = false;
-    let (_, recent, list) = look(&mut app);
-    assert_eq!(recent, None, "Show Recent Colors unchecked hides the row");
-    let (top, _) = list.expect("screen readers find the swatch list");
-    assert!(top < 50.0, "the list starts under the proxy row: {top}");
 }
 
 /// In a panel made taller the swatch list fills the space above the panel's footer instead of
