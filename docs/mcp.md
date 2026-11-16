@@ -8103,7 +8103,8 @@ preview with a warning when it is gone or changed.
 `links.list` and `links.info` give them `document: true`, the file's `format` (`VectorCraft`, `PDF`,
 `PDF-compatible .ai`, `EPS`, `PostScript`) and the artboard's or page's `pageWidth` and `pageHeight` (pt). A relinked
 PDF shows the same page and box of the new file. File › Package copies a placed PDF, `.ai` or EPS file as it is. For a `.ai` file read from
-its editing data, Package also copies the files its art places into the same folder. That file finds them by name,
+its editing data, or an EPS file read from the native document it carries, Package also copies the files its art
+places into the same folder. That file finds them by name,
 and Package warns when one is copied under another name: the copy then shows the file of that name, or its preview.
 Saving the file in the app updates the open documents that place it. `links.embed` (the Links panel's Break Link)
 turns one into the editable copy placing without link gives, its symbols, patterns, swatches and images joining
