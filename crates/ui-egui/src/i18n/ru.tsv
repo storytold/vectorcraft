@@ -3354,8 +3354,12 @@ digits	Malayalam	Малаялам
 	Filter Layers Panel Rows	Фильтровать строки панели «Слои»
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` обозначает изменённые параметры: сохраните набор под другим именем
 @msg	`{key}` must be an array of these names: {_1}	`{key}` должно быть массивом из этих имён: {_1}
-	Search commands and tools	Поиск команд и инструментов
-	Search commands and tools…	Поиск команд и инструментов…
+	Search commands, tools, panels and effects	Поиск команд, инструментов, панелей и эффектов
+	Search commands, tools, panels and effects…	Поиск команд, инструментов, панелей и эффектов…
+	No commands match	Нет подходящих команд
+	{pos} of {total}: {name}	{pos} из {total}: {name}
+@plural	{n} result|{n} results	{n} результат|{n} результата|{n} результатов
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} из {n} результата. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.
 	Recent Commands	Недавние команды
 	No recent commands	Нет недавних команд
 	Search Commands…	Поиск команд…
