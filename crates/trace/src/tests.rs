@@ -1726,7 +1726,7 @@ fn jitter(x: u32, y: u32, salt: u32) -> f64 {
 }
 
 #[test]
-fn full_tone_keeps_a_noisy_ramps_neighboring_tones() {
+fn full_tone_keeps_more_of_a_noisy_ramps_tones() {
     // Gray to green with grain: Full Tone's neighboring tones are close in RGB and mixed along
     // their borders, and still look different.
     let img = Raster::from_fn(256, 96, |x, y| {
@@ -1734,13 +1734,30 @@ fn full_tone_keeps_a_noisy_ramps_neighboring_tones() {
         [v(0, 100.0, 0.0), v(1, 40.0, 0.7), v(2, 100.0, 0.0), 255]
     });
     let params = TraceParams { mode: Mode::Color, palette: Palette::FullTone, color_detail: 85.0, ..TraceParams::default() };
-    // Median cut gives at least 85 (one per step of Color detail); merged where they look alike, 6
-    // are left, and merged as close RGB colors, 5 would be.
+    // Median cut gives at least 85 (one per step of Color detail). Merging the ones that look alike
+    // leaves 6 (one per 30 or so levels of the ramp); merging close RGB colors would leave 4.
     let n = quantize(&img, &params).palette.len();
     assert!(n >= 6, "{n} tones");
     // Automatic traces continuous tone without Full Tone's least count and keeps merging close RGB colors.
     let automatic = quantize(&img, &TraceParams { palette: Palette::Automatic, ..params }).palette.len();
     assert!(automatic < n, "{automatic} tones with Automatic, {n} with Full Tone");
+}
+
+#[test]
+fn full_tone_traces_a_noisy_dark_ground_like_a_light_one() {
+    // A gray ground with up to 8 levels of grain a channel. The same grain lies farther apart in
+    // Oklab in a dark gray than in a light one; the dark ground still takes about as many colors
+    // and shapes as the light one (32 and 53 against 31 and 52 when measured).
+    let ground = |gray: f64| {
+        let img = Raster::from_fn(192, 128, |x, y| {
+            let c = |k: u32| (gray + 8.0 * jitter(x, y, k)).round().clamp(0.0, 255.0) as u8;
+            [c(0), c(1), c(2), 255]
+        });
+        trace(&img, &preset("High Fidelity Photo").unwrap())
+    };
+    let (dark, light) = (ground(28.0), ground(200.0));
+    assert!(dark.palette.len() <= light.palette.len() + 2, "{} colors dark, {} light", dark.palette.len(), light.palette.len());
+    assert!(dark.paths.len() <= light.paths.len() + 6, "{} shapes dark, {} light", dark.paths.len(), light.paths.len());
 }
 
 #[test]

@@ -24,8 +24,9 @@ Logo, Line Art and Outline, and 50 in the other eight. Noise is 1 px in Technica
 and 16 Colors, 10 in Low Fidelity Photo, 15 in 3 Colors and Shades of Gray, 20 in Sketched Art, Line
 Art and Outline, 25 in Default, and 90 in Silhouettes (see
 [image-trace-quality.md](image-trace-quality.md#preset-paths-corners-and-noise)). High Fidelity Photo
-traces with Palette › Full Tone at Color detail 85 and Method › Abutting (VectorCraft's own values); Low
-Fidelity Photo traces with a Limited palette of 20 colors, Overlapping.
+traces with Palette › Full Tone at Color detail 85 and Method › Abutting (VectorCraft's own values; see
+[image-trace-quality.md](image-trace-quality.md#high-fidelity-photo-in-full-tone)); Low Fidelity Photo
+traces with a Limited palette of 20 colors, Overlapping.
 
 Sliders apply on release, and their numeric fields can be edited directly. Each committed
 adjustment re-traces the selected object as one undo step and changes the preset to Custom.
@@ -86,8 +87,8 @@ color nearest to it in lightness and hue, with a difference in hue or chroma cou
 as much as one in lightness, so a gray or a muted brown takes a black, white or other neutral
 library color rather than a saturated color of the same lightness.
 **Abutting and Overlapping.** Abutting is the default Method, and the Default, Auto Color, High Fidelity
-Photo, 3 Colors, 6 Colors and 16 Colors presets use it. With Abutting, two neighboring colors share one exact edge. The
-canvas smooths the edges of each path on its own, so each of the two paths covers only part of the
+Photo, 3 Colors, 6 Colors and 16 Colors presets use it. With Abutting, two neighboring colors share one
+exact edge. The canvas smooths the edges of each path on its own, so each of the two paths covers only part of the
 pixels along that edge, and a thin line of the background can show between the colors. Web browsers
 and PDF viewers usually draw an exported SVG or PDF file the same way and show the same line. Raster
 exports (PNG, JPEG, TIFF and the other bitmap formats) with None anti-aliasing do not show it at any

@@ -328,8 +328,10 @@ fn median_cut_apart(used: &[Used], k: usize, spread: f64, apart: f64, least: usi
         widest: f64,
         best: Option<(f64, Vec<usize>, usize)>,
     }
-    // Boxes no wider than this are never cut.
-    let narrowest = if least > 0 { 0.0 } else { spread.max(0.0) };
+    // Boxes no wider than `spread` are cut only while there are fewer than `least` boxes. A box made
+    // when there are already `least` boxes or more is never cut unless it is wider, so its cut is
+    // not planned.
+    let narrowest = |boxes_after: usize| if boxes_after < least { 0.0 } else { spread.max(0.0) };
     // How much of a cut's gain counts when its sides' mean colors are `a` and `b`: all of it when
     // they look different or either is not a dark gray, less as two dark grays look more alike.
     let dark_gray = |c: [f64; 3]| c[0] < DARK && c[1].hypot(c[2]) < GRAY;
@@ -340,7 +342,8 @@ fn median_cut_apart(used: &[Used], k: usize, spread: f64, apart: f64, least: usi
         }
         ((0..3).map(|q| (a[q] - b[q]).powi(2)).sum::<f64>() / (apart * apart)).min(1.0)
     };
-    let plan = |bins: Vec<usize>| {
+    let plan = |bins: Vec<usize>, boxes_after: usize| {
+        let narrowest = narrowest(boxes_after);
         let mut best: Option<(f64, Vec<usize>, usize)> = None;
         let widest = (0..3)
             .map(|ch| {
@@ -388,7 +391,7 @@ fn median_cut_apart(used: &[Used], k: usize, spread: f64, apart: f64, least: usi
         }
         Cut { bins, widest, best }
     };
-    let mut boxes = vec![plan((0..used.len()).collect())];
+    let mut boxes = vec![plan((0..used.len()).collect(), 1)];
     while boxes.len() < k {
         let gain = |c: &Cut| c.best.as_ref().map_or(f64::NEG_INFINITY, |b| b.0);
         // The boxes wider than `spread` first; when none is left and there are fewer than `least`,
@@ -403,8 +406,9 @@ fn median_cut_apart(used: &[Used], k: usize, spread: f64, apart: f64, least: usi
         };
         let Some((_, mut sorted, at)) = boxes.swap_remove(bi).best else { break };
         let tail = sorted.split_off(at);
-        boxes.push(plan(sorted));
-        boxes.push(plan(tail));
+        let after = boxes.len() + 2;
+        boxes.push(plan(sorted, after));
+        boxes.push(plan(tail, after));
     }
     boxes
         .iter()

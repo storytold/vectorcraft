@@ -315,7 +315,7 @@ pub(crate) fn tests_oklab(c: [u8; 3]) -> [f64; 3] {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Alike {
     /// Close in RGB: under 30 levels apart and thoroughly mixed, or under 12 and mixed in patches.
-    /// A limited palette's colors are few and far apart, so two this close are one color.
+    /// Used for Grayscale and for every Color palette but Full Tone (Automatic included).
     Rgb,
     /// Close to the eye: under [`FULL_TONE_ALIKE`] apart in Oklab and thoroughly mixed, or under
     /// [`FULL_TONE_PATCHES`] and mixed in patches (compression blocks). Full Tone's neighboring tones
@@ -335,13 +335,13 @@ const FULL_TONE_PATCHES: f64 = 1.5;
 /// `q` with the colours that noise made of one colour merged, largest mix first.
 ///
 /// Asked for more colours than a picture has, k-means splits a flat colour along its noise, and
-/// the two halves would trace as specks of one all over the other. Such halves are close (under 30
-/// levels apart: noise is about as strong in a dark colour as in a light one, so the distance is
-/// taken in RGB) and thoroughly mixed: the pixels of the lesser one have, on average, more than
-/// half a neighbour of the other each; or they are closer still (under 12 levels) and mixed in
-/// patches (compression blocks). The bands of a gradient are close too, but each keeps to itself
-/// and they stay apart. The colours in `keep` merge with none. With [`Alike::Seen`], the distances are
-/// taken in Oklab (see [`FULL_TONE_ALIKE`] and [`FULL_TONE_PATCHES`]).
+/// the two halves would trace as specks of one all over the other. Such halves are close and
+/// thoroughly mixed: the pixels of the lesser one have, on average, more than half a neighbour of
+/// the other each; or they are closer still and mixed in patches (compression blocks). The bands
+/// of a gradient are close too, but each keeps to itself and they stay apart. The colours in
+/// `keep` merge with none. Close is under 30 RGB levels apart for thoroughly mixed colours and
+/// under 12 for patches with [`Alike::Rgb`], and in Oklab under [`FULL_TONE_ALIKE`] and
+/// [`FULL_TONE_PATCHES`] with [`Alike::Seen`].
 fn merge_mixed(q: Quantized, w: usize, h: usize, keep: &[[u8; 3]], alike: Alike) -> Quantized {
     let k = q.palette.len();
     // A rare colour kept on purpose (see `rare_colours`) is distinct by choice: it merges with none.
@@ -364,6 +364,13 @@ fn merge_mixed(q: Quantized, w: usize, h: usize, keep: &[[u8; 3]], alike: Alike)
         }
     }
     let mut color: Vec<[f64; 3]> = q.palette.iter().map(|c| c.map(f64::from)).collect();
+    // Each colour in Oklab, for `Alike::Seen`, worked out once and again only for a colour that
+    // takes in another.
+    let mut lab: Vec<[f64; 3]> = if alike == Alike::Seen { color.iter().map(|&c| oklab(c)).collect() } else { vec![] };
+    let seen_apart = |lab: &[[f64; 3]], a: usize, b: usize| match (lab.get(a), lab.get(b)) {
+        (Some(la), Some(lb)) => (0..3).map(|c| (la[c] - lb[c]).powi(2)).sum::<f64>().sqrt(),
+        _ => f64::INFINITY,
+    };
     // Which colour each has merged into (itself when none).
     let mut into: Vec<usize> = (0..k).collect();
     loop {
@@ -374,15 +381,18 @@ fn merge_mixed(q: Quantized, w: usize, h: usize, keep: &[[u8; 3]], alike: Alike)
                     continue;
                 }
                 let mixed = touch[a * k + b] / count[a].min(count[b]);
+                // Two colours this little mixed merge under neither test.
+                if mixed <= 0.15 {
+                    continue;
+                }
                 let merges = match alike {
                     Alike::Rgb => {
                         let apart = (0..3).map(|c| (color[a][c] - color[b][c]).powi(2)).sum::<f64>().sqrt();
-                        mixed > 0.5 && apart < 30.0 || mixed > 0.15 && apart < 12.0
+                        mixed > 0.5 && apart < 30.0 || apart < 12.0
                     }
                     Alike::Seen => {
-                        let (la, lb) = (oklab(color[a]), oklab(color[b]));
-                        let apart = (0..3).map(|c| (la[c] - lb[c]).powi(2)).sum::<f64>().sqrt();
-                        mixed > 0.5 && apart < FULL_TONE_ALIKE || mixed > 0.15 && apart < FULL_TONE_PATCHES
+                        let apart = seen_apart(&lab, a, b);
+                        mixed > 0.5 && apart < FULL_TONE_ALIKE || apart < FULL_TONE_PATCHES
                     }
                 };
                 if merges && best.is_none_or(|x| mixed > x.0) {
@@ -392,6 +402,9 @@ fn merge_mixed(q: Quantized, w: usize, h: usize, keep: &[[u8; 3]], alike: Alike)
         }
         let Some((_, a, b)) = best else { break };
         color[a] = [0, 1, 2].map(|c| (color[a][c] * count[a] + color[b][c] * count[b]) / (count[a] + count[b]));
+        if let Some(l) = lab.get_mut(a) {
+            *l = oklab(color[a]);
+        }
         count[a] += count[b];
         count[b] = 0.0;
         into[b] = a;
