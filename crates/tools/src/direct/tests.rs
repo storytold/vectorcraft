@@ -661,10 +661,9 @@ fn an_anchor_drag_follows_the_while_moving_option() {
     assert!((m - Vec2::new(5.7, 4.6)).hypot() < 1e-9, "{m:?}");
 }
 
-/// A click (no drag) on an anchor that is selected with others, whether the whole path is or
-/// some of its anchors, selects that anchor alone, as in Illustrator: a press keeps the
-/// selection so a drag moves it all, the release without a drag narrows it. Shift still
-/// toggles, and a click on a path's only selected anchor changes nothing visible.
+/// A click (no drag) on an anchor of a path selected whole selects that anchor alone, as in
+/// Illustrator: a press keeps the selection so a drag moves it all, the release without a drag
+/// narrows it. An anchor not yet selected is selected on the press.
 #[test]
 fn a_click_on_a_selected_anchor_selects_it_alone() {
     let (d, id) = doc_with_rect();
@@ -672,22 +671,65 @@ fn a_click_on_a_selected_anchor_selects_it_alone() {
     let alone = vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[0, 0]], "mode": "set"}))];
     let mut whole = Selection::default();
     whole.set([id]);
-    for s in [whole, anchors_of(id, &[(0, 0), (0, 1)])] {
-        let cx = cx(&d, &s, &p);
-        let mut t = DirectSelectionTool::new(false);
-        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)).is_empty(), "{s:?}");
-        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 100.0, 100.0)), alone, "{s:?}");
-        // Dragged instead: moved, selection kept.
-        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)).is_empty());
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 120.0, 100.0));
-        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 120.0, 100.0)), vec![Action::Commit], "{s:?}");
-    }
+    let cx_whole = cx(&d, &whole, &p);
+    let mut t = DirectSelectionTool::new(false);
+    assert!(t.pointer(&cx_whole, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)).is_empty());
+    assert_eq!(t.pointer(&cx_whole, &PointerEvent::new(PointerKind::Up, 100.0, 100.0)), alone);
+    // Dragged instead: moved, selection kept.
+    assert!(t.pointer(&cx_whole, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)).is_empty());
+    t.pointer(&cx_whole, &PointerEvent::new(PointerKind::Drag, 120.0, 100.0));
+    assert_eq!(t.pointer(&cx_whole, &PointerEvent::new(PointerKind::Up, 120.0, 100.0)), vec![Action::Commit]);
+
     // An anchor not yet selected is selected on the press, and the release adds nothing.
     let none = Selection::default();
-    let cx = cx(&d, &none, &p);
+    let cx_none = cx(&d, &none, &p);
     let mut t = DirectSelectionTool::new(false);
-    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)), alone);
-    assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 100.0, 100.0)).is_empty());
+    assert_eq!(t.pointer(&cx_none, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)), alone);
+    assert!(t.pointer(&cx_none, &PointerEvent::new(PointerKind::Up, 100.0, 100.0)).is_empty());
+}
+
+/// #1636: when multiple anchors are selected with Direct Selection, clicking an already-selected
+/// anchor without modifiers designates it as the key anchor. Clicking it again, or pressing Escape,
+/// clears the key anchor designation.
+#[test]
+fn clicking_selected_anchor_designates_and_clears_key_anchor() {
+    let (d, id) = doc_with_rect();
+    let p = paint();
+    let s = anchors_of(id, &[(0, 0), (0, 1)]);
+    let cx_base = cx(&d, &s, &p);
+
+    // Clicking already-selected anchor (0, 0) designates it as Key Anchor.
+    let mut t = DirectSelectionTool::new(false);
+    assert!(t.pointer(&cx_base, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)).is_empty());
+    assert_eq!(
+        t.pointer(&cx_base, &PointerEvent::new(PointerKind::Up, 100.0, 100.0)),
+        vec![Action::Exec("select.key".into(), json!({"id": id.0, "anchor": [0, 0]}))]
+    );
+
+    // Dragging instead moves anchors, committing the move.
+    assert!(t.pointer(&cx_base, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)).is_empty());
+    t.pointer(&cx_base, &PointerEvent::new(PointerKind::Drag, 120.0, 100.0));
+    assert_eq!(t.pointer(&cx_base, &PointerEvent::new(PointerKind::Up, 120.0, 100.0)), vec![Action::Commit]);
+
+    // When the anchor is already designated as the key anchor:
+    let mut with_key = s.clone();
+    with_key.key_anchor = Some((id, (0, 0)));
+    let cx_key = cx(&d, &with_key, &p);
+
+    // Clicking it again cancels the key anchor.
+    let mut t2 = DirectSelectionTool::new(false);
+    assert!(t2.pointer(&cx_key, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)).is_empty());
+    assert_eq!(t2.pointer(&cx_key, &PointerEvent::new(PointerKind::Up, 100.0, 100.0)), vec![Action::Exec("select.key".into(), json!({}))]);
+
+    // Pressing Escape cancels the key anchor.
+    let mut t3 = DirectSelectionTool::new(false);
+    assert!(t3.claims_key(&cx_key, ToolKey::Escape));
+    assert_eq!(t3.key(&cx_key, ToolKey::Escape, Mods::default()), vec![Action::Exec("select.key".into(), json!({}))]);
+
+    // Clicking canvas clears selection and key anchor.
+    let mut t4 = DirectSelectionTool::new(false);
+    assert!(t4.pointer(&cx_key, &PointerEvent::new(PointerKind::Down, 500.0, 500.0)).is_empty());
+    assert_eq!(t4.pointer(&cx_key, &PointerEvent::new(PointerKind::Up, 500.0, 500.0)), vec![Action::Exec("select.none".into(), json!({}))]);
 }
 
 /// Alt-pressing an anchor picks the whole path, as Alt on a segment does, and the drag copies
@@ -2395,4 +2437,27 @@ fn type_on_a_path_shows_and_drags_its_paths_handles() {
     assert_eq!((n.as_str(), &v["anchor"], &v["which"]), ("text.setPathHandle", &json!(1), &json!("in")));
     assert!((v["x"].as_f64().unwrap() - 400.0).abs() < 1e-9, "Shift keeps it straight above its anchor: {v}");
     assert!(handles(&ToolContext { handles_multiple: false, ..cx(&d, &s, &p) }).is_empty());
+}
+
+/// An Alt-marquee across clipped art where the clipping path's own shape, but not the region a
+/// live effect moved it to, lets it show selects the art in Outline view only, which draws the
+/// clipping path without its effects.
+#[test]
+fn outline_view_marquees_measure_clipped_art_by_the_plain_clipping_path() {
+    let (d, _, art) = doc_with_moved_clip_region();
+    let s = Selection::default();
+    let p = paint();
+    let alt = Mods { alt: true, ..Mods::default() };
+    let marquee = |outline: bool| {
+        let c = ToolContext { outline, ..cx(&d, &s, &p) };
+        let mut t = DirectSelectionTool::new(false);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 440.0, 410.0).with_mods(alt));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 460.0, 430.0).with_mods(alt));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 460.0, 430.0).with_mods(alt))
+    };
+    let selects = |a: &[Action]| a.iter().any(|a| matches!(a, Action::Exec(c, v) if c == "select.set" && v["ids"] == json!([art.0])));
+    let a = marquee(true);
+    assert!(selects(&a), "outline: {a:?}");
+    let a = marquee(false);
+    assert!(!selects(&a), "preview: {a:?}");
 }

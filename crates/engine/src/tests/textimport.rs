@@ -468,6 +468,15 @@ fn malformed_docx_fails_cleanly() {
     assert!(e.contains("not a WordprocessingML document"), "{e}");
     let e = place(&mut s, "a.docx", &store(&[("word/document.xml", b"<w:document><w:body>")])).unwrap_err();
     assert!(e.contains("not well-formed XML"), "{e}");
+    for xml in [
+        format!(r#"<w:document xmlns:w="{W_NS}"><w:body><w:p><w:r><w:t>partial text</w:t></w:r></w:p>"#),
+        document("<w:p><w:r><w:t>A&missing;B</w:t></w:r></w:p>"),
+        document("<w:p><w:r><w:t xml:space=\"preserve\" xml:space=\"default\">text</w:t></w:r></w:p>"),
+        document("<w:p xmlns:a=\"urn:test\" xmlns:b=\"urn:test\" a:id=\"1\" b:id=\"2\"><w:r><w:t>text</w:t></w:r></w:p>"),
+    ] {
+        let e = place(&mut s, "a.docx", &store(&[("word/document.xml", xml.as_bytes())])).unwrap_err();
+        assert!(e.contains("not well-formed XML"), "{e}");
+    }
     let e = place(&mut s, "a.docx", &store(&[("word/document.xml", document("<w:p/>").as_bytes())])).unwrap_err();
     assert!(e.contains("no text to place"), "{e}");
     // A file whose headers understate what it unpacks to, and one whose headers say it is too large.

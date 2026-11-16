@@ -11,7 +11,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Pencil",
             [],
             None,
-            "{points: [[x,y]…] or [[x,y,pressure]…] or [[x,y,pressure,tiltX,tiltY,rotation]…] (pen pressure 0..1: the stroke keeps it, for Calligraphic and Scatter brushes with Pressure variation; a point without one presses fully. Pen tilt in degrees, each −90..90, x positive leaning right and y leaning down the page, and barrel rotation in degrees clockwise: the stroke keeps how far the pen leaned, which way and how far its barrel turned, for brushes with Tilt, Bearing and Rotation variation; null for what a point lacks), fidelity?: pt (1.5; from 0.000015625 (0.01 / 640) to 100 / 0.0313 (about 3194.89), the Pencil's and the Paintbrush's 0.01 to 100 px Fidelity at the highest and the lowest zoom; a value outside that range is an error. The tools send their Fidelity in pixels divided by the zoom, kept within the range), fit?: bool (true; false: the points are joined by straight segments, as the Pencil previews a stroke with Live curve fitting off), closed?, style?: \"pencil\"|\"brush\", fill?: bool, keepSelected?: bool (true: the drawn or continued path is selected; false: a new path leaves nothing selected, and a continued or redrawn one is deselected while the rest of the selection stays), extend?: {id, end: \"start\"|\"end\"}, connect?: {id, end: \"start\"|\"end\"}, redraw?: {id, within?: pt (12)}} fit a freehand stroke → {id}. extend continues the path from that end, and closes it when `closed` is true (left out, when the stroke ends within four Fidelities of the path's other end, 6 to 400 pt); with connect, the stroke ends on that end of another path's last open subpath and joins it on, in one path with the extended path's appearance (the other path is removed when nothing of it is left); redraw (Edit Selected Paths) replaces the section of the path between where the stroke starts and ends, each within `within` of one subpath (the shorter way round a closed one), and draws a new path when the stroke doesn't end on it",
+            "{points: [[x,y]…] or [[x,y,pressure]…] or [[x,y,pressure,tiltX,tiltY,rotation]…] (pen pressure 0..1: the stroke keeps it, for Calligraphic and Scatter brushes with Pressure variation; a point without one presses fully. Pen tilt in degrees, each −90..90, x positive leaning right and y leaning down the page, and barrel rotation in degrees clockwise, 0..360: the stroke keeps how far the pen leaned, which way and how far its barrel turned, for brushes with Tilt, Bearing and Rotation variation; null for what a point lacks. A pressure, tilt or rotation outside its range, or a point array of more than six numbers, is an error), fidelity?: pt (1.5; from 0.000015625 (0.01 / 640) to 100 / 0.0313 (about 3194.89), the Pencil's and the Paintbrush's 0.01 to 100 px Fidelity at the highest and the lowest zoom; a value outside that range is an error. The tools send their Fidelity in pixels divided by the zoom, kept within the range), fit?: bool (true; false: the points are joined by straight segments, as the Pencil previews a stroke with Live curve fitting off), closed?, style?: \"pencil\"|\"brush\", fill?: bool, keepSelected?: bool (true: the drawn or continued path is selected; false: a new path leaves nothing selected, and a continued or redrawn one is deselected while the rest of the selection stays), extend?: {id, end: \"start\"|\"end\"}, connect?: {id, end: \"start\"|\"end\"}, redraw?: {id, within?: pt (12)}} fit a freehand stroke → {id}. extend continues the path from that end, and closes it when `closed` is true (left out, when the stroke ends within four Fidelities of the path's other end, 6 to 400 pt); with connect, the stroke ends on that end of another path's last open subpath and joins it on, in one path with the extended path's appearance (the other path is removed when nothing of it is left); redraw (Edit Selected Paths) replaces the section of the path between where the stroke starts and ends, each within `within` of one subpath (the shorter way round a closed one), and draws a new path when the stroke doesn't end on it",
             has_doc,
             freehand
         ),
@@ -74,7 +74,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Split Path",
             [],
             None,
-            "{id, subpath?, segment, t} or {id, subpath?, anchor}: closed paths open there, open paths become two; one of the two new end points is left selected → {ids}",
+            "{id, subpath?, segment, t: 0–1 (0.5)} or {id, subpath?, anchor}: closed paths open there, open paths become two; one of the two new end points is left selected; the paths keep the source's fill and stroke settings except that every stroke's alignment becomes Center (in a path of several subpaths, the other subpaths' strokes too) → {ids}. A t outside 0–1 is refused with an error, and nothing changes",
             has_doc,
             split
         ),
@@ -83,7 +83,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Knife",
             [],
             None,
-            "{points: [[x,y]…]} cut closed shapes (selected, or all when nothing is selected) along the polyline → {ids}",
+            "{points: [[x,y]…] (pen values after x and y are checked as path.freehand checks them and do not change the cut)} cut closed shapes (selected, or all when nothing is selected) along the polyline → {ids}",
             has_doc,
             knife
         ),
@@ -92,7 +92,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eraser",
             [],
             None,
-            "{points: [[x,y]…] or [[x,y,pressure]…] (pen pressure 0..1), size?: pt (10), sizeMode?: \"fixed\" (default) | \"pressure\" (Eraser Tool Options' Size set to Pressure: the tip is size − sizeVariation across where the pen presses lightest and size + sizeVariation where it presses hardest, as path.blob), sizeVariation?: pt (0), angle?: ° (0: the tip's long axis counter-clockwise from level), roundness?: % (100, kept within 1–100)} erase the stroke of an elliptical tip from paths (selected, or all) → {ids}. The tip is `size` across its long axis, which runs at `angle` counter-clockwise from horizontal; its short axis is `roundness` percent of the long one",
+            "{points: [[x,y]…] or [[x,y,pressure]…] or [[x,y,pressure,tiltX,tiltY,rotation]…] (pen pressure 0..1, tilt −90..90°, barrel rotation 0..360° clockwise; pen values are checked as path.freehand checks them), size?: pt (10; from 0.1 to 1000), angle?: ° (0, −180–180: the tip's long axis counter-clockwise from level), roundness?: % (100, 1–100), angleMode?, roundnessMode?, sizeMode?: \"fixed\" (default) | \"random\" | \"pressure\" | \"tilt\" | \"bearing\" | \"rotation\" (Eraser Tool Options' variation menus; a varied angle turns either way, clockwise or counter-clockwise), angleVariation?: ° (0–180, default 0, either way: clockwise or counter-clockwise), roundnessVariation?: % (0–100, default 0), sizeVariation?: pt (0–1000, default 0)} or {rect: [x, y, width, height] (pt; the Eraser's Alt-drag marquee)} erase the stroke of an elliptical tip from paths (selected, or all) → {ids}. The tip is `size` across its long axis, which runs at `angle` counter-clockwise from horizontal; its short axis is `roundness` percent of the long one. A value whose mode is not fixed varies by up to its variation either way: random draws one value for the drag; pressure goes from the value less the variation where the pen presses lightest to the value plus it where it presses hardest (size on pressure as path.blob); tilt from less with the pen lying flat to more with it upright; bearing and rotation from less at −180° to more at 180° of the pen's lean direction or barrel turn. A drag without that pen reading (a mouse) erases at the value itself. An angle or roundness outside its range, an unknown mode, or a variation below 0 or past its range is refused with an error and erases nothing. `rect` in place of `points` erases everything inside the rectangle: closed paths lose its area, and open paths are cut where they cross its edges; the tip's size, angle, roundness and variations do not apply. A width or height of 0 or less, a value that is not a finite number, or `points` and `rect` together is an error. When nothing is erased, no undo step is added",
             has_doc,
             erase_region
         ),
@@ -101,7 +101,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Path Eraser",
             [],
             None,
-            "{points: [[x,y]…], width?: pt (8)} erase the parts of selected paths under the drag → {ids}",
+            "{points: [[x,y]…] (pen values after x and y are checked as path.freehand checks them and do not change what is erased), width?: pt (8)} erase the parts of selected paths under the drag → {ids}",
             has_selection,
             erase_segments
         ),
@@ -110,7 +110,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Smooth",
             [],
             None,
-            "{points: [[x,y]…], radius?: pt (12), fidelity?: pt (2.5; kept within 0.000078125 and about 3195, the Smooth tool's 0.05 to 100 px at the highest and the lowest zoom: the tool sends its Fidelity in screen pixels divided by the zoom)} smooth selected paths near the drag, keeping a corner where the path turns by more than 57.5° at the anchor and over radius and twice radius on either side → {ids, before, after}",
+            "{points: [[x,y]…] (pen values after x and y are checked as path.freehand checks them and do not change the smoothing), radius?: pt (12), fidelity?: pt (2.5; kept within 0.000078125 and about 3195, the Smooth tool's 0.05 to 100 px at the highest and the lowest zoom: the tool sends its Fidelity in screen pixels divided by the zoom)} smooth selected paths near the drag, keeping a corner where the path turns by more than 57.5° at the anchor and over radius and twice radius on either side → {ids, before, after}",
             has_selection,
             smooth_region
         ),
@@ -119,7 +119,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Join",
             [],
             None,
-            "{points: [[x,y]…], tolerance?: pt (12)} join the open-path endpoints scrubbed over, or trim two crossing open paths whose overhanging ends are scrubbed and join them at the crossing → {id}",
+            "{points: [[x,y]…] (pen values after x and y are checked as path.freehand checks them and do not change the join), tolerance?: pt (12)} join the open-path endpoints scrubbed over, or trim two crossing open paths whose overhanging ends are scrubbed and join them at the crossing → {id}",
             has_doc,
             join_scrub
         ),
@@ -128,7 +128,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blob Brush",
             [],
             None,
-            "{points: [[x,y]…] or [[x,y,pressure]…] (pen pressure 0..1), size?: pt (10), sizeMode?: \"fixed\" (default) | \"pressure\" (Blob Brush Tool Options' Size set to Pressure: the brush is size − sizeVariation wide at the lightest pen pressure and size + sizeVariation at the heaviest, at least 0.1 pt; a stroke without pressure keeps the size), sizeVariation?: pt (0), angle?: ° (0, kept within −180–180: the tip's long axis counter-clockwise from horizontal, kept on the page along the stroke), roundness?: % (100, kept within 0–100: the tip's short axis in percent of its long one, 100 round; 0 is drawn as 0.1), fidelity?: pt (0.01–100; the brush follows the stroke fitted at this tolerance as path.freehand fits a Pencil stroke, and a higher value gives a smoother shape; without it the brush follows every point), merge?: true, mergeOnlySelection?: bool (false: merge with any touching same-color blob; true: only with selected ones), keepSelected?: bool (false: the drawn or merged path is not selected, and the rest of the selection stays; true: it is selected)} filled brush shape, merged with the topmost touching same-color blob and the touching ones next to it in stacking order in its group or layer → {id}",
+            "{points: [[x,y]…] or [[x,y,pressure]…] (pen pressure 0..1; pen values are checked as path.freehand checks them), size?: pt (10; from 0.1 to 1000), sizeMode?: \"fixed\" (default) | \"pressure\" (Blob Brush Tool Options' Size set to Pressure: the brush is size − sizeVariation wide at the lightest pen pressure and size + sizeVariation at the heaviest, at least 0.1 pt; a stroke without pressure keeps the size), sizeVariation?: pt (0; from 0 to 1000, checked with Fixed too), angle?: ° (0, kept within −180–180: the tip's long axis counter-clockwise from horizontal, kept on the page along the stroke), roundness?: % (100, kept within 0–100: the tip's short axis in percent of its long one, 100 round; 0 is drawn as 0.1), fidelity?: pt (0.01–100; the brush follows the stroke fitted at this tolerance as path.freehand fits a Pencil stroke, and a higher value gives a smoother shape; without it the brush follows every point), merge?: true, mergeOnlySelection?: bool (false: merge with any touching same-color blob; true: only with selected ones), keepSelected?: bool (false: the drawn or merged path is not selected, and the rest of the selection stays; true: it is selected)} filled brush shape, merged with the topmost touching same-color blob and the touching ones next to it in stacking order in its group or layer → {id}",
             has_doc,
             blob
         ),
