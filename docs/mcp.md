@@ -2860,6 +2860,12 @@ text object (it loses its paint). Compound holes, even-odd fills, glyph outlines
 clip alike on screen, in raster export and in SVG and PDF. `object.clippingMask.release` turns the clip group into a
 plain group and keeps the clipping path with whatever paint it has.
 
+The clipping path stays the clipping path wherever it goes among the members of its clip group or clipping layer
+(`layer.move`, `node.move`, Object › Arrange, art pasted or drawn behind it): what shows does not change. Deleting it,
+or moving it out (into another layer or group, or into a group made of it and art inside the clip), releases the clip
+as `object.clippingMask.release` does; the path it moved is a plain path, and stays one if it goes back. A copy of a
+clipping path alone (pasted or duplicated) is a plain object too.
+
 A clipping path can be painted after Make (`paint.setFill`, `paint.setStroke`, `stroke.set` with its `ids`): its fill
 paints behind the clipped art and its stroke over it, not clipped, on screen and in SVG and PDF.
 
@@ -5402,8 +5408,8 @@ and `layerRows`, the rows highlighted in the panel.
   form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group.
 - **Buttons**: `layer.new {name?, top?, below?, …options}` (above the current layer at its level; `top` with
   Ctrl/Cmd; `below`, directly below the current layer at its level, with Ctrl/Cmd+Alt),
-  `layer.newSublayer {parent?, bottom?, name?, …options}` (on top of the parent's contents; `bottom`, under them but
-  above a clipping layer's clipping path, with Ctrl/Cmd+Alt; both refused while an opacity mask is edited),
+  `layer.newSublayer {parent?, bottom?, name?, …options}` (on top of the parent's contents; `bottom`, under them,
+  with Ctrl/Cmd+Alt; both refused while an opacity mask is edited),
   `layer.delete {ids?}` (rows with what they hold; the
   last layer stays; it does not ask), `ui.layerDelete {ids?|id?}` (the panel's trash, rows dropped on it, Delete
   Selection, and Delete or Backspace on highlighted rows: when a layer or sublayer among the rows holds art, hidden,

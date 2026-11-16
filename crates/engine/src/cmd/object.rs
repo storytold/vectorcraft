@@ -23,6 +23,7 @@ use crate::{EngineError, LastTransform};
 mod align;
 mod arrange;
 mod bounds;
+mod clipping;
 mod commands;
 mod compound;
 mod pixelgrid;
@@ -34,6 +35,7 @@ mod transform;
 pub(crate) use align::choice;
 pub(crate) use arrange::group_nodes;
 pub(crate) use bounds::{bounds_rewrite, object_bounds_transform};
+pub(crate) use clipping::refresh as refresh_clips;
 pub use commands::specs;
 pub(super) use compound::{as_clipping_path, make_clipping_path, release_clip};
 pub(crate) use pixelgrid::{

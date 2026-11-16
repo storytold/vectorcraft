@@ -38,7 +38,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Sublayer…",
             ["Window", "Layers"],
             None,
-            "{parent?: layer id (default: the highlighted row's layer, else the current layer), bottom?: bool, name?, …options as layer.new} a sublayer on top of the parent's contents; `bottom`: under the parent's contents, above a clipping layer's clipping path (Ctrl/Cmd+Alt-click the button); refused while an opacity mask is edited → {id}",
+            "{parent?: layer id (default: the highlighted row's layer, else the current layer), bottom?: bool, name?, …options as layer.new} a sublayer on top of the parent's contents; `bottom`: under the parent's contents (Ctrl/Cmd+Alt-click the button); refused while an opacity mask is edited → {id}",
             super::maskedit::outside_mask_editing,
             new_sublayer
         ),
@@ -508,11 +508,7 @@ fn add_layer(s: &mut Session, p: &Value, cmd: &str, label: &str, place: impl FnO
     check_options(cmd, p, xml_id)?;
     let name = str_param(p, "name").filter(|n| !n.trim().is_empty()).map(str::to_string);
     let id = s.edit(label, |d, _| {
-        let (parent, mut index) = place(d)?;
-        // The clipping path stays at the bottom of a clipping layer.
-        if d.children(parent).is_some_and(|c| !c.is_empty()) && parent.and_then(|p| d.node(p)).is_some_and(Node::clips) {
-            index = index.max(1);
-        }
+        let (parent, index) = place(d)?;
         let mut n = make_layer(d, name.as_deref());
         apply_options(&mut n, p, xml_id);
         Ok(d.insert(parent, index, n)?)
@@ -816,17 +812,13 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
             d.remove_many(&ids)?
         };
         let count = d.children(parent).map_or(0, Vec::len);
-        let mut index = match anchor {
+        let index = match anchor {
             None => count,
             Some(a) => {
                 let (_, i, _) = d.position(a).ok_or(EngineError::NoNode(a))?;
                 if place == Place::Above { i + 1 } else { i }
             }
         };
-        // The clipping path stays at the bottom of a clip group or a clipping layer.
-        if count > 0 && parent.and_then(|p| d.node(p)).is_some_and(Node::clips) {
-            index = index.max(1);
-        }
         let out: Vec<NodeId> = nodes.iter().map(|n| n.id).collect();
         let ch = d.children_mut(parent)?;
         let index = index.min(ch.len());

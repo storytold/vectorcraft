@@ -29,6 +29,9 @@ impl Session {
             if let Some(ge) = &st.global_edit {
                 spread = cmd::globaledit::propagate(&before, doc, ge, [&before_sel.objects, &st.selection.objects]);
             }
+            // A clip keeps its clipping path wherever the edit put it, and lets go of the clip when
+            // the edit took the clipping path out.
+            cmd::refresh_clips(&before, doc);
             // Pixel-aligned objects the edit changed go back on the pixel grid.
             cmd::refresh_pixel_aligned(&before, doc);
             // Color masks of images whose own pixels the edit replaced are made for the new ones.

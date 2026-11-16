@@ -122,8 +122,9 @@ fn the_top_object_must_be_able_to_clip() {
 }
 
 #[test]
-fn send_to_back_in_a_clipping_layer_keeps_the_clipping_path_at_the_bottom() {
-    // #3188, for a clipping layer: the art went under the clipping path and became the clip.
+fn send_to_back_in_a_clipping_layer_goes_below_the_clipping_path_which_still_clips() {
+    // #3188, for a clipping layer: the art went under the clipping path and became the clip. Now
+    // it goes under it, and the layer still clips by the same path.
     let mut s = session();
     let (art, clip) = art_and_clip(&mut s);
     assert!(toggle(&mut s));
@@ -131,6 +132,9 @@ fn send_to_back_in_a_clipping_layer_keeps_the_clipping_path_at_the_bottom() {
     select(&mut s, &[top]);
     s.execute("object.arrange.sendToBack", &json!({})).unwrap();
     let ids: Vec<NodeId> = layer(&s).children().unwrap().iter().map(|n| n.id).collect();
-    assert_eq!(ids, [clip, top, art]);
-    assert!(opaque(&render(&s), 50, 50), "the art inside the clip still shows");
+    assert_eq!(ids, [top, clip, art]);
+    assert_eq!(layer(&s).clipping_path().map(|c| c.id), Some(clip));
+    let r = render(&s);
+    assert!(opaque(&r, 50, 50) && opaque(&r, 30, 30), "the art inside the clip still shows");
+    assert!(!opaque(&r, 10, 10), "and is still clipped");
 }

@@ -31,26 +31,22 @@ pub(super) fn arrange(s: &mut Session, how: Arrange) -> Result<Value> {
                 None => by_parent.push((par, vec![*id])),
             }
         }
-        for (par, mut group) in by_parent {
-            // In a clip group or a clipping layer the bottom child is the clipping path: it stays
-            // there, and the art above it never goes below it (#3188).
-            let floor = usize::from(par.and_then(|p| d.node(p)).is_some_and(vectorcraft_doc::Node::clips));
-            if floor > 0 {
-                group.retain(|id| d.position(*id).is_some_and(|(_, idx, _)| idx >= floor));
-            }
+        // In a clip group or a clipping layer the clipping path and the art go anywhere among
+        // its members: the clip keeps its clipping path wherever it is (`refresh_clips`).
+        for (par, group) in by_parent {
             for (k, id) in group.iter().enumerate() {
                 let Some((_, idx, _)) = d.position(*id) else { continue };
                 // The parent's art, without the ruler guides that stay above it.
                 let len = d.children(par).map_or(0, |ch| Node::guide_run_start(ch));
-                if len <= floor {
+                if len == 0 {
                     continue;
                 }
                 let last = len - 1;
                 let to = match how {
-                    Arrange::Front => last.saturating_sub(k).max(floor),
-                    Arrange::Back => (floor + k).min(last),
+                    Arrange::Front => last.saturating_sub(k),
+                    Arrange::Back => k.min(last),
                     Arrange::Forward => (idx + 1).min(last.saturating_sub(k)).max(idx),
-                    Arrange::Backward => idx.saturating_sub(1).max(floor + k.min(idx.saturating_sub(floor))),
+                    Arrange::Backward => idx.saturating_sub(1).max(k.min(idx)),
                 };
                 if to != idx {
                     d.move_node(*id, par, to)?;

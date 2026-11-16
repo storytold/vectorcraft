@@ -471,14 +471,15 @@ fn new_layers_go_below_the_current_one_and_sublayers_under_the_contents() {
         assert!(s.execute(cmd, &p).is_err(), "{cmd} {p}");
     }
     assert_eq!(s.doc().unwrap().doc.node_count(), count);
-    // In a clipping layer the clipping path stays at the bottom.
+    // In a clipping layer a sublayer goes under the clipping path too, which still clips.
     let mut s = session();
     let layer = s.doc().unwrap().doc.layers[0].id;
     let (back, front) = (rect(&mut s, 0.0), rect(&mut s, 100.0));
     run(&mut s, "layer.clippingMask.toggle", json!({"id": layer.0}));
     assert_eq!(children(&s, layer), vec![front, back], "the top object clips");
     let under = id(&run(&mut s, "layer.newSublayer", json!({"parent": layer.0, "bottom": true})));
-    assert_eq!(children(&s, layer), vec![front, under, back]);
+    assert_eq!(children(&s, layer), vec![under, front, back]);
+    assert_eq!(s.doc().unwrap().doc.node(layer).unwrap().clipping_path().map(|c| c.id), Some(front));
 }
 
 #[test]
