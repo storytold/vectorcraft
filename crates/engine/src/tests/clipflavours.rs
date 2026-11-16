@@ -512,3 +512,21 @@ fn keep_plain_text_preference_drops_pasted_formatting() {
     assert_eq!(paste_copied_range(false), 40.0, "Keep Formatting");
     assert_eq!(paste_copied_range(true), 10.0, "Keep Plain Text");
 }
+
+/// #7975: pasted plain text is new type, filled as [Normal Character Style] is, not with the
+/// current fill.
+#[test]
+fn pasted_plain_text_takes_the_normal_character_style_fill() {
+    use vectorcraft_color::{Color, Paint};
+    let mut s = session();
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "clipboard.importText", json!({"text": "Plain"}));
+    run(&mut s, "edit.paste", json!({"center": [200, 150]}));
+    assert_eq!(text_of(&pasted(&s)[0]).runs[0].style.fill, Paint::solid(Color::BLACK));
+    let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    let attrs = crate::cmd::textstyles::char_attrs(&vectorcraft_doc::CharStyle { fill: blue.clone(), ..Default::default() });
+    run(&mut s, "charStyle.setAttrs", json!({"name": "[Normal Character Style]", "attrs": {"fill": attrs["fill"]}}));
+    run(&mut s, "clipboard.importText", json!({"text": "Plain"}));
+    run(&mut s, "edit.paste", json!({"center": [200, 150]}));
+    assert_eq!(text_of(&pasted(&s)[0]).runs[0].style.fill, blue);
+}
