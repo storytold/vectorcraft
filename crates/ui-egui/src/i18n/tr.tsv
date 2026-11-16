@@ -1722,6 +1722,8 @@ font-technology	Variable	Değişken
 	Lasso Tool	Kement Aracı
 	Enclosing Lasso Tool	Çevreleyen Kement Aracı
 	Enclosing Lasso	Çevreleyen Kement
+	Polygonal Lasso Tool	Çokgen Kement Aracı
+	Polygonal Lasso	Çokgen Kement
 	Last Effect: {name}	Son Etki: {name}
 	Last Effect: {}	Son Etki: {}
 	Last Effect…	Son Etki…

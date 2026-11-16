@@ -2365,6 +2365,8 @@ file-filter	Templates	Sablonok
 	Lasso Tool	Lasszó
 	Enclosing Lasso Tool	Körülzáró lasszó
 	Enclosing Lasso	Körülzáró lasszó
+	Polygonal Lasso Tool	Sokszöglasszó
+	Polygonal Lasso	Sokszöglasszó
 	Last	Utolsó
 	Last commit	Utolsó commit
 	Last Effect: {name}	Legutóbbi effektus: {name}

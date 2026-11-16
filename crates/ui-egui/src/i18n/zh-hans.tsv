@@ -1808,6 +1808,8 @@ file-filter	Templates	模板
 	Lasso Tool	套索工具
 	Enclosing Lasso Tool	包围套索工具
 	Enclosing Lasso	包围套索
+	Polygonal Lasso Tool	多边形套索工具
+	Polygonal Lasso	多边形套索
 	Last Effect: {name}	最后一次效果：{name}
 	Last Effect: {}	上次效果：{}
 	Last Effect…	上次效果…

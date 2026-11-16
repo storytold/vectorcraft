@@ -1833,6 +1833,8 @@ font-technology	Variable	Променливи
 	Lasso Tool	Инструмент „Ласо“
 	Enclosing Lasso Tool	Инструмент „Обхващащо ласо“
 	Enclosing Lasso	Обхващащо ласо
+	Polygonal Lasso Tool	Инструмент „Многоъгълно ласо“
+	Polygonal Lasso	Многоъгълно ласо
 	Last Effect: {name}	Посл. ефект: {name}
 	Last Effect: {}	Посл. ефект: {}
 	Last Effect…	Посл. ефект…
