@@ -16,14 +16,20 @@
 //! (<https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio>) of the color against the color drawn
 //! behind the selection, or against a color pinned with Contrast Background › Current Color, and
 //! whether it meets AA and AAA for the category picked under Contrast For (`color.contrast`).
+//! The wheel's square and the box's field then draw lines where the color picked there would meet
+//! AA and AAA (AAA dashed), and when the color fails, a chip in the row offers the closest color
+//! that passes, the one `color.contrast` answers as `fix`.
 
-use egui::{Ui, UiBuilder, vec2};
+use std::collections::HashMap;
+
+use egui::{Color32, Rect, Stroke, Ui, UiBuilder, vec2};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, Cms};
 use vectorcraft_color::wcag::{self, Category};
 use vectorcraft_color::{Color, Paint, hsb_to_rgb, rgb_to_hsb};
 use vectorcraft_doc::{ColorMode, NodeId};
+use vectorcraft_engine::cmd::{Backdrop, contrast_measure};
 
 use super::color::{Target, apply, wheel_target};
 use super::{color_json, pstate, set_pstate};
@@ -273,15 +279,19 @@ fn strip_number(ch: Channel, hsb: [f32; 3]) -> (f64, &'static str, f64) {
 
 /// The box in a `size` × `size` area: the field of channel `ch` and its strip, on HSB `hsb`, with
 /// markers when `marked`. Returns the HSB a click, a drag, a key or a screen reader's action picks,
-/// and its phase.
-fn show_box(ui: &mut Ui, ch: Channel, hsb: [f32; 3], marked: bool, size: f32) -> Option<([f32; 3], Live)> {
+/// and its phase, and the field's rect.
+fn show_box(ui: &mut Ui, ch: Channel, hsb: [f32; 3], marked: bool, size: f32) -> (Option<([f32; 3], Live)>, Rect) {
     let (z, x, y) = box_pos(ch, hsb);
     let mut pick = None;
+    let mut field_rect = Rect::NOTHING;
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = STRIP_GAP;
         let field = vec2((size - STRIP_GAP - STRIP).max(1.0), size);
         let at = |x: f32, y: f32| widgets::hsb32(box_pick(ch, z, x, y, hsb));
-        if let (Some((x, y)), phase) = widgets::color_field(ui, "color-wheel-box", (tl!("Color box"), ch.field_axes()), field, (x, y), marked, &at) {
+        let picked = widgets::color_field(ui, "color-wheel-box", (tl!("Color box"), ch.field_axes()), field, (x, y), marked, &at);
+        // The field is the first thing in the row.
+        field_rect = Rect::from_min_size(ui.min_rect().min, field);
+        if let (Some((x, y)), phase) = picked {
             pick = Some((box_pick(ch, z, x, y, hsb), phase));
         }
         // The hue strip shows the whole spectrum; the others change only their own component.
@@ -294,7 +304,7 @@ fn show_box(ui: &mut Ui, ch: Channel, hsb: [f32; 3], marked: bool, size: f32) ->
             _ => {}
         }
     });
-    pick
+    (pick, field_rect)
 }
 
 /// Panel state: the HSB picked last, its [`Owner`] and the display sRGB of the color it stored.
@@ -313,9 +323,217 @@ type BehindKey = (u64, u64, Vec<NodeId>, Option<Vec<u32>>, String, Under);
 /// What the contrast row's answer depends on: the background, the active proxy's paint (with nothing
 /// selected it is the default for new art, which no revision counts), the document, its revision,
 /// the selection and its picked symbol object, the proxy, the appearance item, the selected
-/// gradient stop and freeform point, the on-screen Appearance of Black and the color settings.
+/// gradient stop and freeform point, the on-screen Appearance of Black, the color settings and the
+/// Contrast For category, which the closest passing colors are for.
 pub(super) type RatioKey =
-    (String, String, Option<(u64, u64)>, Vec<NodeId>, Option<Vec<u32>>, bool, Option<usize>, Option<usize>, Option<usize>, String, Under);
+    (String, String, Option<(u64, u64)>, Vec<NodeId>, Option<Vec<u32>>, bool, Option<usize>, Option<usize>, Option<usize>, String, Under, Category);
+
+/// Panel state: what the contrast row's answer was measured against, with its [`RatioKey`].
+const BACKDROP: &str = "color-wheel-backdrop";
+/// Panel state: the contrast lines of the square or the field, with the [`LinesKey`] they were
+/// found for.
+pub(super) const LINES: &str = "color-wheel-lines";
+/// What the contrast lines depend on: what the color is measured against, the category, the field
+/// (the view, the channel and the component the field holds fixed) with the model a pick there
+/// stores, and the color settings.
+pub(super) type LinesKey = (Backdrop, Category, String, Under);
+/// Per minimum of the category (AA, then AAA where it has one), the lines in field coordinates.
+pub(super) type Lines = Vec<Vec<Vec<(f32, f32)>>>;
+
+/// The columns and rows at which [`contrast_lines`] samples a field.
+const LINE_SAMPLES: usize = 32;
+/// The halvings that place a line on the edge between two samples.
+const LINE_STEPS: usize = 10;
+
+/// A point of a field: x across, y down, 0 to 1 each.
+type FieldPoint = (f32, f32);
+
+/// The passing bands found between the samples of one column or row: where each peaks along it, and
+/// its two crossings.
+type Bands = Vec<(f32, FieldPoint, FieldPoint)>;
+
+/// Where the contrast `ratio_at` a field point crosses each of `minimums`: per minimum, polylines in
+/// field coordinates. The field is sampled on a 33 × 33 grid, and each cell whose corners fall on
+/// both sides gets a segment between the crossings on its edges, placed by bisection (marching
+/// squares; a cell with two opposite corners passing is split by its center). Around a failing
+/// sample higher than its neighbors in a column or a row, the highest ratio is looked for, so a
+/// passing band narrower than the samples gets its two edges too, joined from column to column or
+/// from row to row. Segments that share an end are joined into one polyline.
+pub(super) fn contrast_lines(ratio_at: &dyn Fn(f32, f32) -> f64, minimums: &[f64]) -> Lines {
+    let n = LINE_SAMPLES;
+    let at = |i: usize| i as f32 / n as f32;
+    // `grid[i][j]` is column i (x) and row j (y).
+    let grid: Vec<Vec<f64>> = (0..=n).map(|i| (0..=n).map(|j| ratio_at(at(i), at(j))).collect()).collect();
+    let r = |i: usize, j: usize| grid.get(i).and_then(|c| c.get(j)).copied().unwrap_or(f64::NAN);
+    minimums
+        .iter()
+        .map(|&min| {
+            let pass = |p: FieldPoint| ratio_at(p.0, p.1) >= min;
+            // The crossing between `p`, on the side `above` says, and `q`.
+            let cross = |p: FieldPoint, q: FieldPoint, above: bool| {
+                let lerp = |t: f32| (p.0 + (q.0 - p.0) * t, p.1 + (q.1 - p.1) * t);
+                let (mut lo, mut hi) = (0.0, 1.0);
+                for _ in 0..LINE_STEPS {
+                    let mid = (lo + hi) / 2.0;
+                    if pass(lerp(mid)) == above { lo = mid } else { hi = mid }
+                }
+                lerp((lo + hi) / 2.0)
+            };
+            let mut edges: HashMap<(usize, usize, bool), Option<FieldPoint>> = HashMap::new();
+            // The crossing on the edge from sample (i, j) across (`across`) or down.
+            let mut edge = |i: usize, j: usize, across: bool| {
+                *edges.entry((i, j, across)).or_insert_with(|| {
+                    let (i2, j2) = if across { (i + 1, j) } else { (i, j + 1) };
+                    let (a, b) = (r(i, j) >= min, r(i2, j2) >= min);
+                    (a != b).then(|| cross((at(i), at(j)), (at(i2), at(j2)), a))
+                })
+            };
+            let mut segments: Vec<[FieldPoint; 2]> = vec![];
+            for i in 0..n {
+                for j in 0..n {
+                    let (top, right, bottom, left) = (edge(i, j, true), edge(i + 1, j, false), edge(i, j + 1, true), edge(i, j, false));
+                    match (top, right, bottom, left) {
+                        (Some(t), Some(rt), Some(b), Some(l)) => {
+                            // Opposite corners pass: the center says which pair of them it joins.
+                            let half = 0.5 / n as f32;
+                            if pass((at(i) + half, at(j) + half)) == (r(i, j) >= min) {
+                                segments.extend([[t, rt], [b, l]]);
+                            } else {
+                                segments.extend([[t, l], [rt, b]]);
+                            }
+                        }
+                        _ => {
+                            let found: Vec<FieldPoint> = [top, right, bottom, left].into_iter().flatten().collect();
+                            if let &[p, q] = found.as_slice() {
+                                segments.push([p, q]);
+                            }
+                        }
+                    }
+                }
+            }
+            // Bands narrower than the samples, along each column and then each row.
+            for across in [false, true] {
+                let point = |k: usize, t: f32| if across { (t, at(k)) } else { (at(k), t) };
+                let value = |k: usize, s: usize| if across { r(s, k) } else { r(k, s) };
+                let bands: Vec<Bands> = (0..=n)
+                    .map(|k| {
+                        let mut found = vec![];
+                        for s in 0..=n {
+                            let (before, after) = (s.saturating_sub(1), (s + 1).min(n));
+                            let v = value(k, s);
+                            if v >= min || v < value(k, before) || (after != s && v <= value(k, after)) {
+                                continue;
+                            }
+                            let peak = wcag::peak_between(f64::from(at(before)), f64::from(at(after)), &|t| {
+                                let p = point(k, t as f32);
+                                ratio_at(p.0, p.1)
+                            }) as f32;
+                            if pass(point(k, peak)) {
+                                found.push((
+                                    peak,
+                                    cross(point(k, at(before)), point(k, peak), false),
+                                    cross(point(k, peak), point(k, at(after)), true),
+                                ));
+                            }
+                        }
+                        found
+                    })
+                    .collect();
+                for pair in bands.windows(2) {
+                    let [this, next] = pair else { continue };
+                    for (peak, a, b) in this {
+                        if let Some((_, c, d)) = next.iter().find(|(p, ..)| (p - peak).abs() <= 1.5 / n as f32) {
+                            segments.extend([[*a, *c], [*b, *d]]);
+                        }
+                    }
+                }
+            }
+            chain(segments)
+        })
+        .collect()
+}
+
+/// `segments` joined end to end into polylines where they share an end.
+fn chain(segments: Vec<[FieldPoint; 2]>) -> Vec<Vec<FieldPoint>> {
+    let key = |p: FieldPoint| (p.0.to_bits(), p.1.to_bits());
+    let mut ends: HashMap<(u32, u32), Vec<usize>> = HashMap::new();
+    for (s, seg) in segments.iter().enumerate() {
+        for p in seg {
+            ends.entry(key(*p)).or_default().push(s);
+        }
+    }
+    let mut used = vec![false; segments.len()];
+    let mut lines = vec![];
+    for (start, [a, b]) in segments.iter().enumerate() {
+        if used.get(start).copied().unwrap_or(true) {
+            continue;
+        }
+        if let Some(u) = used.get_mut(start) {
+            *u = true;
+        }
+        let mut line = std::collections::VecDeque::from([*a, *b]);
+        for back in [true, false] {
+            loop {
+                let end = if back { line.back() } else { line.front() };
+                let Some(end) = end.copied() else { break };
+                let next = ends.get(&key(end)).and_then(|ss| ss.iter().copied().find(|s| !used.get(*s).copied().unwrap_or(true)));
+                let Some((s, [p, q])) = next.and_then(|s| segments.get(s).map(|seg| (s, *seg))) else { break };
+                if let Some(u) = used.get_mut(s) {
+                    *u = true;
+                }
+                let other = if key(p) == key(end) { q } else { p };
+                if back { line.push_back(other) } else { line.push_front(other) }
+            }
+        }
+        lines.push(line.into_iter().collect());
+    }
+    lines
+}
+
+/// The contrast lines of the wheel's square or the box's field on HSB `hsb`, kept per [`LinesKey`]:
+/// where a pick there, stored as the wheel stores it in place of `tgt`'s color, meets each minimum
+/// of the chosen category against `backdrop`.
+fn lines_for(app: &VectorcraftApp, ui: &Ui, backdrop: &Backdrop, tgt: &Target, hsb: [f32; 3], cmyk_doc: bool) -> Lines {
+    let set = &app.ui.color_wheel;
+    let (category, view, ch) = (set.contrast_for, set.view, set.channel);
+    let was = replaced(app, tgt, false);
+    // The component the field holds fixed: the box's strip value, or the wheel's hue.
+    let fixed = if view == View::Box { box_pos(ch, hsb).0 } else { hsb[0] };
+    let field = format!("{view:?} {ch:?} {fixed} {:?} {cmyk_doc}", was.map(|c| c.model()));
+    let key: LinesKey = (backdrop.clone(), category, field, under());
+    if let Some((k, lines)) = pstate::<Option<(LinesKey, Lines)>>(ui.ctx(), LINES)
+        && k == key
+    {
+        return lines;
+    }
+    let cms = cms::active();
+    let at = |x: f32, y: f32| if view == View::Box { box_pick(ch, fixed, x, y, hsb) } else { [hsb[0], x, 1.0 - y] };
+    let ratio_at = |x: f32, y: f32| backdrop.ratio(cms.display_rgb(&backdrop.drawn_color(&stored(&cms, at(x, y), was.as_ref(), cmyk_doc))));
+    let (aa, aaa) = category.minimums();
+    let minimums: Vec<f64> = std::iter::once(aa).chain(aaa).collect();
+    let lines = contrast_lines(&ratio_at, &minimums);
+    set_pstate(ui.ctx(), LINES, Some((key, lines.clone())));
+    lines
+}
+
+/// Draw `lines` (from [`contrast_lines`]) over the field in `rect`: AA solid and AAA dashed, each
+/// a light line over a dark one, as the field's marker is drawn.
+fn draw_contrast_lines(ui: &Ui, rect: Rect, lines: &Lines) {
+    let painter = ui.painter().with_clip_rect(rect);
+    let at = |(x, y): &(f32, f32)| egui::pos2(rect.left() + x * rect.width(), rect.top() + y * rect.height());
+    for (level, polylines) in lines.iter().enumerate() {
+        for line in polylines {
+            let points: Vec<egui::Pos2> = line.iter().map(at).collect();
+            for stroke in [Stroke::new(3.0, Color32::BLACK), Stroke::new(1.0, Color32::WHITE)] {
+                if level == 0 {
+                    painter.add(egui::Shape::line(points.clone(), stroke));
+                } else {
+                    painter.extend(egui::Shape::dashed_line(&points, stroke, 4.0, 3.0));
+                }
+            }
+        }
+    }
+}
 
 /// The active color settings and profiles generation, which change how a color displays without
 /// a document revision (Edit › Color Settings, a document's assigned profiles).
@@ -357,17 +575,24 @@ fn background(app: &mut VectorcraftApp, ui: &Ui) -> Option<Color> {
     Color::from_hex(&hex?)
 }
 
-/// The contrast row: the background's chip, the ratio cut off at two decimals and the AA and AAA
-/// results for the chosen category; a dash when there is no background or no color to measure.
-/// Without a pinned background the row asks `color.contrast` for the color behind the selection
-/// (`against: "below"`), also during an interaction, so translucent groups and layers count as the
-/// command counts them; the chip then shows the background in the answer, else the pinned color or
-/// the one kept by [`background`].
-fn contrast_row(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// The contrast row's measurement: the background it was measured against, `color.contrast`'s
+/// answer for the chosen category, and what the lines measure picks against.
+struct Measured {
+    against: Option<Color>,
+    answer: Option<Value>,
+    backdrop: Option<Backdrop>,
+}
+
+/// Measure the active color for the contrast row and the lines. Without a pinned background it
+/// asks `color.contrast` for the color behind the selection (`against: "below"`), also during an
+/// interaction, so translucent groups and layers count as the command counts them. The answer is
+/// kept per [`RatioKey`].
+fn measure(app: &mut VectorcraftApp, ui: &Ui) -> Measured {
     let category = app.ui.color_wheel.contrast_for;
     let pinned = app.ui.color_wheel.contrast_background.is_some();
     let against = background(app, ui);
     let sampled = !pinned;
+    let mut backdrop = None;
     let answer = against.as_ref().and_then(|bg| {
         let st = app.session.active();
         let key: RatioKey = (
@@ -382,27 +607,51 @@ fn contrast_row(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.session.selected_freeform_point(),
             app.session.prefs.black_on_screen.clone(),
             under(),
+            category,
         );
-        match pstate::<Option<(RatioKey, Option<Value>)>>(ui.ctx(), RATIO) {
-            Some((k, r)) if k == key => r,
+        let kept = pstate::<Option<(RatioKey, Option<Value>)>>(ui.ctx(), RATIO);
+        let kept_backdrop = pstate::<Option<(RatioKey, Option<Backdrop>)>>(ui.ctx(), BACKDROP);
+        match (kept, kept_backdrop) {
+            (Some((k, r)), Some((kb, b))) if k == key && kb == key => {
+                backdrop = b;
+                r
+            }
             _ => {
                 let against = if sampled { json!("below") } else { color_json(bg) };
-                let r = app.session.execute("color.contrast", &json!({ "against": against })).ok();
-                set_pstate(ui.ctx(), RATIO, Some((key, r.clone())));
+                let m = contrast_measure(&app.session, &json!({ "against": against, "for": category.id() })).ok();
+                let (r, b) = m.map_or((None, None), |(r, b)| (Some(r), Some(b)));
+                set_pstate(ui.ctx(), RATIO, Some((key.clone(), r.clone())));
+                set_pstate(ui.ctx(), BACKDROP, Some((key, b.clone())));
+                backdrop = b;
                 r
             }
         }
     });
+    Measured { against, answer, backdrop }
+}
+
+/// The contrast row: the background's chip, the ratio cut off at two decimals, the AA and AAA
+/// results for the chosen category, and a chip of the closest color that passes the first level the
+/// color fails; a dash when there is no background or no color to measure. Without a pinned
+/// background the first chip shows the background in the answer, else the pinned color or the one
+/// kept by [`background`]. The fix chip keeps its space while hidden. Returns the fix color when its
+/// chip is clicked.
+fn contrast_row(app: &VectorcraftApp, ui: &mut Ui, m: &Measured) -> Option<Color> {
+    let category = app.ui.color_wheel.contrast_for;
+    let pinned = app.ui.color_wheel.contrast_background.is_some();
+    let sampled = !pinned;
+    let (against, answer) = (m.against, m.answer.as_ref());
+    let mut clicked = None;
     let resp = ui
         .horizontal(|ui| {
             let (rect, _) = ui.allocate_exact_size(vec2(CHIP, CHIP), egui::Sense::hover());
             // The chip shows the background the ratio was measured against.
-            let measured = answer.as_ref().filter(|_| sampled).and_then(|r| r["against"].as_str()).and_then(Color::from_hex);
+            let measured = answer.filter(|_| sampled).and_then(|r| r["against"].as_str()).and_then(Color::from_hex);
             match measured.or(against) {
                 Some(c) => widgets::swatch_tile(ui, rect, &Paint::solid(c), false, false),
                 None => widgets::swatch_tile(ui, rect, &Paint::None, false, false),
             }
-            let Some(ratio) = answer.as_ref().and_then(|r| r["ratio"].as_f64()) else {
+            let Some(ratio) = answer.and_then(|r| r["ratio"].as_f64()) else {
                 ui.label("—");
                 return;
             };
@@ -413,6 +662,7 @@ fn contrast_row(app: &mut VectorcraftApp, ui: &mut Ui) {
             if let Some(aaa) = aaa {
                 ui.label(format!("AAA {}", result(aaa)));
             }
+            clicked = fix_chip(ui, answer, aa, aaa);
         })
         .response;
     let mut tip = tl!(
@@ -424,6 +674,35 @@ fn contrast_row(app: &mut VectorcraftApp, ui: &mut Ui) {
         tip.push_str(tl!("The background is read at the center of the selection."));
     }
     resp.on_hover_text(tip);
+    clicked
+}
+
+/// The fix chip at the end of the contrast row: the closest color that passes AA when the color
+/// fails AA (`aa`), else AAA when it fails AAA (`aaa`), from `color.contrast`'s `fix`. Its space is
+/// kept while there is none, so the row does not move as a drag crosses a line. Returns the color
+/// when the chip is clicked or activated.
+fn fix_chip(ui: &mut Ui, answer: Option<&Value>, aa: bool, aaa: Option<bool>) -> Option<Color> {
+    let level = if !aa {
+        Some(("aa", "AA"))
+    } else if aaa == Some(false) {
+        Some(("aaa", "AAA"))
+    } else {
+        None
+    };
+    let fix = level.and_then(|(key, name)| {
+        let v = answer?.get("fix")?.get(key)?;
+        serde_json::from_value::<Color>(v.clone()).ok().map(|c| (c, name))
+    });
+    let Some((color, name)) = fix else {
+        ui.allocate_exact_size(vec2(CHIP, CHIP), egui::Sense::hover());
+        return None;
+    };
+    let (rect, resp) = ui.allocate_exact_size(vec2(CHIP, CHIP), egui::Sense::click());
+    widgets::swatch_tile(ui, rect, &Paint::solid(color), false, false);
+    let label = crate::i18n::fmt(tl!("The closest color that passes {level}: click to apply it."), &[("level", name)]);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), &label));
+    let resp = resp.on_hover_text(&label);
+    resp.clicked().then_some(color)
 }
 
 /// What the HSB picked last belongs to: the document, the selected objects or text characters,
@@ -528,7 +807,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         (c, _) => display_hsb(&cms, &c.unwrap_or(app.session.last_solid)),
     };
     let marked = color.is_some();
+    let measured = app.ui.color_wheel.contrast.then(|| measure(app, ui));
     let mut pick: Option<([f32; 3], Live)> = None;
+    let mut field_rect = Rect::NOTHING;
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
             ui.set_width(44.0);
@@ -536,11 +817,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
         let size = ui.available_width().min(MAX_WHEEL);
         if app.ui.color_wheel.view == View::Box {
-            pick = show_box(ui, app.ui.color_wheel.channel, hsb, marked, size);
+            (pick, field_rect) = show_box(ui, app.ui.color_wheel.channel, hsb, marked, size);
             return;
         }
         let ring = widgets::hue_ring(ui, "color-wheel-ring", tl!("Hue ring"), size, hsb[0], marked);
         let square = widgets::ring_square(ring.rect);
+        field_rect = square;
         let mut field_ui = ui.new_child(UiBuilder::new().id_salt("color-wheel-square").max_rect(square));
         let axes =
             [FieldAxis { name: tl!("Saturation"), units: 100.0, suffix: "%" }, FieldAxis { name: tl!("Brightness"), units: 100.0, suffix: "%" }];
@@ -562,12 +844,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             pick = Some(([hsb[0], x, 1.0 - y], field_phase));
         }
     });
-    if app.ui.color_wheel.contrast {
-        contrast_row(app, ui);
+    let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);
+    if let Some(m) = &measured {
+        if let Some(backdrop) = &m.backdrop {
+            let lines = lines_for(app, ui, backdrop, &tgt, hsb, cmyk_doc);
+            draw_contrast_lines(ui, field_rect, &lines);
+        }
+        if let Some(c) = contrast_row(app, ui, m) {
+            apply(app, &tgt, c, Live::Released, false);
+        }
     }
     let Some((hsb, phase)) = pick else { return };
     let behind = super::alt_held(ui);
-    let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);
     let c = stored(&cms, hsb, replaced(app, &tgt, behind).as_ref(), cmyk_doc);
     apply(app, &tgt, c, phase, behind);
     if !behind {

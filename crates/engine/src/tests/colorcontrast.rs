@@ -379,6 +379,14 @@ fn a_picked_symbol_object_is_measured_with_its_instances_stain() {
     let r = s.execute("color.contrast", &json!({"against": "#000000", "opacity": 100})).unwrap();
     let want = vectorcraft_color::wcag::contrast_ratio([0.5; 3], [0.0; 3]);
     assert!((ratio(&r) - want).abs() < 1e-3, "white stained half way to black: {r}");
+    // The fix is the color to store: the stain mixes it half way to black again, and the result
+    // just meets AA against white.
+    let r = s.execute("color.contrast", &json!({"against": "#ffffff", "opacity": 100})).unwrap();
+    assert_eq!(r["normalText"]["aa"], false, "{r}");
+    let fix = fix_color(&r["fix"]["aa"]);
+    let drawn = fix.lerp(&vectorcraft_color::Color::BLACK, 0.5).to_rgb_uncalibrated();
+    let got = vectorcraft_color::wcag::contrast_ratio(drawn, [1.0; 3]);
+    assert!((4.5..4.51).contains(&got), "{fix:?} draws {drawn:?}: {got}");
 }
 
 #[test]
@@ -440,4 +448,80 @@ fn a_fill_of_none_has_no_color_to_measure() {
     let e = s.execute("color.contrast", &json!({})).unwrap_err().to_string();
     assert!(e.contains("has no color"), "{e}");
     assert!(s.execute("color.contrast", &json!({"color": "#000000"})).is_ok());
+}
+
+fn fix_color(v: &Value) -> vectorcraft_color::Color {
+    crate::cmd::color_value(v).unwrap_or_else(|| panic!("not a color: {v}"))
+}
+
+fn oklch_hue(c: &vectorcraft_color::Color) -> f64 {
+    let [_, a, b] = vectorcraft_color::libraries::to_oklab(c);
+    b.atan2(a).to_degrees()
+}
+
+#[test]
+fn a_failing_color_answers_the_closest_passing_color_of_its_hue() {
+    let mut s = Session::new();
+    let r = s.execute("color.contrast", &json!({"color": "#fdc96e", "against": "#355f78"})).unwrap();
+    assert_eq!(r["for"], "normalText");
+    let aa = fix_color(&r["fix"]["aa"]);
+    let back = s.execute("color.contrast", &json!({"color": r["fix"]["aa"], "against": "#355f78"})).unwrap();
+    assert!((4.5..4.51).contains(&ratio(&back)), "{back}");
+    let want = oklch_hue(&vectorcraft_color::Color::from_hex("#fdc96e").unwrap());
+    assert!((oklch_hue(&aa) - want).abs() < 1.0, "{} {want}", oklch_hue(&aa));
+    assert!(matches!(aa, vectorcraft_color::Color::Rgb { .. }), "an RGB color answers RGB: {aa:?}");
+    // White on #355F78 is 6.87:1 and black 3.05:1, so no color reaches AAA's 7:1.
+    assert!(r["fix"]["aaa"].is_null(), "{r}");
+    let large = s.execute("color.contrast", &json!({"color": "#fdc96e", "against": "#355f78", "for": "largeText"})).unwrap();
+    let aaa = s.execute("color.contrast", &json!({"color": large["fix"]["aaa"], "against": "#355f78"})).unwrap();
+    assert!((4.5..4.51).contains(&ratio(&aaa)), "large text AAA is AA's 4.5:1 for normal text: {aaa}");
+}
+
+#[test]
+fn a_passing_color_has_no_fix_and_graphics_have_no_aaa_fix() {
+    let mut s = Session::new();
+    let r = s.execute("color.contrast", &json!({"color": "#000000", "against": "#ffffff"})).unwrap();
+    assert_eq!(r["fix"], json!({"aa": null, "aaa": null}));
+    let g = s.execute("color.contrast", &json!({"color": "#cccccc", "against": "#ffffff", "for": "graphics"})).unwrap();
+    assert_eq!(g["for"], "graphics");
+    let fix = g["fix"].as_object().unwrap();
+    assert_eq!(fix.keys().collect::<Vec<_>>(), ["aa"], "{g}");
+    let back = s.execute("color.contrast", &json!({"color": g["fix"]["aa"], "against": "#ffffff"})).unwrap();
+    assert!((3.0..3.01).contains(&ratio(&back)), "{back}");
+    let large = s.execute("color.contrast", &json!({"color": "#fdc96e", "against": "#355f78", "for": "largeText"})).unwrap();
+    assert!(large["fix"]["aa"].is_null(), "4.49:1 meets large text AA: {large}");
+    assert!(!large["fix"]["aaa"].is_null(), "{large}");
+}
+
+#[test]
+fn a_cmyk_color_answers_a_cmyk_fix() {
+    let mut s = Session::new();
+    let r = s.execute("color.contrast", &json!({"color": {"c": 0, "m": 40, "y": 70, "k": 20}, "against": "#355f78"})).unwrap();
+    assert_eq!(r["normalText"]["aa"], false, "{r}");
+    let fix = fix_color(&r["fix"]["aa"]);
+    assert!(matches!(fix, vectorcraft_color::Color::Cmyk { .. }), "{fix:?}");
+    let back = s.execute("color.contrast", &json!({"color": r["fix"]["aa"], "against": "#355f78"})).unwrap();
+    assert!(ratio(&back) >= 4.5, "{back}");
+}
+
+#[test]
+fn a_fix_is_drawn_at_the_same_opacity_and_none_passes_out_of_reach() {
+    let mut s = Session::new();
+    // #808080 at 50 % over white draws as a light gray: black at 50 % draws 0.5 gray, 3.98:1, which
+    // meets large text AA (3:1) but not AAA (4.5:1).
+    let p = json!({"color": "#808080", "against": "#ffffff", "opacity": 50, "for": "largeText"});
+    let r = s.execute("color.contrast", &p).unwrap();
+    assert_eq!(r["largeText"]["aa"], false, "{r}");
+    assert!(r["fix"]["aaa"].is_null(), "no gray at 50 % reaches 4.5:1: {r}");
+    let back = s.execute("color.contrast", &json!({"color": r["fix"]["aa"], "against": "#ffffff", "opacity": 50})).unwrap();
+    assert!((3.0..3.01).contains(&ratio(&back)), "{back}");
+}
+
+#[test]
+fn for_takes_only_the_three_categories() {
+    let mut s = Session::new();
+    for bad in [json!("NormalText"), json!("aa"), json!(1), json!(true)] {
+        let e = s.execute("color.contrast", &json!({"color": "#000000", "against": "#ffffff", "for": bad})).unwrap_err().to_string();
+        assert!(e.contains("`for` must be one of normalText, largeText, graphics"), "{e}");
+    }
 }

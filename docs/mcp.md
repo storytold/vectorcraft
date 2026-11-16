@@ -658,7 +658,10 @@ the list return an error and change nothing. `{"contrast": true}` shows Show Con
 box, `contrastFor` (`normalText`, `largeText` or `graphics`) picks the category its AA and AAA results are for, and
 `contrastBackground` (a color, or `null` for the color behind the selection) pins the background it measures against,
 as `color.contrast` below answers it. The command returns `{view, channel, contrast, contrastFor,
-contrastBackground}`, and the settings are kept with the preferences.
+contrastBackground}`, and the settings are kept with the preferences. With the row shown, the wheel's square and the
+box's field draw lines where the color picked there meets AA (solid) and AAA (dashed) for the category, and when the
+color fails a level, a chip at the end of the row shows `color.contrast`'s `fix` for the first level it fails; a click
+applies it.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop
@@ -1065,7 +1068,7 @@ panel's Limit to Library does (`ui.colorGuideLimit`); Recolor Artwork's `limitTo
 that is not a string, such as `5`, names no library and gets the same error as an unknown name; `null` or `""` sets no
 limit.
 
-`color.contrast {color?, against?, opacity?}` answers the WCAG 2 contrast ratio
+`color.contrast {color?, against?, opacity?, for?}` answers the WCAG 2 contrast ratio
 ([definition](https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio)) of a color against a background, from 1 to 21, and
 whether it meets AA and AAA for normal text (4.5:1 and 7:1), large text (3:1 and 4.5:1) and graphics (3:1, AA only):
 `{ratio, against, normalText: {aa, aaa}, largeText: {aa, aaa}, graphics: {aa}}`. The results compare the unrounded
@@ -1087,7 +1090,12 @@ selected objects that draw one color with different blend modes, or at different
 `"below"`, also in different translucent groups or layers), where hidden objects do not count; and a proxy of None, a
 pattern or a hidden row without `color`. `against` in the answer is the background as a working RGB `#rrggbb`, the form
 `against` takes; the sampled background is rounded to 8 bits, so giving it back answers the same ratio. Headless MCP
-answers it too.
+answers it too. The answer also has `for` (the category `for` names: `normalText`, the default, `largeText` or
+`graphics`) and `fix: {aa, aaa}` (no `aaa` for graphics): for each level of that category, the closest color that
+meets it when drawn the same way, in the model of the measured color, as the Color Wheel stores a pick. The search
+keeps the color's [OKLCH](https://bottosson.github.io/posts/oklab/) hue, raises or lowers its lightness, whichever
+takes the smaller step, and lowers its chroma where sRGB cannot show it. A level is `null` when the color already meets
+it, or when no lightness of the hue does (white on `#355f78` is 6.87:1, so no color meets 7:1 there).
 
 Color Themes (local only: no online service) keeps five-colour themes in the preferences. `colorTheme.save
 {colors: [...]}` saves up to five colours as they are, `colorTheme.save {color, rule}` saves the five-colour theme a
