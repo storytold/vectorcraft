@@ -779,11 +779,17 @@ pub fn os_cursors(build: bool, wayland: bool) -> bool {
 /// system's copy cursor shows (#8241). Set every frame it shows: the canvas and egui reset it.
 pub(crate) fn set_add_cursor(app: &mut crate::VectorcraftApp, ctx: &egui::Context) {
     ctx.set_cursor_icon(egui::CursorIcon::Copy);
-    if std::env::var_os("VECTORCRAFT_SYSTEM_CURSORS").is_none() && os_cursors(OS_CURSORS, app.services.wayland) {
+    if add_cursor_is_a_glyph(app) {
         // As the canvas sizes its glyphs (User Interface › Scale Cursor Proportional to UI).
         let ui_scale = if app.session.prefs.scale_cursor_with_ui { 1.0 } else { ctx.zoom_factor() };
         ctx.set_cursor_image(app.canvas.cursors.get(Cursor::GroupSelection, ctx.pixels_per_point() / ui_scale));
     }
+}
+
+/// Does [`set_add_cursor`] hand the OS its glyph (rather than ask for the system copy cursor)?
+/// Where the window shows glyphs as OS cursors, unless `VECTORCRAFT_SYSTEM_CURSORS` opts out.
+pub(crate) fn add_cursor_is_a_glyph(app: &crate::VectorcraftApp) -> bool {
+    std::env::var_os("VECTORCRAFT_SYSTEM_CURSORS").is_none() && os_cursors(OS_CURSORS, app.services.wayland)
 }
 
 /// Does the window hide the pointer only while it is the key window? macOS does: winit hides it with

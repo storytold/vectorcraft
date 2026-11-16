@@ -922,10 +922,13 @@ fn the_strip_under_the_ramp_shows_the_add_cursor() {
     // Between the two stops, just under the ramp.
     let under = output(&mut p, &mut app, pos2(bar.center().x, bar.bottom() + 10.0));
     assert_eq!(under.cursor_icon, egui::CursorIcon::Copy);
-    if crate::cursors::OS_CURSORS {
+    // The same condition the panel uses (the build, Wayland, VECTORCRAFT_SYSTEM_CURSORS).
+    if crate::cursors::add_cursor_is_a_glyph(&app) {
         let glyph = app.canvas.cursors.get(vectorcraft_tools::Cursor::GroupSelection, 1.0);
         assert!(glyph.is_some());
         assert_eq!(under.cursor_image, glyph, "the white arrow with a plus, as an OS cursor");
+    } else {
+        assert!(under.cursor_image.is_none(), "the system copy cursor alone");
     }
     let over = output(&mut p, &mut app, bar.center());
     assert_ne!(over.cursor_icon, egui::CursorIcon::Copy);
