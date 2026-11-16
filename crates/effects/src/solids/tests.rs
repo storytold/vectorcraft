@@ -587,6 +587,30 @@ fn drawn_face_bounds(f: &Node) -> Rect {
     }
 }
 
+/// Under a colored light, an Inflate in a solid color with a graphic on its front lies over an
+/// underlay of its faces, the faces that carry parts of the graphic included.
+#[test]
+fn a_colored_inflate_with_a_graphic_lies_over_an_underlay_of_its_faces() {
+    let mut d = Document::new(1000.0, 1000.0);
+    let mark = Node::path(
+        NodeId(0),
+        vectorcraft_geom::shapes::rectangle(Rect::new(500.0, 500.0, 510.0, 510.0)),
+        Appearance::basic(Paint::solid(BLUE), Paint::None, 0.0),
+    );
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(mark) });
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0));
+    let mut n = Node::path(NodeId(7), square, Appearance::basic(Paint::solid(RED), Paint::None, 0.0));
+    let p = json!({"rotationX": -20, "rotationY": -30, "rotationZ": 0, "lights": [{"color": "#ff8080"}], "graphics": [{"symbol": "Mark", "scale": 300.0}]});
+    n.appearance.effects.push(fx(INFLATE, p));
+    let art = solid_art_in(Some(&d), &n).unwrap();
+    let order = art.children().unwrap()[0].children().unwrap();
+    let faces: Vec<Arc<Node>> = order.iter().flat_map(unsealed).collect();
+    assert!(faces.len() > order.len(), "the faces lie over an underlay");
+    let carrying = faces.iter().filter(|f| matches!(f.kind, NodeKind::Group { clip: false, .. })).count();
+    assert!(carrying > 0, "faces carry parts of the graphic");
+    assert!(order.iter().all(|run| !Arc::ptr_eq(&unsealed(run)[0], run)), "every face is in a sealed run");
+}
+
 /// Under a light that is not white, a solid-color fill and a solid-color stroke, plain, dashed or
 /// with a width profile, draw their faces in one order, the faces of both solids in the order of
 /// their depths where they overlap, in Inflate and in Extrude & Bevel, with and without perspective
