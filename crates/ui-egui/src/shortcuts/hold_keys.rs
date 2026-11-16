@@ -208,13 +208,59 @@ fn tool_takes(app: &mut VectorcraftApp, key: Key, text: &str) -> bool {
     tool_key.is_some_and(|k| app.session.tool_claims_key(k, view))
 }
 
+/// Runs the single-key shortcuts of the texts typed before the event at `start` that no wait took,
+/// in order, as the frame's shortcuts would run them, and takes them and their presses from the
+/// frame. A text typed with Cmd, Ctrl or Alt, by a key the active tool takes, or with no shortcut,
+/// is left to the frame. True when one opened a dialog or the palette.
+fn run_typed_before(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    events: &[egui::Event],
+    typed_by: &[Option<usize>],
+    start: usize,
+    taken: &mut Vec<usize>,
+) -> bool {
+    for (k, e) in events.iter().enumerate().take(start) {
+        let egui::Event::Text(text) = e else { continue };
+        let by = typed_by.get(k).copied().flatten();
+        if taken.contains(&k) || by.is_some_and(|b| taken.contains(&b)) {
+            continue;
+        }
+        let (key, physical, repeat, m) = match by.and_then(|b| events.get(b)) {
+            Some(egui::Event::Key { key, physical_key, repeat, modifiers, .. }) => (Some(*key), *physical_key, *repeat, *modifiers),
+            _ => (None, None, false, ctx.input(|i| i.modifiers)),
+        };
+        if m.command || m.ctrl || m.alt || m.mac_cmd || key.is_some_and(|key| tool_takes(app, key, text)) {
+            continue;
+        }
+        let typed = super::latin(text, physical);
+        let chords = match key {
+            Some(key) => tap_chords(&typed, key, m),
+            None => super::text_chords(&typed, m, None),
+        };
+        // A key with no shortcut stays in the frame for what reads it later (Space for the canvas).
+        let keymap = crate::shortcut_editor::current();
+        if !chords.iter().any(|c| crate::keymap::lookup(&keymap.keymap, c).is_some()) {
+            continue;
+        }
+        taken.push(k);
+        taken.extend(by);
+        if super::run_single_key(app, ctx, &chords, key, repeat) {
+            return true;
+        }
+    }
+    false
+}
+
 /// Before the frame's shortcuts run: goes through the frame's events in order. A release of the
 /// waiting key ends the wait (the hold when the delay has passed, otherwise the tap); a press of
 /// another key, or a change of Cmd, Ctrl or Alt, ends it first, so the keys act in the order they
 /// went down; and a new press of a key with a hold shortcut starts a wait, taking the press and
-/// its text from the frame. Then a wait whose delay has passed with the key down runs the hold
-/// shortcut. True when a result opened a dialog or the palette: the rest of the frame's keys are
-/// dropped and no other shortcut runs.
+/// its text from the frame, with the key's repeats that follow in the frame and their text. When a
+/// wait that started in this frame also ends in it, the keys typed before its key run first
+/// ([`run_typed_before`]), so they act in the order they went down. Then a wait
+/// whose delay has passed with the key down runs the hold shortcut. True when a result opened a
+/// dialog or the palette: the rest of the frame's keys are dropped and no other shortcut runs.
 pub(super) fn intake(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
     // Off (Keyboard Shortcuts › Hold Shortcuts), every key runs on its press.
     if !app.session.prefs.hold_shortcuts || blocked(app, ctx) {
@@ -226,6 +272,9 @@ pub(super) fn intake(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
     let text_of = |k: usize| typed_by.iter().position(|by| *by == Some(k)).and_then(|j| events.get(j).map(|e| (j, e)));
     let mut taken: Vec<usize> = vec![];
     let mut stop_at = None;
+    // The press of a wait that started in this frame: when the wait also ends in this frame, the
+    // keys typed before it run first.
+    let mut started: Option<usize> = None;
     for (j, e) in events.iter().enumerate() {
         if let Some(p) = app.hold_keys.pending.as_ref().filter(|p| p.viewport == viewport) {
             let overdue = now - p.since >= p.delay;
@@ -248,11 +297,20 @@ pub(super) fn intake(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
                     _ => None,
                 }
             };
-            if let Some((hold, down)) = ended
-                && settle(app, ctx, hold, down)
-            {
-                stop_at = Some(j);
-                break;
+            if let Some((hold, down)) = ended {
+                // A key typed before it that opened a dialog or the palette ends the wait without
+                // running it.
+                if let Some(start) = started.take()
+                    && run_typed_before(app, ctx, &events, &typed_by, start, &mut taken)
+                {
+                    cancel(app, ctx);
+                    stop_at = Some(j);
+                    break;
+                }
+                if settle(app, ctx, hold, down) {
+                    stop_at = Some(j);
+                    break;
+                }
             }
         }
         let egui::Event::Key { key, physical_key, pressed: true, repeat: false, modifiers: m } = e else { continue };
@@ -271,7 +329,19 @@ pub(super) fn intake(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
         if tool_takes(app, *key, text) {
             continue;
         }
+        started = Some(j);
         taken.extend([j, t]);
+        // The key's repeats in this frame, and the text they type, stay out of the frame too.
+        for (r, later) in events.iter().enumerate().skip(j + 1) {
+            if releases(later, *key, *physical_key) {
+                break;
+            }
+            if matches!(later, egui::Event::Key { key: k, physical_key: p, pressed: true, repeat: true, .. } if same_key(*k, *p, *key, *physical_key))
+            {
+                taken.push(r);
+                taken.extend(text_of(r).map(|(rt, _)| rt));
+            }
+        }
         // A wait left in another viewport ends without running: that window lost the keyboard to
         // this one. Its key's repeats stay held back there until it is let go.
         if let Some(old) = app.hold_keys.pending.take_if(|p| p.viewport != viewport) {

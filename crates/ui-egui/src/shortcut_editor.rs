@@ -1375,8 +1375,9 @@ const MENU_COMMANDS: &str = "Menu Commands";
 /// Export Text's rows in sections, for the shortcut sheet and the CSV file: Tools, then one section
 /// per top-level menu in the order the dialog first lists a command of it, with the names and
 /// shortcuts as the dialog shows them, each name without its top-level menu. Every row the dialog
-/// lists is there, with an empty shortcut when it has none.
-pub fn export_sections(overrides: &Overrides) -> Vec<crate::shortcut_sheet::Section> {
+/// lists is there, with an empty shortcut when it has none. A row with a hold shortcut in `holds`
+/// ends its shortcuts with `Hold X`, joined as the dialog joins them.
+pub fn export_sections(overrides: &Overrides, holds: &Holds) -> Vec<crate::shortcut_sheet::Section> {
     use crate::shortcut_sheet::{Row, Section};
     let snapshot = snapshot();
     let km = crate::keymap::keymap_in(&snapshot, overrides);
@@ -1385,6 +1386,11 @@ pub fn export_sections(overrides: &Overrides) -> Vec<crate::shortcut_sheet::Sect
     let mut menus: Vec<Section> = vec![];
     for e in snapshot.entries.iter().filter(|e| listed(km.overrides(), e)) {
         let shortcut = dialog_shortcuts_with(&km, &e.key, backtick.as_deref()).unwrap_or_default();
+        let shortcut = match hold_of(holds, &e.key) {
+            Some(h) if shortcut.is_empty() => format!("{} {}", tl!("Hold"), menus::pretty_shortcut(&h)),
+            Some(h) => format!("{shortcut} · {} {}", tl!("Hold"), menus::pretty_shortcut(&h)),
+            None => shortcut,
+        };
         if e.is_tool {
             tools.rows.push(Row { name: shown_name(e), shortcut });
             continue;
@@ -1415,9 +1421,9 @@ fn export_text_file(
         TextFormat::Text => Ok(export_text_with(set, overrides, holds).into_bytes()),
         TextFormat::Sheet => {
             let title = format!("{} · {}", tl!("Keyboard Shortcuts"), shown_set_name(set));
-            crate::shortcut_sheet::sheet_pdf(&title, &export_sections(overrides), page)
+            crate::shortcut_sheet::sheet_pdf(&title, &export_sections(overrides, holds), page)
         }
-        TextFormat::Csv => Ok(crate::shortcut_sheet::csv(&export_sections(overrides), ["Group", "Command", "Shortcut"]).into_bytes()),
+        TextFormat::Csv => Ok(crate::shortcut_sheet::csv(&export_sections(overrides, holds), ["Group", "Command", "Shortcut"]).into_bytes()),
     }
 }
 
@@ -2712,7 +2718,7 @@ mod tests {
                     tops.push(top);
                 }
             }
-            (export_sections(&ov), listed.len(), tops)
+            (export_sections(&ov, &Holds::new()), listed.len(), tops)
         });
         let titles: Vec<&str> = sections.iter().map(|s| s.title.as_str()).collect();
         assert_eq!(titles[0], "Tools");
@@ -2787,7 +2793,7 @@ mod tests {
                 Ok(())
             }));
             app.run("shortcuts.exportText", json!({"path": "/a/list.csv", "format": "csv"})).unwrap();
-            (returned, written.borrow().clone(), export_sections(&app.ui.shortcut_overrides))
+            (returned, written.borrow().clone(), export_sections(&app.ui.shortcut_overrides, &Holds::new()))
         });
         let [(path, bytes)] = files.as_slice() else { panic!("{} files", files.len()) };
         assert_eq!(path, "/a/list.csv");
@@ -3635,6 +3641,41 @@ mod tests {
         let (off, on) = (row(&files[0]).unwrap(), row(&files[1]).unwrap());
         assert_eq!(off.split('\t').count(), 2, "{off}");
         assert_eq!(on.split('\t').nth(2), Some(format!("Hold {}", menus::pretty_shortcut("X")).as_str()), "{on}");
+    }
+
+    /// Export Text…'s shortcut sheet and CSV file also list a hold shortcut while Hold Shortcuts is
+    /// on, after the row's shortcuts.
+    #[test]
+    fn the_sheet_and_csv_list_hold_shortcuts_while_they_act() {
+        type Files = std::rc::Rc<std::cell::RefCell<Vec<Vec<u8>>>>;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let written: Files = Default::default();
+        let w = written.clone();
+        app.services.write = Some(Box::new(move |_: &str, b: &[u8]| {
+            w.borrow_mut().push(b.to_vec());
+            Ok(())
+        }));
+        app.run("shortcuts.set", json!({"id": "paint.swap", "hold": "X"})).unwrap();
+        let hold = format!("Hold {}", menus::pretty_shortcut("X"));
+        let sections = with_steady_plugins(|| {
+            written.borrow_mut().clear();
+            for on in [false, false, true] {
+                app.run("prefs.set", json!({"key": "holdShortcuts", "value": on})).unwrap();
+                app.run("shortcuts.exportText", json!({"path": "/a.csv", "format": "csv"})).unwrap();
+                app.run("shortcuts.exportText", json!({"path": "/a.pdf", "format": "sheet"})).unwrap();
+            }
+            app.run("prefs.set", json!({"key": "holdShortcuts", "value": false})).unwrap();
+            export_sections(&app.ui.shortcut_overrides, &app.ui.shortcut_holds)
+        });
+        let files = written.borrow();
+        let [csv_off, sheet_off, _, sheet_off_again, csv_on, sheet_on] = files.as_slice() else { panic!("{} files", files.len()) };
+        let swap = sections.iter().flat_map(|s| &s.rows).filter(|r| r.shortcut.ends_with(&hold)).collect::<Vec<_>>();
+        assert_eq!(swap.len(), 1, "one row has the hold: {swap:?}");
+        let (csv_off, csv_on) = (String::from_utf8_lossy(csv_off), String::from_utf8_lossy(csv_on));
+        assert!(!csv_off.contains(&hold), "off, the CSV file lists no hold");
+        assert!(csv_on.contains(&swap[0].shortcut), "on, the CSV file lists it: {}", swap[0].shortcut);
+        assert_eq!(sheet_off, sheet_off_again, "the sheet is the same each time");
+        assert_ne!(sheet_off, sheet_on, "on, the sheet lists the hold");
     }
 
     /// The text the Keyboard Shortcuts dialog draws in its second frame.

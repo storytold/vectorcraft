@@ -518,6 +518,10 @@ pub fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     }
     if let Some(k) = app.ui.dialog.as_mut() {
         k.fields.insert("overrides".into(), crate::keymap::stored::to_value(&shortcut_editor::saved_overrides(km.overrides(), &ov)));
+        // VectorCraft's defaults have no hold shortcuts; Add to the Current Shortcuts keeps them.
+        if !current {
+            k.fields.insert("holds".into(), json!({}));
+        }
         k.fields.insert("set".into(), json!(set));
         k.fields.insert("__message".into(), json!(tl!("Imported. Press OK to keep the imported set.")));
     }

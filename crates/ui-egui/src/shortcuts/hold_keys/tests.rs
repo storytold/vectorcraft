@@ -307,22 +307,108 @@ fn another_key_ends_the_wait_and_runs_after_it() {
     assert_eq!(app.session.tool_id(), "selection", "the release of X runs nothing more");
 }
 
-/// Two keys pressed in one frame act in the order they went down.
+/// The labels of the document's undo steps after the first `from`.
+fn steps(app: &VectorcraftApp, from: usize) -> Vec<String> {
+    app.session.doc().unwrap().history.undo.iter().skip(from).map(|e| e.label.clone()).collect()
+}
+
+/// The label of the undo step `command` records on [`app_with`]'s document.
+fn label(command: &str) -> String {
+    let mut app = app_with(true);
+    let n = steps(&app, 0).len();
+    app.run(command, json!({})).unwrap();
+    steps(&app, n).pop().unwrap()
+}
+
+/// A quick press of X swaps fill and stroke, and holding X deselects; D sets the default fill and
+/// stroke, as by default.
+fn swap_on_x() -> VectorcraftApp {
+    let mut app = app_with(true);
+    assert_eq!(crate::shortcut_editor::default_of("paint.default"), Some("D"));
+    app.run("shortcuts.set", json!({"id": "paint.swap", "shortcut": "X", "force": true})).unwrap();
+    app.run("shortcuts.set", json!({"id": "select.none", "hold": "X"})).unwrap();
+    app
+}
+
+/// Two keys pressed in one frame act in the order they went down, each once.
 #[test]
 fn keys_in_one_frame_act_in_order() {
-    let mut app = erolka_x(true);
+    let (swap, default) = (label("paint.swap"), label("paint.default"));
+    assert_ne!(swap, default);
+    let mut app = swap_on_x();
     let keys = Keyboard::new();
+    let n = steps(&app, 0).len();
     let mut events = press(Key::X, "x", Modifiers::NONE);
-    events.extend(press(Key::V, "v", Modifiers::NONE));
+    events.extend(press(Key::D, "d", Modifiers::NONE));
     keys.frame(&mut app, 0.0, events);
-    assert_eq!(app.session.tool_id(), "selection", "X's tap first, then V");
-    let mut events = press(Key::V, "v", Modifiers::NONE);
+    assert_eq!(steps(&app, n), [swap.clone(), default.clone()], "X's tap first, then D");
+    keys.frame(&mut app, 1.0, vec![release(Key::X), release(Key::D)]);
+    // Paint that D changes again.
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    let n = steps(&app, 0).len();
+    let mut events = press(Key::D, "d", Modifiers::NONE);
     events.extend(press(Key::X, "x", Modifiers::NONE));
-    app.select_tool("pen");
-    keys.frame(&mut app, 1.0, vec![release(Key::X), release(Key::V)]);
     keys.frame(&mut app, 2.0, events);
     keys.frame(&mut app, 2.1, vec![release(Key::X)]);
-    assert_eq!(app.session.tool_id(), "eyedropper", "V first, then X's tap at its release");
+    assert_eq!(steps(&app, n), [default, swap], "D first, then X's tap at its release");
+    assert_eq!(selected(&app), 1, "and no hold");
+}
+
+/// A wait that starts in a frame after another key, and that a release or another key ends in the
+/// same frame, runs its tap after that key.
+#[test]
+fn a_wait_ended_in_its_frame_runs_after_the_keys_before_it() {
+    let (swap, default) = (label("paint.swap"), label("paint.default"));
+    let mut app = swap_on_x();
+    let keys = Keyboard::new();
+    let n = steps(&app, 0).len();
+    let mut events = press(Key::D, "d", Modifiers::NONE);
+    events.extend(press(Key::X, "x", Modifiers::NONE));
+    events.push(release(Key::X));
+    keys.frame(&mut app, 0.0, events);
+    assert_eq!(steps(&app, n), [default.clone(), swap.clone()], "D first, then X's tap");
+    assert!(app.hold_keys.pending.is_none());
+    keys.frame(&mut app, 1.0, vec![release(Key::D)]);
+    assert_eq!(selected(&app), 1, "nothing waits after it");
+    // Ended by V while X is still down: D, X's tap, then V.
+    let n = steps(&app, 0).len();
+    let mut events = press(Key::D, "d", Modifiers::NONE);
+    events.extend(press(Key::X, "x", Modifiers::NONE));
+    events.extend(press(Key::V, "v", Modifiers::NONE));
+    keys.frame(&mut app, 2.0, events);
+    assert_eq!(steps(&app, n), [default, swap], "D first, then X's tap");
+    assert_eq!(app.session.tool_id(), "selection", "then V");
+    keys.press(&mut app, 2.5, Key::X, "x");
+    keys.frame(&mut app, 2.6, vec![release(Key::X), release(Key::D), release(Key::V)]);
+    assert_eq!(steps(&app, n).len(), 2, "X's repeats run nothing");
+    assert_eq!(selected(&app), 1, "and no hold");
+    // Ended by a command chord (Deselect): D, X's tap, then the chord.
+    assert_eq!(crate::shortcut_editor::default_of("select.none"), Some("Cmd+Shift+A"));
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    let n = steps(&app, 0).len();
+    let mut events = press(Key::D, "d", Modifiers::NONE);
+    events.extend(press(Key::X, "x", Modifiers::NONE));
+    let modifiers = Modifiers::COMMAND | Modifiers::SHIFT;
+    events.push(egui::Event::Key { key: Key::A, physical_key: Some(Key::A), pressed: true, repeat: false, modifiers });
+    keys.frame(&mut app, 3.0, events);
+    assert_eq!(steps(&app, n), [label("paint.default"), label("paint.swap")], "D first, then X's tap");
+    assert_eq!(selected(&app), 0, "then the chord");
+}
+
+/// The repeats of a key in the frame that starts its wait, and the text they type, stay out of the
+/// frame.
+#[test]
+fn repeats_in_the_frame_that_starts_a_wait_stay_out_of_it() {
+    let mut app = swap_on_x();
+    let keys = Keyboard::new();
+    let n = steps(&app, 0).len();
+    let mut events = press(Key::X, "x", Modifiers::NONE);
+    events.extend(press(Key::X, "x", Modifiers::NONE));
+    events.extend(press(Key::X, "x", Modifiers::NONE));
+    let left = keys.frame_left(&mut app, 0.0, events);
+    assert!(app.hold_keys.pending.is_some(), "X waits");
+    assert!(!left.iter().any(|e| matches!(e, egui::Event::Text(_) | egui::Event::Key { pressed: true, .. })), "{left:?}");
+    assert!(steps(&app, n).is_empty(), "the repeats run nothing");
 }
 
 /// A press and its release in one frame are a tap, run in that frame.
