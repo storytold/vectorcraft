@@ -70,9 +70,7 @@ pub(crate) fn carry(from: &Node, mut to: Node) -> Node {
 /// The keys of `doc`'s images that have see-through pixels (an alpha channel that isn't opaque
 /// everywhere).
 pub(crate) fn see_through_images(doc: &Document) -> BTreeSet<String> {
-    let see_through = |b: &ImageBlob| {
-        b.mime != "image/jpeg" && image::load_from_memory(&b.bytes).is_ok_and(|i| i.color().has_alpha() && i.to_rgba8().pixels().any(|p| p[3] < 255))
-    };
+    let see_through = |b: &ImageBlob| b.mime != "image/jpeg" && b.has_transparency();
     doc.images.iter().filter(|(_, b)| see_through(b)).map(|(k, _)| k.clone()).collect()
 }
 
