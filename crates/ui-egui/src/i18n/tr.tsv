@@ -3087,6 +3087,9 @@ digits	Malayalam	Malayalam
 	No menu item	Menü öğesi yok
 	Toolbar	Araç Çubuğu
 	{toolbar}, in the {tool} group	{toolbar}, {tool} grubunda
+	In the menu bar: {path}	Menü çubuğunda: {path}
+	In the {group} group: press and hold to open it	{group} grubunda: açmak için basılı tutun
+	{home}, not shown now	{home}, şu anda gösterilmiyor
 @plural	{n} result|{n} results	{n} sonuç
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} sonuçtan {shown} tanesi. Daraltmak için yazmaya devam edin.
 	Recent Commands	Son komutlar

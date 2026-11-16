@@ -103,8 +103,12 @@ pub(crate) fn mark(app: &mut VectorcraftApp, ctx: &Context, layer: LayerId, clip
     l.drawn = true;
     ctx.request_repaint_after_secs(left as f32);
     let t = Tokens::get(ctx);
-    let painter = ctx.layer_painter(layer).with_clip_rect(clip.intersect(ctx.content_rect()));
-    painter.rect_stroke(rect.shrink(1.0), CornerRadius::same(6), Stroke::new(MARK_WIDTH, t.selection), StrokeKind::Inside);
+    outline(&ctx.layer_painter(layer).with_clip_rect(clip.intersect(ctx.content_rect())), rect, t.selection);
+}
+
+/// Outline `rect`, a control that a mark points at, with `painter` in `color`.
+pub(crate) fn outline(painter: &egui::Painter, rect: Rect, color: egui::Color32) {
+    painter.rect_stroke(rect.shrink(1.0), CornerRadius::same(6), Stroke::new(MARK_WIDTH, color), StrokeKind::Inside);
 }
 
 /// After the toolbars and panels have drawn: Escape ends the locate, also an Escape that closed the
@@ -161,46 +165,76 @@ pub(crate) fn locate_tool(app: &mut VectorcraftApp, p: &Value) -> Result<Value, 
         Some(_) => return Err(format!("`{key}` must be a string")),
     };
     let tool = vectorcraft_tools::tool_info(tool).ok_or_else(|| format!("unknown tool `{tool}`"))?.id;
+    let found = match find(app, tool, false) {
+        Ok(found) => found,
+        Err(reason) => return Ok(unavailable(tool, reason)),
+    };
+    match found.target {
+        Target::Tools => {
+            app.ui.toolbar = true;
+            start(app, tool, Target::Tools);
+            Ok(json!({"tool": tool, "location": found.location, "toolbar": null}))
+        }
+        Target::Custom(name) => {
+            start(app, tool, Target::Custom(name.clone()));
+            Ok(json!({"tool": tool, "location": found.location, "toolbar": name}))
+        }
+        Target::AllTools => {
+            app.run("window.editToolbar", json!({"open": true}))?;
+            start(app, tool, Target::AllTools);
+            Ok(json!({"tool": tool, "location": "allTools", "toolbar": null}))
+        }
+    }
+}
+
+/// Where a toolbar holds a tool: [`find`]'s answer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Found {
+    /// The control that shows the tool.
+    pub target: Target,
+    /// `toolbar` (its slot's button shows it), `flyout` (it is hidden in its slot's group),
+    /// `strip` (its group is torn off into a strip) or `allTools`.
+    pub location: &'static str,
+    /// The tool the slot's button shows, for `toolbar` and `flyout`.
+    pub shown: Option<&'static str>,
+}
+
+/// Where `tool` is in the current layout, without showing or opening anything: the Tools panel's
+/// toolbar first, also while Window › Tools hides it, then the shown toolbars made with New
+/// Toolbar, else the All Tools drawer. With `shown_first`, a hidden Tools panel comes after the
+/// toolbars made with New Toolbar. An error names why no toolbar can show the tool now.
+pub(crate) fn find(app: &VectorcraftApp, tool: &'static str, shown_first: bool) -> Result<Found, &'static str> {
     if app.ui.screen_mode >= 3 {
-        return Ok(unavailable(tool, "Presentation Mode hides the toolbars: change the screen mode to show them"));
+        return Err("Presentation Mode hides the toolbars: change the screen mode to show them");
     }
     // Tab hides the toolbars made with New Toolbar until the next Tab, also once Window › Tools
     // shows the Tools panel again.
     let tab_hid = app.ui.tab_hid.is_some();
     if tab_hid && !app.ui.toolbar {
-        return Ok(unavailable(tool, "Tab has hidden the toolbars: press Tab to show them"));
+        return Err("Tab has hidden the toolbars: press Tab to show them");
     }
-    if let Some(slot) = crate::toolbar::slots(app).into_iter().map(|(_, s)| s).find(|s| s.contains(&tool)) {
-        let location = if slot.len() > 1 && crate::toolbar::is_floating(app, None, slot[0]) {
-            "strip"
-        } else if crate::toolbar::shown_tool(app, &slot) == tool {
-            "toolbar"
+    let main = crate::toolbar::slots(app).into_iter().map(|(_, s)| s).find(|s| s.contains(&tool)).map(|slot| {
+        if slot.len() > 1 && crate::toolbar::is_floating(app, None, slot[0]) {
+            Found { target: Target::Tools, location: "strip", shown: None }
         } else {
-            "flyout"
-        };
-        app.ui.toolbar = true;
-        start(app, tool, Target::Tools);
-        return Ok(json!({"tool": tool, "location": location, "toolbar": null}));
+            let shown = crate::toolbar::shown_tool(app, &slot);
+            Found { target: Target::Tools, location: if shown == tool { "toolbar" } else { "flyout" }, shown: Some(shown) }
+        }
+    });
+    if let Some(main) = main.clone().filter(|_| !shown_first || app.ui.toolbar) {
+        return Ok(main);
     }
     let active = app.session.tool_id();
     let custom = app.ui.custom_toolbars.iter().filter(|b| b.shown && !tab_hid).find_map(|bar| {
         let slot = bar.slots.iter().find(|s| s.iter().any(|t| t == tool))?;
         let tools: Vec<&'static str> = slot.iter().filter_map(|id| vectorcraft_tools::tool_info(id).map(|t| t.id)).collect();
         let first = *tools.first()?;
-        let location = if tools.len() > 1 && crate::toolbar::is_floating(app, Some(&bar.name), first) {
-            "strip"
-        } else if crate::custom_toolbars::shown_tool(bar, active, &tools) == Some(tool) {
-            "toolbar"
-        } else {
-            "flyout"
-        };
-        Some((bar.name.clone(), location))
+        let target = Target::Custom(bar.name.clone());
+        if tools.len() > 1 && crate::toolbar::is_floating(app, Some(&bar.name), first) {
+            return Some(Found { target, location: "strip", shown: None });
+        }
+        let shown = crate::custom_toolbars::shown_tool(bar, active, &tools);
+        Some(Found { target, location: if shown == Some(tool) { "toolbar" } else { "flyout" }, shown })
     });
-    if let Some((name, location)) = custom {
-        start(app, tool, Target::Custom(name.clone()));
-        return Ok(json!({"tool": tool, "location": location, "toolbar": name}));
-    }
-    app.run("window.editToolbar", json!({"open": true}))?;
-    start(app, tool, Target::AllTools);
-    Ok(json!({"tool": tool, "location": "allTools", "toolbar": null}))
+    Ok(custom.or(main).unwrap_or(Found { target: Target::AllTools, location: "allTools", shown: None }))
 }

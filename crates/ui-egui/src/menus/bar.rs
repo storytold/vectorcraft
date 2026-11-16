@@ -37,6 +37,7 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
             for (title, items) in tree.iter() {
                 let text = egui::RichText::new(tl!(title)).size(13.0).color(t.text);
                 let resp = ui.add(egui::Button::new(text));
+                crate::palette::note_spot(ui, resp.rect, || crate::palette::SpotAt::Menu((*title).to_string()));
                 egui::Popup::menu(&resp).show(|ui| menu_body(app, ui, items, &mut clicked));
                 if *title == "File" {
                     file_open = egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(&resp));

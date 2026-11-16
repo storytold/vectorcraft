@@ -3195,6 +3195,9 @@ digits	Malayalam	Малаялам
 	No menu item	Няма елемент в менюто
 	Toolbar	Лента с инструменти
 	{toolbar}, in the {tool} group	{toolbar}, в групата на {tool}
+	In the menu bar: {path}	В лентата с менюта: {path}
+	In the {group} group: press and hold to open it	В групата {group}: натиснете и задръжте, за да я отворите
+	{home}, not shown now	{home}, не се показва сега
 @plural	{n} result|{n} results	{n} резултат|{n} резултата
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} от {n} резултат. Продължете да пишете, за да ги стесните.|{shown} от {n} резултата. Продължете да пишете, за да ги стесните.
 	Recent Commands	Последни команди

@@ -4474,6 +4474,9 @@ antiAlias	Sharp	शार्प
 	No menu item	कोई मेनू आइटम नहीं
 	Toolbar	टूलबार
 	{toolbar}, in the {tool} group	{toolbar}, {tool} समूह में
+	In the menu bar: {path}	मेनू बार में: {path}
+	In the {group} group: press and hold to open it	{group} समूह में: खोलने के लिए दबाकर रखें
+	{home}, not shown now	{home}, अभी नहीं दिखाया गया
 @plural	{n} result|{n} results	{n} परिणाम|{n} परिणाम
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।|{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।
 	Recent Commands	हाल के आदेश

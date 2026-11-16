@@ -4418,6 +4418,9 @@ font-technology	Variable	Muuttuvat
 	No menu item	Ei valikkokohdetta
 	Toolbar	Työkalurivi
 	{toolbar}, in the {tool} group	{toolbar}, ryhmässä {tool}
+	In the menu bar: {path}	Valikkorivillä: {path}
+	In the {group} group: press and hold to open it	Ryhmässä {group}: avaa painamalla pitkään
+	{home}, not shown now	{home}, ei näkyvissä nyt
 @plural	{n} result|{n} results	{n} tulos|{n} tulosta
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown}/{n} tulosta. Kirjoita lisää rajataksesi tuloksia.|{shown}/{n} tulosta. Kirjoita lisää rajataksesi tuloksia.
 	Recent Commands	Viimeisimmät komennot

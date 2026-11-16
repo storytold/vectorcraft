@@ -3400,6 +3400,9 @@
 	No menu item	કોઈ મેનૂ આઇટમ નથી
 	Toolbar	ટૂલબાર
 	{toolbar}, in the {tool} group	{toolbar}, {tool} જૂથમાં
+	In the menu bar: {path}	મેનૂ બારમાં: {path}
+	In the {group} group: press and hold to open it	{group} જૂથમાં: ખોલવા માટે દબાવીને પકડી રાખો
+	{home}, not shown now	{home}, હમણાં બતાવેલ નથી
 	Tool	ટૂલ
 	Command	કમાન્ડ
 	Panel	પેનલ

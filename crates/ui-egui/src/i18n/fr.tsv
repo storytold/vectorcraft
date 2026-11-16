@@ -3285,6 +3285,9 @@ digits	Malayalam	Malayalam
 	No menu item	Aucun élément de menu
 	Toolbar	Barre d’outils
 	{toolbar}, in the {tool} group	{toolbar}, dans le groupe {tool}
+	In the menu bar: {path}	Dans la barre des menus, sous {path}
+	In the {group} group: press and hold to open it	Dans le groupe {group}, maintenez enfoncé pour l’ouvrir
+	{home}, not shown now	{home}, non affiché pour l’instant
 @plural	{n} result|{n} results	{n} résultat|{n} résultats
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} sur {n} résultat. Continuez à taper pour les affiner.|{shown} sur {n} résultats. Continuez à taper pour les affiner.
 	Recent Commands	Commandes récentes

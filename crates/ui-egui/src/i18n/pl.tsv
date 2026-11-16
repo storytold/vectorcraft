@@ -4340,6 +4340,9 @@ font-technology	Variable	Zmienne
 	No menu item	Brak pozycji menu
 	Toolbar	Pasek narzędzi
 	{toolbar}, in the {tool} group	{toolbar}, w grupie {tool}
+	In the menu bar: {path}	Na pasku menu: {path}
+	In the {group} group: press and hold to open it	W grupie {group}: naciśnij i przytrzymaj, aby ją otworzyć
+	{home}, not shown now	{home}, teraz niewidoczne
 @plural	{n} result|{n} results	{n} wynik|{n} wyniki|{n} wyników
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} wyniku. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.
 	Recent Commands	Ostatnie polecenia

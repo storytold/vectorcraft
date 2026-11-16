@@ -3961,6 +3961,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	No menu item	Χωρίς στοιχείο μενού
 	Toolbar	Γραμμή εργαλείων
 	{toolbar}, in the {tool} group	{toolbar}, στην ομάδα {tool}
+	In the menu bar: {path}	Στη γραμμή μενού: {path}
+	In the {group} group: press and hold to open it	Στην ομάδα {group}: πατήστε παρατεταμένα για να ανοίξει
+	{home}, not shown now	{home}, δεν εμφανίζεται τώρα
 @plural	{n} result|{n} results	{n} αποτέλεσμα|{n} αποτελέσματα
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} από {n} αποτέλεσμα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.|{shown} από {n} αποτελέσματα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.
 	Recent Commands	Πρόσφατες εντολές

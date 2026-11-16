@@ -3918,6 +3918,9 @@ mark-style	Japanese	Japán
 	No menu item	Nincs menüpont
 	Toolbar	Eszköztár
 	{toolbar}, in the {tool} group	{toolbar}, a(z) {tool} csoportjában
+	In the menu bar: {path}	A menüsorban: {path}
+	In the {group} group: press and hold to open it	A(z) {group} csoportban: a megnyitáshoz nyomja le és tartsa lenyomva
+	{home}, not shown now	{home}, most nem látható
 @plural	{n} result|{n} results	{n} találat
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} találatból {shown} látható. Gépeljen tovább a szűkítéshez.
 	Recent Commands	Legutóbbi parancsok

@@ -299,6 +299,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                     let Some(shown) = tool_info(shown_tool(app, slot)).or_else(|| tool_info(slot[0])) else { continue };
                     let is_active = slot.contains(&active);
                     let (rect, resp) = ui.allocate_exact_size(vec2(36.0, PITCH - 1.0), Sense::click_and_drag());
+                    crate::palette::note_spot(ui, rect, || crate::palette::SpotAt::Slot(None, slot.iter().map(|s| s.to_string()).collect()));
                     let well = egui::Rect::from_center_size(rect.center(), vec2(30.0, 27.5));
                     if is_active {
                         ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);
@@ -836,7 +837,7 @@ fn flyout_body(
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
     ui.horizontal(|ui| {
         let rows = if floating {
-            ui.horizontal(|ui| tool_strip(ui, t, active, tools, locate))
+            ui.horizontal(|ui| tool_strip(ui, t, active, tools, toolbar, locate))
         } else {
             // A group taller than the window scrolls its rows (inside the frame's 1 pt border). The
             // rows' height is given, since the row this sits in starts one widget tall.
@@ -976,11 +977,19 @@ fn grab_id(toolbar: Option<&str>, key: &str) -> egui::Id {
 
 /// One icon button per tool, the active one lit, with its name and shortcut on hover. Returns the
 /// tool clicked and the button of `locate`.
-fn tool_strip(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], locate: Option<&str>) -> (Option<&'static str>, Option<egui::Rect>) {
+fn tool_strip(
+    ui: &mut Ui,
+    t: &Tokens,
+    active: &str,
+    tools: &[String],
+    toolbar: Option<&str>,
+    locate: Option<&str>,
+) -> (Option<&'static str>, Option<egui::Rect>) {
     let mut chosen = None;
     let mut located = None;
     for tool in tools.iter().filter_map(|id| tool_info(id)) {
         let (r, resp) = ui.allocate_exact_size(STRIP_BUTTON, Sense::click());
+        crate::palette::note_spot(ui, r, || crate::palette::SpotAt::Strip(toolbar.map(str::to_string), tool.id.to_string()));
         let well = r.shrink(1.0);
         if active == tool.id {
             ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);

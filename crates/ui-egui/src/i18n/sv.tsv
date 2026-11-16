@@ -3215,6 +3215,9 @@ digits	Malayalam	Malayalam
 	No menu item	Inget menyalternativ
 	Toolbar	Verktygsfält
 	{toolbar}, in the {tool} group	{toolbar}, i gruppen {tool}
+	In the menu bar: {path}	I menyraden: {path}
+	In the {group} group: press and hold to open it	I gruppen {group}: tryck och håll ned för att öppna den
+	{home}, not shown now	{home}, visas inte nu
 @plural	{n} result|{n} results	{n} resultat|{n} resultat
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.|{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.
 	Recent Commands	Senaste kommandon

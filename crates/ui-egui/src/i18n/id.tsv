@@ -4150,6 +4150,9 @@ font-technology	Variable	Variabel
 	No menu item	Tidak ada item menu
 	Toolbar	Bilah alat
 	{toolbar}, in the {tool} group	{toolbar}, dalam grup {tool}
+	In the menu bar: {path}	Di bilah menu: {path}
+	In the {group} group: press and hold to open it	Di grup {group}: tekan dan tahan untuk membukanya
+	{home}, not shown now	{home}, tidak ditampilkan sekarang
 @plural	{n} result|{n} results	{n} hasil
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} dari {n} hasil. Terus ketik untuk mempersempitnya.
 	Recent Commands	Perintah terbaru

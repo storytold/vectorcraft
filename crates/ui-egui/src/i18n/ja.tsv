@@ -3218,6 +3218,9 @@ mark-style	Japanese	日本式
 	No menu item	メニュー項目なし
 	Toolbar	ツールバー
 	{toolbar}, in the {tool} group	{toolbar}、{tool} のグループ内
+	In the menu bar: {path}	メニューバー: {path}
+	In the {group} group: press and hold to open it	{group} のグループ内: 長押しで開きます
+	{home}, not shown now	{home}、現在は表示されていません
 @plural	{n} result|{n} results	{n} 件
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} 件中 {shown} 件。続けて入力すると絞り込めます。
 	Recent Commands	最近使ったコマンド

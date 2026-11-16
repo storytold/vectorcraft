@@ -4394,6 +4394,9 @@ font-technology	Variable	Varijabilni
 	No menu item	Nema stavke menija
 	Toolbar	Traka s alatima
 	{toolbar}, in the {tool} group	{toolbar}, u grupi {tool}
+	In the menu bar: {path}	Na traci menija: {path}
+	In the {group} group: press and hold to open it	U grupi {group}: pritisnite i držite da je otvorite
+	{home}, not shown now	{home}, trenutno nije prikazano
 @plural	{n} result|{n} results	{n} rezultat|{n} rezultata|{n} rezultata
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.
 	Recent Commands	Nedavne naredbe

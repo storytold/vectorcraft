@@ -3340,6 +3340,9 @@ digits	Malayalam	Malayalam
 	No menu item	Nessuna voce di menu
 	Toolbar	Barra degli strumenti
 	{toolbar}, in the {tool} group	{toolbar}, nel gruppo {tool}
+	In the menu bar: {path}	Nella barra dei menu: {path}
+	In the {group} group: press and hold to open it	Nel gruppo {group}: tieni premuto per aprirlo
+	{home}, not shown now	{home}, ora non visibile
 	Tool	Strumento
 	Command	Comando
 @plural	{n} result|{n} results	{n} risultato|{n} risultati

@@ -4499,6 +4499,9 @@ font-technology	Variable	Variabilní
 	No menu item	Žádná položka nabídky
 	Toolbar	Panel nástrojů
 	{toolbar}, in the {tool} group	{toolbar}, ve skupině {tool}
+	In the menu bar: {path}	V řádku nabídek: {path}
+	In the {group} group: press and hold to open it	Ve skupině {group}: stisknutím a podržením ji otevřete
+	{home}, not shown now	{home}, nyní není zobrazeno
 @plural	{n} result|{n} results	{n} výsledek|{n} výsledky|{n} výsledků
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} výsledku. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.
 	Recent Commands	Nedávné příkazy

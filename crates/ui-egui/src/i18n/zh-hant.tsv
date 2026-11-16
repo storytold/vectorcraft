@@ -4465,6 +4465,9 @@ digits	Malayalam	馬來亞拉姆數字
 	No menu item	無選單項目
 	Toolbar	工具列
 	{toolbar}, in the {tool} group	{toolbar}，位於 {tool} 群組中
+	In the menu bar: {path}	在選單列中：{path}
+	In the {group} group: press and hold to open it	在「{group}」群組中：按住即可開啟
+	{home}, not shown now	{home}，目前未顯示
 	Tool	工具
 	Command	指令
 @plural	{n} result|{n} results	{n} 個結果

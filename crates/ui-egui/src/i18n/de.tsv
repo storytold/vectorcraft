@@ -3259,6 +3259,9 @@ digits	Malayalam	Malayalam
 	No menu item	Kein Menüeintrag
 	Toolbar	Werkzeugleiste
 	{toolbar}, in the {tool} group	{toolbar}, in der Gruppe „{tool}“
+	In the menu bar: {path}	In der Menüleiste: {path}
+	In the {group} group: press and hold to open it	In der Gruppe {group}: zum Öffnen gedrückt halten
+	{home}, not shown now	{home}, derzeit nicht angezeigt
 	Tool	Werkzeug
 	Command	Befehl
 @plural	{n} result|{n} results	{n} Ergebnis|{n} Ergebnisse

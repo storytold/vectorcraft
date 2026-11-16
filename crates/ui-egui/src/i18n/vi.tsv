@@ -3675,6 +3675,9 @@ mark-style	Japanese	Kiểu Nhật
 	No menu item	Không có mục menu
 	Toolbar	Thanh công cụ
 	{toolbar}, in the {tool} group	{toolbar}, trong nhóm {tool}
+	In the menu bar: {path}	Trên thanh menu: {path}
+	In the {group} group: press and hold to open it	Trong nhóm {group}: nhấn giữ để mở
+	{home}, not shown now	{home}, hiện không hiển thị
 	Tool	Công cụ
 	Command	Lệnh
 @plural	{n} result|{n} results	{n} kết quả

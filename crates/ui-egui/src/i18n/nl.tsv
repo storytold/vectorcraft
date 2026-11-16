@@ -4767,6 +4767,9 @@ font-technology	Variable	Variabel
 	No menu item	Geen menu-item
 	Toolbar	Gereedschapsbalk
 	{toolbar}, in the {tool} group	{toolbar}, in de groep {tool}
+	In the menu bar: {path}	In de menubalk: {path}
+	In the {group} group: press and hold to open it	In de groep {group}: ingedrukt houden om te openen
+	{home}, not shown now	{home}, nu niet zichtbaar
 @plural	{n} result|{n} results	{n} resultaat|{n} resultaten
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} van {n} resultaat. Typ verder om ze te beperken.|{shown} van {n} resultaten. Typ verder om ze te beperken.
 	Recent Commands	Recente opdrachten

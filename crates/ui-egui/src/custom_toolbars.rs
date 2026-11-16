@@ -1121,6 +1121,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                             ui.add_space((middle - BUTTON / 2.0 * row.len() as f32 - ui.cursor().min.x).max(0.0));
                             for &(s, slot) in row {
                                 let Some((rect, shown)) = slot_button(ui, &t, &press, slot, &mut actions) else { continue };
+                                crate::palette::note_spot(ui, rect, || crate::palette::SpotAt::Slot(Some(bar.name.clone()), slot.clone()));
                                 if edit_this {
                                     buttons.push((s, rect));
                                 }

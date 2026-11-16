@@ -3329,6 +3329,9 @@ digits	Malayalam	Малаялам
 	No menu item	Нет пункта меню
 	Toolbar	Панель инструментов
 	{toolbar}, in the {tool} group	{toolbar}, в группе «{tool}»
+	In the menu bar: {path}	В строке меню: {path}
+	In the {group} group: press and hold to open it	В группе {group}: нажмите и удерживайте, чтобы открыть её
+	{home}, not shown now	{home}, сейчас не показано
 @plural	{n} result|{n} results	{n} результат|{n} результата|{n} результатов
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} из {n} результата. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.
 	Recent Commands	Недавние команды

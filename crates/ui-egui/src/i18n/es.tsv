@@ -3297,6 +3297,9 @@ digits	Malayalam	Malayálam
 	No menu item	Sin elemento de menú
 	Toolbar	Barra de herramientas
 	{toolbar}, in the {tool} group	{toolbar}, en el grupo {tool}
+	In the menu bar: {path}	En la barra de menús: {path}
+	In the {group} group: press and hold to open it	En el grupo {group}: mantén pulsado para abrirlo
+	{home}, not shown now	{home}, no se muestra ahora
 @plural	{n} result|{n} results	{n} resultado|{n} resultados
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Sigue escribiendo para acotarlos.|{shown} de {n} resultados. Sigue escribiendo para acotarlos.
 	Recent Commands	Comandos recientes

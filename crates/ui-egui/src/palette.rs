@@ -560,6 +560,276 @@ fn row_label(e: &Entry, home: &str) -> String {
     if shortcut.is_empty() { start } else { format!("{start}, {shortcut}") }
 }
 
+/// A control the highlighted result's callout can point at ([`note_spot`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum SpotAt {
+    /// A title of the in-window menu bar, by its English name.
+    Menu(String),
+    /// A slot's button on the Tools panel (toolbar none) or on the toolbar made with New Toolbar of
+    /// this name, and the ids of the tools its group holds.
+    Slot(Option<String>, Vec<String>),
+    /// A tool's button on a strip torn off the Tools panel (toolbar none) or off the toolbar made
+    /// with New Toolbar of this name, and the tool's id.
+    Strip(Option<String>, String),
+}
+
+/// Where a control was drawn: the viewport and pass, its layer, the clip rectangle and its own.
+#[derive(Clone, Debug)]
+struct Spot {
+    at: SpotAt,
+    viewport: egui::ViewportId,
+    pass: u64,
+    layer: egui::LayerId,
+    clip: egui::Rect,
+    rect: egui::Rect,
+}
+
+fn spots_id() -> egui::Id {
+    egui::Id::unique("palette-spots")
+}
+
+/// Where the palette says whether it is open, for [`note_spot`].
+fn spots_wanted_id() -> egui::Id {
+    egui::Id::unique("palette-spots-wanted")
+}
+
+/// While the palette is open, notes that `ui` drew the control `at` at `rect` in this pass, so the
+/// highlighted result's callout can point at it. The menu bar and the toolbars draw before the
+/// palette in each pass; `at` is built only while the palette is open. A control that is not
+/// wholly in view ([`in_view`]) is not noted, so a pass notes no more controls than the window
+/// shows.
+pub(crate) fn note_spot(ui: &egui::Ui, rect: egui::Rect, at: impl FnOnce() -> SpotAt) {
+    let ctx = ui.ctx();
+    if !ctx.data(|d| d.get_temp::<bool>(spots_wanted_id())).unwrap_or(false) || !in_view(ctx.content_rect(), ui.clip_rect(), rect) {
+        return;
+    }
+    let viewport = ctx.viewport_id();
+    let pass = ctx.cumulative_pass_nr_for(viewport);
+    let spot = Spot { at: at(), viewport, pass, layer: ui.layer_id(), clip: ui.clip_rect(), rect };
+    ctx.data_mut(|d| add_spot(d.get_temp_mut_or_default::<Vec<Spot>>(spots_id()), spot));
+}
+
+/// Adds `spot` to `list`. The first control a viewport notes in a pass drops every control it
+/// noted in earlier passes, so the list holds at most one pass of each viewport: no more controls
+/// than its windows drew wholly in view.
+fn add_spot(list: &mut Vec<Spot>, spot: Spot) {
+    if list.iter().rev().find(|s| s.viewport == spot.viewport).is_some_and(|s| s.pass != spot.pass) {
+        list.retain(|s| s.viewport != spot.viewport || s.pass == spot.pass);
+    }
+    list.push(spot);
+}
+
+/// Is `rect`, drawn clipped to `clip`, wholly in view: inside `clip` and inside the window `screen`?
+fn in_view(screen: egui::Rect, clip: egui::Rect, rect: egui::Rect) -> bool {
+    rect.is_finite() && clip.expand(0.5).contains_rect(rect) && screen.expand(0.5).contains_rect(rect)
+}
+
+/// The control noted as `at` in this pass of this viewport, when it is wholly in view and no
+/// window or toolbar lies over it ([`covered`]).
+fn spot(ctx: &egui::Context, at: impl Fn(&SpotAt) -> bool) -> Option<Spot> {
+    let viewport = ctx.viewport_id();
+    let pass = ctx.cumulative_pass_nr_for(viewport);
+    let screen = ctx.content_rect();
+    let found = ctx.data_mut(|d| {
+        d.get_temp_mut_or_default::<Vec<Spot>>(spots_id())
+            .iter()
+            .find(|s| s.viewport == viewport && s.pass == pass && at(&s.at) && in_view(screen, s.clip, s.rect))
+            .cloned()
+    })?;
+    (!covered(ctx, &found)).then_some(found)
+}
+
+/// Does a shown area above the control `s`'s layer overlap it: a floating panel, a toolbar or a
+/// menu? The palette's own backdrop, popup and Recent Commands list do not count (the callout keeps
+/// off the popup itself, [`aim`]), nor do tooltips. A layer that is not an area (a docked panel's)
+/// is under every area of a higher order.
+fn covered(ctx: &egui::Context, s: &Spot) -> bool {
+    let own = [egui::Id::unique("palette-backdrop"), egui::Id::unique("palette"), recent_list_id()];
+    ctx.memory(|m| {
+        let order: Vec<egui::LayerId> = m.layer_ids().collect();
+        let at = order.iter().position(|l| *l == s.layer);
+        order.iter().enumerate().any(|(i, l)| {
+            let above = match at {
+                Some(at) => i > at,
+                None => l.order > s.layer.order,
+            };
+            above
+                && l.order < egui::Order::Tooltip
+                && !own.contains(&l.id)
+                && m.areas().is_visible(l)
+                && m.area_rect(l.id).is_some_and(|r| r.intersects(s.rect))
+        })
+    })
+}
+
+/// Where the highlighted result lives, as the palette points at it.
+enum Pointer {
+    /// The control that shows the home, the callout's text, and the footer line that names the
+    /// home when the popup covers the control.
+    At(Spot, String, String),
+    /// No control in view shows the home: the footer shows the text.
+    Footer(String),
+}
+
+/// The footer line for a home that no control in view shows.
+fn unseen_line(home: &str) -> String {
+    crate::i18n::fmt(tl!("{home}, not shown now"), &[("home", home)])
+}
+
+fn unseen(home: &str) -> Pointer {
+    Pointer::Footer(unseen_line(home))
+}
+
+/// How the callout at a control keeps off the palette's popup and off the control.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Aim {
+    /// Outline the control and show the text in a box beside it.
+    Box,
+    /// Outline the control and show the text in the footer: a box beside the control would cover
+    /// the popup or the control.
+    Outline,
+    /// The popup covers the control: no callout, and the footer names the home.
+    Covered,
+}
+
+/// How the callout at `place` with `text` keeps off the popup at `popup` and off the control.
+fn aim(ctx: &egui::Context, popup: Option<egui::Rect>, place: &Spot, text: &str) -> Aim {
+    if popup.is_some_and(|p| p.intersects(place.rect)) {
+        return Aim::Covered;
+    }
+    let boxed = callout_box(ctx, place, text, popup).0;
+    if popup.is_some_and(|p| p.intersects(boxed)) || boxed.intersects(place.rect) { Aim::Outline } else { Aim::Box }
+}
+
+/// The callout for the highlighted result `e`. A tool points at its slot's button on a shown
+/// toolbar, in the order of [`tool_home`], or at its button on a strip torn off its group; a
+/// result with an item of the in-window menu bar points at the menu's title. A native menu bar,
+/// a home that is not in view now and a result with no menu item get a footer line instead.
+fn pointer(app: &VectorcraftApp, ctx: &egui::Context, e: &Entry) -> Pointer {
+    let lang = crate::i18n::current();
+    if let Some(id) = e.id.strip_prefix("tool:") {
+        let Some(tool) = vectorcraft_tools::tool_info(id) else { return unseen(&tool_home(app, id)) };
+        let Ok(found) = crate::panels::learn::locate::find(app, tool.id, true) else { return unseen(&tool_home(app, id)) };
+        let bar = match &found.target {
+            crate::panels::learn::locate::Target::Tools => None,
+            crate::panels::learn::locate::Target::Custom(name) => Some(name.as_str()),
+            crate::panels::learn::locate::Target::AllTools => return unseen(&tool_home(app, id)),
+        };
+        let place = if found.location == "strip" {
+            spot(ctx, |at| matches!(at, SpotAt::Strip(b, t) if b.as_deref() == bar && t == tool.id))
+        } else {
+            spot(ctx, |at| matches!(at, SpotAt::Slot(b, tools) if b.as_deref() == bar && tools.iter().any(|t| t == tool.id)))
+        };
+        let Some(place) = place else { return unseen(&tool_home(app, id)) };
+        let text = match found.shown.filter(|_| found.location == "flyout").and_then(vectorcraft_tools::tool_info) {
+            Some(group) => crate::i18n::fmt(tl!("In the {group} group: press and hold to open it"), &[("group", crate::i18n::tr(lang, group.label))]),
+            None => crate::i18n::tr(lang, tool.label).to_string(),
+        };
+        return Pointer::At(place, text, tool_home(app, id));
+    }
+    let Some(path) = &e.home else {
+        let shortcut = menus::shown_shortcut(&e.shortcut);
+        let none = tl!("No menu item");
+        return Pointer::Footer(if shortcut.is_empty() { none.to_string() } else { format!("{none}, {shortcut}") });
+    };
+    // The native bar's application menu gives its items no label of their own.
+    let full = match e.menu_item {
+        "" => shown_label(lang, path),
+        item => format!("{} › {}", shown_label(lang, path), crate::i18n::tr(lang, item)),
+    };
+    let in_bar = crate::i18n::fmt(tl!("In the menu bar: {path}"), &[("path", &full)]);
+    if app.services.native_menu.is_some() {
+        return Pointer::Footer(in_bar);
+    }
+    let title = path.split(" › ").next().unwrap_or_default();
+    match spot(ctx, |at| matches!(at, SpotAt::Menu(t) if t == title)) {
+        Some(place) => Pointer::At(place, full, in_bar),
+        None => unseen(&full),
+    }
+}
+
+/// The callout drawn in the last pass: the outlined control, the box (none when the footer shows
+/// the text) and the text. Only tests keep it.
+type Callout = Option<(egui::Rect, Option<egui::Rect>, String)>;
+
+#[cfg(test)]
+fn callout_id() -> egui::Id {
+    egui::Id::unique("palette-callout")
+}
+
+/// The callout's layer, above the palette's backdrop and popup.
+fn callout_painter(ctx: &egui::Context) -> egui::Painter {
+    ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("palette-callout-layer"))).with_clip_rect(ctx.content_rect())
+}
+
+/// Where the box with `text` goes beside the control `place`, and its text laid out: under a menu
+/// title, and on the canvas side of a toolbar's button (its right when the button is in the
+/// window's left half). Beside a button, the text wraps to at most [`BOX_ROWS`] rows to fit
+/// between the button and the window's edge, or the palette's popup at `popup` when the popup is
+/// on that side. The box stays inside the window.
+fn callout_box(ctx: &egui::Context, place: &Spot, text: &str, popup: Option<egui::Rect>) -> (egui::Rect, Arc<egui::Galley>) {
+    let t = Tokens::get(ctx);
+    let screen = ctx.content_rect();
+    let r = place.rect;
+    let menu = matches!(place.at, SpotAt::Menu(_));
+    let right = r.center().x <= screen.center().x;
+    let mut width = screen.width() - 2.0 * BOX_PAD.x - 8.0;
+    if !menu {
+        // Beside a button, the text wraps to fit between the button and the window's edge.
+        // Narrower room than this leaves the box over the button, and the footer shows the text
+        // instead ([`aim`]).
+        let room = if right { screen.right() - r.right() } else { r.left() - screen.left() } - 10.0 - 2.0 * BOX_PAD.x;
+        if room >= 80.0 {
+            width = width.min(room);
+        }
+    }
+    if let Some(p) = popup.filter(|_| !menu) {
+        let room = if right { p.left() - r.right() } else { r.left() - p.right() } - 10.0 - 2.0 * BOX_PAD.x;
+        // Narrower room than this leaves the box where it would cover the popup, and the footer
+        // shows the text instead ([`aim`]).
+        if room >= 80.0 {
+            width = width.min(room);
+        }
+    }
+    let mut job = egui::text::LayoutJob::simple(text.to_owned(), egui::FontId::proportional(12.0), t.text, width.max(0.0));
+    job.wrap = egui::text::TextWrapping {
+        max_width: width.max(0.0),
+        max_rows: if menu { 1 } else { BOX_ROWS },
+        break_anywhere: false,
+        overflow_character: Some('…'),
+    };
+    let galley = callout_painter(ctx).layout_job(job);
+    let size = galley.size() + 2.0 * BOX_PAD;
+    let at = if menu {
+        egui::pos2(r.left(), r.bottom() + 4.0)
+    } else if right {
+        egui::pos2(r.right() + 6.0, r.center().y - size.y / 2.0)
+    } else {
+        egui::pos2(r.left() - 6.0 - size.x, r.center().y - size.y / 2.0)
+    };
+    let x = at.x.min(screen.right() - 4.0 - size.x).max(screen.left() + 4.0);
+    let y = at.y.min(screen.bottom() - 4.0 - size.y).max(screen.top() + 4.0);
+    (egui::Rect::from_min_size(egui::pos2(x, y), size), galley)
+}
+
+/// How many rows the text of a box beside a toolbar's button wraps to at most.
+const BOX_ROWS: usize = 3;
+
+/// The space between the callout box's border and its text.
+const BOX_PAD: egui::Vec2 = egui::vec2(6.0, 3.0);
+
+/// Outline the control `place`, and with `text` show it in a box beside it ([`callout_box`], with
+/// the popup at `popup`). Returns the box.
+fn callout(ctx: &egui::Context, place: &Spot, text: Option<&str>, popup: Option<egui::Rect>) -> Option<egui::Rect> {
+    let t = Tokens::get(ctx);
+    let painter = callout_painter(ctx);
+    crate::panels::learn::locate::outline(&painter.with_clip_rect(place.clip.intersect(ctx.content_rect())), place.rect, t.selection);
+    let (rect, galley) = callout_box(ctx, place, text?, popup);
+    painter.rect(rect, 4.0, t.panel, egui::Stroke::new(1.0, t.selection), egui::StrokeKind::Inside);
+    painter.galley(rect.min + BOX_PAD, galley, t.text);
+    Some(rect)
+}
+
 /// The line under the results: how many results matched, how many of them the list holds when it
 /// can't hold them all, or that none matched.
 fn footer(listed: usize, total: usize) -> String {
@@ -711,6 +981,18 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // closed it focused another widget, such as a field in a window above the backdrop.
     let focus_id = egui::Id::unique("palette-focus-before");
     let field_id = egui::Id::unique("palette-field");
+    // The menu bar and the toolbars note where they draw their controls only while the palette is
+    // open; the pass that opens it asks for another, which they draw noting them.
+    let wanted = ctx.data_mut(|d| std::mem::replace(d.get_temp_mut_or_default::<bool>(spots_wanted_id()), app.ui.palette_open));
+    if app.ui.palette_open && !wanted {
+        ctx.request_repaint();
+    } else if !app.ui.palette_open && wanted {
+        ctx.data_mut(|d| {
+            d.remove::<Vec<Spot>>(spots_id());
+            #[cfg(test)]
+            d.remove::<Callout>(callout_id());
+        });
+    }
     if !app.ui.palette_open {
         let field = ctx.data_mut(|d| {
             let field = d.get_temp::<egui::Id>(field_id);
@@ -812,6 +1094,12 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let screen = ctx.content_rect();
     // The highlighted result the rows and the field's description are drawn with.
     let mut drawn = sel;
+    // The control that shows where the highlighted result lives, the callout's text, and how the
+    // footer drawn in this pass keeps the callout off the popup.
+    let mut pointed: Option<(Spot, String, Aim)> = None;
+    // The popup as the last pass laid it out: the footer is drawn before this pass's popup has its
+    // size, and the callout is checked again against that size after the popup is drawn.
+    let last_popup = ctx.memory(|m| m.area_rect(egui::Id::unique("palette")));
     // The backdrop covers the canvas, the toolbars, the docked panels and the app bar under the
     // popup, in the order of a modal dialog's backdrop (`dialogs::modal::backdrop`), so the press
     // that closes the palette does not press a control under it. Windows in the Foreground order
@@ -821,7 +1109,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     });
     // The area keeps itself inside the window (egui's `Area::constrain` is on), so in a window too
     // short for the field, one row and the footer below TOP, the popup moves up.
-    egui::Area::new(egui::Id::unique("palette")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, [0.0, TOP]).show(ctx, |ui| {
+    let popup_area = egui::Area::new(egui::Id::unique("palette")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, [0.0, TOP]);
+    let area = popup_area.show(ctx, |ui| {
         let margin: i8 = 10;
         egui::Frame::popup(ui.style()).fill(t.panel).inner_margin(egui::Margin::same(margin)).show(ui, |ui| {
             ui.set_width(520.0);
@@ -876,12 +1165,14 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             let resized = (view - last_view).abs() > 0.5;
             // Screen readers stay on the field: its description names the highlighted result and
             // its place among every match, as the footer counts them.
+            let mut described = None;
             if let Some(e) = matches.get(sel) {
                 let rank = if sel + 1 == matches.len() { kept.unwrap_or(sel) } else { sel };
                 let pos = (rank + 1).to_string();
                 let of = total.to_string();
                 let name = row_label(e, &home_text(app, e));
                 let said = crate::i18n::fmt(tl!("{pos} of {total}: {name}"), &[("pos", &pos), ("total", &of), ("name", &name)]);
+                described = Some(said.clone());
                 ui.ctx().accesskit_node_builder(r.id, |node| node.set_description(said));
             }
             if n > 0 {
@@ -945,7 +1236,45 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 });
             }
             ui.add_space(6.0);
-            ui.label(egui::RichText::new(footer(n, total)).color(t.text_dim));
+            // The highlighted result's home, after a pointer or a scroll moved the highlight too. In
+            // the pass that opens the palette, the menu bar and the toolbars have noted nothing yet,
+            // and the next pass shows it.
+            let mut hint = None;
+            match matches.get(sel).filter(|_| wanted).map(|e| pointer(app, ui.ctx(), e)) {
+                Some(Pointer::At(place, text, covered)) => {
+                    let how = aim(ui.ctx(), last_popup, &place, &text);
+                    hint = match how {
+                        Aim::Box => None,
+                        Aim::Outline => Some(text.clone()),
+                        Aim::Covered => Some(covered),
+                    };
+                    // Screen readers get the text of a box beside a tool's button, such as how to
+                    // open the group that hides the tool, with the field's description, unless the
+                    // description already holds it.
+                    if how == Aim::Box
+                        && !matches!(place.at, SpotAt::Menu(_))
+                        && sel == drawn
+                        && let Some(said) = &described
+                        && !said.contains(text.as_str())
+                    {
+                        let said = format!("{said}, {text}");
+                        ui.ctx().accesskit_node_builder(r.id, |node| node.set_description(said));
+                    }
+                    pointed = Some((place, text, how));
+                }
+                Some(Pointer::Footer(text)) => hint = Some(text),
+                None => {}
+            }
+            ui.scope(|ui| {
+                // The footer stays one line of text tall, as the list's height counts it.
+                ui.spacing_mut().interact_size.y = 0.0;
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(footer(n, total)).color(t.text_dim));
+                    if let Some(hint) = hint {
+                        ui.add(egui::Label::new(egui::RichText::new(hint).color(t.text_dim)).truncate());
+                    }
+                });
+            });
             if !list_open
                 && !history_focused
                 && ui.input(|i| i.key_pressed(egui::Key::Enter))
@@ -970,6 +1299,24 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let popup = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("palette"));
     let list = egui::LayerId::new(egui::Order::Foreground, recent_list_id());
     let outside = presses.into_iter().any(|p| !ctx.layer_id_at(p).is_some_and(|l| l == popup || l == list));
+    // The callout keeps off the popup as drawn in this pass. When the popup's new size changes
+    // which of the three cases applies, the next pass draws the footer to match.
+    let now = Some(area.response.rect);
+    let shown: Callout = pointed.and_then(|(place, text, before)| {
+        let how = aim(ctx, now, &place, &text);
+        if how != before {
+            ctx.request_repaint();
+        }
+        match how {
+            Aim::Covered => None,
+            Aim::Outline => Some((place.rect, callout(ctx, &place, None, now), text)),
+            Aim::Box => Some((place.rect, callout(ctx, &place, Some(&text), now), text)),
+        }
+    });
+    #[cfg(test)]
+    ctx.data_mut(|d| d.insert_temp::<Callout>(callout_id(), shown));
+    #[cfg(not(test))]
+    drop(shown);
     // The pointer or a scroll moved the highlight after the rows were drawn: the next frame draws
     // it where it now is.
     if sel != drawn {
@@ -2995,5 +3342,518 @@ mod tests {
         let label = row_label(ranked[MAX_RESULTS], &home_text(&open.app, ranked[MAX_RESULTS]));
         assert!(rows(&nodes).iter().any(|r| r.1 && r.0 == label), "its row is drawn and highlighted");
         assert_eq!(field_description(&nodes), format!("{} of {}: {label}", MAX_RESULTS + 1, ranked.len()));
+    }
+
+    impl Window {
+        /// Opens the palette on `query` and draws until the toolbars and the menu bar have noted
+        /// their controls: the last frame's screen-reader tree.
+        fn search(&mut self, query: &str) -> Vec<egui::accesskit::Node> {
+            self.app.ui.palette_open = true;
+            self.app.ui.palette_query = query.into();
+            self.frame(vec![]);
+            self.frame(vec![])
+        }
+
+        /// The highlighted result's id.
+        fn highlighted(&self) -> String {
+            self.ctx.data(|d| d.get_temp::<Highlight>(egui::Id::unique("palette-selected"))).unwrap().4
+        }
+
+        /// The callout the last frame drew: the outlined control, the box and its text.
+        fn callout(&self) -> Callout {
+            self.ctx.data(|d| d.get_temp::<Callout>(callout_id())).flatten()
+        }
+
+        /// The text of the labels in the popup in the screen-reader tree `nodes`: the footer's.
+        fn popup_labels(&self, nodes: &[egui::accesskit::Node]) -> Vec<String> {
+            let popup = self.popup();
+            nodes
+                .iter()
+                .filter(|n| n.role() == egui::accesskit::Role::Label)
+                .filter(|n| n.bounds().is_some_and(|b| popup.contains(egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32))))
+                .filter_map(|n| n.label().or(n.value()).map(str::to_string))
+                .collect()
+        }
+    }
+
+    /// The bounds of the control whose screen-reader name is `name`, alone or followed by its
+    /// shortcut in parentheses.
+    fn bounds_of(nodes: &[egui::accesskit::Node], name: &str) -> egui::Rect {
+        let at = button_at(nodes, name);
+        let node = nodes
+            .iter()
+            .filter(|n| n.role() == egui::accesskit::Role::Button)
+            .find(|n| n.bounds().is_some_and(|b| ((b.x0 + b.x1) / 2.0) as f32 == at.x && ((b.y0 + b.y1) / 2.0) as f32 == at.y))
+            .unwrap();
+        let b = node.bounds().unwrap();
+        egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32))
+    }
+
+    /// Highlighting a result with an item of the in-window menu bar outlines that menu's title, as
+    /// drawn in the same frame, and the box under it shows the item's whole path.
+    #[test]
+    fn the_highlighted_result_outlines_its_menu_title() {
+        let mut window = Window::new();
+        let nodes = window.search("round corners");
+        assert_eq!(window.highlighted(), "effect:stylize.roundCorners");
+        let (outlined, callout, text) = window.callout().expect("a callout");
+        assert_eq!(text, "Effect › Stylize › Round Corners…");
+        assert_eq!(outlined, bounds_of(&nodes, "Effect"));
+        let callout = callout.expect("a box");
+        assert!(callout.top() >= outlined.bottom(), "the box is under the title: {callout:?} {outlined:?}");
+        // A panel's home is the Window menu.
+        window.search("layers");
+        assert_eq!(window.highlighted(), "panel:layers");
+        let (outlined, _, text) = window.callout().expect("a callout");
+        assert_eq!(text, "Window › Layers");
+        assert_eq!(outlined, bounds_of(&window.frame(vec![]), "Window"));
+        // Closing the palette ends the callout.
+        window.app.ui.palette_open = false;
+        window.frame(vec![]);
+        assert_eq!(window.callout(), None);
+    }
+
+    struct NativeMenus;
+    impl crate::native_menu::Backend for NativeMenus {
+        fn sync(&mut self, _: &crate::native_menu::MenuBar) {}
+        fn drain(&mut self) -> Vec<crate::native_menu::Event> {
+            Vec::new()
+        }
+    }
+
+    /// With the system's menu bar, nothing is drawn over it: the footer names the menu path.
+    #[test]
+    fn with_a_native_menu_bar_the_footer_names_the_path() {
+        let mut window = Window::new();
+        window.app.services.native_menu = Some(crate::native_menu::NativeMenu::new(Box::new(NativeMenus)));
+        let nodes = window.search("round corners");
+        assert_eq!(window.highlighted(), "effect:stylize.roundCorners");
+        assert_eq!(window.callout(), None);
+        assert!(labels(&nodes).contains(&"In the menu bar: Effect › Stylize › Round Corners…".to_string()), "{:?}", labels(&nodes));
+        // The application menu's items have no label of their own: the path ends at the menu.
+        let nodes = window.search("help.about");
+        assert_eq!(window.highlighted(), "help.about");
+        let menu = format!("In the menu bar: {}", crate::native_menu::APP_NAME);
+        assert!(labels(&nodes).contains(&menu), "{:?}", labels(&nodes));
+    }
+
+    /// A tool hidden in a group outlines its group's button and says how to open the group; once
+    /// chosen from the group, the button shows it and the box names the tool alone. The box is on
+    /// the canvas side of the toolbar.
+    #[test]
+    fn a_tool_result_outlines_its_toolbar_slot() {
+        let mut window = Window::new();
+        let nodes = window.search("group selection tool");
+        assert_eq!(window.highlighted(), "tool:groupSelection");
+        let (outlined, callout, text) = window.callout().expect("a callout");
+        assert_eq!(text, "In the Direct Selection Tool group: press and hold to open it");
+        assert_eq!(outlined, bounds_of(&nodes, "Direct Selection Tool"));
+        // Screen readers hear how to open the group with the search field's description.
+        let said: Vec<_> = nodes.iter().filter(|n| n.role() == egui::accesskit::Role::TextInput).filter_map(|n| n.description()).collect();
+        assert!(said.iter().any(|d| d.ends_with(", In the Direct Selection Tool group: press and hold to open it")), "{said:?}");
+        let callout = callout.expect("a box");
+        assert!(callout.left() > outlined.right(), "right of a toolbar docked left: {callout:?} {outlined:?}");
+        window.app.select_tool("groupSelection");
+        let nodes = window.search("group selection tool");
+        let (outlined, _, text) = window.callout().unwrap_or_else(|| panic!("a callout: {:?} {:?}", labels(&nodes), window.popup()));
+        assert_eq!(text, "Group Selection Tool");
+        assert_eq!(outlined, bounds_of(&nodes, "Group Selection Tool"));
+        // Docked right, the box goes on its left. The Zoom Tool's slot is below the popup.
+        window.app.ui.toolbar_right = true;
+        window.frame(vec![]);
+        let nodes = window.search("zoom tool");
+        assert_eq!(window.highlighted(), "tool:zoom");
+        let (outlined, callout, text) = window.callout().unwrap_or_else(|| panic!("a callout: {:?} {:?}", labels(&nodes), window.popup()));
+        assert_eq!(text, "Zoom Tool");
+        assert!(!window.popup().intersects(outlined), "{outlined:?} {:?}", window.popup());
+        let callout = callout.expect("a box");
+        assert!(callout.right() < outlined.left(), "left of a toolbar docked right: {callout:?} {outlined:?}");
+    }
+
+    /// A shown toolbar made with New Toolbar called Drawing that floats at `pos` and holds the Pen
+    /// Tool and the Curvature Tool in one group.
+    fn drawing_toolbar(pos: [f32; 2]) -> crate::state::CustomToolbar {
+        crate::state::CustomToolbar {
+            name: "Drawing".into(),
+            slots: vec![vec!["pen".into(), "curvature".into()]],
+            shown: true,
+            pos,
+            dock: None,
+            dock_right: false,
+            slot_tool: Default::default(),
+            double: false,
+            floating: vec![],
+        }
+    }
+
+    /// With the Tools panel hidden, a shown toolbar made with New Toolbar that holds the tool gets
+    /// the outline; a group torn off it into a strip has the tool's own button outlined.
+    #[test]
+    fn a_tool_on_a_toolbar_made_with_new_toolbar_is_outlined_there() {
+        let mut window = Window::new();
+        window.app.ui.toolbar = false;
+        window.app.ui.custom_toolbars.push(drawing_toolbar([100.0, 200.0]));
+        let nodes = window.search("pen tool");
+        assert_eq!(window.highlighted(), "tool:pen");
+        let (outlined, callout, text) = window.callout().expect("a callout");
+        assert_eq!(text, "Pen Tool");
+        assert!(callout.is_some());
+        assert_eq!(outlined, bounds_of(&nodes, "Pen Tool"));
+        assert!(outlined.left() >= 100.0, "on the toolbar made with New Toolbar: {outlined:?}");
+        // The group torn off into a strip.
+        window.app.ui.custom_toolbars[0]
+            .floating
+            .push(crate::state::FloatingFlyout { tools: vec!["pen".into(), "curvature".into()], pos: [600.0, 500.0] });
+        window.frame(vec![]);
+        window.frame(vec![]);
+        let (outlined, _, text) = window.callout().expect("a callout");
+        assert_eq!(text, "Pen Tool");
+        assert!(outlined.left() >= 600.0 && outlined.top() >= 500.0, "on the strip: {outlined:?}");
+    }
+
+    /// A group torn off the Tools panel into a strip has the tool's own button on the strip
+    /// outlined, with the tool's name.
+    #[test]
+    fn a_strip_torn_off_the_tools_panel_is_pointed_at() {
+        let mut window = Window::new();
+        let slot = crate::toolbar::slots(&window.app).into_iter().map(|(_, s)| s).find(|s| s.contains(&"groupSelection")).expect("the group");
+        let tools = slot.iter().map(|t| t.to_string()).collect();
+        window.app.ui.floating_flyouts.push(crate::state::FloatingFlyout { tools, pos: [600.0, 500.0] });
+        window.frame(vec![]);
+        window.search("group selection tool");
+        assert_eq!(window.highlighted(), "tool:groupSelection");
+        let (outlined, callout, text) = window.callout().expect("a callout");
+        assert_eq!(text, "Group Selection Tool");
+        assert!(callout.is_some());
+        assert!(outlined.left() >= 600.0 && outlined.top() >= 500.0, "on the strip: {outlined:?}");
+    }
+
+    /// Two viewports that note controls in turn keep one pass each in the list, whichever noted
+    /// first, also after one of them stops noting controls.
+    #[test]
+    fn the_noted_controls_hold_one_pass_per_viewport() {
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(10.0, 10.0));
+        let spot = |viewport: egui::ViewportId, pass: u64| Spot {
+            at: SpotAt::Menu("File".into()),
+            viewport,
+            pass,
+            layer: egui::LayerId::background(),
+            clip: rect,
+            rect,
+        };
+        let (a, b) = (egui::ViewportId::ROOT, egui::ViewportId::from_hash_of("another window"));
+        let mut list = Vec::new();
+        for pass in 0..20 {
+            for _ in 0..3 {
+                add_spot(&mut list, spot(a, pass));
+            }
+            for _ in 0..2 {
+                add_spot(&mut list, spot(b, pass));
+            }
+            assert_eq!(list.len(), 5, "pass {pass}");
+            assert!(list.iter().all(|s| s.pass == pass), "pass {pass}");
+        }
+        // The other window stops noting controls.
+        for pass in 20..40 {
+            for _ in 0..3 {
+                add_spot(&mut list, spot(a, pass));
+            }
+            assert_eq!(list.len(), 5, "pass {pass}");
+        }
+    }
+
+    /// Beside a button, the box's text wraps to at most three rows to fit between the button and
+    /// the popup; with no popup beside it, it is one row.
+    #[test]
+    fn a_box_beside_a_button_wraps_to_fit_beside_the_popup() {
+        let ctx = egui::Context::default();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
+        let mut checked = false;
+        let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| {
+            let ctx = ui.ctx();
+            let rect = egui::Rect::from_min_size(egui::pos2(20.0, 100.0), egui::vec2(28.0, 28.0));
+            let place = Spot { at: SpotAt::Slot(None, vec![]), viewport: ctx.viewport_id(), pass: 0, layer: ui.layer_id(), clip: screen, rect };
+            let popup = egui::Rect::from_min_size(egui::pos2(rect.right() + 150.0, 50.0), egui::vec2(400.0, 300.0));
+            let text = "In the Direct Selection Tool group: press and hold to open it";
+            let (boxed, galley) = callout_box(ctx, &place, text, Some(popup));
+            assert!((2..=BOX_ROWS).contains(&galley.rows.len()), "{} rows", galley.rows.len());
+            assert!(boxed.left() > rect.right() && boxed.right() <= popup.left(), "{boxed:?} {popup:?}");
+            let (_, one) = callout_box(ctx, &place, text, None);
+            assert_eq!(one.rows.len(), 1);
+            checked = true;
+        });
+        out.textures_delta.clear();
+        assert!(checked);
+    }
+
+    /// The box never covers the button it points at: in a narrow window it wraps to fit between
+    /// the button and the window's edge, and where it cannot, only the outline is drawn and the
+    /// footer shows the text.
+    #[test]
+    fn the_box_keeps_off_its_button() {
+        let text = "In the Direct Selection Tool group: press and hold to open it";
+        let check = |width: f32, left: f32| {
+            let ctx = egui::Context::default();
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, 300.0));
+            let mut how = None;
+            let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+            let mut out = ctx.run_ui(input, |ui| {
+                let ctx = ui.ctx();
+                let rect = egui::Rect::from_min_size(egui::pos2(left, 100.0), egui::vec2(28.0, 28.0));
+                let place = Spot { at: SpotAt::Slot(None, vec![]), viewport: ctx.viewport_id(), pass: 0, layer: ui.layer_id(), clip: screen, rect };
+                let aimed = aim(ctx, None, &place, text);
+                if aimed == Aim::Box {
+                    let (boxed, _) = callout_box(ctx, &place, text, None);
+                    assert!(!boxed.intersects(rect) && screen.contains_rect(boxed), "{boxed:?} {rect:?}");
+                }
+                how = Some(aimed);
+            });
+            out.textures_delta.clear();
+            how
+        };
+        assert_eq!(check(400.0, 180.0), Some(Aim::Box));
+        assert_eq!(check(400.0, 192.0), Some(Aim::Box));
+        assert_eq!(check(180.0, 60.0), Some(Aim::Outline));
+    }
+
+    /// The callout never covers the palette: a button under the popup is not pointed at, and a
+    /// button whose box would cover the popup is outlined with its text in the footer.
+    #[test]
+    fn the_callout_stays_off_the_palette() {
+        let mut window = Window::new();
+        window.app.ui.toolbar = false;
+        window.app.ui.custom_toolbars.push(drawing_toolbar([600.0, 120.0]));
+        let nodes = window.search("pen tool");
+        assert_eq!(window.highlighted(), "tool:pen");
+        assert!(window.popup().contains(egui::pos2(620.0, 140.0)), "the toolbar is under the popup: {:?}", window.popup());
+        assert_eq!(window.callout(), None);
+        // The toolbar is shown, under the popup: the footer names it and does not say it is hidden.
+        let footer = window.popup_labels(&nodes);
+        assert!(footer.contains(&"Drawing".to_string()), "{footer:?}");
+        assert!(!footer.iter().any(|l| l.contains("not shown now")), "{footer:?}");
+        // Left of the popup, with the box's place to its right on the popup.
+        let popup = window.popup();
+        window.app.ui.custom_toolbars[0].pos = [popup.left() - 60.0, popup.top() + 30.0];
+        window.frame(vec![]);
+        let nodes = window.frame(vec![]);
+        let (outlined, callout, text) = window.callout().expect("a callout");
+        assert!(!popup.intersects(outlined), "{outlined:?} {popup:?}");
+        assert_eq!((callout, text.as_str()), (None, "Pen Tool"));
+        assert!(labels(&nodes).contains(&"Pen Tool".to_string()), "{:?}", labels(&nodes));
+    }
+
+    /// In the pass where more results make the popup taller and it now covers the button, the
+    /// callout is checked against the popup's new size, and the next pass's footer names the home.
+    #[test]
+    fn the_callout_keeps_off_a_popup_that_grew_in_the_same_pass() {
+        let mut window = Window::new();
+        window.app.ui.toolbar = false;
+        window.app.ui.custom_toolbars.push(drawing_toolbar([100.0, 120.0]));
+        window.search("pen tool");
+        let small = window.popup();
+        window.app.ui.custom_toolbars[0].pos = [small.center().x, small.bottom() + 2.0];
+        window.frame(vec![]);
+        window.frame(vec![]);
+        assert_eq!(window.highlighted(), "tool:pen");
+        let (outlined, ..) = window.callout().expect("a callout below the popup");
+        window.app.ui.palette_query = "pen".into();
+        window.frame(vec![]);
+        assert_eq!(window.highlighted(), "tool:pen");
+        assert!(window.popup().intersects(outlined), "the popup grew over the button: {:?} {outlined:?}", window.popup());
+        assert_eq!(window.callout(), None);
+        let nodes = window.frame(vec![]);
+        let footer = window.popup_labels(&nodes);
+        assert!(footer.contains(&"Drawing".to_string()), "{footer:?}");
+        assert!(!footer.iter().any(|l| l.contains("not shown now")), "{footer:?}");
+    }
+
+    /// No callout where no control in view shows the home: in Presentation Mode, with the Tools
+    /// panel hidden, and for a command with no menu item. The footer says where it lives.
+    #[test]
+    fn a_home_out_of_view_is_named_in_the_footer() {
+        let mut window = Window::new();
+        window.app.ui.screen_mode = 3;
+        let nodes = window.search("pen tool");
+        assert_eq!(window.highlighted(), "tool:pen");
+        assert_eq!(window.callout(), None);
+        assert!(labels(&nodes).contains(&"Toolbar, not shown now".to_string()), "{:?}", labels(&nodes));
+        window.app.ui.screen_mode = 0;
+        window.app.ui.toolbar = false;
+        let nodes = window.search("pen tool");
+        assert_eq!(window.callout(), None);
+        assert!(labels(&nodes).contains(&"Toolbar, not shown now".to_string()), "{:?}", labels(&nodes));
+        // Toolbars hidden with Tab.
+        window.app.ui.toolbar = true;
+        window.app.run("window.dock", serde_json::json!({})).expect("Tab");
+        assert!(window.app.ui.tab_hid.is_some());
+        let nodes = window.search("pen tool");
+        assert_eq!(window.highlighted(), "tool:pen");
+        assert_eq!(window.callout(), None);
+        assert!(labels(&nodes).contains(&"Toolbar, not shown now".to_string()), "{:?}", labels(&nodes));
+        window.app.run("window.dock", serde_json::json!({})).expect("Tab");
+        assert!(window.app.ui.tab_hid.is_none() && window.app.ui.toolbar);
+        let entries = entries(&window.ctx, Lang::EN);
+        let none = entries.iter().find(|e| e.home.is_none() && !e.id.starts_with("tool:") && e.shortcut.is_empty()).expect("no menu item");
+        let nodes = window.search(&none.id);
+        assert_eq!(window.highlighted(), none.id);
+        assert_eq!(window.callout(), None);
+        assert!(labels(&nodes).contains(&"No menu item".to_string()), "{:?}", labels(&nodes));
+        // With a shortcut, the footer gives it.
+        let keyed = entries.iter().find(|e| e.home.is_none() && !e.id.starts_with("tool:") && !e.shortcut.is_empty()).expect("a shortcut");
+        let nodes = window.search(&keyed.id);
+        assert_eq!(window.highlighted(), keyed.id);
+        assert_eq!(window.callout(), None);
+        let line = format!("No menu item, {}", menus::shown_shortcut(&keyed.shortcut));
+        assert!(labels(&nodes).contains(&line), "{line} in {:?}", labels(&nodes));
+    }
+
+    /// In the pass that opens the palette, the menu bar and the toolbars have noted no control yet:
+    /// the footer does not call a home that is in view "not shown now", and the next pass points
+    /// at it.
+    #[test]
+    fn the_pass_that_opens_the_palette_names_no_home_as_hidden() {
+        let mut window = Window::new();
+        // Opened once and closed, the popup has its size, so the pass that opens it again draws
+        // it. One pass a frame, so the frame shows that pass.
+        window.search("pen tool");
+        window.app.ui.palette_open = false;
+        window.frame(vec![]);
+        window.ctx.options_mut(|o| o.max_passes = std::num::NonZeroUsize::MIN);
+        window.app.ui.palette_open = true;
+        let nodes = window.frame(vec![]);
+        assert_eq!(window.highlighted(), "tool:pen");
+        let footer = window.popup_labels(&nodes);
+        assert!(!footer.is_empty(), "the popup is drawn: {:?}", labels(&nodes));
+        assert!(!footer.iter().any(|l| l.contains("not shown now")), "{footer:?}");
+        window.frame(vec![]);
+        assert!(window.callout().is_some());
+    }
+
+    /// Moving the pointer onto a row moves the callout to that result's home in the same frame.
+    #[test]
+    fn the_callout_follows_the_pointer() {
+        let mut window = Window::new();
+        let nodes = window.search("select");
+        let entries = entries(&window.ctx, Lang::EN);
+        let x = window.popup().center().x;
+        let target = rows(&nodes)
+            .into_iter()
+            .filter(|r| !r.1)
+            .find_map(|r| {
+                let e = entries.iter().find(|e| row_label(e, &home_text(&window.app, e)) == r.0)?;
+                let path = e.home.as_ref().filter(|_| !e.id.starts_with("tool:") && !e.menu_item.is_empty())?;
+                Some((e.id.clone(), format!("{path} › {}", e.menu_item), (r.2 + r.3) / 2.0))
+            })
+            .expect("a row with a menu item");
+        let (id, text, y) = target;
+        window.frame(vec![egui::Event::PointerMoved(egui::pos2(x, y as f32 - 3.0))]);
+        window.frame(vec![egui::Event::PointerMoved(egui::pos2(x, y as f32))]);
+        assert_eq!(window.highlighted(), id);
+        assert_eq!(window.callout().map(|c| c.2), Some(text));
+    }
+
+    /// Down moves the callout to the next result's home in the same frame, and moving the
+    /// highlight changes no toolbar, flyout, drawer or tool.
+    #[test]
+    fn the_callout_follows_the_highlight_and_reveals_nothing() {
+        let mut window = Window::new();
+        window.search("select");
+        let before = (window.app.ui.flyout, window.app.ui.tools_drawer, window.app.ui.toolbar, window.app.session.tool_id());
+        let entries = entries(&window.ctx, Lang::EN);
+        for _ in 0..6 {
+            let key =
+                egui::Event::Key { key: egui::Key::ArrowDown, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+            window.frame(vec![key]);
+            let id = window.highlighted();
+            let e = entries.iter().find(|e| e.id == id).unwrap();
+            let callout = window.callout();
+            if let Some(path) = e.home.as_ref().filter(|_| !id.starts_with("tool:")) {
+                assert_eq!(callout.map(|c| c.2), Some(format!("{path} › {}", e.menu_item)), "{id}");
+            }
+            assert!(window.app.ui.learn_locate.is_none());
+        }
+        let after = (window.app.ui.flyout, window.app.ui.tools_drawer, window.app.ui.toolbar, window.app.session.tool_id());
+        assert_eq!(before, after);
+    }
+
+    /// Every catalog translates the callout's and the footer's words.
+    #[test]
+    fn catalogs_translate_the_callout_words() {
+        let words = ["In the menu bar: {path}", "In the {group} group: press and hold to open it", "{home}, not shown now"];
+        let missing: Vec<String> = Lang::all()
+            .filter(|l| *l != Lang::EN)
+            .flat_map(|l| words.iter().filter(move |w| !crate::i18n::has(l, w)).map(move |w| format!("{}: {w}", l.code())))
+            .collect();
+        assert!(missing.is_empty(), "{missing:?}");
+    }
+
+    /// A control noted in an earlier pass, in another viewport or clipped by its scroll area is not
+    /// pointed at; the box stays inside a narrow window.
+    #[test]
+    fn only_a_control_in_view_in_this_pass_is_pointed_at() {
+        let ctx = egui::Context::default();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(300.0, 200.0));
+        let mut checked = false;
+        for _ in 0..2 {
+            let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+            let mut out = ctx.run_ui(input, |ui| {
+                let ctx = ui.ctx();
+                let pass = ctx.cumulative_pass_nr_for(ctx.viewport_id());
+                let rect = egui::Rect::from_min_size(egui::pos2(270.0, 10.0), egui::vec2(28.0, 28.0));
+                let at = |name: &str| SpotAt::Menu(name.into());
+                let spot = |name: &str, viewport, pass, clip| Spot { at: at(name), viewport, pass, layer: ui.layer_id(), clip, rect };
+                let list = vec![
+                    spot("old", ctx.viewport_id(), pass.wrapping_sub(1), screen),
+                    spot("other", egui::ViewportId::from_hash_of("detached"), pass, screen),
+                    spot("clipped", ctx.viewport_id(), pass, egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(280.0, 200.0))),
+                    spot("shown", ctx.viewport_id(), pass, screen),
+                ];
+                ctx.data_mut(|d| d.insert_temp(spots_id(), list));
+                for name in ["old", "other", "clipped"] {
+                    assert!(super::spot(ctx, |a| *a == at(name)).is_none(), "{name}");
+                }
+                let shown = super::spot(ctx, |a| *a == at("shown")).expect("shown");
+                let text = "Effect › Stylize › Round Corners… and a long tail of words";
+                let r = callout(ctx, &Spot { at: SpotAt::Slot(None, vec![]), ..shown.clone() }, Some(text), None).unwrap();
+                assert!(screen.contains_rect(r), "{r:?}");
+                let r = callout(ctx, &shown, Some(text), None).unwrap();
+                assert!(screen.contains_rect(r), "{r:?}");
+                checked = true;
+            });
+            out.textures_delta.clear();
+        }
+        assert!(checked);
+    }
+
+    /// A control under a window drawn above its layer is not pointed at; with the window moved off
+    /// it, it is.
+    #[test]
+    fn a_control_under_a_window_is_not_pointed_at() {
+        let ctx = egui::Context::default();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 300.0));
+        let rect = egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(28.0, 28.0));
+        let at = || SpotAt::Menu("bar".into());
+        for (cover_at, pointed) in [(egui::pos2(10.0, 10.0), false), (egui::pos2(200.0, 150.0), true)] {
+            let mut seen = None;
+            // The second pass sees both areas laid out.
+            for _ in 0..2 {
+                let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+                let mut out = ctx.run_ui(input, |ui| {
+                    let ctx = ui.ctx().clone();
+                    ctx.data_mut(|d| d.insert_temp(spots_wanted_id(), true));
+                    egui::Area::new(egui::Id::unique("test-toolbar")).order(egui::Order::Middle).fixed_pos(egui::Pos2::ZERO).show(&ctx, |ui| {
+                        ui.allocate_rect(rect, egui::Sense::hover());
+                        note_spot(ui, rect, at);
+                    });
+                    egui::Area::new(egui::Id::unique("test-cover")).order(egui::Order::Middle).fixed_pos(cover_at).show(&ctx, |ui| {
+                        ui.allocate_space(egui::vec2(80.0, 80.0));
+                    });
+                    seen = Some(super::spot(&ctx, |a| *a == at()).is_some());
+                });
+                out.textures_delta.clear();
+            }
+            assert_eq!(seen, Some(pointed), "{cover_at:?}");
+        }
     }
 }

@@ -3207,6 +3207,9 @@ mark-style	Japanese	일본식
 	No menu item	메뉴 항목 없음
 	Toolbar	도구 모음
 	{toolbar}, in the {tool} group	{toolbar}, {tool} 그룹
+	In the menu bar: {path}	메뉴 막대: {path}
+	In the {group} group: press and hold to open it	{group} 그룹: 길게 눌러 여세요
+	{home}, not shown now	{home}, 지금 표시되지 않음
 	Tool	도구
 	Command	명령
 @plural	{n} result|{n} results	결과 {n}개

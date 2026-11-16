@@ -4124,6 +4124,9 @@ digits	Malayalam	Malaiàlam
 	No menu item	Cap element de menú
 	Toolbar	Barra d’eines
 	{toolbar}, in the {tool} group	{toolbar}, al grup {tool}
+	In the menu bar: {path}	A la barra de menús: {path}
+	In the {group} group: press and hold to open it	Al grup {group}: manteniu premut per obrir-lo
+	{home}, not shown now	{home}, ara no es mostra
 @plural	{n} result|{n} results	{n} resultat|{n} resultats
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultat. Continueu escrivint per reduir-los.|{shown} de {n} resultats. Continueu escrivint per reduir-los.
 	Recent Commands	Ordres recents
