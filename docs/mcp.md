@@ -2075,9 +2075,9 @@ were. `graph.setType` refuses `` `columnWidth` must be a number, not "50" `` for
 `lineWidth`, the Line Width of Draw Filled Lines in points (3 when the graph sets none), takes a number from 0.01 to
 1000 (VectorCraft's own range); `"4"` is refused with `` `lineWidth` must be a number, not "4" ``, and a width below
 0.01 or past 1000 with `` `lineWidth` must be from 0.01 to 1000 pt, not 0 ``. The graph stores a width only when it is
-not 3, so a graph without one is saved and drawn as before. A graph with a width of its own is written to `.ai` as its
-art, without the editable graph records. `graph.setType` with options that leave the graph as it is
-records no undo step.
+not 3, so a graph without one is saved and drawn as before. In `.ai` the graph records carry Draw Filled Lines and
+widths up to 100 pt; a graph with a wider Line Width is written to `.ai` as its art, without the editable graph
+records. `graph.setType` with options that leave the graph as it is records no undo step.
 `axisMin`, `axisMax`, `rightAxisMin` and `rightAxisMax` take a number, or null to go back to the value calculated from
 the data; any other value is refused with `` `axisMin` must be a number or null, not "10" ``. `graph.setData` and
 `graph.create` refuse a `csv` that is not a string, `series` or `categories` that are not lists, and `rows` that are not
