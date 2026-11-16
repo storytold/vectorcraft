@@ -380,6 +380,27 @@ fn randomize_shuffles_new_colours_and_skips_excluded_rows() {
     assert!((hue(&sb["map"][0]["to"]) - 0.0).abs() < 1.0 && (hue(&sb["map"][1]["to"]) - 120.0).abs() < 1.0, "hue kept");
 }
 
+/// A row with no current colors (New Row) keeps its new color through Randomize, and its color
+/// goes to no row that holds current colors: the other rows shuffle their own colors only.
+#[test]
+fn randomize_leaves_an_empty_row_out() {
+    let mut s = session();
+    let map = json!([
+        {"from": [], "to": "rgb 0 255 0"},
+        {"from": ["rgb 255 0 0"], "to": "rgb 255 0 0"},
+        {"from": ["rgb 0 0 255"], "to": "rgb 0 0 255"},
+    ]);
+    for seed in 0..16 {
+        let r = run(&mut s, "recolor.randomize", json!({"map": map, "seed": seed}));
+        assert_eq!(r["map"][0], map[0], "seed {seed}: the empty row keeps its color");
+        let mut tos: Vec<String> = [1, 2].iter().map(|i| r["map"][*i]["to"].as_str().unwrap().to_string()).collect();
+        tos.sort();
+        assert_eq!(tos, ["rgb 0 0 255", "rgb 255 0 0"], "seed {seed}: a permutation of the filled rows' colors");
+    }
+    let sb = run(&mut s, "recolor.randomize", json!({"map": map, "order": false, "saturationBrightness": true, "seed": 3}));
+    assert_eq!(sb["map"][0], map[0], "the empty row keeps its saturation and brightness");
+}
+
 #[test]
 fn edit_group_rewrites_in_order_as_one_undo_step() {
     let mut s = session();

@@ -4272,15 +4272,26 @@ fn live_paint_bucket_double_click_across_a_junction_paints_the_joined_edges() {
         s.pointer(&PointerEvent::new(kind, x, 50.0).with_mods(shift), v).unwrap();
     }
     assert_eq!(middle.iter().map(|e| node(&s, *e).appearance.stroke_paint()).collect::<Vec<_>>(), [green.clone(), green.clone(), green]);
-    // `through` takes edge ids, with scope "connected" only.
+    // `through` takes the group's edge ids, each once, with scope "connected" only; a face's id, an
+    // unknown id or an edge given twice is refused and changes nothing.
+    let face = vectorcraft_tools::builder::faces(&node(&s, g)).first().map(|f| f.id).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let depth = s.doc().unwrap().history.undo.len();
     for p in [
         json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": "x"}),
         json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": [-1]}),
         json!({"group": g.0, "point": [15, 50], "scope": "samePaint", "through": []}),
         json!({"group": g.0, "point": [15, 50], "through": []}),
+        json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": [face.0]}),
+        json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": [999_999_999]}),
+        json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": [middle[1].0, middle[1].0]}),
     ] {
         assert!(s.execute("livePaint.strokeEdge", &p).is_err(), "{p}");
     }
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth);
+    let r = s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": [middle[1].0]})).unwrap();
+    assert_eq!(r["count"], 3, "an edge of the group is taken");
 }
 
 /// A double-click whose second press lands on the next joined edge and is released back on the
@@ -4316,6 +4327,32 @@ fn live_paint_bucket_double_click_released_back_on_the_first_edge_paints_the_joi
         s.pointer(&PointerEvent::new(kind, x, 50.0).with_mods(shift), v).unwrap();
     }
     assert_eq!(middle.iter().map(|e| node(&s, *e).appearance.stroke_paint()).collect::<Vec<_>>(), [green.clone(), green.clone(), green]);
+}
+
+/// With Paint Fills and Paint Strokes both on, a double-click on an edge after a click that filled
+/// a face whose fill was the edge's stroke paint paints the joined edges: the face is not sent as
+/// an edge to join through.
+#[test]
+fn live_paint_bucket_edge_double_click_after_filling_a_face_paints_the_joined_edges() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0]);
+    let [a, b] = faces_at(&s, g, &[(25.0, 25.0), (75.0, 25.0)])[..] else { panic!("two faces") };
+    let black = Paint::solid(Color::rgb(0.0, 0.0, 0.0));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 101.0, 51.0));
+    paint_parts(&mut s, &all, &black, &[(a, black.clone()), (b, black.clone())]);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.set_tool_option("paintStrokes", &json!(true));
+    s.paint.fill = green.clone();
+    s.paint.stroke = green.clone();
+    for (kind, x) in [(PointerKind::Down, 25.0), (PointerKind::Up, 25.0), (PointerKind::Down, 50.0), (PointerKind::Up, 50.0)] {
+        s.pointer(&PointerEvent::new(kind, x, 25.0), v).unwrap();
+    }
+    assert_eq!(fill_of(&s, a), green, "the first click fills the face");
+    s.pointer(&PointerEvent::new(PointerKind::DoubleClick, 50.0, 25.0), v).unwrap();
+    assert!(all.iter().all(|e| node(&s, *e).appearance.stroke_paint() == green), "every joined edge is painted");
+    assert_eq!(fill_of(&s, b), black);
 }
 
 /// A triple-click whose second press holds Cmd (it goes to the selection tool Cmd lends) matches

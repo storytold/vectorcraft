@@ -2,8 +2,8 @@ use super::containers::close;
 use super::document::TEXT_SLOT;
 use super::raster::{self, Limits, Shape};
 use super::types::{
-    FLIP, Frame, IMAGE_TOO_LARGE, Kind, LARGE_IMAGES, LINKED_PLACEHOLDERS, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS, MAX_SIDE,
-    NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, PLACED_CROP, PLACED_PAGE, Place, PlacedPage, PlacedTail,
+    FLIP, Frame, GState, IMAGE_TOO_LARGE, Kind, LARGE_IMAGES, LINKED_PLACEHOLDERS, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS,
+    MAX_SIDE, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, PLACED_CROP, PLACED_PAGE, Place, PlacedPage, PlacedTail,
 };
 use super::{
     Affine, AnchorKind, Appearance, AppearanceItem, Arc, BezPath, CANVAS_CENTRE, FillLayer, ImageBlob, ImageObject, Inks, Instance, LinkInfo, Node,
@@ -224,12 +224,7 @@ impl<'a> Reader<'a> {
             items.push(AppearanceItem::Fill(FillLayer { overprint: gs.overprint_fill, ..FillLayer::new(fill_paint.unwrap_or(gs.fill.clone())) }));
         }
         if stroke {
-            let mut st = StrokeLayer::new(stroke_paint.unwrap_or(gs.stroke.clone()), gs.line_width());
-            st.cap = gs.cap;
-            st.join = gs.join;
-            st.miter_limit = gs.miter;
-            st.dash = gs.dash.clone();
-            st.overprint = gs.overprint_stroke;
+            let st = self.stroke_layer(stroke_paint.unwrap_or(gs.stroke.clone()), &gs);
             items.push(AppearanceItem::Stroke(st));
         }
         let kind = NodeKind::Path { path, rule: gs.rule, live: None, clipping: clip, guide };
@@ -330,15 +325,27 @@ impl<'a> Reader<'a> {
         if !matches!(n.kind, NodeKind::Path { .. }) || n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_))) {
             return;
         }
-        let mut st = StrokeLayer::new(gs.stroke.clone(), gs.line_width());
-        st.cap = gs.cap;
-        st.join = gs.join;
-        st.miter_limit = gs.miter;
-        st.dash = gs.dash.clone();
-        st.overprint = gs.overprint_stroke;
+        let st = self.stroke_layer(gs.stroke.clone(), &gs);
+        let Some(n) = self.frames.last_mut().and_then(|f| f.children.last_mut()) else { return };
         let mut a = (*n.appearance).clone();
         a.items.push(AppearanceItem::Stroke(st));
         n.appearance = a.into();
+    }
+
+    /// A stroke of `paint` with graphics state `gs`'s weight, caps, joins, miter limit, dashes and
+    /// overprint, its weight and dashes at the scale the art is read at ([`Self::space_scale`]).
+    fn stroke_layer(&mut self, paint: Paint, gs: &GState) -> StrokeLayer {
+        let k = self.space_scale();
+        let mut st = StrokeLayer::new(paint, gs.line_width() * k);
+        st.cap = gs.cap;
+        st.join = gs.join;
+        st.miter_limit = gs.miter;
+        st.dash = gs.dash.clone().map(|mut d| {
+            d.scale(k);
+            d
+        });
+        st.overprint = gs.overprint_stroke;
+        st
     }
 
     pub(super) fn set_instance(&mut self, i: &Instance) {
