@@ -9632,6 +9632,32 @@ https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"bunriKinshi":true}}}
 ```
 
+## Kurikaeshi Moji Shori
+
+`text.setFormat {kurikaeshiMojiShori: bool}` (Paragraph panel menu › Kurikaeshi Moji Shori, shown with the East Asian
+options) turns it on or off for the paragraphs of the selected type (or `ids`, or the paragraphs a `start` / `end`
+range touches). On, a repeat mark that starts a line of point or area type, horizontal or vertical, or starts a frame
+of type on a path (which holds one line), is drawn as the character it repeats, so both characters show when a line break separates them. The text keeps the mark: copying,
+searching, the caret and the line breaks stay as they were, and the drawn character takes the mark's place and width.
+SVG export with live type writes the drawn character, and embeds its glyph when fonts are embedded; it writes type on a
+path that starts with such a mark as outlines, with a warning.
+VectorCraft's set of marks and its rules: 々 repeats a Han ideograph, ゝ and ゞ a hiragana, and ヽ and ヾ a katakana; the
+repeated character is the last one before the mark in the paragraph that is not a repeat mark, a soft return or a
+combining voicing mark (U+3099, U+309A), looking back into the frames before when threaded type continues a paragraph
+from one frame into the next; ゝ and ヽ draw it without its voicing marks, and ゞ and ヾ draw its voiced form, or the
+plain kana when it has none; ゝ or ヽ followed by a combining voicing mark (U+3099) counts as ゞ or ヾ when the font draws the
+pair as one glyph, and is drawn as it is when the font draws two. A mark is drawn as it is when nothing before it in the paragraph fits, when the font has no glyph for the character, at the start of a
+paragraph, and inside tate-chu-yoko or warichu. Off by default. It is saved with the paragraph
+(`kurikaeshi_moji_shori` in `para`) only when on, paragraph styles carry it (`kurikaeshi_moji_shori` in a paragraph
+style's attributes), and Reset Panel turns it off. A value that is not true, false or null is refused, `null` leaves the
+setting as it is, and a call that gives the value the paragraphs already have records no undo step. One undo step. `.ai` editing data does not hold it, and a
+save reports a paragraph with it on as left out. The help page:
+https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"kurikaeshiMojiShori":true}}}
+```
+
 ## Korean Line Break Anywhere
 
 `text.setFormat {koreanLineBreakAnywhere: bool}` (Paragraph panel menu › Korean Line Break Anywhere, shown with the
