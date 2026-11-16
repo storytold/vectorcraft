@@ -466,11 +466,20 @@ type Highlight = (usize, String, f32, f32);
 
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // The widget that had the keyboard focus when the palette opened takes it back when the palette
-    // closes, unless a pick opened a dialog, which focuses its own first field.
+    // closes, unless a pick opened a dialog, which focuses its own first field, or the press that
+    // closed it focused another widget, such as a field in a window above the backdrop.
     let focus_id = egui::Id::unique("palette-focus-before");
+    let field_id = egui::Id::unique("palette-field");
     if !app.ui.palette_open {
+        let field = ctx.data_mut(|d| {
+            let field = d.get_temp::<egui::Id>(field_id);
+            d.remove::<egui::Id>(field_id);
+            field
+        });
+        let now = ctx.memory(|m| m.focused());
         if let Some(Some(before)) = ctx.data_mut(|d| d.remove_temp::<Option<egui::Id>>(focus_id))
             && app.ui.dialog.is_none()
+            && (now.is_none() || now == field)
         {
             ctx.memory_mut(|m| m.request_focus(before));
         }
@@ -533,6 +542,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     .desired_width(500.0),
             );
             r.request_focus();
+            ui.ctx().data_mut(|d| d.insert_temp(field_id, r.id));
             ui.add_space(6.0);
             // The list shows as many rows as fit above the footer in the window, up to
             // VISIBLE_ROWS; a page is that many rows.
@@ -1810,6 +1820,47 @@ mod tests {
         frame(&mut app, false);
         frame(&mut app, false);
         assert_ne!(ctx.memory(|m| m.focused()), Some(field), "the dialog keeps the focus");
+        // A click on a field in a window above the backdrop closes the palette and leaves the
+        // focus in that field.
+        let ctx = egui::Context::default();
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let (mut text, mut above_text) = (String::new(), String::new());
+        let above = egui::Id::unique("field above");
+        let corner = egui::pos2(40.0, 400.0);
+        let mut time = 0.0;
+        let mut frame = |app: &mut VectorcraftApp, focus: bool, events: Vec<egui::Event>| {
+            time += 0.1;
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, WINDOW);
+            let input = egui::RawInput { time: Some(time), screen_rect: Some(screen), events, ..Default::default() };
+            ctx.run_ui(input, |ui| {
+                let r = ui.add(egui::TextEdit::singleline(&mut text).id(field));
+                if focus {
+                    r.request_focus();
+                }
+                // Drawn before the palette, so the palette's own focus requests come after the field's.
+                egui::Area::new(egui::Id::unique("window above")).order(egui::Order::Foreground).fixed_pos(corner).show(ui.ctx(), |ui| {
+                    ui.add(egui::TextEdit::singleline(&mut above_text).id(above));
+                });
+                show(app, ui.ctx());
+            })
+            .textures_delta
+            .clear();
+        };
+        frame(&mut app, true, vec![]);
+        frame(&mut app, false, vec![]);
+        app.ui.palette_open = true;
+        frame(&mut app, false, vec![]);
+        frame(&mut app, false, vec![]);
+        let at = corner + egui::vec2(20.0, 8.0);
+        let button =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        frame(&mut app, false, vec![egui::Event::PointerMoved(at)]);
+        frame(&mut app, false, vec![button(true)]);
+        frame(&mut app, false, vec![button(false)]);
+        assert!(!app.ui.palette_open, "the click on the window above closes the palette");
+        frame(&mut app, false, vec![]);
+        frame(&mut app, false, vec![]);
+        assert_eq!(ctx.memory(|m| m.focused()), Some(above), "the clicked field keeps the focus");
     }
 
     /// The whole window, with a document whose rectangle is selected, drawn a frame at a time in
