@@ -1082,3 +1082,28 @@ fn radial_blur_center_stays_in_the_object_when_the_stack_splits() {
     let differ = (0..300 * 300).filter(|i| plain[i * 4 + 3].abs_diff(split[i * 4 + 3]) > 8).count();
     assert!(differ < 50, "{differ} pixels' coverage moved with the room around the art");
 }
+
+/// The raster budget charges each image its pixels before it is made: an image past what is left
+/// is refused and counted, and the object keeps its blur.
+#[test]
+fn an_image_past_the_pixels_left_stays_unmade() {
+    let (mut s, id) = session_with_rect();
+    s.execute("effect.apply", &json!({"ids": [id.0], "effect": "blur.gaussian", "params": {"radius": 3}})).unwrap();
+    let mut d = s.doc().unwrap().doc.as_ref().clone();
+    let n = d.node(id).cloned().unwrap();
+    let pixels = super::rasterfx::raster_pixels(&d, &n, false, true);
+    assert!(pixels > 10_000, "a 100 pt square at 72 ppi: {pixels}");
+
+    let mut budget = super::RasterBudget { images: 10, pixels: pixels - 1, left: 0 };
+    assert!(super::raster_image(&mut d, &n, &mut budget).is_err());
+    assert_eq!((budget.images, budget.pixels, budget.left), (10, pixels - 1, 1), "nothing is taken");
+
+    let mut budget = super::RasterBudget { images: 10, pixels, left: 0 };
+    let (image, _) = super::raster_image(&mut d, &n, &mut budget).unwrap().expect("the image is made");
+    let NodeKind::Image(img) = &image.kind else { panic!("not an image") };
+    assert_eq!(u64::from(img.width) * u64::from(img.height), pixels, "the charge is the image's size");
+    assert_eq!((budget.images, budget.pixels, budget.left), (9, 0, 0));
+
+    let mut budget = super::RasterBudget { images: 0, pixels, left: 0 };
+    assert!(super::raster_image(&mut d, &n, &mut budget).is_err(), "no image is left");
+}
