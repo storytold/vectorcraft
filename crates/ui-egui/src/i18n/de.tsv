@@ -18,7 +18,7 @@
 # `untranslated_report` lists gaps) — and the status and error messages. Left in English on purpose (`MENU_KEEP_AS_IS` in the
 # tests): the product name, language names, OpenType, the built-in workspace names and the bracketed
 # perspective grid preset names; `de-DE`, `de-AT`, `de-CH` and every other `de-*` locale resolve here.
-# Photoshop-style raster effects (Effect menu, their dialogs).
+# Raster effects (Effect menu, their dialogs).
 	Glowing Edges…	Leuchtende Konturen…
 	Glowing Edges	Leuchtende Konturen
 	Edge Width	Kantenbreite

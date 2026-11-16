@@ -282,7 +282,7 @@ fn view_box(region: DRect, thumb: Rect, canvas: Rect, v: &crate::state::View, ui
     pts
 }
 
-/// Slider position (0..1) ↔ zoom percent on Illustrator's log range 3.13 %–64 000 %.
+/// Slider position (0..1) ↔ zoom percent on a log range, 3.13 %–64 000 %.
 pub fn zoom_to_slider(z: f64) -> f64 {
     ((z.clamp(3.13, 64000.0)).ln() - 3.13f64.ln()) / (64000f64.ln() - 3.13f64.ln())
 }

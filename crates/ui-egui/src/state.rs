@@ -101,7 +101,7 @@ pub fn sync_zoom_stops_display_print_size(v: bool) {
     ZOOM_STOPS_PRINT_SIZE.store(v, Ordering::Relaxed);
 }
 
-/// Illustrator's preset zoom stops, in percent.
+/// The preset zoom stops, in percent.
 pub const ZOOM_STOPS: [f64; 26] = [
     3.13, 4.17, 6.25, 8.33, 12.5, 16.67, 25.0, 33.33, 50.0, 66.67, 100.0, 150.0, 200.0, 300.0, 400.0, 600.0, 800.0, 1200.0, 1600.0, 2400.0, 3200.0,
     4800.0, 6400.0, 12800.0, 25600.0, 64000.0,
@@ -135,7 +135,7 @@ pub fn next_zoom_with_display(z: f64, up: bool, display_print_size: bool) -> f64
     zoom_from_display_percent(stop, display_print_size)
 }
 
-/// Format like Illustrator's tab/zoom field: up to 2 decimals, no trailing zeros.
+/// Format for the tab/zoom field: up to 2 decimals, no trailing zeros.
 pub fn zoom_label(z: f64, display_print_size: bool) -> String {
     let s = format!("{:.2}", zoom_display_percent(z, display_print_size));
     let s = s.trim_end_matches('0').trim_end_matches('.');
@@ -454,7 +454,7 @@ pub struct UiState {
     pub toolbar_advanced: bool,
     #[serde(default = "yes")]
     pub task_bar: bool,
-    /// Where the Contextual Task Bar was dragged or pinned. Not saved, as in Illustrator: the bar
+    /// Where the Contextual Task Bar was dragged or pinned. Not saved: the bar
     /// starts under the selection at every launch.
     #[serde(skip)]
     pub task_bar_place: TaskBarPlace,

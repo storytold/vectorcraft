@@ -631,7 +631,7 @@ pub fn paint_cursor(app: &mut VectorcraftApp, ctx: &egui::Context, painter: &egu
 // ---------- drops ----------
 
 impl VectorcraftApp {
-    /// Where file `name` dropped with the pointer at `pos` (screen points) goes: as in Illustrator,
+    /// Where file `name` dropped with the pointer at `pos` (screen points) goes:
     /// onto the canvas of the open document (Shift embeds it), else opened. Where the platform
     /// doesn't say (`None`: desktop drags carry no position), a document opens as a tab of its
     /// own and a picture or text is placed in the middle of the view. A library, a presets file, a

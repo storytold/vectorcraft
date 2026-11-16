@@ -25,7 +25,7 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
     let mut clicked: Option<(String, Value)> = None;
     let mut file_open = false;
     let tree = menu_tree_named(app.session.prefs.font_names_in_english);
-    // No application menu in the window (as in Illustrator): the bar starts at File on every
+    // No application menu in the window: the bar starts at File on every
     // platform. The VectorCraft menu stays in the tree: the native Mac bar takes it from there.
     let tree: Vec<(&str, Vec<Item>)> = tree.into_iter().filter(|(title, _)| *title != "VectorCraft").collect();
     // A menu bar for its layout and menu-button style, but the titles use `Popup::menu` directly:

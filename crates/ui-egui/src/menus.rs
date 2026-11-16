@@ -1,4 +1,4 @@
-//! The menu bar (Illustrator's menu tree) and UI-level commands.
+//! The menu bar (the full menu tree) and UI-level commands.
 //!
 //! Items bound to a command id run through [`VectorcraftApp::run`]. Items not implemented yet are
 //! listed (disabled, with their shortcut) so the full surface is visible and discoverable; the

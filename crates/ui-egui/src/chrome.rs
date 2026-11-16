@@ -36,7 +36,7 @@ use tabs::{CLOSE_BEFORE_TITLE, first_tab_shown, tab_drop, tab_groups, tab_title}
 pub use tabs::{doc_tabs, isolation_bar, step_document};
 pub(crate) use tabs::{document_window_title, show_document, window_tab};
 
-/// The application bar's height, in points (compact, as in PhotoCraft).
+/// The application bar's height, in points (compact).
 pub const APP_BAR_HEIGHT: f32 = 32.0;
 /// The brand mark's side.
 const MARK: f32 = 18.0;
@@ -105,7 +105,7 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let ws = ui.painter().layout_no_wrap(ws_name, egui::FontId::proportional(12.0), t.text);
             let ws_w = (ws.size().x + 36.0).clamp(112.0, 190.0);
             let gap = ui.spacing().item_spacing.x;
-            // The search icon, as in PhotoCraft: shown while a minimal switcher fits beside it.
+            // The search icon: shown while a minimal switcher fits beside it.
             let icon = 28.0;
             let search = switcher && room >= 64.0 + 8.0 + gap + icon;
             let ws_w = ws_w.min(room - 8.0 - gap - if search { icon } else { 0.0 }).max(64.0);

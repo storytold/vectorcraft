@@ -1,5 +1,5 @@
 //! Tool cursors drawn as vector glyphs (egui only offers system cursors). Black shapes with a white
-//! halo, hotspot at `p`, Illustrator's visual grammar: solid arrow (Selection), hollow arrow (Direct
+//! halo, hotspot at `p`, one shape per tool: solid arrow (Selection), hollow arrow (Direct
 //! Selection), pen nib with state badges, crosshair for drawing tools, curved arrows for rotate.
 //!
 //! The desktop app shows them as OS cursors ([`Images`]): the system moves those itself, at once,

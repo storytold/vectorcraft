@@ -886,7 +886,7 @@ fn gripper(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, d
     }
 }
 
-/// The Control bar (Window → Control), context-sensitive like Illustrator's, docked to the top or
+/// The Control bar (Window → Control), context-sensitive, docked to the top or
 /// the bottom of the window, or floating over the window below the menu bar, where it takes no room
 /// from the canvas. A floating bar is [`FLOAT_WIDTH`] wide, or as wide as the window when that is
 /// narrower, and is kept inside the window when the window shrinks.

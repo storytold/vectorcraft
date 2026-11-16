@@ -1,4 +1,4 @@
-//! Effect → Effect Gallery: browse Photoshop-style raster filters by category, build a stack, and
+//! Effect → Effect Gallery: browse raster filters by category, build a stack, and
 //! apply it as separate appearance effects in one undo step.
 //!
 //! Each filter has a thumbnail, and the dialog has its own preview, as the
@@ -29,7 +29,7 @@ const PREVIEW_H: usize = 84;
 /// Dialog kind for the Effect Gallery.
 pub const KIND: &str = "effectGallery";
 
-/// Raster effect submenus in the gallery (the six Photoshop-style folders it holds).
+/// Raster effect submenus in the gallery (the six raster filter folders it holds).
 const CATEGORIES: [(&str, &[&str]); 6] = [
     ("Artistic", &["Effect", "Artistic"]),
     ("Brush Strokes", &["Effect", "Brush Strokes"]),
@@ -425,7 +425,7 @@ fn sample_drawing(w: usize, h: usize) -> Vec<u8> {
     out
 }
 
-/// Run one Photoshop-style filter on a premultiplied RGBA buffer. Leaves it unchanged when `id`
+/// Run one raster filter on a premultiplied RGBA buffer. Leaves it unchanged when `id`
 /// is not one of those filters or the buffer is the wrong size.
 fn apply_pixel(id: &str, params: &Map<String, Value>, data: &mut [u8], w: usize, h: usize) {
     let Some(n) = w.checked_mul(h).and_then(|n| n.checked_mul(4)) else { return };

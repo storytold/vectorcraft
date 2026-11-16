@@ -1,4 +1,4 @@
-//! The Properties panel: context-sensitive sections like Illustrator's.
+//! The Properties panel: sections that change with the selection.
 
 use egui::Ui;
 use serde_json::json;

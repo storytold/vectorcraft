@@ -175,7 +175,7 @@ pub fn subheader(ui: &mut Ui, text: &str) {
     ui.label(egui::RichText::new(tl!(text)).size(12.5).color(t.text));
 }
 
-/// A label drawn with a dotted underline (Illustrator's link labels: "Stroke:", "Opacity:").
+/// A label drawn with a dotted underline (the panels' link labels: "Stroke:", "Opacity:").
 pub fn link_label(ui: &mut Ui, text: &str) -> Response {
     let t = Tokens::get(ui.ctx());
     let galley = ui.painter().layout_no_wrap(tl!(text).to_string(), egui::FontId::proportional(12.5), t.text_strong);

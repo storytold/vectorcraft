@@ -175,7 +175,7 @@ enum Drag {
     },
     /// A Selection tool move over a panel or toolbar: the art waits where it last moved on the
     /// canvas, and the panels get it ([`widgets::PanelDrag::Art`]) if it is released there. Back
-    /// on the canvas the move goes on, as in Illustrator (#2826).
+    /// on the canvas the move goes on (#2826).
     Art,
     /// Fingers making a touch gesture ([`crate::touch`]): the first one's press does nothing.
     Gesture,
@@ -831,7 +831,7 @@ fn frame_options(
         // Type › Highlight Substituted Fonts: pink behind text in a substitute font.
         highlight_substituted_fonts: app.session.prefs.highlight_substituted_fonts,
         // General › Anti-aliased Artwork: off, edges are hard on screen (raster effects and
-        // pattern tiles stay smooth), as in Illustrator.
+        // pattern tiles stay smooth).
         anti_alias: if app.session.prefs.anti_aliased_artwork { vectorcraft_render::AntiAlias::Art } else { vectorcraft_render::AntiAlias::None },
         progressive_placed: true,
         trace_views: true,

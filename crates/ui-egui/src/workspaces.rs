@@ -94,7 +94,7 @@ pub const ESSENTIALS: &str = "Essentials";
 /// Touch workspace (Window → Workspace → Touch; Preferences › Devices › Enable Touch Workspace).
 pub const TOUCH: &str = "Touch";
 
-/// Built-in workspaces, in Illustrator's menu order (Essentials first).
+/// Built-in workspaces, in menu order (Essentials first).
 pub fn builtins() -> Vec<Workspace> {
     let base = Workspace::default();
     let w = |name: &str, f: &dyn Fn(&mut Workspace)| {
