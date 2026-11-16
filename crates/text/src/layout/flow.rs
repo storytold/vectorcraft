@@ -13,7 +13,8 @@ use super::{
     is_cjk, is_word_space, kashida, mark_word_ends, no_line_end, no_line_start, style_metrics,
 };
 use crate::justify::is_format_control;
-use crate::shape::{keep_inseparable_pairs, keep_korean_words};
+use crate::shape::{keep_inseparable_pairs, keep_korean_words, repeat_base, repeated_char, shape_range};
+use std::cell::Cell;
 
 /// Does paragraph `para` push characters in (Kinsoku Shori Type Push In First or Push Out First,
 /// with kinsoku on)?
@@ -213,6 +214,12 @@ struct ParagraphData<'a, 'text> {
     bidi: Option<BidiInfo<'text>>,
     rtl: bool,
     continued: bool,
+    /// Kurikaeshi Moji Shori: the character before a `continued` paragraph in the frames before
+    /// ([`TextObject::first_para_lead`]).
+    lead: Option<char>,
+    /// Kurikaeshi Moji Shori: the byte the paragraph's text has been scanned to for the character a
+    /// repeat mark could stand for, and that character so far ([`ParagraphData::repeat_base_before`]).
+    repeat_scan: Cell<(usize, Option<char>)>,
     sg: Vec<SGlyph>,
     compressed: Vec<bool>,
     wakan: Vec<f64>,
@@ -229,6 +236,21 @@ struct ParagraphData<'a, 'text> {
     hyphen_limit: usize,
     mirror: bool,
     regions: Option<&'a [Region]>,
+}
+
+impl ParagraphData<'_, '_> {
+    /// Kurikaeshi Moji Shori: the character a repeat mark at byte `at` of `text` could stand for,
+    /// the last one before it in the paragraph that [`repeat_base`] takes, or else the paragraph's
+    /// `lead`. Lines are laid out in order, so each call scans on from where the call before it
+    /// stopped; a byte before that starts the scan again at the paragraph's start. None when `at`
+    /// does not fall on a character boundary after the paragraph's start.
+    fn repeat_base_before(&self, text: &str, at: usize) -> Option<Option<char>> {
+        let (from, base) = self.repeat_scan.get();
+        let (from, base) = if from <= at { (from, base) } else { (self.pr.start, self.lead) };
+        let base = repeat_base(text.get(from..at)?).or(base);
+        self.repeat_scan.set((at, base));
+        Some(base)
+    }
 }
 
 fn prepare_paragraph<'a, 'text>(
@@ -324,13 +346,16 @@ fn prepare_paragraph<'a, 'text>(
     let zone = if cx.opts.composer.unwrap_or(para.composer).is_single_line() { para.hyphenation.zone } else { 0.0 };
     let hyphen_limit = usize::try_from(para.hyphenation.hyphen_limit).unwrap_or(usize::MAX);
     let mirror = mirrors_indents(para, rtl, cx.vertical);
+    let lead = t.first_para_lead.filter(|_| continued);
     ParagraphData {
         para,
+        repeat_scan: Cell::new((pr.start, lead)),
         pr,
         marker_text,
         bidi,
         rtl,
         continued,
+        lead,
         sg,
         compressed,
         wakan,
@@ -1272,6 +1297,58 @@ fn emit_line_glyph(
     cx.emit(glyph, Affine::translate(at.to_vec2()), at, 0.0, w.advance, line_index);
 }
 
+/// Kurikaeshi Moji Shori (Paragraph panel menu): the glyph drawn in place of `g`, the first glyph of
+/// a line, when `g` is a repeat mark, and the character it shows: the character [`repeated_char`]
+/// gives for the character `base` finds before the mark, shaped in the mark's style with the type's
+/// features (so vertical type gets the font's vertical forms), from the same face, with the mark's
+/// advance and place, so the line breaks stay as they are. ゝ or ヽ followed by a combining voicing
+/// mark (U+3099) in one glyph counts as ゞ or ヾ. None when `g` is no repeat mark, belongs to a
+/// tate-chu-yoko or warichu block, holds other characters with the mark, shares its cluster with the
+/// glyph after it (`next`), `base` gives None, nothing before it fits, or the face draws the
+/// character with no glyph or with more than one. `base` runs only for a repeat mark.
+pub(super) fn repeat_mark_glyph(
+    cx: &Ctx<'_>,
+    g: &SGlyph,
+    next: Option<&SGlyph>,
+    base: impl FnOnce() -> Option<Option<char>>,
+) -> Option<(SGlyph, char)> {
+    if g.tcy.is_some() || g.wari.is_some() || g.inline.is_some() || !matches!(g.ch, '々' | 'ゝ' | 'ゞ' | 'ヽ' | 'ヾ') {
+        return None;
+    }
+    if next.is_some_and(|n| n.byte == g.byte) {
+        return None;
+    }
+    let mark = match cx.text.get(g.byte..g.byte + g.len)? {
+        "ゝ\u{3099}" => 'ゞ',
+        "ヽ\u{3099}" => 'ヾ',
+        cluster if cluster.len() == g.ch.len_utf8() => g.ch,
+        _ => return None,
+    };
+    let c = repeated_char(base()?, "", mark)?;
+    let mut buf = [0; 4];
+    let s: &str = c.encode_utf8(&mut buf);
+    let mut shaped = Vec::with_capacity(1);
+    shape_range(cx.db, s, 0..s.len(), &[(0..s.len(), cx.style_at(g.byte))], &[], &cx.opts.features, &[], &mut shaped);
+    let [one] = shaped.as_slice() else { return None };
+    (one.gid != 0 && one.face.id() == g.face.id()).then(|| (SGlyph { gid: one.gid, ..g.clone() }, c))
+}
+
+/// Kurikaeshi Moji Shori: the glyph drawn in place of glyph `first` of `paragraph`, the first
+/// character of a line that ends before glyph `end`, when the paragraph has the setting on and
+/// [`repeat_mark_glyph`] gives one for the character before it in the paragraph, or the paragraph's
+/// `lead` before a paragraph that continues from the frame before ([`TextObject::first_para_lead`]);
+/// it is recorded in [`crate::TextLayout::repeat_marks`].
+fn line_start_repeat(cx: &mut Ctx<'_>, paragraph: &ParagraphData<'_, '_>, first: usize, end: usize) -> Option<SGlyph> {
+    if !paragraph.para.kurikaeshi_moji_shori || first >= end {
+        return None;
+    }
+    let g = paragraph.sg.get(first)?;
+    let text = cx.text;
+    let (glyph, c) = repeat_mark_glyph(cx, g, paragraph.sg.get(first + 1), || paragraph.repeat_base_before(text, g.byte))?;
+    cx.out.repeat_marks.push((g.byte, c));
+    Some(glyph)
+}
+
 /// Lay out `line` of `paragraph` as `justification` aligns it: each glyph placed along the
 /// baseline (tabs as [`tab_glyph`] sets them), its hyphen, and the line's record, then the pen
 /// moved on past it.
@@ -1306,9 +1383,14 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
     let mut marker_tab = 0;
     // The warichu blocks drawn on the line: the byte that names each and where it starts.
     let mut wari_blocks: Vec<(usize, f64)> = Vec::new();
+    // Kurikaeshi Moji Shori: the line's first character after any list marker, drawn as the
+    // character it repeats when it is a repeat mark.
+    let first = index.max(paragraph.marker);
+    let repeat = line_start_repeat(cx, paragraph, first, position.end);
     for (order_index, &offset) in order.iter().enumerate() {
         let glyph_index = index + offset;
         let Some(glyph) = sg.get(glyph_index) else { continue };
+        let glyph = if glyph_index == first { repeat.as_ref().unwrap_or(glyph) } else { glyph };
         let mut advance = glyph.adv;
         if glyph_index + 1 == trimmed {
             advance -= line.end_trim;
