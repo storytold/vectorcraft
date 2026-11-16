@@ -3741,6 +3741,70 @@ fn placed_files_are_linked_images_showing_their_preview() {
     assert!(read(stream(&layer("~\n")).as_bytes()).unwrap_err().contains("`~`"));
 }
 
+/// Type made a clipping mask: a clipping group (`q` … `Q`) with no clipping path, whose last object
+/// is a text object, is clipped by that type once its slot holds it, the type first as its
+/// clipping path. Anything else stays as it was read.
+#[test]
+fn type_that_ends_a_clipping_group_without_a_clipping_path_clips_it() {
+    let text = |story: u32| format!("/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n{story} /StoryIndex ,\n;\n");
+    let square = format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let clipper = format!("{RED}{}h W n\n", rect_path(2.0, 2.0, 8.0, 8.0));
+    let r = read_ok(&layer(&format!("q\n{square}{}Q\n", text(4))));
+    let a = art(&r.doc);
+    let [group] = a.as_slice() else { panic!("{a:#?}") };
+    let slot = group.children().and_then(|c| c.last()).map(|n| n.id).unwrap();
+    assert!(matches!(group.kind, NodeKind::Group { clip: false, .. }), "read as it is, until the slot holds its type");
+    assert_eq!(r.type_clips.get(&group.id), Some(&slot));
+    assert_eq!(r.warped_type.type_clips, r.type_clips, "envelopes' contents are clipped by their type too");
+    // Filled with one text object, the slot's type clips the group.
+    let typed = |doc: &Document, one: bool| {
+        let mut layer = (*doc.layers[0]).clone();
+        let mut n = 0;
+        let put = |n: &mut Node| {
+            if let NodeKind::Group { children, .. } = &mut n.kind
+                && let Some(last) = children.last_mut()
+                && last.id == slot
+            {
+                let t = Node::new(
+                    vectorcraft_doc::NodeId(9_000),
+                    NodeKind::Text(Box::new(vectorcraft_doc::TextObject::point(kurbo::Point::ZERO, "M", Default::default()))),
+                );
+                if one {
+                    *last = Arc::new(t);
+                } else {
+                    let mut stroke = t.clone();
+                    stroke.id = vectorcraft_doc::NodeId(9_001);
+                    *last = Arc::new(t);
+                    children.push(Arc::new(stroke));
+                }
+            }
+        };
+        layer.children_mut().unwrap().iter_mut().for_each(|c| put(Arc::make_mut(c)));
+        let clipped = clip_by_type(&mut layer, &r.type_clips, &|s| (s == slot).then_some(vectorcraft_doc::NodeId(9_000)), &mut |_| n += 1);
+        (layer, clipped, n)
+    };
+    let (layer_one, clipped, called) = typed(&r.doc, true);
+    assert_eq!((clipped, called), (1, 1));
+    let g = &layer_one.children().unwrap()[0];
+    let NodeKind::Group { children, clip: true } = &g.kind else { panic!("{g:#?}") };
+    assert!(matches!(children[0].kind, NodeKind::Text(_)) && matches!(children[1].kind, NodeKind::Path { .. }), "{children:#?}");
+    // Several objects in its place (the type and strokes round it): the group stays unclipped.
+    let (layer_two, clipped, _) = typed(&r.doc, false);
+    assert_eq!(clipped, 0);
+    assert!(matches!(layer_two.children().unwrap()[0].kind, NodeKind::Group { clip: false, .. }));
+    // A clipping path in the group clips it, not the type; type that isn't last doesn't; nor does a
+    // group (`u` … `U`) or the type a look draws.
+    for body in [
+        format!("q\n{square}{clipper}{}Q\n", text(4)),
+        format!("q\n{}{square}Q\n", text(4)),
+        format!("u\n{square}{}U\n", text(4)),
+        format!("q\n{square}/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\nQ\n"),
+    ] {
+        let r = read_ok(&layer(&body));
+        assert!(r.type_clips.is_empty(), "{body}: {:?}", r.type_clips);
+    }
+}
+
 #[test]
 fn text_objects_are_slots_named_after_their_story() {
     let words = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n3 /StoryIndex ,\n;\n%_/ArtDictionary :\n%_/XMLUID : (Title) ; (AI10_ArtUID) ,\n%_;\n";
@@ -8580,7 +8644,7 @@ fn warped_type_on_the_page_spends_what_is_left_of_the_budget() {
     let copy = |w: &super::envelope::WarpedLook| super::envelope::WarpedLook { slot: w.slot, look: w.look.clone(), left_out: None };
     let page = Some(Rect::new(0.0, 60.0, 60.0, 100.0));
     let settle = |w: &super::envelope::WarpedLook, spent| {
-        let warped = super::envelope::WarpedType { looks: vec![copy(w)], envelopes: vec![], checks: 1, spent, page, alone: None };
+        let warped = super::envelope::WarpedType { looks: vec![copy(w)], checks: 1, spent, page, ..Default::default() };
         warped.settle(&mut doc.clone(), Some, &Default::default(), &mut vec![])
     };
     let spent = || super::envelope::Spent { any: MAX_DIFFERENCE / 2.0, solid: MAX_SOLID_DIFFERENCE / 2.0 };

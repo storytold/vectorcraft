@@ -5887,12 +5887,18 @@ fn type_envelope_on(keys: &str, shape: &str, drawn: &str, after: &str) -> String
 
 /// [`type_envelope_on`] around the type of story `story`.
 fn type_envelope_on_story(story: u32, keys: &str, shape: &str, drawn: &str, after: &str) -> String {
+    type_envelope_holding(keys, shape, &format!("{}{after}", text_object(story)), drawn)
+}
+
+/// [`type_envelope_on`] whose contents are `contents` (on plain lines, written on `%_` ones), which
+/// hold its text objects.
+fn type_envelope_holding(keys: &str, shape: &str, contents: &str, drawn: &str) -> String {
     let hidden = |s: &str| -> String { s.lines().map(|l| format!("%_{l}\n")).collect() };
     format!(
         "{}{}%_X=\n{}%_X+\n%_ (AIDeformArtKey) ,\n%_1 /Int (AIDeformStyle) ,\n%_;\n%_\n%_9 () XW\nu\n{drawn}U\n9 () XW\n(Adobe Deform Plugin) 1 0 0 XP\n",
         hidden(&format!("u\n{shape}U\n")),
         hidden(&format!("/ArtDictionary :\n{keys}")),
-        hidden(&format!("u\n{}{after}U\n9 () XW\n", text_object(story))),
+        hidden(&format!("u\n{contents}U\n9 () XW\n")),
     )
 }
 
@@ -6554,6 +6560,86 @@ fn a_warp_of_type_opens_as_a_mesh_on_its_saved_grid_and_keeps_its_shape_when_its
         let near = anchors.iter().map(|a| (*a - corner).hypot()).fold(f64::INFINITY, f64::min);
         assert!(near < 0.25, "{corner:?} is {near} from the new text");
     }
+}
+
+/// In the layers, type from the text document made a clipping mask (a clipping group with no
+/// clipping path, the type last) clips the group's art as the page draws it: the type comes in as
+/// the group's clipping path, editable, and the art doesn't paint past it.
+#[test]
+fn type_made_a_clipping_mask_clips_its_group_in_the_layers() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions, envelope_content_bounds};
+    let Some(family) = installed_family() else { return };
+    let doc = type_envelope_text(&family, None);
+    // The page: the type's glyphs in the yellow of the square they clip, which covers the page, and
+    // drawn through a flat mesh over their box, which leaves them where they are.
+    let mut yellow = made_envelope_type(&type_envelope_text(&family, Some("/0 << /0 2 /1 [ 1.0 0.0 0.0 1.0 0.0 ] >>")));
+    yellow.visible = true;
+    let content = vec![std::sync::Arc::new(yellow)];
+    let g = envelope_content_bounds(&content).unwrap();
+    let points = vec![kurbo::Point::new(g.x0, g.y0), kurbo::Point::new(g.x1, g.y0), kurbo::Point::new(g.x0, g.y1), kurbo::Point::new(g.x1, g.y1)];
+    let kind = Box::new(EnvelopeKind::Mesh { rows: 1, cols: 1, points, handles: vec![[kurbo::Vec2::ZERO; 4]; 4] });
+    let options = EnvelopeOptions::NEW;
+    let flat = Node::new(
+        vectorcraft_doc::NodeId(1_000_000),
+        NodeKind::Envelope { content, kind, fidelity: 50.0, editing: false, options, frame: Box::default() },
+    );
+    let (_, page) = drawn_envelope(&flat);
+    let clipped = format!("q\n0 0 1 0 k\n0 0 m\n100 0 L\n100 100 L\n0 100 L\nf\n{}Q\n", text_object(0));
+    let art = native_with_text(&layer("Art", true, &clipped), &doc);
+    let r = import(&eps(&page, &art)).unwrap();
+    // The layers are used, none of their art replaced with the page's (the note on how the type
+    // differs from the page is about the edges of its glyphs).
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("came in as its art") || w.contains("weren't read")), "{:?}", r.warnings);
+    let children = r.document.layers[0].children().unwrap();
+    let [group] = children.as_slice() else { panic!("{children:#?}") };
+    let NodeKind::Group { children, clip: true } = &group.kind else { panic!("not clipped: {group:#?}") };
+    let (NodeKind::Text(t), NodeKind::Path { .. }) = (&children[0].kind, &children[1].kind) else { panic!("{children:#?}") };
+    assert_eq!(t.plain_text(), "FLUX");
+}
+
+/// Type made a clipping mask in an envelope's contents (a clipping group with no clipping path, the
+/// type last) clips the art under it there, as the drawn art shows: the envelope opens live, its
+/// type editable as the group's clipping path. The art it clips covers the type's glyphs and stays
+/// inside their box, so the envelope maps from that box however the art past the type would count.
+#[test]
+fn an_envelope_whose_type_clips_its_contents_opens_live_with_the_type_clipping_them() {
+    let Some(family) = installed_family() else { return };
+    let doc = type_envelope_text(&family, None);
+    // What it draws: the type in the yellow of the square it clips, which covers it.
+    let yellow = made_envelope_type(&type_envelope_text(&family, Some("/0 << /0 2 /1 [ 1.0 0.0 0.0 1.0 0.0 ] >>")));
+    let shaped = |text: Node| {
+        let mut text = text;
+        text.visible = true;
+        let options = vectorcraft_doc::live::EnvelopeOptions::NEW;
+        let content = vec![std::sync::Arc::new(text)];
+        Node::new(
+            vectorcraft_doc::NodeId(1_000_000),
+            NodeKind::Envelope { content, kind: Box::new(rising_kind()), fidelity: 50.0, editing: false, options, frame: Box::default() },
+        )
+    };
+    let glyphs = vectorcraft_doc::live::envelope_content_bounds(&[std::sync::Arc::new(yellow.clone())]).unwrap();
+    let (drawn, page) = drawn_envelope(&shaped(yellow));
+    // A yellow square over the glyphs' box, just inside it.
+    let (x0, y0) = to_art(kurbo::Point::new(glyphs.x0 + 0.01, glyphs.y1 - 0.01));
+    let (x1, y1) = to_art(kurbo::Point::new(glyphs.x1 - 0.01, glyphs.y0 + 0.01));
+    let contents = format!("q\n0 0 1 0 k\n{x0} {y0} m\n{x1} {y0} L\n{x1} {y1} L\n{x0} {y1} L\nf\n{}Q\n", text_object(0));
+    let envelope = type_envelope_holding(&arc_keys(0.3), &rising_grid(), &contents, &drawn);
+    let art = native_with_text(&layer("Art", true, &format!("{}\n{envelope}", square(10, 10))), &doc);
+    let r = import(&eps(&format!("{}\n{page}", page_square(10, 10)), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert!(super::tests::program_warnings(&r.warnings).is_empty(), "{:?}", r.warnings);
+    let mut live = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Envelope { content, .. } = &n.kind {
+            live.push(content.clone());
+        }
+    });
+    let [content] = live.as_slice() else { panic!("{:?}", r.warnings) };
+    let [group] = content.as_slice() else { panic!("{content:#?}") };
+    let NodeKind::Group { children, clip: true } = &group.kind else { panic!("not clipped: {group:#?}") };
+    let (NodeKind::Text(t), NodeKind::Path { .. }) = (&children[0].kind, &children[1].kind) else { panic!("{children:#?}") };
+    assert_eq!(t.plain_text(), "FLUX");
 }
 
 /// A warp of stroked type with Distort Appearance whose drawn art maps the type's bounds with its

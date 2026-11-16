@@ -62,7 +62,7 @@ pub use read::{
     palette, read_beside, read_in, symbols, variables,
 };
 
-pub(crate) use read::is_look_slot;
+pub(crate) use read::{clip_by_type, is_look_slot};
 pub(crate) use style::{MAX_LISTED, MAX_LISTED_NAME, warp_number};
 
 #[cfg(test)]

@@ -329,6 +329,7 @@ pub(super) fn build_weighing(
         unread,
         unread_elsewhere,
         slot_names,
+        type_clips,
         restyled,
         placeholders,
         placed_elsewhere,
@@ -527,6 +528,7 @@ pub(super) fn build_weighing(
     let mut made = vec![];
     let mut filled = std::collections::HashMap::new();
     fill_slots(&mut doc, &mut layers, &mut content.into_iter(), &slot_names, &mut empty, &mut made, &mut vec![], &mut filled);
+    clip_by_type(&mut layers, &type_clips, &filled);
     doc.layers = layers;
     made.sort();
     let threaded_frames: BTreeSet<NodeId> =
@@ -2152,6 +2154,30 @@ fn unmark(nodes: &mut [Arc<Node>], shown: bool, prints: bool, found: &mut Vec<(N
         {
             unmark(c, shown, prints, found);
         }
+    }
+}
+
+/// Make the clipping groups in `layers` that their type clips ([`Structure::type_clips`]) clip by it,
+/// where its slot became one text object (`filled`). The page shows that type by what it clips, so
+/// it is never weighed as type the page doesn't draw ([`prune_unseen`]).
+fn clip_by_type(
+    layers: &mut [Arc<Node>],
+    type_clips: &std::collections::HashMap<NodeId, NodeId>,
+    filled: &std::collections::HashMap<NodeId, Filled>,
+) {
+    let one = |slot: NodeId| {
+        filled.get(&slot).and_then(|f| match f.objects.as_slice() {
+            [id] => Some(*id),
+            _ => None,
+        })
+    };
+    let mut seen = |n: &mut Node| {
+        if let Some(name) = n.name.as_deref().and_then(|m| m.strip_prefix(MADE)) {
+            n.name = (!name.is_empty()).then(|| name.to_string());
+        }
+    };
+    for l in layers {
+        ai::clip_by_type(Arc::make_mut(l), type_clips, &one, &mut seen);
     }
 }
 
