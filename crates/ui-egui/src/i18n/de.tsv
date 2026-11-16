@@ -632,6 +632,18 @@ font-technology	Variable	Variabel
 	Copy Width Point	Breitenpunkt kopieren
 	Copyright	Copyright
 	Copyright Info URL:	URL für Copyright-Informationen:
+	Save Metadata Template…	Metadatenvorlage speichern…
+	Import Options	Importoptionen
+	Clear existing fields and use the template's	Vorhandene Felder löschen und die der Vorlage verwenden
+	Keep existing fields, but replace those the template has	Vorhandene Felder beibehalten, aber die in der Vorlage enthaltenen ersetzen
+	Keep existing fields, but append those the template has	Vorhandene Felder beibehalten, aber die in der Vorlage enthaltenen anfügen
+@msg	the template name can't be empty	der Vorlagenname darf nicht leer sein
+@msg	the template name isn't usable as a file name	der Vorlagenname ist als Dateiname nicht verwendbar
+@msg	no metadata templates folder here	hier gibt es keinen Ordner für Metadatenvorlagen
+@msg	give `name` or `path`, not both	geben Sie `name` oder `path` an, nicht beides
+@msg	give one of `path`, `name` and `data`	geben Sie einen der Parameter `path`, `name` und `data` an
+@msg	mode must be replace, keep or append	der Modus muss replace, keep oder append sein
+@msg	the file is not an XMP metadata template	die Datei ist keine XMP-Metadatenvorlage
 	Copyright Notice:	Copyright-Vermerk:
 	Copyright Status:	Copyright-Status:
 	Copyright Symbol	Copyright-Symbol
@@ -1173,6 +1185,7 @@ font-technology	Variable	Variabel
 	Highlight Size	Glanzpunktgröße
 	Blend Steps	Angleichungsstufen
 	Shading Color	Schattierungsfarbe
+	Black Overprint	Überdruckendes Schwarz
 	Draw Hidden Faces	Verdeckte Flächen zeichnen
 	Eyedropper	Pipette
 	Sample Color from Screen	Farbe vom Bildschirm aufnehmen
@@ -1421,6 +1434,8 @@ file-filter	Templates	Vorlagen
 	Graph	Diagramm
 	Graph Data	Diagrammdaten
 	Graph Type	Diagrammtyp
+	Graph Type…	Diagrammtyp…
+	Graph Data…	Diagrammdaten…
 	Graph Options	Diagrammoptionen
 	Left Axis	Linke Achse
 	Right Axis	Rechte Achse
@@ -2992,6 +3007,12 @@ digits	Malayalam	Malayalam
 	Responsive	Responsiv
 	Restore	Wiederherstellen
 	Restore every preference to its default (applied on OK)	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen (wird bei OK angewendet)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Die Einheit für neue Dokumente in den integrierten Größen außer Pixelgrößen und für geöffnete Dateien ohne gespeicherte Einheit; wenn Sie sie hier wählen und auf OK klicken, erhält auch das aktive Dokument diese Einheit.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Konturstärken, Striche und Lücken werden in dieser Einheit angezeigt, und dafür eingegebene Zahlen werden in ihr gelesen.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Schriftgrade, Zeilenabstand und Grundlinienversatz werden in dieser Einheit angezeigt, und dafür eingegebene Zahlen werden in ihr gelesen.
+	The unit for East Asian type measurements, which no field uses yet.	Die Einheit für Maße in ostasiatischem Text, die noch kein Feld verwendet.
+	When on, a number typed without a unit into a field in picas is read in points.	Wenn aktiviert, wird eine ohne Einheit eingegebene Zahl in einem Feld in Pica als Punkt gelesen.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Mit XML-ID werden Objektnamen in „Ebenen“, „Variablen“ und „Ebenenoptionen“ als XML-IDs angezeigt.
 	Reset all preferences to their defaults?	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Die Standardwerte werden angewendet, wenn Sie in den Voreinstellungen auf OK klicken. Abbrechen dort behält Ihre aktuellen Voreinstellungen.
 	Restore Recovered Documents	Wiederhergestellte Dokumente öffnen
@@ -3025,6 +3046,7 @@ digits	Malayalam	Malayalam
 	Roman Hanging Punctuation	Hängende Interpunktion (lateinisch)
 	Korean Line Break Anywhere	Koreanischer Zeilenumbruch überall
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Einstellungen für ostasiatischen Satz
 	Korean Composition Settings	Einstellungen für koreanischen Satz
 	Rotate	Drehen
@@ -3219,6 +3241,8 @@ digits	Malayalam	Malayalam
 @msg	`{key}` must be an array of these names: {_1}	`{key}` muss ein Array mit diesen Namen sein: {_1}
 	Search commands and tools	Befehle und Werkzeuge suchen
 	Search commands and tools…	Befehle und Werkzeuge suchen…
+	Recent Commands	Zuletzt verwendete Befehle
+	No recent commands	Keine zuletzt verwendeten Befehle
 	Search Commands…	Befehle suchen…
 	Secondary	Sekundär
 	Section Symbol	Paragrafenzeichen
@@ -3637,6 +3661,9 @@ effect	Points	Punkte
 	Show Import Options	Importoptionen anzeigen
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Vor dem Platzieren nach den Importoptionen jeder PDF-, DXF- oder Textdatei fragen; aus: die zuletzt gewählten Optionen verwenden
 	Stylistic Alternates	Stilistische Varianten
+	Ligatures	Ligaturen
+	Ornaments	Ornamente
+	Figures	Ziffern
 	Swash	Schwungschrift
 	Swatch Conflict	Farbfeldkonflikt
 	Swatch Conflicts	Farbfeldkonflikte
@@ -4364,6 +4391,31 @@ theme	Appearance	Erscheinungsbild
 @msg	$.evalFile requires a file path	$.evalFile erfordert einen Dateipfad
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: Die Zeitüberschreitung muss eine endliche Anzahl von Millisekunden sein, 0 oder mehr
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: nimmt einen Dateipfad und eine Zeitüberschreitung
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} ist nicht definiert
+@msg	cannot read property '{key}' of {base}	die Eigenschaft '{key}' von {base} kann nicht gelesen werden
+@msg	cannot set property '{key}' of {base}	die Eigenschaft '{key}' von {base} kann nicht gesetzt werden
+@msg	cannot read a property of {base}	eine Eigenschaft von {base} kann nicht gelesen werden
+@msg	cannot set a property of {base}	eine Eigenschaft von {base} kann nicht gesetzt werden
+@msg	cannot define property '{key}': {why}	die Eigenschaft '{key}' kann nicht definiert werden: {why}
+@msg	cannot assign to property '{key}': {why}	der Eigenschaft '{key}' kann nichts zugewiesen werden: {why}
+@msg	cannot delete property '{key}'	die Eigenschaft '{key}' kann nicht gelöscht werden
+@msg	cannot declare function {ident}	die Funktion {ident} kann nicht deklariert werden
+@msg	invalid assignment target	ungültiges Zuweisungsziel
+@msg	the array's length is read-only	die Länge des Arrays ist schreibgeschützt
+@msg	the property cannot be redefined	die Eigenschaft kann nicht neu definiert werden
+@msg	the object is not extensible	das Objekt ist nicht erweiterbar
+@msg	the length cannot be redefined	die Länge kann nicht neu definiert werden
+@msg	it is read-only	sie ist schreibgeschützt
+@msg	an element cannot be deleted	ein Element kann nicht gelöscht werden
+@msg	it has only a getter	sie hat nur einen Getter
+@msg	the value is a primitive	der Wert ist ein primitiver Wert
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: Zeile {line}, Spalte {column} in {file}: {e} (ausgelöst)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: Zeile {line}, Spalte {column}: {e} (ausgelöst)
 @msg	{name}: {e} (thrown)	{name}: {e} (ausgelöst)
@@ -4404,6 +4456,27 @@ theme	Appearance	Erscheinungsbild
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: Ein Dialog kann sich nicht in einem Callback einer integrierten Funktion, einem Getter, einer Umwandlung oder einer Datei öffnen, die $.evalFile ausführt; rufen Sie ihn aus dem eigenen Code des Skripts auf
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: Die nächste Antwort in `answers` ist für {_1}, nicht für {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` hat keine Antwort mehr für diesen Dialog
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` enthält {n} Antwort, die das Skript nicht verwendet hat|`answers` enthält {n} Antworten, die das Skript nicht verwendet hat
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} ließ {n} Objekt unter dem Pinsel unverändert ({_2}): es formt nur Pfade um|{_1} ließ {n} Objekte unter dem Pinsel unverändert ({_2}): es formt nur Pfade um
+liquify-tool	Warp	Verkrümmung
+liquify-tool	Twirl	Strudel
+liquify-tool	Pucker	Zusammenziehen
+liquify-tool	Bloat	Aufblasen
+liquify-tool	Scallop	Ausbuchten
+liquify-tool	Crystallize	Kristallisieren
+liquify-tool	Wrinkle	Zerknittern
+liquify-kind	graphs	Diagramme
+liquify-kind	type	Text
+liquify-kind	symbols	Symbole
+liquify-kind	images	Bilder
+liquify-kind	meshes	Gitter
+liquify-kind	envelopes	Hüllen
+liquify-kind	repeats	Wiederholungen
+liquify-kind	placed documents	platzierte Dokumente
+liquify-kind	blends	Angleichungen
+liquify-list-two	{0}, {1}	{0} und {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} und {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} ist zu groß für ein Skript
 @msg	vc.log: the log of this run is full	vc.log: Das Protokoll dieses Laufs ist voll
 @msg	this function's script run has ended	der Skriptlauf dieser Funktion ist beendet
@@ -5046,6 +5119,8 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown option `{path}.{k}`	unbekannte Option `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	unbekannter Wert für overprints `{o}` (preserve, simulate oder discard)
 @msg	unknown panel `{raw}`	unbekanntes Bedienfeld `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` hat keine Anzeigegrößen zum Durchlaufen
+@msg	the panels are not shown	die Bedienfelder werden nicht angezeigt
 @msg	panels can't be shown in Presentation Mode	im Präsentationsmodus können keine Bedienfelder angezeigt werden
 @msg	unknown preference `{key}`	unbekannte Voreinstellung `{key}`
 @msg	Preferences imported.	Voreinstellungen importiert.
@@ -5505,6 +5580,7 @@ theme	Appearance	Erscheinungsbild
 	Change Panel Layout	Bedienfeldanordnung ändern
 	Close Panel	Bedienfeld schließen
 	Collapse Panel Group	Bedienfeldgruppe minimieren
+	Cycle Display Sizes	Anzeigegrößen durchlaufen
 	Move Panel	Bedienfeld verschieben
 	Group with	Gruppieren mit
 	Resize panel window	Bedienfeldfenster skalieren
@@ -5874,6 +5950,7 @@ effect	Soft	Weich
 	Export Data Sets…	Datensätze exportieren…
 	Load Variable Library…	Variablenbibliothek laden…
 	Save Variable Library…	Variablenbibliothek speichern…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	„Importieren“ liest eine Datenquelldatei mit der Endung .csv, .tsv, .txt oder .xml
 @msg	a variable library holds text variables, and the document has none	eine Variablenbibliothek enthält Textvariablen, und das Dokument hat keine
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	die Variable `{name}` kann nicht in einer Variablenbibliothek gespeichert werden: Benennen Sie sie so um, dass sie mit einem Buchstaben oder `_` beginnt, ohne Leerzeichen oder andere Symbole als `-`, `_` und `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	der Datensatz `{name}` enthält ein Steuerzeichen, das eine Variablenbibliothek nicht enthalten kann
@@ -6960,6 +7037,24 @@ breakText	Glyphs	Glyphen
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Striche in Pfade umwandeln
 @msg	select paths with dashed strokes to expand	wählen Sie Pfade mit gestrichelter Kontur zum Umwandeln aus
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Tangentialkreis…
+	Tangent Circle	Tangentialkreis
+	Circle:	Kreis:
+@msg	`ids` names an object twice	`ids` nennt ein Objekt zweimal
+@msg	select two or three paths or compound paths	wählen Sie zwei oder drei Pfade oder zusammengesetzte Pfade aus
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` muss von 0.01 bis 1000000 pt sein
+@msg	two shapes need a `radius`	zwei Formen brauchen einen `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	drei Formen legen den Radius selbst fest: lassen Sie `radius` weg
+@msg	`circle` must be from 0 to 64	`circle` muss von 0 bis 64 sein
+@msg	a shape has no outline	eine Form hat keinen Umriss
+@msg	the shapes are too complex: at most 2000 segments in all	die Formen sind zu komplex: höchstens 2000 Segmente insgesamt
+@msg	these shapes take too long to search	diese Formen brauchen zu lange für die Suche
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	mehr als 64 Kreise berühren diese Formen: sie berühren sie womöglich entlang einer ganzen Kurve
+@msg	no circle touches these shapes	kein Kreis berührt diese Formen
+@msg	`circle` is past the last circle found ({found})	`circle` liegt hinter dem letzten gefundenen Kreis ({found})
+@msg	object {value} is not a path or compound path	Objekt {value} ist kein Pfad oder zusammengesetzter Pfad
+@msg	these shapes are too small to measure	diese Formen sind zu klein zum Messen
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentwerkzeuge
 	Save a Timestamped Copy	Kopie mit Zeitstempel speichern
