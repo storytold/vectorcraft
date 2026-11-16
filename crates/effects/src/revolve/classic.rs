@@ -164,6 +164,41 @@ mod tests {
         }
     }
 
+    /// With Black Overprint every face keeps the blue, and the faces that darken get black over it,
+    /// overprinting, as strong as the darkening of the shading color Black.
+    #[test]
+    fn black_overprint_keeps_the_blue_under_overprinting_black() {
+        let darkened = revolved(json!({"surface": "diffuse"}));
+        let art = revolved(json!({"surface": "diffuse", "shadingColor": "blackOverprint"}));
+        let (darkened, drawn) = (faces(&darkened), faces(&art));
+        assert_eq!(darkened.len(), drawn.len());
+        let mut shaded = 0;
+        for (face, black) in drawn.iter().zip(&darkened) {
+            let fills: Vec<&vectorcraft_doc::FillLayer> = face
+                .appearance
+                .items
+                .iter()
+                .filter_map(|i| match i {
+                    AppearanceItem::Fill(f) => Some(f),
+                    AppearanceItem::Stroke(_) => None,
+                })
+                .collect();
+            assert_eq!((fills[0].paint.color(), fills[0].overprint), (Some(BLUE), false));
+            let k = match fills.get(1) {
+                Some(shadow) => {
+                    let Some(Color::Gray { k }) = shadow.paint.color() else { panic!("black shading: {:?}", shadow.paint) };
+                    assert_eq!((shadow.blend, shadow.overprint), (vectorcraft_doc::color::BlendMode::Multiply, true));
+                    shaded += 1;
+                    k
+                }
+                None => 0.0,
+            };
+            let b = fill(black).unwrap().to_rgb()[2];
+            assert!((b - 0.8 * (1.0 - k)).abs() < 1e-3, "black at {k} matches the darkened blue {b}");
+        }
+        assert!(shaded > 0, "faces turned from the light get black");
+    }
+
     #[test]
     fn angle_offset_edge_and_cap_shape_the_surface() {
         let full = revolved(json!({"rotationX": 0, "rotationY": 0, "rotationZ": 0})).visual_bounds().unwrap();

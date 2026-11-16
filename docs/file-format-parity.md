@@ -140,7 +140,7 @@ private editing data. VectorCraft:
   document's defaults and the normal character style carry 1. A run with both Tate-chu-yoko and Standard Vertical Roman
   Alignment is written as Tate-chu-yoko, with the type attributes warning. Type in opacity masks, pattern tiles, symbols and art cut to a
   clipping object, mirrored type, turned or unevenly scaled area type and type on a path, area type in an open frame,
-  type on an open path whose ends meet, area type that flows around a text wrap, type of only white space, threads of
+  type on an open path whose ends meet, area type whose wrap cannot be reconstructed from plain saved paths, compound paths or groups, type of only white space, threads of
   type on a path, threads whose frames differ in orientation, type and stories past the sizes VectorCraft's reader reads, and
   type with inline graphics, ruby, gradient or pattern paint or an appearance or opacity mask of its own, other patterns, other clipping objects and live
   objects (placed documents included) are written as plain filled and stroked paths, and freeform gradients, gradients along
@@ -249,7 +249,9 @@ private editing data. VectorCraft:
   paint; Graph Data then edits it. Other graphs (pie and scatter graphs, graphs with designs or
   customizations, records of later versions) come in as plain groups, paths and type, with a note. Saving a graph to
   `.ai`, in either form, writes these records around its art when the reader above reads them back as the same graph,
-  so the file opens again with its data and settings; any other graph is written as its art, with a warning.
+  so the file opens again with its data and settings; any other graph is written as its art, with a warning. A
+  legend swatch the graph tools draw has the stroke of its series' marks, so a drawn stacked column or area graph
+  is written with its records.
   Legacy `.ai` patterns in the version 7 form (a list of `@` and `&` layers, `_ &` for the tile's background)
   open as pattern swatches, with a fill's offset, scale, rotation, reflection and shear applied before its
   matrix. Legacy `.ai` linked images in

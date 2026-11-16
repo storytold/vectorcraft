@@ -256,3 +256,152 @@ fn eraser_keeps_painted_stroke_open_paths_on_the_outline_route() {
         assert_eq!(after_image.pixels, before_image.pixels);
     }
 }
+
+// The Alt-drag marquee dispatches the same public Eraser command with `rect` instead of `points`.
+fn marquee_rectangle(s: &mut Session, closed: bool, stroked: bool) -> NodeId {
+    let id = NodeId(
+        s.execute(
+            "path.create",
+            &json!({"closed": closed, "anchors": [
+                {"x": 100, "y": 100}, {"x": 200, "y": 100},
+                {"x": 200, "y": 200}, {"x": 100, "y": 200}
+            ]}),
+        )
+        .unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    s.execute("paint.setFill", &json!({"ids": [id.0], "color": "#000000"})).unwrap();
+    if stroked {
+        s.execute("paint.setStroke", &json!({"ids": [id.0], "color": "#000000"})).unwrap();
+        s.execute("stroke.set", &json!({"ids": [id.0], "weight": 4})).unwrap();
+    } else {
+        s.execute("paint.setStroke", &json!({"ids": [id.0], "none": true})).unwrap();
+    }
+    id
+}
+
+#[test]
+fn eraser_marquee_preserves_open_fill_like_closed_and_undo() {
+    for closed in [true, false] {
+        let mut s = session();
+        let id = marquee_rectangle(&mut s, closed, false);
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        assert_eq!(path(&s, id).is_closed(), closed);
+        let render = |s: &Session| {
+            vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 300, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default())
+        };
+        let before_image = render(&s);
+        let before = serde_json::to_value(&s.doc().unwrap().doc).unwrap();
+        let selection = s.doc().unwrap().selection.clone();
+        let history = s.doc().unwrap().history.undo.len();
+        let retained = [(110, 125), (190, 125), (110, 175), (190, 175)];
+        for (x, y) in retained.into_iter().chain([(150, 150)]) {
+            assert_eq!(before_image.pixel(x, y), [0, 0, 0, 255], "closed={closed}: original fill at ({x}, {y})");
+        }
+        s.execute("path.eraseRegion", &json!({"rect": [50, 145, 200, 10]})).unwrap();
+        let after_image = render(&s);
+        for (x, y) in retained {
+            assert_eq!(after_image.pixel(x, y), [0, 0, 0, 255], "closed={closed}: marquee lost retained fill at ({x}, {y})");
+        }
+        assert_eq!(after_image.pixel(150, 150)[3], 0, "closed={closed}: marquee band is empty");
+        let remaining = paths(&s);
+        let area: f64 = remaining.iter().map(|p| vectorcraft_pathops::area(p, FillRule::NonZero)).sum();
+        assert!((area - 9000.0).abs() < 1.0, "closed={closed}: marquee retained area {area}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), history + 1, "one marquee is one edit");
+        let after = serde_json::to_value(&s.doc().unwrap().doc).unwrap();
+        let after_selection = s.doc().unwrap().selection.clone();
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before, "closed={closed}: Undo restores the original document");
+        assert_eq!(s.doc().unwrap().selection, selection);
+        assert_eq!(s.doc().unwrap().history.undo.len(), history);
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), after);
+        assert_eq!(s.doc().unwrap().selection, after_selection);
+    }
+}
+
+#[test]
+fn eraser_marquee_keeps_compound_holes_and_outline_controls() {
+    for rule in ["nonZero", "evenOdd"] {
+        let mut s = session();
+        let mut ids = vec![];
+        for anchors in [
+            json!([{"x": 100, "y": 100}, {"x": 300, "y": 100}, {"x": 300, "y": 300}, {"x": 100, "y": 300}]),
+            json!([{"x": 150, "y": 150}, {"x": 150, "y": 250}, {"x": 250, "y": 250}, {"x": 250, "y": 150}]),
+        ] {
+            let id = s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap();
+            s.execute("paint.setFill", &json!({"ids": [id], "color": "#000000"})).unwrap();
+            s.execute("paint.setStroke", &json!({"ids": [id], "none": true})).unwrap();
+            ids.push(id);
+        }
+        s.execute("select.set", &json!({"ids": ids})).unwrap();
+        let compound = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+        s.execute("path.setFillRule", &json!({"rule": rule})).unwrap();
+        s.execute("select.none", &json!({})).unwrap();
+        let members = match &s.doc().unwrap().doc.node(compound).unwrap().kind {
+            NodeKind::Compound { children, .. } => children,
+            other => panic!("expected compound, got {other:?}"),
+        };
+        assert!(members.iter().all(|n| !n.path_data().unwrap().is_closed()));
+        let render = |s: &Session| {
+            vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 300, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default())
+        };
+        let before_image = render(&s);
+        assert!(before_image.pixel(120, 120)[3] > 240, "{rule}: original ring is filled");
+        assert_eq!(before_image.pixel(200, 200)[3], 0, "{rule}: original hole is empty");
+        let before = serde_json::to_value(&s.doc().unwrap().doc).unwrap();
+        let selection = s.doc().unwrap().selection.clone();
+        let history = s.doc().unwrap().history.undo.len();
+        let miss = s.execute("path.eraseRegion", &json!({"rect": [180, 180, 40, 40]})).unwrap();
+        assert_eq!(miss["ids"], json!([]), "{rule}: a marquee wholly inside the hole misses");
+        assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before);
+        assert_eq!(s.doc().unwrap().selection, selection);
+        assert_eq!(s.doc().unwrap().history.undo.len(), history);
+        let result = s.execute("path.eraseRegion", &json!({"rect": [80, 115, 240, 10]})).unwrap();
+        assert!(!result["ids"].as_array().unwrap().is_empty());
+        for id in result["ids"].as_array().unwrap() {
+            assert!(
+                matches!(s.doc().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind, NodeKind::Compound { .. }),
+                "{rule}: no wrapper replaces the compound pieces"
+            );
+        }
+        let after_image = render(&s);
+        assert_eq!(after_image.pixel(120, 120)[3], 0, "{rule}: marquee band is empty");
+        assert!(after_image.pixel(120, 140)[3] > 240, "{rule}: ring outside the marquee remains filled");
+        assert_eq!(after_image.pixel(200, 200)[3], 0, "{rule}: compound hole stays empty");
+        let area: f64 = after_image.pixels.as_chunks::<4>().0.iter().map(|rgba| f64::from(rgba[3]) / 255.0).sum();
+        assert!((area - 28000.0).abs() < 2.0, "{rule}: marquee removes only its 2000 px² strip: {area}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), history + 1);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before);
+        assert_eq!(s.doc().unwrap().selection, selection);
+    }
+
+    // Filled AND painted-stroke open art keeps the existing outline route, so an interior
+    // marquee that touches none of its three painted edges is a genuine no-op.
+    let mut s = session();
+    let id = marquee_rectangle(&mut s, false, true);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let before = serde_json::to_value(&s.doc().unwrap().doc).unwrap();
+    let selection = s.doc().unwrap().selection.clone();
+    let history = s.doc().unwrap().history.undo.len();
+    let miss = s.execute("path.eraseRegion", &json!({"rect": [130, 145, 40, 10]})).unwrap();
+    assert_eq!(miss["ids"], json!([]));
+    assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!(s.doc().unwrap().history.undo.len(), history);
+
+    // Knife's target collection must not inherit the Eraser-only open-fill area extension.
+    let mut s = session();
+    let id = marquee_rectangle(&mut s, false, false);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let before = serde_json::to_value(&s.doc().unwrap().doc).unwrap();
+    let selection = s.doc().unwrap().selection.clone();
+    let history = s.doc().unwrap().history.undo.len();
+    let miss = s.execute("path.knife", &json!({"points": [[50, 150], [250, 150]]})).unwrap();
+    assert_eq!(miss["ids"], json!([]));
+    assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!(s.doc().unwrap().history.undo.len(), history);
+}

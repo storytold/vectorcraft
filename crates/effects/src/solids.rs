@@ -102,6 +102,21 @@ pub fn has_solid(n: &Node) -> bool {
     solid(&n.appearance.effects).is_some() || n.appearance.items.iter().any(|i| i.visible() && solid(i.effects()).is_some())
 }
 
+/// Does `n` carry a 3D effect that [`three_d_meshes`] builds solids from: a visible Revolve, or
+/// else a visible Extrude & Bevel, Inflate or Rotate effect, which on a group or layer must be on
+/// the object itself (one on a group's fill or stroke draws nothing to export)? It does not build
+/// the solids, so [`three_d_meshes`] can still refuse an object it passes.
+pub fn exports_three_d(n: &Node) -> bool {
+    let container = is_container(n);
+    if crate::has_revolve(n) {
+        !container || n.appearance.effects.iter().any(|e| e.visible && crate::is_revolve(&e.id))
+    } else if container {
+        solid(&n.appearance.effects).is_some()
+    } else {
+        has_solid(n)
+    }
+}
+
 /// The Position presets: (id, [rotation X, Y, Z]). Front, Back, Left, Right, Top and Bottom face
 /// the art that way; Off-Axis tilts each 20° down and 25° aside (showing the top and right);
 /// Isometric lays the art on the left, right, top or bottom plane of an isometric view (the
@@ -625,7 +640,9 @@ pub fn validate_three_d_params(id: &str, p: &Value) -> Result<(), String> {
 /// blend mode (so overlapping facets don't add up their transparency). Under colored lights a solid
 /// color with smooth facets is one composite of all its facets ([`composites_facets`]) unless
 /// `faces`: then each facet is a face of its own, as in a gradient, so the faces can go in one order
-/// with the faces of other solids.
+/// with the faces of other solids. Under colored lights a gradient with transparent stops is drawn
+/// opaque under one mask of its transparency, placed once on all the facets when it has no
+/// placement of its own ([`crate::lighting::opaque_surface_paint`]).
 fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: BlendMode, colored: bool, faces: bool) -> Node {
     if !faces && composites_facets(&facets, paint, colored) {
         let mut group = crate::lighting::solid_surface(n.id, &facets, paint);
@@ -634,7 +651,7 @@ fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: Ble
         return group;
     }
     // Preserve existing white-light paints and alpha composition exactly.
-    let (opaque, mask) = if colored { crate::lighting::opaque_paint(paint) } else { (paint.clone(), None) };
+    let (opaque, mask) = if colored { crate::lighting::opaque_surface_paint(paint, || facets_bounds(&facets)) } else { (paint.clone(), None) };
     let paint = &opaque;
     let children = facets
         .into_iter()
@@ -669,6 +686,11 @@ fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: Ble
         group.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(coverage, true)));
     }
     group
+}
+
+/// The bounds of every facet of `facets` together (`Rect::ZERO` when none has any).
+pub(crate) fn facets_bounds(facets: &[Facet]) -> Rect {
+    facets.iter().filter_map(|f| f.path().bounds()).reduce(|a, c| a.union(c)).unwrap_or(Rect::ZERO)
 }
 
 /// The width of the stroke of a facet's own paint that closes the seams between `face` and its
