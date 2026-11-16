@@ -1,7 +1,5 @@
 //! `document.open`: every readable format into a new document.
 
-use std::io::Cursor;
-
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::Affine;
@@ -133,7 +131,7 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if super::heifread::is_heif(bytes) {
         return format("heif");
     }
-    if let Some(f) = image::guess_format(bytes).ok().and_then(image_format) {
+    if let Some(f) = craft_image_codecs::detect(bytes).and_then(image_format) {
         return Some(f);
     }
     // A version 2 PICT is known by its version opcodes after the picture's frame, at byte 522 of a
@@ -159,9 +157,17 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     by_name
 }
 
-/// The readable raster format behind an `image` crate format.
-fn image_format(f: image::ImageFormat) -> Option<&'static Format> {
-    f.extensions_str().iter().find_map(|e| format(e)).filter(|f| f.read && f.raster)
+/// The readable raster format behind a craft-image-codecs format.
+fn image_format(f: craft_image_codecs::Format) -> Option<&'static Format> {
+    f.extensions().iter().find_map(|e| format(e)).filter(|f| f.read && f.raster)
+}
+
+/// The image's size and the bytes a pixel of it takes decoded, from its header
+/// ([`vectorcraft_doc::decode::decoded_layout`]), for bytes in a format craft-image-codecs tells.
+fn header_layout(bytes: &[u8]) -> Option<(craft_image_codecs::Format, u32, u32, u64)> {
+    let format = craft_image_codecs::detect(bytes)?;
+    let (w, h, per_pixel) = vectorcraft_doc::decode::decoded_layout(bytes, format)?;
+    Some((format, w, h, per_pixel))
 }
 
 /// Why a file carrying editing data (an SVG or PDF saved with Preserve Editing) opened as plain
@@ -892,22 +898,18 @@ pub(crate) use vectorcraft_doc::MAX_RASTER_ALLOC;
 /// says so; the pixels aren't read): Open, Place and the Links panel say it ([`size_note`], #1479).
 /// `None` for images within the allowance, and for bytes that aren't an image.
 pub(crate) fn too_large_note(bytes: &[u8]) -> Option<String> {
-    use image::ImageDecoder as _;
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
         return Some(format!("an image of {w} × {h} pixels is too large to draw"));
     }
-    let reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
-    let format = reader.format()?;
-    let d = reader.into_decoder().ok()?;
-    let (w, h) = d.dimensions();
+    let (format, w, h, per_pixel) = header_layout(bytes)?;
     // The allowance also counts the pixels as RGBA: an image of fewer than 4 bytes a pixel (gray,
     // gray with alpha, RGB) takes more than the decoder counts (#1717).
     let rgba_over = u64::from(w) * u64::from(h) > MAX_RASTER_ALLOC / 4;
-    let samples_over = d.total_bytes() > MAX_RASTER_ALLOC;
+    let samples_over = (u64::from(w) * u64::from(h)).saturating_mul(per_pixel) > MAX_RASTER_ALLOC;
     // The renderer can stream a non-interlaced PNG a row at a time when those buffers fit. Its
     // full decoded byte count can exceed the allowance even though drawing it at native size is
     // safe; use the renderer's decision for that case instead of warning from total_bytes alone.
-    let png_streams_at_size = samples_over && format == image::ImageFormat::Png && vectorcraft_render::reduced_size(bytes) == Some((w, h));
+    let png_streams_at_size = samples_over && format == craft_image_codecs::Format::Png && vectorcraft_render::reduced_size(bytes) == Some((w, h));
     (rgba_over || (samples_over && !png_streams_at_size)).then(|| format!("an image of {w} × {h} pixels is too large to draw"))
 }
 
@@ -918,7 +920,7 @@ pub(crate) fn too_large_note(bytes: &[u8]) -> Option<String> {
 pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
     let note = too_large_note(bytes)?;
     let Some(drawn) = vectorcraft_render::reduced_size(bytes) else { return Some(note) };
-    let (w, h) = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_dimensions().ok()?;
+    let (w, h) = vectorcraft_doc::header_size(bytes)?;
     (drawn != (w, h)).then(|| format!("an image of {w} × {h} pixels is shown at reduced size"))
 }
 
@@ -978,17 +980,14 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     if super::pxrread::is_pxr(bytes) {
         return as_png(super::pxrread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
-    let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
-    if reader.format().is_none() && super::tgaread::is_targa(bytes) {
-        reader.set_format(image::ImageFormat::Tga);
+    let mut detected = craft_image_codecs::detect(bytes);
+    if detected.is_none() && super::tgaread::is_targa(bytes) {
+        detected = Some(craft_image_codecs::Format::Tga);
     }
-    if reader.format().is_none() && super::pcxread::is_pcx(bytes) {
+    if (detected.is_none() || detected == Some(craft_image_codecs::Format::Pcx)) && super::pcxread::is_pcx(bytes) {
         return as_png(super::pcxread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(MAX_RASTER_ALLOC);
-    reader.limits(limits);
-    let kind = reader.format().ok_or_else(|| err("not an image VectorCraft reads (see document.formats)"))?;
+    let kind = detected.ok_or_else(|| err("not an image VectorCraft reads (see document.formats)"))?;
     let f = image_format(kind).ok_or_else(|| err(format!("{kind:?} images can't be opened (see document.formats)")))?;
     // A photo whose EXIF orientation turns or flips it (a camera held upright) is stored as it is
     // seen, so it places the way it was taken (#4284); the others keep their own bytes.
@@ -1009,8 +1008,8 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
         _ => None,
     };
     if let Some(kept) = kept {
-        let (width, height) = reader.into_dimensions().map_err(err)?;
-        return stored(kept, f.mime, (width, height), ppi);
+        let size = vectorcraft_doc::header_size(bytes).ok_or_else(|| err("the image's size can't be read"))?;
+        return stored(kept, f.mime, size, ppi);
     }
     let extra_samples = || {
         let cms = vectorcraft_color::cms::active();
@@ -1023,21 +1022,23 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
         None => match (f.id == "tiff").then(|| vectorcraft_doc::cmyk::group3_tiff_rgba(bytes)).flatten() {
             Some(read) => image::DynamicImage::ImageRgba8(read.map_err(err)?),
             None => {
-                use image::ImageDecoder as _;
-                let mut decoder = reader.into_decoder().map_err(err)?;
                 // The allowance counts the decoded samples and the RGBA pixels they become (#1717).
-                let (w, h) = decoder.dimensions();
-                if decoder.total_bytes() > MAX_RASTER_ALLOC || u64::from(w) * u64::from(h) * 4 > MAX_RASTER_ALLOC {
+                // A Targa file's size is read from its header, which no signature points a probe at.
+                let tga = || (kind == craft_image_codecs::Format::Tga).then(|| super::tgaread::size(bytes)).flatten().map(|(w, h)| (w, h, 4));
+                let (w, h, per_pixel) =
+                    vectorcraft_doc::decode::decoded_layout(bytes, kind).or_else(tga).ok_or_else(|| err("the image's size can't be read"))?;
+                let pixels = u64::from(w) * u64::from(h);
+                if pixels.saturating_mul(per_pixel) > MAX_RASTER_ALLOC || pixels * 4 > MAX_RASTER_ALLOC {
                     return Err(err(format!("an image of {w} × {h} pixels is too large to draw")));
                 }
-                // A profile the decoder can't read leaves the image without one. The image decoder
-                // reads a TIFF's tags within the size of its pixels, so a small TIFF's profile is
-                // read by the TIFF decoder itself.
+                let (img, profile) = vectorcraft_doc::decode::decode_image(kind, bytes, MAX_RASTER_ALLOC).map_err(err)?;
+                // A profile the decoder can't read leaves the image without one. A TIFF's profile is
+                // read by the TIFF reader, as before.
                 icc = match f.id {
                     "tiff" => vectorcraft_doc::cmyk::tiff_icc_profile(bytes),
-                    _ => decoder.icc_profile().ok().flatten(),
+                    _ => profile,
                 };
-                image::DynamicImage::from_decoder(decoder).map_err(err)?
+                img
             }
         },
     };
@@ -1109,11 +1110,8 @@ pub fn texture_image(bytes: &[u8]) -> Result<String> {
             LoadedTexture::from_rgba(inks.width, inks.height, &rgba)
         }
         None => {
-            let mut reader = image::ImageReader::new(Cursor::new(blob.bytes.as_slice())).with_guessed_format().map_err(err)?;
-            let mut limits = image::Limits::default();
-            limits.max_alloc = Some(MAX_RASTER_ALLOC);
-            reader.limits(limits);
-            let img = reader.decode().map_err(err)?.to_rgba8();
+            let kind = craft_image_codecs::detect(&blob.bytes).ok_or_else(|| err("the image can't be read as a texture"))?;
+            let img = vectorcraft_doc::decode::decode_image(kind, &blob.bytes, MAX_RASTER_ALLOC).map_err(err)?.0.to_rgba8();
             LoadedTexture::from_rgba(img.width(), img.height(), img.as_raw())
         }
     };
