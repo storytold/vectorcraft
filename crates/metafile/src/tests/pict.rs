@@ -87,7 +87,8 @@ fn images(d: &Document) -> Vec<(Node, image::RgbaImage)> {
         .into_iter()
         .filter_map(|n| match &n.kind {
             NodeKind::Image(im) => {
-                let png = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_rgba8();
+                let decoded = craft_image_codecs::decode(&d.images[&im.key].bytes).unwrap();
+                let png = image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap();
                 Some((n.clone(), png))
             }
             _ => None,
@@ -374,10 +375,15 @@ fn quicktime(ctype: &[u8; 4], matrix: [f64; 6], w: i16, h: i16, data: &[u8]) -> 
 }
 
 fn red_jpeg() -> Vec<u8> {
-    let img = image::RgbImage::from_pixel(4, 2, image::Rgb([255, 0, 0]));
-    let mut out = std::io::Cursor::new(vec![]);
-    img.write_to(&mut out, image::ImageFormat::Jpeg).unwrap();
-    out.into_inner()
+    let img = craft_image_codecs::Image::from_raw(
+        4,
+        2,
+        craft_image_codecs::ChannelLayout::Rgb,
+        craft_image_codecs::SampleType::U8,
+        [255u8, 0, 0].repeat(8),
+    )
+    .unwrap();
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Jpeg, &craft_image_codecs::EncodeOptions::default()).unwrap()
 }
 
 #[test]

@@ -15,10 +15,13 @@ fn fx(id: &str) -> Effect {
 }
 
 /// `img` encoded as `format`.
-fn encoded(img: image::DynamicImage, format: image::ImageFormat) -> Vec<u8> {
-    let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), format).unwrap();
-    out
+fn encoded(img: image::DynamicImage, format: craft_image_codecs::Format) -> Vec<u8> {
+    let (layout, data) = match format {
+        craft_image_codecs::Format::Jpeg => (craft_image_codecs::ChannelLayout::Rgb, img.to_rgb8().into_raw()),
+        _ => (craft_image_codecs::ChannelLayout::Rgba, img.to_rgba8().into_raw()),
+    };
+    let raw = craft_image_codecs::Image::from_raw(img.width(), img.height(), layout, craft_image_codecs::SampleType::U8, data).unwrap();
+    craft_image_codecs::encode(&raw, format, &craft_image_codecs::EncodeOptions::default()).unwrap()
 }
 
 /// A 100×100 RGBA image, transparent but for an opaque disc of radius 30 in its middle.
@@ -130,7 +133,7 @@ fn outline_object_follows_the_opaque_area_of_an_image_with_alpha() {
     let gray_alpha = image::DynamicImage::ImageLumaA8(disc().to_luma_alpha8());
     let deep = image::DynamicImage::ImageRgba16(disc().to_rgba16());
     for (name, img) in [("rgba", disc()), ("gray and alpha", gray_alpha), ("16 bits a channel", deep)] {
-        let (d, n) = image_doc(encoded(img, image::ImageFormat::Png), vec![stroke(vec![fx("path.outlineObject")])], 1);
+        let (d, n) = image_doc(encoded(img, craft_image_codecs::Format::Png), vec![stroke(vec![fx("path.outlineObject")])], 1);
         let rows = row_bounds(&d, &n);
         assert_eq!(rows.len(), 1, "{name}");
         // The disc runs from 70 to 130; the frame from 50 to 150.
@@ -143,9 +146,9 @@ fn outline_object_follows_the_frame_of_an_image_without_transparency() {
     let opaque = image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(100, 100, image::Rgb([0, 0, 255])));
     let solid = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(100, 100, image::Rgba([0, 0, 255, 200])));
     let formats = [
-        ("jpeg", encoded(opaque.clone(), image::ImageFormat::Jpeg)),
-        ("rgb png", encoded(opaque, image::ImageFormat::Png)),
-        ("rgba png, every pixel more than half opaque", encoded(solid, image::ImageFormat::Png)),
+        ("jpeg", encoded(opaque.clone(), craft_image_codecs::Format::Jpeg)),
+        ("rgb png", encoded(opaque, craft_image_codecs::Format::Png)),
+        ("rgba png, every pixel more than half opaque", encoded(solid, craft_image_codecs::Format::Png)),
     ];
     for (name, bytes) in formats {
         let (d, n) = image_doc(bytes, vec![stroke(vec![fx("path.outlineObject")])], 1);
@@ -165,7 +168,7 @@ fn convert_to_shape_keeps_the_frame_beside_outline_object() {
     let mut fill = FillLayer::new(Paint::solid(Color::rgb(0.0, 1.0, 0.0)));
     fill.effects = vec![rect.clone()];
     let items = vec![AppearanceItem::Fill(fill), stroke(vec![fx("path.outlineObject")]), stroke(vec![rect, fx("path.outlineObject")])];
-    let (d, n) = image_doc(encoded(disc(), image::ImageFormat::Png), items, 2);
+    let (d, n) = image_doc(encoded(disc(), craft_image_codecs::Format::Png), items, 2);
     let rows = row_bounds(&d, &n);
     assert_eq!(rows.len(), 3, "{rows:?}");
     assert!(near(rows[0], [50.0, 50.0, 150.0, 150.0], 1e-9), "{rows:?}");
@@ -179,7 +182,7 @@ fn convert_to_shape_keeps_the_frame_beside_outline_object() {
 #[test]
 fn a_transparent_image_gives_outline_object_nothing_to_paint() {
     let clear = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(100, 100, image::Rgba([0, 0, 0, 100])));
-    let (d, n) = image_doc(encoded(clear, image::ImageFormat::Png), vec![stroke(vec![fx("path.outlineObject")])], 1);
+    let (d, n) = image_doc(encoded(clear, craft_image_codecs::Format::Png), vec![stroke(vec![fx("path.outlineObject")])], 1);
     assert!(row_bounds(&d, &n).is_empty());
     let art = reshape::reshape(Some(&d), &n, None).unwrap();
     assert!(matches!(art.children().unwrap().as_slice(), [only] if matches!(only.kind, NodeKind::Image(_))));
@@ -190,7 +193,7 @@ fn the_outline_follows_the_images_own_pixels_and_placement() {
     // Pixels kept on the image itself (art made outside a document), placed at half size.
     let (_, mut n) = image_doc(vec![], vec![stroke(vec![fx("path.outlineObject")])], 1);
     if let NodeKind::Image(im) = &mut n.kind {
-        im.pixels = Some(Arc::new(ImageBlob::new("image/png", encoded(disc(), image::ImageFormat::Png))));
+        im.pixels = Some(Arc::new(ImageBlob::new("image/png", encoded(disc(), craft_image_codecs::Format::Png))));
         im.xf = Affine::translate((10.0, 20.0)) * Affine::scale(0.5);
     }
     let art = reshape::reshape(None, &n, None).unwrap();
@@ -206,7 +209,7 @@ fn an_off_center_outline_turns_and_reflects_with_a_smaller_copy_of_the_pixels() 
     let half = image::DynamicImage::ImageRgba8(image::RgbaImage::from_fn(60, 30, |x, y| {
         image::Rgba([255, 0, 0, if (6..20).contains(&x) && (3..12).contains(&y) { 255 } else { 0 }])
     }));
-    let (d, mut n) = image_doc(encoded(half, image::ImageFormat::Png), vec![stroke(vec![fx("path.outlineObject")])], 1);
+    let (d, mut n) = image_doc(encoded(half, craft_image_codecs::Format::Png), vec![stroke(vec![fx("path.outlineObject")])], 1);
     let xf = Affine::translate((100.0, 40.0)) * Affine::rotate(std::f64::consts::FRAC_PI_2) * Affine::scale_non_uniform(-1.0, 1.0);
     if let NodeKind::Image(im) = &mut n.kind {
         (im.width, im.height, im.xf) = (120, 60, xf);
@@ -221,7 +224,7 @@ fn an_off_center_outline_turns_and_reflects_with_a_smaller_copy_of_the_pixels() 
 
 #[test]
 fn an_image_in_a_group_exports_with_its_outline() {
-    let (mut d, n) = image_doc(encoded(disc(), image::ImageFormat::Png), vec![stroke(vec![fx("path.outlineObject")])], 1);
+    let (mut d, n) = image_doc(encoded(disc(), craft_image_codecs::Format::Png), vec![stroke(vec![fx("path.outlineObject")])], 1);
     let l = d.layers[0].id;
     d.remove(n.id).unwrap();
     let g = d.alloc_id();
@@ -256,7 +259,7 @@ fn baked_strokes(d: &Document) -> Vec<Rect> {
 fn an_image_under_a_clipping_mask_or_with_an_opacity_mask_exports_with_its_outline() {
     let disc_outline = |paths: &[Rect]| matches!(paths, [b] if near(*b, [70.0, 70.0, 130.0, 130.0], 0.5));
     // Under a clipping mask that covers the whole image.
-    let (mut d, n) = image_doc(encoded(disc(), image::ImageFormat::Png), vec![stroke(vec![fx("path.outlineObject")])], 1);
+    let (mut d, n) = image_doc(encoded(disc(), craft_image_codecs::Format::Png), vec![stroke(vec![fx("path.outlineObject")])], 1);
     let l = d.layers[0].id;
     d.remove(n.id).unwrap();
     let clip = Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0)), Default::default());
@@ -265,7 +268,7 @@ fn an_image_under_a_clipping_mask_or_with_an_opacity_mask_exports_with_its_outli
     let paths = baked_strokes(&d);
     assert!(disc_outline(&paths), "{paths:?}");
     // With an opacity mask.
-    let (mut d, mut n) = image_doc(encoded(disc(), image::ImageFormat::Png), vec![stroke(vec![fx("path.outlineObject")])], 1);
+    let (mut d, mut n) = image_doc(encoded(disc(), craft_image_codecs::Format::Png), vec![stroke(vec![fx("path.outlineObject")])], 1);
     let mut white = Node::path(NodeId(999), vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0)), Default::default());
     white.appearance.set_fill(Paint::solid(Color::WHITE));
     n.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(Node::group(NodeId(998), vec![Arc::new(white)]), true)));
@@ -279,7 +282,7 @@ fn an_image_under_a_clipping_mask_or_with_an_opacity_mask_exports_with_its_outli
 fn outline_object_on_a_fill_and_on_an_indexed_image_follows_the_opaque_area() {
     let mut fill = FillLayer::new(Paint::solid(Color::rgb(0.0, 1.0, 0.0)));
     fill.effects = vec![fx("path.outlineObject")];
-    let (d, n) = image_doc(encoded(disc(), image::ImageFormat::Png), vec![AppearanceItem::Fill(fill)], 1);
+    let (d, n) = image_doc(encoded(disc(), craft_image_codecs::Format::Png), vec![AppearanceItem::Fill(fill)], 1);
     let rows = row_bounds(&d, &n);
     assert!(matches!(rows.as_slice(), [b] if near(*b, [70.0, 70.0, 130.0, 130.0], 0.5)), "{rows:?}");
     // A palette image whose first color is transparent (a tRNS chunk).
@@ -308,15 +311,18 @@ fn an_image_too_large_or_too_complex_to_outline_keeps_its_frame() {
     }
     // A checkerboard of 2 px squares, whose outline would need more than 100,000 anchor points.
     let checker = image::RgbaImage::from_fn(640, 640, |x, y| image::Rgba([0, 0, 0, if (x / 2 + y / 2) % 2 == 0 { 255 } else { 0 }]));
-    let (d, n) =
-        image_doc(encoded(image::DynamicImage::ImageRgba8(checker), image::ImageFormat::Png), vec![stroke(vec![fx("path.outlineObject")])], 1);
+    let (d, n) = image_doc(
+        encoded(image::DynamicImage::ImageRgba8(checker), craft_image_codecs::Format::Png),
+        vec![stroke(vec![fx("path.outlineObject")])],
+        1,
+    );
     assert!(matches!(row_bounds(&d, &n).as_slice(), [b] if near(*b, [50.0, 50.0, 150.0, 150.0], 1e-9)));
 }
 
 #[test]
 fn an_outline_is_traced_once_for_its_pixels_and_dropped_with_them() {
     let traces = || reshape::TRACES.with(std::cell::Cell::get);
-    let (d, n) = image_doc(encoded(disc(), image::ImageFormat::Png), vec![stroke(vec![fx("path.outlineObject")])], 1);
+    let (d, n) = image_doc(encoded(disc(), craft_image_codecs::Format::Png), vec![stroke(vec![fx("path.outlineObject")])], 1);
     let NodeKind::Image(im) = &n.kind else { panic!("not an image") };
     let before = traces();
     let first = reshape::opaque_area(&[Some(&d)], im).unwrap();
@@ -331,7 +337,7 @@ fn an_outline_is_traced_once_for_its_pixels_and_dropped_with_them() {
     // Once the document and its pixels are gone, the next trace drops their entry.
     drop(d);
     assert!(pixels.upgrade().is_none());
-    let (other, _) = image_doc(encoded(disc(), image::ImageFormat::Png), vec![], 1);
+    let (other, _) = image_doc(encoded(disc(), craft_image_codecs::Format::Png), vec![], 1);
     reshape::opaque_area(&[Some(&other)], im).unwrap();
     assert_eq!(traces(), before + 2);
     assert!(!reshape::keeps_outline(&pixels));

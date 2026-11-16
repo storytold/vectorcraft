@@ -50,8 +50,8 @@ fn source_backed_tiles_retain_the_embedded_jpeg_pixels() {
     assert_eq!((image.width, image.height), (400, 300));
     assert_eq!(image.transform, Affine::IDENTITY);
     let Pixels::Rgba8(pixels) = &image.pixels else { panic!("expected retained level-zero pixels") };
-    let expected = image::load_from_memory(&source(&bytes)).unwrap().into_rgba8();
-    assert_eq!(pixels.as_slice(), expected.as_raw());
+    let expected = craft_image_codecs::decode(&source(&bytes)).unwrap().to_rgba8();
+    assert_eq!(pixels.as_slice(), expected.as_slice());
     assert!(pixels.as_chunks::<4>().0.iter().all(|p| p[3] == 255));
     assert!(pixels.as_chunks::<4>().0.iter().any(|p| p[0] != p[1]));
 }

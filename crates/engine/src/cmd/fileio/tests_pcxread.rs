@@ -49,7 +49,27 @@ fn rle(raw: &[u8]) -> Vec<u8> {
 /// The pixels `raster_image` stores for `f`, row by row.
 fn pixels(f: &[u8]) -> Vec<[u8; 4]> {
     let img = raster_image(f).unwrap();
-    image::load_from_memory(&img.blob.bytes).unwrap().to_rgba8().pixels().map(|p| p.0).collect()
+    craft_image_codecs::decode(&img.blob.bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8()
+        .pixels()
+        .map(|p| p.0)
+        .collect()
 }
 
 /// The 16 colors of a header palette: entry `i` is (16 i, 255 − 16 i, i).
