@@ -3242,6 +3242,11 @@ digits	Malayalam	Malayalam
 	Search commands, tools, panels and effects…	Befehle, Werkzeuge, Bedienfelder und Effekte suchen…
 	No commands match	Keine passenden Befehle
 	{pos} of {total}: {name}	{pos} von {total}: {name}
+	No menu item	Kein Menüeintrag
+	Toolbar	Werkzeugleiste
+	{toolbar}, in the {tool} group	{toolbar}, in der Gruppe „{tool}“
+	Tool	Werkzeug
+	Command	Befehl
 @plural	{n} result|{n} results	{n} Ergebnis|{n} Ergebnisse
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} von {n} Ergebnis. Tippen Sie weiter, um sie einzugrenzen.|{shown} von {n} Ergebnissen. Tippen Sie weiter, um sie einzugrenzen.
 	Recent Commands	Zuletzt verwendete Befehle

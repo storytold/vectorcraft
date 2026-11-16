@@ -4318,6 +4318,9 @@ font-technology	Variable	Zmienne
 	Search commands, tools, panels and effects…	Szukaj poleceń, narzędzi, paneli i efektów…
 	No commands match	Żadne polecenie nie pasuje
 	{pos} of {total}: {name}	{pos} z {total}: {name}
+	No menu item	Brak pozycji menu
+	Toolbar	Pasek narzędzi
+	{toolbar}, in the {tool} group	{toolbar}, w grupie {tool}
 @plural	{n} result|{n} results	{n} wynik|{n} wyniki|{n} wyników
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} wyniku. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.
 	Recent Commands	Ostatnie polecenia

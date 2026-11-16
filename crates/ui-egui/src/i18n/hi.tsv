@@ -4457,6 +4457,9 @@ antiAlias	Sharp	शार्प
 	Search commands, tools, panels and effects…	आदेश, टूल, पैनल्स और इफ़ेक्ट्स खोजें…
 	No commands match	कोई आदेश मेल नहीं खाता
 	{pos} of {total}: {name}	{total} में से {pos}: {name}
+	No menu item	कोई मेनू आइटम नहीं
+	Toolbar	टूलबार
+	{toolbar}, in the {tool} group	{toolbar}, {tool} समूह में
 @plural	{n} result|{n} results	{n} परिणाम|{n} परिणाम
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।|{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।
 	Recent Commands	हाल के आदेश

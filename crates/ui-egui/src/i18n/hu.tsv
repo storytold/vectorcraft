@@ -3896,6 +3896,9 @@ mark-style	Japanese	Japán
 	Search commands, tools, panels and effects…	Parancsok, eszközök, panelek és effektusok keresése…
 	No commands match	Nincs egyező parancs
 	{pos} of {total}: {name}	{pos}/{total}: {name}
+	No menu item	Nincs menüpont
+	Toolbar	Eszköztár
+	{toolbar}, in the {tool} group	{toolbar}, a(z) {tool} csoportjában
 @plural	{n} result|{n} results	{n} találat
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} találatból {shown} látható. Gépeljen tovább a szűkítéshez.
 	Recent Commands	Legutóbbi parancsok

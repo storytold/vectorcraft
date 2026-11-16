@@ -4443,6 +4443,11 @@ digits	Malayalam	馬來亞拉姆數字
 	Search commands, tools, panels and effects…	搜尋指令、工具、面板與效果…
 	No commands match	沒有符合的指令
 	{pos} of {total}: {name}	第 {pos} 個，共 {total} 個：{name}
+	No menu item	無選單項目
+	Toolbar	工具列
+	{toolbar}, in the {tool} group	{toolbar}，位於 {tool} 群組中
+	Tool	工具
+	Command	指令
 @plural	{n} result|{n} results	{n} 個結果
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 個結果，顯示 {shown} 個。繼續輸入以縮小範圍。
 	Recent Commands	最近使用的指令

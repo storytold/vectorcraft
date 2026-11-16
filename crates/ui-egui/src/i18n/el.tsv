@@ -3943,6 +3943,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	Search commands, tools, panels and effects…	Αναζήτηση εντολών, εργαλείων, πλαισίων και εφέ…
 	No commands match	Καμία εντολή δεν ταιριάζει
 	{pos} of {total}: {name}	{pos} από {total}: {name}
+	No menu item	Χωρίς στοιχείο μενού
+	Toolbar	Γραμμή εργαλείων
+	{toolbar}, in the {tool} group	{toolbar}, στην ομάδα {tool}
 @plural	{n} result|{n} results	{n} αποτέλεσμα|{n} αποτελέσματα
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} από {n} αποτέλεσμα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.|{shown} από {n} αποτελέσματα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.
 	Recent Commands	Πρόσφατες εντολές

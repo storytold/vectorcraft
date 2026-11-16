@@ -6080,6 +6080,9 @@ font-technology	Variable	ცვლადი
 	Search commands, tools, panels and effects…	ბრძანებების, ხელსაწყოების, პანელებისა და ეფექტების ძიება…
 	No commands match	შესაბამისი ბრძანება არ არის
 	{pos} of {total}: {name}	{pos} / {total}: {name}
+	No menu item	მენიუს ელემენტი არ არის
+	Toolbar	ხელსაწყოთა ზოლი
+	{toolbar}, in the {tool} group	{toolbar}, ჯგუფში {tool}
 @plural	{n} result|{n} results	{n} შედეგი
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} შედეგიდან {shown}. გააგრძელეთ აკრეფა მათ შესამცირებლად.
 	Recent Commands	ბოლო ბრძანებები

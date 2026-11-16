@@ -4372,6 +4372,9 @@ font-technology	Variable	Varijabilni
 	Search commands, tools, panels and effects…	Pretraži naredbe, alate, panele i efekte…
 	No commands match	Nijedna naredba se ne podudara
 	{pos} of {total}: {name}	{pos} od {total}: {name}
+	No menu item	Nema stavke menija
+	Toolbar	Traka s alatima
+	{toolbar}, in the {tool} group	{toolbar}, u grupi {tool}
 @plural	{n} result|{n} results	{n} rezultat|{n} rezultata|{n} rezultata
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.
 	Recent Commands	Nedavne naredbe

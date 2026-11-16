@@ -2735,6 +2735,9 @@ digits	Malayalam	Malaiala
 	Search commands, tools, panels and effects…	Pesquisar comandos, ferramentas, painéis e efeitos…
 	No commands match	Nenhum comando corresponde
 	{pos} of {total}: {name}	{pos} de {total}: {name}
+	No menu item	Nenhum item de menu
+	Toolbar	Barra de Ferramentas
+	{toolbar}, in the {tool} group	{toolbar}, no grupo {tool}
 @plural	{n} result|{n} results	{n} resultado|{n} resultados
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Continue digitando para filtrá-los.|{shown} de {n} resultados. Continue digitando para filtrá-los.
 	Recent Commands	Comandos recentes

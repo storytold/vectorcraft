@@ -4105,6 +4105,9 @@ digits	Malayalam	Malaiàlam
 	Search commands, tools, panels and effects…	Cerca ordres, eines, panells i efectes…
 	No commands match	Cap ordre coincideix
 	{pos} of {total}: {name}	{pos} de {total}: {name}
+	No menu item	Cap element de menú
+	Toolbar	Barra d’eines
+	{toolbar}, in the {tool} group	{toolbar}, al grup {tool}
 @plural	{n} result|{n} results	{n} resultat|{n} resultats
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultat. Continueu escrivint per reduir-los.|{shown} de {n} resultats. Continueu escrivint per reduir-los.
 	Recent Commands	Ordres recents

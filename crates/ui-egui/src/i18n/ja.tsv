@@ -3197,6 +3197,9 @@ mark-style	Japanese	日本式
 	Search commands, tools, panels and effects…	コマンド、ツール、パネル、効果を検索…
 	No commands match	一致するコマンドはありません
 	{pos} of {total}: {name}	{total} 件中 {pos} 件目: {name}
+	No menu item	メニュー項目なし
+	Toolbar	ツールバー
+	{toolbar}, in the {tool} group	{toolbar}、{tool} のグループ内
 @plural	{n} result|{n} results	{n} 件
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} 件中 {shown} 件。続けて入力すると絞り込めます。
 	Recent Commands	最近使ったコマンド

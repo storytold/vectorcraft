@@ -3653,6 +3653,11 @@ mark-style	Japanese	Kiểu Nhật
 	Search commands, tools, panels and effects…	Tìm kiếm lệnh, công cụ, bảng và hiệu ứng…
 	No commands match	Không có lệnh nào khớp
 	{pos} of {total}: {name}	{pos} trên {total}: {name}
+	No menu item	Không có mục menu
+	Toolbar	Thanh công cụ
+	{toolbar}, in the {tool} group	{toolbar}, trong nhóm {tool}
+	Tool	Công cụ
+	Command	Lệnh
 @plural	{n} result|{n} results	{n} kết quả
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} trên {n} kết quả. Tiếp tục gõ để thu hẹp.
 	Recent Commands	Lệnh gần đây

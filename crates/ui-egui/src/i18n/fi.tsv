@@ -4396,6 +4396,9 @@ font-technology	Variable	Muuttuvat
 	Search commands, tools, panels and effects…	Hae komentoja, työkaluja, paneeleita ja tehosteita…
 	No commands match	Mikään komento ei vastaa hakua
 	{pos} of {total}: {name}	{pos}/{total}: {name}
+	No menu item	Ei valikkokohdetta
+	Toolbar	Työkalurivi
+	{toolbar}, in the {tool} group	{toolbar}, ryhmässä {tool}
 @plural	{n} result|{n} results	{n} tulos|{n} tulosta
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown}/{n} tulosta. Kirjoita lisää rajataksesi tuloksia.|{shown}/{n} tulosta. Kirjoita lisää rajataksesi tuloksia.
 	Recent Commands	Viimeisimmät komennot

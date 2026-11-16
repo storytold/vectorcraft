@@ -3311,6 +3311,11 @@ digits	Malayalam	Малаялам
 	Search commands, tools, panels and effects…	Пошук команд, інструментів, панелей та ефектів…
 	No commands match	Немає відповідних команд
 	{pos} of {total}: {name}	{pos} з {total}: {name}
+	No menu item	Немає пункту меню
+	Toolbar	Панель інструментів
+	{toolbar}, in the {tool} group	{toolbar}, у групі «{tool}»
+	Tool	Інструмент
+	Command	Команда
 @plural	{n} result|{n} results	{n} результат|{n} результати|{n} результатів
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} з {n} результату. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.
 	Recent Commands	Нещодавні команди

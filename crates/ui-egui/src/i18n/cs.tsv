@@ -4477,6 +4477,9 @@ font-technology	Variable	Variabilní
 	Search commands, tools, panels and effects…	Hledat příkazy, nástroje, panely a efekty…
 	No commands match	Žádný příkaz neodpovídá
 	{pos} of {total}: {name}	{pos} z {total}: {name}
+	No menu item	Žádná položka nabídky
+	Toolbar	Panel nástrojů
+	{toolbar}, in the {tool} group	{toolbar}, ve skupině {tool}
 @plural	{n} result|{n} results	{n} výsledek|{n} výsledky|{n} výsledků
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} výsledku. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.
 	Recent Commands	Nedávné příkazy

@@ -3367,6 +3367,12 @@
 	Search commands, tools, panels and effects…	આદેશો, ટૂલ્સ, પેનલ્સ અને ઇફેક્ટ્સ શોધો…
 	No commands match	કોઈ આદેશ મેળ ખાતો નથી
 	{pos} of {total}: {name}	{total} માંથી {pos}: {name}
+	No menu item	કોઈ મેનૂ આઇટમ નથી
+	Toolbar	ટૂલબાર
+	{toolbar}, in the {tool} group	{toolbar}, {tool} જૂથમાં
+	Tool	ટૂલ
+	Command	કમાન્ડ
+	Panel	પેનલ
 @plural	{n} result|{n} results	{n} પરિણામ|{n} પરિણામો
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} માંથી {shown} પરિણામ. તેમને સંકુચિત કરવા લખતા રહો.|{n} માંથી {shown} પરિણામો. તેમને સંકુચિત કરવા લખતા રહો.
 	Recent Commands	તાજેતરના આદેશો
