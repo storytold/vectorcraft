@@ -258,9 +258,13 @@ fn reduction(bytes: &[u8], allowance: u64) -> Option<Reduction> {
         return None;
     }
     let to = fitted_dims(w, h, allowance)?;
-    // A PNG that isn't interlaced is read a row at a time when the reader's buffers fit the allowance.
+    // A PNG that isn't interlaced or animated (and upright in pre-pixel EXIF) is read a row at a time when the reader's buffers fit the allowance.
     let row_scratch = if format == image::ImageFormat::Png {
-        png_reader(bytes).filter(|r| !r.info().interlaced).and_then(|r| png_row_scratch(&r)).filter(|&s| s <= allowance)
+        let streamed = craft_image_codecs::PngDecodeRows::new_streaming(bytes, &png_streaming_limits(allowance))
+            .ok()
+            .filter(|dec| dec.streamable())
+            .and_then(|dec| png_row_scratch(&dec.header()));
+        streamed.or_else(|| png_row_scratch_from_header(bytes, w, h, d.total_bytes())).filter(|&s| s <= allowance)
     } else {
         None
     };
@@ -270,6 +274,13 @@ fn reduction(bytes: &[u8], allowance: u64) -> Option<Reduction> {
         d.total_bytes().saturating_add(band)
     });
     (rows || d.total_bytes() <= allowance).then_some(Reduction { size: (w, h), to, rows, scratch })
+}
+
+/// Streaming retains rows, not the declared full image. Preserve the renderer's source-pixel
+/// allowance even when RGBA16's declared samples exceed the shared whole-image default budget.
+/// Row scratch and the reduced pixmap are admitted separately before decoding starts.
+fn png_streaming_limits(source_pixels: u64) -> craft_image_codecs::Limits {
+    craft_image_codecs::Limits { max_width: u32::MAX, max_height: u32::MAX, max_pixels: source_pixels, max_alloc: source_pixels.saturating_mul(8) }
 }
 
 /// How many rows of an image decoded whole [`reduced_pixmap`] converts to RGBA at a time.
@@ -283,17 +294,58 @@ const PNG_KEPT_ROWS: u64 = 128 << 10;
 /// stream buffer grows by.
 const PNG_WINDOW_AND_STEP: u64 = (32 << 10) + (8 << 10);
 
-/// The most memory `r` takes in its buffers to read its image a row at a time: the stream buffer
-/// holds the rows already read up to [`PNG_KEPT_ROWS`] or four rows, whichever is more, the previous
-/// and current rows, and [`PNG_WINDOW_AND_STEP`]. The buffer grows by doubling its reservation,
-/// and while it grows its old reservation and the new one, up to twice the size it holds, are both
-/// allocated: three times that size at most. A copy of a stored row and the row given out come on
-/// top. `None` when a row given out doesn't fit memory.
-fn png_row_scratch(r: &png::Reader<std::io::Cursor<&[u8]>>) -> Option<u64> {
-    let info = r.info();
-    // A filter byte and the row's samples, in whole bytes.
-    let stored = 1 + (u64::from(info.width) * info.color_type.samples() as u64 * info.bit_depth as u64).div_ceil(8);
-    let out = u64::try_from(r.output_line_size(info.width)?).ok()?;
+/// The most memory `craft-image-codecs`'s PNG row decoder takes in its buffers to read its image
+/// a row at a time: the stream buffer holds the rows already read up to [`PNG_KEPT_ROWS`] or four
+/// rows, whichever is more, the previous and current rows, and [`PNG_WINDOW_AND_STEP`]. The buffer
+/// grows by doubling its reservation, and while it grows its old reservation and the new one, up
+/// to twice the size it holds, are both allocated: three times that size at most. A copy of a
+/// stored row and the row given out come on top. `None` when a row given out doesn't fit memory.
+fn png_row_scratch(hdr: &craft_image_codecs::PngHeader) -> Option<u64> {
+    let out = u64::from(hdr.width).checked_mul(hdr.layout.channels() as u64)?.checked_mul(hdr.sample.bytes() as u64)?;
+    png_row_scratch_for_row(out)
+}
+
+/// The row decoder rejects a truncated PNG's tiny IDAT before it can report its header. For a
+/// size estimate, the image decoder still gives us the declared output bytes; use those only when
+/// the PNG header says it is a static, non-interlaced image, the format the renderer can stream.
+fn png_row_scratch_from_header(bytes: &[u8], width: u32, height: u32, total_bytes: u64) -> Option<u64> {
+    const SIG: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
+    if bytes.get(..8)? != SIG || height == 0 || !total_bytes.is_multiple_of(u64::from(height)) {
+        return None;
+    }
+    let mut at = 8usize;
+    let mut header = false;
+    loop {
+        let len = u32::from_be_bytes(bytes.get(at..at + 4)?.try_into().ok()?) as usize;
+        let kind = bytes.get(at + 4..at + 8)?;
+        let data_at = at.checked_add(8)?;
+        let end = data_at.checked_add(len)?;
+        let data = bytes.get(data_at..end)?;
+        match kind {
+            b"IHDR" if len == 13 && !header => {
+                header = true;
+                if at != 8
+                    || u32::from_be_bytes(data[..4].try_into().ok()?) != width
+                    || u32::from_be_bytes(data[4..8].try_into().ok()?) != height
+                    || data[12] != 0
+                {
+                    return None;
+                }
+            }
+            b"acTL" | b"eXIf" => return None,
+            b"IDAT" if header => {
+                let row = total_bytes / u64::from(height);
+                return row.checked_add(1).and_then(png_row_scratch_for_row);
+            }
+            _ => {}
+        }
+        at = end.checked_add(4)?; // CRC
+    }
+}
+
+fn png_row_scratch_for_row(out: u64) -> Option<u64> {
+    // A filter byte and the row's samples.
+    let stored = 1u64.checked_add(out)?;
     let kept = (stored * 4).next_multiple_of(64).max(PNG_KEPT_ROWS);
     let stream = kept + stored * 2 + PNG_WINDOW_AND_STEP;
     Some(stream * 3 + stored + out)
@@ -313,14 +365,6 @@ fn fitted_dims(w: u32, h: u32, allowance: u64) -> Option<(u32, u32)> {
     (u64::from(nw) * u64::from(nh) * 4 <= allowance).then_some((nw, nh))
 }
 
-/// A PNG reader of `bytes` that gives 8-bit gray, gray with alpha, RGB or RGBA rows, with its
-/// header and the chunks before the pixels read.
-fn png_reader(bytes: &[u8]) -> Option<png::Reader<std::io::Cursor<&[u8]>>> {
-    let mut d = png::Decoder::new(std::io::Cursor::new(bytes));
-    d.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
-    d.read_info().ok()
-}
-
 /// `bytes` decoded at the size [`reduction`] gives. Each pixel of the result is the mean of the
 /// image's pixels it covers. [`Undecoded::Unreadable`] when they can't be read, and
 /// [`Undecoded::NoRoom`] when the result and what reading takes ([`Reduction::scratch`]) don't fit
@@ -335,19 +379,64 @@ fn reduced_pixmap(bytes: &[u8], r: &Reduction) -> Result<vello_cpu::Pixmap, Unde
 
 /// `bytes` read and shrunk as [`reduced_pixmap`] says.
 fn shrunk(bytes: &[u8], r: &Reduction) -> Option<vello_cpu::Pixmap> {
+    shrunk_with_png_limits(bytes, r, &png_streaming_limits(allowance()))
+}
+
+fn shrunk_with_png_limits(bytes: &[u8], r: &Reduction, png_limits: &craft_image_codecs::Limits) -> Option<vello_cpu::Pixmap> {
     let mut shrink = Shrink::new(r.size, r.to);
     if r.rows {
-        let mut reader = png_reader(bytes)?;
-        let (color, _) = reader.output_color_type();
-        while let Some(row) = reader.next_row().ok()? {
-            let data = row.data();
-            match color {
-                png::ColorType::Grayscale => shrink.row(data.iter().map(|&g| [g, g, g, 255])),
-                png::ColorType::GrayscaleAlpha => shrink.row(data.as_chunks::<2>().0.iter().map(|&[g, a]| [g, g, g, a])),
-                png::ColorType::Rgb => shrink.row(data.as_chunks::<3>().0.iter().map(|&[r, g, b]| [r, g, b, 255])),
-                png::ColorType::Rgba => shrink.row(data.as_chunks::<4>().0.iter().copied()),
-                png::ColorType::Indexed => return None,
-            }
+        use craft_image_codecs::{ChannelLayout, CodecError, Format, PngDecodeRows, SampleType};
+        let mut dec = PngDecodeRows::new_streaming(bytes, png_limits).ok()?;
+        if !dec.streamable() {
+            return None;
+        }
+        let hdr = dec.header();
+        // Yield after each row and stop once all pixels have arrived. The pinned decoder's
+        // first tail batch only locates a text chunk; later batches inflate/retain its value.
+        // Never run those batches: the renderer needs pixels, not ancillary text. Its underlying
+        // PNG reader also ignores text chunks before IDAT, so neither location retains text.
+        for _ in 0..hdr.height {
+            let _extras = dec
+                .step_stream::<CodecError>(1, &mut || false, &mut |_y, row| {
+                    match (hdr.layout, hdr.sample) {
+                        (ChannelLayout::Gray, SampleType::U8) => shrink.row(row.iter().map(|&g| [g, g, g, 255])),
+                        (ChannelLayout::GrayA, SampleType::U8) => shrink.row(row.as_chunks::<2>().0.iter().map(|&[g, a]| [g, g, g, a])),
+                        (ChannelLayout::Rgb, SampleType::U8) => shrink.row(row.as_chunks::<3>().0.iter().map(|&[r, g, b]| [r, g, b, 255])),
+                        (ChannelLayout::Rgba, SampleType::U8) => shrink.row(row.as_chunks::<4>().0.iter().copied()),
+                        (ChannelLayout::Gray, SampleType::U16) => shrink.row(row.as_chunks::<2>().0.iter().map(|&g| {
+                            let v = (u16::from_ne_bytes(g) >> 8) as u8;
+                            [v, v, v, 255]
+                        })),
+                        (ChannelLayout::GrayA, SampleType::U16) => shrink.row(row.as_chunks::<4>().0.iter().map(|&[g0, g1, a0, a1]| {
+                            let g = (u16::from_ne_bytes([g0, g1]) >> 8) as u8;
+                            let a = (u16::from_ne_bytes([a0, a1]) >> 8) as u8;
+                            [g, g, g, a]
+                        })),
+                        (ChannelLayout::Rgb, SampleType::U16) => shrink.row(row.as_chunks::<6>().0.iter().map(|&[r0, r1, g0, g1, b0, b1]| {
+                            [
+                                (u16::from_ne_bytes([r0, r1]) >> 8) as u8,
+                                (u16::from_ne_bytes([g0, g1]) >> 8) as u8,
+                                (u16::from_ne_bytes([b0, b1]) >> 8) as u8,
+                                255,
+                            ]
+                        })),
+                        (ChannelLayout::Rgba, SampleType::U16) => {
+                            shrink.row(row.as_chunks::<8>().0.iter().map(|&[r0, r1, g0, g1, b0, b1, a0, a1]| {
+                                [
+                                    (u16::from_ne_bytes([r0, r1]) >> 8) as u8,
+                                    (u16::from_ne_bytes([g0, g1]) >> 8) as u8,
+                                    (u16::from_ne_bytes([b0, b1]) >> 8) as u8,
+                                    (u16::from_ne_bytes([a0, a1]) >> 8) as u8,
+                                ]
+                            }))
+                        }
+                        _ => {
+                            return Err(CodecError::Unsupported { format: Format::Png, reason: "unsupported PNG channel layout".into() });
+                        }
+                    }
+                    Ok(())
+                })
+                .ok()?;
         }
     } else {
         let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().ok()?;
@@ -587,6 +676,58 @@ mod tests {
         assert_eq!(room_for(MAX_DECODE_ALLOC + 1, 2 * MAX_DECODE_ALLOC), Err(Undecoded::Unreadable));
         assert_eq!(room_for(MAX_DECODE_ALLOC, MAX_DECODE_ALLOC + 1), Err(Undecoded::NoRoom));
         assert_eq!(room_for(MAX_DECODE_ALLOC, MAX_DECODE_ALLOC), Ok(()));
+    }
+
+    #[test]
+    fn streaming_header_accepts_rgba16_above_whole_image_default() {
+        // Header-only fixture: opening the stream checks declared size without allocating or
+        // decoding the 1.2 GB canvas. Padding meets the decoder's compressed-size plausibility
+        // bound; no rows are requested from this deliberately incomplete image.
+        let (w, h) = (10_000u32, 15_000u32);
+        let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+        let ihdr = [&b"IHDR"[..], &w.to_be_bytes(), &h.to_be_bytes(), &[16, 6, 0, 0, 0]].concat();
+        let mut idat = b"IDAT\x78\x9c".to_vec();
+        idat.resize(1_200_000, 0);
+        for chunk in [&ihdr[..], &idat, b"IEND"] {
+            bytes.extend((chunk.len() as u32 - 4).to_be_bytes());
+            bytes.extend(chunk);
+            let mut crc = flate2::Crc::new();
+            crc.update(chunk);
+            bytes.extend(crc.sum().to_be_bytes());
+        }
+        let default = craft_image_codecs::Limits { max_alloc: 1 << 30, max_pixels: 150_000_000, ..Default::default() };
+        assert!(craft_image_codecs::PngDecodeRows::new_streaming(&bytes, &default).is_err());
+        let rows = craft_image_codecs::PngDecodeRows::new_streaming(&bytes, &png_streaming_limits(150_000_000)).unwrap();
+        assert_eq!((rows.header().width, rows.header().height), (w, h));
+        assert!(rows.streamable());
+        assert!(craft_image_codecs::PngDecodeRows::new_streaming(&bytes, &png_streaming_limits(149_999_999)).is_err());
+    }
+
+    #[test]
+    fn streaming_reduction_does_not_retain_text_after_pixels() {
+        let mut bytes = Vec::new();
+        striped(8).write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png).unwrap();
+        let mut chunk = b"tEXtComment\0".to_vec();
+        chunk.extend(std::iter::repeat_n(b'x', 1 << 20));
+        // PNG's IEEE CRC over type and payload, kept local to this fixture.
+        let mut crc = u32::MAX;
+        for &byte in &chunk {
+            crc ^= u32::from(byte);
+            for _ in 0..8 {
+                crc = (crc >> 1) ^ (0xedb88320 & 0u32.wrapping_sub(crc & 1));
+            }
+        }
+        let mut tail = ((chunk.len() - 4) as u32).to_be_bytes().to_vec();
+        tail.extend(chunk);
+        tail.extend((!crc).to_be_bytes());
+        bytes.splice(bytes.len() - 12..bytes.len() - 12, tail);
+        let limits = craft_image_codecs::Limits { max_alloc: 1 << 19, ..Default::default() };
+        let mut full = craft_image_codecs::PngDecodeRows::new_streaming(&bytes, &limits).unwrap();
+        assert!(full.step_stream::<craft_image_codecs::CodecError>(1, &mut || true, &mut |_, _| Ok(())).is_err());
+        // The renderer stops after the pixels instead of retaining ancillary text.
+        let reduced = shrunk_with_png_limits(&bytes, &Reduction { size: (8, 1), to: (4, 1), rows: true, scratch: 0 }, &limits).unwrap();
+        assert_eq!((reduced.width(), reduced.height()), (4, 1));
+        assert!(red_at_its_coverage(&reduced));
     }
 
     /// Opaque red beside clear black, every other column of a `w` × 1 image.

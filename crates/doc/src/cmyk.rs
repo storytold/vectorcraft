@@ -664,9 +664,6 @@ pub fn jpeg_with_icc(bytes: &[u8], icc: &[u8]) -> Option<Vec<u8>> {
     const CHUNK: usize = 0xFFFF - 2 - ICC_SEGMENT.len() - 2;
     let chunks: Vec<&[u8]> = icc.chunks(CHUNK).collect();
     let count = u8::try_from(chunks.len()).ok().filter(|n| *n > 0)?;
-    if !bytes.starts_with(&[0xFF, 0xD8]) {
-        return None;
-    }
     let mut segments = Vec::with_capacity(icc.len() + 18 * chunks.len());
     for (i, chunk) in chunks.iter().enumerate() {
         let len = u16::try_from(chunk.len() + 2 + ICC_SEGMENT.len() + 2).ok()?;
@@ -675,6 +672,23 @@ pub fn jpeg_with_icc(bytes: &[u8], icc: &[u8]) -> Option<Vec<u8>> {
         segments.extend_from_slice(ICC_SEGMENT);
         segments.extend_from_slice(&[u8::try_from(i + 1).ok()?, count]);
         segments.extend_from_slice(chunk);
+    }
+    with_icc_segments(bytes, segments)
+}
+
+/// JPEG `bytes` without the ICC profile they carry: every `ICC_PROFILE` APP2 segment before the
+/// scan taken out, and the other segments and the scan as they are. `None` for bytes whose
+/// segments before the scan can't be read.
+pub fn jpeg_without_icc(bytes: &[u8]) -> Option<Vec<u8>> {
+    with_icc_segments(bytes, vec![])
+}
+
+/// JPEG `bytes` with every `ICC_PROFILE` APP2 segment before the scan taken out and `segments`
+/// written after the leading application segments; `None` when the bytes don't start a JPEG or
+/// their segments before the scan can't be read.
+fn with_icc_segments(bytes: &[u8], segments: Vec<u8>) -> Option<Vec<u8>> {
+    if !bytes.starts_with(&[0xFF, 0xD8]) {
+        return None;
     }
     let mut out = Vec::with_capacity(bytes.len() + segments.len());
     out.extend_from_slice(&[0xFF, 0xD8]);

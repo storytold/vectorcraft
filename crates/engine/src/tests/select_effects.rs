@@ -1,6 +1,6 @@
 //! Clicks, hovers and marquees with the selection tools leave out the area that raster effects
 //! (drop shadows, glows, blurs) paint beyond an object: there they reach the object under the
-//! effect, or nothing.
+//! effect, or nothing. Clicks and marquees take art where its geometry effects draw it.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeId;
@@ -390,4 +390,108 @@ fn group_selection_hover_over_a_drop_shadow_marks_nothing() {
         assert!(anchor_marks(&mut s).is_empty(), "({x}, {y})");
     }
     assert_eq!(press(&mut s, "groupSelection", (110.0, 50.0), (110.0, 50.0), Mods::default()), [b]);
+}
+
+/// A rectangle that a Transform effect moves 100 pt to the right is selected by a click and by a
+/// marquee where it is drawn, and not at its own place, which it no longer paints. The same holds
+/// for a group whose own Transform effect moves it.
+#[test]
+fn a_click_and_a_marquee_select_art_where_its_transform_effect_draws_it() {
+    let mut s = session();
+    let a = rect(&mut s, 20.0, 20.0, 40.0, 40.0, "#ff0000");
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "ids": [a.0], "params": {"moveH": 100}, "item": null}));
+    assert_eq!(pixel(&s, 140, 40), [255, 0, 0, 255], "drawn where it moved");
+    assert_eq!(pixel(&s, 40, 40), WHITE, "not drawn at its own place");
+    run(&mut s, "select.none", json!({}));
+    assert!(click(&mut s, 40.0, 40.0).is_empty());
+    assert_eq!(click(&mut s, 140.0, 40.0), [a]);
+    assert_eq!(press(&mut s, "selection", (110.0, 10.0), (130.0, 30.0), Mods::default()), [a], "a marquee across its drawn corner");
+    run(&mut s, "select.none", json!({}));
+    assert!(press(&mut s, "selection", (10.0, 10.0), (30.0, 30.0), Mods::default()).is_empty(), "a marquee across its own corner");
+
+    let mut s = session();
+    let b = rect(&mut s, 20.0, 120.0, 40.0, 40.0, "#0000ff");
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    let g = id_of(&run(&mut s, "object.group", json!({})));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "ids": [g.0], "params": {"moveH": 100}, "item": null}));
+    assert_eq!(pixel(&s, 140, 140), BLUE, "the group drawn where it moved");
+    run(&mut s, "select.none", json!({}));
+    assert!(click(&mut s, 40.0, 140.0).is_empty());
+    assert_eq!(click(&mut s, 140.0, 140.0), [g]);
+    assert_eq!(press(&mut s, "selection", (110.0, 110.0), (130.0, 130.0), Mods::default()), [g]);
+    run(&mut s, "select.none", json!({}));
+    assert!(press(&mut s, "selection", (10.0, 110.0), (30.0, 130.0), Mods::default()).is_empty());
+}
+
+/// A group's own fill paints its member's shape before the member's own Transform effect moves the
+/// member: a click there selects the group, and a click on the moved member selects it too. A
+/// Direct Selection marquee takes the group there and the member where it moved.
+#[test]
+fn a_click_selects_a_group_where_its_own_fill_paints_a_moved_member() {
+    let mut s = session();
+    let b = rect(&mut s, 20.0, 120.0, 40.0, 40.0, "#0000ff");
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    let g = id_of(&run(&mut s, "object.group", json!({})));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "ids": [b.0], "params": {"moveH": 100}, "item": null}));
+    assert_eq!(pixel(&s, 40, 140), [255, 0, 0, 255], "the group's fill at the member's own place");
+    assert_eq!(pixel(&s, 140, 140), BLUE, "the member where it moved");
+    run(&mut s, "select.none", json!({}));
+    assert_eq!(click(&mut s, 40.0, 140.0), [g]);
+    run(&mut s, "select.none", json!({}));
+    assert_eq!(click(&mut s, 140.0, 140.0), [g]);
+    // A marquee across the edge of the group's fill takes the group, and one across the moved
+    // member's edge takes the member.
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(vectorcraft_doc::hit::marquee(doc, Rect::new(10.0, 130.0, 30.0, 150.0), None, true), [g]);
+    assert_eq!(vectorcraft_doc::hit::marquee(doc, Rect::new(110.0, 130.0, 130.0, 150.0), None, true), [b]);
+}
+
+/// An inner group's own fill paints its member's shape before the member's own Transform effect
+/// moves the member, and so does an outer group's own fill around it: a Direct Selection marquee
+/// across the edge of those fills takes both groups, and one across the moved member takes it.
+#[test]
+fn a_marquee_takes_an_inner_groups_own_fill_inside_a_painted_group() {
+    let mut s = session();
+    let b = rect(&mut s, 20.0, 120.0, 40.0, 40.0, "#0000ff");
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    let g = id_of(&run(&mut s, "object.group", json!({})));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "ids": [b.0], "params": {"moveV": -100}, "item": null}));
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    let o = id_of(&run(&mut s, "object.group", json!({})));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "paint.setFill", json!({"color": "#00ff00"}));
+    assert_eq!(pixel(&s, 40, 140), [0, 255, 0, 255], "the outer group's fill at the member's own place");
+    assert_eq!(pixel(&s, 40, 40), BLUE, "the member where it moved");
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(vectorcraft_doc::hit::marquee(doc, Rect::new(10.0, 130.0, 30.0, 150.0), None, true), [o, g]);
+    assert_eq!(vectorcraft_doc::hit::marquee(doc, Rect::new(10.0, 30.0, 30.0, 50.0), None, true), [b]);
+}
+
+/// A group's own fill paints its member's shape before the member's own Transform effect moves
+/// the member, and so does its layer's own fill around it: a Direct Selection marquee across the
+/// edge of the group's fill takes the group, and one across the moved member takes it.
+#[test]
+fn a_marquee_takes_a_groups_own_fill_inside_a_painted_layer() {
+    let mut s = session();
+    let b = rect(&mut s, 20.0, 120.0, 40.0, 40.0, "#0000ff");
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    let g = id_of(&run(&mut s, "object.group", json!({})));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "ids": [b.0], "params": {"moveV": -100}, "item": null}));
+    let l = s.doc().unwrap().doc.layers[0].id;
+    run(&mut s, "appearance.addFill", json!({"ids": [l.0]}));
+    assert!(!s.doc().unwrap().doc.layers[0].appearance.items.is_empty(), "the layer has a fill of its own");
+    assert_eq!(pixel(&s, 40, 40), BLUE, "the member where it moved");
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(vectorcraft_doc::hit::marquee(doc, Rect::new(10.0, 130.0, 30.0, 150.0), None, true), [g]);
+    assert_eq!(vectorcraft_doc::hit::marquee(doc, Rect::new(10.0, 30.0, 30.0, 50.0), None, true), [b]);
 }

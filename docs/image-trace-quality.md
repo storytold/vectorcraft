@@ -237,10 +237,10 @@ Every built-in preset other than Auto Color and Flat Logo traces at Paths 50. Co
 | High Fidelity Photo | 50 | 50 | 5 | 90, 25, 4 |
 | Low Fidelity Photo | 50 | 50 | 10 | 60, 50, 12 |
 | 3 Colors | 50 | 50 | 15 | 60, 60, 20 |
-| 6 Colors | 50 | 50 | 15 | 65, 60, 16 |
-| 16 Colors | 50 | 50 | 15 | 70, 55, 10 |
+| 6 Colors | 50 | 50 | 8 | 65, 60, 16 |
+| 16 Colors | 50 | 50 | 8 | 70, 55, 10 |
 | Shades of Gray | 50 | 50 | 15 | 60, 50, 10 |
-| Black and White Logo | 50 | 75 | 25 | 95, 80, 8 |
+| Black and White Logo | 50 | 75 | 5 | 95, 80, 8 |
 | Sketched Art | 50 | 50 | 20 | 50, 50, 100 |
 | Silhouettes | 50 | 50 | 90 | 40, 60, 30 |
 | Line Art | 50 | 75 | 20 | 80, 70, 10 |
@@ -248,7 +248,9 @@ Every built-in preset other than Auto Color and Flat Logo traces at Paths 50. Co
 | Outline | 50 | 75 | 20 | 80, 70, 10 |
 
 The palettes, color counts, thresholds and other options of the presets did not change. The enhanced
-versions of these presets use the same Paths, Corners and Noise.
+versions of these presets use the same Paths, Corners and Noise. 6 Colors and 16 Colors were at Noise 15
+and Black and White Logo at 25 until [Noise joins the nearest color](#noise-joins-the-nearest-color);
+the measurements below were made at those values.
 
 Measured with the harness below (section 1, each preset on the inputs it is meant for), before and after:
 anchors fall in 10 of the 12 changed presets, for example 5,494 to 3,136 (High Fidelity Photo), 33 to 27
@@ -308,6 +310,47 @@ photo quality must also be checked. Local photo/scan validation uses fixed hashe
 identical settings on unchanged current source and the candidate, including separate portrait
 crops and white-composited PNG comparisons. These local fixtures are not repository assets.
 The parity score is unchanged.
+
+## Noise joins the nearest color
+
+A region below Noise used to join the color it shares the longest border with. Along a thin dark
+line on a light ground, a dark speck of the line touches the ground on more sides than the line, so
+it joined the ground and the line broke into dashes. Now, when the color of the longest border is
+10 or more apart from the region's own color (Oklab × 100), the region joins the neighboring color
+nearest the average of its pixels, among the colors that share at least a tenth of the longest
+border. The average is taken in the image as prepared for tracing (deblocked, and smoothed for a
+photo) and leaves out the semi-transparent pixels along a cut-out image's edge that are the color
+beside them blended with the transparent background. A single pixel whose longest border is tied
+between colors keeps the previous rule. The rule changes only which
+color a region joins, and higher Noise still continues the same merge sequence. It applies in Color
+and Grayscale: in Black and White a region has only one neighboring color. The values are
+VectorCraft's own. 6 Colors and 16 Colors move from Noise 15 to 8, and Black and White Logo from 25 to 5.
+The new Noise values were chosen with the rule in place, and the measurements below include both
+changes.
+
+Measured on 17 local images (synthetic shapes and photos at several sizes, a geometric drawing and
+eight illustrations; not repository assets), against `main` at `ea3f81d9c3`, with the mean absolute
+difference per channel (0 to 255) against the image on white:
+
+| preset | three illustrations with fine dark lines | four other illustrations | synthetic shapes and photos |
+|:--|:--|:--|:--|
+| 16 Colors | 8.15 / 10.80 / 8.69 → 5.82 / 6.25 / 6.01; anchors +72% to +99% | −1.8% to −11.9%; anchors +20% to +39% | within 0.08 of a level; anchors 0% to +37% |
+| 6 Colors | 7.24 / 9.14 / 9.21 → 5.87 / 6.66 / 7.87; anchors +55% to +73% | −0.6% to −3.5%; anchors +13% to +20% | within 0.03; anchors 0% to +22% |
+| High Fidelity Photo | 8.42 / 10.11 / 7.46 → 6.85 / 7.54 / 6.00; anchors +31% to +51% | −1.4% to −5.8%; anchors −9% to +4% | within 0.08; anchors −6% to +5% |
+
+With Black and White Logo, where only the Noise value changes, the pixels that differ from the image
+thresholded at 128 fall from 2.00 / 2.42 / 1.96% to 1.49 / 1.58 / 1.23% on the three illustrations,
+with 37% to 64% more anchors, and from 1.19 to 2.37% to 1.14 to 1.94% on the other four, with 5% to
+41% more anchors; the synthetic inputs change by 0.01% or less. On a simple flat illustration the
+difference changes by 1.0% or less in every preset, with up to 21% more anchors, and the geometric
+drawing keeps its anchor count and difference in every preset. Tests:
+`a_dark_speck_beside_a_dark_line_joins_the_line`, `a_speck_close_to_its_longest_border_color_joins_it`,
+`a_color_with_a_short_border_is_not_chosen`, `a_lone_pixel_tied_between_colors_merges_by_border`,
+`a_speck_of_settled_cut_edge_pixels_merges_by_border`, `noise_still_removes_every_region_below_it` and
+`a_source_that_does_not_cover_the_labels_is_not_read` in `crates/trace/src/quantize/denoise.rs`.
+`the_borders_of_a_gradients_bands_follow_its_contours` now traces at Noise 15: at 16 Colors' new
+Noise 8 the borders of its noisy gradient stray 0.92 px from the contours, above the test's 0.9 px
+limit.
 
 ## Pieces returning to a junction
 An outline piece can return to its starting junction while being fitted as an open chain. At loose
