@@ -5215,6 +5215,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	automation path rejected: outside the read root {root}: {path}	已拒绝自动化路径：位于读取根目录 {root} 之外：{path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	已拒绝自动化路径：位于所有读取根目录 {roots} 之外：{path}
 @msg	a linked JavaScript file is outside the read roots	链接的 JavaScript 文件位于所有读取根目录之外
+@msg	a linked image file is outside the read roots	链接的图像文件位于所有读取根目录之外
+@msg	a linked file's export folder is outside the read roots	链接文件的导出文件夹位于所有读取根目录之外
 @msg	automation path rejected: outside the write root {root}: {path}	已拒绝自动化路径：位于写入根目录 {root} 之外：{path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	已拒绝自动化路径：位于所有写入根目录 {roots} 之外：{path}
 @msg	automation path rejected: path is empty	已拒绝自动化路径：路径为空

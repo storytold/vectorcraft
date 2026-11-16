@@ -9236,6 +9236,7 @@ breakText	Glyphs	Glyphen
 @msg	a line needs at least two points	eine Linie braucht mindestens zwei Punkte
 @msg	a linked JavaScript file is outside the read roots	eine verknüpfte JavaScript-Datei liegt außerhalb der Lesestammordner
 @msg	a linked image file is outside the read roots	eine verknüpfte Bilddatei liegt außerhalb der Lesestammordner
+@msg	a linked file's export folder is outside the read roots	der Exportordner einer verknüpften Datei liegt außerhalb der Lesestammordner
 @msg	a number cannot be read	eine Zahl kann nicht gelesen werden
 @msg	a swatch exchange block is too long	ein Block der Farbfeld-Austauschdatei ist zu lang
 @msg	a swatch exchange name is too long	ein Name in der Farbfeld-Austauschdatei ist zu lang

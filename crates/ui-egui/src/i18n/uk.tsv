@@ -5483,6 +5483,8 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	automation path rejected: outside the read root {root}: {path}	шлях автоматизації відхилено: поза кореневою папкою для читання {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	шлях автоматизації відхилено: поза кореневими папками для читання {roots}: {path}
 @msg	a linked JavaScript file is outside the read roots	зв’язаний файл JavaScript перебуває поза кореневими папками для читання
+@msg	a linked image file is outside the read roots	зв’язаний файл зображення перебуває поза кореневими папками для читання
+@msg	a linked file's export folder is outside the read roots	папка експорту зв’язаного файлу перебуває поза кореневими папками для читання
 @msg	automation path rejected: outside the write root {root}: {path}	шлях автоматизації відхилено: поза кореневою папкою для запису {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	шлях автоматизації відхилено: поза кореневими папками для запису {roots}: {path}
 @msg	automation path rejected: path is empty	шлях автоматизації відхилено: шлях порожній

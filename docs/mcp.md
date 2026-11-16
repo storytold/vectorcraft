@@ -270,9 +270,22 @@ the suite) keep the agent to the folders you give it:
   selected objects only, and `clipboard.exportSvg` checks the copied objects, following a relative path from
   the document they came from while it is open; in a frame a request drives, Copy then puts no SVG on the
   system clipboard. An image whose pixels the document holds exports embedded, and a URL is not checked.
-- With `preserveEditing`, the document an SVG or SVGZ of these outputs carries leaves out the Export for Screens
-  folder (`export_settings.folder`) when it is outside the read roots, as `document.exportSettings` does; the
-  other export settings and the art are kept, and the open document keeps the folder.
+- The same error refuses, before any file or folder is written, every output of these commands and
+  `document.exportPdf` that carries the native document (the native file or template, EPS, `.ai`, `.ait` and
+  PDF files the JavaScript rule above lists, with `selectedOnly` and `document.exportSelection` the selected
+  objects' document) when that document names a file outside the read roots: a linked image or placed file, the
+  relative path kept of one (taken from the document's folder), or a data set's image, in every symbol,
+  pattern, graph design and brush, used or not. A stored brush entry that does not read as a brush is refused
+  too, since its links cannot be checked. Files that carry no native document are written as before, and the
+  document keeps every link and data set.
+- The document these outputs carry (an SVG or SVGZ with `preserveEditing`, a native file or template, an EPS
+  file, a `.ai` or `.ait` file, a PDF with Preserve Editing, and the document `file.package` writes and the
+  linked native documents it rewrites) leaves out the Export for Screens folder (`export_settings.folder`) when
+  it is outside the read roots, as `document.exportSettings` does; the other export settings and the art are
+  kept, and the open document keeps the folder. `file.package` copies a linked PDF, `.ai` or EPS file, and a
+  linked native document with `relink: false`, as it is: when the native document such a file is or carries
+  keeps a folder outside the read roots, the package is refused before anything is written with "a linked
+  file's export folder is outside the read roots", which names no file or folder.
 - `plugin.list`, `plugin.safeMode`, `file.recovery.*` and `ui_inspect`'s `scriptReport` leave out the paths
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
   folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`

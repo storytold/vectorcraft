@@ -7287,6 +7287,8 @@ axis	Y Axis	Y ekseni
 @msg	the guide is hidden or locked	kılavuz gizli veya kilitli
 @msg	the library's file is outside the read roots	kütüphanenin dosyası okuma köklerinin dışında
 @msg	a linked JavaScript file is outside the read roots	bağlantılı bir JavaScript dosyası okuma köklerinin dışında
+@msg	a linked image file is outside the read roots	bağlantılı bir görüntü dosyası okuma köklerinin dışında
+@msg	a linked file's export folder is outside the read roots	bağlantılı bir dosyanın dışa aktarma klasörü okuma köklerinin dışında
 @msg	the line is too long, or the paths it passes too many, to check	çizgi denetlenemeyecek kadar uzun veya geçtiği yollar çok fazla
 @msg	the method needs an XML value	yöntem için bir XML değeri gerekir
 @msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	boya bir serbest biçimli degrade değil (paint.editGradient {kind} ile bir tane uygulayın)

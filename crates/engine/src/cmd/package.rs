@@ -137,6 +137,24 @@ fn check_carried_scripts(name: &str, bytes: &[u8], path: &str) -> Result<()> {
     }
 }
 
+/// The error for a linked file the package would copy with an Export for Screens folder outside
+/// the read roots in the native document it is or carries.
+const FOLDER_OUTSIDE: &str = "a linked file's export folder is outside the read roots";
+
+/// Under read roots, the linked file `name` (`bytes`, as the package writes it) is copied only when
+/// the native document it is or carries ([`carried_document`]) keeps no Export for Screens folder
+/// outside them: a file copied as it is, a PDF, `.ai` or EPS file or a native document not
+/// rewritten, would name it. The error names no file or folder.
+fn check_carried_folder(name: &str, bytes: &[u8]) -> Result<()> {
+    if crate::file_access::current().is_none() {
+        return Ok(());
+    }
+    match carried_document(name, bytes) {
+        Some(carried) if matches!(super::fileio::with_readable_settings_folder(&carried), std::borrow::Cow::Owned(_)) => Err(bad(C, FOLDER_OUTSIDE)),
+        _ => Ok(()),
+    }
+}
+
 /// The fonts of the type on `pages` of the PDF or `.ai` file `name` (`bytes`, found at `path`);
 /// none for other files.
 fn page_fonts(name: &str, bytes: &[u8], path: &str, pages: &PlacedPages) -> BTreeSet<super::fonts::UsedFont> {
@@ -348,6 +366,7 @@ impl<'a> Collector<'a> {
                                     options.profiles = saved.profiles;
                                     options.compress = compressed;
                                     options.include_linked = include_linked;
+                                    let nested = super::fileio::with_readable_settings_folder(&nested);
                                     match vectorcraft_format::save_with(&nested, &options) {
                                         Ok(rewritten) => bytes = rewritten,
                                         Err(e) => self.warn(
@@ -366,6 +385,7 @@ impl<'a> Collector<'a> {
                         }
                     }
                 }
+                check_carried_folder(&file.name, &bytes)?;
                 let copy = Copied { name: destination_file.clone(), size: Some(bytes.len() as u64), hash: Some(hash_bytes(&bytes)) };
                 self.copies.insert(found_path.to_string(), copy.clone());
                 local.insert(file.path.clone(), copy);
@@ -505,7 +525,9 @@ fn prepare(s: &mut Session, p: &Value) -> Result<Package> {
     }
     let root = folder.map(|f| Path::new(f).join(&name));
     let info = if o.report { Some(super::docinfo::report(s, false)?) } else { None };
+    // The package's document leaves out an Export for Screens folder outside the read roots.
     let doc = s.doc()?.doc.clone();
+    let doc = if let std::borrow::Cow::Owned(kept) = super::fileio::with_readable_settings_folder(&doc) { std::sync::Arc::new(kept) } else { doc };
     let links_from = s.doc()?.links_from.clone().unwrap_or_else(|| doc_path.clone());
     Ok(Package { o, doc_path, links_from, stem, name, root, info, doc })
 }

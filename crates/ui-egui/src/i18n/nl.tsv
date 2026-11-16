@@ -6219,6 +6219,7 @@ imageTrace	Outline	Contour
 @msg	a legend draws at most {MAX_CHIPS} swatches	een legenda tekent maximaal {MAX_CHIPS} stalen
 @msg	a linked JavaScript file is outside the read roots	een gekoppeld JavaScript-bestand staat buiten de leesroots
 @msg	a linked image file is outside the read roots	een gekoppeld afbeeldingsbestand staat buiten de leesroots
+@msg	a linked file's export folder is outside the read roots	de exportmap van een gekoppeld bestand staat buiten de leesroots
 @msg	a name names one asset: give multiple: false, or one object	een naam noemt één asset: geef multiple: false, of één object
 @msg	a namespace declaration uses a reserved prefix or URI	een naamruimtedeclaratie gebruikt een gereserveerd voorvoegsel of een gereserveerde URI
 @msg	a namespace qualifier is undefined	een naamruimtekwalificatie is niet gedefinieerd

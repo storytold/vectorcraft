@@ -2064,6 +2064,7 @@
 @msg	{var_key} must be 0 or more	{var_key} უნდა იყოს 0 ან მეტი
 @msg	{var_key} must be at most {most}	{var_key} უნდა იყოს მაქსიმუმ {most}
 @msg	a linked image file is outside the read roots	დაკავშირებული გამოსახულების ფაილი წაკითხვის ძირეული საქაღალდეების გარეთაა
+@msg	a linked file's export folder is outside the read roots	დაკავშირებული ფაილის ექსპორტის საქაღალდე წაკითხვის ძირეული საქაღალდეების გარეთაა
 	Neon & Glow	ნეონი და ნათება
 	Show Hidden Panels at Edge	დამალული პანელების ჩვენება კიდესთან
 @msg	`anchor` must be a [subpath, anchor] pair	`anchor` უნდა იყოს წყვილი [subpath, anchor]

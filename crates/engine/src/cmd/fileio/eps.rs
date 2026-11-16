@@ -280,8 +280,10 @@ fn thumbnail_of(preview: &Rendered, rect: Rect) -> Result<Raster> {
 }
 
 /// What the file carries to reopen: `doc` (with only artboard `board` when the file is one of
-/// several artboards), with linked images whole when `include_linked`.
+/// several artboards), with linked images whole when `include_linked`, and without an Export for
+/// Screens folder outside the read roots ([`super::access::with_readable_settings_folder`]).
 fn native(doc: &Document, board: Option<usize>, include_linked: bool) -> Vec<u8> {
+    let doc = &*super::access::with_readable_settings_folder(doc);
     let several = board.filter(|_| doc.artboards.len() > 1);
     if several.is_none() && !include_linked {
         return vectorcraft_format::save(doc, false);

@@ -231,6 +231,8 @@ pub(super) fn encode_to(cmd: &str, f: &Format, doc: &Document, p: &Value, w: imp
         }
         other => other,
     };
+    // Without an Export for Screens folder outside the read roots.
+    let native = super::access::with_readable_settings_folder(&native);
     so.pretty = so.pretty_fits(&native);
     vectorcraft_format::save_to(&native, &so, w).map_err(|e| bad(cmd, e.to_string()))
 }
@@ -308,6 +310,8 @@ pub(super) fn ai_native(cmd: &str, doc: &Document, so: &SaveOptions) -> Result<V
     } else {
         Cow::Borrowed(doc)
     };
+    // Without an Export for Screens folder outside the read roots.
+    let native = super::access::with_readable_settings_folder(&native);
     vectorcraft_format::save_with(&native, so).map_err(|e| bad(cmd, e.to_string()))
 }
 
