@@ -639,6 +639,11 @@ font-technology	Variable	Променливи
 	Copy Width Point	Копиране на точка на ширина
 	Copyright	Авторско право
 	Copyright Info URL:	URL адрес с информация за авторското право:
+	Save Metadata Template…	Запази шаблон за метаданни…
+	Import Options	Опции за импортиране
+	Clear existing fields and use the template's	Изчисти съществуващите полета и използвай тези от шаблона
+	Keep existing fields, but replace those the template has	Запази съществуващите полета, но замени съдържащите се в шаблона
+	Keep existing fields, but append those the template has	Запази съществуващите полета, но добави съдържащите се в шаблона
 	Copyright Notice:	Бележка за авторското право:
 	Copyright Status:	Статус на авторското право:
 	Copyright Symbol	Символ за авторско право
@@ -1162,6 +1167,7 @@ font-technology	Variable	Променливи
 	Highlight Size	Размер на отблясъка
 	Blend Steps	Стъпки на преливане
 	Shading Color	Цвят на засенчването
+	Black Overprint	Черно с напечатване
 	Draw Hidden Faces	Изчертаване на скритите страни
 	Eyedropper	Пипета
 	Eyedropper Applies:	Пипетата прилага:
@@ -2950,6 +2956,12 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивен
 	Restore	Възстановяване
 	Restore every preference to its default (applied on OK)	Възстановяване на всички настройки по подразбиране (прилага се при ОПК)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Единицата за новите документи от вградените размери, освен тези в пиксели, и за отворените файлове без записана единица; ако я изберете тук и натиснете ОК, тя става и единица на активния документ.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Дебелините на щрихите, тиретата и междините се показват в тази единица и въведените за тях числа се четат в нея.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Размерите на текста, междуредието и отстъпът на базовата линия се показват в тази единица и въведените за тях числа се четат в нея.
+	The unit for East Asian type measurements, which no field uses yet.	Единицата за мерките на източноазиатски текст, която засега не се използва от нито едно поле.
+	When on, a number typed without a unit into a field in picas is read in points.	Когато е включено, число, въведено без единица в поле в пики, се чете в точки.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	При XML ID имената на обектите се показват като XML ID в Слоеве, Променливи и Опции за слоя.
 	Reset all preferences to their defaults?	Да се нулират ли всички настройки до стойностите по подразбиране?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Стойностите по подразбиране се прилагат, когато щракнете върху ОК в Настройки. Отказ там запазва текущите ви настройки.
 	Restore Recovered Documents	Възстановяване на възстановените документи
@@ -2983,6 +2995,7 @@ digits	Malayalam	Малаялам
 	Roman Hanging Punctuation	Латинска висяща пунктуация
 	Korean Line Break Anywhere	Пренасяне на корейски текст навсякъде
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Настройки за източноазиатска композиция
 	Korean Composition Settings	Настройки за корейска композиция
 	Rotate	Завъртане
@@ -3163,6 +3176,8 @@ digits	Malayalam	Малаялам
 	Search All	Търсене във всички
 	Search commands and tools	Търсене на команди и инструменти
 	Search commands and tools…	Търсене на команди и инструменти…
+	Recent Commands	Последни команди
+	No recent commands	Няма последни команди
 	Search Commands…	Търсене на команди…
 	Secondary	Вторичен
 	Section Symbol	Символ за раздел
@@ -3576,6 +3591,9 @@ digits	Malayalam	Малаялам
 	Show Import Options	Показване на опциите за импортиране
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Питане за опциите за импортиране на всеки PDF, DXF или текстов файл преди поставянето му; изключено: използват се последно избраните опции
 	Stylistic Alternates	Стилистични алтернативи
+	Ligatures	Лигатури
+	Ornaments	Орнаменти
+	Figures	Цифри
 	Set {n}	Набор {n}
 	Swash	Декоративен елемент
 	Swatch Conflict	Конфликт на образци
@@ -6735,6 +6753,24 @@ breakText	Glyphs	Глифи
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Разширяване на тиретата в пътища
 @msg	select paths with dashed strokes to expand	изберете пътища с прекъснат щрих за разширяване
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Допирателна окръжност…
+	Tangent Circle	Допирателна окръжност
+	Circle:	Окръжност:
+@msg	`ids` names an object twice	`ids` посочва обект два пъти
+@msg	select two or three paths or compound paths	изберете два или три пътя или съставни пътя
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` трябва да е от 0.01 до 1000000 pt
+@msg	two shapes need a `radius`	две форми изискват `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	три форми сами задават радиуса: пропуснете `radius`
+@msg	`circle` must be from 0 to 64	`circle` трябва да е от 0 до 64
+@msg	a shape has no outline	една от формите няма контур
+@msg	the shapes are too complex: at most 2000 segments in all	формите са твърде сложни: общо най-много 2000 сегмента
+@msg	these shapes take too long to search	търсенето за тези форми отнема твърде дълго
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	повече от 64 окръжности докосват тези форми: може да ги докосват по цяла крива
+@msg	no circle touches these shapes	никоя окръжност не докосва тези форми
+@msg	`circle` is past the last circle found ({found})	`circle` е след последната намерена окръжност ({found})
+@msg	object {value} is not a path or compound path	обект {value} не е път или съставен път
+@msg	these shapes are too small to measure	тези форми са твърде малки, за да бъдат измерени
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Инструменти за документи
 	Save a Timestamped Copy	Запазване на копие с дата и час

@@ -677,16 +677,16 @@ fn the_eraser_tip_varies_with_its_modes() {
     assert!((upright - 195.0).abs() < 0.3, "the upright tip left {upright} pt of the line");
     let level_tip = left_of_line(json!([]));
     assert!((level_tip - 180.0).abs() < 0.3, "the level tip left {level_tip} pt of the line");
-    // A 1500 pt tip on Tilt erases 1500 pt across with a mouse, as it does on Fixed.
+    // A 1000 pt tip on Tilt erases 1000 pt across with a mouse, as it does on Fixed.
     let mut s = session();
     rect(&mut s, 0.0, 0.0, 4000.0, 4000.0);
-    let big = json!({"points": [[1000, 2000], [3000, 2000]], "size": 1500, "sizeMode": "tilt", "sizeVariation": 10});
+    let big = json!({"points": [[1000, 2000], [3000, 2000]], "size": 1000, "sizeMode": "tilt", "sizeVariation": 10});
     s.execute("path.eraseRegion", &big).unwrap();
     let filled =
         |x: f64, y: f64| paths(&s).iter().any(|(_, pd)| vectorcraft_geom::hit::fill_contains(&pd.to_bezpath(), FillRule::NonZero, Point::new(x, y)));
-    assert_eq!((filled(2000.0, 2740.0), filled(2000.0, 2760.0)), (false, true), "a 1500 pt tip");
+    assert_eq!((filled(2000.0, 2490.0), filled(2000.0, 2510.0)), (false, true), "a 1000 pt tip");
     // A Size Variation kept while Size is Fixed leaves the size alone.
-    let kept = with(&on_rotation, json!({"sizeMode": "fixed", "sizeVariation": 1000000}));
+    let kept = with(&on_rotation, json!({"sizeMode": "fixed", "sizeVariation": 1000}));
     assert_eq!(erased(kept, json!([]), &probes), [true, false], "Size on Fixed with a Variation");
     let mut s = session();
     let id = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
@@ -1335,6 +1335,84 @@ fn eraser_removes_small_shape_entirely() {
     s.execute("select.none", &json!({})).unwrap();
     s.execute("path.eraseRegion", &json!({"points": [[102, 102]], "size": 20})).unwrap();
     assert!(paths(&s).is_empty());
+}
+
+/// `path.eraseRegion {rect}` (the Eraser's Alt-drag marquee) erases everything inside the
+/// rectangle: a closed shape loses its area, an open path is cut where it crosses the edges, a
+/// shape wholly inside goes, and only the selected paths take part when something is selected. One
+/// undo step puts everything back, and a rectangle that touches nothing adds no undo step.
+#[test]
+fn erase_region_rect_erases_everything_inside_it() {
+    let filled = |s: &Session, x: f64, y: f64| {
+        paths(s).iter().any(|(_, pd)| pd.is_closed() && vectorcraft_geom::hit::fill_contains(&pd.to_bezpath(), FillRule::NonZero, Point::new(x, y)))
+    };
+    let mut s = session();
+    rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+    rect(&mut s, 180.0, 140.0, 10.0, 10.0);
+    line(&mut s, 50.0, 150.0, 350.0, 150.0);
+    s.execute("select.none", &json!({})).unwrap();
+    let undo = undo_steps(&s);
+    let r = s.execute("path.eraseRegion", &json!({"rect": [150, 120, 100, 60]})).unwrap();
+    assert!(!r["ids"].as_array().unwrap().is_empty(), "{r}");
+    assert_eq!(undo_steps(&s), undo + 1);
+    assert!(!filled(&s, 200.0, 150.0) && !filled(&s, 185.0, 145.0), "the area inside is erased, the small square with it");
+    assert!(filled(&s, 120.0, 150.0) && filled(&s, 200.0, 250.0) && filled(&s, 200.0, 110.0), "the rest stays filled");
+    let ps = paths(&s);
+    assert_eq!(ps.iter().filter(|(_, pd)| pd.is_closed()).count(), 1, "the square keeps the rectangle as a hole: {ps:?}");
+    let open: Vec<f64> = ps.iter().filter(|(_, pd)| !pd.is_closed()).map(|(_, pd)| pd.length()).collect();
+    assert_eq!(open.len(), 2, "the line is cut in two: {open:?}");
+    assert!(open.iter().all(|l| (l - 100.0).abs() < 0.01), "{open:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(paths(&s).len(), 3);
+    assert!(filled(&s, 200.0, 160.0) && filled(&s, 185.0, 145.0));
+    // A rectangle away from the art erases nothing and adds no undo step.
+    let undo = undo_steps(&s);
+    assert_eq!(s.execute("path.eraseRegion", &json!({"rect": [500, 500, 10, 10]})).unwrap(), json!({"ids": []}));
+    assert_eq!(undo_steps(&s), undo);
+    // With the line selected, only the line is erased.
+    let ln = paths(&s).into_iter().find(|(_, pd)| !pd.is_closed()).unwrap().0;
+    s.execute("select.set", &json!({"ids": [ln.0]})).unwrap();
+    let closed: Vec<PathData> = paths(&s).into_iter().filter(|(_, pd)| pd.is_closed()).map(|(_, pd)| pd).collect();
+    s.execute("path.eraseRegion", &json!({"rect": [90, 100, 30, 100]})).unwrap();
+    let after: Vec<PathData> = paths(&s).into_iter().filter(|(_, pd)| pd.is_closed()).map(|(_, pd)| pd).collect();
+    assert_eq!(after, closed, "the unselected squares are unchanged");
+    let open: Vec<f64> = paths(&s).iter().filter(|(_, pd)| !pd.is_closed()).map(|(_, pd)| pd.length()).collect();
+    assert_eq!(open.len(), 2);
+    assert!((open.iter().sum::<f64>() - 270.0).abs() < 0.01, "{open:?}");
+}
+
+/// A narrow `path.eraseRegion {rect}` across a long open path cuts it, wherever the rectangle
+/// falls between the samples the path's length would give.
+#[test]
+fn erase_region_rect_cuts_a_long_line_with_a_narrow_rectangle() {
+    let mut s = session();
+    line(&mut s, 0.0, 100.0, 10000.0, 100.0);
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("path.eraseRegion", &json!({"rect": [5000.3, 90, 1, 20]})).unwrap();
+    let mut open: Vec<f64> = paths(&s).iter().map(|(_, pd)| pd.length()).collect();
+    open.sort_by(f64::total_cmp);
+    assert_eq!(open.len(), 2, "{open:?}");
+    assert!((open[0] - 4998.7).abs() < 0.01 && (open[1] - 5000.3).abs() < 0.01, "{open:?}");
+}
+
+/// `path.eraseRegion` refuses a `rect` that is not four finite numbers with a width and a height
+/// above 0, and `rect` given with `points`, and changes nothing.
+#[test]
+fn erase_region_rect_refuses_bad_values() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let shape = "rect is [x, y, width, height] in points, with a width and a height above 0";
+    for p in [
+        json!({"rect": [10, 10, 0, 20]}),
+        json!({"rect": [10, 10, 20, -5]}),
+        json!({"rect": [10, 10, 20]}),
+        json!({"rect": [10, "10", 20, 20]}),
+        json!({"rect": [1e308, 0, 1e308, 20]}),
+        json!({"rect": {"x": 10, "y": 10, "width": 20, "height": 20}}),
+    ] {
+        refuses_with(&mut s, "path.eraseRegion", &p, shape);
+    }
+    refuses_with(&mut s, "path.eraseRegion", &json!({"rect": [10, 10, 20, 20], "points": [[0, 0]]}), "give `points` or `rect`, not both");
 }
 
 /// #4495: the Eraser cuts a compound path as one shape: its hole stays empty, the erased area is
@@ -2802,6 +2880,116 @@ fn drawing_commands_refuse_a_point_or_pressure_given_as_text() {
     let sized = json!({"points": [[100, 700, 0.25, 30, 0, null], [150, 700, 0.75, null, null, 45], [200, 700, 1.0, 0, 0, 90]], "size": 10, "sizeMode": "pressure", "sizeVariation": 8});
     s.execute("path.blob", &sized).unwrap();
     s.execute("path.eraseRegion", &sized).unwrap();
+}
+
+/// The drawing tools' commands refuse a pen pressure outside 0 to 1, a tiltX or tiltY outside -90
+/// to 90 and a rotation outside 0 to 360, naming the key, and a point array of more than six
+/// numbers, naming the point; the document, the selection and the undo history stay as they were.
+/// The ends of each range, null, one tilt axis alone and a mouse point `[x, y]` still draw.
+#[test]
+fn pen_values_outside_their_ranges_are_refused() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let good = [json!([90, 150]), json!([150, 150]), json!([210, 150])];
+    let cmds = [
+        "path.freehand",
+        "brush.freehand",
+        "path.knife",
+        "path.eraseRegion",
+        "path.eraseSegments",
+        "path.smoothRegion",
+        "path.joinScrub",
+        "path.blob",
+    ];
+    let pressure = "`pressure` must be from 0 to 1";
+    let tilt_x = "`tiltX` must be from -90 to 90";
+    let tilt_y = "`tiltY` must be from -90 to 90";
+    let rotation = "`rotation` must be from 0 to 360";
+    let entries = "`points[3]` must be an array of at most 6 entries";
+    for cmd in cmds {
+        for (bad, want) in [
+            (json!([150, 150, -0.01]), pressure),
+            (json!([150, 150, 1.5]), pressure),
+            (json!({"x": 150, "y": 150, "pressure": 1e300}), pressure),
+            (json!([150, 150, 0.5, -90.5]), tilt_x),
+            (json!([150, 150, 0.5, 91, 0]), tilt_x),
+            (json!({"x": 150, "y": 150, "tiltX": -1e300}), tilt_x),
+            (json!([150, 150, null, 0, -1e300]), tilt_y),
+            (json!({"x": 150, "y": 150, "tiltY": 90.01}), tilt_y),
+            (json!([150, 150, null, null, null, -1]), rotation),
+            (json!({"x": 150, "y": 150, "rotation": 360.5}), rotation),
+            (json!([150, 150, null, null, null, 720]), rotation),
+            (json!([150, 150, 0.5, 0, 0, 0, 1]), entries),
+            (json!([150, 150, null, null, null, null, null]), entries),
+        ] {
+            let points: Vec<_> = good.iter().cloned().chain([bad]).collect();
+            let sel = s.doc().unwrap().selection.clone();
+            refuses_with(&mut s, cmd, &json!({"points": points}), want);
+            assert_eq!(s.doc().unwrap().selection, sel, "{cmd} {points:?} changed the selection");
+        }
+    }
+    for (row, cmd) in ["path.freehand", "brush.freehand", "path.blob", "path.eraseRegion"].into_iter().enumerate() {
+        let y = 300.0 + 50.0 * row as f64;
+        let points = json!([
+            [100, y, 0, -90, 90, 0],
+            [150, y, 1, 90, -90, 360],
+            [200, y, 0.5, null, 30],
+            {"x": 250, "y": y, "tiltX": -45, "pressure": null},
+            [300, y],
+            {"x": 350, "y": y, "rotation": 359.99},
+        ]);
+        s.execute(cmd, &json!({"points": points})).unwrap_or_else(|e| panic!("{cmd}: {e}"));
+        let mouse = json!([[100, y + 20.0], [200, y + 20.0], [300, y + 25.0]]);
+        s.execute(cmd, &json!({"points": mouse})).unwrap_or_else(|e| panic!("{cmd} with mouse points: {e}"));
+    }
+}
+
+/// `path.blob` and `path.eraseRegion` refuse a `size` outside 0.1 to 1000 pt and a `sizeVariation`
+/// outside 0 to 1000 pt, in every `sizeMode` each takes and with it left out, and a `sizeVariation`
+/// that is not a number with Fixed too; nothing changes. The ends of each range and null still draw.
+#[test]
+fn blob_and_eraser_size_and_variation_outside_their_ranges_are_refused() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let stroke = json!({"points": [[90, 150, 0.2, 30, 0, 45], [150, 150, 0.6, 0, 30, 90], [210, 150, 1, -30, 0, 180]]});
+    let size = "`size` must be from 0.1 to 1000";
+    let variation = "`sizeVariation` must be from 0 to 1000";
+    let blob_modes = [json!(null), json!("fixed"), json!("pressure")];
+    let eraser_modes = [json!(null), json!("fixed"), json!("random"), json!("pressure"), json!("tilt"), json!("bearing"), json!("rotation")];
+    // The Eraser keeps its own message for a negative Size Variation.
+    for (cmd, modes, negative) in
+        [("path.blob", &blob_modes[..], variation), ("path.eraseRegion", &eraser_modes[..], "sizeVariation must be 0 or more")]
+    {
+        for x in [json!(0.09), json!(0), json!(-1), json!(1000.5), json!(1e300)] {
+            let sel = s.doc().unwrap().selection.clone();
+            refuses_with(&mut s, cmd, &with(&stroke, json!({"size": x})), size);
+            assert_eq!(s.doc().unwrap().selection, sel, "{cmd} size {x} changed the selection");
+        }
+        for mode in modes {
+            for (x, want) in [(json!(-0.5), negative), (json!(1000.01), variation), (json!(1e300), variation)] {
+                let sel = s.doc().unwrap().selection.clone();
+                refuses_with(&mut s, cmd, &with(&stroke, json!({"sizeMode": mode, "sizeVariation": x})), want);
+                assert_eq!(s.doc().unwrap().selection, sel, "{cmd} {mode} sizeVariation {x} changed the selection");
+            }
+            let text = json!({"sizeMode": mode, "sizeVariation": "8"});
+            refuses_with(&mut s, cmd, &with(&stroke, text), "`sizeVariation` must be a number, not \"8\"");
+        }
+    }
+    for (row, (cmd, modes)) in [("path.blob", &blob_modes[..]), ("path.eraseRegion", &eraser_modes[..])].into_iter().enumerate() {
+        let y = 300.0 + 100.0 * row as f64;
+        let at = |p: serde_json::Value| with(&json!({"points": [[100, y, 0.2, 30, 0, 0], [200, y, 0.6, 0, 30, 90], [300, y, 1, -30, 0, 360]]}), p);
+        for extra in [json!({"size": 0.1}), json!({"size": 1000}), json!({"size": null, "sizeVariation": null, "sizeMode": null})] {
+            s.execute(cmd, &at(extra.clone())).unwrap_or_else(|e| panic!("{cmd} {extra}: {e}"));
+        }
+        for mode in modes {
+            for x in [0, 1000] {
+                let extra = json!({"sizeMode": mode, "sizeVariation": x});
+                s.execute(cmd, &at(extra.clone())).unwrap_or_else(|e| panic!("{cmd} {extra}: {e}"));
+            }
+        }
+    }
 }
 
 /// The Eraser, Path Eraser, Smooth, Join and Blob Brush commands refuse a size, angle, roundness,
