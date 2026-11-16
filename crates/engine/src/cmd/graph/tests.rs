@@ -1443,6 +1443,27 @@ fn paint_targets_leave_a_graph_designs_copy_out() {
     assert_eq!(super::paint_targets(d, &[copy, art, mark]), [mark]);
 }
 
+/// The fill opacity the proxies show leaves out the art of a column or marker design in a series, which
+/// `paint.setFill {opacity}` leaves out too: with only that art selected there is none, also with a row of the art
+/// active, and with a mark selected after it the mark's.
+#[test]
+fn proxy_opacity_leaves_a_graph_designs_art_out() {
+    let (mut s, _, _, art, mark) = design_art();
+    let (mut m, _, marker_art) = marker_design_art();
+    for (s, art) in [(&mut s, art), (&mut m, marker_art)] {
+        s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+        assert_eq!(s.proxy_opacity(false), None);
+        assert!(s.execute("paint.setFill", &json!({"opacity": 50})).is_err());
+        let fill = top_row(s, art, true);
+        s.execute("appearance.setActiveItem", &json!({"index": fill})).unwrap();
+        assert_eq!(s.proxy_opacity(false), None, "with the art's fill row active");
+        assert!(s.execute("paint.setFill", &json!({"opacity": 50})).is_err());
+    }
+    s.execute("paint.setFill", &json!({"ids": [mark.0], "opacity": 40})).unwrap();
+    s.execute("select.set", &json!({"ids": [art.0, mark.0]})).unwrap();
+    assert!((s.proxy_opacity(false).unwrap() - 0.4).abs() < 1e-6, "the mark's fill opacity");
+}
+
 /// The art of a marker design in series 1 of a line graph: the design's copy and a path inside it.
 fn marker_design_art() -> (Session, NodeId, NodeId) {
     let mut s = Session::new();
