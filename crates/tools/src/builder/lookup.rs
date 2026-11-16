@@ -126,13 +126,14 @@ pub fn visible_edges_along<'a>(group: &'a Node, chunks: &[Vec<Point>]) -> Vec<&'
                 // An end of either one on the other covers a touch and a stretch that runs along
                 // the edge, where no single crossing point exists. Where neither crosses the other,
                 // their closest points are ends or a point of the edge where it runs parallel to
-                // the drag.
+                // the drag. A crossing kurbo finds just before or after an end of the edge counts
+                // only through the checks on that end.
                 *h = on_seg(a)
                     || on_seg(b)
                     || on_line(c.p0)
                     || on_line(c.p3)
                     || (a != b
-                        && (!kurbo::PathSeg::Cubic(*c).intersect_line(line).is_empty()
+                        && (kurbo::PathSeg::Cubic(*c).intersect_line(line).iter().any(|x| (0.0..=1.0).contains(&x.segment_t))
                             || lp_parallel_at(c, b - a).into_iter().any(|t| on_line(kurbo::ParamCurve::eval(c, t)))));
             }
         }

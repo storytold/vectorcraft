@@ -1167,6 +1167,29 @@ fn visible_edges_along_finds_crossed_and_near_edges() {
     assert_eq!(reached(130.001), vec![ids[0]]);
 }
 
+/// A drag that passes 0.0002 pt before the start of a long curved edge does not reach it, although
+/// the curve extended a tiny step past its start meets the drag.
+#[test]
+fn visible_edges_along_skips_an_edge_the_drag_meets_only_past_its_end() {
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let mut curve = BezPath::new();
+    curve.move_to((0.0, 0.0));
+    curve.curve_to((100000.0, 0.0), (200000.0, 100.0), (300000.0, 100.0));
+    let id = d.alloc_id();
+    let mut edge = Node::path(id, vectorcraft_geom::PathData::from_bezpath(&curve), Appearance::default());
+    edge.name = Some(EDGE_NAME.into());
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, vec![empty_sources(&mut d), Arc::new(edge)]);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    d.insert(Some(l), 0, g).unwrap();
+    let group = d.node(gid).unwrap();
+    let reached = |x: f64| visible_edges_along(group, &[vec![Point::new(x, -1.0), Point::new(x, 1.0)]]).iter().map(|e| e.id).collect::<Vec<_>>();
+    assert_eq!(reached(-0.0002), Vec::<NodeId>::new());
+    assert_eq!(reached(-0.00005), vec![id]);
+    assert_eq!(reached(0.0002), vec![id]);
+}
+
 /// A double-click on an edge after a press whose drag stroked another edge of the line joins
 /// through that edge as the stroke paint it had before the drag.
 #[test]
