@@ -1346,3 +1346,90 @@ fn eraser_mixed_gradient_rows_keep_visible_fill_placement() {
         "hidden rows must not suppress the visible fill's placement: Along {fitted_along:?}; Rasterize {fitted_rasterize:?}"
     );
 }
+
+fn eraser_endpoint_region(s: &mut Session, mode: &str, miss: bool) -> Value {
+    if mode == "rect" {
+        let rect = if miss { json!([55, 145, 10, 10]) } else { json!([150, 140, 20, 20]) };
+        s.execute("path.eraseRegion", &json!({"rect": rect})).unwrap()
+    } else {
+        let points = if miss { json!([[60, 150]]) } else { json!([[160, 150]]) };
+        erase(s, json!({"points": points, "size": 20}), mode == "varied")
+    }
+}
+
+fn eraser_keeps_unused_endpoint_handles_out_of_fill_case(mode: &str) {
+    for (closed, stroked) in [(false, false), (true, false), (false, true)] {
+        let mut s = session();
+        let id = NodeId(
+            s.execute(
+                "path.create",
+                &json!({"closed": closed, "anchors": [
+                    {"x": 100, "y": 100, "in": [0, 100]}, {"x": 200, "y": 100},
+                    {"x": 200, "y": 200}, {"x": 100, "y": 200, "out": [0, 200]}
+                ]}),
+            )
+            .unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        if stroked {
+            s.execute("paint.setFill", &json!({"ids": [id.0], "none": true})).unwrap();
+            s.execute("paint.setStroke", &json!({"ids": [id.0], "color": "#000000"})).unwrap();
+            s.execute("stroke.set", &json!({"ids": [id.0], "weight": 4})).unwrap();
+        } else {
+            s.execute("paint.setFill", &json!({"ids": [id.0], "color": "#000000"})).unwrap();
+            s.execute("paint.setStroke", &json!({"ids": [id.0], "none": true})).unwrap();
+        }
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        let sp = &path(&s, id).subpaths[0];
+        assert_eq!(sp.closed, closed);
+        assert_eq!(sp.anchors.first().unwrap().h_in, Point::new(0.0, 100.0));
+        assert_eq!(sp.anchors.last().unwrap().h_out, Point::new(0.0, 200.0));
+        let before = serde_json::to_value(&s.doc().unwrap().doc).unwrap();
+        let selection = s.doc().unwrap().selection.clone();
+        let history = s.doc().unwrap().history.undo.len();
+        let before_image = eraser_gradient_image(&s);
+        assert_eq!(before_image.pixel(60, 150)[3], if closed { 255 } else { 0 }, "{mode}: fixture closure");
+        assert_eq!(before_image.pixel(160, 150)[3], if stroked { 0 } else { 255 }, "{mode}: interior witness");
+
+        let result = eraser_endpoint_region(&mut s, mode, false);
+        let after_image = eraser_gradient_image(&s);
+        assert_eq!(after_image.pixel(160, 150)[3], 0, "{mode}: erased interior");
+        assert_eq!(after_image.pixel(60, 150), before_image.pixel(60, 150), "{mode}: no new bulge or lost closed curve");
+        if stroked {
+            assert_eq!(result["ids"], json!([]), "{mode}: the open outline misses an interior dab");
+            assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before);
+            assert_eq!(s.doc().unwrap().selection, selection);
+            assert_eq!(s.doc().unwrap().history.undo.len(), history);
+            continue;
+        }
+        assert_eq!(after_image.pixel(180, 180), [0, 0, 0, 255], "{mode}: retained fill");
+        assert_eq!(s.doc().unwrap().history.undo.len(), history + 1);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before, "{mode}: original geometry and endpoint handles restored");
+        assert_eq!(s.doc().unwrap().selection, selection);
+        assert_eq!(s.doc().unwrap().history.undo.len(), history);
+        if !closed {
+            let miss = eraser_endpoint_region(&mut s, mode, true);
+            assert_eq!(miss["ids"], json!([]), "{mode}: the phantom bulge cannot count as an intersection");
+            assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before);
+            assert_eq!(s.doc().unwrap().selection, selection);
+            assert_eq!(s.doc().unwrap().history.undo.len(), history);
+        }
+    }
+}
+
+#[test]
+fn eraser_keeps_unused_endpoint_handles_out_of_fill_marquee() {
+    eraser_keeps_unused_endpoint_handles_out_of_fill_case("rect");
+}
+
+#[test]
+fn eraser_keeps_unused_endpoint_handles_out_of_fill_fixed_tip() {
+    eraser_keeps_unused_endpoint_handles_out_of_fill_case("fixed");
+}
+
+#[test]
+fn eraser_keeps_unused_endpoint_handles_out_of_fill_varied_tip() {
+    eraser_keeps_unused_endpoint_handles_out_of_fill_case("varied");
+}

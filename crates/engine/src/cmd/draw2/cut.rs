@@ -343,6 +343,7 @@ pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
     let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
     for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach), true)? {
         if erase_as_area(&st.doc, id, &pd) {
+            let pd = eraser_fill_operand(pd);
             if po::area(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) <= 1e-6 {
                 continue;
             }
@@ -362,6 +363,23 @@ fn erase_as_area(doc: &Document, id: NodeId, pd: &PathData) -> bool {
         doc.parent_of(id).and_then(|parent| doc.node(parent)).is_some_and(|parent| matches!(parent.kind, NodeKind::Compound { .. }));
     let filled_open = !compound_member && doc.node(id).is_some_and(|node| has_fill(node) && !has_painted_stroke(node));
     pd.is_closed() || filled_open
+}
+
+/// Close only Eraser's temporary fill operand, preserving an open path's straight closing edge.
+fn eraser_fill_operand(mut pd: PathData) -> PathData {
+    for sp in &mut pd.subpaths {
+        if !sp.closed {
+            // These endpoint handles are unused by an open path. Closing it must not activate them.
+            if let Some(first) = sp.anchors.first_mut() {
+                first.h_in = first.p;
+            }
+            if let Some(last) = sp.anchors.last_mut() {
+                last.h_out = last.p;
+            }
+            sp.closed = true;
+        }
+    }
+    pd
 }
 
 /// `path.eraseRegion`'s `rect: [x, y, width, height]`: four finite numbers, with a width and a
@@ -405,6 +423,7 @@ fn erase_rect(s: &mut Session, r: Rect) -> Result<Value> {
     let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
     for (id, pd, rule) in fill_targets(&st.doc, &st.selection, r, true)? {
         if erase_as_area(&st.doc, id, &pd) {
+            let pd = eraser_fill_operand(pd);
             if po::area(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) <= 1e-6 {
                 continue;
             }
@@ -505,6 +524,7 @@ fn erase_varied(s: &mut Session, samples: &[Sample], tip: [f64; 3], vary: [(Vari
     let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
     for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach), true)? {
         if erase_as_area(&st.doc, id, &pd) {
+            let pd = eraser_fill_operand(pd);
             if po::area(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) <= 1e-6 {
                 continue;
             }
