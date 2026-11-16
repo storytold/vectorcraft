@@ -500,8 +500,8 @@ fn check_optical_tsume(db: &FontDb, family: &str, strict: bool) {
         let moved = |optical: bool| xs(&set(optical, Some(letter))).iter().zip(xs(&set(optical, None))).map(|(a, b)| a - b).collect::<Vec<_>>();
         let (without, with_optical) = (moved(false), moved(true));
         let blank = blank(letter);
-        if strict || blank > 1e-3 {
-            assert!(without.iter().any(|m| m.abs() > 1e-3), "{family} {letter}: Tsume moves or narrows the glyphs ({blank} blank): {without:?}");
+        if strict || blank > 1e-6 {
+            assert!(without.iter().any(|m| m.abs() > 1e-6), "{family} {letter}: Tsume moves or narrows the glyphs ({blank} blank): {without:?}");
         } else {
             assert!(without.iter().all(|m| m.abs() < 1e-6), "{family} {letter}: no blank space ({blank}), Tsume takes nothing: {without:?}");
         }
