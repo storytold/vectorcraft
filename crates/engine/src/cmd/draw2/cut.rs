@@ -1,6 +1,6 @@
 use super::common::{
-    PenRecord, SIZE_VARIATIONS, SIZES, Sample, dist_to_polyline, fill_targets, ids_json, path_mut, path_of, points_param, poly_bounds,
-    pressure_region, ranged, replace_with_pieces, samples_param, sibling_with, size_pressure, target_paths, usize_opt,
+    PenRecord, SIZE_VARIATIONS, SIZES, Sample, center_strokes, dist_to_polyline, fill_targets, ids_json, path_mut, path_of, points_param,
+    poly_bounds, pressure_region, ranged, replace_with_pieces, samples_param, sibling_with, size_pressure, target_paths, usize_opt,
 };
 use super::{
     Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, EngineError, FillRule, Join, NodeId, Paint, ParamCurve, PathData, Point, Rect, Result, Session,
@@ -225,14 +225,17 @@ pub(super) fn split(s: &mut Session, p: &Value) -> Result<Value> {
             sel.add(id);
             sel.anchors.entry(id).or_default().insert((si, 0));
         };
+        // The paths a cut makes keep the source's appearance with every stroke centered.
         if sp.closed {
             path.subpaths[si] = pieces.pop().ok_or_else(|| EngineError::Other("no such anchor".into()))?;
+            center_strokes(d, id);
             pick(sel, id, si);
             return Ok(vec![id]);
         }
         let [left, right] = <[SubPath; 2]>::try_from(pieces).map_err(|_| EngineError::Other("cannot split an open path at its end point".into()))?;
         if path.subpaths.len() == 1 {
             path.subpaths[0] = left;
+            center_strokes(d, id);
             let node = sibling_with(d, id, PathData::single(right))?;
             let (parent, idx, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
             let nid = d.insert(parent, idx + 1, node)?;
@@ -241,6 +244,7 @@ pub(super) fn split(s: &mut Session, p: &Value) -> Result<Value> {
         } else {
             path.subpaths[si] = left;
             path.subpaths.insert(si + 1, right);
+            center_strokes(d, id);
             pick(sel, id, si + 1);
             Ok(vec![id])
         }
