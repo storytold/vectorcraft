@@ -1018,6 +1018,7 @@
 	Change Panel Layout	Muuta paneelien asettelua
 	Close Panel	Sulje paneeli
 	Collapse Panel Group	Kutista paneeliryhmä
+	Cycle Display Sizes	Vaihda näyttökokoa
 	Move Panel	Siirrä paneelia
 	Group with	Ryhmitä kohteen kanssa
 	Resize panels	Muuta paneelien kokoa
@@ -2070,6 +2071,9 @@ digits	Malayalam	Malajalam
 	Select text to set its OpenType features.	Valitse teksti, jonka OpenType-ominaisuudet haluat asettaa.
 	Standard Ligatures	Vakioligatuurit
 	Stylistic Alternates	Tyylivaihtoehdot
+	Ligatures	Ligatuurit
+	Ornaments	Ornamentit
+	Figures	Numerot
 	Swash	Koukerot
 	Tabular Lining	Taulukkonumerot
 	Tabular Oldstyle	Vanhanaikaiset taulukkonumerot
@@ -2602,6 +2606,18 @@ digits	Malayalam	Malajalam
 	Author Title:	Tekijän titteli:
 	Author:	Tekijä:
 	Copyright Info URL:	Tekijänoikeustietojen URL:
+	Save Metadata Template…	Tallenna metatietomallipohja…
+	Import Options	Tuontiasetukset
+	Clear existing fields and use the template's	Tyhjennä nykyiset kentät ja käytä mallipohjan kenttiä
+	Keep existing fields, but replace those the template has	Säilytä nykyiset kentät, mutta korvaa mallipohjassa olevat
+	Keep existing fields, but append those the template has	Säilytä nykyiset kentät, mutta lisää mallipohjassa olevat
+@msg	the template name can't be empty	mallipohjan nimi ei voi olla tyhjä
+@msg	the template name isn't usable as a file name	mallipohjan nimeä ei voi käyttää tiedostonimenä
+@msg	no metadata templates folder here	täällä ei ole metatietomallipohjien kansiota
+@msg	give `name` or `path`, not both	anna `name` tai `path`, ei molempia
+@msg	give one of `path`, `name` and `data`	anna yksi seuraavista: `path`, `name` ja `data`
+@msg	mode must be replace, keep or append	tilan on oltava replace, keep tai append
+@msg	the file is not an XMP metadata template	tiedosto ei ole XMP-metatietomallipohja
 	Copyright Notice:	Tekijänoikeusilmoitus:
 	Copyright Status:	Tekijänoikeuden tila:
 	Created:	Luotu:
@@ -3636,6 +3652,8 @@ theme	Appearance	Ulkoasu
 	Create Graph	Luo kaavio
 	Graph Data	Kaavion tiedot
 	Graph Type	Kaavion tyyppi
+	Graph Type…	Kaavion tyyppi…
+	Graph Data…	Kaavion tiedot…
 	Graph Options	Kaavion asetukset
 	Left Axis	Vasen akseli
 	Right Axis	Oikea akseli
@@ -4716,6 +4734,27 @@ imageTrace	Outline	Ääriviiva
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: valintaikkuna ei voi avautua sisäänrakennetun funktion takaisinkutsussa, getterissä, muunnoksessa tai tiedostossa, jonka $.evalFile ajaa; kutsu sitä skriptin omasta koodista
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: seuraava vastaus kohteessa `answers` on kohteelle {_1}, ei kohteelle {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: kohteessa `answers` ei ole enää vastausta tälle valintaikkunalle
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` sisältää {n} vastauksen, jota komentosarja ei käyttänyt|`answers` sisältää {n} vastausta, joita komentosarja ei käyttänyt
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} jätti {n} objektin siveltimen alla muuttamatta ({_2}): se muokkaa vain polkuja|{_1} jätti {n} objektia siveltimen alla muuttamatta ({_2}): se muokkaa vain polkuja
+liquify-tool	Warp	Vääristys
+liquify-tool	Twirl	Pyöritys
+liquify-tool	Pucker	Rypistys
+liquify-tool	Bloat	Pullistus
+liquify-tool	Scallop	Simpukointi
+liquify-tool	Crystallize	Kiteytys
+liquify-tool	Wrinkle	Ryppyistys
+liquify-kind	graphs	kaaviot
+liquify-kind	type	teksti
+liquify-kind	symbols	symbolit
+liquify-kind	images	kuvat
+liquify-kind	meshes	verkot
+liquify-kind	envelopes	vääristyskuoret
+liquify-kind	repeats	toistot
+liquify-kind	placed documents	sijoitetut asiakirjat
+liquify-kind	blends	sulautukset
+liquify-list-two	{0}, {1}	{0} ja {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} on liian suuri skriptille
 @msg	vc.log: the log of this run is full	vc.log: tämän ajon loki on täynnä
 @msg	this function's script run has ended	tämän funktion skriptiajo on päättynyt
@@ -5353,6 +5392,8 @@ imageTrace	Outline	Ääriviiva
 @msg	unknown option `{path}.{k}`	tuntematon asetus `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	tuntematon päällepainatusten käsittely `{o}` (preserve, simulate tai discard)
 @msg	unknown panel `{raw}`	tuntematon paneeli `{raw}`
+@msg	`{panel}` has no display sizes to cycle	paneelissa `{panel}` ei ole vaihdettavia näyttökokoja
+@msg	the panels are not shown	paneelit eivät ole näkyvissä
 @msg	panels can't be shown in Presentation Mode	paneeleja ei voi näyttää esitystilassa
 @msg	unknown preference `{key}`	tuntematon asetus `{key}`
 @msg	Preferences imported.	Asetukset tuotiin.
@@ -6172,6 +6213,7 @@ mark-style	Japanese	Japanilainen
 	Export Data Sets…	Vie tietojoukot…
 	Load Variable Library…	Lataa muuttujakirjasto…
 	Save Variable Library…	Tallenna muuttujakirjasto…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	”Tuo” lukee tietolähdetiedoston, jonka tunniste on .csv, .tsv, .txt tai .xml
 @msg	a variable library holds text variables, and the document has none	muuttujakirjasto sisältää tekstimuuttujia, eikä asiakirjassa ole yhtään
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	muuttujaa `{name}` ei voi tallentaa muuttujakirjastoon: nimeä se uudelleen niin, että se alkaa kirjaimella tai merkillä `_` eikä sisällä välilyöntejä tai muita symboleja kuin `-`, `_` ja `.`
 @msg	{k} has control characters	{k} sisältää ohjausmerkkejä
@@ -7620,6 +7662,19 @@ breakText	Glyphs	Merkit
 	Not Aligned to Pixel Grid	Ei tasattu pikseliruudukkoon
 @msg	only paths and compound paths can be aligned to the pixel grid	vain polut ja yhdistelmäpolut voi tasata pikseliruudukkoon
 @msg	side is left or right, not `{s}`	side on left tai right, ei `{s}`
+@msg	side is left or right, not `{v}`	side on left tai right, ei `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order on kokonaisluku, vähintään 0 ja enintään {others}, ei `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar-arvon (työkalurivin nimi) on oltava merkkijono
+@msg	no toolbar named `{name}`	ei työkaluriviä nimeltä `{name}`
+@msg	toolbar name can't be empty	työkalurivin nimi ei voi olla tyhjä
+@msg	a toolbar name has at most {MAX_NAME} characters	työkalurivin nimessä on enintään {MAX_NAME} merkkiä
+@msg	there is already a toolbar named `{name}`	työkalurivi nimeltä `{name}` on jo olemassa
+@msg	there is already a toolbar named `{to}`	työkalurivi nimeltä `{to}` on jo olemassa
+@msg	a workspace keeps at most {MAX} toolbars	työtilassa on enintään {MAX} työkaluriviä
+@msg	name (a toolbar's name) must be a string	name-arvon (työkalurivin nimi) on oltava merkkijono
+@msg	name (a toolbar's name) is required	name (työkalurivin nimi) vaaditaan
+@msg	to (the new name) is required	to (uusi nimi) vaaditaan
+@msg	name must be a toolbar's name	name-arvon on oltava työkalurivin nimi
 	Ignore All	Ohita kaikki
 	Add to Dictionary	Lisää sanastoon
 	No Suggestions	Ei ehdotuksia

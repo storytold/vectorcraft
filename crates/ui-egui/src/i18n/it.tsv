@@ -654,6 +654,18 @@ font-technology	Variable	Variabili
 	Copy Width Point	Copia punto di larghezza
 	Copyright	Copyright
 	Copyright Info URL:	URL informazioni copyright:
+	Save Metadata Template…	Salva modello di metadati…
+	Import Options	Opzioni di importazione
+	Clear existing fields and use the template's	Cancella i campi esistenti e usa quelli del modello
+	Keep existing fields, but replace those the template has	Mantieni i campi esistenti, ma sostituisci quelli presenti nel modello
+	Keep existing fields, but append those the template has	Mantieni i campi esistenti, ma aggiungi quelli presenti nel modello
+@msg	the template name can't be empty	il nome del modello non può essere vuoto
+@msg	the template name isn't usable as a file name	il nome del modello non è utilizzabile come nome di file
+@msg	no metadata templates folder here	qui non c'è una cartella dei modelli di metadati
+@msg	give `name` or `path`, not both	indica `name` o `path`, non entrambi
+@msg	give one of `path`, `name` and `data`	indica uno tra `path`, `name` e `data`
+@msg	mode must be replace, keep or append	la modalità deve essere replace, keep o append
+@msg	the file is not an XMP metadata template	il file non è un modello di metadati XMP
 	Copyright Notice:	Nota sul copyright:
 	Copyright Status:	Stato copyright:
 	Copyright Symbol	Simbolo di copyright
@@ -1451,6 +1463,8 @@ file-filter	Templates	Modelli
 	Graph	Grafico
 	Graph Data	Dati grafico
 	Graph Type	Tipo di grafico
+	Graph Type…	Tipo di grafico…
+	Graph Data…	Dati grafico…
 	Graph Options	Opzioni grafico
 	Left Axis	Asse sinistro
 	Right Axis	Asse destro
@@ -3715,6 +3729,9 @@ digits	Malayalam	Malayalam
 	Show Import Options	Mostra opzioni di importazione
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Chiedi le opzioni di importazione di ogni file PDF, DXF o di testo prima di inserirlo; disattivato: usa le ultime opzioni scelte
 	Stylistic Alternates	Alternative stilistiche
+	Ligatures	Legature
+	Ornaments	Ornamenti
+	Figures	Cifre
 	Swash	Ornamentale
 	Swatch Conflict	Conflitto campioni
 	Swatch Conflicts	Conflitti campioni
@@ -4536,6 +4553,27 @@ axis	Both	Entrambi
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: una finestra di dialogo non può aprirsi dentro un callback di una funzione integrata, un getter, una conversione o un file eseguito da $.evalFile; chiamala dal codice dello script stesso
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: la prossima risposta in `answers` è per {_1}, non per {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: in `answers` non rimangono risposte per questa finestra di dialogo
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` contiene {n} risposta che lo script non ha usato|`answers` contiene {n} risposte che lo script non ha usato
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} ha lasciato {n} oggetto sotto il pennello senza modifiche ({_2}): rimodella solo i tracciati|{_1} ha lasciato {n} oggetti sotto il pennello senza modifiche ({_2}): rimodella solo i tracciati
+liquify-tool	Warp	Altera
+liquify-tool	Twirl	Vortice
+liquify-tool	Pucker	Contrai
+liquify-tool	Bloat	Gonfia
+liquify-tool	Scallop	Smerla
+liquify-tool	Crystallize	Cristallizza
+liquify-tool	Wrinkle	Grinza
+liquify-kind	graphs	grafici
+liquify-kind	type	testo
+liquify-kind	symbols	simboli
+liquify-kind	images	immagini
+liquify-kind	meshes	trame
+liquify-kind	envelopes	involucri
+liquify-kind	repeats	ripetizioni
+liquify-kind	placed documents	documenti inseriti
+liquify-kind	blends	fusioni
+liquify-list-two	{0}, {1}	{0} e {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} e {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} è troppo grande per uno script
 @msg	vc.log: the log of this run is full	vc.log: il registro di questa esecuzione è pieno
 @msg	this function's script run has ended	l'esecuzione dello script di questa funzione è terminata
@@ -5177,6 +5215,8 @@ axis	Both	Entrambi
 @msg	unknown option `{path}.{k}`	opzione sconosciuta `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	valore di sovrastampa sconosciuto `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	pannello sconosciuto `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` non ha dimensioni di visualizzazione da scorrere
+@msg	the panels are not shown	i pannelli non sono visualizzati
 @msg	panels can't be shown in Presentation Mode	i pannelli non possono essere mostrati in modalità presentazione
 @msg	unknown preference `{key}`	preferenza sconosciuta `{key}`
 @msg	Preferences imported.	Preferenze importate.
@@ -5554,6 +5594,7 @@ effect	Regular	Normale
 	Change Panel Layout	Modifica disposizione dei pannelli
 	Close Panel	Chiudi pannello
 	Collapse Panel Group	Comprimi gruppo di pannelli
+	Cycle Display Sizes	Scorri le dimensioni di visualizzazione
 	Move Panel	Sposta pannello
 	Group with	Raggruppa con
 	Resize panels	Ridimensiona pannelli
@@ -5913,6 +5954,7 @@ lighting	Light	Luce
 	Export Data Sets…	Esporta set di dati…
 	Load Variable Library…	Carica libreria di variabili…
 	Save Variable Library…	Salva libreria di variabili…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	«Importa» legge un file di origine dati con estensione .csv, .tsv, .txt o .xml
 @msg	a variable library holds text variables, and the document has none	una libreria di variabili contiene variabili di testo e il documento non ne ha
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variabile `{name}` non può essere salvata in una libreria di variabili: rinominala in modo che inizi con una lettera o `_`, senza spazi né simboli diversi da `-`, `_` e `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	il set di dati `{name}` contiene un carattere di controllo, che una libreria di variabili non può contenere

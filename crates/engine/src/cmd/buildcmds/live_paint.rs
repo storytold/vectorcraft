@@ -580,6 +580,12 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
     let (eid, count, changed) = {
         let d = &s.doc()?.doc;
         let n = d.node(g).filter(|n| is_live_paint(n)).ok_or_else(|| bad(C, format!("{g} is not a Live Paint group")))?;
+        // Each id in `through` is an edge of the group, given once.
+        let group_edges: std::collections::HashSet<NodeId> = b::edges(n).iter().map(|e| e.id).collect();
+        let mut seen = std::collections::HashSet::new();
+        if let Some(id) = through.iter().find(|id| !group_edges.contains(id) || !seen.insert(**id)) {
+            return Err(bad(C, format!("through: {id} is not an edge of {g}, or is given twice")));
+        }
         let start = b::visible_edge_near(n, pt, tol).ok_or_else(|| EngineError::Other("no Live Paint edge near that point".into()))?;
         let eid = start.id;
         let like = like.unwrap_or_else(|| b::lp_stroke_paint(start));

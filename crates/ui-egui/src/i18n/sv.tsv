@@ -641,6 +641,18 @@ font-technology	Variable	Variabla
 	Copy Width Point	Kopiera breddpunkt
 	Copyright	Upphovsrätt
 	Copyright Info URL:	URL för upphovsrättsinformation:
+	Save Metadata Template…	Spara metadatamall…
+	Import Options	Importalternativ
+	Clear existing fields and use the template's	Rensa befintliga fält och använd mallens
+	Keep existing fields, but replace those the template has	Behåll befintliga fält, men ersätt dem som mallen har
+	Keep existing fields, but append those the template has	Behåll befintliga fält, men lägg till dem som mallen har
+@msg	the template name can't be empty	mallnamnet får inte vara tomt
+@msg	the template name isn't usable as a file name	mallnamnet kan inte användas som filnamn
+@msg	no metadata templates folder here	det finns ingen mapp för metadatamallar här
+@msg	give `name` or `path`, not both	ange `name` eller `path`, inte båda
+@msg	give one of `path`, `name` and `data`	ange en av `path`, `name` och `data`
+@msg	mode must be replace, keep or append	läget måste vara replace, keep eller append
+@msg	the file is not an XMP metadata template	filen är inte en XMP-metadatamall
 	Copyright Notice:	Upphovsrättsmeddelande:
 	Copyright Status:	Upphovsrättsstatus:
 	Copyright Symbol	Upphovsrättssymbol
@@ -1389,6 +1401,8 @@ font-technology	Variable	Variabla
 	Graph	Diagram
 	Graph Data	Diagramdata
 	Graph Type	Diagramtyp
+	Graph Type…	Diagramtyp…
+	Graph Data…	Diagramdata…
 	Graph Options	Diagramalternativ
 	Left Axis	Vänster axel
 	Right Axis	Höger axel
@@ -3591,6 +3605,9 @@ digits	Malayalam	Malayalam
 	Show Import Options	Visa importalternativ
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Fråga efter importalternativ för varje PDF-, DXF- eller textfil innan den placeras; av: använd de senast valda alternativen
 	Stylistic Alternates	Stilistiska alternativ
+	Ligatures	Ligaturer
+	Ornaments	Ornament
+	Figures	Siffror
 	Swash	Swash
 	Swatch Conflict	Färgrutekonflikt
 	Swatch Conflicts	Färgrutekonflikter
@@ -4394,6 +4411,27 @@ axis	Both	Båda
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: en dialogruta kan inte öppnas i ett återanrop från en inbyggd funktion, en getter, en konvertering eller en fil som $.evalFile kör; anropa den från skriptets egen kod
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: nästa svar i `answers` gäller {_1}, inte {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` har inget svar kvar för den här dialogrutan
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` har {n} svar som skriptet inte använde|`answers` har {n} svar som skriptet inte använde
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} lämnade {n} objekt under penseln utan ändring ({_2}): bara banor formas om|{_1} lämnade {n} objekt under penseln utan ändring ({_2}): bara banor formas om
+liquify-tool	Warp	Förvräng
+liquify-tool	Twirl	Virvel
+liquify-tool	Pucker	Dra ihop
+liquify-tool	Bloat	Svullnad
+liquify-tool	Scallop	Bågkant
+liquify-tool	Crystallize	Kristallisera
+liquify-tool	Wrinkle	Skrynkla
+liquify-kind	graphs	diagram
+liquify-kind	type	text
+liquify-kind	symbols	symboler
+liquify-kind	images	bilder
+liquify-kind	meshes	nät
+liquify-kind	envelopes	kuvert
+liquify-kind	repeats	upprepningar
+liquify-kind	placed documents	placerade dokument
+liquify-kind	blends	blandningar
+liquify-list-two	{0}, {1}	{0} och {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} och {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} är för stort för ett skript
 @msg	vc.log: the log of this run is full	vc.log: loggen för den här körningen är full
 @msg	this function's script run has ended	skriptkörningen för den här funktionen har avslutats
@@ -5030,6 +5068,8 @@ axis	Both	Båda
 @msg	unknown option `{path}.{k}`	okänt alternativ `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	okänt värde för övertryck `{o}` (preserve, simulate eller discard)
 @msg	unknown panel `{raw}`	okänd panel `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` har inga visningsstorlekar att växla mellan
+@msg	the panels are not shown	panelerna visas inte
 @msg	panels can't be shown in Presentation Mode	paneler kan inte visas i presentationsläge
 @msg	unknown preference `{key}`	okänd inställning `{key}`
 @msg	Preferences imported.	Inställningarna har importerats.
@@ -5421,6 +5461,7 @@ effect	Soft	Mjuk
 	Change Panel Layout	Ändra panellayout
 	Close Panel	Stäng panel
 	Collapse Panel Group	Komprimera panelgrupp
+	Cycle Display Sizes	Växla visningsstorlekar
 	Move Panel	Flytta panel
 	Group with	Gruppera med
 	Resize panels	Ändra storlek på paneler
@@ -6157,6 +6198,7 @@ theme	Appearance	Utseende
 	Export Data Sets…	Exportera datauppsättningar…
 	Load Variable Library…	Läs in variabelbibliotek…
 	Save Variable Library…	Spara variabelbibliotek…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	”Importera” läser en datakällfil med filändelsen .csv, .tsv, .txt eller .xml
 @msg	a variable library holds text variables, and the document has none	ett variabelbibliotek innehåller textvariabler, och dokumentet har inga
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variabeln `{name}` kan inte sparas i ett variabelbibliotek: byt namn på den så att den börjar med en bokstav eller `_`, utan mellanslag eller andra symboler än `-`, `_` och `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	datauppsättningen `{name}` innehåller ett kontrolltecken, som ett variabelbibliotek inte kan innehålla
@@ -9020,6 +9062,8 @@ digits	Hindi	Hindi
 	Not Aligned to Pixel Grid	Inte justerade mot pixelrutnät
 @msg	only paths and compound paths can be aligned to the pixel grid	bara banor och sammansatta banor kan justeras mot pixelrutnätet
 @msg	side is left or right, not `{s}`	side är left eller right, inte `{s}`
+@msg	side is left or right, not `{v}`	side är left eller right, inte `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order är ett heltal från 0 till {others}, inte `{v}`
 	Ignore All	Ignorera alla
 	Add to Dictionary	Lägg till i ordlistan
 	No Suggestions	Inga förslag
