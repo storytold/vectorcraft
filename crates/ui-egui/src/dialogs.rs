@@ -703,6 +703,12 @@ pub fn cancel(app: &mut VectorcraftApp) {
             script_run::notice_cancel(app, &d);
         }
         missing_links::cancelled(app, &d);
+        // Find Font's next open starts with an empty replacement search.
+        if d.kind == "findFont"
+            && let Some(ctx) = app.ui_ctx.clone()
+        {
+            crate::find_font::clear_search(&ctx);
+        }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec
         // without a preview, yet previews some commands (Grid Repeat Options) when asked to.
