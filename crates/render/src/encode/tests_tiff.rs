@@ -202,3 +202,33 @@ fn packbits_round_trips() {
         assert_eq!(out, data);
     }
 }
+
+/// TIFF's LZW strips through craft-stream-codecs (#778) read back as the strip they were made of
+/// with weezl, the writer before them, and take no more bytes than weezl's: the same bytes until
+/// the code table first fills, after which the two clear it at different codes.
+#[test]
+fn lzw_strips_read_back_as_weezl_reads_them() {
+    let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+    let mut noise = |n: usize, spread: u64| {
+        (0..n)
+            .map(|_| {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                (seed % spread) as u8
+            })
+            .collect::<Vec<u8>>()
+    };
+    let strips =
+        [vec![], vec![7], vec![0; 70_000], noise(8_192, 256), noise(65_536, 4), noise(200_000, 256), (0..=255).cycle().take(30_000).collect()];
+    for strip in &strips {
+        let weezl = weezl::encode::Encoder::with_tiff_size_switch(weezl::BitOrder::Msb, 8).encode(strip).unwrap();
+        let craft = craft_stream_codecs::lzw::encode(strip, true);
+        let back = weezl::decode::Decoder::with_tiff_size_switch(weezl::BitOrder::Msb, 8).decode(&craft).unwrap();
+        assert!(back == *strip, "{} bytes read back", strip.len());
+        assert!(craft.len() <= weezl.len(), "{} bytes: {} against {}", strip.len(), craft.len(), weezl.len());
+        // Up to the first table reset (4,093 codes of at most 12 bits) the codes are the same.
+        let same = craft.iter().zip(&weezl).take_while(|(a, b)| a == b).count();
+        assert!(same >= weezl.len().min(4_300), "{} bytes: the same for {same}", strip.len());
+    }
+}
