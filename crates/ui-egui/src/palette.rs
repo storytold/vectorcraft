@@ -340,8 +340,23 @@ fn catalog(lang: crate::i18n::Lang, native: bool) -> Catalog {
         list.iter().map(|e| e.home.as_deref().map(|h| format!("{} › {}", shown_label(lang, h), crate::i18n::tr(lang, e.menu_item)))).collect();
     // A group's row in the `search` context gives its words in `lang`; a plain row is not read.
     let search_row = |key: &str| crate::i18n::tr_ctx_row(lang, words::CONTEXT, key).map(str::to_string);
-    let index = search::Index::build(&list, &shown_homes, search_row);
+    let index = search::Index::build(&list, &shown_homes, &params_texts(&list), search_row);
     Catalog { list, index, ranked: std::sync::Mutex::new(None) }
+}
+
+/// The params text of each entry's command, which the index reads a description from
+/// ([`search::description`]): an engine or plug-in command's, a UI command's (the one it wraps
+/// keeps its own) and an effect's. A tool, a panel and a filter plug-in have none.
+fn params_texts(list: &[Entry]) -> Vec<&'static str> {
+    let engine = vectorcraft_engine::command_specs().iter().chain(vectorcraft_engine::cmd::plugin::command_specs());
+    let mut by_id: std::collections::HashMap<&str, &'static str> = engine.map(|c| (c.id, c.params)).collect();
+    by_id.extend(menus::UI_COMMANDS.iter().map(|c| (c.0, c.3)));
+    list.iter()
+        .map(|e| match e.id.strip_prefix("effect:") {
+            Some(effect) => vectorcraft_effects::effect_info(effect).map_or("", |info| info.params),
+            None => by_id.get(e.id.as_str()).copied().unwrap_or(""),
+        })
+        .collect()
 }
 
 /// The palette's entries in `lang` with the in-window menu bar.
@@ -2240,7 +2255,7 @@ mod tests {
         let nodes = open.press(egui::Key::ArrowDown, 1);
         assert_eq!(field_description(&nodes), format!("2 of {total}: {}", label(1)));
         // Fewer results match than the list holds.
-        let mut open = Open::new("copy", WINDOW);
+        let mut open = Open::new("eyedropper", WINDOW);
         let n = open.listed().len();
         assert!((1..MAX_RESULTS).contains(&n), "{n}");
         let first = entries.iter().find(|e| e.id == open.listed()[0]).map(row_label).unwrap();

@@ -1000,14 +1000,10 @@ fn names_a_required_field(params: &str) -> bool {
         !(f.is_empty() || f.starts_with('…') || f[end..].starts_with('=') || f[..end].split('|').all(|n| n.trim().ends_with('?')))
     };
     let Some(rest) = params.strip_prefix('{') else { return false };
-    let (mut depth, mut quoted, mut start) = (0usize, false, 0);
-    for (i, ch) in rest.char_indices() {
+    let mut start = 0;
+    for (i, ch, depth) in outside_quotes(rest) {
         match ch {
-            '"' => quoted = !quoted,
-            _ if quoted => {}
-            '{' | '[' | '(' => depth += 1,
             '}' if depth == 0 => return required(&rest[start..i]),
-            '}' | ']' | ')' => depth = depth.saturating_sub(1),
             ',' if depth == 0 => {
                 if required(&rest[start..i]) {
                     return true;
@@ -1018,6 +1014,29 @@ fn names_a_required_field(params: &str) -> bool {
         }
     }
     false
+}
+
+/// Each character of `text` that is not a double quote or inside a pair of them, with its byte
+/// offset and the number of `{`, `[` and `(` groups open before it. A closing `}`, `]` or `)` comes
+/// with a count that includes the group it closes, and one with no group open counts none.
+pub(crate) fn outside_quotes(text: &str) -> impl Iterator<Item = (usize, char, usize)> + '_ {
+    let (mut depth, mut quoted) = (0usize, false);
+    text.char_indices().filter_map(move |(i, ch)| {
+        if ch == '"' {
+            quoted = !quoted;
+            return None;
+        }
+        if quoted {
+            return None;
+        }
+        let before = depth;
+        match ch {
+            '{' | '[' | '(' => depth += 1,
+            '}' | ']' | ')' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        Some((i, ch, before))
+    })
 }
 
 pub fn entry(key: &str) -> Option<Entry> {
