@@ -24,7 +24,7 @@ blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 
 | | Value | Kind |
 |---|---|---|
-| **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 348/375 wired (92.8%), tools 89/92, Illustrator effects 46/50, Photoshop effects 57/57, 3D 4/4 (initial types, no materials) |
+| **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 717/719 wired (99.7%), tools 89/92, Illustrator effects 46/50, Photoshop effects 57/57, 3D 4/4 (initial types, no materials) |
 | **Feature depth** (weighted by use, scored by behaviour) | **~75%** | estimated |
 | **To beta** | **~170–270 h** one agent · ~50–80 h with 4–6 agents | estimated |
 | **To full parity** | **~360–590 h** one agent · ~95–165 h with 4–6 agents | estimated |
@@ -102,14 +102,14 @@ Weights, evidence and the missing items per area: [target-app-parity.md](docs/ta
 | Arabic | `ar` | none (no right-to-left interface) | 0% |
 | French | `fr` | full | 100% |
 | Portuguese (Brazil) | `pt-br` | full | 100% |
-| Indonesian | `id` | none | 0% |
+| Indonesian | `id` | 6,947 catalog rows; status and error messages partial | most dialogs and tooltips |
 | Japanese | `ja` | full | 100% |
 | German | `de` | full | 98% |
 | Korean | `ko` | full | 100% |
 | Bosnian | `bs` | full (AI-assisted, native review pending) | 100% |
 | Vietnamese | `vi` | full | 100% |
 
-Also shipped: Traditional Chinese (partial, 80%), Bulgarian, Finnish, Greek, Hungarian, Italian, Polish, Russian, Swedish, Ukrainian and Georgian (full), Catalan (full; AI-drafted, native review welcome), Czech (catalog complete; render-site gaps reduced; native review pending).
+Also shipped: Traditional Chinese (partial, 80%), Bulgarian, Finnish, Greek, Hungarian, Italian, Polish, Russian, Swedish, Ukrainian, Georgian, Dutch, Danish and Turkish (full), Catalan (full; AI-drafted, native review welcome), Czech (catalog complete; render-site gaps reduced; native review pending).
 The Georgian catalog has had a native speaker's review; no other catalog has. Details: [localization-parity.md](docs/localization-parity.md).
 
 ## Upcoming
@@ -142,6 +142,7 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 - 2026-11-01: Expand Dashes into Paths joins the Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): each selected path's dashed stroke becomes separate open paths, one per dash, laid out exactly as the stroke draws them (pattern, offset, Align Dashes to Corners and Path Ends), each keeping the stroke with the dashes off, so the gaps are real gaps for cutters and plotters, as one undo step (`addon.pathtools.expandDashes`, #4922).
 - 2026-11-01: Randomize Opacity joins the Arrange Tools add-on (Object › Plug-ins › Arrange Tools): each selected object gets its own opacity at random between a minimum and a maximum percent, with a seed that repeats the result, as one undo step (`addon.arrange.randomizeOpacity`, #4925).
 - 2026-11-01: Sort Objects joins the Arrange Tools add-on (Object › Plug-ins › Arrange Tools): the selected objects are sorted by width, height, area, position, opacity or stacking order (small to large, large to small or at random) and take another of those in that order, trading their values or stepping them evenly, as one undo step (`addon.arrange.sort`, #4917).
+- 2026-11-15: Tangent Circle joins the Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): the circles that touch two selected paths or compound paths at a set radius, or three of them (up to eight for three circles), touching each outline without crossing it; circles, rotated ellipses and other paths alike. A dialog that previews every circle or one picked by number, the current paint, one undo step (`addon.pathtools.tangentCircle`). A VectorCraft addition: headline numbers unchanged.
 - 2026-11-01: New Symbols from Layers joins the Document Tools add-on (Object › Plug-ins › Document Tools): one symbol of each top-level layer's art (the layers highlighted in the Layers panel when two or more are, else every layer), named after the layer, made as New Symbol makes one; Convert Layers to Symbols also puts an instance of each in place of its layer's art. Empty layers are skipped and reported; one undo step. A VectorCraft addition: headline numbers unchanged.
 - 2026-11-01: Document Tools, a built-in add-on (Object › Plug-ins › Document Tools), starts with Save a Timestamped Copy: a copy of the document named `<name>_YYYY-MM-DD_HH-MM` (UTC; `-2`, `-3`… when that name is taken) goes next to it, or into a folder picked for a document never saved, written as File › Save a Copy writes it, so the document keeps its path, title and modified state. Off on the web, which has no clock. A VectorCraft addition: headline numbers unchanged.
 - 2026-11-01: Divide into Dashes joins the Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): the selected paths, or only their direct-selected segments, are cut into separate open paths of a dash length measured along the curve, with an optional gap (left empty, or kept as pieces), each keeping the path's appearance; Fit to Corners and Ends stretches or squeezes the lengths so every run starts and ends on a dash. A dialog with Preview, one undo step, at most 100000 pieces. A VectorCraft addition: headline numbers unchanged.

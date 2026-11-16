@@ -69,6 +69,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         objects_on_path_section(app, ui, &oop);
         divider(ui);
     }
+    graph::section(app, ui);
     if matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Text(_))) {
         type_sections(app, ui);
         divider(ui);
@@ -1050,6 +1051,7 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 pub(crate) mod dynamic_text;
+pub(crate) mod graph;
 pub(crate) mod vertical_align;
 
 #[cfg(test)]

@@ -164,6 +164,17 @@ pub enum PixelOp {
     Scaling,
 }
 
+/// The isolated group, layer or object in isolation mode, of `isolation` (the document's isolated
+/// node). Pattern editing mode, opacity mask editing and symbol editing mode isolate their own
+/// layer, which does not count here; an object isolated inside them counts.
+pub fn ordinary_isolation(doc: &Document, isolation: Option<NodeId>) -> Option<NodeId> {
+    isolation.filter(|l| {
+        !doc.pattern_edit.as_ref().is_some_and(|e| e.layer == *l)
+            && !doc.mask_edit.as_ref().is_some_and(|e| e.layer == *l)
+            && !doc.symbol_edit.as_ref().is_some_and(|e| e.layer == *l)
+    })
+}
+
 /// Read-only context a tool sees.
 pub struct ToolContext<'a> {
     pub doc: &'a Document,
