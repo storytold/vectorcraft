@@ -719,10 +719,16 @@ fn cmyk_raster(
     if alpha.iter().all(|&a| a == 255) {
         return Ok((blob, None));
     }
-    let mask = image::GrayImage::from_raw(img.width, img.height, alpha)
-        .ok_or_else(|| EngineError::Other("the image's transparency doesn't fit it".into()))?;
-    let mut png = Vec::new();
-    mask.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| EngineError::Other(e.to_string()))?;
+    let mask = craft_image_codecs::Image::from_raw(
+        img.width,
+        img.height,
+        craft_image_codecs::ChannelLayout::Gray,
+        craft_image_codecs::SampleType::U8,
+        alpha,
+    )
+    .map_err(|_| EngineError::Other("the image's transparency doesn't fit it".into()))?;
+    let png = craft_image_codecs::encode(&mask, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+        .map_err(|e| EngineError::Other(e.to_string()))?;
     Ok((blob, Some(png)))
 }
 
@@ -1072,9 +1078,16 @@ pub(crate) fn check_resample_size(sw: u32, sh: u32, w: u32, h: u32) -> Result<()
 
 /// `img` as PNG bytes.
 fn encode_png(img: &image::RgbaImage) -> Result<Vec<u8>> {
-    let mut png = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| bad("object.cropImage", e.to_string()))?;
-    Ok(png)
+    let fail = |e: craft_image_codecs::CodecError| bad("object.cropImage", e.to_string());
+    let raw = craft_image_codecs::Image::from_raw(
+        img.width(),
+        img.height(),
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        img.as_raw().clone(),
+    )
+    .map_err(fail)?;
+    craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).map_err(fail)
 }
 
 fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1221,22 +1234,24 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
 /// The image's pixels as RGBA, held to the allowance opening a raster has.
 fn decode_rgba(c: &str, blob: &vectorcraft_doc::ImageBlob) -> Result<image::RgbaImage> {
     // Print rasters run to gigabytes decoded: the same allowance opening them has.
-    let reader = || {
-        image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice()))
-            .with_guessed_format()
-            .map_err(|_| bad(c, "the image's pixels can't be read"))
-    };
     // The image's size as RGBA, read from its header, is held to that allowance before anything
     // is decoded (#1717).
-    let (w, h) = reader()?.into_dimensions().map_err(|e| bad(c, format!("the image's pixels can't be read: {e}")))?;
-    if u64::from(w) * u64::from(h) > crate::cmd::fileio::MAX_RASTER_ALLOC / 4 {
+    let header = vectorcraft_doc::header_size(&blob.bytes);
+    if let Some((w, h)) = header
+        && u64::from(w) * u64::from(h) > crate::cmd::fileio::MAX_RASTER_ALLOC / 4
+    {
         return Err(bad(c, format!("an image of {w} × {h} pixels is too large to draw")));
     }
-    let mut reader = reader()?;
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(crate::cmd::fileio::MAX_RASTER_ALLOC);
-    reader.limits(limits);
-    Ok(reader.decode().map_err(|e| bad(c, format!("the image's pixels can't be read: {e}")))?.to_rgba8())
+    let mut opts = craft_image_codecs::DecodeOptions::default();
+    opts.limits.max_pixels = crate::cmd::fileio::MAX_RASTER_ALLOC / 4;
+    opts.limits.max_alloc = crate::cmd::fileio::MAX_RASTER_ALLOC;
+    let img = craft_image_codecs::decode_with(&blob.bytes, &opts).map_err(|e| match e {
+        // Within the allowance from its header: a file that can't hold the pixels it declares.
+        craft_image_codecs::CodecError::LimitExceeded(_) if header.is_none() => bad(c, "the image is too large to draw"),
+        _ => bad(c, format!("the image's pixels can't be read: {e}")),
+    })?;
+    let (w, h) = img.dimensions();
+    image::RgbaImage::from_raw(w, h, img.to_rgba8()).ok_or_else(|| bad(c, "the image's pixels can't be read"))
 }
 
 /// Crop Image's trim: the image cut to the box of its pixels that aren't fully transparent, the
@@ -1265,9 +1280,12 @@ fn trim_image(s: &mut Session, id: NodeId, im: ImageObject) -> Result<Value> {
         return Ok(json!({ "id": id.0, "width": w, "height": h, "trimmed": false }));
     }
     let cut = image::imageops::crop_imm(&px, x0, y0, x1 - x0, y1 - y0).to_image();
-    let mut png = Vec::new();
-    cut.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| bad(C, e.to_string()))?;
     let (cw, ch) = (x1 - x0, y1 - y0);
+    let raw =
+        craft_image_codecs::Image::from_raw(cw, ch, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, cut.into_raw())
+            .map_err(|e| bad(C, e.to_string()))?;
+    let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+        .map_err(|e| bad(C, e.to_string()))?;
     put_pixels(s, id, png, cw, ch, im.xf * Affine::translate((f64::from(x0), f64::from(y0))))?;
     Ok(json!({ "id": id.0, "width": cw, "height": ch, "trimmed": true }))
 }
