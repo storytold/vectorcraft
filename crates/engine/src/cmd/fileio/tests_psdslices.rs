@@ -263,6 +263,32 @@ fn photoshop_7_descriptors_after_version_6_records_are_read_past() {
 }
 
 #[test]
+fn a_version_6_record_whose_id_is_16_is_a_slice_not_a_descriptor() {
+    // The 16th record has ID 16, group ID 0, origin 2, no name and the Image type: its first 18
+    // bytes also read as a descriptor of version 16 with no items.
+    let records: Vec<S> = (1..=17).map(|id| if id == 16 { user("", [1, 1, 4, 4]) } else { user("a", [0, 0, 5, 5]) }).collect();
+    let descriptor_after = [16u32.to_be_bytes().to_vec(), descriptor(&[("topOutset", D::Long(0))])].concat();
+    for trailing in [vec![], descriptor_after] {
+        let (s, r) = open(&with_resource(&psd(false), 1050, &v6(&records, &trailing)), json!({}));
+        assert!(warnings(&r).is_empty(), "{r}");
+        let got = slices(&s);
+        assert_eq!(got.len(), 17, "{got:?}");
+        assert_eq!((got[15].0, got[15].1.name.as_str()), (Rect::new(1.0, 1.0, 4.0, 4.0), ""));
+        assert_eq!(got[16].1.name, "a");
+    }
+    // A descriptor after each record whose class ID is four zero bytes, with no items, followed by
+    // records with no strings: the records don't also read one after another.
+    let empty = [ustr(""), 0u32.to_be_bytes().to_vec(), vec![0; 4], 0u32.to_be_bytes().to_vec()].concat();
+    let trailing = [16u32.to_be_bytes().to_vec(), empty].concat();
+    for rect in [[0, 0, 0, 0], [0, 0, 5, 5]] {
+        let (s, r) = open(&with_resource(&psd(false), 1050, &v6(&[user("", rect), user("", rect), user("", rect)], &trailing)), json!({}));
+        let w = warnings(&r);
+        assert!(!w.iter().any(|w| w.starts_with("the slices can't be read")), "{w:?}");
+        assert_eq!(slices(&s).len(), if rect[2] > 0 { 3 } else { 0 }, "{w:?}");
+    }
+}
+
+#[test]
 fn version_6_descriptors_share_one_budget_of_values() {
     // Each record's descriptor holds 2,501 values, well under the 200,000 one descriptor may hold;
     // 100 of them hold 250,100 together.
@@ -372,6 +398,29 @@ fn slices_that_cant_be_read_warn_and_the_file_still_opens() {
 }
 
 #[test]
+fn a_slices_resource_cut_short_warns_and_the_file_still_opens() {
+    let good = v6(&[user("a", [0, 0, 5, 5])], &[]);
+    // Image resource `id`, the last of the image resources, declares 10 bytes more than they hold.
+    let cut = |layers: bool, id: u16, data: &[u8]| {
+        let mut f = with_resource(&psd(layers), id, data);
+        let sig = [&b"8BIM"[..], &id.to_be_bytes()].concat();
+        let at = f.windows(6).rposition(|w| w == sig.as_slice()).unwrap() + 8;
+        f[at..at + 4].copy_from_slice(&(data.len() as u32 + 10).to_be_bytes());
+        f
+    };
+    for layers in [true, false] {
+        let (s, r) = open(&cut(layers, 1050, &good), json!({}));
+        let w = warnings(&r);
+        assert!(w.iter().any(|w| w.starts_with("the slices can't be read (") && w.contains("cut short")), "{w:?}");
+        assert!(slices(&s).is_empty());
+        assert!(s.doc().unwrap().doc.art_bounds().is_some());
+        // Another resource cut short says nothing about slices.
+        let (s, r) = open(&cut(layers, 1051, &[0, 1]), json!({}));
+        assert!(warnings(&r).is_empty() && slices(&s).is_empty(), "{r}");
+    }
+}
+
+#[test]
 fn slices_are_clipped_to_the_canvas_and_those_outside_it_are_left_out() {
     let data = v6(&[user("over", [-5, -5, 5, 30]), user("out", [25, 0, 30, 5]), user("empty", [4, 4, 4, 9]), user("in", [1, 1, 2, 2])], &[]);
     let (s, r) = open(&with_resource(&psd(false), 1050, &data), json!({}));
@@ -452,8 +501,13 @@ fn damaged_slices_never_panic() {
             let mut f = base.clone();
             f[at] = v;
             let mut s = Session::new();
-            let _ = s.execute("document.open", &json!({"name": "poster.psd", "dataBase64": b64(&f)}));
-            let _ = s.execute("document.psdInfo", &json!({"dataBase64": b64(&f)}));
+            // The engine's guard reports a panic as an internal error.
+            for r in [
+                s.execute("document.open", &json!({"name": "poster.psd", "dataBase64": b64(&f)})),
+                s.execute("document.psdInfo", &json!({"dataBase64": b64(&f)})),
+            ] {
+                assert!(!matches!(r, Err(crate::EngineError::Internal { .. })), "byte {at} set to {v}: {r:?}");
+            }
         }
     }
 }
