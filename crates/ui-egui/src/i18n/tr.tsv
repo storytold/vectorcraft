@@ -2827,6 +2827,38 @@ digits	Malayalam	Malayalam
 	Responsive	duyarlı
 	Restore	Geri yükle
 	Restore every preference to its default (applied on OK)	Her tercihi varsayılana geri yükleyin (Tamam'a uygulanır)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Tuvalde seçim veya araç için bir komut çubuğu gösterir; sürüklerken ve Sunum Modu'nda gizlenir.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Bir ok tuşunun seçimi ne kadar taşıdığı; Shift ile on kat daha uzağa taşır.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	Ok tuşlarının boyunca taşıdığı ve Shift'in çizmeyi ve taşımayı sınırladığı eksenlerin açısı.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	Yuvarlatılmış Dikdörtgen aracının çizdiği köşe yarıçapı; çizerken yarıçapı değiştirmek bu değeri de değiştirir.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Bir komut dosyasından olduğu gibi konum verilmediğinde Yapıştır'ın kopyayı sağa ve aşağı ne kadar kaydırdığı; uygulamada Yapıştır kopyayı görünümün ortasına koyar.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Kalem aracının seçili bir yolda tıkladığınız bağlantı noktasını silmesini veya yolun bir parçasına tıkladığınız yere nokta eklemesini engeller.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Çizim araçları simgeleri yerine artı işaretli bir imleç gösterir; Caps Lock açıkken aynısını yapar.
+	Shows a tip when the pointer rests on a button or field that has one.	İmleç ipucu olan bir düğme veya alan üzerinde durduğunda ipucunu gösterir.
+	Shows a warning before a script you choose runs.	Seçtiğiniz bir komut dosyası çalışmadan önce uyarı gösterir.
+	Smooths the edges of artwork on the canvas.	Tuvaldeki resmin kenarlarını yumuşatır.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Seçim › Aynı › Dolgu Rengi, Kontur Rengi ve Doldur ve Konturla yalnızca genel veya spot renk örneğinin aynı tonunu bulur, herhangi bir tonunu değil.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Hiçbir belge açık değilken Ana Sayfa ekranını gösterir; kapalıyken siz Ana Sayfa'ya tıklayana kadar pencere boş kalır.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Nesneleri boyut, konum ve hizalama için konturları ve şekil değiştiren efektleriyle birlikte ölçer; gölgeler, parlamalar ve bulanıklaştırmalar ölçülmez.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	%100 yakınlaştırmada belgenin bir inçi 72 yerine 96 ekran noktası kaplar.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Seçim aracıyla bir gruba, yola veya görüntüye çift tıklamak onu yalıtım modunda açar.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Desen dolguları ve konturları, bir dönüşüm veya Dönüştür panelinin menüsü başka bir seçim yapmadıkça resimle birlikte dönüşür.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Canlı köşe yarıçapları, ölçekleme başka bir seçim yapmadıkça resimle birlikte ölçeklenir.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Kontur kalınlıkları, kesik çizgiler ve efekt mesafeleri, ölçekleme başka bir seçim yapmadıkça resimle birlikte ölçeklenir.
+	The mouse wheel zooms the canvas instead of scrolling it.	Fare tekerleği tuvali kaydırmak yerine yakınlaştırır.
+	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Fare Tekerleği ile Yakınlaştırma kapalıyken, Cmd/Ctrl basılı tutulan fare tekerleği tuvali yana kaydırır.
+	Dragging sideways on a numeric field's label changes the field's value.	Sayısal bir alanın etiketi üzerinde yana sürüklemek alanın değerini değiştirir.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	İzleme dörtgeninde iki parmakla döndürme hareketi tuvalin görünümünü döndürür.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Bir aracın kısayol tuşunu basılı tutmak, tuşu bırakana kadar o aracı seçer, ardından önceki araç yeniden seçilir.
+	Shows the bounding box while you move the selection or draw a shape.	Seçimi taşırken veya bir şekil çizerken sınırlayıcı kutuyu gösterir.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Kesim İşaretleri Oluşturun, Roma tarzı yerine Japon tarzı işaretler çizer.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	Yeni resim yalnızca seçimin dolgusunu ve konturunu alır; kapalıyken seçili nesnenin tüm görünümünü alır.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Dönüştür panelinde, Özellikler panelinde veya Kontrol çubuğunda genişliği ya da yüksekliği değiştirmek diğerini orantılı olarak değiştirir.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Canlı bir dikdörtgenin özellikleri dört köşenin tümü için tek bir Köşe Yarıçapı alanı gösterir; kapalıyken her köşenin kendi alanı olur.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Dönüştür panelindeki düzenlemelerin neyi dönüştürdüğü: nesneyi, desen döşemelerini veya ikisini; Varsayılan, Desen Döşemelerini Dönüştür'ü izler.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Bir sembol örneği seçiliyken Dönüştür paneli, sembolün kayıt noktasını referans noktası olarak kullanır.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Çalışma Yüzeyi aracı etkinken çalışma yüzeylerinin dışındaki tuvali karartır.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Çalışma Yüzeyi Dışındaki Bölgeyi Karart açıkken, Çalışma Yüzeyi aracıyla sürüklerken çalışma yüzeylerinin dışındaki alan karanlık kalır.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Piksel boyutları dışındaki yerleşik boyutlardaki yeni belgelerin ve birim kaydetmeyen açılan dosyaların birimi; burada seçip Tamam'a tıkladığınızda etkin belgenin birimi de bu olur.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Kontur kalınlıkları, kısa çizgiler ve boşluklar bu birimde gösterilir ve bunlar için yazılan sayılar bu birimde okunur.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Yazı boyutları, satır aralığı ve taban çizgisi kayması bu birimde gösterilir ve bunlar için yazılan sayılar bu birimde okunur.

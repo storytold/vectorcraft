@@ -3078,6 +3078,38 @@ mark-style	Japanese	日本式
 	Restore	復元
 	Restore Recovered Documents	復帰したドキュメントを復元
 	Restore every preference to its default (applied on OK)	すべての環境設定を初期値に戻す (OK で適用)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	選択範囲やツールに応じたコマンドのバーをカンバスに表示します。ドラッグ中とプレゼンテーションモードでは隠れます。
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	矢印キーで選択範囲を移動する距離です。Shift キーを押すと 10 倍移動します。
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	矢印キーで移動する軸と、Shift キーで描画や移動を固定する軸の角度です。
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	角丸長方形ツールで描くときの角丸の半径です。描画中に半径を変えるとこの値も変わります。
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	スクリプトからなど位置の指定がないときに、ペーストでコピーを右と下へずらす距離です。アプリでのペーストはコピーを表示の中央に置きます。
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	選択したパスでクリックしたアンカーポイントをペンツールが削除したり、セグメントをクリックした位置に追加したりしないようにします。
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	描画ツールのポインターをアイコンではなく十字にします。Caps Lock がオンの間も同じになります。
+	Shows a tip when the pointer rests on a button or field that has one.	ヒントのあるボタンやフィールドにポインターを置くとヒントを表示します。
+	Shows a warning before a script you choose runs.	選んだスクリプトを実行する前に警告を表示します。
+	Smooths the edges of artwork on the canvas.	カンバス上のアートワークの縁を滑らかにします。
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	選択 › 共通 › カラー (塗り)、カラー (線)、塗りと線は、グローバルスウォッチまたは特色スウォッチの同じ濃度だけを選び、ほかの濃度は選びません。
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	ドキュメントが開いていないときにホーム画面を表示します。オフのときは、ホームをクリックするまでウィンドウは空のままです。
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	サイズ、位置、整列のために、線と形を変える効果を含めてオブジェクトを測ります。ドロップシャドウ、光彩、ぼかしは含めません。
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% 表示のとき、ドキュメントの 1 インチを 72 ではなく 96 スクリーンポイントで表示します。
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	選択ツールでグループ、パス、画像をダブルクリックすると、編集モードで開きます。
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	変形コマンドや変形パネルのメニューで別の指定をしない限り、パターンの塗りと線をアートワークと一緒に変形します。
+	Live corner radii scale with the art, unless the scale chooses otherwise.	拡大・縮小で別の指定をしない限り、ライブコーナーの半径をアートワークと一緒に拡大・縮小します。
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	拡大・縮小で別の指定をしない限り、線幅、破線、効果の距離をアートワークと一緒に拡大・縮小します。
+	The mouse wheel zooms the canvas instead of scrolling it.	マウスホイールでカンバスをスクロールせずにズームします。
+	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	マウスホイールでズームがオフの間、Cmd/Ctrl キーを押しながらホイールを回すとカンバスを横にスクロールします。
+	Dragging sideways on a numeric field's label changes the field's value.	数値フィールドのラベルを横にドラッグすると、フィールドの値が変わります。
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	トラックパッドで 2 本指の回転ジェスチャーをすると、カンバスの表示が回転します。
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ツールのショートカットキーを押している間はそのツールを選び、離すと前のツールに戻ります。
+	Shows the bounding box while you move the selection or draw a shape.	選択範囲の移動中や図形の描画中にバウンディングボックスを表示します。
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	トリムマークを作成で、西洋式ではなく日本式のトンボを描きます。
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	新規オブジェクトに選択範囲の塗りと線だけを適用します。オフのときは、選択したオブジェクトのアピアランス全体を適用します。
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	変形パネル、プロパティパネル、コントロールパネルで幅または高さを変えると、もう一方も比率を保って変わります。
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	ライブ長方形のプロパティで、4 つの角に共通の角丸の半径フィールドを 1 つ表示します。オフのときは角ごとにフィールドを表示します。
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	変形パネルでの編集が変形する対象で、オブジェクト、パターンタイル、またはその両方です。デフォルトはパターンタイルを変形に従います。
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	シンボルインスタンスを 1 つ選択したとき、変形パネルはシンボルの基準点を基準点として使います。
+	Darkens the canvas outside the artboards while the Artboard tool is active.	アートボードツールを使っている間、アートボードの外側のカンバスを暗く表示します。
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	アートボードの外側を暗く表示がオンのとき、アートボードツールでドラッグしている間もアートボードの外側を暗いままにします。
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	ピクセル以外の組み込みサイズの新規ドキュメントと、単位を記録していない開いたファイルに使う単位で、ここで選んで OK をクリックすると作業中のドキュメントの単位も変わります。
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	線幅、線分、間隔はこの単位で表示され、入力した数値もこの単位で読み取られます。
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	フォントサイズ、行送り、ベースラインシフトはこの単位で表示され、入力した数値もこの単位で読み取られます。

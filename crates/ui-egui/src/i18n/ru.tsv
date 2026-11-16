@@ -3090,6 +3090,38 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивный
 	Restore	Восстановить
 	Restore every preference to its default (applied on OK)	Восстановить все настройки по умолчанию (применяется при нажатии ОК)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Показывает на холсте панель команд для выделения или инструмента; она скрывается во время перетаскивания и в режиме презентации.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Насколько клавиша со стрелкой сдвигает выделение; с Shift она сдвигает его в десять раз дальше.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	Угол осей, вдоль которых сдвигают клавиши со стрелками и к которым Shift привязывает рисование и перемещение.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	Радиус угла, с которым рисует инструмент «Скруглённый прямоугольник»; изменение радиуса во время рисования меняет и это значение.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Насколько «Вставить» сдвигает копию вправо и вниз, когда положение не задано, например из скрипта; «Вставить» в приложении помещает её в центр вида.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Не даёт инструменту «Перо» удалять опорную точку, по которой вы щёлкаете на выделенном контуре, или добавлять точку там, где вы щёлкаете по его сегменту.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Инструменты рисования показывают указатель-перекрестие вместо своего значка; Caps Lock делает то же самое, пока он включён.
+	Shows a tip when the pointer rests on a button or field that has one.	Показывает подсказку, когда указатель задерживается на кнопке или поле, у которых она есть.
+	Shows a warning before a script you choose runs.	Показывает предупреждение перед запуском выбранного вами скрипта.
+	Smooths the edges of artwork on the canvas.	Сглаживает края графики на холсте.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	«Выделение › То же › Цвет заливки», «Цвет обводки» и «Заливка и обводка» находят только тот же оттенок глобального или плашечного образца, а не любой его оттенок.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Показывает начальный экран, когда нет открытых документов; если выключено, окно остаётся пустым, пока вы не нажмёте «Домой».
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Измеряет объекты с обводками и эффектами, меняющими форму, для размера, положения и выравнивания; тени, свечения и размытия не учитываются.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	При масштабе 100 % один дюйм документа занимает 96 экранных пунктов вместо 72.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Двойной щелчок по группе, контуру или изображению инструментом «Выделение» открывает их в режиме изоляции.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Заливки и обводки узором трансформируются вместе с графикой, если трансформирование или меню панели «Трансформировать» не задаёт иное.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Радиусы динамических углов масштабируются вместе с графикой, если масштабирование не задаёт иное.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Толщина обводок, штрихи и расстояния эффектов масштабируются вместе с графикой, если масштабирование не задаёт иное.
+	The mouse wheel zooms the canvas instead of scrolling it.	Колесо мыши масштабирует холст, а не прокручивает его.
+	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Пока «Масштабировать колесом мыши» выключено, колесо мыши с нажатой Cmd/Ctrl прокручивает холст по горизонтали.
+	Dragging sideways on a numeric field's label changes the field's value.	Перетаскивание по подписи числового поля в сторону меняет значение поля.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест поворота двумя пальцами на трекпаде поворачивает вид холста.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Пока вы удерживаете клавишу инструмента, он остаётся выбранным, а после отпускания снова выбирается предыдущий инструмент.
+	Shows the bounding box while you move the selection or draw a shape.	Показывает ограничивающую рамку, пока вы перемещаете выделение или рисуете фигуру.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	«Создать метки подрезки» рисует метки в японском стиле вместо западных.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	Новые объекты получают только заливку и обводку выделения; если выключено, они получают всё оформление выделенного объекта.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Изменение ширины или высоты на панели «Трансформировать», панели «Свойства» или панели управления пропорционально меняет другой размер.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Свойства динамического прямоугольника показывают одно поле «Радиус угла» для всех четырёх углов; если выключено, у каждого угла своё поле.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Что трансформируют изменения на панели «Трансформировать»: объект, плитки его узора или и то и другое; «По умолчанию» следует «Трансформировать плитки узора».
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Когда выделен один экземпляр символа, панель «Трансформировать» использует точку регистрации символа как опорную точку.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Затемняет холст вне монтажных областей, пока активен инструмент «Монтажная область».
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Когда включено «Затемнять область вне монтажной области», область вне монтажных областей остаётся тёмной, пока вы перетаскиваете инструментом «Монтажная область».
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Единица новых документов встроенных размеров, кроме размеров в пикселях, и открытых файлов без записанной единицы; если выбрать её здесь и нажать ОК, она станет и единицей активного документа.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Толщина обводки, штрихи и зазоры показываются в этой единице, и введённые для них числа читаются в ней.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Размеры текста, интерлиньяж и смещение базовой линии показываются в этой единице, и введённые для них числа читаются в ней.
