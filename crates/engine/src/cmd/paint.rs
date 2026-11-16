@@ -560,10 +560,8 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
 fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity: Option<f32>, fill: bool) -> Result<Value> {
     let cmd = if fill { "paint.setFill" } else { "paint.setStroke" };
     let focus = switch_or(p, "focus", true, cmd)?;
-    let span = match &paint {
-        Some(paint) => spans_targets(p, paint).map_err(|e| bad(cmd, e))?,
-        None => false,
-    };
+    // An opacity alone places no gradient, so `span` may only be "object" with it.
+    let span = spans_targets(p, paint.as_ref().unwrap_or(&Paint::None)).map_err(|e| bad(cmd, e))?;
     // Characters selected with the Type tool take the paint, not the whole type object (#1063).
     if p.get("ids").is_none()
         && p.get("id").is_none()

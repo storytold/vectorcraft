@@ -156,6 +156,15 @@ fn errors_leave_the_document_and_defaults_alone() {
     }
     let e = s.execute("paint.setFill", &json!({})).unwrap_err();
     assert!(e.to_string().contains("give color, none, swatch, gradient or opacity"), "{e}");
+    // An opacity alone places no gradient across the selection.
+    let doc = s.doc().unwrap().doc.clone();
+    for (span, says) in [(json!("selection"), "give `gradient`"), (json!("all"), "span must be \"object\" or \"selection\"")] {
+        let e = s.execute("paint.setFill", &json!({"opacity": 40, "span": span})).unwrap_err();
+        assert!(e.to_string().contains(says), "{span}: {e}");
+    }
+    assert_eq!(*s.doc().unwrap().doc, *doc);
+    s.execute("paint.setFill", &json!({"opacity": 40, "span": "object"})).unwrap();
+    assert!((fill_opacity(&s, id) - 0.4).abs() < 1e-6);
     s.execute("select.none", &json!({})).unwrap();
     let doc = s.doc().unwrap().doc.clone();
     for p in [json!({"opacity": 40}), json!({"color": "#ff0000", "opacity": 40})] {
