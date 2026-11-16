@@ -101,7 +101,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Path Eraser",
             [],
             None,
-            "{points: [[x,y]…] (pen values after x and y are checked as path.freehand checks them and do not change what is erased), width?: pt (8)} erase the parts of selected paths under the drag → {ids}",
+            "{points: [[x,y]…] (pen values after x and y are checked as path.freehand checks them and do not change what is erased), width?: pt (8; from 0.001 to 1000)} erase the parts of selected paths under the drag → {ids}. A width outside 0.001 to 1000 is refused with an error, and nothing changes",
             has_selection,
             erase_segments
         ),

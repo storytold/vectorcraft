@@ -5959,6 +5959,10 @@ with `` `t` must be from 0 to 1 ``, with `segment` or with `anchor`. The documen
 recorded. Left out or null, `angle` is 0° and `roundness` is 100%; left out, `t` is 0.5. The Eraser's ranges are
 VectorCraft's own values.
 
+`path.eraseSegments` (the Path Eraser) refuses a `width` outside 0.001 to 1000 pt with
+`` `width` must be from 0.001 to 1000 ``. The document and the selection do not change and no undo step is recorded.
+Left out or null, `width` is 8 pt. The range is VectorCraft's own value.
+
 These commands refuse a string, a number or another value that is not true or false with
 `` `closed` must be true or false ``, naming the key; the document does not change and no undo step is recorded:
 `independent` in `path.close` and `path.setHandle`; `patterns` in `path.moveAnchors`; `closed`, `keepSelected` and

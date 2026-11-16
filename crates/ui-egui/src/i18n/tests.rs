@@ -2851,9 +2851,9 @@ fn three_d_refusals_are_translated_in_every_complete_catalog() {
     assert!(missing.is_empty(), "{} 3D messages have no @msg row:\n{}", missing.len(), missing.join("\n"));
 }
 
-/// The Eraser's range refusals (`path.eraseRegion` `angle` and `roundness`) and the Scissors' (`path.split`
-/// `t`) show in every complete-message language with the key and the range numbers as given; the
-/// error the command returns stays English.
+/// The Eraser's range refusals (`path.eraseRegion` `angle` and `roundness`), the Path Eraser's
+/// (`path.eraseSegments` `width`) and the Scissors' (`path.split` `t`) show in every complete-message
+/// language with the key and the range numbers as given; the error the command returns stays English.
 #[test]
 fn eraser_and_scissors_range_refusals_translate_with_their_values() {
     use serde_json::json;
@@ -2863,6 +2863,7 @@ fn eraser_and_scissors_range_refusals_translate_with_their_values() {
     let refusals = [
         ("path.eraseRegion", json!({"points": [[10, 10], [60, 10]], "angle": 200}), "`angle`", ["-180", "180"]),
         ("path.eraseRegion", json!({"points": [[10, 10], [60, 10]], "roundness": 0}), "`roundness`", ["1", "100"]),
+        ("path.eraseSegments", json!({"points": [[30, 0], [30, 70]], "width": 2000}), "`width`", ["0.001", "1000"]),
         ("path.split", json!({"id": id, "segment": 0, "t": 1.5}), "`t`", ["0", "1"]),
     ];
     for (cmd, p, key, numbers) in &refusals {

@@ -3059,6 +3059,30 @@ fn blob_and_eraser_size_and_variation_outside_their_ranges_are_refused() {
     }
 }
 
+/// `path.eraseSegments` refuses a `width` outside 0.001 to 1000 pt, and nothing changes. The ends of
+/// the range and null still erase.
+#[test]
+fn path_eraser_width_outside_its_range_is_refused() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let drag = json!({"points": [[150, 90], [150, 110]]});
+    for x in [json!(0), json!(-1), json!(0.0009), json!(1e-300), json!(1000.01), json!(1e300)] {
+        let sel = s.doc().unwrap().selection.clone();
+        refuses_with(&mut s, "path.eraseSegments", &with(&drag, json!({"width": x})), "`width` must be from 0.001 to 1000");
+        assert_eq!(s.doc().unwrap().selection, sel, "width {x} changed the selection");
+    }
+    for x in [json!(0.001), json!(1000), json!(null)] {
+        let before = s.doc().unwrap().doc.clone();
+        let undo = undo_steps(&s);
+        s.execute("path.eraseSegments", &with(&drag, json!({"width": x}))).unwrap_or_else(|e| panic!("width {x}: {e}"));
+        assert!(s.doc().unwrap().doc != before, "width {x} erased nothing");
+        assert_eq!(undo_steps(&s), undo + 1, "width {x}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    }
+}
+
 /// The Eraser, Path Eraser, Smooth, Join and Blob Brush commands refuse a size, angle, roundness,
 /// width, radius, fidelity or tolerance given as text or as another value that is not a number, and change
 /// nothing; null is read as the key left out.
