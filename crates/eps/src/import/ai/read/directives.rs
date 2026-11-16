@@ -837,11 +837,13 @@ impl<'a> Reader<'a> {
     }
 
     /// Lend `sub`, a reader of a definition, what this import may still spend on laying out blends
-    /// and checking envelopes ([`Reader::take_back_budgets`] takes back what is left).
+    /// and checking envelopes and aligned dashes ([`Reader::take_back_budgets`] takes back what is
+    /// left).
     fn lend_budgets(&mut self, sub: &mut Reader<'_>) {
         sub.blend_budget = self.blend_budget;
         sub.envelope_checks = self.envelope_checks;
         sub.envelope_spent = std::mem::take(&mut self.envelope_spent);
+        sub.dash_checks = self.dash_checks;
     }
 
     /// Take back from `sub` what [`Self::lend_budgets`] lent it, less what it spent.
@@ -849,6 +851,7 @@ impl<'a> Reader<'a> {
         self.blend_budget = sub.blend_budget;
         self.envelope_checks = sub.envelope_checks;
         self.envelope_spent = std::mem::take(&mut sub.envelope_spent);
+        self.dash_checks = sub.dash_checks;
     }
 
     /// In a pattern's definition, the operands of its first operator start with its head,

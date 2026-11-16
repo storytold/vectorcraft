@@ -6216,27 +6216,39 @@ fn a_stroke_offset_filter_keeps_its_strokes_style() {
 }
 
 /// A Stroke Offset stroke this doesn't read as a stroke keeps the object's drawn look: a switch
-/// written as another kind, dashes aligned to corners and path ends, a gradient.
+/// written as another kind, a gradient.
 #[test]
 fn a_stroke_offset_filter_with_a_stroke_this_does_not_read_keeps_the_drawn_look() {
     let outside = "0 /Bool (StrokeOffsetInside) ,\n";
     let gradient = "0 R\nBb\n0 0 0 0 Bh\n2 (Red ramp) 0 0 90 1 1 0 0 1 0 0 1 Bg\n0 BB\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd";
     let cases = [
         ("a switch written as a number", offset_stroke_style_with("Edge", "1 /Int (StrokeOffsetInside) ,\n", OFFSET_STROKE)),
-        (
-            "dashes aligned to corners",
-            offset_stroke_style_with(
-                "Edge",
-                &format!("{outside}/Dictionary : /NotRecorded ,\n1 /Bool (BSDashAdj) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n"),
-                &OFFSET_STROKE.replace("[]0 d", "[5 10 ]0 d"),
-            ),
-        ),
         ("a gradient", offset_stroke_style_with("Edge", outside, gradient)),
     ];
     for (why, style) in cases {
         let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{}", layer(&styled_square("Edge"))));
         assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{why}: {:?}", r.warnings);
     }
+}
+
+/// A Stroke Offset stroke with dashes aligned to corners and path ends reads as such a stroke,
+/// outside the path; the object takes it only where it draws as its drawn look. Here the look (a
+/// filled square) draws otherwise, so the look check keeps the drawn look.
+#[test]
+fn a_stroke_offset_with_dashes_aligned_to_corners_unlike_its_look_keeps_the_look() {
+    use crate::import::ai::style::StyleItem;
+    use vectorcraft_doc::StrokeAlign;
+    let keys = "0 /Bool (StrokeOffsetInside) ,\n/Dictionary : /NotRecorded ,\n1 /Bool (BSDashAdj) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n";
+    let style = offset_stroke_style_with("Edge", keys, &OFFSET_STROKE.replace("[]0 d", "[5 10 ]0 d"));
+    let styles = crate::import::ai::style::art_styles(style.as_bytes());
+    let Some(StyleItem::Stroke { dash: Some(dash), align, .. }) = styles["Edge"].items.iter().find(|i| matches!(i, StyleItem::Stroke { .. })) else {
+        panic!("{:?}", styles["Edge"])
+    };
+    assert_eq!((dash.pattern.as_slice(), dash.align_corners, *align), ([5.0, 10.0].as_slice(), true, StrokeAlign::Outside));
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{}", layer(&styled_square("Edge"))));
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    assert!(matches!(a.as_slice(), [n] if matches!(n.kind, NodeKind::Group { .. })), "the drawn look: {a:#?}");
 }
 
 /// A listed `[Default]` style whose stroke is aligned outside comes in as the default graphic

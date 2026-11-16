@@ -59,6 +59,9 @@ pub(crate) fn drawn_note(typed: bool) -> &'static str {
 pub(super) const MAX_PENDING: usize = 64;
 /// The most envelopes and warped text objects one import draws to check; more keep their drawn art.
 pub(crate) const MAX_CHECKED: usize = 256;
+/// The most strokes with dashes aligned to corners one import draws to check against their drawn
+/// looks (apart from [`MAX_CHECKED`]); more keep their drawn looks.
+pub(crate) const MAX_DASH_CHECKS: usize = 256;
 /// The most rows or columns of a mesh read (Make with Mesh's own limit).
 const MAX_GRID: u32 = 50;
 /// How far, in points over width and height together, a saved size may lie from the contents'

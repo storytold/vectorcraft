@@ -835,15 +835,30 @@ impl<'a> Reader<'a> {
             })
         });
         // An image with a Warp is the object only where its live warp draws as its drawn look, and
-        // while the import has a check left for it; otherwise its drawn look stays.
+        // while the import has a check left for it; otherwise its drawn look stays. So is a stroke
+        // with dashes aligned to corners and path ends, whose fitting is VectorCraft's own, within
+        // checks of its own ([`crate::import::ai::MAX_DASH_CHECKS`]) and without weighing the page:
+        // the envelopes' checks and share of the page check stay theirs alone. Type with such
+        // dashes keeps its drawn look, as before.
         let appearance = match appearance {
+            Some(ap) if aligns_dashes(&ap) && slot_of(object.name.as_deref()).is_some() => None,
             Some(ap) if matches!(object.kind, NodeKind::Image(_)) && ap.effects.iter().any(|e| e.id.starts_with("warp.")) => {
                 let alike = self.envelope_checks > 0 && {
                     self.envelope_checks -= 1;
                     let layer = self.doc.alloc_id();
                     let shared = crate::import::ai::envelope::Shared { patterns: &self.doc.patterns, images: &self.doc.images };
                     let shown = !hidden && object.visible && look.visible;
-                    image_warp_alike(object, &ap, look, &self.hidden_ids, hidden, layer, &shared, page.filter(|_| shown), &mut self.envelope_spent)
+                    look_alike(object, &ap, look, &self.hidden_ids, hidden, layer, &shared, page.filter(|_| shown), &mut self.envelope_spent)
+                };
+                alike.then_some(ap)
+            }
+            Some(ap) if aligns_dashes(&ap) => {
+                let alike = self.dash_checks > 0 && {
+                    self.dash_checks -= 1;
+                    let layer = self.doc.alloc_id();
+                    let shared = crate::import::ai::envelope::Shared { patterns: &self.doc.patterns, images: &self.doc.images };
+                    let mut spent = crate::import::ai::envelope::Spent::default();
+                    look_alike(object, &ap, look, &self.hidden_ids, hidden, layer, &shared, None, &mut spent)
                 };
                 alike.then_some(ap)
             }
@@ -1187,18 +1202,19 @@ fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
 
 /// Is `object` an image without an opacity mask, and `st` one Warp on it with nothing else that
 /// paints ([`crate::import::ai::style::ArtStyle::image_warp`])? Such an image is read with its Warp
-/// live where that draws as its drawn look ([`image_warp_alike`]).
+/// live where that draws as its drawn look ([`look_alike`]).
 fn image_warps(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
     matches!(object.kind, NodeKind::Image(_)) && object.extras().mask.is_none() && st.image_warp
 }
 
-/// Does image `object` with `appearance` (its style's Warp) draw as `look`, its drawn look, compared
-/// over all that the warp draws ([`crate::import::ai::envelope::warped_alike`]) on `layer`, a layer
-/// id no other node has? Both are drawn shown, opaque and in the Normal mode; a hidden look is drawn
-/// with every object in it shown, as the hidden object's look holds them. Unless the look is on
-/// `%_` lines itself (`hidden`), the copies in it that are on `%_` lines (`hidden_ids`) are left out.
+/// Does `object` with `appearance` (an image's Warp, or a stroke with dashes aligned to corners)
+/// draw as `look`, its drawn look, compared over all that it draws, effects included
+/// ([`crate::import::ai::envelope::warped_alike`]), on `layer`, a layer id no other node has? Both
+/// are drawn shown, opaque and in the Normal mode; a hidden look is drawn with every object in it
+/// shown, as the hidden object's look holds them. Unless the look is on `%_` lines itself
+/// (`hidden`), the copies in it that are on `%_` lines (`hidden_ids`) are left out.
 #[allow(clippy::too_many_arguments)]
-fn image_warp_alike(
+fn look_alike(
     object: &Node,
     appearance: &Appearance,
     look: &Node,
@@ -1224,6 +1240,11 @@ fn image_warp_alike(
     crate::import::ai::envelope::warped_alike(&live, &plain, layer, shared, page, spent)
 }
 
+/// Does `appearance` stroke with dashes aligned to corners and path ends?
+fn aligns_dashes(appearance: &Appearance) -> bool {
+    appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.dash.as_ref().is_some_and(|d| d.align_corners && d.is_dashed())))
+}
+
 /// Show every object in container `n`, at any depth.
 fn show_members(n: &mut Node) {
     for c in n.children_mut().into_iter().flatten() {
@@ -1245,7 +1266,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     let slot = slot_of(object.name.as_deref()).is_some();
     // Several fills and strokes, on a path or a compound path.
     let stacked = !slot && !st.simple && st.stacked && matches!(object.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
-    // One Warp on an image, checked against its drawn look by the caller ([`image_warp_alike`]).
+    // One Warp on an image, checked against its drawn look by the caller ([`look_alike`]).
     let image_warp = !st.simple && image_warps(object, st);
     // A symbol instance draws its symbol's art: it keeps its drawn look.
     if !st.plain

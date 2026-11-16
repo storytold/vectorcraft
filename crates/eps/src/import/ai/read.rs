@@ -593,6 +593,9 @@ struct Reader<'a> {
     envelope_checks: usize,
     /// How far the live envelopes read so far draw from their drawn art ([`super::envelope::Spent`]).
     envelope_spent: super::envelope::Spent,
+    /// How many more strokes with dashes aligned to corners this import may draw to check
+    /// ([`super::MAX_DASH_CHECKS`]).
+    dash_checks: usize,
     /// The text objects read with a Warp ([`super::envelope::WarpedType`]).
     warped_type: Vec<super::envelope::WarpedLook>,
     /// The envelopes of type read with their drawn art, settled once the type is laid out
@@ -822,6 +825,7 @@ impl<'a> Reader<'a> {
             envelopes: Vec::new(),
             envelope_checks: super::envelope::MAX_CHECKED,
             envelope_spent: super::envelope::Spent::default(),
+            dash_checks: super::MAX_DASH_CHECKS,
             warped_type: Vec::new(),
             typed_envelopes: Vec::new(),
             envelopes_drawn: Vec::new(),

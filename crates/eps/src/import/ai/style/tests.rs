@@ -61,13 +61,17 @@ fn a_uniform_or_unreadable_width_profile_stays_a_live_stroke() {
 }
 
 #[test]
-fn dashes_aligned_to_corners_keep_the_drawn_look() {
-    // GUARDS: the look holds the fitted pattern and the solid ends the style's dash array doesn't.
+fn dashes_aligned_to_corners_read_as_aligned_dashes() {
+    // The look holds the fitted pattern, which the style's dash array doesn't: the reader takes the
+    // stroke only where VectorCraft's own fitting draws as that look.
     let data = b"/KnownStyle :\n(Stitches) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
             /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
             /Dictionary : /NotRecorded ,\n1 /Bool (BSDashAdj) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n\
             /StrokeStyle : 0 R\n0 0 0 0 0 0 1 XA\n1 J 0 j 2 w 10 M [5 10 ]0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n";
-    assert!(!art_styles(data)["Stitches"].plain);
+    let style = &art_styles(data)["Stitches"];
+    assert!(style.plain, "{style:?}");
+    let [StyleItem::Stroke { dash: Some(dash), .. }] = style.items.as_slice() else { panic!("{:?}", style.items) };
+    assert_eq!((dash.pattern.as_slice(), dash.align_corners), ([5.0, 10.0].as_slice(), true));
 }
 
 /// The style `Shade`: a Drop Shadow whose dictionary holds `keys`.

@@ -1461,11 +1461,10 @@ fn stroke_item(f: &Filter, align: StrokeAlign) -> Result<Option<StyleItem>, ()> 
     if !f.paints.0 {
         return Ok(None);
     }
-    // Dashes aligned to corners and path ends draw as the look's pieces: a solid end at each end
-    // and the pattern, fitted, between them.
-    if f.params.get("BSDashAdj").is_some_and(|v| *v != 0.0) {
-        return Err(());
-    }
+    // Dashes aligned to corners and path ends (the switch in the stroke's dictionary): the look
+    // draws them fitted between solid ends, which the reader checks the stroke against before it
+    // takes it.
+    let aligned = f.params.get("BSDashAdj").is_some_and(|v| *v != 0.0);
     match &f.stroke {
         Some(p) if !f.gradient && f.pattern.is_none() => Ok(Some(StyleItem::Stroke {
             paint: p.clone(),
@@ -1473,7 +1472,7 @@ fn stroke_item(f: &Filter, align: StrokeAlign) -> Result<Option<StyleItem>, ()> 
             cap: f.cap,
             join: f.join,
             miter: f.miter,
-            dash: f.dash.clone(),
+            dash: f.dash.clone().map(|d| Dash { align_corners: aligned, ..d }),
             profile: width_profile(&f.arrays),
             align,
             brush: None,

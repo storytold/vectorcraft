@@ -7198,6 +7198,122 @@ fn warped_type_that_draws_apart_from_its_look_comes_in_as_the_look() {
     }
 }
 
+/// An art style section with style `Dashed`: a black stroke 2 units wide with butt caps, miter joins
+/// and dashes of 6 and gaps of 4, aligned to corners and path ends (`BSDashAdj`).
+fn aligned_dash_style() -> String {
+    "%AI9_BeginArtStyles\n/KnownStyle :\n(Dashed) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+     /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
+     /Dictionary : /NotRecorded ,\n1 /Bool (BSDashAdj) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n\
+     /StrokeStyle : 0 R\n0 0 0 1 0 0 0 XA\n0 J 0 j 2 w 10 M [6 4 ]0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n%AI9_EndArtStyles\n"
+        .to_string()
+}
+
+/// The open path of [`aligned_dash_file`], a corner at (80, 20), in the document's coordinates.
+fn aligned_dash_path() -> kurbo::BezPath {
+    let mut bp = kurbo::BezPath::new();
+    bp.move_to((20.0, 20.0));
+    bp.line_to((80.0, 20.0));
+    bp.line_to((80.0, 70.0));
+    bp
+}
+
+/// What [`aligned_dash_style`] draws along [`aligned_dash_path`], with its dashes aligned to corners
+/// and path ends by VectorCraft or (`aligned` false) not, as look operators in black.
+fn aligned_dash_look(aligned: bool) -> String {
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::{Dash, LineCap, LineJoin, StrokeLayer};
+    let mut stroke = StrokeLayer::new(Paint::solid(Color::BLACK), 2.0);
+    (stroke.cap, stroke.join, stroke.miter_limit) = (LineCap::Butt, LineJoin::Miter, 10.0);
+    stroke.dash = Some(Dash { pattern: vec![6.0, 4.0], offset: 0.0, align_corners: aligned });
+    let outline = vectorcraft_effects::stroke::line_outline(&aligned_dash_path(), &stroke, 2.0, 0.01);
+    assert!(!outline.elements().is_empty());
+    drawn_as_operators(&outline).replace("0 1 1 0 1 0 0 Xa", "0 0 0 1 0 0 0 Xa")
+}
+
+/// The editing copy of [`aligned_dash_path`] under [`aligned_dash_style`], with the look `drawing`.
+fn aligned_dash_file(drawing: &str) -> String {
+    aligned_dash_files(drawing, 1)
+}
+
+/// [`aligned_dash_file`] with `n` such paths.
+fn aligned_dash_files(drawing: &str, n: usize) -> String {
+    let own = "%_0 0 0 1 0 0 0 XA\n%_2 w\n%_20 80 m\n%_80 80 L\n%_80 30 L\n%_S\n";
+    let one = format!("u\n{drawing}\nU\n9 () XW\n{own}1 (Dashed) XW\n");
+    native(&(aligned_dash_style() + &layer("Art", true, &one.repeat(n))))
+}
+
+/// The paths of `d` that stroke with dashes, each with whether its dashes are aligned to corners.
+fn dashed_paths(d: &Document) -> Vec<bool> {
+    let mut out = vec![];
+    d.walk(|n| {
+        if matches!(n.kind, NodeKind::Path { .. }) {
+            for i in &n.appearance.items {
+                if let vectorcraft_doc::AppearanceItem::Stroke(s) = i
+                    && let Some(dash) = &s.dash
+                {
+                    out.push(dash.align_corners);
+                }
+            }
+        }
+    });
+    out
+}
+
+/// A stroke whose dashes are aligned to corners and path ends comes in as the path with that stroke,
+/// editable, where VectorCraft's fitting draws as its drawn look.
+#[test]
+fn dashes_aligned_to_corners_that_draw_as_the_look_come_in_live() {
+    let (d, notes) = crate::ai_alone(&private(&aligned_dash_file(&aligned_dash_look(true)))).unwrap();
+    assert_eq!(dashed_paths(&d), [true], "{notes:?}");
+    assert!(!notes.iter().any(|w| w.contains("drawn look")), "{notes:?}");
+}
+
+/// Where the look draws the dashes elsewhere (here, not fitted), the path keeps its drawn look.
+#[test]
+fn dashes_aligned_to_corners_that_draw_apart_from_the_look_keep_it() {
+    let (d, notes) = crate::ai_alone(&private(&aligned_dash_file(&aligned_dash_look(false)))).unwrap();
+    assert!(dashed_paths(&d).is_empty(), "{notes:?}");
+    let looks = d.layers[0].children().unwrap();
+    assert!(matches!(looks.as_slice(), [l] if matches!(l.kind, NodeKind::Group { .. }) && l.visual_bounds().is_some()), "{looks:#?}");
+}
+
+/// The strokes with aligned dashes one import checks against their looks are limited
+/// ([`crate::import::ai::MAX_DASH_CHECKS`]), apart from the envelopes' checks: past the
+/// limit, a path that would draw as its look keeps the look.
+#[test]
+fn dashes_aligned_to_corners_past_their_checks_keep_the_look() {
+    let n = crate::import::ai::MAX_DASH_CHECKS;
+    let (d, notes) = crate::ai_alone(&private(&aligned_dash_files(&aligned_dash_look(true), n + 1))).unwrap();
+    assert_eq!(dashed_paths(&d).len(), n, "{notes:?}");
+    let looks = d.layers[0].children().unwrap().iter().filter(|c| matches!(c.kind, NodeKind::Group { .. })).count();
+    assert_eq!(looks, 1);
+}
+
+/// Type under a style with dashes aligned to corners keeps its drawn look, as before, and takes no
+/// such stroke: the look check isn't made for type.
+#[test]
+fn type_with_dashes_aligned_to_corners_keeps_its_drawn_look() {
+    let doc = text_document(&[("TILT\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let own: String = text_object(0).lines().map(|l| format!("%_{l}\n")).collect();
+    let look = format!("u\n{}\nU\n9 () XW\n", aligned_dash_look(true));
+    let file = native_with_text(&(aligned_dash_style() + &layer("Art", true, &format!("{look}{own}1 (Dashed) XW\n"))), &doc);
+    let (d, notes) = crate::ai_alone(&private(&file)).unwrap();
+    // The look stays, and the type takes no stroke with aligned dashes.
+    let kids = d.layers[0].children().unwrap();
+    assert!(kids.iter().any(|c| matches!(c.kind, NodeKind::Group { .. }) && c.visual_bounds().is_some()), "{notes:?}");
+    let mut aligned = false;
+    d.walk(|n| {
+        if matches!(n.kind, NodeKind::Text(_)) {
+            aligned |= n
+                .appearance
+                .items
+                .iter()
+                .any(|i| matches!(i, vectorcraft_doc::AppearanceItem::Stroke(s) if s.dash.as_ref().is_some_and(|d| d.align_corners)));
+        }
+    });
+    assert!(!aligned, "{notes:?}");
+}
+
 /// Warped type that a text variable binds stays type with the effect live and keeps its binding,
 /// though its live warp draws apart from its look.
 #[test]
