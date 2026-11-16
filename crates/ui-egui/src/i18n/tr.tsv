@@ -8313,7 +8313,9 @@ axis	Y Axis	Y ekseni
 @msg	position must be normal, superscript or subscript	position normal, superscript veya subscript olmalıdır
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position topLeft, topRight, bottomLeft veya bottomRight olmalıdır
 @msg	positions must be between 0 and 100000 pt	konumlar 0 ile 100000 pt arasında olmalıdır
+@msg	ppi can't be more than {max} for this image	bu görüntü için ppi {max} değerinden büyük olamaz
 @msg	ppi must be a positive number, not {ppi}	ppi pozitif bir sayı olmalıdır, {ppi} değil
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim görüntünün piksellerini olduğu gibi korur: ppi belirtmeyin
 @msg	ppi must be between 1 and 2400	ppi 1 ile 2400 arasında olmalıdır
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}`, transforms|bounds|fileDimensions|fit|fill değerlerinden biri değil
 @msg	preserveShape must be clippingMask|transparency	preserveShape clippingMask|transparency olmalıdır

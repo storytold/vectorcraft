@@ -7932,7 +7932,9 @@ axis	Y Axis	Y 軸
 @msg	position must be normal, superscript or subscript	position には normal、superscript、subscript のいずれかを指定してください
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position には topLeft、topRight、bottomLeft、bottomRight のいずれかを指定してください
 @msg	positions must be between 0 and 100000 pt	positions には 0 から 100000 pt までの値を指定してください
+@msg	ppi can't be more than {max} for this image	この画像の ppi には {max} 以下の値を指定してください
 @msg	ppi must be a positive number, not {ppi}	ppi には正の数値を指定してください ({ppi} は指定できません)
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim は画像のピクセルをそのまま残します: ppi は指定しないでください
 @msg	ppi must be between 1 and 2400	ppi には 1 から 2400 までの値を指定してください
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` は transforms|bounds|fileDimensions|fit|fill のいずれでもありません
 @msg	preserveShape must be clippingMask|transparency	preserveShape には clippingMask|transparency のいずれかを指定してください

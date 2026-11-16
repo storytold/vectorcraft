@@ -7971,7 +7971,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	position must be normal, superscript or subscript	position normal, superscript या subscript होना चाहिए
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position को topLeft, topRight, bottomLeft या bottomRight होना चाहिए
 @msg	positions must be between 0 and 100000 pt	positions 0 और 100000 pt के बीच होनी चाहिए
+@msg	ppi can't be more than {max} for this image	इस छवि के लिए ppi {max} से अधिक नहीं हो सकता
 @msg	ppi must be a positive number, not {ppi}	ppi एक धनात्मक संख्या होनी चाहिए, {ppi} नहीं
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim छवि के पिक्सेल जैसे हैं वैसे ही रखता है: ppi न दें
 @msg	ppi must be between 1 and 2400	ppi 1 और 2400 के बीच होना चाहिए
 @msg	precision must be from 0.001 to 10 pt	precision 0.001 से 10 pt तक होनी चाहिए
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}`, transforms|bounds|fileDimensions|fit|fill में से नहीं है

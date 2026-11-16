@@ -8903,7 +8903,9 @@ breakText	Glyphs	字符
 @msg	position must be normal, superscript or subscript	position 必須是 normal、superscript 或 subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position 必須是 topLeft、topRight、bottomLeft 或 bottomRight
 @msg	positions must be between 0 and 100000 pt	positions 必須介於 0 到 100000 pt 之間
+@msg	ppi can't be more than {max} for this image	此影像的 ppi 不能超過 {max}
 @msg	ppi must be a positive number, not {ppi}	ppi 必須是正數，而非 {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim 會保持影像像素不變：請勿指定 ppi
 @msg	ppi must be between 1 and 2400	ppi 必須介於 1 和 2400 之間
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` 不是 transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape 必須是 clippingMask|transparency

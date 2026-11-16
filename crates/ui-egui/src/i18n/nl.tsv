@@ -7018,7 +7018,9 @@ imageTrace	Outline	Contour
 @msg	position must be normal, superscript or subscript	position moet normal, superscript of subscript zijn
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position moet topLeft, topRight, bottomLeft of bottomRight zijn
 @msg	positions must be between 0 and 100000 pt	positions moeten tussen 0 en 100000 pt liggen
+@msg	ppi can't be more than {max} for this image	ppi kan voor deze afbeelding niet hoger zijn dan {max}
 @msg	ppi must be a positive number, not {ppi}	ppi moet een positief getal zijn, niet {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim laat de pixels van de afbeelding zoals ze zijn: laat ppi weg
 @msg	ppi must be between 1 and 2400	ppi moet tussen 1 en 2400 liggen
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` is niet transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape moet clippingMask|transparency zijn
