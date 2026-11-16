@@ -41,10 +41,10 @@ pub use features::{
     EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_FEATURE_VALUE, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by,
 };
 pub use fontdb::{
-    CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, GlyphAlternate, GlyphOrigin, IcfMargins, JoiningPosition,
-    LentCompositeFonts, PlatformFontFiles, StylisticSet, Substitution, SubstitutionKind, WantedFont, WantedFonts, app_font_dir, is_font_file,
-    is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined, style_weight, system_font_dirs,
-    user_font_dirs,
+    CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontLikeness, FontMatch, FontTraits, GlyphAlternate, GlyphCategory,
+    GlyphCategoryKind, GlyphOrigin, IcfMargins, JoiningPosition, LentCompositeFonts, PlatformFontFiles, StylisticSet, Substitution, SubstitutionKind,
+    WantedFont, WantedFonts, app_font_dir, is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs,
+    set_user_font_dirs_confined, style_weight, system_font_dirs, user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
 pub use layout::{envelope_ink, layout_inputs, register_envelope_ink};
@@ -54,7 +54,7 @@ pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 pub use kept::{KeptLayoutsFrame, LayoutStamp, keep_layout, take_kept_layout};
 use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
 pub use layout::{decorations, drawn, fit_first_line, fit_source_lines, layout, layout_with, scaled};
-pub use shape::{aki_space, inseparable, line_start_space, spacing_scale};
+pub use shape::{aki_space, inseparable, line_start_space, repeat_base, spacing_scale};
 pub use vectorcraft_doc::TextObject;
 
 pub use vectorcraft_doc::{AreaFit, FirstBaseline, TextFlow, VerticalAlign};
@@ -401,6 +401,10 @@ pub struct TextLayout {
     pub inlines: Vec<InlineGlyph>,
     /// List markers, in text order.
     pub markers: Vec<ListMarker>,
+    /// Kurikaeshi Moji Shori: the repeat marks drawn as the character they stand for, as (the
+    /// mark's byte offset in the plain text, the character drawn), in text order. Writers that put
+    /// characters in place of glyphs (live SVG text) write that character.
+    pub repeat_marks: Vec<(usize, char)>,
 }
 
 impl Default for TextLayout {
@@ -419,6 +423,7 @@ impl Default for TextLayout {
             path_fill: None,
             inlines: Vec::new(),
             markers: Vec::new(),
+            repeat_marks: Vec::new(),
         }
     }
 }
