@@ -1760,6 +1760,25 @@ fn crop_image_of_a_turned_image_resamples_its_drawing() {
     assert!(close(c.x0, b.x0 + 40.0) && close(c.y0, b.y0 + 40.0) && close(c.width(), 72.0) && close(c.height(), 36.0), "{c:?}");
 }
 
+/// A turned image cropped at its own resolution, asked for, gets that resolution, not the lower
+/// density of the box around it.
+#[test]
+fn crop_image_of_a_turned_image_at_its_own_resolution_keeps_it() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    s.execute("object.rotate", &json!({"angle": 45})).unwrap();
+    let b = bounds(&s, img);
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0 + 40.0, b.y0 + 40.0, 72, 36], "ppi": 36})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (36, 18), "{r}");
+    // Over the whole box around it, its own resolution draws it square to the page.
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    s.execute("object.rotate", &json!({"angle": 45})).unwrap();
+    let b = bounds(&s, img);
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0, b.y0, b.width(), b.height()], "ppi": 36})).unwrap();
+    assert_eq!(r["width"].as_u64().unwrap(), (b.width() / 2.0).round() as u64, "{r}");
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0, b.y0, b.width(), b.height()]}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "nothing to crop"), "{r:?}");
+}
+
 /// A linked image can be cropped to up to 300 ppi, even above its own; the crop embeds it.
 #[test]
 fn crop_image_takes_a_linked_image_up_to_300_ppi() {

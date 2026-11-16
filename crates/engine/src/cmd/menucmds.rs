@@ -999,10 +999,11 @@ fn crop_pixels(doc: &vectorcraft_doc::Document, im: &ImageObject, r: Rect) -> Op
     Some((cut, im.xf * Affine::translate((f64::from(x0), f64::from(y0)))))
 }
 
-/// Crop Image's `ppi`: the resolution the cropped image is resampled to, in pixels per point, or `None` to keep
-/// the image's own. Refuses a resolution that isn't a positive number or is above what the image allows: its own,
-/// or 300 ppi for a linked image, within 1 to 2400 ppi as Rasterize's.
-fn crop_resolution(p: &Value, im: &ImageObject) -> Result<Option<f64>> {
+/// Crop Image's `ppi`: the resolution asked for, in pixels per point, and whether it keeps the image's pixels as
+/// they are (its own, with square pixels); `None` for the image's own. Refuses a resolution that isn't a positive
+/// number or is above what the image allows: its own, or 300 ppi for a linked image, within 1 to 2400 ppi as
+/// Rasterize's.
+fn crop_resolution(p: &Value, im: &ImageObject) -> Result<Option<(f64, bool)>> {
     const C: &str = "object.cropImage";
     let Some(ppi) = p.get("ppi").filter(|v| !v.is_null()) else { return Ok(None) };
     let ppi = ppi.as_f64().filter(|v| v.is_finite() && *v > 0.0).ok_or_else(|| bad(C, format!("ppi must be a positive number, not {ppi}")))?;
@@ -1015,7 +1016,7 @@ fn crop_resolution(p: &Value, im: &ImageObject) -> Result<Option<f64>> {
         return Err(bad(C, format!("ppi can't be more than {max} for this image")));
     }
     // An image whose pixels are not square is resampled on both sides, even at its denser side's resolution.
-    Ok((!vectorcraft_tools::cropimage::keeps_resolution(im, ppi, 1e-6)).then_some(ppi / 72.0))
+    Ok(Some((ppi / 72.0, vectorcraft_tools::cropimage::keeps_resolution(im, ppi, 1e-6))))
 }
 
 /// A `w` × `h` image resampled at a resolution asked for, held to the size a drawing may have ([`MAX_PIXELS`], and
@@ -1095,7 +1096,9 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
         return trim_image(s, id, (**im).clone());
     }
     let ib = node.geometric_bounds().ok_or_else(|| bad(C, "image has no bounds"))?;
-    let target = crop_resolution(p, im)?;
+    let asked = crop_resolution(p, im)?;
+    // The resolution the image's pixels are resampled to when they are cut straight.
+    let target = asked.and_then(|(t, keeps)| (!keeps).then_some(t));
     let rect = match p.get("rect").filter(|v| !v.is_null()) {
         Some(Value::Array(a)) if a.len() == 4 => {
             let v: Vec<f64> = a.iter().filter_map(Value::as_f64).collect();
@@ -1119,7 +1122,10 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // A box over the whole image still resamples it to a new resolution.
     let whole = (r.x0 - ib.x0).abs() < 1e-6 && (r.y0 - ib.y0).abs() < 1e-6 && (r.x1 - ib.x1).abs() < 1e-6 && (r.y1 - ib.y1).abs() < 1e-6;
-    if whole && target.is_none() {
+    // A turned or skewed image is drawn, so a resolution asked for, even its own, still makes a new image.
+    let [_, xb, xc, _, _, _] = im.xf.as_coeffs();
+    let turned = xb.abs() > 1e-9 || xc.abs() > 1e-9;
+    if whole && target.is_none() && (asked.is_none() || !turned) {
         return Err(bad(C, "nothing to crop"));
     }
     if let Some(t) = target {
@@ -1140,6 +1146,12 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
         let (cw, ch) = cut.dimensions();
         put_pixels(s, id, encode_png(&cut)?, cw, ch, xf)?;
         return Ok(json!({ "id": id.0, "width": cw, "height": ch }));
+    }
+    // A drawn crop is made at a resolution asked for even when it is the image's own: the box of a
+    // turned or skewed image holds fewer of its pixels a point than the image does.
+    let target = asked.map(|(t, _)| t);
+    if let Some(t) = target {
+        check_crop_size((r.width() * t).round().max(1.0), (r.height() * t).round().max(1.0))?;
     }
     // Drawn at the image's pixel density, or for a resolution asked for at up to twice that (no more
     // than the image's own, measured on its pixel grid however it is turned, nor past the size a

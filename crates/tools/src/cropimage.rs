@@ -213,9 +213,18 @@ impl CropImageTool {
             let max = im.map_or(f64::INFINITY, |im| image_ppi(im).1);
             // A resolution set before this image was selected is held to this image's limit.
             let resample = ppi.map(|v| v.min(max)).filter(|v| im.is_none_or(|im| !keeps_resolution(im, *v, 1e-3)));
-            if !same(r, image) || resample.is_some() {
+            // A turned or skewed image is drawn to be cropped: the resolution goes with it even when
+            // it is the image's own, which the PPI field shows until another is chosen (when it is
+            // one `object.cropImage` takes). A resolution chosen for it crops even over the whole box.
+            let drawn = im.filter(|im| {
+                let [_, b, c, _, _, _] = im.xf.as_coeffs();
+                b.abs() > 1e-9 || c.abs() > 1e-9
+            });
+            let own = |im: &ImageObject| Some(image_ppi(im).0).filter(|v| (1.0..=2400.0).contains(v));
+            let send = resample.or_else(|| drawn.and_then(|im| ppi.or_else(|| own(im))).map(|v| v.min(max)));
+            if !same(r, image) || resample.is_some() || (drawn.is_some() && ppi.is_some()) {
                 let mut p = json!({ "rect": [r.x0, r.y0, r.width(), r.height()] });
-                if let Some(v) = resample {
+                if let Some(v) = send {
                     p["ppi"] = json!(v);
                 }
                 out.push(Action::Exec("object.cropImage".into(), p));
@@ -677,6 +686,36 @@ mod tests {
         assert_eq!(exec(&enter(&mut t, &cx)), Some(json!({ "rect": [60.0, 70.0, 100.0, 50.0] })));
         t.set_option("ppi", &json!(300));
         assert_eq!(exec(&enter(&mut t, &cx)), None, "held to its own over the whole image: nothing to do");
+    }
+
+    /// A turned image is drawn to be cropped, so Apply sends its own resolution too, the one the
+    /// PPI field shows, or the one chosen.
+    #[test]
+    fn apply_sends_a_turned_image_s_own_resolution() {
+        // Turned about the page's corner, it stays within the artboard.
+        let (mut d, s) = doc_with_image((150.0, 60.0));
+        let Some(id) = s.objects.first().copied() else { panic!("an image") };
+        if let Some(NodeKind::Image(im)) = d.node_mut(id).map(|n| &mut n.kind) {
+            im.xf = Affine::rotate(0.5) * im.xf;
+        }
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let ppi = |acts: &[Action]| {
+            acts.iter().find_map(|a| match a {
+                Action::Exec(c, v) if c == "object.cropImage" => v.get("ppi").and_then(Value::as_f64),
+                _ => None,
+            })
+        };
+        let mut t = CropImageTool::default();
+        t.set_option("rect", &json!([150, 150, 20, 20]));
+        assert!(ppi(&enter(&mut t, &cx)).is_some_and(|v| (v - 36.0).abs() < 1e-9));
+        t.set_option("rect", &json!([150, 150, 20, 20]));
+        t.set_option("ppi", &json!(36));
+        assert!(ppi(&enter(&mut t, &cx)).is_some_and(|v| (v - 36.0).abs() < 1e-9));
+        // Over the whole box, Apply crops at a resolution chosen, and leaves it alone without one.
+        t.set_option("ppi", &json!(36));
+        assert!(ppi(&enter(&mut t, &cx)).is_some_and(|v| (v - 36.0).abs() < 1e-9));
+        assert!(!enter(&mut t, &cx).iter().any(|a| matches!(a, Action::Exec(..))));
     }
 
     /// A crop that fails leaves the tool chosen (the switch to the Selection tool is not made), so
