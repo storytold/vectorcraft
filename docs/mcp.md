@@ -11296,7 +11296,9 @@ intensity), and the Symbolism tools one brush: `diameter` (80), `intensity` (5),
 `method` (`userDefined`), `showBrush` (true), `sprayScrunch`, `spraySize`, `spraySpin`, `sprayScreen`, `sprayStain`
 and `sprayStyle` (each `average`), `proportional` (true) and `affectsDensity` (false); these starting values are
 VectorCraft's own. With `showBrush` the brush's outline follows the pointer, with a dashed ring inside it at
-`intensity`/10 of its radius (no ring at 10, with `usePressure` or for the Symbol Sprayer, which uses neither). Interaction state (pins, a reference point) starts afresh. In the
+`intensity`/10 of its radius (no ring at 10, with `usePressure` or for the Symbol Sprayer, which uses neither). For a
+Symbolism tool, a `method` or Symbol Sprayer value not in those lists, or a `usePressure`, `showBrush`, `proportional`
+or `affectsDensity` that is not true or false, is an error that sets none of the values. Interaction state (pins, a reference point) starts afresh. In the
 desktop app, while the Artboard tool is in use, a change to its `selected` or `active` makes the artboard it then has
 active the active artboard (the navigator's and the Artboards panel's).
 

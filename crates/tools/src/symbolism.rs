@@ -72,6 +72,30 @@ pub struct SymbolismTool {
     pub affects_density: bool,
 }
 
+/// Checks the Symbolism Tools Options in `values` before `tool.setOption` sets any, when `tool` is
+/// a symbolism tool: `method` that is not one of [`METHODS`], a Symbol Sprayer option that is not
+/// one of [`SPRAY_MODES`], and `usePressure`, `showBrush`, `proportional` or `affectsDensity` that
+/// is not true or false are errors. Ok for every other tool and every other key. Saved settings go
+/// to the tool's `set_option` instead, which skips a value it cannot read.
+pub fn check_options(tool: &str, values: &serde_json::Map<String, Value>) -> Result<(), String> {
+    if !tool.starts_with("symbol") || create(tool).is_none() {
+        return Ok(());
+    }
+    let must_be = |key: &str, names: &[&str]| format!("`{key}` must be one of {}", names.join(", "));
+    for (key, v) in values {
+        let error = match key.as_str() {
+            "usePressure" | "showBrush" | "proportional" | "affectsDensity" => (!v.is_boolean()).then(|| format!("`{key}` must be true or false")),
+            "method" => one_of(v, &METHODS).is_none().then(|| must_be(key, &METHODS)),
+            k if SPRAY_ATTRIBUTES.iter().any(|(a, _)| *a == k) => one_of(v, &SPRAY_MODES).is_none().then(|| must_be(key, &SPRAY_MODES)),
+            _ => None,
+        };
+        if let Some(e) = error {
+            return Err(e);
+        }
+    }
+    Ok(())
+}
+
 /// `v` as one of `allowed`, when it is one.
 fn one_of(v: &Value, allowed: &[&'static str]) -> Option<&'static str> {
     let s = v.as_str()?;

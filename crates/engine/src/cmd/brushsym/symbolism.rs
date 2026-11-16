@@ -163,34 +163,65 @@ pub(super) struct Mean {
     pub gap: Option<f64>,
 }
 
-/// For each of `looks`, the distance to the nearest of the others (infinite for one alone). Each
-/// is first looked for in the cells around it of a grid `cell` points wide: one found within `cell`
-/// is the nearest, since every one that near is in those cells. Otherwise all are measured.
-fn nearest_gaps(looks: &[&Look], cell: f64) -> Vec<f64> {
-    let cell = cell.max(1e-6);
-    let mut cells: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
-    for (i, l) in looks.iter().enumerate() {
-        cells.entry(key(l.center, cell)).or_default().push(i);
+/// The x (`axis` 0) or y (`axis` 1) of `p`.
+fn coord(p: Point, axis: usize) -> f64 {
+    if axis == 0 { p.x } else { p.y }
+}
+
+/// Arrange `order` (indices into `pts`) as a k-d tree: the middle entry of each slice splits the
+/// rest by x at even depths and by y at odd ones, the smaller values before it.
+fn kd_build(order: &mut [usize], pts: &[Point], axis: usize) {
+    if order.len() <= 1 {
+        return;
     }
-    let distance = |i: usize, j: usize| if i == j { None } else { Some(looks.get(j)?.center.distance(looks.get(i)?.center)) };
-    (0..looks.len())
+    let mid = order.len() / 2;
+    let at = |i: &usize| pts.get(*i).map_or(0.0, |p| coord(*p, axis));
+    order.select_nth_unstable_by(mid, |a, b| at(a).total_cmp(&at(b)));
+    let (left, right) = order.split_at_mut(mid);
+    kd_build(left, pts, 1 - axis);
+    kd_build(right.get_mut(1..).unwrap_or_default(), pts, 1 - axis);
+}
+
+/// The distance from `pts[i]` to the nearest of the others in k-d tree `order`, if nearer than
+/// `best`. Instances on top of each other end the search: none can be nearer.
+fn kd_nearest(order: &[usize], pts: &[Point], axis: usize, i: usize, best: &mut f64) {
+    let (Some(&j), Some(&p)) = (order.get(order.len() / 2), pts.get(i)) else { return };
+    let Some(&q) = pts.get(j) else { return };
+    if j != i {
+        *best = best.min(p.distance(q));
+    }
+    if *best == 0.0 {
+        return;
+    }
+    let (left, right) = order.split_at(order.len() / 2);
+    let right = right.get(1..).unwrap_or_default();
+    let diff = coord(p, axis) - coord(q, axis);
+    let (near, far) = if diff < 0.0 { (left, right) } else { (right, left) };
+    kd_nearest(near, pts, 1 - axis, i, best);
+    // The other side holds nothing nearer than the split line.
+    if diff.abs() < *best {
+        kd_nearest(far, pts, 1 - axis, i, best);
+    }
+}
+
+/// For each of `looks`, the distance to the nearest of the others (infinite for one alone), found
+/// through a k-d tree of their centers.
+fn nearest_gaps(looks: &[&Look]) -> Vec<f64> {
+    let pts: Vec<Point> = looks.iter().map(|l| l.center).collect();
+    let mut order: Vec<usize> = (0..pts.len()).collect();
+    kd_build(&mut order, &pts, 0);
+    (0..pts.len())
         .map(|i| {
             let mut best = f64::INFINITY;
-            for j in around(&cells, looks.get(i).map_or(Point::ZERO, |l| l.center), cell) {
-                best = distance(i, j).map_or(best, |d| best.min(d));
-                // Instances on top of each other: none can be nearer.
-                if best == 0.0 {
-                    break;
-                }
-            }
-            if best <= cell { best } else { (0..looks.len()).filter_map(|j| distance(i, j)).fold(f64::INFINITY, f64::min) }
+            kd_nearest(&order, &pts, 0, i, &mut best);
+            best
         })
         .collect()
 }
 
 /// The [`Mean`] of `looks`, the instances under a brush centered on `at` (None for none), with
-/// [`Mean::gap`] when `gap_cell` gives the grid width [`nearest_gaps`] uses.
-pub(super) fn mean(looks: &[&Look], at: Point, gap_cell: Option<f64>) -> Option<Mean> {
+/// [`Mean::gap`] when `with_gap` is set.
+pub(super) fn mean(looks: &[&Look], at: Point, with_gap: bool) -> Option<Mean> {
     if looks.is_empty() {
         return None;
     }
@@ -215,7 +246,7 @@ pub(super) fn mean(looks: &[&Look], at: Point, gap_cell: Option<f64>) -> Option<
     // Rotations that cancel out have no mean direction: the first instance's stands for it.
     let angle = if sin.hypot(cos) > 1e-9 { sin.atan2(cos) } else { looks[0].angle };
     // One instance under the brush has no spacing there.
-    let gap = gap_cell.filter(|_| looks.len() > 1).map(|cell| nearest_gaps(looks, cell).iter().sum::<f64>() / n);
+    let gap = (with_gap && looks.len() > 1).then(|| nearest_gaps(looks).iter().sum::<f64>() / n);
     Some(Mean {
         scale: (log_scale / n).exp(),
         angle,
@@ -273,7 +304,7 @@ impl Grid {
     pub fn mean(&self, at: Point, radius: f64, with_gap: bool) -> Option<Mean> {
         let near: Vec<&Look> =
             around(&self.cells, at, self.cell).filter_map(|i| self.looks.get(i)).filter(|l| l.center.distance(at) <= radius).collect();
-        mean(&near, at, with_gap.then_some(radius / 4.0))
+        mean(&near, at, with_gap)
     }
 }
 
@@ -358,20 +389,27 @@ mod tests {
         Look { center: Point::new(x, y), scale: 1.0, angle: 0.0, opacity: 1.0, fill: None }
     }
 
+    /// The distance from each instance in `from` to the nearest other one in `refs`, measured
+    /// against every other instance.
+    fn brute(refs: &[&Look], from: impl Iterator<Item = usize>) -> Vec<f64> {
+        from.map(|i| (0..refs.len()).filter(|j| *j != i).map(|j| refs[i].center.distance(refs[j].center)).fold(f64::INFINITY, f64::min)).collect()
+    }
+
     /// The gaps are each instance's distance to its nearest neighbor, measured against every other
     /// instance: close pairs whose members are far apart in the order, instances on top of each
-    /// other, and instances farther apart than the grid's cells.
+    /// other, instances far from all others, many instances close together, and many on one line.
     #[test]
     fn nearest_gaps_match_measuring_every_pair() {
         let mut looks: Vec<Look> = (0..300).map(|i| at(f64::from(i % 20) * 9.0, f64::from(i / 20) * 7.0)).collect();
         // The second member of each pair comes 300 places later.
         looks.extend((0..300).map(|i| at(f64::from(i % 20) * 9.0 + 0.5, f64::from(i / 20) * 7.0)));
         looks.extend([at(500.0, 500.0), at(500.0, 500.0), at(900.0, 40.0)]);
+        // 400 instances within one point of each other, and 200 on one upright line.
+        looks.extend((0..400).map(|i| at(700.0 + f64::from(i % 20) * 0.05, 700.0 + f64::from(i / 20) * 0.05)));
+        looks.extend((0..200).map(|i| at(-50.0, f64::from(i) * 1.5)));
         let refs: Vec<&Look> = looks.iter().collect();
-        let brute: Vec<f64> = (0..refs.len())
-            .map(|i| (0..refs.len()).filter(|j| *j != i).map(|j| refs[i].center.distance(refs[j].center)).fold(f64::INFINITY, f64::min))
-            .collect();
-        assert_eq!(nearest_gaps(&refs, 10.0), brute);
-        assert_eq!(nearest_gaps(&refs[..1], 10.0), [f64::INFINITY]);
+        assert_eq!(nearest_gaps(&refs), brute(&refs, 0..refs.len()));
+        assert_eq!(nearest_gaps(&refs[..1]), [f64::INFINITY]);
+        assert_eq!(nearest_gaps(&refs[..0]), Vec::<f64>::new());
     }
 }

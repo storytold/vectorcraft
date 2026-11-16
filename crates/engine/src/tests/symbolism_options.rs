@@ -119,6 +119,26 @@ fn average_brings_the_instances_under_the_brush_toward_their_mean() {
     assert!(pa > oa && pb < 1.0 && (pa - pb).abs() < (1.0 - oa) / 2.0, "{pa} {pb} from {oa}");
 }
 
+/// `tool.setOption` refuses a Method, a Symbol Sprayer option or a checkbox value the Symbolism Tools
+/// Options do not have, and sets none of the values given with it.
+#[test]
+fn bad_symbolism_tool_options_are_refused() {
+    let mut s = session();
+    let before = s.tool_options_of("symbolSizer");
+    for (values, want) in [
+        (json!({"proportional": false, "method": "smooth"}), "`method` must be one of userDefined, average, random"),
+        (json!({"sprayScrunch": "random"}), "`sprayScrunch` must be one of average, userDefined"),
+        (json!({"method": "average", "usePressure": 1}), "`usePressure` must be true or false"),
+        (json!({"affectsDensity": "yes"}), "`affectsDensity` must be true or false"),
+    ] {
+        let r = s.set_tool_option_cmd(&json!({"tool": "symbolSizer", "values": values}));
+        assert_eq!(r, Err(want.to_string()), "{values}");
+        assert_eq!(s.tool_options_of("symbolSizer"), before, "{values}");
+    }
+    s.set_tool_option_cmd(&json!({"tool": "symbolSizer", "key": "method", "value": "random"})).unwrap();
+    assert_eq!(s.tool_options_of("symbolSizer")["method"], json!("random"));
+}
+
 /// Average opacities below the Symbol Screener's least opacity (5%) stay below it: with the Screener
 /// the instances meet at their mean, and a sprayed instance takes the mean of those under the brush.
 #[test]

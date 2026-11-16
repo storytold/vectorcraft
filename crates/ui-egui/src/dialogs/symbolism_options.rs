@@ -121,8 +121,10 @@ fn selected_sets(app: &VectorcraftApp) -> Vec<u64> {
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
     let mut values: Map<String, Value> =
         NUMBERS.iter().filter(|k| d.fields.contains_key(**k)).map(|k| (k.to_string(), json!(d.f64(k, 0.0)))).collect();
-    values.extend(SWITCHES.iter().filter(|k| d.fields.contains_key(**k)).map(|k| (k.to_string(), json!(d.bool(k)))));
-    values.extend(SPRAY.iter().chain(&["method"]).filter(|k| d.fields.contains_key(**k)).map(|k| (k.to_string(), json!(d.str(k)))));
+    // The checkboxes and choices as the fields hold them, so a value the tools do not have is refused.
+    values.extend(SWITCHES.iter().chain(&SPRAY).chain(&["method"]).filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))));
+    // An option `tool.setOption` refuses leaves the symbol sets as they are too.
+    vectorcraft_tools::symbolism::check_options(&d.str("tool"), &values)?;
     let (from, to) = (d.f64(DENSITY_WAS, 0.0).clamp(1.0, 10.0), d.f64("density", 0.0).clamp(1.0, 10.0));
     let sets = selected_sets(app);
     if d.fields.contains_key(DENSITY_WAS) && from != to && !sets.is_empty() {
@@ -265,6 +267,22 @@ mod tests {
         assert!(width(&app) < was * 0.8, "{} of {was}", width(&app));
         assert_eq!(undo(&app), steps + 1);
         assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(9.0));
+        // An option the tools do not have: neither the set nor the options change.
+        let (was, steps) = (width(&app), undo(&app));
+        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("density".into(), json!(3));
+        d.fields.insert("method".into(), json!("smooth"));
+        assert!(super::super::confirm(&mut app).is_err());
+        assert_eq!((width(&app), undo(&app)), (was, steps));
+        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("density".into(), json!(3));
+        d.fields.insert("usePressure".into(), json!(1));
+        assert!(super::super::confirm(&mut app).is_err());
+        assert_eq!((width(&app), undo(&app)), (was, steps));
+        assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(9.0));
+        app.ui.dialog = None;
         // Without a set selected only the option changes.
         app.run("select.set", json!({"ids": []})).unwrap();
         let (was, steps) = (width(&app), undo(&app));

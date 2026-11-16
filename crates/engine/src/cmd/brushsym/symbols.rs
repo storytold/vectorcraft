@@ -1129,7 +1129,7 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                 .then(|| {
                     let under = |n: &&Node| instance_center(n).is_some_and(|c| c.distance(*q) <= radius);
                     let looks: Vec<_> = candidates.iter().filter_map(|id| d.node(*id).filter(under).and_then(|n| look(d, n))).collect();
-                    mean(&looks.iter().collect::<Vec<_>>(), *q, None)
+                    mean(&looks.iter().collect::<Vec<_>>(), *q, false)
                 })
                 .flatten();
             for id in &candidates {
