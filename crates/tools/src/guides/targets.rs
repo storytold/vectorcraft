@@ -107,6 +107,89 @@ pub(super) fn span(r: &Rect, x: bool) -> (f64, f64) {
     if x { (r.x0, r.x1) } else { (r.y0, r.y1) }
 }
 
+/// Is `v` square to the direction `d` (both nonzero)?
+fn square_to(v: Vec2, d: Vec2) -> bool {
+    let scale = v.hypot() * d.hypot();
+    scale > 1e-18 && v.dot(d).abs() <= 1e-9 * scale
+}
+
+/// Do the directions `a` and `b` (both nonzero) run the same way?
+fn parallel(a: Vec2, b: Vec2) -> bool {
+    let scale = a.hypot() * b.hypot();
+    scale > 1e-18 && a.dot(b) > 0.0 && a.cross(b).abs() <= 1e-6 * scale
+}
+
+/// Does the curve `seg` run around `center` the whole way, as an arc of a circle about it drawn
+/// with curves does: nearly square to the center all along, and its distance from the center
+/// varying by no more than 0.03%? A circle drawn with four curves ([`vectorcraft_geom::shapes::ellipse`])
+/// strays outward from its radius by up to 0.0273%, so an ellipse whose axes differ by less than
+/// that cannot be told from one. A circle around the center then lies along the curve.
+fn runs_round(seg: &PathSeg, center: Point) -> bool {
+    const SAMPLES: [f64; 9] = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0];
+    if matches!(seg, PathSeg::Line(_)) {
+        return false;
+    }
+    let (mut lo, mut hi) = (f64::INFINITY, 0.0_f64);
+    for t in SAMPLES {
+        let (v, d) = (seg.eval(t) - center, seg_direction(seg, t));
+        if v.dot(d).abs() > 2e-3 * v.hypot() * d.hypot() {
+            return false;
+        }
+        (lo, hi) = (lo.min(v.hypot()), hi.max(v.hypot()));
+    }
+    hi - lo <= 3e-4 * hi
+}
+
+/// Whether a segment of `segs` other than the `i`th carries on past the end `at` of the `i`th
+/// (its start when `at_start`) in the same direction: it has an end at `at` and runs away from
+/// it the way the `i`th runs out through it, so the two join smoothly there rather than overlap.
+fn continues_smoothly(segs: &[&PathSeg], i: usize, at: Point, at_start: bool) -> bool {
+    let Some(seg) = segs.get(i) else { return false };
+    let d = end_direction(seg, at_start);
+    let out = if at_start { -d } else { d };
+    let close = 1e-9 * (1.0 + at.x.abs().max(at.y.abs()));
+    segs.iter().enumerate().filter(|(j, _)| *j != i).any(|(_, s)| {
+        [(true, s.start()), (false, s.end())].into_iter().any(|(start, end)| {
+            let d = end_direction(s, start);
+            end.distance(at) <= close && parallel(if start { d } else { -d }, out)
+        })
+    })
+}
+
+/// The direction `seg` runs at its start (`at_start`) or its end. Where a curve's handle lies on
+/// its anchor the derivative there is zero, so the direction is taken toward the next control
+/// point that differs from the anchor, the direction the curve leaves the anchor in.
+fn end_direction(seg: &PathSeg, at_start: bool) -> Vec2 {
+    let mut points: Vec<Point> = match seg {
+        PathSeg::Line(l) => vec![l.p0, l.p1],
+        PathSeg::Quad(q) => vec![q.p0, q.p1, q.p2],
+        PathSeg::Cubic(c) => vec![c.p0, c.p1, c.p2, c.p3],
+    };
+    if !at_start {
+        points.reverse();
+    }
+    let Some((&anchor, rest)) = points.split_first() else { return Vec2::ZERO };
+    let away = rest.iter().map(|q| *q - anchor).find(|v| v.hypot2() > 0.0).unwrap_or(Vec2::ZERO);
+    if at_start { away } else { -away }
+}
+
+/// The points inside `seg` where the line from `center` meets it square, where a circle round
+/// `center` touches it, with the segment's direction there. A straight segment has at most one, its
+/// foot of the perpendicular. On a curve, besides the sign changes [`touch_params`] finds, a sample
+/// where the line is square exactly counts too: a center straight out from a symmetric curve's
+/// middle meets it square at t = 0.5.
+fn radial_touches(seg: &PathSeg, center: Point) -> Vec<(Point, Vec2)> {
+    /// The samples checked for an exact square meeting, as [`touch_params`] samples the curve.
+    const STEPS: u32 = 24;
+    if let PathSeg::Line(l) = seg {
+        let d = l.p1 - l.p0;
+        let t = (center - l.p0).dot(d) / d.hypot2();
+        return if t.is_finite() && t > 0.0 && t < 1.0 { vec![(l.p0 + d * t, d)] } else { vec![] };
+    }
+    let sampled = (1..STEPS).map(|i| f64::from(i) / f64::from(STEPS)).filter(|&t| square_to(seg.eval(t) - center, seg_direction(seg, t)));
+    sampled.chain(touch_params(seg, center, true)).map(|t| (seg.eval(t), seg_direction(seg, t))).collect()
+}
+
 /// Along axis `x`, does dragging `handle` move the box's minimum edge (true) or maximum (false)?
 fn resize_moves_min_edge(handle: Handle, x: bool) -> Option<bool> {
     let (ax, ay) = handle.axes();
@@ -776,6 +859,74 @@ impl Targets {
         }
         out.extend(self.label(q, if perpendicular { "perpendicular" } else { "tangent" }));
         out
+    }
+
+    /// Snap to Tangent for a circle drawn around `center` with radius `r`: the radius nearest `r`,
+    /// within `tol` of it, at which the circle touches a target segment (where the line from
+    /// `center` meets the path square, at a point the path runs smoothly through), and the guides
+    /// showing it. None with an anchor, a center or a crossing within `tol` of the pointer `p`, or
+    /// at `corner`, where the drawn point snapped to: those win as they do for a drawn point. At
+    /// most 256 segments are measured, the ones nearest `p` when more cross the ring round
+    /// `center` at radius `r`.
+    pub(super) fn tangent_radius(&self, center: Point, p: Point, corner: Point, r: f64, tol: f64) -> Option<(f64, Vec<Overlay>)> {
+        /// How many segments one pointer move measures at most.
+        const MAX_SEGMENTS: usize = 256;
+        let finite = [center.x, center.y, p.x, p.y, corner.x, corner.y, r, tol].iter().all(|v| v.is_finite());
+        if !self.tangent || !finite || r < 0.0 || tol <= 0.0 {
+            return None;
+        }
+        if self.nearest_point(p, tol).is_some() || self.crossing(p, tol).is_some() {
+            return None;
+        }
+        // The corner snapped onto a point or a crossing: it lies on one, not merely near.
+        let on = |q: Point| q.distance(corner) <= 1e-9 * (1.0 + corner.x.abs().max(corner.y.abs()));
+        if self.nearest_point(corner, tol).is_some_and(|(q, _)| on(q)) || self.crossing(corner, tol).is_some_and(on) {
+            return None;
+        }
+        let (lo, hi) = (r - tol, r + tol);
+        // A segment can touch the circle only if part of its control bounds lies within the ring
+        // between `lo` and `hi` around the center.
+        let in_ring = |b: &Rect| {
+            let near = Point::new(center.x.clamp(b.x0, b.x1), center.y.clamp(b.y0, b.y1)).distance(center);
+            let far = (center.x - b.x0).abs().max((center.x - b.x1).abs()).hypot((center.y - b.y0).abs().max((center.y - b.y1).abs()));
+            near <= hi && far >= lo
+        };
+        let mut best: Option<(f64, Point, Vec2)> = None;
+        let mut offer = |q: Point, d: Vec2| {
+            let rho = q.distance(center);
+            if rho > tol && (rho - r).abs() <= tol && best.is_none_or(|(b, ..)| (rho - r).abs() < (b - r).abs()) {
+                best = Some((rho, q, d));
+            }
+        };
+        let mut ring: Vec<&(Rect, PathSeg)> = self.segments.iter().filter(|(b, _)| in_ring(b)).collect();
+        if ring.len() > MAX_SEGMENTS {
+            let from_p = |b: &Rect| Point::new(p.x.clamp(b.x0, b.x1), p.y.clamp(b.y0, b.y1)).distance(p);
+            ring.select_nth_unstable_by(MAX_SEGMENTS, |a, b| from_p(&a.0).total_cmp(&from_p(&b.0)));
+            ring.truncate(MAX_SEGMENTS);
+        }
+        let near: Vec<&PathSeg> = ring.into_iter().map(|(_, s)| s).collect();
+        for (i, seg) in near.iter().enumerate() {
+            // A circle around the same center lies along such a curve rather than touching it.
+            if runs_round(seg, center) {
+                continue;
+            }
+            for (q, d) in radial_touches(seg, center) {
+                offer(q, d);
+            }
+            // At an end square to the center the circle touches the path only where the next
+            // segment carries on in the same direction: at a corner or an open end it meets it.
+            // That segment ends on the circle too, so it is in the ring; when more than
+            // MAX_SEGMENTS segments are in the ring and it is not among those kept, the end is not
+            // offered.
+            for (at_start, end) in [(true, seg.start()), (false, seg.end())] {
+                let d = end_direction(seg, at_start);
+                if square_to(end - center, d) && continues_smoothly(&near, i, end, at_start) {
+                    offer(end, d);
+                }
+            }
+        }
+        let (rho, q, d) = best?;
+        Some((rho, self.touch_guides(center, q, false, d, tol)))
     }
 
     /// The segment extension nearest `p`, within `tol` of it (and `p` farther than that from the

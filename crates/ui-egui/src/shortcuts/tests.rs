@@ -296,11 +296,11 @@ fn a_shortcut_runs_what_its_menu_item_runs() {
 /// Smooth and Simplify, Offset Path, the Object › Transform dialogs, Average, Split Into Grid,
 /// Vector Halftone, Rearrange All Artboards, Pathfinder Options, the Object › Plug-ins dialogs
 /// (Arrange in Grid, Replace with Top Object, the size, opacity and sort dialogs of the Arrange
-/// add-on, Set Corners…, Divide into Dashes, Find Nearest Swatch, the swatch legend, the type
+/// add-on, Set Corners…, Divide into Dashes, Tangent Circle…, Find Nearest Swatch, the swatch legend, the type
 /// tools, the select add-on and Select by Link Status…), three "…" items whose menu entry gives
 /// params, Smart Punctuation…, Edit Custom Dictionary…, Composite Fonts…, Recolor Artwork…, the Edit menu's preset
 /// dialogs and Apply SVG Filter….
-const MENU_DIALOG_COMMANDS: [&str; 39] = [
+const MENU_DIALOG_COMMANDS: [&str; 40] = [
     "object.path.smooth",
     "object.path.simplify",
     "object.path.offsetPath",
@@ -323,6 +323,7 @@ const MENU_DIALOG_COMMANDS: [&str; 39] = [
     "addon.arrange.sort",
     crate::addons::pathtools::set_corners::COMMAND,
     crate::addons::pathtools::dashes::COMMAND,
+    crate::addons::pathtools::tangent_circle::COMMAND,
     crate::addons::color::nearest::COMMAND,
     crate::addons::color::legend::COMMAND,
     crate::addons::typetools::COMMAND,
