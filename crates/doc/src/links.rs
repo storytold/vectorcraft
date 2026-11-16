@@ -155,22 +155,12 @@ impl ImageBlob {
     /// [`Self::checked_with_proxy`], with the pixels it decoded: `None` beside the blob when it
     /// decoded none (an image past the allowance).
     pub fn checked_with_pixels(mut self, proxy: bool) -> Option<(Self, Option<image::DynamicImage>)> {
-        let max = crate::MAX_RASTER_ALLOC;
-        let reader = || image::ImageReader::new(Cursor::new(self.bytes.as_slice())).with_guessed_format().ok();
-        let (w, h) = reader()?.into_dimensions().ok()?;
-        if u64::from(w) * u64::from(h) > max / 4 {
-            return Some((self, None));
-        }
-        let mut r = reader()?;
-        let mut limits = image::Limits::default();
-        limits.max_alloc = Some(max);
-        r.limits(limits);
-        let img = match r.decode() {
-            Ok(img) => img,
-            Err(image::ImageError::Limits(_)) => return Some((self, None)),
+        let img = match crate::decode::decode_within(&self.bytes, crate::MAX_RASTER_ALLOC) {
+            Ok(Some((img, _))) => img,
+            Ok(None) => return Some((self, None)),
             Err(_) => return None,
         };
-        if proxy && self.proxy.is_none() && w.max(h) > PROXY_SIZE {
+        if proxy && self.proxy.is_none() && img.width().max(img.height()) > PROXY_SIZE {
             self.proxy = proxy_of(&img).map(Arc::new);
         }
         Some((self, Some(img)))
@@ -210,21 +200,16 @@ pub fn missing_placeholder() -> Option<Vec<u8>> {
 /// `bytes` decoded and shrunk to fit [`PROXY_SIZE`] as a PNG; `None` when small enough already or
 /// undecodable.
 fn proxy_png(bytes: &[u8]) -> Option<Vec<u8>> {
-    let (w, h) = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_dimensions().ok()?;
+    let format = craft_image_codecs::detect(bytes)?;
+    let (w, h, _) = crate::decode::decoded_layout(bytes, format)?;
     if w.max(h) <= PROXY_SIZE {
         return None;
     }
-    // The proxy decodes within the project's raster cap, counted as RGBA like every other
-    // decode path (#3597): the header alone decides whether the pixels could ever fit, and the
-    // decoder gets the same budget instead of image's own default.
-    if u64::from(w) * u64::from(h) > crate::MAX_RASTER_ALLOC / 4 {
-        return None;
-    }
-    let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(crate::MAX_RASTER_ALLOC);
-    reader.limits(limits);
-    proxy_of(&reader.decode().ok()?)
+    // The proxy decodes within the project's raster cap, counted as the file's samples and as
+    // RGBA like every other decode path (#3597, #1717): the header alone decides whether the
+    // pixels could ever fit, and the decoder gets the same budget.
+    let (img, _) = crate::decode::decode_within(bytes, crate::MAX_RASTER_ALLOC).ok()??;
+    proxy_of(&img)
 }
 
 /// Decoded image `img` shrunk to fit [`PROXY_SIZE`] as a PNG.

@@ -6690,6 +6690,7 @@ dependencies = [
  "chrono",
  "craft-image-codecs",
  "craft-stream-codecs",
+ "flate2",
  "image",
  "jpeg-encoder",
  "kurbo 0.13.1",

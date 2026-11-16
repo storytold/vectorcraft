@@ -1,15 +1,15 @@
 //! Images decoded through craft-image-codecs as the image crate gave them (#778): the renderer,
-//! File › Open and Place, and SVG import read their pixels with [`decode_image`], and size them
-//! from their header with [`decoded_layout`].
+//! File › Open and Place, SVG import, and embedded and linked images read their pixels with
+//! [`decode_image`] and [`decode_within`], and size them from their header with [`decoded_layout`].
+
+/// Decoded pixels, as stored and as the image crate gave them, and the ICC profile the file embeds.
+pub type DecodedImage = (image::DynamicImage, Option<Vec<u8>>);
 
 /// `bytes` decoded as `format` within `allowance` bytes, the pixels as stored (not turned
 /// upright) and as the image crate gave them ([`dynamic`]), with the ICC profile the file embeds.
-/// The renderer, File › Open and Place, and SVG import read images with it.
-pub fn decode_image(
-    format: craft_image_codecs::Format,
-    bytes: &[u8],
-    allowance: u64,
-) -> Result<(image::DynamicImage, Option<Vec<u8>>), craft_image_codecs::CodecError> {
+/// The renderer, File › Open and Place, SVG import, and embedded and linked images read images
+/// with it.
+pub fn decode_image(format: craft_image_codecs::Format, bytes: &[u8], allowance: u64) -> Result<DecodedImage, craft_image_codecs::CodecError> {
     let opts = craft_image_codecs::DecodeOptions {
         limits: craft_image_codecs::Limits { max_width: u32::MAX, max_height: u32::MAX, max_pixels: u64::MAX, max_alloc: allowance },
         keep_orientation: true,
@@ -18,6 +18,26 @@ pub fn decode_image(
     let icc = img.icc.take();
     let img = dynamic(img).ok_or_else(|| craft_image_codecs::CodecError::InvalidImage("the decoded samples don't fit the image".into()))?;
     Ok((img, icc))
+}
+
+/// `bytes` decoded within `max` bytes, counted as the file's samples and as RGBA (#1717), the
+/// pixels as stored and as the image crate gave them, with the ICC profile the file embeds.
+/// Image blobs read their pixels with it. `Ok(None)` when they would take more than `max` as
+/// samples or as RGBA, or when the decode needs more than `max`. `Err` when the bytes aren't an
+/// image the decoder reads.
+pub fn decode_within(bytes: &[u8], max: u64) -> Result<Option<DecodedImage>, craft_image_codecs::CodecError> {
+    let format = craft_image_codecs::detect(bytes).ok_or(craft_image_codecs::CodecError::UnknownFormat)?;
+    let (w, h, per_pixel) =
+        decoded_layout(bytes, format).ok_or_else(|| craft_image_codecs::CodecError::InvalidImage("the image's size can't be read".into()))?;
+    let pixels = u64::from(w) * u64::from(h);
+    if pixels.saturating_mul(per_pixel) > max || pixels.saturating_mul(4) > max {
+        return Ok(None);
+    }
+    match decode_image(format, bytes, max) {
+        Ok(img) => Ok(Some(img)),
+        Err(craft_image_codecs::CodecError::LimitExceeded(_)) => Ok(None),
+        Err(e) => Err(e),
+    }
 }
 
 /// A decoded image as the image crate's: 8- and 16-bit gray, gray and alpha, RGB and RGBA as they
