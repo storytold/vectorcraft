@@ -174,11 +174,15 @@ impl FontLikeness {
     /// How unlike two faces look: 0 for faces whose numbers are all the same, more the further
     /// apart they are. A number one of the faces does not give is left out. PANOSE digits are
     /// compared only between faces of the same PANOSE family kind; faces of different kinds count
-    /// 3 apart. The weights and scales are VectorCraft's own.
+    /// 3 apart. Faces that share no number to compare (neither a PANOSE family kind, a weight, a
+    /// width, a height, an average width nor an italic angle) are `f32::INFINITY` apart, further
+    /// than any faces that share one. The weights and scales are VectorCraft's own.
     pub fn distance(&self, other: &Self) -> f32 {
         let mut d = 0.0;
+        let mut compared = false;
         let (kind, other_kind) = (self.panose[0], other.panose[0]);
         if kind > 1 && other_kind > 1 {
+            compared = true;
             if kind == other_kind {
                 for (a, b) in self.panose.iter().zip(&other.panose).skip(1) {
                     if *a > 1 && *b > 1 {
@@ -190,21 +194,25 @@ impl FontLikeness {
             }
         }
         if self.weight != 0 && other.weight != 0 {
+            compared = true;
             d += f32::from(self.weight.abs_diff(other.weight)) / 200.0;
         }
         if self.width != 0 && other.width != 0 {
+            compared = true;
             d += f32::from(self.width.abs_diff(other.width)) * 0.5;
         }
         for (a, b, scale) in [(self.x_height, other.x_height, 10.0), (self.cap_height, other.cap_height, 5.0), (self.avg_width, other.avg_width, 8.0)]
         {
             if a != 0 && b != 0 {
+                compared = true;
                 d += f32::from(a.abs_diff(b)) / 1000.0 * scale;
             }
         }
         if let (Some(a), Some(b)) = (self.italic_angle, other.italic_angle) {
+            compared = true;
             d += f32::from(a.abs_diff(b)) / 50.0;
         }
-        d
+        if compared { d } else { f32::INFINITY }
     }
 }
 
