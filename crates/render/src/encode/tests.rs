@@ -86,8 +86,10 @@ fn gray_and_bilevel_images_store_gray() {
     assert_eq!(gray(&file), levels);
     let (mime, file) = img.to_bilevel(150.0).unwrap();
     assert_eq!(mime, "image/tiff");
-    let mut d = ::tiff::decoder::Decoder::new(std::io::Cursor::new(&file)).unwrap();
-    assert_eq!(d.colortype().unwrap(), ::tiff::ColorType::Gray(1));
+    let tiff = craft_tiff::Tiff::parse(&file).unwrap();
+    let ifd = &tiff.ifds[0];
+    assert_eq!(ifd.u16(craft_tiff::tags::SAMPLES_PER_PIXEL), Some(1));
+    assert_eq!(ifd.value(craft_tiff::tags::BITS_PER_SAMPLE).unwrap().to_u64_vec(), vec![1]);
     let bw: Vec<u8> = [0u8, 0, 255, 255, 255, 0].iter().flat_map(|&g| [g, 255]).collect();
     assert_eq!(gray(&file), bw, "from 128 up is white");
     // Half-covered white over the light grey; a clear pixel is white.

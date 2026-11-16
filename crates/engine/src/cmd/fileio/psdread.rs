@@ -105,7 +105,7 @@ pub(super) struct Header<'a> {
     /// Colour mode data: an indexed image's palette (256 reds, then greens, then blues).
     palette: &'a [u8],
     /// The image resources.
-    resources: &'a [u8],
+    pub(super) resources: &'a [u8],
     /// The layer and mask information.
     pub(super) layers: &'a [u8],
 }
@@ -172,25 +172,50 @@ pub fn resolution(bytes: &[u8]) -> Option<(f64, f64)> {
 /// The image resource blocks of `resources`, in file order: each one's id, name (the bytes of its
 /// Pascal string) and data. Stops at the first block that is cut short. With `signed`, only the
 /// blocks whose signature is `8BIM` are given.
-fn resources(resources: &[u8], signed: bool) -> impl Iterator<Item = (u16, &[u8], &[u8])> {
+pub(super) fn resources(resources: &[u8], signed: bool) -> impl Iterator<Item = (u16, &[u8], &[u8])> {
     let mut r = Reader::new(resources);
-    std::iter::from_fn(move || {
-        if r.rest().is_empty() {
-            return None;
+    std::iter::from_fn(move || if r.rest().is_empty() { None } else { block(&mut r).ok() })
+        .filter(move |(ours, ..)| *ours || !signed)
+        .map(|(_, id, name, data)| (id, name, data))
+}
+
+/// The data of the first `8BIM` image resource block `id` of `resources`. `None` when there is
+/// none before the blocks end or before a block that is cut short ahead of it. An error when
+/// that block itself is cut short.
+pub(super) fn resource(resources: &[u8], id: u16) -> Result<Option<&[u8]>, String> {
+    let mut r = Reader::new(resources);
+    while !r.rest().is_empty() {
+        match block(&mut r) {
+            Ok((true, i, _, data)) if i == id => return Ok(Some(data)),
+            Ok(_) => {}
+            Err(Some((true, i))) if i == id => return Err(TRUNCATED.into()),
+            Err(_) => return Ok(None),
         }
-        let ours = r.take(4).ok()? == b"8BIM";
-        let id = r.u16().ok()?;
+    }
+    Ok(None)
+}
+
+/// An image resource block: whether its signature is `8BIM`, its id, its name (the bytes of its
+/// Pascal string) and its data.
+type Block<'a> = (bool, u16, &'a [u8], &'a [u8]);
+
+/// The image resource block that `r` starts with. When it is cut short, the error gives whether
+/// its signature is `8BIM` and its id, when those were read.
+fn block<'a>(r: &mut Reader<'a>) -> Result<Block<'a>, Option<(bool, u16)>> {
+    let ours = r.take(4).map_err(|_| None)? == b"8BIM";
+    let id = r.u16().map_err(|_| None)?;
+    let mut rest = || -> Result<(&'a [u8], &'a [u8]), String> {
         // A Pascal string padded to an even size, length byte included.
-        let len = usize::from(r.u8().ok()?);
-        let name = r.take(len).ok()?;
-        r.take((len + 1) % 2).ok()?;
-        let size = usize::try_from(r.u32().ok()?).ok()?;
-        let data = r.take(size).ok()?;
-        r.take(size % 2).ok()?;
-        Some((ours, id, name, data))
-    })
-    .filter(move |(ours, ..)| *ours || !signed)
-    .map(|(_, id, name, data)| (id, name, data))
+        let len = usize::from(r.u8()?);
+        let name = r.take(len)?;
+        r.take((len + 1) % 2)?;
+        let size = usize::try_from(r.u32()?).map_err(|_| TRUNCATED.to_string())?;
+        let data = r.take(size)?;
+        r.take(size % 2)?;
+        Ok((name, data))
+    };
+    let (name, data) = rest().map_err(|_| Some((ours, id)))?;
+    Ok((ours, id, name, data))
 }
 
 /// The resource naming the document's clipping path.

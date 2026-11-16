@@ -179,6 +179,9 @@ pub struct Session {
     /// The Scripts folder, whose scripts File › Scripts lists; `None`: no folder
     /// ([`Session::attach_scripts_dir`]).
     scripts_dir: Option<std::path::PathBuf>,
+    /// The folder of File Info's metadata templates; `None`: no folder
+    /// ([`Session::attach_metadata_templates_dir`]).
+    metadata_templates_dir: Option<std::path::PathBuf>,
     /// The folder of the New Document profiles `file.new` starts documents from; `None`: none,
     /// every document starts with the defaults ([`Session::attach_new_doc_profiles`]).
     new_doc_profile_dir: Option<std::path::PathBuf>,
@@ -245,6 +248,8 @@ pub struct Session {
     /// keyboard: those files, and the files they link to, are read under these roots, so a queue
     /// an agent loaded never reads beyond what it was given.
     pub(crate) place_queue_roots: Option<std::sync::Arc<file_access::AutomationRoots>>,
+    /// How many times the place cursor has been loaded ([`Session::place_queue_loads`]).
+    pub(crate) place_queue_loads: u64,
     /// While [`Session::import_image_read`] runs `clipboard.importImage`: the image read for it,
     /// which the command loads instead of reading `dataBase64`; `None` otherwise.
     pub(crate) image_hand_off: Option<cmd::clipboard::ImageRead>,

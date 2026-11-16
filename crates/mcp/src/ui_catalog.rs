@@ -167,6 +167,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} toggle a red underline under the words of the document's type its dictionaries don't know (text.spelling.check lists them), kept up to date as the type changes; type with effects isn't underlined → whether Auto Spell Check is on",
     ),
+    (
+        "ui.checkSpelling",
+        "Check Spelling…",
+        "Cmd+I",
+        "{} open the Check Spelling dialog to walk through unrecognized words with suggestions, ignore, change and dictionary options",
+    ),
     ("shortcuts.set", "Set Keyboard Shortcut", "", "{id: command id or tool:<id>, shortcut: \"Cmd+Shift+K\" | \"\" (none) | null (default), force?}"),
     ("shortcuts.list", "List Keyboard Shortcuts", "", "{query?} → [{id, label, group, shortcut, default, overridden}]"),
     ("shortcuts.conflicts", "Keyboard Shortcut Conflicts", "", "{} → [{shortcut, ids}]"),
@@ -182,7 +188,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "shortcuts.exportText",
         "Export Keyboard Shortcuts as Text…",
         "",
-        "{path?} save the current set's tools and menu commands with their shortcuts as a UTF-8 text file (Keyboard Shortcuts › Export Text…): the set's name, then a Tools and a Menu Commands section in the dialog's order, one `name<TAB>shortcut` line per row, empty after the tab when it has none; without `path`, pick a file",
+        "{path?, format?: \"text\"|\"sheet\"|\"csv\" (default text), pageSize?: \"letter\"|\"a4\" (sheet only; default A4 when the current document prints on A4, else letter)} save the current set's tools and menu commands with their shortcuts (Keyboard Shortcuts › Export Text…). text: a UTF-8 text file: the set's name, then a Tools and a Menu Commands section in the dialog's order, one `name<TAB>shortcut` line per row, empty after the tab when it has none. sheet: a printable PDF on landscape pages that lists the rows with a shortcut, Tools and then a group per top-level menu, under a colored band per group, shortcut then name, in four columns. csv: a UTF-8 CSV file (RFC 4180 quoting, CRLF) with a `Group,Command,Shortcut` header and one record per row in the sheet's groups, in the UI language; a field that starts with = + - @ and has more after it starts with '. A `path` is written as given. Without it, pick a file: the desktop save dialog offers the three formats (text first) unless `format` names one, and the file type picked decides and gives the name its extension; with no dialog, writer or download, returns {text} (text, csv) or {pdf: base64} (sheet); a bad `format` or `pageSize` is an error",
     ),
     ("shortcuts.import", "Import Keyboard Shortcuts…", "", "{path? | data?}"),
     (
@@ -392,7 +398,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "type.lineComposer",
         "Toggle Line Composer",
         "Cmd+Alt+Shift+C",
-        "{} the selected type's paragraphs (or those the Type tool's selection touches) use the Single-line Composer when they all use the Every-line Composer, else the Every-line Composer (text.setFormat {composer}) → \"singleLine\" | \"everyLine\"",
+        "{} the selected type's paragraphs (or those the Type tool's selection touches) use the Single-line Composer when they all use the Every-line Composer, else the Every-line Composer; paragraphs that all use a Standard composer keep it, any other mix takes the Middle Eastern & South Asian one (text.setFormat {composer}) → \"singleLine\" | \"everyLine\" | \"standardSingleLine\" | \"standardEveryLine\"",
     ),
     (
         "type.hyphenate",
@@ -432,6 +438,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("view.nextArtboard", "Next Artboard", "", "{} the navigator's Next Artboard button: view.goToArtboard {index: \"next\"} → {index}"),
     ("view.lastArtboard", "Last Artboard", "", "{} the navigator's Last Artboard button: view.goToArtboard {index: \"last\"} → {index}"),
+    (
+        "view.statusBarShow",
+        "Status Bar Show",
+        "",
+        "{show: \"artboardName\" | \"currentTool\" | \"dateTime\" | \"undos\" | \"colorProfile\"} the status bar's Show menu (a click on its info field): the field shows the name of the artboard the navigator shows, the tool in use (the default), the date and time (local on the desktop, UTC on the web), the active document's undo and redo step counts, or the profile its colors use (the one assigned for its color mode, else, or when that one is not available, that mode's working space); kept with the UI state; any other value is an error → show",
+    ),
     ("view.edges", "Hide Edges", "Cmd+H", "{}"),
     ("view.artboards", "Hide Artboards", "Cmd+Shift+H", "{}"),
     (
@@ -613,6 +625,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} show/hide the dock and the floating panels (hiding them closes a panel popped out of the icon column), leaving the toolbar and the Control bar as they are; returns whether the panels show",
     ),
     (
+        "window.panels.peek",
+        "Show Hidden Panels at Edge",
+        "",
+        "{side: left|right|null} while Tab or Shift+Tab hides the panels, show the docked panels on that side of the canvas over its edge, as resting the pointer on that edge of the window for 0.3 s does; they hide again 0.3 s after the pointer moves away from them, and null hides them now. Floating panels, the toolbar and the Control bar stay hidden, and Tab or Shift+Tab shows the panels for good. Fails and changes nothing while the panels show, in Presentation Mode, for any other side, or when no panel is docked on that side; returns the side shown or null",
+    ),
+    (
         "window.panel",
         "Show Panel",
         "",
@@ -637,6 +655,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Collapse Panel Group",
         "",
         "{panel, collapsed?: bool} minimize the group holding a panel to its tabs (in a floating window, the window to its title bar), or restore it, as a double-click on a tab or the drag bar does; the same as window.panel.minimize {panel, minimized}. Without `collapsed` it toggles. Returns {panel, collapsed, layout}",
+    ),
+    (
+        "window.panel.cycleOptions",
+        "Cycle Display Sizes",
+        "",
+        "{panel} show a panel at its next display size, as the double triangle at the right end of its tab strip does: the sizes are the states of its panel menu's Show/Hide Options (Transparency: options and thumbnails, thumbnails alone, neither), largest first, and the smallest goes back to the largest; Align, Attributes, Character, Color, Flattener Preview, Gradient, Info, Paragraph, Stroke, Transform and Transparency have them. An unknown panel or one without display sizes is an error and changes nothing. Returns {panel, size: 0 for the largest, sizes: how many it has}",
     ),
     (
         "window.panel.float",
@@ -1609,7 +1633,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.actionSet.load",
         "Load Actions…",
         "",
-        "{path? | data?: the file's text} read an action set file (.vcactions) at path, else a picked one, and add its set after the Actions panel's sets; a set named like one in the panel gets the next free number (Print 2), and the other sets stay. Files of another version, over 8 MiB, with more than 1,000 actions or with an action of more than 10,000 steps are refused, and so is any set, .aia ones too, that Save Actions… would write larger than 8 MiB (a file with less white space, or a name that gets a number); the panel menu's Load Actions… (disabled where there is no open dialog, the web) → {set: index, name, actions: n}. An action set another app saved as text (.aia, starting /version; read with actionSet.read) comes in with its actions. A step with a label and no recorded values comes in when exactly one menu command has that label (in English or the interface language, any case, no final …), and that command is directly in a top menu, can be recorded in actions, is what its menu bar item runs with no values and opens no dialog (never a submenu's item, a file or document command, Paste, Undo, Redo or an add-on's command), with no params and excluded from playback when it is off in the file; the other steps, every step with no label and every step recorded with values (a recorded menu item too) among them, are left out → {set, name, actions, skipped: [{action, step: its label, else its name}] (the first 1,000), leftOut: n}, and the status bar says how many were left out; a set with no name takes the file's name, else Actions; a file actionSet.read marks truncated is refused, and text that starts /version and isn't an action set gives \"not an action set file\"",
+        "{path? | data?: the file's text} read an action set file (.vcactions) at path, else a picked one, and add its set after the Actions panel's sets; a set named like one in the panel gets the next free number (Print 2), and the other sets stay. Files of another version, over 8 MiB, with more than 1,000 actions or with an action of more than 10,000 steps are refused, and so is any set, .aia ones too, that Save Actions… would write larger than 8 MiB (a file with less white space, or a name that gets a number); the panel menu's Load Actions… (disabled where there is no open dialog, the web) → {set: index, name, actions: n}. An action set another app saved as text (.aia, starting /version; read with actionSet.read) comes in with its actions. A step with a label and no recorded values comes in when exactly one menu command has that label (in English or the interface language, any case, no final …), and that command is directly in a top menu, can be recorded in actions, is what its menu bar item runs with no values and opens no dialog (never a submenu's item, a file or document command, Paste, Undo, Redo or an add-on's command), with no params and excluded from playback when it is off in the file. A Set Selection step (found by its internal name, whatever its label) comes in as select.byNote {note, caseSensitive, wholeWord} when it has exactly three recorded values: text (ustring, UTF-8; 1 to 1,024 bytes once trimmed), word and case (boolean, 0 or 1); with any other values it is left out. The other steps, every other step with no label and every other step recorded with values (a recorded menu item too) among them, are left out → {set, name, actions, skipped: [{action, step: its label, else its name}] (the first 1,000), leftOut: n}, and the status bar says how many were left out; a set with no name takes the file's name, else Actions; a file actionSet.read marks truncated is refused, and text that starts /version and isn't an action set gives \"not an action set file\"",
     ),
     (
         "ui.actionSet.delete",
