@@ -7004,6 +7004,9 @@ font-technology	Variable	ცვლადი
 @msg	All colors are within the CMYK gamut	ყველა ფერი CMYK-ის გამის ფარგლებშია
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	CMYK-ის გამის ფარგლებს გარეთაა ფერი ({n})
 @msg	Unembedded to {_1}	ჩაშენება მოხსნილია: {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	ჩაშენება მოხსნილია, გამოსახულებები: {n}, საქაღალდე: {folder}
+@msg	every numbered name for {name} is taken in that folder	იმ საქაღალდეში {name}-ის ყველა დანომრილი სახელი დაკავებულია
+@msg	give id and path for one image, or ids and folder for several	ერთი გამოსახულებისთვის მიუთითეთ id და path, რამდენიმესთვის კი ids და folder
 @msg	Reset {_1}	ჩამოყრილია: {_1}
 @msg	Sent to {_1}	გაგზავნილია: {_1}
 @msg	{_1} files	ფაილები: {_1}

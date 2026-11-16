@@ -5302,6 +5302,9 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	All colors are within the CMYK gamut	Toutes les couleurs sont dans la gamme CMJN
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} couleur est hors de la gamme CMJN|{n} couleurs sont hors de la gamme CMJN
 @msg	Unembedded to {_1}	Incorporation annulée vers {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Incorporation annulée pour {n} image vers {folder}|Incorporation annulée pour {n} images vers {folder}
+@msg	every numbered name for {name} is taken in that folder	tous les noms numérotés pour {name} sont déjà pris dans ce dossier
+@msg	give id and path for one image, or ids and folder for several	indiquez id et path pour une image, ou ids et folder pour plusieurs
 @msg	Reset {_1}	{_1} réinitialisé
 @msg	Sent to {_1}	Envoyé à {_1}
 @msg	{_1} files	Fichiers {_1}

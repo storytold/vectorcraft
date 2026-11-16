@@ -335,6 +335,37 @@ pub(crate) fn unembed(app: &mut VectorcraftApp, id: u64, name: &str) {
     });
 }
 
+/// Whether Unembed… can act on `embedded` selected embedded images: one goes to a picked file,
+/// several to a picked folder (the web downloads each one).
+pub(crate) fn can_unembed(app: &VectorcraftApp, embedded: usize) -> bool {
+    match embedded {
+        0 => false,
+        1 => true,
+        _ => app.services.download.is_some() || app.services.pick_folder.is_some(),
+    }
+}
+
+/// Write embedded images `ids` to new files in a picked folder and link each one to its file, in
+/// one undo step (the web downloads each one and links none).
+pub(crate) fn unembed_several(app: &mut VectorcraftApp, ids: Vec<u64>) {
+    if app.services.download.is_some() {
+        for id in ids {
+            unembed(app, id, "");
+        }
+        return;
+    }
+    crate::picks::button(app, move |app| unembed_to_picked_folder(app, ids.clone()));
+}
+
+fn unembed_to_picked_folder(app: &mut VectorcraftApp, ids: Vec<u64>) {
+    let Some(folder) = crate::picks::folder(app) else { return };
+    let r = app.run("links.unembed", json!({ "ids": ids, "folder": folder }));
+    report(app, r, |v| {
+        let n = v["unembedded"].as_array().map_or(0, Vec::len);
+        crate::i18n::msg_n(n as u64, "Unembedded {n} image to {folder}", "Unembedded {n} images to {folder}", &[("folder", &folder)])
+    });
+}
+
 /// The UI commands `links.editOriginal` (open the linked file in its app) and `links.reveal`
 /// (show it in its folder) for image `id` (default: the selected linked image) → `{path}`.
 pub(crate) fn open_file(app: &mut VectorcraftApp, p: &Value, reveal: bool) -> Result<Value, String> {
@@ -834,12 +865,16 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     }
-    if menu_item(ui, tl!("Unembed…"), embedded.len() == 1, false)
-        && let Some(r) = embedded.first()
-        && let Some(id) = r["id"].as_u64()
-    {
-        let name = r["name"].as_str().unwrap_or("Image").to_string();
-        unembed(app, id, &name);
+    if menu_item(ui, tl!("Unembed…"), can_unembed(app, embedded.len()), false) {
+        match &embedded[..] {
+            [r] => {
+                if let Some(id) = r["id"].as_u64() {
+                    let name = r["name"].as_str().unwrap_or("Image").to_string();
+                    unembed(app, id, &name);
+                }
+            }
+            rows => unembed_several(app, rows.iter().filter_map(|r| r["id"].as_u64()).collect()),
+        }
     }
     if menu_item(ui, tl!("Placement Options…"), any, false) {
         crate::menus::invoke(app, "ui.placementOptionsDialog", json!({ "ids": ids(&sel, |_| true) }));

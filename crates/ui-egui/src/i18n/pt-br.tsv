@@ -4643,6 +4643,9 @@ axis	Both	Ambos
 @msg	All colors are within the CMYK gamut	Todas as cores estão dentro do gamut CMYK
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} cor está fora do gamut CMYK|{n} cores estão fora do gamut CMYK
 @msg	Unembedded to {_1}	Desincorporado para {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	{n} imagem desincorporada para {folder}|{n} imagens desincorporadas para {folder}
+@msg	every numbered name for {name} is taken in that folder	todos os nomes numerados para {name} já existem nessa pasta
+@msg	give id and path for one image, or ids and folder for several	informe id e path para uma imagem, ou ids e folder para várias
 @msg	Reset {_1}	Redefinir {_1}
 @msg	Sent to {_1}	Enviado para {_1}
 @msg	{_1} files	{_1} arquivos

@@ -5636,6 +5636,9 @@ imageTrace	Outline	Contour
 @msg	All colors are within the CMYK gamut	Alle kleuren vallen binnen het CMYK-gamut
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} kleur valt buiten het CMYK-gamut|{n} kleuren vallen buiten het CMYK-gamut
 @msg	Unembedded to {_1}	Extern gemaakt: {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	{n} afbeelding extern gemaakt in {folder}|{n} afbeeldingen extern gemaakt in {folder}
+@msg	every numbered name for {name} is taken in that folder	elke genummerde naam voor {name} is al vergeven in die map
+@msg	give id and path for one image, or ids and folder for several	geef id en path voor één afbeelding, of ids en folder voor meerdere
 @msg	Reset {_1}	{_1} opnieuw ingesteld
 @msg	Sent to {_1}	Verzonden naar {_1}
 @msg	{_1} files	{_1}-bestanden

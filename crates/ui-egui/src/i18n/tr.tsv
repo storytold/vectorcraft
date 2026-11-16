@@ -5061,6 +5061,9 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	All colors are within the CMYK gamut	Tüm renkler CMYK gamındadır
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} renk CMYK gamının dışında
 @msg	Unembedded to {_1}	{_1}'ye gömülü değil
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	{n} görselin gömülmesi kaldırıldı: {folder}
+@msg	every numbered name for {name} is taken in that folder	{name} için numaralandırılmış her ad o klasörde zaten kullanılıyor
+@msg	give id and path for one image, or ids and folder for several	tek görsel için id ve path, birden çok görsel için ids ve folder verin
 @msg	Reset {_1}	{_1}'yi sıfırla
 @msg	Sent to {_1}	{_1}'ye gönderildi
 @msg	{_1} files	{_1} dosyaları
