@@ -437,6 +437,73 @@ pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
     }
 }
 
+/// Why the result `id` can't run now, as an English status message, or `None` while it can: the
+/// engine's reason when it gives one, else the status line a dimmed menu item's pick gives
+/// ([`crate::shortcut_editor::dimmed`]). A panel can't be shown in Presentation Mode, a tool can
+/// always be chosen, and every other result asks [`menus::enabled`] about the command its pick
+/// runs.
+fn unavailable(app: &VectorcraftApp, id: &str) -> Option<String> {
+    if id.starts_with("tool:") {
+        return None;
+    }
+    if id.starts_with("panel:") && app.ui.screen_mode >= 3 {
+        return Some("panels can't be shown in Presentation Mode".to_string());
+    }
+    // The command the pick runs.
+    let id = if id.starts_with("panel:") || id.starts_with("plugin:") || id.starts_with("effect:") {
+        crate::keymap::command_of(id).id
+    } else {
+        id.to_string()
+    };
+    if menus::enabled(app, &id) {
+        return None;
+    }
+    let why = vectorcraft_engine::find_command(&id).and_then(|c| (c.enabled)(&app.session).err());
+    Some(why.unwrap_or_else(|| format!("command `{id}` is not available right now")))
+}
+
+/// The drawn results' [`unavailable`] answers, in the interface language, for the state `key`
+/// ([`availability_key`]) they were read in. An engine check can take tens of milliseconds on a
+/// large selection, so each result is asked once per state instead of on every frame.
+#[derive(Clone, Default)]
+struct Availability {
+    key: u64,
+    known: std::collections::HashMap<String, Option<String>>,
+}
+
+impl Availability {
+    /// Why the result `id` can't run now, translated, or `None` while it can.
+    fn why(&mut self, app: &VectorcraftApp, id: &str) -> Option<String> {
+        if let Some(why) = self.known.get(id) {
+            return why.clone();
+        }
+        let why = unavailable(app, id).map(|why| crate::i18n::msg(&why));
+        self.known.insert(id.to_string(), why.clone());
+        why
+    }
+}
+
+/// What the results' availability depends on: what the native menu bar's rows depend on
+/// ([`crate::native_menu::state_hash`]: commands run, the document's revision, selection, history
+/// and clipboard, the language and more), whether the document has unsaved changes, the screen
+/// mode, an open dialog, and the background saves and exports, file reads, plug-in runs and traces
+/// that run or show their progress. A frame with a pointer button release also changes it, for
+/// what it leaves out (a panel shown, a tool chosen); typing in the search field does not.
+fn availability_key(app: &VectorcraftApp, ctx: &egui::Context) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let click = ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::PointerButton { pressed: false, .. })));
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    crate::native_menu::state_hash(app, click.then_some(app.host_iteration)).hash(&mut h);
+    let running = app.background.jobs.iter().filter(|j| j.progress.is_some() && !j.cancelled()).count();
+    (app.ui.screen_mode, app.ui.dialog.is_some(), app.background.jobs.len(), running).hash(&mut h);
+    (app.opening.pending.len(), crate::opening::any_shown(app)).hash(&mut h);
+    // A background save marks the document saved without a new revision.
+    app.session.active().map(|d| (d.path.is_some(), d.converted, d.is_dirty())).hash(&mut h);
+    let plugins = (crate::plugin_runs::any_running(app), crate::plugin_runs::any_shown(app));
+    (plugins, crate::trace_runs::any_running(app), crate::trace_runs::any_shown(app)).hash(&mut h);
+    h.finish()
+}
+
 /// The entries the query `q` matches, best first ([`search::rank`]), with the commands picked most
 /// often (`uses`) first among the entries that match as well, and then the picks that Recent
 /// Commands lists for the ids `recent_ids` ([`recent`]). The ranking of the last query is kept, so
@@ -788,6 +855,13 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         });
     }
     let screen = ctx.content_rect();
+    // The drawn results' availability, kept while the state it was read in lasts.
+    let availability_id = egui::Id::unique("palette-availability");
+    let key = availability_key(app, ctx);
+    let mut availability = ctx
+        .data_mut(|d| d.remove_temp::<Availability>(availability_id))
+        .filter(|a| a.key == key)
+        .unwrap_or(Availability { key, known: Default::default() });
     // The highlighted result the rows and the field's description are drawn with.
     let mut drawn = sel;
     // The backdrop covers the canvas, the toolbars, the docked panels and the app bar under the
@@ -884,19 +958,32 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                             if on {
                                 ui.painter().rect_filled(rect, 4.0, ui.visuals().selection.bg_fill);
                             }
+                            // A result that can't run now stays in its place, drawn dimmed, and says
+                            // why on hover and to screen readers.
+                            let why = availability.why(app, &e.id);
+                            let (name_color, shortcut_color) = if why.is_some() { (t.text_disabled, t.text_disabled) } else { (t.text, t.text_dim) };
                             let font = egui::TextStyle::Body.resolve(ui.style());
                             let shortcut = menus::shown_shortcut(&e.shortcut);
                             let p = ui.painter();
                             let shortcut_at = rect.right_center() - egui::vec2(8.0, 0.0);
-                            let used = p.text(shortcut_at, egui::Align2::RIGHT_CENTER, &shortcut, font.clone(), t.text_dim);
+                            let used = p.text(shortcut_at, egui::Align2::RIGHT_CENTER, &shortcut, font.clone(), shortcut_color);
                             let name_end = if shortcut.is_empty() { rect.right() - 8.0 } else { used.left() - 12.0 };
                             let name_at = rect.left() + 8.0;
-                            let name = name_galley(p, &e.shown, font, t.text, name_end - name_at);
-                            p.galley(egui::pos2(name_at, rect.center().y - name.size().y / 2.0), name, t.text);
+                            let name = name_galley(p, &e.shown, font, name_color, name_end - name_at);
+                            p.galley(egui::pos2(name_at, rect.center().y - name.size().y / 2.0), name, name_color);
                             // `WidgetInfo::selected` reaches screen readers as a toggled state, so the
                             // row sets the selected state on its node itself.
-                            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ListItem, true, row_label(e)));
-                            ui.ctx().accesskit_node_builder(resp.id, |node| node.set_selected(on));
+                            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ListItem, why.is_none(), row_label(e)));
+                            ui.ctx().accesskit_node_builder(resp.id, |node| {
+                                node.set_selected(on);
+                                if let Some(why) = &why {
+                                    node.set_description(why.clone());
+                                }
+                            });
+                            let resp = match why {
+                                Some(why) => resp.on_hover_text(why),
+                                None => resp,
+                            };
                             if resp.clicked() {
                                 run = Some(e.id.clone());
                             }
@@ -911,10 +998,23 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     }
                 });
             }
+            // While the highlighted result can't run now, the footer also says why, so a keyboard
+            // user reads it too: on the count's line, or alone under the recent picks, so the
+            // footer stays the height counted above.
+            let why = matches.get(sel).and_then(|e| availability.why(app, &e.id));
             // Under the recent picks no count is shown; with none, one dimmed line says so.
             if !empty {
                 ui.add_space(6.0);
-                ui.label(egui::RichText::new(footer(n, total)).color(t.text_dim));
+                let count = ui.label(egui::RichText::new(footer(n, total)).color(t.text_dim));
+                if let Some(why) = why {
+                    let right = ui.max_rect().right();
+                    let at = egui::Rect::from_x_y_ranges((count.rect.right() + 12.0).min(right)..=right, count.rect.y_range());
+                    let why = egui::RichText::new(why).color(t.text_dim);
+                    ui.put(at, egui::Label::new(why).truncate().halign(egui::Align::Max));
+                }
+            } else if let Some(why) = why {
+                ui.add_space(6.0);
+                ui.add(egui::Label::new(egui::RichText::new(why).color(t.text_dim)).truncate());
             } else if n == 0 {
                 ui.label(egui::RichText::new(tl!("No recent commands")).color(t.text_dim));
             }
@@ -951,6 +1051,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     ctx.data_mut(|d| {
         d.insert_temp::<Highlight>(sel_id, (sel, q, offset, view, sel_key));
         d.insert_temp(rsel_id, rsel);
+        d.insert_temp(availability_id, availability);
     });
     if let Some(id) = run {
         app.ui.palette_open = false;
@@ -2619,6 +2720,165 @@ mod tests {
         open.frame(vec![button(false)]);
         assert!(!open.app.ui.palette_open);
         assert!(crate::panel_docking::showing(&open.app.ui, &panel), "{panel}: {}", open.app.ui.status);
+    }
+
+    /// The open palette on `query` over the session `session`.
+    fn open_on(query: &str, session: vectorcraft_engine::Session) -> Open {
+        let mut open = Open::new(query, WINDOW);
+        open.app = VectorcraftApp::new(session, crate::Services::default());
+        open.app.ui.palette_open = true;
+        open.app.ui.palette_query = query.into();
+        open.frame(vec![]);
+        open
+    }
+
+    /// The screen-reader node of the result row named `name`.
+    fn row_named<'a>(nodes: &'a [egui::accesskit::Node], name: &str) -> &'a egui::accesskit::Node {
+        nodes
+            .iter()
+            .filter(|n| n.role() == egui::accesskit::Role::ListItem)
+            .find(|n| n.label().is_some_and(|l| l == name || l.starts_with(&format!("{name}, "))))
+            .unwrap_or_else(|| panic!("a row named {name}: {:?}", rows(nodes)))
+    }
+
+    /// Highlights the result `id` with the arrow keys: the frame's screen-reader tree.
+    fn highlight(open: &mut Open, id: &str) -> Vec<egui::accesskit::Node> {
+        let k = open.listed().iter().position(|e| e == id).unwrap_or_else(|| panic!("{id} is listed"));
+        assert!(k < VISIBLE_ROWS, "{:?}", open.listed());
+        let nodes = open.press(egui::Key::ArrowDown, k);
+        assert_eq!(open.highlighted(), k);
+        nodes
+    }
+
+    /// With nothing selected, Ungroup stays listed in its place, dimmed, with the engine's reason in
+    /// its screen-reader description and in the footer while it is highlighted. Selecting art while
+    /// the palette stays open shows it as available on the next frame, in the same order. (A query
+    /// other tests' plug-in names do not match, so the list stays the same between frames.)
+    #[test]
+    fn a_result_that_cannot_run_now_is_dimmed_and_says_why() {
+        let mut session = vectorcraft_testkit::fixtures::Fixture::Multi.session();
+        session.execute("select.none", &json!({})).unwrap();
+        let why = crate::i18n::msg(&(vectorcraft_engine::find_command("object.ungroup").unwrap().enabled)(&session).unwrap_err());
+        let mut open = open_on("ungroup", session);
+        let name = entries(&open.ctx, Lang::EN).iter().find(|e| e.id == "object.ungroup").map(row_label).unwrap();
+        let order = open.listed();
+        let nodes = highlight(&mut open, "object.ungroup");
+        let ungroup = row_named(&nodes, &name);
+        assert!(ungroup.is_disabled(), "{ungroup:?}");
+        assert_eq!(ungroup.description(), Some(why.as_str()));
+        let footer_says = |nodes: &[egui::accesskit::Node]| labels(nodes).contains(&why);
+        assert!(footer_says(&nodes), "{:?}", labels(&nodes));
+        let dimmed_rows: Vec<String> = rows(&nodes).into_iter().map(|r| r.0).collect();
+
+        open.app.run("select.all", json!({})).unwrap();
+        let nodes = open.frame(vec![]);
+        let ungroup = row_named(&nodes, &name);
+        assert!(!ungroup.is_disabled() && ungroup.description().is_none(), "{ungroup:?}");
+        assert!(!footer_says(&nodes), "{:?}", labels(&nodes));
+        // Whether a result can run never moves it.
+        assert_eq!(open.listed(), order);
+        assert_eq!(rows(&nodes).into_iter().map(|r| r.0).collect::<Vec<_>>(), dimmed_rows);
+    }
+
+    /// Under an empty search, a highlighted recent pick that can't run now is dimmed and the line
+    /// under the picks says why.
+    #[test]
+    fn a_recent_pick_that_cannot_run_now_says_why() {
+        let mut session = vectorcraft_testkit::fixtures::Fixture::Multi.session();
+        session.execute("select.none", &json!({})).unwrap();
+        let why = crate::i18n::msg(&(vectorcraft_engine::find_command("object.ungroup").unwrap().enabled)(&session).unwrap_err());
+        let mut open = open_on("", session);
+        open.app.ui.recent_commands = vec!["object.ungroup".to_string(), "object.group".to_string()];
+        let nodes = open.frame(vec![]);
+        assert_eq!(open.highlighted(), 0);
+        let rows: Vec<_> = nodes.iter().filter(|n| n.role() == egui::accesskit::Role::ListItem).collect();
+        assert_eq!(rows.len(), 2, "{rows:?}");
+        assert!(rows.iter().all(|n| n.is_disabled()), "{rows:?}");
+        assert!(labels(&nodes).contains(&why), "{:?}", labels(&nodes));
+        let popup = open.popup();
+        assert!(popup.bottom() <= WINDOW.y, "{popup:?}");
+    }
+
+    /// The drawn results are asked whether they can run once per state: keys pressed in the palette
+    /// keep the answers, and a command run or a click asks again.
+    #[test]
+    fn availability_is_read_once_per_state() {
+        let mut session = vectorcraft_testkit::fixtures::Fixture::Multi.session();
+        session.execute("select.none", &json!({})).unwrap();
+        let mut open = open_on("ungroup", session);
+        let id = egui::Id::unique("palette-availability");
+        let read = |open: &Open| open.ctx.data(|d| d.get_temp::<Availability>(id)).expect("the availability is kept");
+        let first = read(&open);
+        assert!(first.known.get("object.ungroup").is_some_and(Option::is_some), "{:?}", first.known);
+        // The key also takes in state shared by every test (the language, the loaded fonts, the
+        // installed plug-ins), which other tests change at the same time, so the presses are tried
+        // again until one try keeps the key.
+        let kept = (0..20).any(|_| {
+            open.frame(vec![]);
+            let before = read(&open).key;
+            open.press(egui::Key::ArrowDown, 1);
+            open.press(egui::Key::X, 1);
+            read(&open).key == before
+        });
+        assert!(kept, "key presses keep the answers");
+        let first = read(&open);
+        open.app.run("select.all", json!({})).unwrap();
+        open.frame(vec![]);
+        let after = read(&open);
+        assert_ne!(after.key, first.key);
+        assert_eq!(after.known.get("object.ungroup"), Some(&None), "asked again: {:?}", after.known);
+        let release = egui::Event::PointerButton {
+            pos: egui::pos2(1.0, 1.0),
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        open.frame(vec![release]);
+        assert_ne!(read(&open).key, after.key, "a click asks again");
+    }
+
+    /// Paste is dimmed while the clipboard is empty and nothing can be pasted from the system
+    /// clipboard, and not while the system clipboard can be pasted.
+    #[test]
+    fn paste_is_dimmed_only_while_nothing_can_be_pasted() {
+        let mut open = open_on("paste", vectorcraft_testkit::fixtures::Fixture::Multi.session());
+        open.app.system_paste = false;
+        let nodes = open.frame(vec![]);
+        let paste = row_named(&nodes, "Edit › Paste");
+        assert!(paste.is_disabled(), "{paste:?}");
+        assert_eq!(paste.description(), Some(crate::i18n::msg("clipboard is empty").as_str()));
+        open.app.system_paste = true;
+        let nodes = open.frame(vec![]);
+        assert!(!row_named(&nodes, "Edit › Paste").is_disabled());
+    }
+
+    /// A tool can always be chosen; a panel can't be shown in Presentation Mode, and says so.
+    #[test]
+    fn tools_are_never_dimmed_and_panels_are_in_presentation_mode() {
+        let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let tools: Vec<String> = build(Lang::EN).into_iter().map(|e| e.id).filter(|id| id.starts_with("tool:")).collect();
+        assert!(!tools.is_empty());
+        assert!(tools.iter().all(|id| unavailable(&app, id).is_none()), "{tools:?}");
+        let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        assert_eq!(unavailable(&app, "panel:layers"), None);
+        app.ui.screen_mode = 3;
+        assert_eq!(unavailable(&app, "panel:layers").as_deref(), Some("panels can't be shown in Presentation Mode"));
+    }
+
+    /// A UI command without an engine reason says it is not available, and a filter plug-in or an
+    /// effect asks about the command its pick runs.
+    #[test]
+    fn a_result_without_an_engine_reason_says_it_is_not_available() {
+        let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        assert!(vectorcraft_engine::find_command("ui.newBrush").is_none());
+        assert_eq!(unavailable(&app, "ui.newBrush").as_deref(), Some("command `ui.newBrush` is not available right now"));
+        assert_eq!(unavailable(&app, "plugin:any.filter").as_deref(), Some("command `plugin.dialog` is not available right now"));
+        let effect = crate::shortcut_editor::effect_items().first().map(|e| format!("effect:{}", e.effect)).expect("an Effect menu item");
+        assert!(unavailable(&app, &effect).is_some(), "{effect}");
+        let app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        assert_eq!(unavailable(&app, "ui.newBrush"), None);
+        assert_eq!(unavailable(&app, "plugin:any.filter"), None);
+        assert_eq!(unavailable(&app, &effect), None, "{effect}");
     }
 
     /// Screen readers stay on the field: its description names the highlighted result and its
