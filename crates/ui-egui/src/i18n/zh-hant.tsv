@@ -1013,6 +1013,10 @@ font-technology	Variable	可變
 	Cap Height	大寫字母高度
 	x-Height	x 字高
 	ICF Box	ICF 框
+	Show Sample	顯示樣本
+	Hide Sample	隱藏樣本
+	Max Ascent/Descent	最大上升/下降
+	Max Ascender	最大上伸部
 	Em Dash	長破折號
 	Em Space	全形空格
 	Embed	嵌入
@@ -1338,6 +1342,8 @@ file-filter	Templates	範本
 	Font Family & Style	字體家族與樣式
 	Font Family, Style & Size	字體家族、樣式與大小
 	Font List	字體清單
+	Show Similar Fonts	顯示相似字體
+	Clear Similar Fonts	清除相似字體
 	Font Preview Size	字體預覽大小
 	Font Size	字體大小
 	Variable Font	可變字體
@@ -1453,6 +1459,7 @@ file-filter	Templates	範本
 	Connect Data Points	連接資料點
 	Edge-to-Edge Lines	邊到邊線條
 	Draw Filled Lines	繪製填色線條
+	Line Width	線寬
 	Tick Values	刻度值
 	Override Calculated Values	覆寫計算值
 	Divisions	刻度數
@@ -1959,6 +1966,7 @@ file-filter	Templates	範本
 @msg	no history to clear	沒有可清除的步驟記錄
 @msg	no history state {v}	沒有步驟記錄 {v}
 @msg	Expand Appearance: the selection has a basic appearance	展開外觀：選取範圍只有基本外觀
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	部分點陣效果未轉換為影像：它們會超過 1,024 個影像或總計 256 百萬像素
 @msg	select (or target) objects whose appearance isn't basic	請選取 (或指定目標) 外觀不是基本外觀的物件
 @msg	{C}: no effect at index {from}	{C}：索引 {from} 處沒有效果
 @msg	Expand: no gradient fills	展開：沒有漸層填色
@@ -2605,6 +2613,31 @@ file-filter	Templates	範本
 @msg	$.evalFile requires a file path	$.evalFile 需要檔案路徑
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile：逾時必須是 0 或更大的有限毫秒數
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile：接受一個檔案路徑和一個逾時值
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} 未定義
+@msg	cannot read property '{key}' of {base}	無法讀取 {base} 的屬性 '{key}'
+@msg	cannot set property '{key}' of {base}	無法設定 {base} 的屬性 '{key}'
+@msg	cannot read a property of {base}	無法讀取 {base} 的屬性
+@msg	cannot set a property of {base}	無法設定 {base} 的屬性
+@msg	cannot define property '{key}': {why}	無法定義屬性 '{key}'：{why}
+@msg	cannot assign to property '{key}': {why}	無法為屬性 '{key}' 賦值：{why}
+@msg	cannot delete property '{key}'	無法刪除屬性 '{key}'
+@msg	cannot declare function {ident}	無法宣告函式 {ident}
+@msg	invalid assignment target	賦值目標無效
+@msg	the array's length is read-only	陣列的長度是唯讀的
+@msg	the property cannot be redefined	屬性無法重新定義
+@msg	the object is not extensible	物件不可擴充
+@msg	the length cannot be redefined	長度無法重新定義
+@msg	it is read-only	它是唯讀的
+@msg	an element cannot be deleted	無法刪除元素
+@msg	it has only a getter	它只有 getter
+@msg	the value is a primitive	該值是基本值
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}：{file} 第 {line} 行，第 {column} 欄：{e}（擲回）
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}：第 {line} 行，第 {column} 欄：{e}（擲回）
 @msg	{name}: {e} (thrown)	{name}：{e}（擲回）
@@ -4465,6 +4498,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Filter Layers Panel Rows	篩選圖層面板列
 	Search commands and tools	搜尋指令與工具
 	Search commands and tools…	搜尋指令與工具…
+	Recent Commands	最近使用的指令
+	No recent commands	沒有最近使用的指令
 	Search Commands…	搜尋指令…
 	Secondary	次要
 	Section Symbol	章節符號
@@ -6058,7 +6093,7 @@ lighting	Light	光源
 	X:	X：
 	Y:	Y：
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	封閉開放輪廓的圓形端部。部分旋轉的切割側面保持開放。
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	封閉開放輪廓的圓形端部。部分旋轉的切割側面也會封閉。
 	Distance	距離
 	Make Image Dynamic	使影像動態化
 	Import Data Sets…	匯入資料集…
@@ -6164,6 +6199,7 @@ lighting	Light	光源
 	Single Word Justification:	單字對齊：
 	Full Justify	全部強迫齊行
 	Minimum must not exceed Desired, nor Desired Maximum.	最小值不可超過所需值，所需值不可超過最大值。
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`：最小值不可超過所需值，所需值不可超過最大值
 	Minimum	最小值
 	Justification	對齊設定
 	Add filters from the list above	從上方清單新增濾鏡
@@ -7114,9 +7150,43 @@ breakText	Glyphs	字符
 	Remove Gaps	移除間隙
 @msg	that makes too many pieces (at most 100000): make the dashes longer	這會產生過多片段（最多 100000 個）：請加長短破折號
 @msg	select paths, or segments, to divide	請選取要分割的路徑或線段
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	公切線…
+	Common Tangents	公切線
+	Tangents	切線
+	Centerline	中心線
+	External	外部
+	Internal	內部
+@msg	select two closed paths	請選取兩條封閉路徑
+@msg	a selected path is open	所選路徑是開放的
+@msg	a selected path is not convex	所選路徑不是凸形
+@msg	a selected path has no area	所選路徑沒有面積
+@msg	a selected path has more than 10000 segments	所選路徑的線段超過 10000 條
+@msg	the two paths have the same outline	兩條路徑的輪廓相同
+@msg	One path lies inside the other, so they have no common tangents	一條路徑位於另一條之內，因此它們沒有公切線
+@msg	The paths overlap, so they have no internal tangents	路徑互相重疊，因此它們沒有內公切線
+@msg	One path lies inside the other, so they have no internal tangents	一條路徑位於另一條之內，因此它們沒有內公切線
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	將短破折號展開為路徑
 @msg	select paths with dashed strokes to expand	請選取要展開的虛線筆畫路徑
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	相切圓…
+	Tangent Circle	相切圓
+	Circle:	圓：
+@msg	`ids` names an object twice	`ids` 將同一個物件指定了兩次
+@msg	select two or three paths or compound paths	請選取兩個或三個路徑或複合路徑
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` 必須為 0.01 到 1000000 pt
+@msg	two shapes need a `radius`	兩個形狀需要 `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	三個形狀會自行決定半徑：請勿指定 `radius`
+@msg	`circle` must be from 0 to 64	`circle` 必須為 0 到 64
+@msg	a shape has no outline	有一個形狀沒有外框
+@msg	the shapes are too complex: at most 2000 segments in all	形狀過於複雜：總共最多 2000 個線段
+@msg	these shapes take too long to search	這些形狀的搜尋耗時過長
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	與這些形狀相切的圓超過 64 個：它們可能沿整條曲線相接
+@msg	no circle touches these shapes	沒有與這些形狀相切的圓
+@msg	`circle` is past the last circle found ({found})	`circle` 超出了找到的最後一個圓（{found}）
+@msg	object {value} is not a path or compound path	物件 {value} 不是路徑或複合路徑
+@msg	these shapes are too small to measure	這些形狀太小，無法測量
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	文件工具
 	Save a Timestamped Copy	儲存附時間戳記的拷貝
@@ -7171,7 +7241,7 @@ breakText	Glyphs	字符
 @msg	stroke cannot be set on a symbol instance	無法為符號範例設定 stroke
 @msg	fill on a symbol instance must be a solid color or none	符號範例的 fill 必須是純色或 none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	無法為沒有「轉換為形狀」或「外框物件」效果的影像設定 {key}
-@msg	pass newName, registration, exportType, nineSlice and/or type	請提供 newName、registration、exportType、nineSlice 和/或 type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	請提供 newName、registration、exportType、nineSlice、type 和/或 alignToPixelGrid
 	Text Flow	文字流向
 	By Rows	依列
 	By Columns	依欄
@@ -7394,6 +7464,8 @@ breakText	Glyphs	字符
 @msg	No bridge of this width fits across the selected art	此寬度的連接橋無法放入所選圖稿
 @msg	Some islands could not be joined to the area around the art	部分孤島無法連接到圖稿周圍的區域
 @msg	`width` must be from {lo} to {hi} pt	`width` 必須介於 {lo} 到 {hi} pt 之間
+@msg	`angle` must be from -180 to 180 degrees	`angle` 必須介於 -180 到 180 度之間
+@msg	`roundness` must be from 1 to 100%	`roundness` 必須介於 1 到 100% 之間
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必須是介於 1 到 {MAX_BRIDGES_PER_ISLAND} 的整數
 	Weed Box and Lines…	除廢框與除廢線…
 	Weed Box and Lines	除廢框與除廢線
@@ -8900,7 +8972,9 @@ breakText	Glyphs	字符
 @msg	position must be normal, superscript or subscript	position 必須是 normal、superscript 或 subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position 必須是 topLeft、topRight、bottomLeft 或 bottomRight
 @msg	positions must be between 0 and 100000 pt	positions 必須介於 0 到 100000 pt 之間
+@msg	ppi can't be more than {max} for this image	此影像的 ppi 不能超過 {max}
 @msg	ppi must be a positive number, not {ppi}	ppi 必須是正數，而非 {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim 會保持影像像素不變：請勿指定 ppi
 @msg	ppi must be between 1 and 2400	ppi 必須介於 1 和 2400 之間
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` 不是 transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape 必須是 clippingMask|transparency
