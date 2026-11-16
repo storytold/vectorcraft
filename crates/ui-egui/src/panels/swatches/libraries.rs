@@ -1,9 +1,9 @@
 use super::actions::deletable;
 use super::dnd::selection;
-use super::tiles::{describe, global_mark, list_icons};
+use super::tiles::{describe, global_mark, list_icons, pattern_thumb_in};
 use super::{
-    Arc, BuiltinLibrary, GRADIENT_LIBRARIES, Item, LibraryKind, LibraryRef, Rect, Row, SWATCH_LIBRARIES, Swatch, SwatchLibrary, Ui, Value,
-    VectorcraftApp, json, library_panel, menu_item, swatch_tile, swatchlib,
+    Arc, BuiltinLibrary, GRADIENT_LIBRARIES, Item, LibraryKind, LibraryRef, PATTERN_LIBRARIES, Rect, Row, SWATCH_LIBRARIES, Swatch, SwatchLibrary,
+    Ui, Value, VectorcraftApp, json, library_panel, menu_item, patternlib, swatch_tile, swatchlib,
 };
 
 fn library_refs(libs: Vec<swatchlib::LibraryInfo>) -> Vec<LibraryRef> {
@@ -83,7 +83,7 @@ impl LibraryKind for SwatchLibraries {
     }
     /// Ungrouped swatches, then each colour group's folder and swatches (a group whose name
     /// matches shows all of them), as in the Swatches panel.
-    fn rows<'a>(lib: &'a Self::Lib, query: &str) -> Vec<Row<'a, Swatch>> {
+    fn rows<'a>(lib: &'a Self::Lib, _: &str, query: &str) -> Vec<Row<'a, Swatch>> {
         let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
         let row = |w: &'a Swatch| Row { name: &w.name, item: Some(w) };
         let mut out: Vec<Row<Swatch>> = lib.swatches.iter().filter(|w| found(&w.name)).map(row).collect();
@@ -99,6 +99,10 @@ impl LibraryKind for SwatchLibraries {
     }
     fn draw(_: &VectorcraftApp, ui: &Ui, r: Rect, w: &Swatch, selected: bool, hovered: bool) {
         swatch_tile(ui, r, &w.paint, selected, hovered);
+        // A built-in pattern library's pattern, drawn from the library.
+        if let Some(src) = patternlib::swatch_source(w) {
+            pattern_thumb_in(&src, ui, r.shrink(1.0), &w.paint);
+        }
         if w.global {
             global_mark(ui, r, w.spot);
         }
@@ -194,10 +198,12 @@ pub(crate) fn window_menu() -> Vec<Item> {
         "window.userSwatchLibrary10",
     ];
     let open = |b: &'static BuiltinLibrary| Item::Cmd(b.name, "window.swatchLibrary", json!({ "library": b.id }));
+    let patterns = PATTERN_LIBRARIES.iter().map(|b| Item::Cmd(b.name, "window.swatchLibrary", json!({ "library": b.id }))).collect();
     let mut items = vec![Item::Cmd("Default Swatches", "swatch.resetDefaults", Value::Null), Item::Sep];
     items.extend(SWATCH_LIBRARIES.iter().map(open));
     items.extend([
         Item::Sub("Gradients", GRADIENT_LIBRARIES.iter().map(open).collect()),
+        Item::Sub("Patterns", patterns),
         Item::Sep,
         Item::Sub("User Defined", SLOTS.iter().map(|id| Item::Cmd("User Library", id, Value::Null)).collect()),
         Item::Sep,

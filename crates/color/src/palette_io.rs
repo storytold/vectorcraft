@@ -189,10 +189,41 @@ fn write_css(lib: &SwatchLibrary, keep: impl Fn(&&Swatch) -> bool) -> String {
             let value = match &w.paint {
                 Paint::Solid { color, .. } => css_color(color, 1.0),
                 Paint::Gradient(g) if g.gradient.kind != GradientKind::Freeform => {
+                    // A mirrored conic turns counterclockwise, and CSS only turns clockwise: its stops
+                    // are written mirrored about the seam instead.
+                    let mirrored = g.gradient.kind == GradientKind::Conic && g.geom.is_some_and(|geom| geom.is_mirrored());
+                    let stop = |s: &crate::GradientStop| {
+                        let at = if mirrored { 1.0 - s.offset } else { s.offset };
+                        format!("{} {}%", css_color(&s.color, s.opacity), at * 100.0)
+                    };
+                    // Stops that repeat or reflect run that many times across the box.
+                    let unrolled = g.gradient.unrolled();
                     let stops: Vec<String> =
-                        g.gradient.stops.iter().map(|s| format!("{} {}%", css_color(&s.color, s.opacity), s.offset * 100.0)).collect();
+                        if mirrored { unrolled.stops.iter().rev().map(stop).collect() } else { unrolled.stops.iter().map(stop).collect() };
                     match g.gradient.kind {
                         GradientKind::Radial => format!("radial-gradient(circle, {})", stops.join(", ")),
+                        // CSS sweeps clockwise from straight up; the angle is counted counterclockwise
+                        // from the right.
+                        GradientKind::Conic => {
+                            format!("conic-gradient(from {}deg, {})", (90.0 - g.angle).rem_euclid(360.0).round(), stops.join(", "))
+                        }
+                        // CSS has no diamond gradient: four layers, each a quarter of the box with
+                        // the stops running from the center out to its corner at a diagonal angle,
+                        // make the diamond its fit gives a box of any shape: the level at a point
+                        // is its distance from the center along both axes over the box's
+                        // half-width plus half-height
+                        // (https://www.w3.org/TR/css-images-3/#linear-gradients). Turned by an angle
+                        // that is not a multiple of 90 degrees, its corners leave the box's axes,
+                        // and a circle stands in for it, as for a radial swatch.
+                        GradientKind::Diamond if (1e-9..90.0 - 1e-9).contains(&g.angle.rem_euclid(90.0)) => {
+                            format!("radial-gradient(circle, {})", stops.join(", "))
+                        }
+                        GradientKind::Diamond => {
+                            let stops = stops.join(", ");
+                            [("top left", 315), ("top right", 45), ("bottom right", 135), ("bottom left", 225)]
+                                .map(|(corner, deg)| format!("linear-gradient({deg}deg, {stops}) {corner} / 50% 50% no-repeat"))
+                                .join(", ")
+                        }
                         _ => format!("linear-gradient({}deg, {})", (90.0 - g.angle).rem_euclid(360.0).round(), stops.join(", ")),
                     }
                 }

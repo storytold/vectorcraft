@@ -89,6 +89,67 @@ fn bad_corners_and_kinds_are_errors() {
     assert_eq!(corners(&s, id), ([0.0; 4], [CornerKind::Round; 4], 4), "nothing changed");
 }
 
+/// A side count that isn't a whole number from 3 to 1000, a negative radius and an unknown key
+/// (at the top level or in one of `items`) are errors naming the key; the shapes and the undo
+/// history stay as they were. A radius of 0 and the ends of the side range still work.
+#[test]
+fn bad_sides_radii_and_keys_are_errors() {
+    let (mut s, id) = session();
+    let poly = NodeId(s.execute("shape.polygon", &json!({"cx": 200, "cy": 200, "radius": 80, "sides": 6})).unwrap()["id"].as_u64().unwrap());
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (corners(s, id), st.doc.node(poly).unwrap().clone(), st.history.undo.len())
+    };
+    let before = state(&s);
+    for (p, key) in [
+        (json!({"ids": [poly.0], "sides": 2.5}), "`sides` must be a whole number from 3 to 1000, not 2.5"),
+        (json!({"ids": [poly.0], "sides": -1}), "`sides` must be a whole number from 3 to 1000, not -1"),
+        (json!({"ids": [poly.0], "sides": 2}), "`sides` must be a whole number from 3 to 1000, not 2"),
+        (json!({"ids": [poly.0], "sides": 1001}), "`sides` must be a whole number from 3 to 1000, not 1001"),
+        (json!({"ids": [id.0, poly.0], "radius": -4}), "`radius` must be a radius of 0 or more, not -4"),
+        (json!({"items": [{"id": id.0, "corners": [0]}], "radius": -0.5}), "`radius` must be a radius of 0 or more, not -0.5"),
+        (json!({"id": id.0, "path": [[0, 0]], "radius": 5}), "unknown parameter `path`"),
+        (json!({"items": [{"id": id.0, "corner": [0]}], "radius": 5}), "unknown parameter `items[0].corner`; did you mean `items[0].corners`?"),
+    ] {
+        match s.execute("object.setLiveShape", &p) {
+            Err(EngineError::BadParams { cmd, msg }) => assert!(cmd == "object.setLiveShape" && msg.starts_with(key), "{p}: {msg}"),
+            other => panic!("{p}: {other:?}"),
+        }
+        assert_eq!(state(&s), before, "{p}");
+    }
+    run(&mut s, json!({"ids": [poly.0], "sides": 3}));
+    assert!(matches!(node_path(&s, poly).1, Some(LiveShape::Polygon { sides: 3, .. })));
+    run(&mut s, json!({"ids": [poly.0], "sides": 1000.0}));
+    assert!(matches!(node_path(&s, poly).1, Some(LiveShape::Polygon { sides: 1000, .. })));
+    run(&mut s, json!({"id": id.0, "radius": 6}));
+    run(&mut s, json!({"id": id.0, "radius": 0}));
+    assert_eq!(corners(&s, id).0, [0.0; 4]);
+}
+
+/// Saved steps play as they did before `sides` and `radius` were checked: a negative radius
+/// removes the rounding, a whole side count outside 3 to 1000 is brought into that range, and a
+/// fractional or negative side count is ignored.
+#[test]
+fn saved_steps_with_out_of_range_sides_or_radius_still_play() {
+    let (mut s, id) = session();
+    let poly = NodeId(s.execute("shape.polygon", &json!({"cx": 200, "cy": 200, "radius": 80, "sides": 6})).unwrap()["id"].as_u64().unwrap());
+    let replay = |s: &mut Session, p: Value| s.replay("object.setLiveShape", &p).unwrap_or_else(|e| panic!("{p}: {e}"));
+    run(&mut s, json!({"id": id.0, "radius": 6}));
+    replay(&mut s, json!({"id": id.0, "radius": -4}));
+    assert_eq!(corners(&s, id).0, [0.0; 4]);
+    let sides = |s: &Session| match node_path(s, poly).1 {
+        Some(LiveShape::Polygon { sides, .. }) => sides,
+        other => panic!("{other:?}"),
+    };
+    for (n, want) in [(json!(2), 3), (json!(1001), 1000), (json!(2.5), 1000), (json!(-1), 1000), (json!(5.0), 5)] {
+        replay(&mut s, json!({"ids": [poly.0], "sides": n}));
+        assert_eq!(sides(&s), want, "{n}");
+    }
+    // A direct call still refuses them.
+    assert!(s.execute("object.setLiveShape", &json!({"id": id.0, "radius": -4})).is_err());
+    assert!(s.execute("object.setLiveShape", &json!({"ids": [poly.0], "sides": 2})).is_err());
+}
+
 #[test]
 fn direct_selected_corners_round_alone_and_stay_selected() {
     let (mut s, id) = session();
@@ -484,4 +545,71 @@ fn relative_corner_rounding_keeps_fraction_on_resize() {
     assert!((radii[0] - want).abs() < 0.02, "fraction unchanged after scale: {}", radii[0]);
     let c = LiveCorners::of(n).unwrap();
     assert!((c.drawn_radius(0) / drawn - 2.0).abs() < 0.05, "drawn radius doubled with the shape");
+}
+
+/// #2898: while a corner widget is pressed or dragged, Up and Down step the corners' kind (round,
+/// inverted round, chamfer, in turn) along with the radius, as one undo step with the drag.
+#[test]
+fn arrows_while_dragging_a_corner_widget_change_the_corner_kind() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+    let (mut s, id) = session();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    let st = s.doc().unwrap();
+    let w = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, v.zoom, false, true, 180.0).expect("corner widgets show");
+    let at = w.visible().next().expect("a widget");
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let ptr = |s: &mut Session, kind: PointerKind, x: f64, y: f64| {
+        s.pointer(&PointerEvent::new(kind, x, y).with_mods(Mods::default()), v).unwrap();
+    };
+    let n = steps(&s);
+    // Press, Up twice (round → inverted round → chamfer), drag inward, release.
+    ptr(&mut s, PointerKind::Down, at.x, at.y);
+    s.tool_key(ToolKey::Up, Mods::default(), v).unwrap();
+    s.tool_key(ToolKey::Up, Mods::default(), v).unwrap();
+    ptr(&mut s, PointerKind::Drag, at.x + 8.0, at.y + 8.0);
+    ptr(&mut s, PointerKind::Up, at.x + 8.0, at.y + 8.0);
+    let (radii, kinds, _) = corners(&s, id);
+    assert_eq!(kinds, [CornerKind::Chamfer; 4], "every shown corner takes the kind");
+    assert!(radii.iter().all(|r| *r > 0.0), "and the radius: {radii:?}");
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    // A press and Down without a drag: the previous kind, the radius kept, one more step. A
+    // pointer move within the drag threshold after the press leaves the radii alone too.
+    let st = s.doc().unwrap();
+    let w = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, v.zoom, false, true, 180.0).unwrap();
+    let at = w.visible().next().unwrap();
+    ptr(&mut s, PointerKind::Down, at.x, at.y);
+    s.tool_key(ToolKey::Down, Mods::default(), v).unwrap();
+    ptr(&mut s, PointerKind::Drag, at.x + 1.0, at.y + 1.0);
+    ptr(&mut s, PointerKind::Up, at.x + 1.0, at.y + 1.0);
+    let (after, kinds, _) = corners(&s, id);
+    assert_eq!(kinds, [CornerKind::InvertedRound; 4]);
+    assert_eq!(after, radii);
+    assert_eq!(steps(&s), n + 2);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(corners(&s, id).1, [CornerKind::Chamfer; 4]);
+}
+
+/// An arrow press without a drag changes only the corners' kind: corners with different radii
+/// keep each their own (#2898 review).
+#[test]
+fn an_arrow_press_without_a_drag_keeps_mixed_radii() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+    let (mut s, id) = session();
+    run(&mut s, json!({"id": id.0, "corners": [0], "radius": 5}));
+    run(&mut s, json!({"id": id.0, "corners": [2], "radius": 15}));
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    let before = corners(&s, id).0;
+    let st = s.doc().unwrap();
+    let w = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, v.zoom, false, true, 180.0).unwrap();
+    let at = w.visible().next().unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, at.x, at.y).with_mods(Mods::default()), v).unwrap();
+    s.tool_key(ToolKey::Up, Mods::default(), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, at.x, at.y).with_mods(Mods::default()), v).unwrap();
+    let (radii, kinds, _) = corners(&s, id);
+    assert_eq!(radii, before, "each corner keeps its radius");
+    assert!(kinds.iter().all(|k| *k == CornerKind::InvertedRound), "{kinds:?}");
 }

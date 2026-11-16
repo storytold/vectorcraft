@@ -8,11 +8,11 @@
 use std::sync::Arc;
 
 use kurbo::ParamCurveNearest;
-use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind, PressureProfile};
+use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_geom::{Affine, BezPath, CubicBez, ParamCurve, PathData, PathEl, Point, Rect, SubPath, Vec2};
 
 use crate::track::{Rng, Track, normal, seed_of, tracks};
-use crate::{ArtBrush, ArtScale, CornerSource, Direction, PatternBrush, PatternFit, Scatter, Variation, tolerance};
+use crate::{ArtBrush, ArtScale, CornerSource, Direction, PatternBrush, PatternFit, PenAt, Scatter, Variation, tolerance};
 
 /// Longest mapped segment (points in document space).
 const MAX_SEG: f64 = 1.5;
@@ -103,7 +103,7 @@ fn densified(sp: &SubPath, flat_tol: f64, max_du: f64) -> Option<Vec<Point>> {
     let mut bp = BezPath::new();
     sp.to_bezpath_into(&mut bp);
     let mut pts = vec![];
-    kurbo::flatten(bp.iter(), flat_tol.max(1e-4), |e| {
+    vectorcraft_geom::flatten(bp.iter(), flat_tol.max(1e-4), |e| {
         if let PathEl::MoveTo(q) | PathEl::LineTo(q) = e {
             pts.push(q);
         }
@@ -465,17 +465,8 @@ fn art_runs(t: &Track) -> Vec<(f64, f64)> {
     bounds.windows(2).map(|w| (w[0], w[1])).collect()
 }
 
-/// The art on [s0, s1] of `t`, `cross` across where `widen` (0..=1, by arc length) is 1, and
-/// `width` the width (%) there.
-fn art_on_run(
-    t: &Track,
-    (s0, s1): (f64, f64),
-    a: &ArtBrush,
-    (art, b): (&Node, Rect),
-    cross: f64,
-    width: f64,
-    widen: &dyn Fn(f64) -> f64,
-) -> Option<Node> {
+/// The art on [s0, s1] of `t`, `cross` across where `widen` (0..=1, by arc length) is 1.
+fn art_on_run(t: &Track, (s0, s1): (f64, f64), a: &ArtBrush, (art, b): (&Node, Rect), cross: f64, widen: &dyn Fn(f64) -> f64) -> Option<Node> {
     let l = s1 - s0;
     if l <= 1e-9 {
         return None;
@@ -483,10 +474,8 @@ fn art_on_run(
     let w = b.width();
     let (along, cross) = match a.scale {
         ArtScale::Stretch => (AlongMap::linear(w, s0, s1), cross),
-        ArtScale::Proportional => {
-            let k = l / w;
-            (AlongMap::linear(w, s0, s1), k * width / 100.0)
-        }
+        // Scaled across as much as along, times the stroke weight and the width, as the other modes are.
+        ArtScale::Proportional => (AlongMap::linear(w, s0, s1), l / w * cross),
         ArtScale::BetweenGuides { start, end } => {
             let (g0, g1) = (start.clamp(0.0, 1.0) * w, end.clamp(0.0, 1.0) * w);
             let (g0, g1) = (g0.min(g1), g0.max(g1));
@@ -503,9 +492,10 @@ fn art_on_run(
     bend_widened(t, art, b, along, cross, widen)
 }
 
-/// An art brush's art along `bp`. With a width that follows the pen's pressure, the art is as
-/// wide as the pressure recorded at each point of the stroke gives (half way without a recording).
-pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, pressure: Option<&PressureProfile>) -> Vec<Node> {
+/// An art brush's art along `bp`. With a width that follows the pen (its pressure, tilt, bearing
+/// or rotation), the art is as wide as what `stroke` recorded at each point gives (half way
+/// without a recording).
+pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, stroke: &StrokeLayer) -> Vec<Node> {
     let Some((art, b)) = oriented(&a.art, a.direction, a.flip_along, a.flip_across) else { return vec![] };
     let (light, heavy) = a.width_range();
     let width = light.max(heavy);
@@ -522,12 +512,12 @@ pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, pressure: Option<&Pre
             }
             // A run past the start of a closed track wraps round to it.
             let at = if s > l { s - l } else { s };
-            let p = pressure.map_or(PressureProfile::MID, |p| p.at(at / l)).clamp(0.0, 1.0);
+            let p = a.width_mode.and_then(|m| PenAt::of(stroke, at / l).control(m)).unwrap_or(0.5);
             (light + (heavy - light) * p) / width
         };
         let runs = if a.overlap { art_runs(&t) } else { vec![(0.0, l)] };
         for run in runs {
-            if let Some(n) = art_on_run(&t, run, a, (&art, b), cross, width, &widen) {
+            if let Some(n) = art_on_run(&t, run, a, (&art, b), cross, &widen) {
                 out.push(n);
             }
         }
@@ -536,18 +526,19 @@ pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, pressure: Option<&Pre
 }
 
 /// One of a scatter brush's values for the next copy: Fixed takes the first of `(a, b)`, Random a
-/// value between them, Pressure the first at pen pressure 0 and the second at 1. Every value
-/// draws, so a copy's random values stay the same whatever the other modes.
-fn vary(rng: &mut Rng, (a, b): (f64, f64), mode: Variation, pressure: f64) -> f64 {
+/// value between them, and a mode that follows the pen the first where `pen` reads 0 for it and
+/// the second where it reads 1. Every value draws, so a copy's random values stay the same
+/// whatever the other modes.
+fn vary(rng: &mut Rng, (a, b): (f64, f64), mode: Variation, pen: PenAt) -> f64 {
     let r = rng.range(a, b);
-    match mode {
-        Variation::Fixed => a,
-        Variation::Random => r,
-        Variation::Pressure => a + (b - a) * pressure.clamp(0.0, 1.0),
+    match pen.control(mode) {
+        Some(c) => a + (b - a) * c,
+        None if mode == Variation::Random => r,
+        None => a,
     }
 }
 
-pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<&PressureProfile>, name: &str) -> Vec<Node> {
+pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, stroke: &StrokeLayer, name: &str) -> Vec<Node> {
     let Some(b) = sc.art.geometric_bounds() else { return vec![] };
     let (aw, ah) = (b.width().max(1e-3), b.height().max(1e-3));
     let mut rng = Rng::new(seed_of(bp, name));
@@ -558,8 +549,8 @@ pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<
             break;
         }
         let l = t.len();
-        // The pen pressure at arc length `at` (half way without a recorded one).
-        let pressure_at = |at: f64| pressure.map_or(PressureProfile::MID, |p| p.at(if l > 1e-9 { at / l } else { 0.0 }));
+        // What the pen recorded at arc length `at` (the values themselves without a recording).
+        let pen_at = |at: f64| PenAt::of(stroke, if l > 1e-9 { at / l } else { 0.0 });
         let mut s: Option<f64> = None;
         let mut guard = 0;
         loop {
@@ -567,8 +558,8 @@ pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<
             if guard > 20000 {
                 break;
             }
-            // Size and spacing place the next copy, so they take the pressure at the last one.
-            let p = pressure_at(s.unwrap_or(0.0));
+            // Size and spacing place the next copy, so they take the pen at the last one.
+            let p = pen_at(s.unwrap_or(0.0));
             let size = vary(&mut rng, sc.size, size_mode, p).max(1.0) / 100.0 * weight;
             let spacing = vary(&mut rng, sc.spacing, spacing_mode, p).max(1.0) / 100.0;
             let step = aw * size * spacing;
@@ -580,7 +571,7 @@ pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<
                 break;
             }
             s = Some(pos);
-            let p = pressure_at(pos);
+            let p = pen_at(pos);
             let off = vary(&mut rng, sc.scatter, scatter_mode, p) / 100.0 * ah * size;
             let rot = vary(&mut rng, sc.rotation, rotation_mode, p).to_radians();
             let (p, tg) = t.frame(pos);
@@ -878,12 +869,16 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node>
             };
             trims.push(None);
             corner_half = corner_half.max(bb.width() * k / 2.0);
-            let bis = a + b;
-            let bis = if bis.hypot() < 1e-9 { a } else { bis / bis.hypot() };
-            let xf = Affine::translate(t.verts[i].to_vec2())
-                * Affine::rotate(bis.y.atan2(bis.x))
-                * Affine::scale(k)
-                * Affine::translate(-bb.center().to_vec2());
+            // Inner and outer corner art is the corner that joins a side tile on its right to one
+            // below it, so its arms point along +x and +y (as the flips leave them). The tile is
+            // turned so that the line halving its arms lies on the line halving the sides at the
+            // corner, back along the incoming side and on along the outgoing one: at a right angle
+            // the arms meet the side tiles, and at other angles the difference is split between
+            // the two sides (#6110).
+            let arms = Vec2::new(if pb.flip_along { -1.0 } else { 1.0 }, if pb.flip_across { -1.0 } else { 1.0 });
+            let sides = b - a;
+            let angle = sides.y.atan2(sides.x) - arms.y.atan2(arms.x);
+            let xf = Affine::translate(t.verts[i].to_vec2()) * Affine::rotate(angle) * Affine::scale(k) * Affine::translate(-bb.center().to_vec2());
             let mut n = art.clone();
             n.transform(xf, true);
             out.take(Some(n));

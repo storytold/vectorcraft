@@ -271,6 +271,30 @@ fn a_file_with_type_sizes_out_of_range_opens_with_them_in_range() {
     assert!(b.width().is_finite() && b.height().is_finite(), "{b:?}");
 }
 
+/// A file whose character styles hold a Tate-chu-yoko Up/Down or Left/Right offset past
+/// `MAX_COORD` either way opens with the nearer end, and text that takes the style gets it. An
+/// offset within range stays as saved.
+#[test]
+fn a_file_with_tate_chu_yoko_offsets_out_of_range_in_a_character_style_opens_with_them_in_range() {
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 40, "y": 60, "size": 20, "text": "12"})).unwrap()["id"].as_u64().unwrap());
+    let mut d = (*s.doc().unwrap().doc).clone();
+    let attrs = json!({"tateChuYoko": true, "tcyUpDown": 1e12, "tcyLeftRight": -1e12});
+    d.char_styles.push(vectorcraft_doc::TextStyleDef { name: "Far".into(), attrs: attrs.as_object().unwrap().clone() });
+    let attrs = json!({"tcyUpDown": 5000, "tcyLeftRight": -3.5});
+    d.char_styles.push(vectorcraft_doc::TextStyleDef { name: "Near".into(), attrs: attrs.as_object().unwrap().clone() });
+    let data = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&d));
+    s.execute("document.open", &json!({"name": "tcy.vectorcraft", "dataBase64": data})).unwrap();
+    let max = vectorcraft_doc::MAX_COORD;
+    let doc = &s.doc().unwrap().doc;
+    let fixed = json!({"tateChuYoko": true, "tcyUpDown": max, "tcyLeftRight": -max});
+    assert_eq!(doc.char_styles[0].attrs, *fixed.as_object().unwrap());
+    assert_eq!(doc.char_styles[1].attrs, *json!({"tcyUpDown": 5000, "tcyLeftRight": -3.5}).as_object().unwrap());
+    s.execute("charStyle.apply", &json!({"name": "Far", "id": id.0})).unwrap();
+    let t = text(&s, id);
+    assert_eq!(t.runs.iter().map(|r| (r.style.tcy_up_down, r.style.tcy_left_right)).collect::<Vec<_>>(), [(max, -max)]);
+}
+
 /// SVG import keeps type sizes outside the Character panel's 0.1 to 1296 pt, and it gives a line
 /// aligned differently from the one before it an indent, here past the Paragraph panel's 1296 pt.
 /// A native file of the result opens with the same type.
@@ -320,4 +344,28 @@ fn scale_text_attributes_bakes_group_scale_and_undoes() {
     near(text(&s, id).runs[0].style.size, 24.0);
     s.execute("edit.undo", &json!({})).unwrap();
     near(text(&s, id).runs[0].style.size, 12.0);
+}
+
+/// Scale Text Attributes bakes a horizontal stretch into the Horizontal Scale: tracked type stays
+/// where the stretch drew it, as tracking is measured in the em the Horizontal Scale draws
+/// (`vectorcraft_text::spacing_scale`). It used to lose the stretch's share of the tracking.
+#[test]
+fn scale_text_attributes_keeps_tracked_type_where_it_was() {
+    let mut s = session();
+    let id = create(&mut s, 20.0);
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "tracking": 300})).unwrap();
+    s.execute("object.scale", &json!({"sx": 200, "sy": 100})).unwrap();
+    let pens = |s: &Session| {
+        let t = text(s, id);
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+        lay.glyphs.iter().map(|g| t.xf * (g.xf * Point::ZERO)).collect::<Vec<_>>()
+    };
+    let before = pens(&s);
+    s.execute("type.scaleTextAttributes", &json!({})).unwrap();
+    near(text(&s, id).runs[0].style.h_scale, 200.0);
+    let after = pens(&s);
+    assert_eq!(before.len(), after.len());
+    for (b, a) in before.iter().zip(&after) {
+        assert!((*a - *b).hypot() < 1e-6, "{before:?} {after:?}");
+    }
 }

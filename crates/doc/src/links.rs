@@ -46,10 +46,26 @@ impl LinkInfo {
         Self { path: path.into(), ..Self::default() }
     }
 
-    /// The file name: the path's last component, whichever system's separators it uses.
+    /// The file name: the path's last component, whichever system's separators it uses
+    /// ([`path_separators`]).
     pub fn name(&self) -> &str {
-        self.path.rsplit(['/', '\\']).next().unwrap_or(&self.path)
+        self.path.rsplit(path_separators(&self.path)).next().unwrap_or(&self.path)
     }
+
+    /// The folder the file is in: the path without its name and the separators before it.
+    pub fn folder(&self) -> &str {
+        let folder = self.path.get(..self.path.len().saturating_sub(self.name().len())).unwrap_or_default();
+        folder.trim_end_matches(path_separators(&self.path))
+    }
+}
+
+/// The characters that separate the folders of `path`. A path with a colon and no `/` or `\` is a
+/// classic Mac OS path (`Disk:Folder:file.tif`, as older documents store links), whose folders are
+/// separated by colons. Any other path is separated by `/` and `\`: its file name may hold a colon
+/// (`/Users/a/x:y.png`) and never holds a `/` or `\`.
+pub fn path_separators(path: &str) -> &'static [char] {
+    const SLASHES: &[char] = &['/', '\\'];
+    if path.contains(':') && !path.contains(SLASHES) { &[':'] } else { SLASHES }
 }
 
 impl From<&str> for LinkInfo {
@@ -164,6 +180,31 @@ impl ImageBlob {
     pub fn is_proxy(&self) -> bool {
         self.proxy.as_ref().is_some_and(|p| Arc::ptr_eq(p, &self.bytes))
     }
+
+    /// Does a colorize paint ([`crate::NodeExtras::colorize`]) show on these bytes? Not while
+    /// they are a preview whose pixels aren't grayscale, such as [`missing_placeholder`]: until
+    /// the file is relinked the image shows the preview as it is, and keeps the paint.
+    pub fn takes_colorize(&self) -> bool {
+        !self.is_proxy() || self.gray_source().is_some()
+    }
+}
+
+/// The side of [`missing_placeholder`]'s image, in pixels.
+pub const MISSING_SIDE: u32 = 64;
+
+/// What a linked image shows when an importer has no pixels for it (its file is missing or isn't
+/// in the data): a light tile, crossed out, [`MISSING_SIDE`] pixels a side, as a PNG. `None` when
+/// it can't be encoded.
+pub fn missing_placeholder() -> Option<Vec<u8>> {
+    let last = MISSING_SIDE - 1;
+    let img = image::RgbaImage::from_fn(MISSING_SIDE, MISSING_SIDE, |x, y| {
+        let edge = x == 0 || y == 0 || x == last || y == last;
+        let cross = x.abs_diff(y) <= 1 || (x + y).abs_diff(last) <= 1;
+        image::Rgba(if edge || cross { [200, 60, 60, 255] } else { [236, 236, 236, 255] })
+    });
+    let mut png = Vec::new();
+    img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+    Some(png)
 }
 
 /// `bytes` decoded and shrunk to fit [`PROXY_SIZE`] as a PNG; `None` when small enough already or
@@ -188,7 +229,8 @@ fn proxy_png(bytes: &[u8]) -> Option<Vec<u8>> {
 
 /// Decoded image `img` shrunk to fit [`PROXY_SIZE`] as a PNG.
 fn proxy_of(img: &image::DynamicImage) -> Option<Vec<u8>> {
-    let small = img.thumbnail(PROXY_SIZE, PROXY_SIZE);
+    let (w, h) = crate::resample::fit_size(img.width(), img.height(), PROXY_SIZE, PROXY_SIZE);
+    let small = crate::resample::averaged(img, w, h);
     let mut png = Vec::new();
     small.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
     Some(png)
@@ -207,14 +249,15 @@ fn walk_all<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
 
 impl Document {
     /// Visit every image object: in the layers, then in symbol definitions and pattern swatches,
-    /// opacity-mask art included.
+    /// then in [`Document::mounted_art`], opacity-mask art included.
     pub fn visit_images<'a>(&'a self, mut f: impl FnMut(&'a Node, &'a ImageObject)) {
         let roots = self
             .layers
             .iter()
             .chain(self.symbols.iter().map(|s| &s.art))
             .chain(self.graph_designs.iter().map(|g| &g.art))
-            .chain(self.patterns.iter().flat_map(|p| &p.art));
+            .chain(self.patterns.iter().flat_map(|p| &p.art))
+            .chain(self.mounted_art.iter().map(|(n, _)| n));
         for root in roots {
             walk_all(root, &mut |n| {
                 if let NodeKind::Image(im) = &n.kind {
@@ -343,7 +386,8 @@ impl Align {
 
 impl Document {
     /// Rewrite linked file locations in both raster images and placed VectorCraft documents,
-    /// including those inside symbols, patterns and opacity masks. Used to make packages portable.
+    /// including those inside symbols, patterns, opacity masks and [`Document::mounted_art`]. Used to
+    /// make packages portable.
     pub fn update_links(&mut self, mut f: impl FnMut(&mut LinkInfo)) {
         fn walk(n: &mut Arc<Node>, f: &mut dyn FnMut(&mut LinkInfo)) {
             let n = Arc::make_mut(n);
@@ -368,9 +412,73 @@ impl Document {
             .iter_mut()
             .chain(self.symbols.iter_mut().map(|s| &mut s.art))
             .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
-            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art));
+            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art))
+            .chain(self.mounted_art.iter_mut().map(|(n, _)| n));
         for root in roots {
             walk(root, &mut f);
+        }
+    }
+
+    /// [`Self::update_links`] for the links `pick` holds for only, in one pass; only the nodes on the
+    /// way to one are copied.
+    pub fn update_links_where(&mut self, pick: impl Fn(&LinkInfo) -> bool, mut f: impl FnMut(&mut LinkInfo)) {
+        fn link_of(n: &Node) -> Option<&LinkInfo> {
+            match &n.kind {
+                NodeKind::Image(image) => image.link.as_ref(),
+                NodeKind::PlacedDocument(placed) => Some(&placed.link),
+                _ => None,
+            }
+        }
+        /// `n` updated in place, a copy of it when shared; left as it is when it holds no picked link.
+        fn update(n: &mut Arc<Node>, pick: &dyn Fn(&LinkInfo) -> bool, f: &mut dyn FnMut(&mut LinkInfo)) {
+            // Each child is updated through a second handle, so an updated child is a new node and a new
+            // pointer marks a change.
+            let mask = n.extras().mask.as_ref().and_then(|m| {
+                let mut art = Arc::clone(&m.art);
+                update(&mut art, pick, f);
+                (!Arc::ptr_eq(&art, &m.art)).then_some(art)
+            });
+            let mut children = vec![];
+            for (i, c) in n.children().into_iter().flatten().enumerate() {
+                let mut new = Arc::clone(c);
+                update(&mut new, pick, f);
+                if !Arc::ptr_eq(&new, c) {
+                    children.push((i, new));
+                }
+            }
+            let own = link_of(n).is_some_and(pick);
+            if !own && mask.is_none() && children.is_empty() {
+                return;
+            }
+            let n = Arc::make_mut(n);
+            let link = match &mut n.kind {
+                NodeKind::Image(image) => image.link.as_mut(),
+                NodeKind::PlacedDocument(placed) => Some(&mut placed.link),
+                _ => None,
+            };
+            if let Some(link) = link.filter(|_| own) {
+                f(link);
+            }
+            if let (Some(art), Some(m)) = (mask, n.extras_if_any().and_then(|e| e.mask.as_mut())) {
+                m.art = art;
+            }
+            if let Some(slots) = n.children_mut() {
+                for (i, c) in children {
+                    if let Some(slot) = slots.get_mut(i) {
+                        *slot = c;
+                    }
+                }
+            }
+        }
+        let roots = self
+            .layers
+            .iter_mut()
+            .chain(self.symbols.iter_mut().map(|s| &mut s.art))
+            .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
+            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art))
+            .chain(self.mounted_art.iter_mut().map(|(n, _)| n));
+        for root in roots {
+            update(root, &pick, &mut f);
         }
     }
 
@@ -445,6 +553,46 @@ mod tests {
         .unwrap()
     }
 
+    /// `update_links_where` changes only the picked links, in a copy of the nodes on the way to them;
+    /// the other nodes stay shared with the document it was cloned from.
+    #[test]
+    fn update_links_where_copies_only_the_nodes_it_changes() {
+        let mut d = Document::new(10.0, 10.0);
+        image(&mut d, "a", Some(LinkInfo::new("/art/a.png")));
+        image(&mut d, "b", Some(LinkInfo::new("/art/b.png")));
+        image(&mut d, "c", None);
+        let mut copy = d.clone();
+        let mut calls = 0;
+        copy.update_links_where(
+            |l| l.path == "/art/a.png",
+            |l| {
+                calls += 1;
+                l.relative = Some("art/a.png".into());
+            },
+        );
+        assert_eq!(calls, 1);
+        let node = |d: &Document, key: &str| {
+            d.layers[0].children().unwrap().iter().find(|n| matches!(&n.kind, NodeKind::Image(im) if im.key == key)).unwrap().clone()
+        };
+        let relative = |n: &Node| match &n.kind {
+            NodeKind::Image(im) => im.link.as_ref().and_then(|l| l.relative.clone()),
+            _ => None,
+        };
+        assert_eq!((relative(&node(&copy, "a")), relative(&node(&d, "a"))), (Some("art/a.png".into()), None));
+        assert!(Arc::ptr_eq(&node(&copy, "b"), &node(&d, "b")) && Arc::ptr_eq(&node(&copy, "c"), &node(&d, "c")));
+        assert!(!Arc::ptr_eq(&copy.layers[0], &d.layers[0]));
+        // Nothing picked: nothing is copied.
+        let mut same = d.clone();
+        same.update_links_where(|_| false, |_| {});
+        assert!(Arc::ptr_eq(&same.layers[0], &d.layers[0]));
+    }
+
+    #[test]
+    fn the_placeholder_is_a_png() {
+        let png = missing_placeholder().unwrap();
+        assert_eq!(image::load_from_memory(&png).unwrap().width(), MISSING_SIDE);
+    }
+
     #[test]
     fn a_path_string_from_older_files_reads_as_a_link() {
         let old: ImageObject = serde_json::from_str(r#"{"key":"k","width":2,"height":1,"xf":[1,0,0,1,0,0],"link":"C:\\art\\photo.png"}"#).unwrap();
@@ -458,6 +606,35 @@ mod tests {
         // Written as an object, with only what is known.
         let v = serde_json::to_value(&new).unwrap();
         assert_eq!(v["link"], serde_json::json!({"path": "/a/b.png", "size": 9, "page": 2}));
+    }
+
+    /// A classic Mac OS path is named by its last colon-separated component, and its folder is
+    /// what comes before; other paths keep their `/` and `\` separators, and a name never holds
+    /// one.
+    #[test]
+    fn a_classic_mac_path_is_named_by_its_last_component() {
+        let parts = |path: &str| {
+            let l = LinkInfo::new(path);
+            (l.name().to_string(), l.folder().to_string())
+        };
+        assert_eq!(parts("Macintosh HD:Images:photo.tif"), ("photo.tif".into(), "Macintosh HD:Images".into()));
+        assert_eq!(parts("Disk:photo.tif"), ("photo.tif".into(), "Disk".into()));
+        assert_eq!(parts("Disk:Art/2024:a\\b.tif"), ("b.tif".into(), "Disk:Art/2024:a".into()));
+        assert_eq!(parts("Disk:Images:../other.png"), ("other.png".into(), "Disk:Images:..".into()), "a name reaches no other folder");
+        assert_eq!(parts("C:\\art\\photo.png"), ("photo.png".into(), "C:\\art".into()));
+        assert_eq!(parts("c:/art/photo.png"), ("photo.png".into(), "c:/art".into()));
+        assert_eq!(parts("/Users/a/x:y.png"), ("x:y.png".into(), "/Users/a".into()), "a POSIX name may hold a colon");
+        assert_eq!(parts("./art/x:y.png"), ("x:y.png".into(), "./art".into()));
+        assert_eq!(parts("..\\art\\x:y.png"), ("x:y.png".into(), "..\\art".into()));
+        assert_eq!(parts("\\\\?\\C:\\art\\photo.png"), ("photo.png".into(), "\\\\?\\C:\\art".into()));
+        assert_eq!(parts("file:///art/photo.png"), ("photo.png".into(), "file:///art".into()));
+        assert_eq!(parts("file:/art/photo.png"), ("photo.png".into(), "file:/art".into()));
+        assert_eq!(parts("assets/icon:dark.png"), ("icon:dark.png".into(), "assets".into()), "a relative path with slashes");
+        assert_eq!(parts(":Images:photo.tif"), ("photo.tif".into(), ":Images".into()), "a classic path relative to its folder");
+        assert_eq!(parts("/Users/a//photo.png").1, "/Users/a", "repeated separators");
+        assert_eq!(parts("photo.png"), ("photo.png".into(), String::new()));
+        assert_eq!(parts("C:photo.png"), ("photo.png".into(), "C".into()), "a drive-relative path has the same shape");
+        assert_eq!(LinkInfo::new("Macintosh HD:Images:photo.tif").path, "Macintosh HD:Images:photo.tif", "the stored path is kept");
     }
 
     #[test]
@@ -555,5 +732,20 @@ mod tests {
         image(&mut d, "b", None);
         image(&mut d, "c", None);
         assert_eq!(d.linked_only_images().into_iter().collect::<Vec<_>>(), ["a"]);
+    }
+
+    /// The preview of an image with clear pixels keeps the color of its opaque ones: the clear
+    /// black beside them does not darken them, whichever way the preview is made.
+    #[test]
+    fn a_preview_keeps_the_color_beside_clear_pixels() {
+        let mut full = vec![];
+        image::RgbaImage::from_fn(1024, 4, |x, _| if x % 2 == 0 { image::Rgba([200, 30, 30, 255]) } else { image::Rgba([0, 0, 0, 0]) })
+            .write_to(&mut Cursor::new(&mut full), image::ImageFormat::Png)
+            .unwrap();
+        for blob in [ImageBlob::png(full.clone()).with_proxy(), ImageBlob::png(full.clone()).checked_with_proxy(true).unwrap()] {
+            let p = image::load_from_memory(blob.proxy.as_ref().unwrap()).unwrap().into_rgba8();
+            assert_eq!(p.dimensions(), (PROXY_SIZE, 1));
+            assert!(p.pixels().all(|q| q.0 == [200, 30, 30, 128]), "{:?}", p.get_pixel(0, 0));
+        }
     }
 }

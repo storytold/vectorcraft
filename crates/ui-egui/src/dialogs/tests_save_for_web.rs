@@ -318,6 +318,21 @@ fn the_web_downloads_and_has_no_browser_preview() {
 }
 
 #[test]
+fn preview_in_browser_stays_in_its_folder_and_is_the_persons_to_open() {
+    for (title, name) in
+        [("Poster", "Poster"), ("../..", "Untitled"), ("..", "Untitled"), ("a/..", "Untitled"), ("..\\x", "Untitled"), (" ", "Untitled")]
+    {
+        assert_eq!(save_for_web::preview_name(title), name, "{title}");
+    }
+    let dir = vectorcraft_testkit::temp_dir("sfw-browser-automation");
+    let (mut app, log) = app(&dir, false);
+    app.ui.answering_control = true;
+    assert!(app.run("file.saveForWeb.browser", json!({"format": "jpg"})).unwrap_err().contains("opens another app"));
+    app.ui.answering_control = false;
+    assert!(!log.borrow().iter().any(|l| l.starts_with("open ")), "{:?}", log.borrow());
+}
+
+#[test]
 fn preview_in_browser_opens_the_page() {
     let dir = vectorcraft_testkit::temp_dir("sfw-browser");
     let (mut app, log) = app(&dir, false);
@@ -572,7 +587,7 @@ fn a_browser_preview_skips_a_folder_an_earlier_process_left() {
 
 #[test]
 fn saving_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
-    const NOTE: &str = "with 1 note(s): an image couldn't be decoded and is missing from the picture";
+    const NOTE: &str = "with 1 note: an image couldn't be decoded and is missing from the picture";
     // A PNG whose header reads but whose pixel data is cut short: the renderer draws nothing for it.
     let mut png = Vec::new();
     image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))

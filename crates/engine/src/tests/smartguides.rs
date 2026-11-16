@@ -89,6 +89,37 @@ fn a_pen_anchor_lines_up_with_another_objects_centre() {
     assert!((pts[2] - Point::new(100.0, 381.0)).hypot() < 1e-9, "{pts:?}");
 }
 
+/// View › Pixel Preview turns Smart Guides off in the tools: a moved square no longer lines up with
+/// the other square's top and shows no guide, and a Rectangle tool corner no longer lands on its
+/// anchor.
+#[test]
+fn pixel_preview_turns_smart_guides_off() {
+    for pixel in [false, true] {
+        let view = ViewInfo { pixel_preview: pixel, ..ViewInfo::default() };
+        let mut s = session();
+        let b = s.execute("shape.rectangle", &json!({"x": 400, "y": 300, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        s.select_tool("selection", view).unwrap();
+        s.execute("select.set", &json!({"ids": [b]})).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, 425.0, 325.0), view).unwrap();
+        for y in [300.0, 250.0, 200.0, 150.0, 128.0] {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, 425.0, y), view).unwrap();
+        }
+        let guides = s.overlays(view).into_iter().filter(|o| matches!(o, Overlay::Line { .. } | Overlay::Label { .. })).count();
+        s.pointer(&PointerEvent::new(PointerKind::Up, 425.0, 128.0), view).unwrap();
+        let top = s.doc().unwrap().doc.node(NodeId(b)).unwrap().geometric_bounds().unwrap().y0;
+        assert_eq!((top, guides > 0), if pixel { (103.0, false) } else { (100.0, true) }, "Pixel Preview {pixel}");
+
+        s.select_tool("rectangle", view).unwrap();
+        for (kind, x, y) in
+            [(PointerKind::Down, 302.0, 297.0), (PointerKind::Drag, 250.0, 250.0), (PointerKind::Drag, 202.0, 203.0), (PointerKind::Up, 202.0, 203.0)]
+        {
+            s.pointer(&PointerEvent::new(kind, x, y), view).unwrap();
+        }
+        let r = made(&s);
+        assert_eq!((r.x0, r.y0), if pixel { (202.0, 203.0) } else { (200.0, 200.0) }, "Pixel Preview {pixel}");
+    }
+}
+
 /// Preferences › Smart Guides › Construction Guides: on (the default), a Pen anchor near the
 /// 45° guide through the last one lands on it; off, it stays where it was clicked.
 #[test]

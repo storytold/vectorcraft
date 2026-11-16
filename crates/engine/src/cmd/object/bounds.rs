@@ -59,24 +59,31 @@ fn bounds_transform(s: &Session, p: &Value, ids: Vec<NodeId>, least: f64, anchor
     let st = s.doc()?;
     check_switches(p, &TRANSFORM_SWITCHES, "object.setBounds")?;
     check_switches(p, &["proportional"], "object.setBounds")?;
+    let how = s.bounds_measure();
     if anchors
         && transforms_objects(p)
         && !bool_or(p, "copy", false)
-        && let Some(b) = effects::preview::anchor_bounds(&st.selection, &st.doc, s.prefs.use_preview_bounds)
+        && let Some(b) = effects::preview::anchor_bounds_with(&st.selection, &st.doc, how)
     {
         return Ok(Bounds::Anchors(ids, b));
     }
     let d = &s.doc()?.doc;
     // Sizes are measured square to the bounding box, which a rotation turns with the objects:
-    // the math below runs in its frame.
-    let frame = d.oriented_bounds(&ids, false).ok_or_else(|| EngineError::Other("no bounds".into()))?;
+    // the math below runs in its frame. With Measure Type by Glyph Bounds, point type is measured
+    // by its glyphs' ink, which a transform of the type moves and scales with it.
+    let geometric = effects::preview::Measure { preview: false, ..how };
+    let frame = effects::preview::oriented_bounds_with(d, &ids, geometric).ok_or_else(|| EngineError::Other("no bounds".into()))?;
     let g = frame.rect;
+    let symbols = d.symbol_boxes();
+    let by_glyphs = how.glyphs && ids.iter().filter_map(|id| d.node(*id)).any(|n| effects::preview::by_glyphs(&symbols, n, how));
     // With Use Preview Bounds the values measure the visual box as drawn, whose margins around the
     // geometric box (left, top, right, bottom) scale with the strokes or stay. The margins of
     // `vs`, the visual box without the strokes in symbols' art, scale; those strokes keep their
-    // weight when an instance scales, so the rest of the margins stay.
+    // weight when an instance scales, so the rest of the margins stay. Type measured by its glyphs
+    // is measured as drawn after each scale tried instead (below).
     let (v, vs) = if s.prefs.use_preview_bounds {
-        (effects::preview::oriented_bounds(d, &ids, true).map_or(g, |b| b.rect), scaling_box(d, &ids, &frame).unwrap_or(g))
+        let v = effects::preview::oriented_bounds_with(d, &ids, how).map_or(g, |b| b.rect);
+        (v, if by_glyphs { v } else { scaling_box(d, &ids, &frame).unwrap_or(g) })
     } else {
         (g, g)
     };
@@ -125,22 +132,31 @@ fn bounds_transform(s: &Session, p: &Value, ids: Vec<NodeId>, least: f64, anchor
     // The scales and the point above can miss the size or the reference point when the margins of
     // the objects differ, the members of groups and the objects in symbols' art included, and with
     // strokes that scale, when the sizes are out of proportion. The objects are then measured one
-    // by one ([`Spans::measure`]), and the scales solved for. Objects with geometry effects are
-    // measured as drawn after each scale tried instead ([`refit_drawn`]).
-    let symbols = d.symbol_boxes();
-    let drawn = || ids.iter().filter_map(|id| d.node(*id)).any(|n| effects::preview::draws_geometry(&symbols, n));
+    // by one ([`Spans::measure`]), and the scales solved for. Objects with geometry effects,
+    // objects with a stroke that stops at the corners of a segment at a slant (butt caps, bevel and
+    // miter joins), whose margins change with the segment's direction, and type measured by its
+    // glyphs, are measured as drawn after each scale tried instead ([`refit_drawn`]).
+    let to_local = frame.to_doc().inverse();
+    let drawn = || {
+        by_glyphs
+            || ids
+                .iter()
+                .filter_map(|id| d.node(*id))
+                .any(|n| effects::preview::draws_geometry(&symbols, n) || n.has_slanted_stroke_corners(&symbols, to_local))
+    };
+    // Without Use Preview Bounds the box has no margins (`v`, `vs` and `g` are one box, glyph ink
+    // included), so the scales above are exact and nothing is refitted.
     let solved = if !(s.prefs.use_preview_bounds && w >= 0.0 && h >= 0.0) {
         None
     } else if transforms_objects(p) && !bool_or(p, "typeAreas", false) && drawn() {
         let options = scaling_options(s, p);
-        let to_local = frame.to_doc().inverse();
         let measure = |sx: f64, sy: f64| {
             let xf = frame.conjugate(about(rp, Affine::scale_non_uniform(sx, sy)));
             let sc = if Scaling::factor(xf).is_some() { options } else { Scaling::default() };
             ids.iter().filter_map(|id| d.node(*id)).fold(None, |acc, n| {
                 let mut n = n.clone();
                 n.transform(xf, sc);
-                vectorcraft_geom::union_opt(acc, effects::preview::bounds_in(&symbols, &n, to_local))
+                vectorcraft_geom::union_opt(acc, effects::preview::bounds_in_with(&symbols, &n, to_local, how))
             })
         };
         // The scales above keep the effects' reach as a margin that stays, and give 0 for a size

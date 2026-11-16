@@ -14,7 +14,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, MaskEdit, Node, NodeId, NodeKind, Selection};
 
-use super::{CommandSpec, EngineError, Result, Session, bad, cmd, has_doc, id_param};
+use super::{CommandSpec, EngineError, Result, Session, bad, cmd, has_doc, object_param, switch_or};
 
 /// Name of the temporary mask-editing layer.
 pub const MASK_EDIT_LAYER: &str = "Opacity Mask Editing";
@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Window", "Transparency"],
             None,
             "{id?} edit the mask art of `id` (default: the first selected object with a mask) in place, as clicking the mask thumbnail in the Transparency panel does; refused in isolation mode and in pattern editing mode → {layer}",
-            can_edit_mask,
+            can_enter,
             enter
         ),
         cmd!(
@@ -79,6 +79,13 @@ pub(crate) fn can_edit_mask(s: &Session) -> std::result::Result<(), String> {
     mask_editing_refused(st).map_or(Ok(()), |why| Err(why.into()))
 }
 
+/// Edit Opacity Mask: mask editing can be entered ([`can_edit_mask`]), and outside it no object of a
+/// dynamic symbol instance's art is selected, since its instance's mask is not edited from it.
+fn can_enter(s: &Session) -> std::result::Result<(), String> {
+    can_edit_mask(s)?;
+    if s.active().is_some_and(|st| st.doc.mask_edit.is_some()) { Ok(()) } else { super::edit::no_symbol_part(s) }
+}
+
 /// A document is open and no opacity mask is being edited: isolation mode and pattern editing mode
 /// are not entered while an opacity mask is edited.
 pub(crate) fn outside_mask_editing(s: &Session) -> std::result::Result<(), String> {
@@ -117,12 +124,17 @@ fn enter(s: &mut Session, p: &Value) -> Result<Value> {
     if st.doc.mask_edit.is_some() {
         return Err(bad(C, "already editing an opacity mask"));
     }
-    let id = id_param(p, "id").or_else(|| first_masked(st)).ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
+    let given = object_param(p, "id", C)?;
+    if given.is_none() {
+        super::edit::refuse_symbol_part(s)?;
+    }
+    let id = given.or_else(|| first_masked(st)).ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
     let layer = start(s, id)?;
     Ok(json!({ "layer": layer.0 }))
 }
 
-/// The first selected object with an opacity mask.
+/// The first selected object with an opacity mask. Callers refuse first while an object of a
+/// dynamic symbol instance's art is selected ([`super::edit::refuse_symbol_part`]).
 fn first_masked(st: &crate::DocState) -> Option<NodeId> {
     st.selection.subjects().iter().copied().find(|i| st.doc.node(*i).is_some_and(|n| n.extras().mask.is_some()))
 }
@@ -136,15 +148,19 @@ fn start(s: &mut Session, id: NodeId) -> Result<NodeId> {
 
 fn view_mask(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "transparency.viewOpacityMask";
+    let given = object_param(p, "id", C)?;
     let st = s.doc()?;
     let editing = st.doc.mask_edit.map(|m| m.object);
-    if !p.get("on").and_then(Value::as_bool).unwrap_or(st.shown_mask().is_none()) {
+    if !switch_or(p, "on", st.shown_mask().is_none(), C)? {
         let st = s.doc_mut()?;
         let id = st.mask_view.take();
         st.revision += 1;
         return Ok(json!({ "on": false, "id": id.map(|i| i.0) }));
     }
-    let id = id_param(p, "id").or(editing).or_else(|| first_masked(st)).ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
+    if given.is_none() && editing.is_none() {
+        super::edit::refuse_symbol_part(s)?;
+    }
+    let id = given.or(editing).or_else(|| first_masked(st)).ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
     match editing {
         Some(e) if e != id => return Err(bad(C, "already editing another object's opacity mask")),
         Some(_) => {}
@@ -243,10 +259,12 @@ pub(crate) fn follow_history(st: &mut crate::DocState, was: Option<NodeId>) {
 /// mode when the object or the layer is gone (e.g. deleted).
 pub(crate) fn sync(d: &mut Document) {
     let Some(me) = d.mask_edit else { return };
-    let art: Option<Vec<Arc<Node>>> = d.node(me.layer).and_then(|l| l.children().cloned());
+    // The layer's art: ruler guides on it are not part of the mask.
+    let art: Option<Vec<Arc<Node>>> =
+        d.node(me.layer).and_then(|l| l.children()).map(|ch| ch.iter().filter(|c| !c.is_ruler_guide()).cloned().collect());
     let (Some(art), true) = (art, d.node(me.object).is_some_and(|n| n.extras().mask.is_some())) else {
         d.mask_edit = None;
-        let _ = d.remove(me.layer);
+        let _ = d.remove_edit_layer(me.layer);
         return;
     };
     let new_art = match art.as_slice() {

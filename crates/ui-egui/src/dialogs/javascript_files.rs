@@ -6,8 +6,12 @@
 //! linked file. Add and Remove act at once. The dialog has only Close.
 //!
 //! Fields: `file` (the path or URL to link), `selected` (a linked file).
+//!
+//! In a frame automation drives with read roots in force, the list names a file outside them by
+//! its file name alone, as `svgInteractivity.info` does; `selected` keeps the file as linked.
 
 use serde_json::{Value, json};
+use vectorcraft_engine::cmd::links::shown_script;
 
 use super::DialogSpec;
 use crate::picks::PickRequest;
@@ -63,18 +67,36 @@ enum Action {
     Remove,
 }
 
+/// The active document's linked files, each as it is linked and as the list shows it
+/// ([`shown_script`]).
+fn listed(app: &VectorcraftApp) -> Vec<(String, String)> {
+    app.session.active().map_or_else(Vec::new, |st| st.doc.svg_scripts.iter().map(|f| (f.clone(), shown_script(st, f).into_owned())).collect())
+}
+
+/// The row of `files` ([`listed`]) that `selected` names: the one row linked or shown as it. A
+/// click selects a file as it is linked; a request may also give it as the list shows it. A name
+/// that fits several rows selects none, as `svgInteractivity.removeFile` refuses it.
+fn selected_row(files: &[(String, String)], selected: &str) -> Option<usize> {
+    let mut rows = files.iter().enumerate().filter(|(_, (linked, shown))| linked == selected || shown == selected);
+    match (rows.next(), rows.next()) {
+        (Some((i, _)), None) => Some(i),
+        _ => None,
+    }
+}
+
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let files: Vec<String> = app.session.active().map(|st| st.doc.svg_scripts.clone()).unwrap_or_default();
+    let files = listed(app);
     let selected = d.str("selected");
+    let row = selected_row(&files, &selected);
     let mut act = None;
     widgets::list_box(ui, |ui| {
         egui::ScrollArea::vertical().id_salt("javascript-files").min_scrolled_height(140.0).max_height(140.0).show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.set_min_height(140.0);
             // Paths and URLs are data: shown as they are.
-            for f in &files {
-                if ui.selectable_label(*f == selected, f.as_str()).clicked() {
-                    act = Some(Action::Select(f.clone()));
+            for (i, (linked, shown)) in files.iter().enumerate() {
+                if ui.selectable_label(row == Some(i), shown.as_str()).clicked() {
+                    act = Some(Action::Select(linked.clone()));
                 }
             }
         });
@@ -94,7 +116,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         if ui.add_enabled_ui(!d.str("file").trim().is_empty(), |ui| widgets::flat_button(ui, tl!("Add"), 64.0)).inner.clicked() {
             act = Some(Action::Add);
         }
-        if ui.add_enabled_ui(files.contains(&selected), |ui| widgets::flat_button(ui, tl!("Remove"), 64.0)).inner.clicked() {
+        if ui.add_enabled_ui(row.is_some(), |ui| widgets::flat_button(ui, tl!("Remove"), 64.0)).inner.clicked() {
             act = Some(Action::Remove);
         }
     });
@@ -162,6 +184,39 @@ mod tests {
         d.fields.insert("file".into(), json!("https://example.com/b.js"));
         let texts = frame(&mut app, &mut d);
         assert!(texts.iter().any(|t| t == "https://example.com/b.js"), "the field shows `file`: {texts:?}");
+    }
+
+    /// In a frame drawn with read roots in force, the list names a linked file outside them by its
+    /// file name alone, and that name unlinks it; the person sees the whole path.
+    #[test]
+    fn automation_javascript_files_dialog_hides_outside_root_paths() {
+        let base = std::env::temp_dir().join(format!("vc-js-dialog-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("in")).unwrap();
+        let outside = base.join("outside").join("menu.js").to_string_lossy().into_owned();
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("svgInteractivity.addFile", &json!({ "file": outside })).unwrap();
+        let mut d = Dialog::new(KIND, json!({ "file": "", "selected": "" }));
+        let texts = frame(&mut app, &mut d);
+        assert!(texts.contains(&outside), "{texts:?}");
+        let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&base.join("in")], &[]).unwrap();
+        let texts = vectorcraft_engine::file_access::confine(roots.as_ref(), || frame(&mut app, &mut d));
+        assert!(texts.iter().any(|t| t == "menu.js") && !texts.iter().any(|t| t.contains("vc-js-dialog")), "{texts:?}");
+        // A row keeps the file as linked, so a click selects it by its whole path, which stays
+        // selected in the person's list; a name a request gives selects it too.
+        let rows = vectorcraft_engine::file_access::confine(roots.as_ref(), || listed(&app));
+        assert_eq!(rows, [(outside.clone(), "menu.js".to_string())]);
+        assert_eq!((selected_row(&rows, &outside), selected_row(&rows, "menu.js")), (Some(0), Some(0)));
+        // A name two rows show selects neither.
+        let twins = [rows[0].clone(), ("/elsewhere/menu.js".to_string(), "menu.js".to_string())];
+        assert_eq!((selected_row(&twins, "menu.js"), selected_row(&twins, "/elsewhere/menu.js")), (None, Some(1)));
+        assert_eq!(listed(&app), [(outside.clone(), outside.clone())], "the person's");
+        // Remove sends the selected name.
+        let removed = vectorcraft_engine::file_access::confine(roots.as_ref(), || app.run("svgInteractivity.removeFile", json!({"file": "menu.js"})));
+        assert!(removed.is_ok(), "{removed:?}");
+        assert!(app.session.active().is_some_and(|st| st.doc.svg_scripts.is_empty()));
+        let _ = std::fs::remove_dir_all(base);
     }
 
     /// Choose… puts the picked file in File or URL as a `file:///` URL, with no `\` and with

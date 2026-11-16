@@ -20,12 +20,12 @@ pub(super) const MASK_THUMB: &str = "tr-mask-thumb";
 
 /// The panel's values ([`vectorcraft_engine::Session::transparency_info`]) and its first target
 /// (the selection, or the object whose mask is being edited), recomputed only when the document
-/// or the selection changes.
+/// or the selection changes, or other gradient mesh points are picked.
 fn state(app: &VectorcraftApp, ctx: &egui::Context) -> (TransparencyInfo, Option<Node>) {
-    type Key = (u64, u64, usize, Option<NodeId>, Option<NodeId>);
+    type Key = (u64, u64, usize, Option<NodeId>, Option<NodeId>, Option<Vec<(NodeId, Vec<usize>)>>);
     let Some(st) = app.session.active() else { return Default::default() };
     let sel = &st.selection.objects;
-    let key: Key = (st.uid, st.revision, sel.len(), sel.first().copied(), sel.last().copied());
+    let key: Key = (st.uid, st.revision, sel.len(), sel.first().copied(), sel.last().copied(), app.session.mesh_points_picked());
     let id = egui::Id::unique("tr-state");
     if let Some((k, v)) = ctx.data(|d| d.get_temp::<(Key, (TransparencyInfo, Option<Node>))>(id))
         && k == key
@@ -39,6 +39,7 @@ fn state(app: &VectorcraftApp, ctx: &egui::Context) -> (TransparencyInfo, Option
     v
 }
 
+/// The Transparency panel: blend mode and opacity of the selection, or of the Appearance panel's active fill/stroke (whose object-only controls are greyed out), the opacity mask and the knockout options.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     // While editing a mask the panel shows the masked object (the selection is its mask art).
@@ -50,6 +51,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // panel then shows the masked object), else of the targets, blank where they differ; with no
     // target, the defaults for new art.
     let item = editing.is_none().then(|| app.session.appearance_item()).flatten().and_then(|_| current_transparency(app));
+    // A fill/stroke's transparency is only its opacity and blend: what applies to whole objects
+    // (the opacity mask, isolation, knockout) is greyed out meanwhile.
+    let object = editing.is_some() || app.session.appearance_item().is_none();
     let (op, blend) = match item {
         Some((o, b)) => (Some(o), Some(b)),
         None if has => (info.opacity.map(|o| (o / 100.0) as f32), info.blend),
@@ -67,100 +71,104 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let hide_thumbs: bool = pstate(ui.ctx(), "tr-hide-thumbs");
     let mask = n.as_ref().and_then(|n| n.extras().mask.as_deref());
     let (new_clip, new_invert) = app.session.new_mask_defaults();
-    ui.horizontal(|ui| {
-        if !hide_thumbs {
-            let (r, oresp) = ui.allocate_exact_size(vec2(60.0, 50.0), Sense::click());
-            ui.painter().rect_filled(r, 0.0, egui::Color32::WHITE);
-            // The thumbnail being edited is outlined (object normally, the mask while editing it).
-            let (obj_w, mask_w) = if editing.is_some() { (0.5, 1.5) } else { (1.5, 1.0) };
-            ui.painter().rect_stroke(r, 0.0, Stroke::new(obj_w, t.border), StrokeKind::Outside);
-            if editing.is_some() && oresp.on_hover_text(tl!("Stop editing the opacity mask")).clicked() {
-                app.run("transparency.stopEditingOpacityMask", json!({})).ok();
-            }
-            if let Some(n) = &n {
-                let mut bare = n.clone();
-                bare.extras_mut().mask = None;
-                if !node_thumb(app, ui, "tr-obj", &bare, r.shrink(3.0), None) {
-                    let (f, s) = current_paints(app);
-                    let inner = r.shrink2(vec2(6.0, 10.0));
-                    widgets::paint_chip(ui, inner, &f);
-                    if let Some(c) = s.color()
-                        && !matches!(s, Paint::None)
-                    {
-                        ui.painter().rect_stroke(inner, 0.0, Stroke::new(1.0, super::c32(&c)), StrokeKind::Middle);
-                    }
+    ui.add_enabled_ui(object, |ui| {
+        ui.horizontal(|ui| {
+            if !hide_thumbs {
+                let (r, oresp) = ui.allocate_exact_size(vec2(60.0, 50.0), Sense::click());
+                ui.painter().rect_filled(r, 0.0, egui::Color32::WHITE);
+                // The thumbnail being edited is outlined (object normally, the mask while editing it).
+                let (obj_w, mask_w) = if editing.is_some() { (0.5, 1.5) } else { (1.5, 1.0) };
+                ui.painter().rect_stroke(r, 0.0, Stroke::new(obj_w, t.border), StrokeKind::Outside);
+                if editing.is_some() && oresp.on_hover_text(tl!("Stop editing the opacity mask")).clicked() {
+                    app.run("transparency.stopEditingOpacityMask", json!({})).ok();
                 }
-            }
-            match (mask, n.as_ref().map(|n| n.id)) {
-                (Some(m), Some(id)) => {
-                    // Link toggle between the object and its mask.
-                    let (lr, lresp) = ui.allocate_exact_size(vec2(14.0, 50.0), Sense::click());
-                    icons::paint(
-                        ui,
-                        if m.linked { "link" } else { "link-2-off" },
-                        egui::Rect::from_center_size(lr.center(), vec2(12.0, 12.0)),
-                        t.icon,
-                    );
-                    if lresp.on_hover_text(if m.linked { tl!("Unlink the mask") } else { tl!("Link the mask") }).clicked() {
-                        app.run("transparency.setOpacityMask", json!({"linked": !m.linked})).ok();
-                    }
-                    let (mr, _) = ui.allocate_exact_size(vec2(50.0, 50.0), Sense::hover());
-                    let mresp = ui.interact(mr, egui::Id::unique(MASK_THUMB), Sense::click());
-                    let bg = if m.clip != m.invert { [0, 0, 0, 255] } else { [255, 255, 255, 255] };
-                    ui.painter().rect_filled(mr, 0.0, egui::Color32::from_rgb(bg[0], bg[1], bg[2]));
-                    node_thumb(app, ui, "tr-mask", &m.art, mr.shrink(2.0), Some(bg));
-                    // Viewing the mask alone (Alt-click) highlights its thumbnail.
-                    let viewing = app.session.active().is_some_and(|d| d.shown_mask().is_some());
-                    let border = match (viewing, editing.is_some()) {
-                        (true, _) => Stroke::new(2.0, t.accent),
-                        (false, true) => Stroke::new(mask_w, t.border),
-                        (false, false) => Stroke::new(mask_w, t.input_border),
-                    };
-                    ui.painter().rect_stroke(mr, 0.0, border, StrokeKind::Inside);
-                    if m.disabled {
-                        let red = Stroke::new(2.0, egui::Color32::from_rgb(220, 40, 40));
-                        ui.painter().line_segment([mr.left_top(), mr.right_bottom()], red);
-                        ui.painter().line_segment([mr.right_top(), mr.left_bottom()], red);
-                    }
-                    let (shift, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.alt));
-                    let tip = tl!("Click to edit the mask; Alt-click to view only the mask; Shift-click to disable or enable it");
-                    if mresp.on_hover_text(tip).clicked() {
-                        if shift {
-                            app.run(if m.disabled { "transparency.enableOpacityMask" } else { "transparency.disableOpacityMask" }, json!({})).ok();
-                        } else if alt {
-                            app.run("transparency.viewOpacityMask", json!({"id": id.0})).ok();
-                        } else if editing.is_none() {
-                            app.run("transparency.editOpacityMask", json!({"id": id.0})).ok();
+                if let Some(n) = &n {
+                    let mut bare = n.clone();
+                    bare.extras_mut().mask = None;
+                    if !node_thumb(app, ui, "tr-obj", &bare, r.shrink(3.0), None) {
+                        let (f, s) = current_paints(app);
+                        let inner = r.shrink2(vec2(6.0, 10.0));
+                        widgets::paint_chip(ui, inner, &f);
+                        if let Some(c) = s.color()
+                            && !matches!(s, Paint::None)
+                        {
+                            ui.painter().rect_stroke(inner, 0.0, Stroke::new(1.0, super::c32(&c)), StrokeKind::Middle);
                         }
                     }
                 }
-                _ => {
-                    let (m, _) = ui.allocate_exact_size(vec2(50.0, 50.0), Sense::hover());
-                    ui.painter().rect_stroke(m, 0.0, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
-                    icons::paint(ui, "dc-mask-none", m.shrink(12.0), t.text_disabled);
+                match (mask, n.as_ref().map(|n| n.id)) {
+                    (Some(m), Some(id)) => {
+                        // Link toggle between the object and its mask.
+                        let (lr, lresp) = ui.allocate_exact_size(vec2(14.0, 50.0), Sense::click());
+                        icons::paint(
+                            ui,
+                            if m.linked { "link" } else { "link-2-off" },
+                            egui::Rect::from_center_size(lr.center(), vec2(12.0, 12.0)),
+                            t.icon,
+                        );
+                        if lresp.on_hover_text(if m.linked { tl!("Unlink the mask") } else { tl!("Link the mask") }).clicked() {
+                            app.run("transparency.setOpacityMask", json!({"linked": !m.linked})).ok();
+                        }
+                        let (mr, _) = ui.allocate_exact_size(vec2(50.0, 50.0), Sense::hover());
+                        let mresp = ui.interact(mr, egui::Id::unique(MASK_THUMB), Sense::click());
+                        let bg = if m.clip != m.invert { [0, 0, 0, 255] } else { [255, 255, 255, 255] };
+                        ui.painter().rect_filled(mr, 0.0, egui::Color32::from_rgb(bg[0], bg[1], bg[2]));
+                        node_thumb(app, ui, "tr-mask", &m.art, mr.shrink(2.0), Some(bg));
+                        // Viewing the mask alone (Alt-click) highlights its thumbnail.
+                        let viewing = app.session.active().is_some_and(|d| d.shown_mask().is_some());
+                        let border = match (viewing, editing.is_some()) {
+                            (true, _) => Stroke::new(2.0, t.accent),
+                            (false, true) => Stroke::new(mask_w, t.border),
+                            (false, false) => Stroke::new(mask_w, t.input_border),
+                        };
+                        ui.painter().rect_stroke(mr, 0.0, border, StrokeKind::Inside);
+                        if m.disabled {
+                            let red = Stroke::new(2.0, egui::Color32::from_rgb(220, 40, 40));
+                            ui.painter().line_segment([mr.left_top(), mr.right_bottom()], red);
+                            ui.painter().line_segment([mr.right_top(), mr.left_bottom()], red);
+                        }
+                        let (shift, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.alt));
+                        let tip = tl!("Click to edit the mask; Alt-click to view only the mask; Shift-click to disable or enable it");
+                        if mresp.on_hover_text(tip).clicked() {
+                            if shift {
+                                app.run(if m.disabled { "transparency.enableOpacityMask" } else { "transparency.disableOpacityMask" }, json!({}))
+                                    .ok();
+                            } else if alt {
+                                app.run("transparency.viewOpacityMask", json!({"id": id.0})).ok();
+                            } else if editing.is_none() {
+                                app.run("transparency.editOpacityMask", json!({"id": id.0})).ok();
+                            }
+                        }
+                    }
+                    _ => {
+                        let (m, _) = ui.allocate_exact_size(vec2(50.0, 50.0), Sense::hover());
+                        ui.painter().rect_stroke(m, 0.0, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
+                        icons::paint(ui, "dc-mask-none", m.shrink(12.0), t.text_disabled);
+                    }
                 }
             }
-        }
-        ui.vertical(|ui| {
-            let label = if mask.is_some() { tl!("Release") } else { tl!("Make Mask") };
-            // Make Mask is off in isolation mode and pattern editing mode for one object, which it would take into mask editing.
-            let enabled = mask.is_some() || (has && editing.is_none() && crate::menus::enabled(app, "transparency.makeOpacityMask"));
-            let r = ui.add_enabled_ui(enabled, |ui| widgets::flat_button(ui, label, 96.0)).inner;
-            if r.on_disabled_hover_text(tl!("Select the art (and, on top of it, the mask object)")).clicked() {
-                let id = if mask.is_some() { "transparency.releaseOpacityMask" } else { "transparency.makeOpacityMask" };
-                app.run(id, json!({})).ok();
-            }
-            let (clip, invert) = mask.map(|m| (m.clip, m.invert)).unwrap_or((new_clip, new_invert));
-            if widgets::check(ui, tl!("Clip"), clip, mask.is_some()) {
-                app.run("transparency.setOpacityMask", json!({"clip": !clip})).ok();
-            }
-            if widgets::check(ui, tl!("Invert Mask"), invert, mask.is_some()) {
-                app.run("transparency.setOpacityMask", json!({"invert": !invert})).ok();
-            }
-        });
+            ui.vertical(|ui| {
+                let label = if mask.is_some() { tl!("Release") } else { tl!("Make Mask") };
+                // Make Mask is off in isolation mode and pattern editing mode for one object, which it would take into mask editing.
+                let enabled = mask.is_some() || (has && editing.is_none() && crate::menus::enabled(app, "transparency.makeOpacityMask"));
+                let r = ui.add_enabled_ui(enabled, |ui| widgets::flat_button(ui, label, 96.0)).inner;
+                if r.on_disabled_hover_text(tl!("Select the art (and, on top of it, the mask object)")).clicked() {
+                    let id = if mask.is_some() { "transparency.releaseOpacityMask" } else { "transparency.makeOpacityMask" };
+                    app.run(id, json!({})).ok();
+                }
+                let (clip, invert) = mask.map(|m| (m.clip, m.invert)).unwrap_or((new_clip, new_invert));
+                if widgets::check(ui, tl!("Clip"), clip, mask.is_some()) {
+                    app.run("transparency.setOpacityMask", json!({"clip": !clip})).ok();
+                }
+                if widgets::check(ui, tl!("Invert Mask"), invert, mask.is_some()) {
+                    app.run("transparency.setOpacityMask", json!({"invert": !invert})).ok();
+                }
+            });
+        })
     });
     if !pstate::<bool>(ui.ctx(), "tr-hide-options") {
         widgets::divider(ui);
+        let has = has && object;
         if widgets::check(ui, tl!("Isolate Blending"), isolate, has) {
             app.run("transparency.set", json!({"isolate": !isolate})).ok();
         }
@@ -183,6 +191,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// The Transparency panel's menu: showing thumbnails and options, and the opacity mask items (whole objects only).
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let hide_thumbs: bool = pstate(ui.ctx(), "tr-hide-thumbs");
     let hide_opts: bool = pstate(ui.ctx(), "tr-hide-options");
@@ -197,9 +206,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let editing = app.session.active().is_some_and(|d| d.doc.mask_edit.is_some());
     let (_, n) = state(app, ui.ctx());
     let mask = n.as_ref().and_then(|n| n.extras().mask.as_deref());
+    // Not for a fill/stroke (the Appearance panel's active row): masks belong to whole objects.
+    let object = editing || app.session.appearance_item().is_none();
     let can_make = n.is_some() && !editing && crate::menus::enabled(app, "transparency.makeOpacityMask");
     for (label, id, enabled) in mask_items(mask, can_make) {
-        if menu_item(ui, tl!(label), enabled, false) {
+        if menu_item(ui, tl!(label), enabled && object, false) {
             app.run(id, json!({})).ok();
         }
     }
@@ -338,6 +349,50 @@ mod tests {
         run(&mut app, "transparency.releaseOpacityMask", json!({}));
         assert!(frame(&mut app).iter().any(|t| t == "Make Mask"));
         assert!(app.session.active().unwrap().doc.mask_edit.is_none());
+    }
+
+    /// Picking other gradient mesh points (which gives the document no new revision) shows their
+    /// opacity, the one `transparency.set` changes then.
+    #[test]
+    fn picking_mesh_points_shows_their_opacity() {
+        use vectorcraft_engine::ViewInfo;
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        let a = run(&mut app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50}))["id"].clone();
+        run(&mut app, "object.mesh.create", json!({"rows": 2, "cols": 2}));
+        run(&mut app, "object.mesh.setPointColor", json!({"id": a, "index": 0, "opacity": 0.3}));
+        run(&mut app, "paint.setStroke", json!({"color": "#000000"}));
+        let v = ViewInfo::default();
+        app.session.select_tool("mesh", v).unwrap();
+        let click = |app: &mut VectorcraftApp, x: f64, y: f64| {
+            for k in [PointerKind::Down, PointerKind::Up] {
+                app.session.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+            }
+        };
+        let picked = |app: &VectorcraftApp| app.session.mesh_points_picked().map(|p| p.into_iter().flat_map(|(_, v)| v).collect::<Vec<_>>());
+        let ctx = egui::Context::default();
+        click(&mut app, 35.0, 10.0);
+        assert_ne!(picked(&app), Some(vec![0]), "the click picks the top middle point");
+        assert_eq!(picked(&app).map(|v| v.len()), Some(1));
+        assert_eq!(state(&app, &ctx).0.opacity, Some(100.0));
+        click(&mut app, 10.0, 10.0);
+        assert_eq!(picked(&app), Some(vec![0]), "the click picks the top-left point");
+        assert_eq!(state(&app, &ctx).0.opacity, Some(30.0), "the newly picked point's opacity");
+        // An active Appearance row takes the opacity, so the values are the object's again.
+        let rows = app
+            .session
+            .active()
+            .unwrap()
+            .selection
+            .objects
+            .first()
+            .map(|id| app.session.active().unwrap().doc.node(*id).unwrap().appearance.items.len());
+        assert!(rows.is_some_and(|n| n > 0), "the mesh has its stroke row");
+        run(&mut app, "appearance.setActiveItem", json!({"index": 0}));
+        assert_eq!(picked(&app), None);
+        assert_eq!(app.session.transparency_info().opacity, Some(100.0), "the object's opacity, not the point's");
+        assert_eq!(run(&mut app, "transparency.info", json!({}))["opacity"], json!(100.0));
     }
 
     #[test]

@@ -47,6 +47,10 @@
 //!   rasterised in SVG
 //!   (<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-gradients/control-perceptual-interpolation-in-gradients.html>).
 //!   On characters they are written as linear gradients through stops on the perceptual curve.
+//! * **Gradients mixed around the hue wheel** (Hue Clockwise and Hue Counterclockwise,
+//!   VectorCraft's own methods) fill or stroke objects as an `<image>` of the gradient too, at the
+//!   document's raster effects resolution. On characters they are written as gradients through
+//!   stops on their way around the wheel.
 //! * **Symbol instances** the shared `<symbol>` would paint differently from the canvas (stained,
 //!   scaled with strokes, turned or scaled with effects, brushes or live objects, or holding
 //!   pattern paints or unlinked masks, which stay on the page) are written as their own art.
@@ -74,12 +78,15 @@
 //! * A `<g id>` layer (top-level, or inside one) that isn't displayed (`display: none`) comes back
 //!   as a hidden layer; other undisplayed objects as hidden objects, unless a `<use>` refers to
 //!   them.
-//! * `spreadMethod` reflect and repeat are expanded into stops over the painted area (at most
-//!   64 periods).
+//! * `spreadMethod` reflect and repeat become the gradient's spread, Reflect or Repeat, its stops
+//!   running once along the vector.
 //! * `<image>` files are read through [`ImportOptions`]: rasters stay linked, SVG files (and SVG
 //!   `data:` URLs) become art (without their text), missing ones a placeholder keeping the link.
-//! * Text lines after the first start at the first line's x; text in a clip path is ignored;
-//!   absolute positions inside type on a path are ignored; vertical text sets every glyph sideways.
+//! * Text lines after the first start at the first line's x; absolute positions inside type on a
+//!   path are ignored; vertical text sets every glyph sideways.
+//! * A `<text>` in a `<clipPath>`, or a `<use>` there that shows one, clips by its glyph outlines.
+//!   When a clip path holds only one text, and that text has no clip path of its own and no
+//!   even-odd clip rule, the clip group's clipping path is the text as live type that paints nothing.
 //!
 //! ## Import text
 //!
@@ -243,6 +250,10 @@ pub struct ExportOptions {
     /// its licence allows (whole where it forbids subsetting, left out where it forbids
     /// embedding). Not with outlined text or the Tiny profile.
     pub embed_fonts: bool,
+    /// Include Variable Data: write the document's text variables, its data sets and the object
+    /// each text variable is bound to as a `variableSets` element, in the layout Load Variable
+    /// Library reads. Opening the SVG reads them back.
+    pub variable_data: bool,
 }
 
 impl Default for ExportOptions {
@@ -264,6 +275,7 @@ impl Default for ExportOptions {
             encoding: Encoding::Utf8,
             profile: Profile::Svg11,
             embed_fonts: false,
+            variable_data: false,
         }
     }
 }
@@ -291,6 +303,9 @@ pub struct Output {
     pub linked: Vec<LinkedImage>,
     /// Features the export approximates.
     pub warnings: Vec<String>,
+    /// Notes on the options: one the export didn't apply or applied another way (an encoding, a
+    /// font embedded whole).
+    pub setting_notes: Vec<String>,
     /// The encoding [`Self::bytes`] writes.
     pub encoding: Encoding,
 }
@@ -351,6 +366,14 @@ pub enum SvgError {
     /// nested-image expansion bombs, #3564).
     #[error("the SVG expands to more than {0} nested SVG images")]
     TooManyImages(usize),
+    /// The style values the reader would copy into the elements the SVG expands to, `<use>`
+    /// copies and SVG images included, add up to more than this many megabytes.
+    #[error("the SVG's styles expand to more than {0} MB")]
+    StylesTooLarge(usize),
+    /// Matching the style sheets' selectors against the elements the SVG expands to, `<use>`
+    /// copies and SVG images included, takes more tests than the reader allows.
+    #[error("the SVG's style sheets take too long to match")]
+    StylesTooComplex,
 }
 
 /// Export a document as an SVG string (linked images are not returned: see [`export_full`]).
@@ -358,15 +381,18 @@ pub fn export(doc: &Document, opts: &ExportOptions) -> String {
     export_full(doc, opts, None).svg
 }
 
-/// Export a document as an SVG string, also returning warnings about approximated features.
+/// Export a document as an SVG string, also returning warnings about approximated features,
+/// then the notes on the options ([`Output::setting_notes`]).
 pub fn export_with_report(doc: &Document, opts: &ExportOptions) -> (String, Vec<String>) {
     let o = export_full(doc, opts, None);
-    (o.svg, o.warnings)
+    (o.svg, o.warnings.into_iter().chain(o.setting_notes).collect())
 }
 
 /// Export a document as SVG plus the image files it links to. `native`: the document in the
 /// native format, embedded when [`ExportOptions::preserve_editing`] is on.
 pub fn export_full(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>) -> Output {
+    // Type in the document's composite fonts is drawn in them, whether or not an app has the document open.
+    let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
     export::export(doc, opts, native)
 }
 
@@ -440,21 +466,17 @@ pub(crate) fn body_hash(parts: &[&str]) -> String {
 
 /// Does `bytes` start like gzip data (an SVGZ file)?
 pub fn is_svgz(bytes: &[u8]) -> bool {
-    bytes.starts_with(&[0x1f, 0x8b])
+    craft_svg::sniff::is_svgz(bytes)
 }
 
 /// Compress SVG text as SVGZ (gzip).
 pub fn compress(svg: &str) -> Vec<u8> {
-    compress_bytes(svg.as_bytes())
+    craft_svg::svgz::compress(svg.as_bytes())
 }
 
 /// Compress an SVG file (in any encoding, see [`Output::bytes`]) as SVGZ (gzip).
 pub fn compress_bytes(svg: &[u8]) -> Vec<u8> {
-    use std::io::Write as _;
-    let mut gz = flate2::write::GzEncoder::new(Vec::with_capacity(svg.len() / 4), flate2::Compression::default());
-    // Writing to a Vec cannot fail.
-    let _ = gz.write_all(svg);
-    gz.finish().unwrap_or_default()
+    craft_svg::svgz::compress(svg)
 }
 
 /// Most bytes an SVGZ file may unpack to (a guard against decompression bombs).
@@ -469,72 +491,25 @@ pub fn text_of(bytes: &[u8]) -> Result<std::borrow::Cow<'_, str>, SvgError> {
 /// [`text_of`], SVGZ bytes unpacking within what `unpacked`, the bytes SVGZ data unpacked to so
 /// far, leaves of [`MAX_SVGZ`]. What they unpack to is added to it, whether or not it decodes.
 pub(crate) fn text_within<'a>(bytes: &'a [u8], unpacked: &std::sync::atomic::AtomicU64) -> Result<std::borrow::Cow<'a, str>, SvgError> {
-    use std::io::Read as _;
     use std::sync::atomic::Ordering;
     if !is_svgz(bytes) {
-        return match decode(bytes)? {
-            Decoded::Utf8(skip) => std::str::from_utf8(bytes.get(skip..).unwrap_or_default()).map(Into::into).map_err(|_| not_utf8()),
-            Decoded::Text(t) => Ok(t.into()),
-        };
+        return craft_svg::svgz::decode(bytes).map_err(|_| not_utf8());
     }
-    let most = MAX_SVGZ.saturating_sub(unpacked.load(Ordering::Relaxed));
-    let mut raw = Vec::new();
-    let read = flate2::read::GzDecoder::new(bytes).take(most.saturating_add(1)).read_to_end(&mut raw);
-    // Read before a failure is kept: it was unpacked too.
-    unpacked.fetch_add(raw.len() as u64, Ordering::Relaxed);
-    read.map_err(|e| SvgError::Parse(format!("not a valid SVGZ file: {e}")))?;
-    if raw.len() as u64 > most {
-        return Err(SvgError::TooBig(format!("the SVGZ file unpacks to more than {} MB", most >> 20)));
-    }
-    match decode(&raw)? {
-        Decoded::Utf8(skip) => {
-            raw.drain(..skip);
-            String::from_utf8(raw).map(Into::into).map_err(|_| not_utf8())
+    let most = usize::try_from(MAX_SVGZ.saturating_sub(unpacked.load(Ordering::Relaxed))).unwrap_or(usize::MAX);
+    match craft_svg::svgz::inflate(bytes, most) {
+        Ok(raw) => {
+            unpacked.fetch_add(raw.len() as u64, Ordering::Relaxed);
+            craft_svg::svgz::decode(&raw).map(|t| std::borrow::Cow::Owned(t.into_owned())).map_err(|_| not_utf8())
         }
-        Decoded::Text(t) => Ok(t.into()),
+        Err(craft_svg::svgz::Error::TooLarge(_)) => Err(SvgError::TooBig(format!("the SVGZ file unpacks to more than {} MB", most >> 20))),
+        Err(craft_svg::svgz::Error::Corrupt(e)) => Err(SvgError::Parse(format!("not a valid SVGZ file: {e}"))),
+        Err(craft_svg::svgz::Error::Encoding) => Err(not_utf8()),
+        Err(e) => Err(SvgError::Parse(e.to_string())),
     }
 }
 
 fn not_utf8() -> SvgError {
     SvgError::Parse("SVG is not UTF-8, UTF-16 or ISO 8859-1".into())
-}
-
-/// How SVG bytes are read.
-enum Decoded {
-    /// UTF-8 after this many bytes (a byte order mark).
-    Utf8(usize),
-    /// Text decoded from another encoding.
-    Text(String),
-}
-
-/// The encoding of SVG bytes: a byte order mark (UTF-8 or UTF-16), else the XML declaration's
-/// (ISO 8859-1 by its names; anything else is read as UTF-8).
-fn decode(bytes: &[u8]) -> Result<Decoded, SvgError> {
-    let utf16 = |rest: &[u8], unit: fn([u8; 2]) -> u16| {
-        let (units, odd) = rest.as_chunks::<2>();
-        if !odd.is_empty() {
-            return Err(not_utf8());
-        }
-        char::decode_utf16(units.iter().map(|u| unit(*u))).collect::<Result<String, _>>().map(Decoded::Text).map_err(|_| not_utf8())
-    };
-    match bytes {
-        [0xef, 0xbb, 0xbf, ..] => Ok(Decoded::Utf8(3)),
-        [0xfe, 0xff, rest @ ..] => utf16(rest, u16::from_be_bytes),
-        [0xff, 0xfe, rest @ ..] => utf16(rest, u16::from_le_bytes),
-        _ if declared_latin1(bytes) => Ok(Decoded::Text(bytes.iter().map(|b| char::from(*b)).collect())),
-        _ => Ok(Decoded::Utf8(0)),
-    }
-}
-
-/// Does the XML declaration at the start of `bytes` name ISO 8859-1?
-fn declared_latin1(bytes: &[u8]) -> bool {
-    let head = bytes.get(..bytes.len().min(200)).unwrap_or_default();
-    let Some(decl) = head.strip_prefix(b"<?xml").and_then(|d| d.split(|b| *b == b'>').next()) else { return false };
-    let decl = String::from_utf8_lossy(decl).to_ascii_lowercase();
-    let Some(at) = decl.find("encoding") else { return false };
-    let value = decl.get(at + "encoding".len()..).unwrap_or("").trim_start().trim_start_matches('=').trim_start();
-    let name = value.trim_start_matches(['"', '\'']).split(['"', '\'', ' ', '?']).next().unwrap_or("");
-    matches!(name, "iso-8859-1" | "iso8859-1" | "iso_8859-1" | "latin1" | "latin-1" | "l1")
 }
 
 /// Import an SVG document.
@@ -548,8 +523,20 @@ pub fn import_with_report(svg: &str) -> Result<(Document, Vec<String>), SvgError
     import_with(svg, &ImportOptions::default())
 }
 
+/// Effect › SVG Filters › Import SVG Filter: the `<filter>` elements of SVG text `svg` that an SVG
+/// filter effect takes, as (name, XML) in document order, up to `room` of them and leaving out the
+/// names `taken` says, and how many it doesn't take. Filters past `room` or named as `taken` says
+/// are not checked. The text is read with the limits on depth and entities that [`import`] reads
+/// documents with.
+pub fn svg_filters(svg: &str, room: usize, taken: impl Fn(&str) -> bool) -> Result<(Vec<(String, String)>, usize), SvgError> {
+    import::svg_filters(svg, room, taken)
+}
+
 pub use glyph::glyph_art;
-pub use import::{MAX_ELEMENT_DEPTH, MAX_FOREIGN, MAX_FOREIGN_VALUE, MAX_NESTED_SVG_IMAGES, MAX_NODES};
+pub use import::{
+    MAX_DATA_URL_BYTES, MAX_ELEMENT_DEPTH, MAX_FOREIGN, MAX_FOREIGN_VALUE, MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, MAX_NESTED_SVG_TEXT,
+    MAX_NODES,
+};
 
 /// Import an SVG document reading the files it links to as `opts` says, also returning warnings.
 pub fn import_with(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<String>), SvgError> {
@@ -562,6 +549,15 @@ pub fn import_within(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
     // capped (`import::depth`), and it gets room for that cap whatever thread asks.
     vectorcraft_doc::depth::with_deep_stack(|| import::import(svg, opts, max_nodes))
 }
+
+/// [`import_with`], also returning the object made of each element whose id `ids` lists (the
+/// first object named after it), by element id. Ids with no object are left out.
+pub fn import_finding(svg: &str, opts: &ImportOptions, ids: &std::collections::HashSet<String>) -> Result<(Document, Vec<String>, Found), SvgError> {
+    vectorcraft_doc::depth::with_deep_stack(|| import::import_finding(svg, opts, MAX_NODES, ids))
+}
+
+/// The object made of each element [`import_finding`] looked for, by element id.
+pub type Found = std::collections::HashMap<String, vectorcraft_doc::NodeId>;
 
 /// Reads a linked file: its bytes and the link to it (absolute path, size, time and hash), or
 /// `None` when there is no readable file at the (absolute) path.
@@ -624,6 +620,49 @@ pub fn xml_escape(s: &str) -> String {
     o
 }
 
+/// [`push_num`] through integer arithmetic, for the values it writes the same as the decimal
+/// formatter: `decimals` of at most 9, and `v` scaled by 10^`decimals` below 2^53 and further from
+/// halfway between two integers than the scaling's rounding error. Returns false, writing nothing,
+/// for any other value.
+fn push_num_scaled(out: &mut String, v: f64, decimals: u8) -> bool {
+    const SCALE: [f64; 10] = [1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9];
+    let Some(&scale) = SCALE.get(usize::from(decimals)) else { return false };
+    // Each power of ten here is exact, so `x` is within half an ulp (`x * EPSILON / 2`) of |v| × 10^decimals.
+    let x = v.abs() * scale;
+    if x.is_nan() || x >= 9.0e15 {
+        return false;
+    }
+    let whole = x.floor();
+    let frac = x - whole;
+    if (frac - 0.5).abs() <= x * f64::EPSILON {
+        return false;
+    }
+    let mut n = whole as u64 + u64::from(frac > 0.5);
+    let places = usize::from(decimals);
+    // The digits of `n` from the last one, at least one more than `places` of them.
+    let mut digits = [0u8; 24];
+    let mut len = 0;
+    for d in digits.iter_mut() {
+        if n == 0 && len > places {
+            break;
+        }
+        *d = b'0' + (n % 10) as u8;
+        n /= 10;
+        len += 1;
+    }
+    let Some((fraction, int)) = digits.get(..len).and_then(|d| d.split_at_checked(places)) else { return false };
+    let zeros = fraction.iter().take_while(|&&d| d == b'0').count();
+    if v < 0.0 && (zeros < places || int.iter().any(|&d| d != b'0')) {
+        out.push('-');
+    }
+    out.extend(int.iter().rev().map(|&d| char::from(d)));
+    if zeros < places {
+        out.push('.');
+        out.extend(fraction.iter().skip(zeros).rev().map(|&d| char::from(d)));
+    }
+    true
+}
+
 /// Format a number with at most `decimals` places, trimming trailing zeros.
 pub fn fmt_num(v: f64, decimals: u8) -> String {
     let mut s = String::new();
@@ -635,6 +674,9 @@ pub fn fmt_num(v: f64, decimals: u8) -> String {
 pub fn push_num(out: &mut String, v: f64, decimals: u8) {
     use std::fmt::Write as _;
     let v = if v.is_finite() { v } else { 0.0 };
+    if push_num_scaled(out, v, decimals) {
+        return;
+    }
     let start = out.len();
     let _ = write!(out, "{:.*}", decimals as usize, v); // writing to a String can't fail
     let s = out.get(start..).unwrap_or_default();
@@ -673,5 +715,49 @@ mod tests {
     #[test]
     fn escaping() {
         assert_eq!(xml_escape("a<b>&\"'"), "a&lt;b&gt;&amp;&quot;&apos;");
+    }
+
+    /// `v` at `decimals` places by the decimal formatter, trailing zeros trimmed.
+    fn formatted(v: f64, decimals: u8) -> String {
+        let s = format!("{:.*}", usize::from(decimals), if v.is_finite() { v } else { 0.0 });
+        let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.') } else { &s };
+        if matches!(s, "-0" | "") { "0".into() } else { s.into() }
+    }
+
+    #[test]
+    fn numbers_match_the_decimal_formatter() {
+        let mut values =
+            vec![0.0, -0.0, 0.5, -0.5, 2.5, 0.0005, -0.0005, 1.0005, 0.125, 1e-12, 9.0e15, 4503599627370495.5, 1e20, f64::NAN, f64::INFINITY];
+        // Coordinates of every size, and values on and just off the halfway points between written numbers.
+        let mut seed = 0x2545_f491_4f6c_dd1d_u64;
+        for _ in 0..20_000 {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            let unit = (seed >> 11) as f64 / (1u64 << 53) as f64;
+            let v = (unit - 0.5) * 10f64.powi((seed % 13) as i32 - 3);
+            let tie = ((v * 1000.0).trunc() + 0.5) / 1000.0;
+            values.extend([v, tie, f64::from_bits(tie.to_bits() + 1), f64::from_bits(tie.to_bits() - 1)]);
+        }
+        for v in values {
+            for d in 0..=12 {
+                assert_eq!(fmt_num(v, d), formatted(v, d), "{v:e} at {d} decimals");
+            }
+        }
+    }
+
+    #[test]
+    fn coordinates_are_written_through_integers() {
+        for (v, d, want) in [(123.4567, 3, "123.457"), (-0.25, 3, "-0.25"), (-0.0004, 3, "0"), (1600.0, 3, "1600"), (7.0, 0, "7")] {
+            let mut s = String::new();
+            assert!(push_num_scaled(&mut s, v, d), "{v} at {d} decimals");
+            assert_eq!(s, want);
+        }
+        // Halfway as stored, too large, or too many places: the decimal formatter writes them.
+        for (v, d) in [(0.5, 0), (0.125, 2), (1e16, 0), (1.0, 10)] {
+            let mut s = String::new();
+            assert!(!push_num_scaled(&mut s, v, d), "{v} at {d} decimals");
+            assert!(s.is_empty());
+        }
     }
 }

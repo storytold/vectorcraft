@@ -1,0 +1,13 @@
+[package]
+name = "vectorcraft-apischema"
+description = "Machine-readable parameter schemas for VectorCraft commands, with a validator and a params text writer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde_json = { workspace = true }

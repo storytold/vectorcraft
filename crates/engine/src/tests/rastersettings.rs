@@ -292,6 +292,58 @@ fn rasterize_measures_the_art_its_geometry_effects_draw() {
     assert_eq!((xf.translation().x, width), (150.0, 41));
 }
 
+/// A Transform effect after Rasterize moves the image the Rasterize effect makes: Expand Appearance
+/// and PDF export make the image of the art before the Transform effect, as Object › Rasterize
+/// makes it, and place it through the effect's map, as the canvas draws it.
+#[test]
+fn expand_rasterize_then_transform_matches_canvas() {
+    let mut o = session();
+    red_rectangle(&mut o);
+    let made = id(&o.execute("object.rasterize", &json!({"ppi": 72, "background": "white", "addAround": 2})).unwrap());
+    let od = &o.doc().unwrap().doc;
+    let (w, h, xf, png, _) = rasterized(od, od.node(made).unwrap());
+    // About the center of the rectangle's path.
+    let about =
+        |m: vectorcraft_geom::Affine| vectorcraft_geom::Affine::translate((70.5, 65.25)) * m * vectorcraft_geom::Affine::translate((-70.5, -65.25));
+    let cases = [
+        (json!({"scaleH": 200, "scaleV": 200}), about(vectorcraft_geom::Affine::scale(2.0))),
+        (json!({"rotate": 30}), about(vectorcraft_geom::Affine::rotate(-30f64.to_radians()))),
+        (
+            json!({"rotate": 30, "moveH": 10, "strokes": true}),
+            vectorcraft_geom::Affine::translate((10.0, 0.0)) * about(vectorcraft_geom::Affine::rotate(-30f64.to_radians())),
+        ),
+    ];
+    for (params, map) in cases {
+        let mut s = session();
+        let r = red_rectangle(&mut s);
+        let raster = json!({"useDocumentResolution": false, "resolution": 72, "background": "white", "addAround": 2});
+        s.execute("effect.apply", &json!({"effect": "rasterize", "params": raster, "ids": [r.0]})).unwrap();
+        s.execute("effect.apply", &json!({"effect": "distort.transform", "params": params.clone(), "ids": [r.0]})).unwrap();
+        let check = |d: &Document, n: &vectorcraft_doc::Node, what: &str| {
+            let (w2, h2, xf2, png2, _) = rasterized(d, n);
+            assert_eq!((w2, h2), (w, h), "{what} {params}");
+            assert!(png2 == png, "{what} {params}: the same pixels");
+            let want = map * xf;
+            assert!(xf2.as_coeffs().iter().zip(want.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-6), "{what} {params}: {xf2:?} {want:?}");
+        };
+        let flat = crate::flatten_raster_effects(&s.doc().unwrap().doc).unwrap();
+        check(&flat, &flat.layers[0].children().unwrap()[0], "PDF export");
+        s.execute("effect.expandAppearance", &json!({"ids": [r.0]})).unwrap();
+        let d = &s.doc().unwrap().doc;
+        check(d, d.node(r).unwrap(), "Expand Appearance");
+    }
+    // A Transform effect that scales the image to nothing leaves nothing in PDF export, as the
+    // canvas draws nothing.
+    let mut s = session();
+    let r = red_rectangle(&mut s);
+    let raster = json!({"useDocumentResolution": false, "resolution": 72, "background": "white", "addAround": 2});
+    s.execute("effect.apply", &json!({"effect": "rasterize", "params": raster, "ids": [r.0]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "distort.transform", "params": {"scaleH": 0}, "ids": [r.0]})).unwrap();
+    let flat = crate::flatten_raster_effects(&s.doc().unwrap().doc).unwrap();
+    let n = &flat.layers[0].children().unwrap()[0];
+    assert!(matches!(&n.kind, vectorcraft_doc::NodeKind::Group { children, .. } if children.is_empty()), "{:?}", n.kind);
+}
+
 #[test]
 fn the_clipping_mask_follows_the_art_its_geometry_effects_draw() {
     let clip = |s: &Session, n: NodeId| match &s.doc().unwrap().doc.node(n).unwrap().kind {
@@ -454,4 +506,51 @@ fn rasterize_to_cmyk_makes_a_cmyk_image() {
     let alpha = image::load_from_memory(&d.images[&m.key].bytes).unwrap().to_luma8();
     assert_eq!((alpha.get_pixel(1, 1).0, alpha.get_pixel(25, 25).0), ([0], [255]));
     assert!(mask.clip);
+}
+
+/// Rasterize with the Grayscale or Bitmap colour model makes a grayscale image (#6969): the
+/// image says Grayscale, its file holds one gray channel (one bit a pixel for an opaque Bitmap,
+/// gray and alpha over a transparent background), in a CMYK document too, and a fill color
+/// colorizes it.
+#[test]
+fn rasterize_to_grayscale_or_bitmap_makes_a_grayscale_image() {
+    for mode in ["rgb", "cmyk"] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 100, "height": 100, "colorMode": mode})).unwrap();
+        let r = id(&s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap());
+        s.execute("paint.setFill", &json!({"color": "#ff0000", "ids": [r.0]})).unwrap();
+        s.execute("paint.setStroke", &json!({"none": true, "ids": [r.0]})).unwrap();
+        let mut rasterize = |model: &str, background: &str| {
+            s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+            let p = json!({"ppi": 72, "colorModel": model, "background": background, "addAround": 5});
+            let img = id(&s.execute("object.rasterize", &p).unwrap());
+            let info = s.execute("image.info", &json!({"id": img.0})).unwrap();
+            let d = &s.doc().unwrap().doc;
+            let n = d.node(img).unwrap();
+            assert!(n.extras().mask.is_none(), "{mode} {model} {background}: no opacity mask");
+            let NodeKind::Image(im) = &n.kind else { panic!("an image") };
+            let blob = d.images[&im.key].clone();
+            let pixels = image::load_from_memory(&blob.bytes).unwrap().to_luma_alpha8();
+            assert_eq!(pixels.dimensions(), (50, 50));
+            let at = |x, y| pixels.get_pixel(x, y).0;
+            s.execute("edit.undo", &json!({})).unwrap();
+            (info["colorMode"].clone(), blob.gray_source(), at(25, 25), at(1, 1))
+        };
+        let gray = |one_bit, alpha| Some(vectorcraft_doc::GraySource { one_bit, alpha });
+        let (info, source, [level, alpha], corner) = rasterize("grayscale", "white");
+        assert_eq!((info, source, alpha, corner), (json!("Grayscale"), gray(false, false), 255, [255, 255]), "{mode}");
+        if mode == "rgb" {
+            assert_eq!(level, 54, "red's Rec. 709 luma");
+        } else {
+            assert!((1..=254).contains(&level), "the CMYK red's screen color as a gray: {level}");
+        }
+        assert_eq!(rasterize("grayscale", "transparent"), (json!("Grayscale"), gray(false, true), [level, 255], [255, 0]), "{mode}");
+        assert_eq!(rasterize("bitmap", "white"), (json!("Grayscale"), gray(true, false), [0, 255], [255, 255]), "{mode}");
+        assert_eq!(rasterize("bitmap", "transparent"), (json!("Grayscale"), gray(false, true), [0, 255], [255, 0]), "{mode}");
+        // A fill color colorizes the image, as it does any grayscale image.
+        s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+        let img = id(&s.execute("object.rasterize", &json!({"ppi": 72, "colorModel": "grayscale"})).unwrap());
+        s.execute("paint.setFill", &json!({"color": "#0000ff", "ids": [img.0]})).unwrap();
+        assert!(s.doc().unwrap().doc.node(img).unwrap().extras().colorize.is_some(), "{mode}: colorized");
+    }
 }

@@ -49,24 +49,31 @@ pub fn style_at(runs: &[TextRun], byte: usize) -> CharStyle {
 }
 
 /// Style for text typed over `start..end` (Illustrator: the first replaced character's style, or
-/// the character before the caret).
+/// the character before the caret), without a glyph choice ([`CharStyle::glyph_alternate`]):
+/// typed characters take their default glyphs.
 pub fn insertion_style(runs: &[TextRun], start: usize, end: usize) -> CharStyle {
-    if end > start {
-        // The character at `start` (not the one before it).
-        let mut off = 0;
-        for r in runs {
-            if start < off + r.text.len() {
-                return r.style.clone();
+    let mut style = 'found: {
+        if end > start {
+            // The character at `start` (not the one before it).
+            let mut off = 0;
+            for r in runs {
+                if start < off + r.text.len() {
+                    break 'found r.style.clone();
+                }
+                off += r.text.len();
             }
-            off += r.text.len();
         }
-    }
-    style_at(runs, start)
+        style_at(runs, start)
+    };
+    style.glyph_alternate = None;
+    style
 }
 
 /// Merge adjacent runs with equal styles and drop empty runs (keeping one run so the object
 /// remembers its style). Inline graphic runs never merge: each stays one [`INLINE_CHAR`]; one
-/// whose text is anything else (malformed input) becomes plain text.
+/// whose text is anything else (malformed input) becomes plain text. A run with a glyph choice
+/// ([`CharStyle::glyph_alternate`]) is not merged into the run before it, and loses the choice
+/// when its text does not start with the character the choice is for.
 pub fn normalize(runs: &mut Vec<TextRun>) {
     let first_style = runs.first().map(|r| r.style.clone());
     let mut out: Vec<TextRun> = Vec::with_capacity(runs.len());
@@ -77,8 +84,13 @@ pub fn normalize(runs: &mut Vec<TextRun>) {
         if r.inline.is_some() && !is_inline_text(&r.text) {
             r.inline = None;
         }
+        if r.style.glyph_alternate.as_ref().is_some_and(|c| !r.text.starts_with(c.ch)) {
+            r.style.glyph_alternate = None;
+        }
         match out.last_mut() {
-            Some(l) if l.style == r.style && l.inline.is_none() && r.inline.is_none() => l.text.push_str(&r.text),
+            Some(l) if l.style == r.style && l.inline.is_none() && r.inline.is_none() && r.style.glyph_alternate.is_none() => {
+                l.text.push_str(&r.text)
+            }
             _ => out.push(r),
         }
     }
@@ -100,7 +112,8 @@ fn split_at(runs: &mut Vec<TextRun>, byte: usize) -> usize {
         if byte < off + len {
             let at = floor_char(&runs[i].text, byte - off);
             let tail = runs[i].text.split_off(at);
-            let style = runs[i].style.clone();
+            // A glyph choice is for the run's first character, which stays in the head.
+            let style = CharStyle { glyph_alternate: None, ..runs[i].style.clone() };
             // An inline graphic is one character: a split lands before it (`at` == 0), the empty
             // head is dropped by `normalize` and the tail keeps the graphic.
             let inline = runs[i].inline.clone();
@@ -177,7 +190,12 @@ pub fn slice_runs(runs: &[TextRun], start: usize, end: usize) -> Vec<TextRun> {
                 off = re;
                 continue;
             }
-            out.push(TextRun { text: t.to_string(), style: r.style.clone(), inline: r.inline.clone() });
+            let mut style = r.style.clone();
+            // A glyph choice is for the run's first character.
+            if floor_char(&r.text, a - rs) > 0 {
+                style.glyph_alternate = None;
+            }
+            out.push(TextRun { text: t.to_string(), style, inline: r.inline.clone() });
         }
         off = re;
     }
@@ -194,6 +212,28 @@ pub fn prev_char(s: &str, i: usize) -> usize {
 pub fn next_char(s: &str, i: usize) -> usize {
     let i = floor_char(s, i);
     s[i..].chars().next().map(|c| i + c.len_utf8()).unwrap_or(s.len())
+}
+
+/// Does the character at byte `i` of `s` start a line by itself: the first character of the text,
+/// of a paragraph, or after a forced line break (U+2028)?
+pub fn starts_line(s: &str, i: usize) -> bool {
+    i == 0 || s.get(..i).is_some_and(|before| before.ends_with(['\n', '\u{2028}']))
+}
+
+/// The character whose kerning the Type tool's caret at byte `i` of `s` sets (the Kerning field,
+/// Alt+arrows, Reset Tracking and Kerning), and whether that kerning is the space before it
+/// ([`vectorcraft_doc::CharStyle::kerning_before`]) or after it
+/// ([`vectorcraft_doc::CharStyle::kerning`]). Inside a line it is the space after the character
+/// before the caret. At the start of a line ([`starts_line`]) no character on the line comes before
+/// the caret, so it is the space before the character after it (#5111). None at the start of an
+/// empty line, where no character follows either.
+pub fn caret_kerning_target(s: &str, i: usize) -> Option<(Range<usize>, bool)> {
+    let i = floor_char(s, i);
+    if !starts_line(s, i) {
+        return Some((prev_char(s, i)..i, false));
+    }
+    let c = s.get(i..)?.chars().next()?;
+    (c != '\n' && c != '\u{2028}').then(|| (i..i + c.len_utf8(), true))
 }
 
 /// The start of the grapheme cluster before `i` (Left arrow): a Thai consonant with its vowel and

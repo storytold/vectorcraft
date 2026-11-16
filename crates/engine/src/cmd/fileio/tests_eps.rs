@@ -170,6 +170,28 @@ fn transparency_is_flattened_with_the_flattener_preset() {
     assert!(e.contains("preset"), "{e}");
 }
 
+/// A picture cropped by a clipping path, in a clip group at 80%, over a square that only the
+/// hidden part of the picture covers: the file prints the square, and its image is as large as
+/// the crop, with the default preset (a rectangle of image) and with High Resolution (an image
+/// clipped to its regions).
+#[test]
+fn flattening_cropped_art_keeps_the_art_under_its_hidden_part() {
+    use super::tests_pdfx::{Art, CROP, cropped, drawn, lost, shown_image_sizes};
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    for preset in ["medium", "high"] {
+        let (mut s, _) = cropped("rgb", 400.0, Art::Image { see_through: false });
+        s.execute("transparency.set", &json!({"opacity": 80})).unwrap();
+        let canvas = drawn(&s.doc().unwrap().doc);
+        let opts = json!({"artboards": [0], "flattenerPreset": preset, "previewFormat": "none", "thumbnails": false});
+        let r = s.execute("document.exportEps", &opts).unwrap();
+        // What the file prints, not the document it carries.
+        let back = vectorcraft_eps::import_with(&b64(&r), false).unwrap().document;
+        assert_eq!(lost(&canvas, &drawn(&back)), 0, "{preset}: art went missing");
+        let sizes = shown_image_sizes(&back);
+        assert!(!sizes.is_empty() && sizes.iter().all(|(w, h)| *w <= CROP[2] + 1.0 && *h <= CROP[3] + 1.0), "{preset}: the images show {sizes:?}");
+    }
+}
+
 #[test]
 fn overprints_are_kept_or_discarded() {
     let mut s = session(100.0, 100.0, 1);
@@ -194,6 +216,106 @@ fn placed_images_are_written_and_previews_are_black_and_white_on_request() {
     assert_eq!((tiff_tag(tiff, 258), tiff_tag(tiff, 277), tiff_tag(tiff, 262)), (Some(1), Some(1), Some(0)));
     let l3 = postscript(&b64(&s.execute("document.exportEps", &json!({"previewFormat": "none"})).unwrap()));
     assert!(l3.contains("/FlateDecode filter >> image"));
+}
+
+/// The PNG thumbnail of an EPS file, decoded.
+fn thumbnail_png(bytes: &[u8]) -> image::RgbaImage {
+    let png = vectorcraft_eps::thumbnail(bytes).expect("a thumbnail");
+    image::load_from_memory_with_format(&png, image::ImageFormat::Png).unwrap().to_rgba8()
+}
+
+/// The TIFF preview of an EPS file, decoded.
+fn preview_tiff(bytes: &[u8]) -> image::RgbaImage {
+    let tiff = vectorcraft_eps::sections(bytes).unwrap().1.expect("a preview");
+    image::load_from_memory_with_format(tiff, image::ImageFormat::Tiff).unwrap().to_rgba8()
+}
+
+/// The size of a thumbnail render of the rect an EPS file's preview shows (its bounding box).
+fn thumbnail_size(bytes: &[u8]) -> (u32, u32) {
+    let b: Vec<f64> = dsc(&postscript(bytes), "BoundingBox").unwrap().split(' ').map(|v| v.parse().unwrap()).collect();
+    let rect = vectorcraft_geom::Rect::new(b[0], b[1], b[2], b[3]);
+    let long = rect.width().max(rect.height());
+    vectorcraft_render::raster_size(rect, if long > 128.0 { 128.0 / long } else { 1.0 }).unwrap()
+}
+
+/// The thumbnail is the color preview made smaller, the area average of its pixels at the size a
+/// 128 px render has, not a second render of the document; it shows the same picture as one.
+#[test]
+fn the_thumbnail_is_made_from_the_preview() {
+    let mut s = session(1000.0, 700.0, 1);
+    s.execute("paint.setFill", &json!({"color": "#2060c0"})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 37.3, "y": 41.9, "width": 811.7, "height": 563.1})).unwrap();
+    let r = s.execute("document.exportEps", &json!({"useArtboards": true, "previewFormat": "tiffColor", "transparentPreview": false})).unwrap();
+    let bytes = b64(&r);
+    let preview = preview_tiff(&bytes);
+    assert_eq!(preview.dimensions(), (1000, 700));
+    let thumb = thumbnail_png(&bytes);
+    assert_eq!(thumb.dimensions(), (128, 90));
+    // An opaque preview's straight pixels are its premultiplied ones.
+    let shown = vectorcraft_render::Rendered { width: 1000, height: 700, pixels: preview.into_raw() };
+    assert!(thumb.as_raw() == &shown.area_resized(128, 90).unwrap().pixels, "the thumbnail isn't the preview made smaller");
+    let doc = &s.doc().unwrap().doc;
+    let fresh = vectorcraft_render::Renderer::new().render_region(doc, vectorcraft_geom::Rect::new(0.0, 0.0, 1000.0, 700.0), 0.128, true);
+    let mut diffs: Vec<u8> = thumb.as_raw().iter().zip(&fresh.pixels).map(|(a, b)| a.abs_diff(*b)).collect();
+    diffs.sort_unstable();
+    let mean = diffs.iter().map(|d| f64::from(*d)).sum::<f64>() / diffs.len() as f64;
+    let p95 = diffs[diffs.len() * 95 / 100];
+    assert!(mean <= 8.0 && p95 <= 32, "mean {mean}, 95th percentile {p95}");
+}
+
+/// A thumbnail is opaque color on white whatever the preview: a transparent color preview's, and a
+/// black-and-white preview's, which keeps the art's colors.
+#[test]
+fn thumbnails_of_transparent_and_black_and_white_previews_are_opaque_color() {
+    let mut s = session(400.0, 200.0, 1);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 200, "height": 200})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let fresh = vectorcraft_render::Renderer::new().render_region(doc, vectorcraft_geom::Rect::new(0.0, 0.0, 400.0, 200.0), 0.32, true);
+    let red: [u8; 4] = fresh.pixels[(32 * 128 + 10) * 4..][..4].try_into().unwrap();
+    for preview in ["tiffColor", "tiffBw"] {
+        let r = s.execute("document.exportEps", &json!({"useArtboards": true, "previewFormat": preview})).unwrap();
+        let thumb = thumbnail_png(&b64(&r));
+        assert_eq!(thumb.dimensions(), (128, 64), "{preview}");
+        assert_eq!(thumb.get_pixel(10, 32).0, red, "{preview}");
+        assert_eq!(thumb.get_pixel(120, 32).0, [255, 255, 255, 255], "{preview}");
+        assert!(thumb.pixels().all(|p| p[3] == 255), "{preview}");
+    }
+}
+
+/// A page that fits in a thumbnail gets its preview's own pixels, unresampled.
+#[test]
+fn a_small_page_s_thumbnail_is_its_preview() {
+    let mut s = session(100.0, 60.0, 1);
+    s.execute("shape.ellipse", &json!({"x": 10.5, "y": 7.25, "width": 70, "height": 41})).unwrap();
+    let bytes = b64(&s.execute("document.exportEps", &json!({"useArtboards": true, "transparentPreview": false})).unwrap());
+    let thumb = thumbnail_png(&bytes);
+    assert_eq!(thumb.dimensions(), (100, 60));
+    assert!(thumb == preview_tiff(&bytes), "the thumbnail isn't the preview");
+}
+
+/// Every file has a thumbnail at the size a thumbnail render has, with any page shape, on Save
+/// too and without a preview; with thumbnails off there is none.
+#[test]
+fn every_file_s_thumbnail_has_the_thumbnail_size() {
+    let mut s = session(333.3, 77.7, 2);
+    let second = s.doc().unwrap().doc.artboards[1].rect.x0;
+    s.execute("shape.rectangle", &json!({"x": 3.7, "y": 5.1, "width": 300, "height": 61.3})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": second + 1.0, "y": 2.0, "width": 20, "height": 70})).unwrap();
+    for preview in ["tiffColor", "tiffBw", "none"] {
+        let r = s.execute("document.exportEps", &json!({"useArtboards": true, "previewFormat": preview})).unwrap();
+        let files = r["files"].as_array().unwrap();
+        assert_eq!(files.len(), 3);
+        for f in files {
+            let bytes = b64(f);
+            assert_eq!(thumbnail_png(&bytes).dimensions(), thumbnail_size(&bytes), "{preview} {}", f["name"]);
+        }
+    }
+    assert_eq!(thumbnail_size(&b64(&s.execute("document.exportEps", &json!({"range": "1"})).unwrap())), (128, 30));
+    let saved = b64(&s.execute("document.save", &json!({"format": "eps", "previewFormat": "tiffColor"})).unwrap());
+    assert_eq!(thumbnail_png(&saved).dimensions(), thumbnail_size(&saved));
+    let r = s.execute("document.exportEps", &json!({"useArtboards": true, "thumbnails": false})).unwrap();
+    assert!(r["files"].as_array().unwrap().iter().all(|f| vectorcraft_eps::thumbnail(&b64(f)).is_none()));
 }
 
 /// Two placed images whose pixel data can't be decoded are left out of the EPS, and `warnings`

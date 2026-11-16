@@ -44,10 +44,12 @@ impl UiState {
     pub fn read_preferences(bytes: &[u8]) -> Option<ReadPreferences> {
         let mut saved: Value = serde_json::from_slice(bytes).ok()?;
         let fields = saved.as_object_mut()?;
+        help_bar_visibility(fields, "status_bar", "help_bar");
         let mut intact = recover(fields, Keys::SNAKE);
         for key in ["custom_workspaces", "workspace_changes"] {
             if let Some(Value::Array(workspaces)) = fields.get_mut(key) {
                 for workspace in workspaces.iter_mut().filter_map(Value::as_object_mut) {
+                    help_bar_visibility(workspace, "statusBar", "helpBar");
                     intact &= recover(workspace, Keys::CAMEL);
                 }
             }
@@ -55,6 +57,15 @@ impl UiState {
         let mut ui: UiState = serde_json::from_value(saved).ok()?;
         let outcome = migrate_ui(&mut ui);
         Some(ReadPreferences { ui, intact: intact && outcome.intact, converted: outcome.converted })
+    }
+}
+
+/// Older layouts used status-bar visibility for both bottom bars. Preserve that choice until
+/// the layout has an independent Help Bar setting.
+fn help_bar_visibility(fields: &mut Map<String, Value>, status: &str, help: &str) {
+    if !fields.contains_key(help) {
+        let visible = fields.get(status).and_then(Value::as_bool).unwrap_or(true);
+        fields.insert(help.into(), Value::Bool(visible));
     }
 }
 

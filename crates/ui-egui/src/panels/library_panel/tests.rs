@@ -70,6 +70,25 @@ fn clicking_a_library_swatch_adds_and_applies_it_in_one_step() {
     assert!(last_open(&app.ui).is_none());
 }
 
+#[test]
+fn clicking_a_library_pattern_adds_the_pattern_and_applies_it_to_the_active_proxy() {
+    let mut app = app();
+    let ctx = context();
+    let r = app.run("window.swatchLibrary", json!({"library": "Geometric Patterns"})).unwrap();
+    assert_eq!(r["panel"].as_str(), Some("library:swatches:geometric-patterns"));
+    let undo = undo_len(&app);
+    click(&mut app, &ctx, "Checkerboard", Modifiers::NONE, 0.0);
+    let d = &app.session.doc().unwrap().doc;
+    assert!(d.pattern("Checkerboard").is_some() && d.swatch("Checkerboard").is_some(), "added with its pattern");
+    assert!(matches!(&app.session.paint.fill, Paint::Pattern { pattern, .. } if pattern == "Checkerboard"), "applied to the fill");
+    assert_eq!(undo_len(&app), undo + 1);
+    // Alt-click paints the stroke; the pattern is added once.
+    let patterns = app.session.doc().unwrap().doc.patterns.len();
+    click(&mut app, &ctx, "Checkerboard", Modifiers::ALT, 2.0);
+    assert!(matches!(&app.session.paint.stroke, Paint::Pattern { pattern, .. } if pattern == "Checkerboard"));
+    assert_eq!(app.session.doc().unwrap().doc.patterns.len(), patterns);
+}
+
 /// A color clicked in a swatch library becomes the Color Guide's base color (#3137).
 #[test]
 fn a_clicked_library_color_becomes_the_color_guides_base() {
@@ -108,7 +127,7 @@ fn a_plain_click_sets_where_a_shift_click_range_starts() {
     let ctx = context();
     app.run("window.swatchLibrary", json!({"library": "pastels"})).unwrap();
     let (_, lib) = SwatchLibraries::get(&app, "pastels").unwrap();
-    let order: Vec<String> = SwatchLibraries::rows(&lib, "").iter().map(|r| r.name.to_string()).collect();
+    let order: Vec<String> = SwatchLibraries::rows(&lib, "pastels", "").iter().map(|r| r.name.to_string()).collect();
     click(&mut app, &ctx, &order[1], Modifiers::NONE, 0.0);
     click(&mut app, &ctx, &order[4], Modifiers::SHIFT, 2.0);
     assert_eq!(selection(&ctx, "library:swatches:pastels"), order[1..=4], "the range starts at the plain click");
@@ -136,7 +155,10 @@ fn find_filters_list_view_and_arrows_step_through_the_libraries() {
     assert!(ctx.read_response(tile_id(panel, "#00FF00")).is_none());
     let first = SWATCH_IDS[0];
     let last = SwatchLibraries::list(&app).pop().unwrap().id;
-    assert_eq!(last, "radial-glows", "gradient libraries come after the swatch libraries");
+    assert_eq!(last, "optical-effects", "gradient and then pattern libraries come after the swatch libraries");
+    assert_eq!(neighbour::<SwatchLibraries>(&app, "radial-glows", 1).as_deref(), Some("geometric-patterns"));
+    assert_eq!(neighbour::<SwatchLibraries>(&app, "geometric-patterns", 1).as_deref(), Some("grit-textures"));
+    assert_eq!(neighbour::<SwatchLibraries>(&app, "grit-textures", 1).as_deref(), Some("optical-effects"));
     assert_eq!(neighbour::<SwatchLibraries>(&app, first, -1), Some(last), "wraps around");
     assert_eq!(neighbour::<SwatchLibraries>(&app, "web-safe-216", 1).as_deref(), Some(SWATCH_IDS[1]));
 }
@@ -172,6 +194,13 @@ fn the_window_submenu_lists_every_library() {
         .collect();
     assert!(gradients.len() >= 5);
     assert_eq!(gradients, listed("gradients"));
+    let patterns: Vec<Value> = crate::menus::menu_entries(&app)
+        .into_iter()
+        .filter(|e| e.path == ["Window", "Swatch Libraries", "Patterns"])
+        .map(|e| e.params["library"].clone())
+        .collect();
+    assert!(!patterns.is_empty());
+    assert_eq!(patterns, listed("patterns"));
     let defaults = crate::menus::menu_entries(&app).into_iter().any(|e| e.command.as_deref() == Some("swatch.resetDefaults"));
     assert!(defaults, "Default Swatches is listed");
 }
@@ -660,4 +689,33 @@ fn the_panel_menu_has_persistent() {
     for item in ["Add to Swatches", "Small List View", "Show Find Field", "Previous Library", "Persistent", "Close Library"] {
         assert!(text.contains(item), "{item}: {text}");
     }
+}
+
+/// In a panel made taller the library list fills the space above the panel's footer instead of
+/// scrolling inside 220 pt (#2992); outside a sized panel it keeps that height.
+#[test]
+fn the_list_fills_a_tall_panel_above_its_footer() {
+    let mut app = app();
+    let ctx = context();
+    app.run("window.swatchLibrary", json!({"library": "web-safe-216"})).unwrap();
+    let panel = "library:swatches:web-safe-216";
+    app.run("ui.libraryPanel", json!({"panel": panel, "view": "smallList"})).unwrap();
+    // The clip rect of the rows' names (the colors' hex codes): the list's visible area.
+    let mut list = |bottom: Option<f32>| {
+        let mut clip = None;
+        for _ in 0..3 {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 800.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                let info = egui::UiStackInfo::default().with_tag_value(widgets::PANEL_FOOTER, bottom);
+                ui.scope_builder(egui::UiBuilder::new().ui_stack_info(info), |ui| crate::dock::panel_body(&mut app, ui, panel, 256.0, 760.0));
+            });
+            out.textures_delta.clear();
+            clip = out.shapes.iter().find(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.text().starts_with('#'))).map(|c| c.clip_rect);
+        }
+        clip.expect("a row is drawn")
+    };
+    let tall = list(Some(700.0));
+    assert!(tall.height() > 400.0 && tall.bottom() <= 700.0 - 31.0, "the list fills the panel above its footer: {tall:?}");
+    let loose = list(None);
+    assert!(loose.height() <= 220.5, "unsized, the list keeps its height: {loose:?}");
 }

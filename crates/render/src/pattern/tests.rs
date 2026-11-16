@@ -251,19 +251,30 @@ fn kept_tiles_stay_within_the_budget() {
 #[test]
 fn kept_tiles_count_the_images_they_could_not_decode() {
     use vectorcraft_doc::{ImageBlob, ImageObject};
-    let mut d = doc_with_pattern(TileType::Grid);
-    // A PNG signature with nothing after it.
-    d.images.insert("cut".into(), ImageBlob::new("image/png", b"\x89PNG\r\n\x1a\n".to_vec()));
-    let im = ImageObject { key: "cut".into(), width: 10, height: 10, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
-    d.patterns[0].art = vec![Arc::new(Node::new(NodeId(901), NodeKind::Image(Box::new(im))))];
-    let mut r = Renderer::new();
-    let start = tiles_rasterized();
-    for n in 0..3 {
-        let before = crate::paint::decode_failures();
-        frame(&mut r, &d, 1.0);
-        assert!(crate::paint::decode_failures() > before, "frame {n}");
+    // A tile of art with an image is drawn again when the fonts change, and other tests add
+    // fonts, so the frames come from a run in which the fonts stayed the same. Each run draws a
+    // new document, whose first frame finds no tile kept from an earlier run.
+    let _fonts = crate::tests_fontchange::fonts_steady();
+    let (failures, rasterized) = crate::tests_fontchange::with_fonts_unchanged(|| {
+        let mut d = doc_with_pattern(TileType::Grid);
+        // A PNG signature with nothing after it.
+        d.images.insert("cut".into(), ImageBlob::new("image/png", b"\x89PNG\r\n\x1a\n".to_vec()));
+        let im =
+            ImageObject { key: "cut".into(), width: 10, height: 10, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+        d.patterns[0].art = vec![Arc::new(Node::new(NodeId(901), NodeKind::Image(Box::new(im))))];
+        let mut r = Renderer::new();
+        let start = tiles_rasterized();
+        let failures = [0, 1, 2].map(|_| {
+            let before = crate::paint::decode_failures();
+            frame(&mut r, &d, 1.0);
+            crate::paint::decode_failures() > before
+        });
+        (failures, tiles_rasterized() - start)
+    });
+    for (n, failed) in failures.into_iter().enumerate() {
+        assert!(failed, "frame {n}");
     }
-    assert_eq!(tiles_rasterized() - start, 1, "the later frames draw from the tile kept");
+    assert_eq!(rasterized, 1, "the later frames draw from the tile kept");
 }
 
 #[test]

@@ -71,6 +71,10 @@ fn shift_tracking_and_missing_symbols() {
     let mut t = text("A", art(1.0), "B", 20.0);
     t.runs[1].style.tracking = 100.0;
     assert!((inline_glyph(&layout(db(), &t)).advance - 42.0).abs() < 1e-6);
+    // At 50% Horizontal Scale the tracking adds half as much, as after a glyph; the art keeps its
+    // width.
+    t.runs[1].style.h_scale = 50.0;
+    assert!((inline_glyph(&layout(db(), &t)).advance - 41.0).abs() < 1e-6);
     // Unresolved (missing symbol): a square of the height, nothing to draw.
     let t = text("A", InlineArt::new("gone"), "B", 20.0);
     let l = layout(db(), &t);
@@ -248,6 +252,56 @@ fn inline_art_in_a_right_to_left_paragraph_is_placed_by_the_bidi_reordering() {
     assert!(inline_rtl && inline < first);
 }
 
+/// A manual kerning value on an inline graphic's character spaces it from the next character in
+/// reading order by the distance the same value spaces a letter of its size: left to right, right
+/// to left and down a vertical column. The character before it keeps its place, and a graphic's 0
+/// sets the text as no value does.
+#[test]
+fn manual_kerning_on_an_inline_graphic_spaces_it_like_a_letter() {
+    let db = FontDb::global();
+    // `before`, then the graphic (or `letter` in its place) with `kerning`, then `after`.
+    let set = |before: &str, letter: Option<&str>, after: &str, kerning: Option<f64>, vertical: bool| {
+        let mut t = TextObject::point(Point::ZERO, before, style(20.0));
+        let st = CharStyle { kerning, ..style(20.0) };
+        t.runs.push(match letter {
+            Some(c) => TextRun::new(c, st),
+            None => TextRun::inline(art(1.0), st),
+        });
+        t.runs.push(TextRun::new(after, style(20.0)));
+        t.vertical = vertical;
+        let l = layout(db, &t);
+        let ink = |run: usize, last: bool| {
+            let mut g: Vec<&PositionedGlyph> = l.glyphs.iter().filter(|g| g.run == run).collect();
+            g.sort_by_key(|g| g.byte);
+            let g = if last { g.last() } else { g.first() };
+            g.expect("glyph").xf * Point::ZERO
+        };
+        assert_eq!(l.inlines.len(), usize::from(letter.is_none()));
+        // Distance along the line: across the page, or down the column.
+        let along = |a: Point, b: Point| if vertical { (b.y - a.y).abs() } else { (b.x - a.x).abs() };
+        let (previous, middle, next) = (ink(0, true), ink(1, false), ink(2, false));
+        (along(previous, middle), along(middle, next), l.glyphs.iter().map(|g| (g.origin, g.advance)).collect::<Vec<_>>())
+    };
+    for (before, letter, after, vertical) in [("A", "X", "B", false), ("אב", "ג", "דה", false), ("ab", "x", "cd", true)] {
+        for letter in [None, Some(letter)] {
+            let (before_plain, after_plain, plain) = set(before, letter, after, Some(0.0), vertical);
+            let (before_kerned, after_kerned, _) = set(before, letter, after, Some(200.0), vertical);
+            // 200/1000 em of 20 pt.
+            assert!((after_kerned - after_plain - 4.0).abs() < 1e-6, "{before:?} {letter:?}: {after_plain} -> {after_kerned}");
+            assert!((before_kerned - before_plain).abs() < 1e-6, "{before:?} {letter:?}: {before_plain} -> {before_kerned}");
+            if letter.is_some() {
+                // A letter's 0 also turns off its font's kerning pairs; a graphic has none.
+                continue;
+            }
+            let (_, _, none) = set(before, letter, after, None, vertical);
+            assert!(
+                plain.iter().zip(&none).all(|(a, b)| (a.0 - b.0).hypot() < 1e-9 && (a.1 - b.1).abs() < 1e-9),
+                "{before:?} {letter:?}: 0 sets the text as no value does"
+            );
+        }
+    }
+}
+
 /// Character Alignment: an inline graphic's em box is its run's, whatever its scale. It moves with
 /// its run's text when that is smaller than the line's largest characters, and a big graphic in
 /// small text doesn't make its line's small characters move.
@@ -295,6 +349,25 @@ fn top_to_top_leading_spaces_inline_art_by_its_run() {
     let (small0, small1) = lines(1.0);
     let (tall0, tall1) = lines(3.0);
     assert!((small0 - tall0).abs() < 1e-6 && (small1 - tall1).abs() < 1e-6, "{small0} {small1} / {tall0} {tall1}");
+}
+
+/// A pushed-in line closes the gaps next to its CJK characters and leaves the gap after inline art
+/// open. Needs a font with full-width Japanese (skipped without one).
+#[test]
+fn a_pushed_in_line_leaves_the_gap_after_inline_art() {
+    let mut t = TextObject::point(Point::ZERO, "一二", style(20.0));
+    t.xf = Affine::IDENTITY;
+    t.runs.push(TextRun::inline(art(0.5), style(20.0)));
+    t.runs.push(TextRun::new("四五六七八九十一二三四五」六", style(20.0)));
+    t.para.kinsoku_type = vectorcraft_doc::KinsokuShoriType::PushInFirst;
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 300.0, 200.0).to_path(0.1)) };
+    let l = layout(FontDb::global(), &t);
+    if (l.glyphs[0].advance - 20.0).abs() > 2.0 {
+        return; // no font with full-width Japanese here
+    }
+    assert!(l.glyphs[1].advance < 20.0 - 0.5, "the other gaps close up: {}", l.glyphs[1].advance);
+    let art = inline_glyph(&l);
+    assert!((art.advance - 20.0).abs() < 1e-6, "the art keeps its advance: {}", art.advance);
 }
 
 #[test]

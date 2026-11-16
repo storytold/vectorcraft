@@ -16,27 +16,33 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
         crate::panels::empty_state(ui, "swatch-book", tl!("No document"), tl!("Open a document to see its swatches."));
         return;
     }
-    let view: View = pstate(ui.ctx(), "swatch-view");
+    let view = app.ui.swatches_view;
     let kind: Kind = pstate(ui.ctx(), "swatch-kind");
     // Top row: proxy at left, list / grid view toggles at right.
     ui.horizontal(|ui| {
         crate::panels::proxy(app, ui, 34.0);
         ui.add_space(ui.available_width() - 58.0);
+        let mut to = None;
         if widgets::icon_button(ui, "dc-list-view", tl!("Show List View"), view.is_list(), 26.0).clicked() {
-            set_pstate(ui.ctx(), "swatch-view", View::SmallList);
+            to = Some(View::SmallList);
         }
         if widgets::icon_button(ui, "dc-grid-view", tl!("Show Thumbnail View"), !view.is_list(), 26.0).clicked() {
-            set_pstate(ui.ctx(), "swatch-view", View::MediumThumb);
+            to = Some(View::MediumThumb);
+        }
+        if let Some(v) = to {
+            app.run("ui.panelView", json!({ "panel": "swatches", "view": v })).ok();
         }
     });
     ui.add_space(4.0);
     // A recent colour paints the active proxy (Alt: the inactive one), as a swatch does, and
-    // becomes the Color Guide's base color.
-    if let Some(c) = crate::panels::recent_colors_row(app, ui) {
-        crate::panels::color_guide::choose_base(app, c);
-        crate::panels::apply_click(app, ui, json!({"color": crate::panels::color_json(&c)}));
+    // becomes the Color Guide's base color. The panel menu's Show Recent Colors hides the row.
+    if app.ui.swatches_show_recent_colors {
+        if let Some(c) = crate::panels::recent_colors_row(app, ui) {
+            crate::panels::color_guide::choose_base(app, c);
+            crate::panels::apply_click(app, ui, json!({"color": crate::panels::color_json(&c)}));
+        }
+        widgets::divider(ui);
     }
-    widgets::divider(ui);
     widgets::subheader(ui, tl!("Swatch Tiles"));
     let query = if pstate(ui.ctx(), "swatch-show-find") { widgets::search_field(ui, find_id(), tl!("Find")) } else { String::new() };
     let items = entries(app, kind, &query);
@@ -46,12 +52,20 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
     // Without a selection the swatch of the active paint is highlighted.
     let fallback: Vec<String> = if selected.is_empty() { active_swatch.into_iter().collect() } else { vec![] };
     let sel = if selected.is_empty() { &fallback } else { &selected };
-    let lit = app.session.active().map(|st| highlighted(&st.doc, sel)).unwrap_or_default();
-    let is_sel = |name: &str| lit.contains(&name);
+    let lit: Vec<String> = app.session.active().map(|st| highlighted(&st.doc, sel).into_iter().map(str::to_string).collect()).unwrap_or_default();
+    let is_sel = |name: &str| lit.iter().any(|n| n == name);
     let mut ev = TileEvents::default();
+    // In a sized panel the list fills the space above the footer (#1638), as the Artboards list
+    // does; elsewhere it keeps its 150 pt (200 pt for large thumbnails).
+    let fixed = widgets::panel_footer_bottom(ui).is_some();
+    let list_height = widgets::panel_list_height(ui, if view == View::LargeThumb { 200.0 } else { 150.0 }, 2.0 + ui.spacing().item_spacing.y);
     widgets::list_box(ui, |ui| {
-        let max_height = if view == View::LargeThumb { 200.0 } else { 150.0 };
-        let out = egui::ScrollArea::vertical().id_salt("swatch-scroll").max_height(max_height).show(ui, |ui| {
+        let scroll = egui::ScrollArea::vertical()
+            .id_salt("swatch-scroll")
+            .max_height(list_height)
+            .min_scrolled_height(list_height.min(64.0))
+            .auto_shrink([false, !fixed]);
+        let out = scroll.show(ui, |ui| {
             ui.set_width(ui.available_width());
             if view.is_list() {
                 for e in &items {
@@ -70,6 +84,7 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
                         Entry::Folder(_) => draw_folder(ui, chip),
                     }
                     list_row_name(ui, r, chip, crate::i18n::t_name("swatch", name));
+                    super::item_context_menu(app, ui, &resp, e);
                     tile_input(ui, resp, e, &items, sel, true, &mut ev);
                 }
             } else {
@@ -90,6 +105,7 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
                         }
                         Entry::Folder(_) => folder_tile(ui, cell, is_sel(name)),
                     }
+                    super::item_context_menu(app, ui, &resp, e);
                     tile_input(ui, resp, e, &items, sel, false, &mut ev);
                 }
             }

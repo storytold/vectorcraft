@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use serde_json::json;
-use vectorcraft_color::{Color, Paint, Swatch};
+use vectorcraft_color::{Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientPaint, GradientStop, Paint, Swatch};
 use vectorcraft_doc::{Appearance, Artboard, Document, LayerColor, Node, NodeKind};
 use vectorcraft_geom::{Rect, shapes};
 use vectorcraft_testkit::raster::render_region;
@@ -33,6 +33,7 @@ fn artboard(id: u32, x: f64) -> Artboard {
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     }
 }
 
@@ -212,6 +213,145 @@ fn placement_and_custom_scale() {
     assert!(job(&big, json!({"autoRotate": false})).warnings.iter().any(|w| w.contains("larger than the imageable area")));
 }
 
+/// The top-left corners of the copies on the first page of `pv`.
+fn corners(pv: &PrintPreview) -> Vec<(f64, f64)> {
+    pv.sheets[0].copies.iter().map(|c| (c[0], c[1])).collect()
+}
+
+/// Every `(x, y)` of `xs` and `ys`, across then down.
+fn grid(xs: &[f64], ys: &[f64]) -> Vec<(f64, f64)> {
+    ys.iter().flat_map(|y| xs.iter().map(move |x| (*x, *y))).collect()
+}
+
+#[test]
+fn copies_per_sheet_fill_the_page_in_a_grid() {
+    // A 2 × 3.5 in card (144 × 252 pt) on Letter (612 × 792 pt): 4 across and 3 down, the
+    // 576 × 756 pt grid centered.
+    let d = doc(144.0, 252.0, &[(Rect::new(0.0, 0.0, 144.0, 252.0), rgb(1.0, 0.0, 0.0))]);
+    let pv = preview(&d, &settings(json!({"copiesPerSheet": true}))).unwrap();
+    assert_eq!((pv.pages, pv.sheets.len(), pv.sheets[0].orientation), (1, 1, Orientation::Portrait));
+    assert_eq!(corners(&pv), grid(&[18.0, 162.0, 306.0, 450.0], &[18.0, 270.0, 522.0]));
+    assert!(pv.sheets[0].copies.iter().all(|c| (c[2] - c[0], c[3] - c[1]) == (144.0, 252.0)), "{:?}", pv.sheets[0].copies);
+    assert_eq!(pv.sheets[0].trim, [18.0, 18.0, 594.0, 774.0], "the TrimBox holds every copy");
+    assert!(pv.warnings.is_empty(), "{:?}", pv.warnings);
+    // The printed page holds the twelve cards there.
+    let p = pages(&job(&d, json!({"copiesPerSheet": true})).bytes);
+    assert_eq!(p.len(), 1);
+    let mut printed: Vec<(f64, f64)> = p[0].1.iter().map(|(r, _)| (r.x0.round(), r.y0.round())).collect();
+    printed.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.total_cmp(&b.0)));
+    assert_eq!(printed, grid(&[18.0, 162.0, 306.0, 450.0], &[18.0, 270.0, 522.0]), "{:?}", p[0].1);
+    assert!(p[0].1.iter().all(|(r, paint)| rgb8(paint) == [255, 0, 0] && near(*r, Rect::new(r.x0, r.y0, r.x0 + 144.0, r.y0 + 252.0))));
+    // An 18 pt gutter: 3 across and 3 down, the 468 × 792 pt grid centered.
+    let pv = preview(&d, &settings(json!({"copiesPerSheet": true, "gutter": 18}))).unwrap();
+    assert_eq!(corners(&pv), grid(&[72.0, 234.0, 396.0], &[0.0, 270.0, 540.0]));
+    // The placement places the grid, inside the margin.
+    let pv = preview(&d, &settings(json!({"copiesPerSheet": true, "margin": 9, "placement": {"origin": "topLeft"}}))).unwrap();
+    assert_eq!(corners(&pv), grid(&[9.0, 153.0, 297.0, 441.0], &[9.0, 261.0, 513.0]));
+    // Moved 400 pt right, two columns leave the paper: the TrimBox holds the copies still on it.
+    let pv = preview(&d, &settings(json!({"copiesPerSheet": true, "placement": {"origin": "topLeft", "x": 400}}))).unwrap();
+    assert_eq!(pv.sheets[0].trim, [400.0, 0.0, 612.0, 756.0]);
+}
+
+#[test]
+fn copies_per_sheet_is_off_by_default_and_off_prints_as_before() {
+    let s = PrintSettings::default();
+    assert_eq!((s.copies_per_sheet, s.gutter), (false, 0.0));
+    let v = serde_json::to_value(&s).unwrap();
+    assert_eq!((&v["copiesPerSheet"], &v["gutter"]), (&json!(false), &json!(0.0)));
+    assert!(settings(json!({"gutter": -1})).check().is_err() && settings(json!({"gutter": 721})).check().is_err());
+    // Off, the job is the same file whatever the gutter, and its pages list no copies.
+    let d = doc(144.0, 252.0, &[(Rect::new(0.0, 0.0, 144.0, 252.0), rgb(1.0, 0.0, 0.0))]);
+    assert_eq!(job(&d, json!({})).bytes, job(&d, json!({"copiesPerSheet": false, "gutter": 36})).bytes);
+    let pv = serde_json::to_value(preview(&d, &settings(json!({}))).unwrap()).unwrap();
+    assert!(pv["sheets"][0].get("copies").is_none(), "{pv}");
+    // Tiles print one artboard across pages: copies per sheet is left out.
+    let pv = preview(&d, &settings(json!({"copiesPerSheet": true, "scaling": "tileFull"}))).unwrap();
+    assert!(pv.sheets[0].copies.is_empty() && pv.sheets[0].tile.is_some());
+}
+
+#[test]
+fn an_artboard_that_does_not_fit_prints_one_copy_per_sheet() {
+    // 700 × 900 pt is larger than Letter either way round.
+    let d = doc(700.0, 900.0, &[(Rect::new(0.0, 0.0, 700.0, 900.0), rgb(0.0, 0.0, 1.0))]);
+    let r = job(&d, json!({"copiesPerSheet": true}));
+    assert_eq!(r.pages, 1);
+    // A note on the options; the art that doesn't print is what the job loses.
+    assert_eq!(r.setting_notes, ["Artboard 1 with its bleed and marks doesn't fit the imageable area: it prints one copy per sheet"]);
+    assert!(r.warnings.iter().any(|w| w.contains("larger than the imageable area")), "{:?}", r.warnings);
+    assert_eq!(r.bytes, job(&d, json!({})).bytes, "printed as without copies per sheet");
+    assert!(preview(&d, &settings(json!({"copiesPerSheet": true}))).unwrap().sheets[0].copies.is_empty());
+    // When one copy fits, it prints alone, centered, whatever the gutter.
+    let d = doc(400.0, 500.0, &[]);
+    let pv = preview(&d, &settings(json!({"copiesPerSheet": true, "gutter": 300}))).unwrap();
+    assert_eq!(corners(&pv), [(106.0, 146.0)]);
+    // More copies than a sheet takes are refused.
+    let tiny = doc(1.0, 1.0, &[]);
+    assert!(preview(&tiny, &settings(json!({"copiesPerSheet": true}))).is_err_and(|e| e.to_string().contains("more than 1000 copies")));
+}
+
+#[test]
+fn each_copy_prints_with_its_marks() {
+    let d = doc(100.0, 100.0, &[(Rect::new(0.0, 0.0, 100.0, 100.0), rgb(1.0, 0.0, 0.0))]);
+    let set = json!({"copiesPerSheet": true, "marks": {"trim": true}});
+    let pv = preview(&d, &settings(set.clone())).unwrap();
+    let copies = pv.sheets[0].copies.len();
+    assert!(copies > 1, "{pv:?}");
+    let back = import(&job(&d, set).bytes).unwrap();
+    let mut marks = 0;
+    back.walk(|n| marks += usize::from(n.appearance.stroke().is_some_and(|s| s.paint.is_registration())));
+    assert_eq!(marks, 8 * copies, "8 trim marks around each copy");
+}
+
+#[test]
+fn every_copy_on_a_sheet_draws_the_same_symbol_instances() {
+    // A symbol of three squares (4 objects with its group), placed twice.
+    let mut d = doc(100.0, 100.0, &[]);
+    let squares = (0..3)
+        .map(|i| {
+            let r = Rect::new(f64::from(i) * 10.0, 0.0, f64::from(i) * 10.0 + 5.0, 5.0);
+            Arc::new(Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::basic(rgb(1.0, 0.0, 0.0), Paint::None, 0.0)))
+        })
+        .collect();
+    let art = Node::group(d.alloc_id(), squares);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Squares".into(), art: Arc::new(art) });
+    let layer = d.default_layer().unwrap();
+    for y in [10.0, 50.0] {
+        let instance = NodeKind::SymbolInstance { symbol: "Squares".into(), xf: vectorcraft_geom::Affine::translate((10.0, y)) };
+        let id = d.alloc_id();
+        d.insert(Some(layer), 0, Node::new(id, instance)).unwrap();
+    }
+    let set = PdfSettings { compression: CompressionSettings { compress_text: false, ..Default::default() }, ..Default::default() };
+    let mut w = crate::export::Writer::new(&d, &set, "Copies", None, false).unwrap();
+    let mut ex = crate::export::Exporter::new(&d, &set);
+    // Room for 10 symbol objects: the first copy could write both instances (8) and leave the
+    // second copy none.
+    ex.symbol_limit = 10;
+    let copies = [vectorcraft_geom::Vec2::ZERO, vectorcraft_geom::Vec2::new(200.0, 0.0)];
+    let page = Rect::new(0.0, 0.0, 300.0, 100.0);
+    let sheet = crate::export::Sheet {
+        size: (300.0, 100.0),
+        unit: 1.0,
+        trim: page,
+        bleed: page,
+        view: vectorcraft_geom::Affine::IDENTITY,
+        window: None,
+        place: vectorcraft_geom::Affine::IDENTITY,
+        copies: &copies,
+        area: Rect::new(0.0, 0.0, 100.0, 100.0),
+        clip: false,
+        marks: None,
+        negative: false,
+        links: false,
+    };
+    w.page(&mut ex, &sheet).unwrap();
+    assert_eq!(ex.symbol_limit, 10, "the limit is the export's again after the sheet");
+    w.absorb(ex);
+    let (bytes, ..) = w.finish(&mut std::collections::HashSet::new(), false).unwrap();
+    let p = pages(&bytes);
+    let left = p[0].1.iter().filter(|(r, _)| r.x0 < 200.0).count();
+    assert_eq!((left, p[0].1.len() - left), (3, 3), "one instance in each copy: {:?}", p[0].1);
+}
+
 #[test]
 fn tiles_cover_the_artboard_with_overlap() {
     // 1000 × 700 on Letter tiles (612 × 792), 36 pt overlap: 2 × 1.
@@ -237,6 +377,14 @@ fn tiles_cover_the_artboard_with_overlap() {
     let pv = preview(&d, &settings(json!({"scaling": "tileImageable", "margin": 72, "autoRotate": false}))).unwrap();
     assert_eq!((pv.tiles[0].columns, pv.tiles[0].rows), (3, 3));
     assert!(preview(&d, &settings(json!({"scaling": "tileFull", "overlap": 400}))).is_err(), "overlap of half a tile");
+}
+
+#[test]
+fn a_job_of_too_many_artboards_is_refused_while_laying_out() {
+    let mut d = doc(100.0, 100.0, &[]);
+    d.artboards.extend((2..=MAX_PAGES as u32 + 2).map(|i| artboard(i, 0.0)));
+    let e = preview(&d, &settings(json!({}))).unwrap_err().to_string();
+    assert!(e.contains("more than 2000 pages"), "{e}");
 }
 
 #[test]
@@ -301,6 +449,85 @@ fn a_symbol_instances_brush_art_keeps_its_artboard_printed() {
     let p = pages(&job(&d, json!({"skipBlank": true})).bytes);
     assert_eq!(p.len(), 1);
     assert!(p[0].1.iter().any(|(_, paint)| rgb8(paint) == [255, 0, 0]), "{p:?}");
+}
+
+#[test]
+fn a_brushed_paths_brush_art_keeps_its_artboard_printed_and_framed() {
+    // A line from (-5, 40) to (-5, 60) with a 1 pt red stroke painted by a 20 pt round nib, alone,
+    // in a group or as the art of a symbol instance: the line lies left of the artboard, and the nib
+    // paints 10 pt either side of it, onto the artboard.
+    let line = || {
+        let mut stroke = Appearance::basic(Paint::None, rgb(1.0, 0.0, 0.0), 1.0);
+        stroke.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+        Node::path(vectorcraft_doc::NodeId(0), shapes::line((-5.0, 40.0).into(), (-5.0, 60.0).into()), stroke)
+    };
+    for what in ["path", "group", "symbol instance"] {
+        let mut d = doc(100.0, 100.0, &[]);
+        let mut lib = vectorcraft_brush::library(&d);
+        let Some(vectorcraft_brush::BrushKind::Calligraphic(c)) = lib.iter_mut().find(|b| b.name == "3 pt. Round").map(|b| &mut b.kind) else {
+            panic!("the 3 pt. Round brush")
+        };
+        c.size = 20.0;
+        vectorcraft_brush::store(&mut d, &lib);
+        let mut n = match what {
+            "path" => line(),
+            "group" => Node::group(vectorcraft_doc::NodeId(0), vec![Arc::new(line())]),
+            _ => {
+                d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Nib".into(), art: Arc::new(line()) });
+                Node::new(vectorcraft_doc::NodeId(0), NodeKind::SymbolInstance { symbol: "Nib".into(), xf: vectorcraft_geom::Affine::IDENTITY })
+            }
+        };
+        n.id = d.alloc_id();
+        let layer = d.default_layer().unwrap();
+        d.insert(Some(layer), 0, n).unwrap();
+        // Skip Blank Artboards keeps the artboard, and its page holds the nib's art.
+        let p = pages(&job(&d, json!({"skipBlank": true})).bytes);
+        assert_eq!(p.len(), 1, "{what}");
+        assert!(p[0].1.iter().any(|(_, paint)| rgb8(paint) == [255, 0, 0]), "{what}: {p:?}");
+        // Ignoring artboards, the page holds all the nib's art, 20 × 40 pt.
+        let pv = preview(&d, &settings(json!({"artboards": "ignore"}))).unwrap();
+        let t = pv.sheets[0].trim;
+        assert!(t[2] - t[0] >= 20.0 && t[3] - t[1] >= 40.0, "{what}: {t:?}");
+    }
+    // A compound path is painted with its own appearance: the brushed stroke left on its path
+    // paints nothing, and the artboard stays blank.
+    let mut d = doc(100.0, 100.0, &[]);
+    let kind = NodeKind::Compound { children: vec![Arc::new(line())], rule: vectorcraft_geom::FillRule::NonZero };
+    let mut compound = Node::new(d.alloc_id(), kind);
+    compound.appearance = Appearance::basic(Paint::None, rgb(1.0, 0.0, 0.0), 1.0).into();
+    let layer = d.default_layer().unwrap();
+    d.insert(Some(layer), 0, compound).unwrap();
+    assert!(preview(&d, &settings(json!({"skipBlank": true}))).is_err());
+    // A brushed stroke without a paint draws no brush art: the artboard stays blank.
+    let mut d = doc(100.0, 100.0, &[]);
+    let mut unpainted = line();
+    unpainted.id = d.alloc_id();
+    unpainted.appearance.stroke_mut().unwrap().paint = Paint::None;
+    d.insert(Some(layer), 0, unpainted).unwrap();
+    assert!(preview(&d, &settings(json!({"skipBlank": true}))).is_err());
+}
+
+#[test]
+fn symbol_art_effects_print_where_they_draw() {
+    // A red square and the symbol's blue square, each moved 100 pt right by a Transform effect,
+    // print at the same distance from the page's left edge.
+    let moved = |mut n: Node| {
+        n.appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params: json!({"moveH": 100.0}), visible: true });
+        n
+    };
+    let mut d = doc(200.0, 100.0, &[]);
+    let (layer, id) = (d.default_layer().unwrap(), d.alloc_id());
+    let red = Node::path(id, shapes::rectangle(Rect::new(10.0, 10.0, 20.0, 20.0)), Appearance::basic(rgb(1.0, 0.0, 0.0), Paint::None, 0.0));
+    d.insert(Some(layer), 0, moved(red)).unwrap();
+    let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 40.0, 20.0, 50.0)), Appearance::basic(rgb(0.0, 0.0, 1.0), Paint::None, 0.0));
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(moved(art)) });
+    let id = d.alloc_id();
+    d.insert(Some(layer), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Moved".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
+    let p = pages(&job(&d, json!({})).bytes);
+    assert_eq!(p.len(), 1);
+    let left = |c: [u8; 3]| p[0].1.iter().find(|(_, paint)| rgb8(paint) == c).map(|(r, _)| r.x0);
+    let (red, blue) = (left([255, 0, 0]), left([0, 0, 255]));
+    assert!(red.zip(blue).is_some_and(|(r, b)| (r - b).abs() < 0.05), "{p:?}");
 }
 
 #[test]
@@ -386,6 +613,81 @@ fn cmyk_and_a_spot_separate_into_five_plates() {
     let p = pages(&job(&d, json!({"output": {"mode": "separations", "spotsToProcess": true}})).bytes);
     assert_eq!(p.len(), 4);
     assert_eq!(inks(&p[2]), [0.0, 40.0], "the gold's yellow");
+}
+
+/// A 100 pt CMYK document with spot swatch `Gold` and a square filled with gradient `g`.
+fn gold_gradient_doc(g: GradientPaint) -> Document {
+    let mut d = doc(100.0, 100.0, &[(Rect::new(0.0, 0.0, 50.0, 50.0), Paint::Gradient(Box::new(g)))]);
+    d.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+    d.swatches.push(Swatch { name: "Gold".into(), paint: Paint::solid(Color::cmyk(0.0, 0.2, 0.8, 0.1)), global: true, spot: true });
+    d
+}
+
+/// The grey of each plate of a separation of `d` (job options `v`), in percent: of the first
+/// gradient stop, and of the first freeform point when there is one. No plate keeps a link or
+/// process plates.
+fn gradient_plates(d: &Document, v: serde_json::Value) -> Vec<(f32, Option<f32>)> {
+    let opts = PrintOptions { settings: settings(v), ..Default::default() };
+    let gray = |c: &Color| match c {
+        Color::Gray { k } => (k * 100.0).round(),
+        c => panic!("{c:?}"),
+    };
+    let plan = plan(d, &opts).unwrap();
+    plan.plates
+        .iter()
+        .map(|p| {
+            let mut found = vec![];
+            p.walk(|n| {
+                if let Some(Paint::Gradient(g)) = n.appearance.fill().map(|f| &f.paint) {
+                    let s = &g.gradient.stops[0];
+                    assert_eq!((s.swatch.as_deref(), s.tint, s.plates), (None, 1.0, None), "the stop is unlinked");
+                    found.push((gray(&s.color), g.freeform.as_ref().and_then(|f| f.points.first()).map(|q| gray(&q.color))));
+                }
+            });
+            assert_eq!(found.len(), 1);
+            found[0]
+        })
+        .collect()
+}
+
+#[test]
+fn a_spot_gradient_stop_prints_its_process_plates() {
+    let mut mixed = GradientStop::new(0.0, Color::cmyk(0.25, 0.1, 0.8, 0.05));
+    (mixed.swatch, mixed.tint, mixed.plates) = (Some("Gold".into()), 0.5, Some([0.25, 0.0, 0.4, 0.0]));
+    let g = GradientPaint::new(Gradient::new(GradientKind::Linear, vec![mixed, GradientStop::new(1.0, Color::cmyk(0.0, 0.0, 0.0, 0.0))]));
+    let d = gold_gradient_doc(g);
+    let first = |v| gradient_plates(&d, v).into_iter().map(|(s, _)| s).collect::<Vec<_>>();
+    assert_eq!(first(json!({"output": {"mode": "separations"}})), [25.0, 0.0, 40.0, 0.0, 50.0], "Cyan, Magenta, Yellow, Black, Gold");
+    // Spots as process: the plates layered with the gold tint's process inks (0, 10, 40, 5).
+    assert_eq!(first(json!({"output": {"mode": "separations", "spotsToProcess": true}})), [25.0, 10.0, 64.0, 5.0]);
+}
+
+#[test]
+fn a_spot_gradient_stop_whose_tint_is_not_a_number_prints_no_spot_ink() {
+    let mut mixed = GradientStop::new(0.0, Color::cmyk(0.25, 0.1, 0.8, 0.05));
+    (mixed.swatch, mixed.tint, mixed.plates) = (Some("Gold".into()), f32::NAN, Some([0.25, 0.0, 0.4, 0.0]));
+    let g = GradientPaint::new(Gradient::new(GradientKind::Linear, vec![mixed, GradientStop::new(1.0, Color::cmyk(0.0, 0.0, 0.0, 0.0))]));
+    let d = gold_gradient_doc(g);
+    let first = |v| gradient_plates(&d, v).into_iter().map(|(s, _)| s).collect::<Vec<_>>();
+    assert_eq!(first(json!({"output": {"mode": "separations"}})), [25.0, 0.0, 40.0, 0.0, 0.0], "Cyan, Magenta, Yellow, Black, Gold");
+    assert_eq!(first(json!({"output": {"mode": "separations", "spotsToProcess": true}})), [25.0, 0.0, 40.0, 0.0]);
+}
+
+#[test]
+fn a_freeform_gradients_points_separate_into_plates() {
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Freeform, vec![GradientStop::new(0.0, Color::cmyk(0.0, 0.0, 0.0, 1.0))]));
+    let point = FreeformPoint::new(vectorcraft_geom::Point::new(25.0, 25.0), Color::cmyk(0.0, 0.6, 0.0, 0.0));
+    g.freeform = Some(Freeform { points: vec![point], ..Default::default() });
+    let d = gold_gradient_doc(g);
+    let set = json!({"output": {"mode": "separations"}});
+    let points = gradient_plates(&d, set.clone()).into_iter().map(|(_, p)| p).collect::<Vec<_>>();
+    assert_eq!(points, [Some(0.0), Some(60.0), Some(0.0), Some(0.0), Some(0.0)], "the point's magenta, on its plate only");
+    // Each plate draws the square in the grey of the point's ink on it.
+    let plan = plan(&d, &PrintOptions { settings: settings(set), ..Default::default() }).unwrap();
+    let drawn: Vec<u8> = plan.plates.iter().map(|p| render_region(p, Rect::new(0.0, 0.0, 50.0, 50.0), 1.0).over_white(25, 25)[0]).collect();
+    for (plate, (v, ink)) in drawn.iter().zip([0.0, 0.6, 0.0, 0.0, 0.0]).enumerate() {
+        assert!((f32::from(*v) - 255.0 * (1.0 - ink)).abs() <= 3.0, "plate {plate}: {drawn:?}");
+    }
 }
 
 #[test]

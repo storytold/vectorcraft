@@ -2,7 +2,7 @@ use super::entry::RgbInCmyk;
 use super::exporter::{constant_mask, cover, to_path, writable, xf};
 use super::{
     Affine, Arc, Archival, ColorOut, Compatibility, Document, Exporter, HashSet, Image, Metadata, Node, PageSettings, PdfError, PdfVersion, Rect,
-    Shape, Size, Standard, find, krilla, rfind, write,
+    Shape, Size, Standard, Surface, Vec2, find, krilla, rfind, write,
 };
 
 /// A PDF being written, shared by export and print: the file's configuration and metadata, then
@@ -26,6 +26,10 @@ pub(crate) struct Writer {
     images: Vec<(String, Image)>,
 }
 
+/// What [`Writer::finish`] gives: the file, the warnings of its drawing, and the notes on the
+/// output intent asked for ([`crate::ExportReport::setting_notes`]).
+pub(crate) type Finished = (Vec<u8>, Vec<String>, Vec<String>);
+
 /// One page as [`Writer::page`] draws it: the art placed in a drawing space ([`Self::place`]),
 /// which [`Self::view`] maps onto the page.
 pub(crate) struct Sheet<'a> {
@@ -43,6 +47,9 @@ pub(crate) struct Sheet<'a> {
     pub window: Option<Rect>,
     /// Document space → drawing space.
     pub place: Affine,
+    /// Copies on the page: each one's move in drawing space from where [`Self::place`] puts the
+    /// art. The art and the marks are drawn once per copy. Empty: one copy, not moved.
+    pub copies: &'a [Vec2],
     /// The art drawn, in document space (the bleed box): what lies outside it is left out.
     pub area: Rect,
     /// Clip the art to [`Self::area`].
@@ -51,6 +58,8 @@ pub(crate) struct Sheet<'a> {
     pub marks: Option<&'a Node>,
     /// Invert the page: paper black, ink clear (a film negative).
     pub negative: bool,
+    /// The objects' URLs are written as links over them ([`super::links`]).
+    pub links: bool,
 }
 
 impl Writer {
@@ -120,27 +129,22 @@ impl Writer {
         let size = Size::from_wh(w.max(least) as f32, h.max(least) as f32).ok_or_else(|| PdfError::BadSetting(format!("page size {w} × {h}")))?;
         let at = |b: Rect| krilla::geom::Rect::from_ltrb(b.x0 as f32, b.y0 as f32, b.x1 as f32, b.y1 as f32);
         let mut page = self.pdf.document_mut().start_page_with(PageSettings::new(size).with_trim_box(at(sheet.trim)).with_bleed_box(at(sheet.bleed)));
-        let mut s = page.surface();
+        let mut s = Surface::page(page.surface(), size.height());
         let paper = Rect::new(0.0, 0.0, w, h);
         if sheet.negative {
             cover(&mut s, paper, 255, 1.0);
         }
+        // `moves` holds each copy's move in drawing space; without copies, it holds one zero move.
+        let moves = if sheet.copies.is_empty() { &[Vec2::ZERO][..] } else { sheet.copies };
+        let place_at = |m: Vec2| if m == Vec2::ZERO { sheet.place } else { Affine::translate(m) * sheet.place };
         // A page whose art or marks would be placed beyond [`MAX_COORD`] is left blank.
-        let fits = writable(&s, sheet.view, Rect::ZERO) && writable(&s, sheet.view * sheet.place, Rect::ZERO);
+        let fits = writable(&s, sheet.view, Rect::ZERO) && moves.iter().all(|m| writable(&s, sheet.view * place_at(*m), Rect::ZERO));
         s.push_transform(&xf(sheet.view));
         let window = sheet.window.and_then(|r| to_path(&s, &r.to_path(0.1)));
         if let Some(clip) = &window {
             s.push_clip_path(clip, &krilla::paint::FillRule::NonZero);
         }
-        let placed = sheet.place != Affine::IDENTITY;
-        if placed {
-            s.push_transform(&xf(sheet.place));
-        }
         let r = sheet.area;
-        let clip = sheet.clip.then(|| to_path(&s, &r.to_path(0.1))).flatten();
-        if let Some(clip) = &clip {
-            s.push_clip_path(clip, &krilla::paint::FillRule::NonZero);
-        }
         // Page Isolated Blending / Page Knockout Group: the page content is one group (the PDF
         // writer has no page group attributes; a flat PDF 1.3 file has none). In CMYK, transparency
         // at the top of a page is put in a group of its own, whose blending space `cmyk_blending`
@@ -149,33 +153,62 @@ impl Writer {
         let doc = ex.doc;
         let page_group = fits && !self.pdf13 && (doc.page_isolate || doc.page_knockout);
         let cmyk_page_group = fits && self.cmyk && !page_group && ex.shows_transparency();
-        if page_group || (cmyk_page_group && !Node::children_blend(&doc.layers, &mut |c| c.blends_through())) {
-            s.push_isolated();
-        } else if cmyk_page_group {
-            let all = constant_mask(&mut s, r, 1.0);
-            s.push_mask(all);
+        // Each copy draws within an equal share of the symbol objects the export has left
+        // ([`vectorcraft_doc::MAX_SYMBOL_NODES`]), so every copy leaves out the same instances.
+        let limit = ex.symbol_limit;
+        let share = limit.saturating_sub(ex.symbol_nodes) / moves.len() as u64;
+        for m in moves {
+            ex.symbol_limit = ex.symbol_nodes.saturating_add(share);
+            let place = place_at(*m);
+            let placed = place != Affine::IDENTITY;
+            if placed {
+                s.push_transform(&xf(place));
+            }
+            let clip = sheet.clip.then(|| to_path(&s, &r.to_path(0.1))).flatten();
+            if let Some(clip) = &clip {
+                s.push_clip_path(clip, &krilla::paint::FillRule::NonZero);
+            }
+            if page_group || (cmyk_page_group && !Node::children_blend(&doc.layers, &mut |c| c.blends_through())) {
+                s.push_isolated();
+            } else if cmyk_page_group {
+                let all = constant_mask(&mut s, r, 1.0);
+                s.push_mask(all);
+            }
+            if fits {
+                let shown = (sheet.view * place).inverse().transform_rect_bbox(paper);
+                ex.paper = if [shown.x0, shown.y0, shown.x1, shown.y1].iter().all(|v| v.is_finite()) { shown.union(r) } else { r };
+                ex.children(&mut s, &doc.layers, r);
+            }
+            if page_group || cmyk_page_group {
+                s.pop();
+            }
+            if clip.is_some() {
+                s.pop();
+            }
+            if placed {
+                s.pop();
+            }
         }
-        if fits {
-            ex.children(&mut s, &doc.layers, r);
-        }
-        if page_group || cmyk_page_group {
-            s.pop();
-        }
-        if clip.is_some() {
-            s.pop();
-        }
-        if placed {
-            s.pop();
-        }
+        ex.symbol_limit = limit;
         if fits && let Some(art) = sheet.marks {
             // The drawing space the page shows (the marks' area).
             let shown = sheet.view.inverse().transform_rect_bbox(paper);
+            let shown = sheet.window.map_or(shown, |r| r.intersect(shown));
             let knockout = std::mem::replace(&mut ex.knockout, false);
             // Marks keep their inks: they aren't converted to the destination. The page
             // information is drawn as glyph shapes, like the other marks, not as text.
             let convert = std::mem::replace(&mut ex.convert, false);
             let outline = std::mem::replace(&mut ex.outline_text, true);
-            ex.node(&mut s, art, sheet.window.map_or(shown, |r| r.intersect(shown)), true);
+            for m in moves {
+                let moved = *m != Vec2::ZERO;
+                if moved {
+                    s.push_transform(&xf(Affine::translate(*m)));
+                }
+                ex.node(&mut s, art, shown - *m, true);
+                if moved {
+                    s.pop();
+                }
+            }
             (ex.knockout, ex.convert, ex.outline_text) = (knockout, convert, outline);
         }
         if window.is_some() {
@@ -188,6 +221,15 @@ impl Writer {
             s.pop();
         }
         s.finish();
+        if fits && sheet.links {
+            let (links, more) = ex.links(r, sheet.view * sheet.place);
+            for annotation in links.into_iter().filter_map(super::links::annotation) {
+                page.add_annotation(annotation);
+            }
+            if more {
+                ex.warn(super::links::TOO_MANY_LINKS);
+            }
+        }
         page.finish();
         Ok(())
     }
@@ -214,10 +256,11 @@ impl Writer {
     }
 
     /// The finished file (with the output intent and Trapped entries, and checked against its
-    /// standard) and the warnings of its drawing. PDF/X-1a spot colours keep their CMYK
+    /// standard), the warnings of its drawing, and the notes on the output intent asked for
+    /// ([`crate::ExportReport::setting_notes`]). PDF/X-1a spot colours keep their CMYK
     /// alternates. When the writer couldn't decode one of the images, its key is added to
     /// `left_out` ([`leaving_out_undecodable`]) and the writer's error is returned.
-    pub(crate) fn finish(mut self, left_out: &mut HashSet<String>, display_doc_title: bool) -> Result<(Vec<u8>, Vec<String>), PdfError> {
+    pub(crate) fn finish(mut self, left_out: &mut HashSet<String>, display_doc_title: bool) -> Result<Finished, PdfError> {
         let images = std::mem::take(&mut self.images);
         let mut bytes = self.pdf.finish().map_err(|e| {
             if let write::WriteError::Serialization(k) = &e
@@ -228,14 +271,14 @@ impl Writer {
             PdfError::from(e)
         })?;
         if self.cmyk {
-            cmyk_blending(&mut bytes, self.out.tagged);
+            let profile = self.out.tagged.then(|| vectorcraft_color::cms::icc_bytes(self.out.cmyk_profile()).ok()).flatten();
+            cmyk_blending(&mut bytes, self.out.tagged, profile.as_deref(), self.out.standard != Standard::PdfA2b);
         }
         let lab = !self.lab_spots.is_empty() && !self.out.standard.cmyk_only();
         let bytes = if lab { crate::lab_spot::lab_alternates(bytes, &self.lab_spots) } else { bytes };
-        let (bytes, more) = self.out.write_catalog(bytes, display_doc_title)?;
-        self.warnings.extend(more);
+        let (bytes, settings) = self.out.write_catalog(bytes, display_doc_title)?;
         self.warnings.extend(self.rgb_in_cmyk.warning());
-        Ok((crate::pdfx::finish(bytes, self.out.standard, self.pdf13)?, self.warnings))
+        Ok((crate::pdfx::finish(bytes, self.out.standard, self.pdf13)?, self.warnings, settings))
     }
 }
 
@@ -243,12 +286,21 @@ impl Writer {
 /// its blending space (DeviceRGB, or sRGB when colours are `tagged`), so the group dictionaries
 /// are rewritten in place to DeviceCMYK (or the CMYK profile's space), keeping their length so the
 /// cross-reference offsets stay valid. Luminosity masks' groups keep RGB: mask luminance is that
-/// of screen colours, as on screen.
-fn cmyk_blending(pdf: &mut [u8], tagged: bool) {
+/// of screen colours, as on screen. Tagged groups blend in the space of CMYK profile `profile`
+/// (the one that tags CMYK colours) when the file has one. When its only CMYK spaces are of other
+/// profiles (images' own), they blend in DeviceCMYK where `device` allows it, else they keep RGB;
+/// without `profile`, they blend in the first CMYK space.
+fn cmyk_blending(pdf: &mut [u8], tagged: bool, profile: Option<&[u8]>, device: bool) {
     let masks = luminosity_mask_groups(pdf);
     let mut spaces = vec![("/CS/DeviceRGB".to_string(), "/CS/DeviceCMYK".to_string())];
     if tagged {
-        spaces.extend(icc_spaces(pdf));
+        let own = profile.and_then(|icc| crate::output::tagging_stream(pdf, &crate::patch::Xref::read(pdf)?, icc));
+        let without = match (profile, device) {
+            (None, _) => Without::FirstCmyk,
+            (Some(_), true) => Without::DeviceCmyk,
+            (Some(_), false) => Without::Rgb,
+        };
+        spaces.extend(icc_spaces(pdf, own, without));
     }
     let mut from = 0;
     while let Some(at) = find(pdf, b"/Group<<", from).map(|i| i + b"/Group".len()) {
@@ -261,11 +313,22 @@ fn cmyk_blending(pdf: &mut [u8], tagged: bool) {
     }
 }
 
+/// What tagged groups blend in when the file holds no space of the document's CMYK profile.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Without {
+    /// The first ICC-based CMYK space of the file.
+    FirstCmyk,
+    DeviceCmyk,
+    /// The RGB space they have.
+    Rgb,
+}
+
 /// The ICC-based RGB colour spaces of `pdf`, each with the ICC-based CMYK one to blend in instead,
-/// as group `/CS` entries (`/CS 3 0 R`); none without a CMYK one.
-fn icc_spaces(pdf: &[u8]) -> Vec<(String, String)> {
+/// as group `/CS` entries (`/CS 3 0 R`): the one whose profile is stream `own`, else as `without`
+/// says; none without a CMYK one.
+fn icc_spaces(pdf: &[u8], own: Option<u32>, without: Without) -> Vec<(String, String)> {
     const ICC: &[u8] = b"[/ICCBased ";
-    let (mut rgb, mut cmyk) = (vec![], None);
+    let (mut rgb, mut cmyk, mut own_cmyk) = (vec![], None, None);
     let mut from = 0;
     while let Some(at) = find(pdf, ICC, from) {
         from = at + ICC.len();
@@ -277,11 +340,19 @@ fn icc_spaces(pdf: &[u8]) -> Vec<(String, String)> {
         let Some(head) = find(pdf, format!("\n{stream} 0 obj").as_bytes(), 0) else { continue };
         let dict = pdf.get(head..find(pdf, b"stream", head).unwrap_or(pdf.len())).unwrap_or_default();
         if find(dict, b"/N 4", 0).is_some() {
+            if own == Some(stream) {
+                own_cmyk.get_or_insert(format!("/CS {array} 0 R"));
+            }
             cmyk.get_or_insert(format!("/CS {array} 0 R"));
         } else if find(dict, b"/N 3", 0).is_some() {
             rgb.push(format!("/CS {array} 0 R"));
         }
     }
+    let cmyk = own_cmyk.or_else(|| match without {
+        Without::FirstCmyk => cmyk,
+        Without::DeviceCmyk => cmyk.map(|_| "/CS/DeviceCMYK".to_string()),
+        Without::Rgb => None,
+    });
     let Some(cmyk) = cmyk else { return vec![] };
     rgb.into_iter().map(|r| (r, cmyk.clone())).collect()
 }
@@ -342,4 +413,28 @@ pub(super) fn date_time(t: i64) -> krilla::metadata::DateTime {
         .second(second as u8)
         .utc_offset_hour(0)
         .utc_offset_minute(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Without, icc_spaces};
+
+    /// Objects 1 to 3: an RGB ICC-based space (profile 4), then two CMYK ones (profiles 5, 6).
+    const SPACES: &[u8] = b"%PDF-1.7\n1 0 obj\n[/ICCBased 4 0 R]\nendobj\n2 0 obj\n[/ICCBased 5 0 R]\nendobj\n3 0 obj\n[/ICCBased 6 0 R]\nendobj\n\
+        4 0 obj\n<</N 3/Length 0>>stream\n\nendstream\nendobj\n5 0 obj\n<</N 4/Length 0>>stream\n\nendstream\nendobj\n\
+        6 0 obj\n<</N 4/Length 0>>stream\n\nendstream\nendobj\n";
+
+    #[test]
+    fn groups_blend_in_the_documents_cmyk_space_else_device_cmyk() {
+        let rgb = "/CS 1 0 R".to_string();
+        // The space of the document's profile, wherever it is.
+        for without in [Without::FirstCmyk, Without::DeviceCmyk, Without::Rgb] {
+            assert_eq!(icc_spaces(SPACES, Some(6), without), [(rgb.clone(), "/CS 3 0 R".to_string())], "{without:?}");
+        }
+        // Without it, DeviceCMYK, or RGB where DeviceCMYK isn't allowed, rather than another
+        // profile's space; the first CMYK space when the document's profile isn't known.
+        assert_eq!(icc_spaces(SPACES, None, Without::DeviceCmyk), [(rgb.clone(), "/CS/DeviceCMYK".to_string())]);
+        assert_eq!(icc_spaces(SPACES, None, Without::Rgb), []);
+        assert_eq!(icc_spaces(SPACES, None, Without::FirstCmyk), [(rgb, "/CS 2 0 R".to_string())]);
+    }
 }

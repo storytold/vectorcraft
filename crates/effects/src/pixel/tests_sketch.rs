@@ -14,6 +14,7 @@ fn space(w: usize, h: usize) -> PixelSpace {
         to_doc: Affine::IDENTITY,
         px: 1.0,
         center: Point::new(w / 2.0, h / 2.0),
+        size: vectorcraft_geom::Vec2::new(w, h),
         channels: Channels::Rgb,
         line: 1.0,
         extent: 0.5 * w.hypot(h),
@@ -176,7 +177,7 @@ fn sketch_filters_reach_beyond_nothing_they_do_not_paint() {
     for id in ["sketch.basRelief", "sketch.charcoal", "sketch.conteCrayon", "sketch.photocopy", "sketch.stamp"] {
         let f = fx(id, json!({}));
         assert_eq!(f.outset(Rect::new(0.0, 0.0, 50.0, 50.0)), 0.0, "{id} keeps the object's coverage");
-        assert!(f.reach().is_some_and(|r| r.is_finite() && r > 0.0), "{id} reach");
+        assert!(f.reach(1.0).is_some_and(|r| r.is_finite() && r > 0.0), "{id} reach");
     }
 }
 

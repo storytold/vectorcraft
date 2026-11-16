@@ -23,7 +23,9 @@ use vectorcraft_engine::cmd::color_value;
 
 use super::form::PREVIEWED;
 use super::{DialogAction, DialogSpec};
-use crate::panels::color::{GAMUT_WARNING, WEB_WARNING, gamut_fix, hex_digits, is_web_safe, parse_hex, warning_chip, web_safe};
+use crate::panels::color::{
+    GAMUT_WARNING, WEB_WARNING, gamut_fix, hex_digits, is_web_safe, parse_hex, warning_chip, web_safe, working_hsb, working_rgb,
+};
 use crate::panels::{c32, color_json};
 use crate::state::Dialog;
 use crate::theme::Tokens;
@@ -113,6 +115,23 @@ impl Channel {
             Channel::Blue => (2, 0, 1),
         }
     }
+    /// The color field's axes (across, up) as keys and screen readers see them: hue in degrees,
+    /// saturation and brightness in percent, red, green and blue from 0 to 255.
+    fn field_axes(self) -> [widgets::FieldAxis<'static>; 2] {
+        let axis = |i: usize| {
+            let (name, units, suffix) = match (self.is_hsb(), i) {
+                (true, 0) => (tl!("Hue"), 360.0, "°"),
+                (true, 1) => (tl!("Saturation"), 100.0, "%"),
+                (true, _) => (tl!("Brightness"), 100.0, "%"),
+                (false, 0) => (tl!("Red"), 255.0, ""),
+                (false, 1) => (tl!("Green"), 255.0, ""),
+                (false, _) => (tl!("Blue"), 255.0, ""),
+            };
+            widgets::FieldAxis { name, units, suffix }
+        };
+        let (_, x, y) = self.axes();
+        [axis(x), axis(y)]
+    }
 }
 
 /// The picked colour with its HSB (hue in degrees), kept so the hue survives grey colours.
@@ -123,8 +142,9 @@ pub struct Picked {
 }
 
 impl Picked {
+    /// Read HSB from the color's native working RGB components.
     pub fn of(color: Color) -> Self {
-        Self { color, hsb: color.to_hsb() }
+        Self { color, hsb: working_hsb(&color) }
     }
     fn from_hsb(hsb: [f32; 3]) -> Self {
         Self { color: Color::from_hsb(hsb[0], hsb[1], hsb[2]), hsb }
@@ -137,7 +157,7 @@ impl Picked {
 
 /// The slider value and the field point (x right, y down; 0..1 each) of a colour.
 pub fn field_pos(ch: Channel, p: &Picked) -> (f32, f32, f32) {
-    let v = if ch.is_hsb() { [p.hsb[0] / 360.0, p.hsb[1], p.hsb[2]] } else { p.color.to_rgb() };
+    let v = if ch.is_hsb() { [p.hsb[0] / 360.0, p.hsb[1], p.hsb[2]] } else { working_rgb(&p.color) };
     let (z, x, y) = ch.axes();
     (v[z], v[x], 1.0 - v[y])
 }
@@ -162,7 +182,7 @@ pub fn slider_color(ch: Channel, z: f32, x: f32, y: f32) -> Color {
 /// The number and suffix that [`value_fields`] shows in the field of `ch` for `p`, and the field's
 /// largest number: H in degrees (to 360), S and B in percent (to 100), and R, G and B from 0 to 255.
 fn channel_value(ch: Channel, p: &Picked) -> (f32, &'static str, f32) {
-    let [r, g, b] = p.color.to_rgb();
+    let [r, g, b] = working_rgb(&p.color);
     match ch {
         Channel::Hue => (p.hsb[0], "°", 360.0),
         Channel::Saturation => (p.hsb[1] * 100.0, "%", 100.0),
@@ -174,6 +194,7 @@ fn channel_value(ch: Channel, p: &Picked) -> (f32, &'static str, f32) {
 }
 
 /// The colour the dialog holds: an edited `hex` wins over `color` (agents set either one).
+/// Cached HSB is reused when it reconstructs working RGB within 1e-6 per channel.
 fn picked(d: &Dialog) -> Picked {
     let hex = d.str("hex");
     let color = match parse_hex(&hex) {
@@ -182,7 +203,9 @@ fn picked(d: &Dialog) -> Picked {
     };
     let hsb = d.fields.get("__hsb").and_then(|v| serde_json::from_value::<[f32; 3]>(v.clone()).ok());
     let p = match hsb {
-        Some(h) if Picked::from_hsb(h).color.to_hex() == color.to_hex() => Picked { color, hsb: h },
+        Some(h) if working_rgb(&Picked::from_hsb(h).color).into_iter().zip(working_rgb(&color)).all(|(a, b)| (a - b).abs() <= 1e-6) => {
+            Picked { color, hsb: h }
+        }
         _ => Picked::of(color),
     };
     p.snapped(d.bool("webOnly"))
@@ -241,6 +264,23 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     d.fields.insert(crate::screen_color::PICKER_ID.into(), json!(crate::screen_color::picker_id()));
     app.ui.dialog = Some(d);
     Ok(Value::Null)
+}
+
+/// The field of a Color Picker opened over a command dialog ([`over_effect`]): the dialog's colour
+/// field its OK fills.
+const COLOUR_FIELD: &str = "__colourField";
+
+/// The Color Picker over the command dialog `parent`, on `colour`, that fills the dialog's `field`
+/// with its OK and goes back to it, as Cancel does. It previews nothing itself: the dialog's own
+/// preview shows the colour once it is back.
+pub(super) fn over_effect(parent: &Dialog, field: &str, colour: Color) -> Dialog {
+    let mut d = Dialog::new(
+        KIND,
+        json!({"original": color_json(&colour), "channel": Channel::default().id(), "webOnly": false, "swatches": false, COLOUR_FIELD: field}),
+    );
+    d.fields.insert(super::PARENT.into(), serde_json::to_value(parent).unwrap_or_default());
+    store(&mut d, &Picked::of(colour));
+    d
 }
 
 /// The field of a Color Picker opened over Recolor Artwork ([`over_recolor`]): the row whose new
@@ -344,7 +384,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
                         } else {
                             let (z, x, y) = field_pos(channel, &p);
                             let at = |x: f32, y: f32| c32(&field_pick(channel, z, x, y).snapped(web).color);
-                            if let (Some((x, y)), _) = widgets::color_field(ui, "cp-field", vec2(side, side), (x, y), &at) {
+                            if let (Some((x, y)), _) =
+                                widgets::color_field(ui, "cp-field", (tl!("Color field"), channel.field_axes()), vec2(side, side), (x, y), true, &at)
+                            {
                                 pick = Some(field_pick(channel, z, x, y));
                             }
                             ui.add_space(SLIDER_GAP);
@@ -427,8 +469,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
 /// Opened for an artboard, the picker shows the color on that artboard's paper, with or without a
 /// selection.
 fn preview(app: &mut VectorcraftApp, d: &mut Dialog) {
-    // Over Recolor Artwork the art shows that dialog's preview, which this one must not replace.
-    if d.fields.contains_key(RECOLOR_ROW) {
+    // Over Recolor Artwork the art shows that dialog's preview, which this one must not replace;
+    // over a command dialog this picker only fills a field, and the dialog previews it.
+    if d.fields.contains_key(RECOLOR_ROW) || d.fields.contains_key(COLOUR_FIELD) {
         return;
     }
     let (cmd, params) = paint_command(app, d);
@@ -493,7 +536,7 @@ fn new_original_chips(ui: &mut Ui, new: &Color, original: &Color) -> bool {
 /// K, with a stop at each channel's radio button before its field.
 fn value_fields(ui: &mut Ui, p: &Picked, channel: Channel) -> (Option<Picked>, Option<Channel>) {
     let t = Tokens::get(ui.ctx());
-    let rgb = p.color.to_rgb();
+    let rgb = working_rgb(&p.color);
     let lab = p.color.to_lab();
     let cms = cms::active();
     let cmyk = p.color.to_cmyk_managed(cms.settings().intent);
@@ -626,6 +669,15 @@ fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, current: &Color, side: f32) ->
 /// OK with the starting color unchanged and nothing previewed closes the picker and leaves the
 /// artboard as it was: without a background color, or with its color in its own color model.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    if let Some(field) = d.fields.get(COLOUR_FIELD).and_then(Value::as_str) {
+        let mut parent = super::parent(d).ok_or("the dialog it was opened over is no longer open")?;
+        parent.fields.insert(field.to_string(), json!(picked(d).color.to_hex()));
+        // The dialog previews the new colour when it comes back: end this picker's interaction, as
+        // Cancel does, so the dialog starts its preview afresh.
+        let _ = app.session.cancel_interaction();
+        app.ui.dialog = Some(parent);
+        return Ok(Value::Null);
+    }
     if let Some(row) = d.fields.get(RECOLOR_ROW).and_then(Value::as_u64) {
         let parent = super::parent(d).ok_or("Recolor Artwork is no longer open")?;
         let c = in_document_model(app, picked(d).color);

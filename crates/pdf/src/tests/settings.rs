@@ -41,6 +41,24 @@ fn json_is_camel_case_and_partial_objects_keep_defaults() {
     }
 }
 
+/// The Profiles setting is unset when left out, `null` or `"default"` (written as `null`), and set
+/// by a choice's id; another value is refused.
+#[test]
+fn the_profiles_setting_can_be_left_unset() {
+    assert_eq!(serde_json::to_value(PdfSettings::default()).unwrap()["output"]["profiles"], serde_json::Value::Null);
+    for unset in [json!({}), json!({"profiles": null}), json!({"profiles": "default"})] {
+        assert_eq!(settings(json!({"output": unset.clone()})).output.profiles, None, "{unset}");
+    }
+    for (id, want) in [("none", ProfileInclusion::None), ("all", ProfileInclusion::All), ("taggedSource", ProfileInclusion::TaggedSource)] {
+        let s = settings(json!({"output": {"profiles": id}}));
+        assert_eq!(s.output.profiles, Some(want), "{id}");
+        assert_eq!(serde_json::from_value::<PdfSettings>(serde_json::to_value(&s).unwrap()).unwrap(), s, "{id} round-trips");
+    }
+    for bad in [json!("Default"), json!("never"), json!(1)] {
+        assert!(serde_json::from_value::<PdfSettings>(json!({"output": {"profiles": bad.clone()}})).is_err(), "{bad}");
+    }
+}
+
 #[test]
 fn passwords_are_never_serialized() {
     let s = settings(json!({"security": {"openPassword": "secret", "permissionsPassword": "owner"}}));
@@ -73,7 +91,7 @@ fn checks_refuse_what_the_writer_cant_honour() {
 }
 
 #[test]
-fn options_not_applied_yet_come_back_as_warnings() {
+fn options_not_applied_yet_come_back_as_setting_notes() {
     assert!(PdfSettings::default().warnings().is_empty());
     for (v, word) in [
         (json!({"createLayers": true, "compatibility": "1.4"}), "PDF 1.5"),
@@ -110,7 +128,8 @@ fn options_not_applied_yet_come_back_as_warnings() {
     let r =
         export_with_report(&doc(), &PdfOptions { settings: settings(json!({"thumbnails": true, "marks": {"trim": true}})), ..Default::default() })
             .unwrap();
-    // The writer embeds the thumbnails it is given: without them, the one warning says so.
-    assert!(r.warnings.len() == 1 && r.warnings[0].contains("thumbnails need the pages drawn"), "{:?}", r.warnings);
+    // The writer embeds the thumbnails it is given: without them, the one note on the options says so.
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert!(r.setting_notes.len() == 1 && r.setting_notes[0].contains("thumbnails need the pages drawn"), "{:?}", r.setting_notes);
     assert!(r.bytes.starts_with(b"%PDF-1.7"));
 }

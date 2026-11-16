@@ -3,6 +3,7 @@ use super::{
     Affine, GlyphSnap, GuideStyle, Handle, HitOptions, Line, NodeId, OrientedBox, Overlay, ParamCurve, ParamCurveDeriv, ParamCurveNearest, PathSeg,
     Point, Rect, ScreenFrame, ToolContext, Vec2, constrain_angle_from, hit_test,
 };
+use crate::PixelOp;
 
 /// Where curves `a` and `b` cross near `p`: a point projected from one onto the other and back
 /// settles where they meet (none when they don't nearby).
@@ -100,11 +101,29 @@ pub struct PointSnap {
     /// The smart guide targets, or with Smart Guides off those of Snap to Point, and how near (in
     /// screen pixels) they pull; none with pixels or the grid snapping instead, or nothing on.
     targets: Option<(Targets, f64)>,
+    /// The kind of edit the point serves: whether Snap to Pixel rounds it
+    /// ([`ToolContext::snaps_to_pixel`]).
+    op: PixelOp,
 }
 
 impl PointSnap {
+    /// Snapping for a drawn point.
     pub fn new(cx: &ToolContext, targets: impl FnOnce() -> Targets) -> Self {
-        let targets = if cx.snap_to_pixel || cx.snap_to_grid {
+        Self::for_op(cx, PixelOp::Drawing, targets)
+    }
+
+    /// Snapping for a moved point (an anchor, or the selection held by one).
+    pub fn moving(cx: &ToolContext, targets: impl FnOnce() -> Targets) -> Self {
+        Self::for_op(cx, PixelOp::Moving, targets)
+    }
+
+    /// Snapping for a dragged handle that scales ([`Self::snap_scale`]).
+    pub fn scaling(cx: &ToolContext, targets: impl FnOnce() -> Targets) -> Self {
+        Self::for_op(cx, PixelOp::Scaling, targets)
+    }
+
+    fn for_op(cx: &ToolContext, op: PixelOp, targets: impl FnOnce() -> Targets) -> Self {
+        let targets = if cx.snaps_to_pixel(op) || cx.snap_to_grid {
             None
         } else if cx.smart_guides {
             // Snap to Point keeps pulling points onto the ruler guides with Smart Guides on (#812).
@@ -116,7 +135,14 @@ impl PointSnap {
         } else {
             None
         };
-        Self { targets }
+        Self { targets, op }
+    }
+
+    /// Snapping for a point placed anywhere, as a drawing tool's ([`DrawSnap`]) is: the art in the
+    /// window as targets ([`Targets::for_drawing`]), live text as Snap to Glyph asks.
+    pub fn drawn(cx: &ToolContext) -> Self {
+        let glyphs = (cx.snap_to_glyph && cx.smart_guides && cx.alignment_guides).then_some(cx.glyph_snap);
+        Self::new(cx, || Targets::for_drawing(cx.doc, &[], visible(cx), glyphs))
     }
 
     /// Where `p` goes, and the guides showing why.
@@ -128,7 +154,7 @@ impl PointSnap {
     /// showing why. Pixels and the grid round it before Shift turns it onto its angle.
     pub fn snap_from(&self, cx: &ToolContext, p: Point, from: Option<&Leave>) -> (Point, Vec<Overlay>) {
         let keep = |q: Point| from.and_then(|f| f.constrained(q)).unwrap_or(q);
-        if cx.snap_to_pixel {
+        if cx.snaps_to_pixel(self.op) {
             return (keep(Point::new(p.x.round(), p.y.round())), vec![]);
         }
         if cx.snap_to_grid {
@@ -141,9 +167,10 @@ impl PointSnap {
     }
 
     /// Snap a bounding-box resize ([`Targets::snap_scale`]) as [`Self::snap`] snaps a point. With
-    /// Snap to Pixel on, the corner or side the handle moves lines up with whole pixels, and with
-    /// Snap to Grid on it lines up with the nearest gridline, however far that is; neither shows
-    /// guides. Otherwise the handle snaps to the targets [`Self::new`] gathered.
+    /// Snap to Pixel on for scaling, the corner or side the handle moves lines up with whole
+    /// pixels, and with Snap to Grid on it lines up with the nearest gridline, however far that
+    /// is; neither shows guides. Otherwise the handle snaps to the targets [`Self::scaling`]
+    /// gathered.
     pub fn snap_scale(
         &self,
         cx: &ToolContext,
@@ -153,7 +180,7 @@ impl PointSnap {
         proportional: bool,
         from_center: bool,
     ) -> (Affine, Vec<Overlay>) {
-        let step = if cx.snap_to_pixel {
+        let step = if cx.snaps_to_pixel(PixelOp::Scaling) {
             Some(1.0)
         } else if cx.snap_to_grid {
             Some(cx.grid_step()).filter(|s| s.is_finite() && *s > 0.0)
@@ -230,10 +257,11 @@ impl Leave {
         self
     }
 
-    /// The straight segment from the anchor `at` to a point being dragged (an open path's end
-    /// moved with Direct Selection): the point may land square to a segment or grazing a curve,
-    /// but is not held to Shift's angles or the construction guides, which a moved anchor
-    /// does not follow.
+    /// The straight segment from the point `at` to a point being placed (an open path's end
+    /// moved with Direct Selection, or the Dimension tool's second Linear point after a first
+    /// point that is not on an anchor): the point may
+    /// land square to a segment or grazing a curve, but is not held to Shift's angles or the
+    /// construction guides through `at`.
     pub fn contact(at: Point) -> Self {
         Self { at, shift: None, angles: &[], contact: true }
     }
@@ -288,6 +316,11 @@ pub fn square(d: Vec2) -> Vec2 {
 /// state: hovering gathers them again only after the document, the selection, what is left out,
 /// the window or the snapping options changed; a press always gathers them afresh, and the drag
 /// it starts keeps them, the document then showing the drag's own previews.
+///
+/// The Measure and Measure & Inspect tools keep one too, for the ends of a drag only. They do not
+/// ask it while hovering. [`Self::measure`] gathers [`Targets::for_measure`] instead, and a press
+/// reuses those targets while nothing they depend on changed. It has guides to show only while
+/// Snap to Glyph gives guides.
 #[derive(Default)]
 pub struct DrawSnap {
     /// The targets, and what they were gathered for (none: for one drag only).
@@ -315,7 +348,15 @@ impl SnapKey {
             revision: cx.revision,
             exclude: exclude.to_vec(),
             screen: cx.screen,
-            view: [cx.smart_guides, cx.snap_to_point, cx.snap_to_pixel, cx.snap_to_grid, cx.guides, cx.snap_tangent, cx.snap_perpendicular],
+            view: [
+                cx.smart_guides,
+                cx.snap_to_point,
+                cx.snaps_to_pixel(PixelOp::Drawing),
+                cx.snap_to_grid,
+                cx.guides,
+                cx.snap_tangent,
+                cx.snap_perpendicular,
+            ],
             snap_to_glyph: (cx.snap_to_glyph && cx.smart_guides && cx.alignment_guides).then_some(cx.glyph_snap),
             style: GuideStyle::of(cx),
             tolerances: [cx.snapping_tolerance, cx.snap_tolerance],
@@ -324,7 +365,7 @@ impl SnapKey {
 }
 
 /// The part of the document the window shows (none headless: all of it).
-fn visible(cx: &ToolContext) -> Option<Rect> {
+pub(super) fn visible(cx: &ToolContext) -> Option<Rect> {
     let s = cx.screen?;
     let (w, h) = s.size;
     Some(Rect::from_points(s.at(0.0, 0.0), s.at(w, h)).union_pt(s.at(w, 0.0)).union_pt(s.at(0.0, h)))
@@ -348,11 +389,28 @@ impl DrawSnap {
         self.snap(cx, p, from)
     }
 
+    /// Snap an end of a measurement at `p` ([`Targets::for_measure`]), reusing the targets while
+    /// nothing they depend on changed, so a drag lays out the type once. With Snap to Glyph giving
+    /// no guides, [`Self::guides`] stays empty.
+    pub fn measure(&mut self, cx: &ToolContext, p: Point, from: Option<&Leave>) -> Point {
+        let key = SnapKey::of(cx, &[]);
+        let glyphs = key.snap_to_glyph.is_some();
+        if self.targets.as_ref().is_none_or(|(k, _)| k.as_ref() != Some(&key)) {
+            let snap = PointSnap::new(cx, || Targets::for_measure(cx.doc, visible(cx), key.snap_to_glyph));
+            self.targets = Some((Some(key), snap));
+        }
+        let q = self.snap(cx, p, from);
+        if !glyphs {
+            self.guides.clear();
+        }
+        q
+    }
+
     /// Snap the point pressed at `p` onto the art's anchors and paths alone, within the Smart
     /// Guides snapping tolerance (the Knife's straight cut). The targets serve this press only.
     pub fn press_on_paths(&mut self, cx: &ToolContext, p: Point) -> Point {
         let targets = Targets::for_drawing(cx.doc, &[], visible(cx), None).styled(cx).anchors_and_paths();
-        self.targets = Some((None, PointSnap { targets: Some((targets, cx.snapping_tolerance)) }));
+        self.targets = Some((None, PointSnap { targets: Some((targets, cx.snapping_tolerance)), op: PixelOp::Drawing }));
         self.snap(cx, p, None)
     }
 
@@ -363,12 +421,58 @@ impl DrawSnap {
         self.guides.clear();
     }
 
+    /// Snap to Tangent for a circle drawn around `center`, its radius `r` set by the pointer at `p`
+    /// through the dragged `corner` (where [`Self::drag`] put it): the radius, within the Smart
+    /// Guides snapping tolerance of `r`, at which the circle touches nearby art
+    /// ([`Targets::tangent_radius`]), its guides replacing the last snap's. None, the guides kept,
+    /// with Smart Guides or Snap to Tangent off, pixels or the grid snapping instead (each read
+    /// again on every move, as [`PointSnap::snap_from`] reads pixels and the grid), nothing in
+    /// reach, or an anchor, center or crossing in reach of `p` or at `corner`.
+    pub fn circle_radius(&mut self, cx: &ToolContext, center: Point, p: Point, corner: Point, r: f64) -> Option<f64> {
+        let Some((_, PointSnap { targets: Some((t, tol)), op })) = &self.targets else { return None };
+        if !cx.smart_guides || !cx.snap_tangent || cx.snaps_to_pixel(*op) || cx.snap_to_grid {
+            return None;
+        }
+        let (radius, guides) = t.tangent_radius(center, p, corner, r, cx.tol(*tol))?;
+        self.guides = guides;
+        Some(radius)
+    }
+
     /// Snap `p`, dragged since the press, with the targets the press gathered.
     pub fn drag(&mut self, cx: &ToolContext, p: Point, from: Option<&Leave>) -> Point {
         if self.targets.is_none() {
             self.gather(cx, SnapKey::of(cx, &[]));
         }
         self.snap(cx, p, from)
+    }
+
+    /// How far from `p` the nearest Smart Guides point (an anchor or a center) or crossing of the
+    /// targets lies, when one is within the snapping tolerance: none otherwise, and none while
+    /// pixels or the grid snap instead.
+    pub(crate) fn point_within_reach(&self, cx: &ToolContext, p: Point) -> Option<f64> {
+        let Some((_, PointSnap { targets: Some((t, tol)), .. })) = &self.targets else { return None };
+        if !cx.smart_guides {
+            return None;
+        }
+        let tol = cx.tol(*tol);
+        let point = t.nearest_point(p, tol).map(|(q, _)| q.distance(p));
+        let crossing = t.crossing(p, tol).map(|q| q.distance(p));
+        match (point, crossing) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
+    }
+
+    /// Whether `q`, where a point at `p` snapped to, is the nearest Smart Guides point (an anchor or
+    /// a center) or the nearest crossing of the targets within the snapping tolerance of `p`.
+    pub(crate) fn snapped_to_point(&self, cx: &ToolContext, p: Point, q: Point) -> bool {
+        let Some((_, PointSnap { targets: Some((t, tol)), .. })) = &self.targets else { return false };
+        if !cx.smart_guides {
+            return false;
+        }
+        let tol = cx.tol(*tol);
+        let at = |a: Point| a.distance(q) <= 1e-9 * tol.max(1.0);
+        t.nearest_point(p, tol).is_some_and(|(a, _)| at(a)) || t.crossing(p, tol).is_some_and(at)
     }
 
     /// The guides of the last snap.
@@ -406,8 +510,12 @@ impl HandleSnap {
     /// Where the handle of anchor `ai` of subpath `si` of path `id` goes with the pointer at `p`,
     /// and the guides showing why.
     pub fn snap(&mut self, cx: &ToolContext, (id, si, ai): (NodeId, usize, usize), p: Point, shift: bool) -> (Point, Vec<Overlay>) {
-        let path = cx.doc.node(id).and_then(|n| n.path_data());
-        if shift && let Some(a) = path.and_then(|pd| pd.subpaths.get(si)?.anchors.get(ai)) {
+        // A path's anchor, or one of type on a path's path (#3565), in document space.
+        let anchor = cx.doc.node(id).and_then(|n| match &n.kind {
+            vectorcraft_doc::NodeKind::Text(t) => t.type_path()?.subpaths.get(si)?.anchors.get(ai).copied(),
+            _ => n.path_data()?.subpaths.get(si)?.anchors.get(ai).copied(),
+        });
+        if shift && let Some(a) = anchor {
             return (a.p + constrain_angle_from(p - a.p, 45.0, cx.constrain_angle), vec![]);
         }
         if self.0.targets.is_none() {

@@ -180,6 +180,72 @@ fn pans_within_a_cropped_rasters_margin_draw_it_kept() {
     }
 }
 
+/// A frame counts the art it draws in a way that depends on its size: an effect raster cropped to
+/// it or made at a lower resolution, drawn from the raster kept as well as made; a filter layer
+/// cropped to it or made at a lower resolution; any filter layer drawn on a single-threaded context,
+/// as on a single-threaded renderer or in a group drawn offscreen; and a mesh past the mesh buffer.
+/// Art with a raster of its own whole, and a filter layer that stays inside the frame, are not
+/// counted.
+#[test]
+fn a_frame_counts_the_art_it_draws_by_its_size() {
+    let effect = |id: &str, params: serde_json::Value| backdrop(&[(id, params)]).0;
+    let mesh = |side: f64| {
+        let mut d = Document::new(595.0, 842.0);
+        let m = vectorcraft_doc::GradientMesh::from_surface(2, 2, &|u, v| vectorcraft_geom::Point::new(u * side, v * side), &|u, v| {
+            Color::rgb(u as f32, v as f32, 0.5)
+        });
+        let layer = d.layers[0].id;
+        let node = Node::new(d.alloc_id(), NodeKind::Mesh(m));
+        d.insert(Some(layer), 0, node).unwrap();
+        d
+    };
+    let blur = effect("blur.gaussian", json!({"radius": 8}));
+    let shadow = effect("stylize.dropShadow", json!({"blur": 8, "x": 4, "y": 4}));
+    let outer_glow = effect("stylize.outerGlow", json!({"blur": 8}));
+    let glow = effect("stylize.innerGlow", json!({"blur": 8}));
+    let wide_glow = effect("stylize.innerGlow", json!({"blur": 2000}));
+    let group_glow = {
+        let mut d = Document::new(595.0, 842.0);
+        let basic = |c: Color| Appearance::basic(Paint::solid(c), Paint::None, 0.0);
+        let wide = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 595.0, 842.0)), basic(Color::rgb(0.9, 0.8, 0.3)));
+        let mut child = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(200.0, 200.0, 330.0, 500.0)), basic(Color::rgb(0.1, 0.3, 0.9)));
+        child.appearance.effects = vec![Effect { id: "stylize.innerGlow".into(), params: json!({"blur": 40}), visible: true }];
+        child.blend = vectorcraft_doc::color::BlendMode::Multiply;
+        let mut group = Node::group(d.alloc_id(), vec![std::sync::Arc::new(wide), std::sync::Arc::new(child)]);
+        group.isolate = true;
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), 0, group).unwrap();
+        d
+    };
+    let cases = [
+        ("a whole blur raster", &blur, 1.0, (640, 900), 2, false),
+        ("a blur raster cropped to the frame", &blur, 10.0, (256, 128), 2, true),
+        ("a blur raster at a lower resolution", &blur, 5.0, (3200, 4400), 2, true),
+        ("a whole shadow raster", &shadow, 1.0, (640, 900), 2, false),
+        ("a shadow raster cropped to the frame", &shadow, 40.0, (256, 128), 2, true),
+        ("an outer glow raster at a lower resolution", &outer_glow, 5.0, (3200, 4400), 2, true),
+        ("a filter layer inside the frame", &glow, 1.0, (640, 900), 2, false),
+        ("a filter layer past the frame's edge", &glow, 1.0, (256, 128), 2, true),
+        ("a filter layer at a lower resolution", &wide_glow, 1.0, (640, 900), 2, true),
+        ("a filter layer on a single-threaded renderer", &glow, 1.0, (640, 900), 0, true),
+        ("a filter layer in a group drawn offscreen", &group_glow, 1.0, (640, 900), 2, true),
+    ];
+    for (name, d, zoom, size, threads, counted) in cases {
+        let opts = RenderOptions::default();
+        let mut r = Renderer::new();
+        r.threads = threads;
+        r.render(d, size.0, size.1, view(zoom, size), &opts);
+        assert_eq!(r.stats.view_sized > 0, counted, "{name}");
+        r.render(d, size.0, size.1, view(zoom, size), &opts);
+        assert_eq!(r.stats.view_sized > 0, counted, "{name}, drawn again");
+    }
+    let mut r = Renderer::new();
+    r.render(&mesh(100.0), 2100, 2100, Affine::IDENTITY, &RenderOptions::default());
+    assert_eq!(r.stats.view_sized, 0, "a mesh within the mesh buffer");
+    r.render(&mesh(3000.0), 2100, 2100, Affine::IDENTITY, &RenderOptions::default());
+    assert!(r.stats.view_sized > 0, "a mesh past the mesh buffer");
+}
+
 /// Scrolls by amounts that are not whole pixels, as the wheel and a trackpad give them, moved in whole pixels with the part left
 /// over carried to the next, as the canvas moves them: after the scroll that makes the Drop Shadow's cropped raster
 /// again with its margin, every later scroll draws it kept. The same scrolls moved as given make it again in every

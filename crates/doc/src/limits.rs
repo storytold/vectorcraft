@@ -13,7 +13,11 @@ pub enum DocError {
     Invalid(String),
 }
 
-pub const FORMAT_VERSION: u32 = 1;
+/// The document version new documents get. Version 2: a positive Twist angle turns clockwise
+/// ([`crate::twist`]). Version 3: Color Halftone's Max Radius is in pixels of the raster effects
+/// resolution (older documents are converted on opening,
+/// [`crate::Document::migrate_halftone_radii`]).
+pub const FORMAT_VERSION: u32 = 3;
 
 /// Node, slice and asset ids are handed out below this: no document gets near it by counting, so
 /// larger ids in a file are damage (or made by hand) and the counter never follows them (#1718).

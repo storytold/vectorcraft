@@ -126,6 +126,23 @@ impl SavedSelection {
     }
 }
 
+/// An SVG filter the document holds (Effect › SVG Filters): a `<filter>` element named by its
+/// `id`, listed in the SVG Filters submenu and in Apply SVG Filter.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SvgFilter {
+    /// The filter element's `id`.
+    pub name: String,
+    /// The `<filter>` element's XML, as it was written.
+    pub xml: String,
+}
+
+impl SvgFilter {
+    /// Most SVG filters a document holds.
+    pub const MAX: usize = 64;
+    /// Longest filter element, in bytes.
+    pub const MAX_XML: usize = 64 * 1024;
+}
+
 /// A symbol definition.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Symbol {

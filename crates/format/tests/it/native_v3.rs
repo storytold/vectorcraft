@@ -157,6 +157,24 @@ fn keys_from_newer_versions_round_trip() {
     check_native_roundtrip(&d).unwrap();
 }
 
+/// An opacity-mask editing state in a file drops the editing layer it names only when that is a
+/// top-level layer, as files saved mid-edit have it: a sublayer it names loads and stays.
+#[test]
+fn saved_mask_editing_drops_only_a_top_level_layer() {
+    let mut d = Document::new(612.0, 792.0);
+    let host = d.layers[0].id;
+    let sub = d.add_layer(Some("Sub"));
+    d.move_node(sub, Some(host), 0).unwrap();
+    let top = d.add_layer(Some("Mask"));
+    for (layer, kept) in [(sub, true), (top, false)] {
+        let mut v = json_of(&save(&d, false));
+        v["document"]["mask_edit"] = json!({"object": host, "layer": layer});
+        let back = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+        assert_eq!(back.node(layer).is_some(), kept, "layer {layer:?}");
+        assert!(back.mask_edit.is_none() && back.node(host).is_some());
+    }
+}
+
 /// The paragraph composer is saved only when it isn't the default (Every-line) and reads back.
 #[test]
 fn text_composer_round_trips() {
@@ -192,6 +210,44 @@ fn text_composer_round_trips() {
     let d2 = load(&serde_json::to_vec(&v).unwrap()).unwrap();
     assert!(composers(&d2).iter().all(|c| *c == Composer::EveryLine), "{:?}", composers(&d2));
     assert!(!String::from_utf8_lossy(&save(&d2, false)).contains("composer"));
+}
+
+/// Every composer reads back as it was saved (the two Standard ones as their own values), and the
+/// ME&SA names are the ones files have always used: `everyLine` stays the unwritten default and
+/// `singleLine` keeps its spelling, so a document that never picks a Standard composer is unchanged.
+#[test]
+fn all_four_composers_round_trip() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    let one = |c: Composer| {
+        let mut d = Document::new(200.0, 200.0);
+        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "ક\u{ACD}ક", Default::default());
+        t.para.composer = c;
+        t.kind = TextKind::Point;
+        let id = d.alloc_id();
+        d.insert(None, usize::MAX, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+        d
+    };
+    for (c, written) in [
+        (Composer::SingleLine, Some("singleLine")),
+        (Composer::EveryLine, None),
+        (Composer::StandardSingleLine, Some("standardSingleLine")),
+        (Composer::StandardEveryLine, Some("standardEveryLine")),
+    ] {
+        let bytes = save(&one(c), false);
+        let text = String::from_utf8_lossy(&bytes);
+        match written {
+            Some(w) => assert!(text.contains(&format!("\"composer\":\"{w}\"")), "{c:?}"),
+            None => assert!(!text.contains("\"composer\""), "{c:?}"),
+        }
+        let back = load(&bytes).unwrap();
+        let mut got = None;
+        back.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                got = Some(t.para.composer);
+            }
+        });
+        assert_eq!(got, Some(c));
+    }
 }
 
 /// A document as the first version wrote it (format name `drawcraft`, anchors as maps).
@@ -275,13 +331,21 @@ fn artboard_guides_round_trip_and_canvas_guides_save_as_before() {
     use vectorcraft_doc::Guide;
     let mut d = Document::new(100.0, 100.0);
     let id = d.artboards[0].id;
-    d.guides = vec![Guide::new(true, 10.0), Guide { artboard: Some(id), ..Guide::new(false, 20.0) }];
+    d.add_ruler_guide(&Guide::new(true, 10.0));
+    d.add_ruler_guide(&Guide { artboard: Some(id), ..Guide::new(false, 20.0) });
     let mut v = json_of(&save(&d, false));
-    assert_eq!(v["document"]["guides"], json!([{"vertical": true, "pos": 10.0}, {"vertical": false, "pos": 20.0, "artboard": id}]));
-    assert_eq!(load(&save(&d, false)).unwrap().guides, d.guides);
+    let lines: Vec<_> = v["document"]["guides"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|g| json!({"vertical": g["vertical"], "pos": g["pos"], "artboard": g.get("artboard")}))
+        .collect();
+    assert_eq!(lines, [json!({"vertical": true, "pos": 10.0, "artboard": null}), json!({"vertical": false, "pos": 20.0, "artboard": id})]);
+    assert_eq!(load(&save(&d, false)).unwrap().ruler_guides(), d.ruler_guides());
     v["document"]["guides"] = json!([{"vertical": false, "pos": 20.0}]);
     let old = load(&serde_json::to_vec(&v).unwrap()).unwrap();
-    assert_eq!(old.guides, [Guide::new(false, 20.0)]);
+    let old_lines: Vec<_> = old.ruler_guides().into_iter().map(|g| (g.vertical, g.pos, g.artboard)).collect();
+    assert_eq!(old_lines, [(false, 20.0, None)]);
 }
 
 #[test]
