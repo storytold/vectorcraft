@@ -96,10 +96,13 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         // The paragraphs of the selected type, or those the Type tool's selection touches.
         if crate::panels::character::text_style(app).is_some() {
             v.push(sub("Bullets and Numbering", vec![c("Apply Bullets", "type.applyBullets"), c("Apply Numbers", "type.applyNumbers")]));
-            // A right-click on type turns Auto Spell Check on or off, as Edit › Spelling does, per
-            // the public [Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)
-            // page. Its submenu holds only toggles, so it shows the check mark (`render_items`).
-            v.push(sub("Spelling", vec![c("Auto Spell Check", "edit.autoSpellCheck")]));
+            // A right-click on type turns Auto Spell Check on or off and opens Check Spelling…, as
+            // Edit › Spelling does, per the public [Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)
+            // page. The submenu shows Auto Spell Check's check mark (`render_items`).
+            v.push(sub(
+                "Spelling",
+                vec![c("Auto Spell Check", "edit.autoSpellCheck"), c("Check Spelling…", crate::dialogs::check_spelling::COMMAND)],
+            ));
         }
         v.extend([c("Make Guides", "view.guides.make"), Sep, sub("Transform", transform_items())]);
         if intertwine.is_none() {
@@ -274,7 +277,7 @@ pub fn context_menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, clicked: &mut 
     widgets::menu_scroll(ui, |ui| {
         widgets::menu_min_width(ui, 200.0);
         // Its toggles already say what they do (Show Rulers, Hide Guides): no check-mark gutter,
-        // except in a submenu of toggles alone (Spelling › Auto Spell Check).
+        // except in a submenu of toggles alone and in Spelling, for Auto Spell Check.
         render_items(app, ui, &context_items(app), false, clicked);
     });
 }
