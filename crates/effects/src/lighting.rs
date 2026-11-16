@@ -176,6 +176,20 @@ pub(crate) fn footprint(path: &vectorcraft_geom::BezPath, seam: f64) -> vectorcr
 /// in a clip of its footprint, neither with an opacity mask.
 pub(crate) fn sealed(id: vectorcraft_doc::NodeId, faces: &[std::sync::Arc<vectorcraft_doc::Node>]) -> Option<vectorcraft_doc::Node> {
     use std::sync::Arc;
+    use vectorcraft_doc::{Node, NodeKind};
+    let (clip, mut underlay) = underlay(id, faces)?;
+    underlay.extend(faces.iter().cloned());
+    Some(Node::new(id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(Node::group(id, underlay))], clip: true }))
+}
+
+/// The parts of [`sealed`] for `faces`: a path of the union of the facets' footprints, to clip to,
+/// and the facets grown to seams [`UNDERLAY_SEAM`] wide, in the same order. `None` under the same
+/// conditions as [`sealed`].
+pub(crate) fn underlay(
+    id: vectorcraft_doc::NodeId,
+    faces: &[std::sync::Arc<vectorcraft_doc::Node>],
+) -> Option<(vectorcraft_doc::Node, Vec<std::sync::Arc<vectorcraft_doc::Node>>)> {
+    use std::sync::Arc;
     use vectorcraft_doc::{Appearance, Node, NodeKind};
     let mut outline = vectorcraft_geom::BezPath::new();
     let mut underlay = Vec::with_capacity(faces.len());
@@ -207,9 +221,7 @@ pub(crate) fn sealed(id: vectorcraft_doc::NodeId, faces: &[std::sync::Arc<vector
             _ => return None,
         }
     }
-    let clip = Node::path(id, vectorcraft_geom::PathData::from_bezpath(&outline), Appearance::default());
-    underlay.extend(faces.iter().cloned());
-    Some(Node::new(id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(Node::group(id, underlay))], clip: true }))
+    Some((Node::path(id, vectorcraft_geom::PathData::from_bezpath(&outline), Appearance::default()), underlay))
 }
 
 /// Composite smooth solid-fill facets with one clip and three channel groups per surface. In each
@@ -319,6 +331,22 @@ pub(crate) fn opaque_paint(paint: &Paint) -> (Paint, Option<Paint>) {
         }
     }
     (base, transparent.then_some(mask))
+}
+
+/// [`opaque_paint`] for a surface of several faces under one opacity mask. A transparent gradient
+/// without a placement (or a freeform gradient without points) is first pinned to `bounds`, the
+/// faces' bounds together grown by 1 pt, so every face's color and the mask share one placement.
+/// An opaque gradient is returned as [`opaque_paint`] returns it.
+pub(crate) fn opaque_surface_paint(paint: &Paint, bounds: impl FnOnce() -> vectorcraft_geom::Rect) -> (Paint, Option<Paint>) {
+    let (base, mask) = opaque_paint(paint);
+    if mask.is_none() || !matches!(paint, Paint::Gradient(_)) {
+        return (base, mask);
+    }
+    let mut pinned = paint.clone();
+    if let Paint::Gradient(g) = &mut pinned {
+        g.pin(bounds().inflate(1.0, 1.0));
+    }
+    opaque_paint(&pinned)
 }
 
 fn composed_art(id: vectorcraft_doc::NodeId, path: &vectorcraft_geom::PathData, paint: &Paint, light: Ramp, seam: f64) -> vectorcraft_doc::Node {

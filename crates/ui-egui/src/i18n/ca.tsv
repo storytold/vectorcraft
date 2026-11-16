@@ -772,6 +772,7 @@ antiAlias	Sharp	Nítid
 	Preserve Numbers	Conserva els números
 	Coarse Dots	Punts gruixuts
 	Collapse Panel Group	Replega el grup de panells
+	Cycle Display Sizes	Alterna les mides de visualització
 	Collapse Panels to Icons	Replega els panells a icones
 	Collapse to Icons	Replega a icones
 	Collate	Intercala
@@ -946,6 +947,18 @@ antiAlias	Sharp	Nítid
 	Copyright	Copyright
 	Copyright and Contact Info	Informació de copyright i de contacte
 	Copyright Info URL:	URL de la informació de copyright:
+	Save Metadata Template…	Desa la plantilla de metadades…
+	Import Options	Opcions d’importació
+	Clear existing fields and use the template's	Esborra els camps existents i fes servir els de la plantilla
+	Keep existing fields, but replace those the template has	Conserva els camps existents, però substitueix els que tingui la plantilla
+	Keep existing fields, but append those the template has	Conserva els camps existents, però afegeix els que tingui la plantilla
+@msg	the template name can't be empty	el nom de la plantilla no pot estar buit
+@msg	the template name isn't usable as a file name	el nom de la plantilla no es pot fer servir com a nom de fitxer
+@msg	no metadata templates folder here	aquí no hi ha cap carpeta de plantilles de metadades
+@msg	give `name` or `path`, not both	indiqueu `name` o `path`, no tots dos
+@msg	give one of `path`, `name` and `data`	indiqueu un de `path`, `name` i `data`
+@msg	mode must be replace, keep or append	el mode ha de ser replace, keep o append
+@msg	the file is not an XMP metadata template	el fitxer no és una plantilla de metadades XMP
 	Copyright Notice:	Avís de copyright:
 	Copyright Status:	Estat del copyright:
 	Copyright Symbol	Símbol de copyright
@@ -1644,6 +1657,7 @@ antiAlias	Sharp	Nítid
 	Highlight Size	Mida de la brillantor
 	Blend Steps	Passos de fusió
 	Shading Color	Color de l’ombra
+	Black Overprint	Negre en sobreimpressió
 	Draw Hidden Faces	Dibuixa les cares ocultes
 	Eyedropper	Comptagotes
 	Eyedropper Applies:	El comptagotes aplica:
@@ -1910,6 +1924,8 @@ digits	Malayalam	Malaiàlam
 	Graph Design	Disseny del gràfic
 	Graph Marker	Marcador del gràfic
 	Graph Type	Tipus de gràfic
+	Graph Type…	Tipus de gràfic…
+	Graph Data…	Dades del gràfic…
 	Graph Options	Opcions del gràfic
 	Left Axis	Eix esquerre
 	Right Axis	Eix dret
@@ -2025,6 +2041,7 @@ digits	Malayalam	Malaiàlam
 	Show smooth color wheel	Mostra la roda de color contínua
 	Show segmented color wheel	Mostra la roda de color segmentada
 	Show color bars	Mostra les barres de color
+	Find the selected colors in the artwork	Troba els colors seleccionats a l’obra
 	Harmony Sets	Conjunts d’harmonia
 	HDTV 1080p	HDTV 1080p
 	HDTV 720p	HDTV 720p
@@ -2494,6 +2511,7 @@ digits	Malayalam	Malaiàlam
 	Load Variable Library	Carrega la biblioteca de variables
 	Load Variable Library…	Carrega la biblioteca de variables…
 	Save Variable Library…	Desa la biblioteca de variables…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	«Importa» llegeix un fitxer d’origen de dades amb l’extensió .csv, .tsv, .txt o .xml
 @msg	a variable library holds text variables, and the document has none	una biblioteca de variables conté variables de text, i el document no en té cap
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variable `{name}` no es pot desar en una biblioteca de variables: canvieu-li el nom perquè comenci amb una lletra o `_`, sense espais ni símbols que no siguin `-`, `_` i `.`
 @msg	{k} has control characters	{k} conté caràcters de control
@@ -3430,6 +3448,8 @@ digits	Malayalam	Malaiàlam
 	Insert Aki Left	Insereix aki a l'esquerra
 	Insert Aki Right	Insereix aki a la dreta
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Ajusta la posició horitzontal dels diacrítics
+	Adjust Vertical Diacritic Position	Ajusta la posició vertical dels diacrítics
 	Proportional Lining	Xifres proporcionals alineades
 	Position:	Posició:
 	Default Position	Posició predeterminada
@@ -3764,6 +3784,12 @@ digits	Malayalam	Malaiàlam
 	Responsive	Adaptatiu
 	Restore	Restaura
 	Restore every preference to its default (applied on OK)	Restaura cada preferència al seu valor predeterminat (s’aplica en prémer D’acord)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	La unitat dels documents nous de mides predefinides, excepte les mides en píxels, i dels fitxers oberts que no registren cap unitat; si la trieu aquí i feu clic a D’acord, també passa a ser la unitat del document actiu.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Els gruixos de traç, els guions i els espais es mostren en aquesta unitat, i els nombres que s’hi escriuen es llegeixen en aquesta unitat.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Les mides del text, l’interlineat i el desplaçament de la línia de base es mostren en aquesta unitat, i els nombres que s’hi escriuen es llegeixen en aquesta unitat.
+	The unit for East Asian type measurements, which no field uses yet.	La unitat per a les mesures del text d’Àsia oriental, que encara no fa servir cap camp.
+	When on, a number typed without a unit into a field in picas is read in points.	Quan està activat, un nombre escrit sense unitat en un camp en piques es llegeix en punts.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Amb ID XML, els noms dels objectes es mostren com a ID XML a Capes, Variables i Opcions de la capa.
 	Reset all preferences to their defaults?	Voleu restablir totes les preferències als valors predeterminats?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Els valors predeterminats s’apliquen quan feu clic a D’acord a Preferències. Cancel·la allà conserva les preferències actuals.
 	Restore Recovered Documents	Restaura els documents recuperats
@@ -3812,6 +3838,7 @@ digits	Malayalam	Malaiàlam
 	Roman Hanging Punctuation	Puntuació penjant romana
 	Korean Line Break Anywhere	Salt de línia coreà a qualsevol lloc
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Configuració de composició de l’Àsia oriental
 	Korean Composition Settings	Configuració de composició coreana
 	Rotate	Gira
@@ -4664,6 +4691,9 @@ digits	Malayalam	Malaiàlam
 	Show Import Options	Mostra les opcions d’importació
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Demana les opcions d’importació de cada fitxer PDF, DXF o de text abans de col·locar-lo; desactivat: s’usen les últimes opcions triades
 	Stylistic Alternates	Alternatives estilístiques
+	Ligatures	Lligadures
+	Ornaments	Ornaments
+	Figures	Xifres
 	Swash	Volada
 	Swatch Conflict	Conflicte de mostres
 	Swatch Conflicts	Conflictes de mostres
@@ -5707,6 +5737,27 @@ digits	Malayalam	Malaiàlam
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: un quadre de diàleg no es pot obrir dins d'una crida de retorn d'una funció integrada, un getter, una conversió o un fitxer que executa $.evalFile; crideu-lo des del codi propi de l'script
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: la resposta següent d'`answers` és per a {_1}, no per a {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: a `answers` no queden respostes per a aquest quadre de diàleg
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` conté {n} resposta que l'script no ha utilitzat|`answers` conté {n} respostes que l'script no ha utilitzat
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} ha deixat {n} objecte sota el pinzell sense canvis ({_2}): només remodela traçats|{_1} ha deixat {n} objectes sota el pinzell sense canvis ({_2}): només remodela traçats
+liquify-tool	Warp	Deformació
+liquify-tool	Twirl	Remolí
+liquify-tool	Pucker	Arrufament
+liquify-tool	Bloat	Inflament
+liquify-tool	Scallop	Festonat
+liquify-tool	Crystallize	Cristal·lització
+liquify-tool	Wrinkle	Arruga
+liquify-kind	graphs	gràfics
+liquify-kind	type	text
+liquify-kind	symbols	símbols
+liquify-kind	images	imatges
+liquify-kind	meshes	malles
+liquify-kind	envelopes	embolcalls
+liquify-kind	repeats	repeticions
+liquify-kind	placed documents	documents col·locats
+liquify-kind	blends	fusions
+liquify-list-two	{0}, {1}	{0} i {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} i {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} és massa gran per a un script
 @msg	vc.log: the log of this run is full	vc.log: el registre d'aquesta execució és ple
 @msg	this function's script run has ended	l'execució de l'script d'aquesta funció ha acabat
@@ -6544,6 +6595,8 @@ digits	Malayalam	Malaiàlam
 @msg	unknown option `{path}.{k}`	opció desconeguda `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressions desconegudes `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	panell desconegut `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` no té mides de visualització per alternar
+@msg	the panels are not shown	els panells no es mostren
 @msg	panels can't be shown in Presentation Mode	els panells no es poden mostrar en el mode de presentació
 @msg	unknown parameter `{key}`; did you mean `{near}`?	paràmetre desconegut `{key}`; volies dir `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	paràmetre desconegut `{key}`; l’ordre no admet cap paràmetre
@@ -7560,6 +7613,19 @@ breakText	Glyphs	Glifs
 	Not Aligned to Pixel Grid	No alineat a la quadrícula de píxels
 @msg	only paths and compound paths can be aligned to the pixel grid	només els traçats i els traçats compostos es poden alinear a la quadrícula de píxels
 @msg	side is left or right, not `{s}`	side ha de ser left o right, no `{s}`
+@msg	side is left or right, not `{v}`	side ha de ser left o right, no `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order ha de ser un nombre enter de 0 a {others}, no `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (el nom d’una barra d’eines) ha de ser una cadena
+@msg	no toolbar named `{name}`	no hi ha cap barra d’eines anomenada `{name}`
+@msg	toolbar name can't be empty	el nom de la barra d’eines no pot ser buit
+@msg	a toolbar name has at most {MAX_NAME} characters	un nom de barra d’eines té com a màxim {MAX_NAME} caràcters
+@msg	there is already a toolbar named `{name}`	ja hi ha una barra d’eines anomenada `{name}`
+@msg	there is already a toolbar named `{to}`	ja hi ha una barra d’eines anomenada `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	un espai de treball conté com a màxim {MAX} barres d’eines
+@msg	name (a toolbar's name) must be a string	name (el nom d’una barra d’eines) ha de ser una cadena
+@msg	name (a toolbar's name) is required	cal name (el nom d’una barra d’eines)
+@msg	to (the new name) is required	cal to (el nom nou)
+@msg	name must be a toolbar's name	name ha de ser el nom d’una barra d’eines
 	Ignore All	Ignora-ho tot
 	Add to Dictionary	Afegeix al diccionari
 	No Suggestions	No hi ha suggeriments
@@ -7772,4 +7838,21 @@ breakText	Glyphs	Glifs
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} píxels és massa gran per a JPEG (com a màxim 65535 píxels per costat): reduïu la resolució
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} píxels és massa gran per a Targa (com a màxim 65535 píxels per costat): reduïu la resolució
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} píxels és massa gran per a PSD (com a màxim {MAX_SIDE} píxels per costat): reduïu la resolució
+	Packaging Tools	Eines d’embalatge
+	Fold Lines	Línies de plegat
+	Make Cut Line	Converteix en línia de tall
+	Make Crease Line	Converteix en línia d’hendit
+	Make Partial Cut Line	Converteix en línia de tall parcial
+	Make Perforation Line	Converteix en línia de perforació
+	Make Fold Line	Converteix en línia de plegat
+	Role Swatches…	Mostres dels tipus de línia…
+	Role Swatches	Mostres dels tipus de línia
+	Role	Tipus de línia
+	Cut Line	Línia de tall
+	Crease Line	Línia d’hendit
+	Partial Cut Line	Línia de tall parcial
+	Perforation Line	Línia de perforació
+	No objects are selected.	No hi ha cap objecte seleccionat.
+	Open a document to mark its fold lines.	Obre un document per marcar-ne les línies de plegat.
+	Remove Fold Line Role	Elimina el tipus de línia
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
