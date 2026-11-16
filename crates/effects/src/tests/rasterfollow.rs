@@ -1295,6 +1295,20 @@ fn each_copy_of_a_fills_or_strokes_own_transform_carries_the_shadow_before_it() 
     }
 }
 
+/// A Transform effect that makes copies, listed after a fill's or stroke's first Transform effect
+/// with Transform Patterns on, gives each copy the shadow listed before it, as the first one's
+/// copies do, with or without options of its own: drawn, expanded and baked.
+#[test]
+fn each_copy_of_a_later_copying_transform_carries_the_shadow_before_it() {
+    for stroke in [false, true] {
+        for (params, want, blurs) in copying_cases() {
+            let effects = vec![transform(json!({"patterns": true})), shadow(10.0, 0.0, 4.0), transform(params.clone())];
+            let n = one_row(square(102, vec![]), stroke, effects);
+            assert_copies_carry(&n, &want, &blurs, &format!("stroke {stroke}: {params}"));
+        }
+    }
+}
+
 /// A fill's or stroke's shadow under its object's Transform effect that makes copies is carried by
 /// each copy, moved, turned, reflected and scaled with it: for a single fill, a single stroke, and
 /// a fill and a stroke that paint each copy below the one before. Drawn, expanded and baked.
