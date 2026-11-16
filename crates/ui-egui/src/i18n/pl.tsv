@@ -9595,3 +9595,22 @@ breakText	Glyphs	Glify
 	No objects are selected.	Nie zaznaczono żadnych obiektów.
 	Open a document to mark its fold lines.	Otwórz dokument, aby oznaczyć jego linie zgięcia.
 	Remove Fold Line Role	Usuń rodzaj linii
+	Check	Sprawdź
+	Check Fold Lines	Sprawdź linie zgięcia
+@msg	No cut lines are in the selection.	W zaznaczeniu nie ma linii cięcia.
+@msg	No cut lines are in the document.	W dokumencie nie ma linii cięcia.
+@msg	The cut lines do not enclose an area.	Linie cięcia nie obejmują żadnego obszaru.
+@msg	A cut line ends without meeting another cut line.	Linia cięcia kończy się, nie stykając się z inną linią cięcia.
+@msg	A gap between cut lines was closed.	Zamknięto przerwę między liniami cięcia.
+@msg	The fold lines are too complex to check.	Linie zgięcia są zbyt złożone, aby je sprawdzić.
+@msg	A cut line and a crease lie on top of each other.	Linia cięcia i linia bigowania leżą na sobie.
+@msg	Two lines of the same role lie on top of each other.	Dwie linie tego samego rodzaju leżą na sobie.
+@msg	A crease ends inside a panel.	Linia bigowania kończy się wewnątrz panelu.
+@msg	A crease does not divide two panels.	Linia bigowania nie rozdziela dwóch paneli.
+@msg	A crease lies outside the cut outline.	Linia bigowania leży poza konturem cięcia.
+@msg	A crease that is not straight is folded along one straight line.	Linia bigowania, która nie jest prosta, jest zginana wzdłuż jednej linii prostej.
+@msg	A gap between cut lines is too narrow to tell apart.	Przerwa między liniami cięcia jest zbyt wąska, aby ją rozróżnić.
+@msg	A cut-out area holds other fold lines.	Wycięty obszar zawiera inne linie zgięcia.
+@msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
+@msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
+@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, bigi: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}

@@ -6,6 +6,7 @@
 //! intersecting profiles can have ambiguous visibility and are not solid modelling inputs.
 #![forbid(unsafe_code)]
 
+pub mod fold;
 mod solid;
 mod visibility;
 pub use solid::{

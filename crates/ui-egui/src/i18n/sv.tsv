@@ -9425,4 +9425,23 @@ digits	Hindi	Hindi
 	No objects are selected.	Inga objekt är markerade.
 	Open a document to mark its fold lines.	Öppna ett dokument för att markera dess falslinjer.
 	Remove Fold Line Role	Ta bort linjetyp
+	Check	Kontrollera
+	Check Fold Lines	Kontrollera falslinjer
+@msg	No cut lines are in the selection.	Det finns inga skärlinjer i markeringen.
+@msg	No cut lines are in the document.	Det finns inga skärlinjer i dokumentet.
+@msg	The cut lines do not enclose an area.	Skärlinjerna omsluter inget område.
+@msg	A cut line ends without meeting another cut line.	En skärlinje slutar utan att möta en annan skärlinje.
+@msg	A gap between cut lines was closed.	Ett mellanrum mellan skärlinjer stängdes.
+@msg	The fold lines are too complex to check.	Falslinjerna är för komplexa för att kontrollera.
+@msg	A cut line and a crease lie on top of each other.	En skärlinje och en biglinje ligger ovanpå varandra.
+@msg	Two lines of the same role lie on top of each other.	Två linjer av samma typ ligger ovanpå varandra.
+@msg	A crease ends inside a panel.	En biglinje slutar inuti en panel.
+@msg	A crease does not divide two panels.	En biglinje delar inte två paneler.
+@msg	A crease lies outside the cut outline.	En biglinje ligger utanför skärkonturen.
+@msg	A crease that is not straight is folded along one straight line.	En biglinje som inte är rak falsas längs en rak linje.
+@msg	A gap between cut lines is too narrow to tell apart.	Ett mellanrum mellan skärlinjer är för smalt för att skilja ut.
+@msg	A cut-out area holds other fold lines.	Ett utskuret område innehåller andra falslinjer.
+@msg	A panel is not joined to the rest by a crease.	En panel är inte förbunden med resten av någon biglinje.
+@msg	A fold line is on a non-printing layer.	En falslinje ligger på ett lager som inte skrivs ut.
+@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, bigningar: {hinges}, fel: {errors}, varningar: {warnings}
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen

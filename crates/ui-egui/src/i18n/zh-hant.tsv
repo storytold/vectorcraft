@@ -9390,4 +9390,23 @@ breakText	Glyphs	字符
 	No objects are selected.	未選取任何物件。
 	Open a document to mark its fold lines.	開啟文件以標記其摺線。
 	Remove Fold Line Role	移除線條類型
+	Check	檢查
+	Check Fold Lines	檢查摺線
+@msg	No cut lines are in the selection.	選取範圍中沒有切割線。
+@msg	No cut lines are in the document.	文件中沒有切割線。
+@msg	The cut lines do not enclose an area.	切割線未圍成任何區域。
+@msg	A cut line ends without meeting another cut line.	一條切割線未與其他切割線相接就結束了。
+@msg	A gap between cut lines was closed.	已封閉切割線之間的間隙。
+@msg	The fold lines are too complex to check.	摺線過於複雜，無法檢查。
+@msg	A cut line and a crease lie on top of each other.	一條切割線與一條壓痕線重疊。
+@msg	Two lines of the same role lie on top of each other.	兩條同類線條重疊。
+@msg	A crease ends inside a panel.	一條壓痕線在面板內部結束。
+@msg	A crease does not divide two panels.	一條壓痕線沒有分隔兩個面板。
+@msg	A crease lies outside the cut outline.	一條壓痕線位於切割輪廓之外。
+@msg	A crease that is not straight is folded along one straight line.	不直的壓痕線沿一條直線摺疊。
+@msg	A gap between cut lines is too narrow to tell apart.	切割線之間的間隙太窄，無法區分。
+@msg	A cut-out area holds other fold lines.	一個鏤空區域包含其他摺線。
+@msg	A panel is not joined to the rest by a crease.	一個面板沒有透過任何壓痕線與其餘部分相連。
+@msg	A fold line is on a non-printing layer.	一條摺線位於不列印的圖層上。
+@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	面板：{panels}，壓痕：{hinges}，錯誤：{errors}，警告：{warnings}
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小

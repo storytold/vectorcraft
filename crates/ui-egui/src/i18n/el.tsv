@@ -7919,4 +7919,23 @@ breakText	Glyphs	Γλύφοι
 	No objects are selected.	Δεν έχουν επιλεγεί αντικείμενα.
 	Open a document to mark its fold lines.	Ανοίξτε ένα έγγραφο για να σημειώσετε τις γραμμές δίπλωσής του.
 	Remove Fold Line Role	Αφαίρεση τύπου γραμμής
+	Check	Έλεγχος
+	Check Fold Lines	Έλεγχος γραμμών δίπλωσης
+@msg	No cut lines are in the selection.	Η επιλογή δεν περιέχει γραμμές κοπής.
+@msg	No cut lines are in the document.	Το έγγραφο δεν περιέχει γραμμές κοπής.
+@msg	The cut lines do not enclose an area.	Οι γραμμές κοπής δεν περικλείουν καμία περιοχή.
+@msg	A cut line ends without meeting another cut line.	Μια γραμμή κοπής τελειώνει χωρίς να συναντήσει άλλη γραμμή κοπής.
+@msg	A gap between cut lines was closed.	Ένα κενό ανάμεσα σε γραμμές κοπής κλείστηκε.
+@msg	The fold lines are too complex to check.	Οι γραμμές δίπλωσης είναι πολύ σύνθετες για έλεγχο.
+@msg	A cut line and a crease lie on top of each other.	Μια γραμμή κοπής και μια γραμμή πτύχωσης βρίσκονται η μία πάνω στην άλλη.
+@msg	Two lines of the same role lie on top of each other.	Δύο γραμμές του ίδιου τύπου βρίσκονται η μία πάνω στην άλλη.
+@msg	A crease ends inside a panel.	Μια γραμμή πτύχωσης τελειώνει μέσα σε ένα πάνελ.
+@msg	A crease does not divide two panels.	Μια γραμμή πτύχωσης δεν χωρίζει δύο πάνελ.
+@msg	A crease lies outside the cut outline.	Μια γραμμή πτύχωσης βρίσκεται έξω από το περίγραμμα κοπής.
+@msg	A crease that is not straight is folded along one straight line.	Μια γραμμή πτύχωσης που δεν είναι ευθεία διπλώνεται κατά μήκος μίας ευθείας.
+@msg	A gap between cut lines is too narrow to tell apart.	Ένα κενό ανάμεσα σε γραμμές κοπής είναι πολύ στενό για να διακριθεί.
+@msg	A cut-out area holds other fold lines.	Μια αποκομμένη περιοχή περιέχει άλλες γραμμές δίπλωσης.
+@msg	A panel is not joined to the rest by a crease.	Ένα πάνελ δεν συνδέεται με τα υπόλοιπα με καμία γραμμή πτύχωσης.
+@msg	A fold line is on a non-printing layer.	Μια γραμμή δίπλωσης βρίσκεται σε επίπεδο που δεν εκτυπώνεται.
+@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Πάνελ: {panels}, πτυχώσεις: {hinges}, σφάλματα: {errors}, προειδοποιήσεις: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"

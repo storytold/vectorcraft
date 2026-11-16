@@ -9742,3 +9742,22 @@ breakText	Glyphs	Glyfy
 	No objects are selected.	Nejsou vybrány žádné objekty.
 	Open a document to mark its fold lines.	Otevřete dokument, abyste označili jeho linie skladu.
 	Remove Fold Line Role	Odstranit typ linie
+	Check	Zkontrolovat
+	Check Fold Lines	Zkontrolovat linie skladu
+@msg	No cut lines are in the selection.	Ve výběru nejsou žádné linie řezu.
+@msg	No cut lines are in the document.	V dokumentu nejsou žádné linie řezu.
+@msg	The cut lines do not enclose an area.	Linie řezu neohraničují žádnou plochu.
+@msg	A cut line ends without meeting another cut line.	Linie řezu končí, aniž by se setkala s jinou linií řezu.
+@msg	A gap between cut lines was closed.	Mezera mezi liniemi řezu byla uzavřena.
+@msg	The fold lines are too complex to check.	Linie skladu jsou příliš složité na kontrolu.
+@msg	A cut line and a crease lie on top of each other.	Linie řezu a linie bigu leží přes sebe.
+@msg	Two lines of the same role lie on top of each other.	Dvě linie stejného typu leží přes sebe.
+@msg	A crease ends inside a panel.	Linie bigu končí uvnitř panelu.
+@msg	A crease does not divide two panels.	Linie bigu nerozděluje dva panely.
+@msg	A crease lies outside the cut outline.	Linie bigu leží mimo obrys řezu.
+@msg	A crease that is not straight is folded along one straight line.	Linie bigu, která není rovná, se ohýbá podél jedné přímky.
+@msg	A gap between cut lines is too narrow to tell apart.	Mezera mezi liniemi řezu je příliš úzká na rozlišení.
+@msg	A cut-out area holds other fold lines.	Vyříznutá oblast obsahuje další linie skladu.
+@msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
+@msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
+@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, bigy: {hinges}, chyby: {errors}, upozornění: {warnings}

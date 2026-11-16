@@ -8002,4 +8002,23 @@ breakText	Glyphs	Merkit
 	No objects are selected.	Objekteja ei ole valittu.
 	Open a document to mark its fold lines.	Avaa asiakirja, niin voit merkitä sen taittoviivat.
 	Remove Fold Line Role	Poista viivatyyppi
+	Check	Tarkista
+	Check Fold Lines	Tarkista taittoviivat
+@msg	No cut lines are in the selection.	Valinnassa ei ole leikkausviivoja.
+@msg	No cut lines are in the document.	Asiakirjassa ei ole leikkausviivoja.
+@msg	The cut lines do not enclose an area.	Leikkausviivat eivät rajaa aluetta.
+@msg	A cut line ends without meeting another cut line.	Leikkausviiva päättyy kohtaamatta toista leikkausviivaa.
+@msg	A gap between cut lines was closed.	Leikkausviivojen välinen rako suljettiin.
+@msg	The fold lines are too complex to check.	Taittoviivat ovat liian monimutkaisia tarkistettaviksi.
+@msg	A cut line and a crease lie on top of each other.	Leikkausviiva ja nuuttausviiva ovat päällekkäin.
+@msg	Two lines of the same role lie on top of each other.	Kaksi samantyyppistä viivaa on päällekkäin.
+@msg	A crease ends inside a panel.	Nuuttausviiva päättyy paneelin sisään.
+@msg	A crease does not divide two panels.	Nuuttausviiva ei jaa kahta paneelia.
+@msg	A crease lies outside the cut outline.	Nuuttausviiva on leikkausääriviivan ulkopuolella.
+@msg	A crease that is not straight is folded along one straight line.	Nuuttausviiva, joka ei ole suora, taitetaan yhtä suoraa viivaa pitkin.
+@msg	A gap between cut lines is too narrow to tell apart.	Leikkausviivojen välinen rako on liian kapea erotettavaksi.
+@msg	A cut-out area holds other fold lines.	Leikattu alue sisältää muita taittoviivoja.
+@msg	A panel is not joined to the rest by a crease.	Paneelia ei ole liitetty muihin millään nuuttausviivalla.
+@msg	A fold line is on a non-printing layer.	Taittoviiva on tasolla, jota ei tulosteta.
+@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Paneelit: {panels}, nuuttaukset: {hinges}, virheet: {errors}, varoitukset: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"

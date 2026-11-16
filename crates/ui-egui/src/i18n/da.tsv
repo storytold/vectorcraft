@@ -9844,4 +9844,23 @@ breakText	Glyphs	Glyffer
 	No objects are selected.	Ingen objekter er markeret.
 	Open a document to mark its fold lines.	Åbn et dokument for at markere dets foldelinjer.
 	Remove Fold Line Role	Fjern linjetype
+	Check	Kontrollér
+	Check Fold Lines	Kontrollér foldelinjer
+@msg	No cut lines are in the selection.	Der er ingen skærelinjer i markeringen.
+@msg	No cut lines are in the document.	Der er ingen skærelinjer i dokumentet.
+@msg	The cut lines do not enclose an area.	Skærelinjerne omslutter ikke et område.
+@msg	A cut line ends without meeting another cut line.	En skærelinje slutter uden at møde en anden skærelinje.
+@msg	A gap between cut lines was closed.	Et mellemrum mellem skærelinjer blev lukket.
+@msg	The fold lines are too complex to check.	Foldelinjerne er for komplekse til at kontrollere.
+@msg	A cut line and a crease lie on top of each other.	En skærelinje og en rillelinje ligger oven på hinanden.
+@msg	Two lines of the same role lie on top of each other.	To linjer af samme type ligger oven på hinanden.
+@msg	A crease ends inside a panel.	En rillelinje slutter inde i et panel.
+@msg	A crease does not divide two panels.	En rillelinje deler ikke to paneler.
+@msg	A crease lies outside the cut outline.	En rillelinje ligger uden for skærekonturen.
+@msg	A crease that is not straight is folded along one straight line.	En rillelinje, der ikke er lige, foldes langs én ret linje.
+@msg	A gap between cut lines is too narrow to tell apart.	Et mellemrum mellem skærelinjer er for smalt til at skelne.
+@msg	A cut-out area holds other fold lines.	Et udskåret område indeholder andre foldelinjer.
+@msg	A panel is not joined to the rest by a crease.	Et panel er ikke forbundet med resten af en rillelinje.
+@msg	A fold line is on a non-printing layer.	En foldelinje ligger på et lag, der ikke udskrives.
+@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, riller: {hinges}, fejl: {errors}, advarsler: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"

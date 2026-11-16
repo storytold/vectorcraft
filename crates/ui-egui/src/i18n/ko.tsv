@@ -9337,3 +9337,22 @@ breakText	Glyphs	글리프
 	No objects are selected.	선택한 개체가 없습니다.
 	Open a document to mark its fold lines.	접는 선을 지정하려면 문서를 여세요.
 	Remove Fold Line Role	선 종류 제거
+	Check	검사
+	Check Fold Lines	접는 선 검사
+@msg	No cut lines are in the selection.	선택 영역에 재단선이 없습니다.
+@msg	No cut lines are in the document.	문서에 재단선이 없습니다.
+@msg	The cut lines do not enclose an area.	재단선이 영역을 둘러싸지 않습니다.
+@msg	A cut line ends without meeting another cut line.	재단선이 다른 재단선과 만나지 않고 끝납니다.
+@msg	A gap between cut lines was closed.	재단선 사이의 틈을 닫았습니다.
+@msg	The fold lines are too complex to check.	접는 선이 너무 복잡해서 검사할 수 없습니다.
+@msg	A cut line and a crease lie on top of each other.	재단선과 오시선이 겹쳐 있습니다.
+@msg	Two lines of the same role lie on top of each other.	같은 종류의 선 두 개가 겹쳐 있습니다.
+@msg	A crease ends inside a panel.	오시선이 패널 안에서 끝납니다.
+@msg	A crease does not divide two panels.	오시선이 두 패널을 나누지 않습니다.
+@msg	A crease lies outside the cut outline.	오시선이 재단 윤곽선 밖에 있습니다.
+@msg	A crease that is not straight is folded along one straight line.	곧지 않은 오시선은 하나의 직선을 따라 접힙니다.
+@msg	A gap between cut lines is too narrow to tell apart.	재단선 사이의 틈이 너무 좁아 구별할 수 없습니다.
+@msg	A cut-out area holds other fold lines.	잘라 낸 영역에 다른 접는 선이 있습니다.
+@msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
+@msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
+@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 오시: {hinges}, 오류: {errors}, 경고: {warnings}

@@ -9580,4 +9580,23 @@ breakText	Glyphs	字形
 	No objects are selected.	未选择任何对象。
 	Open a document to mark its fold lines.	打开文档以标记其折线。
 	Remove Fold Line Role	移除线条类型
+	Check	检查
+	Check Fold Lines	检查折线
+@msg	No cut lines are in the selection.	所选内容中没有切割线。
+@msg	No cut lines are in the document.	文档中没有切割线。
+@msg	The cut lines do not enclose an area.	切割线未围成任何区域。
+@msg	A cut line ends without meeting another cut line.	一条切割线未与其他切割线相接就结束了。
+@msg	A gap between cut lines was closed.	已闭合切割线之间的间隙。
+@msg	The fold lines are too complex to check.	折线过于复杂，无法检查。
+@msg	A cut line and a crease lie on top of each other.	一条切割线与一条压痕线重叠。
+@msg	Two lines of the same role lie on top of each other.	两条同类线条重叠。
+@msg	A crease ends inside a panel.	一条压痕线在面板内部结束。
+@msg	A crease does not divide two panels.	一条压痕线没有分隔两个面板。
+@msg	A crease lies outside the cut outline.	一条压痕线位于切割轮廓之外。
+@msg	A crease that is not straight is folded along one straight line.	不直的压痕线沿一条直线折叠。
+@msg	A gap between cut lines is too narrow to tell apart.	切割线之间的间隙太窄，无法区分。
+@msg	A cut-out area holds other fold lines.	一个镂空区域包含其他折线。
+@msg	A panel is not joined to the rest by a crease.	一个面板没有通过任何压痕线与其余部分相连。
+@msg	A fold line is on a non-printing layer.	一条折线位于不打印的图层上。
+@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	面板：{panels}，压痕：{hinges}，错误：{errors}，警告：{warnings}
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率

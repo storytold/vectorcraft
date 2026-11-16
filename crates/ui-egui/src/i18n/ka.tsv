@@ -10010,4 +10010,23 @@ font-script	Japanese	იაპონური
 	No objects are selected.	ობიექტები არ არის მონიშნული.
 	Open a document to mark its fold lines.	გახსენით დოკუმენტი მისი მოკეცვის ხაზების მოსანიშნად.
 	Remove Fold Line Role	ხაზის ტიპის მოხსნა
+	Check	შემოწმება
+	Check Fold Lines	მოკეცვის ხაზების შემოწმება
+@msg	No cut lines are in the selection.	მონიშვნაში ჭრის ხაზები არ არის.
+@msg	No cut lines are in the document.	დოკუმენტში ჭრის ხაზები არ არის.
+@msg	The cut lines do not enclose an area.	ჭრის ხაზები არცერთ არეს არ შემოფარგლავს.
+@msg	A cut line ends without meeting another cut line.	ჭრის ხაზი მთავრდება ისე, რომ სხვა ჭრის ხაზს არ ხვდება.
+@msg	A gap between cut lines was closed.	ჭრის ხაზებს შორის ღრეჩო დაიხურა.
+@msg	The fold lines are too complex to check.	მოკეცვის ხაზები შესამოწმებლად ზედმეტად რთულია.
+@msg	A cut line and a crease lie on top of each other.	ჭრის ხაზი და ბიგის ხაზი ერთმანეთზე დევს.
+@msg	Two lines of the same role lie on top of each other.	ერთი ტიპის ორი ხაზი ერთმანეთზე დევს.
+@msg	A crease ends inside a panel.	ბიგის ხაზი პანელის შიგნით მთავრდება.
+@msg	A crease does not divide two panels.	ბიგის ხაზი ორ პანელს არ ყოფს.
+@msg	A crease lies outside the cut outline.	ბიგის ხაზი ჭრის კონტურის გარეთაა.
+@msg	A crease that is not straight is folded along one straight line.	ბიგის ხაზი, რომელიც სწორი არ არის, ერთი სწორი ხაზის გასწვრივ იკეცება.
+@msg	A gap between cut lines is too narrow to tell apart.	ჭრის ხაზებს შორის ღრეჩო ზედმეტად ვიწროა გასარჩევად.
+@msg	A cut-out area holds other fold lines.	ამოჭრილი არე სხვა მოკეცვის ხაზებს შეიცავს.
+@msg	A panel is not joined to the rest by a crease.	პანელი დანარჩენს არცერთი ბიგის ხაზით არ უერთდება.
+@msg	A fold line is on a non-printing layer.	მოკეცვის ხაზი არასაბეჭდ შრეზეა.
+@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	პანელები: {panels}, ბიგები: {hinges}, შეცდომები: {errors}, გაფრთხილებები: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"

@@ -9813,3 +9813,22 @@ swatch	Yellow Green	Verde-amarelado
 	No objects are selected.	Nenhum objeto selecionado.
 	Open a document to mark its fold lines.	Abra um documento para marcar suas linhas de dobra.
 	Remove Fold Line Role	Remover Tipo de Linha
+	Check	Verificar
+	Check Fold Lines	Verificar Linhas de Dobra
+@msg	No cut lines are in the selection.	Não há linhas de corte na seleção.
+@msg	No cut lines are in the document.	Não há linhas de corte no documento.
+@msg	The cut lines do not enclose an area.	As linhas de corte não delimitam nenhuma área.
+@msg	A cut line ends without meeting another cut line.	Uma linha de corte termina sem encontrar outra linha de corte.
+@msg	A gap between cut lines was closed.	Uma lacuna entre linhas de corte foi fechada.
+@msg	The fold lines are too complex to check.	As linhas de dobra são complexas demais para verificar.
+@msg	A cut line and a crease lie on top of each other.	Uma linha de corte e uma de vinco estão sobrepostas.
+@msg	Two lines of the same role lie on top of each other.	Duas linhas do mesmo tipo estão sobrepostas.
+@msg	A crease ends inside a panel.	Uma linha de vinco termina dentro de um painel.
+@msg	A crease does not divide two panels.	Uma linha de vinco não divide dois painéis.
+@msg	A crease lies outside the cut outline.	Uma linha de vinco está fora do contorno de corte.
+@msg	A crease that is not straight is folded along one straight line.	Uma linha de vinco que não é reta é dobrada ao longo de uma única linha reta.
+@msg	A gap between cut lines is too narrow to tell apart.	Uma lacuna entre linhas de corte é estreita demais para ser distinguida.
+@msg	A cut-out area holds other fold lines.	Uma área recortada contém outras linhas de dobra.
+@msg	A panel is not joined to the rest by a crease.	Um painel não está unido ao restante por nenhuma linha de vinco.
+@msg	A fold line is on a non-printing layer.	Uma linha de dobra está em uma camada não imprimível.
+@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Painéis: {panels}, vincos: {hinges}, erros: {errors}, avisos: {warnings}

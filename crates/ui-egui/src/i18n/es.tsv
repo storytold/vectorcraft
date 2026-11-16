@@ -7906,4 +7906,23 @@ breakText	Glyphs	Glifos
 	No objects are selected.	No hay objetos seleccionados.
 	Open a document to mark its fold lines.	Abre un documento para marcar sus líneas de plegado.
 	Remove Fold Line Role	Quitar tipo de línea
+	Check	Comprobar
+	Check Fold Lines	Comprobar líneas de plegado
+@msg	No cut lines are in the selection.	No hay líneas de corte en la selección.
+@msg	No cut lines are in the document.	No hay líneas de corte en el documento.
+@msg	The cut lines do not enclose an area.	Las líneas de corte no encierran ningún área.
+@msg	A cut line ends without meeting another cut line.	Una línea de corte termina sin llegar a otra línea de corte.
+@msg	A gap between cut lines was closed.	Se cerró un hueco entre líneas de corte.
+@msg	The fold lines are too complex to check.	Las líneas de plegado son demasiado complejas para comprobarlas.
+@msg	A cut line and a crease lie on top of each other.	Una línea de corte y una de hendido están superpuestas.
+@msg	Two lines of the same role lie on top of each other.	Dos líneas del mismo tipo están superpuestas.
+@msg	A crease ends inside a panel.	Una línea de hendido termina dentro de un panel.
+@msg	A crease does not divide two panels.	Una línea de hendido no separa dos paneles.
+@msg	A crease lies outside the cut outline.	Una línea de hendido está fuera del contorno de corte.
+@msg	A crease that is not straight is folded along one straight line.	Una línea de hendido que no es recta se pliega a lo largo de una sola línea recta.
+@msg	A gap between cut lines is too narrow to tell apart.	Un hueco entre líneas de corte es demasiado estrecho para distinguirlo.
+@msg	A cut-out area holds other fold lines.	Un área recortada contiene otras líneas de plegado.
+@msg	A panel is not joined to the rest by a crease.	Un panel no está unido al resto por ninguna línea de hendido.
+@msg	A fold line is on a non-printing layer.	Una línea de plegado está en una capa que no se imprime.
+@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Paneles: {panels}, hendidos: {hinges}, errores: {errors}, advertencias: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"

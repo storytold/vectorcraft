@@ -9374,3 +9374,22 @@ breakText	Glyphs	Glifi
 	No objects are selected.	Nessun oggetto selezionato.
 	Open a document to mark its fold lines.	Apri un documento per segnarne le linee di piega.
 	Remove Fold Line Role	Rimuovi tipo di linea
+	Check	Verifica
+	Check Fold Lines	Verifica linee di piega
+@msg	No cut lines are in the selection.	Nella selezione non ci sono linee di taglio.
+@msg	No cut lines are in the document.	Nel documento non ci sono linee di taglio.
+@msg	The cut lines do not enclose an area.	Le linee di taglio non racchiudono alcuna area.
+@msg	A cut line ends without meeting another cut line.	Una linea di taglio termina senza incontrare un’altra linea di taglio.
+@msg	A gap between cut lines was closed.	È stato chiuso uno spazio tra linee di taglio.
+@msg	The fold lines are too complex to check.	Le linee di piega sono troppo complesse da verificare.
+@msg	A cut line and a crease lie on top of each other.	Una linea di taglio e una di cordonatura sono sovrapposte.
+@msg	Two lines of the same role lie on top of each other.	Due linee dello stesso tipo sono sovrapposte.
+@msg	A crease ends inside a panel.	Una linea di cordonatura termina all’interno di un pannello.
+@msg	A crease does not divide two panels.	Una linea di cordonatura non divide due pannelli.
+@msg	A crease lies outside the cut outline.	Una linea di cordonatura si trova fuori dal contorno di taglio.
+@msg	A crease that is not straight is folded along one straight line.	Una linea di cordonatura non diritta viene piegata lungo un’unica linea retta.
+@msg	A gap between cut lines is too narrow to tell apart.	Uno spazio tra linee di taglio è troppo stretto per essere distinto.
+@msg	A cut-out area holds other fold lines.	Un’area ritagliata contiene altre linee di piega.
+@msg	A panel is not joined to the rest by a crease.	Un pannello non è unito al resto da alcuna linea di cordonatura.
+@msg	A fold line is on a non-printing layer.	Una linea di piega si trova su un livello non stampabile.
+@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Pannelli: {panels}, cordonature: {hinges}, errori: {errors}, avvisi: {warnings}
