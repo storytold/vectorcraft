@@ -115,19 +115,35 @@ impl Level {
         out
     }
 
-    /// This level at half its size, rounded up, each pixel the mean of the four it covers (an odd
-    /// last row or column with itself).
-    fn half(&self) -> Option<Level> {
+    /// This level at half its size, rounded up, each pixel the mean of the pixels it covers weighted
+    /// by the area of the full print they cover. A pixel of this level is `step` pixels of the full
+    /// print (`base` pixels across and down) on a side, and fewer in the last column and row when
+    /// `base` is not a multiple of `step`.
+    fn half(&self, base: (u32, u32), step: u32) -> Option<Level> {
         let (w, h) = (self.width.div_ceil(2), self.height.div_ceil(2));
         if (w, h) == (self.width, self.height) {
             return None;
         }
+        // The pixels of the full print that column or row `i` of this level covers, or 0 past it.
+        let covers = |i: u32, side: u32| u64::from(side).saturating_sub(u64::from(i) * u64::from(step)).min(u64::from(step)) as f32;
         let mut pixels = Vec::with_capacity(w as usize * h as usize * 4);
-        for y in 0..i64::from(h) {
-            for x in 0..i64::from(w) {
-                let px = [self.at(2 * x, 2 * y), self.at(2 * x + 1, 2 * y), self.at(2 * x, 2 * y + 1), self.at(2 * x + 1, 2 * y + 1)];
-                for k in 0..4 {
-                    pixels.push((px.iter().map(|p| p[k]).sum::<f32>() / 4.0).round() as u8);
+        for y in 0..h {
+            for x in 0..w {
+                let mut sum = [0.0f32; 4];
+                let mut area = 0.0;
+                for (sx, sy) in [(2 * x, 2 * y), (2 * x + 1, 2 * y), (2 * x, 2 * y + 1), (2 * x + 1, 2 * y + 1)] {
+                    if sx >= self.width || sy >= self.height {
+                        continue;
+                    }
+                    let a = covers(sx, base.0) * covers(sy, base.1);
+                    let p = self.at(i64::from(sx), i64::from(sy));
+                    for (s, c) in sum.iter_mut().zip(p) {
+                        *s += c * a;
+                    }
+                    area += a;
+                }
+                for s in sum {
+                    pixels.push(if area > 0.0 { (s / area).round() as u8 } else { 0 });
                 }
             }
         }
@@ -135,7 +151,8 @@ impl Level {
     }
 }
 
-/// The flat print: the document rect it covers and its raster at full size and at two halvings.
+/// The flat print: the document rect it covers and its raster at full size and halved again and
+/// again down to one pixel.
 #[derive(Clone, Debug)]
 pub struct Print {
     pub region: Rect,
@@ -152,9 +169,10 @@ impl Print {
             return None;
         }
         let mut levels = vec![Level { width, height, pixels }];
-        while levels.len() < 3 {
-            let Some(next) = levels.last().and_then(Level::half) else { break };
+        let mut step = 1;
+        while let Some(next) = levels.last().and_then(|l| l.half((width, height), step)) {
             levels.push(next);
+            step *= 2;
         }
         Some(Print { region, levels })
     }

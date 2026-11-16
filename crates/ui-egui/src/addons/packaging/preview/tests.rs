@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use egui::{Event, Modifiers, PointerButton, Pos2, vec2};
 
-use super::{Cache, ID, PrintKey, Settings, last_image, last_rect, prints_rendered, show, status, work_done};
+use super::{Cache, ID, PrintKey, Settings, inside_color, last_image, last_rect, prints_rendered, show, status, work_done};
 use crate::{VectorcraftApp, menus};
 
 /// An app with a tray blank (a 100 pt base at x 140 to 240, y 140 to 240, and a 40 pt wall on each
@@ -123,6 +123,15 @@ fn ui_fold_preview_sets_the_window_and_refuses_bad_values() {
     // A swatch with a plain color names the inside.
     app.run("ui.foldPreview", json!({"inside": "White"})).unwrap();
     assert_eq!(app.ui.fold_preview.inside, "White");
+    // So does one whose name starts with #, and a swatch's name comes before a #rrggbb that reads the same.
+    app.run("swatch.new", json!({"name": "#brand", "color": "#0000ff"})).unwrap();
+    app.run("swatch.new", json!({"name": "#00ff00", "color": "#0000ff"})).unwrap();
+    app.run("ui.foldPreview", json!({"inside": "#brand"})).unwrap();
+    assert_eq!(app.ui.fold_preview.inside, "#brand");
+    let doc = &app.session.active().expect("a document").doc;
+    assert_eq!(inside_color(doc, "#brand"), Some([0, 0, 255, 255]));
+    assert_eq!(inside_color(doc, "#00ff00"), Some([0, 0, 255, 255]));
+    assert_eq!(inside_color(doc, "#ff0000"), Some([255, 0, 0, 255]));
 }
 
 #[test]

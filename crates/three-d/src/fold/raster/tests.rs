@@ -177,7 +177,7 @@ fn unusable_views_and_prints_are_refused() {
     assert!(Print::new(region, MAX_SIDE + 1, 1, vec![0; (MAX_SIDE as usize + 1) * 4]).is_none());
     assert!(Print::new(Rect::new(0.0, 0.0, 0.0, 10.0), 1, 1, vec![0; 4]).is_none(), "an empty region");
     let p = Print::new(region, 8, 4, vec![255; 8 * 4 * 4]).expect("a print");
-    assert_eq!(p.levels.iter().map(|l| (l.width, l.height)).collect::<Vec<_>>(), vec![(8, 4), (4, 2), (2, 1)]);
+    assert_eq!(p.levels.iter().map(|l| (l.width, l.height)).collect::<Vec<_>>(), vec![(8, 4), (4, 2), (2, 1), (1, 1)]);
 }
 
 #[test]
@@ -211,6 +211,41 @@ fn a_print_far_smaller_on_screen_samples_a_halved_level() {
     let img = render(&Scene { blank: &b, folded: &f, print: Some(&print), inside: [0; 4], outside: WHITE, camera }).expect("drawn");
     let [r, ..] = pixel(&img, 0, 0);
     assert!((80..=150).contains(&r), "gray, not a black or white column: {r}");
+}
+
+#[test]
+fn a_print_sixteen_times_smaller_on_screen_samples_a_level_halved_four_times() {
+    // 64 × 64, columns in bands of 4 alternating black and white: halved twice, they still alternate;
+    // halved four times, they average to gray.
+    let mut px = vec![];
+    for _ in 0..64 {
+        for x in 0..64 {
+            px.extend(if (x / 4) % 2 == 0 { [0, 0, 0, 255] } else { [255, 255, 255, 255] });
+        }
+    }
+    let print = Print::new(Rect::new(0.0, 0.0, 100.0, 100.0), 64, 64, px).expect("a print");
+    assert_eq!(print.levels.len(), 7, "64 down to 1");
+    let (b, f) = scene_of(vec![panel(vec![square(0.0, 0.0, 100.0, 100.0)])], vec![Pose::IDENTITY]);
+    // 100 points in 3 pixels: about 21 print pixels a view pixel.
+    let camera = Camera { width: 3, height: 3, scale: 0.03, ..front() };
+    let img = render(&Scene { blank: &b, folded: &f, print: Some(&print), inside: [0; 4], outside: WHITE, camera }).expect("drawn");
+    let [r, ..] = pixel(&img, 0, 1);
+    assert!((90..=140).contains(&r), "gray, not a black or white band: {r}");
+}
+
+#[test]
+fn a_halved_level_weighs_an_odd_last_column_by_the_area_it_covers() {
+    // 9 × 9, black but for a white last column: a ninth of the print, so the one-pixel level is
+    // a ninth white (255 / 9 is about 28), not half.
+    let mut px = vec![];
+    for _ in 0..9 {
+        for x in 0..9 {
+            px.extend(if x == 8 { [255, 255, 255, 255] } else { [0, 0, 0, 255] });
+        }
+    }
+    let print = Print::new(Rect::new(0.0, 0.0, 100.0, 100.0), 9, 9, px).expect("a print");
+    assert_eq!(print.levels.iter().map(|l| (l.width, l.height)).collect::<Vec<_>>(), vec![(9, 9), (5, 5), (3, 3), (2, 2), (1, 1)]);
+    assert_eq!(print.levels.last().map(|l| l.pixels.clone()), Some(vec![28, 28, 28, 255]));
 }
 
 #[test]

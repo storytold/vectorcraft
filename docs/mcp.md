@@ -13235,7 +13235,7 @@ and the print is a raster whose longest side is 2,048 pixels, rendered again whe
 perspective?, inside?, showFoldLines?, base?}`) sets the window, shows it and draws it again. A second run leaves the
 window open. `rotateX` (-180 to 180) tips the top toward the viewer and `rotateY` (-180 to 180) turns the right side
 toward the viewer, in degrees; `zoom` is 0.1 to 8, where 1 fits the folded blank; `perspective` is the field of view, 0 to
-160 degrees, 0 for none; `inside` is `#rrggbb` or the name of a swatch with a plain color; `base` is a point in a panel
+160 degrees, 0 for none; `inside` is the name of a swatch with a plain color, or else `#rrggbb`; `base` is a point in a panel
 of the document's blanks, or null for the largest panel. With perspective, the zoom of 1 keeps the eye at least twice
 the folded blank's radius from its middle. A value of the wrong kind or out of range is an error and sets nothing.
 VectorCraft's own defaults are a Three-Quarter view (`rotateX` 25, `rotateY` 35), no perspective, a white inside and the

@@ -183,14 +183,12 @@ thread_local! {
     static RENDERER: std::cell::RefCell<vectorcraft_render::Renderer> = std::cell::RefCell::new(vectorcraft_render::Renderer::new());
 }
 
-/// The board's inside color (straight RGBA) for `inside`: `#rrggbb`, or a swatch of `d` with a
-/// plain color; `None` for anything else.
+/// The board's inside color (straight RGBA) for `inside`: a swatch of `d` with a plain color, or else
+/// `#rrggbb`; `None` for anything else.
 fn inside_color(d: &vectorcraft_engine::doc::Document, inside: &str) -> Option<[u8; 4]> {
-    if inside.starts_with('#') {
-        return vectorcraft_color::Color::from_hex(inside).map(|c| c.to_rgba8(1.0));
-    }
-    match &d.swatch(inside)?.paint {
-        vectorcraft_color::Paint::Solid { color, .. } => Some(color.to_rgba8(1.0)),
+    match d.swatch(inside).map(|s| &s.paint) {
+        Some(vectorcraft_color::Paint::Solid { color, .. }) => Some(color.to_rgba8(1.0)),
+        _ if inside.starts_with('#') => vectorcraft_color::Color::from_hex(inside).map(|c| c.to_rgba8(1.0)),
         _ => None,
     }
 }
