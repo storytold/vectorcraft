@@ -178,7 +178,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "shortcuts.set",
         "Set Keyboard Shortcut",
         "",
-        "{id: command id or tool:<id>, shortcut?: \"Cmd+Shift+K\" | \"\" (none) | null (default), hold?: a character key alone or with Shift (\"X\", \"Shift+X\", \".\") | \"\" | null (none), force?} → {id, shortcut, hold, removedFrom}; `hold` alone leaves the shortcut as it is; a hold shortcut acts while the holdShortcuts preference is on",
+        "{id: command id or tool:<id>, shortcut?: \"Cmd+Shift+K\" | \"\" (none) | null (default), hold?: a character key alone or with Shift (\"X\", \"Shift+X\", \".\") | \"\" | null (none), force?} → {id, shortcut, hold, removedFrom}; `hold` alone leaves the shortcut as it is; a command listed only with a shortcut takes a hold only with one and loses it with the shortcut; a hold shortcut acts while the holdShortcuts preference is on",
     ),
     ("shortcuts.list", "List Keyboard Shortcuts", "", "{query?} → [{id, label, group, shortcut, hold, default, overridden}]"),
     ("shortcuts.conflicts", "Keyboard Shortcut Conflicts", "", "{} → [{shortcut, ids}]"),

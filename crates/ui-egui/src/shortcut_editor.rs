@@ -1165,9 +1165,20 @@ pub fn hold_of(holds: &Holds, key: &str) -> Option<String> {
 }
 
 /// The entry whose usable hold shortcut is `chord`: the first in `holds`' order when several are.
-/// An entry no longer listed (a removed plug-in's) keeps its text but does not hold.
+/// An entry no longer listed (a removed plug-in's, or one that [`needs_a_value`] whose shortcut
+/// was taken away) keeps its text but does not hold.
 pub(crate) fn hold_for<'a>(holds: &'a Holds, chord: &craft_keymap::Chord) -> Option<&'a str> {
-    holds.iter().find(|(k, t)| hold_chord(t).is_ok_and(|c| c == *chord) && entry(k).is_some()).map(|(k, _)| k.as_str())
+    let mirror = current();
+    holds
+        .iter()
+        .find(|(k, t)| hold_chord(t).is_ok_and(|c| c == *chord) && entry(k).is_some_and(|e| listed(mirror.keymap.overrides(), &e)))
+        .map(|(k, _)| k.as_str())
+}
+
+/// Removes the hold shortcuts of the entries the editor does not list under `overrides`: one that
+/// [`needs_a_value`] loses its hold with its shortcut. A removed plug-in's entry keeps its hold.
+fn drop_unlisted_holds(holds: &mut Holds, overrides: &Overrides) {
+    holds.retain(|k, _| entry(k).is_none_or(|e| listed(overrides, &e)));
 }
 
 /// Sets (`Some`) or removes (`None` or `""`) the hold shortcut of `key`. Another entry that holds
@@ -1540,6 +1551,10 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
                 assign(&mut ov, &key, shortcut.as_deref(), force)
             };
             let r = r.and_then(|mut removed| {
+                // An entry the editor lists only with a shortcut takes a hold shortcut only with one.
+                if hold.as_deref().is_some_and(|h| !h.is_empty()) && entry(&key).is_some_and(|e| !listed(&ov, &e)) {
+                    return Err(format!("`{key}` needs a shortcut before it can have a hold shortcut"));
+                }
                 if has_hold {
                     for k in assign_hold(&mut holds, &key, hold.as_deref(), force)? {
                         if !removed.contains(&k) {
@@ -1547,6 +1562,7 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
                         }
                     }
                 }
+                drop_unlisted_holds(&mut holds, &ov);
                 Ok(removed)
             });
             r.map(|removed| {
@@ -1742,8 +1758,9 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
                     (_, None) => Err("no file reader".into()),
                 }
             };
-            data.and_then(|v| Ok((import_json(&v)?, import_holds(&v)?))).map(|((set, ov), holds)| {
+            data.and_then(|v| Ok((import_json(&v)?, import_holds(&v)?))).map(|((set, ov), mut holds)| {
                 let n = ov.len();
+                drop_unlisted_holds(&mut holds, &ov);
                 app.ui.shortcut_overrides = ov;
                 app.ui.shortcut_holds = holds;
                 app.ui.shortcut_set = set;
@@ -2066,6 +2083,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if let Cow::Owned(km) = &km {
         d.fields.insert("overrides".into(), stored::to_value(&saved_overrides(km.overrides(), &saved)));
     }
+    drop_unlisted_holds(&mut holds, km.overrides());
     d.fields.insert("holds".into(), json!(holds));
     if d.str("__recording").is_empty() {
         d.fields.insert("__recordingHold".into(), json!(false));
@@ -3578,6 +3596,32 @@ mod tests {
         let r = app.run("shortcuts.set", json!({"id": "select.none", "hold": "Shift+X", "force": true})).unwrap();
         assert_eq!(r["removedFrom"], json!(["paint.swap"]));
         assert_eq!(app.ui.shortcut_holds.keys().collect::<Vec<_>>(), ["select.none"]);
+    }
+
+    /// A command the editor lists only with a shortcut (Transparency needs a value) takes a hold
+    /// shortcut only with one, and loses its hold, as it stops being listed, when the shortcut is
+    /// taken away: by clearing it or by giving it to another command.
+    #[test]
+    fn a_hold_shortcut_needs_a_listed_entry() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        assert!(needs_a_value("transparency.set"));
+        let r = app.run("shortcuts.set", json!({"id": "transparency.set", "hold": "Q"}));
+        assert!(r.is_err(), "{r:?}");
+        assert!(app.ui.shortcut_holds.is_empty() && app.ui.shortcut_overrides.is_empty());
+        let q = vc_chord("Q").unwrap();
+        app.run("shortcuts.set", json!({"id": "transparency.set", "shortcut": "Cmd+Alt+Shift+F9", "hold": "Q"})).unwrap();
+        assert_eq!(hold_for(&app.ui.shortcut_holds, &q), Some("transparency.set"));
+        let rows = with_steady_plugins(|| app.run("shortcuts.list", json!({"query": "transparency.set"})).unwrap());
+        assert!(rows.as_array().unwrap().iter().any(|r| r["id"] == "transparency.set" && r["hold"] == "Q"), "{rows}");
+        app.run("shortcuts.set", json!({"id": "transparency.set", "shortcut": ""})).unwrap();
+        assert_eq!(hold_for(&app.ui.shortcut_holds, &q), None);
+        assert!(app.ui.shortcut_holds.is_empty(), "{:?}", app.ui.shortcut_holds);
+        // The key is free for another command, with no conflict left behind.
+        app.run("shortcuts.set", json!({"id": "paint.swap", "hold": "Q"})).unwrap();
+        assert_eq!(app.run("shortcuts.conflicts", json!({})).unwrap(), json!([]));
+        app.run("shortcuts.set", json!({"id": "transparency.set", "shortcut": "Cmd+Alt+Shift+F9", "hold": "Shift+Q"})).unwrap();
+        app.run("shortcuts.set", json!({"id": "edit.duplicate", "shortcut": "Cmd+Alt+Shift+F9", "force": true})).unwrap();
+        assert_eq!(app.ui.shortcut_holds.keys().collect::<Vec<_>>(), ["paint.swap"]);
     }
 
     /// Reset All and a preset clear the hold shortcuts; two entries holding one key are a conflict.

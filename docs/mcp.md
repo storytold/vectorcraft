@@ -6649,7 +6649,9 @@ has a hold shortcut, or a key the active tool uses itself (E with the Extend Pat
 `shortcuts.set {id, hold}` sets a hold shortcut, and `hold: ""` or `null` removes it; `hold` alone leaves the entry's
 shortcut as it is, and a key that another entry already holds is refused unless `force` is true. Hold shortcuts are
 kept apart from shortcuts: Use Default, Clear and `shortcut: null` leave them, and `overridden` in `shortcuts.list` is
-about the shortcut only. `shortcuts.list` rows give the hold shortcut as `hold`, `shortcuts.conflicts` lists a key two
+about the shortcut only. A command the editor lists only while it has a shortcut (one that needs a value, such as
+`transparency.set`) takes a hold shortcut only with a shortcut, and loses its hold shortcut when its shortcut is cleared
+or given to another entry. `shortcuts.list` rows give the hold shortcut as `hold`, `shortcuts.conflicts` lists a key two
 entries hold as `"Hold X"`, and Reset to Defaults and a preset remove every hold shortcut. `shortcuts.export` writes
 them as a `holds` object (entry id to key) when there are any, and `shortcuts.import` reads it; a file without `holds`
 has none, and a `holds` value that is not a usable hold shortcut fails the import, which then changes nothing.
