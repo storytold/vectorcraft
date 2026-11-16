@@ -3414,6 +3414,9 @@ antiAlias	Sharp	शार्प
 	Overprint	ओवरप्रिंट
 	Overprint and Transparency Flattener	ओवरप्रिंट और ट्रांसपेरेंसी फ़्लैटनर
 	Overprint and Transparency Flattener Options	ओवरप्रिंट और ट्रांसपेरेंसी फ़्लैटनर ऑप्शन्स
+	Custom…	कस्टम…
+	Custom Transparency Flattener Options	कस्टम ट्रांसपेरेंसी फ़्लैटनर ऑप्शन्स
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS में अल्फा पारदर्शिता नहीं होती, और ओवरप्रिंट तय करता है कि ओवरप्रिंट रखे जाएँ या नहीं।
 	Overprint Black	ओवरप्रिंट ब्लैक
 	Overprint Black…	ओवरप्रिंट ब्लैक…
 	Overprint Fill	फ़िल ओवरप्रिंट करें

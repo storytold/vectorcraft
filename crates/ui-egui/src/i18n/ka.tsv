@@ -4723,6 +4723,9 @@ digits	Malayalam	მალაიალამური
 	Open a document to preview its pages	გახსენით დოკუმენტი მისი გვერდების წინასწარ სანახავად
 	Output › Mode	გამოტანა › რეჟიმი
 	Overprint and Transparency Flattener Options	ზედდაბეჭდვისა და გამჭვირვალობის გაბრტყელების პარამეტრები
+	Custom…	მორგებული…
+	Custom Transparency Flattener Options	გამჭვირვალობის გაბრტყელების მორგებული პარამეტრები
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS-ს არ აქვს ალფა-გამჭვირვალობა, ხოლო ზედდაბეჭდვები განსაზღვრავს, შენარჩუნდება თუ არა ზედდაბეჭდვები.
 	Place the pages with the placement again	გვერდების ხელახლა განთავსება განთავსების მიხედვით
 	Placement:	განთავსება:
 	Preserve CMYK Numbers	CMYK მნიშვნელობების შენარჩუნება

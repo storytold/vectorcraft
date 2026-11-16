@@ -180,6 +180,16 @@ const FIELD: f32 = 56.0;
 /// panel edit them: the raster/vector balance, both resolutions and the six switches. Returns true
 /// when one changed.
 pub(crate) fn options_editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions, enabled: bool) -> bool {
+    editor(ui, id, o, enabled, false)
+}
+
+/// [`options_editor`] with Preserve Alpha Transparency and Preserve Overprints and Spot Colors
+/// shown but not editable (the file format or another control sets them).
+pub(crate) fn options_editor_fixed_preserve(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions) -> bool {
+    editor(ui, id, o, true, true)
+}
+
+fn editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions, enabled: bool, fixed_preserve: bool) -> bool {
     let t = Tokens::get(ui.ctx());
     let before = o.clone();
     let dim = |ui: &mut egui::Ui, s: &str| {
@@ -226,16 +236,16 @@ pub(crate) fn options_editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions
             }
         });
         ui.add_space(4.0);
-        let switches: [(&str, &mut bool); 6] = [
-            (tl!("Convert All Text to Outlines"), &mut o.text_to_outlines),
-            (tl!("Convert All Strokes to Outlines"), &mut o.strokes_to_outlines),
-            (tl!("Clip Complex Regions"), &mut o.clip_complex_regions),
-            (tl!("Anti-alias Rasters"), &mut o.anti_alias),
-            (tl!("Preserve Alpha Transparency"), &mut o.preserve_alpha),
-            (tl!("Preserve Overprints and Spot Colors"), &mut o.preserve_overprints),
+        let switches: [(&str, &mut bool, bool); 6] = [
+            (tl!("Convert All Text to Outlines"), &mut o.text_to_outlines, false),
+            (tl!("Convert All Strokes to Outlines"), &mut o.strokes_to_outlines, false),
+            (tl!("Clip Complex Regions"), &mut o.clip_complex_regions, false),
+            (tl!("Anti-alias Rasters"), &mut o.anti_alias, false),
+            (tl!("Preserve Alpha Transparency"), &mut o.preserve_alpha, fixed_preserve),
+            (tl!("Preserve Overprints and Spot Colors"), &mut o.preserve_overprints, fixed_preserve),
         ];
-        for (label, v) in switches {
-            if widgets::check(ui, label, *v, enabled) {
+        for (label, v, fixed) in switches {
+            if widgets::check(ui, label, *v, enabled && !fixed) {
                 *v = !*v;
             }
         }

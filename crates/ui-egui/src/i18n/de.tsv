@@ -2509,6 +2509,9 @@ file-filter	Templates	Vorlagen
 	Overprint	Überdrucken
 	Overprint and Transparency Flattener	Überdrucken und Transparenzreduzierung
 	Overprint and Transparency Flattener Options	Optionen für Überdrucken und Transparenzreduzierung
+	Custom…	Benutzerdefiniert…
+	Custom Transparency Flattener Options	Benutzerdefinierte Optionen für Transparenzreduzierung
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS hat keine Alphatransparenz, und „Überdrucken“ legt fest, ob Überdrucken erhalten bleibt.
 	Overprint Black…	Schwarz überdrucken…
 	Overprint Fill	Fläche überdrucken
 	Overprint Preview	Überdruckenvorschau

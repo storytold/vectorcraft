@@ -2554,6 +2554,9 @@ font-technology	Variable	Variables
 	Overprint	Sobreimprimir
 	Overprint and Transparency Flattener	Sobreimpresión y acoplador de transparencia
 	Overprint and Transparency Flattener Options	Opciones de sobreimpresión y acoplador de transparencia
+	Custom…	Personalizado…
+	Custom Transparency Flattener Options	Opciones personalizadas de acoplador de transparencia
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS no tiene transparencia alfa, y Sobreimpresiones determina si se conservan las sobreimpresiones.
 	Overprint Black…	Sobreimprimir negro…
 	Overprint Fill	Sobreimprimir relleno
 	Overprint Preview	Vista previa de sobreimpresión

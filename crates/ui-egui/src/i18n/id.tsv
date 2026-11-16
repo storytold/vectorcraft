@@ -2667,6 +2667,9 @@ digits	Malayalam	Malayalam
 	Open a document to preview its pages	Buka dokumen untuk melihat pratinjau halamannya
 	Output › Mode	Keluaran › Mode
 	Overprint and Transparency Flattener Options	Opsi overprint dan perataan transparansi
+	Custom…	Kustom…
+	Custom Transparency Flattener Options	Opsi perataan transparansi kustom
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS tidak memiliki transparansi alfa, dan Overprint menentukan apakah overprint dipertahankan.
 	Place the pages with the placement again	Tempatkan halaman lagi dengan penempatan tersebut
 	Placement:	Penempatan:
 	Preserve CMYK Numbers	Pertahankan angka CMYK

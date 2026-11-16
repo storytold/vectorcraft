@@ -2700,6 +2700,9 @@ antiAlias	Sharp	날카롭게
 	Overprint Stroke	선 오버프린트
 	Overprint and Transparency Flattener	오버프린트 및 투명도 병합
 	Overprint and Transparency Flattener Options	오버프린트 및 투명도 병합 옵션
+	Custom…	사용자 지정…
+	Custom Transparency Flattener Options	사용자 지정 투명도 병합 옵션
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS에는 알파 투명도가 없으며, 오버프린트 설정에 따라 오버프린트 유지 여부가 결정됩니다.
 	Overprint:	오버프린트:
 	Overprints:	오버프린트:
 	Override Character Color	문자 색상 덮어쓰기

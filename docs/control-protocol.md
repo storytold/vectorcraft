@@ -812,12 +812,20 @@ selected slices. Hidden or locked slices (`view.slices.hide`, `view.slices.lock`
 EPS Options: Export As… with the EPS format (`file.exportAs {format: "eps"}`, then the save dialog), or
 `ui.epsOptionsDialog {path?, …document.exportEps options}` for agents, opens the `epsOptions` dialog. Its fields are
 `document.export` params: `previewFormat` (`none`, `tiffBw`, `tiffColor`), `transparentPreview`, `overprints`
-(`preserve`, `discard`), `flattenerPreset` (a built-in or saved preset's name), `includeLinkedFiles`, `thumbnails`,
+(`preserve`, `discard`), `flattenerPreset` (a built-in or saved preset's name), `flattener` (custom flattener options
+over the preset, as `object.flattenTransparency` takes them), `includeLinkedFiles`, `thumbnails`,
 `cmykPostScript`, `compatibleGradients`, `level` (`2`, `3`), plus `path` and the artboard choice (`useArtboards`,
 `range`). `ui.dialog.confirm` checks them (a bad value or an unknown preset keeps the dialog open), remembers them for
 the next EPS Options and writes the file(s), asking for a path when there is none. With Use Artboards and two or more
 artboards, it writes a central file of the whole document under the chosen name and one `{stem}_{artboard}.eps` per
 artboard. When no art shows, it writes only the artboard files.
+
+The Custom… button beside the preset opens the `epsFlattenerOptions` dialog over EPS Options, on the options the
+export would use. Its fields are the flattener options; `preserveAlpha` is always off, and overprints are kept only
+with `overprints: "preserve"`. Its `ui.dialog.confirm` sets every option as `flattener` (the preset then shows
+[Custom]) and goes back to EPS Options; `ui.dialog.cancel` goes back with the options unchanged. Choosing a preset,
+in the dropdown or with `ui.dialog.set {flattenerPreset}`, drops `flattener`, and so does `ui.epsOptionsDialog` with
+a `flattenerPreset` and no `flattener`.
 
 Data Recovery: at launch, copies left behind by a crash open the `recovery` dialog (never copies another running
 instance keeps, so instances started side by side for screenshots don't get it). Fields: `copies` (`[{file, title,

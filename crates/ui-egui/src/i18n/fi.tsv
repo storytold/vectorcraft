@@ -2886,6 +2886,9 @@ digits	Malayalam	Malajalam
 	Open a document to preview its pages	Avaa asiakirja, niin voit esikatsella sen sivuja
 	Output › Mode	Tuloste › Tila
 	Overprint and Transparency Flattener Options	Päällepainatuksen ja läpinäkyvyyden litistyksen asetukset
+	Custom…	Mukautettu…
+	Custom Transparency Flattener Options	Läpinäkyvyyden litistyksen mukautetut asetukset
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS:ssä ei ole alfa-läpinäkyvyyttä, ja Päällepainatukset määrää, säilytetäänkö päällepainatukset.
 	Place the pages with the placement again	Sijoita sivut uudelleen sijoittelun mukaan
 	Placement:	Sijoittelu:
 	Preserve CMYK Numbers	Säilytä CMYK-arvot

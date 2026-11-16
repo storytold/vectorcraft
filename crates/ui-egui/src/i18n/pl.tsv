@@ -2855,6 +2855,9 @@ digits	Malayalam	Malajalam
 	Open a document to preview its pages	Otwórz dokument, aby podejrzeć jego strony
 	Output › Mode	Wyjście › Tryb
 	Overprint and Transparency Flattener Options	Opcje nadruku i spłaszczania przezroczystości
+	Custom…	Niestandardowe…
+	Custom Transparency Flattener Options	Niestandardowe opcje spłaszczania przezroczystości
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS nie ma przezroczystości alfa, a Nadruki określają, czy nadruki są zachowywane.
 	Place the pages with the placement again	Ponownie rozmieść strony według położenia
 	Placement:	Położenie:
 	Preserve CMYK Numbers	Zachowaj wartości CMYK

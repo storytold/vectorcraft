@@ -2942,6 +2942,9 @@ digits	Malayalam	Malajálamské
 	Open a document to preview its pages	Otevřete dokument, abyste viděli náhled jeho stránek
 	Output › Mode	Výstup › Režim
 	Overprint and Transparency Flattener Options	Možnosti přetisku a sloučení průhlednosti
+	Custom…	Vlastní nastavení…
+	Custom Transparency Flattener Options	Vlastní možnosti sloučení průhlednosti
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS nemá průhlednost alfa a Přetisky určují, zda se přetisky zachovají.
 	Place the pages with the placement again	Znovu rozmístit stránky podle umístění
 	Placement:	Umístění:
 	Preserve CMYK Numbers	Zachovat hodnoty CMYK

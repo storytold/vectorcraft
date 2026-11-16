@@ -3713,6 +3713,9 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Overprint	疊印
 	Overprint and Transparency Flattener	疊印與透明度平面化
 	Overprint and Transparency Flattener Options	疊印與透明度平面化選項
+	Custom…	自訂…
+	Custom Transparency Flattener Options	自訂透明度平面化選項
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS 沒有 Alpha 透明度，「疊印」決定是否保留疊印。
 	Overprint Black…	疊印黑色…
 	Overprint Fill	疊印填色
 	Overprint Preview	疊印預視

@@ -2579,6 +2579,9 @@ file-filter	Templates	Шаблоны
 	Overprint	Наложение
 	Overprint and Transparency Flattener	Наложение и объединение прозрачностей
 	Overprint and Transparency Flattener Options	Параметры наложения и объединения прозрачностей
+	Custom…	Пользовательские…
+	Custom Transparency Flattener Options	Пользовательские параметры объединения прозрачностей
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	В EPS нет альфа-прозрачности, а параметр «Наложения» определяет, сохраняются ли наложения.
 	Overprint Black…	Наложение чёрного…
 	Overprint Fill	Наложение заливки
 	Overprint Preview	Просмотр наложения

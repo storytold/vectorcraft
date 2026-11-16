@@ -3136,6 +3136,9 @@ digits	Malayalam	Malaiàlam
 	Overprint	Sobrimpressió
 	Overprint and Transparency Flattener	Aplanador de sobremipressió i transparència
 	Overprint and Transparency Flattener Options	Opcions de l’aplanador de sobremipressió i transparència
+	Custom…	Personalitzat…
+	Custom Transparency Flattener Options	Opcions personalitzades de l’aplanador de transparència
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	L’EPS no té transparència alfa, i Sobreimpressions determina si es conserven les sobreimpressions.
 	Overprint Black…	Sobrimpressió del negre…
 	Overprint Fill	Sobrimpressió del farciment
 	Overprint Preview	Previsualització de la sobremipressió

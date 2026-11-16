@@ -3445,6 +3445,9 @@ theme	Appearance	Εμφάνιση
 	Overprint	Υπερεκτύπωση
 	Overprint and Transparency Flattener	Υπερεκτύπωση και ισοπέδωση διαφάνειας
 	Overprint and Transparency Flattener Options	Επιλογές υπερεκτύπωσης και ισοπέδωσης διαφάνειας
+	Custom…	Προσαρμοσμένο…
+	Custom Transparency Flattener Options	Προσαρμοσμένες επιλογές ισοπέδωσης διαφάνειας
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	Το EPS δεν έχει διαφάνεια άλφα και οι Υπερεκτυπώσεις ορίζουν αν διατηρούνται οι υπερεκτυπώσεις.
 	Overprint Black…	Υπερεκτύπωση μαύρου…
 	Overprint Fill	Υπερεκτύπωση γεμίσματος
 	Overprint Preview	Προεπισκόπηση υπερεκτύπωσης

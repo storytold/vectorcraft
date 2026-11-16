@@ -2100,6 +2100,9 @@ antiAlias	Sharp	Nítido
 	Overprint Stroke	Sobreimpressão de Traçado
 	Overprint and Transparency Flattener	Sobreimpressão e Achatamento de Transparência
 	Overprint and Transparency Flattener Options	Opções de Sobreimpressão e Achatamento de Transparência
+	Custom…	Personalizado…
+	Custom Transparency Flattener Options	Opções Personalizadas de Achatamento de Transparência
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	O EPS não tem transparência alfa, e Sobreimpressões define se as sobreimpressões são mantidas.
 	Overprint:	Sobreimpressão:
 	Overprints:	Sobreimpressões:
 	Override Character Color	Substituir Cor do Caractere

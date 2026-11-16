@@ -2487,6 +2487,9 @@ font-technology	Variable	Variabla
 	Overprint	Övertryck
 	Overprint and Transparency Flattener	Övertryck och transparensutplattning
 	Overprint and Transparency Flattener Options	Alternativ för övertryck och transparensutplattning
+	Custom…	Anpassad…
+	Custom Transparency Flattener Options	Anpassade alternativ för transparensutplattning
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS har ingen alfatransparens, och Övertryck avgör om övertryck behålls.
 	Overprint Black…	Övertryck svart…
 	Overprint Fill	Övertryck fyllning
 	Overprint Preview	Förhandsgranskning av övertryck

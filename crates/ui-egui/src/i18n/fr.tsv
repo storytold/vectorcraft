@@ -2542,6 +2542,9 @@ font-technology	Variable	Variables
 	Overprint	Surimpression
 	Overprint and Transparency Flattener	Surimpression et aplatissement des transparences
 	Overprint and Transparency Flattener Options	Options de surimpression et d’aplatissement des transparences
+	Custom…	Personnalisé…
+	Custom Transparency Flattener Options	Options personnalisées d’aplatissement des transparences
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	Le format EPS n’a pas de transparence alpha, et Surimpressions détermine si les surimpressions sont conservées.
 	Overprint Black…	Surimpression du noir…
 	Overprint Fill	Surimpression du fond
 	Overprint Preview	Aperçu de la surimpression
