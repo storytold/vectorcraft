@@ -3765,6 +3765,9 @@ digits	Malayalam	Malayálam
 @msg	`{_1}` is the name of an installed font	`{_1}` es el nombre de una fuente instalada
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} usa `{font}`, una fuente compuesta
 @msg	give fonts: [{name, parts}…]	indique fonts: [{name, parts}…]
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` debe ser "document", {{artboards: [index, …]}} o {{layers: [id, …]}}
+@msg	numbers out of order in {{}} quantifier	números desordenados en el cuantificador {{}}
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	la pintura no es un degradado de forma libre (aplique uno con paint.editGradient {{kind: "freeform"}})
 @msg	path is empty	path está vacío
 @msg	fonts must be a list of composite fonts	fonts debe ser una lista de fuentes compuestas
 @msg	names must be strings	names debe contener cadenas
@@ -7790,7 +7793,6 @@ breakText	Glyphs	Glifos
 @msg	`rows` must be lists of numbers or nulls, not {r}	`rows` deben ser listas de números o valores null, no {r}
 @msg	`scale` must be a number from 0.001 to 1000	`scale` debe ser un número entre 0.001 y 1000
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}` debe ser una lista que no esté vacía
-@msg	`scope` must be "document", {artboards} or {layers}	`scope` debe ser "document", {artboards} o {layers}
 @msg	`side` must be "left", "right", "top" or "bottom"	`side` debe ser "left", "right", "top" o "bottom"
 @msg	`side` places the artboard: leave out x, y, width and height	`side` coloca la mesa de trabajo: omite x, y, width y height
 @msg	`source` is the only path in series group `target`	`source` es el único trazado del grupo de serie `target`
@@ -7963,7 +7965,6 @@ breakText	Glyphs	Glifos
 @msg	not a regular expression	no es una expresión regular
 @msg	not an action set: the text doesn't start with /version and a number	no es un conjunto de acciones: el texto no empieza con /version y un número
 @msg	nothing to repeat	nada que repetir
-@msg	numbers out of order in {_1} quantifier	números desordenados en el cuantificador {_1}
 @msg	object {_1} needs a 3D effect	el objeto {_1} necesita un efecto 3D
 @msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	objeto {_1}: una Extrusión y biselado hueca no tiene extremos: activa Extremo para asignar un gráfico
 @msg	object {_1}: with a depth of 0 the object has one face: map its graphics onto the front	objeto {_1}: con una profundidad de 0 el objeto tiene una sola cara: asigna sus gráficos a la parte frontal
@@ -8031,7 +8032,6 @@ breakText	Glyphs	Glifos
 @msg	the guide is hidden or locked	la guía está oculta o bloqueada
 @msg	the library's file is outside the read roots	el archivo de la biblioteca está fuera de las raíces de lectura
 @msg	the method needs an XML value	el método necesita un valor XML
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	la pintura no es un degradado de forma libre (aplica uno con paint.editGradient {kind})
 @msg	the parameters or body do not form one function	los parámetros o el cuerpo no forman una sola función
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	el filtro SVG pegado {name} dibuja de forma distinta al filtro del documento con ese nombre, y no hay ningún nombre libre para él
 @msg	the pen table holds more than 255 pens	la tabla de plumillas contiene más de 255 plumillas
