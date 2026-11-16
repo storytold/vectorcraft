@@ -509,6 +509,15 @@ fn a_confined_package_refuses_a_linked_file_whose_editing_data_cannot_be_read() 
     refused(&mut s, json!({"folder": out}));
     refused(&mut s, json!({"relink": false}));
     assert_eq!(run(&mut s, "file.package", json!({}))["links"], 1, "the person's package");
+    // A PDF listing the editing file without its data (`EF` renamed, the same length).
+    let at = editable.windows(4).position(|w| w.starts_with(b"/EF") && !w[3].is_ascii_alphanumeric()).expect("the editing file's EF");
+    let mut detached = editable.clone();
+    detached[at..at + 3].copy_from_slice(b"/XF");
+    assert!(vectorcraft_pdf::editing(&detached).is_none(), "the editing data can't be resolved");
+    write(&pdf, &detached);
+    refused(&mut s, json!({"folder": out}));
+    refused(&mut s, json!({"relink": false}));
+    assert_eq!(run(&mut s, "file.package", json!({}))["links"], 1, "the person's package");
     // A PDF without editing data.
     write(&pdf, &plain);
     assert_eq!(package(&mut s, json!({"folder": out})).unwrap()["links"], 1);

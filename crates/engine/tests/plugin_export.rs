@@ -388,4 +388,6 @@ fn a_confined_exporter_is_refused_stored_paths_outside_the_read_roots() {
     let mut found = vec![];
     strings_in(&serde_json::from_slice(&std::fs::read(r["files"][0].as_str().unwrap()).unwrap()).unwrap(), &mut found);
     assert!(!found.contains(&placed), "{found:?}");
+    let _ = std::fs::remove_dir_all(&away);
+    let _ = std::fs::remove_dir_all(&home);
 }

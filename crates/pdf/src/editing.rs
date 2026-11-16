@@ -77,12 +77,33 @@ pub fn editing_with(bytes: &[u8], password: Option<&str>) -> Option<Editing> {
     editing_in(&crate::pages::open(bytes, password).ok()?)
 }
 
+/// The file specification of the editing file among a parsed PDF's attachments, if any, and whether
+/// a name tree key names the editing file (set also when its file specification can't be read).
+fn editing_file_spec(pdf: &Pdf) -> (Option<Dict<'_>>, bool) {
+    let xref = pdf.xref();
+    let Some(tree) = xref
+        .get::<Dict<'_>>(xref.root_id())
+        .and_then(|catalog| catalog.get::<Dict<'_>>(b"Names"))
+        .and_then(|names| names.get::<Dict<'_>>(b"EmbeddedFiles"))
+    else {
+        return (None, false);
+    };
+    let mut keyed = false;
+    let spec = editing_spec(&tree, 0, &mut HashSet::new(), &mut keyed, xref);
+    (spec, keyed)
+}
+
+/// Does a parsed PDF list the editing file among its attachments, also when [`editing_in`] can't
+/// read it (its file specification, its `EF` dictionary or its `F` or `UF` stream can't be
+/// resolved)?
+pub(crate) fn has_editing_file_in(pdf: &Pdf) -> bool {
+    let (spec, keyed) = editing_file_spec(pdf);
+    spec.is_some() || keyed
+}
+
 /// [`editing`] of a parsed PDF.
 pub(crate) fn editing_in(pdf: &Pdf) -> Option<Editing> {
-    let xref = pdf.xref();
-    let catalog = xref.get::<Dict<'_>>(xref.root_id())?;
-    let tree = catalog.get::<Dict<'_>>(b"Names")?.get::<Dict<'_>>(b"EmbeddedFiles")?;
-    let spec = editing_spec(&tree, 0, &mut HashSet::new(), xref)?;
+    let spec = editing_file_spec(pdf).0?;
     let files = spec.get::<Dict<'_>>(b"EF")?;
     let stream = files.get::<Stream<'_>>(b"F").or_else(|| files.get::<Stream<'_>>(b"UF"))?;
     let data = stream.decoded().map(|d| d.into_owned()).unwrap_or_default();
@@ -98,8 +119,21 @@ pub(crate) fn editing_in(pdf: &Pdf) -> Option<Editing> {
 
 /// The file specification of the editing file in the name tree node `node`. `seen` holds the indirect
 /// nodes already searched, so a node shared by many `Kids` arrays is searched once, not once per path.
-fn editing_spec<'a>(node: &Dict<'a>, depth: usize, seen: &mut HashSet<ObjectIdentifier>, xref: &'a XRef) -> Option<Dict<'a>> {
+/// `keyed` is set when a key searched names the editing file.
+fn editing_spec<'a>(node: &Dict<'a>, depth: usize, seen: &mut HashSet<ObjectIdentifier>, keyed: &mut bool, xref: &'a XRef) -> Option<Dict<'a>> {
     if let Some(names) = node.get::<Array<'a>>(b"Names") {
+        // The keys read as written, so a value that can't be resolved doesn't shift the pairs.
+        let mut raw = items(&names);
+        while let (Some(key), Some(_)) = (raw.next(), raw.next()) {
+            let key = match key {
+                MaybeRef::NotRef(Object::String(key)) => Some(key),
+                MaybeRef::Ref(r) => xref.get::<PdfString<'a>>(r.into()),
+                MaybeRef::NotRef(_) => None,
+            };
+            if key.is_some_and(|key| is_editing_name(&key)) {
+                *keyed = true;
+            }
+        }
         let mut items = names.iter::<Object<'a>>();
         while let (Some(_), Some(spec)) = (items.next(), items.next()) {
             if let Object::Dict(spec) = spec
@@ -121,17 +155,20 @@ fn editing_spec<'a>(node: &Dict<'a>, depth: usize, seen: &mut HashSet<ObjectIden
             MaybeRef::NotRef(Object::Dict(kid)) => kid,
             _ => return None,
         };
-        editing_spec(&kid, depth + 1, seen, xref)
+        editing_spec(&kid, depth + 1, seen, keyed, xref)
     })
 }
 
 /// A file specification naming the editing file (current or legacy name), in any text string
 /// encoding.
 fn is_editing_file(spec: &Dict<'_>) -> bool {
-    [&b"UF"[..], b"F"].into_iter().filter_map(|k| spec.get::<PdfString<'_>>(k)).any(|name| {
-        let name = text_string(name.as_bytes());
-        name == EDITING_FILE || name == LEGACY_EDITING_FILE
-    })
+    [&b"UF"[..], b"F"].into_iter().filter_map(|k| spec.get::<PdfString<'_>>(k)).any(|name| is_editing_name(&name))
+}
+
+/// A text string that is the editing file's name (current or legacy), in any encoding.
+fn is_editing_name(name: &PdfString<'_>) -> bool {
+    let name = text_string(name.as_bytes());
+    name == EDITING_FILE || name == LEGACY_EDITING_FILE
 }
 
 /// The most decoded page content [`page_hash`] reads in all (bytes).
