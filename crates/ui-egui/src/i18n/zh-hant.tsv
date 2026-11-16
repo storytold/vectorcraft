@@ -1332,6 +1332,8 @@ file-filter	Templates	範本
 	Font Family & Style	字體家族與樣式
 	Font Family, Style & Size	字體家族、樣式與大小
 	Font List	字體清單
+	Show Similar Fonts	顯示相似字體
+	Clear Similar Fonts	清除相似字體
 	Font Preview Size	字體預覽大小
 	Font Size	字體大小
 	Variable Font	可變字體

@@ -1589,6 +1589,8 @@ file-filter	Templates	Mẫu
 	Font Family & Style	Họ phông & kiểu
 	Font Family, Style & Size	Họ phông, kiểu & cỡ
 	Font List	Danh sách phông
+	Show Similar Fonts	Hiển thị phông tương tự
+	Clear Similar Fonts	Xóa phông tương tự
 	Font Preview Size	Cỡ xem trước phông
 	Font Size	Cỡ chữ
 	Variable Font	Phông chữ biến thiên

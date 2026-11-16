@@ -11126,9 +11126,23 @@ the fallback font and is listed as missing, without editing the document. The ty
 symbols and pattern swatches is laid out again too, and inline graphics take the new size of their symbols' art. The app does so by
 itself when its window comes to the front and a font folder changed meanwhile.
 
+`text.similarFonts {family, limit?}` gives the families `text.fontList` lists in the order a font menu's Show Similar
+Fonts lists them (the ≈ button on a family's row; the ≈ chip under the filters clears it): `{family, families}`, with
+`family` the family's own name first, then the families that set the same script (Japanese, Thai or neither), then the
+others, each group nearest first. The measure is VectorCraft's own. It compares each family's face nearest an upright
+Regular by its OS/2 PANOSE digits (only between faces of the same PANOSE family kind), weight and width classes, x-height,
+cap height and average character width, and its `post` italic angle (a named instance of a variable font takes its `wght`
+and `slnt` settings), leaving out a number either face does not give, and counts a family of another kind (serif, sans
+serif, script and the font menu's other kinds) as further away. It reads these when a font is cataloged or loaded and opens
+no font file when asked. `limit` (a whole number from 1 to 100000) keeps
+the first ones. A missing or blank `family` fails with `` `family` is required ``, one that is not a string with
+`` `family` must be a string ``, a family that isn't available or that the font menus don't list with ``font family `<name>` is not available``, and any
+other `limit` with `` `limit` must be a whole number from 1 to 100000 ``.
+
 ```json
 {"name":"run_command","arguments":{"command":"text.fontList","params":{}}}
 {"name":"run_command","arguments":{"command":"text.fontList","params":{"family":"Source Serif 4"}}}
+{"name":"run_command","arguments":{"command":"text.similarFonts","params":{"family":"Source Sans 3","limit":10}}}
 {"name":"run_command","arguments":{"command":"text.rescanFonts","params":{}}}
 ```
 
