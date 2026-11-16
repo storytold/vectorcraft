@@ -2,6 +2,7 @@
 //! its leading, baseline shift, scaling and kerning, and a renderer with the same font draws the
 //! export where the canvas draws the text.
 
+use craft_svg::tree::usvg;
 use std::sync::Arc;
 
 use vectorcraft_color::{Color, Paint};
@@ -834,7 +835,7 @@ fn viewer_outlines(svg: &str) -> Vec<BezPath> {
                     let m = Affine::new([m.sx as f64, m.ky as f64, m.kx as f64, m.sy as f64, m.tx as f64, m.ty as f64]);
                     let mut bp = BezPath::new();
                     for s in p.data().segments() {
-                        use usvg::tiny_skia_path::PathSegment as S;
+                        use craft_svg::tree::usvg::tiny_skia_path::PathSegment as S;
                         let pt = |q: usvg::tiny_skia_path::Point| m * Point::new(q.x as f64, q.y as f64);
                         match s {
                             S::MoveTo(a) => bp.move_to(pt(a)),
