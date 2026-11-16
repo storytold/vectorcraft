@@ -1722,6 +1722,10 @@ digits	Malayalam	Malajalam
 	Em Box	Em-laatikko
 	x-Height	x-korkeus
 	ICF Box	ICF-laatikko
+	Show Sample	Näytä näyte
+	Hide Sample	Piilota näyte
+	Max Ascent/Descent	Suurin korkeus/syvyys
+	Max Ascender	Suurin yläpidennys
 	Copy Color Value (Hex)	Kopioi väriarvo (heksa)
 	Create New Swatch…	Luo uusi värimalli…
 	Name 40%	Nimi 40%
@@ -3635,6 +3639,8 @@ theme	Appearance	Ulkoasu
 	Find Font Files	Etsi fonttitiedostoja
 	Add Font Files	Lisää fonttitiedostoja
 	Font List	Fonttiluettelo
+	Show Similar Fonts	Näytä samankaltaiset fontit
+	Clear Similar Fonts	Tyhjennä samankaltaiset fontit
 	Fonts in Document	Asiakirjan fontit
 	Refresh Font List	Päivitä fonttiluettelo
 	Replace Font	Korvaa fontti
@@ -4855,6 +4861,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	Divide Objects Below: select exactly one path	Jaa alla olevat objektit: valitse tasan yksi polku
 @msg	Downloaded {what}	Ladattiin {what}
 @msg	Expand Appearance: the selection has a basic appearance	Laajenna ulkoasu: valinnalla on perusulkoasu
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	joitakin rasteritehosteita ei muunnettu kuviksi: ne veisivät yli 1 024 kuvaa tai yhteensä 256 megapikseliä
 @msg	Expand: no brush strokes selected	Laajenna: sivellinviivoja ei ole valittu
 @msg	Expand: no gradient fills	Laajenna: ei liukuväritäyttöjä
 @msg	Expand: nothing to expand	Laajenna: ei laajennettavaa
@@ -6244,7 +6251,7 @@ mark-style	Japanese	Japanilainen
 	By Object	Objektin mukaan
 	Check an artboard to save.	Valitse tallennettava piirtoalusta.
 	Clear All	Tyhjennä kaikki
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Sulje avointen profiilien pyöreät päät. Osittaiset pyöräytykset jättävät leikkauspintansa auki.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Sulje avointen profiilien pyöreät päät. Osittaiset pyöräytykset sulkevat myös leikkauspintansa.
 	Color Panel Options	Väri-paneelin asetukset
 	Color blindness – Tritanopia-type	Värisokeus – tritanopia
 	Create Dimension	Luo mitta
@@ -6498,6 +6505,7 @@ mark-style	Japanese	Japanilainen
 	Single Word Justification:	Yksittäisen sanan tasaus:
 	Full Justify	Täysi tasaus
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimi ei saa ylittää haluttua arvoa eikä haluttu arvo maksimia.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: minimi ei saa ylittää haluttua arvoa eikä haluttu arvo maksimia
 	Justification	Tasaus
 	Add filters from the list above	Lisää suodattimia yllä olevasta luettelosta
 	Add to Stack	Lisää pinoon
@@ -7575,7 +7583,7 @@ breakText	Glyphs	Merkit
 @msg	stroke cannot be set on a symbol instance	stroke-arvoa ei voi asettaa symbolin ilmentymälle
 @msg	fill on a symbol instance must be a solid color or none	symbolin ilmentymän fill-arvon on oltava tasainen väri tai none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key}-arvoa ei voi asettaa kuvalle, jolla ei ole tehostetta Muunna muodoksi tai Muunna objekti ääriviivoiksi
-@msg	pass newName, registration, exportType, nineSlice and/or type	anna newName, registration, exportType, nineSlice ja/tai type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	anna newName, registration, exportType, nineSlice, type ja/tai alignToPixelGrid
 	Text Flow	Tekstin kulku
 	By Rows	Riveittäin
 	By Columns	Sarakkeittain

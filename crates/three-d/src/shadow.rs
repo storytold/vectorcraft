@@ -335,11 +335,11 @@ pub fn inflate_shadowed(
 }
 
 /// Revolve's surface ([`crate::revolve`]) and, from the same sweep, the faces
-/// [`ShadowCaster::revolve`] adds for it with the nonzero fill rule. An error where
+/// [`ShadowCaster::revolve`] adds for it with the fill rule of `options`. An error where
 /// [`crate::revolve`] gives one.
 pub fn revolve_shadowed(path: &PathData, bounds: Rect, options: Revolve) -> Result<(Vec<Face>, SolidFaces), String> {
     let mut kept = vec![];
-    let (faces, lost) = crate::revolve_sweep(path, FillRule::NonZero, bounds, options, true, Some(&mut kept))?;
+    let (faces, lost) = crate::revolve_sweep(path, options.fill_rule, bounds, options, true, Some(&mut kept))?;
     let projection = Some(crate::revolve_projection(bounds, options.sanitized()));
     Ok((faces, SolidFaces { faces: lost.map_or(Ok(kept), Err), projection }))
 }

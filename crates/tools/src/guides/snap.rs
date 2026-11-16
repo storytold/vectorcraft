@@ -421,6 +421,23 @@ impl DrawSnap {
         self.guides.clear();
     }
 
+    /// Snap to Tangent for a circle drawn around `center`, its radius `r` set by the pointer at `p`
+    /// through the dragged `corner` (where [`Self::drag`] put it): the radius, within the Smart
+    /// Guides snapping tolerance of `r`, at which the circle touches nearby art
+    /// ([`Targets::tangent_radius`]), its guides replacing the last snap's. None, the guides kept,
+    /// with Smart Guides or Snap to Tangent off, pixels or the grid snapping instead (each read
+    /// again on every move, as [`PointSnap::snap_from`] reads pixels and the grid), nothing in
+    /// reach, or an anchor, center or crossing in reach of `p` or at `corner`.
+    pub fn circle_radius(&mut self, cx: &ToolContext, center: Point, p: Point, corner: Point, r: f64) -> Option<f64> {
+        let Some((_, PointSnap { targets: Some((t, tol)), op })) = &self.targets else { return None };
+        if !cx.smart_guides || !cx.snap_tangent || cx.snaps_to_pixel(*op) || cx.snap_to_grid {
+            return None;
+        }
+        let (radius, guides) = t.tangent_radius(center, p, corner, r, cx.tol(*tol))?;
+        self.guides = guides;
+        Some(radius)
+    }
+
     /// Snap `p`, dragged since the press, with the targets the press gathered.
     pub fn drag(&mut self, cx: &ToolContext, p: Point, from: Option<&Leave>) -> Point {
         if self.targets.is_none() {
