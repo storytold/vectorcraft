@@ -1337,7 +1337,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.dialogReset",
         "Reset",
         "",
-        "{} the open dialog's Reset, which its Cancel button reads while Alt (Option on macOS) is held (Flare Tool Options, dialog `flareOptions`; Save PDF, dialog `savePdf`): its fields go back to their defaults (Save PDF: the chosen preset's settings, with the path and artboards kept) and the dialog stays open, so OK applies them → the dialog; an error when no dialog is open or the open one has no Reset",
+        "{} the open dialog's Reset, which its Cancel button reads while Alt (Option on macOS) is held (Flare Tool Options, dialog `flareOptions`; Save PDF, dialog `savePdf`): its fields go back to their defaults (Save PDF: the chosen preset's settings, with the path and artboards kept) and the dialog stays open, so OK applies them → the dialog; an error when no dialog is open, the open one has no Reset, or Save PDF's chosen preset was deleted (the fields stay as they are)",
     ),
     (
         "ui.justification",

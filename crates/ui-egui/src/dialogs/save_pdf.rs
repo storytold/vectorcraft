@@ -531,11 +531,11 @@ fn replace_settings(d: &mut Dialog, settings: Map<String, Value>) {
 
 /// Reset (Cancel with Alt or Option held): the options go back to the chosen preset's settings, as
 /// choosing that preset sets them, and the dialog stays open. A preset that can no longer be found
-/// (a saved one deleted while the dialog is open) leaves the dialog as it is.
-fn reset(app: &VectorcraftApp, d: &mut Dialog) {
-    if let Ok(settings) = settings_fields(app, &json!({ "preset": d.str("preset") })) {
-        replace_settings(d, settings);
-    }
+/// (a saved one deleted while the dialog is open) is an error, and the dialog is left as it is.
+fn reset(app: &VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
+    let settings = settings_fields(app, &json!({ "preset": d.str("preset") }))?;
+    replace_settings(d, settings);
+    Ok(())
 }
 
 /// General: the options, then the artboards (Save PDF) or the description (preset editor).

@@ -396,19 +396,22 @@ fn reset_puts_the_chosen_presets_settings_back_and_keeps_the_path_and_artboards(
     assert_eq!(vectorcraft_pdf::import(&w[0].1).unwrap().artboards.len(), 1, "range 2");
 }
 
-/// Reset with a saved preset deleted while the dialog is open leaves the options as they are,
-/// rather than switching to another preset's.
+/// Reset with a saved preset deleted while the dialog is open is an error naming the preset, and
+/// it leaves the options and the password as they are rather than switching to another preset's.
 #[test]
-fn reset_with_a_deleted_preset_keeps_the_options() {
+fn reset_with_a_deleted_preset_is_an_error_and_keeps_the_options() {
     let (mut app, _, _) = app();
     app.run("pdf.preset.save", json!({"name": "Gone", "compatibility": "1.5"})).unwrap();
     app.run("ui.savePdfDialog", json!({"preset": "Gone"})).unwrap();
     set_field(&mut app, "compatibility", json!("1.6"));
+    set_field(&mut app, OPEN_PASSWORD, json!("secret"));
     app.run("pdf.preset.delete", json!({"name": "Gone"})).unwrap();
-    app.run("ui.dialogReset", json!({})).unwrap();
+    let e = app.run("ui.dialogReset", json!({})).unwrap_err();
+    assert!(e.contains("unknown PDF preset `Gone`"), "{e}");
     let d = app.ui.dialog.as_ref().expect("the dialog stays open");
     assert_eq!(d.str("preset"), "Gone");
     assert_eq!(get(d, "compatibility"), "1.6");
+    assert_eq!(get(d, OPEN_PASSWORD), "secret");
 }
 
 #[test]
