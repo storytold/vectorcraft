@@ -894,3 +894,43 @@ fn a_stop_dragged_off_the_ramp_or_deleted_with_the_button_beside_it_goes() {
     p.click(&mut app, del.center());
     assert_eq!(hexes(&app), ["#ffffff", "#000000"]);
 }
+
+/// #8241: over the strip under the ramp, where a click adds a stop, the panel shows the white arrow
+/// with a plus. Where the window shows glyphs as OS cursors (Windows, X11), it hands the glyph to
+/// the OS, since winit shows the plain arrow for the system copy cursor there; elsewhere the
+/// system copy cursor. Over the ramp itself, which adds nothing, neither.
+#[test]
+fn the_strip_under_the_ramp_shows_the_add_cursor() {
+    let stops = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#000000"}]);
+    let mut app = app(json!({"gradient": {"stops": stops}}));
+    let mut p = Panel::new();
+    p.frame(&mut app, vec![], Modifiers::NONE);
+    let bar = p.widget("grad-bar");
+    let output = |p: &mut Panel, app: &mut VectorcraftApp, at: Pos2| {
+        p.time += 0.1;
+        let events = vec![Event::PointerMoved(at)];
+        let input = egui::RawInput {
+            time: Some(p.time),
+            events,
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(260.0, 600.0))),
+            ..Default::default()
+        };
+        let mut out = p.ctx.run_ui(input, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.platform_output
+    };
+    // Between the two stops, just under the ramp.
+    let under = output(&mut p, &mut app, pos2(bar.center().x, bar.bottom() + 10.0));
+    assert_eq!(under.cursor_icon, egui::CursorIcon::Copy);
+    // The same condition the panel uses (the build, Wayland, VECTORCRAFT_SYSTEM_CURSORS).
+    if crate::cursors::add_cursor_is_a_glyph(&app) {
+        let glyph = app.canvas.cursors.get(vectorcraft_tools::Cursor::GroupSelection, 1.0);
+        assert!(glyph.is_some());
+        assert_eq!(under.cursor_image, glyph, "the white arrow with a plus, as an OS cursor");
+    } else {
+        assert!(under.cursor_image.is_none(), "the system copy cursor alone");
+    }
+    let over = output(&mut p, &mut app, bar.center());
+    assert_ne!(over.cursor_icon, egui::CursorIcon::Copy);
+    assert!(over.cursor_image.is_none(), "over the ramp, no add cursor");
+}

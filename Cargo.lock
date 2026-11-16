@@ -1240,6 +1240,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-ps"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=a80c0f25f1c4767374a27a444fbf95e3e8162e14#a80c0f25f1c4767374a27a444fbf95e3e8162e14"
+dependencies = [
+ "flate2",
+ "kurbo 0.13.1",
+]
+
+[[package]]
 name = "craft-psd"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=a499742a9389f47d10cdc61e4cdbf4e5f07f48cd#a499742a9389f47d10cdc61e4cdbf4e5f07f48cd"
@@ -6856,6 +6865,7 @@ dependencies = [
  "craft-eps",
  "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=a499742a9389f47d10cdc61e4cdbf4e5f07f48cd)",
  "craft-pdf",
+ "craft-ps",
  "craft-stream-codecs",
  "encoding_rs",
  "fax",
