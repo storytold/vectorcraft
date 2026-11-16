@@ -570,6 +570,20 @@ fn control_bar_panel_menu_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The Navigator panel menu's items are in every complete catalog, and no catalog keeps the
+/// item's earlier name, View Artboard Only.
+#[test]
+fn navigator_panel_menu_labels_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["View Artboard Contents Only", "Panel Options…"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    for lang in LANGUAGES.iter() {
+        assert!(lang.catalog().plain("View Artboard Only").is_none(), "{} keeps View Artboard Only", lang.code);
+    }
+}
+
 /// Document Info's labels: every category title, which the panel and its menu show, every count
 /// label of the Objects category, and the Document category's fixed row labels (the artboard rows
 /// show artboard names and are left out).

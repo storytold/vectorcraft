@@ -85,7 +85,7 @@ mod tests {
             d.fields.insert("solidDashes".into(), json!(solid));
             super::super::confirm(app)
         };
-        assert_eq!(set(&mut app, "Green", true).unwrap(), json!({"color": "#4fff4f", "solidDashes": true}));
+        assert_eq!(set(&mut app, "Green", true).unwrap(), json!({"color": "#4fff4f", "solidDashes": true, "viewArtboardContentsOnly": true}));
         assert!(app.ui.dialog.is_none());
         app.run("ui.navigatorPanelOptions", json!({})).unwrap();
         set(&mut app, "#0000FF", true).unwrap();

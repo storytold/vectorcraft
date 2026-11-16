@@ -1097,7 +1097,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.navigatorPanelOptions",
         "Panel Options…",
         "",
-        "{color?: #rrggbb or a preset name (Light Red, the default, then the layer colors such as \"Light Blue\"), solidDashes?: bool (Draw Dashed Lines as Solid Lines, off by default: the Navigator's thumbnail draws dashed strokes without their dashes; the canvas, printing and exports keep them)} set the Navigator panel's options, the color its view box is drawn in and solid dashes (kept with the UI state) → {color, solidDashes}; with neither, open its Panel Options (dialog `navigatorPanelOptions`, fields color, solidDashes; OK sets them); an error for a value that is not a color or not true or false, which changes nothing",
+        "{color?: #rrggbb or a preset name (Light Red, the default, then the layer colors such as \"Light Blue\"), solidDashes?: bool (Draw Dashed Lines as Solid Lines, off by default: the Navigator's thumbnail draws dashed strokes without their dashes; the canvas, printing and exports keep them), viewArtboardContentsOnly?: bool (View Artboard Contents Only in the panel menu, on by default and for UI state saved without it: the thumbnail fits the artboards and draws only the art inside them, cut at each artboard's edges; off, it also shows the art on the pasteboard)} set the Navigator panel's options, the color its view box is drawn in, solid dashes and artboard contents only (kept with the UI state) → {color, solidDashes, viewArtboardContentsOnly}; with none, open its Panel Options (dialog `navigatorPanelOptions`, fields color, solidDashes; OK sets them); an error for a value that is not a color or not true or false, which changes nothing",
     ),
     (
         "ui.layersExpand",

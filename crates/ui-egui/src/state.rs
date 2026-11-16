@@ -850,7 +850,8 @@ pub struct UiState {
     /// Layers panel › Panel Options… (row size, thumbnails, Show Layers Only, Locate Selected Objects).
     #[serde(default)]
     pub layers_panel: crate::panels::layers::PanelOptions,
-    /// Navigator panel › Panel Options… (the view box color, Draw Dashed Lines as Solid Lines).
+    /// Navigator panel › Panel Options… (the view box color, Draw Dashed Lines as Solid Lines) and
+    /// the panel menu's View Artboard Contents Only.
     #[serde(default)]
     pub navigator_panel: crate::panels::navigator::PanelOptions,
     /// The Layers panel's Filter (`ui.layersFilter`). It is not saved and lasts the session, as the
