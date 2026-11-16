@@ -2161,6 +2161,7 @@ antiAlias	Sharp	शार्प
 	Connect Data Points	डेटा पॉइंट जोड़ें
 	Edge-to-Edge Lines	किनारे से किनारे तक रेखाएँ
 	Draw Filled Lines	भरी हुई रेखाएँ बनाएँ
+	Line Width	रेखा की चौड़ाई
 	Tick Values	टिक मान
 	Override Calculated Values	परिकलित मानों को बदलें
 	Divisions	विभाजन
@@ -3681,6 +3682,8 @@ antiAlias	Sharp	शार्प
 	Polygon	बहुभुज
 	Polygon Properties:	बहुभुज प्रॉपर्टीज़:
 	Polygon Tool	पॉलीगोन टूल
+	Polygonal Lasso	बहुभुज लैस्सो
+	Polygonal Lasso Tool	बहुभुज लैस्सो टूल
 	Portrait	पोर्ट्रेट
 	Portrait (flipped)	पोर्ट्रेट (फ्लिप)
 	Portuguese	पुर्तगाली
@@ -4684,6 +4687,9 @@ antiAlias	Sharp	शार्प
 	Show Center Mark	शो सेंटर मार्क
 	Show Code	कोड दिखाएं
 	Show color bars	रंग सलाखों दिखाएँ
+	Add Color Tool	रंग जोड़ें टूल
+	Remove Color Tool	रंग हटाएँ टूल
+	Remove Color	रंग हटाएँ
 	Find the selected colors in the artwork	चयनित रंगों को आर्टवर्क में खोजें
 	Show Color Groups	रंग समूह दिखाएँ
 	Show Color Swatches	रंग स्वॉचेस दिखाएँ
@@ -8140,6 +8146,22 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	select paths to join	जोड़ने के लिए पाथ सिलेक्ट करें
 @msg	select paths with dashed strokes to expand	विस्तृत करने के लिए डैश स्ट्रोक के साथ पाथ सिलेक्ट करें
 @msg	select paths, or segments, to divide	विभाजित करने के लिए पाथ, या खंड चुनें
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	उभयनिष्ठ स्पर्शरेखाएँ…
+	Common Tangents	उभयनिष्ठ स्पर्शरेखाएँ
+	Tangents	स्पर्शरेखाएँ
+	Centerline	केंद्र रेखा
+	External	बाहरी
+	Internal	आंतरिक
+@msg	select two closed paths	दो बंद पाथ चुनें
+@msg	a selected path is open	चुना गया एक पाथ खुला है
+@msg	a selected path is not convex	चुना गया एक पाथ उत्तल नहीं है
+@msg	a selected path has no area	चुने गए एक पाथ का कोई क्षेत्रफल नहीं है
+@msg	a selected path has more than 10000 segments	चुने गए एक पाथ में 10000 से अधिक खंड हैं
+@msg	the two paths have the same outline	दोनों पाथ की रूपरेखा एक जैसी है
+@msg	One path lies inside the other, so they have no common tangents	एक पाथ दूसरे के अंदर है, इसलिए उनकी कोई उभयनिष्ठ स्पर्शरेखा नहीं है
+@msg	The paths overlap, so they have no internal tangents	पाथ एक-दूसरे पर चढ़े हुए हैं, इसलिए उनकी कोई आंतरिक स्पर्शरेखा नहीं है
+@msg	One path lies inside the other, so they have no internal tangents	एक पाथ दूसरे के अंदर है, इसलिए उनकी कोई आंतरिक स्पर्शरेखा नहीं है
 @msg	select plain rectangles, ellipses or regular polygons to convert	बदलने के लिए सादे आयत, अंडाकार या नियमित बहुभुजों सिलेक्ट करें
 @msg	Select point type	पॉइंट टाइप सिलेक्ट करें
 @msg	select two or three paths or compound paths	दो या तीन पाथ या यौगिक पाथ सिलेक्ट करें
@@ -9173,6 +9195,8 @@ theme	Appearance	अपीयरेंस
 @msg	No bridge of this width fits across the selected art	इस चौड़ाई का कोई ब्रिज चुने गए आर्टवर्क के पार नहीं आता
 @msg	Some islands could not be joined to the area around the art	कुछ आइलैंड आर्टवर्क के आसपास के क्षेत्र से नहीं जोड़े जा सके
 @msg	`width` must be from {lo} to {hi} pt	`width` {lo} से {hi} pt तक होना चाहिए
+@msg	`angle` must be from -180 to 180 degrees	`angle` -180 से 180 डिग्री तक होना चाहिए
+@msg	`roundness` must be from 1 to 100%	`roundness` 1 से 100% तक होना चाहिए
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 से {MAX_BRIDGES_PER_ISLAND} तक पूरी संख्या होना चाहिए
 	Weed Box and Lines…	वीड बॉक्स और लाइनें…
 	Weed Box and Lines	वीड बॉक्स और लाइनें

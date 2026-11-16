@@ -3376,6 +3376,8 @@ lighting	Light	სინათლე
 	Lasso Tool	ლასოს ხელსაწყო
 	Enclosing Lasso Tool	შემომსაზღვრელი ლასოს ხელსაწყო
 	Enclosing Lasso	შემომსაზღვრელი ლასო
+	Polygonal Lasso Tool	მრავალკუთხა ლასოს ხელსაწყო
+	Polygonal Lasso	მრავალკუთხა ლასო
 	Line Cut Tool	ხაზით ჭრის ხელსაწყო
 	Line Graph Tool	ხაზოვანი დიაგრამის ხელსაწყო
 	Line Segment Tool	ხაზის სეგმენტის ხელსაწყო
@@ -4786,6 +4788,9 @@ digits	Malayalam	მალაიალამური
 	Show smooth color wheel	გლუვი ფერთა წრის ჩვენება
 	Show segmented color wheel	სეგმენტირებული ფერთა წრის ჩვენება
 	Show color bars	ფერთა ზოლების ჩვენება
+	Add Color Tool	ფერის დამატების ხელსაწყო
+	Remove Color Tool	ფერის წაშლის ხელსაწყო
+	Remove Color	ფერის წაშლა
 	Find the selected colors in the artwork	არჩეული ფერების პოვნა ნახატში
 	Keep this row's colors (exclude)	ამ სტრიქონის ფერების შენარჩუნება (გამორიცხვა)
 	Limit to Library:	ბიბლიოთეკით შეზღუდვა:
@@ -5392,6 +5397,7 @@ theme	Appearance	იერსახე
 	Connect Data Points	მონაცემთა წერტილების შეერთება
 	Edge-to-Edge Lines	ხაზები კიდიდან კიდემდე
 	Draw Filled Lines	შევსებული ხაზების დახატვა
+	Line Width	ხაზის სიგანე
 	Tick Values	დანაყოფების მნიშვნელობები
 	Override Calculated Values	გამოთვლილი მნიშვნელობების შეცვლა
 	Divisions	დანაყოფები
@@ -9565,6 +9571,22 @@ breakText	Glyphs	გლიფები
 	Remove Gaps	ღრეჩოების მოცილება
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ეს ძალიან ბევრ ნაწილს იძლევა (მაქსიმუმ 100000): გაზარდეთ ტირეების სიგრძე
 @msg	select paths, or segments, to divide	აირჩიეთ დასაყოფი ტრაექტორიები ან სეგმენტები
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	საერთო მხებები…
+	Common Tangents	საერთო მხებები
+	Tangents	მხებები
+	Centerline	ცენტრალური ხაზი
+	External	გარე
+	Internal	შიდა
+@msg	select two closed paths	აირჩიეთ ორი დახურული ტრაექტორია
+@msg	a selected path is open	არჩეული ტრაექტორია ღიაა
+@msg	a selected path is not convex	არჩეული ტრაექტორია არ არის ამოზნექილი
+@msg	a selected path has no area	არჩეულ ტრაექტორიას ფართობი არ აქვს
+@msg	a selected path has more than 10000 segments	არჩეულ ტრაექტორიას 10000-ზე მეტი სეგმენტი აქვს
+@msg	the two paths have the same outline	ორივე ტრაექტორიას ერთნაირი კონტური აქვს
+@msg	One path lies inside the other, so they have no common tangents	ერთი ტრაექტორია მეორის შიგნითაა, ამიტომ მათ საერთო მხებები არ აქვთ
+@msg	The paths overlap, so they have no internal tangents	ტრაექტორიები ერთმანეთს ფარავს, ამიტომ მათ შიდა მხებები არ აქვთ
+@msg	One path lies inside the other, so they have no internal tangents	ერთი ტრაექტორია მეორის შიგნითაა, ამიტომ მათ შიდა მხებები არ აქვთ
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	ტირეების ტრაექტორიებად გაშლა
 @msg	select paths with dashed strokes to expand	აირჩიეთ გასაშლელი ტირეებიანი ხაზის კონტურები
@@ -9954,6 +9976,8 @@ font-script	Japanese	იაპონური
 @msg	No bridge of this width fits across the selected art	ამ სიგანის ხიდი მონიშნულ ნახატზე არ ეტევა
 @msg	Some islands could not be joined to the area around the art	ზოგიერთი კუნძული ვერ დაუკავშირდა ნახატის გარშემო არეს
 @msg	`width` must be from {lo} to {hi} pt	`width` უნდა იყოს {lo}-დან {hi} pt-მდე
+@msg	`angle` must be from -180 to 180 degrees	`angle` უნდა იყოს -180-დან 180 გრადუსამდე
+@msg	`roundness` must be from 1 to 100%	`roundness` უნდა იყოს 1-დან 100%-მდე
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` უნდა იყოს მთელი რიცხვი 1-დან {MAX_BRIDGES_PER_ISLAND}-მდე
 	Weed Box and Lines…	ნარჩენის მოსაცილებელი ჩარჩო და ხაზები…
 	Weed Box and Lines	ნარჩენის მოსაცილებელი ჩარჩო და ხაზები

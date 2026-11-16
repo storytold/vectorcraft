@@ -1455,6 +1455,7 @@ file-filter	Templates	Vorlagen
 	Connect Data Points	Datenpunkte verbinden
 	Edge-to-Edge Lines	Linien von Kante zu Kante
 	Draw Filled Lines	Gefüllte Linien zeichnen
+	Line Width	Linienbreite
 	Tick Values	Teilstrichwerte
 	Override Calculated Values	Berechnete Werte überschreiben
 	Divisions	Teilungen
@@ -1553,6 +1554,9 @@ file-filter	Templates	Vorlagen
 	Show smooth color wheel	Stufenlosen Farbkreis anzeigen
 	Show segmented color wheel	Segmentierten Farbkreis anzeigen
 	Show color bars	Farbbalken anzeigen
+	Add Color Tool	Farbe-hinzufügen-Werkzeug
+	Remove Color Tool	Farbe-entfernen-Werkzeug
+	Remove Color	Farbe entfernen
 	Find the selected colors in the artwork	Ausgewählte Farben in der Grafik finden
 	Harmony Sets	Harmoniesätze
 	Height	Höhe
@@ -1901,6 +1905,8 @@ file-filter	Templates	Vorlagen
 	Lasso Tool	Lasso-Werkzeug
 	Enclosing Lasso Tool	Umschließendes Lasso-Werkzeug
 	Enclosing Lasso	Umschließendes Lasso
+	Polygonal Lasso Tool	Polygon-Lasso-Werkzeug
+	Polygonal Lasso	Polygon-Lasso
 	Last Effect: {name}	Letzter Effekt: {name}
 	Last Effect: {}	Letzter Effekt: {}
 	Last Effect…	Letzter Effekt…
@@ -7041,6 +7047,22 @@ breakText	Glyphs	Glyphen
 	Remove Gaps	Lücken entfernen
 @msg	that makes too many pieces (at most 100000): make the dashes longer	das ergibt zu viele Teile (höchstens 100000): machen Sie die Striche länger
 @msg	select paths, or segments, to divide	wählen Sie Pfade oder Segmente zum Aufteilen aus
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Gemeinsame Tangenten…
+	Common Tangents	Gemeinsame Tangenten
+	Tangents	Tangenten
+	Centerline	Mittellinie
+	External	Äußere
+	Internal	Innere
+@msg	select two closed paths	wählen Sie zwei geschlossene Pfade aus
+@msg	a selected path is open	ein ausgewählter Pfad ist offen
+@msg	a selected path is not convex	ein ausgewählter Pfad ist nicht konvex
+@msg	a selected path has no area	ein ausgewählter Pfad hat keine Fläche
+@msg	a selected path has more than 10000 segments	ein ausgewählter Pfad hat mehr als 10000 Segmente
+@msg	the two paths have the same outline	die beiden Pfade haben denselben Umriss
+@msg	One path lies inside the other, so they have no common tangents	Ein Pfad liegt im anderen, daher haben sie keine gemeinsamen Tangenten
+@msg	The paths overlap, so they have no internal tangents	Die Pfade überlappen sich, daher haben sie keine inneren Tangenten
+@msg	One path lies inside the other, so they have no internal tangents	Ein Pfad liegt im anderen, daher haben sie keine inneren Tangenten
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Striche in Pfade umwandeln
 @msg	select paths with dashed strokes to expand	wählen Sie Pfade mit gestrichelter Kontur zum Umwandeln aus
@@ -7342,6 +7364,8 @@ breakText	Glyphs	Glyphen
 @msg	No bridge of this width fits across the selected art	Kein Steg dieser Breite passt über das ausgewählte Bildmaterial
 @msg	Some islands could not be joined to the area around the art	Einige Inseln konnten nicht mit der Fläche um das Bildmaterial verbunden werden
 @msg	`width` must be from {lo} to {hi} pt	`width` muss zwischen {lo} und {hi} pt liegen
+@msg	`angle` must be from -180 to 180 degrees	`angle` muss zwischen -180 und 180 Grad liegen
+@msg	`roundness` must be from 1 to 100%	`roundness` muss zwischen 1 und 100 % liegen
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` muss eine ganze Zahl von 1 bis {MAX_BRIDGES_PER_ISLAND} sein
 	Weed Box and Lines…	Entgitterrahmen und -linien…
 	Weed Box and Lines	Entgitterrahmen und -linien

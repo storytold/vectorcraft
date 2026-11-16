@@ -575,6 +575,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	No bridge of this width fits across the selected art	Geen brug van deze breedte past over de geselecteerde illustratie
 @msg	Some islands could not be joined to the area around the art	Sommige eilanden konden niet worden verbonden met het gebied rond de illustratie
 @msg	`width` must be from {lo} to {hi} pt	`width` moet van {lo} tot {hi} pt zijn
+@msg	`angle` must be from -180 to 180 degrees	`angle` moet van -180 tot 180 graden zijn
+@msg	`roundness` must be from 1 to 100%	`roundness` moet van 1 tot 100% zijn
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` moet een geheel getal van 1 tot {MAX_BRIDGES_PER_ISLAND} zijn
 
 	File	Bestand
@@ -1906,6 +1908,8 @@ lighting	Light	Licht
 	Lasso Tool	Lasso-gereedschap
 	Enclosing Lasso Tool	Omsluitend lassogereedschap
 	Enclosing Lasso	Omsluitende lasso
+	Polygonal Lasso Tool	Veelhoekig lassogereedschap
+	Polygonal Lasso	Veelhoekige lasso
 	Lasso	Lasso
 	Line Cut Tool	Lijnknip-gereedschap
 	Line Graph Tool	Lijndiagram-gereedschap
@@ -3350,6 +3354,9 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Vloeiend kleurenwiel tonen
 	Show segmented color wheel	Gesegmenteerd kleurenwiel tonen
 	Show color bars	Kleurbalken tonen
+	Add Color Tool	Gereedschap Kleur toevoegen
+	Remove Color Tool	Gereedschap Kleur verwijderen
+	Remove Color	Kleur verwijderen
 	Find the selected colors in the artwork	De geselecteerde kleuren zoeken in de artwork
 	Harmony Rules	Harmonieregels
 	Keep this row's colors (exclude)	De kleuren van deze rij behouden (uitsluiten)
@@ -4027,6 +4034,7 @@ theme	Appearance	Vormgeving
 	Connect Data Points	Gegevenspunten verbinden
 	Edge-to-Edge Lines	Lijnen van rand tot rand
 	Draw Filled Lines	Gevulde lijnen tekenen
+	Line Width	Lijndikte
 	Tick Values	Maatstreepwaarden
 	Override Calculated Values	Berekende waarden negeren
 	Divisions	Verdelingen
@@ -9326,6 +9334,22 @@ breakText	Glyphs	Glyphs
 	Remove Gaps	Tussenruimten verwijderen
 @msg	that makes too many pieces (at most 100000): make the dashes longer	dat geeft te veel stukken (hoogstens 100000): maak de streepjes langer
 @msg	select paths, or segments, to divide	selecteer paden of segmenten om te verdelen
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Gemeenschappelijke raaklijnen…
+	Common Tangents	Gemeenschappelijke raaklijnen
+	Tangents	Raaklijnen
+	Centerline	Middellijn
+	External	Uitwendige
+	Internal	Inwendige
+@msg	select two closed paths	selecteer twee gesloten paden
+@msg	a selected path is open	een geselecteerd pad is open
+@msg	a selected path is not convex	een geselecteerd pad is niet convex
+@msg	a selected path has no area	een geselecteerd pad heeft geen oppervlak
+@msg	a selected path has more than 10000 segments	een geselecteerd pad heeft meer dan 10000 segmenten
+@msg	the two paths have the same outline	de twee paden hebben dezelfde omtrek
+@msg	One path lies inside the other, so they have no common tangents	Het ene pad ligt binnen het andere, dus ze hebben geen gemeenschappelijke raaklijnen
+@msg	The paths overlap, so they have no internal tangents	De paden overlappen, dus ze hebben geen inwendige raaklijnen
+@msg	One path lies inside the other, so they have no internal tangents	Het ene pad ligt binnen het andere, dus ze hebben geen inwendige raaklijnen
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Streepjes uitbreiden tot paden
 @msg	select paths with dashed strokes to expand	selecteer paden met een streepjeslijn om uit te breiden

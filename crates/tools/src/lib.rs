@@ -686,6 +686,7 @@ mod cursor_tests {
         for (id, c) in [
             ("lasso", Cursor::Lasso),
             (addons::enclosing_lasso::ID, Cursor::Lasso),
+            (addons::polygonal_lasso::ID, Cursor::Lasso),
             ("magicWand", Cursor::MagicWand),
             ("paintbrush", Cursor::Paintbrush),
             ("blobBrush", Cursor::BlobBrush),

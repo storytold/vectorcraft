@@ -706,6 +706,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	No bridge of this width fits across the selected art	Ingen bro med denne bredde passer hen over den markerede grafik
 @msg	Some islands could not be joined to the area around the art	Nogle øer kunne ikke forbindes med området omkring grafikken
 @msg	`width` must be from {lo} to {hi} pt	`width` skal være fra {lo} til {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` skal være fra -180 til 180 grader
+@msg	`roundness` must be from 1 to 100%	`roundness` skal være fra 1 til 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` skal være et heltal fra 1 til {MAX_BRIDGES_PER_ISLAND}
 
 	File	Filer
@@ -4012,6 +4014,8 @@ lighting	Light	Lys
 	Lasso Tool	Lassoværktøj
 	Enclosing Lasso Tool	Omsluttende lassoværktøj
 	Enclosing Lasso	Omsluttende lasso
+	Polygonal Lasso Tool	Polygonlassoværktøj
+	Polygonal Lasso	Polygonlasso
 	Lasso	Lasso
 	Line Cut Tool	Linjeskæringsværktøj
 	Line Graph Tool	Linjediagramværktøj
@@ -5456,6 +5460,9 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Vis glat farvehjul
 	Show segmented color wheel	Vis segmenteret farvehjul
 	Show color bars	Vis farvebjælker
+	Add Color Tool	Værktøjet Tilføj farve
+	Remove Color Tool	Værktøjet Fjern farve
+	Remove Color	Fjern farve
 	Find the selected colors in the artwork	Find de valgte farver i grafikken
 	Harmony Rules	Harmoniregler
 	Keep this row's colors (exclude)	Behold farverne i denne række (ekskludér)
@@ -6133,6 +6140,7 @@ theme	Appearance	Udseende
 	Connect Data Points	Forbind datapunkter
 	Edge-to-Edge Lines	Linjer fra kant til kant
 	Draw Filled Lines	Tegn udfyldte linjer
+	Line Width	Linjebredde
 	Tick Values	Afmærkningsværdier
 	Override Calculated Values	Tilsidesæt beregnede værdier
 	Divisions	Inddelinger
@@ -9501,6 +9509,22 @@ breakText	Glyphs	Glyffer
 	Remove Gaps	Fjern mellemrum
 @msg	that makes too many pieces (at most 100000): make the dashes longer	det giver for mange stykker (højst 100000): gør stregerne længere
 @msg	select paths, or segments, to divide	vælg stier eller segmenter, der skal opdeles
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Fælles tangenter…
+	Common Tangents	Fælles tangenter
+	Tangents	Tangenter
+	Centerline	Midterlinje
+	External	Ydre
+	Internal	Indre
+@msg	select two closed paths	vælg to lukkede stier
+@msg	a selected path is open	en valgt sti er åben
+@msg	a selected path is not convex	en valgt sti er ikke konveks
+@msg	a selected path has no area	en valgt sti har intet areal
+@msg	a selected path has more than 10000 segments	en valgt sti har mere end 10000 segmenter
+@msg	the two paths have the same outline	de to stier har samme omrids
+@msg	One path lies inside the other, so they have no common tangents	Den ene sti ligger inden i den anden, så de har ingen fælles tangenter
+@msg	The paths overlap, so they have no internal tangents	Stierne overlapper, så de har ingen indre tangenter
+@msg	One path lies inside the other, so they have no internal tangents	Den ene sti ligger inden i den anden, så de har ingen indre tangenter
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Udvid streger til stier
 @msg	select paths with dashed strokes to expand	vælg stier med stiplet streg, der skal udvides

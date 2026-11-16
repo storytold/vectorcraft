@@ -1949,6 +1949,9 @@ antiAlias	Sharp	날카롭게
 	Show smooth color wheel	부드러운 색상환 표시
 	Show segmented color wheel	분할 색상환 표시
 	Show color bars	색상 막대 표시
+	Add Color Tool	색상 추가 도구
+	Remove Color Tool	색상 제거 도구
+	Remove Color	색상 제거
 	Find the selected colors in the artwork	선택한 색상을 아트웍에서 찾기
 	Height	높이
 	Height:	높이:
@@ -2220,6 +2223,8 @@ antiAlias	Sharp	날카롭게
 	Lasso Tool	올가미 도구
 	Enclosing Lasso Tool	둘러싸기 올가미 도구
 	Enclosing Lasso	둘러싸기 올가미
+	Polygonal Lasso Tool	다각형 올가미 도구
+	Polygonal Lasso	다각형 올가미
 	Last Effect: {name}	마지막 효과: {name}
 	Last Page	마지막 페이지
 	Layer Options…	레이어 옵션…
@@ -3912,6 +3917,7 @@ file-filter	Templates	템플릿
 	Connect Data Points	데이터 요소 연결
 	Edge-to-Edge Lines	가장자리 간 선
 	Draw Filled Lines	채워진 선 그리기
+	Line Width	선 너비
 	Tick Values	눈금 값
 	Override Calculated Values	계산된 값 재정의
 	Divisions	구간
@@ -7041,6 +7047,22 @@ breakText	Glyphs	글리프
 	Remove Gaps	간격 제거
 @msg	that makes too many pieces (at most 100000): make the dashes longer	조각이 너무 많아집니다(최대 100000개). 대시를 더 길게 하십시오
 @msg	select paths, or segments, to divide	나눌 패스나 세그먼트를 선택하십시오
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	공통 접선…
+	Common Tangents	공통 접선
+	Tangents	접선
+	Centerline	중심선
+	External	외부
+	Internal	내부
+@msg	select two closed paths	닫힌 패스 2개를 선택하십시오
+@msg	a selected path is open	선택한 패스가 열려 있습니다
+@msg	a selected path is not convex	선택한 패스가 볼록하지 않습니다
+@msg	a selected path has no area	선택한 패스에 면적이 없습니다
+@msg	a selected path has more than 10000 segments	선택한 패스의 세그먼트가 10000개를 넘습니다
+@msg	the two paths have the same outline	두 패스의 윤곽선이 같습니다
+@msg	One path lies inside the other, so they have no common tangents	한 패스가 다른 패스 안에 있어 공통 접선이 없습니다
+@msg	The paths overlap, so they have no internal tangents	패스가 겹쳐 있어 내부 접선이 없습니다
+@msg	One path lies inside the other, so they have no internal tangents	한 패스가 다른 패스 안에 있어 내부 접선이 없습니다
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	대시를 패스로 확장
 @msg	select paths with dashed strokes to expand	확장할 점선 획의 패스를 선택하십시오
@@ -7342,6 +7364,8 @@ breakText	Glyphs	글리프
 @msg	No bridge of this width fits across the selected art	이 너비의 브리지가 선택한 아트워크에 들어가지 않습니다
 @msg	Some islands could not be joined to the area around the art	일부 섬을 아트워크 주변 영역에 연결할 수 없습니다
 @msg	`width` must be from {lo} to {hi} pt	`width`는 {lo}에서 {hi}pt 사이여야 합니다
+@msg	`angle` must be from -180 to 180 degrees	`angle`는 -180도에서 180도 사이여야 합니다
+@msg	`roundness` must be from 1 to 100%	`roundness`는 1%에서 100% 사이여야 합니다
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`는 1에서 {MAX_BRIDGES_PER_ISLAND} 사이의 정수여야 합니다
 	Weed Box and Lines…	위딩 상자 및 선…
 	Weed Box and Lines	위딩 상자 및 선

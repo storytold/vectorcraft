@@ -1423,6 +1423,7 @@ font-technology	Variable	Variabla
 	Connect Data Points	Förbind datapunkter
 	Edge-to-Edge Lines	Linjer från kant till kant
 	Draw Filled Lines	Rita fyllda linjer
+	Line Width	Linjebredd
 	Tick Values	Skalstrecksvärden
 	Override Calculated Values	Åsidosätt beräknade värden
 	Divisions	Indelningar
@@ -1521,6 +1522,9 @@ font-technology	Variable	Variabla
 	Show smooth color wheel	Visa steglöst färghjul
 	Show segmented color wheel	Visa segmenterat färghjul
 	Show color bars	Visa färgstaplar
+	Add Color Tool	Verktyget Lägg till färg
+	Remove Color Tool	Verktyget Ta bort färg
+	Remove Color	Ta bort färg
 	Find the selected colors in the artwork	Hitta de markerade färgerna i teckningen
 	Harmony Sets	Harmoniuppsättningar
 	Height	Höjd
@@ -1851,6 +1855,8 @@ font-technology	Variable	Variabla
 	Lasso Tool	Lassoverktyg
 	Enclosing Lasso Tool	Omslutande lassoverktyg
 	Enclosing Lasso	Omslutande lasso
+	Polygonal Lasso Tool	Polygonlassoverktyg
+	Polygonal Lasso	Polygonlasso
 	Last Effect: {name}	Senaste effekten: {name}
 	Last Effect: {}	Senaste effekten: {}
 	Last Effect…	Senaste effekten…
@@ -7478,6 +7484,22 @@ breakText	Glyphs	Glyfer
 	Remove Gaps	Ta bort mellanrum
 @msg	that makes too many pieces (at most 100000): make the dashes longer	det blir för många delar (högst 100000): gör strecken längre
 @msg	select paths, or segments, to divide	markera banor eller segment att dela upp
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Gemensamma tangenter…
+	Common Tangents	Gemensamma tangenter
+	Tangents	Tangenter
+	Centerline	Mittlinje
+	External	Yttre
+	Internal	Inre
+@msg	select two closed paths	markera två slutna banor
+@msg	a selected path is open	en markerad bana är öppen
+@msg	a selected path is not convex	en markerad bana är inte konvex
+@msg	a selected path has no area	en markerad bana har ingen yta
+@msg	a selected path has more than 10000 segments	en markerad bana har fler än 10000 segment
+@msg	the two paths have the same outline	de två banorna har samma kontur
+@msg	One path lies inside the other, so they have no common tangents	Den ena banan ligger inuti den andra, så de har inga gemensamma tangenter
+@msg	The paths overlap, so they have no internal tangents	Banorna överlappar, så de har inga inre tangenter
+@msg	One path lies inside the other, so they have no internal tangents	Den ena banan ligger inuti den andra, så de har inga inre tangenter
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandera streck till banor
 @msg	select paths with dashed strokes to expand	markera banor med streckad kontur att expandera
@@ -9217,6 +9239,8 @@ digits	Hindi	Hindi
 @msg	No bridge of this width fits across the selected art	Ingen brygga med den här bredden får plats över den markerade teckningen
 @msg	Some islands could not be joined to the area around the art	Vissa öar kunde inte förbindas med området runt teckningen
 @msg	`width` must be from {lo} to {hi} pt	`width` måste vara från {lo} till {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` måste vara från -180 till 180 grader
+@msg	`roundness` must be from 1 to 100%	`roundness` måste vara från 1 till 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` måste vara ett heltal från 1 till {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Rensningsram och rensningslinjer…
 	Weed Box and Lines	Rensningsram och rensningslinjer

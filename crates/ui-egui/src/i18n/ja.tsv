@@ -1959,6 +1959,9 @@ antiAlias	Sharp	シャープ
 	Show smooth color wheel	滑らかなカラーホイールを表示
 	Show segmented color wheel	分割カラーホイールを表示
 	Show color bars	カラーバーを表示
+	Add Color Tool	カラー追加ツール
+	Remove Color Tool	カラー削除ツール
+	Remove Color	カラーを削除
 	Find the selected colors in the artwork	選択したカラーをアートワーク内で検索
 	Height	高さ
 	Height:	高さ:
@@ -2230,6 +2233,8 @@ antiAlias	Sharp	シャープ
 	Lasso Tool	なげなわツール
 	Enclosing Lasso Tool	囲みなげなわツール
 	Enclosing Lasso	囲みなげなわ
+	Polygonal Lasso Tool	多角形なげなわツール
+	Polygonal Lasso	多角形なげなわ
 	Last Effect: {name}	最後の効果：{name}
 	Last Page	最後のページ
 	Layer Options…	レイヤーオプション…
@@ -3924,6 +3929,7 @@ file-filter	Templates	テンプレート
 	Connect Data Points	データポイントを線でつなぐ
 	Edge-to-Edge Lines	端から端までの線
 	Draw Filled Lines	線を塗りつぶして描く
+	Line Width	線幅
 	Tick Values	目盛りの値
 	Override Calculated Values	計算値を上書き
 	Divisions	分割数
@@ -8956,6 +8962,22 @@ breakText	Glyphs	字形
 	Remove Gaps	間隔を削除
 @msg	that makes too many pieces (at most 100000): make the dashes longer	分割数が多すぎます（最大 100000）：ダッシュを長くしてください
 @msg	select paths, or segments, to divide	分割するパスまたはセグメントを選択してください
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	共通接線…
+	Common Tangents	共通接線
+	Tangents	接線
+	Centerline	中心線
+	External	外側
+	Internal	内側
+@msg	select two closed paths	閉じたパスを 2 つ選択してください
+@msg	a selected path is open	選択したパスが開いています
+@msg	a selected path is not convex	選択したパスが凸形ではありません
+@msg	a selected path has no area	選択したパスに面積がありません
+@msg	a selected path has more than 10000 segments	選択したパスのセグメントが 10000 を超えています
+@msg	the two paths have the same outline	2 つのパスの輪郭が同じです
+@msg	One path lies inside the other, so they have no common tangents	一方のパスがもう一方の内側にあるため、共通接線はありません
+@msg	The paths overlap, so they have no internal tangents	パスが重なっているため、内側の接線はありません
+@msg	One path lies inside the other, so they have no internal tangents	一方のパスがもう一方の内側にあるため、内側の接線はありません
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	破線をパスに拡張
 @msg	select paths with dashed strokes to expand	拡張する破線のパスを選択してください
@@ -9257,6 +9279,8 @@ breakText	Glyphs	字形
 @msg	No bridge of this width fits across the selected art	この幅のブリッジは選択したアートワークに収まりません
 @msg	Some islands could not be joined to the area around the art	一部のアイランドをアートワークの周囲の領域につなげられませんでした
 @msg	`width` must be from {lo} to {hi} pt	`width` は {lo}～{hi} pt の範囲で指定してください
+@msg	`angle` must be from -180 to 180 degrees	`angle` は -180～180 度の範囲で指定してください
+@msg	`roundness` must be from 1 to 100%	`roundness` は 1～100% の範囲で指定してください
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` には 1 から {MAX_BRIDGES_PER_ISLAND} の整数を指定してください
 	Weed Box and Lines…	カス取り枠とライン…
 	Weed Box and Lines	カス取り枠とライン

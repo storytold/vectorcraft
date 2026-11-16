@@ -1483,6 +1483,7 @@ file-filter	Templates	Шаблони
 	Connect Data Points	З'єднувати точки даних
 	Edge-to-Edge Lines	Лінії від краю до краю
 	Draw Filled Lines	Малювати заповнені лінії
+	Line Width	Ширина лінії
 	Tick Values	Значення поділок
 	Override Calculated Values	Замінити обчислені значення
 	Divisions	Поділки
@@ -1581,6 +1582,9 @@ file-filter	Templates	Шаблони
 	Show smooth color wheel	Показати плавне колірне коло
 	Show segmented color wheel	Показати сегментоване колірне коло
 	Show color bars	Показати колірні смуги
+	Add Color Tool	Інструмент «Додати колір»
+	Remove Color Tool	Інструмент «Вилучити колір»
+	Remove Color	Вилучити колір
 	Find the selected colors in the artwork	Знайти вибрані кольори в малюнку
 	Harmony Sets	Набори гармонії
 	Height	Висота
@@ -1932,6 +1936,8 @@ file-filter	Templates	Шаблони
 	Lasso Tool	Інструмент «Ласо»
 	Enclosing Lasso Tool	Інструмент «Охоплювальне ласо»
 	Enclosing Lasso	Охоплювальне ласо
+	Polygonal Lasso Tool	Інструмент «Багатокутне ласо»
+	Polygonal Lasso	Багатокутне ласо
 	Last Effect: {name}	Останній ефект: {name}
 	Last Effect: {}	Останній ефект: {}
 	Last Effect…	Останній ефект…
@@ -7059,6 +7065,22 @@ breakText	Glyphs	Гліфи
 	Remove Gaps	Прибрати проміжки
 @msg	that makes too many pieces (at most 100000): make the dashes longer	так вийде забагато частин (не більше 100000): подовжте штрихи
 @msg	select paths, or segments, to divide	виділіть контури або сегменти для розділення
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Спільні дотичні…
+	Common Tangents	Спільні дотичні
+	Tangents	Дотичні
+	Centerline	Осьова лінія
+	External	Зовнішні
+	Internal	Внутрішні
+@msg	select two closed paths	виділіть два замкнені контури
+@msg	a selected path is open	виділений контур відкритий
+@msg	a selected path is not convex	виділений контур не опуклий
+@msg	a selected path has no area	виділений контур не має площі
+@msg	a selected path has more than 10000 segments	виділений контур містить понад 10000 сегментів
+@msg	the two paths have the same outline	обидва контури мають однакову форму
+@msg	One path lies inside the other, so they have no common tangents	Один контур лежить усередині іншого, тому вони не мають спільних дотичних
+@msg	The paths overlap, so they have no internal tangents	Контури перекриваються, тому вони не мають внутрішніх дотичних
+@msg	One path lies inside the other, so they have no internal tangents	Один контур лежить усередині іншого, тому вони не мають внутрішніх дотичних
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Розібрати штрихи на контури
 @msg	select paths with dashed strokes to expand	виділіть контури зі штриховим обведенням для розбору
@@ -7476,6 +7498,8 @@ breakText	Glyphs	Гліфи
 @msg	No bridge of this width fits across the selected art	Місток такої ширини не вміщується впоперек виділеної графіки
 @msg	Some islands could not be joined to the area around the art	Деякі острівці не вдалося з’єднати з областю навколо графіки
 @msg	`width` must be from {lo} to {hi} pt	`width` має бути від {lo} до {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` має бути від -180 до 180 градусів
+@msg	`roundness` must be from 1 to 100%	`roundness` має бути від 1 до 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` має бути цілим числом від 1 до {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Рамка й лінії вибірки…
 	Weed Box and Lines	Рамка й лінії вибірки
