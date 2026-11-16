@@ -1632,8 +1632,8 @@ fn ok_refuses_a_typed_folder_outside_the_automation_roots_before_looking_at_it()
 
 /// One frame of the open Preferences dialog with `events`, a quarter second after the last. → The
 /// texts it painted where they show (a text its clip rectangle hides is left out), with their
-/// rectangles, and the description of each accessibility node that has one.
-fn description_frame(a: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> (Vec<(String, egui::Rect)>, Vec<String>) {
+/// rectangles, and the description of the accessibility node with the keyboard focus, if it has one.
+fn description_frame(a: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> (Vec<(String, egui::Rect)>, Option<String>) {
     let time = ctx.input(|i| i.time) + 0.25;
     let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0)));
     let raw = egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() };
@@ -1653,9 +1653,11 @@ fn description_frame(a: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<eg
     }
     let mut texts = vec![];
     out.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect, &mut texts));
-    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
-    let described = nodes.iter().filter_map(|(_, n)| n.description().map(str::to_string)).collect();
-    (texts, described)
+    let focused = out.platform_output.accesskit_update.and_then(|u| {
+        let focus = u.focus;
+        u.nodes.into_iter().find(|(id, _)| *id == focus).and_then(|(_, n)| n.description().map(str::to_string))
+    });
+    (texts, focused)
 }
 
 /// The Preferences window's rectangle.
@@ -1741,7 +1743,7 @@ fn keyboard_focus_on_a_units_row_shows_its_description() {
         }
     }
     let described = shown.expect("Tab reaches the General row and its sentence shows");
-    assert!(described.iter().any(|d| d == general), "the focused control carries the sentence: {described:?}");
+    assert_eq!(described.as_deref(), Some(general), "the focused control carries the sentence");
 }
 
 /// The field list with the description line under it, and the description line, in the last frame.
@@ -1863,7 +1865,7 @@ fn keyboard_focus_on_a_general_row_shows_its_description() {
         }
     }
     let described = shown.expect("Tab reaches the Contextual Task Bar row and its sentence shows");
-    assert!(described.iter().any(|d| d == task_bar), "the focused control carries the sentence: {described:?}");
+    assert_eq!(described.as_deref(), Some(task_bar), "the focused control carries the sentence");
 }
 
 /// Every setting the Type category shows has exactly one sentence.
@@ -1929,7 +1931,7 @@ fn keyboard_focus_on_a_type_row_shows_its_description() {
         }
     }
     let described = shown.expect("Tab reaches the Size/Leading row and its sentence shows");
-    assert!(described.iter().any(|d| d == size), "the focused control carries the sentence: {described:?}");
+    assert_eq!(described.as_deref(), Some(size), "the focused control carries the sentence");
 }
 
 /// A sentence shown when the dialog closed does not come back when it opens again with the
