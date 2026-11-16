@@ -478,7 +478,7 @@ fn group_shadow(
 /// Geometry does ([`crate::solids::classic::surface`]). The last two values are whether the faces
 /// go over an underlay of themselves ([`seals`]): the caller seals them ([`sealed_surface`],
 /// [`sealed_runs`]) in the order it draws them; and whether the faces were left out.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn surface(
     doc: Option<&Document>,
     n: &Node,
