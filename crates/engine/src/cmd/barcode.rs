@@ -177,7 +177,7 @@ fn create(s: &mut Session, p: &Value) -> Result<Value> {
     let (w, h) = code.size_mm();
     let (w, h) = (w * PT_PER_MM, h * PT_PER_MM);
     let parent = s.doc()?.target_parent()?;
-    let style = s_style(s, &spec);
+    let style = s_style(s, &spec, C)?;
     let id = s.edit("Barcode", |d, sel| {
         let origin = match (opt_f64(p, "x"), opt_f64(p, "y")) {
             (Some(x), Some(y)) => Point::new(x, y),
@@ -195,8 +195,8 @@ fn create(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The character style the human readable line is set in: the spec's font, else the one new type
 /// in this document gets.
-fn s_style(s: &Session, spec: &BarcodeSpec) -> CharStyle {
-    let mut style = new_type_style(s, &json!({}));
+fn s_style(s: &Session, spec: &BarcodeSpec, cmd: &str) -> Result<CharStyle> {
+    let mut style = new_type_style(s, &json!({}), cmd)?;
     // The human readable line is set in the face the standards name for it — the machine's OCR-B —
     // unless the caller asked for another one, and in whatever the document is set to when there is
     // no OCR-B to be had.
@@ -209,7 +209,7 @@ fn s_style(s: &Session, spec: &BarcodeSpec) -> CharStyle {
     style.fill = Paint::solid(Color::BLACK);
     style.stroke = Paint::None;
     style.stroke_width = 0.0;
-    style
+    Ok(style)
 }
 
 /// The barcode object the selection names, or the one the selection is inside.
@@ -252,8 +252,8 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
     // (or a digit) inside the symbol: subtract that to get back to the origin the art started at.
     let old = s.doc()?.doc.node(id).and_then(|n| n.extras().barcode.as_deref().cloned()).ok_or(EngineError::NoNode(id))?;
     let corner = top_left(s, id);
-    let style = s_style(s, &spec);
-    let old_style = s_style(s, &old);
+    let style = s_style(s, &spec, C)?;
+    let old_style = s_style(s, &old, C)?;
     s.edit("Barcode Options", |d, _| {
         let (dx, dy) = art_offset(d, &old, &old_style)?;
         draw(d, id, &spec, &code, Point::new(corner.x - dx, corner.y - dy), style.clone())
@@ -512,7 +512,7 @@ fn create_batch(s: &mut Session, p: &Value) -> Result<Value> {
     }
 
     let parent = s.doc()?.target_parent()?;
-    let style = s_style(s, &spec);
+    let style = s_style(s, &spec, C)?;
     let corner = s.doc()?.doc.artboards.first().map_or(Point::ZERO, |a| Point::new(a.rect.x0, a.rect.y0));
     let (left, top) = (opt_f64(p, "x").unwrap_or(corner.x), opt_f64(p, "y").unwrap_or(corner.y));
     let ids = s.edit("Barcodes", |d, sel| {
