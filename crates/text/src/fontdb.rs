@@ -54,7 +54,7 @@ pub(crate) use face::MAX_LIVE_INSTANCES;
 pub(crate) use face::PathAlignHeights;
 pub use face::{FALLBACK_FAMILY, FontFace, IcfMargins, OutlineFormat};
 pub(crate) use glyph_pen::FlipPen;
-pub use gsub::{GlyphOrigin, JoiningPosition, Substitution, SubstitutionKind};
+pub use gsub::{GlyphCategory, GlyphCategoryKind, GlyphOrigin, JoiningPosition, Substitution, SubstitutionKind};
 #[cfg(not(target_arch = "wasm32"))]
 use names::SysFallback;
 #[cfg(test)]
@@ -119,6 +119,9 @@ pub struct FontDb {
     /// type naming one as its family is set in its parts' fonts. A thread's guards can lend others
     /// in their place ([`FontDb::lend_composite_fonts`]).
     composites: RwLock<HashMap<String, Arc<vectorcraft_doc::CompositeFont>>>,
+    /// The lookups of the custom character sets of the composite fonts held or lent, each built
+    /// when first used.
+    custom_classes: Mutex<composite::CustomClasses>,
 }
 
 /// Where a database's system font scan looks: folders (read with their subfolders) and font files.

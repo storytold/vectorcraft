@@ -2014,3 +2014,154 @@ fn dynamic_text_rows_follow_the_selected_area_type() {
     app.run("text.thread.create", json!({})).unwrap();
     assert_eq!(dynamic_text::shown(&app).map(|s| (s.on, s.enabled)), Some((Some(false), false)));
 }
+
+/// A document with a graph of `kind` and three series, selected → the graph's id.
+fn graph_doc(app: &mut VectorcraftApp, kind: &str, x: f64) -> u64 {
+    if app.session.active().is_none() {
+        app.run("file.new", json!({"width": 800, "height": 400})).unwrap();
+    }
+    let csv = ",a,b,c\nQ1,1,2,3\nQ2,3,4,5";
+    app.run("graph.create", json!({"type": kind, "x": x, "y": 0, "width": 200, "height": 150, "csv": csv})).unwrap()["id"].as_u64().unwrap()
+}
+
+/// The ids of graph `graph`'s series groups, in series order.
+fn series_groups(app: &VectorcraftApp, graph: u64) -> Vec<u64> {
+    let st = app.session.active().unwrap();
+    let mut groups: Vec<(u32, u64)> = st
+        .doc
+        .node(vectorcraft_doc::NodeId(graph))
+        .and_then(vectorcraft_doc::Node::children)
+        .into_iter()
+        .flatten()
+        .filter_map(|c| c.extras().series_index.map(|i| (i, c.id.0)))
+        .collect();
+    groups.sort_unstable();
+    groups.into_iter().map(|(_, id)| id).collect()
+}
+
+/// One selected column graph has a Graph section with Graph Type…, Graph Data… and Column…, and
+/// each button opens its Object › Graph dialog for the graph.
+#[test]
+fn one_selected_graph_has_a_graph_section_whose_buttons_open_the_graph_dialogs() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    graph_doc(&mut app, "column", 0.0);
+    assert_eq!(graph::shown(&app), Some(graph::Shown { column: true, marker: false }));
+    let ctx = egui::Context::default();
+    let texts = frame(&mut app, &ctx, vec![]);
+    for label in ["Graph", "Graph Type…", "Graph Data…", "Column…"] {
+        assert!(texts.iter().any(|(t, _)| t == label), "no {label:?} in {texts:?}");
+    }
+    assert!(!texts.iter().any(|(t, _)| t == "Marker…"), "{texts:?}");
+    let press = |app: &mut VectorcraftApp, label: &str| {
+        let texts = panel_frame(app, &ctx, vec![], graph::section);
+        let at = texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no {label:?} in {texts:?}"));
+        let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        panel_frame(app, &ctx, vec![Event::PointerMoved(at), b(true)], graph::section);
+        panel_frame(app, &ctx, vec![b(false)], graph::section);
+        app.ui.dialog.take().unwrap_or_else(|| panic!("{label:?} opened no dialog"))
+    };
+    let d = press(&mut app, "Graph Type…");
+    assert_eq!((d.kind.as_str(), d.str("type")), (crate::dialogs::graph_type::KIND, "column".to_string()));
+    assert_eq!(press(&mut app, "Graph Data…").kind, crate::dialogs::graph_data::KIND);
+    assert_eq!(press(&mut app, "Column…").kind, crate::dialogs::graph_design::COLUMN);
+}
+
+/// At the panel's narrowest, Graph Type… and Graph Data… share a row in English, and a translated
+/// label too long for half of the row puts each of them on a row of its own, drawn whole.
+#[test]
+fn the_graph_sections_long_labels_get_rows_of_their_own() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    graph_doc(&mut app, "column", 0.0);
+    let ctx = egui::Context::default();
+    let width = 220.0;
+    let texts = |app: &mut VectorcraftApp| {
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(width, 700.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| graph::section(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .filter_map(|s| {
+                if let egui::Shape::Text(t) = &s.shape {
+                    Some((t.galley.text().to_string(), Rect::from_min_size(t.pos, t.galley.size())))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    };
+    let rect = |texts: &[(String, Rect)], label: &str| {
+        texts.iter().find(|(t, _)| t == label).map(|(_, r)| *r).unwrap_or_else(|| panic!("no {label:?} in {texts:?}"))
+    };
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let english = texts(&mut app);
+    assert_eq!(rect(&english, "Graph Type…").center().y, rect(&english, "Graph Data…").center().y, "{english:?}");
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+    let german = texts(&mut app);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (kind, data) = (rect(&german, "Diagrammtyp…"), rect(&german, "Diagrammdaten…"));
+    assert!(kind.bottom() <= data.top(), "{german:?}");
+    for r in [kind, data] {
+        assert!(r.left() >= 0.0 && r.right() <= width, "{r:?} in {german:?}");
+    }
+}
+
+/// Column… shows when every series it would change draws columns or bars, Marker… when every one
+/// draws lines, scatter points or radar lines: series picked with Group Selection count on their
+/// own, and a combined graph selected whole shows neither.
+#[test]
+fn the_graph_sections_column_and_marker_follow_the_series_they_would_change() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let g = graph_doc(&mut app, "column", 0.0);
+    app.run("graph.setType", json!({"seriesIndexes": [1], "type": "line"})).unwrap();
+    app.run("select.set", json!({"ids": [g]})).unwrap();
+    assert_eq!(graph::shown(&app), Some(graph::Shown { column: false, marker: false }), "column and line series");
+    let groups = series_groups(&app, g);
+    assert_eq!(groups.len(), 3, "{groups:?}");
+    app.run("select.set", json!({"ids": [groups[1]]})).unwrap();
+    assert_eq!(graph::shown(&app), Some(graph::Shown { column: false, marker: true }), "the line series");
+    app.run("select.set", json!({"ids": [groups[0], groups[2]]})).unwrap();
+    assert_eq!(graph::shown(&app), Some(graph::Shown { column: true, marker: false }), "the column series");
+    app.run("select.set", json!({"ids": [groups[0], groups[1]]})).unwrap();
+    assert_eq!(graph::shown(&app), Some(graph::Shown { column: false, marker: false }), "one of each");
+    for (kind, shown) in [
+        ("line", (false, true)),
+        ("scatter", (false, true)),
+        ("radar", (false, true)),
+        ("bar", (true, false)),
+        ("pie", (false, false)),
+        ("area", (false, false)),
+    ] {
+        let id = graph_doc(&mut app, kind, 300.0);
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        assert_eq!(graph::shown(&app).map(|s| (s.column, s.marker)), Some(shown), "{kind}");
+        app.run("edit.clear", json!({})).unwrap();
+    }
+    // A graph whose data was cleared has no series for Column… or Marker… to change.
+    for kind in ["column", "line"] {
+        let id = graph_doc(&mut app, kind, 300.0);
+        app.run("graph.setData", json!({"id": id, "series": [], "categories": [], "rows": []})).unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        assert_eq!(graph::shown(&app), Some(graph::Shown { column: false, marker: false }), "an empty {kind} graph");
+        app.run("edit.clear", json!({})).unwrap();
+    }
+}
+
+/// The Graph section shows only while everything selected is one graph or lies in it.
+#[test]
+fn the_graph_section_needs_one_graph_selected() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let a = graph_doc(&mut app, "column", 0.0);
+    let b = graph_doc(&mut app, "column", 300.0);
+    let rect = app.run("shape.rectangle", json!({"x": 600, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    for (ids, what) in [(vec![rect], "a rectangle"), (vec![a, rect], "a graph and a rectangle"), (vec![a, b], "two graphs")] {
+        app.run("select.set", json!({ "ids": ids })).unwrap();
+        assert_eq!(graph::shown(&app), None, "{what}");
+        let texts = frame(&mut app, &egui::Context::default(), vec![]);
+        assert!(!texts.iter().any(|(t, _)| t == "Graph Type…"), "{what}: {texts:?}");
+    }
+    let groups = series_groups(&app, a);
+    app.run("select.set", json!({"ids": [groups[0], groups[1]]})).unwrap();
+    assert!(graph::shown(&app).is_some(), "two series of one graph");
+    app.run("select.set", json!({"ids": [groups[0], series_groups(&app, b)[0]]})).unwrap();
+    assert_eq!(graph::shown(&app), None, "series of two graphs");
+}

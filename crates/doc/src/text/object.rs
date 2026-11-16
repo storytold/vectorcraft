@@ -352,7 +352,10 @@ impl TextObject {
     }
     /// Flip type on a path to the other side of its path (Type on a Path Options › Flip, or its
     /// centre bracket dragged across the path): the path runs the other way and the brackets swap
-    /// ends, so the type keeps its stretch of the path. False, changing nothing, for other type.
+    /// ends, so the type keeps its stretch of the path. Type that starts before an open path's start
+    /// ([`TextKind::path_text_start`]) starts at its start bracket after the flip: the part of its
+    /// span before the path's start would come after the path's end. False, changing nothing, for
+    /// other type.
     pub fn flip_on_path(&mut self) -> bool {
         let Some((s, e)) = self.kind.path_span() else { return false };
         let TextKind::OnPath { path, start, end } = &mut self.kind else { return false };
@@ -508,6 +511,8 @@ impl crate::Document {
             st.aki_left = num("akiLeft").unwrap_or(st.aki_left);
             st.aki_right = num("akiRight").unwrap_or(st.aki_right);
             st.tsume = num("tsume").unwrap_or(st.tsume);
+            st.diacritic_horizontal = num("diacriticHorizontal").unwrap_or(st.diacritic_horizontal);
+            st.diacritic_vertical = num("diacriticVertical").unwrap_or(st.diacritic_vertical);
             st.warichu_gap = num("warichuGap").unwrap_or(st.warichu_gap);
             st.warichu_scale = num("warichuScale").unwrap_or(st.warichu_scale);
             st.keep_dimensions_in_range();
@@ -534,6 +539,8 @@ impl crate::Document {
                 ("akiLeft", Some(st.aki_left)),
                 ("akiRight", Some(st.aki_right)),
                 ("tsume", Some(st.tsume)),
+                ("diacriticHorizontal", Some(st.diacritic_horizontal)),
+                ("diacriticVertical", Some(st.diacritic_vertical)),
                 ("leading", st.leading),
             ];
             for (k, v) in kept {

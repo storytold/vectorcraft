@@ -137,7 +137,7 @@ pub enum Light {
 }
 
 impl Light {
-    const ALL: [Light; 8] =
+    pub(super) const ALL: [Light; 8] =
         [Light::Bottom, Light::BottomLeft, Light::Left, Light::TopLeft, Light::Top, Light::TopRight, Light::Right, Light::BottomRight];
 
     /// The direction of `value` (a [`LIGHT_DIRECTIONS`] value, any case); Top otherwise.
