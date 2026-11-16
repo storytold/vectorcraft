@@ -4234,6 +4234,21 @@ antiAlias	Sharp	शार्प
 	Draws the grid behind the artwork; off, the grid is drawn over it.	ग्रिड को आर्टवर्क के पीछे बनाता है; बंद होने पर ग्रिड उसके ऊपर बनती है।
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	पिक्सेल प्रीव्यू में 600% या अधिक ज़ूम पर, सक्रिय व्यू आर्टवर्क के ऊपर दस्तावेज़ के हर पिक्सेल के किनारे पर रेखा दिखाता है।
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	पैटर्न संपादित करते समय दिखने वाले टाइल एज और डैश वाली स्वॉच सीमाओं का रंग।
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	ड्रॉ करने, खिसकाने और ट्रांसफ़ॉर्म करने को पास के आर्ट पर स्नैप करता है और गाइड्स व लेबल दिखाता है; पिक्सेल प्रीव्यू इन्हें बंद करता है, और ग्रिड पर स्नैप करें इनकी जगह ग्रिड पर स्नैप करता है।
+	The color of Smart Guide lines and labels.	स्मार्ट गाइड्स की रेखाओं और लेबल का रंग।
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	उस किनारे या केंद्र के साथ रेखा दिखाता है जिससे आर्ट संरेखित होता है; बंद होने पर आर्ट रेखा के बिना भी संरेखित होता है, और ग्लिफ़ पर स्नैप करें लागू नहीं होता।
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	सिलेक्शन टूल के साथ, जब आप ड्रैग नहीं कर रहे हों, पॉइंटर के नीचे के असिलेक्टेड ऑब्जेक्ट की रूपरेखा उसकी लेयर के रंग में दिखाता है।
+	Shows the size or angle next to the pointer while you scale or rotate art.	आर्ट को स्केल या घुमाते समय पॉइंटर के पास आकार या कोण दिखाता है।
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	ड्रॉ करते समय पॉइंट उन रेखाओं पर स्नैप होते हैं जो चुने गए कोणों पर उस पॉइंट से गुज़रती हैं जहाँ से सेगमेंट या आकृति शुरू होती है।
+	The set of angles the construction guides follow while Construction Guides is on.	निर्माण गाइड चालू होने पर निर्माण गाइड जिन कोणों का पालन करते हैं, उनका समूह।
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	बताता है कि पॉइंट किस पर स्नैप होता है, जैसे एंकर, पाथ या संरेखण; बंद होने पर पॉइंट नामों के बिना उसी तरह स्नैप होते हैं।
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	ड्रॉ करते या खिसकाते समय पॉइंटर के पास दूरियाँ, कोण और आर्ट कितना खिसका यह दिखाता है।
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	खिसकाए गए या आकार बदले गए आर्ट को पास के ऑब्जेक्ट्स के बीच जितने ही अंतर पर स्नैप करता है और बराबर अंतर चिह्नित करता है।
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	कुछ सिलेक्ट होने पर, किसी दूसरे ऑब्जेक्ट या आर्टबोर्ड के ऊपर Alt/Option दबाए रखने से उसके और सिलेक्शन के बीच की दूरियाँ दिखती हैं।
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	ड्रैग जहाँ से शुरू हुआ था, वहाँ से स्नैपिंग सहिष्णुता के भीतर वापस ड्रैग किया गया सिलेक्शन ठीक उसी जगह लौट जाता है; कॉपी नहीं लौटती।
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	स्मार्ट गाइड्स के स्नैप करने के लिए पॉइंटर या ड्रैग किया गया पॉइंट स्क्रीन पर आर्ट के कितने पास आना चाहिए; यह दूरी हर ज़ूम पर समान रहती है।
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	लाइन सेगमेंट के सिरे को, या केंद्र से ड्रॉ किए गए वृत्त को, इस तरह स्नैप करता है कि वह पास के वक्र को छुए।
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	लाइन सेगमेंट के सिरे को इस तरह स्नैप करता है कि वह पास के सीधे सेगमेंट से समकोण पर मिले।
 	Reset all preferences to their defaults?	सभी प्रेफ़रेंसेज़ को उनके डिफ़ॉल्ट पर रीसेट करें?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	डिफ़ॉल्ट तब लागू होते हैं जब आप प्रेफ़रेंसेज़ में ठीक है पर क्लिक करते हैं। वहाँ रद्द करें आपकी मौजूदा प्रेफ़रेंसेज़ बनाए रखता है।
 	Restore Recovered Documents	पुनर्स्थापना डॉक्यूमेंट

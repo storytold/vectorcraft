@@ -4574,6 +4574,21 @@ font-technology	Variable	Variabilní
 	Draws the grid behind the artwork; off, the grid is drawn over it.	Kreslí mřížku za kresbou; je-li vypnuto, kreslí se mřížka přes ni.
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	V náhledu obrazových bodů při zvětšení 600 % a více ukazuje aktivní zobrazení přes kresbu čáru na okraji každého obrazového bodu dokumentu.
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Barva okraje dlaždice a přerušovaných hranic položky vzorníku, které se ukazují při úpravě vzorku.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Přichytává kreslení, přesouvání a transformace k blízké kresbě a ukazuje vodítka a popisky; Náhled obrazových bodů je vypíná a Přichytávat k mřížce místo nich přichytává k mřížce.
+	The color of Smart Guide lines and labels.	Barva čar a popisků chytrých vodítek.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Ukazuje čáru podél okraje nebo středu, ke kterému se kresba zarovnává; když je vypnuto, kresba se zarovnává i bez čáry a Přichytávat ke glyfům neplatí.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	S nástrojem pro výběr obtáhne nevybraný objekt pod ukazatelem barvou jeho vrstvy, dokud netáhnete.
+	Shows the size or angle next to the pointer while you scale or rotate art.	Ukazuje u ukazatele velikost nebo úhel, když měníte velikost kresby nebo ji otáčíte.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Při kreslení se body přichytávají k čarám ve zvolených úhlech procházejícím bodem, kde začíná segment nebo tvar.
+	The set of angles the construction guides follow while Construction Guides is on.	Sada úhlů, které konstrukční vodítka sledují, když jsou Konstrukční vodítka zapnutá.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Pojmenuje, k čemu se bod přichytí, například kotevní bod, cestu nebo zarovnání; když je vypnuto, body se přichytávají stejně, jen bez názvů.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Ukazuje u ukazatele vzdálenosti, úhly a o kolik se kresba posunula, když kreslíte nebo přesouváte.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Přichytí přesunutou kresbu nebo kresbu se změněnou velikostí na stejnou mezeru jako mezi blízkými objekty a vyznačí stejné mezery.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Když je něco vybráno, podržení Alt/Option nad jiným objektem nebo pracovní plochou ukáže vzdálenosti mezi ním a výběrem.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Výběr přetažený zpět do tolerance přichytávání od místa, kde tažení začalo, se vrátí přesně na to místo; kopie ne.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Jak blízko na obrazovce musí ukazatel nebo tažený bod přijít ke kresbě, aby se chytrá vodítka přichytila; vzdálenost je stejná při každém zvětšení.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Přichytí konec úsečky nebo kružnici kreslenou od středu tak, aby se dotýkala blízké křivky.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Přichytí konec úsečky tak, aby se s blízkým rovným segmentem setkal v pravém úhlu.
 	Reset all preferences to their defaults?	Obnovit všechny předvolby na výchozí hodnoty?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Výchozí hodnoty se použijí po klepnutí na OK v Předvolbách. Zrušit tam zachová vaše současné předvolby.
 	Smaller ↔ Larger	Menší ↔ Větší

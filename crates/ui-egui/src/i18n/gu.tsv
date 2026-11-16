@@ -3191,6 +3191,21 @@
 	Draws the grid behind the artwork; off, the grid is drawn over it.	ગ્રિડને આર્ટવર્કની પાછળ દોરે છે; બંધ હોય ત્યારે ગ્રિડ તેની ઉપર દોરાય છે.
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	પિક્સેલ પૂર્વાવલોકનમાં 600% કે વધુ ઝૂમ પર, સક્રિય વ્યૂ આર્ટવર્ક પર દસ્તાવેજના દરેક પિક્સેલની કિનારીએ રેખા બતાવે છે.
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	પેટર્ન સંપાદિત કરતી વખતે દેખાતી ટાઇલ કિનારી અને ડૅશવાળી સ્વેચ બાઉન્ડ્સનો રંગ.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	દોરવું, ખસેડવું અને ટ્રાન્સફોર્મ કરવું નજીકના આર્ટ પર સ્નેપ કરે છે અને ગાઇડ અને લેબલ બતાવે છે; પિક્સેલ પૂર્વાવલોકન તેમને બંધ કરે છે, અને ગ્રિડ પર સ્નેપ તેના બદલે ગ્રિડ પર સ્નેપ કરે છે.
+	The color of Smart Guide lines and labels.	સ્માર્ટ ગાઇડની રેખાઓ અને લેબલનો રંગ.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	આર્ટ જે કિનારી અથવા કેન્દ્ર સાથે સંરેખિત થાય તેની સાથે રેખા બતાવે છે; બંધ હોય ત્યારે આર્ટ રેખા વિના પણ સંરેખિત થાય છે, અને ગ્લિફ પર સ્નેપ લાગુ પડતું નથી.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	પસંદગી ટૂલ સાથે, તમે ખેંચતા ન હો ત્યારે પોઇન્ટર નીચેના પસંદ ન કરેલા ઑબ્જેક્ટની રૂપરેખા તેના લેયરના રંગમાં બતાવે છે.
+	Shows the size or angle next to the pointer while you scale or rotate art.	તમે આર્ટને સ્કેલ કે ફેરવો ત્યારે પોઇન્ટર પાસે કદ અથવા ખૂણો બતાવે છે.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	તમે દોરો ત્યારે, બિંદુઓ સેગમેન્ટ કે આકાર જ્યાંથી શરૂ થાય તે બિંદુમાંથી પસાર થતી પસંદ કરેલા ખૂણાની રેખાઓ પર સ્નેપ થાય છે.
+	The set of angles the construction guides follow while Construction Guides is on.	બાંધકામ ગાઇડ્સ ચાલુ હોય ત્યારે બાંધકામ ગાઇડ્સ જે ખૂણાઓને અનુસરે છે તેનો સમૂહ.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	બિંદુ શેના પર સ્નેપ થાય છે તેનું નામ બતાવે છે, જેમ કે એન્કર, પાથ અથવા સંરેખણ; બંધ હોય ત્યારે બિંદુઓ નામ વિના એ જ રીતે સ્નેપ થાય છે.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	તમે દોરો કે ખસેડો ત્યારે પોઇન્ટર પાસે અંતર, ખૂણા અને આર્ટ કેટલું ખસ્યું તે બતાવે છે.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	ખસેડેલા કે કદ બદલેલા આર્ટને નજીકના ઑબ્જેક્ટ્સ વચ્ચેના જેટલા જ અંતર પર સ્નેપ કરે છે અને સમાન અંતર દર્શાવે છે.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	કંઈક પસંદ કરેલું હોય ત્યારે, બીજા ઑબ્જેક્ટ કે આર્ટબોર્ડ પર Alt/Option દબાવી રાખવાથી તેની અને પસંદગી વચ્ચેનું અંતર દેખાય છે.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	ખેંચાણ જ્યાંથી શરૂ થયું ત્યાંથી સ્નેપિંગ સહનશીલતાની અંદર પાછી ખેંચેલી પસંદગી બરાબર એ જ જગ્યાએ પાછી જાય છે; નકલ જતી નથી.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	સ્માર્ટ ગાઇડ સ્નેપ કરે તે માટે પોઇન્ટર અથવા ખેંચેલું બિંદુ સ્ક્રીન પર આર્ટની કેટલું નજીક આવવું જોઈએ; આ અંતર દરેક ઝૂમ પર સમાન રહે છે.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	લાઇન સેગમેન્ટના છેડાને, અથવા કેન્દ્રથી દોરેલા વર્તુળને, એ રીતે સ્નેપ કરે છે કે તે નજીકના વળાંકને સ્પર્શે.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	લાઇન સેગમેન્ટના છેડાને એ રીતે સ્નેપ કરે છે કે તે નજીકના સીધા સેગમેન્ટને કાટખૂણે મળે.
 	Restored documents open unsaved: save them to keep them.	પુનઃસ્થાપિત દસ્તાવેજો અસાચવેલા ખુલશે: તેમને રાખવા માટે સાચવો.
 	Restrict printing, editing and other tasks	છાપકામ, સંપાદન અને અન્ય કાર્યો પર પ્રતિબંધ મૂકો
 	Reticulation…	રેટિક્યુલેશન…

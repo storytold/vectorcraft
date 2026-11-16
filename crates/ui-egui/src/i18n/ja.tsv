@@ -3142,6 +3142,21 @@ mark-style	Japanese	日本式
 	Draws the grid behind the artwork; off, the grid is drawn over it.	グリッドをアートワークの背面に描きます。オフのときは前面に描きます。
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	ピクセルプレビューで 600% 以上にズームすると、アクティブな表示でアートワークの上に、ドキュメントの各ピクセルの境界に線が表示されます。
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	パターンの編集中に表示されるタイルの境界線と、破線のスウォッチの境界の色です。
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	描画、移動、変形を近くのアートにスナップし、ガイドとラベルを表示します。ピクセルプレビューではオフになり、グリッドにスナップがオンのときは代わりにグリッドにスナップします。
+	The color of Smart Guide lines and labels.	スマートガイドの線とラベルの色です。
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	アートが揃う端または中心に沿って線を表示します。オフでも線なしで揃い、グリフにスナップは適用されません。
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	選択ツールでドラッグしていないとき、ポインターの下にある未選択のオブジェクトをレイヤーの色で囲みます。
+	Shows the size or angle next to the pointer while you scale or rotate art.	アートを拡大・縮小または回転している間、ポインターの横にサイズまたは角度を表示します。
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	描画中、セグメントまたはシェイプの始点を通る、選択した角度の線にポイントがスナップします。
+	The set of angles the construction guides follow while Construction Guides is on.	作図ガイドがオンのときに作図ガイドが従う角度のセットです。
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	アンカー、パス、整列など、ポイントのスナップ先の名前を表示します。オフでも名前なしで同じようにスナップします。
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	描画中または移動中に、距離、角度、アートの移動量をポインターの横に表示します。
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	移動またはサイズ変更したアートを近くのオブジェクト間と同じ間隔にスナップし、等しい間隔を示します。
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	何かを選択した状態で、別のオブジェクトまたはアートボードの上で Alt/Option キーを押し続けると、それと選択範囲の間の距離を表示します。
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	ドラッグの開始位置からスナップ許容値の範囲内までドラッグして戻した選択範囲は、正確にその位置に戻ります。コピーは戻りません。
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	スマートガイドがスナップするために、ポインターやドラッグしたポイントが画面上でアートにどこまで近づく必要があるかです。この距離はどのズームでも同じです。
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	直線セグメントの端、または中心から描いた円を、近くの曲線に接するようにスナップします。
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	直線セグメントの端を、近くの直線セグメントと直角に交わるようにスナップします。
 	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	初期値は環境設定で OK をクリックすると適用されます。そこでキャンセルすると現在の環境設定が保たれます。
 	Restored documents open unsaved: save them to keep them.	復元したドキュメントは未保存の状態で開きます。保存して残してください。

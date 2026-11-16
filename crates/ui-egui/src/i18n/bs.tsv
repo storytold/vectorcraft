@@ -4469,6 +4469,21 @@ font-technology	Variable	Varijabilni
 	Draws the grid behind the artwork; off, the grid is drawn over it.	Crta mrežu iza crteža; kad je isključeno, mreža se crta preko njega.
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	U pregledu piksela pri zumu od 600% ili više aktivni prikaz pokazuje liniju na rubu svakog piksela dokumenta preko crteža.
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Boja ivice pločice i isprekidanih granica uzorka boje koje se prikazuju dok uređujete uzorak.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Hvata crtanje, pomjeranje i transformisanje uz obližnje objekte i prikazuje vodilice i oznake; Pregled piksela ih isključuje, a Priljepi uz mrežu umjesto toga hvata uz mrežu.
+	The color of Smart Guide lines and labels.	Boja linija i oznaka pametnih vodilica.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Prikazuje liniju duž ivice ili centra s kojim se objekti poravnavaju; kad je isključeno, objekti se i dalje poravnavaju bez linije, a Prilijepi uz glif ne djeluje.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	S alatom za odabir ocrtava neodabrani objekat ispod pokazivača bojom njegovog sloja dok ne prevlačite.
+	Shows the size or angle next to the pointer while you scale or rotate art.	Prikazuje veličinu ili ugao pored pokazivača dok skalirate ili rotirate objekte.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Dok crtate, tačke se hvataju uz linije pod odabranim uglovima kroz tačku od koje počinje segment ili oblik.
+	The set of angles the construction guides follow while Construction Guides is on.	Skup uglova koje prate konstrukcijske vodilice dok su Konstrukcijske vodilice uključene.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Imenuje za šta se tačka hvata, npr. sidrenu tačku, putanju ili poravnanje; kad je isključeno, tačke se hvataju isto, bez naziva.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Prikazuje pored pokazivača udaljenosti, uglove i koliko je objekat pomjeren dok crtate ili pomjerate.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Hvata pomjerene objekte ili objekte promijenjene veličine uz isti razmak kao između obližnjih objekata i označava jednake razmake.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Kad je nešto odabrano, držanje tipke Alt/Option iznad drugog objekta ili radne ploče prikazuje udaljenosti između njega i odabira.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Odabir vraćen prevlačenjem unutar tolerancije hvatanja od mjesta gdje je prevlačenje počelo vraća se tačno na to mjesto; kopija ne.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Koliko blizu na ekranu pokazivač ili prevučena tačka mora doći do objekta da bi ga pametne vodilice uhvatile; udaljenost je ista pri svakom zumu.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Hvata kraj segmenta linije ili krug nacrtan iz središta tako da dodiruje obližnju krivu.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Hvata kraj segmenta linije tako da pod pravim uglom susreće obližnji ravni segment.
 	Reset all preferences to their defaults?	Vratiti sve postavke na zadane vrijednosti?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Zadane vrijednosti primjenjuju se kada kliknete U redu u Postavkama. Otkaži tamo zadržava vaše trenutne postavke.
 	Smaller ↔ Larger	Manje ↔ veće

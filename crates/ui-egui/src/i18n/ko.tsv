@@ -3131,6 +3131,21 @@ mark-style	Japanese	일본식
 	Draws the grid behind the artwork; off, the grid is drawn over it.	격자를 아트워크 뒤에 그립니다. 끄면 격자를 아트워크 위에 그립니다.
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	픽셀 미리 보기에서 600% 이상으로 확대하면 활성 보기에서 아트워크 위에 문서의 각 픽셀 경계마다 선이 표시됩니다.
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	패턴을 편집하는 동안 표시되는 타일 가장자리와 점선 견본 경계의 색상입니다.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	그리기, 이동, 변형을 가까운 아트에 스냅하고 안내선과 레이블을 표시합니다. 픽셀 미리 보기에서는 꺼지며, 격자에 스냅이 켜져 있으면 대신 격자에 스냅합니다.
+	The color of Smart Guide lines and labels.	스마트 안내선의 선과 레이블 색상입니다.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	아트가 맞춰지는 가장자리나 중심을 따라 선을 표시합니다. 끄면 선 없이도 맞춰지며, 글리프에 스냅은 적용되지 않습니다.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	선택 도구로 드래그하지 않는 동안 포인터 아래의 선택되지 않은 개체 윤곽을 레이어 색상으로 표시합니다.
+	Shows the size or angle next to the pointer while you scale or rotate art.	아트의 크기를 조절하거나 회전하는 동안 포인터 옆에 크기나 각도를 표시합니다.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	그리는 동안 점이 세그먼트나 모양의 시작점을 지나는 선택한 각도의 선에 스냅됩니다.
+	The set of angles the construction guides follow while Construction Guides is on.	작도 안내선이 켜져 있을 때 작도 안내선이 따르는 각도 세트입니다.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	앵커, 패스, 정렬처럼 점이 스냅되는 대상의 이름을 표시합니다. 끄면 이름 없이 같은 방식으로 스냅됩니다.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	그리거나 이동하는 동안 포인터 옆에 거리, 각도, 아트가 이동한 거리를 표시합니다.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	이동하거나 크기를 조절한 아트를 가까운 개체 사이와 같은 간격에 스냅하고 같은 간격을 표시합니다.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	무언가를 선택한 상태에서 다른 개체나 아트보드 위에서 Alt/Option 키를 누르고 있으면 그것과 선택 영역 사이의 거리를 표시합니다.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	드래그를 시작한 위치에서 스냅 허용 오차 이내로 다시 드래그한 선택 영역은 정확히 그 위치로 돌아갑니다. 복사본은 돌아가지 않습니다.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	스마트 안내선이 스냅하려면 포인터나 드래그한 점이 화면에서 아트에 얼마나 가까이 와야 하는지입니다. 이 거리는 모든 확대/축소에서 같습니다.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	선 세그먼트의 끝이나 중심에서 그린 원을 가까운 곡선에 닿도록 스냅합니다.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	선 세그먼트의 끝을 가까운 직선 세그먼트와 직각으로 만나도록 스냅합니다.
 	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
 	Restored documents open unsaved: save them to keep them.	복원된 문서는 저장되지 않은 상태로 열립니다. 보존하려면 저장하세요.

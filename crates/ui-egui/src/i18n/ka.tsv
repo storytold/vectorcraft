@@ -6177,6 +6177,21 @@ font-technology	Variable	ცვლადი
 	Draws the grid behind the artwork; off, the grid is drawn over it.	ბადეს ნამუშევრის უკან ხატავს; გამორთვისას ბადე მის ზემოთ იხატება.
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	პიქსელების წინასწარ ნახვაში 600%-იან ან მეტ მასშტაბზე აქტიური ხედი ნამუშევრის ზემოთ დოკუმენტის თითოეული პიქსელის კიდეზე ხაზს აჩვენებს.
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	ფილის კიდისა და ფერის ნიმუშის წყვეტილი საზღვრების ფერი, რომლებიც პატერნის რედაქტირებისას ჩანს.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	ხატვას, გადატანასა და გარდაქმნას ახლომდებარე გრაფიკაზე აბამს და აჩვენებს დამხმარე ხაზებსა და წარწერებს; პიქსელების წინასწარი ნახვა მათ თიშავს, ბადეზე მიბმა კი მათ ნაცვლად ბადეზე აბამს.
+	The color of Smart Guide lines and labels.	ჭკვიანი დამხმარე ხაზების ხაზებისა და წარწერების ფერი.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	აჩვენებს ხაზს იმ კიდის ან ცენტრის გასწვრივ, რომელსაც გრაფიკა უსწორდება; გამორთვისას გრაფიკა მაინც სწორდება ხაზის გარეშე, გლიფზე მიბმა კი არ მოქმედებს.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	მონიშვნის ხელსაწყოთი, სანამ არ ათრევთ, მაჩვენებლის ქვეშ მყოფ მოუნიშნავ ობიექტს მისი შრის ფერით შემოხაზავს.
+	Shows the size or angle next to the pointer while you scale or rotate art.	გრაფიკის მასშტაბირების ან მობრუნებისას მაჩვენებლის გვერდით აჩვენებს ზომას ან კუთხეს.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	ხატვისას წერტილები ებმის არჩეული კუთხის ხაზებს, რომლებიც სეგმენტის ან ფიგურის საწყის წერტილზე გადის.
+	The set of angles the construction guides follow while Construction Guides is on.	კუთხეების ნაკრები, რომელსაც სამშენებლო დამხმარე ხაზები მიჰყვება, სანამ სამშენებლო დამხმარე ხაზები ჩართულია.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	ასახელებს, რას ებმის წერტილი, მაგალითად, საყრდენ წერტილს, ტრაექტორიას ან გასწორებას; გამორთვისას წერტილები ისევე ებმის, სახელების გარეშე.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	ხატვის ან გადატანისას მაჩვენებლის გვერდით აჩვენებს მანძილებს, კუთხეებს და რამდენით გადაადგილდა გრაფიკა.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	გადატანილ ან ზომაშეცვლილ გრაფიკას აბამს იმავე შუალედზე, რაც ახლომდებარე ობიექტებს შორისაა, და ნიშნავს თანაბარ შუალედებს.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	როცა რაიმე მონიშნულია, Alt/Option-ის დაჭერა სხვა ობიექტზე ან სამუშაო დაფაზე აჩვენებს მანძილებს მასა და მონიშნულს შორის.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	მონიშნული, რომელიც თრევის დაწყების ადგილიდან მიბმის დაშვების ფარგლებში დააბრუნეთ, ზუსტად იმ ადგილზე ბრუნდება; ასლი არა.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	რამდენად ახლოს უნდა მივიდეს ეკრანზე მაჩვენებელი ან გადათრეული წერტილი გრაფიკასთან, რომ ჭკვიანმა დამხმარე ხაზებმა მიაბან; მანძილი ყველა მასშტაბზე ერთნაირია.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	ხაზის სეგმენტის ბოლოს, ან ცენტრიდან დახატულ წრეწირს, ისე აბამს, რომ ახლომდებარე მრუდს შეეხოს.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	ხაზის სეგმენტის ბოლოს ისე აბამს, რომ ახლომდებარე სწორ სეგმენტს მართი კუთხით შეხვდეს.
 	Reset all preferences to their defaults?	დავაბრუნოთ ყველა პარამეტრი ნაგულისხმევ მნიშვნელობებზე?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	ნაგულისხმევი მნიშვნელობები გამოიყენება, როცა პარამეტრებში OK-ს დააჭერთ. იქ გაუქმება ინარჩუნებს თქვენს მიმდინარე პარამეტრებს.
 	Smaller ↔ Larger	უფრო პატარა ↔ უფრო დიდი

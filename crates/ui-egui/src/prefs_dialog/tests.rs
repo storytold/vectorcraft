@@ -1798,12 +1798,12 @@ fn a_row_without_a_description_leaves_the_line_empty() {
     assert_eq!(preferences_window(&ctx).size(), size);
 }
 
-/// Every setting the General, Selection & Anchor Display and Guides & Grid categories show has
-/// exactly one sentence, and no key has two.
+/// Every setting the General, Selection & Anchor Display, Guides & Grid and Smart Guides categories
+/// show, the Smart Guides box included, has exactly one sentence, and no key has two.
 #[test]
-fn every_general_selection_and_guides_setting_has_one_description() {
+fn every_general_selection_guides_and_smart_guides_setting_has_one_description() {
     let mut bad = vec![];
-    for s in settings().filter(|s| ["General", "Selection & Anchor Display", "Guides & Grid"].contains(&s.category)) {
+    for s in settings().filter(|s| ["General", "Selection & Anchor Display", "Guides & Grid", "Smart Guides"].contains(&s.category)) {
         match descriptions::DESCRIPTIONS.iter().filter(|(k, _)| *k == s.key).count() {
             1 => {}
             n => bad.push(format!("`{}` ({}) has {n} sentences", s.key, s.label)),
@@ -1959,6 +1959,53 @@ fn keyboard_focus_on_a_guides_and_grid_row_shows_its_description() {
     }
     let described = shown.expect("Tab reaches the Snap to Grid row and its sentence shows");
     assert!(described.iter().any(|d| d == snap), "the focused control carries the sentence: {described:?}");
+}
+
+/// The pointer over Smart Guides' own Smart Guides row and over its Alignment Guides row shows each
+/// row's sentence.
+#[test]
+fn hovering_a_smart_guides_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Smart Guides"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    let row = |texts: &[(String, egui::Rect)], label: &str| {
+        texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
+    };
+    let smart = descriptions::description("__smartGuides").expect("Smart Guides has a sentence");
+    let alignment = descriptions::description("alignmentGuides").expect("Alignment Guides has a sentence");
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, "Smart Guides (View → Smart Guides)"))]);
+    let (after, _) = description_frame(&mut a, &ctx, vec![]);
+    assert!(painted(&after, smart) && !painted(&after, alignment), "the Smart Guides row's sentence shows: {after:?}");
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, "Alignment Guides"))]);
+    let (after, _) = description_frame(&mut a, &ctx, vec![]);
+    assert!(painted(&after, alignment) && !painted(&after, smart), "the Alignment Guides row's sentence shows: {after:?}");
+}
+
+/// Tab from the search field reaches Smart Guides' first control, the Smart Guides box: the line
+/// shows its sentence and a screen reader gets it as the control's description.
+#[test]
+fn keyboard_focus_on_a_smart_guides_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Smart Guides"));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    description_frame(&mut a, &ctx, vec![]);
+    let smart = descriptions::description("__smartGuides").expect("Smart Guides has a sentence");
+    let mut shown = None;
+    for _ in 0..40 {
+        let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
+        if painted(&texts, smart) {
+            shown = Some(described);
+            break;
+        }
+    }
+    let described = shown.expect("Tab reaches the Smart Guides row and its sentence shows");
+    assert!(described.iter().any(|d| d == smart), "the focused control carries the sentence: {described:?}");
 }
 
 /// A sentence shown when the dialog closed does not come back when it opens again with the

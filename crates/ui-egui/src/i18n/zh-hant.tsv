@@ -4292,6 +4292,21 @@ digits	Malayalam	馬來亞拉姆數字
 	Draws the grid behind the artwork; off, the grid is drawn over it.	將格點繪製在圖稿後方；關閉時格點繪製在圖稿上方。
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	在像素預視中縮放至 600% 以上時，作用中的檢視會在圖稿上方沿文件每個像素的邊緣顯示線條。
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	編輯圖樣時顯示的拼貼邊緣和虛線色票邊界的顏色。
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	將繪製、移動和變形靠齊到附近的圖稿，並顯示參考線和標籤；像素預視會將其關閉，開啟靠齊格點時則改為靠齊格點。
+	The color of Smart Guide lines and labels.	智慧型參考線的線條和標籤顏色。
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	沿著圖稿對齊的邊緣或中心顯示一條線；關閉時圖稿仍會對齊，只是不顯示線條，且靠齊字符不會作用。
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	使用選取工具且未拖曳時，以圖層顏色描出指標下未選取物件的外框。
+	Shows the size or angle next to the pointer while you scale or rotate art.	縮放或旋轉圖稿時，在指標旁顯示尺寸或角度。
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	繪製時，點會靠齊到通過線段或形狀起點、依所選角度延伸的線上。
+	The set of angles the construction guides follow while Construction Guides is on.	建構參考線開啟時，建構參考線所依循的角度組合。
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	顯示點靠齊的對象名稱，例如錨點、路徑或對齊；關閉時點仍以相同方式靠齊，只是不顯示名稱。
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	繪製或移動時，在指標旁顯示距離、角度和圖稿移動的距離。
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	將移動或調整大小的圖稿靠齊到與附近物件之間相同的間距，並標示相等的間距。
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	選取物件後，在另一個物件或工作區域上按住 Alt/Option 會顯示它與選取範圍之間的距離。
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	拖回到距拖曳起點靠齊容許度以內的選取範圍會精確回到原處；複製的物件不會。
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	指標或拖曳的點在螢幕上需離圖稿多近，智慧型參考線才會靠齊；此距離在任何縮放比例下都相同。
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	靠齊線段的端點或從中心繪製的圓，使其與附近的曲線相切。
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	靠齊線段的端點，使其與附近的直線段成直角相交。
 	Reset all preferences to their defaults?	要將所有偏好設定重設為預設值嗎？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在偏好設定中按下確定後才會套用預設值。在那裡按下取消會保留目前的偏好設定。
 	Restore Recovered Documents	還原找回的文件

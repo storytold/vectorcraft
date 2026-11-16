@@ -129,6 +129,37 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ("gridsInBack", "Draws the grid behind the artwork; off, the grid is drawn over it."),
     ("showPixelGrid", "In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork."),
     ("patternTileEdgeColor", "The color of the tile edge and the dashed swatch bounds shown while you edit a pattern."),
+    // Smart Guides
+    (
+        "__smartGuides",
+        "Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.",
+    ),
+    ("smartGuideColor", "The color of Smart Guide lines and labels."),
+    (
+        "alignmentGuides",
+        "Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.",
+    ),
+    ("objectHighlighting", "With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging."),
+    ("transformToolsGuides", "Shows the size or angle next to the pointer while you scale or rotate art."),
+    ("constructionGuides", "While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from."),
+    ("constructionAngles", "The set of angles the construction guides follow while Construction Guides is on."),
+    ("anchorPathLabels", "Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names."),
+    ("measurementLabels", "Shows distances, angles and how far art has moved next to the pointer while you draw or move it."),
+    ("spacingGuides", "Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps."),
+    (
+        "distanceGuides",
+        "With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.",
+    ),
+    (
+        "snapToLastLocation",
+        "A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.",
+    ),
+    (
+        "snappingTolerance",
+        "How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.",
+    ),
+    ("snapTangent", "Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve."),
+    ("snapPerpendicular", "Snaps the end of a line segment so that it meets a nearby straight segment at a right angle."),
 ];
 
 /// The sentence that describes the setting `key`, in English, or `None` when it has none yet.
