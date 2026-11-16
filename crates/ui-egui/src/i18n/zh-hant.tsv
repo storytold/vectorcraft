@@ -1553,6 +1553,9 @@ file-filter	Templates	範本
 	Show smooth color wheel	顯示平滑色輪
 	Show segmented color wheel	顯示分段色輪
 	Show color bars	顯示顏色條
+	Add Color Tool	新增顏色工具
+	Remove Color Tool	移除顏色工具
+	Remove Color	移除顏色
 	Find the selected colors in the artwork	在圖稿中尋找所選顏色
 	Harmony Sets	色彩調和組
 	Height	高度
@@ -3046,6 +3049,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Lasso Tool	套索工具
 	Enclosing Lasso Tool	包圍套索工具
 	Enclosing Lasso	包圍套索
+	Polygonal Lasso Tool	多邊形套索工具
+	Polygonal Lasso	多邊形套索
 	Last Effect: {name}	最後一次效果：{name}
 	Last Effect: {}	上次效果：{}
 	Last Effect…	最後一次效果…
@@ -7159,6 +7164,11 @@ breakText	Glyphs	字符
 	Malayalam	馬來亞拉姆文
 	Odia	歐利亞文
 	Urdu	烏都文
+	Sanskrit	梵文
+	Nepali	尼泊爾文
+	Assamese	阿薩姆文
+	Konkani	貢根文
+	Sindhi	信德文
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 及更新版本 (版本 {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	將所有開啟的文件匯出為 PDF

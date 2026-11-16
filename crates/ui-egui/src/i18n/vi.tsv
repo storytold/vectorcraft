@@ -1819,6 +1819,9 @@ file-filter	Templates	Mẫu
 	Show smooth color wheel	Hiện bánh xe màu liền mạch
 	Show segmented color wheel	Hiện bánh xe màu phân đoạn
 	Show color bars	Hiện các thanh màu
+	Add Color Tool	Công cụ Thêm màu
+	Remove Color Tool	Công cụ Xóa màu
+	Remove Color	Xóa màu
 	Find the selected colors in the artwork	Tìm các màu đã chọn trong tác phẩm
 	Harmony Sets	Bộ hài hòa màu
 	Height	Chiều cao
@@ -2214,6 +2217,8 @@ digits	Hindi	Hindi
 	Lasso Tool	Công cụ Lasso
 	Enclosing Lasso Tool	Công cụ Lasso bao quanh
 	Enclosing Lasso	Lasso bao quanh
+	Polygonal Lasso Tool	Công cụ Lasso đa giác
+	Polygonal Lasso	Lasso đa giác
 	Last	Cuối cùng
 	Last commit	Commit cuối cùng
 	Last Effect: {name}	Hiệu ứng vừa dùng: {name}
@@ -7148,6 +7153,11 @@ breakText	Glyphs	Glyph
 	Malayalam	Tiếng Malayalam
 	Odia	Tiếng Odia
 	Urdu	Tiếng Urdu
+	Sanskrit	Tiếng Phạn
+	Nepali	Tiếng Nepal
+	Assamese	Tiếng Assam
+	Konkani	Tiếng Konkani
+	Sindhi	Tiếng Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} trở lên (phiên bản {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Xuất tất cả tài liệu đang mở dưới dạng PDF

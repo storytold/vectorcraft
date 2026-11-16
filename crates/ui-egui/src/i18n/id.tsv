@@ -1340,6 +1340,8 @@ lighting	Light	Cahaya
 	Lasso Tool	Alat lasso
 	Enclosing Lasso Tool	Alat laso pengeliling
 	Enclosing Lasso	Laso pengeliling
+	Polygonal Lasso Tool	Alat laso poligonal
+	Polygonal Lasso	Laso poligonal
 	Lasso	Lasso
 	Line Cut Tool	Alat potong garis
 	Line Graph Tool	Alat grafik garis
@@ -2735,6 +2737,9 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Tampilkan roda warna halus
 	Show segmented color wheel	Tampilkan roda warna bersegmen
 	Show color bars	Tampilkan bilah warna
+	Add Color Tool	Alat Tambah Warna
+	Remove Color Tool	Alat Hapus Warna
+	Remove Color	Hapus Warna
 	Find the selected colors in the artwork	Temukan warna yang dipilih di karya seni
 	Harmony Rules	Aturan harmoni
 	Keep this row's colors (exclude)	Pertahankan warna baris ini (kecualikan)
@@ -6830,6 +6835,11 @@ breakText	Glyphs	Glif
 	Malayalam	Malayalam
 	Odia	Oriya
 	Urdu	Urdu
+	Sanskrit	Sanskerta
+	Nepali	Nepali
+	Assamese	Assam
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} dan yang lebih baru (versi {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Ekspor Semua Dokumen Terbuka sebagai PDF

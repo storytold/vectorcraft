@@ -1439,6 +1439,8 @@ lighting	Light	Světlo
 	Lasso Tool	Nástroj Laso
 	Enclosing Lasso Tool	Nástroj obklopující laso
 	Enclosing Lasso	Obklopující laso
+	Polygonal Lasso Tool	Nástroj Mnohoúhelníkové laso
+	Polygonal Lasso	Mnohoúhelníkové laso
 	Lasso	Laso
 	Line Cut Tool	Nástroj Řez čarou
 	Line Graph Tool	Nástroj Spojnicový graf
@@ -3010,6 +3012,9 @@ digits	Malayalam	Malajálamské
 	Show smooth color wheel	Zobrazit plynulé barevné kolo
 	Show segmented color wheel	Zobrazit segmentované barevné kolo
 	Show color bars	Zobrazit barevné pruhy
+	Add Color Tool	Nástroj Přidat barvu
+	Remove Color Tool	Nástroj Odstranit barvu
+	Remove Color	Odstranit barvu
 	Find the selected colors in the artwork	Najít vybrané barvy v kresbě
 	Harmony Rules	Pravidla harmonie
 	Keep this row's colors (exclude)	Ponechat barvy tohoto řádku (vyloučit)
@@ -7509,6 +7514,11 @@ breakText	Glyphs	Glyfy
 	Malayalam	Malajálamština
 	Odia	Urijština
 	Urdu	Urdština
+	Sanskrit	Sanskrt
+	Nepali	Nepálština
+	Assamese	Ásámština
+	Konkani	Konkánština
+	Sindhi	Sindhština
 	VectorCraft {release} and later (version {n})	VectorCraft {release} a novější (verze {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Exportovat všechny otevřené dokumenty jako PDF
