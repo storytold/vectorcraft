@@ -1117,7 +1117,9 @@ fn hold_shortcut_delay_dims_without_hold_shortcuts() {
                 events,
                 ..Default::default()
             };
-            let mut out = ctx.run_ui(raw, |ui| category_fields(ui, &mut a, d, "General"));
+            let mut out = ctx.run_ui(raw, |ui| {
+                category_fields(ui, &mut a, d, "General");
+            });
             out.textures_delta.clear();
             let label = out.shapes.iter().find_map(|c| text(&c.shape, &|t| t.starts_with("Hold Shortcut Delay")));
             let field = out.shapes.iter().find_map(|c| text(&c.shape, &|t| t.starts_with("0.35")));
