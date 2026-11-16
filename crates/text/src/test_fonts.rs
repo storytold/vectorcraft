@@ -484,6 +484,73 @@ pub fn full_width_font() -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family of [`repeat_mark_font`].
+pub const REPEAT_MARK_FAMILY: &str = "Repeattest Sans";
+
+/// The Japanese characters [`repeat_mark_font`] maps, each to the glyph of the Latin capital beside
+/// it: an ideograph, the repeat marks, kana with and without their voicing marks, and the combining
+/// voicing mark (U+3099), so that a repeat mark followed by it is shaped in this font and not in a
+/// fallback font that also has both characters (craft-fonts' Japanese faces).
+pub const REPEAT_MARK_CHARS: [(char, char); 12] = [
+    ('時', 'A'),
+    ('々', 'B'),
+    ('す', 'C'),
+    ('ず', 'D'),
+    ('ゝ', 'E'),
+    ('ゞ', 'F'),
+    ('サ', 'G'),
+    ('ザ', 'H'),
+    ('ヽ', 'I'),
+    ('ヾ', 'J'),
+    ('あ', 'K'),
+    ('\u{3099}', 'L'),
+];
+
+/// A test-only cmap over bundled Source Sans 3: each of [`REPEAT_MARK_CHARS`] uses the glyph of its
+/// Latin capital, so the glyph drawn for a repeat mark tells which character was drawn; the space
+/// keeps its own glyph.
+pub fn repeat_mark_font() -> Option<Vec<u8>> {
+    repeat_font(REPEAT_MARK_FAMILY, &REPEAT_MARK_CHARS)
+}
+
+/// The family of [`rare_repeat_mark_font`].
+pub const RARE_REPEAT_MARK_FAMILY: &str = "Raretest Sans";
+
+/// [`repeat_mark_font`] for tests that add it to the shared [`crate::FontDb::global`]: it maps
+/// only 龘 (to the glyph of A) and 々 (to the glyph of B), characters no other text in those tests
+/// uses, so other tests' Japanese text does not fall back to it.
+pub fn rare_repeat_mark_font() -> Option<Vec<u8>> {
+    repeat_font(RARE_REPEAT_MARK_FAMILY, &[('龘', 'A'), ('々', 'B')])
+}
+
+/// A font named `family` over bundled Source Sans 3 whose cmap maps each of `chars` to the glyph of
+/// the Latin capital beside it, and the space to its own glyph.
+fn repeat_font(family: &str, chars: &[(char, char)]) -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let mut mappings: Vec<(char, write_fonts::types::GlyphId)> = Vec::new();
+    for &(c, latin) in chars.iter().chain(&[(' ', ' ')]) {
+        mappings.push((c, write_fonts::types::GlyphId::new(charmap.map(latin)?.to_u32())));
+    }
+    let cmap = Cmap::from_mappings(mappings).ok()?;
+    let full = format!("{family} Regular");
+    let postscript = format!("{}-Regular", family.replace(' ', ""));
+    let name = name_table(&[(1, family), (2, "Regular"), (4, &full), (6, &postscript)])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&cmap).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if tag != Tag::new(b"GSUB") && !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`half_form_font`].
 pub const HALF_FORM_FAMILY: &str = "Halftest Sans";
 

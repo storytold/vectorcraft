@@ -1179,6 +1179,7 @@ font-technology	Variable	Değişken
 	Highlight Size	Parlama Boyutu
 	Blend Steps	Karışım Adımları
 	Shading Color	Gölgeleme Rengi
+	Black Overprint	Siyah Üst Baskı
 	Draw Hidden Faces	Gizli Yüzleri Çiz
 	Eyedropper	Damlalık
 	Sample Color from Screen	Ekrandan Örnek Renk
@@ -2812,6 +2813,12 @@ digits	Malayalam	Malayalam
 	Responsive	duyarlı
 	Restore	Geri yükle
 	Restore every preference to its default (applied on OK)	Her tercihi varsayılana geri yükleyin (Tamam'a uygulanır)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Piksel boyutları dışındaki yerleşik boyutlardaki yeni belgelerin ve birim kaydetmeyen açılan dosyaların birimi; burada seçip Tamam'a tıkladığınızda etkin belgenin birimi de bu olur.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Kontur kalınlıkları, kısa çizgiler ve boşluklar bu birimde gösterilir ve bunlar için yazılan sayılar bu birimde okunur.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Yazı boyutları, satır aralığı ve taban çizgisi kayması bu birimde gösterilir ve bunlar için yazılan sayılar bu birimde okunur.
+	The unit for East Asian type measurements, which no field uses yet.	Doğu Asya metni ölçüleri için henüz hiçbir alanın kullanmadığı birim.
+	When on, a number typed without a unit into a field in picas is read in points.	Açıkken, pika cinsinden bir alana birimsiz yazılan sayı punto olarak okunur.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML kimliği seçiliyken nesne adları Katmanlar, Değişkenler ve Katman Seçenekleri'nde XML kimliği olarak gösterilir.
 	Reset all preferences to their defaults?	Tüm tercihler varsayılanlarına sıfırlansın mı?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Varsayılanlar, Tercihler'de Tamam'a tıkladığınızda uygulanır. Oradaki İptal, mevcut tercihlerinizi korur.
 	Restore Recovered Documents	Kurtarılan Belgeleri Geri Yükle
@@ -2843,6 +2850,7 @@ digits	Malayalam	Malayalam
 	Roman Hanging Punctuation	Roma Asılı Noktalama İşaretleri
 	Korean Line Break Anywhere	Korece Satırı Her Yerde Kes
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Doğu Asya Dizgi Ayarları
 	Korean Composition Settings	Korece Dizgi Ayarları
 	Rotate	Döndür
@@ -3059,6 +3067,8 @@ digits	Malayalam	Malayalam
 @msg	`{key}` must be an array of these names: {_1}	`{key}` şu adlardan oluşan bir dizi olmalıdır: {_1}
 	Search commands and tools	Komutları ve araçları arayın
 	Search commands and tools…	Komutları ve araçları arayın…
+	Recent Commands	Son komutlar
+	No recent commands	Son komut yok
 	Search Commands…	Arama Komutları…
 	Secondary	İkincil
 	Section Symbol	Bölüm Sembolü
@@ -4223,6 +4233,31 @@ axis	Both	Her İkisi
 @msg	$.evalFile requires a file path	$.evalFile bir dosya yolu gerektirir
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: zaman aşımı sonlu bir milisaniye sayısı olmalıdır, 0 veya daha fazla
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: bir dosya yolu ve bir zaman aşımı alır
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} tanımlı değil
+@msg	cannot read property '{key}' of {base}	{base} değerinin '{key}' özelliği okunamıyor
+@msg	cannot set property '{key}' of {base}	{base} değerinin '{key}' özelliği ayarlanamıyor
+@msg	cannot read a property of {base}	{base} değerinin bir özelliği okunamıyor
+@msg	cannot set a property of {base}	{base} değerinin bir özelliği ayarlanamıyor
+@msg	cannot define property '{key}': {why}	'{key}' özelliği tanımlanamıyor: {why}
+@msg	cannot assign to property '{key}': {why}	'{key}' özelliğine atama yapılamıyor: {why}
+@msg	cannot delete property '{key}'	'{key}' özelliği silinemiyor
+@msg	cannot declare function {ident}	{ident} işlevi bildirilemiyor
+@msg	invalid assignment target	geçersiz atama hedefi
+@msg	the array's length is read-only	dizinin uzunluğu salt okunur
+@msg	the property cannot be redefined	özellik yeniden tanımlanamaz
+@msg	the object is not extensible	nesne genişletilemez
+@msg	the length cannot be redefined	uzunluk yeniden tanımlanamaz
+@msg	it is read-only	salt okunur
+@msg	an element cannot be deleted	bir öğe silinemez
+@msg	it has only a getter	yalnızca getter'ı var
+@msg	the value is a primitive	değer ilkel
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, satır {line}, sütun {column}: {e} (fırlatıldı)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: satır {line}, sütun {column}: {e} (fırlatıldı)
 @msg	{name}: {e} (thrown)	{name}: {e} (fırlatıldı)
@@ -9288,6 +9323,24 @@ breakText	Glyphs	Glifler
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Tireleri Yollara Genişlet
 @msg	select paths with dashed strokes to expand	genişletilecek kesikli konturlu yolları seçin
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Teğet Daire…
+	Tangent Circle	Teğet Daire
+	Circle:	Daire:
+@msg	`ids` names an object twice	`ids` bir nesneyi iki kez belirtiyor
+@msg	select two or three paths or compound paths	iki veya üç yol ya da bileşik yol seçin
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` 0.01 ile 1000000 pt arasında olmalıdır
+@msg	two shapes need a `radius`	iki şekil için `radius` gerekir
+@msg	three shapes set the radius themselves: leave `radius` out	üç şekil yarıçapı kendisi belirler: `radius` değerini vermeyin
+@msg	`circle` must be from 0 to 64	`circle` 0 ile 64 arasında olmalıdır
+@msg	a shape has no outline	bir şeklin anahattı yok
+@msg	the shapes are too complex: at most 2000 segments in all	şekiller çok karmaşık: toplamda en fazla 2000 bölüm
+@msg	these shapes take too long to search	bu şekiller için arama çok uzun sürüyor
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	bu şekillere 64'ten fazla daire değiyor: bütün bir eğri boyunca değiyor olabilirler
+@msg	no circle touches these shapes	bu şekillere hiçbir daire değmiyor
+@msg	`circle` is past the last circle found ({found})	`circle` bulunan son dairenin ötesinde ({found})
+@msg	object {value} is not a path or compound path	{value} nesnesi bir yol veya bileşik yol değil
+@msg	these shapes are too small to measure	bu şekiller ölçülemeyecek kadar küçük
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Belge Araçları
 	Save a Timestamped Copy	Zaman Damgalı Bir Kopya Kaydet
