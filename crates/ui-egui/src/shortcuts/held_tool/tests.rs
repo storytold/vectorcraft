@@ -475,3 +475,23 @@ fn a_tool_chosen_during_the_hold_stays_when_the_key_is_let_go() {
     keys.release_s(&mut app, 0.5);
     assert_eq!(app.session.tool_id(), "rectangle");
 }
+
+/// A Cmd/Ctrl click over an anchor while V is down goes to Direct Selection, lent to the Selection
+/// tool the key chose, so it does not use Selection: letting go of V before the threshold keeps
+/// Selection, as it does for any click lent to a selection tool.
+#[test]
+fn a_click_lent_by_the_selection_tool_does_not_use_the_held_tool() {
+    let mut app = pen_app();
+    let keys = Keyboard::new();
+    keys.press(&mut app, 0.0, Key::V, "v");
+    assert_eq!(app.session.tool_id(), "selection");
+    let mods = vectorcraft_tools::Mods { cmd: true, ..Default::default() };
+    let view = app.view_info();
+    // The rectangle's corner: an anchor of the selected path.
+    let event = |kind| PointerEvent { mods, ..PointerEvent::new(kind, 100.0, 100.0) };
+    crate::canvas::dispatch(&mut app, &event(PointerKind::Down), view);
+    crate::canvas::dispatch(&mut app, &event(PointerKind::Up), view);
+    keys.release(&mut app, HOLD_SECONDS / 2.0, Key::V);
+    assert_eq!(app.session.tool_id(), "selection");
+    assert!(app.held_tool.is_empty());
+}
