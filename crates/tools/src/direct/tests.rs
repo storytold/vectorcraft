@@ -246,6 +246,137 @@ fn shift_click_picks_several_spine_points_which_drag_together() {
     assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["anchor"] == 0 && v.get("with").is_none()), "{a:?}");
 }
 
+/// [`blend_doc`] with a spine through (110, 310), (160, 310) and (210, 310).
+fn blend_doc_with_three_spine_points() -> (vectorcraft_doc::Document, NodeId) {
+    let (mut d, g, _) = blend_doc();
+    let sp = vectorcraft_geom::SubPath::polyline(&[Point::new(110.0, 310.0), Point::new(160.0, 310.0), Point::new(210.0, 310.0)], false);
+    let Some(NodeKind::Blend { spec, .. }) = d.node_mut(g).map(|n| &mut n.kind) else { panic!("blend") };
+    (spec.spine, spec.key_anchors) = (Some(PathData::single(sp)), vec![0, 2]);
+    (d, g)
+}
+
+/// A marquee drawn with Direct Selection from `from` to `to`, released.
+fn spine_marquee(t: &mut DirectSelectionTool, cx: &ToolContext, from: (f64, f64), to: (f64, f64), mods: Mods) -> Vec<Action> {
+    assert_eq!(t.pointer(cx, &PointerEvent::new(PointerKind::Down, from.0, from.1).with_mods(mods)), vec![]);
+    t.pointer(cx, &PointerEvent::new(PointerKind::Drag, to.0, to.1).with_mods(mods));
+    assert!(t.overlays(cx).iter().any(|o| matches!(o, Overlay::Marquee(_))), "a marquee");
+    t.pointer(cx, &PointerEvent::new(PointerKind::Up, to.0, to.1).with_mods(mods))
+}
+
+/// A Direct Selection marquee picks the points of a selected blend's spine inside it, which then
+/// drag together, and keeps the blend selected; a marquee around none of them drops the picks.
+#[test]
+fn marquee_picks_selected_blend_spine_points_which_drag_together() {
+    let (d, g) = blend_doc_with_three_spine_points();
+    let mut s = Selection::default();
+    s.set([g]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let filled = |t: &DirectSelectionTool| t.overlays(&cx).iter().filter(|o| matches!(o, Overlay::Anchor { filled: true, .. })).count();
+    let mut t = DirectSelectionTool::new(false);
+    // Around (160, 310) and (210, 310), the second on the rect's edge.
+    let a = spine_marquee(&mut t, &cx, (230.0, 330.0), (160.0, 290.0), Mods::default());
+    assert!(
+        matches!(a.first(), Some(Action::Exec(c, v)) if c == "select.anchorsMany" && v["mode"] == "set" && v["items"].as_array().is_some_and(|i| i.iter().any(|i| i["id"] == g.0))),
+        "the blend stays selected: {a:?}"
+    );
+    assert_eq!(filled(&t), 2, "both picked points show");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 210.0, 310.0));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 210.0, 330.0));
+    assert_eq!(
+        a.last(),
+        Some(&Action::Preview("object.blend.spine.moveAnchor".into(), json!({"id": g.0, "anchor": 2, "x": 210.0, "y": 330.0, "with": [1]})))
+    );
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 210.0, 330.0)), vec![Action::Commit]);
+    // A marquee around none of the points drops them.
+    spine_marquee(&mut t, &cx, (300.0, 330.0), (240.0, 290.0), Mods::default());
+    assert_eq!((t.spine, filled(&t)), (None, 0));
+}
+
+/// With Shift, a Direct Selection marquee toggles the spine points inside it: a picked one leaves,
+/// another joins, and those outside it keep their state; the blend is not toggled away.
+#[test]
+fn shift_marquee_toggles_selected_blend_spine_points() {
+    let (d, g) = blend_doc_with_three_spine_points();
+    let mut s = Selection::default();
+    s.set([g]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Mods::default() };
+    let mut t = DirectSelectionTool::new(false);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 310.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.0, 310.0));
+    let a = spine_marquee(&mut t, &cx, (230.0, 330.0), (150.0, 290.0), shift);
+    assert!(
+        matches!(a.first(), Some(Action::Exec(c, v)) if c == "select.anchorsMany" && v["items"].as_array().is_some_and(|i| !i.iter().any(|i| i["id"] == g.0))),
+        "the blend is not toggled: {a:?}"
+    );
+    assert_eq!((t.spine, t.spine_more.clone()), (Some((g, 2)), vec![]));
+    spine_marquee(&mut t, &cx, (130.0, 330.0), (90.0, 290.0), shift);
+    assert_eq!((t.spine, t.spine_more.clone()), (Some((g, 2)), vec![0]));
+    // A Shift-marquee around none of them keeps them, and keeps the blend selected when it
+    // touches the blend's art.
+    spine_marquee(&mut t, &cx, (300.0, 330.0), (240.0, 290.0), shift);
+    assert_eq!((t.spine, t.spine_more.clone()), (Some((g, 2)), vec![0]));
+    let a = spine_marquee(&mut t, &cx, (230.0, 330.0), (205.0, 315.0), shift);
+    assert!(
+        matches!(a.first(), Some(Action::Exec(c, v)) if c == "select.anchorsMany" && v["items"].as_array().is_some_and(|i| !i.iter().any(|i| i["id"] == g.0))),
+        "the blend is not toggled: {a:?}"
+    );
+    assert_eq!((t.spine, t.spine_more.clone()), (Some((g, 2)), vec![0]));
+}
+
+/// A Direct Selection marquee does not pick the spine points of a blend that is not selected, or
+/// of a selected blend that is locked or hidden.
+#[test]
+fn marquee_skips_unselected_locked_and_hidden_blend_spines() {
+    let (d, g) = blend_doc_with_three_spine_points();
+    let p = paint();
+    let mut s = Selection::default();
+    let none = cx(&d, &s, &p);
+    let mut t = DirectSelectionTool::new(false);
+    spine_marquee(&mut t, &none, (230.0, 330.0), (150.0, 290.0), Mods::default());
+    assert_eq!(t.spine, None, "not selected");
+    s.set([g]);
+    for lock in [true, false] {
+        let mut d = d.clone();
+        let Some(n) = d.node_mut(g) else { panic!("blend") };
+        if lock {
+            n.locked = true;
+        } else {
+            n.visible = false;
+        }
+        let c = cx(&d, &s, &p);
+        let mut t = DirectSelectionTool::new(false);
+        spine_marquee(&mut t, &c, (230.0, 330.0), (150.0, 290.0), Mods::default());
+        assert_eq!(t.spine, None, "locked: {lock}");
+    }
+    // The same marquee on the selected blend picks them.
+    let c = cx(&d, &s, &p);
+    let mut t = DirectSelectionTool::new(false);
+    spine_marquee(&mut t, &c, (230.0, 330.0), (150.0, 290.0), Mods::default());
+    assert_eq!((t.spine, t.spine_more.clone()), (Some((g, 2)), vec![1]));
+}
+
+/// Escape during a Direct Selection marquee cancels it and keeps the spine points picked before.
+#[test]
+fn escape_cancels_a_marquee_and_keeps_the_picked_spine_points() {
+    let (d, g) = blend_doc_with_three_spine_points();
+    let mut s = Selection::default();
+    s.set([g]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = DirectSelectionTool::new(false);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 310.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.0, 310.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 330.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 290.0));
+    assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 90.0, 290.0)), vec![]);
+    assert_eq!((t.spine, t.spine_more.clone()), (Some((g, 1)), vec![]));
+    assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Anchor { filled: true, .. })), "the picked point shows");
+}
+
 /// #1111: the Anchor Point tool bends a selected blend's straight spine; Direct Selection
 /// reshapes a curved spine segment and leaves a straight one alone, as it does a path's.
 #[test]
