@@ -5792,10 +5792,6 @@ lighting	Light	Lumière
 @msg	Revolve requires a shape with at least two anchors	Révolution nécessite une forme comportant au moins deux points d’ancrage
 @msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} sur un groupe nécessite des tracés, tracés transparents, textes, groupes, groupes de découpe, dégradés de formes et occurrences de symbole : libérez ou développez d’abord ces éléments : {what}.
 @msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} sur un groupe accepte au plus {MAX_MEMBERS} objets
-@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	Un effet 3D sur un groupe ou un calque s’applique au groupe lui-même, pas à son fond ni à son contour
-@msg	a 3D effect on a group's fill or stroke draws nothing	un effet 3D sur le fond ou le contour d’un groupe ne dessine rien
-@msg	a 3D effect on a group's fill or stroke draws nothing to export	un effet 3D sur le fond ou le contour d’un groupe ne dessine rien à exporter
-@msg	The 3D object is too complex to export	L’objet 3D est trop complexe pour être exporté
 @msg	the <filter> element needs an id, the filter's name	l’élément <filter> doit avoir un id, le nom du filtre
 @msg	an SVG filter's id is at most {MAX_NAME} characters	l’id d’un filtre SVG compte au plus {MAX_NAME} caractères
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> n’est pas un élément de filtre SVG
@@ -5814,6 +5810,10 @@ lighting	Light	Lumière
 @msg	the SVG filter can't be drawn: check its primitives and their inputs	le filtre SVG ne peut pas être dessiné : vérifiez ses primitives et leurs entrées
 @msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	les éléments d’un filtre SVG s’imbriquent sur au plus {MAX_DEPTH} niveaux
 @msg	an SVG filter is at most {_1} KB	un filtre SVG fait au plus {_1} Ko
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	Un effet 3D sur un groupe ou un calque s’applique au groupe lui-même, pas à son fond ni à son contour
+@msg	a 3D effect on a group's fill or stroke draws nothing	un effet 3D sur le fond ou le contour d’un groupe ne dessine rien
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	un effet 3D sur le fond ou le contour d’un groupe ne dessine rien à exporter
+@msg	The 3D object is too complex to export	L’objet 3D est trop complexe pour être exporté
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l’objet n’a aucun effet 3D (Extrusion et biseautage, Révolution, Gonfler ou Rotation)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` doit être un objet ne contenant que `mode`, avec la valeur shaded ou wireframe
 @msg	its 3D effect builds no solid	son effet 3D ne construit aucun volume
