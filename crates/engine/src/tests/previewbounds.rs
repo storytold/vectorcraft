@@ -352,6 +352,35 @@ fn preview_3d_oriented_box_follows_projected_art() {
     }
 }
 
+/// A click on a member of a layer with a 3D effect selects that member, with Use Preview Bounds on
+/// or off, and the layer is still measured by its projected art.
+#[test]
+fn a_click_selects_the_member_of_a_layer_with_a_3d_effect() {
+    for effect in PREVIEW_3D {
+        for on in [false, true] {
+            let mut s = session();
+            let id = rect(&mut s, 100.0, 80.0, 0.0);
+            run(&mut s, "paint.setFill", json!({"color": "#0000ff"}));
+            let layer = s.doc().unwrap().doc.layers[0].id;
+            run(&mut s, "effect.apply", json!({"ids": [layer.0], "effect": effect, "params": params_3d(effect), "item": null}));
+            preview(&mut s, on);
+            run(&mut s, "select.none", json!({}));
+            let v = ViewInfo::default();
+            s.select_tool("selection", v).unwrap();
+            for k in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(k, 140.0, 125.0), v).unwrap();
+            }
+            assert_eq!(s.active().unwrap().selection.objects, [id], "{effect}, preview={on}");
+            let d = &s.doc().unwrap().doc;
+            let art =
+                vectorcraft_render::effects::revolve_art(&d.layers[0]).or_else(|| vectorcraft_render::effects::solid_art(&d.layers[0])).unwrap();
+            let expected = vectorcraft_render::effects::preview::visual_bounds(&d.symbol_boxes(), &art).unwrap();
+            let measured = vectorcraft_render::effects::preview::bounds_of(d, &[layer], true).unwrap();
+            assert!(near(measured, expected, 1e-6), "{effect}: {measured:?} vs {expected:?}");
+        }
+    }
+}
+
 #[test]
 fn a_square_with_offset_path_is_measured_by_the_offset_shape() {
     let mut s = session();

@@ -13,7 +13,8 @@
 //! before its effects, which the renderer clips by, and those strokes as drawn. Fills and
 //! strokes that paint nothing (hidden, or painted None) are left out. Extrude & Bevel, Revolve,
 //! Inflate and Rotate are measured by the same projected vector art the renderer draws, with
-//! any geometry effects after projection applied to that art. [`bounds_of`],
+//! any geometry effects after projection applied to that art; [`drawn_art`], which clicks and
+//! marquees use, leaves 3D effects unprojected. [`bounds_of`],
 //! [`oriented_bounds`] and [`anchor_bounds`] measure the visual bounds of that art, strokes
 //! included, where [`Document::bounds_of`], [`Document::oriented_bounds`] and
 //! [`Selection::anchor_bounds`] measure the objects themselves. Raster effects (shadows, glows,
@@ -193,8 +194,8 @@ pub fn laid_out_ink(layout: &vectorcraft_text::TextLayout, t: &vectorcraft_doc::
         .fold(layout.ink_bounds(), |acc, (_, bar)| union_opt(acc, Some(bar.bounding_box())))
 }
 
-/// The visual bounds of `n` as drawn: those of its [`drawn_art`], else
-/// [`Node::visual_bounds_with`].
+/// The visual bounds of `n` as drawn: those of its [`drawn_art`] with its 3D effects projected,
+/// else [`Node::visual_bounds_with`].
 pub fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     Drawn::new(symbols).visual_bounds(n)
 }
@@ -205,32 +206,46 @@ pub fn bounds_in(symbols: &SymbolBoxes, n: &Node, a: Affine) -> Option<Rect> {
     Drawn::new(symbols).bounds_in(n, a)
 }
 
-/// `n` as plain art with geometry and projected 3D effects applied, at every depth, symbol instances
-/// measured by `symbols`. Raster effects stay on the art. A group, layer or intertwine without a
-/// clip is rebuilt with the drawn art of each member that has one. A clip group or layer becomes a
-/// group of its clipping path without strokes and the drawn art of the path's strokes, when they
-/// have one. `None` when no supported geometry or 3D effect in `n` changes what it draws.
+/// `n` as plain art with the geometry effects in it applied, at every depth, symbol instances
+/// measured by `symbols`, for clicks and marquees. Raster effects stay on the art. A group, layer or
+/// intertwine without a clip is rebuilt with the drawn art of each member that has one. A clip group
+/// or layer becomes a group of its clipping path without strokes and the drawn art of the path's
+/// strokes, when they have one. 3D effects stay on the art unprojected, so each object in it keeps
+/// its own id. `None` when no geometry effect in `n` changes what it draws.
 pub fn drawn_art(symbols: &SymbolBoxes, n: &Node) -> Option<Node> {
-    Drawn::new(symbols).drawn_art(n)
+    Drawn::without_3d(symbols).drawn_art(n)
 }
 
-/// Whether [`drawn_art`] gives `n` art of its own, or would give one to an object in it. A symbol
-/// instance in `n` counts when its symbol's art has geometry or 3D effects.
+/// Whether `n` is measured by art of its own with Use Preview Bounds, or an object in it is: a
+/// geometry or 3D effect in it changes what it draws. A symbol instance in `n` counts when its
+/// symbol's art has geometry or 3D effects.
 pub fn draws_geometry(symbols: &SymbolBoxes, n: &Node) -> bool {
     Drawn::new(symbols).draws_geometry(n)
 }
 
 /// One measurement: whether each symbol checked so far draws geometry or 3D art, by symbol name,
 /// and how many more instances it measures with those effects in the current object ([`MAX_INSTANCES`]).
+/// With `three_d` false, 3D effects are left on the art unprojected ([`drawn_art`]).
 struct Drawn<'s, 'd> {
     symbols: &'s SymbolBoxes<'d>,
     draws: RefCell<HashMap<String, bool>>,
     left: Cell<usize>,
+    three_d: bool,
 }
 
 impl<'s, 'd> Drawn<'s, 'd> {
     fn new(symbols: &'s SymbolBoxes<'d>) -> Self {
-        Drawn { symbols, draws: RefCell::default(), left: Cell::new(MAX_INSTANCES) }
+        Drawn { symbols, draws: RefCell::default(), left: Cell::new(MAX_INSTANCES), three_d: true }
+    }
+
+    /// A measurement that projects no 3D effect, for clicks and marquees ([`drawn_art`]).
+    fn without_3d(symbols: &'s SymbolBoxes<'d>) -> Self {
+        Drawn { three_d: false, ..Self::new(symbols) }
+    }
+
+    /// Whether `n` has a 3D effect of its own that this measurement projects.
+    fn projects(&self, n: &Node) -> bool {
+        self.three_d && (has_revolve(n) || has_solid(n))
     }
 
     /// Sets the count of instances left back to [`MAX_INSTANCES`], for the next object.
@@ -275,8 +290,7 @@ impl<'s, 'd> Drawn<'s, 'd> {
         let mut found = false;
         n.walk(&mut |c| {
             found = found
-                || has_revolve(c)
-                || has_solid(c)
+                || self.projects(c)
                 || match &c.kind {
                     NodeKind::SymbolInstance { symbol, .. } => !geometry_effects(c).is_empty() || self.symbol_draws(symbol),
                     _ => reshapes(c),
@@ -307,12 +321,14 @@ impl<'s, 'd> Drawn<'s, 'd> {
     fn own_art(&self, n: &Node) -> Option<Node> {
         let doc = Some(self.symbols.document());
         // A symbol instance with a 3D effect of its own counts toward MAX_INSTANCES before its art is built.
-        let counted = matches!(n.kind, NodeKind::SymbolInstance { .. }) && (has_revolve(n) || has_solid(n));
+        let counted = matches!(n.kind, NodeKind::SymbolInstance { .. }) && self.projects(n);
         if counted {
             let left = self.left.get().checked_sub(1)?;
             self.left.set(left);
         }
-        if let Some(art) = revolve_art_in(doc, n).or_else(|| solid_art_in(doc, n)) {
+        if self.three_d
+            && let Some(art) = revolve_art_in(doc, n).or_else(|| solid_art_in(doc, n))
+        {
             // The builders retain later geometry on the projected group. Measure it after that
             // geometry too; item-level effects are handled by the ordinary member traversal.
             return Some(self.own_art(&art).unwrap_or(art));
