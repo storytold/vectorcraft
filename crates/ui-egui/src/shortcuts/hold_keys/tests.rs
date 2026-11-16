@@ -395,6 +395,30 @@ fn a_wait_ended_in_its_frame_runs_after_the_keys_before_it() {
     assert_eq!(selected(&app), 0, "then the chord");
 }
 
+/// A command chord (Undo) pressed before a wait that starts and ends in one frame runs first: the
+/// key's tap does not run before it, and the frame acts as it does with Hold Shortcuts off.
+#[test]
+fn a_chord_before_a_wait_ended_in_its_frame_runs_first() {
+    assert_eq!(crate::shortcut_editor::default_of("edit.undo"), Some("Cmd+Z"));
+    let frame = |app: &mut VectorcraftApp| {
+        app.run("paint.setFill", json!({"color": "#00ff00"})).unwrap();
+        let mut events =
+            vec![egui::Event::Key { key: Key::Z, physical_key: Some(Key::Z), pressed: true, repeat: false, modifiers: Modifiers::COMMAND }];
+        events.extend(press(Key::X, "x", Modifiers::NONE));
+        events.push(release(Key::X));
+        Keyboard::new().frame(app, 0.0, events);
+        (fill(app), selected(app))
+    };
+    let mut off = swap_on_x();
+    off.run("prefs.set", json!({"key": "holdShortcuts", "value": false})).unwrap();
+    let off = frame(&mut off);
+    let mut app = swap_on_x();
+    let on = frame(&mut app);
+    assert_eq!(on.0, "#ff0000", "Undo restores the red fill and does not undo X's swap");
+    assert_eq!(on, off);
+    assert!(app.hold_keys.pending.is_none());
+}
+
 /// The repeats of a key in the frame that starts its wait, and the text they type, stay out of the
 /// frame.
 #[test]

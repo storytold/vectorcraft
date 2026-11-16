@@ -208,6 +208,15 @@ fn tool_takes(app: &mut VectorcraftApp, key: Key, text: &str) -> bool {
     tool_key.is_some_and(|k| app.session.tool_claims_key(k, view))
 }
 
+/// Is there a press with Cmd, Ctrl or Alt before the event at `start` that no wait took?
+fn chord_before(events: &[egui::Event], start: usize, taken: &[usize]) -> bool {
+    events.iter().enumerate().take(start).any(|(k, e)| {
+        !taken.contains(&k)
+            && matches!(e, egui::Event::Key { key, pressed: true, modifiers: m, .. }
+                if !super::is_modifier(*key) && (m.command || m.ctrl || m.alt || m.mac_cmd))
+    })
+}
+
 /// Runs the single-key shortcuts of the texts typed before the event at `start` that no wait took,
 /// in order, as the frame's shortcuts would run them, and takes them and their presses from the
 /// frame. A text typed with Cmd, Ctrl or Alt, by a key the active tool takes, or with no shortcut,
@@ -259,7 +268,8 @@ fn run_typed_before(
 /// went down; and a new press of a key with a hold shortcut starts a wait, taking the press and
 /// its text from the frame, with the key's repeats that follow in the frame and their text. When a
 /// wait that started in this frame also ends in it, the keys typed before its key run first
-/// ([`run_typed_before`]), so they act in the order they went down. Then a wait
+/// ([`run_typed_before`]), so they act in the order they went down; after a chord with Cmd, Ctrl
+/// or Alt before its key, the key goes back to the frame instead ([`chord_before`]). Then a wait
 /// whose delay has passed with the key down runs the hold shortcut. True when a result opened a
 /// dialog or the palette: the rest of the frame's keys are dropped and no other shortcut runs.
 pub(super) fn intake(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
@@ -299,16 +309,25 @@ pub(super) fn intake(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
                 }
             };
             if let Some((hold, down)) = ended {
-                // A key typed before it that opened a dialog or the palette ends the wait without
-                // running it.
-                if let Some(start) = started.take()
+                let start = started.take();
+                // After a chord with Cmd, Ctrl or Alt pressed before it, which the frame's shortcuts
+                // run, the key goes back to the frame without waiting, so the frame handles it as it
+                // does with Hold Shortcuts off and its tap does not run before the chord.
+                if let Some(start) = start
+                    && chord_before(&events, start, &taken)
+                {
+                    cancel(app, ctx);
+                    let text = text_of(start).map(|(t, _)| t);
+                    taken.retain(|&k| k != start && Some(k) != text);
+                } else if let Some(start) = start
                     && let Some(opened) = run_typed_before(app, ctx, &events, &typed_by, start, &mut taken)
                 {
+                    // A key typed before it that opened a dialog or the palette ends the wait
+                    // without running it.
                     cancel(app, ctx);
                     stop_at = Some(opened);
                     break;
-                }
-                if settle(app, ctx, hold, down) {
+                } else if settle(app, ctx, hold, down) {
                     stop_at = Some(j);
                     break;
                 }
