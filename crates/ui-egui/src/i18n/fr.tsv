@@ -1558,6 +1558,8 @@ font-technology	Variable	Variables
 	Show smooth color wheel	Afficher la roue chromatique continue
 	Show segmented color wheel	Afficher la roue chromatique segmentée
 	Show color bars	Afficher les barres de couleur
+	Show brightness and hue on wheel	Afficher la luminosité et la teinte sur la roue
+	Show saturation and hue on wheel	Afficher la saturation et la teinte sur la roue
 	Add Color Tool	Outil Ajouter une couleur
 	Remove Color Tool	Outil Supprimer une couleur
 	Remove Color	Supprimer la couleur
@@ -2648,6 +2650,10 @@ font-technology	Variable	Variables
 	Play Current Selection	Exécuter la sélection actuelle
 	Save Actions…	Enregistrer les scripts…
 	Load Actions…	Charger des scripts…
+	Reset Actions	Réinitialiser les scripts
+	Replace the current actions with the default set?	Remplacer les scripts actuels par le jeu par défaut ?
+	Append adds the default set after the current sets instead.	Le bouton Ajouter ajoute plutôt le jeu par défaut après les jeux actuels.
+	Append	Ajouter
 	Plug-in Info	Informations sur le module externe
 	Plug-ins	Modules externes
 	Plug-in…	Module externe…
@@ -4295,6 +4301,7 @@ imageTrace	Outline	Contour
 	 to set spacing and orientation	 pour définir l’espacement et l’orientation
 	:	 :
 	Isolate Selected Group	Isoler le groupe sélectionné
+	Isolate Selected Path	Isoler le tracé sélectionné
 	Isolate Selected Object	Isoler l’objet sélectionné
 	Release Clipping Mask	Annuler le masque d’écrêtage
 	Make Compound Path	Créer un tracé transparent
@@ -9733,4 +9740,24 @@ breakText	Glyphs	Glyphes
 	No objects are selected.	Aucun objet n’est sélectionné.
 	Open a document to mark its fold lines.	Ouvrez un document pour marquer ses lignes de pliage.
 	Remove Fold Line Role	Supprimer le type de ligne
+	Check	Vérifier
+	Check Fold Lines	Vérifier les lignes de pliage
+@msg	No cut lines are in the selection.	La sélection ne contient aucune ligne de découpe.
+@msg	No cut lines are in the document.	Le document ne contient aucune ligne de découpe.
+@msg	The cut lines do not enclose an area.	Les lignes de découpe n’entourent aucune zone.
+@msg	A cut line ends without meeting another cut line.	Une ligne de découpe se termine sans rejoindre une autre ligne de découpe.
+@msg	A gap between cut lines was closed.	Un écart entre des lignes de découpe a été fermé.
+@msg	The fold lines are too complex to check.	Les lignes de pliage sont trop complexes pour être vérifiées.
+@msg	A cut line and a crease lie on top of each other.	Une ligne de découpe et une ligne de rainage se superposent.
+@msg	No cut lines are among the given objects.	Les objets indiqués ne contiennent aucune ligne de découpe.
+@msg	Two fold lines lie on top of each other.	Deux lignes de pliage se superposent.
+@msg	A crease ends inside a panel.	Une ligne de rainage se termine à l’intérieur d’un panneau.
+@msg	A crease does not divide two panels.	Une ligne de rainage ne sépare pas deux panneaux.
+@msg	A crease lies outside the cut outline, wholly or in part.	Une ligne de rainage se trouve en tout ou en partie hors du contour de découpe.
+@msg	The pieces of a hinge are not on one straight line.	Les morceaux d’une charnière ne sont pas sur une seule ligne droite.
+@msg	A gap between cut lines is too narrow to tell apart.	Un écart entre des lignes de découpe est trop étroit pour être distingué.
+@msg	A cut-out area holds other fold lines or another blank.	Une zone découpée contient d’autres lignes de pliage ou un autre flan.
+@msg	A panel is not joined to the rest by a crease.	Un panneau n’est relié au reste par aucune ligne de rainage.
+@msg	A fold line is on a non-printing layer.	Une ligne de pliage se trouve sur un calque non imprimable.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	{panels} panneau(x), {hinges} charnière(s), {errors} erreur(s), {warnings} avertissement(s)
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution

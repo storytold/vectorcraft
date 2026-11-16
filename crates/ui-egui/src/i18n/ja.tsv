@@ -953,6 +953,7 @@ digits	Malayalam	マラヤーラム数字
 	Auto Color	自動カラー
 	Automatic	自動
 	Isolate Selected Group	選択したグループを分離
+	Isolate Selected Path	選択したパスを分離
 	Isolate Selected Object	選択したオブジェクトを分離
 	Exit Isolation Mode	分離モードを終了
 	Make Clipping Mask	クリッピングマスクを作成
@@ -1962,6 +1963,8 @@ antiAlias	Sharp	シャープ
 	Show smooth color wheel	滑らかなカラーホイールを表示
 	Show segmented color wheel	分割カラーホイールを表示
 	Show color bars	カラーバーを表示
+	Show brightness and hue on wheel	ホイールに明るさと色相を表示
+	Show saturation and hue on wheel	ホイールに彩度と色相を表示
 	Add Color Tool	カラー追加ツール
 	Remove Color Tool	カラー削除ツール
 	Remove Color	カラーを削除
@@ -2787,6 +2790,10 @@ diagnostics	ui	UI
 	Play Current Selection	選択項目を再生
 	Save Actions…	アクションを保存…
 	Load Actions…	アクションを読み込み…
+	Reset Actions	アクションをリセット
+	Replace the current actions with the default set?	現在のアクションを初期設定のセットで置き換えますか？
+	Append adds the default set after the current sets instead.	「追加」を選ぶと、初期設定のセットを現在のセットの後に追加します。
+	Append	追加
 	Plug-in Info	プラグイン情報
 	Plug-in…	プラグイン…
 	Points	ポイント
@@ -9449,3 +9456,23 @@ breakText	Glyphs	字形
 	No objects are selected.	オブジェクトが選択されていません。
 	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
 	Remove Fold Line Role	線種を解除
+	Check	チェック
+	Check Fold Lines	折り線をチェック
+@msg	No cut lines are in the selection.	選択範囲にカット線がありません。
+@msg	No cut lines are in the document.	ドキュメントにカット線がありません。
+@msg	The cut lines do not enclose an area.	カット線が領域を囲んでいません。
+@msg	A cut line ends without meeting another cut line.	カット線が他のカット線と接しないまま終わっています。
+@msg	A gap between cut lines was closed.	カット線間の隙間を閉じました。
+@msg	The fold lines are too complex to check.	折り線が複雑すぎるためチェックできません。
+@msg	A cut line and a crease lie on top of each other.	カット線と筋入れ線が重なっています。
+@msg	No cut lines are among the given objects.	指定したオブジェクトにカット線がありません。
+@msg	Two fold lines lie on top of each other.	折り線が 2 本重なっています。
+@msg	A crease ends inside a panel.	筋入れ線がパネルの内側で終わっています。
+@msg	A crease does not divide two panels.	筋入れ線が 2 つのパネルを分けていません。
+@msg	A crease lies outside the cut outline, wholly or in part.	筋入れ線の全体または一部がカットの輪郭の外側にあります。
+@msg	The pieces of a hinge are not on one straight line.	ヒンジの各部分が 1 本の直線上にありません。
+@msg	A gap between cut lines is too narrow to tell apart.	カット線間の隙間が狭すぎて区別できません。
+@msg	A cut-out area holds other fold lines or another blank.	切り抜かれた領域に他の折り線または別の展開図があります。
+@msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
+@msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
