@@ -5677,6 +5677,7 @@ lighting	Light	Licht
 @msg	missing panel layout	Bedienfeldanordnung fehlt
 @msg	unsupported native docking operation	Nicht unterstützte native Docking-Operation
 	Linux Display Server	Linux-Anzeigeserver
+	Low-Latency Drawing	Zeichnen mit geringer Latenz
 	X11 (XWayland) When a Pen Is Attached	X11 (XWayland), wenn ein Stift angeschlossen ist
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Wenn der Stift eines Grafiktabletts nicht zeichnet, wählen Sie eine Option mit X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)

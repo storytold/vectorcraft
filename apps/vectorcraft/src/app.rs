@@ -43,6 +43,16 @@ impl eframe::App for App {
     /// Restore the borderless caption, apply platform menu and pen input, and hand the frame to the
     /// app's raw-input hook while the keyboard user is unconfined.
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
+        // Without vsync, a main-window frame starts no sooner than the minimum interval after the
+        // last one. eframe runs this hook once per frame, shown or not, before egui reads the input.
+        // The frame's time moves on by the wait, and the hang report's frame time starts after it.
+        if raw.viewport_id == egui::ViewportId::ROOT {
+            if let Some(wait) = super::presentation::frame_wait(self.min_frame, self.last_frame_began.map(|t| t.elapsed())) {
+                std::thread::sleep(wait);
+                raw.time = raw.time.map(|time| time + wait.as_secs_f64());
+            }
+            self.last_frame_began = Some(std::time::Instant::now());
+        }
         let _timed = BEACON.enter_timed(Stage::Input);
         self.frame_start = Some(std::time::Instant::now());
         // winit gives the window its caption back when it changes the window's flags (maximize,

@@ -6845,6 +6845,11 @@ is converted on its own.
 osManaged}`, where `source` is `profile`, `srgbProfile` (a profile that shows sRGB unchanged), `system`, `none`,
 `pending` or `unsupported`, `applied` says whether the canvas is converted, and `reason` says why not.
 
+`lowLatencyDrawing` (Preferences › Performance › Low-Latency Drawing, off by default; desktop app) is read when the app
+starts. On, the window presents without vsync (wgpu's `AutoNoVsync`) and frames start at most 240 times a second.
+`--present-mode` and `VECTORCRAFT_PRESENT_MODE` take precedence over it (see `docs/development.md` › Desktop graphics
+processor). A value that is not a boolean is an error.
+
 `ctrlWheelScrollsSideways` (on by default): on, Cmd/Ctrl with a mouse wheel's whole notches scrolls the canvas sideways
 instead of zooming while `zoomWithMouseWheel` is off; off, Cmd/Ctrl-wheel zooms about the pointer. Alt + Cmd/Ctrl-wheel
 and a pinch on a Mac trackpad, on a touch screen or in the web build still zoom about the pointer. Under either

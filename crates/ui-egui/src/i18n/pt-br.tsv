@@ -5735,6 +5735,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 	Right Diagonal	Diagonal Direita
 	Left Diagonal	Diagonal Esquerda
 	Linux Display Server	Servidor de Exibição do Linux
+	Low-Latency Drawing	Desenho de Baixa Latência
 	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) Quando Houver uma Caneta Conectada
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Se a caneta de uma mesa digitalizadora não desenhar, escolha uma opção X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)

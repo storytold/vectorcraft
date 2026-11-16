@@ -512,6 +512,44 @@ fn graphics_processor_preference_shows_and_persists() {
     assert_eq!(saved["engine_prefs"]["gpuPreference"], json!("highPerformance"));
 }
 
+/// Performance › Low-Latency Drawing (#6013): shown off with its restart note, applied by OK,
+/// saved with the UI state under the key the desktop app reads before the window opens, and every
+/// bundled language translates its label.
+#[test]
+fn low_latency_drawing_preference_shows_and_persists() {
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let mut a = app();
+    open(&mut a, Some("Performance"));
+    assert_eq!(a.ui.dialog.as_ref().unwrap().fields.get("lowLatencyDrawing"), Some(&json!(false)));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+    out.textures_delta.clear();
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+    out.textures_delta.clear();
+    let mut shown = vec![];
+    out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+    let at = shown.iter().position(|t| t == "Low-Latency Drawing").unwrap_or_else(|| panic!("{shown:?}"));
+    // The note is the row's own: it comes before the next row's label.
+    let next = shown[at..].iter().position(|t| t.starts_with("History States")).map(|n| at + n).unwrap_or_else(|| panic!("{shown:?}"));
+    assert!(shown[at..next].iter().any(|t| t == "Applies the next time VectorCraft starts."), "{shown:?}");
+    a.ui.dialog.as_mut().unwrap().fields.insert("lowLatencyDrawing".into(), json!(true));
+    confirm(&mut a).unwrap();
+    assert!(a.take_prefs_changed(), "OK asks the host to write the preferences file");
+    assert!(a.session.prefs.low_latency_drawing);
+    let saved: Value = serde_json::from_slice(&serde_json::to_vec(&a.ui).unwrap()).unwrap();
+    assert_eq!(saved["engine_prefs"]["lowLatencyDrawing"], json!(true));
+    for lang in crate::i18n::Lang::all().filter(|l| l.code() != crate::i18n::Lang::EN.code()) {
+        assert!(crate::i18n::has(lang, "Low-Latency Drawing"), "{}", lang.code());
+    }
+}
+
 /// User Interface › System Title Bar: shown with its next-launch note, applied by OK and
 /// saved with the UI state under the key the desktop app reads before the window opens.
 #[test]
