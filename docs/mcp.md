@@ -6754,7 +6754,9 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
   preference off. A smooth anchor keeps its handles in line: its re-mapped handle takes the new length and stays in
   line with the other handle, and when both of its handles were re-mapped they point along the mean of their
   directions. When the two point the same way, both move with the anchor as with the preference off. A retracted
-  handle stays retracted. The value used joins the command's journal entry and Transform Again's options. Align and
+  handle stays retracted. The value used joins the command's journal entry and Transform Again's options; a saved step
+  without `interpolate` (an action or journal entry recorded before it) moves the handles as with the preference off,
+  as it did when it was recorded. Align and
   Distribute, and the anchors of type paths and area type frames (`text.reshapePath`, `text.reshapeArea`), move as
   before. Off, the handles of a moved anchor move with it and the other handles stay where they are.
 - `hideCornerWidgetAbove` (177° by default): corners wider than this show no Live Corners widget (a rectangle's right

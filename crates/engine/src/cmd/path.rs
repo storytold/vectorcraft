@@ -267,9 +267,11 @@ pub(crate) fn move_anchors(s: &mut Session, p: &Value) -> Result<Value> {
 /// Interpolate Control Points: does a move of direct-selected anchors re-map the handles of the
 /// segments beside them (`interpolate` param, else General › Interpolate Control Points When
 /// Moving Anchors)? Noted in the journal, so a replay re-maps them alike whatever the preference
-/// is then.
+/// is then. A saved step without `interpolate` ([`Session::replay`]) was recorded before the
+/// preference existed, so it moves the handles as it did then, without re-mapping them.
 pub(crate) fn interpolates_handles(s: &mut Session, p: &Value, cmd: &str) -> Result<bool> {
-    let on = switch_or(p, "interpolate", s.prefs.interpolate_control_points, cmd)?;
+    let default = s.prefs.interpolate_control_points && !s.replaying();
+    let on = switch_or(p, "interpolate", default, cmd)?;
     s.note_journal("interpolate", json!(on));
     Ok(on)
 }

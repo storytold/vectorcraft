@@ -264,6 +264,26 @@ fn a_replayed_move_re_maps_the_handles_as_it_did_whatever_the_preference_is_then
 }
 
 #[test]
+fn a_saved_step_without_interpolate_moves_the_handles_rigidly_whatever_the_preference() {
+    // A step recorded before the preference existed has no `interpolate`; with the preference on,
+    // it still plays as it did when it was recorded.
+    for cmd in ["path.moveAnchors", "object.nudge", "object.move"] {
+        let mut s = session();
+        interpolate(&mut s, true);
+        let id = curve(&mut s);
+        select(&mut s, id, json!([[0, 0]]));
+        s.replay(cmd, &json!({"dx": 1, "dy": 1})).unwrap();
+        let (a, b) = (anchor(&s, id, 0), anchor(&s, id, 1));
+        assert_ne!(a.p, Point::new(100.0, 100.0), "{cmd}: the anchor moves");
+        assert_eq!((a.h_out.x - a.p.x, a.h_out.y - a.p.y), (50.0, 0.0), "{cmd}: the moved anchor's handle moves with it");
+        assert_eq!(b.h_in, Point::new(250.0, 100.0), "{cmd}: the other end's handle stays");
+        // Run directly, the same params follow the preference.
+        s.execute(cmd, &json!({"dx": 1, "dy": 1})).unwrap();
+        assert_ne!(anchor(&s, id, 1).h_in, Point::new(250.0, 100.0), "{cmd}: executed, the handles are re-mapped");
+    }
+}
+
+#[test]
 fn transform_again_keeps_the_setting_its_move_used() {
     let mut s = session();
     interpolate(&mut s, true);
