@@ -505,6 +505,7 @@ fn monitor_profile_labels_are_in_complete_catalogs() {
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         for label in [
             "Use Monitor Profile for Canvas",
+            "Refresh Monitor Profile",
             "The canvas is drawn in sRGB.",
             "Canvas display profile:",
             "The system matches the window to the display's colors.",

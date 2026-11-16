@@ -162,6 +162,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("edit.preferences", "Preferences…", "Cmd+K", "{category?} open Preferences (engine: prefs.get / prefs.set / prefs.list)"),
     ("edit.keyboardShortcuts", "Keyboard Shortcuts…", "Cmd+Alt+Shift+K", "{}"),
     (
+        "view.refreshMonitorProfile",
+        "Refresh Monitor Profile",
+        "",
+        "{} read the display's profile for Use Monitor Profile for Canvas (monitorProfileDisplay) again on the next frame, without waiting for the 10-second reading or the 1-second display check; while a reading runs, the request waits for it to end → {requested: true}, before the profile is read (ui.inspect › displayProfile reports the reading, and readRequested while it waits); an error while the preference is off, and where nothing reads the display's profile (the web build)",
+    ),
+    (
         "edit.autoSpellCheck",
         "Auto Spell Check",
         "",

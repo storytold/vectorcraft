@@ -3635,6 +3635,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	Real World:	Πραγματικός κόσμος:
 	Real-time Drawing and Editing	Σχεδίαση και επεξεργασία σε πραγματικό χρόνο
 	Use Monitor Profile for Canvas	Χρήση προφίλ οθόνης για τον καμβά
+	Refresh Monitor Profile	Ανανέωση προφίλ οθόνης
+@msg	turn on Use Monitor Profile for Canvas first	ενεργοποιήστε πρώτα τη «Χρήση προφίλ οθόνης για τον καμβά»
+@msg	this build doesn't read display profiles	αυτή η έκδοση δεν διαβάζει προφίλ οθονών
 	The canvas is drawn in sRGB.	Ο καμβάς σχεδιάζεται σε sRGB.
 	Canvas display profile:	Προφίλ οθόνης καμβά:
 	The system matches the window to the display's colors.	Το σύστημα προσαρμόζει το παράθυρο στα χρώματα της οθόνης.

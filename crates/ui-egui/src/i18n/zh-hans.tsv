@@ -2707,6 +2707,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Real World:	真实世界：
 	Real-time Drawing and Editing	实时绘图和编辑
 	Use Monitor Profile for Canvas	画布使用显示器配置文件
+	Refresh Monitor Profile	刷新显示器配置文件
+@msg	turn on Use Monitor Profile for Canvas first	请先打开“画布使用显示器配置文件”
+@msg	this build doesn't read display profiles	此版本不读取显示器配置文件
 	The canvas is drawn in sRGB.	画布以 sRGB 绘制。
 	Canvas display profile:	画布显示配置文件：
 	The system matches the window to the display's colors.	系统会使窗口匹配显示器的颜色。

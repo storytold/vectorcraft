@@ -2853,6 +2853,9 @@ digits	Malayalam	Malayalam
 	Real World:	Mondo reale:
 	Real-time Drawing and Editing	Disegno e modifica in tempo reale
 	Use Monitor Profile for Canvas	Usa il profilo del monitor per l'area di disegno
+	Refresh Monitor Profile	Aggiorna profilo del monitor
+@msg	turn on Use Monitor Profile for Canvas first	attiva prima «Usa il profilo del monitor per l'area di disegno»
+@msg	this build doesn't read display profiles	questa versione non legge i profili dei display
 	The canvas is drawn in sRGB.	L'area di disegno è visualizzata in sRGB.
 	Canvas display profile:	Profilo del display per l'area di disegno:
 	The system matches the window to the display's colors.	Il sistema adatta la finestra ai colori del display.

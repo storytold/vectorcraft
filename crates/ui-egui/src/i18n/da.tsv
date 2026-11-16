@@ -6463,6 +6463,9 @@ theme	Appearance	Udseende
 	Printing / Exporting	Udskrivning / eksport
 	Real-time Drawing and Editing	Tegning og redigering i realtid
 	Use Monitor Profile for Canvas	Brug skærmprofil til canvas
+	Refresh Monitor Profile	Opdatér skærmprofil
+@msg	turn on Use Monitor Profile for Canvas first	slå først „Brug skærmprofil til canvas“ til
+@msg	this build doesn't read display profiles	denne version læser ikke skærmprofiler
 	The canvas is drawn in sRGB.	Canvasset tegnes i sRGB.
 	Canvas display profile:	Canvassets skærmprofil:
 	The system matches the window to the display's colors.	Systemet tilpasser vinduet til skærmens farver.

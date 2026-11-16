@@ -4357,6 +4357,9 @@ theme	Appearance	Vormgeving
 	Printing / Exporting	Afdrukken / exporteren
 	Real-time Drawing and Editing	Tekenen en bewerken in realtime
 	Use Monitor Profile for Canvas	Monitorprofiel gebruiken voor canvas
+	Refresh Monitor Profile	Monitorprofiel vernieuwen
+@msg	turn on Use Monitor Profile for Canvas first	schakel eerst 'Monitorprofiel gebruiken voor canvas' in
+@msg	this build doesn't read display profiles	deze versie leest geen beeldschermprofielen
 	The canvas is drawn in sRGB.	Het canvas wordt in sRGB getekend.
 	Canvas display profile:	Weergaveprofiel van het canvas:
 	The system matches the window to the display's colors.	Het systeem stemt het venster af op de kleuren van het scherm.

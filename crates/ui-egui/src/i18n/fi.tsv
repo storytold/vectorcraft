@@ -4004,6 +4004,9 @@ theme	Appearance	Ulkoasu
 	Printing / Exporting	Tulostus / vienti
 	Real-time Drawing and Editing	Reaaliaikainen piirto ja muokkaus
 	Use Monitor Profile for Canvas	Käytä näytön profiilia kankaalle
+	Refresh Monitor Profile	Päivitä näytön profiili
+@msg	turn on Use Monitor Profile for Canvas first	ota ensin käyttöön ”Käytä näytön profiilia kankaalle”
+@msg	this build doesn't read display profiles	tämä versio ei lue näyttöjen profiileja
 	The canvas is drawn in sRGB.	Kangas piirretään sRGB-tilassa.
 	Canvas display profile:	Kankaan näyttöprofiili:
 	The system matches the window to the display's colors.	Järjestelmä sovittaa ikkunan näytön väreihin.

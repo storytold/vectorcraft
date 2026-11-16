@@ -2866,6 +2866,9 @@ mark-style	Japanese	일본식
 	Real World:	실제 크기:
 	Real-time Drawing and Editing	실시간 그리기 및 편집
 	Use Monitor Profile for Canvas	캔버스에 모니터 프로필 사용
+	Refresh Monitor Profile	모니터 프로필 새로 고침
+@msg	turn on Use Monitor Profile for Canvas first	먼저 "캔버스에 모니터 프로필 사용"을 켜세요
+@msg	this build doesn't read display profiles	이 빌드는 디스플레이 프로필을 읽지 않습니다
 	The canvas is drawn in sRGB.	캔버스는 sRGB로 그려집니다.
 	Canvas display profile:	캔버스 디스플레이 프로필:
 	The system matches the window to the display's colors.	시스템이 창을 디스플레이 색상에 맞춥니다.

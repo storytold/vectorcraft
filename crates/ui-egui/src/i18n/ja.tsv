@@ -2876,6 +2876,9 @@ mark-style	Japanese	日本式
 	Real World:	実寸:
 	Real-time Drawing and Editing	リアルタイム描画および編集
 	Use Monitor Profile for Canvas	キャンバスにモニタープロファイルを使用
+	Refresh Monitor Profile	モニタープロファイルを更新
+@msg	turn on Use Monitor Profile for Canvas first	先に「キャンバスにモニタープロファイルを使用」をオンにしてください
+@msg	this build doesn't read display profiles	このビルドはディスプレイプロファイルを読み込みません
 	The canvas is drawn in sRGB.	キャンバスは sRGB で描画されます。
 	Canvas display profile:	キャンバスのディスプレイプロファイル:
 	The system matches the window to the display's colors.	システムがウィンドウをディスプレイのカラーに合わせます。

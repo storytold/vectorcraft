@@ -2845,6 +2845,9 @@ digits	Malayalam	Малаялам
 	Real World:	Реальний світ:
 	Real-time Drawing and Editing	Малювання та редагування у реальному часі
 	Use Monitor Profile for Canvas	Використовувати профіль монітора для полотна
+	Refresh Monitor Profile	Оновити профіль монітора
+@msg	turn on Use Monitor Profile for Canvas first	спочатку увімкніть «Використовувати профіль монітора для полотна»
+@msg	this build doesn't read display profiles	ця збірка не читає профілі дисплеїв
 	The canvas is drawn in sRGB.	Полотно відображається в sRGB.
 	Canvas display profile:	Профіль дисплея для полотна:
 	The system matches the window to the display's colors.	Система узгоджує кольори вікна з дисплеєм.

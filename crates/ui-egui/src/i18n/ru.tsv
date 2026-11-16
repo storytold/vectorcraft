@@ -2842,6 +2842,9 @@ digits	Malayalam	Малаялам
 	Real World:	Реальный мир:
 	Real-time Drawing and Editing	Рисование и редактирование в реальном времени
 	Use Monitor Profile for Canvas	Использовать профиль монитора для холста
+	Refresh Monitor Profile	Обновить профиль монитора
+@msg	turn on Use Monitor Profile for Canvas first	сначала включите «Использовать профиль монитора для холста»
+@msg	this build doesn't read display profiles	эта сборка не читает профили дисплеев
 	The canvas is drawn in sRGB.	Холст отображается в sRGB.
 	Canvas display profile:	Профиль дисплея для холста:
 	The system matches the window to the display's colors.	Система согласует цвета окна с дисплеем.

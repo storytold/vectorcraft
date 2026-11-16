@@ -5718,6 +5718,9 @@ theme	Appearance	იერსახე
 	Printing / Exporting	ბეჭდვა / ექსპორტირება
 	Real-time Drawing and Editing	რეალურ დროში ხატვა და რედაქტირება
 	Use Monitor Profile for Canvas	მონიტორის პროფილის გამოყენება ტილოსთვის
+	Refresh Monitor Profile	მონიტორის პროფილის განახლება
+@msg	turn on Use Monitor Profile for Canvas first	ჯერ ჩართეთ „მონიტორის პროფილის გამოყენება ტილოსთვის“
+@msg	this build doesn't read display profiles	ეს ვერსია ეკრანის პროფილებს არ კითხულობს
 	The canvas is drawn in sRGB.	ტილო sRGB-ში იხატება.
 	Canvas display profile:	ტილოს ეკრანის პროფილი:
 	The system matches the window to the display's colors.	სისტემა ფანჯარას ეკრანის ფერებს უსადაგებს.

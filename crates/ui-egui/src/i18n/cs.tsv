@@ -4080,6 +4080,9 @@ theme	Appearance	Motiv
 	Printing / Exporting	Tisk / export
 	Real-time Drawing and Editing	Kreslení a úpravy v reálném čase
 	Use Monitor Profile for Canvas	Použít profil monitoru pro plátno
+	Refresh Monitor Profile	Obnovit profil monitoru
+@msg	turn on Use Monitor Profile for Canvas first	nejprve zapněte „Použít profil monitoru pro plátno“
+@msg	this build doesn't read display profiles	tato verze nečte profily displejů
 	The canvas is drawn in sRGB.	Plátno se vykresluje v sRGB.
 	Canvas display profile:	Profil displeje pro plátno:
 	The system matches the window to the display's colors.	Systém přizpůsobuje okno barvám displeje.

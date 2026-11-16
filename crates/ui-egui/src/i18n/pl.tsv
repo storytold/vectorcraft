@@ -3943,6 +3943,9 @@ theme	Appearance	Wygląd
 	Printing / Exporting	Drukowanie / eksportowanie
 	Real-time Drawing and Editing	Rysowanie i edycja w czasie rzeczywistym
 	Use Monitor Profile for Canvas	Użyj profilu monitora dla płótna
+	Refresh Monitor Profile	Odśwież profil monitora
+@msg	turn on Use Monitor Profile for Canvas first	najpierw włącz „Użyj profilu monitora dla płótna”
+@msg	this build doesn't read display profiles	ta wersja nie odczytuje profili wyświetlaczy
 	The canvas is drawn in sRGB.	Płótno jest rysowane w sRGB.
 	Canvas display profile:	Profil wyświetlacza płótna:
 	The system matches the window to the display's colors.	System dopasowuje okno do kolorów wyświetlacza.

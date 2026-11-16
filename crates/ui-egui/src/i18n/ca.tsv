@@ -3528,6 +3528,9 @@ digits	Malayalam	Malaiàlam
 	Real World:	Món real:
 	Real-time Drawing and Editing	Dibuix i edició en temps real
 	Use Monitor Profile for Canvas	Utilitza el perfil del monitor per al llenç
+	Refresh Monitor Profile	Actualitza el perfil del monitor
+@msg	turn on Use Monitor Profile for Canvas first	activeu primer «Utilitza el perfil del monitor per al llenç»
+@msg	this build doesn't read display profiles	aquesta versió no llegeix perfils de pantalla
 	The canvas is drawn in sRGB.	El llenç es dibuixa en sRGB.
 	Canvas display profile:	Perfil de pantalla del llenç:
 	The system matches the window to the display's colors.	El sistema ajusta la finestra als colors de la pantalla.

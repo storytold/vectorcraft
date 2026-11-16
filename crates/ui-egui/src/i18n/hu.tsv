@@ -3383,6 +3383,9 @@ mark-style	Japanese	Japán
 	Real World:	Valós méret:
 	Real-time Drawing and Editing	Valós idejű rajzolás és szerkesztés
 	Use Monitor Profile for Canvas	Monitorprofil használata a vászonhoz
+	Refresh Monitor Profile	Monitorprofil frissítése
+@msg	turn on Use Monitor Profile for Canvas first	előbb kapcsolja be a „Monitorprofil használata a vászonhoz” beállítást
+@msg	this build doesn't read display profiles	ez a változat nem olvassa be a kijelzőprofilokat
 	The canvas is drawn in sRGB.	A vászon sRGB-ben jelenik meg.
 	Canvas display profile:	A vászon kijelzőprofilja:
 	The system matches the window to the display's colors.	A rendszer a kijelző színeihez igazítja az ablakot.

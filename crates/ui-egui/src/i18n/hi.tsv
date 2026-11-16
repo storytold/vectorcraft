@@ -3871,6 +3871,9 @@ antiAlias	Sharp	शार्प
 	Real World:	रियल वर्ल्ड:
 	Real-time Drawing and Editing	रियल टाइम ड्राइंग और संपादन
 	Use Monitor Profile for Canvas	कैनवास के लिए मॉनिटर प्रोफ़ाइल का उपयोग करें
+	Refresh Monitor Profile	मॉनिटर प्रोफ़ाइल रिफ्रेश करें
+@msg	turn on Use Monitor Profile for Canvas first	पहले "कैनवास के लिए मॉनिटर प्रोफ़ाइल का उपयोग करें" चालू करें
+@msg	this build doesn't read display profiles	यह बिल्ड डिस्प्ले प्रोफ़ाइल नहीं पढ़ता
 	The canvas is drawn in sRGB.	कैनवास sRGB में बनाया जाता है।
 	Canvas display profile:	कैनवास की डिस्प्ले प्रोफ़ाइल:
 	The system matches the window to the display's colors.	सिस्टम विंडो को डिस्प्ले के रंगों से मिलाता है।

@@ -6821,13 +6821,20 @@ output's `_ICC_PROFILE` property when colord has no usable profile, then the scr
 Color on (HDR or Automatic Color Management) and macOS windows are converted by the system, and nothing is converted
 again. In a Wayland session, and where no profile is set or the profile is not an RGB display profile of at most 1 MiB,
 the canvas stays sRGB. The app reads the display again every 10 seconds and when the window moves to another display.
+Edit › Refresh Monitor Profile (`view.refreshMonitorProfile`, `{}`; a desktop UI command) reads it again on the next
+frame without waiting for either interval, for example after a new profile is installed for the display; a request
+made while a reading runs starts when that reading ends. It returns `{requested: true}` before the profile is read,
+and is an error while `monitorProfileDisplay` is off (nothing is queued) and where nothing reads the display's profile
+(the web build). It changes no document, proof setting or preference and records no undo step; reading the same
+profile again leaves the canvas as it is.
 Exports, `ui.render`, the document, panels and thumbnails are not converted; with Proof Colors on, the proof is drawn
 first and then converted. Translucent art and the antialiased edges of art over an artboard's paper or the
 transparency grid are blended with it in sRGB, and the blend is converted; over the pasteboard and in Outline the art
 is converted on its own.
 `ui.inspect` returns `displayProfile`: `{enabled, display, source, profile, from, applied, reason,
-osManaged}`, where `source` is `profile`, `srgbProfile` (a profile that shows sRGB unchanged), `system`, `none`,
-`pending` or `unsupported`, `applied` says whether the canvas is converted, and `reason` says why not.
+osManaged, readRequested}`, where `source` is `profile`, `srgbProfile` (a profile that shows sRGB unchanged), `system`, `none`,
+`pending` or `unsupported`, `applied` says whether the canvas is converted, `reason` says why not, and `readRequested`
+says whether a reading Refresh Monitor Profile asked for has not started yet.
 
 `ctrlWheelScrollsSideways` (on by default): on, Cmd/Ctrl with a mouse wheel's whole notches scrolls the canvas sideways
 instead of zooming while `zoomWithMouseWheel` is off; off, Cmd/Ctrl-wheel zooms about the pointer. Alt + Cmd/Ctrl-wheel

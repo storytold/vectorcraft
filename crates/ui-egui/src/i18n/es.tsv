@@ -2813,6 +2813,9 @@ digits	Malayalam	Malayálam
 	Real World:	Mundo real:
 	Real-time Drawing and Editing	Dibujo y edición en tiempo real
 	Use Monitor Profile for Canvas	Usar perfil del monitor para el lienzo
+	Refresh Monitor Profile	Actualizar perfil del monitor
+@msg	turn on Use Monitor Profile for Canvas first	activa primero «Usar perfil del monitor para el lienzo»
+@msg	this build doesn't read display profiles	esta versión no lee perfiles de pantalla
 	The canvas is drawn in sRGB.	El lienzo se dibuja en sRGB.
 	Canvas display profile:	Perfil de pantalla del lienzo:
 	The system matches the window to the display's colors.	El sistema ajusta la ventana a los colores de la pantalla.
