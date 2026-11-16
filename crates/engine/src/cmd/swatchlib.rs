@@ -49,7 +49,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add to Swatches",
             ["Window", "Swatch Libraries"],
             None,
-            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy)} copy library swatches into the document as one undo step. A swatch the document already has (same name and paint) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\"). A pattern swatch brings its pattern, as pasting art painted with it does: the same pattern the document has is used, and a name another pattern or swatch has gets a number → {library, added: [names in the document], existing: [names already there], applied?: name}",
+            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy)} copy library swatches into the document as one undo step. A gradient or pattern swatch in a library color group is refused (color groups hold solid colors only), and the document is left unchanged. A swatch the document already has (same name and paint) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\"). A pattern swatch brings its pattern, as pasting art painted with it does: the same pattern the document has is used, and a name another pattern or swatch has gets a number → {library, added: [names in the document], existing: [names already there], applied?: name}",
             has_doc,
             add
         ),
@@ -839,6 +839,10 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let focus = switch_or(p, "focus", true, C)?;
     let picked = picked(&lib, &names_param(p, C)?, C)?;
+    // Color groups hold solid colors only, as swatch.new, swatch.newGroup and swatch.move keep them.
+    if let Some((_, w)) = picked.iter().find(|(g, w)| g.is_some() && w.paint.color().is_none()) {
+        return Err(bad(C, format!("`{}`: colour groups hold solid colours only", w.name)));
+    }
     // Swatches the document already has (same name and paint; for a pattern swatch, a swatch of the
     // same pattern) are reused, not added again.
     let patterns = patternlib::library_doc(&info.id);

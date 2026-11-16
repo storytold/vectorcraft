@@ -160,6 +160,38 @@ fn save_and_load_round_trip_keeps_cmyk_spot_and_groups() {
     assert!(s.execute("swatch.library.save", &json!({"user": true})).is_err(), "no user folder in a headless session");
 }
 
+/// A library color group that holds a gradient is not copied into the document: color groups
+/// hold solid colors only. The document keeps its swatches and no undo step is recorded.
+#[test]
+fn add_refuses_a_library_color_group_holding_a_gradient() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Brand", "colors": ["#123456", "#abcdef"]}));
+    let r = run(&mut s, "swatch.library.save", json!({"names": ["Brand", "Sunset"], "name": "Mixed"}));
+    // Move the Sunset gradient into the library's Brand group, as a hand-edited file can.
+    let mut lib: Value = serde_json::from_str(r["data"].as_str().unwrap()).unwrap();
+    let swatches = lib["swatches"].as_array_mut().unwrap();
+    let at = swatches.iter().position(|w| w["name"] == "Sunset").unwrap();
+    let sunset = swatches.remove(at);
+    lib["groups"][0]["swatches"].as_array_mut().unwrap().insert(1, sunset);
+    let r = run(&mut s, "swatch.library.load", json!({"data": lib.to_string(), "name": "mixed.vcswatches"}));
+    let id = r["library"].as_str().unwrap().to_string();
+    let (_, loaded) = cmd::swatchlib::library(&s, &id).unwrap();
+    assert!(matches!(loaded.groups[0].swatches[1].paint, Paint::Gradient(_)), "the reader keeps the gradient in the group");
+    run(&mut s, "swatch.delete", json!({"names": ["Brand", "Sunset"]}));
+    let (before, undo) = (doc(&s).swatch_groups.clone(), undo_len(&s));
+    for p in [json!({"library": id}), json!({"library": id, "names": ["Brand"]})] {
+        let e = s.execute("swatch.library.add", &p).unwrap_err().to_string();
+        assert!(e.contains("`Sunset`: colour groups hold solid colours only"), "{p}: {e}");
+        assert_eq!(doc(&s).swatch_groups, before, "{p}");
+        assert_eq!(undo_len(&s), undo, "{p}");
+    }
+    // The gradient on its own comes in ungrouped.
+    let r = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Sunset"]}));
+    assert_eq!(r["added"], json!(["Sunset"]), "{r}");
+    assert!(doc(&s).swatches.iter().any(|w| w.name == "Sunset" && matches!(w.paint, Paint::Gradient(_))));
+    assert_eq!(doc(&s).swatch_groups, before);
+}
+
 /// The swatch library commands, and the graphic style library save and load that share their file
 /// handling, refuse a parameter of the wrong form, such as `user: "true"` or `names: "Grays"`, with
 /// an error that names it; the document keeps its swatches and no undo step is recorded. A null

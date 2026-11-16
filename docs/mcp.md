@@ -4739,7 +4739,8 @@ them (`id`, `name`, `category`, `count`) and `swatch.library.get {library}` retu
 in the `swatch.list` shape (`library` is an id or a name). `swatch.library.add {library, names?}` copies swatches
 into the document as one undo step: a colour group's name brings the whole group, a swatch's name the swatch alone,
 no names the whole library; swatches the document already has (same name and paint) are reported under `existing`
-and not added again. `apply: "fill"|"stroke"` also applies the first one, in the same undo step (what clicking a
+and not added again. Color groups hold solid colors only: an add that would bring a gradient or pattern swatch
+into a color group is refused, and the document is left unchanged. `apply: "fill"|"stroke"` also applies the first one, in the same undo step (what clicking a
 swatch in the library panel does). The pattern libraries Geometric Patterns (`geometric-patterns`), Grit Textures
 (`grit-textures`: seamless black grain, grit, sand, speckle, stipple, scratch and fleck tiles) and Optical Effects
 (`optical-effects`: VectorCraft's own black wave, ring, warped-check, pinched-stripe, chevron and lens tiles),
