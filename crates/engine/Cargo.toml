@@ -16,7 +16,7 @@ bundled-fonts = ["vectorcraft-text/bundled-fonts"]
 # HEIC and HEIF images open and place, decoded by heic-rs (an HEVC decoder). A build without this
 # feature still recognizes the files and refuses them with a message. The apps list it beside
 # `bundled-fonts`.
-heif = ["dep:craft-heif"]
+heif = ["dep:heic-rs", "dep:rayon"]
 
 [dependencies]
 # Which paths stored in documents may be opened.
@@ -45,8 +45,11 @@ vectorcraft-js = { workspace = true }
 vectorcraft-apischema = { workspace = true }
 image = { workspace = true }
 craft-image-codecs = { workspace = true }
-craft-jxl = { workspace = true }
-craft-heif = { workspace = true, optional = true }
+jxl-oxide = { workspace = true }
+jxl-color = { workspace = true }
+jxl-grid = { workspace = true }
+# Pure Rust, no unsafe; pinned at the version photocraft-heif uses.
+heic-rs = { version = "=0.1.4", default-features = false, features = ["std"], optional = true }
 flate2 = { workspace = true }
 chrono = { workspace = true }
 # The XML parts of Word documents placed as type (place/docx.rs).
@@ -69,7 +72,17 @@ rustix = { workspace = true, features = ["std", "process"] }
 [target.'cfg(windows)'.dependencies]
 same-file = "1.0.6"
 
+# The tiles of a HEIC photo decode in parallel on native; wasm stays single-threaded.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+heic-rs = { version = "=0.1.4", default-features = false, features = ["std", "parallel"], optional = true }
+rayon = { version = "1.12", optional = true }
+
 [dev-dependencies]
+# JPEG XL files for the `.jxl` open and place tests.
+zune-jpegxl = { workspace = true }
+zune-core = { workspace = true }
+# JPEG XL files for the import fuzz tests (tests/import_fuzz.rs).
+craft-jxl = { workspace = true }
 # vectorcraft-doc's Group 3 TIFF reader before craft-stream-codecs, the reference
 # tests/group3_reference.rs compares it with.
 hayro-ccitt = { workspace = true }

@@ -37,24 +37,7 @@ fn centers(side: u32) -> [(u32, u32); 4] {
 #[cfg(feature = "heif")]
 fn decoded(bytes: &[u8]) -> image::RgbaImage {
     let raster = load::raster_image(bytes).unwrap();
-    craft_image_codecs::decode(&raster.blob.bytes)
-        .map(|__cimg| {
-            let (__w, __h) = __cimg.dimensions();
-            match (__cimg.layout(), __cimg.sample_type()) {
-                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
-                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
-                }
-                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
-                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
-                }
-                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
-                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
-                }
-                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
-            }
-        })
-        .unwrap()
-        .to_rgba8()
+    image::load_from_memory(&raster.blob.bytes).unwrap().to_rgba8()
 }
 
 #[cfg(feature = "heif")]
@@ -82,28 +65,7 @@ fn quadrants_open_and_place_as_their_pixels() {
         assert_eq!(opened["format"], "heif", "{name}");
         assert_eq!(s.doc().unwrap().doc.artboards[0].rect.size(), vectorcraft_geom::Size::new(32.0, 32.0));
         let blob = s.doc().unwrap().doc.images.values().next().unwrap();
-        assert_quadrants(
-            &craft_image_codecs::decode(&blob.bytes)
-                .map(|__cimg| {
-                    let (__w, __h) = __cimg.dimensions();
-                    match (__cimg.layout(), __cimg.sample_type()) {
-                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
-                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
-                        }
-                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
-                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
-                        }
-                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
-                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
-                        }
-                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
-                    }
-                })
-                .unwrap()
-                .to_rgba8(),
-            32,
-            name,
-        );
+        assert_quadrants(&image::load_from_memory(&blob.bytes).unwrap().to_rgba8(), 32, name);
         s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         let placed = s.execute("file.place", &json!({"name": name, "dataBase64": encoded})).unwrap();
         assert_eq!(placed["format"], "heif", "{name}");
@@ -384,8 +346,8 @@ fn damaged_unsupported_and_oversized_files_are_refused() {
     small[at + 4..at + 8].copy_from_slice(&32u32.to_be_bytes());
     let refused = super::heifread::decode(&small, 64 * 64 * 17 - 1).map(|img| img.dimensions());
     assert!(refused.as_ref().is_err_and(|e| e.contains("too large to draw")), "{refused:?}");
-    // A 128 × 128 grid of four 64 × 64 tiles.
-    let grid = 128 * 128 * 17;
+    // A 128 × 128 grid of four 64 × 64 tiles adds its composed frame, 128 × 128 × 6.
+    let grid = 128 * 128 * (8 + 6) + 4 * 64 * 64 * 9;
     assert!(super::heifread::decode(GRID, grid).is_ok());
     assert!(super::heifread::decode(GRID, grid - 1).unwrap_err().contains("too large to draw"));
     // The grid's ispe (property 1) claims 16 × 16 pixels; its grid data still composes 128 × 128,
@@ -395,6 +357,255 @@ fn damaged_unsupported_and_oversized_files_are_refused() {
     understated[366..370].copy_from_slice(&16u32.to_be_bytes());
     understated[370..374].copy_from_slice(&16u32.to_be_bytes());
     assert!(super::heifread::decode(&understated, grid - 1).unwrap_err().contains("too large to draw"));
+}
+
+/// Appends `value` as `n` bits, most significant first.
+#[cfg(feature = "heif")]
+fn put(bits: &mut Vec<bool>, value: u64, n: u32) {
+    bits.extend((0..n).rev().map(|i| i < 64 && value >> i & 1 == 1));
+}
+
+/// Appends `value` as an unsigned Exp-Golomb code.
+#[cfg(feature = "heif")]
+fn put_ue(bits: &mut Vec<bool>, value: u64) {
+    let len = 64 - (value + 1).leading_zeros();
+    put(bits, 0, len - 1);
+    put(bits, value + 1, len);
+}
+
+/// The fields of SPS 0 of `width` × `height` 4:2:0 samples with `sub_layers` sub-layers, each
+/// with its profile and level, up to its height.
+#[cfg(feature = "heif")]
+fn sps_head(width: u64, height: u64, sub_layers: u64) -> Vec<bool> {
+    sps_head_with_id(width, height, sub_layers, 0)
+}
+
+/// [`sps_head`] for SPS `id`.
+#[cfg(feature = "heif")]
+fn sps_head_with_id(width: u64, height: u64, sub_layers: u64, id: u64) -> Vec<bool> {
+    let mut bits = Vec::new();
+    put(&mut bits, 0, 4);
+    put(&mut bits, sub_layers, 3);
+    put(&mut bits, 1, 1);
+    put(&mut bits, 0, 96);
+    for _ in 0..sub_layers {
+        put(&mut bits, 0b11, 2);
+    }
+    if sub_layers > 0 {
+        put(&mut bits, 0, 2 * (8 - sub_layers as u32));
+    }
+    for _ in 0..sub_layers {
+        put(&mut bits, 0, 88 + 8);
+    }
+    put_ue(&mut bits, id);
+    put_ue(&mut bits, 1);
+    put_ue(&mut bits, width);
+    put_ue(&mut bits, height);
+    bits
+}
+
+/// An SPS NAL unit of `bits` (see [`nal`]).
+#[cfg(feature = "heif")]
+fn sps_nal(bits: Vec<bool>) -> Vec<u8> {
+    nal(33, bits)
+}
+
+/// A NAL unit of type `kind` holding `bits`, with its stop bit, and emulation prevention bytes
+/// inserted as a stream carries them.
+#[cfg(feature = "heif")]
+fn nal(kind: u8, mut bits: Vec<bool>) -> Vec<u8> {
+    put(&mut bits, 1, 1);
+    while !bits.len().is_multiple_of(8) {
+        bits.push(false);
+    }
+    let rbsp: Vec<u8> = bits.chunks(8).map(|b| b.iter().fold(0u8, |v, &bit| v << 1 | u8::from(bit))).collect();
+    let mut nal = vec![kind << 1, 1];
+    let mut zeros = 0;
+    for b in rbsp {
+        if zeros >= 2 && b <= 3 {
+            nal.push(3);
+            zeros = 0;
+        }
+        zeros = if b == 0 { zeros + 1 } else { 0 };
+        nal.push(b);
+    }
+    nal
+}
+
+#[cfg(feature = "heif")]
+fn sps(width: u64, height: u64, sub_layers: u64) -> Vec<u8> {
+    sps_nal(sps_head(width, height, sub_layers))
+}
+
+/// A 64 × 64 SPS that uses every optional part before the VUI's video signal type: a conformance
+/// window, sub-layer ordering for two sub-layers, explicit scaling lists, PCM, a reference picture
+/// set predicted from another and a long-term picture, then an Extended_SAR aspect ratio and
+/// overscan information. `signal` is the full-range flag and the color description, if any.
+#[cfg(feature = "heif")]
+fn sps_with_vui(signal: Option<(u64, Option<[u64; 3]>)>) -> Vec<u8> {
+    sps_with_vui_and_id(signal, 0)
+}
+
+/// [`sps_with_vui`] for SPS `id`.
+#[cfg(feature = "heif")]
+fn sps_with_vui_and_id(signal: Option<(u64, Option<[u64; 3]>)>, id: u64) -> Vec<u8> {
+    let mut bits = sps_head_with_id(64, 64, 1, id);
+    put(&mut bits, 1, 1);
+    for offset in [0, 2, 0, 2] {
+        put_ue(&mut bits, offset);
+    }
+    put_ue(&mut bits, 0);
+    put_ue(&mut bits, 0);
+    // 8 bits of picture order count.
+    put_ue(&mut bits, 4);
+    put(&mut bits, 1, 1);
+    for _ in 0..2 * 3 {
+        put_ue(&mut bits, 1);
+    }
+    for value in [0, 3, 0, 3, 1, 1] {
+        put_ue(&mut bits, value);
+    }
+    // Scaling lists: matrix 1 of each size given explicitly, the others copied.
+    put(&mut bits, 0b11, 2);
+    for size in 0..4 {
+        for matrix in 0..if size == 3 { 2 } else { 6 } {
+            if matrix == 1 {
+                put(&mut bits, 1, 1);
+                if size > 1 {
+                    put_ue(&mut bits, 5);
+                }
+                for _ in 0..if size == 0 { 16 } else { 64 } {
+                    put_ue(&mut bits, 3);
+                }
+            } else {
+                put(&mut bits, 0, 1);
+                put_ue(&mut bits, 0);
+            }
+        }
+    }
+    // AMP off, SAO on, PCM with its depths, block sizes and loop filter flag.
+    put(&mut bits, 0b01, 2);
+    put(&mut bits, 1, 1);
+    put(&mut bits, 0x77, 8);
+    put_ue(&mut bits, 0);
+    put_ue(&mut bits, 1);
+    put(&mut bits, 0, 1);
+    // Two short-term sets: one negative and one positive picture, then a set predicted from it
+    // with three entries (unused with use_delta_flag, used, unused).
+    put_ue(&mut bits, 2);
+    put_ue(&mut bits, 1);
+    put_ue(&mut bits, 1);
+    for _ in 0..2 {
+        put_ue(&mut bits, 0);
+        put(&mut bits, 1, 1);
+    }
+    put(&mut bits, 1, 1);
+    put(&mut bits, 0, 1);
+    put_ue(&mut bits, 0);
+    put(&mut bits, 0b01100, 5);
+    // One long-term picture: 8 bits of picture order count and its used flag.
+    put(&mut bits, 1, 1);
+    put_ue(&mut bits, 1);
+    put(&mut bits, 0xab, 8);
+    put(&mut bits, 1, 1);
+    put(&mut bits, 0b11, 2);
+    // VUI: Extended_SAR 1:1 and overscan information.
+    put(&mut bits, 1, 1);
+    put(&mut bits, 1, 1);
+    put(&mut bits, 255, 8);
+    put(&mut bits, 0x0001_0001, 32);
+    put(&mut bits, 1, 1);
+    put(&mut bits, 0, 1);
+    match signal {
+        Some((full, description)) => {
+            put(&mut bits, 1, 1);
+            put(&mut bits, 5, 3);
+            put(&mut bits, full, 1);
+            put(&mut bits, u64::from(description.is_some()), 1);
+            for code in description.into_iter().flatten() {
+                put(&mut bits, code, 8);
+            }
+        }
+        None => put(&mut bits, 0, 1),
+    }
+    // No chroma location, field or display window information, timing or restrictions.
+    put(&mut bits, 0, 8);
+    sps_nal(bits)
+}
+
+#[cfg(feature = "heif")]
+#[test]
+fn picture_sizes_come_from_the_sequence_parameter_sets() {
+    use super::heifread::{picture_bytes, sps_size};
+    for sub_layers in [0, 1, 6] {
+        for (w, h) in [(32, 32), (4032, 3024), (65535, 65535)] {
+            let nal = sps(w, h, sub_layers);
+            assert!(nal.windows(3).any(|w| w == [0, 0, 3]), "the profile's zeros need emulation prevention");
+            assert_eq!(sps_size(&nal), Some((w, h, 1)), "{w} × {h}, {sub_layers} sub-layers");
+        }
+    }
+    let mut vps = sps(32, 32, 0);
+    vps[0] = 32 << 1;
+    assert_eq!(sps_size(&vps), None);
+    assert_eq!(sps_size(&sps(32, 32, 0)[..8]), None);
+    // 4:2:0 is 3 bytes a sample position in each of three sets of planes, in 64-sample blocks.
+    assert_eq!(picture_bytes(QUADRANTS), Some(64 * 64 * 9));
+    assert_eq!(picture_bytes(GRID), Some(4 * 64 * 64 * 9));
+    assert!(picture_bytes(ALPHA).unwrap() > 64 * 64 * 9, "the alpha image is counted");
+}
+
+#[cfg(feature = "heif")]
+#[test]
+fn the_color_description_comes_from_the_streams_video_signal_type() {
+    use super::heifread::{sps_signal, sps_size};
+    use heic_rs::{MatrixCoefficients, Range};
+    let signal = |nal: &[u8]| sps_signal(nal).map(|n| (n.primaries, n.transfer, n.matrix, n.matrix_code, n.range));
+    let described = sps_with_vui(Some((1, Some([12, 13, 6]))));
+    assert_eq!(sps_size(&described), Some((64, 64, 1)));
+    assert_eq!(signal(&described), Some((12, 13, MatrixCoefficients::Bt601, 6, Range::Full)));
+    assert_eq!(signal(&sps_with_vui(Some((0, None)))), Some((2, 2, MatrixCoefficients::Unspecified, 2, Range::Limited)));
+    assert_eq!(signal(&sps_with_vui(None)), None);
+    assert_eq!(signal(&sps(64, 64, 0)), None, "cut short before its VUI");
+    // The ICC-only fixture's stream: heif-enc writes full-range BT.601.
+    let ctx = heic_rs::context::Context::open(TONES_P3_ICC_ONLY).unwrap();
+    let props = ctx.props(ctx.meta.primary).unwrap();
+    assert!(props.nclx.is_none() && props.icc.is_some());
+    let sets = props.hvcc.unwrap().parameter_sets();
+    let nal = sets.into_iter().find(|nal| nal[0] >> 1 & 0x3f == 33).unwrap();
+    assert_eq!(sps_signal(nal).map(|n| (n.matrix, n.range)), Some((MatrixCoefficients::Bt601, Range::Full)));
+}
+
+#[cfg(feature = "heif")]
+#[test]
+fn the_slices_picture_parameter_set_picks_the_sps() {
+    use super::heifread::{active_sps, sps_signal};
+    use heic_rs::Range;
+    let full = sps_with_vui_and_id(Some((1, Some([1, 13, 6]))), 0);
+    let limited = sps_with_vui_and_id(Some((0, Some([1, 13, 1]))), 1);
+    let pps = |id: u64, sps: u64| {
+        let mut bits = Vec::new();
+        put_ue(&mut bits, id);
+        put_ue(&mut bits, sps);
+        nal(34, bits)
+    };
+    // first_slice_segment_in_pic_flag, no_output_of_prior_pics_flag for an IDR picture (type 19),
+    // slice_pic_parameter_set_id.
+    let slice = |kind: u8, pps: u64| {
+        let mut bits = vec![true];
+        if kind == 19 {
+            bits.push(false);
+        }
+        put_ue(&mut bits, pps);
+        nal(kind, bits)
+    };
+    let (pps0, pps3) = (pps(0, 0), pps(3, 1));
+    let sets = [full.as_slice(), limited.as_slice(), pps0.as_slice(), pps3.as_slice()];
+    let (idr3, trail0, idr5) = (slice(19, 3), slice(1, 0), slice(19, 5));
+    assert_eq!(active_sps(&sets, &[&idr3]), Some(limited.as_slice()));
+    assert_eq!(active_sps(&sets, &[&trail0]), Some(full.as_slice()));
+    assert_eq!(active_sps(&sets, &[&idr5]), None, "no PPS 5");
+    assert_eq!(active_sps(&sets, &[&pps0]), None, "no slice");
+    assert_eq!(active_sps(&sets, &[&idr3]).and_then(sps_signal).map(|n| (n.matrix_code, n.range)), Some((1, Range::Limited)));
 }
 
 #[cfg(not(feature = "heif"))]

@@ -41,7 +41,6 @@ craft-tiff = { git = "https://github.com/storytold/craft-libs", rev = "d6cd7836d
 craft-psd = { git = "https://github.com/storytold/craft-libs", rev = "d6cd7836d364177661b0ae17f48a0805e83a5f32" }
 craft-stream-codecs = { git = "https://github.com/storytold/craft-libs", rev = "d6cd7836d364177661b0ae17f48a0805e83a5f32" }
 craft-jxl = { git = "https://github.com/storytold/craft-libs", rev = "d6cd7836d364177661b0ae17f48a0805e83a5f32" }
-craft-heif = { git = "https://github.com/storytold/craft-libs", rev = "d6cd7836d364177661b0ae17f48a0805e83a5f32" }
 craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.1.0", rev = "e98299546f5c5c3c22388d16507f8b5e61a5f280", features = ["egui"] }
 # internal
 vectorcraft-geom = { path = "crates/geom" }
@@ -122,6 +121,16 @@ ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
 # craft-stream-codecs' Group 3 rows with (vectorcraft-doc's and vectorcraft-engine's dev-dependencies).
 tiff = "0.11"
 zune-jpeg = "0.5"
+# JPEG XL decoder (pure Rust, MIT OR Apache-2.0): File › Open and Place read `.jxl` images. It is
+# built without its default `rayon` feature and decodes on one thread.
+jxl-oxide = { version = "0.12.6", default-features = false }
+# jxl-oxide's color conversions, run on colors after their alpha is divided out.
+jxl-color = "0.11.0"
+# jxl-oxide's buffer allocation error, told apart from other decoding errors.
+jxl-grid = "0.6.2"
+# Tests: a lossless JPEG XL encoder (pure Rust, MIT OR Apache-2.0 OR Zlib) for the `.jxl` test files.
+zune-jpegxl = { version = "0.5.2", default-features = false, features = ["std"] }
+zune-core = "0.5"
 hayro-ccitt = "0.3"
 jpeg-encoder = { version = "0.6", default-features = false, features = ["std"] }
 # Substring search for the EPS reader's PostScript `search`.

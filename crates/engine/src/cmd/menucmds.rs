@@ -1103,7 +1103,8 @@ fn decode_rgba(c: &str, blob: &vectorcraft_doc::ImageBlob) -> Result<image::Rgba
     // Print rasters run to gigabytes decoded: the same allowance opening them has.
     // The image's size as RGBA, read from its header, is held to that allowance before anything
     // is decoded (#1717).
-    if let Some((w, h)) = vectorcraft_doc::header_size(&blob.bytes)
+    let header = vectorcraft_doc::header_size(&blob.bytes);
+    if let Some((w, h)) = header
         && u64::from(w) * u64::from(h) > crate::cmd::fileio::MAX_RASTER_ALLOC / 4
     {
         return Err(bad(c, format!("an image of {w} × {h} pixels is too large to draw")));
@@ -1112,7 +1113,8 @@ fn decode_rgba(c: &str, blob: &vectorcraft_doc::ImageBlob) -> Result<image::Rgba
     opts.limits.max_pixels = crate::cmd::fileio::MAX_RASTER_ALLOC / 4;
     opts.limits.max_alloc = crate::cmd::fileio::MAX_RASTER_ALLOC;
     let img = craft_image_codecs::decode_with(&blob.bytes, &opts).map_err(|e| match e {
-        craft_image_codecs::CodecError::LimitExceeded(_) => bad(c, "the image is too large to draw"),
+        // Within the allowance from its header: a file that can't hold the pixels it declares.
+        craft_image_codecs::CodecError::LimitExceeded(_) if header.is_none() => bad(c, "the image is too large to draw"),
         _ => bad(c, format!("the image's pixels can't be read: {e}")),
     })?;
     let (w, h) = img.dimensions();

@@ -448,14 +448,46 @@ pub(crate) fn clear(blob: &ImageBlob, settings: &Settings, mut kept: Option<&mut
     Ok(Some(Cleared { blob: ImageBlob::png(png), width: w, height: h, cleared }))
 }
 
+/// The image's size and the bytes a pixel of it takes to change, read from its header: its
+/// samples as decoded (bitmaps as 8-bit gray, palettes as RGB, or RGBA with a transparent entry),
+/// those worked on and kept for the PNG, and the work. A header that gives only the size (one
+/// whose file can't hold its pixels) counts the fewest: one 8-bit sample. `None` when the header
+/// doesn't say.
+fn header_pixels(bytes: &[u8]) -> Option<(u32, u32, u64)> {
+    use craft_image_codecs::RasterColorType as T;
+    let Some(i) = craft_image_codecs::inspect_raster(bytes).ok().flatten() else {
+        return vectorcraft_doc::header_size(bytes).map(|(w, h)| (w, h, 1 + 2 * 4 + WORK_BYTES));
+    };
+    let deep = i.bits_per_sample > 8 && i.color_type != T::Indexed;
+    let channels = match i.color_type {
+        T::Indexed => 3 + u64::from(i.transparent_index.is_some()),
+        T::Bitmap => 1,
+        _ => u64::from(i.channels.max(1)),
+    };
+    let samples = channels * if deep { 2 } else { 1 };
+    Some((i.width, i.height, samples + 2 * if deep { 8 } else { 4 } + WORK_BYTES))
+}
+
 /// `blob`'s pixels as straight RGBA, whether they were gray, and its ICC profile. An image that
 /// can't be decoded or is too large to change is an error. The pixels are kept in `kept`, when it
 /// is given, if a copy of them fits the decode allowance beside the work. Errors are command `cmd`'s.
 fn decode(blob: &ImageBlob, kept: Option<&mut DecodedImages>, cmd: &str) -> Result<(Arc<Pixels>, bool, Option<Vec<u8>>)> {
+    // The file's pixels, those worked on (as many again for the PNG made of them) and the work,
+    // checked from the header before anything is decoded.
+    let too_large = |w: u32, h: u32, per_pixel: u64| {
+        u64::from(w).checked_mul(u64::from(h)).and_then(|n| n.checked_mul(per_pixel)).is_none_or(|n| n > MAX_RASTER_ALLOC)
+    };
+    let header = header_pixels(&blob.bytes);
+    if let Some((w, h, per_pixel)) = header
+        && too_large(w, h, per_pixel)
+    {
+        return Err(bad(cmd, format!("an image of {w} × {h} pixels is too large to change")));
+    }
     let mut opts = craft_image_codecs::DecodeOptions::default();
     opts.limits.max_alloc = MAX_RASTER_ALLOC;
     let img = craft_image_codecs::decode_with(&blob.bytes, &opts).map_err(|e| match e {
-        craft_image_codecs::CodecError::LimitExceeded(_) => bad(cmd, "the image is too large to change"),
+        // Within the allowance from its header: a file that can't hold the pixels it declares.
+        craft_image_codecs::CodecError::LimitExceeded(_) if header.is_none() => bad(cmd, "the image is too large to change"),
         _ => bad(cmd, format!("the image's pixels can't be read: {e}")),
     })?;
     let (w, h) = img.dimensions();
@@ -463,7 +495,7 @@ fn decode(blob: &ImageBlob, kept: Option<&mut DecodedImages>, cmd: &str) -> Resu
     let deep = img.sample_type() == craft_image_codecs::SampleType::U16;
     let gray = matches!(img.layout(), craft_image_codecs::ChannelLayout::Gray | craft_image_codecs::ChannelLayout::GrayA);
     let per_pixel = u64::from(img.layout().channels() as u32 * img.sample_type().bytes() as u32) + 2 * if deep { 8 } else { 4 } + WORK_BYTES;
-    if u64::from(w).checked_mul(u64::from(h)).and_then(|n| n.checked_mul(per_pixel)).is_none_or(|n| n > MAX_RASTER_ALLOC) {
+    if too_large(w, h, per_pixel) {
         return Err(bad(cmd, format!("an image of {w} × {h} pixels is too large to change")));
     }
     #[cfg(test)]

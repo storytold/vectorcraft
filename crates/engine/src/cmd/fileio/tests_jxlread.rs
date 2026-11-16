@@ -1,39 +1,20 @@
 //! Reading JPEG XL images: the bare codestream and the container, alpha, 16-bit samples, the size
 //! check before decoding, and damaged files refused without a panic.
 
-use craft_jxl::{EncodeOptions, ImageRef, Layout, Samples};
 use serde_json::json;
+use zune_core::bit_depth::BitDepth;
+use zune_core::colorspace::ColorSpace;
+use zune_core::options::EncoderOptions;
 
-use super::jxlread::{decode, is_jxl, oriented_resolution, pixel_boxes};
+use super::jxlread::{ToSrgb, decode, is_jxl, oriented_resolution, output_profile, pixel_boxes, to_rgba};
 use super::*;
 
-#[derive(Clone, Copy)]
-enum BitDepth {
-    Eight,
-    Sixteen,
-}
-
-/// A lossless JPEG XL codestream of `w` × `h` pixels: `samples` in `layout`, 8-bit, or 16-bit in
+/// A lossless JPEG XL codestream of `w` × `h` pixels: `samples` in `space`, 8-bit, or 16-bit in
 /// native byte order.
-fn jxl(w: usize, h: usize, layout: Layout, depth: BitDepth, samples: &[u8]) -> Vec<u8> {
-    let opts = EncodeOptions { lossless: true, ..EncodeOptions::default() };
-    match depth {
-        BitDepth::Eight => craft_jxl::encode(
-            &ImageRef { width: w as u32, height: h as u32, layout, samples: Samples::U8(samples) },
-            opts,
-            &craft_jxl::Metadata::default(),
-        )
-        .unwrap(),
-        BitDepth::Sixteen => {
-            let u16s: Vec<u16> = samples.as_chunks::<2>().0.iter().map(|c| u16::from_ne_bytes([c[0], c[1]])).collect();
-            craft_jxl::encode(
-                &ImageRef { width: w as u32, height: h as u32, layout, samples: Samples::U16(&u16s) },
-                opts,
-                &craft_jxl::Metadata::default(),
-            )
-            .unwrap()
-        }
-    }
+fn jxl(w: usize, h: usize, space: ColorSpace, depth: BitDepth, samples: &[u8]) -> Vec<u8> {
+    let mut out = vec![];
+    zune_jpegxl::JxlSimpleEncoder::new(samples, EncoderOptions::new(w, h, space, depth)).encode(&mut out).unwrap();
+    out
 }
 
 /// `codestream` in the ISOBMFF container: the signature box, `ftyp` and a `jxlc` box holding it.
@@ -51,7 +32,7 @@ fn container(codestream: &[u8]) -> Vec<u8> {
 const RGBA: [[u8; 4]; 6] = [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255], [200, 100, 50, 128], [9, 9, 9, 0], [77, 77, 77, 255]];
 
 fn rgba8() -> Vec<u8> {
-    jxl(3, 2, Layout::Rgba, BitDepth::Eight, RGBA.as_flattened())
+    jxl(3, 2, ColorSpace::RGBA, BitDepth::Eight, RGBA.as_flattened())
 }
 
 fn b64(bytes: &[u8]) -> String {
@@ -64,27 +45,7 @@ fn stored_pixels(s: &Session) -> Vec<[u8; 4]> {
     assert_eq!(doc.images.len(), 1);
     let blob = doc.images.values().next().unwrap();
     assert_eq!(blob.mime, "image/png", "stored as PNG");
-    craft_image_codecs::decode(&blob.bytes)
-        .map(|__cimg| {
-            let (__w, __h) = __cimg.dimensions();
-            match (__cimg.layout(), __cimg.sample_type()) {
-                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
-                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
-                }
-                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
-                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
-                }
-                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
-                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
-                }
-                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
-            }
-        })
-        .unwrap()
-        .to_rgba8()
-        .pixels()
-        .map(|p| p.0)
-        .collect()
+    image::load_from_memory(&blob.bytes).unwrap().to_rgba8().pixels().map(|p| p.0).collect()
 }
 
 #[test]
@@ -183,13 +144,13 @@ fn a_copied_jxl_file_pastes_as_its_image() {
 fn sixteen_bit_samples_become_eight_bits() {
     let rgb: [[u16; 3]; 4] = [[0x0000, 0x8080, 0xffff], [0x1234, 0x80ff, 0x7f00], [0xff00, 0x00ff, 0x4000], [0xc000, 0x0101, 0xfefe]];
     let samples: Vec<u8> = rgb.as_flattened().iter().flat_map(|v| v.to_ne_bytes()).collect();
-    let f = jxl(2, 2, Layout::Rgb, BitDepth::Sixteen, &samples);
+    let f = jxl(2, 2, ColorSpace::RGB, BitDepth::Sixteen, &samples);
     let to8 = |v: u16| (f64::from(v) / 65535.0 * 255.0).round() as u8;
     let want: Vec<[u8; 4]> = rgb.iter().map(|p| [to8(p[0]), to8(p[1]), to8(p[2]), 255]).collect();
     assert_eq!(decode(&f, 1 << 30).unwrap().0.pixels().map(|p| p.0).collect::<Vec<_>>(), want);
     // Gray, 16 bits, in the container, opened as a document.
     let gray: Vec<u8> = [0xffffu16, 0x8080, 0x0000, 0x4040].iter().flat_map(|v| v.to_ne_bytes()).collect();
-    let f = container(&jxl(2, 2, Layout::Gray, BitDepth::Sixteen, &gray));
+    let f = container(&jxl(2, 2, ColorSpace::Luma, BitDepth::Sixteen, &gray));
     let mut s = Session::new();
     s.execute("document.open", &json!({"name": "gray.jxl", "dataBase64": b64(&f)})).unwrap();
     assert_eq!(stored_pixels(&s), [[255, 255, 255, 255], [128, 128, 128, 255], [0, 0, 0, 255], [64, 64, 64, 255]]);
@@ -231,14 +192,56 @@ fn an_image_too_large_is_refused_from_its_header() {
 /// the image is too large to draw, as when its size alone is.
 #[test]
 fn an_image_whose_decoder_buffers_pass_the_allowance_is_too_large() {
-    assert!(decode(&rgba8(), 24).unwrap_err().contains("too large to draw"));
+    assert_eq!(decode(&rgba8(), 24).unwrap_err(), "an image of 3 × 2 pixels is too large to draw");
     let gray: Vec<u8> = (0..64 * 64).map(|i| (i % 251) as u8).collect();
-    let f = container(&jxl(64, 64, Layout::Gray, BitDepth::Eight, &gray));
-    assert!(decode(&f, 64 * 64 * 4).unwrap_err().contains("too large to draw"));
+    let f = container(&jxl(64, 64, ColorSpace::Luma, BitDepth::Eight, &gray));
+    assert_eq!(decode(&f, 64 * 64 * 4).unwrap_err(), "an image of 64 × 64 pixels is too large to draw");
     assert!(decode(&f, 1 << 20).is_ok());
     // A file cut short is still reported as cut short or unreadable.
     let e = decode(&f[..f.len() - 3], 1 << 20).unwrap_err();
     assert!(!e.contains("too large"), "{e}");
+}
+
+/// Premultiplied colors are divided by their alpha before they are converted to sRGB: a linear
+/// 0.25 at alpha 0.5 is a straight linear 0.5, which sRGB stores as 0.735 (188 of 255).
+#[test]
+fn associated_alpha_is_divided_out_before_the_color_conversion() {
+    use jxl_oxide::{ColorEncodingWithProfile, EnumColourEncoding, NullCms, RenderingIntent};
+    let srgb = EnumColourEncoding::srgb(RenderingIntent::Relative);
+    let linear = EnumColourEncoding { tf: jxl_oxide::color::TransferFunction::Linear, ..srgb.clone() };
+    let header = jxl_oxide::JxlImage::builder().read(&rgba8()[..]).unwrap();
+    let m = &header.image_header().metadata;
+    let to_srgb = ToSrgb::Transform(
+        jxl_color::ColorTransform::new(
+            &ColorEncodingWithProfile::new(linear),
+            &ColorEncodingWithProfile::new(srgb),
+            &m.opsin_inverse_matrix,
+            &m.tone_mapping,
+            &NullCms,
+        )
+        .unwrap(),
+    );
+    let mut colors = [vec![0.0; 2], vec![0.0; 2], vec![0.0; 2]];
+    let mut out = [0u8; 8];
+    for convert in [&to_srgb, &ToSrgb::Curve] {
+        to_rgba(&[0.25, 0.25, 0.25, 0.5, 0.0, 0.0, 0.0, 0.0], 4, true, Some(convert), &mut colors, &mut out).unwrap();
+        assert_eq!(out, [188, 188, 188, 128, 0, 0, 0, 0]);
+        // Straight alpha is left as it is.
+        to_rgba(&[0.25, 0.25, 0.25, 0.5, 1.0, 1.0, 1.0, 1.0], 4, false, Some(convert), &mut colors, &mut out).unwrap();
+        assert_eq!(out, [137, 137, 137, 128, 255, 255, 255, 255]);
+    }
+    // Gray with another white point converts through three channels and comes back as gray.
+    let gray_e = EnumColourEncoding {
+        white_point: jxl_oxide::color::WhitePoint::E,
+        tf: jxl_oxide::color::TransferFunction::Linear,
+        ..EnumColourEncoding::gray_srgb(RenderingIntent::Relative)
+    };
+    let gray_srgb = ColorEncodingWithProfile::new(EnumColourEncoding::gray_srgb(RenderingIntent::Relative));
+    let to_gray =
+        jxl_color::ColorTransform::new(&ColorEncodingWithProfile::new(gray_e), &gray_srgb, &m.opsin_inverse_matrix, &m.tone_mapping, &NullCms)
+            .unwrap();
+    to_rgba(&[0.25, 0.5, 1.0, 1.0], 2, true, Some(&ToSrgb::Transform(to_gray)), &mut colors, &mut out).unwrap();
+    assert_eq!(out, [188, 188, 188, 128, 255, 255, 255, 255]);
 }
 
 /// A container's Exif and Brotli-compressed boxes are left out: an unreadable `brob` box before the
@@ -258,17 +261,53 @@ fn metadata_boxes_are_not_read() {
     assert_eq!(decode(&f, 1 << 30).unwrap().0.pixels().map(|p| p.0).collect::<Vec<_>>(), RGBA);
 }
 
-/// The PNG carries the profile, the pixels and the resolution.
+/// Colors left in their embedded RGB profile keep it: the PNG they are stored in carries the
+/// profile. Colors converted to sRGB, and a gray image's colors, which come back as RGB, are stored
+/// without one.
 #[test]
 fn colors_left_in_their_icc_profile_keep_it() {
+    use image::ImageDecoder as _;
+    use jxl_oxide::{EnumColourEncoding, RenderingIntent};
+    // A profile jxl-color can't turn into a JPEG XL color space, so the decoder leaves the colors
+    // in it: the sRGB profile with the tag of its red curve renamed.
+    let unnamed = |encoding: &EnumColourEncoding, curve: &[u8; 4]| {
+        let mut icc = jxl_color::icc::colour_encoding_to_icc(encoding);
+        let count = u32::from_be_bytes(icc[128..132].try_into().unwrap()) as usize;
+        for at in (0..count).map(|i| 132 + 12 * i) {
+            if icc[at..at + 4] == curve[..] {
+                icc[at..at + 4].copy_from_slice(b"xTRC");
+            }
+        }
+        icc
+    };
+    let srgb = EnumColourEncoding::srgb(RenderingIntent::Relative);
+    let rgb = unnamed(&srgb, b"rTRC");
+    assert_ne!(rgb, jxl_color::icc::colour_encoding_to_icc(&srgb), "a tag renamed");
+    assert_eq!(output_profile(false, false, Some(&rgb)).unwrap(), Some(rgb.clone()));
+    assert_eq!(output_profile(true, false, Some(&rgb)).unwrap(), None, "XYB-encoded colors become sRGB");
+    assert_eq!(output_profile(false, false, Some(&jxl_color::icc::colour_encoding_to_icc(&srgb))).unwrap(), None, "converted to sRGB");
+    let gray = unnamed(&EnumColourEncoding::gray_srgb(RenderingIntent::Relative), b"kTRC");
+    assert!(!jxl_oxide::ColorEncodingWithProfile::with_icc(&gray).unwrap().icc_profile().is_empty());
+    assert_eq!(output_profile(false, true, Some(&gray)).unwrap_err(), "the JPEG XL file can't be read: unsupported grayscale ICC profile");
+    assert_eq!(
+        output_profile(false, true, Some(&jxl_color::icc::colour_encoding_to_icc(&EnumColourEncoding::gray_srgb(RenderingIntent::Relative))))
+            .unwrap(),
+        None
+    );
+    assert_eq!(output_profile(false, false, None).unwrap(), None);
+    // A color image left in a profile that is not an RGB one can't be stored as RGB.
+    let mut lab = rgb.clone();
+    lab[16..20].copy_from_slice(b"Lab ");
+    assert_eq!(output_profile(false, false, Some(&lab)).unwrap_err(), "the JPEG XL file can't be read: unsupported ICC profile color space");
+    assert_eq!(output_profile(true, false, Some(&lab)).unwrap(), None, "XYB-encoded colors become sRGB");
+    // The PNG carries the profile, the pixels and the resolution.
     let img = image::RgbaImage::from_raw(2, 1, vec![200, 100, 50, 255, 9, 9, 9, 0]).unwrap();
-    let dummy_icc = vec![0u8; 128];
-    for icc in [Some(dummy_icc), None] {
+    for icc in [Some(rgb), None] {
         let RasterImage { blob, width, height, .. } = super::load::as_png(img.clone(), icc.clone(), Some((144.0, 144.0))).unwrap();
         assert_eq!((width, height), (2, 1));
-        let decoded = craft_image_codecs::decode(&blob.bytes).unwrap();
-        assert_eq!(decoded.icc, icc);
-        assert_eq!(decoded.data(), img.as_raw().as_slice());
+        let mut png = image::codecs::png::PngDecoder::new(std::io::Cursor::new(&blob.bytes[..])).unwrap();
+        assert_eq!(png.icc_profile().unwrap(), icc);
+        assert_eq!(image::DynamicImage::from_decoder(png).unwrap().to_rgba8(), img);
         assert_eq!(super::ppi::resolution(&blob.bytes).map(|(x, y)| (x.round(), y.round())), Some((144.0, 144.0)));
     }
 }

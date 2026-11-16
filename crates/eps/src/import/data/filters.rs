@@ -367,7 +367,13 @@ pub(super) fn fax_settings(d: Option<&DictRef>) -> Res<CcittParams> {
     }
     // Group 4 below 0, one-dimensional Group 3 at 0, mixed Group 3 above (the row's tag bit says
     // how it is coded, so any positive `K` reads the same); `as` saturates.
-    let k = if k < 0.0 { -1 } else if k == 0.0 { 0 } else { (k as i64).max(1) };
+    let k = if k < 0.0 {
+        -1
+    } else if k == 0.0 {
+        0
+    } else {
+        (k as i64).max(1)
+    };
     Ok(CcittParams {
         k,
         columns: columns as i64,

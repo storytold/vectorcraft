@@ -99,6 +99,15 @@ fn pixels(s: &Session, id: NodeId) -> DynamicImage {
                 (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
                     image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
                 }
+                (layout, craft_image_codecs::SampleType::U16) => {
+                    let v = __cimg.to_u16_samples().unwrap();
+                    match layout {
+                        craft_image_codecs::ChannelLayout::Gray => image::DynamicImage::ImageLuma16(ImageBuffer::from_raw(__w, __h, v).unwrap()),
+                        craft_image_codecs::ChannelLayout::GrayA => image::DynamicImage::ImageLumaA16(ImageBuffer::from_raw(__w, __h, v).unwrap()),
+                        craft_image_codecs::ChannelLayout::Rgb => image::DynamicImage::ImageRgb16(ImageBuffer::from_raw(__w, __h, v).unwrap()),
+                        _ => image::DynamicImage::ImageRgba16(ImageBuffer::from_raw(__w, __h, v).unwrap()),
+                    }
+                }
                 _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
             }
         })
