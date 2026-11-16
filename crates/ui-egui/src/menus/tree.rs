@@ -547,6 +547,23 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Overprint Preview", "view.overprintPreview"),
                 c("Pixel Preview", "view.pixelPreview"),
                 c("Trim View", "view.trimView"),
+                sub(
+                    "Split View",
+                    vec![
+                        c("Enable Split View", "view.splitView"),
+                        Sep,
+                        c("Vertical", "view.splitVertical"),
+                        c("Horizontal", "view.splitHorizontal"),
+                        Sep,
+                        c("Preview", "view.splitPreview"),
+                        c("Outline", "view.splitOutline"),
+                        c("Pixel Preview", "view.splitPixelPreview"),
+                        c("Overprint Preview", "view.splitOverprintPreview"),
+                        c("Trim View", "view.splitTrimView"),
+                        Sep,
+                        c("Reset Divider", "view.splitReset"),
+                    ],
+                ),
                 c("Presentation Mode", "view.presentation"),
                 sub(
                     "Screen Mode",

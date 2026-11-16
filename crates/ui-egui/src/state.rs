@@ -6,6 +6,52 @@ use vectorcraft_geom::Point;
 
 use crate::theme::Brightness;
 
+/// Orientation of the shared-canvas comparison divider.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SplitOrientation {
+    Vertical,
+    Horizontal,
+}
+
+/// The comparison side's render mode, independent of the ordinary view settings.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SplitMode {
+    Preview,
+    Outline,
+    PixelPreview,
+    OverprintPreview,
+    TrimView,
+}
+
+/// Per-view comparison settings; older UI state opens with split view disabled.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SplitView {
+    pub enabled: bool,
+    pub orientation: SplitOrientation,
+    pub fraction: f32,
+    pub comparison: SplitMode,
+}
+
+impl Default for SplitView {
+    fn default() -> Self {
+        Self { enabled: false, orientation: SplitOrientation::Vertical, fraction: 0.5, comparison: SplitMode::Outline }
+    }
+}
+
+impl SplitView {
+    /// The finite divider position within the canvas, including both endpoints.
+    pub fn ratio(&self) -> f32 {
+        if self.fraction.is_finite() { self.fraction.clamp(0.0, 1.0) } else { 0.5 }
+    }
+
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 /// Per-document view (camera).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct View {
@@ -27,11 +73,14 @@ pub struct View {
     /// document opens in Preview.
     #[serde(default)]
     pub outline: bool,
+    /// The optional comparison across this view's shared canvas.
+    #[serde(default, skip_serializing_if = "SplitView::is_default")]
+    pub split: SplitView,
 }
 
 impl Default for View {
     fn default() -> Self {
-        Self { zoom: 1.0, center: Point::new(306.0, 396.0), fitted: false, rotation: 0.0, artboard: 0, outline: false }
+        Self { zoom: 1.0, center: Point::new(306.0, 396.0), fitted: false, rotation: 0.0, artboard: 0, outline: false, split: SplitView::default() }
     }
 }
 
@@ -55,6 +104,7 @@ impl View {
             rotation: if v.rotation.is_finite() { v.rotation } else { 0.0 },
             artboard: 0,
             outline: false,
+            split: SplitView::default(),
         })
     }
 

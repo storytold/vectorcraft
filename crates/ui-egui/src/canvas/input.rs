@@ -21,10 +21,14 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     // so a tap whose press and lift come in one frame has no hover position: it presses (and
     // double-taps) where it was seen last (#491).
     let at = hover.or_else(|| pointer.interact_pos().filter(|p| rect.contains(*p)));
-    let view = app.view_info();
+    let view = super::split::input_view(app, ui, rect, at);
     let (backquote_now, backquote_before) = backquote_seen(ui);
     let f = Pointing { resp, rect, pointer: &pointer, m, space, xf, v, view, backquote_before, modal };
     touch_gestures(app, ui, rect, view, modal);
+    if super::split::divider_input(app, ui, resp, rect, modal, space) {
+        poll_tool(app, ui, view);
+        return;
+    }
     // Pressed and held still, a pen or a finger opens the context menu (egui's long touch): the
     // tool's press is dropped, as a right-click presses nothing. Under a modal dialog it drops nothing.
     if resp.long_touched() && !modal {
@@ -62,13 +66,17 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         center: v.center,
         zoom: v.zoom,
         rotation: v.rotation,
+        outline: view.outline,
+        pixel: view.pixel_preview,
         doc: app.session.active().map(|st| (st.uid, st.revision)),
     };
-    let (tool_switched, context_changed) = ui.data_mut(|d| {
+    let (tool_switched, context_changed, mode_changed) = ui.data_mut(|d| {
         let id = egui::Id::unique("canvas-hover-context");
         let prev = d.get_temp::<HoverContext>(id);
         d.insert_temp(id, context);
-        prev.map_or((false, false), |prev| (prev.tool != context.tool, prev != context))
+        prev.map_or((false, false, false), |prev| {
+            (prev.tool != context.tool, prev != context, (prev.outline, prev.pixel) != (context.outline, context.pixel))
+        })
     });
 
     if app.ui.screen_mode == 3 && matches!(drag, None | Some(Drag::Present | Drag::Gesture)) {
@@ -137,7 +145,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     } else if let Some(p) = hover_tool
         // A press on an artboard's name starts no drag: the moves while it is held are not hover.
         && !(pointer.primary_down() && ui.data(|d| d.get_temp::<(usize, bool)>(name_press_id()).is_some()))
-        && (pointer.is_moving() || mods_changed || !was_over || tool_switched || (context_changed && app.session.tool_wants_rehover()))
+        && (pointer.is_moving() || mods_changed || !was_over || tool_switched || mode_changed || (context_changed && app.session.tool_wants_rehover()))
     {
         let ev = PointerEvent {
             kind: PointerKind::Move,
@@ -159,11 +167,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     // The tool works on another thread (a large selection's planar map or merge): it checks each
     // frame whether the work is done, and then shows the highlight under the pointer or applies
     // the edit.
-    if app.session.tool_waiting() {
-        let r = app.session.tool_poll(view, false);
-        apply_requests(app, r);
-        ui.ctx().request_repaint_after(std::time::Duration::from_millis(16));
-    }
+    poll_tool(app, ui, view);
     if pointer.primary_released()
         && let Some((i, shift)) = ui.data_mut(|d| d.remove_temp::<(usize, bool)>(name_press_id()))
     {
@@ -189,8 +193,18 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     {
         triple_click(app, ui, &f, p);
     }
+    super::split::end_press(ui);
     if drag.is_some() || pointer.is_moving() || mods_changed {
         ui.ctx().request_repaint();
+    }
+}
+
+/// Completion belongs to the frame even when the divider owns the pointer.
+fn poll_tool(app: &mut VectorcraftApp, ui: &Ui, view: vectorcraft_engine::ViewInfo) {
+    if app.session.tool_waiting() {
+        let r = app.session.tool_poll(view, false);
+        apply_requests(app, r);
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(16));
     }
 }
 
@@ -338,6 +352,9 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
         crate::document_drag::begin(app, ui.ctx(), ev.pos);
         Drag::Tool
     };
+    if tool_holds(d) {
+        super::split::latch(app, ui, view);
+    }
     // A drag of the Zoom, Hand or Rotate View tool uses the tool of a held shortcut; held Space's
     // view tools are not that tool.
     if !space && matches!(d, Drag::ZoomBox { .. } | Drag::ZoomScrub { .. } | Drag::Pan { .. } | Drag::RotateView { .. }) {

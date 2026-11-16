@@ -261,6 +261,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // with the frame's text, below: the loop then skips Enter, the first key.
     let enter_types = app.session.tool_wants_text();
     for (k, tk) in [(Key::Enter, ToolKey::Enter), (Key::Escape, ToolKey::Escape)].into_iter().skip(usize::from(enter_types)) {
+        // The divider owns Escape before a tool can clear its key anchor or consume the key.
+        if k == Key::Escape && crate::canvas::dragging_split(ctx) {
+            continue;
+        }
         if !typing && !composing && !take_claimed_repeat(app, ctx, k, tk, view) && pressed_anew(ctx, k) {
             // A chord a command is bound to (Cmd+Enter) runs only that command, in the shortcuts
             // below, also when the tool claims the key. While the Type tool edits text only Cmd

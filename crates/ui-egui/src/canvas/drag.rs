@@ -16,6 +16,8 @@ pub(super) struct HoverContext {
     pub(super) center: Point,
     pub(super) zoom: f64,
     pub(super) rotation: f64,
+    pub(super) outline: bool,
+    pub(super) pixel: bool,
     /// The active document's id and revision (which moves with every edit, undo and selection
     /// change).
     pub(super) doc: Option<(u64, u64)>,
@@ -27,6 +29,7 @@ pub(crate) fn end_document_drag(ctx: &egui::Context) {
         d.remove::<Drag>(drag_id());
         d.remove::<Pos2>(drag_pos_id());
     });
+    super::split::forget(ctx);
 }
 
 /// Temp-memory key for the active canvas drag state.
@@ -274,6 +277,7 @@ pub(super) fn space_lends_view_tools(app: &VectorcraftApp, m: egui::Modifiers, s
 /// Drop the tool press in progress, if any: nothing it began is kept, and the rest of the press
 /// does nothing ([`Drag::Gesture`]).
 pub(super) fn drop_press(app: &mut VectorcraftApp, ui: &Ui, view: vectorcraft_engine::ViewInfo) {
+    super::split::cancel_divider(ui.ctx());
     match ui.data(|d| d.get_temp::<Drag>(drag_id())) {
         Some(Drag::Tool | Drag::Art) => {
             // The tool drops the press, and a mouse-up returns it to rest with the options it had

@@ -45,6 +45,14 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         // counts as off: the item turns it into area type with Block on).
         "type.dynamicText" => selected_text(|_| true).is_some_and(|t| t.dynamic_text && !matches!(t.kind, vectorcraft_engine::doc::TextKind::Point)),
         "view.outline" => app.outline_view(),
+        "view.splitView" => app.view().is_some_and(|view| view.split.enabled),
+        "view.splitVertical" => app.view().is_some_and(|view| view.split.orientation == crate::state::SplitOrientation::Vertical),
+        "view.splitHorizontal" => app.view().is_some_and(|view| view.split.orientation == crate::state::SplitOrientation::Horizontal),
+        "view.splitPreview" => app.view().is_some_and(|view| view.split.comparison == crate::state::SplitMode::Preview),
+        "view.splitOutline" => app.view().is_some_and(|view| view.split.comparison == crate::state::SplitMode::Outline),
+        "view.splitPixelPreview" => app.view().is_some_and(|view| view.split.comparison == crate::state::SplitMode::PixelPreview),
+        "view.splitOverprintPreview" => app.view().is_some_and(|view| view.split.comparison == crate::state::SplitMode::OverprintPreview),
+        "view.splitTrimView" => app.view().is_some_and(|view| view.split.comparison == crate::state::SplitMode::TrimView),
         "view.pixelPreview" => v.pixel_preview,
         "view.trimView" => v.trim_view,
         "view.snapToPixel" => v.snap_to_pixel,
@@ -245,6 +253,15 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         | "view.fitAll"
         | "view.actualSize"
         | "view.outline"
+        | "view.splitView"
+        | "view.splitVertical"
+        | "view.splitHorizontal"
+        | "view.splitPreview"
+        | "view.splitOutline"
+        | "view.splitPixelPreview"
+        | "view.splitOverprintPreview"
+        | "view.splitTrimView"
+        | "view.splitReset"
         | "view.rotate" => app.session.active().is_some(),
         "view.rotateToSelection" | crate::addons::arrange::ZOOM => app.session.active().is_some_and(|d| !d.selection.objects.is_empty()),
         id if id.starts_with("file.openRecent") => recent_slot(app, id).is_some(),

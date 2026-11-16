@@ -2,6 +2,7 @@ use super::{canvas, cursors, render_worker};
 
 /// Cached canvas raster.
 pub struct CanvasCache {
+    pub(crate) split: canvas::split_cache::SplitCache,
     pub renderer: vectorcraft_render::Renderer,
     pub texture: Option<egui::TextureHandle>,
     pub key: Option<CacheKey>,

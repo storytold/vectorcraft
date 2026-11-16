@@ -118,7 +118,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     {
         return Some(r);
     }
-    run_ui_part1(app, id, p)
+    run_split_view(app, id)
+        .or_else(|| run_ui_part1(app, id, p))
         .or_else(|| run_ui_part2(app, id, p))
         .or_else(|| run_ui_part3(app, id, p))
         .or_else(|| run_ui_part4(app, id, p))
@@ -131,6 +132,27 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         .or_else(|| run_ui_part11(app, id, p))
         .or_else(|| run_ui_part12(app, id, p))
         .or_else(|| run_ui_part13(app, id, p))
+}
+
+/// Split comparison commands change only the active view; the canvas owns gesture cleanup.
+fn run_split_view(app: &mut VectorcraftApp, id: &str) -> Option<Result<Value, String>> {
+    use crate::state::{SplitMode, SplitOrientation, SplitView};
+
+    let update: fn(&mut SplitView) = match id {
+        "view.splitView" => |s| s.enabled = !s.enabled,
+        "view.splitVertical" => |s| s.orientation = SplitOrientation::Vertical,
+        "view.splitHorizontal" => |s| s.orientation = SplitOrientation::Horizontal,
+        "view.splitPreview" => |s| s.comparison = SplitMode::Preview,
+        "view.splitOutline" => |s| s.comparison = SplitMode::Outline,
+        "view.splitPixelPreview" => |s| s.comparison = SplitMode::PixelPreview,
+        "view.splitOverprintPreview" => |s| s.comparison = SplitMode::OverprintPreview,
+        "view.splitTrimView" => |s| s.comparison = SplitMode::TrimView,
+        "view.splitReset" => |s| s.fraction = 0.5,
+        _ => return None,
+    };
+    let Some(view) = app.view_mut() else { return Some(Err("no document".into())) };
+    update(&mut view.split);
+    Some(Ok(json!(view.split)))
 }
 
 /// UI commands, part 1.
