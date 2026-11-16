@@ -1971,3 +1971,160 @@ fn selected_stories_list_each_frame_once() {
     app.run("select.set", json!({"ids": []})).unwrap();
     assert!(selected_stories(&app).is_empty());
 }
+
+/// Check that the kept list of the selected stories, and the type objects it resolves to, are the
+/// ones a fresh build works out.
+fn assert_stories_are_fresh(app: &VectorcraftApp, what: &str) {
+    let st = app.session.active().unwrap();
+    let fresh = build_selected_stories(st);
+    assert_eq!(selected_stories(app), fresh, "{what}");
+    let texts = selected_story_texts(app);
+    let expected: Vec<_> = fresh
+        .iter()
+        .filter_map(|id| match &st.doc.node(*id)?.kind {
+            NodeKind::Text(t) => Some(t.as_ref()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts.len(), expected.len(), "{what}: type objects");
+    assert!(texts.iter().zip(&expected).all(|(t, e)| std::ptr::eq(*t, *e)), "{what}: the current document's type objects, in order");
+}
+
+/// The kept list of the selected stories follows every change it is worked out from: an edit, a
+/// new selection (in another order, or as long with other objects, also without a new revision),
+/// a selected group and a switch to another document at the same revision.
+#[test]
+fn kept_selected_stories_follow_the_document_and_the_selection() {
+    let (mut app, [a, b, c], other) = story_selected_in_its_first_frame();
+    assert_stories_are_fresh(&app, "a frame of a story");
+    let builds = STORY_BUILDS.get();
+    assert_eq!(selected_stories(&app), [a, b, c].map(NodeId).to_vec());
+    assert_eq!(STORY_BUILDS.get(), builds, "a second read keeps the list");
+
+    app.run("text.setStyle", json!({"size": 9})).unwrap();
+    assert_stories_are_fresh(&app, "after an edit");
+    app.run("select.set", json!({"ids": [other, a]})).unwrap();
+    assert_stories_are_fresh(&app, "two stories");
+    app.run("select.set", json!({"ids": [a, other]})).unwrap();
+    assert_stories_are_fresh(&app, "the same objects in another order");
+    app.run("select.set", json!({"ids": [other, b]})).unwrap();
+    assert_stories_are_fresh(&app, "as many other objects");
+    app.session.doc_mut().unwrap().selection.objects = vec![NodeId(other)];
+    assert_stories_are_fresh(&app, "a new selection at the same revision");
+    assert_eq!(selected_stories(&app), vec![NodeId(other)]);
+
+    app.run("select.set", json!({"ids": [other, a]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    assert_stories_are_fresh(&app, "a selected group");
+
+    let revision = app.session.active().unwrap().revision;
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let only = app.run("text.create", json!({"x": 20, "y": 50, "text": "Only", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    let st = app.session.doc_mut().unwrap();
+    st.selection.objects = vec![NodeId(group)];
+    st.revision = revision;
+    assert_stories_are_fresh(&app, "another document with the first one's selection and revision");
+    assert_ne!(selected_stories(&app), [a, b, c, other].map(NodeId).to_vec());
+    app.run("select.set", json!({"ids": [only]})).unwrap();
+    assert_stories_are_fresh(&app, "the other document's own type");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert_stories_are_fresh(&app, "back in the first document");
+
+    app.run("select.set", json!({"ids": []})).unwrap();
+    assert!(selected_stories(&app).is_empty());
+    assert!(selected_story_texts(&app).is_empty());
+}
+
+/// What the Character and Paragraph panels draw, and the values of their fields, with the list of
+/// the selected stories kept and with it built for every read.
+fn panels_kept_and_unkept(app: &mut VectorcraftApp) -> [(Vec<String>, String); 2] {
+    let read = |app: &mut VectorcraftApp, unkept: bool| {
+        STORIES_UNKEPT.set(unkept);
+        let ctx = egui::Context::default();
+        let mut texts = vec![];
+        for _ in 0..3 {
+            texts = super::super::tests_appearance::frame_events(&ctx, app, vec![], |app, ui| {
+                show(app, ui);
+                crate::panels::paragraph::show(app, ui);
+            });
+        }
+        // A rect's position can be NaN, which `Rect`'s `==` refuses to compare.
+        let texts: Vec<String> = texts.iter().map(|(text, rect)| format!("{text} {rect:?}")).collect();
+        let fields = format!(
+            "{:?} {:?}",
+            [
+                shared_effective(app, |s| s.size),
+                shared_effective(app, |s| s.h_scale),
+                shared_effective(app, |s| s.v_scale),
+                shared_effective(app, |s| s.baseline_shift),
+                shared_leading(app),
+                shared(app, |s| s.tracking),
+            ],
+            (
+                shared(app, |s| (s.font_family.clone(), s.font_style.clone())),
+                shared(app, |s| (s.all_caps, s.underline, s.strikethrough, s.position)),
+                selected_fonts(app),
+                any_style(app, |s| s.underline),
+                selected_stories(app),
+                selected_story_texts(app).len(),
+                text_style(app).map(|(c, p)| (c.size, p.left_indent)),
+            )
+        );
+        STORIES_UNKEPT.set(false);
+        (texts, fields)
+    };
+    [read(app, true), read(app, false)]
+}
+
+/// The panels show the same thing whether the list of the selected stories is kept or worked out
+/// for each field: with nothing selected, one story, several stories with mixed values and a
+/// Type tool selection inside one story.
+#[test]
+fn panels_show_the_same_with_the_kept_selected_stories() {
+    let (mut app, [a, b, c], other) = story_selected_in_its_first_frame();
+    let same = |app: &mut VectorcraftApp, what: &str| {
+        let [unkept, kept] = panels_kept_and_unkept(app);
+        assert_eq!(unkept.1, kept.1, "{what}: field values");
+        assert_eq!(unkept.0, kept.0, "{what}: what the panels draw");
+        unkept.1
+    };
+    app.run("select.set", json!({"ids": []})).unwrap();
+    same(&mut app, "nothing selected");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    let one = same(&mut app, "one story");
+    app.run("text.setStyle", json!({"ids": [c], "size": 20, "tracking": 50})).unwrap();
+    app.run("text.setFormat", json!({"ids": [b], "underline": true, "hScale": 120})).unwrap();
+    app.run("select.set", json!({"ids": [other, a]})).unwrap();
+    let mixed = same(&mut app, "several stories with mixed values");
+    assert_ne!(one, mixed);
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 4, "caret": 15}));
+    assert_eq!(text_editing(&app), Some((NodeId(a), 4, 15)));
+    same(&mut app, "a Type tool selection inside one story");
+}
+
+/// One frame of the Character and Paragraph panels works out the selected stories once, though
+/// many of their fields read them; a change to the document works them out again.
+#[test]
+fn panels_work_out_the_selected_stories_once_per_frame() {
+    let (mut app, [a, ..], other) = story_selected_in_its_first_frame();
+    app.run("select.set", json!({"ids": [other, a]})).unwrap();
+    let ctx = egui::Context::default();
+    let frame = |app: &mut VectorcraftApp| {
+        let builds = STORY_BUILDS.get();
+        super::super::tests_appearance::frame_events(&ctx, app, vec![], |app, ui| {
+            show(app, ui);
+            crate::panels::paragraph::show(app, ui);
+        });
+        STORY_BUILDS.get() - builds
+    };
+    frame(&mut app);
+    app.run("text.setStyle", json!({"size": 9})).unwrap();
+    assert_eq!(frame(&mut app), 1, "one build after an edit");
+    assert_eq!(frame(&mut app), 0, "nothing changed");
+    STORIES_UNKEPT.set(true);
+    let reads = frame(&mut app);
+    STORIES_UNKEPT.set(false);
+    assert!(reads > 1, "the fields read the list {reads} times");
+}
