@@ -189,6 +189,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // search field leaves them the keyboard.
     let list_open = recent_list_open(ctx);
     let mut run: Option<String> = None;
+    let mut history_focused = false;
     // The highlighted result (#1757): Up and Down move it (wrapping), the pointer over a result
     // takes it, and a new query starts again from the first.
     let sel_id = egui::Id::unique("palette-selected");
@@ -212,6 +213,14 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
         rsel = rsel.min(rn - 1);
     }
+    // Enter or Space runs the row the arrow keys of this frame moved to. The keys are taken here,
+    // since a row's button turns them into a click of the row that had the keyboard last frame.
+    if list_open
+        && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter) | i.consume_key(egui::Modifiers::NONE, egui::Key::Space))
+        && let Some(e) = recent.get(rsel)
+    {
+        run = Some(e.id.clone());
+    }
     let n = matches.len();
     if n > 0 && !list_open {
         let (down, up) =
@@ -234,13 +243,16 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         .hint_text(tl!("Search commands and tools…"))
                         .desired_width(470.0),
                 );
-                if !list_open {
-                    r.request_focus();
-                }
                 // Recent Commands: the last picks, most recent first. A choice runs as a pick of
                 // the same result does. The first row takes the keyboard when the list opens, and
                 // the row with the keyboard keeps it while the list is open.
                 let button = crate::widgets::icon_button(ui, "history", tl!("Recent Commands"), false, 24.0);
+                // The search field keeps the keyboard, except while the list is open or Tab has
+                // moved it to the list's button, where Enter or Space opens the list.
+                history_focused = button.has_focus();
+                if !list_open && !history_focused {
+                    r.request_focus();
+                }
                 egui::Popup::menu(&button).id(recent_list_id()).show(|ui| {
                     if recent.is_empty() {
                         ui.add_enabled(false, egui::Button::new(tl!("No recent commands")));
@@ -272,6 +284,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 }
             }
             if !list_open
+                && !history_focused
                 && ui.input(|i| i.key_pressed(egui::Key::Enter))
                 && let Some(e) = matches.get(sel)
             {
@@ -730,6 +743,46 @@ mod tests {
             assert_eq!(h.state().ui.recent_commands.first().map(String::as_str), Some(ran), "{keys:?}: {:?}", h.state().ui.recent_commands);
             assert_eq!(h.state().ui.recent_commands.len(), 2, "{keys:?}: no search result ran");
         }
+    }
+
+    /// #6376: Down and Enter that arrive in the same frame run the row Down moved to, not the row
+    /// that had the keyboard before.
+    #[test]
+    fn down_and_enter_in_one_frame_run_the_row_down_moved_to() {
+        use egui_kittest::kittest::Queryable;
+        let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        app.ui.recent_commands = vec!["object.group".into(), "paint.swap".into()];
+        let mut h = palette_harness(app);
+        h.get_by_label(tl!("Recent Commands")).click();
+        h.run_steps(2);
+        // `key_press` runs a frame for each event, so both keys go into the next frame's input.
+        for key in [egui::Key::ArrowDown, egui::Key::Enter] {
+            h.input_mut().events.push(egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE });
+        }
+        h.run_steps(2);
+        assert!(!h.state().ui.palette_open, "the palette closes");
+        assert_eq!(h.state().ui.recent_commands, ["paint.swap", "object.group"]);
+    }
+
+    /// #6376: Tab moves the keyboard from the search field to the Recent Commands button and it
+    /// stays there; Enter then opens the list instead of running the highlighted result.
+    #[test]
+    fn tab_reaches_the_recent_commands_button_and_enter_opens_the_list() {
+        use egui_kittest::kittest::Queryable;
+        let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        app.ui.recent_commands = vec!["object.group".into()];
+        let mut h = palette_harness(app);
+        h.state_mut().ui.palette_query = "zoom".into();
+        h.run_steps(2);
+        h.key_press(egui::Key::Tab);
+        h.run_steps(3);
+        assert!(h.get_by_label(tl!("Recent Commands")).is_focused(), "the button keeps the keyboard");
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        assert!(h.state().ui.palette_open, "no search result ran");
+        let shown = build(crate::i18n::current()).into_iter().find(|e| e.id == "object.group").unwrap().shown;
+        assert!(h.query_by(|n| n.label().is_some_and(|l| l.starts_with(&shown))).is_some(), "the list is open");
+        assert_eq!(h.state().ui.recent_commands, ["object.group"]);
     }
 
     /// #6376: another open popup leaves the palette's keys alone: Enter still runs the highlighted
