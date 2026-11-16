@@ -770,6 +770,9 @@
 	Magic Wand	Taikasauva
 	Navigator	Navigaattori
 	Navigator Panel Options	Navigaattori-paneelin asetukset
+	Attributes Panel Options	Määritteet-paneelin asetukset
+	Number of Recent URLs:	Viimeisimpien URL-osoitteiden määrä:
+@msg	`count` must be a whole number from 1 to 30	`count` on oltava kokonaisluku 1–30
 	Draw Dashed Lines as Solid Lines	Piirrä katkoviivat yhtenäisinä viivoina
 	Pattern Options	Kuvion asetukset
 	Properties	Ominaisuudet

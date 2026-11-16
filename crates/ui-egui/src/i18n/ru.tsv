@@ -2221,6 +2221,9 @@ file-filter	Templates	Шаблоны
 	Navigate	Навигация
 	Navigator	Навигатор
 	Navigator Panel Options	Параметры панели «Навигатор»
+	Attributes Panel Options	Параметры панели «Атрибуты»
+	Number of Recent URLs:	Число последних URL:
+@msg	`count` must be a whole number from 1 to 30	`count` должно быть целым числом от 1 до 30
 	Draw Dashed Lines as Solid Lines	Рисовать штриховые линии сплошными
 	Needs the desktop app	Требуется настольное приложение
 	Neutral Gradients	Нейтральные градиенты

@@ -2113,6 +2113,9 @@ font-technology	Variable	Променливи
 	Navigate	Навигация
 	Navigator	Навигатор
 	Navigator Panel Options	Опции за панела „Навигатор“
+	Attributes Panel Options	Опции за панела „Атрибути“
+	Number of Recent URLs:	Брой скорошни URL адреси:
+@msg	`count` must be a whole number from 1 to 30	`count` трябва да е цяло число от 1 до 30
 	Draw Dashed Lines as Solid Lines	Изчертаване на прекъснатите линии като плътни
 	Needs the desktop app	Изисква десктоп приложение
 	Neutral Gradients	Неутрални градиенти

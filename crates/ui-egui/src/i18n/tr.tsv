@@ -2009,6 +2009,9 @@ font-technology	Variable	Değişken
 	Navigate	Gezin
 	Navigator	Gezgin
 	Navigator Panel Options	Gezgin Paneli Seçenekleri
+	Attributes Panel Options	Nitelikler Paneli Seçenekleri
+	Number of Recent URLs:	Son URL Sayısı:
+@msg	`count` must be a whole number from 1 to 30	`count` 1 ile 30 arasında bir tam sayı olmalıdır
 	Draw Dashed Lines as Solid Lines	Kesikli Çizgileri Düz Çizgi Olarak Çiz
 	Needs the desktop app	Masaüstü uygulaması gerekiyor
 	Neutral Gradients	Nötr Degradeler

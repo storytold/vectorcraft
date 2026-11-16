@@ -194,7 +194,8 @@ pub struct Session {
     /// `plugin.install` takes `grant` and `allowHeavy` from any request
     /// ([`Session::allow_plugin_grants_from_requests`]).
     plugin_grants_from_requests: bool,
-    /// URLs recently given in the Attributes panel (`attributes.set {url}`), newest first; not saved.
+    /// URLs recently given in the Attributes panel (`attributes.set {url}`), newest first, at most
+    /// [`cmd::RECENT_URLS`]; not saved.
     pub recent_urls: Vec<String>,
     /// The saved tracing presets' revision and latest changes ([`Session::trace_presets_revision`]).
     pub(crate) trace_preset_changes: cmd::TracePresetChanges,

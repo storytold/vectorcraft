@@ -726,6 +726,9 @@
 	Magic Wand	Różdżka
 	Navigator	Nawigator
 	Navigator Panel Options	Opcje panelu Nawigator
+	Attributes Panel Options	Opcje panelu Atrybuty
+	Number of Recent URLs:	Liczba ostatnich adresów URL:
+@msg	`count` must be a whole number from 1 to 30	`count` musi być liczbą całkowitą od 1 do 30
 	Draw Dashed Lines as Solid Lines	Rysuj linie przerywane jako ciągłe
 	Pattern Options	Opcje wzorka
 	Properties	Właściwości

@@ -2737,6 +2737,9 @@ file-filter	Templates	Sablonok
 	Navigate	Navigálás
 	Navigator	Navigátor
 	Navigator Panel Options	Navigátor panel beállításai
+	Attributes Panel Options	Attribútumok panel beállításai
+	Number of Recent URLs:	Legutóbbi URL-ek száma:
+@msg	`count` must be a whole number from 1 to 30	`count`: 1 és 30 közötti egész szám kell
 	Draw Dashed Lines as Solid Lines	Szaggatott vonalak rajzolása folytonosként
 	Needs the desktop app	Az asztali alkalmazás kell hozzá
 	Negative	Negatív

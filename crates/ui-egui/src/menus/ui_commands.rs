@@ -1101,6 +1101,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{color?: #rrggbb or a preset name (Light Red, the default, then the layer colors such as \"Light Blue\"), solidDashes?: bool (Draw Dashed Lines as Solid Lines, off by default: the Navigator's thumbnail draws dashed strokes without their dashes; the canvas, printing and exports keep them)} set the Navigator panel's options, the color its view box is drawn in and solid dashes (kept with the UI state) → {color, solidDashes}; with neither, open its Panel Options (dialog `navigatorPanelOptions`, fields color, solidDashes; OK sets them); an error for a value that is not a color or not true or false, which changes nothing",
     ),
     (
+        "ui.attributesPanelOptions",
+        "Panel Options…",
+        "",
+        "{count?: 1–30 (10 by default)} set how many of the recent URLs (attributes.info › recentUrls, which keeps 30) the Attributes panel's URL menu lists, newest first (kept with the UI state) → {count}; without count, open its Panel Options (dialog `attributesPanelOptions`, field count; OK sets it); an error for a count that is not a whole number from 1 to 30, which changes nothing",
+    ),
+    (
         "ui.layersExpand",
         "Expand Layers Panel Rows",
         "",

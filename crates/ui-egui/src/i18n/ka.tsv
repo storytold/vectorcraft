@@ -2773,6 +2773,9 @@
 	Magic Wand	ჯადოსნური ჯოხი
 	Navigator	ნავიგატორი
 	Navigator Panel Options	ნავიგატორის პანელის პარამეტრები
+	Attributes Panel Options	ატრიბუტების პანელის პარამეტრები
+	Number of Recent URLs:	ბოლოდროინდელი URL-ების რაოდენობა:
+@msg	`count` must be a whole number from 1 to 30	`count` უნდა იყოს მთელი რიცხვი 1-დან 30-მდე
 	Draw Dashed Lines as Solid Lines	ტირეებიანი ხაზების უწყვეტ ხაზებად დახატვა
 	Pattern Options	პატერნის პარამეტრები
 	Properties	თვისებები

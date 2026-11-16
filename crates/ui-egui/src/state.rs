@@ -853,6 +853,9 @@ pub struct UiState {
     /// Navigator panel › Panel Options… (the view box color, Draw Dashed Lines as Solid Lines).
     #[serde(default)]
     pub navigator_panel: crate::panels::navigator::PanelOptions,
+    /// Attributes panel › Panel Options… (how many recent URLs the URL menu lists).
+    #[serde(default)]
+    pub attributes_panel: crate::panels::attributes::PanelOptions,
     /// The Layers panel's Filter (`ui.layersFilter`). It is not saved and lasts the session, as the
     /// Search All text does.
     #[serde(skip)]
@@ -1273,6 +1276,7 @@ impl Default for UiState {
             trace_hold_source: None,
             layers_panel: Default::default(),
             navigator_panel: Default::default(),
+            attributes_panel: Default::default(),
             layers_filter: Default::default(),
             swatches_view: Default::default(),
             graphic_styles_view: Default::default(),

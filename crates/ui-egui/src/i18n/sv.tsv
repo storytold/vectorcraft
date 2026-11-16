@@ -2129,6 +2129,9 @@ font-technology	Variable	Variabla
 	Navigate	Navigera
 	Navigator	Navigator
 	Navigator Panel Options	Alternativ för panelen Navigator
+	Attributes Panel Options	Alternativ för panelen Attribut
+	Number of Recent URLs:	Antal senaste URL:er:
+@msg	`count` must be a whole number from 1 to 30	`count` måste vara ett heltal från 1 till 30
 	Draw Dashed Lines as Solid Lines	Rita streckade linjer som heldragna linjer
 	Needs the desktop app	Kräver skrivbordsappen
 	Neutral Gradients	Neutrala gradienter

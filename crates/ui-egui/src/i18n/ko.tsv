@@ -791,6 +791,9 @@ digits	Malayalam	말라얄람어
 	Magic Wand	마술봉
 	Navigator	내비게이터
 	Navigator Panel Options	내비게이터 패널 옵션
+	Attributes Panel Options	속성 패널 옵션
+	Number of Recent URLs:	최근 URL 수:
+@msg	`count` must be a whole number from 1 to 30	`count`은(는) 1에서 30 사이의 정수여야 합니다
 	Draw Dashed Lines as Solid Lines	점선을 실선으로 그리기
 	Pattern Options	패턴 옵션
 	Properties	속성

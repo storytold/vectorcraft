@@ -2776,6 +2776,9 @@ digits	Malayalam	Malaiàlam
 	Navigate	Navega
 	Navigator	Navegador
 	Navigator Panel Options	Opcions del panell Navegador
+	Attributes Panel Options	Opcions del panell Atributs
+	Number of Recent URLs:	Nombre d’URL recents:
+@msg	`count` must be a whole number from 1 to 30	`count` ha de ser un nombre enter d’1 a 30
 	Draw Dashed Lines as Solid Lines	Dibuixa les línies discontínues com a contínues
 	Needs a choice	Necessita una tria
 	Needs a key	Necessita una clau

@@ -3032,6 +3032,9 @@ antiAlias	Sharp	शार्प
 	Navigate	नेविगेट करें
 	Navigator	नेविगेटर
 	Navigator Panel Options	नेविगेटर पैनल ऑप्शन्स
+	Attributes Panel Options	एट्रिब्यूट्स पैनल ऑप्शन्स
+	Number of Recent URLs:	हाल के URL की संख्या:
+@msg	`count` must be a whole number from 1 to 30	`count` 1 से 30 तक पूरी संख्या होना चाहिए
 	Nearly Closed Paths	लगभग बंद पाथ
 	Nearly Coincident Anchors	लगभग Coincident एंकर
 	Needless Clipping Groups	अनावश्यक क्लिपिंग समूह

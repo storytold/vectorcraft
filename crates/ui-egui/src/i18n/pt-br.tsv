@@ -1829,6 +1829,9 @@ antiAlias	Sharp	Nítido
 	Navigate	Navegar
 	Navigator	Navegador
 	Navigator Panel Options	Opções do painel Navegador
+	Attributes Panel Options	Opções do painel Atributos
+	Number of Recent URLs:	Número de URLs Recentes:
+@msg	`count` must be a whole number from 1 to 30	`count` deve ser um número inteiro de 1 a 30
 	Draw Dashed Lines as Solid Lines	Desenhar linhas tracejadas como linhas sólidas
 	Needs the desktop app	Requer o aplicativo de desktop
 	Neutral Gradients	Gradientes Neutros

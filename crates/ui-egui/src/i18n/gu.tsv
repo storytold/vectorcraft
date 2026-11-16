@@ -2278,6 +2278,9 @@
 	Navigate	નેવિગેટ કરો
 	Navigator	નેવિગેટર
 	Navigator Panel Options	નેવિગેટર પૅનલ વિકલ્પો
+	Attributes Panel Options	ગુણધર્મો પૅનલ વિકલ્પો
+	Number of Recent URLs:	તાજેતરના URLની સંખ્યા:
+@msg	`count` must be a whole number from 1 to 30	`count` 1 થી 30 સુધીની પૂર્ણ સંખ્યા હોવી જોઈએ
 	Needs Attention Only	માત્ર ધ્યાન માગતા
 	Needs a choice	પસંદગી જરૂરી
 	Needs a key	કીની જરૂર છે

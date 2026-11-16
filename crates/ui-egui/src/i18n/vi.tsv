@@ -2555,6 +2555,9 @@ digits	Hindi	Hindi
 	Navigate	Dẫn hướng
 	Navigator	Bộ dẫn hướng
 	Navigator Panel Options	Tùy chọn bảng bộ dẫn hướng
+	Attributes Panel Options	Tùy chọn bảng thuộc tính
+	Number of Recent URLs:	Số URL gần đây:
+@msg	`count` must be a whole number from 1 to 30	`count` phải là số nguyên từ 1 đến 30
 	Draw Dashed Lines as Solid Lines	Vẽ đường nét đứt thành đường liền
 	Needs the desktop app	Cần ứng dụng máy tính để bàn
 	Neutral Gradients	Chuyển sắc trung tính

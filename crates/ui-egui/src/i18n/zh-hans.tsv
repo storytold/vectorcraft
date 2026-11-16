@@ -2096,6 +2096,9 @@ file-filter	Templates	模板
 	Navigate	导航
 	Navigator	导航器
 	Navigator Panel Options	导航器面板选项
+	Attributes Panel Options	属性面板选项
+	Number of Recent URLs:	最近使用的网址数量：
+@msg	`count` must be a whole number from 1 to 30	`count` 必须是 1 到 30 之间的整数
 	Draw Dashed Lines as Solid Lines	将虚线绘制为实线
 	Needs the desktop app	需要桌面应用
 	Neutral Gradients	中性渐变

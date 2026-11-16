@@ -3398,6 +3398,9 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Magic Wand	Magisk tryllestav
 	Navigator	Navigator
 	Navigator Panel Options	Indstillinger for navigatorpanelet
+	Attributes Panel Options	Indstillinger for attributpanelet
+	Number of Recent URLs:	Antal seneste URL'er:
+@msg	`count` must be a whole number from 1 to 30	`count` skal være et heltal fra 1 til 30
 	Draw Dashed Lines as Solid Lines	Tegn stiplede linjer som hele linjer
 	Pattern Options	Mønsterindstillinger
 	Properties	Egenskaber

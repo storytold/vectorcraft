@@ -15,6 +15,7 @@ pub mod action_select_object;
 pub mod action_set_options;
 pub mod action_stop;
 pub mod artboard_options;
+pub mod attributes_panel_options;
 pub mod blend_options;
 mod brush_art_options;
 pub mod brush_delete;
@@ -466,6 +467,7 @@ registry! {
     LayerOptions: [layer_options::KIND] => layer_options::SPEC,
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
     NavigatorPanelOptions: [navigator_panel_options::KIND] => navigator_panel_options::SPEC,
+    AttributesPanelOptions: [attributes_panel_options::KIND] => attributes_panel_options::SPEC,
     PathfinderOptions: [pathfinder_options::KIND] => pathfinder_options::SPEC,
     PixelSnapOptions: [pixel_snap_options::KIND] => pixel_snap_options::SPEC,
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,

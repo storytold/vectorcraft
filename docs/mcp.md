@@ -5692,9 +5692,18 @@ paths and compound paths, and `path.reverse {reversed?}` makes subpaths run coun
 (false). When every subpath of a path or compound path turns alike, its strokes' width profiles (left and right swapped) and pen
 pressure, tilt, bearing and rotation turn with it, so the strokes draw as before. SVG export wraps an object with a URL in `<a xlink:href>`, and SVG import reads `<a href>` links back.
 
+`recentUrls` keeps the 30 newest distinct URLs given in the session, newest first. The panel's URL menu lists the
+first 10 of them by default; the panel menu's Panel Options… opens the `attributesPanelOptions` dialog (field `count`),
+and `ui.attributesPanelOptions {count}` sets the number without it, a whole number from 1 to 30 → `{count}`. A lower
+count hides the older URLs without removing them from `recentUrls`. The count is kept with the UI state; a count out of
+range is an error and changes nothing. The help page
+[Create image maps for web graphics](https://helpx.adobe.com/illustrator/desktop/save-and-export/export-files-to-different-formats/create-image-maps-for-web-graphics.html)
+describes the same 1 to 30 range; the default of 10 is VectorCraft's own value.
+
 ```json
 {"name":"run_command","arguments":{"command":"attributes.set","params":{"ids":[12],"url":"https://example.com","imageMap":"rectangle"}}}
 {"name":"run_command","arguments":{"command":"path.setFillRule","params":{"rule":"evenOdd"}}}
+{"name":"invoke_menu","arguments":{"command":"ui.attributesPanelOptions","params":{"count":20}}}
 ```
 
 ## SVG interactivity

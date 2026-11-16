@@ -798,6 +798,9 @@ digits	Malayalam	マラヤーラム数字
 	Magic Wand	自動選択
 	Navigator	ナビゲーター
 	Navigator Panel Options	ナビゲーターパネルオプション
+	Attributes Panel Options	属性パネルオプション
+	Number of Recent URLs:	最近使った URL の数:
+@msg	`count` must be a whole number from 1 to 30	`count` には 1 から 30 までの整数を指定してください
 	Draw Dashed Lines as Solid Lines	破線を実線で表示
 	Pattern Options	パターンオプション
 	Properties	プロパティ

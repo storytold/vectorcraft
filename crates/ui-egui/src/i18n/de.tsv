@@ -2193,6 +2193,9 @@ file-filter	Templates	Vorlagen
 	Navigate	Navigieren
 	Navigator	Navigator
 	Navigator Panel Options	Optionen für das Navigatorbedienfeld
+	Attributes Panel Options	Optionen für das Attributebedienfeld
+	Number of Recent URLs:	Anzahl zuletzt verwendeter URLs:
+@msg	`count` must be a whole number from 1 to 30	`count` muss eine ganze Zahl von 1 bis 30 sein
 	Draw Dashed Lines as Solid Lines	Gestrichelte Linien als durchgezogene Linien zeichnen
 	Needs the desktop app	Erfordert die Desktop-App
 	Neutral Gradients	Neutrale Verläufe

@@ -779,6 +779,9 @@
 	Magic Wand	Kouzelná hůlka
 	Navigator	Navigátor
 	Navigator Panel Options	Možnosti panelu Navigátor
+	Attributes Panel Options	Možnosti panelu Atributy
+	Number of Recent URLs:	Počet nedávných URL:
+@msg	`count` must be a whole number from 1 to 30	`count` musí být celé číslo od 1 do 30
 	Draw Dashed Lines as Solid Lines	Kreslit čárkované čáry jako plné
 	Pattern Options	Možnosti vzorku
 	Properties	Vlastnosti

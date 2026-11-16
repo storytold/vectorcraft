@@ -2184,6 +2184,9 @@ font-technology	Variable	Variables
 	Navigate	Naviguer
 	Navigator	Navigation
 	Navigator Panel Options	Options du panneau Navigation
+	Attributes Panel Options	Options du panneau Options d’objet
+	Number of Recent URLs:	Nombre d’URL récentes :
+@msg	`count` must be a whole number from 1 to 30	`count` doit être un nombre entier compris entre 1 et 30
 	Draw Dashed Lines as Solid Lines	Dessiner les pointillés en traits pleins
 	Needs the desktop app	Nécessite l’application de bureau
 	Neutral Gradients	Dégradés neutres
