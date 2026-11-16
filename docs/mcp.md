@@ -4305,7 +4305,10 @@ style is applied to gets them at the same place relative to its own bounds.
 (each on top of the ones before it) with the first one's transparency; `graphicStyle.move {name, to}` reorders the
 list (what dragging a style in the panel does). `graphicStyle.duplicate {name}` adds a copy of the style at the end
 of the list, named `<name> copy` (`<name> copy 2` and so on when that is taken), with no object linked to it; the
-panel menu's Duplicate Graphic Style and a style dropped on the panel's New Graphic Style button run it. Override Character Color (`graphicStyle.setOptions
+panel menu's Duplicate Graphic Style and a style dropped on the panel's New Graphic Style button run it.
+`graphicStyle.delete {name}` or `{names}` deletes styles in one undo step; objects linked to them keep their look and
+are no longer linked. The panel's Delete Graphic Style button and menu item, and a style dropped on the button, run it
+after asking; Alt held on the button, or on the drop, deletes without asking. Override Character Color (`graphicStyle.setOptions
 {overrideCharColor}`, the preference `overrideCharColor`, on by default) makes a style applied to type replace its
 characters' fill and stroke with the style's fills and strokes; off, the characters keep their colour under them.
 
