@@ -2648,7 +2648,11 @@ fn convert_image(bytes: &[u8], ext: &str) -> std::result::Result<Vec<u8>, String
         "bmp" => craft_image_codecs::Format::Bmp,
         _ => return Err(format!("can't write .{ext} images")),
     };
-    let img = craft_image_codecs::decode(bytes).map_err(|e| e.to_string())?;
+    let mut opts = craft_image_codecs::DecodeOptions::default();
+    opts.limits.max_alloc = vectorcraft_doc::MAX_RASTER_ALLOC;
+    opts.limits.max_width = u32::MAX;
+    opts.limits.max_height = u32::MAX;
+    let img = craft_image_codecs::decode_with(bytes, &opts).map_err(|e| e.to_string())?;
     let raw = if format == craft_image_codecs::Format::Jpeg {
         let rgb: Vec<u8> = img.to_rgba8().as_chunks::<4>().0.iter().flat_map(|p| [p[0], p[1], p[2]]).collect();
         craft_image_codecs::Image::from_raw(

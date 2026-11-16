@@ -107,12 +107,20 @@ impl LoadedTexture {
         }
         let mut opts = craft_image_codecs::DecodeOptions::default();
         opts.limits.max_alloc = vectorcraft_doc::MAX_RASTER_ALLOC;
+        // The codec default caps each side at 2^18; a stored texture can be longer than that and
+        // still fit the live and allocation budgets.
+        opts.limits.max_width = u32::MAX;
+        opts.limits.max_height = u32::MAX;
         let img = craft_image_codecs::decode_as_with(craft_image_codecs::Format::Png, png, &opts).ok()?;
         let (width, height) = img.dimensions();
         if width == 0 || height == 0 {
             return None;
         }
-        let luma = image::RgbaImage::from_raw(width, height, img.to_rgba8()).map(image::DynamicImage::ImageRgba8)?.into_luma8().into_raw();
+        use craft_image_codecs::{ChannelLayout as L, SampleType as S};
+        let luma = match (img.layout(), img.sample_type()) {
+            (L::Gray, S::U8) => img.into_data(),
+            _ => image::RgbaImage::from_raw(width, height, img.to_rgba8()).map(image::DynamicImage::ImageRgba8)?.into_luma8().into_raw(),
+        };
         Some(Self::new(width, height, luma))
     }
 
