@@ -23,7 +23,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     confirm,
     preview: true,
     // Load Texture… adds the texture it reads.
-    passes: |d, field| field == vectorcraft_effects::pixel::TEXTURE_IMAGE && matches!(d.str("__effect").as_str(), GLASS | TEXTURIZER),
+    passes: |d, field| field == vectorcraft_effects::pixel::TEXTURE_IMAGE && loads_texture(&d.str("__effect")),
     // OK could only fail the same way: off, beside the reason the dialog shows (#6140).
     ok_enabled: Some(|_, d| !(vectorcraft_effects::is_three_d(&d.str("__effect")) && d.fields.contains_key(form::REFUSED))),
     ..DialogSpec::FORM
@@ -220,6 +220,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
         None if id == GLASS => glass_fields(app, ui, d, GLASS),
         None if id == TEXTURIZER => glass_fields(app, ui, d, TEXTURIZER),
+        None if id == ROUGH_PASTELS => glass_fields(app, ui, d, ROUGH_PASTELS),
         None if id == TRANSFORM => transform_fields(ui, d, app.session.general_unit()),
         None if id == SCRIBBLE => scribble_fields(ui, d, app.session.general_unit()),
         None if id == ZIG_ZAG || id == ROUGHEN => size_fields(ui, d, &id, app.session.general_unit()),
@@ -320,12 +321,12 @@ fn center_round(x: f64) -> f64 {
 /// for Zoom, rings for Spin) drawn about the center. A press or a drag in the box puts the center
 /// there; with the keyboard focus the arrow keys move it 1 % of the box (10 % with Shift). The
 /// Horizontal and Vertical fields beside it type the same position in percent of the bounds' width
-/// and height. Changes go to `d.fields["centerX"]` and `["centerY"]`.
+/// and height. The center the box shows, kept within 0 to 1, goes to `d.fields["centerX"]` and
+/// `["centerY"]`.
 fn blur_center(ui: &mut egui::Ui, d: &mut Dialog) {
     use egui::{Key, Modifiers, Sense, Stroke};
     let [kx, ky] = BLUR_CENTER;
     let mut c = [d.f64(kx, 0.5).clamp(0.0, 1.0), d.f64(ky, 0.5).clamp(0.0, 1.0)];
-    let before = c;
     let t = Tokens::get(ui.ctx());
     let zoom = d.str("method").eq_ignore_ascii_case("zoom");
     form::caption(ui, "Blur Center");
@@ -403,9 +404,12 @@ fn blur_center(ui: &mut egui::Ui, d: &mut Dialog) {
             });
         });
     });
-    if c != before {
-        d.fields.insert(kx.into(), json!(c[0]));
-        d.fields.insert(ky.into(), json!(c[1]));
+    // A saved center outside the bounds is drawn at the nearest edge, and the fields hold that
+    // edge too, so OK sends the center the box shows.
+    for (key, v) in [(kx, c[0]), (ky, c[1])] {
+        if d.fields.get(key).and_then(Value::as_f64) != Some(v) {
+            d.fields.insert(key.into(), json!(v));
+        }
     }
 }
 
@@ -413,16 +417,23 @@ fn blur_center(ui: &mut egui::Ui, d: &mut Dialog) {
 const GLASS: &str = "distort.glass";
 /// The Texturizer effect (Effect › Texture › Texturizer…).
 const TEXTURIZER: &str = "texture.texturizer";
+/// The Rough Pastels effect (Effect › Artistic › Rough Pastels…).
+const ROUGH_PASTELS: &str = "artistic.roughPastels";
 
-/// Glass and Texturizer: parameters, the Texture menu ending with Loaded Texture once a texture is
-/// loaded, and Load Texture… with the loaded texture's size. Returns whether the values differ from
-/// those last previewed.
+/// Does effect `id` have Load Texture… in its dialog (Glass, Texturizer, Rough Pastels)?
+fn loads_texture(id: &str) -> bool {
+    matches!(id, GLASS | TEXTURIZER | ROUGH_PASTELS)
+}
+
+/// Glass, Texturizer and Rough Pastels: parameters, the Texture menu ending with Loaded Texture
+/// once a texture is loaded, and Load Texture… with the loaded texture's size. Returns whether the
+/// values differ from those last previewed.
 fn glass_fields(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id: &str) -> bool {
     use vectorcraft_effects::pixel::{TEXTURE_IMAGE, texture};
     // The stored texture is shown as its size, not as a text field.
     let stored = d.fields.remove(TEXTURE_IMAGE);
     let size = stored.as_ref().and_then(Value::as_str).and_then(texture).map(|t| t.size());
-    let menu = if id == TEXTURIZER { texturizer_textures(size.is_some()) } else { glass_textures(size.is_some()) };
+    let menu = if id == GLASS { glass_textures(size.is_some()) } else { texturizer_textures(size.is_some()) };
     let doc = vectorcraft_effects::effect_info(id).map(|e| e.params).unwrap_or_default();
     let unit = app.session.general_unit();
     let pick = |k: &str| if k == "texture" { Some(menu) } else { choices(id, k) };
@@ -438,11 +449,18 @@ fn glass_fields(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id:
             widgets::dim_label(ui, &format!("{w} × {h} px"));
         }
     });
-    if load
-        && let Err(e) = crate::picks::in_dialog(app, d, load_texture)
-        && e != "cancelled"
-    {
-        app.status(e);
+    if load {
+        // The Effect Gallery's Settings draw in a dialog of their own: its answer goes to the gallery.
+        let loaded = if d.fields.contains_key(super::effect_gallery::SETTINGS) {
+            super::effect_gallery::load_texture(app, d)
+        } else {
+            crate::picks::in_dialog(app, d, load_texture)
+        };
+        if let Err(e) = loaded
+            && e != "cancelled"
+        {
+            app.status(e);
+        }
     }
     values_changed(d)
 }
@@ -453,7 +471,8 @@ fn glass_textures(loaded: bool) -> form::Choices {
     if loaded { &GLASS_TEXTURES_LOADED } else { &GLASS_TEXTURES }
 }
 
-/// Texturizer's Texture menu, ending with Loaded Texture once a texture is `loaded`.
+/// Texturizer's and Rough Pastels' Texture menu, ending with Loaded Texture once a texture is
+/// `loaded`.
 fn texturizer_textures(loaded: bool) -> form::Choices {
     use vectorcraft_effects::pixel::{TEXTURES, TEXTURES_LOADED};
     if loaded { &TEXTURES_LOADED } else { &TEXTURES }
@@ -461,7 +480,7 @@ fn texturizer_textures(loaded: bool) -> form::Choices {
 
 /// Glass's Load Texture…: an image file the user picks, read into `textureImage` as Glass stores
 /// it and picked in the Texture menu.
-fn load_texture(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
+pub(super) fn load_texture(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     use vectorcraft_engine::cmd::fileio;
     let filters = crate::FilePick::filters(fileio::FORMATS.iter().filter(|f| f.read && f.raster).map(|f| (f.label, fileio::read_extensions(f))));
     let path = crate::picks::open(app, &crate::FilePick { filters, ..Default::default() }).ok_or("cancelled")?;
@@ -488,8 +507,10 @@ fn choices(effect: &str, key: &str) -> Option<form::Choices> {
         ("sketch.halftonePattern", "patternType") => Some(&vectorcraft_effects::pixel::HALFTONE_TYPES),
         ("sketch.plaster", "lightDirection") => Some(&vectorcraft_effects::pixel::LIGHT_DIRECTIONS),
         ("texture.grain", "grainType") => Some(&vectorcraft_effects::pixel::GRAIN_TYPES),
-        ("texture.texturizer" | "artistic.underpainting" | "sketch.conteCrayon", "texture") => Some(&vectorcraft_effects::pixel::TEXTURES),
-        ("sketch.basRelief" | "texture.texturizer" | "artistic.underpainting" | "sketch.conteCrayon", "lightDirection") => {
+        ("texture.texturizer" | "artistic.underpainting" | "artistic.roughPastels" | "sketch.conteCrayon", "texture") => {
+            Some(&vectorcraft_effects::pixel::TEXTURES)
+        }
+        ("sketch.basRelief" | "texture.texturizer" | "artistic.underpainting" | "artistic.roughPastels" | "sketch.conteCrayon", "lightDirection") => {
             Some(&vectorcraft_effects::pixel::LIGHT_DIRECTIONS)
         }
         ("video.deinterlace", "eliminate") => Some(&[("Odd Fields", "odd"), ("Even Fields", "even")]),
@@ -524,7 +545,7 @@ pub(super) fn own_choices(effect: &str, key: &str, cmyk: bool) -> Option<Vec<(&'
         }
         (vectorcraft_effects::CLASSIC_ROTATE, "surface") => vec![(tl!("No Shading"), "none"), (tl!("Diffuse"), "diffuse")],
         (vectorcraft_effects::CLASSIC_EXTRUDE | vectorcraft_effects::CLASSIC_REVOLVE | vectorcraft_effects::CLASSIC_ROTATE, "shadingColor") => {
-            vec![(tl!("Black"), "black"), (tl!("Custom"), "custom"), (tl!("None"), "none")]
+            vec![(tl!("Black"), "black"), (tl!("Custom"), "custom"), (tl!("None"), "none"), (tl!("Black Overprint"), "blackOverprint")]
         }
         (vectorcraft_effects::EXTRUDE | vectorcraft_effects::CLASSIC_EXTRUDE, "bevel") => vec![
             (tl!("None"), "none"),
@@ -547,10 +568,10 @@ pub(super) fn own_choices(effect: &str, key: &str, cmyk: bool) -> Option<Vec<(&'
 
 /// The values that parameter `key` of applied effect `effect` picks from, as its dialog lists
 /// them, as (label, value): our own effects' labels in the UI language, a plug-in's choices as the
-/// plug-in names them. Glass's Texture menu ends with Loaded Texture when the effect's values
-/// `params` hold a loaded texture, and the lists of [`own_choices`] are translated as their
-/// dialogs translate them (`cmyk`: the document is in CMYK). `None` for a parameter that is not one
-/// of these lists.
+/// plug-in names them. The Texture menu of Glass, Texturizer and Rough Pastels ends with Loaded
+/// Texture when the effect's values `params` hold a loaded texture, and the lists of
+/// [`own_choices`] are translated as their dialogs translate them (`cmyk`: the document is in
+/// CMYK). `None` for a parameter that is not one of these lists.
 pub(crate) fn shown_choices(effect: &str, key: &str, params: &Map<String, Value>, cmyk: bool) -> Option<Vec<(String, String)>> {
     if let Some(plugin) = vectorcraft_plugins::effect::installed(effect) {
         return plugin.manifest().param(key).and_then(|p| match &p.spec {
@@ -561,7 +582,7 @@ pub(crate) fn shown_choices(effect: &str, key: &str, params: &Map<String, Value>
     if let Some(own) = own_choices(effect, key, cmyk) {
         return Some(own.into_iter().map(|(label, value)| (tl!(label).to_string(), value.to_string())).collect());
     }
-    let options = if (effect == GLASS || effect == TEXTURIZER) && key == "texture" {
+    let options = if loads_texture(effect) && key == "texture" {
         use vectorcraft_effects::pixel::{TEXTURE_IMAGE, texture};
         let loaded = params.get(TEXTURE_IMAGE).and_then(Value::as_str).and_then(texture).is_some();
         if effect == GLASS { glass_textures(loaded) } else { texturizer_textures(loaded) }
@@ -1185,6 +1206,45 @@ mod tests {
         assert_eq!((&params["texture"], &params["textureImage"]), (&json!("loaded"), &json!(stored)));
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    /// Rough Pastels' Texture and Light Direction are menus, and Load Texture… matches Glass: pick,
+    /// Loaded Texture in the menu with the texture's size, OK applies, and the Appearance panel's
+    /// Texture menu lists Loaded Texture too.
+    #[test]
+    fn rough_pastels_load_texture_reads_the_picked_image_into_the_effect() {
+        let dir = std::env::temp_dir().join(format!("vectorcraft-rough-pastels-dialog-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("texture.png");
+        image::RgbaImage::from_fn(6, 4, |x, y| image::Rgba([(x * 40) as u8, (y * 60) as u8, 90, 255])).save(&path).unwrap();
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let picked = path.to_string_lossy().into_owned();
+        app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(picked.clone())));
+        app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("effect.dialog", json!({"effect": ROUGH_PASTELS})).unwrap();
+        let paint = |app: &mut VectorcraftApp| crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()));
+        let text = paint(&mut app);
+        assert!(text.lines().any(|l| l == "Load Texture…") && text.lines().any(|l| l == "Canvas") && text.lines().any(|l| l == "Top"), "{text}");
+        assert!(!text.contains("Loaded Texture") && !text.contains(" px"), "{text}");
+        let mut d = app.ui.dialog.take().unwrap();
+        load_texture(&mut app, &mut d).unwrap();
+        let stored = d.str(vectorcraft_effects::pixel::TEXTURE_IMAGE);
+        assert_eq!((d.str("texture"), vectorcraft_effects::pixel::texture(&stored).map(|t| t.size())), ("loaded".to_string(), Some((6, 4))));
+        app.ui.dialog = Some(d);
+        let text = paint(&mut app);
+        assert!(text.lines().any(|l| l == "Loaded Texture") && text.lines().any(|l| l == "6 × 4 px"), "{text}");
+        assert!(!text.contains(&stored[..24]), "the stored text isn't shown");
+        super::super::confirm(&mut app).unwrap();
+        let st = app.session.doc().unwrap();
+        let params = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params;
+        assert_eq!((&params["texture"], &params["textureImage"]), (&json!("loaded"), &json!(stored)));
+        let shown = shown_choices(ROUGH_PASTELS, "texture", params.as_object().unwrap(), false).unwrap();
+        assert_eq!(shown.last().map(|(_, v)| v.as_str()), Some(vectorcraft_effects::pixel::LOADED), "{shown:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// Effect > Stylize > Outer Glow: a swatch beside Color shows the effect's colour, typing a
     /// hex recolours it, and a double-click opens the Color Picker over the dialog; its OK fills
     /// Color, and the effect applies that colour.
@@ -1444,5 +1504,39 @@ mod tests {
             (RADIAL_BLUR, Some(0.26), Some(1.0)),
             "OK applies it"
         );
+    }
+
+    /// A Radial Blur whose saved Blur Center lies outside the object's bounds (a document written
+    /// by hand or by another build) opens with the center at the nearest edge, and OK stores that
+    /// edge instead of sending the saved value, which `effect.setParams` refuses.
+    #[test]
+    fn radial_blur_center_outside_the_bounds_opens_at_the_edge_and_ok_keeps_it() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("effect.apply", json!({"effect": RADIAL_BLUR, "params": {"amount": 20}})).unwrap();
+        {
+            let st = app.session.doc_mut().unwrap();
+            let d = std::sync::Arc::make_mut(&mut st.doc);
+            let fx = &mut d.node_mut(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0];
+            fx.params["centerX"] = json!(1.5);
+            fx.params["centerY"] = json!(-0.25);
+        }
+        app.run("effect.dialog", json!({"effect": RADIAL_BLUR, "index": 0})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        for k in 0..4 {
+            let input = egui::RawInput { time: Some(f64::from(k) * 0.05), ..Default::default() };
+            let mut out = ctx.run_ui(input, |ui| super::super::show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
+        }
+        let field = |k: &str| app.ui.dialog.as_ref().unwrap().fields.get(k).and_then(Value::as_f64);
+        assert_eq!((field("centerX"), field("centerY")), (Some(1.0), Some(0.0)), "the fields hold the center the box shows");
+        super::super::confirm(&mut app).unwrap();
+        let st = app.session.doc().unwrap();
+        let fx = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0];
+        assert_eq!((fx.params["centerX"].as_f64(), fx.params["centerY"].as_f64()), (Some(1.0), Some(0.0)), "OK stores the edge");
     }
 }

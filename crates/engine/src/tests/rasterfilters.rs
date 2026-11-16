@@ -287,7 +287,41 @@ fn rings_png() -> Vec<u8> {
         image::Rgba([v as u8, v as u8, 255 - v as u8, 255])
     });
     let mut png = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     png
 }
 
@@ -323,8 +357,7 @@ fn glass_loads_a_texture_saves_it_and_draws_it() {
     assert_eq!(doc.node(NodeId(g)).unwrap().appearance.effects[0].params, glass_params(&s, g));
     assert_eq!(Renderer::new().render_region(&doc, Rect::new(0.0, 0.0, 200.0, 200.0), 1.0, true).pixels, loaded.pixels);
     // The same file by path, through Effect Options, stores the same texture.
-    let dir = std::env::temp_dir().join(format!("vc-glass-texture-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = vectorcraft_testkit::TempDir::new("glass-texture");
     let path = dir.join("rings.png");
     std::fs::write(&path, &png).unwrap();
     let (mut t, h) = striped();
@@ -334,7 +367,7 @@ fn glass_loads_a_texture_saves_it_and_draws_it() {
     assert_eq!(glass_params(&t, h)["textureImage"], json!(stored));
     assert_eq!(glass_params(&t, h)["texture"], json!("loaded"));
     assert_eq!(render(&t).pixels, loaded.pixels);
-    let _ = std::fs::remove_dir_all(&dir);
+    drop(dir);
     // The stored string is taken as it is (as effect.list gives it, and a graphic style copies it).
     t.execute("effect.apply", &json!({"effect": "distort.glass", "ids": [h], "params": {"textureImage": stored, "texture": "frosted"}})).unwrap();
     let second = t.doc().unwrap().doc.node(NodeId(h)).unwrap().appearance.effects[1].params.clone();
@@ -389,6 +422,53 @@ fn texturizer_loads_a_texture_and_draws_it() {
     let doc = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
     assert_eq!(doc.node(NodeId(g)).unwrap().appearance.effects[0].params, glass_params(&s, g));
     assert_eq!(Renderer::new().render_region(&doc, Rect::new(0.0, 0.0, 200.0, 200.0), 1.0, true).pixels, loaded.pixels);
+}
+
+/// Effect › Artistic › Rough Pastels › Load Texture: an image file, given as bytes or by path, is
+/// stored with the effect and picked; it draws as the surface, a save and open keeps it, a file
+/// that isn't an image is refused without a change, and undo takes it away.
+#[test]
+fn rough_pastels_loads_a_texture_saves_it_and_draws_it() {
+    let png = rings_png();
+    let data = vectorcraft_format::base64_encode(&png);
+    let (mut s, g) = striped();
+    let file = json!({"name": "rings.png", "dataBase64": data});
+    s.execute("effect.apply", &json!({"effect": "artistic.roughPastels", "ids": [g], "params": {"relief": 20, "textureImage": file}})).unwrap();
+    let p = glass_params(&s, g);
+    assert_eq!(p["texture"], json!("loaded"), "loading a texture picks it");
+    let stored = p["textureImage"].as_str().unwrap().to_string();
+    assert_eq!(vectorcraft_render::effects::pixel::texture(&stored).unwrap().size(), (12, 10));
+    let loaded = render(&s);
+    for (_, builtin) in vectorcraft_render::effects::pixel::TEXTURES {
+        s.execute("effect.setParams", &json!({"index": 0, "ids": [g], "params": {"texture": builtin}})).unwrap();
+        assert!(mean_diff(&loaded, &render(&s)) > 0.001, "{builtin}");
+    }
+    s.execute("effect.setParams", &json!({"index": 0, "ids": [g], "params": {"texture": "loaded"}})).unwrap();
+    assert_eq!(render(&s).pixels, loaded.pixels, "the texture stayed with the effect");
+    let doc = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    assert_eq!(doc.node(NodeId(g)).unwrap().appearance.effects[0].params, glass_params(&s, g));
+    assert_eq!(Renderer::new().render_region(&doc, Rect::new(0.0, 0.0, 200.0, 200.0), 1.0, true).pixels, loaded.pixels);
+    // A file that isn't an image changes nothing.
+    let junk = vectorcraft_format::base64_encode(b"not an image");
+    let before = glass_params(&s, g);
+    let e = s.execute("effect.setParams", &json!({"index": 0, "ids": [g], "params": {"textureImage": {"dataBase64": junk}}})).unwrap_err();
+    assert!(e.to_string().contains("textureImage"), "{e}");
+    let e = s.execute("effect.setParams", &json!({"index": 0, "ids": [g], "params": {"textureImage": 5}})).unwrap_err();
+    assert!(e.to_string().contains("textureImage"), "{e}");
+    assert_eq!(glass_params(&s, g), before);
+    // The same file by path, through Effect Options, stores the same texture; undo takes it away.
+    let dir = vectorcraft_testkit::TempDir::new("rough-pastels-texture");
+    let path = dir.join("rings.png");
+    std::fs::write(&path, &png).unwrap();
+    let (mut t, h) = striped();
+    t.execute("effect.apply", &json!({"effect": "artistic.roughPastels", "ids": [h], "params": {"relief": 20}})).unwrap();
+    assert!(glass_params(&t, h).get("textureImage").is_none());
+    t.execute("effect.setParams", &json!({"index": 0, "ids": [h], "params": {"textureImage": {"path": path.to_string_lossy()}}})).unwrap();
+    drop(dir);
+    assert_eq!((&glass_params(&t, h)["textureImage"], &glass_params(&t, h)["texture"]), (&json!(stored), &json!("loaded")));
+    assert_eq!(render(&t).pixels, loaded.pixels);
+    t.execute("edit.undo", &json!({})).unwrap();
+    assert!(glass_params(&t, h).get("textureImage").is_none(), "undone");
 }
 
 #[test]

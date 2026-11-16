@@ -48,8 +48,10 @@ pub struct CharStyle {
     /// of the character's ink, inside its own width, that is taken away, 0 to [`MAX_TSUME`]. 50
     /// halves that space and 100 sets the ink edge to edge; the glyph itself is not scaled. A
     /// cluster takes the value of its first character. Tracking, kerning and Insert Aki are added
-    /// after it. Horizontal type only.
+    /// after it. In vertical type an upright character is measured above and below its ink, inside
+    /// its cell down the column.
     /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    /// <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/format-east-asian-characters-in-vertical-text.html>
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub tsume: f64,
     /// Use glyph shapes for automatic pair spacing; false uses font metrics.
@@ -180,6 +182,18 @@ pub struct CharStyle {
     /// these characters are drawn in, whatever digits were typed.
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub digits: Digits,
+    /// Adjust Horizontal Diacritic Position (Character panel, Middle Eastern options): the font's
+    /// mark glyphs among these characters (GDEF class 3, such as Arabic harakat and Hebrew points)
+    /// move right by a positive value and left by a negative one, relative to their letters, in
+    /// 1/1000 em of the size, from -[`MAX_DIACRITIC_POSITION`] to [`MAX_DIACRITIC_POSITION`].
+    /// Saved only when not 0.
+    /// <https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=549>
+    #[serde(default, rename = "diacriticHorizontal", skip_serializing_if = "crate::skip::is_default")]
+    pub diacritic_horizontal: f64,
+    /// Adjust Vertical Diacritic Position: the mark glyphs move up by a positive value and down by
+    /// a negative one, as [`Self::diacritic_horizontal`] moves them across.
+    #[serde(default, rename = "diacriticVertical", skip_serializing_if = "crate::skip::is_default")]
+    pub diacritic_vertical: f64,
     /// Font height reference (Character panel menu › Show Font Height Options): the height of the
     /// font that [`Self::size`] measures, the em box by default.
     #[serde(default, rename = "fontHeightReference", skip_serializing_if = "crate::skip::is_default")]
@@ -297,6 +311,15 @@ impl GlyphForm {
             GlyphForm::ThirdWidth => b"twid",
             GlyphForm::QuarterWidth => b"qwid",
         })
+    }
+
+    /// Is this one of the monospaced width forms (`fwid`, `hwid`, `twid`, `qwid`)? A font may
+    /// draw them with other glyphs (`GSUB`) or with other widths for the same glyphs (`GPOS`), and
+    /// they set the characters on a fixed width, so Proportional Metrics (`palt`) is not applied
+    /// with them.
+    /// <https://learn.microsoft.com/en-us/typography/opentype/spec/features_fj#tag-fwid>
+    pub fn is_width(self) -> bool {
+        matches!(self, GlyphForm::FullWidth | GlyphForm::HalfWidth | GlyphForm::ThirdWidth | GlyphForm::QuarterWidth)
     }
 }
 
@@ -544,6 +567,10 @@ pub const MAX_AKI: f64 = 1000.0;
 /// The largest Tsume ([`CharStyle::tsume`]), in percent: all the blank space beside the ink.
 pub const MAX_TSUME: f64 = 100.0;
 
+/// The largest Adjust Horizontal or Vertical Diacritic Position either way
+/// ([`CharStyle::diacritic_horizontal`]), in 1/1000 em: one em.
+pub const MAX_DIACRITIC_POSITION: f64 = 1000.0;
+
 /// The number of lines a warichu block may be stacked on ([`CharStyle::warichu_lines`]).
 pub const WARICHU_LINES: std::ops::RangeInclusive<u8> = 1..=6;
 
@@ -675,6 +702,8 @@ impl Default for CharStyle {
             warichu_align: WarichuAlign::Auto,
             small_caps: None,
             digits: Digits::Default,
+            diacritic_horizontal: 0.0,
+            diacritic_vertical: 0.0,
             font_height_reference: FontHeightReference::EmBox,
             no_break: false,
             language: None,
@@ -698,7 +727,8 @@ impl CharStyle {
     /// same way. The Warichu Settings Lines and Scale
     /// are kept to [`WARICHU_LINES`] and [`WARICHU_SCALE`]; a gap or scale that is not a number becomes its default. The gap is kept to 0 to
     /// [`crate::MAX_COORD`], as the baseline shift is, since a scaled type object holds it in its
-    /// own units.
+    /// own units. The Adjust Horizontal and Vertical Diacritic Positions are kept within
+    /// [`MAX_DIACRITIC_POSITION`] either way, and one that is not a number becomes 0.
     pub fn keep_dimensions_in_range(&mut self) {
         let default = Self::default();
         let within = |v: f64, or: f64| if v > 0.0 { v.min(crate::MAX_COORD) } else { or };
@@ -714,6 +744,9 @@ impl CharStyle {
         self.aki_left = aki(self.aki_left);
         self.aki_right = aki(self.aki_right);
         self.tsume = if self.tsume.is_nan() { 0.0 } else { self.tsume.clamp(0.0, MAX_TSUME) };
+        let diacritic = |v: f64| if v.is_nan() { 0.0 } else { v.clamp(-MAX_DIACRITIC_POSITION, MAX_DIACRITIC_POSITION) };
+        self.diacritic_horizontal = diacritic(self.diacritic_horizontal);
+        self.diacritic_vertical = diacritic(self.diacritic_vertical);
         self.warichu_lines = self.warichu_lines.clamp(*WARICHU_LINES.start(), *WARICHU_LINES.end());
         self.warichu_gap = if self.warichu_gap.is_nan() { default.warichu_gap } else { self.warichu_gap.clamp(0.0, crate::MAX_COORD) };
         self.warichu_scale =
@@ -784,6 +817,15 @@ impl CharStyle {
     pub fn keep_scripts_in_range(&mut self) {
         self.position = self.position.in_range();
         self.small_caps = self.small_caps.map(small_caps_in_range);
+    }
+    /// Sets the East Asian glyph form ([`CharStyle::glyph_form`]). A form other than the default
+    /// also takes away the character's glyph choice ([`CharStyle::glyph_alternate`]), which would
+    /// otherwise keep drawing its own glyph; the default form keeps it.
+    pub fn set_glyph_form(&mut self, form: GlyphForm) {
+        self.glyph_form = form;
+        if form != GlyphForm::Default {
+            self.glyph_alternate = None;
+        }
     }
 }
 

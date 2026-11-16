@@ -782,6 +782,57 @@ fn insert_aki_fields_show_with_the_east_asian_options() {
     assert!(left(&app).iter().all(|v| *v == 1000.0), "{:?}", left(&app));
 }
 
+/// Adjust Horizontal and Vertical Diacritic Position are fields of the panel with the Middle
+/// Eastern options only, and show the selected characters' values, blank where they differ. A value
+/// typed past -1000 sets -1000. Bad values sent to the commands are errors that change nothing.
+#[test]
+fn diacritic_position_fields_show_with_the_middle_eastern_options() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "بَبَ"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("text.setFormat", json!({"diacriticHorizontal": 125, "diacriticVertical": -375})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(!text.contains("´↔") && !text.contains("-375"), "{text}");
+    app.session.prefs.show_indic_options = true;
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(text.contains("´↔") && text.contains("´↕") && text.contains("125") && text.contains("-375"), "{text}");
+    let undo = app.session.active().unwrap().history.undo.len();
+    let doc = app.session.active().unwrap().doc.clone();
+    for (cmd, params) in [
+        ("text.setFormat", json!({"diacriticHorizontal": 1000.5})),
+        ("text.setFormat", json!({"diacriticVertical": "up"})),
+        ("text.setRangeStyle", json!({"id": id, "start": 0, "end": 2, "diacriticVertical": -1001})),
+        ("text.setRangeStyle", json!({"id": id, "start": 0, "end": 2, "diacriticHorizontal": true})),
+    ] {
+        let error = app.run(cmd, params.clone()).unwrap_err().to_string();
+        assert!(error.contains("`diacritic"), "{cmd} {params}: {error}");
+    }
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    assert!(app.session.active().unwrap().doc == doc);
+    // Setting the value the characters already have records no undo step.
+    app.run("text.setFormat", json!({"diacriticVertical": -375})).unwrap();
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    // Only the first letter and its fatha have -375: the Vertical field is blank.
+    app.run("text.setRangeStyle", json!({"id": id, "start": 4, "end": 8, "diacriticVertical": 0})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(text.contains("125") && !text.contains("-375"), "{text}");
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let ctx = egui::Context::default();
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "125").center(), show);
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame_events(&ctx, &mut app, vec![key(egui::Key::A, egui::Modifiers::COMMAND)], show);
+    frame_events(&ctx, &mut app, vec![egui::Event::Text("-1500".into())], show);
+    frame_events(&ctx, &mut app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)], show);
+    frame_events(&ctx, &mut app, vec![], show);
+    let horizontal = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.diacritic_horizontal).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    assert!(horizontal(&app).iter().all(|v| *v == -1000.0), "{:?}", horizontal(&app));
+}
+
 /// Tsume is a field of the panel with the East Asian options only, and shows the selected
 /// characters' value, blank where they differ. A value typed past 100 sets 100.
 #[test]
@@ -1487,6 +1538,8 @@ fn reset_panel_resets_every_attribute_but_the_font() {
             s.char_direction != d.char_direction,
             s.digits != d.digits,
             s.font_height_reference != d.font_height_reference,
+            s.diacritic_horizontal != d.diacritic_horizontal,
+            s.diacritic_vertical != d.diacritic_vertical,
         ]
     };
     let custom = |app: &mut VectorcraftApp| {
@@ -1496,16 +1549,17 @@ fn reset_panel_resets_every_attribute_but_the_font() {
                 "id": id, "tracking": 50, "leading": 30, "kerning": 20, "baselineShift": 3, "hScale": 120, "vScale": 90, "rotation": 15,
                 "underline": true, "strikethrough": true, "allCaps": true, "smallCaps": true, "position": "superscript",
                 "charAlign": "emBoxCenter", "proportionalMetrics": true, "tateChuYoko": true, "tcyUpDown": 2, "tcyLeftRight": -3,
-                "akiLeft": 250, "akiRight": 500, "tsume": 50, "standardVerticalRoman": true, "noBreak": true, "charDirection": "rightToLeft", "digits": "hindi", "fontHeightReference": "capHeight"
+                "akiLeft": 250, "akiRight": 500, "tsume": 50, "standardVerticalRoman": true, "noBreak": true, "charDirection": "rightToLeft", "digits": "hindi", "fontHeightReference": "capHeight",
+                "diacriticHorizontal": 120, "diacriticVertical": -80
             }),
         )
         .unwrap();
     };
     let plain = runs(&app)[0].1.clone();
-    assert_eq!(differs(&plain, &CharStyle::default()), [false; 25]);
+    assert_eq!(differs(&plain, &CharStyle::default()), [false; 27]);
     custom(&mut app);
     let styled = runs(&app)[0].1.clone();
-    assert_eq!(differs(&styled, &CharStyle::default()), [true; 25]);
+    assert_eq!(differs(&styled, &CharStyle::default()), [true; 27]);
     app.run("select.set", json!({"ids": [id]})).unwrap();
     reset_panel(&mut app);
     assert_eq!(runs(&app), [("One 12".to_string(), plain.clone())]);

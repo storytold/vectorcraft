@@ -1547,6 +1547,42 @@ fn texturizer_draws_a_loaded_texture_as_relief() {
     assert_eq!(fx("texture.texturizer", json!({"texture": "LOADED", "textureImage": "not a texture"})), fx("texture.texturizer", json!({})));
 }
 
+/// Rough Pastels draws a loaded texture as its surface, and Scaling, Relief, Light Direction and
+/// Invert act on it as on the built-in ones.
+#[test]
+fn rough_pastels_draws_a_loaded_texture_as_its_surface() {
+    let w = 64;
+    let mid = grey(150);
+    let rings = stored(12, 10, |x, y| {
+        let v = ((x as f64 - 5.5).hypot(y as f64 - 4.5) * 0.9).sin().abs();
+        let g = (v * 255.0).round() as u8;
+        [g, g, g, 255]
+    });
+    let run = |mut p: serde_json::Value| {
+        p["strokeLength"] = json!(0);
+        let mut d = flat(w, mid);
+        fx("artistic.roughPastels", p).apply(&mut d, w, w, &space(w, w));
+        d
+    };
+    let relief = run(json!({"texture": "loaded", "textureImage": rings, "relief": 20}));
+    assert_ne!(relief, flat(w, mid));
+    for (_, builtin) in TEXTURES {
+        assert_ne!(relief, run(json!({"texture": builtin, "relief": 20})), "{builtin}");
+    }
+    for (key, value) in [("invert", json!(true)), ("scaling", json!(200)), ("lightDirection", json!("bottomRight")), ("relief", json!(5))] {
+        let mut p = json!({"texture": "loaded", "textureImage": rings, "relief": 20});
+        p[key] = value;
+        assert_ne!(run(p), relief, "{key}");
+    }
+    assert_eq!(run(json!({"texture": "loaded", "textureImage": rings, "relief": 0})), flat(w, mid));
+    let parsed = fx("artistic.roughPastels", json!({"texture": "Loaded", "textureImage": rings}));
+    assert!(matches!(parsed, PixelFx::RoughPastels { texture: Texture::Loaded(_), .. }), "{parsed:?}");
+    // Without a stored texture, or with one that isn't, Loaded draws Canvas.
+    for p in [json!({"texture": "loaded"}), json!({"texture": "loaded", "textureImage": "not a texture"})] {
+        assert_eq!(fx("artistic.roughPastels", p), fx("artistic.roughPastels", json!({})));
+    }
+}
+
 /// The Texture filters' patterns lie in document space around the object's centre: the same at
 /// twice the resolution, and moving with the object.
 #[test]
@@ -1666,6 +1702,14 @@ fn a_loaded_texture_is_its_gray_over_middle_gray() {
     assert_eq!(h(-0.5), 0.5 * (1.0 + 128.0 / 255.0));
     assert!(LoadedTexture::from_rgba(0, 4, &[]).is_none() && LoadedTexture::from_rgba(2, 2, &[0; 12]).is_none());
     assert!(texture("not base64!").is_none() && texture("aGVsbG8=").is_none(), "base64 of a PNG only");
+}
+
+/// A stored texture longer than the codec's default 2^18-pixel side still reads back.
+#[test]
+fn a_stored_texture_longer_than_the_codec_default_side_reads_back() {
+    let t = LoadedTexture::from_rgba(262_145, 1, &vec![128; 262_145 * 4]).and_then(|t| t.to_stored()).unwrap();
+    let loaded = texture(&t).unwrap();
+    assert_eq!(loaded.size(), (262_145, 1));
 }
 
 #[test]

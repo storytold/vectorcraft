@@ -43,13 +43,17 @@
 //!   PostScript names in `%%DocumentFonts` and `%%IncludeFont` (§3.1) and re-encoded to
 //!   Windows-1252 (`TE`, then `%AI3_BeginEncoding: _name name`, `TZ`, §3.3), the 8-bit encoding
 //!   strings are in.
+//! - Graphs (§17): a graph whose records VectorCraft's reader reads back as the same graph
+//!   (`crate::ai_graph`) as `%_Gs`, its functional records, its group with each series' group
+//!   followed by `%_2 column 0 0 Go`, and `%_GS`.
 //!
 //! The format has one artboard, no transparency, sublayers, object names, hidden objects (only
 //! layers hide), live effects, symbols or appearances with several fills and strokes. Callers write
 //! one file per artboard and expand appearances first; what is left is written as the format can
 //! hold it, each loss a warning: transparent objects are written opaque, sublayers become groups,
-//! live objects and symbols their art, strokes a plain line can't draw their outlines, pattern
-//! fills their tiles clipped to the shape, freeform gradients their average colour, elliptical
+//! live objects and symbols their art, other graphs their art, strokes a plain line can't draw
+//! their outlines, pattern fills their tiles clipped to the shape, freeform gradients their average
+//! colour, elliptical
 //! radial gradients circular (the gradient matrix is relative to a canvas the specification
 //! doesn't size), transparent image pixels over white. Hidden objects go to a hidden layer of
 //! their own above their layer, are left out or show, as [`HiddenObjects`] says (in a hidden
@@ -173,13 +177,8 @@ pub struct LegacyAiOutput {
 pub fn writes_image_mask(doc: &Document, n: &Node) -> bool {
     let NodeKind::Image(im) = &n.kind else { return false };
     // The size from the file's header, before any pixels are decoded.
-    let fits = |bytes: &[u8]| {
-        image::ImageReader::new(std::io::Cursor::new(bytes))
-            .with_guessed_format()
-            .ok()
-            .and_then(|r| r.into_dimensions().ok())
-            .is_some_and(|(w, h)| w > 0 && h > 0 && u64::from(w) * u64::from(h) <= MAX_IMAGE_PIXELS)
-    };
+    let fits =
+        |bytes: &[u8]| vectorcraft_doc::header_size(bytes).is_some_and(|(w, h)| w > 0 && h > 0 && u64::from(w) * u64::from(h) <= MAX_IMAGE_PIXELS);
     matches!(n.extras().colorize.as_deref(), Some(Paint::Solid { .. }))
         && !n.extras().mask.as_ref().is_some_and(|m| !m.disabled)
         && doc
