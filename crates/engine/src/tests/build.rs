@@ -7774,6 +7774,54 @@ fn image_trace_view_is_stored_kept_and_validated() {
     assert!(s.execute("imageTrace.setView", &json!({"id": a.0, "view": "outlines"})).is_err());
 }
 
+/// The Split view's divider is set with the view, kept when omitted, when tracing again and through
+/// save and open, adds no undo step when unchanged and one when changed, and is checked. On screen
+/// the source image shows left of it and the result right of it; exports draw the result.
+#[test]
+fn image_trace_split_view_keeps_and_validates_its_divider() {
+    let mut s = session();
+    let g = disc_on_blue(&mut s);
+    // The image covers 50 to 250 across; the disc 90 to 210, so the divider moves over the disc.
+    let r = s.execute("imageTrace.setView", &json!({"view": "split"})).unwrap();
+    assert_eq!((r["view"].as_str(), r["split"].as_f64()), (Some("split"), Some(0.5)));
+    let steps = s.doc().unwrap().history.undo.len();
+    let r = s.execute("imageTrace.setView", &json!({"view": "split", "split": 0.25})).unwrap();
+    assert_eq!(r["split"].as_f64(), Some(0.25));
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    assert_eq!(node(&s, g).trace_split(), 0.25);
+    for same in [json!({"view": "split", "split": 0.25}), json!({"view": "split"})] {
+        let r = s.execute("imageTrace.setView", &same).unwrap();
+        assert_eq!(r["split"].as_f64(), Some(0.25), "{same}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "{same}: no undo step");
+    }
+    // Pixels at y = 60 (above the disc): the image's blue left of x = 100, white right of it.
+    let blue = |p: [u8; 4]| p[0] < 200 && p[2] > 245;
+    let white = |p: [u8; 4]| p[0] > 245 && p[1] > 245 && p[2] > 245;
+    let screen = render_doc(&s, true);
+    assert!(blue(screen.pixel(60, 60)) && blue(screen.pixel(95, 60)), "{:?}", screen.pixel(95, 60));
+    assert!(white(screen.pixel(105, 60)) && white(screen.pixel(240, 60)), "{:?}", screen.pixel(105, 60));
+    let export = render_doc(&s, false);
+    assert!(white(export.pixel(60, 60)), "exports draw the tracing result");
+    // Another view keeps the divider for when Split is chosen again.
+    s.execute("imageTrace.setView", &json!({"view": "outlines"})).unwrap();
+    assert_eq!(node(&s, g).trace_split(), 0.25);
+    s.execute("imageTrace.setView", &json!({"view": "split"})).unwrap();
+    let g = NodeId(s.execute("imageTrace.make", &json!({"id": g.0, "params": {"ignoreWhite": true, "noise": 30}})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!((node(&s, g).trace_view(), node(&s, g).trace_split()), (vectorcraft_doc::TraceView::Split, 0.25), "tracing again");
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    assert_eq!((back.node(g).unwrap().trace_view(), back.node(g).unwrap().trace_split()), (vectorcraft_doc::TraceView::Split, 0.25));
+    // Bad dividers are refused and change nothing.
+    let steps = s.doc().unwrap().history.undo.len();
+    for bad in [json!(-0.1), json!(1.01), json!("0.5"), json!(true), json!([0.5])] {
+        assert!(s.execute("imageTrace.setView", &json!({"view": "split", "split": bad})).is_err(), "{bad}");
+    }
+    assert_eq!((s.doc().unwrap().history.undo.len(), node(&s, g).trace_split()), (steps, 0.25));
+    for edge in [0.0, 1.0] {
+        s.execute("imageTrace.setView", &json!({"view": "split", "split": edge})).unwrap();
+        assert_eq!(node(&s, g).trace_split(), edge);
+    }
+}
+
 #[test]
 fn image_trace_views_draw_on_screen_only_and_expand_to_the_result() {
     let mut s = session();

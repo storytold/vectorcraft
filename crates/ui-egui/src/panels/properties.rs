@@ -377,6 +377,7 @@ fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vect
         crate::panels::image_trace::preset_dropdown(app, ui, preset, ui.available_width());
     });
     ui.horizontal(|ui| crate::panels::image_trace::view_row(app, ui, view, ui.available_width()));
+    crate::panels::image_trace::split_row(app, ui);
     if widgets::flat_button(ui, tl!("Image Trace"), ui.available_width()).clicked() {
         crate::panels::image_trace::open_settings(app);
     }

@@ -3981,6 +3981,13 @@ already walks Image Trace. Short agent entry points:
 - Image Trace: `imageTrace.presets`, `imageTrace.make {id?, preset?, params?, view?}` (or `imageTrace.makeAndExpand`),
   `imageTrace.setView`, `imageTrace.expand`, `imageTrace.release`. A key inside `params` that is not one of the trace
   settings, such as `colours`, is an error that names it and the nearest setting (`colors`), as for a command's own keys.
+  `imageTrace.setView {view: "split", split?}` is VectorCraft's own view: the window shows the source image on the part of
+  the image left of a divider across it and the tracing result everywhere else. `split` (0 to 1, default 0.5) is the fraction of the source
+  image's width, measured from its left edge in its own pixels, that shows the image, so the divider turns with the
+  image; a value outside 0 to 1, or one that is not a number, is an error. The object keeps `split` when another view is
+  set and when it is traced again, and the result names it. Exports, printing and Expand draw the tracing result. With
+  one such object selected, the Selection tool drags the divider (one undo step), and the Image Trace and Properties
+  panels show a Divider slider that the arrow keys move a percent at a time.
   With `byColor: true`, `imageTrace.expand` and `imageTrace.makeAndExpand` put each color's paths in a group of their
   own, named by the global swatch the color links to (a tint with its percentage, as `Sky 50%`) or as `#rrggbb`;
   gradient fills share a group named `Gradients`. The groups stack in the order of the lowest path in each, and each

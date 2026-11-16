@@ -4752,6 +4752,91 @@ fn mirror_axis_drag_uses_canvas_coordinates_in_a_zoomed_rotated_view() {
     }
 }
 
+/// The Split view's divider of a selected Image Trace object is drawn where the Selection tool
+/// takes it in a zoomed, turned view. Dragging its middle across the image previews the divider,
+/// commits one undo step and leaves the traced art where it was; Undo puts the divider back.
+#[test]
+fn trace_split_divider_drag_in_a_zoomed_rotated_view_is_one_undo_step() {
+    use vectorcraft_tools::trace_split::TraceDivider;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let data = vectorcraft_format::base64_encode(&crate::tests_sysclip::blue_png());
+    app.run("file.place", json!({"name": "blue.png", "dataBase64": data, "link": false, "at": [200, 150]})).unwrap();
+    app.run("imageTrace.make", json!({"preset": "Default"})).unwrap();
+    app.run("imageTrace.setView", json!({"view": "split"})).unwrap();
+    app.select_tool("selection");
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    let divider = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        TraceDivider::of(&st.doc, &st.selection, app.view().unwrap().zoom).unwrap()
+    };
+    let initial = divider(&app);
+    assert_eq!(initial.split, 0.5);
+    let middle = initial.ends[0].midpoint(initial.ends[1]);
+    {
+        let v = app.view_mut().unwrap();
+        (v.zoom, v.rotation, v.center, v.fitted) = (30.0, 30.0, middle, true);
+    }
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let art = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        st.doc.node(initial.id).unwrap().geometric_bounds()
+    };
+    let before = (art(&app), app.session.active().unwrap().history.undo.len());
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    // The divider is drawn between its ends on screen.
+    let ends = initial.ends.map(|q| xf.to_screen(q));
+    let drawn = shapes(&mut app, &ctx);
+    assert!(
+        drawn.iter().any(|s| matches!(s, Shape::LineSegment { points, .. }
+            if points.iter().zip(ends).all(|(a, b)| a.distance(b) < 0.5) || points.iter().rev().zip(ends).all(|(a, b)| a.distance(b) < 0.5))),
+        "the divider is drawn from {:?} to {:?}",
+        ends[0],
+        ends[1]
+    );
+    // A quarter of the image's width to the right, in the image's own direction.
+    let from = xf.to_screen(middle);
+    let st = app.session.active().unwrap();
+    let NodeKind::Image(im) = &st.doc.node(initial.id).unwrap().children().unwrap()[0].kind else { panic!("no source image") };
+    let to = xf.to_screen(im.xf * vectorcraft_geom::Point::new(f64::from(im.width) * 0.75, f64::from(im.height) * 0.5));
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), button(from, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(to)]);
+    assert!((divider(&app).split - 0.75).abs() < 0.01, "the divider previews during the drag: {}", divider(&app).split);
+    frame(&mut app, &ctx, vec![button(to, false)]);
+    assert!((divider(&app).split - 0.75).abs() < 0.01);
+    assert_eq!((art(&app), app.session.active().unwrap().history.undo.len()), (before.0, before.1 + 1), "one undo step, the art unmoved");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(divider(&app).split, 0.5);
+    // Escape during a drag puts the divider back with no undo step.
+    let steps = app.session.active().unwrap().history.undo.len();
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), button(from, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(to)]);
+    assert!((divider(&app).split - 0.75).abs() < 0.01);
+    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    let raw =
+        egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events: vec![escape], ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| {
+        crate::shortcuts::handle(&mut app, ui.ctx());
+        show(&mut app, ui)
+    });
+    out.textures_delta.clear();
+    assert!(!app.session.tool_busy(), "Escape ends the drag");
+    assert_eq!(divider(&app).split, 0.5, "Escape puts the divider back");
+    frame(&mut app, &ctx, vec![button(to, false)]);
+    assert_eq!(divider(&app).split, 0.5, "Escape cancels the drag");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), steps, "no undo step");
+    // With the bounding box hidden, the divider is not drawn.
+    app.ui.view.bounding_box = false;
+    let drawn = shapes(&mut app, &ctx);
+    assert!(
+        !drawn.iter().any(|s| matches!(s, Shape::LineSegment { points, .. } if points.iter().zip(ends).all(|(a, b)| a.distance(b) < 0.5))),
+        "no divider with the bounding box hidden"
+    );
+}
+
 /// A selected grid repeat draws its row handle below the grid and a slider between its first
 /// two columns (none with the bounding box hidden). Dragging the row handle down two tiles in
 /// a zoomed view makes five rows without scaling the source, as one undo step, and the slider

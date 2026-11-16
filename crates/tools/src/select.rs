@@ -149,6 +149,8 @@ enum State {
     GridRepeat(crate::repeat_grid::GridDrag),
     /// Drag a radial repeat's instances or radius handle.
     RadialRepeat(crate::repeat_radial::RadialDrag),
+    /// Drag the divider of an Image Trace object in the Split view.
+    TraceSplit(crate::trace_split::SplitDrag),
     /// Dragging a bracket of type on a path.
     Bracket(BracketDrag),
     /// Dragging a 9-slice guide of the symbol being edited.
@@ -798,7 +800,7 @@ impl Tool for SelectionTool {
     /// E during a marquee drag switches the marquee between the objects it touches and only the
     /// objects inside it. Escape during a drag (a move or an Alt-drag copy, a bounding-box scale or
     /// rotation, a marquee, a corner widget, a pie widget, a blend widget, the Rotate All, Space, Move All or Select/Move widget, the brackets of type on a path, a mirror
-    /// axis, a grid repeat's handles, a ruler guide) cancels it: what it changed goes back, no copy
+    /// axis, a grid repeat's handles, an Image Trace divider, a ruler guide) cancels it: what it changed goes back, no copy
     /// is left, and the tool waits for the next press. With the pointer loaded with text, Escape
     /// drops the text.
     fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
@@ -883,7 +885,9 @@ impl Tool for SelectionTool {
             State::Marquee { .. } => key == ToolKey::Letter('e'),
             State::Corner(_) => matches!(key, ToolKey::Up | ToolKey::Down),
             State::BlendWidget(_) => matches!(key, ToolKey::Up | ToolKey::Down | ToolKey::Left | ToolKey::Right),
-            State::Loaded { .. } | State::Mirror(_) | State::GridRepeat(_) | State::RadialRepeat(_) | State::NineSlice(_) => key == ToolKey::Escape,
+            State::Loaded { .. } | State::Mirror(_) | State::GridRepeat(_) | State::RadialRepeat(_) | State::TraceSplit(_) | State::NineSlice(_) => {
+                key == ToolKey::Escape
+            }
             _ => false,
         }
     }
@@ -926,6 +930,7 @@ impl Tool for SelectionTool {
             State::Mirror(d) => d.adjusting(),
             State::GridRepeat(d) => d.adjusting(),
             State::RadialRepeat(d) => d.adjusting(),
+            State::TraceSplit(d) => d.adjusting(),
             _ => false,
         }
     }
@@ -1240,6 +1245,9 @@ impl Tool for SelectionTool {
         if let State::RadialRepeat(d) = &self.state {
             return d.cursor(cx);
         }
+        if let State::TraceSplit(d) = &self.state {
+            return d.cursor(cx);
+        }
         if matches!(self.state, State::NineSlice(_)) || (matches!(self.state, State::Idle) && crate::nineslice::over_guide(cx, p)) {
             return Cursor::Move;
         }
@@ -1247,8 +1255,10 @@ impl Tool for SelectionTool {
             && !m.cmd
             && !m.ctrl
             && !m.alt
-            && let Some(cursor) =
-                crate::mirror::cursor(cx, p).or_else(|| crate::repeat_grid::cursor(cx, p)).or_else(|| crate::repeat_radial::cursor(cx, p))
+            && let Some(cursor) = crate::mirror::cursor(cx, p)
+                .or_else(|| crate::repeat_grid::cursor(cx, p))
+                .or_else(|| crate::repeat_radial::cursor(cx, p))
+                .or_else(|| crate::trace_split::cursor(cx, p))
         {
             return cursor;
         }
@@ -1581,6 +1591,21 @@ impl SelectionTool {
                 _ => return Some(vec![]),
             }
         }
+        if let State::TraceSplit(mut d) = self.state.clone() {
+            match ev.kind {
+                PointerKind::Drag | PointerKind::Up => {
+                    let mut out = d.drag(cx, ev.pos);
+                    if ev.kind == PointerKind::Up {
+                        out.extend(d.finish());
+                        self.state = State::Idle;
+                    } else {
+                        self.state = State::TraceSplit(d);
+                    }
+                    return Some(out);
+                }
+                _ => return Some(vec![]),
+            }
+        }
         if matches!(self.state, State::Idle)
             && ev.kind == PointerKind::Down
             && let Some(d) = crate::mirror::MirrorDrag::hit(cx, ev.pos, ev.mods)
@@ -1602,6 +1627,14 @@ impl SelectionTool {
             && let Some(d) = crate::repeat_radial::RadialDrag::hit(cx, ev.pos, ev.mods)
         {
             self.state = State::RadialRepeat(d);
+            self.hover = None;
+            return Some(vec![]);
+        }
+        if matches!(self.state, State::Idle)
+            && ev.kind == PointerKind::Down
+            && let Some(d) = crate::trace_split::SplitDrag::hit(cx, ev.pos, ev.mods)
+        {
+            self.state = State::TraceSplit(d);
             self.hover = None;
             return Some(vec![]);
         }

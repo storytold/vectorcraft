@@ -79,6 +79,7 @@ pub use tool_overlays::{HiddenChars, SpellingMarks};
 use tool_overlays::{
     grid_repeat_overlay, hidden_chars_overlay, live_paint_gap_overlays, mirror_axis_overlay, nine_slice_overlay, original_path_overlay,
     print_tiling_overlay, radial_repeat_overlay, rotate_view_dial, shaper_widget_overlay, slice_overlay, spelling_overlay, thread_overlays,
+    trace_split_overlay,
 };
 pub(crate) use view::animated_zoom;
 pub(crate) use view::drag_rotation;
@@ -1348,6 +1349,7 @@ fn selection_visuals(
         mirror_axis_overlay(app, painter, xf);
         grid_repeat_overlay(app, painter, xf);
         radial_repeat_overlay(app, painter, xf);
+        trace_split_overlay(app, painter, xf);
         if app.ui.view.text_threads {
             // Under the tools' overlays: a selected frame's own ports are drawn over its thread's.
             let mut threads = thread_overlays(app, xf.zoom);

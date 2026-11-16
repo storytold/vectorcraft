@@ -10,8 +10,9 @@ use super::{Node, PathData};
 pub struct NodeExtras {
     /// Opacity mask (Transparency panel). Its art lives here, outside the layer tree.
     pub mask: Option<Box<OpacityMask>>,
-    /// Image Trace object: `{preset, params, view?}` it was traced with (the Image Trace panel shows
-    /// them; `view` is its [`crate::TraceView`] id, absent for the tracing result).
+    /// Image Trace object: `{preset, params, view?, split?}` it was traced with (the Image Trace
+    /// panel shows them; `view` is its [`crate::TraceView`] id, absent for the tracing result, and
+    /// `split` the Split view's divider, [`crate::TraceView::split_of`]).
     pub trace: Option<Box<serde_json::Value>>,
     /// Object → Text Wrap: area type below this object (in the same layer) flows around it.
     pub wrap: Option<crate::text::TextWrap>,

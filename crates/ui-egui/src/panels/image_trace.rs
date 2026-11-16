@@ -197,7 +197,50 @@ fn view_label(v: TraceView) -> &'static str {
         TraceView::Outlines => tl!("Outlines"),
         TraceView::OutlinesWithSource => tl!("Outlines with Source Image"),
         TraceView::Source => tl!("Source Image"),
+        TraceView::Split => tl!("Split View"),
     }
+}
+
+/// The Split view's divider of the one selected Image Trace object, when it shows that view.
+fn selected_split(app: &VectorcraftApp) -> Option<f64> {
+    let st = app.session.active()?;
+    let [id] = st.selection.objects[..] else { return None };
+    st.doc.node(id).filter(|n| is_trace(n) && n.trace_view() == TraceView::Split).map(Node::trace_split)
+}
+
+/// The Divider row of the one selected Image Trace object in the Split view: how much of the
+/// source image's width, from its left edge, shows the image. A drag is one undo step, and the
+/// arrow keys move it a percent at a time. Nothing without such an object.
+pub(crate) fn split_row(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let Some(split) = selected_split(app) else { return };
+    ui.horizontal(|ui| {
+        let label = widgets::dim_label(ui, tl!("Divider"));
+        // The canvas sets the divider to a ten-thousandth: a hundredth of a percent.
+        let mut pct = (split * 10_000.0).round() / 100.0;
+        // Clamping only edits keeps a divider between whole percents (a canvas drag, an agent's
+        // value) as it is while the panel shows: clamping always rounds it to the step each frame
+        // and reports a change.
+        let slider = egui::Slider::new(&mut pct, 0.0..=100.0).suffix("%").step_by(1.0).clamping(egui::SliderClamping::Edits);
+        let r = widgets::slider(ui, slider).labelled_by(label.id);
+        r.widget_info(|| egui::WidgetInfo::slider(ui.is_enabled(), pct, tl!("Divider")));
+        if cfg!(test) {
+            ui.ctx().data_mut(|d| {
+                d.insert_temp(egui::Id::unique("trace-split-slider-id"), r.id);
+                d.insert_temp(egui::Id::unique("trace-split-slider-rect"), r.rect);
+            });
+        }
+        let phase = if r.dragged() && !r.drag_stopped() {
+            widgets::Live::Dragging
+        } else if r.drag_stopped() || r.changed() {
+            widgets::Live::Released
+        } else {
+            widgets::Live::Idle
+        };
+        if phase != widgets::Live::Idle {
+            let split = (pct / 100.0).clamp(0.0, 1.0);
+            crate::panels::live_run(app, "Image Trace View", "imageTrace.setView", json!({ "view": TraceView::Split.id(), "split": split }), phase);
+        }
+    });
 }
 
 /// The View dropdown showing `current` → the view chosen.
@@ -641,6 +684,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         hold_source(app, ui.ctx(), any_trace && r.is_pointer_button_down_on());
     });
+    split_row(app, ui);
     ui.horizontal(|ui| {
         widgets::dim_label(ui, tl!("Mode:"));
         let mode = st.params["mode"].as_str().unwrap_or("blackAndWhite").to_string();

@@ -44,6 +44,7 @@ pub mod slice;
 pub mod symbolism;
 pub mod text;
 pub mod touchtype;
+pub mod trace_split;
 pub mod typewidget;
 pub mod xform;
 
