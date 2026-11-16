@@ -228,6 +228,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
     (crate::addons::packaging::ID, "Fold Lines", "scissors"),
+    (crate::addons::packaging::preview::ID, "Fold Preview", "box"),
     (crate::addons::pathtools::ID, "Anchor Inspector", "dc-anchor-smooth"),
     (crate::addons::pathtools::shape::ID, "Parametric Shape", "hexagon"),
     (crate::addons::pen::ID, "Smart Pen", "spline-pointer"),
@@ -712,6 +713,10 @@ pub struct UiState {
     /// Flattener Preview panel: highlight, overprints, preset and options (`ui.flattenerPreview`).
     #[serde(default)]
     pub flattener_preview: crate::panels::flattener_preview::Settings,
+    /// Fold Preview window: fold amount, view, zoom, perspective, inside color, fold lines and
+    /// base panel (`ui.foldPreview`).
+    #[serde(default)]
+    pub fold_preview: crate::addons::packaging::preview::Settings,
     /// Color Guide panel: Limit to Library, a swatch library id, "document" (the document's
     /// swatches) or "" (none) (`ui.colorGuideLimit`).
     #[serde(default)]
@@ -1237,6 +1242,7 @@ impl Default for UiState {
             color_guide: Default::default(),
             library_panels: vec![],
             flattener_preview: Default::default(),
+            fold_preview: Default::default(),
             color_guide_limit: String::new(),
             color_guide_base: None,
             align_to: Default::default(),

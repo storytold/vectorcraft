@@ -9376,3 +9376,13 @@ breakText	Glyphs	Glyphen
 @msg	A panel is not joined to the rest by a crease.	Ein Feld ist durch keine Rilllinie mit den übrigen verbunden.
 @msg	A fold line is on a non-printing layer.	Eine Faltlinie liegt auf einer nicht druckbaren Ebene.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Scharniere: {hinges}, Fehler: {errors}, Warnungen: {warnings}
+	Fold Preview	Faltvorschau
+	Fold	Falten
+	Show Fold Lines	Faltlinien einblenden
+	Three-Quarter	Dreiviertelansicht
+	Open a document to preview its folded shape.	Öffnen Sie ein Dokument, um seine gefaltete Form in der Vorschau zu sehen.
+@msg	Check the fold lines first.	Prüfen Sie zuerst die Faltlinien.
+@msg	Panels: {panels}, hinges: {hinges}	Felder: {panels}, Scharniere: {hinges}
+@msg	Other blanks not shown: {count}	Weitere Zuschnitte nicht angezeigt: {count}
+@msg	A joint does not close by {gap} pt.	Eine Verbindung schließt um {gap} pt nicht.
+@msg	Two panels pass through each other.	Zwei Felder durchdringen einander.

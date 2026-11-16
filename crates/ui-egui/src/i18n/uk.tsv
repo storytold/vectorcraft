@@ -9385,3 +9385,13 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Fold Preview	Перегляд згину
+	Fold	Згин
+	Show Fold Lines	Показати лінії згину
+	Three-Quarter	Три чверті
+	Open a document to preview its folded shape.	Відкрийте документ, щоб переглянути його у складеному вигляді.
+@msg	Check the fold lines first.	Спершу перевірте лінії згину.
+@msg	Panels: {panels}, hinges: {hinges}	Панелі: {panels}, шарніри: {hinges}
+@msg	Other blanks not shown: {count}	Інші розгортки не показано: {count}
+@msg	A joint does not close by {gap} pt.	Стик не змикається на {gap} pt.
+@msg	Two panels pass through each other.	Дві панелі проходять одна крізь одну.

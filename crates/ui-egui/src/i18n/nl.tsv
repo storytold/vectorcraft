@@ -9811,3 +9811,13 @@ breakText	Glyphs	Glyphs
 @msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
 @msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}
+	Fold Preview	Vouwvoorbeeld
+	Fold	Vouwen
+	Show Fold Lines	Vouwlijnen tonen
+	Three-Quarter	Driekwart
+	Open a document to preview its folded shape.	Open een document om de gevouwen vorm te bekijken.
+@msg	Check the fold lines first.	Controleer eerst de vouwlijnen.
+@msg	Panels: {panels}, hinges: {hinges}	Panelen: {panels}, scharnieren: {hinges}
+@msg	Other blanks not shown: {count}	Andere uitslagen niet getoond: {count}
+@msg	A joint does not close by {gap} pt.	Een naad sluit {gap} pt niet.
+@msg	Two panels pass through each other.	Twee panelen gaan door elkaar heen.

@@ -9849,3 +9849,13 @@ swatch	Yellow Green	Verde-amarelado
 @msg	A panel is not joined to the rest by a crease.	Um painel não está unido ao restante por nenhuma linha de vinco.
 @msg	A fold line is on a non-printing layer.	Uma linha de dobra está em uma camada não imprimível.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Painéis: {panels}, dobradiças: {hinges}, erros: {errors}, avisos: {warnings}
+	Fold Preview	Visualização da Dobra
+	Fold	Dobra
+	Show Fold Lines	Mostrar Linhas de Dobra
+	Three-Quarter	Três Quartos
+	Open a document to preview its folded shape.	Abra um documento para visualizar sua forma dobrada.
+@msg	Check the fold lines first.	Verifique primeiro as linhas de dobra.
+@msg	Panels: {panels}, hinges: {hinges}	Painéis: {panels}, dobradiças: {hinges}
+@msg	Other blanks not shown: {count}	Outras planificações não exibidas: {count}
+@msg	A joint does not close by {gap} pt.	Uma junção não fecha por {gap} pt.
+@msg	Two panels pass through each other.	Dois painéis se atravessam.

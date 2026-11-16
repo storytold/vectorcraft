@@ -1377,6 +1377,7 @@ pub(crate) fn floating_size(panel: &str) -> egui::Vec2 {
         // Tall enough to show its Corners and Shared Edges sections, last in it, which the Corner
         // Tool's and Shared Edge Merge Tool's menu items open.
         crate::addons::pathtools::ID => egui::vec2(260.0, 660.0),
+        crate::addons::packaging::preview::ID => egui::vec2(520.0, 440.0),
         _ => egui::vec2(260.0, 360.0),
     }
 }

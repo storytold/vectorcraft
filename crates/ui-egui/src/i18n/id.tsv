@@ -7135,4 +7135,14 @@ breakText	Glyphs	Glif
 @msg	A panel is not joined to the rest by a crease.	Sebuah panel tidak tersambung ke bagian lain oleh garis lekuk apa pun.
 @msg	A fold line is on a non-printing layer.	Sebuah garis lipat berada di lapisan yang tidak dicetak.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panel: {panels}, engsel: {hinges}, galat: {errors}, peringatan: {warnings}
+	Fold Preview	Pratinjau lipatan
+	Fold	Lipat
+	Show Fold Lines	Tampilkan garis lipat
+	Three-Quarter	Tiga perempat
+	Open a document to preview its folded shape.	Buka dokumen untuk melihat pratinjau bentuk terlipatnya.
+@msg	Check the fold lines first.	Periksa garis lipat terlebih dahulu.
+@msg	Panels: {panels}, hinges: {hinges}	Panel: {panels}, engsel: {hinges}
+@msg	Other blanks not shown: {count}	Bentangan lain tidak ditampilkan: {count}
+@msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
+@msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"

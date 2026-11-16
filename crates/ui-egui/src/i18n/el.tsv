@@ -7955,4 +7955,14 @@ breakText	Glyphs	Γλύφοι
 @msg	A panel is not joined to the rest by a crease.	Ένα πάνελ δεν συνδέεται με τα υπόλοιπα με καμία γραμμή πτύχωσης.
 @msg	A fold line is on a non-printing layer.	Μια γραμμή δίπλωσης βρίσκεται σε επίπεδο που δεν εκτυπώνεται.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Πάνελ: {panels}, μεντεσέδες: {hinges}, σφάλματα: {errors}, προειδοποιήσεις: {warnings}
+	Fold Preview	Προεπισκόπηση δίπλωσης
+	Fold	Δίπλωση
+	Show Fold Lines	Εμφάνιση γραμμών δίπλωσης
+	Three-Quarter	Τρία τέταρτα
+	Open a document to preview its folded shape.	Ανοίξτε ένα έγγραφο για να δείτε σε προεπισκόπηση το διπλωμένο σχήμα του.
+@msg	Check the fold lines first.	Ελέγξτε πρώτα τις γραμμές δίπλωσης.
+@msg	Panels: {panels}, hinges: {hinges}	Πάνελ: {panels}, μεντεσέδες: {hinges}
+@msg	Other blanks not shown: {count}	Άλλα αναπτύγματα δεν εμφανίζονται: {count}
+@msg	A joint does not close by {gap} pt.	Μια ένωση δεν κλείνει κατά {gap} pt.
+@msg	Two panels pass through each other.	Δύο πάνελ διαπερνούν το ένα το άλλο.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"

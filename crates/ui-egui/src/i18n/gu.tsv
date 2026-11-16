@@ -4877,6 +4877,16 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 @msg	A panel is not joined to the rest by a crease.	એક પેનલ કોઈ ક્રીઝ લાઇનથી બાકીના સાથે જોડાયેલી નથી.
 @msg	A fold line is on a non-printing layer.	એક ફોલ્ડ લાઇન નોન-પ્રિન્ટિંગ લેયર પર છે.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	પેનલ: {panels}, હિન્જ: {hinges}, ભૂલો: {errors}, ચેતવણીઓ: {warnings}
+	Fold Preview	ફોલ્ડ પ્રિવ્યૂ
+	Fold	ફોલ્ડ
+	Show Fold Lines	ફોલ્ડ લાઇન્સ બતાવો
+	Three-Quarter	ત્રણ-ચતુર્થાંશ
+	Open a document to preview its folded shape.	તેનો ફોલ્ડ કરેલો આકાર જોવા દસ્તાવેજ ખોલો.
+@msg	Check the fold lines first.	પહેલાં ફોલ્ડ લાઇન્સ ચેક કરો.
+@msg	Panels: {panels}, hinges: {hinges}	પેનલ: {panels}, હિન્જ: {hinges}
+@msg	Other blanks not shown: {count}	બીજા બ્લેન્ક બતાવ્યા નથી: {count}
+@msg	A joint does not close by {gap} pt.	એક સાંધો {gap} pt થી બંધ થતો નથી.
+@msg	Two panels pass through each other.	બે પેનલ એકબીજામાંથી પસાર થાય છે.
 	Middle Eastern & South Asian Single-line Composer	સિંગલ-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
 	Middle Eastern & South Asian Every-line Composer	એવરી-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર

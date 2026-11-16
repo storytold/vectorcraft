@@ -7120,4 +7120,14 @@ breakText	Glyphs	Глифи
 @msg	A panel is not joined to the rest by a crease.	Панел не е свързан с останалите с линия за биговане.
 @msg	A fold line is on a non-printing layer.	Линия на сгъване е на слой, който не се печата.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панели: {panels}, панти: {hinges}, грешки: {errors}, предупреждения: {warnings}
+	Fold Preview	Преглед на сгъването
+	Fold	Сгъване
+	Show Fold Lines	Покажи линиите на сгъване
+	Three-Quarter	Три четвърти
+	Open a document to preview its folded shape.	Отворете документ, за да прегледате сгънатата му форма.
+@msg	Check the fold lines first.	Първо проверете линиите на сгъване.
+@msg	Panels: {panels}, hinges: {hinges}	Панели: {panels}, панти: {hinges}
+@msg	Other blanks not shown: {count}	Други разкрои не са показани: {count}
+@msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
+@msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

@@ -10044,4 +10044,14 @@ font-script	Japanese	იაპონური
 @msg	A panel is not joined to the rest by a crease.	პანელი დანარჩენს არცერთი ბიგის ხაზით არ უერთდება.
 @msg	A fold line is on a non-printing layer.	მოკეცვის ხაზი არასაბეჭდ შრეზეა.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	პანელები: {panels}, ანჯამები: {hinges}, შეცდომები: {errors}, გაფრთხილებები: {warnings}
+	Fold Preview	მოკეცვის გადახედვა
+	Fold	მოკეცვა
+	Show Fold Lines	მოკეცვის ხაზების ჩვენება
+	Three-Quarter	სამი მეოთხედი
+	Open a document to preview its folded shape.	გახსენით დოკუმენტი მისი მოკეცილი ფორმის სანახავად.
+@msg	Check the fold lines first.	ჯერ შეამოწმეთ მოკეცვის ხაზები.
+@msg	Panels: {panels}, hinges: {hinges}	პანელები: {panels}, ანჯამები: {hinges}
+@msg	Other blanks not shown: {count}	სხვა ნამზადები არ ჩანს: {count}
+@msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
+@msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"

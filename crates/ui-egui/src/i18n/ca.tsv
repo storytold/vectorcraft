@@ -7981,4 +7981,14 @@ breakText	Glyphs	Glifs
 @msg	A panel is not joined to the rest by a crease.	Un panell no està unit a la resta per cap línia d’hendit.
 @msg	A fold line is on a non-printing layer.	Una línia de plegat és en una capa que no s’imprimeix.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panells: {panels}, frontisses: {hinges}, errors: {errors}, avisos: {warnings}
+	Fold Preview	Previsualització del plegat
+	Fold	Plegat
+	Show Fold Lines	Mostra les línies de plegat
+	Three-Quarter	Tres quarts
+	Open a document to preview its folded shape.	Obre un document per previsualitzar-ne la forma plegada.
+@msg	Check the fold lines first.	Primer comprova les línies de plegat.
+@msg	Panels: {panels}, hinges: {hinges}	Panells: {panels}, frontisses: {hinges}
+@msg	Other blanks not shown: {count}	Altres troquelats no mostrats: {count}
+@msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
+@msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"

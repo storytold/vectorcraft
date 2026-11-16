@@ -9880,4 +9880,14 @@ breakText	Glyphs	Glyffer
 @msg	A panel is not joined to the rest by a crease.	Et panel er ikke forbundet med resten af en rillelinje.
 @msg	A fold line is on a non-printing layer.	En foldelinje ligger på et lag, der ikke udskrives.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, hængsler: {hinges}, fejl: {errors}, advarsler: {warnings}
+	Fold Preview	Forhåndsvisning af foldning
+	Fold	Foldning
+	Show Fold Lines	Vis foldelinjer
+	Three-Quarter	Trekvart
+	Open a document to preview its folded shape.	Åbn et dokument for at se dets foldede form.
+@msg	Check the fold lines first.	Kontrollér foldelinjerne først.
+@msg	Panels: {panels}, hinges: {hinges}	Paneler: {panels}, hængsler: {hinges}
+@msg	Other blanks not shown: {count}	Andre emner vises ikke: {count}
+@msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
+@msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"

@@ -8038,4 +8038,14 @@ breakText	Glyphs	Merkit
 @msg	A panel is not joined to the rest by a crease.	Paneelia ei ole liitetty muihin millään nuuttausviivalla.
 @msg	A fold line is on a non-printing layer.	Taittoviiva on tasolla, jota ei tulosteta.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneelit: {panels}, saranat: {hinges}, virheet: {errors}, varoitukset: {warnings}
+	Fold Preview	Taiton esikatselu
+	Fold	Taitto
+	Show Fold Lines	Näytä taittoviivat
+	Three-Quarter	Kolme neljäsosaa
+	Open a document to preview its folded shape.	Avaa asiakirja, niin voit esikatsella sen taitettua muotoa.
+@msg	Check the fold lines first.	Tarkista ensin taittoviivat.
+@msg	Panels: {panels}, hinges: {hinges}	Paneelit: {panels}, saranat: {hinges}
+@msg	Other blanks not shown: {count}	Muita aihioita ei näytetä: {count}
+@msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
+@msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"

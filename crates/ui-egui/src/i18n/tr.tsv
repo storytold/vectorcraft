@@ -9732,3 +9732,13 @@ breakText	Glyphs	Glifler
 @msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
 @msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}
+	Fold Preview	Katlama Önizlemesi
+	Fold	Katlama
+	Show Fold Lines	Katlama Çizgilerini Göster
+	Three-Quarter	Dörtte Üç
+	Open a document to preview its folded shape.	Katlanmış şeklini önizlemek için bir belgeyi açın.
+@msg	Check the fold lines first.	Önce katlama çizgilerini denetleyin.
+@msg	Panels: {panels}, hinges: {hinges}	Paneller: {panels}, menteşeler: {hinges}
+@msg	Other blanks not shown: {count}	Gösterilmeyen diğer açınımlar: {count}
+@msg	A joint does not close by {gap} pt.	Bir birleşim {gap} pt kadar kapanmıyor.
+@msg	Two panels pass through each other.	İki panel birbirinin içinden geçiyor.

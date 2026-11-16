@@ -9477,3 +9477,13 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
+	Fold Preview	折りプレビュー
+	Fold	折り
+	Show Fold Lines	折り線を表示
+	Three-Quarter	斜め
+	Open a document to preview its folded shape.	ドキュメントを開くと折った形をプレビューできます。
+@msg	Check the fold lines first.	先に折り線をチェックしてください。
+@msg	Panels: {panels}, hinges: {hinges}	パネル: {panels}、ヒンジ: {hinges}
+@msg	Other blanks not shown: {count}	表示されていない他の展開図: {count}
+@msg	A joint does not close by {gap} pt.	継ぎ目が {gap} pt 閉じていません。
+@msg	Two panels pass through each other.	2 つのパネルが互いを貫通しています。

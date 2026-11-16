@@ -9616,4 +9616,14 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	一个面板没有通过任何压痕线与其余部分相连。
 @msg	A fold line is on a non-printing layer.	一条折线位于不打印的图层上。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	面板：{panels}，铰链：{hinges}，错误：{errors}，警告：{warnings}
+	Fold Preview	折叠预览
+	Fold	折叠
+	Show Fold Lines	显示折线
+	Three-Quarter	四分之三视图
+	Open a document to preview its folded shape.	打开文档以预览其折叠后的形状。
+@msg	Check the fold lines first.	请先检查折线。
+@msg	Panels: {panels}, hinges: {hinges}	面板：{panels}，铰链：{hinges}
+@msg	Other blanks not shown: {count}	未显示的其他展开图：{count}
+@msg	A joint does not close by {gap} pt.	有一处接缝相差 {gap} pt 未闭合。
+@msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率

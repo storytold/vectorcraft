@@ -9459,4 +9459,14 @@ digits	Hindi	Hindi
 @msg	A panel is not joined to the rest by a crease.	En panel är inte förbunden med resten av någon biglinje.
 @msg	A fold line is on a non-printing layer.	En falslinje ligger på ett lager som inte skrivs ut.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, gångjärn: {hinges}, fel: {errors}, varningar: {warnings}
+	Fold Preview	Förhandsgranskning av falsning
+	Fold	Falsning
+	Show Fold Lines	Visa falslinjer
+	Three-Quarter	Trekvarts
+	Open a document to preview its folded shape.	Öppna ett dokument för att förhandsgranska dess falsade form.
+@msg	Check the fold lines first.	Kontrollera falslinjerna först.
+@msg	Panels: {panels}, hinges: {hinges}	Paneler: {panels}, gångjärn: {hinges}
+@msg	Other blanks not shown: {count}	Andra ämnen visas inte: {count}
+@msg	A joint does not close by {gap} pt.	En fog sluter inte med {gap} pt.
+@msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen

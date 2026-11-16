@@ -7173,4 +7173,14 @@ shape	Open	Otvoren
 @msg	A panel is not joined to the rest by a crease.	Panel nije povezan s ostatkom nijednom linijom bigovanja.
 @msg	A fold line is on a non-printing layer.	Linija savijanja je na sloju koji se ne štampa.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneli: {panels}, šarke: {hinges}, greške: {errors}, upozorenja: {warnings}
+	Fold Preview	Pregled savijanja
+	Fold	Savijanje
+	Show Fold Lines	Prikaži linije savijanja
+	Three-Quarter	Tri četvrtine
+	Open a document to preview its folded shape.	Otvorite dokument da pregledate njegov savijeni oblik.
+@msg	Check the fold lines first.	Prvo provjerite linije savijanja.
+@msg	Panels: {panels}, hinges: {hinges}	Paneli: {panels}, šarke: {hinges}
+@msg	Other blanks not shown: {count}	Ostali krojevi nisu prikazani: {count}
+@msg	A joint does not close by {gap} pt.	Spoj se ne zatvara za {gap} pt.
+@msg	Two panels pass through each other.	Dva panela prolaze jedan kroz drugi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"

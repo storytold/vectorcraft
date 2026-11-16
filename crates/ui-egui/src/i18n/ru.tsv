@@ -9870,5 +9870,15 @@ shape	Open	Открытый
 @msg	A panel is not joined to the rest by a crease.	Панель не соединена с остальными ни одной линией биговки.
 @msg	A fold line is on a non-printing layer.	Линия сгиба находится на непечатаемом слое.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панели: {panels}, шарниры: {hinges}, ошибки: {errors}, предупреждения: {warnings}
+	Fold Preview	Предпросмотр сгиба
+	Fold	Сгиб
+	Show Fold Lines	Показать линии сгиба
+	Three-Quarter	Три четверти
+	Open a document to preview its folded shape.	Откройте документ, чтобы просмотреть его в сложенном виде.
+@msg	Check the fold lines first.	Сначала проверьте линии сгиба.
+@msg	Panels: {panels}, hinges: {hinges}	Панели: {panels}, шарниры: {hinges}
+@msg	Other blanks not shown: {count}	Другие развёртки не показаны: {count}
+@msg	A joint does not close by {gap} pt.	Стык не смыкается на {gap} pt.
+@msg	Two panels pass through each other.	Две панели проходят друг сквозь друга.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

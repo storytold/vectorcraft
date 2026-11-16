@@ -9778,3 +9778,13 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Fold Preview	Náhled skládání
+	Fold	Složení
+	Show Fold Lines	Zobrazit linie skladu
+	Three-Quarter	Tři čtvrtě
+	Open a document to preview its folded shape.	Otevřete dokument, abyste zobrazili náhled jeho složeného tvaru.
+@msg	Check the fold lines first.	Nejprve zkontrolujte linie skladu.
+@msg	Panels: {panels}, hinges: {hinges}	Panely: {panels}, panty: {hinges}
+@msg	Other blanks not shown: {count}	Další přířezy nejsou zobrazeny: {count}
+@msg	A joint does not close by {gap} pt.	Spoj se nezavírá o {gap} pt.
+@msg	Two panels pass through each other.	Dva panely procházejí jeden druhým.

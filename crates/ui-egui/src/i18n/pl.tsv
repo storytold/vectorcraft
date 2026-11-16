@@ -9631,3 +9631,13 @@ breakText	Glyphs	Glify
 @msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
 @msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
+	Fold Preview	Podgląd złożenia
+	Fold	Złożenie
+	Show Fold Lines	Pokaż linie zgięcia
+	Three-Quarter	Trzy czwarte
+	Open a document to preview its folded shape.	Otwórz dokument, aby zobaczyć podgląd jego złożonego kształtu.
+@msg	Check the fold lines first.	Najpierw sprawdź linie zgięcia.
+@msg	Panels: {panels}, hinges: {hinges}	Panele: {panels}, zawiasy: {hinges}
+@msg	Other blanks not shown: {count}	Inne wykroje nie są pokazane: {count}
+@msg	A joint does not close by {gap} pt.	Połączenie nie domyka się o {gap} pt.
+@msg	Two panels pass through each other.	Dwa panele przechodzą przez siebie.

@@ -9410,3 +9410,13 @@ breakText	Glyphs	Glifi
 @msg	A panel is not joined to the rest by a crease.	Un pannello non è unito al resto da alcuna linea di cordonatura.
 @msg	A fold line is on a non-printing layer.	Una linea di piega si trova su un livello non stampabile.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Pannelli: {panels}, cerniere: {hinges}, errori: {errors}, avvisi: {warnings}
+	Fold Preview	Anteprima piegatura
+	Fold	Piegatura
+	Show Fold Lines	Mostra linee di piega
+	Three-Quarter	Tre quarti
+	Open a document to preview its folded shape.	Apri un documento per vederne in anteprima la forma piegata.
+@msg	Check the fold lines first.	Verifica prima le linee di piega.
+@msg	Panels: {panels}, hinges: {hinges}	Pannelli: {panels}, cerniere: {hinges}
+@msg	Other blanks not shown: {count}	Altri fustellati non mostrati: {count}
+@msg	A joint does not close by {gap} pt.	Una giunzione non si chiude di {gap} pt.
+@msg	Two panels pass through each other.	Due pannelli si attraversano.
