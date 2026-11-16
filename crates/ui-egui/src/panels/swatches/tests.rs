@@ -695,6 +695,14 @@ fn swatches_dropped_on_delete_swatch_are_deleted_after_asking() {
         assert_eq!(doc(&app), kept, "{name}");
     }
     assert_eq!(undo_steps(&app), undo + 2);
+    // A swatch of the user's whose name starts with a bracket is an ordinary swatch.
+    app.run("swatch.new", json!({"name": "[Blue]", "color": "#0000ff"})).unwrap();
+    let undo = undo_steps(&app);
+    assert_eq!(drag_to_trash(&mut app, &ctx, "[Blue]", Modifiers::NONE, 7.0), (true, true));
+    assert_eq!(dialog_message(&app).as_deref(), Some("Delete “[Blue]”?"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(doc(&app).swatch("[Blue]").is_none(), "OK deletes it");
+    assert_eq!(undo_steps(&app), undo + 1);
 }
 
 /// Delete Swatch takes only swatches dragged from the active document's list: a paint dragged from

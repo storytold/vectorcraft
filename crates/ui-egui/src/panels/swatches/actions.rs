@@ -111,7 +111,8 @@ pub(super) const DRAG_DOC: &str = "swatch-drag-doc";
 /// drag, and for a drag started in another document.
 fn dragged_deletable(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
     let Some(st) = app.session.active() else { return vec![] };
-    deletable(&dragged_rows(app, ctx)).into_iter().filter(|n| st.doc.swatch_name_taken(n)).collect()
+    let d = &st.doc;
+    dragged_rows(app, ctx).into_iter().filter(|n| d.swatch_name_taken(n) && d.swatch(n).is_none_or(|w| !w.is_reserved())).collect()
 }
 
 /// The names of the swatches or color groups of the active document being dragged from the list,
