@@ -975,6 +975,7 @@
 	Change Panel Layout	Zmień układ paneli
 	Close Panel	Zamknij panel
 	Collapse Panel Group	Zwiń grupę paneli
+	Cycle Display Sizes	Przełącz rozmiary wyświetlania
 	Move Panel	Przesuń panel
 	Group with	Grupuj z
 	Resize panels	Zmień rozmiar paneli
@@ -2027,6 +2028,9 @@ digits	Malayalam	Malajalam
 	Select text to set its OpenType features.	Zaznacz tekst, aby ustawić jego funkcje OpenType.
 	Standard Ligatures	Ligatury standardowe
 	Stylistic Alternates	Alternatywy stylistyczne
+	Ligatures	Ligatury
+	Ornaments	Ornamenty
+	Figures	Cyfry
 	Swash	Ozdobniki
 	Tabular Lining	Tabelaryczne nowoczesne
 	Tabular Oldstyle	Tabelaryczne nautyczne
@@ -2562,6 +2566,18 @@ digits	Malayalam	Malajalam
 	Author Title:	Stanowisko autora:
 	Author:	Autor:
 	Copyright Info URL:	URL informacji o prawach autorskich:
+	Save Metadata Template…	Zapisz szablon metadanych…
+	Import Options	Opcje importu
+	Clear existing fields and use the template's	Wyczyść istniejące pola i użyj pól z szablonu
+	Keep existing fields, but replace those the template has	Zachowaj istniejące pola, ale zastąp te, które zawiera szablon
+	Keep existing fields, but append those the template has	Zachowaj istniejące pola, ale dołącz te, które zawiera szablon
+@msg	the template name can't be empty	nazwa szablonu nie może być pusta
+@msg	the template name isn't usable as a file name	nazwy szablonu nie można użyć jako nazwy pliku
+@msg	no metadata templates folder here	brak tu folderu szablonów metadanych
+@msg	give `name` or `path`, not both	podaj `name` albo `path`, nie oba
+@msg	give one of `path`, `name` and `data`	podaj jeden z parametrów `path`, `name` i `data`
+@msg	mode must be replace, keep or append	tryb musi mieć wartość replace, keep lub append
+@msg	the file is not an XMP metadata template	plik nie jest szablonem metadanych XMP
 	Copyright Notice:	Informacja o prawach autorskich:
 	Copyright Status:	Status praw autorskich:
 	Created:	Utworzono:
@@ -3574,6 +3590,8 @@ theme	Appearance	Wygląd
 	Create Graph	Utwórz wykres
 	Graph Data	Dane wykresu
 	Graph Type	Typ wykresu
+	Graph Type…	Typ wykresu…
+	Graph Data…	Dane wykresu…
 	Graph Options	Opcje wykresu
 	Left Axis	Lewa oś
 	Right Axis	Prawa oś
@@ -4623,6 +4641,27 @@ imageTrace	Outline	Kontur
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: okno dialogowe nie może się otworzyć w wywołaniu zwrotnym funkcji wbudowanej, getterze, konwersji ani pliku uruchamianym przez $.evalFile; wywołaj je z własnego kodu skryptu
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: następna odpowiedź w `answers` jest dla {_1}, nie dla {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: w `answers` nie została żadna odpowiedź dla tego okna dialogowego
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` zawiera {n} odpowiedź, której skrypt nie użył|`answers` zawiera {n} odpowiedzi, których skrypt nie użył|`answers` zawiera {n} odpowiedzi, których skrypt nie użył
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} pozostawił {n} obiekt pod pędzlem bez zmian ({_2}): przekształca tylko ścieżki|{_1} pozostawił {n} obiekty pod pędzlem bez zmian ({_2}): przekształca tylko ścieżki|{_1} pozostawił {n} obiektów pod pędzlem bez zmian ({_2}): przekształca tylko ścieżki
+liquify-tool	Warp	Wypaczenie
+liquify-tool	Twirl	Wir
+liquify-tool	Pucker	Ściągnięcie
+liquify-tool	Bloat	Nadmuchanie
+liquify-tool	Scallop	Ząbkowanie
+liquify-tool	Crystallize	Krystalizacja
+liquify-tool	Wrinkle	Marszczenie
+liquify-kind	graphs	wykresy
+liquify-kind	type	tekst
+liquify-kind	symbols	symbole
+liquify-kind	images	obrazy
+liquify-kind	meshes	siatki
+liquify-kind	envelopes	koperty
+liquify-kind	repeats	powtórzenia
+liquify-kind	placed documents	umieszczone dokumenty
+liquify-kind	blends	przejścia
+liquify-list-two	{0}, {1}	{0} i {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} i {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} jest za duży dla skryptu
 @msg	vc.log: the log of this run is full	vc.log: dziennik tego uruchomienia jest pełny
 @msg	this function's script run has ended	uruchomienie skryptu tej funkcji zakończyło się
@@ -5265,6 +5304,8 @@ imageTrace	Outline	Kontur
 @msg	unknown option `{path}.{k}`	nieznana opcja `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	nieznana wartość nadruków `{o}` (preserve, simulate lub discard)
 @msg	unknown panel `{raw}`	nieznany panel `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` nie ma rozmiarów wyświetlania do przełączania
+@msg	the panels are not shown	panele nie są wyświetlane
 @msg	panels can't be shown in Presentation Mode	w trybie prezentacji nie można wyświetlić paneli
 @msg	unknown preference `{key}`	nieznana preferencja `{key}`
 @msg	Preferences imported.	Zaimportowano preferencje.
@@ -6144,6 +6185,7 @@ mark-style	Japanese	Japońskie
 	Export Data Sets…	Eksportuj zestawy danych…
 	Load Variable Library…	Wczytaj bibliotekę zmiennych…
 	Save Variable Library…	Zapisz bibliotekę zmiennych…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	„Importuj” wczytuje plik źródła danych z rozszerzeniem .csv, .tsv, .txt lub .xml
 @msg	a variable library holds text variables, and the document has none	biblioteka zmiennych zawiera zmienne tekstowe, a dokument nie ma żadnej
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	nie można zapisać zmiennej `{name}` w bibliotece zmiennych: zmień jej nazwę tak, aby zaczynała się literą lub `_`, bez spacji i symboli innych niż `-`, `_` i `.`
 @msg	{k} has control characters	{k} zawiera znaki sterujące

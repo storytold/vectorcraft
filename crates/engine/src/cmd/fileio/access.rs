@@ -149,7 +149,9 @@ pub(crate) const IMAGE_OUTSIDE: &str = "a linked image file is outside the read 
 /// file with SVG Options › Images set to Link, and with Embed when the document holds no pixels for
 /// the image, for the images of the art each file draws (with chosen artboards, the art over each
 /// one; hidden layers and objects only with `hiddenLayers`, template layers and the opacity-mask
-/// and symbol editing layers never) and of the symbols, patterns and brushes that art uses; with
+/// and symbol editing layers never, opacity masks not with SVG Tiny 1.2, and objects with effects
+/// SVG has no filters for as the images the file draws of them), of the art the file draws for each
+/// placed document, and of the symbols, patterns and brushes that art uses; with
 /// Preserve Editing Capabilities, the native document the file carries names every linked file, the relative paths kept of them
 /// and each data set's image. The error names no file or folder.
 pub fn check_linked_images(cmd: &str, format: &str, st: &crate::DocState, d: &vectorcraft_doc::Document, p: &Value) -> Result<()> {
@@ -162,21 +164,27 @@ pub(crate) fn check_images_in(cmd: &str, format: &str, d: &vectorcraft_doc::Docu
     if !matches!(format, "svg" | "svgz") || crate::file_access::current().is_none() {
         return Ok(());
     }
-    // Options that don't read as the encoder's choices count as Link, Preserve Editing and hidden
-    // layers kept: the encoder refuses them anyway.
-    let (link, preserve, hidden) = match super::svg::options_map(p) {
+    // Options that don't read as the encoder's choices count as Link, Preserve Editing, hidden
+    // layers kept and SVG 1.1: the encoder refuses them anyway.
+    let (link, preserve, hidden, tiny) = match super::svg::options_map(p) {
         Ok(m) => {
             let on = |k: &str| m.get(k).is_some_and(|v| v.as_bool() != Some(false));
-            (m.get("images").is_some_and(|v| v.as_str() != Some("embed")), on("preserveEditing"), on("hiddenLayers"))
+            let tiny = m.get("profile").and_then(Value::as_str) == Some("tiny12");
+            (m.get("images").is_some_and(|v| v.as_str() != Some("embed")), on("preserveEditing"), on("hiddenLayers"), tiny)
         }
-        Err(_) => (true, true, true),
+        Err(_) => (true, true, true, false),
     };
     // The opacity-mask and symbol editing layers are never written.
     let d = &*d.without_edit_modes();
-    let names = |d: &vectorcraft_doc::Document| crate::cmd::links::svg_names_hidden_image(d, base, link, hidden);
-    if preserve && crate::cmd::links::names_hidden_file(d, base)
-        || names(d) && super::svg::drawn(d, p).is_none_or(|files| files.iter().any(|f| names(f)))
-    {
+    let names = |d: &vectorcraft_doc::Document| crate::cmd::links::svg_names_hidden_image(d, base, link, hidden, tiny);
+    // The SVG draws the objects with effects it has no filters for as images of them, as the
+    // encoder and the clipboard prepare them.
+    let drawing_names = || {
+        let flat = crate::cmd::rasterfx::flatten_pixel_effects_for(d, !tiny);
+        let d = flat.as_ref().unwrap_or(d);
+        names(d) && super::svg::drawn(d, p).is_none_or(|files| files.iter().any(|f| names(f)))
+    };
+    if preserve && crate::cmd::links::names_hidden_file(d, base) || names(d) && drawing_names() {
         return Err(bad(cmd, IMAGE_OUTSIDE));
     }
     Ok(())
