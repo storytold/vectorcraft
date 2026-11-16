@@ -3913,8 +3913,12 @@ mark-style	Japanese	Japán
 	Filter Layers Panel Rows	Rétegek panel sorainak szűrése
 @msg	`Custom` stands for changed settings: save the preset under another name	a `Custom` a módosított beállításokat jelöli: mentsd az előbeállítást más néven
 @msg	`{key}` must be an array of these names: {_1}	`{key}`: ezen nevek tömbje kell: {_1}
-	Search commands and tools	Parancsok és eszközök keresése
-	Search commands and tools…	Parancsok és eszközök keresése…
+	Search commands, tools, panels and effects	Parancsok, eszközök, panelek és effektusok keresése
+	Search commands, tools, panels and effects…	Parancsok, eszközök, panelek és effektusok keresése…
+	No commands match	Nincs egyező parancs
+	{pos} of {total}: {name}	{pos}/{total}: {name}
+@plural	{n} result|{n} results	{n} találat
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} találatból {shown} látható. Gépeljen tovább a szűkítéshez.
 	Recent Commands	Legutóbbi parancsok
 	No recent commands	Nincsenek legutóbbi parancsok
 	Search Commands…	Parancsok keresése…

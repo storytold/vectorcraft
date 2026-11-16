@@ -3082,8 +3082,12 @@ digits	Malayalam	Malayalam
 	Redefine {name}	“{name}” Stilini Yeniden Tanımla
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` değiştirilmiş ayarları ifade eder: ön ayarı başka bir adla kaydedin
 @msg	`{key}` must be an array of these names: {_1}	`{key}` şu adlardan oluşan bir dizi olmalıdır: {_1}
-	Search commands and tools	Komutları ve araçları arayın
-	Search commands and tools…	Komutları ve araçları arayın…
+	Search commands, tools, panels and effects	Komutları, araçları, panelleri ve efektleri arayın
+	Search commands, tools, panels and effects…	Komutları, araçları, panelleri ve efektleri arayın…
+	No commands match	Eşleşen komut yok
+	{pos} of {total}: {name}	{pos}/{total}: {name}
+@plural	{n} result|{n} results	{n} sonuç
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} sonuçtan {shown} tanesi. Daraltmak için yazmaya devam edin.
 	Recent Commands	Son komutlar
 	No recent commands	Son komut yok
 	Search Commands…	Arama Komutları…
