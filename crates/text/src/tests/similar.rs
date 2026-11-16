@@ -140,7 +140,8 @@ fn a_family_without_numbers_comes_after_the_measured_ones() {
     // The measured families keep the order they have without it.
     let measured: Vec<String> = order.iter().filter(|f| *f != NUMBERLESS_FAMILY).cloned().collect();
     assert_eq!(measured, db.similar_families("Source Sans 3", &families[1..]));
-    // Asked about itself, it comes first, and the families it shares no number with keep their
-    // order in the list.
-    assert_eq!(db.similar_families(NUMBERLESS_FAMILY, &families), families);
+    // Asked about itself, it comes first even from the end of the list, and the families it shares
+    // no number with keep their order in the list.
+    let last = names(&["JetBrains Mono", "Source Serif 4", "Inter", HEIGHTLESS_FAMILY, "Source Sans 3", NUMBERLESS_FAMILY]);
+    assert_eq!(db.similar_families(NUMBERLESS_FAMILY, &last), families);
 }
