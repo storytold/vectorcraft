@@ -41,6 +41,8 @@ struct Shown {
     edge: Edge,
     /// When the pointer left them; `None` while it is over them or has not moved since they showed.
     left_at: Option<f64>,
+    /// Whether a press, a modal dialog, a popup or a flyout held them open last frame.
+    held: bool,
 }
 
 /// The session's state of the panels shown from the edges.
@@ -102,9 +104,11 @@ pub(super) fn update(app: &mut VectorcraftApp, ctx: &egui::Context, area: egui::
         return None;
     }
     let (now, pointer, down, moved) = ctx.input(|i| {
-        // A release counts as moving away: a press may have held the panels while it left them.
-        let moved =
-            i.pointer.delta() != egui::Vec2::ZERO || i.pointer.any_released() || i.events.iter().any(|e| matches!(e, egui::Event::PointerGone));
+        // A release counts as moving away: a press may have held the panels while it left them. A
+        // pointer entering the window has no delta on its first frame, so the move event counts too.
+        let moved = i.pointer.delta() != egui::Vec2::ZERO
+            || i.pointer.any_released()
+            || i.events.iter().any(|e| matches!(e, egui::Event::PointerMoved(_) | egui::Event::PointerGone));
         (i.time, i.pointer.hover_pos(), i.pointer.any_down(), moved)
     });
     // A workspace switched to while panels show may dock none on that side.
@@ -123,11 +127,15 @@ pub(super) fn update(app: &mut VectorcraftApp, ctx: &egui::Context, area: egui::
                     Edge::Right => p.x > uncovered.right(),
                 }
         });
-        if over || down || blocked || flyout {
+        let held = down || blocked || flyout;
+        if over || held {
             shown.left_at = None;
-        } else if moved || pointer.is_none() {
+        } else if moved || shown.held {
+            // A hold that ends with the pointer away from them counts as moving away, as closing a
+            // popup or flyout with Escape does not move the pointer.
             shown.left_at.get_or_insert(now);
         }
+        shown.held = held;
         match shown.left_at {
             Some(left) if now - left >= GRACE => {
                 st.shown = None;
@@ -160,7 +168,7 @@ pub(super) fn update(app: &mut VectorcraftApp, ctx: &egui::Context, area: egui::
     };
     if now - since >= DELAY {
         st.resting = None;
-        st.shown = Some(Shown { edge, left_at: None });
+        st.shown = Some(Shown { edge, left_at: None, held: false });
         return Some(edge);
     }
     st.resting = Some((edge, since));
@@ -233,7 +241,7 @@ pub(super) fn command(app: &mut VectorcraftApp, params: &Value) -> Result<Value,
             }
             let st = &mut app.dock_rt.peek;
             st.resting = None;
-            st.shown = Some(Shown { edge, left_at: None });
+            st.shown = Some(Shown { edge, left_at: None, held: false });
             Ok(json!(edge.id()))
         }
         None => {

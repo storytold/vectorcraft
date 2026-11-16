@@ -26,7 +26,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Ellipse",
             [],
             None,
-            "{x, y, width, height, rotation?: deg clockwise about the centre (0: upright)} → {id}",
+            "{x, y, width, height, rotation?: deg clockwise about the centre (0: upright), anchors=4 (2–1000: smooth anchors spaced evenly by angle; any count but 4 draws a plain path, not a live ellipse)} → {id}",
             has_doc,
             ellipse
         ),
@@ -362,10 +362,28 @@ fn rectangle(s: &mut Session, p: &Value) -> Result<Value> {
     add_art_turned(s, label, path_kind(live.to_path(), Some(live)), f64_or(p, "rotation", 0.0))
 }
 
+/// The most anchors `shape.ellipse` draws, as many as a polygon's sides.
+const MAX_ELLIPSE_ANCHORS: u64 = 1000;
+
 fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
     let r = rect_of(p, "shape.ellipse")?;
-    let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: rect_transform(r, p, "shape.ellipse")? };
-    add_art_turned(s, "Ellipse", path_kind(live.to_path(), Some(live)), f64_or(p, "rotation", 0.0))
+    // One message for every number that is not a whole count in range (a fraction, a negative,
+    // 0, 1, too many); a value that is not a number gets `number_or`'s.
+    let (key, min, max) = ("anchors", 2, MAX_ELLIPSE_ANCHORS);
+    let n = number_or(p, key, 4.0, "shape.ellipse")?;
+    if n.fract() != 0.0 || !(min as f64..=max as f64).contains(&n) {
+        return Err(bad("shape.ellipse", format!("`{key}` must be a whole number between {min} and {max} (got {n})")));
+    }
+    let x = n as u64;
+    let xf = rect_transform(r, p, "shape.ellipse")?;
+    let rotation = f64_or(p, "rotation", 0.0);
+    if x != 4 {
+        // Another count is a plain path: a live ellipse always has 4 anchors.
+        let path = shapes::ellipse_with_anchors(Rect::new(0.0, 0.0, r.width(), r.height()), x as u32).transformed(xf);
+        return add_art_turned(s, "Ellipse", path_kind(path, None), rotation);
+    }
+    let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf };
+    add_art_turned(s, "Ellipse", path_kind(live.to_path(), Some(live)), rotation)
 }
 
 /// The whole-number count `p` gives for `key` (`5` or `5.0`), or `default` when it is left out or
@@ -863,7 +881,8 @@ pub(crate) fn new_area_fit(s: &Session, p: &Value, c: &str, t: &mut TextObject) 
 
 /// The character style new type gets: `size`, `font`, `style` and `color` from `p` (an RGB
 /// `color` in a CMYK document as [`super::paint::new_color`] stores it), else the defaults,
-/// filled with the current fill unless that is None or white (black then), in the document's
+/// filled as `[Normal Character Style]` is (black unless redefined; never the current fill,
+/// #7975), in the document's
 /// language. A `size` outside [`super::typecmd::TYPE_SIZES`] is an error.
 pub(crate) fn new_type_style(s: &Session, p: &Value, cmd: &str) -> Result<CharStyle> {
     let mut style = CharStyle::default();
@@ -881,8 +900,7 @@ pub(crate) fn new_type_style(s: &Session, p: &Value, cmd: &str) -> Result<CharSt
     }
     style.fill = match p.get("color").and_then(color_value) {
         Some(c) => vectorcraft_color::Paint::solid(super::paint::new_color(s, p, c)),
-        None if !s.paint.fill.is_none() && s.paint.fill != vectorcraft_color::Paint::solid(vectorcraft_color::Color::WHITE) => s.paint.fill.clone(),
-        None => vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+        None => s.doc().map_or_else(|_| CharStyle::default().fill, |d| super::textstyles::normal_char_fill(&d.doc)),
     };
     // In the language Document Setup chose, else Preferences › Hyphenation › Default Language; none
     // for the default. Type already in a document keeps its own.

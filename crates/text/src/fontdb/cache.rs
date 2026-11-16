@@ -8,7 +8,10 @@ pub(super) struct CatalogFamily {
     /// Non-English family name from the name table, when the scan found one.
     pub(super) native: Option<String>,
     pub(super) faces: Vec<CatalogFace>,
-    /// The family's kind (from its first face found); variable when any face found is.
+    /// The family's kind (from its first face found); variable when any face found is. Its
+    /// likeness is the one of the face found nearest an upright Regular ([`regular_rank`]).
+    ///
+    /// [`regular_rank`]: super::traits::regular_rank
     pub(super) traits: Option<FontTraits>,
 }
 

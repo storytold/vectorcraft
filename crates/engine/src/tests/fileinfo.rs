@@ -582,3 +582,233 @@ fn an_untitled_document_saved_to_a_file_exports_titled_after_it() {
     }
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// A session whose metadata templates folder is `dir/Metadata Templates`, with a document titled
+/// Poster.
+fn template_session(dir: &std::path::Path) -> Session {
+    let mut s = session();
+    s.attach_metadata_templates_dir(dir.join("Metadata Templates"));
+    s
+}
+
+#[test]
+fn a_saved_metadata_template_is_listed_and_applies_to_another_document() {
+    let dir = vectorcraft_testkit::TempDir::new("fileinfo-template");
+    let mut s = template_session(&dir);
+    assert_eq!(s.execute("file.info.templates", &json!({})).unwrap()["templates"], json!([]), "no folder yet");
+    s.execute("file.info", &info()).unwrap();
+    let r = s.execute("file.info.saveTemplate", &json!({"name": " Studio "})).unwrap();
+    assert_eq!(r["name"], "Studio");
+    let path = dir.join("Metadata Templates").join("Studio.xmp");
+    assert!(path.is_file(), "saved into the folder: {r}");
+    let listed = s.execute("file.info.templates", &json!({})).unwrap();
+    assert_eq!(listed["templates"][0]["name"], "Studio");
+    assert_eq!(listed["templates"].as_array().map(Vec::len), Some(1));
+    // A name that isn't a usable file name as it is is refused, so `a/b` and `a?b` never share a file.
+    for name in ["a/b", "a?b", "CON", "Studio.", "x\u{1}"] {
+        assert!(s.execute("file.info.saveTemplate", &json!({"name": name})).is_err(), "{name}");
+    }
+    assert_eq!(s.execute("file.info.templates", &json!({})).unwrap()["templates"].as_array().map(Vec::len), Some(1));
+    // Saving is not an edit of the document.
+    assert_eq!(s.doc().unwrap().history.undo.len(), 1);
+    // Into a new document, by name, in one undo step.
+    s.execute("file.new", &json!({"width": 100, "height": 80})).unwrap();
+    let r = s.execute("file.info.applyTemplate", &json!({"name": "Studio", "mode": "keep"})).unwrap();
+    assert_eq!(r["changed"], true);
+    let m = &s.doc().unwrap().doc.metadata;
+    assert_eq!((m.author.as_str(), m.author_title.as_str(), m.rating), ("Ada Lovelace", "Designer", 4));
+    assert_eq!(m.keywords, ["fair", "Poster", "print"]);
+    assert_eq!((m.copyright_status, m.copyright_notice.as_str()), (CopyrightStatus::Copyrighted, "(c) 2026 Ada"));
+    assert_eq!(m.description, "A poster\nfor the fair");
+    assert_eq!(r["title"], "Poster", "the template carries the title of its own");
+    assert_eq!(s.doc().unwrap().history.undo.len(), 1);
+    // Applied again, nothing changes and nothing is recorded.
+    let r = s.execute("file.info.applyTemplate", &json!({"path": path.to_str().unwrap(), "mode": "keep"})).unwrap();
+    assert_eq!(r["changed"], false);
+    assert_eq!(s.doc().unwrap().history.undo.len(), 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.metadata.author, "");
+    // The same name replaces the template.
+    s.execute("file.info.saveTemplate", &json!({"name": "Studio", "fields": {"author": "Grace"}})).unwrap();
+    let back = vectorcraft_pdf::read_template(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(back.author.as_deref(), Some("Grace"));
+    assert_eq!(back.title, None, "an Untitled-N title is not written");
+}
+
+#[test]
+fn a_metadata_template_merges_in_three_modes() {
+    let mut s = session();
+    s.execute("file.info", &json!({"author": "Ada", "keywords": ["fair"], "rating": 2, "copyrightUrl": "https://example.com/a"})).unwrap();
+    let template = vectorcraft_pdf::metadata_template(&vectorcraft_pdf::FileInfo {
+        author: Some("Grace".into()),
+        description: Some("From the template".into()),
+        keywords: Some(vec!["print".into(), "Fair".into()]),
+        rating: Some(5),
+        copyrighted: Some(false),
+        ..Default::default()
+    });
+    let merged =
+        |s: &mut Session, mode: &str| s.execute("file.info.applyTemplate", &json!({"data": template, "mode": mode, "apply": false})).unwrap();
+    // Clear and replace: the fields the template lacks are cleared; the title stays.
+    let r = merged(&mut s, "replace");
+    assert_eq!((r["author"].as_str(), r["description"].as_str(), r["rating"].as_u64()), (Some("Grace"), Some("From the template"), Some(5)));
+    assert_eq!(
+        (r["keywords"].clone(), r["copyrightUrl"].as_str(), r["copyrightStatus"].as_str()),
+        (json!(["print", "Fair"]), Some(""), Some("publicDomain"))
+    );
+    assert_eq!(r["title"], "Poster");
+    // Keep and replace: the template's fields replace those it has; the others stay.
+    let r = merged(&mut s, "keep");
+    assert_eq!((r["author"].as_str(), r["rating"].as_u64(), r["copyrightUrl"].as_str()), (Some("Grace"), Some(5), Some("https://example.com/a")));
+    assert_eq!(r["keywords"], json!(["print", "Fair"]));
+    // Keep and append: keywords are added (each once), and only empty fields are filled.
+    let r = merged(&mut s, "append");
+    assert_eq!((r["author"].as_str(), r["rating"].as_u64(), r["description"].as_str()), (Some("Ada"), Some(2), Some("From the template")));
+    assert_eq!((r["keywords"].clone(), r["copyrightStatus"].as_str()), (json!(["fair", "print"]), Some("publicDomain")));
+    // `apply: false` changed nothing; `base` merges into the given fields instead.
+    assert_eq!(s.doc().unwrap().history.undo.len(), 1);
+    assert_eq!(s.doc().unwrap().doc.metadata.author, "Ada");
+    let r = s.execute("file.info.applyTemplate", &json!({"data": template, "mode": "append", "apply": false, "base": {"author": ""}})).unwrap();
+    assert_eq!(r["author"], "Grace");
+    // Applied: one undo step.
+    s.execute("file.info.applyTemplate", &json!({"data": template, "mode": "replace"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), 2);
+    assert_eq!(s.doc().unwrap().doc.metadata.copyright_url, "");
+}
+
+#[test]
+fn metadata_template_errors() {
+    let dir = vectorcraft_testkit::TempDir::new("fileinfo-template-errors");
+    let mut s = template_session(&dir);
+    let xmp = vectorcraft_pdf::metadata_template(&vectorcraft_pdf::FileInfo { author: Some("Ada".into()), ..Default::default() });
+    let not_xmp = dir.join("note.xmp");
+    std::fs::write(&not_xmp, "<note>not metadata</note>").unwrap();
+    let big = dir.join("big.xmp");
+    std::fs::write(&big, vec![b' '; vectorcraft_pdf::MAX_TEMPLATE_BYTES + 1]).unwrap();
+    let e = s.execute("file.info.applyTemplate", &json!({"path": big.to_str().unwrap(), "mode": "keep"})).unwrap_err();
+    assert!(e.to_string().contains("larger than 8 MB"), "{e}");
+    let e = s.execute("file.info.applyTemplate", &json!({"data": " ".repeat(vectorcraft_pdf::MAX_TEMPLATE_BYTES + 1), "mode": "keep"})).unwrap_err();
+    assert!(e.to_string().contains("larger than 8 MB"), "{e}");
+    for bad in [
+        json!({"data": xmp, "mode": "merge"}),
+        json!({"data": xmp}),
+        json!({"data": xmp, "mode": 3}),
+        json!({"mode": "keep"}),
+        json!({"data": xmp, "path": not_xmp.to_str().unwrap(), "mode": "keep"}),
+        json!({"path": dir.join("missing.xmp").to_str().unwrap(), "mode": "keep"}),
+        json!({"path": not_xmp.to_str().unwrap(), "mode": "keep"}),
+        json!({"path": big.to_str().unwrap(), "mode": "keep"}),
+        json!({"name": "missing", "mode": "keep"}),
+        json!({"data": "Ada Lovelace", "mode": "keep"}),
+        json!({"data": xmp, "mode": "keep", "apply": "yes"}),
+        json!({"data": xmp, "mode": "keep", "base": [1]}),
+        json!({"data": xmp, "mode": "keep", "base": {"rating": 9}}),
+    ] {
+        assert!(s.execute("file.info.applyTemplate", &bad).is_err(), "{bad}");
+    }
+    for bad in [json!({"name": "a", "path": "b.xmp"}), json!({"name": "  "}), json!({"fields": {"rating": 9}}), json!({"fields": "x"})] {
+        assert!(s.execute("file.info.saveTemplate", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), 0);
+    assert!(!dir.join("Metadata Templates").exists(), "no failed save made the folder");
+    // A link in the folder is not followed, by its name or its file name.
+    #[cfg(unix)]
+    {
+        let outside = dir.join("outside.xmp");
+        std::fs::write(&outside, &xmp).unwrap();
+        std::fs::create_dir_all(dir.join("Metadata Templates")).unwrap();
+        std::os::unix::fs::symlink(&outside, dir.join("Metadata Templates").join("Linked.xmp")).unwrap();
+        for name in ["Linked", "Linked.xmp"] {
+            assert!(s.execute("file.info.applyTemplate", &json!({"name": name, "mode": "keep"})).is_err(), "{name}");
+        }
+        let e = s.execute("file.info.applyTemplate", &json!({"name": "Linked", "mode": "keep"})).unwrap_err();
+        assert!(e.to_string().contains("not a file"), "{e}");
+        assert_eq!(s.execute("file.info.templates", &json!({})).unwrap()["templates"], json!([]));
+        // A save by that name leaves the linked file as it was.
+        let e = s.execute("file.info.saveTemplate", &json!({"name": "Linked", "fields": {"author": "Grace"}})).unwrap_err();
+        assert!(e.to_string().contains("not a file"), "{e}");
+        assert_eq!(std::fs::read_to_string(&outside).unwrap(), xmp);
+        std::fs::remove_dir_all(dir.join("Metadata Templates")).unwrap();
+    }
+    // Without a folder (runs without preferences), a name is an error, the data comes back, and
+    // the list is empty.
+    let mut s = session();
+    assert!(s.execute("file.info.saveTemplate", &json!({"name": "Studio"})).is_err());
+    let data = s.execute("file.info.saveTemplate", &json!({"fields": {"author": "Ada"}})).unwrap()["data"].as_str().unwrap().to_string();
+    assert_eq!(vectorcraft_pdf::read_template(data.as_bytes()).unwrap().author.as_deref(), Some("Ada"));
+    assert_eq!(s.execute("file.info.templates", &json!({"create": true})).unwrap(), json!({"templates": []}));
+}
+
+#[test]
+fn the_templates_folder_lists_only_xmp_files_and_can_be_made() {
+    let dir = vectorcraft_testkit::TempDir::new("fileinfo-template-list");
+    let mut s = template_session(&dir);
+    let r = s.execute("file.info.templates", &json!({"create": true})).unwrap();
+    let folder = dir.join("Metadata Templates");
+    assert!(folder.is_dir());
+    assert_eq!(r["folder"], folder.to_str().unwrap());
+    for f in ["b.XMP", "a.xmp", "notes.txt", ".xmp"] {
+        std::fs::write(folder.join(f), "x").unwrap();
+    }
+    std::fs::create_dir(folder.join("c.xmp")).unwrap();
+    // Other files, however many, leave the templates listed.
+    for i in 0..1000 {
+        std::fs::write(folder.join(format!("{i:04}.txt")), "").unwrap();
+    }
+    let names: Vec<String> = s.execute("file.info.templates", &json!({})).unwrap()["templates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(names, ["a", "b"]);
+    // A listed name opens whatever the case of its extension.
+    let xmp = vectorcraft_pdf::metadata_template(&vectorcraft_pdf::FileInfo { author: Some("Grace".into()), ..Default::default() });
+    std::fs::write(folder.join("b.XMP"), xmp).unwrap();
+    let r = s.execute("file.info.applyTemplate", &json!({"name": "b", "mode": "keep"})).unwrap();
+    assert_eq!(r["author"], "Grace");
+    // Its listed file name opens it too.
+    let listed = s.execute("file.info.templates", &json!({})).unwrap();
+    assert_eq!(listed["templates"][1]["file"], "b.XMP");
+    let r = s.execute("file.info.applyTemplate", &json!({"name": "b.XMP", "mode": "replace", "apply": false})).unwrap();
+    assert_eq!(r["author"], "Grace");
+    // A listed file name is taken before the name with `.xmp` added.
+    let ada = vectorcraft_pdf::metadata_template(&vectorcraft_pdf::FileInfo { author: Some("Ada".into()), ..Default::default() });
+    std::fs::write(folder.join("b.XMP.xmp"), ada).unwrap();
+    let r = s.execute("file.info.applyTemplate", &json!({"name": "b.XMP", "mode": "replace", "apply": false})).unwrap();
+    assert_eq!(r["author"], "Grace");
+    let r = s.execute("file.info.applyTemplate", &json!({"name": "b.XMP.xmp", "mode": "replace", "apply": false})).unwrap();
+    assert_eq!(r["author"], "Ada");
+    // A name that is not a file name never opens the template its safe form names.
+    let grace = vectorcraft_pdf::metadata_template(&vectorcraft_pdf::FileInfo { author: Some("Grace".into()), ..Default::default() });
+    std::fs::write(folder.join("a-b.xmp"), grace).unwrap();
+    let r = s.execute("file.info.applyTemplate", &json!({"name": "a-b", "mode": "replace", "apply": false})).unwrap();
+    assert_eq!(r["author"], "Grace");
+    for name in ["a/b", "a\\b", "a:b"] {
+        let e = s.execute("file.info.applyTemplate", &json!({"name": name, "mode": "replace", "apply": false})).unwrap_err();
+        assert!(e.to_string().contains("isn't usable as a file name"), "{name}: {e}");
+    }
+}
+
+#[test]
+fn the_largest_file_info_saves_a_template_that_imports() {
+    let mut s = session();
+    let text = "\"&".repeat(32_768);
+    let keywords: Vec<String> = (0..1000).map(|i| format!("{i:04}{}", "\"".repeat(252))).collect();
+    let fields = json!({
+        "author": text, "authorTitle": text, "description": text, "copyrightNotice": text,
+        "copyrightUrl": format!("https://example.com/{}", "&".repeat(2000)), "keywords": keywords, "rating": 5, "copyrightStatus": "copyrighted",
+    });
+    let data = s.execute("file.info.saveTemplate", &json!({"fields": fields})).unwrap()["data"].as_str().unwrap().to_string();
+    assert!(data.len() > 1 << 20, "{} bytes", data.len());
+    let r = s.execute("file.info.applyTemplate", &json!({"data": data, "mode": "replace"})).unwrap();
+    assert_eq!((r["author"].as_str(), r["keywords"].as_array().map(Vec::len)), (Some(text.as_str()), Some(1000)));
+}
+
+#[test]
+fn a_pdf_opens_with_the_rating_and_author_title_its_packet_gives() {
+    let mut m = DocMetadata::default();
+    let f = vectorcraft_pdf::FileInfo { author_title: Some("Editor".into()), rating: Some(3), ..Default::default() };
+    crate::cmd::fileinfo::read_pdf(&mut m, f);
+    assert_eq!((m.author_title.as_str(), m.rating), ("Editor", 3));
+}

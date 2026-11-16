@@ -365,7 +365,7 @@ impl SnapKey {
 }
 
 /// The part of the document the window shows (none headless: all of it).
-fn visible(cx: &ToolContext) -> Option<Rect> {
+pub(super) fn visible(cx: &ToolContext) -> Option<Rect> {
     let s = cx.screen?;
     let (w, h) = s.size;
     Some(Rect::from_points(s.at(0.0, 0.0), s.at(w, h)).union_pt(s.at(w, 0.0)).union_pt(s.at(0.0, h)))
@@ -421,12 +421,58 @@ impl DrawSnap {
         self.guides.clear();
     }
 
+    /// Snap to Tangent for a circle drawn around `center`, its radius `r` set by the pointer at `p`
+    /// through the dragged `corner` (where [`Self::drag`] put it): the radius, within the Smart
+    /// Guides snapping tolerance of `r`, at which the circle touches nearby art
+    /// ([`Targets::tangent_radius`]), its guides replacing the last snap's. None, the guides kept,
+    /// with Smart Guides or Snap to Tangent off, pixels or the grid snapping instead (each read
+    /// again on every move, as [`PointSnap::snap_from`] reads pixels and the grid), nothing in
+    /// reach, or an anchor, center or crossing in reach of `p` or at `corner`.
+    pub fn circle_radius(&mut self, cx: &ToolContext, center: Point, p: Point, corner: Point, r: f64) -> Option<f64> {
+        let Some((_, PointSnap { targets: Some((t, tol)), op })) = &self.targets else { return None };
+        if !cx.smart_guides || !cx.snap_tangent || cx.snaps_to_pixel(*op) || cx.snap_to_grid {
+            return None;
+        }
+        let (radius, guides) = t.tangent_radius(center, p, corner, r, cx.tol(*tol))?;
+        self.guides = guides;
+        Some(radius)
+    }
+
     /// Snap `p`, dragged since the press, with the targets the press gathered.
     pub fn drag(&mut self, cx: &ToolContext, p: Point, from: Option<&Leave>) -> Point {
         if self.targets.is_none() {
             self.gather(cx, SnapKey::of(cx, &[]));
         }
         self.snap(cx, p, from)
+    }
+
+    /// How far from `p` the nearest Smart Guides point (an anchor or a center) or crossing of the
+    /// targets lies, when one is within the snapping tolerance: none otherwise, and none while
+    /// pixels or the grid snap instead.
+    pub(crate) fn point_within_reach(&self, cx: &ToolContext, p: Point) -> Option<f64> {
+        let Some((_, PointSnap { targets: Some((t, tol)), .. })) = &self.targets else { return None };
+        if !cx.smart_guides {
+            return None;
+        }
+        let tol = cx.tol(*tol);
+        let point = t.nearest_point(p, tol).map(|(q, _)| q.distance(p));
+        let crossing = t.crossing(p, tol).map(|q| q.distance(p));
+        match (point, crossing) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
+    }
+
+    /// Whether `q`, where a point at `p` snapped to, is the nearest Smart Guides point (an anchor or
+    /// a center) or the nearest crossing of the targets within the snapping tolerance of `p`.
+    pub(crate) fn snapped_to_point(&self, cx: &ToolContext, p: Point, q: Point) -> bool {
+        let Some((_, PointSnap { targets: Some((t, tol)), .. })) = &self.targets else { return false };
+        if !cx.smart_guides {
+            return false;
+        }
+        let tol = cx.tol(*tol);
+        let at = |a: Point| a.distance(q) <= 1e-9 * tol.max(1.0);
+        t.nearest_point(p, tol).is_some_and(|(a, _)| at(a)) || t.crossing(p, tol).is_some_and(at)
     }
 
     /// The guides of the last snap.
