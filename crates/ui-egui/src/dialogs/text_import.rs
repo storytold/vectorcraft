@@ -165,4 +165,25 @@ mod tests {
         assert_eq!(t.plain_text(), "one two\nthree", "one paragraph per block");
         assert_eq!(st.history.undo.len(), 1);
     }
+
+    /// A text file dropped on a canvas is placed by the dialog's OK in the document it was dropped
+    /// on, even when another document became active meanwhile.
+    #[test]
+    fn a_dropped_text_files_ok_places_in_the_document_it_was_dropped_on() {
+        use crate::place::{DropAt, DropTarget};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        for _ in 0..2 {
+            app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        }
+        app.session.set_active(0);
+        let st = app.session.doc().unwrap();
+        let target = DropTarget::Place(DropAt { doc: st.uid, reverts: st.reverts, at: vectorcraft_geom::Point::new(100.0, 100.0), embed: true });
+        crate::place::drop_files(&mut app, vec![(target, ("notes.txt".into(), None, b"one".to_vec()))]);
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+        app.session.set_active(1);
+        super::super::confirm(&mut app).unwrap();
+        let objects = |i: usize| app.session.documents()[i].doc.layers.iter().map(|l| l.children().map_or(0, Vec::len)).sum::<usize>();
+        assert_eq!((objects(0), objects(1)), (1, 0), "placed in the document it was dropped on");
+        assert_eq!(app.session.active_index(), Some(0));
+    }
 }

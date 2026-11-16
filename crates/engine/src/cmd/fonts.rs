@@ -54,6 +54,15 @@ pub fn specs() -> Vec<CommandSpec> {
             font_list
         ),
         cmd!(
+            query "text.glyphCategories",
+            "Glyph Categories",
+            [],
+            None,
+            "{family, style?} the OpenType categories of the font's glyphs, what the Glyphs panel's Show menu lists after Alternates for Current Selection: from the font's GSUB table, the glyphs that the single, alternate, multiple and ligature substitutions of each kind's features give, each glyph once by id, in this order: `ligatures` (liga, dlig, hlig), `swashes` (swsh, cswh), `stylisticAlternates` (salt), `ss01` to `ss20`, `smallCaps` (smcp, c2sc), `ornaments` (ornm), `fractions` (frac, afrc, numr, dnom) and `figures` (lnum, onum, pnum, tnum); a kind without glyphs is left out; contextual lookups are not followed → {family, style, categories: [{id, name?: a stylistic set's name in the font, glyphs: [glyph id]}]} (style omitted: the family's first style; an error when the family or style isn't available)",
+            always,
+            glyph_categories
+        ),
+        cmd!(
             "text.rescanFonts",
             "Refresh Font List",
             [],
@@ -1135,6 +1144,44 @@ fn font_list(_: &mut Session, p: &Value) -> Result<Value> {
         }
         None => Ok(json!({ "families": *db.menu_family_list() })),
     }
+}
+
+/// `text.glyphCategories`: the OpenType categories of a font's glyphs
+/// ([`vectorcraft_text::FontFace::glyph_categories`]).
+fn glyph_categories(_: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.glyphCategories";
+    let text = |key: &str| match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) => Ok(Some(s.as_str())),
+        Some(_) => Err(bad(C, format!("`{key}` must be a string"))),
+    };
+    let family = text("family")?.ok_or_else(|| bad(C, "missing `family`"))?;
+    let db = vectorcraft_text::FontDb::global();
+    if !db.has_family(family) {
+        return Err(bad(C, format!("font family `{family}` is not available")));
+    }
+    let styles = db.styles(family);
+    let style = match text("style")? {
+        Some(style) => styles
+            .iter()
+            .find(|s| s.eq_ignore_ascii_case(style))
+            .cloned()
+            .ok_or_else(|| bad(C, format!("style `{style}` of `{family}` is not available")))?,
+        None => styles.first().cloned().unwrap_or_else(|| "Regular".into()),
+    };
+    let face = db.face(family, &style).ok_or_else(|| bad(C, format!("style `{style}` of `{family}` is not available")))?;
+    let categories: Vec<Value> = face
+        .glyph_categories()
+        .iter()
+        .map(|c| {
+            let mut v = json!({"id": c.kind.id(), "glyphs": c.glyphs});
+            if let Some(name) = &c.name {
+                v["name"] = json!(name);
+            }
+            v
+        })
+        .collect();
+    Ok(json!({"family": face.family, "style": face.style, "categories": categories}))
 }
 
 pub(crate) fn rescan(s: &mut Session, _: &Value) -> Result<Value> {

@@ -1452,6 +1452,76 @@ fn objects_at_edit_contents_uses_general_order() {
     assert_eq!(objects_at(&d, p, opt, None), vec![b, a]);
 }
 
+/// Select Behind keeps one limit of symbol art to walk when it falls back to the general
+/// traversal, for an envelope in Edit Contents and for a root that is not a layer: the fallback
+/// walks no more art than what the first pass left, and keeps what the first pass found.
+#[test]
+fn select_behind_keeps_one_art_limit_when_it_falls_back() {
+    // 60 instances of `Clipped` with the rectangle hidden, which a click at (150, 50) walks the art
+    // of and misses: each walk takes 3 objects of the 100.
+    let stack = |d: &mut Document, count: usize| {
+        let l = d.layers[0].id;
+        for _ in 0..count {
+            let inst = instance_of(d, "Clipped");
+            d.insert(Some(l), usize::MAX, Arc::unwrap_or_clone(inst)).unwrap();
+        }
+    };
+    // An envelope in Edit Contents at the bottom of the layer, its contents under (150, 50).
+    let envelope = |d: &mut Document| {
+        let inner = |id| Arc::new(Node::path(id, shapes::rectangle(Rect::new(120.0, 20.0, 180.0, 80.0)), Appearance::default_art()));
+        let (a, b) = (d.alloc_id(), d.alloc_id());
+        let e = Node::new(
+            d.alloc_id(),
+            NodeKind::Envelope {
+                content: vec![inner(a), inner(b)],
+                kind: Box::new(crate::live::EnvelopeKind::Warp { style: "arc".to_string(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true, version: 0 }),
+                fidelity: 100.0,
+                editing: true,
+                options: Default::default(),
+                frame: Box::new(vectorcraft_geom::Affine::IDENTITY),
+            },
+        );
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, e).unwrap();
+        (a, b)
+    };
+    let p = Point::new(150.0, 50.0);
+    let mut d = Document::new(600.0, 400.0);
+    clipped_symbol(&mut d, false);
+    let (a, b) = envelope(&mut d);
+    stack(&mut d, 60);
+    let (behind, _, arts) = with_art_limit(100, || objects_at(&d, p, HitOptions::default(), None));
+    assert_eq!(behind, vec![b, a]);
+    assert!(arts <= 34, "envelope in Edit Contents: {arts} instances' art walked");
+    // An instance that the first pass hits by its art, the limit then used up, stays in the list:
+    // `Shown` is `Clipped` with its rectangle shown, below 32 instances of `Clipped`.
+    let mut d = Document::new(600.0, 400.0);
+    clipped_symbol(&mut d, false);
+    let (a, b) = envelope(&mut d);
+    let (mut mask, art) = half_clipped(&mut d);
+    mask.appearance.effects.push(test_move());
+    let mut clip = Node::group(d.alloc_id(), vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    group_symbol(&mut d, "Shown", vec![Arc::new(clip)]);
+    let hit = instance_of(&mut d, "Shown");
+    let hit_id = hit.id;
+    let l = d.layers[0].id;
+    d.insert(Some(l), usize::MAX, Arc::unwrap_or_clone(hit)).unwrap();
+    stack(&mut d, 32);
+    let (behind, _, arts) = with_art_limit(100, || objects_at(&d, p, HitOptions::default(), None));
+    assert_eq!(behind, vec![hit_id, b, a], "hit before the fallback");
+    assert!(arts <= 34, "hit before the fallback: {arts} instances' art walked");
+    // A root that is not a layer, below the layer.
+    let mut d = Document::new(600.0, 400.0);
+    clipped_symbol(&mut d, false);
+    stack(&mut d, 60);
+    let root = Arc::new(Node::group(d.alloc_id(), vec![]));
+    d.layers.insert(0, root);
+    let (behind, _, arts) = with_art_limit(100, || objects_at(&d, p, HitOptions::default(), None));
+    assert!(behind.is_empty());
+    assert!(arts <= 34, "root that is not a layer: {arts} instances' art walked");
+}
+
 #[test]
 fn locked_and_hidden_skip() {
     let mut d = Document::new(200.0, 200.0);
@@ -2138,6 +2208,37 @@ fn a_click_and_a_marquee_walk_repeated_nested_symbol_instances_within_one_limit(
     assert_eq!(with_art_limit(100, || hit_test(&d, Point::new(150.0, 50.0), HitOptions::default()).map(|h| h.leaf)).0, Some(inst), "click");
     let edge = Rect::new(140.0, -5.0, 160.0, 5.0);
     assert_eq!(with_art_limit(100, || marquee(&d, edge, None, false)).0, [inst], "marquee across the art's edge");
+}
+
+/// The members of an Intertwine group in symbol art count toward the art walk's limit of objects
+/// for a click, as the members of a plain group do. A click on a member's path past the instance's
+/// box is still found within the limit.
+#[test]
+fn a_click_counts_the_members_of_an_intertwine_group_in_symbol_art_toward_one_limit() {
+    set_clip_region(moved_clip_region);
+    // A clip group whose clipping region `test.move` moves to 100..200 × 0..100, past the 0..100
+    // box, over an Intertwine group of 200 squares at 140..160 × 40..60.
+    let mut d = Document::new(600.0, 400.0);
+    let l = d.layers[0].id;
+    let (mut mask, _) = half_clipped(&mut d);
+    mask.appearance.effects.push(test_move());
+    let squares = (0..200)
+        .map(|_| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(140.0, 40.0, 160.0, 60.0)), Appearance::default_art())))
+        .collect();
+    let woven = Arc::new(Node::new(d.alloc_id(), NodeKind::Intertwine { children: squares }));
+    let mut clip = Node::group(d.alloc_id(), vec![Arc::new(mask), woven]);
+    clip.set_clips(true);
+    group_symbol(&mut d, "Woven", vec![Arc::new(clip)]);
+    let inst = instance_of(&mut d, "Woven");
+    let id = inst.id;
+    d.insert(Some(l), 0, Arc::unwrap_or_clone(inst)).unwrap();
+    let opt = HitOptions { path_only: true, ..HitOptions::default() };
+    let at = |x: f64| hit_test(&d, Point::new(x, 50.0), opt).map(|h| h.leaf);
+    // Inside the squares and away from their paths, every member is tested and none is hit.
+    let (hit, leaves, _) = with_art_limit(100, || at(150.0));
+    assert_eq!(hit, None);
+    assert!(leaves <= 100, "{leaves} leaves tested");
+    assert_eq!(with_art_limit(100, || at(140.0)).0, Some(id), "on the squares' paths");
 }
 
 /// In a dynamic symbol's art that placing through its 9-slice guides could make more than

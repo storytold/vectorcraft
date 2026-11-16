@@ -777,6 +777,61 @@ fn bucket_modifier_only_hover_updates_the_visible_cursor() {
     assert!(chips(&mut app) > 0);
 }
 
+/// A press between a Live Paint Bucket triple-click's clicks that the view tools take (a
+/// middle-button pan, a pan with Space held) counts as a press that paints nothing: the
+/// triple-click matches the fill the face had before the first click.
+#[test]
+fn bucket_triple_click_with_a_view_tool_press_between_matches_the_fill_before() {
+    use egui::{Event, Modifiers, PointerButton};
+    use vectorcraft_color::{Color, Paint};
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    for case in ["middle", "space"] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let ids: Vec<u64> = [0.0, 50.0, 100.0]
+            .iter()
+            .map(|x| app.session.execute("shape.rectangle", &json!({"x": x, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap())
+            .collect();
+        app.session.execute("select.set", &json!({"ids": ids})).unwrap();
+        let g = app.session.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+        for (x, hex) in [(25, "#ff0000"), (75, "#ff0000"), (125, "#0000ff")] {
+            app.session.execute("livePaint.fill", &json!({"group": g, "point": [x, 125], "color": hex})).unwrap();
+        }
+        app.session.execute("select.none", &json!({})).unwrap();
+        app.select_tool("livePaintBucket");
+        app.session.paint.fill = green.clone();
+        if let Some(v) = app.view_mut() {
+            v.center = Point::new(200.0, 150.0);
+            v.zoom = 1.0;
+            v.fitted = true;
+        }
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let at = xf.to_screen(Point::new(25.0, 125.0));
+        let click = |app: &mut VectorcraftApp, button, pos, modifiers| {
+            let b = |pressed| Event::PointerButton { pos, button, pressed, modifiers };
+            frame(app, &ctx, vec![Event::PointerMoved(pos), b(true)]);
+            frame(app, &ctx, vec![b(false)]);
+        };
+        click(&mut app, PointerButton::Primary, at, Modifiers::NONE);
+        if case == "middle" {
+            click(&mut app, PointerButton::Middle, at, Modifiers::NONE);
+        } else {
+            let space = |pressed| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: Modifiers::NONE };
+            frame(&mut app, &ctx, vec![space(true)]);
+            click(&mut app, PointerButton::Primary, at, Modifiers::NONE);
+            frame(&mut app, &ctx, vec![space(false)]);
+        }
+        click(&mut app, PointerButton::Primary, at, Modifiers::NONE);
+        frame(&mut app, &ctx, vec![]);
+        let group = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(g)).unwrap().clone();
+        let fill = |x: f64| vectorcraft_tools::builder::face_at(&group, Point::new(x, 125.0)).unwrap().appearance.fill_paint();
+        assert_eq!([fill(25.0), fill(75.0)], [green.clone(), green.clone()], "{case}: the faces that were red");
+        assert_eq!(fill(125.0), Paint::solid(Color::from_hex("#0000ff").unwrap()), "{case}: the blue face");
+    }
+}
+
 /// The Image Trace panel's eye-button hold ends when the pointer is released, even when the
 /// panel stopped drawing while the button was held, so a later press on the canvas does not
 /// show the source image.

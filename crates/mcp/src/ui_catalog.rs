@@ -167,6 +167,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} toggle a red underline under the words of the document's type its dictionaries don't know (text.spelling.check lists them), kept up to date as the type changes; type with effects isn't underlined → whether Auto Spell Check is on",
     ),
+    (
+        "ui.checkSpelling",
+        "Check Spelling…",
+        "Cmd+I",
+        "{} open the Check Spelling dialog to walk through unrecognized words with suggestions, ignore, change and dictionary options",
+    ),
     ("shortcuts.set", "Set Keyboard Shortcut", "", "{id: command id or tool:<id>, shortcut: \"Cmd+Shift+K\" | \"\" (none) | null (default), force?}"),
     ("shortcuts.list", "List Keyboard Shortcuts", "", "{query?} → [{id, label, group, shortcut, default, overridden}]"),
     ("shortcuts.conflicts", "Keyboard Shortcut Conflicts", "", "{} → [{shortcut, ids}]"),
@@ -182,7 +188,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "shortcuts.exportText",
         "Export Keyboard Shortcuts as Text…",
         "",
-        "{path?} save the current set's tools and menu commands with their shortcuts as a UTF-8 text file (Keyboard Shortcuts › Export Text…): the set's name, then a Tools and a Menu Commands section in the dialog's order, one `name<TAB>shortcut` line per row, empty after the tab when it has none; without `path`, pick a file",
+        "{path?, format?: \"text\"|\"sheet\"|\"csv\" (default text), pageSize?: \"letter\"|\"a4\" (sheet only; default A4 when the current document prints on A4, else letter)} save the current set's tools and menu commands with their shortcuts (Keyboard Shortcuts › Export Text…). text: a UTF-8 text file: the set's name, then a Tools and a Menu Commands section in the dialog's order, one `name<TAB>shortcut` line per row, empty after the tab when it has none. sheet: a printable PDF on landscape pages that lists the rows with a shortcut, Tools and then a group per top-level menu, under a colored band per group, shortcut then name, in four columns. csv: a UTF-8 CSV file (RFC 4180 quoting, CRLF) with a `Group,Command,Shortcut` header and one record per row in the sheet's groups, in the UI language; a field that starts with = + - @ and has more after it starts with '. A `path` is written as given. Without it, pick a file: the desktop save dialog offers the three formats (text first) unless `format` names one, and the file type picked decides and gives the name its extension; with no dialog, writer or download, returns {text} (text, csv) or {pdf: base64} (sheet); a bad `format` or `pageSize` is an error",
     ),
     ("shortcuts.import", "Import Keyboard Shortcuts…", "", "{path? | data?}"),
     (
@@ -649,6 +655,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Collapse Panel Group",
         "",
         "{panel, collapsed?: bool} minimize the group holding a panel to its tabs (in a floating window, the window to its title bar), or restore it, as a double-click on a tab or the drag bar does; the same as window.panel.minimize {panel, minimized}. Without `collapsed` it toggles. Returns {panel, collapsed, layout}",
+    ),
+    (
+        "window.panel.cycleOptions",
+        "Cycle Display Sizes",
+        "",
+        "{panel} show a panel at its next display size, as the double triangle at the right end of its tab strip does: the sizes are the states of its panel menu's Show/Hide Options (Transparency: options and thumbnails, thumbnails alone, neither), largest first, and the smallest goes back to the largest; Align, Attributes, Character, Color, Flattener Preview, Gradient, Info, Paragraph, Stroke, Transform and Transparency have them. An unknown panel or one without display sizes is an error and changes nothing. Returns {panel, size: 0 for the largest, sizes: how many it has}",
     ),
     (
         "window.panel.float",
