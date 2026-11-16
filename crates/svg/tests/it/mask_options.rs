@@ -2,6 +2,7 @@
 //! defaults in `data-vectorcraft-mask`, and import restores them and the original mask art (without
 //! the backdrop rectangle and inverting filter that draw the options in SVG).
 
+use craft_svg::tree::draw::resvg;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, OpacityMask};
 use vectorcraft_geom::{Rect, shapes};
