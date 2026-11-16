@@ -698,6 +698,58 @@ fn picked_mesh_points_take_the_eyedropper_sample() {
     assert_ne!(node(&s, m).appearance, appearance);
 }
 
+/// A Cmd-click with the Direct Selection tool the Eyedropper lends picks gradient mesh points for
+/// the Eyedropper: the lent tool starts from the Eyedropper's picks, so a Shift-click adds to
+/// them, and the Eyedropper samples into what the lent tool left picked (#8090).
+#[test]
+fn mesh_points_picked_through_the_lent_tool_take_the_eyedropper_sample() {
+    let mut s = session();
+    // Two pixels, orange and teal, 100 pt each, at (300, 0).
+    let rgba = [[255u8, 128, 0, 255], [0, 128, 128, 255]].concat();
+    let img = craft_image_codecs::Image::from_raw(2, 1, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba).unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+    s.edit("Place", |d, _| {
+        d.images.insert("px".into(), ImageBlob::png(png.to_vec()));
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let xf = vectorcraft_geom::Affine::translate((300.0, 0.0)) * vectorcraft_geom::Affine::scale(100.0);
+        let im = ImageObject { key: "px".into(), width: 2, height: 1, xf, link: None, placement: Default::default(), pixels: None };
+        d.insert(Some(l), 0, Node::new(id, NodeKind::Image(Box::new(im)))).map_err(|e| crate::EngineError::Other(e.to_string()))
+    })
+    .unwrap();
+    let m = rect(&mut s, 10.0);
+    s.execute("object.mesh.create", &json!({"ids": [m.0], "rows": 1, "cols": 1})).unwrap();
+    let colors = |s: &Session| match node(s, m).kind {
+        NodeKind::Mesh(g) => g.points.iter().map(|p| p.color).collect::<Vec<_>>(),
+        k => panic!("not a mesh: {k:?}"),
+    };
+    let white = colors(&s)[0];
+    let v = ViewInfo::default();
+    let press = |s: &mut Session, i: usize, mods: Mods| {
+        let q = match node(s, m).kind {
+            NodeKind::Mesh(g) => g.points[i].p,
+            k => panic!("not a mesh: {k:?}"),
+        };
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, q.x, q.y).with_mods(mods), v).unwrap();
+        }
+    };
+    let (teal, orange) = (Color::rgb8(0, 128, 128), Color::rgb8(255, 128, 0));
+    s.execute("select.set", &json!({"ids": [m.0]})).unwrap();
+    s.select_tool("directSelection", v).unwrap();
+    press(&mut s, 0, Mods::default());
+    s.select_tool("eyedropper", v).unwrap();
+    // Cmd-click point 3: Direct Selection, lent, picks it in place of point 0.
+    press(&mut s, 3, Mods { cmd: true, ..Default::default() });
+    assert_eq!(s.tool_id(), "eyedropper");
+    click(&mut s, 450.0, 50.0, Mods::default());
+    assert_eq!(colors(&s), [white, white, white, teal], "the point the lent tool picked takes the sample");
+    // Cmd+Shift-click point 0 adds it to the Eyedropper's pick.
+    press(&mut s, 0, Mods { cmd: true, shift: true, ..Default::default() });
+    click(&mut s, 350.0, 50.0, Mods::default());
+    assert_eq!(colors(&s), [orange, white, white, orange], "both picked points take the sample");
+}
+
 /// A CMYK document with one image of `px` (one row, 100 pt a pixel) at (300, 0).
 fn cmyk_doc_with_image(px: &[[u8; 4]]) -> Session {
     let mut s = Session::new();
