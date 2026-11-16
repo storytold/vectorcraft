@@ -11,9 +11,11 @@ mod rare;
 use cut_edge::{choosing_pixels, compact, settled, settled_wide, settles_wide};
 pub(crate) use cut_edge::{continuous_tone, settle_cut_edges};
 pub use denoise::denoise;
+#[cfg(test)]
 pub(crate) use denoise::denoise_keeping;
+pub(crate) use denoise::{Source, denoise_nearest};
 pub use palette::FULL_TONE_MAX;
-use palette::{Bin, HistKey, TracedAs, Used, color_palette, flat_colors, kmeans_1d, labs, nearest_1d, nearest_lab, nearest_library};
+use palette::{Bin, HistKey, TracedAs, Used, color_palette, flat_count, flat_palette, kmeans_1d, labs, nearest_1d, nearest_lab, nearest_library};
 #[cfg(test)]
 pub(crate) use rare::kept_rare;
 use rare::{rare_colours, refine_around};
@@ -126,12 +128,18 @@ pub(crate) fn quantize_keeping(img: &Raster, params: &TraceParams) -> (Quantized
             // Automatic on flat art: colours too rare for its count, but distinct and drawn as
             // regions of their own, are added (see `rare_colours`).
             let detail = (params.color_detail / 100.0).clamp(0.0, 1.0);
-            let flat_auto = params.palette == Palette::Automatic && flat_colors(from, detail).is_some();
+            let flat = if params.palette == Palette::Automatic { flat_count(from, detail) } else { None };
+            let flat_auto = flat.is_some();
             let mut rare: Vec<[u8; 3]> = vec![];
-            // The picture with `colors` colours asked for; fewer come back when it has fewer, or
-            // when noise made several of one (see `merge_mixed`).
-            let mut reduce = |colors: u32| {
-                let mut centers = color_palette(from, &TraceParams { colors, ..params.clone() });
+            // The picture in the colors `params` asks for, or in one color per clean level when
+            // `levels` is given; fewer come back when it has fewer, or when noise made several of
+            // one (see `merge_mixed`). Also whether `merge_mixed` merged any.
+            let mut reduce = |levels: Option<usize>| {
+                rare.clear();
+                let mut centers = match levels {
+                    Some(n) => flat_palette(from, n),
+                    None => color_palette(from, params),
+                };
                 // The anti-aliasing beside a rare color along the cut edge, with the indexes of
                 // that color and of the color on the other side of it (see `rare_colours`).
                 let mut traced_as: Vec<TracedAs> = vec![];
@@ -168,9 +176,24 @@ pub(crate) fn quantize_keeping(img: &Raster, params: &TraceParams) -> (Quantized
                 let palette = centers.iter().map(|c| [c[0].round() as u8, c[1].round() as u8, c[2].round() as u8]).collect();
                 let q = compact(labels, palette);
                 // A swatch library's colours are used as they are.
-                if library { q } else { merge_mixed(q, img.width as usize, img.height as usize, &rare) }
+                if library {
+                    return (q, false);
+                }
+                let before = q.palette.len();
+                let q = merge_mixed(q, img.width as usize, img.height as usize, &rare);
+                let merged = q.palette.len() < before;
+                (q, merged)
             };
-            let q = reduce(params.colors);
+            // Clean levels (see `flat_count`) each take a color unless `merge_mixed` finds two of
+            // them mixed (dithering, or a thin region of a level beside a close one): such a
+            // picture takes the colors median cut counts, with rare colors added.
+            let q = match flat {
+                Some((_, Some(levels))) => match reduce(Some(levels)) {
+                    (q, false) => q,
+                    (_, true) => reduce(None).0,
+                },
+                _ => reduce(None).0,
+            };
             let q = if settles_wide(params) { settled_wide(q, img, &own, false) } else { settled(q, img, &own) };
             rare.retain(|c| q.palette.contains(c));
             (q, rare)
@@ -273,6 +296,11 @@ fn oklab(c: [f64; 3]) -> [f64; 3] {
         100.0 * (1.977_998_495_1 * l - 2.428_592_205 * m + 0.450_593_709_9 * s),
         100.0 * (0.025_904_037_1 * l + 0.782_771_766_2 * m - 0.808_675_766 * s),
     ]
+}
+
+/// [`oklab`] of each palette color.
+pub(crate) fn palette_labs(palette: &[[u8; 3]]) -> Vec<[f64; 3]> {
+    palette.iter().map(|c| oklab(c.map(f64::from))).collect()
 }
 
 /// [`oklab`] of an sRGB colour, for the tests.

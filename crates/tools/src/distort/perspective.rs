@@ -378,9 +378,11 @@ impl PerspectiveGrid {
         if (self.origin[1] - self.horizon).abs() < 1e-6 {
             return Err("ground level must differ from the horizon".into());
         }
-        // A moved plane stays in front of the viewer.
-        let behind = |p: Plane| self.axes(p).is_some_and(|[.., n]| 1.0 + self.offset(p) * self.axis_col(n)[2] <= 1e-9);
-        if Plane::ALL.iter().any(|p| !self.offset(*p).is_finite() || self.offset(*p).abs() > MAX_DEPTH || behind(*p)) {
+        // A moved plane stays in front of the viewer, both where Automatic Plane Positioning holds
+        // it and in its own place, which it goes back to.
+        let behind = |p: Plane, d: f64| self.axes(p).is_some_and(|[.., n]| 1.0 + d * self.axis_col(n)[2] <= 1e-9);
+        let bad = |p: Plane, d: f64| !d.is_finite() || d.abs() > MAX_DEPTH || behind(p, d);
+        if Plane::ALL.iter().any(|p| bad(*p, self.offset(*p)) || bad(*p, self.placed_offset(*p))) {
             return Err("a plane is moved too far (behind the viewer)".into());
         }
         self.validate_definition()

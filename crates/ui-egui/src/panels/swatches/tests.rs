@@ -4,6 +4,8 @@ use egui::{Event, Modifiers, PointerButton, Pos2};
 use vectorcraft_color::Color;
 use vectorcraft_engine::Session;
 
+mod context_menu;
+
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
@@ -489,7 +491,7 @@ fn find_field_filters_and_shift_extends_over_what_is_shown() {
 fn list_view_rows_take_double_clicks_and_folder_clicks_select_the_group() {
     let mut app = app();
     let ctx = context();
-    set_pstate(&ctx, "swatch-view", View::SmallList);
+    app.ui.swatches_view = View::SmallList;
     double_click_tile(&mut app, &ctx, "Red");
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND), "double-click in a list opens Swatch Options");
     let d = &app.session.active().unwrap().doc;
@@ -912,7 +914,41 @@ fn deselecting_keeps_the_arts_swatch_highlighted() {
 fn images_and_unswatched_text_highlight_no_swatch() {
     let mut app = app();
     let mut png = vec![];
-    image::RgbaImage::from_pixel(4, 4, image::Rgba([255, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(4, 4, image::Rgba([255, 0, 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let data = vectorcraft_format::base64_encode(&png);
     app.run("file.place", json!({"name": "a.png", "dataBase64": data, "link": false})).unwrap();
     assert_eq!(active_swatch(&app), None, "an image: no swatch");
@@ -1013,7 +1049,7 @@ fn the_list_fills_a_tall_panel_above_its_footer() {
         app.run("swatch.new", json!({"name": format!("Tone {i:02}"), "color": format!("#{:02x}3060", i * 4)})).unwrap();
     }
     let ctx = context();
-    set_pstate(&ctx, "swatch-view", View::SmallList);
+    app.ui.swatches_view = View::SmallList;
     // The clip rect of the first swatch row's name: the list's visible area.
     let mut list = |bottom: Option<f32>| {
         let mut clip = None;

@@ -579,6 +579,29 @@ fn colored_light_surfaces_match_supersampling_at_internal_facet_edges() {
     assert!(failures.is_empty(), "{failures:#?}");
 }
 
+/// Inflate turned so its facets narrow to slivers at the edges, in an opaque solid fill under two
+/// colored lights, against 3x averaged down ([`seams_against_supersampled`]): each facet and its
+/// seam cover an edge pixel once together, so at most one RGB channel is more than 3 levels off, by
+/// no more than 4, and no alpha is off.
+#[test]
+fn turned_colored_inflate_facets_and_seams_cover_their_edges_once() {
+    let lights = json!([
+        {"color":"#ff0000","rotation":135,"height":35,"intensity":70},
+        {"color":"#0000ff","rotation":-35,"height":25,"intensity":65}
+    ]);
+    let (mut s, _) = setup("threeD.inflate");
+    let change = json!({"index":0,"item":null,"params":{"ambient":10,"lights":lights,"rotationX":50,"rotationY":35}});
+    s.execute("effect.setParams", &change).unwrap();
+    s.execute("paint.setFill", &json!({"color":"#ffcc66"})).unwrap();
+    let image = render(doc(&s));
+    let (measured, color, max, holes, worst) = seams_against_supersampled(doc(&s), &image);
+    assert!(measured > 2_000, "{measured} pixels inside");
+    assert!(
+        holes == 0 && color <= 1 && max <= 4,
+        "of {measured} pixels, {color} channels off by more than 3 (at most {max}), {holes} alphas off: {worst:?}"
+    );
+}
+
 /// The closed facet edges of colored-light surfaces survive SVG and PDF, read back and drawn at
 /// 1:1, and Expand Appearance: inside the art, every pixel stays opaque and within 6 levels of the
 /// live art.
@@ -646,6 +669,107 @@ fn batched_colored_inflate_preserves_compound_holes_and_surface_opacity() {
     assert!((150..=156).contains(&image.pixel(110, 200)[3]), "surface opacity applies once: {:?}", image.pixel(110, 200));
     s.execute("effect.expandAppearance", &json!({})).unwrap();
     assert_eq!(image.pixels, render(doc(&s)).pixels);
+}
+
+/// The alpha of `d` drawn at 1:1 against a 3x render averaged down. Inside the art, on each pixel
+/// whose 3x average and its eight neighbors' share one alpha, a pixel is off when it is below 255
+/// where that alpha is 255, otherwise more than 3 levels away from it. Outside the art, a pixel is
+/// painted past the outline when it has an alpha above 3 where it and its eight neighbors are empty
+/// at 3x. Returns (pixels measured inside, pixels off, the largest alpha off, pixels painted past the
+/// outline, the first few of either).
+fn alpha_against_supersampled(d: &Document) -> (usize, usize, u8, usize, Vec<String>) {
+    let image = render(d);
+    let fine = vectorcraft_render::Renderer::new().render(
+        d,
+        1200,
+        1200,
+        kurbo::Affine::scale(3.0),
+        &vectorcraft_render::RenderOptions { background: None, artboards: false, ..Default::default() },
+    );
+    let average = fine.area_resized(400, 400).unwrap();
+    let (mut measured, mut off, mut worst, mut past) = (0, 0, 0, 0);
+    let mut first = vec![];
+    for y in 1..399 {
+        for x in 1..399 {
+            let q = average.pixel(x, y)[3];
+            if !(y - 1..=y + 1).all(|y| (x - 1..=x + 1).all(|x| average.pixel(x, y)[3] == q)) {
+                continue;
+            }
+            let p = image.pixel(x, y)[3];
+            let wrong = if q == 0 {
+                let painted = p > 3;
+                past += usize::from(painted);
+                painted
+            } else {
+                measured += 1;
+                let hole = if q == 255 { p < 255 } else { p.abs_diff(q) > 3 };
+                off += usize::from(hole);
+                worst = worst.max(p.abs_diff(q));
+                hole
+            };
+            if wrong && first.len() < 4 {
+                first.push(format!("({x},{y}) {p} vs {q}"));
+            }
+        }
+    }
+    (measured, off, worst, past, first)
+}
+
+/// Revolve under colored lights draws each face of a gradient-lit surface on its own, over an
+/// underlay of its faces clipped to the surface's outline: at 1:1, no pixel inside the art lets the
+/// background through where a 3x render averaged down is opaque, none paints past the outline, and
+/// a surface's opacity, its gradient's transparent stops and its blending mode apply once. The same
+/// holds for the art read back from SVG and PDF and for Expand Appearance.
+#[test]
+fn colored_revolve_faces_leave_no_alpha_holes_at_one_to_one() {
+    let gradient = |opacity: f64| {
+        json!({"gradient":{"kind":"linear","start":[100,150],"end":[200,150],"stops":[
+            {"offset":0,"color":"#ffffff","opacity":opacity},{"offset":1,"color":"#808080","opacity":opacity}
+        ]}})
+    };
+    let lights = json!([
+        {"color":"#ff0000","rotation":135,"height":35,"intensity":70},
+        {"color":"#0000ff","rotation":-35,"height":25,"intensity":65}
+    ]);
+    let cases = [
+        ("red light, gradient", gradient(1.0), json!({}), None),
+        ("red light, solid", json!({"color":"#ffcc66"}), json!({}), None),
+        ("two lights, gradient", gradient(1.0), json!({"ambient":10,"lights":lights}), None),
+        ("two lights, solid", json!({"color":"#ffcc66"}), json!({"ambient":10,"lights":lights}), None),
+        ("red light, edge-on faces", gradient(1.0), json!({"rotationX":-80}), None),
+        ("red light, gradient at 60%", gradient(0.6), json!({}), None),
+        ("red light, fill at 60%", gradient(1.0), json!({}), Some(json!({"item":0,"opacity":60}))),
+        ("red light, multiply", gradient(1.0), json!({}), Some(json!({"item":0,"blend":"Multiply"}))),
+    ];
+    let mut failures = vec![];
+    for (name, fill, params, transparency) in cases {
+        let (mut s, _) = capped_profile();
+        s.execute("effect.setParams", &json!({"index":0,"item":null,"params":params})).unwrap();
+        s.execute("paint.setFill", &fill).unwrap();
+        if let Some(t) = transparency {
+            s.execute("transparency.set", &t).unwrap();
+        }
+        let svg = s.execute("document.serialize", &json!({"format":"svg"})).unwrap()["text"].as_str().unwrap().to_owned();
+        assert!(!svg.contains("<image"), "{name}");
+        let pdf = s.execute("document.serialize", &json!({"format":"pdf"})).unwrap();
+        let pdf = vectorcraft_format::base64_decode(pdf["dataBase64"].as_str().unwrap()).unwrap();
+        assert!(!pdf.windows(b"/Subtype /Image".len()).any(|w| w == b"/Subtype /Image"), "{name}");
+        let live = doc(&s).clone();
+        s.execute("effect.expandAppearance", &json!({})).unwrap();
+        for (of, d) in [
+            ("live", live),
+            ("SVG", vectorcraft_svg::import(&svg).unwrap()),
+            ("PDF", vectorcraft_pdf::import(&pdf).unwrap()),
+            ("expanded", doc(&s).clone()),
+        ] {
+            let (measured, off, worst, past, first) = alpha_against_supersampled(&d);
+            assert!(measured > 10_000, "{name} {of}: {measured} pixels inside");
+            if off > 0 || past > 0 {
+                failures.push(format!("{name} {of}: of {measured} pixels, {off} off (at most {worst}), {past} past the outline: {first:?}"));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
 }
 
 /// Under colored lights, an Inflate fill and stroke in solid colors draw each face on its own, in

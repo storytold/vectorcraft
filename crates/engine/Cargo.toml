@@ -29,6 +29,8 @@ vectorcraft-tools = { workspace = true }
 vectorcraft-text = { workspace = true }
 vectorcraft-render = { workspace = true }
 vectorcraft-pathops = { workspace = true }
+# The panels and hinges of a packaging blank (Packaging Tools' Check Fold Lines).
+vectorcraft-three-d = { workspace = true }
 vectorcraft-brush = { workspace = true }
 vectorcraft-trace = { workspace = true }
 vectorcraft-svg = { workspace = true }
@@ -44,16 +46,16 @@ vectorcraft-js = { workspace = true }
 # The commands' parameter schemas (schemas.rs).
 vectorcraft-apischema = { workspace = true }
 image = { workspace = true }
+craft-image-codecs = { workspace = true }
 jxl-oxide = { workspace = true }
 jxl-color = { workspace = true }
 jxl-grid = { workspace = true }
-hayro-jpeg2000 = { version = "=0.3.5", default-features = false, features = ["std", "simd"] }
 # Pure Rust, no unsafe; pinned at the version photocraft-heif uses.
 heic-rs = { version = "=0.1.4", default-features = false, features = ["std"], optional = true }
 flate2 = { workspace = true }
 chrono = { workspace = true }
 # The XML parts of Word documents placed as type (place/docx.rs).
-roxmltree = "0.21"
+craft-xml = { workspace = true }
 # The compound file that holds a Word 97-2003 document placed as type (place/doc.rs).
 cfb = "0.15"
 kurbo = { workspace = true }
@@ -78,6 +80,16 @@ heic-rs = { version = "=0.1.4", default-features = false, features = ["std", "pa
 rayon = { version = "1.12", optional = true }
 
 [dev-dependencies]
+# JPEG XL files for the `.jxl` open and place tests.
+zune-jpegxl = { workspace = true }
+zune-core = { workspace = true }
+# JPEG XL files for the import fuzz tests (tests/import_fuzz.rs).
+craft-jxl = { workspace = true }
+# vectorcraft-doc's Group 3 TIFF reader before craft-stream-codecs, the reference
+# tests/group3_reference.rs compares it with.
+hayro-ccitt = { workspace = true }
+tiff = { workspace = true }
+craft-stream-codecs = { workspace = true }
 vectorcraft-affinity = { workspace = true, features = ["synth"] }
 crc32fast = { workspace = true }
 vectorcraft-testkit = { workspace = true }
@@ -89,9 +101,6 @@ vectorcraft-pdf = { workspace = true, features = ["read-count"] }
 wat = { workspace = true }
 # Zstandard streams for the Illustrator editing data fuzz tests.
 ruzstd = { workspace = true }
-# JPEG XL files for the `.jxl` open and place tests.
-zune-jpegxl = { workspace = true }
-zune-core = { workspace = true }
 # The JavaScript parser's lexer, compared with the script checker's on the same scripts.
 vectorcraft-js = { workspace = true }
 # A bundled font's own glyph boxes, for the glyph bounds tests.

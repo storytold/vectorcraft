@@ -2,7 +2,7 @@
 //!
 //! The UI is thin: every action goes through [`VectorcraftApp::run`], which dispatches UI commands
 //! (view/window) here and everything else to the engine. The same entry point serves menus,
-//! shortcuts, the ⌘K palette and the control channel ([`control`]).
+//! shortcuts, the command palette ([`palette`], Help › Search Commands…) and the control channel ([`control`]).
 #![forbid(unsafe_code)]
 
 /// VectorCraft as craft-update knows it, with its 128 px icon and accent colour: the update
@@ -71,6 +71,7 @@ pub mod script_runs;
 pub mod scripts_menu;
 mod scrub;
 pub mod shortcut_editor;
+pub mod shortcut_sheet;
 pub mod shortcuts;
 pub mod state;
 pub mod stylus;
@@ -353,6 +354,10 @@ pub struct VectorcraftApp {
     /// can be driven one simulated frame at a time (production always leaves this `None`).
     #[cfg(test)]
     pub(crate) now_override: Option<f64>,
+    /// An error the next tool choice returns before the engine sees it ([`Self::try_select_tool`]),
+    /// so tests can drive a failed switch (production has no such field).
+    #[cfg(test)]
+    pub(crate) fail_next_tool_choice: Option<String>,
     /// The host iteration [`Self::tick`] ran in (`None`: never): once per iteration, never per pass.
     tick_iteration: Option<u64>,
     /// The context, viewport and frame whose UI-phase input was already taken in this host

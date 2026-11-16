@@ -769,7 +769,7 @@ fn add_anchor_points_doubles() {
 /// The one-pass build gives what inserting a midpoint into each segment (last first) gives, open or closed.
 #[test]
 fn add_anchor_points_matches_inserting() {
-    let open = PathData::single(SubPath::new(circle(0.0, 0.0, 10.0).subpaths[0].anchors.clone(), false));
+    let open = PathData::single(SubPath::new(circle(0.0, 0.0, 10.0).subpaths[0].anchors.to_vec(), false));
     for src in [circle(0.0, 0.0, 10.0), rect(0.0, 0.0, 10.0, 10.0), open] {
         let mut want = src.clone();
         for sp in &mut want.subpaths {
