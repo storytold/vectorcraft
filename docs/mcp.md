@@ -4889,14 +4889,14 @@ them as process colors; `.acb` files are read, never written. A file in the user
 same extension and bytes as one there, loads as that User Defined library (category `user`).
 From a document, such as a `.ai` or `.eps` swatch library, it reads the colors, tints, gradients and pattern swatches
 in the document's order and color groups; `swatch.library.add` brings a pattern swatch's pattern, with its tile and
-art, into the document as a pattern swatch under the library swatch's name and in its color group. A file with no
-swatches, and a `.ai` or `.eps` file whose swatches are only the default ones, are refused with
-"`<file>` has no swatches of its own". The Swatch Libraries filter of Other Library… lists `.ai` and `.eps` files
-as well as the library files.
+art, into the document as a pattern swatch under the library swatch's name and in its color group. A document with
+no swatches, and a `.ai`, `.eps` or PostScript file whose swatches are only the default ones, are refused with
+"`<file>` has no swatches of its own". The Swatch Libraries filter of Other Library… lists `.ai`, `.ait` and `.eps`
+(`.epsf`) files as well as the library files.
 `swatch.library.copyToUser {library}` copies a loaded library into the user library folder of the desktop
 app (a library file as it is; a document's swatches or a library loaded from `data` or `dataBase64`
-as `.vcswatches`; a library with pattern swatches is refused, since a `.vcswatches` file can't hold them) under a name no file there has, and lists it as User Defined from then on; until the app
-quits, commands given its loaded id use the copy → `{library, name, count, path, copied}` (`copied: false`
+as `.vcswatches`; a library with pattern swatches is refused) under a name no file there has, and lists it as User
+Defined from then on; until the app quits, commands given its loaded id use the copy → `{library, name, count, path, copied}` (`copied: false`
 when the folder already held the same file). Without a user library folder the command is disabled.
 These commands refuse a parameter of the wrong form with an error that names it: `library`, `apply`, `path`, `data`,
 `dataBase64`, `format` and `name` must be strings, `names` must be a list of names, and `focus`, `replace` and `user`

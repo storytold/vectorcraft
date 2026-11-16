@@ -341,6 +341,34 @@ fn another_documents_pattern_swatches_of_one_pattern_add_as_separate_swatches() 
     assert_eq!(again["added"], json!([]), "{again}");
 }
 
+/// A library swatch named after its pattern, added in one call after another swatch of that pattern
+/// with the same placement, stands for the swatch just added: it is listed as existing, not added
+/// again.
+#[test]
+fn a_pattern_swatch_named_after_its_pattern_reuses_one_added_in_the_same_call() {
+    use std::sync::Arc;
+    let mut s = session();
+    s.edit("Pattern", |d, _| {
+        let path = vectorcraft_geom::shapes::ellipse(vectorcraft_geom::Rect::new(0.0, 0.0, 4.0, 4.0));
+        let dot = vectorcraft_doc::Node::path(d.alloc_id(), path, vectorcraft_doc::Appearance::default_art());
+        let tile = vectorcraft_geom::Rect::new(0.0, 0.0, 8.0, 8.0);
+        d.patterns.push(vectorcraft_doc::PatternDef { tile, ..vectorcraft_doc::PatternDef::new("Dots", vec![Arc::new(dot)]) });
+        for name in ["Tiles", "Dots"] {
+            let paint = Paint::Pattern { pattern: "Dots".into(), xf: vectorcraft_geom::Affine::IDENTITY };
+            d.swatches.push(vectorcraft_color::Swatch { name: name.into(), paint, global: false, spot: false });
+        }
+        Ok(())
+    })
+    .unwrap();
+    let b64 = run(&mut s, "document.serialize", json!({}))["dataBase64"].as_str().unwrap().to_string();
+    let id = run(&mut s, "swatch.library.load", json!({"dataBase64": b64, "name": "Dots.vectorcraft"}))["library"].clone();
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let r = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Tiles", "Dots"]}));
+    assert_eq!((&r["added"], &r["existing"]), (&json!(["Tiles"]), &json!(["Tiles"])), "{r}");
+    let d = doc(&s);
+    assert_eq!(d.swatches_iter().filter(|w| matches!(&w.paint, Paint::Pattern { pattern, .. } if pattern == "Dots")).count(), 1, "{r}");
+}
+
 #[test]
 fn swatch_exchange_files_load_add_and_list_as_user_libraries() {
     let bytes = vectorcraft_testkit::ase::sample();

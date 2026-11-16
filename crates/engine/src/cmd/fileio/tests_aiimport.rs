@@ -491,22 +491,34 @@ fn a_pattern_from_a_ai_library_keeps_a_color_the_library_lacks() {
     std::fs::remove_dir_all(&dir).ok();
 }
 
-/// A `.ai` file without a palette of its own, and a library file with no swatches, are refused as
+/// A `.ai` file without a palette of its own, and a document with no swatches, are refused as
 /// swatch libraries with a message, not listed as the default swatches or as an empty library. A
-/// damaged `.ai` is refused with the reader's error, and neither is listed.
+/// damaged `.ai` is refused with the reader's error, and none of them is listed. A library file
+/// with no swatches loads as an empty library.
 #[test]
-fn swatch_library_files_without_swatches_or_damaged_are_refused() {
+fn swatch_library_documents_without_swatches_or_damaged_are_refused() {
     let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.edit("Clear", |d, _| {
+        d.swatches.clear();
+        d.swatch_groups.clear();
+        Ok(())
+    })
+    .unwrap();
+    let b64 = s.execute("document.serialize", &json!({})).unwrap()["dataBase64"].as_str().unwrap().to_string();
+    let e = s.execute("swatch.library.load", &json!({"dataBase64": b64, "name": "Bare.vectorcraft"})).unwrap_err().to_string();
+    assert!(e.contains("`Bare.vectorcraft` has no swatches of its own"), "{e}");
     let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", &format!("0 0 0 1 k\n{}f\n", ai::rect(10.0, 50.0, 40.0, 90.0))));
     let p = json!({"dataBase64": vectorcraft_format::base64_encode(&ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f")), "name": "art.ai"});
     let e = s.execute("swatch.library.load", &p).unwrap_err().to_string();
     assert!(e.contains("`art.ai` has no swatches of its own"), "{e}");
-    let e = s.execute("swatch.library.load", &json!({"data": "GIMP Palette\nName: Empty\n#\n", "name": "Empty.gpl"})).unwrap_err().to_string();
-    assert!(e.contains("`Empty.gpl` has no swatches of its own"), "{e}");
     let damaged = json!({"data": "%PDF-1.4\n%damaged\n", "name": "damaged.ai"});
     assert!(s.execute("swatch.library.load", &damaged).is_err());
     let list = s.execute("swatch.library.list", &json!({})).unwrap();
     assert!(list["libraries"].as_array().unwrap().iter().all(|l| l["category"] != "loaded"), "{list}");
+    // A library file without swatches still loads, as an empty library.
+    let r = s.execute("swatch.library.load", &json!({"data": "GIMP Palette\nName: Empty\n#\n", "name": "Empty.gpl"})).unwrap();
+    assert_eq!(r["count"], json!(0), "{r}");
 }
 
 /// Other Library… on a `.ai` graphic style library (art styles, their list and no layers) gives the

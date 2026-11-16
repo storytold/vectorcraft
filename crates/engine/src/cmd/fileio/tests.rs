@@ -497,7 +497,7 @@ fn library_open_filters_list_library_formats_first() {
 #[test]
 fn the_swatch_library_filter_lists_ai_and_eps_files() {
     let filters: Vec<_> = library_open_filters("Swatch libraries", crate::cmd::swatchlib::LIBRARY_PICK_EXTS).collect();
-    for ext in ["ai", "eps", "ase", "gpl", "acb", "vcswatches"] {
+    for ext in ["ai", "ait", "eps", "epsf", "ase", "gpl", "acb", "vcswatches"] {
         assert!(filters[0].1.contains(&ext), "{ext}: {:?}", filters[0]);
     }
     assert_eq!(filters.iter().filter(|f| f.0 == "Swatch libraries").count(), 1, "{filters:?}");

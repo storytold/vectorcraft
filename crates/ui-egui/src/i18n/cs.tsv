@@ -8229,7 +8229,7 @@ breakText	Glyphs	Glyfy
 @msg	`{id}` is no writable format (see document.formats)	`{id}` není formát, který lze zapisovat (viz document.formats)
 @msg	`{id}` isn't a loaded library	`{id}` není načtená knihovna
 @msg	`{file}` has no swatches of its own	`{file}` nemá žádné vlastní vzorky
-@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` obsahuje vzorky, které soubor .vcswatches nepojme
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` obsahuje vzorkové položky vzorníku, které soubor .vcswatches nepojme
 @msg	`{key}` has no colours	`{key}` neobsahuje žádné barvy
 @msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` obsahuje více než {MAX_EDIT_WORDS} slov
 @msg	`{key}` is a design name	`{key}` je název návrhu
