@@ -1569,6 +1569,8 @@ font-technology	Variable	Variables
 	Show smooth color wheel	Mostrar rueda de color continua
 	Show segmented color wheel	Mostrar rueda de color segmentada
 	Show color bars	Mostrar barras de color
+	Show brightness and hue on wheel	Mostrar brillo y tono en la rueda
+	Show saturation and hue on wheel	Mostrar saturación y tono en la rueda
 	Add Color Tool	Herramienta Añadir color
 	Remove Color Tool	Herramienta Eliminar color
 	Remove Color	Eliminar color

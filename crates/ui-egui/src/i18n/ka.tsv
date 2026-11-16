@@ -4788,6 +4788,8 @@ digits	Malayalam	მალაიალამური
 	Show smooth color wheel	გლუვი ფერთა წრის ჩვენება
 	Show segmented color wheel	სეგმენტირებული ფერთა წრის ჩვენება
 	Show color bars	ფერთა ზოლების ჩვენება
+	Show brightness and hue on wheel	სიკაშკაშისა და ფერის ტონის ჩვენება წრეზე
+	Show saturation and hue on wheel	გაჯერებისა და ფერის ტონის ჩვენება წრეზე
 	Add Color Tool	ფერის დამატების ხელსაწყო
 	Remove Color Tool	ფერის წაშლის ხელსაწყო
 	Remove Color	ფერის წაშლა

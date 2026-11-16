@@ -1354,6 +1354,8 @@ antiAlias	Sharp	Nítido
 	Show smooth color wheel	Mostrar roda de cores contínua
 	Show segmented color wheel	Mostrar roda de cores segmentada
 	Show color bars	Mostrar barras de cores
+	Show brightness and hue on wheel	Mostrar brilho e tom na roda
+	Show saturation and hue on wheel	Mostrar saturação e tom na roda
 	Add Color Tool	Ferramenta Adicionar cor
 	Remove Color Tool	Ferramenta Remover cor
 	Remove Color	Remover cor

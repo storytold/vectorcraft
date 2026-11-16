@@ -1554,6 +1554,8 @@ file-filter	Templates	Vorlagen
 	Show smooth color wheel	Stufenlosen Farbkreis anzeigen
 	Show segmented color wheel	Segmentierten Farbkreis anzeigen
 	Show color bars	Farbbalken anzeigen
+	Show brightness and hue on wheel	Helligkeit und Farbton im Farbkreis anzeigen
+	Show saturation and hue on wheel	Sättigung und Farbton im Farbkreis anzeigen
 	Add Color Tool	Farbe-hinzufügen-Werkzeug
 	Remove Color Tool	Farbe-entfernen-Werkzeug
 	Remove Color	Farbe entfernen

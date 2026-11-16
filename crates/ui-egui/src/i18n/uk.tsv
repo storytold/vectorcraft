@@ -1582,6 +1582,8 @@ file-filter	Templates	Шаблони
 	Show smooth color wheel	Показати плавне колірне коло
 	Show segmented color wheel	Показати сегментоване колірне коло
 	Show color bars	Показати колірні смуги
+	Show brightness and hue on wheel	Показати яскравість і відтінок на колі
+	Show saturation and hue on wheel	Показати насиченість і відтінок на колі
 	Add Color Tool	Інструмент «Додати колір»
 	Remove Color Tool	Інструмент «Вилучити колір»
 	Remove Color	Вилучити колір
