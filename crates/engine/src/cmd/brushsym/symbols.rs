@@ -1300,11 +1300,19 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Move the paint of instance `id`'s stain or style (`fill`, its topmost fill with the amount)
 /// toward `to` by `t`. The fill keeps its amount and everything else it has, and the instance's
-/// other appearance items stay as they are. An instance without a stain or style, or one whose
-/// paint does not change, is left as it is. Returns whether it changed.
+/// other appearance items stay as they are. A paint with no form between it and `to` (a solid
+/// color and a pattern, say) takes `to` at once, so repeated strokes below half strength still
+/// reach it. An instance without a stain or style, or one whose paint does not change, is left as
+/// it is. Returns whether it changed.
 fn recolor_keeping_amount(d: &mut Document, id: NodeId, fill: Option<(Paint, f64)>, to: &Paint, t: f64) -> bool {
+    use vectorcraft_doc::blend::lerp_paint;
     let Some((own, _)) = fill.filter(|(_, o)| *o > 0.0) else { return false };
-    let paint = vectorcraft_doc::blend::lerp_paint(&own, to, t.clamp(0.0, 1.0) as f32);
+    let t = t.clamp(0.0, 1.0) as f32;
+    let mut paint = lerp_paint(&own, to, t);
+    // `lerp_paint` switches such a pair halfway, so just below half it still gives `own`.
+    if paint == own && t > 0.0 && lerp_paint(&own, to, 0.49) == own {
+        paint = to.clone();
+    }
     if paint == own {
         return false;
     }

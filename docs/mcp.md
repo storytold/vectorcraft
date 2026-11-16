@@ -3460,8 +3460,9 @@ already walks Image Trace. Short agent entry points:
     move them on the canvas. It returns `{count}`, the instances that moved.
   - The Sizer keeps each instance's center where it is, even with `affectsDensity`.
   - The Stainer moves an instance's paint toward `color` by the tool's amount at its distance from the point, and the
-    Styler toward the style by the brush's strength there, whatever `method` is. An instance without a stain or style
-    is left as it is, and `alt` has no effect.
+    Styler toward the style by the brush's strength there, whatever `method` is. A paint with no form between it and
+    the new one (a solid color and a pattern) takes the new one at once. An instance without a stain or style is left
+    as it is, and `alt` has no effect.
   - No undo step is added when nothing moves or changes.
 - Dynamic symbols: an instance of a symbol whose `type` is `dynamic` changes the appearance of objects in the symbol's
   art for itself only and stays linked. `symbol.instance.setAppearance {id?, path, fill?, stroke?, opacity?, blend?}`

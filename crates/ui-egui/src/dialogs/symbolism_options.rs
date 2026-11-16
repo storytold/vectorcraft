@@ -121,9 +121,15 @@ fn selected_sets(app: &VectorcraftApp) -> Vec<u64> {
 /// OK: set the brush the Symbolism tools share (the tool keeps it within its ranges), after giving
 /// a new Symbol Set Density to the selected symbol sets.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
-    let mut values: Map<String, Value> =
-        NUMBERS.iter().filter(|k| d.fields.contains_key(**k)).map(|k| (k.to_string(), json!(d.f64(k, 0.0)))).collect();
-    values.extend(SWITCHES.iter().filter(|k| d.fields.contains_key(**k)).map(|k| (k.to_string(), json!(d.bool(k)))));
+    // Each value goes to the check as it is stored, so one of the wrong kind is refused rather than
+    // read as 0 or false. A number stored as text is read as the field reads it, and other text is
+    // refused.
+    let stored = |k: &str| match d.fields.get(k) {
+        Some(Value::String(s)) => Some(vectorcraft_doc::Unit::Points.parse(s).map_or_else(|| json!(s), |n| json!(n))),
+        v => v.cloned(),
+    };
+    let mut values: Map<String, Value> = NUMBERS.iter().filter_map(|k| Some((k.to_string(), stored(k)?))).collect();
+    values.extend(SWITCHES.iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))));
     values.extend(SPRAY.iter().chain(&["method"]).filter(|k| d.fields.contains_key(**k)).map(|k| (k.to_string(), json!(d.str(k)))));
     // A value `tool.setOption` refuses changes no density either.
     vectorcraft_tools::symbolism::check_options(&d.str("tool"), &values)?;
@@ -291,6 +297,17 @@ mod tests {
         assert!(super::super::confirm(&mut app).is_err());
         assert_eq!((width(&app), undo(&app)), (was, steps));
         assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(5.0));
+        // So does a checkbox or a number stored as a value of the wrong kind.
+        for (k, v) in [("usePressure", json!("invalid")), ("proportional", json!(1)), ("intensity", json!("strong")), ("diameter", json!(true))] {
+            app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
+            let fields = &mut app.ui.dialog.as_mut().unwrap().fields;
+            fields.insert("density".into(), json!(9));
+            fields.insert(k.into(), v);
+            assert!(super::super::confirm(&mut app).is_err(), "{k}");
+            assert_eq!((width(&app), undo(&app)), (was, steps), "{k}");
+            let o = app.session.tool_options_of("symbolSizer");
+            assert_eq!((o["density"].as_f64(), o["usePressure"].as_bool()), (Some(5.0), Some(false)), "{k}");
+        }
         // A higher density packs the set closer, as one undo step.
         app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
         app.ui.dialog.as_mut().unwrap().fields.insert("density".into(), json!(9));

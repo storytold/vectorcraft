@@ -205,6 +205,28 @@ fn shift_with_the_styler_keeps_the_amount_and_changes_the_style() {
     assert!(blue[2] > 0.99 && blue[0] < 0.01, "{blue:?}");
 }
 
+/// A stain or style with no form between it and the new paint (a pattern and a solid color) takes
+/// the new paint at once, at any strength, and keeps its amount.
+#[test]
+fn shift_changes_a_paint_that_has_no_form_in_between() {
+    use vectorcraft_color::Paint;
+    let mut s = session();
+    let a = dot(&mut s, 100.0, 150.0);
+    s.edit("Pattern fill", |d, _| {
+        let mut f = vectorcraft_doc::FillLayer::new(Paint::Pattern { pattern: "Tile".into(), xf: Default::default() });
+        f.opacity = 0.4;
+        d.node_mut(a).unwrap().appearance.items.insert(0, vectorcraft_doc::AppearanceItem::Fill(f));
+        Ok(())
+    })
+    .unwrap();
+    // Low intensity, near the brush's edge: far below half strength.
+    let r = adjust(&mut s, json!({"tool": "stain", "points": [[104, 150]], "radius": 5, "intensity": 1, "color": "#ff0000", "shift": true}));
+    assert_eq!(r["count"], 1);
+    let f = node(&s, a).appearance.fill().cloned().unwrap();
+    assert_eq!(f.opacity, 0.4, "the amount stays");
+    assert!(f.paint.color().is_some_and(|c| c.to_rgb()[0] > 0.99), "{:?}", f.paint);
+}
+
 /// A style name the document has no style for (the Styler's style from another document, or one
 /// since renamed or deleted) moves the fill toward the same style as no name.
 #[test]
