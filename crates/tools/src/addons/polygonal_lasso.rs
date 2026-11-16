@@ -46,10 +46,11 @@ impl PolygonalLassoTool {
     }
 
     /// Removes the last vertex and hides the segment that followed the pointer until the pointer
-    /// moves again.
+    /// moves again. A press in progress no longer owns a vertex, so dropping it removes nothing more.
     fn take_back_vertex(&mut self) {
         self.vertices.pop();
         self.hover = None;
+        self.pressed_vertex = false;
     }
 
     fn clear(&mut self) {

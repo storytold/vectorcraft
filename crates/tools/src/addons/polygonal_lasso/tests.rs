@@ -222,6 +222,19 @@ fn a_dropped_press_takes_back_only_its_vertex() {
 }
 
 #[test]
+fn a_dropped_press_after_backspace_keeps_the_earlier_vertices() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = cx(&d, &s, &p);
+    let mut tool = PolygonalLassoTool::default();
+    clicks(&mut tool, &cx, &CORNER[..2], Mods::default());
+    tool.pointer(&cx, &PointerEvent::new(PointerKind::Down, 80.0, 140.0));
+    assert!(tool.key(&cx, ToolKey::Backspace, Mods::default()).is_empty());
+    assert!(tool.drop_press(&cx).is_empty());
+    assert_eq!(tool.vertices, vec![Point::new(80.0, 80.0), Point::new(140.0, 80.0)]);
+}
+
+#[test]
 fn the_tool_shows_the_lasso_cursor() {
     let (d, _) = doc_with_rect();
     let (s, p) = (Selection::default(), paint());
