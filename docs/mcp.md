@@ -8547,7 +8547,16 @@ documents every field:
   `orientation`, `autoRotate` (on by default: the paper turns to each artboard), `transverse`; `printLayers:
   visiblePrintable|visible|all` (template layers never print); `placement: {origin, x, y}` places the printed area
   (artboard, bleed and marks) on the imageable area (the paper inside `margin`); `scaling: none|fit|custom|tileFull|
-  tileImageable` with `scale: {width, height}` (%), `overlap` and `tileRange` (tiles numbered across then down).
+  tileImageable` with `scale: {width, height, linked}` (1–1000 %), `overlap` and `tileRange` (tiles numbered across
+  then down).
+- `scale.linked` keeps the custom scale's width and height equal, as the link by Custom's width and height does on
+  [the help page](https://helpx.adobe.com/illustrator/desktop/save-and-export/export-files-to-different-formats/print-documents-in-illustrator.html),
+  where turning it off scales the two apart. The rest is VectorCraft's own rule. New settings have it on, and a saved
+  `scale` without `linked` reads it as false, so settings and presets saved before it print as they did. While it is
+  on, a request that gives one percentage sets the other, turning it on sets the height to the width, and a width and
+  height that differ are an error. A request that gives a different width and height without `linked` turns it off;
+  `linked: null` keeps the saved link, as `null` does for every setting. The Print dialog shows it as the link button after Scale W and H, dimmed with them unless Scaling is Custom or a
+  tiling choice.
 - Copies per sheet: with `copiesPerSheet: true` (off by default; not with tiling) each sheet holds as many copies of
   the artboard as fit the imageable area, each with its bleed and marks, across then down, `gutter` pt apart (0–720,
   default 0). The copies are not turned, and the placement places the whole grid. An artboard that doesn't fit prints
