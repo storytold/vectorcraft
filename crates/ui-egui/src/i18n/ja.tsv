@@ -3116,6 +3116,29 @@ mark-style	Japanese	日本式
 	The unit for East Asian type measurements, which no field uses yet.	東アジア言語の文字の測定に使う単位で、まだどのフィールドも使っていません。
 	When on, a number typed without a unit into a field in picas is read in points.	オンのとき、パイカのフィールドに単位なしで入力した数値はポイントとして読み取られます。
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID を選ぶと、レイヤー、変数、レイヤーオプションでオブジェクト名が XML ID として表示されます。
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	文字サイズと行送りの増減値です。Cmd/Ctrl+Shift+. と Cmd/Ctrl+Shift+, で文字サイズを 1 段階、Alt も押すと 5 段階変えます。横組みの文字では Alt と上下の矢印キーで行送りを 1 段階、Cmd/Ctrl も押すと 5 段階変えます。
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	トラッキングとカーニングの増減値で、単位は 1/1000 em です。横組みの文字では Alt と左右の矢印キーで、キャレット位置のカーニングまたは選択したテキストのトラッキングを 1 段階、Cmd/Ctrl も押すと 5 段階変えます。
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	ベースラインシフトの増減値です。横組みの文字では Alt と Shift と上下の矢印キーでベースラインを 1 段階、Cmd/Ctrl も押すと 5 段階移動します。
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	文字、段落、OpenType、字形の各パネルに日本語などの東アジアの文字のオプションを表示し、合成フォントのコマンドも表示します。
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	文字パネルと段落パネルに、段落の方向、カシーダ、数字など、アラビア語、ヘブライ語、インド系文字のオプションを表示します。
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	選択ツールは文字をベースライン、エリア内文字の枠、またはパス上でのみ選択し、ボックス内の任意の場所では選択しません。
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	フォントメニューに各フォントを英語名で表示します。オフにすると、自国語の名前も持つフォントはその名前で表示されます。
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	新しいエリア内文字は自動サイズ調整がオンの状態で作成され、横組みの長方形の枠は文字に合わせて高さが伸び縮みします。
+	Font lists and the Type › Font menu show a sample of each font beside its name.	フォントリストとフォントメニューに、各フォントの名前の横にそのフォントのサンプルを表示します。
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	フォントのサンプルを、インターフェイスの明るさにかかわらず白地に濃い色の文字で描きます。メニュー内のフォントプレビューがオンのときだけ有効です。
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	文字パネルなどのフォント欄のリストで各行をどれだけ高くするか、つまり各サンプルの大きさです。
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	最近使用したフォントとフォントリストに、最後に使ったフォントを新しい順にいくつ表示するかです (1～15)。
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	文字のフォントまたはフォントスタイルを変えたとき、新しいフォントに字形がない文字は元のフォントのままになります。
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	OpenType 機能で置き換えられた合字などの字形を、カンバス上でピンクのハイライトで示します。プリントや書き出しには含まれません。
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	文字ツールで 1 文字を選択すると、カンバス上のその横に、選べる異体字の列が表示されます。
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	フォントが見つからず代替フォントで描かれた文字を、カンバス上でピンクのハイライトで示します。プリントや書き出しには含まれません。
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	文字ツールで作成した新しい文字は、選択されたサンプルテキストで始まり、入力するとそれが置き換わります。
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	段落の先頭で 1. や * などのリスト記号とスペースを入力すると、その段落がリストになります。
+	Fonts in this folder show in the font menus and can be used without being installed.	このフォルダーのフォントはフォントメニューに表示され、インストールせずに使えます。
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	文字にグラフィックスタイルを適用すると、スタイルに塗りや線があればその文字自体の塗りや線が取り除かれ、スタイルのペイントが見えるようになります。
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	整列と分布は、ポイント文字を仮想ボディではなく字形のインクで測ります。
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	整列と分布は、エリア内文字を枠ではなく字形のインクで測ります。
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	バウンディングボックスと変形パネルは、ポイント文字を仮想ボディではなく字形のインクで測ります。
 	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	初期値は環境設定で OK をクリックすると適用されます。そこでキャンセルすると現在の環境設定が保たれます。
 	Restored documents open unsaved: save them to keep them.	復元したドキュメントは未保存の状態で開きます。保存して残してください。
