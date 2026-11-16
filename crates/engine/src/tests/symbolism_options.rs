@@ -119,6 +119,30 @@ fn average_brings_the_instances_under_the_brush_toward_their_mean() {
     assert!(pa > oa && pb < 1.0 && (pa - pb).abs() < (1.0 - oa) / 2.0, "{pa} {pb} from {oa}");
 }
 
+/// Average opacities below the Symbol Screener's least opacity (5%) stay below it: with the Screener
+/// the instances meet at their mean, and a sprayed instance takes the mean of those under the brush.
+#[test]
+fn average_keeps_opacities_below_the_screeners_least() {
+    let mut s = session();
+    let set = NodeId(s.execute("symbol.spray", &json!({"name": "Dot", "points": [[200, 150]], "radius": 4})).unwrap()["id"].as_u64().unwrap());
+    let a = members(&s, set)[0];
+    let b = dot(&mut s, 220.0, 150.0);
+    for (id, opacity) in [(a, 0), (b, 2)] {
+        s.select(|_, sel| sel.set([id])).unwrap();
+        s.execute("transparency.set", &json!({"opacity": opacity})).unwrap();
+    }
+    s.select(|_, sel| sel.set([set])).unwrap();
+    // A new instance beside the invisible one takes its opacity.
+    s.execute("symbol.spray", &json!({"name": "Dot", "points": [[185, 150]], "radius": 20})).unwrap();
+    let sprayed = *members(&s, set).last().unwrap();
+    assert_eq!(node(&s, sprayed).opacity, 0.0);
+    // The Screener with Average brings 0% and 2% toward 1%, not up to 5%.
+    s.select(|_, sel| sel.clear()).unwrap();
+    adjust(&mut s, json!({"tool": "screen", "points": [[210, 150]], "radius": 40, "intensity": 10, "method": "average"}));
+    let (pa, pb) = (node(&s, a).opacity, node(&s, b).opacity);
+    assert!(pa > 0.0 && pa < 0.02 && pb < 0.02 && pb > 0.0, "{pa} {pb}");
+}
+
 /// Average over instances that already have the mean, or a stroke over no instance, changes
 /// nothing and adds no undo step.
 #[test]

@@ -3427,7 +3427,10 @@ already walks Image Trace. Short agent entry points:
     Scruncher its distance from their middle toward their mean distance, the Sizer the geometric mean of their sizes,
     the Spinner their mean direction, the Stainer and the Styler their mean amount, the Screener their mean opacity.
     `alt` does not reverse it. An instance already at the mean is left as it is, and no undo step is added when
-    no instance changes.
+    no instance changes. The Screener's average, and the opacity a sprayed instance takes as its average, can be
+    below the 5% that the Screener otherwise stops at.
+  - With `userDefined` the Styler gives each instance under the brush the whole style, whatever the intensity or the
+    pen pressure; `random` scales each instance's share by the brush strength there.
   - With `proportional` false a drag resizes along its own direction (a level drag the width, an upright one the
     height) and one point resizes both. With `affectsDensity` an instance also moves away from the point as it grows
     and toward it as it shrinks.

@@ -1008,7 +1008,7 @@ pub(super) fn symbol_spray(s: &mut Session, p: &Value) -> Result<Value> {
             if modes.screen
                 && let Some(m) = near
             {
-                n.opacity = (m.opacity as f32).clamp(0.05, 1.0);
+                n.opacity = (m.opacity as f32).clamp(0.0, 1.0);
             }
             // The stain and the style are both the instance's fill: the style, set last, replaces
             // the stain, an averaged one too when the instances under the brush have a fill.
@@ -1254,7 +1254,8 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                     _ => {
                         let step = (0.1 * w * share) as f32;
                         n.opacity = match &avg {
-                            Some((t, _)) => (n.opacity + ((t.opacity - f64::from(n.opacity)) * w.min(1.0)) as f32).clamp(0.05, 1.0),
+                            // The mean may be below the 5% the Screener otherwise stops at.
+                            Some((t, _)) => (n.opacity + ((t.opacity - f64::from(n.opacity)) * w.min(1.0)) as f32).clamp(0.0, 1.0),
                             None if alt => (n.opacity + step).min(1.0),
                             None => (n.opacity - step).max(0.05),
                         };
