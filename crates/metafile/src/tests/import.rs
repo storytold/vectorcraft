@@ -987,11 +987,22 @@ fn multiline_text_with_advances_aligns_each_line() {
         drops.push(found[2].1 - found[0].1);
     }
     assert!(drops.iter().all(|d| (d - drops[0]).abs() < 0.01), "{drops:?}");
+    // Underlined and left aligned, each line's underline ends with its own advances: no bar runs on
+    // past either line.
+    let records = vec![(82, font_of("Arial", true)), (37, le(&[2])), (84, text_out(1000, "Hi\nHi", &[2000, 1000, 0, 2000, 1000]))];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert!(all(&back.document).iter().all(|n| !matches!(n.kind, NodeKind::Path { .. })));
     for (align, x, second) in [(6, 2500, [15.0, 30.0]), (2, 4000, [20.0, 35.0])] {
         let records = vec![(22, le(&[align])), (82, arial()), (37, le(&[2])), (84, text_out(x, "Hi\nHi", &[2000, 1000, 0, 1500, 500]))];
         let xs: Vec<f64> = at(&records).iter().map(|p| p.0).collect();
         assert_eq!(xs, vec![10.0, 30.0, second[0], second[1]], "{align}");
     }
+    // An advance further than tracking reaches on the second line of centered type (at 100 mm):
+    // that line splits where the advance puts its characters, and the first line stays in place.
+    let records = vec![(22, le(&[6])), (82, arial()), (37, le(&[2])), (84, text_out(10000, "Hi\nHiy", &[2000, 1000, 0, 12000, 500, 1000]))];
+    let found = texts_at(&import(&hand_emf(20000, 3000, &records)).unwrap().document);
+    let want = vec![("Hi".to_string(), vec![85.0, 105.0]), ("H".to_string(), vec![32.5]), ("iy".to_string(), vec![152.5, 157.5])];
+    assert_eq!(found, want);
 }
 
 #[test]
@@ -1061,6 +1072,15 @@ fn split_type_keeps_its_underline_and_right_to_left_order() {
     let records = vec![(82, arial()), (37, le(&[2])), (84, text_out(1000, "Hiy", &[12000, 500, 1000]))];
     let back = import(&hand_emf(20000, 3000, &records)).unwrap();
     assert!(all(&back.document).iter().all(|n| !matches!(n.kind, NodeKind::Path { .. })));
+    // A last advance further than tracking reaches, right aligned at 140 mm: the "H" and the "i"
+    // start at 10 and 20 mm, and the underline runs on from the "i" to 140 mm.
+    let records = vec![(22, le(&[2])), (82, font_of("Arial", true)), (37, le(&[2])), (84, text_out(14000, "Hi", &[1000, 12000]))];
+    let back = import(&hand_emf(20000, 3000, &records)).unwrap();
+    assert_eq!(texts_at(&back.document), vec![("Hi".to_string(), vec![10.0, 20.0])]);
+    let bars: Vec<Rect> =
+        all(&back.document).iter().filter(|n| matches!(n.kind, NodeKind::Path { .. })).filter_map(|n| n.geometric_bounds()).collect();
+    assert_eq!(bars.len(), 1, "{bars:?}");
+    assert!(bars[0].x0 > 20.0 * mm && (bars[0].x1 - 140.0 * mm).abs() < 0.01, "{bars:?}");
     // Right to left type with the same advance stays one text object, its characters in order.
     let s = "\u{5e9}\u{5dc}\u{5d5}\u{5dd}";
     let records = vec![(82, arial()), (37, le(&[2])), (84, text_out(1000, s, &[12000, 500, 500, 1000]))];

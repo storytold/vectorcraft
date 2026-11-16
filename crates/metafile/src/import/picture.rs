@@ -14,8 +14,9 @@
 //!   for are spaced by them: tracking on each character, with pair kerning off. On a single left
 //!   to right line, the characters after an advance that tracking can't give (further than its
 //!   range reaches, or a tab) are point type of their own, and an underline or strikethrough is carried across the space between.
-//!   Centered or right aligned type on more than one line is point type per line, each line
-//!   aligned by its own advances.
+//!   It is also carried on to the end of the last character's advance. Type on more than one line
+//!   is placed a line at a time: each line is aligned by its own advances and split as a single
+//!   line is.
 //! - Clip regions and clip paths become clipping groups around what they clip; a rectangle around
 //!   the whole picture clips nothing and is left out.
 //!
@@ -599,76 +600,96 @@ impl Mapper {
             text.para.justify = justify;
             text
         };
+        let whole = point(&s);
+        let opacity = f32::from(t.color[3]) / 255.0;
+        if dx.is_empty() {
+            let mut text = whole;
+            text.xf = base * Affine::translate((0.0, drop));
+            text.cached_bounds = Some(vectorcraft_text::layout(db, &text).bounds);
+            let mut n = Node::new(NodeId(0), NodeKind::Text(Box::new(text)));
+            n.opacity = opacity;
+            self.push(chain, n);
+            return;
+        }
         // Text units grow by `k` along the baseline in the text object's own space.
         let dx: Vec<f64> = dx.iter().map(|d| d * k).collect();
         let chars: Vec<char> = s.chars().collect();
-        // The string in pieces, each a text object of its own: one piece, or with advances, a
-        // new piece after each cluster that tracking can't space by its advance.
-        let whole = point(&s);
-        let (pieces, mut tracked) = if dx.is_empty() {
-            (vec![(0, chars.len())], None)
-        } else {
-            let (pieces, text, laid) = pieces(whole.clone(), db, &dx);
-            (pieces, Some((text, laid)))
-        };
-        let split = pieces.len() > 1;
-        // Centered or right aligned type on more than one line: a point type object per line.
-        if let Some((_, laid)) = tracked.as_ref().filter(|(_, l)| l.lines.len() > 1 && !matches!(t.h_align, HAlign::Left)) {
-            for (mut text, start, down) in per_line(laid, &s, &dx, lead * k, &t.h_align, f.underline || f.strike, &point) {
-                text.xf = base * Affine::translate((start, drop + down));
-                let mut n = Node::new(NodeId(0), NodeKind::Text(Box::new(text)));
-                n.opacity = f32::from(t.color[3]) / 255.0;
-                self.push(chain.clone(), n);
+        let line = Line { base, drop, align: &t.h_align, decorated: f.underline || f.strike, color: t.color, opacity, point: &point, chain: &chain };
+        // Type on more than one line is placed a line at a time, each line aligned by its own
+        // advances (layout leaves the tracking after a line's last character out of the width it
+        // aligns, and each line ends with its own) and its underline carried on to its own end.
+        let laid = vectorcraft_text::layout(db, &whole);
+        if laid.lines.len() > 1 {
+            // Where each character starts (bytes): the character a byte offset starts is found by
+            // a search.
+            let starts: Vec<usize> = s.char_indices().map(|(at, _)| at).collect();
+            let count = |to: usize| starts.partition_point(|at| *at < to);
+            let first = laid.lines.first().map_or(0.0, |l| l.baseline);
+            for (n, l) in laid.lines.iter().enumerate() {
+                let (from, to) = (count(l.start), count(l.end));
+                let (Some(cs), Some(dx)) = (chars.get(from..to), dx.get(from..to)) else { continue };
+                // A leading NUL's advance comes before the first line only.
+                let lead = if n == 0 { lead * k } else { 0.0 };
+                let down = l.baseline - first;
+                self.line(&line, cs, dx, lead, if down.is_finite() { down } else { 0.0 });
             }
+        } else {
+            self.line(&line, &chars, &dx, lead * k, 0.0);
+        }
+    }
+
+    /// One line of text with advances `dx` (points along the baseline) for its characters `chars`,
+    /// `down` below the first line's baseline: in pieces, each a text object of its own, a new
+    /// piece after each cluster that tracking can't space by its advance.
+    fn line(&mut self, line: &Line, chars: &[char], dx: &[f64], lead: f64, down: f64) {
+        if chars.is_empty() || (chars.iter().all(|c| c.is_whitespace()) && !line.decorated) {
             return;
         }
+        let db = vectorcraft_text::FontDb::global();
+        let s: String = chars.iter().collect();
+        let (pieces, text, laid) = pieces((line.point)(&s), db, dx);
+        let split = pieces.len() > 1;
+        let mut tracked = Some((text, laid));
         // Along the baseline (the text object's own space), where the next piece starts from the
         // reference point: the line as long as its advances (a leading NUL's included), where the
         // alignment puts it.
-        let mut at = aligned(lead * k, dx.iter().sum(), &t.h_align);
+        let mut at = aligned(lead, dx.iter().sum(), line.align);
         let last = pieces.len().saturating_sub(1);
         for (i, (from, to)) in pieces.into_iter().enumerate() {
             let piece: String = chars.get(from..to).unwrap_or_default().iter().collect();
+            let dx = dx.get(from..to).unwrap_or_default();
             // Blanks of their own draw nothing unless they are underlined or struck through.
-            if piece.trim().is_empty() && !(f.underline || f.strike) {
-                at += dx.get(from..to).map_or(0.0, |dx| dx.iter().sum());
+            if piece.trim().is_empty() && !line.decorated {
+                at += dx.iter().sum::<f64>();
                 continue;
             }
-            let (mut text, laid, start, end) = match dx.get(from..to) {
-                Some(dx) if !dx.is_empty() => {
-                    // The whole string in one piece was already tracked to its advances.
-                    let (text, laid) = match tracked.take().filter(|_| !split) {
-                        Some(done) => done,
-                        None => {
-                            let mut text = point(&piece);
-                            let laid = advanced(&mut text, db, dx);
-                            (text, laid)
-                        }
-                    };
-                    let x0 = laid.lines.first().map_or(0.0, |l| l.x0);
-                    let start = if (at - x0).is_finite() { at - x0 } else { 0.0 };
-                    let span: f64 = dx.iter().sum();
-                    at += span;
-                    (text, laid, start, x0 + span)
-                }
-                _ => {
-                    let laid = vectorcraft_text::layout(db, &whole);
-                    (whole.clone(), laid, 0.0, 0.0)
+            // The line in one piece was already tracked to its advances.
+            let (mut text, laid) = match tracked.take().filter(|_| !split) {
+                Some(done) => done,
+                None => {
+                    let mut text = (line.point)(&piece);
+                    let laid = advanced(&mut text, db, dx);
+                    (text, laid)
                 }
             };
-            text.xf = base * Affine::translate((start, drop));
+            let x0 = laid.lines.first().map_or(0.0, |l| l.x0);
+            let start = if (at - x0).is_finite() { at - x0 } else { 0.0 };
+            let span: f64 = dx.iter().sum();
+            at += span;
+            text.xf = line.base * Affine::translate((start, line.drop + down));
             text.cached_bounds = Some(laid.bounds);
             // An underline or strikethrough runs on across the space an advance leaves before
-            // the next piece, as one bar per piece from where its own bars end.
-            let gap = if split && i < last { gaps(&laid, db, &text, end) } else { BezPath::new() };
+            // the next piece, or after the line's last character, as one bar per piece from where
+            // its own bars end.
+            let gap = if (split && i < last) || (i == last && line.decorated) { gaps(&laid, db, &text, x0 + span) } else { BezPath::new() };
             let mut n = Node::new(NodeId(0), NodeKind::Text(Box::new(text.clone())));
-            n.opacity = f32::from(t.color[3]) / 255.0;
-            self.push(chain.clone(), n);
+            n.opacity = line.opacity;
+            self.push(line.chain.to_vec(), n);
             if !gap.elements().is_empty() {
                 let mut gap = gap;
                 gap.apply_affine(text.xf);
-                if let Some(n) = self.path_node(gap, Some(t.color), None, false) {
-                    self.push(chain.clone(), n);
+                if let Some(n) = self.path_node(gap, Some(line.color), None, false) {
+                    self.push(line.chain.to_vec(), n);
                 }
             }
         }
@@ -707,46 +728,18 @@ fn aligned(lead: f64, span: f64, align: &HAlign) -> f64 {
     }
 }
 
-/// The lines of `s` (laid out as `laid`, more than one line) as point type objects of their own,
-/// each tracked to its characters' entries of `dx` and aligned by them, with where it starts along
-/// the baseline from the reference point and how far its baseline is below the first line's.
-/// Layout leaves the tracking after a line's last character out of the width it aligns, and each
-/// line ends with its own, so one object can't align every line by its advances. `lead` (a leading
-/// NUL's advance) comes before the first line. Blank lines are left out unless `decorated`
-/// (underlined or struck through).
-fn per_line(
-    laid: &vectorcraft_text::TextLayout,
-    s: &str,
-    dx: &[f64],
-    lead: f64,
-    align: &HAlign,
+/// What every piece of a text record's lines shares: the text space (`base`, with the baseline
+/// `drop` below the reference point), the alignment, whether the type is underlined or struck
+/// through, its color and opacity, a point type object of a string in its style, and its clips.
+struct Line<'a> {
+    base: Affine,
+    drop: f64,
+    align: &'a HAlign,
     decorated: bool,
-    point: &dyn Fn(&str) -> TextObject,
-) -> Vec<(TextObject, f64, f64)> {
-    let db = vectorcraft_text::FontDb::global();
-    let first = laid.lines.first().map_or(0.0, |l| l.baseline);
-    // Where each character starts (bytes): the character a byte offset starts is found by a search.
-    let starts: Vec<usize> = s.char_indices().map(|(at, _)| at).collect();
-    let count = |to: usize| starts.partition_point(|at| *at < to);
-    let chars: Vec<char> = s.chars().collect();
-    let mut out = vec![];
-    for (n, l) in laid.lines.iter().enumerate() {
-        let (from, to) = (count(l.start), count(l.end));
-        let line: String = chars.get(from..to).unwrap_or_default().iter().collect();
-        let Some(dx) = dx.get(from..to) else { continue };
-        if line.is_empty() || (line.trim().is_empty() && !decorated) {
-            continue;
-        }
-        let mut text = point(&line);
-        let line_laid = advanced(&mut text, db, dx);
-        let lead = if n == 0 { lead } else { 0.0 };
-        let x0 = line_laid.lines.first().map_or(0.0, |l| l.x0);
-        let start = aligned(lead, dx.iter().sum(), align) - x0;
-        let down = l.baseline - first;
-        text.cached_bounds = Some(line_laid.bounds);
-        out.push((text, if start.is_finite() { start } else { 0.0 }, if down.is_finite() { down } else { 0.0 }));
-    }
-    out
+    color: [u8; 4],
+    opacity: f32,
+    point: &'a dyn Fn(&str) -> TextObject,
+    chain: &'a [Arc<Clip>],
 }
 
 /// The most times [`advanced`] lays the type out again to correct its tracking.
@@ -869,7 +862,8 @@ fn gaps(laid: &vectorcraft_text::TextLayout, db: &vectorcraft_text::FontDb, t: &
     let far = bars.iter().map(|b| b.x1).fold(f64::NEG_INFINITY, f64::max);
     let mut bp = BezPath::new();
     for b in bars.into_iter().filter(|b| b.x1 >= far - 1e-6) {
-        if end > b.x1 && end.is_finite() {
+        // A thousandth of a point is short of anything drawn.
+        if end > b.x1 + 1e-3 && end.is_finite() {
             bp.extend(shapes::rectangle(Rect::new(b.x1, b.y0, end, b.y1)).to_bezpath());
         }
     }
