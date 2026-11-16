@@ -21,7 +21,8 @@ craft-proof = { git = "https://github.com/storytold/craft-libs", rev = "9be9a637
 # desktop. The `egui` feature adds `craft_window::decorate`. (craft-libs#217.)
 craft-window = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb", features = ["egui"] }
 # The `.vectorcraft` envelope: its members, version, embedded images and the data after the JSON.
-craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", rev = "e98299546f5c5c3c22388d16507f8b5e61a5f280" }
+craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", rev = "b0d84cd15db39f2af9869cfb47b8b72cbeca3f20" }
+craft-gzip = { git = "https://github.com/storytold/craft-libs", rev = "b0d84cd15db39f2af9869cfb47b8b72cbeca3f20" }
 # craft-update: app-specific pretend versions apply to startup and manual checks.
 # Native Affinity documents (craft-libs#914).
 craft-affinity = { git = "https://github.com/storytold/craft-libs", rev = "228f6d0c50f1fdee4c5124603602993fc79d4c9d" }

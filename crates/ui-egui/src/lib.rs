@@ -71,6 +71,7 @@ pub mod script_runs;
 pub mod scripts_menu;
 mod scrub;
 pub mod shortcut_editor;
+pub mod shortcut_sheet;
 pub mod shortcuts;
 pub mod state;
 pub mod stylus;

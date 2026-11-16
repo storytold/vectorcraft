@@ -131,6 +131,27 @@
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: een dialoogvenster kan niet openen binnen een callback van een ingebouwde functie, een getter, een conversie of een bestand dat $.evalFile uitvoert; roep het aan vanuit de eigen code van het script
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: het volgende antwoord in `answers` is voor {_1}, niet voor {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` heeft geen antwoord meer voor dit dialoogvenster
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` bevat {n} antwoord dat het script niet heeft gebruikt|`answers` bevat {n} antwoorden die het script niet heeft gebruikt
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} liet {n} object onder het penseel ongewijzigd ({_2}): het vervormt alleen paden|{_1} liet {n} objecten onder het penseel ongewijzigd ({_2}): het vervormt alleen paden
+liquify-tool	Warp	Vervormen
+liquify-tool	Twirl	Draaien
+liquify-tool	Pucker	Krimpen
+liquify-tool	Bloat	Opblazen
+liquify-tool	Scallop	Schulpen
+liquify-tool	Crystallize	Kristalliseren
+liquify-tool	Wrinkle	Rimpelen
+liquify-kind	graphs	grafieken
+liquify-kind	type	tekst
+liquify-kind	symbols	symbolen
+liquify-kind	images	afbeeldingen
+liquify-kind	meshes	rasters
+liquify-kind	envelopes	omvormingen
+liquify-kind	repeats	herhalingen
+liquify-kind	placed documents	geplaatste documenten
+liquify-kind	blends	vermengingen
+liquify-list-two	{0}, {1}	{0} en {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} en {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} is te groot voor een script
 @msg	vc.log: the log of this run is full	vc.log: het logboek van deze uitvoering is vol
 @msg	this function's script run has ended	de scriptuitvoering van deze functie is beëindigd
@@ -2448,6 +2469,9 @@ digits	Malayalam	Malayalam
 	Select text to set its OpenType features.	Selecteer tekst om de OpenType-functies in te stellen.
 	Standard Ligatures	Standaardligaturen
 	Stylistic Alternates	Stilistische alternatieven
+	Ligatures	Ligaturen
+	Ornaments	Ornamenten
+	Figures	Cijfers
 	Set {n}	Set {n}
 	Swash	Swash
 	Tabular Lining	Tabulaire lining
@@ -2972,6 +2996,18 @@ digits	Malayalam	Malayalam
 	Author Title:	Auteurstitel:
 	Author:	Auteur:
 	Copyright Info URL:	URL voor copyrightinfo:
+	Save Metadata Template…	Metagegevenssjabloon opslaan…
+	Import Options	Importopties
+	Clear existing fields and use the template's	Bestaande velden wissen en die van het sjabloon gebruiken
+	Keep existing fields, but replace those the template has	Bestaande velden behouden, maar die in het sjabloon vervangen
+	Keep existing fields, but append those the template has	Bestaande velden behouden, maar die in het sjabloon toevoegen
+@msg	the template name can't be empty	de sjabloonnaam mag niet leeg zijn
+@msg	the template name isn't usable as a file name	de sjabloonnaam is niet bruikbaar als bestandsnaam
+@msg	no metadata templates folder here	hier is geen map voor metagegevenssjablonen
+@msg	give `name` or `path`, not both	geef `name` of `path` op, niet allebei
+@msg	give one of `path`, `name` and `data`	geef één van `path`, `name` en `data` op
+@msg	mode must be replace, keep or append	de modus moet replace, keep of append zijn
+@msg	the file is not an XMP metadata template	het bestand is geen XMP-metagegevenssjabloon
 	Copyright Notice:	Copyrightvermelding:
 	Copyright Status:	Copyrightstatus:
 	Created:	Aangemaakt:
