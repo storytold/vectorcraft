@@ -5630,6 +5630,7 @@ theme	Appearance	იერსახე
 	Data Recovery	მონაცემების აღდგენა
 	Default Language	ნაგულისხმევი ენა
 	Disable Auto Add/Delete	ავტომატური დამატება/წაშლის გამორთვა
+	Interpolate Control Points When Moving Anchors	სახელურების ინტერპოლაცია საყრდენი წერტილების გადაადგილებისას
 	Display All Blacks Accurately	ყველა შავის ზუსტად ჩვენება
 	Display All Blacks as Rich Black	ყველა შავის მდიდარ შავად ჩვენება
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	პიქსელურ ნახვაში ბიტმაპების ანტიალიასინგიან გამოსახულებებად ჩვენება

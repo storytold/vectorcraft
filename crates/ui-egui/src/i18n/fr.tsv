@@ -855,6 +855,7 @@ font-technology	Variable	Variables
 	Direct Selection Tool	Outil Sélection directe
 	Direction Handles	Poignées de direction
 	Disable Auto Add/Delete	Désactiver l’ajout/suppression automatique
+	Interpolate Control Points When Moving Anchors	Interpoler les poignées de direction lors du déplacement des points d’ancrage
 	Disable Opacity Mask	Désactiver le masque d’opacité
 	Discard	Ignorer
 	Discard Empty Type	Supprimer le texte vide

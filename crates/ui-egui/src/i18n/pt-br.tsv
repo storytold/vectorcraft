@@ -764,6 +764,7 @@ antiAlias	Sharp	Nítido
 	Direct Selection Tool	Ferramenta Seleção Direta
 	Direction Handles	Alças de Direção
 	Disable Auto Add/Delete	Desativar Adicionar/Excluir Automático
+	Interpolate Control Points When Moving Anchors	Interpolar Alças de Direção ao Mover Pontos de Ancoragem
 	Disable Opacity Mask	Desativar Máscara de Opacidade
 	Discard	Descartar
 	Discard Empty Type	Descartar Texto Vazio

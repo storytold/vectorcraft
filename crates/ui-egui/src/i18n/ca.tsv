@@ -1229,6 +1229,7 @@ antiAlias	Sharp	Nítid
 	Direction:	Direcció:
 	Directives	Directrius
 	Disable Auto Add/Delete	Desactiva l’addició i la supressió automàtiques
+	Interpolate Control Points When Moving Anchors	Interpola les manetes de direcció en moure punts d’ancoratge
 	Disable Opacity Mask	Desactiva la màscara d’opacitat
 	Discard	Descarta
 	Discard Empty Type	Descarta el text buit

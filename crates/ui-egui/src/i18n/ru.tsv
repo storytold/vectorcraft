@@ -850,6 +850,7 @@ font-technology	Variable	Вариативные
 	Direct Selection Tool	Инструмент «Прямое выделение»
 	Direction Handles	Маркеры направления
 	Disable Auto Add/Delete	Отключить авто-добавление/удаление
+	Interpolate Control Points When Moving Anchors	Интерполировать маркеры направления при перемещении опорных точек
 	Disable Opacity Mask	Отключить непрозрачную маску
 	Discard	Отменить
 	Discard Empty Type	Отменить пустой текст

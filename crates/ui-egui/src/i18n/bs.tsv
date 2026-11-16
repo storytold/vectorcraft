@@ -3875,6 +3875,7 @@ theme	Appearance	Izgled
 	Data Recovery	Oporavak podataka
 	Default Language	Zadani jezik
 	Disable Auto Add/Delete	Onemogući automatsko dodavanje/brisanje
+	Interpolate Control Points When Moving Anchors	Interpoliraj ručke smjera pri pomjeranju sidrenih tačaka
 	Display All Blacks Accurately	Prikaži sve crne tačno
 	Display All Blacks as Rich Black	Prikaži sve crne kao bogatu crnu
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Prikaži bitmape kao slike sa zaglađenim ivicama u pregledu piksela

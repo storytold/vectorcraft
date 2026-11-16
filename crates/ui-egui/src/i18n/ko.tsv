@@ -1522,6 +1522,7 @@ antiAlias	Sharp	날카롭게
 	Dimensions	치수
 	Direct Selection Tool	직접 선택 도구
 	Disable Auto Add/Delete	자동 추가/삭제 사용 안 함
+	Interpolate Control Points When Moving Anchors	앵커 포인트 이동 시 방향 핸들 보간
 	Disable Opacity Mask	불투명 마스크 사용 안 함
 	Discard	삭제
 	Preserve	보존

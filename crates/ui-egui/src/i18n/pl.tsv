@@ -3855,6 +3855,7 @@ theme	Appearance	Wygląd
 	Data Recovery	Odzyskiwanie danych
 	Default Language	Język domyślny
 	Disable Auto Add/Delete	Wyłącz automatyczne dodawanie/usuwanie
+	Interpolate Control Points When Moving Anchors	Interpoluj uchwyty kierunkowe podczas przesuwania punktów kontrolnych
 	Display All Blacks Accurately	Wyświetlaj wszystkie czernie dokładnie
 	Display All Blacks as Rich Black	Wyświetlaj wszystkie czernie jako czerń głęboką
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Wyświetlaj bitmapy wygładzone w podglądzie pikseli

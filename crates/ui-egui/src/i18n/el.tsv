@@ -811,6 +811,7 @@ font-technology	Variable	Μεταβλητές
 	Direct Selection Tool	Άμεση επιλογή (Direct Selection Tool)
 	Direction Handles	Λαβές κατεύθυνσης
 	Disable Auto Add/Delete	Απενεργοποίηση αυτόματης προσθήκης/διαγραφής
+	Interpolate Control Points When Moving Anchors	Παρεμβολή λαβών κατεύθυνσης κατά τη μετακίνηση σημείων αγκύρωσης
 	Disable Opacity Mask	Απενεργοποίηση μάσκας αδιαφάνειας
 	Discard	Απόρριψη
 	Discard Empty Type	Απόρριψη κενού κειμένου

@@ -1100,6 +1100,7 @@ font-technology	Variable	Változó
 	Direction Handles	Iránykezelő fogantyúk
 	Direction:	Irány:
 	Disable Auto Add/Delete	Automatikus hozzáadás és törlés kikapcsolása
+	Interpolate Control Points When Moving Anchors	Iránykezelő fogantyúk interpolálása horgonypontok mozgatásakor
 	Disable Opacity Mask	Átlátszósági maszk kikapcsolása
 	Discard	Elvetés
 	Discard Empty Type	Üres szöveg elvetése

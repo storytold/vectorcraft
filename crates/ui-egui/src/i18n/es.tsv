@@ -852,6 +852,7 @@ font-technology	Variable	Variables
 	Direct Selection Tool	Herramienta Selección directa
 	Direction Handles	Manejadores de dirección
 	Disable Auto Add/Delete	Desactivar agregar/eliminar automático
+	Interpolate Control Points When Moving Anchors	Interpolar manejadores de dirección al mover puntos de ancla
 	Disable Opacity Mask	Desactivar máscara de opacidad
 	Discard	Descartar
 	Discard Empty Type	Descartar texto vacío

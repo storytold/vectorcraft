@@ -3978,6 +3978,7 @@ theme	Appearance	Motiv
 	Data Recovery	Obnovení dat
 	Default Language	Výchozí jazyk
 	Disable Auto Add/Delete	Vypnout automatické přidávání/odstraňování
+	Interpolate Control Points When Moving Anchors	Interpolovat směrové úchyty při přesouvání kotevních bodů
 	Display All Blacks Accurately	Zobrazovat všechny černé přesně
 	Display All Blacks as Rich Black	Zobrazovat všechny černé jako sytou černou
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Zobrazovat bitmapy v náhledu obrazových bodů vyhlazené

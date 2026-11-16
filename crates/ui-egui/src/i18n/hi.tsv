@@ -1389,6 +1389,7 @@ antiAlias	Sharp	शार्प
 	Direction:	दिशा:
 	Directives	निर्देश
 	Disable Auto Add/Delete	ऑटो जोड़ना/हटाना अक्षम करें
+	Interpolate Control Points When Moving Anchors	एंकर पॉइंट खिसकाते समय निर्देशन हैंडल इंटरपोलेट करें
 	Disable Opacity Mask	ओपेसिटी मास्क अक्षम करें
 	Discard	डिस्कर्ड
 	Discard Empty Type	खाली टाइप हटाएँ

@@ -1532,6 +1532,7 @@ antiAlias	Sharp	シャープ
 	Dimensions	寸法
 	Direct Selection Tool	ダイレクト選択ツール
 	Disable Auto Add/Delete	自動追加/削除機能を使用しない
+	Interpolate Control Points When Moving Anchors	アンカーポイントの移動時に方向線ハンドルを補間
 	Disable Opacity Mask	不透明マスクを無効にする
 	Discard	破棄
 	Preserve	保持

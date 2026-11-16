@@ -84,6 +84,7 @@ mod history_mem;
 mod ids_without_selection;
 mod inline;
 mod interactivity;
+mod interpolate_handles;
 mod intertwine;
 mod journal;
 mod keyanchor;

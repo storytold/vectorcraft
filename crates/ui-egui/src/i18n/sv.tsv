@@ -839,6 +839,7 @@ font-technology	Variable	Variabla
 	Direct Selection Tool	Direktmarkeringsverktyg
 	Direction Handles	Riktningshandtag
 	Disable Auto Add/Delete	Inaktivera Lägg till/radera automatiskt
+	Interpolate Control Points When Moving Anchors	Interpolera riktningshandtag vid flyttning av ankarpunkter
 	Disable Opacity Mask	Inaktivera opacitetsmask
 	Discard	Släng
 	Discard Empty Type	Släng tom text

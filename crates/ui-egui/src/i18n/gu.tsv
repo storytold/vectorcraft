@@ -982,6 +982,7 @@
 	Direction:	દિશા:
 	Directives	નિર્દેશો
 	Disable Auto Add/Delete	ઑટો ઍડ/ડિલીટ બંધ કરો
+	Interpolate Control Points When Moving Anchors	એન્કર બિંદુઓ ખસેડતી વખતે દિશા હેન્ડલ્સ ઇન્ટરપોલેટ કરો
 	Disable Opacity Mask	ઓપેસિટી માસ્ક બંધ કરો
 	Disable and Continue	બંધ કરો અને ચાલુ રાખો
 	Disabled plug-ins	બંધ કરેલા પ્લગ-ઇન્સ

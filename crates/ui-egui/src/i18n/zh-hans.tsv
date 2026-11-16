@@ -793,6 +793,7 @@ antiAlias	Sharp	锐利
 	Direct Selection Tool	直接选择工具
 	Direction Handles	方向手柄
 	Disable Auto Add/Delete	禁用自动添加/删除锚点
+	Interpolate Control Points When Moving Anchors	移动锚点时插值方向手柄
 	Disable Opacity Mask	禁用不透明度蒙版
 	Discard	不存储
 	Discard Empty Type	丢弃空文字

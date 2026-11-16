@@ -3916,6 +3916,7 @@ theme	Appearance	Ulkoasu
 	Data Recovery	Tietojen palautus
 	Default Language	Oletuskieli
 	Disable Auto Add/Delete	Poista automaattinen lisäys/poisto käytöstä
+	Interpolate Control Points When Moving Anchors	Interpoloi suuntakahvat siirrettäessä ankkuripisteitä
 	Display All Blacks Accurately	Näytä kaikki mustat tarkasti
 	Display All Blacks as Rich Black	Näytä kaikki mustat syvämustina
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Näytä bittikartat reunanpehmennettyinä kuvina pikseliesikatselussa

@@ -992,6 +992,7 @@ font-technology	Variable	Biến thiên
 	Direction Handles	Tay nắm hướng
 	Direction:	Hướng:
 	Disable Auto Add/Delete	Tắt tự động thêm/xóa
+	Interpolate Control Points When Moving Anchors	Nội suy tay nắm hướng khi di chuyển điểm neo
 	Disable Opacity Mask	Tắt mặt nạ độ mờ
 	Discard	Loại bỏ
 	Preserve	Bảo lưu

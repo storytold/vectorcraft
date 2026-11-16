@@ -139,6 +139,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("cornerRadius", "General", "", "Corner Radius", len(0.0, 1296.0, General)),
     p!("pasteOffset", "General", "", "Paste Offset", len(0.0, 1296.0, General)),
     p!("disableAutoAddDelete", "General", "Options", "Disable Auto Add/Delete", bool),
+    p!("interpolateControlPoints", "General", "Options", "Interpolate Control Points When Moving Anchors", bool),
     p!("usePreciseCursors", "General", "Options", "Use Precise Cursors", bool),
     p!("showToolTips", "General", "Options", "Show Tool Tips", bool),
     p!("showExternalScriptWarning", "General", "Options", "Show External Script Warning", bool),

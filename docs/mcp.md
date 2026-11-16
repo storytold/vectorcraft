@@ -6744,6 +6744,19 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
 - `showHandlesMultipleAnchors` (on by default): off, Direct Selection (and the Anchor Point tool, and the Pen with Alt)
   shows and drags direction handles only while a single anchor is selected. On, the handles of the direct-selected
   anchors, or of every anchor of a path selected as a whole, show and drag. `handleStyle` (`solid`, `hollow`, `large`) draws their ends (desktop app).
+- `interpolateControlPoints` (General › Interpolate Control Points When Moving Anchors, off by default): the default of
+  the `interpolate` param of `path.moveAnchors` (a Direct Selection drag), `object.nudge` (the arrow keys),
+  `object.move`, `object.transform` and `object.transformAgain`. It applies when they move direct-selected anchors
+  without turning or scaling them; `object.setBounds` and `guide.move` follow the preference when they move anchors.
+  On, both handles of each segment with one moved end are re-mapped by the turn, uniform scale and move that take the
+  segment's old ends to its new ends, so a segment between two corner anchors keeps its shape relative to its ends. A
+  segment with both ends moved, or with its ends at the same place before or after the move, moves as it does with the
+  preference off. A smooth anchor keeps its handles in line: its re-mapped handle takes the new length and stays in
+  line with the other handle, and when both of its handles were re-mapped they point along the mean of their
+  directions. When the two point the same way, both move with the anchor as with the preference off. A retracted
+  handle stays retracted. The value used joins the command's journal entry and Transform Again's options. Align and
+  Distribute, and the anchors of type paths and area type frames (`text.reshapePath`, `text.reshapeArea`), move as
+  before. Off, the handles of a moved anchor move with it and the other handles stay where they are.
 - `hideCornerWidgetAbove` (177° by default): corners wider than this show no Live Corners widget (a rectangle's right
   angles hide below 90°).
 - `transformPatternTiles` (off by default): the default of the transforms' `patterns` param (`object.transform`,

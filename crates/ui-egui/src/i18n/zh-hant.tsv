@@ -814,6 +814,7 @@ font-technology	Variable	可變
 	Direct Selection Tool	直接選取工具
 	Direction Handles	控制把手
 	Disable Auto Add/Delete	停用自動增加/刪除
+	Interpolate Control Points When Moving Anchors	移動錨點時內插控制把手
 	Disable Opacity Mask	停用不透明度遮色片
 	Discard	捨棄
 	Preserve	保留

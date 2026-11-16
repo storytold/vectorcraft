@@ -6373,6 +6373,7 @@ theme	Appearance	Udseende
 	Data Recovery	Datgendannelse
 	Default Language	Standardsprog
 	Disable Auto Add/Delete	Deaktivér automatisk tilføjelse/sletning
+	Interpolate Control Points When Moving Anchors	Interpolér retningshåndtag ved flytning af ankerpunkter
 	Display All Blacks Accurately	Vis alle sorte nøjagtigt
 	Display All Blacks as Rich Black	Vis alle sorte som rich black
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Vis bitmaps som antialiaserede billeder i pixelforhåndsvisning

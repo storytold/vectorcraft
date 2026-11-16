@@ -4267,6 +4267,7 @@ theme	Appearance	Vormgeving
 	Data Recovery	Gegevensherstel
 	Default Language	Standaardtaal
 	Disable Auto Add/Delete	Automatisch toevoegen/verwijderen uitschakelen
+	Interpolate Control Points When Moving Anchors	Richtingsgrepen interpoleren bij het verplaatsen van ankerpunten
 	Display All Blacks Accurately	Alle zwarttinten nauwkeurig weergeven
 	Display All Blacks as Rich Black	Alle zwarttinten weergeven als rijk zwart
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Bitmaps in pixelvoorbeeld weergeven als afbeeldingen met antialiasing

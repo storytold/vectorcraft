@@ -29,6 +29,12 @@ pub struct Prefs {
     pub constrain_angle: f64,
     pub corner_radius: f64,
     pub disable_auto_add_delete: bool,
+    /// General › Interpolate Control Points When Moving Anchors: the default of the `interpolate`
+    /// param of the commands that move direct-selected anchors (a Direct Selection drag, the arrow
+    /// keys, Move, Transform Again). On, the handles of each segment with one moved end are
+    /// re-mapped by the turn, scale and move that take its old ends to its new ends. Off (the
+    /// default), the handles of a moved anchor move with it and the other handles stay.
+    pub interpolate_control_points: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
     /// Other Script… warns before it runs a chosen script.
@@ -393,6 +399,7 @@ impl Default for Prefs {
             constrain_angle: 0.0,
             corner_radius: 12.0,
             disable_auto_add_delete: false,
+            interpolate_control_points: false,
             use_precise_cursors: false,
             show_tool_tips: true,
             show_external_script_warning: true,

@@ -831,6 +831,7 @@ font-technology	Variable	Variabel
 	Direct Selection Tool	Direktauswahl-Werkzeug
 	Direction Handles	Richtungsgriffe
 	Disable Auto Add/Delete	Automatisches Hinzufügen/Löschen deaktivieren
+	Interpolate Control Points When Moving Anchors	Richtungsgriffe beim Verschieben von Ankerpunkten interpolieren
 	Disable Opacity Mask	Deckkraftmaske deaktivieren
 	Discard	Verwerfen
 	Preserve	Beibehalten

@@ -422,8 +422,10 @@ impl Session {
             // selected): Transform Again moves the selected anchors and the objects selected whole
             // by the same distance. A drag that ends where it began leaves the last transform.
             let mut options = serde_json::json!({ "copy": false });
-            if let Some(patterns) = preview.1.get("patterns") {
-                options["patterns"] = patterns.clone();
+            for key in ["patterns", "interpolate"] {
+                if let Some(v) = preview.1.get(key) {
+                    options[key] = v.clone();
+                }
             }
             st.last_transform = Some(LastTransform::Matrix(vectorcraft_geom::Affine::translate(moved), options));
             st.last_perspective = None;

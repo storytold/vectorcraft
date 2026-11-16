@@ -831,6 +831,7 @@ font-technology	Variable	Değişken
 	Direct Selection Tool	Doğrudan Seçim Aracı
 	Direction Handles	Yön Kolları
 	Disable Auto Add/Delete	Otomatik Ekleme/Silmeyi Devre Dışı Bırak
+	Interpolate Control Points When Moving Anchors	Bağlantı Noktalarını Taşırken Yön Kollarını Enterpole Et
 	Disable Opacity Mask	Opaklık Maskesini Devre Dışı Bırak
 	Discard	At
 	Discard Empty Type	Boş Türü At

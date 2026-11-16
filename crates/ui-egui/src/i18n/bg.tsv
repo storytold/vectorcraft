@@ -830,6 +830,7 @@ font-technology	Variable	Променливи
 	Direct Selection Tool	Инструмент „Директен избор“
 	Direction Handles	Маркери за посока
 	Disable Auto Add/Delete	Изключване на автоматично добавяне/изтриване
+	Interpolate Control Points When Moving Anchors	Интерполиране на маркерите за посока при преместване на опорни точки
 	Disable Opacity Mask	Изключване на маска за непрозрачност
 	Discard	Отхвърляне
 	Discard Empty Type	Отхвърляне на празен текст
