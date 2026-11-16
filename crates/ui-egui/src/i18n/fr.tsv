@@ -3266,6 +3266,8 @@ digits	Malayalam	Malayalam
 @msg	`{key}` must be an array of these names: {_1}	`{key}` doit être un tableau de noms parmi {_1}
 	Search commands and tools	Chercher commandes et outils
 	Search commands and tools…	Chercher commandes et outils…
+	Recent Commands	Commandes récentes
+	No recent commands	Aucune commande récente
 	Search Commands…	Rechercher des commandes…
 	Secondary	Secondaire
 	Section Symbol	Symbole de section
@@ -4455,6 +4457,31 @@ axis	Both	Les deux
 @msg	$.evalFile requires a file path	$.evalFile nécessite un chemin de fichier
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile : le délai doit être un nombre fini de millisecondes, 0 ou plus
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile : prend un chemin de fichier et un délai
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} n'est pas défini
+@msg	cannot read property '{key}' of {base}	impossible de lire la propriété '{key}' de {base}
+@msg	cannot set property '{key}' of {base}	impossible de modifier la propriété '{key}' de {base}
+@msg	cannot read a property of {base}	impossible de lire une propriété de {base}
+@msg	cannot set a property of {base}	impossible de modifier une propriété de {base}
+@msg	cannot define property '{key}': {why}	impossible de définir la propriété '{key}' : {why}
+@msg	cannot assign to property '{key}': {why}	impossible d'affecter la propriété '{key}' : {why}
+@msg	cannot delete property '{key}'	impossible de supprimer la propriété '{key}'
+@msg	cannot declare function {ident}	impossible de déclarer la fonction {ident}
+@msg	invalid assignment target	cible d'affectation non valide
+@msg	the array's length is read-only	la longueur du tableau est en lecture seule
+@msg	the property cannot be redefined	la propriété ne peut pas être redéfinie
+@msg	the object is not extensible	l'objet n'est pas extensible
+@msg	the length cannot be redefined	la longueur ne peut pas être redéfinie
+@msg	it is read-only	elle est en lecture seule
+@msg	an element cannot be deleted	un élément ne peut pas être supprimé
+@msg	it has only a getter	elle n'a qu'un getter
+@msg	the value is a primitive	la valeur est une primitive
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name} : ligne {line}, colonne {column} de {file} : {e} (levée)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name} : ligne {line}, colonne {column} : {e} (levée)
 @msg	{name}: {e} (thrown)	{name} : {e} (levée)
@@ -7413,6 +7440,24 @@ breakText	Glyphs	Glyphes
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Décomposer les tirets en tracés
 @msg	select paths with dashed strokes to expand	sélectionnez des tracés à contour pointillé à décomposer
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Cercle tangent…
+	Tangent Circle	Cercle tangent
+	Circle:	Cercle :
+@msg	`ids` names an object twice	`ids` désigne deux fois le même objet
+@msg	select two or three paths or compound paths	sélectionnez deux ou trois tracés ou tracés transparents
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` doit être compris entre 0.01 et 1000000 pt
+@msg	two shapes need a `radius`	deux formes demandent un `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	trois formes fixent elles-mêmes le rayon : omettez `radius`
+@msg	`circle` must be from 0 to 64	`circle` doit être compris entre 0 et 64
+@msg	a shape has no outline	une forme n’a pas de contour
+@msg	the shapes are too complex: at most 2000 segments in all	les formes sont trop complexes : 2000 segments au plus au total
+@msg	these shapes take too long to search	la recherche prend trop de temps pour ces formes
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	plus de 64 cercles touchent ces formes : ils les touchent peut-être le long d’une courbe entière
+@msg	no circle touches these shapes	aucun cercle ne touche ces formes
+@msg	`circle` is past the last circle found ({found})	`circle` dépasse le dernier cercle trouvé ({found})
+@msg	object {value} is not a path or compound path	l’objet {value} n’est ni un tracé ni un tracé transparent
+@msg	these shapes are too small to measure	ces formes sont trop petites pour être mesurées
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Outils de document
 	Save a Timestamped Copy	Enregistrer une copie horodatée
