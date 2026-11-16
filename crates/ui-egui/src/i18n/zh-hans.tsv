@@ -4320,6 +4320,7 @@ imageTrace	Outline	轮廓
 @msg	no history to clear	没有可清除的历史记录
 @msg	no history state {v}	没有历史记录状态 {v}
 @msg	Expand Appearance: the selection has a basic appearance	扩展外观：所选对象只有基本外观
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	部分栅格效果未转换为图像：它们会超过 1,024 个图像或总计 256 兆像素
 @msg	select (or target) objects whose appearance isn't basic	请选择 (或定位) 外观不是基本外观的对象
 @msg	{C}: no effect at index {from}	{C}：索引 {from} 处没有效果
 @msg	Expand: no gradient fills	扩展：没有渐变填色

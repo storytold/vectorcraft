@@ -4634,6 +4634,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	Divide Objects Below: select exactly one path	Поділ об’єктів нижче: виділіть рівно один контур
 @msg	Downloaded {what}	Завантажено: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Розбір оформлення: виділення основне оформлення
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	деякі растрові ефекти не перетворено на зображення: для них потрібно понад 1024 зображення або загалом 256 мегапікселів
 @msg	Expand: no brush strokes selected	Розбір: не виділено мазки пензлі
 @msg	Expand: no gradient fills	Розбір: немає градієнтних заливок
 @msg	Expand: nothing to expand	Розбір: нема чого розбирати

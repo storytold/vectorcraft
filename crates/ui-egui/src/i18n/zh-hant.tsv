@@ -1953,6 +1953,7 @@ file-filter	Templates	範本
 @msg	no history to clear	沒有可清除的步驟記錄
 @msg	no history state {v}	沒有步驟記錄 {v}
 @msg	Expand Appearance: the selection has a basic appearance	展開外觀：選取範圍只有基本外觀
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	部分點陣效果未轉換為影像：它們會超過 1,024 個影像或總計 256 百萬像素
 @msg	select (or target) objects whose appearance isn't basic	請選取 (或指定目標) 外觀不是基本外觀的物件
 @msg	{C}: no effect at index {from}	{C}：索引 {from} 處沒有效果
 @msg	Expand: no gradient fills	展開：沒有漸層填色

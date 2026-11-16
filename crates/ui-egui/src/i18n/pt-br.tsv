@@ -3938,6 +3938,7 @@ axis	Both	Ambos
 @msg	Divide Objects Below: select exactly one path	Dividir objetos abaixo: selecione exatamente um traçado
 @msg	Downloaded {what}	{what} baixado
 @msg	Expand Appearance: the selection has a basic appearance	Expandir aparência: a seleção tem uma aparência básica
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	alguns efeitos de raster não foram transformados em imagens: ocupariam mais de 1.024 imagens ou 256 megapixels no total
 @msg	Expand: no brush strokes selected	Expandir: nenhum traço de pincel selecionado
 @msg	Expand: no gradient fills	Expandir: nenhum preenchimento em gradiente
 @msg	Expand: nothing to expand	Expandir: nada para expandir

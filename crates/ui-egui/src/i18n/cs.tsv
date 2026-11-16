@@ -4918,6 +4918,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	Divide Objects Below: select exactly one path	Rozdělit objekty pod: vyberte právě jednu cestu
 @msg	Downloaded {what}	Staženo: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Rozložit vzhled: výběr má základní vzhled
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	některé rastrové efekty nebyly převedeny na obrazy: zabraly by více než 1 024 obrazů nebo celkem 256 megapixelů
 @msg	Expand: no brush strokes selected	Rozložit: nejsou vybrány žádné tahy štětcem
 @msg	Expand: no gradient fills	Rozložit: žádné přechodové výplně
 @msg	Expand: nothing to expand	Rozložit: není co rozložit

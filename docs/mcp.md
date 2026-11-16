@@ -5387,11 +5387,19 @@ the object with the image). Type with a geometry effect (Outline Object included
 is outlined; type that has no fills or strokes of its own and whose only effects are shadows or outer glows stays
 type, with the image under it. A group's or layer's own fills and strokes become objects among its members, and its
 members are expanded too. A symbol instance whose topmost fill or topmost stroke is visible, has an opacity above 0
-and has a geometry effect becomes a group of its art: that fill's effects reshape the filled shapes of the art and that
-stroke's effects reshape its stroked shapes, which keep their colors, as the canvas draws them (VectorCraft's own
-rule); the instance's other fills and strokes are dropped. A raster effect on that fill or stroke draws on the filled
-or stroked shapes of the art, and expanding makes it an image as for other objects; with no geometry effect, the
-instance stays an instance over a shadow or glow image, and a blur, feather or inner glow replaces it with the image.
+and has a geometry or raster effect becomes a group of its art: that fill's effects reshape the filled shapes of the
+art and that stroke's effects reshape its stroked shapes, which keep their colors, as the canvas draws them
+(VectorCraft's own rule); the instance's other fills and strokes are dropped. A raster effect on that fill or stroke
+draws on the filled or stroked shapes of the art, and expanding makes it an image as for other objects: a shadow or
+glow image goes under the art, and a blur, feather or inner glow replaces the instance with the image. A symbol
+instance in the art whose topmost fill or stroke has a geometry or raster effect, its own or one the outer instance
+passes on, becomes its art and image the same way, and so do the instances in that art (VectorCraft's own rule).
+Before, an instance whose fill or stroke had only a shadow or glow stayed an instance over the image, and a raster
+effect on an instance in the art stayed live.
+One Expand Appearance makes at most 1,024 images of raster effects, holding 256 megapixels in all (VectorCraft's own
+limits). An object or symbol instance whose image would go past them stays as it is, with its effects and the objects
+in it; the result then carries a `warning` and `rasterLeft`, the number of objects left so, and when nothing else
+expands the command fails with the same message. A legacy `.ai` save notes it the same way.
 The result is `{ids}`; when an image in the art can't be decoded, the images made from
 raster effects do not show it, and the result also carries the `warning` that Flatten Transparency gives.
 A path's strokes stay strokes, as the

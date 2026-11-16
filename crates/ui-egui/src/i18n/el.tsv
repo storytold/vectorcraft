@@ -2617,6 +2617,7 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	Divide Objects Below: select exactly one path	Διαίρεση αντικειμένων από κάτω: επιλέξτε ακριβώς μία διαδρομή
 @msg	Downloaded {what}	Έγινε λήψη του {what}
 @msg	Expand Appearance: the selection has a basic appearance	Επέκταση εμφάνισης: η επιλογή έχει βασική εμφάνιση
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	ορισμένα εφέ ράστερ δεν μετατράπηκαν σε εικόνες: θα χρειάζονταν περισσότερες από 1.024 εικόνες ή συνολικά 256 megapixel
 @msg	Expand: no brush strokes selected	Επέκταση: δεν επιλέχθηκαν πινελιές
 @msg	Expand: no gradient fills	Επέκταση: δεν υπάρχουν γεμίσματα ντεγκραντέ
 @msg	Expand: nothing to expand	Επέκταση: δεν υπάρχει περιεχόμενο προς επέκταση

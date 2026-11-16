@@ -5440,6 +5440,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	egy diagram adatsorában a diagramminta grafikája a mintából rajzolódik újra: a módosításához szerkeszd a mintát
 @msg	every search thread stopped on an internal error (please report this bug)	minden keresési szál belső hibával leállt (kérjük, jelentsd ezt a hibát)
 @msg	Expand Appearance: the selection has a basic appearance	Megjelenés kibontása: a kijelölésnek alapmegjelenése van
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	néhány raszteres effektus nem lett képpé alakítva: több mint 1024 képet vagy összesen 256 megapixelt foglalnának
 @msg	Expand: no brush strokes selected	Kibontás: nincs kijelölt ecsetvonás
 @msg	Expand: no gradient fills	Kibontás: nincs színátmenetes kitöltés
 @msg	Expand: nothing to expand	Kibontás: nincs mit kibontani

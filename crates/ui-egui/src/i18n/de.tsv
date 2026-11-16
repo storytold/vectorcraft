@@ -4520,6 +4520,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	Divide Objects Below: select exactly one path	Darunterliegende Objekte aufteilen: Wählen Sie genau einen Pfad aus
 @msg	Downloaded {what}	{what} heruntergeladen
 @msg	Expand Appearance: the selection has a basic appearance	Aussehen umwandeln: Die Auswahl hat ein einfaches Aussehen
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	einige Rastereffekte wurden nicht in Bilder umgewandelt: Sie würden mehr als 1.024 Bilder oder insgesamt 256 Megapixel benötigen
 @msg	Expand: no brush strokes selected	Umwandeln: keine Pinselkonturen ausgewählt
 @msg	Expand: no gradient fills	Umwandeln: keine Verlaufsflächen
 @msg	Expand: nothing to expand	Umwandeln: nichts umzuwandeln

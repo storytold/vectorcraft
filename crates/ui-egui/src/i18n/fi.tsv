@@ -4855,6 +4855,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	Divide Objects Below: select exactly one path	Jaa alla olevat objektit: valitse tasan yksi polku
 @msg	Downloaded {what}	Ladattiin {what}
 @msg	Expand Appearance: the selection has a basic appearance	Laajenna ulkoasu: valinnalla on perusulkoasu
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	joitakin rasteritehosteita ei muunnettu kuviksi: ne veisivät yli 1 024 kuvaa tai yhteensä 256 megapikseliä
 @msg	Expand: no brush strokes selected	Laajenna: sivellinviivoja ei ole valittu
 @msg	Expand: no gradient fills	Laajenna: ei liukuväritäyttöjä
 @msg	Expand: nothing to expand	Laajenna: ei laajennettavaa

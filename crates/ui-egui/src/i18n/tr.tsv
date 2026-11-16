@@ -4364,6 +4364,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	Divide Objects Below: select exactly one path	Aşağıdaki Nesneleri Böl: tam olarak bir yol seçin
 @msg	Downloaded {what}	{what} indirildi
 @msg	Expand Appearance: the selection has a basic appearance	Görünümü Genişlet: seçimin temel bir görünümü vardır
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	bazı raster efektleri görüntüye dönüştürülmedi: toplamda 1.024'ten fazla görüntü veya 256 megapiksel gerektirirlerdi
 @msg	Expand: no brush strokes selected	Genişlet: seçili fırça darbesi yok
 @msg	Expand: no gradient fills	Genişlet: degrade dolgu yok
 @msg	Expand: nothing to expand	Genişlet: genişletilecek bir şey yok

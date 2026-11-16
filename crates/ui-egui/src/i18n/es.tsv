@@ -4622,6 +4622,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	Divide Objects Below: select exactly one path	Dividir objetos inferiores: selecciona exactamente un trazado
 @msg	Downloaded {what}	Se descargó {what}
 @msg	Expand Appearance: the selection has a basic appearance	Expandir apariencia: la selección tiene una apariencia básica
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	algunos efectos ráster no se convirtieron en imágenes: ocuparían más de 1024 imágenes o 256 megapíxeles en total
 @msg	Expand: no brush strokes selected	Expandir: no hay trazos de pincel seleccionados
 @msg	Expand: no gradient fills	Expandir: no hay rellenos de degradado
 @msg	Expand: nothing to expand	Expandir: no hay nada que expandir

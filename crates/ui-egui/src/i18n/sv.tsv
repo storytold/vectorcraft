@@ -4532,6 +4532,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	Divide Objects Below: select exactly one path	Dela objekt under: markera exakt en bana
 @msg	Downloaded {what}	Hämtade {what}
 @msg	Expand Appearance: the selection has a basic appearance	Expandera utseende: markeringen har ett grundläggande utseende
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	vissa rastereffekter gjordes inte om till bilder: de skulle kräva mer än 1 024 bilder eller totalt 256 megapixlar
 @msg	Expand: no brush strokes selected	Expandera: inga penseldrag är markerade
 @msg	Expand: no gradient fills	Expandera: inga gradientfyllningar
 @msg	Expand: nothing to expand	Expandera: ingenting att expandera
