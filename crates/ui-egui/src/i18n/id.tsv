@@ -487,6 +487,7 @@
 	Highlight Size	Ukuran kilau
 	Blend Steps	Langkah campuran
 	Shading Color	Warna pengarsiran
+	Black Overprint	Hitam overprint
 	Draw Hidden Faces	Gambar sisi tersembunyi
 	Revolve…	Revolusi…
 	Inflate…	Gelembungkan…
@@ -1907,6 +1908,7 @@ digits	Malayalam	Malayalam
 	Roman Hanging Punctuation	Tanda baca gantung Romawi
 	Korean Line Break Anywhere	Putus baris Korea di mana saja
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Pengaturan komposisi Asia Timur
 	Korean Composition Settings	Pengaturan komposisi Korea
 	Select a text object to edit its paragraph attributes.	Pilih objek teks untuk mengedit atribut paragrafnya.
@@ -4139,6 +4141,12 @@ font-technology	Variable	Variabel
 	Preferences	Preferensi
 	Previous	Sebelumnya
 	Restore every preference to its default (applied on OK)	Kembalikan semua preferensi ke defaultnya (diterapkan saat OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Satuan untuk dokumen baru dari ukuran bawaan selain ukuran piksel dan untuk file yang dibuka tanpa satuan tercatat; jika Anda memilihnya di sini lalu mengklik OK, satuan dokumen aktif juga menjadi satuan ini.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Ketebalan stroke, putus-putus, dan jarak ditampilkan dalam satuan ini, dan angka yang diketik untuknya dibaca dalam satuan ini.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Ukuran teks, leading, dan pergeseran garis dasar ditampilkan dalam satuan ini, dan angka yang diketik untuknya dibaca dalam satuan ini.
+	The unit for East Asian type measurements, which no field uses yet.	Satuan untuk ukuran teks Asia Timur, yang belum digunakan bidang mana pun.
+	When on, a number typed without a unit into a field in picas is read in points.	Jika aktif, angka yang diketik tanpa satuan di bidang dalam pica dibaca dalam titik.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Dengan ID XML, nama objek ditampilkan sebagai ID XML di Lapisan, Variabel, dan Opsi lapisan.
 	Reset all preferences to their defaults?	Atur ulang semua preferensi ke defaultnya?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Nilai default diterapkan saat Anda mengklik OK di Preferensi. Batal di sana mempertahankan preferensi Anda saat ini.
 	Smaller ↔ Larger	Lebih kecil ↔ Lebih besar

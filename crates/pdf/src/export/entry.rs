@@ -57,6 +57,7 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     let layers = vectorcraft_effects::WrittenLayers {
         hidden: set.writes_layers() && !doc.page_knockout,
         non_printing: set.include_non_printing || set.create_layers,
+        hidden_objects: false,
     };
     let baked = vectorcraft_effects::bake_document_placing_symbols(doc, true, layers);
     // Baking stops early when cancelled, leaving a half-baked copy that must not be written.

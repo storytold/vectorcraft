@@ -501,8 +501,13 @@ fn damaged_slices_never_panic() {
             let mut f = base.clone();
             f[at] = v;
             let mut s = Session::new();
-            let _ = s.execute("document.open", &json!({"name": "poster.psd", "dataBase64": b64(&f)}));
-            let _ = s.execute("document.psdInfo", &json!({"dataBase64": b64(&f)}));
+            // The engine's guard reports a panic as an internal error.
+            for r in [
+                s.execute("document.open", &json!({"name": "poster.psd", "dataBase64": b64(&f)})),
+                s.execute("document.psdInfo", &json!({"dataBase64": b64(&f)})),
+            ] {
+                assert!(!matches!(r, Err(crate::EngineError::Internal { .. })), "byte {at} set to {v}: {r:?}");
+            }
         }
     }
 }
