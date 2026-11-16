@@ -2956,6 +2956,16 @@ records no undo step.
 among the objects beside it in its group or layer, passing over hidden and locked objects and sublayers. When there
 is no such object, the selection stays as it is.
 
+`select.magicWand` compares fill and stroke colors by the active document's color mode. In an RGB document
+`fillTolerance` and `strokeTolerance` run from 0 to 255 and measure the Euclidean distance between the display RGB
+values. In a CMYK document they run from 0 to 100 and measure the Euclidean distance between the C, M, Y and K
+percentages: a CMYK color's own values, and RGB, Gray and Lab colors converted to CMYK. Ten points of one ink matches
+at 10, and ten points of each of two inks does not. A tolerance above 100 set in an RGB document is kept and applies
+as 100 while a CMYK document is active; `magicWand.options` and `magicWand.set` report that value. `magicWand.set`
+returns an error and changes no setting, `reset` included, when a given tolerance is not a number or is out of its
+range (the color tolerances by the active document, 0 to 255 with no document open; `weightTolerance` 0 to 1000 pt;
+`opacityTolerance` 0 to 100 %). An omitted value keeps its setting.
+
 `select.same.textFillAndStrokeColor` (Select › Same › Text Fill & Stroke Color) selects the type objects that have
 characters whose fill and stroke both match the first character of the first selected type, and returns `{count}`.
 `select.same.textFillColor` and `select.same.textStrokeColor` compare the fill or the stroke alone. In type with
@@ -5407,7 +5417,7 @@ layer (its opacity, its own fills and effects, an opacity mask on the whole laye
 selected. `document.inspect` reports it as `target`, and any other selection change ends it.
 `appearance.transfer {source, target, copy?}` is dragging a target circle onto another: the target gets the source's
 fills, strokes, effects and transparency, and the source is cleared unless `copy` (Alt-drag). Dropping a circle on the
-panel's trash is `appearance.clear {ids: [id]}`. Masked objects' names have a dashed underline; while an opacity mask
+panel's trash is `appearance.reduceToBasic {ids: [id]}` (Reduce to Basic Appearance; nothing is deleted). Masked objects' names have a dashed underline; while an opacity mask
 is edited the panel lists only an `<Opacity Mask>` entry and the document tab says `(<Opacity Mask>/Opacity Mask)`.
 
 ```json
@@ -7008,6 +7018,20 @@ of it headless), gathered once per document state; the shape being drawn is neve
 With a 100 × 100 square at (100, 100), the first starts the rectangle on its corner (200, 200); the second puts the
 Pen's second anchor at (150, 431), in line with the square's centre.
 
+With `backquote` true on a `drag` event, the `rectangle`, `roundedRectangle`, `ellipse`, `polygon`, `star` and
+`lineSegment` tools leave a copy of the shape being drawn each time the pointer has moved 8 screen points since the
+last copy, or since the first event with the key down; a key change with no pointer travel leaves none. Each copy is
+the shape as that event showed it, with its modifiers and Up/Down counts, and is its own object. The `up` keeps the
+copies and the last shape as one undo step, and Escape takes them all back. One drag leaves at most 128 copies, and a
+shape with no width, height or length leaves none. The spacing and the limit are VectorCraft's own values; the
+continuous duplicate itself is in the Keys for drawing table of
+[the help page](https://help.adobe.com/archive/en_US/illustrator/cs3/illustrator_cs3_help.pdf#page=469). With Smart
+Guides off, this drag leaves a 70 × 50 and a 90 × 50 copy and the 110 × 70 rectangle:
+
+```json
+{"name":"pointer_gesture","arguments":{"tool":"rectangle","events":[{"kind":"down","x":50,"y":50},{"kind":"drag","x":100,"y":100,"backquote":true},{"kind":"drag","x":120,"y":100,"backquote":true},{"kind":"drag","x":140,"y":100,"backquote":true},{"kind":"drag","x":160,"y":120},{"kind":"up","x":160,"y":120}]}}
+```
+
 ## Type preferences
 
 - `placeholderText` (on by default): type the Type tools place (`pointer_gesture` with `type`, `areaType`…) starts with
@@ -8418,7 +8442,8 @@ height (`"100h"`) or a resolution (`"72ppi"`); raster rows name their files `@2x
 otherwise. `fullDocument` writes one file per row instead (a PDF of every artboard, other formats the bounds of all
 art), `includeBleed` grows each artboard by the document's bleed, `includeArtboardFill: false` (Include Artboard
 Fill unchecked) leaves the artboards' background colors out of the files, `pdfs: "single"` (Export PDFs As › Single file)
-writes the artboards a PDF row exports as the pages of one PDF named after the document, `subfolders` puts each
+writes the artboards a PDF row exports as the pages of one PDF named after the document (it is refused with
+`assets`, `layers` or `selection: "each"`, whose files each hold one item's art), `subfolders` puts each
 row's files in a sub-folder (its size or format, or its own `folder`; `folders: "format"` sorts by format instead), `preset: "mobile"` or `"density"` (Android-style ldpi…xxxhdpi
 sub-folders) replaces the rows, and `settings: {png: {…}, jpg: {…}, svg: {…}, pdf: {preset}}` gives every row of a
 format its options. On every platform, `/`, `\`, `:`, `<`, `>`, `"`, `|`, `?`, `*` and control characters from a
@@ -11213,7 +11238,8 @@ others, each group nearest first. The measure is VectorCraft's own. It compares 
 Regular by its OS/2 PANOSE digits (only between faces of the same PANOSE family kind), weight and width classes, x-height,
 cap height and average character width, and its `post` italic angle (a named instance of a variable font takes its `wght`
 and `slnt` settings), leaving out a number either face does not give, and counts a family of another kind (serif, sans
-serif, script and the font menu's other kinds) as further away. It reads these when a font is cataloged or loaded and opens
+serif, script and the font menu's other kinds) as further away. A family that shares none of these numbers with `family`
+comes after every family in its group that shares one. It reads these when a font is cataloged or loaded and opens
 no font file when asked. `limit` (a whole number from 1 to 100000) keeps
 the first ones. A missing or blank `family` fails with `` `family` is required ``, one that is not a string with
 `` `family` must be a string ``, a family that isn't available or that the font menus don't list with ``font family `<name>` is not available``, and any
