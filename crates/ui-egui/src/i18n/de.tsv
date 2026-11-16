@@ -1338,6 +1338,8 @@ file-filter	Templates	Vorlagen
 	Font Family & Style	Schriftfamilie und -schnitt
 	Font Family, Style & Size	Schriftfamilie, -schnitt und -grad
 	Font List	Schriftliste
+	Show Similar Fonts	Ähnliche Schriften anzeigen
+	Clear Similar Fonts	Ähnliche Schriften zurücksetzen
 	Font Preview Size	Größe der Schriftvorschau
 	Font Size	Schriftgrad
 	Variable Font	Variable Schrift
@@ -1453,6 +1455,7 @@ file-filter	Templates	Vorlagen
 	Connect Data Points	Datenpunkte verbinden
 	Edge-to-Edge Lines	Linien von Kante zu Kante
 	Draw Filled Lines	Gefüllte Linien zeichnen
+	Line Width	Linienbreite
 	Tick Values	Teilstrichwerte
 	Override Calculated Values	Berechnete Werte überschreiben
 	Divisions	Teilungen
@@ -1551,6 +1554,9 @@ file-filter	Templates	Vorlagen
 	Show smooth color wheel	Stufenlosen Farbkreis anzeigen
 	Show segmented color wheel	Segmentierten Farbkreis anzeigen
 	Show color bars	Farbbalken anzeigen
+	Add Color Tool	Farbe-hinzufügen-Werkzeug
+	Remove Color Tool	Farbe-entfernen-Werkzeug
+	Remove Color	Farbe entfernen
 	Find the selected colors in the artwork	Ausgewählte Farben in der Grafik finden
 	Harmony Sets	Harmoniesätze
 	Height	Höhe
@@ -1899,6 +1905,8 @@ file-filter	Templates	Vorlagen
 	Lasso Tool	Lasso-Werkzeug
 	Enclosing Lasso Tool	Umschließendes Lasso-Werkzeug
 	Enclosing Lasso	Umschließendes Lasso
+	Polygonal Lasso Tool	Polygon-Lasso-Werkzeug
+	Polygonal Lasso	Polygon-Lasso
 	Last Effect: {name}	Letzter Effekt: {name}
 	Last Effect: {}	Letzter Effekt: {}
 	Last Effect…	Letzter Effekt…
@@ -4520,6 +4528,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	Divide Objects Below: select exactly one path	Darunterliegende Objekte aufteilen: Wählen Sie genau einen Pfad aus
 @msg	Downloaded {what}	{what} heruntergeladen
 @msg	Expand Appearance: the selection has a basic appearance	Aussehen umwandeln: Die Auswahl hat ein einfaches Aussehen
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	einige Rastereffekte wurden nicht in Bilder umgewandelt: Sie würden mehr als 1.024 Bilder oder insgesamt 256 Megapixel benötigen
 @msg	Expand: no brush strokes selected	Umwandeln: keine Pinselkonturen ausgewählt
 @msg	Expand: no gradient fills	Umwandeln: keine Verlaufsflächen
 @msg	Expand: nothing to expand	Umwandeln: nichts umzuwandeln
@@ -5364,6 +5373,10 @@ variable-list-end	{0}, {1}	{0} und {1}
 	Cap Height	Versalhöhe
 	x-Height	x-Höhe
 	ICF Box	ICF-Rahmen
+	Show Sample	Muster einblenden
+	Hide Sample	Muster ausblenden
+	Max Ascent/Descent	Max. Höhe/Tiefe
+	Max Ascender	Max. Oberlänge
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` ist der Schrittverweis {r}, den nur `run` und `command_batch` auflösen
 @msg	`ids` must be an array of object ids, not {v}	`ids` muss ein Array von Objekt-IDs sein, nicht {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` muss ein Array von Farben sein, nicht {v}
@@ -5944,7 +5957,7 @@ effect	Soft	Weich
 @msg	Unknown dimension style	Unbekannter Bemaßungsstil
 @msg	Unknown unit	Unbekannte Einheit
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Schließt die kreisförmigen Enden offener Profile. Bei einer Teildrehung bleiben die Schnittseiten offen.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Schließt die kreisförmigen Enden offener Profile. Bei einer Teildrehung werden auch die Schnittseiten geschlossen.
 	Distance	Abstand
 @msg	span must be "object" or "selection", got {v}	span muss "object" oder "selection" sein, nicht {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" platziert einen `gradient`, kein Farbfeld
@@ -6097,6 +6110,7 @@ effect	Soft	Weich
 	Single Word Justification:	Ausrichtung einzelner Wörter:
 	Full Justify	Blocksatz
 	Minimum must not exceed Desired, nor Desired Maximum.	Das Minimum darf den optimalen Wert nicht übersteigen, der optimale Wert nicht das Maximum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Das Minimum darf den optimalen Wert nicht übersteigen, der optimale Wert nicht das Maximum
 	Minimum	Minimum
 	Justification	Abstände
 	Add filters from the list above	Filter aus der Liste oben hinzufügen
@@ -7040,6 +7054,22 @@ breakText	Glyphs	Glyphen
 	Remove Gaps	Lücken entfernen
 @msg	that makes too many pieces (at most 100000): make the dashes longer	das ergibt zu viele Teile (höchstens 100000): machen Sie die Striche länger
 @msg	select paths, or segments, to divide	wählen Sie Pfade oder Segmente zum Aufteilen aus
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Gemeinsame Tangenten…
+	Common Tangents	Gemeinsame Tangenten
+	Tangents	Tangenten
+	Centerline	Mittellinie
+	External	Äußere
+	Internal	Innere
+@msg	select two closed paths	wählen Sie zwei geschlossene Pfade aus
+@msg	a selected path is open	ein ausgewählter Pfad ist offen
+@msg	a selected path is not convex	ein ausgewählter Pfad ist nicht konvex
+@msg	a selected path has no area	ein ausgewählter Pfad hat keine Fläche
+@msg	a selected path has more than 10000 segments	ein ausgewählter Pfad hat mehr als 10000 Segmente
+@msg	the two paths have the same outline	die beiden Pfade haben denselben Umriss
+@msg	One path lies inside the other, so they have no common tangents	Ein Pfad liegt im anderen, daher haben sie keine gemeinsamen Tangenten
+@msg	The paths overlap, so they have no internal tangents	Die Pfade überlappen sich, daher haben sie keine inneren Tangenten
+@msg	One path lies inside the other, so they have no internal tangents	Ein Pfad liegt im anderen, daher haben sie keine inneren Tangenten
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Striche in Pfade umwandeln
 @msg	select paths with dashed strokes to expand	wählen Sie Pfade mit gestrichelter Kontur zum Umwandeln aus
@@ -7115,7 +7145,7 @@ breakText	Glyphs	Glyphen
 @msg	stroke cannot be set on a symbol instance	stroke kann nicht für eine Symbolinstanz gesetzt werden
 @msg	fill on a symbol instance must be a solid color or none	fill einer Symbolinstanz muss eine Vollfarbe oder none sein
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kann nicht für ein Bild ohne den Effekt „In Form umwandeln“ oder „Objekt in Pfade umwandeln“ gesetzt werden
-@msg	pass newName, registration, exportType, nineSlice and/or type	geben Sie newName, registration, exportType, nineSlice und/oder type an
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	geben Sie newName, registration, exportType, nineSlice, type und/oder alignToPixelGrid an
 	Text Flow	Textfluss
 	By Rows	Nach Zeilen
 	By Columns	Nach Spalten
@@ -7341,6 +7371,8 @@ breakText	Glyphs	Glyphen
 @msg	No bridge of this width fits across the selected art	Kein Steg dieser Breite passt über das ausgewählte Bildmaterial
 @msg	Some islands could not be joined to the area around the art	Einige Inseln konnten nicht mit der Fläche um das Bildmaterial verbunden werden
 @msg	`width` must be from {lo} to {hi} pt	`width` muss zwischen {lo} und {hi} pt liegen
+@msg	`angle` must be from -180 to 180 degrees	`angle` muss zwischen -180 und 180 Grad liegen
+@msg	`roundness` must be from 1 to 100%	`roundness` muss zwischen 1 und 100 % liegen
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` muss eine ganze Zahl von 1 bis {MAX_BRIDGES_PER_ISLAND} sein
 	Weed Box and Lines…	Entgitterrahmen und -linien…
 	Weed Box and Lines	Entgitterrahmen und -linien
@@ -8699,7 +8731,9 @@ breakText	Glyphs	Glyphen
 @msg	position must be normal, superscript or subscript	position muss normal, superscript oder subscript sein
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position muss topLeft, topRight, bottomLeft oder bottomRight sein
 @msg	positions must be between 0 and 100000 pt	positions müssen zwischen 0 und 100000 pt liegen
+@msg	ppi can't be more than {max} for this image	ppi darf für dieses Bild nicht mehr als {max} sein
 @msg	ppi must be a positive number, not {ppi}	ppi muss eine positive Zahl sein, nicht {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim lässt die Pixel des Bildes unverändert: Lassen Sie ppi weg
 @msg	ppi must be between 1 and 2400	ppi muss zwischen 1 und 2400 liegen
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` ist nicht transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape muss clippingMask|transparency sein

@@ -923,6 +923,9 @@ pub struct WheelResponse {
     /// A colour moved by dragging its marker (a new hue and saturation) or, the selected colour,
     /// the brightness slider (a new brightness): `[h°, s, v]`, `None` where the control kept it.
     pub moved: Option<(usize, [Option<f32>; 3])>,
+    /// A click on the wheel: the color whose marker is within reach of it (if any), and the hue
+    /// (degrees) and saturation under the pointer (1 for a marker past the wheel's edge).
+    pub clicked: Option<(Option<usize>, [f32; 2])>,
 }
 
 /// The harmony wheel of Recolor Artwork's Edit tab and the Color Themes panel: a hue and saturation
@@ -971,6 +974,12 @@ fn wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>
             let near = colors.iter().map(at).enumerate().map(|(i, m)| (i, m.distance(p))).filter(|x| x.1 <= 14.0).min_by(|a, b| a.1.total_cmp(&b.1));
             out.pressed = near.map(|x| x.0);
             ui.data_mut(|m| m.insert_temp(drag, out.pressed));
+            // A click inside the wheel, or on a marker, gives the hue and saturation under it.
+            let dv = p - c;
+            if resp.clicked() && (dv.length() <= r || out.pressed.is_some()) {
+                let h = (-dv.y).atan2(dv.x).to_degrees().rem_euclid(360.0);
+                out.clicked = Some((out.pressed, [h, (dv.length() / r).clamp(0.0, 1.0)]));
+            }
         }
         if resp.dragged()
             && let (Some(i), Some(p)) = (ui.data(|m| m.get_temp::<Option<usize>>(drag)).flatten(), resp.interact_pointer_pos())
