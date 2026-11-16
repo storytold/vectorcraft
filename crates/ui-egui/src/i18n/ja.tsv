@@ -9021,7 +9021,7 @@ breakText	Glyphs	字形
 @msg	stroke cannot be set on a symbol instance	シンボルインスタンスには stroke を設定できません
 @msg	fill on a symbol instance must be a solid color or none	シンボルインスタンスの fill は単色または none にしてください
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	「シェイプに変換」または「オブジェクトのアウトライン」効果のない画像には {key} を設定できません
-@msg	pass newName, registration, exportType, nineSlice and/or type	newName、registration、exportType、nineSlice、type のいずれかを指定してください
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	newName、registration、exportType、nineSlice、type、alignToPixelGrid のいずれかを指定してください
 	Text Flow	テキストの流れ
 	By Rows	行方向
 	By Columns	列方向

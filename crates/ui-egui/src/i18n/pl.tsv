@@ -7373,7 +7373,7 @@ breakText	Glyphs	Glify
 @msg	stroke cannot be set on a symbol instance	nie można ustawić stroke dla wystąpienia symbolu
 @msg	fill on a symbol instance must be a solid color or none	fill wystąpienia symbolu musi być jednolitym kolorem lub none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	nie można ustawić {key} dla obrazu bez efektu Konwertuj na kształt lub Kontur obiektu
-@msg	pass newName, registration, exportType, nineSlice and/or type	podaj newName, registration, exportType, nineSlice i/lub type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	podaj newName, registration, exportType, nineSlice, type i/lub alignToPixelGrid
 	Text Flow	Przepływ tekstu
 	By Rows	Wierszami
 	By Columns	Kolumnami

@@ -7502,7 +7502,7 @@ breakText	Glyphs	Glifák
 @msg	stroke cannot be set on a symbol instance	a stroke nem állítható be szimbólumpéldányon
 @msg	fill on a symbol instance must be a solid color or none	a szimbólumpéldány fill értéke csak egyszínű szín vagy none lehet
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	a {key} nem állítható be olyan képen, amelyen nincs Átalakítás alakzattá vagy Objektum útvonallá alakítása effektus
-@msg	pass newName, registration, exportType, nineSlice and/or type	adja meg a newName, registration, exportType, nineSlice és/vagy type értékét
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	adja meg a newName, registration, exportType, nineSlice, type és/vagy alignToPixelGrid értékét
 	Text Flow	Szövegfolyás
 	By Rows	Soronként
 	By Columns	Oszloponként

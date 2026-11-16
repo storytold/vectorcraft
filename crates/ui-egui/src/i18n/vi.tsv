@@ -7156,7 +7156,7 @@ breakText	Glyphs	Glyph
 @msg	stroke cannot be set on a symbol instance	không thể đặt stroke cho thực thể ký hiệu
 @msg	fill on a symbol instance must be a solid color or none	fill của thực thể ký hiệu phải là màu đặc hoặc none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	không thể đặt {key} cho hình ảnh không có hiệu ứng Chuyển thành hình dạng hoặc Đường bao đối tượng
-@msg	pass newName, registration, exportType, nineSlice and/or type	hãy cung cấp newName, registration, exportType, nineSlice và/hoặc type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	hãy cung cấp newName, registration, exportType, nineSlice, type và/hoặc alignToPixelGrid
 	Text Flow	Luồng văn bản
 	By Rows	Theo hàng
 	By Columns	Theo cột

@@ -7108,7 +7108,7 @@ breakText	Glyphs	Glyphen
 @msg	stroke cannot be set on a symbol instance	stroke kann nicht für eine Symbolinstanz gesetzt werden
 @msg	fill on a symbol instance must be a solid color or none	fill einer Symbolinstanz muss eine Vollfarbe oder none sein
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kann nicht für ein Bild ohne den Effekt „In Form umwandeln“ oder „Objekt in Pfade umwandeln“ gesetzt werden
-@msg	pass newName, registration, exportType, nineSlice and/or type	geben Sie newName, registration, exportType, nineSlice und/oder type an
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	geben Sie newName, registration, exportType, nineSlice, type und/oder alignToPixelGrid an
 	Text Flow	Textfluss
 	By Rows	Nach Zeilen
 	By Columns	Nach Spalten

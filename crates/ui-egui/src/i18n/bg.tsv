@@ -6825,7 +6825,7 @@ breakText	Glyphs	Глифи
 @msg	stroke cannot be set on a symbol instance	stroke не може да се задава за екземпляр на символ
 @msg	fill on a symbol instance must be a solid color or none	fill на екземпляр на символ трябва да е плътен цвят или none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} не може да се задава за изображение без ефект „Конвертиране в фигура“ или „Преобразуване на обекта в контур“
-@msg	pass newName, registration, exportType, nineSlice and/or type	задайте newName, registration, exportType, nineSlice и/или type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	задайте newName, registration, exportType, nineSlice, type и/или alignToPixelGrid
 	Text Flow	Поток на текста
 	By Rows	По редове
 	By Columns	По колони

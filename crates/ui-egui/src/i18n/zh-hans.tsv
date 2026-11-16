@@ -7358,7 +7358,7 @@ breakText	Glyphs	字形
 @msg	stroke cannot be set on a symbol instance	无法为符号实例设置 stroke
 @msg	fill on a symbol instance must be a solid color or none	符号实例的 fill 必须是纯色或 none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	无法为没有“转换为形状”或“轮廓化对象”效果的图像设置 {key}
-@msg	pass newName, registration, exportType, nineSlice and/or type	请提供 newName、registration、exportType、nineSlice 和/或 type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	请提供 newName、registration、exportType、nineSlice、type 和/或 alignToPixelGrid
 	Text Flow	文本流向
 	By Rows	按行
 	By Columns	按列
