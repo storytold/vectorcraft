@@ -55,6 +55,8 @@ font-technology	Variable	バリアブル
 	Insert Aki Left	前にアキを挿入
 	Insert Aki Right	後ろにアキを挿入
 	Tsume	文字ツメ
+	Adjust Horizontal Diacritic Position	発音区別符号の水平位置を調整
+	Adjust Vertical Diacritic Position	発音区別符号の垂直位置を調整
 	Character Direction	文字の方向
 	Digits	数字
 	Arabic	アラビア数字
@@ -1384,6 +1386,18 @@ antiAlias	Sharp	シャープ
 	Copy Width Point	幅ポイントをコピー
 	Copyright	著作権
 	Copyright Info URL:	著作権情報の URL:
+	Save Metadata Template…	メタデータテンプレートを保存…
+	Import Options	読み込みオプション
+	Clear existing fields and use the template's	既存のフィールドを消去してテンプレートのフィールドを使用
+	Keep existing fields, but replace those the template has	既存のフィールドを保持し、テンプレートにあるフィールドを置換
+	Keep existing fields, but append those the template has	既存のフィールドを保持し、テンプレートにあるフィールドを追加
+@msg	the template name can't be empty	テンプレート名は空にできません
+@msg	the template name isn't usable as a file name	テンプレート名はファイル名として使用できません
+@msg	no metadata templates folder here	ここにはメタデータテンプレートのフォルダーがありません
+@msg	give `name` or `path`, not both	`name` と `path` のどちらか一方を指定してください
+@msg	give one of `path`, `name` and `data`	`path`、`name`、`data` のいずれか 1 つを指定してください
+@msg	mode must be replace, keep or append	モードは replace、keep、append のいずれかにしてください
+@msg	the file is not an XMP metadata template	このファイルは XMP メタデータテンプレートではありません
 	Copyright Notice:	著作権表示:
 	Copyright Status:	著作権の状態:
 	Corner Point Angle Threshold:	コーナーポイントの角度のしきい値:
@@ -1938,6 +1952,7 @@ antiAlias	Sharp	シャープ
 	Show smooth color wheel	滑らかなカラーホイールを表示
 	Show segmented color wheel	分割カラーホイールを表示
 	Show color bars	カラーバーを表示
+	Find the selected colors in the artwork	選択したカラーをアートワーク内で検索
 	Height	高さ
 	Height:	高さ:
 	Help › Search Commands…	ヘルプ › コマンドを検索…
@@ -3409,6 +3424,9 @@ mark-style	Japanese	日本式
 	Swap Fill and Stroke	塗りと線を入れ替え
 	Swap start and end arrowheads	始点と終点の矢印を入れ替え
 	Stylistic Alternates	スタイル代替字
+	Ligatures	合字
+	Ornaments	装飾
+	Figures	数字
 	Swash	スワッシュ
 	Swatch Conflict	スウォッチの競合
 	Swatch Conflicts	スウォッチの競合
@@ -3871,6 +3889,8 @@ file-filter	Templates	テンプレート
 	Gradient (. or Shift+.)	グラデーション (. または Shift+.)
 	Graph Data	グラフデータ
 	Graph Type	グラフの種類
+	Graph Type…	グラフの種類…
+	Graph Data…	グラフデータ…
 	Graph Options	グラフオプション
 	Left Axis	左軸
 	Right Axis	右軸
@@ -5108,6 +5128,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	give only one of onto, below and above	onto、below、above のうち 1 つだけを指定してください
 @msg	column must be true or a number from 1	column には true または 1 以上の数値を指定してください
 @msg	unknown panel `{raw}`	`{raw}` は不明なパネルです
+@msg	`{panel}` has no display sizes to cycle	`{panel}` には切り替える表示サイズがありません
+@msg	the panels are not shown	パネルが表示されていません
 @msg	panels can't be shown in Presentation Mode	プレゼンテーションモードではパネルを表示できません
 @msg	x and y must both be numbers	x と y はどちらも数値で指定してください
 @msg	Downloaded {what}	{what} をダウンロードしました
@@ -5295,6 +5317,27 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: 組み込み関数のコールバック、getter、変換、または $.evalFile が実行するファイルの中ではダイアログを開けません。スクリプト自身のコードから呼び出してください
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: `answers` の次の回答は {name} ではなく {_1} のものです
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` にこのダイアログの回答が残っていません
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` にスクリプトが使用しなかった回答が {n} 件あります
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} はブラシの下にある {n} 個のオブジェクトを変更せずに残しました（{_2}）。パスのみを変形します
+liquify-tool	Warp	ワープ
+liquify-tool	Twirl	旋回
+liquify-tool	Pucker	収縮
+liquify-tool	Bloat	膨張
+liquify-tool	Scallop	ギザギザ
+liquify-tool	Crystallize	結晶化
+liquify-tool	Wrinkle	しわ
+liquify-kind	graphs	グラフ
+liquify-kind	type	テキスト
+liquify-kind	symbols	シンボル
+liquify-kind	images	画像
+liquify-kind	meshes	メッシュ
+liquify-kind	envelopes	エンベロープ
+liquify-kind	repeats	リピート
+liquify-kind	placed documents	配置ドキュメント
+liquify-kind	blends	ブレンド
+liquify-list-two	{0}, {1}	{0}、{1}
+liquify-list-middle	{0}, {1}	{0}、{1}
+liquify-list-end	{0}, {1}	{0}、{1}
 @msg	vc.document{place} is too large for a script	vc.document{place} はスクリプトには大きすぎます
 @msg	vc.log: the log of this run is full	vc.log: この実行のログがいっぱいです
 @msg	this function's script run has ended	この関数のスクリプトの実行は終了しています
@@ -5591,6 +5634,7 @@ effect	Vertical	垂直
 	Change Panel Layout	パネルの配置を変更
 	Close Panel	パネルを閉じる
 	Collapse Panel Group	パネルグループを折りたたむ
+	Cycle Display Sizes	表示サイズを切り替え
 	Move Panel	パネルを移動
 	Group with	グループ化先
 	Resize panels	パネルのサイズを変更
@@ -5965,6 +6009,7 @@ lighting	Light	ライト
 	Export Data Sets…	データセットを書き出し…
 	Load Variable Library…	変数ライブラリを読み込み…
 	Save Variable Library…	変数ライブラリを保存…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	「読み込み」は拡張子が .csv、.tsv、.txt、.xml のデータソースファイルを読み込みます
 @msg	a variable library holds text variables, and the document has none	変数ライブラリにはテキスト変数を保存しますが、このドキュメントにはテキスト変数がありません
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	変数 `{name}` は変数ライブラリに保存できません: 英字または `_` で始まり、スペースや `-`、`_`、`.` 以外の記号を含まない名前に変更してください
 @msg	{k} has control characters	{k} に制御文字が含まれています
@@ -9302,3 +9347,20 @@ breakText	Glyphs	字形
 @msg	turn on at least one side	少なくとも 1 つの辺をオンにしてください
 @msg	with no hem and no grommets there is nothing to mark	折り返しもハトメもないため、マークを付けるものがありません
 @msg	{saving} failed: {e}	{saving} に失敗しました: {e}
+	Packaging Tools	パッケージツール
+	Fold Lines	折り線
+	Make Cut Line	カット線にする
+	Make Crease Line	筋入れ線にする
+	Make Partial Cut Line	半抜き線にする
+	Make Perforation Line	ミシン目線にする
+	Make Fold Line	折り線にする
+	Role Swatches…	線種のスウォッチ…
+	Role Swatches	線種のスウォッチ
+	Role	線種
+	Cut Line	カット線
+	Crease Line	筋入れ線
+	Partial Cut Line	半抜き線
+	Perforation Line	ミシン目線
+	No objects are selected.	オブジェクトが選択されていません。
+	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
+	Remove Fold Line Role	線種を解除

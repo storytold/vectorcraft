@@ -29,6 +29,8 @@ mod sketch_ink;
 mod texture;
 mod video;
 
+use std::f64::consts::{PI, TAU};
+
 use serde_json::Value;
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
@@ -332,6 +334,9 @@ pub struct PixelSpace {
     pub extent: f64,
 }
 
+/// Color Halftone's screen angle parameters with their defaults (degrees).
+const SCREEN_ANGLES: [(&str, f64); 4] = [("channel1", 108.0), ("channel2", 162.0), ("channel3", 90.0), ("channel4", 45.0)];
+
 /// Effect `id`'s parameters `p` (defaults merged in) as a [`PixelFx`]; `None` for other effects.
 pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
     let quality = |levels: [(&str, u32); 3], default: u32| {
@@ -565,8 +570,7 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
         },
         "pixelate.colorHalftone" => PixelFx::ColorHalftone {
             max_radius: num(p, "maxRadius", 8.0).clamp(4.0, 127.0),
-            angles: [("channel1", 108.0), ("channel2", 162.0), ("channel3", 90.0), ("channel4", 45.0)]
-                .map(|(k, d)| num(p, k, d).clamp(-360.0, 360.0)),
+            angles: SCREEN_ANGLES.map(|(k, d)| num(p, k, d).clamp(-360.0, 360.0)),
         },
         "pixelate.crystallize" => PixelFx::Crystallize { cell: num(p, "cellSize", 10.0).clamp(3.0, 300.0) },
         "pixelate.mezzotint" => PixelFx::Mezzotint { kind: Mezzotint::parse(text(p, "type", "fineDots")) },
@@ -853,6 +857,113 @@ impl PixelFx {
 /// otherwise.
 fn pick<T: Clone>(table: &[(&str, &str)], all: &[T], value: &str, default: T) -> T {
     table.iter().zip(all).find(|((_, v), _)| v.eq_ignore_ascii_case(value)).map_or(default, |(_, t)| t.clone())
+}
+
+/// The shortest that a direction's unit vector may become under a Transform effect and still give
+/// a direction ([`turned_directions`]).
+const MIN_TURNED: f64 = 1e-9;
+
+/// How close (radians) two directions' angles to a turned direction must be to count as equally
+/// near ([`nearest`]).
+const TIE: f64 = 1e-9;
+
+/// The parameters of pixel filter `id` (params `p`, defaults not merged in) that set a direction
+/// on the page, as `a` turns them: `a` is the linear part of a Transform effect listed after the
+/// filter, which turns, reflects and scales what the filter paints. A light direction or stroke
+/// direction becomes the one nearest to where `a` takes it, the one clockwise of it when two are
+/// equally near ([`snapped`]); `later` is the map the filter still goes through when it is drawn,
+/// after `a`. Color Halftone's screen angles (degrees counterclockwise from the page's horizontal)
+/// turn with `a`, from 0 up to 360. A direction that `a` takes to no direction (a zero scale) stays
+/// as it is. Empty for filters with no such parameter.
+pub(crate) fn turned_directions(id: &str, p: &Value, a: Affine, later: Affine) -> Vec<(&'static str, Value)> {
+    enum Kind {
+        Light(&'static str),
+        Stroke,
+        Screens,
+    }
+    let kind = match id {
+        "sketch.basRelief" => Kind::Light("bottom"),
+        "artistic.underpainting" | "artistic.roughPastels" | "sketch.conteCrayon" | "sketch.plaster" | "texture.texturizer" => Kind::Light("top"),
+        "brushStrokes.sprayedStrokes" | "sketch.graphicPen" => Kind::Stroke,
+        "pixelate.colorHalftone" => Kind::Screens,
+        _ => return Vec::new(),
+    };
+    let p = crate::merged_params(id, p);
+    match kind {
+        Kind::Light(default) => {
+            let light = Light::parse(text(&p, "lightDirection", default));
+            snapped(&Light::ALL, Light::toward, light, a, later, false)
+                .and_then(|t| name_of(&LIGHT_DIRECTIONS, &Light::ALL, t))
+                .map(|name| vec![("lightDirection", Value::from(name))])
+                .unwrap_or_default()
+        }
+        Kind::Stroke => {
+            let direction = StrokeDirection::parse(text(&p, "strokeDirection", "rightDiagonal"));
+            snapped(&StrokeDirection::ALL, StrokeDirection::along, direction, a, later, true)
+                .and_then(|t| name_of(&STROKE_DIRECTIONS, &StrokeDirection::ALL, t))
+                .map(|name| vec![("strokeDirection", Value::from(name))])
+                .unwrap_or_default()
+        }
+        // A screen at θ° runs along (cos θ, −sin θ) on the page (y down).
+        Kind::Screens => SCREEN_ANGLES
+            .iter()
+            .filter_map(|&(key, default)| {
+                let t = num(&p, key, default).clamp(-360.0, 360.0).to_radians();
+                let v = mapped(a, Vec2::new(t.cos(), -t.sin()))?;
+                let degrees = ((-v.y).atan2(v.x).to_degrees() * 1e6).round() / 1e6;
+                Some((key, Value::from(degrees.rem_euclid(360.0) + 0.0)))
+            })
+            .collect(),
+    }
+}
+
+/// Where the linear part of `a` takes direction `v`; `None` when it takes it to no direction.
+fn mapped(a: Affine, v: Vec2) -> Option<Vec2> {
+    let w = (a * v.to_point()) - (a * Point::ORIGIN);
+    (w.is_finite() && w.hypot() > MIN_TURNED).then_some(w)
+}
+
+/// The entry of `all` to store for `from` (directions `dir`) once `a` turns it: the one nearest to
+/// where `a` takes it ([`nearest`]). When the stored entry is still to be mapped by `later` and
+/// rounded again as it is drawn, it is the entry nearest to that among those that `later` takes to
+/// the entry nearest to where `later` after `a` takes `from`, so that the drawn direction is
+/// rounded once. `None` when `a` takes `from` to no direction.
+fn snapped<T: Copy + PartialEq>(all: &[T], dir: fn(T) -> Vec2, from: T, a: Affine, later: Affine, axis: bool) -> Option<T> {
+    let v = mapped(a, dir(from))?;
+    let turned = nearest(all, dir, v, axis)?;
+    if later == Affine::IDENTITY {
+        return Some(turned);
+    }
+    let Some(target) = mapped(later * a, dir(from)).and_then(|w| nearest(all, dir, w, axis)) else { return Some(turned) };
+    let fits: Vec<T> = all.iter().copied().filter(|&t| mapped(later, dir(t)).and_then(|w| nearest(all, dir, w, axis)) == Some(target)).collect();
+    nearest(&fits, dir, v, axis).or(Some(turned))
+}
+
+/// The entry of `all` whose direction (`dir`, page axes with y down) is nearest to `v` by angle,
+/// a direction and its opposite counting as the same with `axis`. Of two equally near, the one
+/// clockwise of `v` on the page.
+fn nearest<T: Copy>(all: &[T], dir: impl Fn(T) -> Vec2, v: Vec2, axis: bool) -> Option<T> {
+    let period = if axis { PI } else { TAU };
+    let at = v.atan2();
+    let mut best: Option<(T, f64)> = None;
+    for &t in all {
+        // How far clockwise of `v` the entry lies, within half a period either way.
+        let d = (dir(t).atan2() - at).rem_euclid(period);
+        let d = if d > period / 2.0 { d - period } else { d };
+        let better = match best {
+            None => true,
+            Some((_, b)) => d.abs() < b.abs() - TIE || (d.abs() <= b.abs() + TIE && d > b),
+        };
+        if better {
+            best = Some((t, d));
+        }
+    }
+    best.map(|(t, _)| t)
+}
+
+/// The value in `table` of entry `t` of `all` (the same order).
+fn name_of<T: PartialEq>(table: &[(&'static str, &'static str)], all: &[T], t: T) -> Option<&'static str> {
+    table.iter().zip(all).find(|(_, u)| **u == t).map(|((_, v), _)| *v)
 }
 
 /// `data` as `w` × `h` RGBA pixels, `None` when it isn't that size (or is empty).

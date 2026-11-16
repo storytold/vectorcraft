@@ -639,6 +639,11 @@ font-technology	Variable	Променливи
 	Copy Width Point	Копиране на точка на ширина
 	Copyright	Авторско право
 	Copyright Info URL:	URL адрес с информация за авторското право:
+	Save Metadata Template…	Запази шаблон за метаданни…
+	Import Options	Опции за импортиране
+	Clear existing fields and use the template's	Изчисти съществуващите полета и използвай тези от шаблона
+	Keep existing fields, but replace those the template has	Запази съществуващите полета, но замени съдържащите се в шаблона
+	Keep existing fields, but append those the template has	Запази съществуващите полета, но добави съдържащите се в шаблона
 	Copyright Notice:	Бележка за авторското право:
 	Copyright Status:	Статус на авторското право:
 	Copyright Symbol	Символ за авторско право
@@ -1378,6 +1383,8 @@ font-technology	Variable	Променливи
 	Graph	Диаграма
 	Graph Data	Данни за диаграма
 	Graph Type	Тип диаграма
+	Graph Type…	Тип диаграма…
+	Graph Data…	Данни за диаграма…
 	Graph Options	Опции на диаграмата
 	Left Axis	Лява ос
 	Right Axis	Дясна ос
@@ -1493,6 +1500,7 @@ font-technology	Variable	Променливи
 	Show smooth color wheel	Показване на плавно цветово колело
 	Show segmented color wheel	Показване на сегментирано цветово колело
 	Show color bars	Показване на цветни ленти
+	Find the selected colors in the artwork	Намиране на избраните цветове в илюстрацията
 	Harmony Sets	Набори от хармонии
 	Height	Височина
 	Height:	Височина:
@@ -2647,6 +2655,8 @@ font-technology	Variable	Променливи
 	Insert Aki Left	Вмъкване на аки отляво
 	Insert Aki Right	Вмъкване на аки отдясно
 	Tsume	Цуме
+	Adjust Horizontal Diacritic Position	Коригиране на хоризонталната позиция на диакритиците
+	Adjust Vertical Diacritic Position	Коригиране на вертикалната позиция на диакритиците
 	Character Direction	Посока на знаците
 	Digits	Цифри
 	Arabic	Арабски
@@ -3571,6 +3581,9 @@ digits	Malayalam	Малаялам
 	Show Import Options	Показване на опциите за импортиране
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Питане за опциите за импортиране на всеки PDF, DXF или текстов файл преди поставянето му; изключено: използват се последно избраните опции
 	Stylistic Alternates	Стилистични алтернативи
+	Ligatures	Лигатури
+	Ornaments	Орнаменти
+	Figures	Цифри
 	Set {n}	Набор {n}
 	Swash	Декоративен елемент
 	Swatch Conflict	Конфликт на образци
@@ -5150,6 +5163,7 @@ effect	Soft	Меко
 	Change Panel Layout	Промяна на оформлението на панела
 	Close Panel	Затваряне на панела
 	Collapse Panel Group	Свиване на групата панели
+	Cycle Display Sizes	Превключване на размерите на показване
 	Move Panel	Преместване на панела
 	Group with	Групиране с
 	Resize panels	Преоразмеряване на панели
@@ -7010,4 +7024,21 @@ breakText	Glyphs	Глифи
 	Nest Shapes…	Подреждане на форми…
 	Nest Shapes	Подреждане на форми
 	Roll	Ролка
+	Packaging Tools	Инструменти за опаковки
+	Fold Lines	Линии на сгъване
+	Make Cut Line	Направи линия за рязане
+	Make Crease Line	Направи линия за биговане
+	Make Partial Cut Line	Направи линия за частично рязане
+	Make Perforation Line	Направи линия за перфорация
+	Make Fold Line	Направи линия на сгъване
+	Role Swatches…	Образци за видовете линии…
+	Role Swatches	Образци за видовете линии
+	Role	Вид линия
+	Cut Line	Линия за рязане
+	Crease Line	Линия за биговане
+	Partial Cut Line	Линия за частично рязане
+	Perforation Line	Линия за перфорация
+	No objects are selected.	Няма избрани обекти.
+	Open a document to mark its fold lines.	Отворете документ, за да отбележите линиите му на сгъване.
+	Remove Fold Line Role	Премахни вида на линията
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

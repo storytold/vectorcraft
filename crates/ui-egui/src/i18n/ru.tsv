@@ -652,6 +652,18 @@ font-technology	Variable	Вариативные
 	Copy Width Point	Копировать точку ширины
 	Copyright	Copyright
 	Copyright Info URL:	URL информации об авторских правах:
+	Save Metadata Template…	Сохранить шаблон метаданных…
+	Import Options	Параметры импорта
+	Clear existing fields and use the template's	Очистить существующие поля и использовать поля шаблона
+	Keep existing fields, but replace those the template has	Сохранить существующие поля, но заменить те, что есть в шаблоне
+	Keep existing fields, but append those the template has	Сохранить существующие поля, но добавить те, что есть в шаблоне
+@msg	the template name can't be empty	имя шаблона не может быть пустым
+@msg	the template name isn't usable as a file name	имя шаблона нельзя использовать как имя файла
+@msg	no metadata templates folder here	здесь нет папки шаблонов метаданных
+@msg	give `name` or `path`, not both	укажите `name` или `path`, но не оба
+@msg	give one of `path`, `name` and `data`	укажите один из параметров `path`, `name` и `data`
+@msg	mode must be replace, keep or append	режим должен быть replace, keep или append
+@msg	the file is not an XMP metadata template	файл не является шаблоном метаданных XMP
 	Copyright Notice:	Уведомление об авторских правах:
 	Copyright Status:	Статус авторских прав:
 	Copyright Symbol	Символ авторского права
@@ -1442,6 +1454,8 @@ file-filter	Templates	Шаблоны
 	Graph	Диаграмма
 	Graph Data	Данные диаграммы
 	Graph Type	Тип диаграммы
+	Graph Type…	Тип диаграммы…
+	Graph Data…	Данные диаграммы…
 	Graph Options	Параметры диаграммы
 	Left Axis	Левая ось
 	Right Axis	Правая ось
@@ -1557,6 +1571,7 @@ file-filter	Templates	Шаблоны
 	Show smooth color wheel	Показать плавный цветовой круг
 	Show segmented color wheel	Показать сегментированный цветовой круг
 	Show color bars	Показать цветовые полосы
+	Find the selected colors in the artwork	Найти выбранные цвета в рисунке
 	Harmony Sets	Наборы гармонии
 	Height	Высота
 	Height:	Высота:
@@ -2754,6 +2769,8 @@ mark-style	Japanese	Японский
 	Insert Aki Left	Вставить аки слева
 	Insert Aki Right	Вставить аки справа
 	Tsume	Цумэ
+	Adjust Horizontal Diacritic Position	Настроить горизонтальное положение диакритических знаков
+	Adjust Vertical Diacritic Position	Настроить вертикальное положение диакритических знаков
 	Character Direction	Направление символов
 	Digits	Цифры
 	Arabic	Арабские
@@ -3695,6 +3712,9 @@ digits	Malayalam	Малаялам
 	Show Import Options	Показывать параметры импорта
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Запрашивать параметры импорта каждого файла PDF, DXF или текстового файла перед помещением; если выключено, используются последние выбранные параметры
 	Stylistic Alternates	Стилистические альтернативы
+	Ligatures	Лигатуры
+	Ornaments	Орнаменты
+	Figures	Цифры
 	Swash	Росчерк
 	Swatch Conflict	Конфликт образцов
 	Swatch Conflicts	Конфликты образцов
@@ -4515,6 +4535,27 @@ axis	Both	Оба
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: диалоговое окно не может открыться внутри обратного вызова встроенной функции, геттера, преобразования или файла, который выполняет $.evalFile; вызовите его из собственного кода скрипта
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: следующий ответ в `answers` предназначен для {_1}, а не для {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: в `answers` не осталось ответа для этого диалогового окна
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	В `answers` остался {n} ответ, который скрипт не использовал|В `answers` осталось {n} ответа, которые скрипт не использовал|В `answers` осталось {n} ответов, которые скрипт не использовал
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} оставил без изменений {n} объект под кистью ({_2}): он изменяет только контуры|{_1} оставил без изменений {n} объекта под кистью ({_2}): он изменяет только контуры|{_1} оставил без изменений {n} объектов под кистью ({_2}): он изменяет только контуры
+liquify-tool	Warp	Инструмент «Деформация»
+liquify-tool	Twirl	Инструмент «Закручивание»
+liquify-tool	Pucker	Инструмент «Сморщивание»
+liquify-tool	Bloat	Инструмент «Раздувание»
+liquify-tool	Scallop	Инструмент «Фестоны»
+liquify-tool	Crystallize	Инструмент «Кристаллизация»
+liquify-tool	Wrinkle	Инструмент «Морщины»
+liquify-kind	graphs	диаграммы
+liquify-kind	type	текст
+liquify-kind	symbols	символы
+liquify-kind	images	изображения
+liquify-kind	meshes	сетки
+liquify-kind	envelopes	оболочки
+liquify-kind	repeats	повторы
+liquify-kind	placed documents	размещённые документы
+liquify-kind	blends	переходы
+liquify-list-two	{0}, {1}	{0} и {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} и {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} слишком велик для скрипта
 @msg	vc.log: the log of this run is full	vc.log: журнал этого запуска заполнен
 @msg	this function's script run has ended	запуск скрипта этой функции завершён
@@ -5169,6 +5210,8 @@ axis	Both	Оба
 @msg	unknown option `{path}.{k}`	неизвестный параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	неизвестные наложения `{o}` (preserve, simulate или discard)
 @msg	unknown panel `{raw}`	неизвестная панель `{raw}`
+@msg	`{panel}` has no display sizes to cycle	у панели `{panel}` нет размеров отображения для переключения
+@msg	the panels are not shown	панели не показаны
 @msg	panels can't be shown in Presentation Mode	в режиме презентации панели показать нельзя
 @msg	unknown preference `{key}`	неизвестная настройка `{key}`
 @msg	Preferences imported.	Настройки импортированы.
@@ -5546,6 +5589,7 @@ axis	Both	Оба
 	Change Panel Layout	Изменить расположение панелей
 	Close Panel	Закрыть панель
 	Collapse Panel Group	Свернуть группу панелей
+	Cycle Display Sizes	Переключить размеры отображения
 	Move Panel	Переместить панель
 	Group with	Сгруппировать с
 	Resize panels	Изменить размер панелей
@@ -5918,6 +5962,7 @@ lighting	Light	Свет
 	Export Data Sets…	Экспортировать наборы данных…
 	Load Variable Library…	Загрузить библиотеку переменных…
 	Save Variable Library…	Сохранить библиотеку переменных…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	«Импорт» читает файл источника данных с расширением .csv, .tsv, .txt или .xml
 @msg	a variable library holds text variables, and the document has none	библиотека переменных содержит текстовые переменные, а в документе их нет
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	переменную `{name}` нельзя сохранить в библиотеке переменных: переименуйте её так, чтобы имя начиналось с буквы или `_` и не содержало пробелов и символов, кроме `-`, `_` и `.`
 @msg	{k} has control characters	{k} содержит управляющие символы
@@ -9697,5 +9742,22 @@ shape	Open	Открытый
 @msg	{path}: could not be read	{path}: не удалось прочитать
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} пикселей — слишком большой размер для JPEG (не более 65535 пикселей по стороне): уменьшите разрешение
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} пикселей — слишком большой размер для Targa (не более 65535 пикселей по стороне): уменьшите разрешение
+	Packaging Tools	Инструменты упаковки
+	Fold Lines	Линии сгиба
+	Make Cut Line	Сделать линией реза
+	Make Crease Line	Сделать линией биговки
+	Make Partial Cut Line	Сделать линией надреза
+	Make Perforation Line	Сделать линией перфорации
+	Make Fold Line	Сделать линией сгиба
+	Role Swatches…	Образцы типов линий…
+	Role Swatches	Образцы типов линий
+	Role	Тип линии
+	Cut Line	Линия реза
+	Crease Line	Линия биговки
+	Partial Cut Line	Линия надреза
+	Perforation Line	Линия перфорации
+	No objects are selected.	Объекты не выделены.
+	Open a document to mark its fold lines.	Откройте документ, чтобы отметить его линии сгиба.
+	Remove Fold Line Role	Убрать тип линии
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

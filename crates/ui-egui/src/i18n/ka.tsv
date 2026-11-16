@@ -3005,6 +3005,7 @@
 	Change Panel Layout	პანელების განლაგების შეცვლა
 	Close Panel	პანელის დახურვა
 	Collapse Panel Group	პანელების ჯგუფის აკეცვა
+	Cycle Display Sizes	ჩვენების ზომების გადართვა
 	Move Panel	პანელის გადაადგილება
 	Group with	ერთად დაჯგუფება
 	Resize panels	პანელების ზომის შეცვლა
@@ -3553,6 +3554,8 @@ lighting	Light	სინათლე
 	Insert Aki Left	აკის ჩასმა მარცხნივ
 	Insert Aki Right	აკის ჩასმა მარჯვნივ
 	Tsume	ცუმე
+	Adjust Horizontal Diacritic Position	დიაკრიტიკის ჰორიზონტალური პოზიციის მორგება
+	Adjust Vertical Diacritic Position	დიაკრიტიკის ვერტიკალური პოზიციის მორგება
 	Character Direction	სიმბოლოების მიმართულება
 	Digits	ციფრები
 	Arabic	არაბული
@@ -3918,6 +3921,9 @@ digits	Malayalam	მალაიალამური
 	Select text to set its OpenType features.	OpenType შესაძლებლობების დასაყენებლად მონიშნეთ ტექსტი.
 	Standard Ligatures	სტანდარტული ლიგატურები
 	Stylistic Alternates	სტილისტური ალტერნატივები
+	Ligatures	ლიგატურები
+	Ornaments	ორნამენტები
+	Figures	ციფრები
 	Swash	მოხატული ასოები (swash)
 	Tabular Lining	ცხრილური ხაზოვანი
 	Tabular Oldstyle	ცხრილური ძველებური
@@ -4438,6 +4444,18 @@ digits	Malayalam	მალაიალამური
 	Author Title:	ავტორის თანამდებობა:
 	Author:	ავტორი:
 	Copyright Info URL:	საავტორო უფლების ინფორმაციის URL:
+	Save Metadata Template…	მეტამონაცემების შაბლონის შენახვა…
+	Import Options	იმპორტის პარამეტრები
+	Clear existing fields and use the template's	არსებული ველების გასუფთავება და შაბლონის ველების გამოყენება
+	Keep existing fields, but replace those the template has	არსებული ველების შენარჩუნება, მაგრამ შაბლონში არსებულების ჩანაცვლება
+	Keep existing fields, but append those the template has	არსებული ველების შენარჩუნება, მაგრამ შაბლონში არსებულების დამატება
+@msg	the template name can't be empty	შაბლონის სახელი ცარიელი ვერ იქნება
+@msg	the template name isn't usable as a file name	შაბლონის სახელი ფაილის სახელად ვერ გამოდგება
+@msg	no metadata templates folder here	აქ მეტამონაცემების შაბლონების საქაღალდე არ არის
+@msg	give `name` or `path`, not both	მიუთითეთ `name` ან `path`, არა ორივე
+@msg	give one of `path`, `name` and `data`	მიუთითეთ ერთ-ერთი: `path`, `name` და `data`
+@msg	mode must be replace, keep or append	რეჟიმი უნდა იყოს replace, keep ან append
+@msg	the file is not an XMP metadata template	ფაილი არ არის XMP მეტამონაცემების შაბლონი
 	Copyright Notice:	საავტორო უფლების შენიშვნა:
 	Copyright Status:	საავტორო უფლების სტატუსი:
 	Created:	შექმნილია:
@@ -4759,6 +4777,7 @@ digits	Malayalam	მალაიალამური
 	Show smooth color wheel	გლუვი ფერთა წრის ჩვენება
 	Show segmented color wheel	სეგმენტირებული ფერთა წრის ჩვენება
 	Show color bars	ფერთა ზოლების ჩვენება
+	Find the selected colors in the artwork	არჩეული ფერების პოვნა ნახატში
 	Keep this row's colors (exclude)	ამ სტრიქონის ფერების შენარჩუნება (გამორიცხვა)
 	Limit to Library:	ბიბლიოთეკით შეზღუდვა:
 	Link harmony colors	ჰარმონიის ფერების დაკავშირება
@@ -5343,6 +5362,8 @@ theme	Appearance	იერსახე
 	Create Graph	დიაგრამის შექმნა
 	Graph Data	დიაგრამის მონაცემები
 	Graph Type	დიაგრამის ტიპი
+	Graph Type…	გრაფიკის ტიპი…
+	Graph Data…	გრაფიკის მონაცემები…
 	Graph Options	გრაფიკის პარამეტრები
 	Left Axis	მარცხენა ღერძი
 	Right Axis	მარჯვენა ღერძი
@@ -6857,6 +6878,8 @@ font-technology	Variable	ცვლადი
 @msg	unknown option `{path}.{k}`	უცნობი პარამეტრი `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	უცნობი ზედდაბეჭდვა `{o}` (preserve, simulate ან discard)
 @msg	unknown panel `{raw}`	უცნობი პანელი `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` პანელს არ აქვს გადასართავი ჩვენების ზომები
+@msg	the panels are not shown	პანელები არ ჩანს
 @msg	panels can't be shown in Presentation Mode	პრეზენტაციის რეჟიმში პანელების ჩვენება შეუძლებელია
 @msg	unknown preference `{key}`	უცნობი პარამეტრი `{key}`
 @msg	Preferences imported.	პარამეტრები იმპორტირებულია.
@@ -7801,6 +7824,27 @@ imageTrace	Outline	კონტური
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: დიალოგი ვერ გაიხსნება ჩაშენებული ფუნქციის უკუძახილში, getter-ში, გარდაქმნაში ან ფაილში, რომელსაც $.evalFile უშვებს; გამოიძახეთ ის სკრიპტის საკუთარი კოდიდან
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: შემდეგი პასუხი `answers`-ში არის {_1}-ისთვის და არა {name}-ისთვის
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers`-ში ამ დიალოგისთვის პასუხი აღარ დარჩა
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers`-ში დარჩა {n} პასუხი, რომელიც სკრიპტს არ გამოუყენებია
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1}-მა ფუნჯის ქვეშ უცვლელი დატოვა {n} ობიექტი ({_2}): ის მხოლოდ ტრაექტორიებს ცვლის
+liquify-tool	Warp	გაღუნვა
+liquify-tool	Twirl	დახვევა
+liquify-tool	Pucker	შეკუმშვა
+liquify-tool	Bloat	გაბერვა
+liquify-tool	Scallop	დაკბილვა
+liquify-tool	Crystallize	კრისტალიზაცია
+liquify-tool	Wrinkle	დანაოჭება
+liquify-kind	graphs	დიაგრამები
+liquify-kind	type	ტექსტი
+liquify-kind	symbols	სიმბოლოები
+liquify-kind	images	გამოსახულებები
+liquify-kind	meshes	ბადეები
+liquify-kind	envelopes	გარსები
+liquify-kind	repeats	გამეორებები
+liquify-kind	placed documents	განთავსებული დოკუმენტები
+liquify-kind	blends	გადასვლები
+liquify-list-two	{0}, {1}	{0} და {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} და {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} ზედმეტად დიდია სკრიპტისთვის
 @msg	vc.log: the log of this run is full	vc.log: ამ გაშვების ჟურნალი სავსეა
 @msg	this function's script run has ended	ამ ფუნქციის სკრიპტის გაშვება დასრულდა
@@ -8037,6 +8081,7 @@ imageTrace	Outline	კონტური
 	Export Data Sets…	მონაცემთა ნაკრებების ექსპორტი…
 	Load Variable Library…	ცვლადების ბიბლიოთეკის ჩატვირთვა…
 	Save Variable Library…	ცვლადების ბიბლიოთეკის შენახვა…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	„იმპორტი“ კითხულობს მონაცემთა წყაროს ფაილს გაფართოებით .csv, .tsv, .txt ან .xml
 @msg	a variable library holds text variables, and the document has none	ცვლადების ბიბლიოთეკა ტექსტურ ცვლადებს შეიცავს, დოკუმენტს კი არცერთი არ აქვს
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	ცვლადი `{name}` ვერ შეინახება ცვლადების ბიბლიოთეკაში: გადაარქვით სახელი ისე, რომ იწყებოდეს ასოთი ან `_`-ით, ჰარეების და `-`, `_` და `.`-ის გარდა სხვა სიმბოლოების გარეშე
 @msg	{k} has control characters	{k} შეიცავს მმართველ სიმბოლოებს
@@ -9874,4 +9919,21 @@ font-script	Japanese	იაპონური
 	Nest Shapes…	ფორმების განლაგება…
 	Nest Shapes	ფორმების განლაგება
 	Roll	რულონი
+	Packaging Tools	შეფუთვის ხელსაწყოები
+	Fold Lines	მოკეცვის ხაზები
+	Make Cut Line	ჭრის ხაზად გადაქცევა
+	Make Crease Line	ბიგის ხაზად გადაქცევა
+	Make Partial Cut Line	ნაწილობრივი ჭრის ხაზად გადაქცევა
+	Make Perforation Line	პერფორაციის ხაზად გადაქცევა
+	Make Fold Line	მოკეცვის ხაზად გადაქცევა
+	Role Swatches…	ხაზის ტიპების ფერის ნიმუშები…
+	Role Swatches	ხაზის ტიპების ფერის ნიმუშები
+	Role	ხაზის ტიპი
+	Cut Line	ჭრის ხაზი
+	Crease Line	ბიგის ხაზი
+	Partial Cut Line	ნაწილობრივი ჭრის ხაზი
+	Perforation Line	პერფორაციის ხაზი
+	No objects are selected.	ობიექტები არ არის მონიშნული.
+	Open a document to mark its fold lines.	გახსენით დოკუმენტი მისი მოკეცვის ხაზების მოსანიშნად.
+	Remove Fold Line Role	ხაზის ტიპის მოხსნა
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
