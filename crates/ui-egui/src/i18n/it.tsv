@@ -654,6 +654,18 @@ font-technology	Variable	Variabili
 	Copy Width Point	Copia punto di larghezza
 	Copyright	Copyright
 	Copyright Info URL:	URL informazioni copyright:
+	Save Metadata Template…	Salva modello di metadati…
+	Import Options	Opzioni di importazione
+	Clear existing fields and use the template's	Cancella i campi esistenti e usa quelli del modello
+	Keep existing fields, but replace those the template has	Mantieni i campi esistenti, ma sostituisci quelli presenti nel modello
+	Keep existing fields, but append those the template has	Mantieni i campi esistenti, ma aggiungi quelli presenti nel modello
+@msg	the template name can't be empty	il nome del modello non può essere vuoto
+@msg	the template name isn't usable as a file name	il nome del modello non è utilizzabile come nome di file
+@msg	no metadata templates folder here	qui non c'è una cartella dei modelli di metadati
+@msg	give `name` or `path`, not both	indica `name` o `path`, non entrambi
+@msg	give one of `path`, `name` and `data`	indica uno tra `path`, `name` e `data`
+@msg	mode must be replace, keep or append	la modalità deve essere replace, keep o append
+@msg	the file is not an XMP metadata template	il file non è un modello di metadati XMP
 	Copyright Notice:	Nota sul copyright:
 	Copyright Status:	Stato copyright:
 	Copyright Symbol	Simbolo di copyright
@@ -1203,6 +1215,7 @@ font-technology	Variable	Variabili
 	Highlight Size	Dimensione lucentezza
 	Blend Steps	Passaggi di fusione
 	Shading Color	Colore ombreggiatura
+	Black Overprint	Nero in sovrastampa
 	Draw Hidden Faces	Disegna facce nascoste
 	Eyedropper	Contagocce
 	Sample Color from Screen	Campiona colore dallo schermo
@@ -3070,6 +3083,12 @@ digits	Malayalam	Malayalam
 	Responsive	Adattivo
 	Restore	Ripristina
 	Restore every preference to its default (applied on OK)	Ripristina tutte le preferenze ai valori predefiniti (applicato con OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	L'unità dei nuovi documenti nelle dimensioni predefinite, tranne quelle in pixel, e dei file aperti che non registrano alcuna unità; sceglierla qui e fare clic su OK la imposta anche per il documento attivo.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Gli spessori della traccia, i trattini e gli spazi sono mostrati in questa unità, e i numeri digitati per essi sono letti in questa unità.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Dimensioni del testo, interlinea e spostamento della linea di base sono mostrati in questa unità, e i numeri digitati per essi sono letti in questa unità.
+	The unit for East Asian type measurements, which no field uses yet.	L'unità per le misure del testo dell'Asia orientale, che nessun campo usa ancora.
+	When on, a number typed without a unit into a field in picas is read in points.	Se attiva, un numero digitato senza unità in un campo in pica viene letto in punti.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Con ID XML, i nomi degli oggetti sono mostrati come ID XML in Livelli, Variabili e Opzioni livello.
 	Reset all preferences to their defaults?	Ripristinare tutte le preferenze ai valori predefiniti?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	I valori predefiniti vengono applicati quando fai clic su OK in Preferenze. Annulla lì mantiene le preferenze attuali.
 	Restore Recovered Documents	Ripristina documenti recuperati
@@ -3103,6 +3122,7 @@ digits	Malayalam	Malayalam
 	Roman Hanging Punctuation	Punteggiatura sporgente romana
 	Korean Line Break Anywhere	Interruzione di riga coreana ovunque
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Impostazioni di composizione dell’Asia orientale
 	Korean Composition Settings	Impostazioni di composizione coreana
 	Rotate	Ruota
@@ -3714,6 +3734,9 @@ digits	Malayalam	Malayalam
 	Show Import Options	Mostra opzioni di importazione
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Chiedi le opzioni di importazione di ogni file PDF, DXF o di testo prima di inserirlo; disattivato: usa le ultime opzioni scelte
 	Stylistic Alternates	Alternative stilistiche
+	Ligatures	Legature
+	Ornaments	Ornamenti
+	Figures	Cifre
 	Swash	Ornamentale
 	Swatch Conflict	Conflitto campioni
 	Swatch Conflicts	Conflitti campioni
@@ -4535,6 +4558,27 @@ axis	Both	Entrambi
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: una finestra di dialogo non può aprirsi dentro un callback di una funzione integrata, un getter, una conversione o un file eseguito da $.evalFile; chiamala dal codice dello script stesso
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: la prossima risposta in `answers` è per {_1}, non per {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: in `answers` non rimangono risposte per questa finestra di dialogo
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` contiene {n} risposta che lo script non ha usato|`answers` contiene {n} risposte che lo script non ha usato
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} ha lasciato {n} oggetto sotto il pennello senza modifiche ({_2}): rimodella solo i tracciati|{_1} ha lasciato {n} oggetti sotto il pennello senza modifiche ({_2}): rimodella solo i tracciati
+liquify-tool	Warp	Altera
+liquify-tool	Twirl	Vortice
+liquify-tool	Pucker	Contrai
+liquify-tool	Bloat	Gonfia
+liquify-tool	Scallop	Smerla
+liquify-tool	Crystallize	Cristallizza
+liquify-tool	Wrinkle	Grinza
+liquify-kind	graphs	grafici
+liquify-kind	type	testo
+liquify-kind	symbols	simboli
+liquify-kind	images	immagini
+liquify-kind	meshes	trame
+liquify-kind	envelopes	involucri
+liquify-kind	repeats	ripetizioni
+liquify-kind	placed documents	documenti inseriti
+liquify-kind	blends	fusioni
+liquify-list-two	{0}, {1}	{0} e {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} e {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} è troppo grande per uno script
 @msg	vc.log: the log of this run is full	vc.log: il registro di questa esecuzione è pieno
 @msg	this function's script run has ended	l'esecuzione dello script di questa funzione è terminata
