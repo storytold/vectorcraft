@@ -1045,6 +1045,10 @@ font-technology	Variable	Variabili
 	Cap Height	Altezza maiuscole
 	x-Height	Altezza x
 	ICF Box	Riquadro ICF
+	Show Sample	Mostra campione
+	Hide Sample	Nascondi campione
+	Max Ascent/Descent	Altezza/profondità max
+	Max Ascender	Ascendente max
 	Em Dash	Lineetta
 	Em Space	Spazio em
 	Embed	Incorpora
@@ -1368,6 +1372,8 @@ file-filter	Templates	Modelli
 	Font Family & Style	Famiglia e stile font
 	Font Family, Style & Size	Famiglia, stile e dimensione font
 	Font List	Elenco font
+	Show Similar Fonts	Mostra font simili
+	Clear Similar Fonts	Cancella font simili
 	Font Preview Size	Dimensione anteprima font
 	Font Size	Dimensione font
 	Variable Font	Font variabile
@@ -4650,6 +4656,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	Divide Objects Below: select exactly one path	Dividi oggetti sottostanti: seleziona esattamente un tracciato
 @msg	Downloaded {what}	Scaricato {what}
 @msg	Expand Appearance: the selection has a basic appearance	Espandi aspetto: la selezione ha un aspetto di base
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	alcuni effetti raster non sono stati trasformati in immagini: richiederebbero più di 1.024 immagini o 256 megapixel in totale
 @msg	Expand: no brush strokes selected	Espandi: nessuna traccia di pennello selezionata
 @msg	Expand: no gradient fills	Espandi: nessun riempimento con sfumatura
 @msg	Expand: nothing to expand	Espandi: niente da espandere
@@ -5974,7 +5981,7 @@ lighting	Light	Luce
 @msg	Unknown dimension style	Stile di quota sconosciuto
 @msg	Unknown unit	Unità sconosciuta
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Chiude le estremità circolari dei profili aperti. Le rotazioni parziali mantengono aperti i lati di taglio.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Chiude le estremità circolari dei profili aperti. Le rotazioni parziali chiudono anche i lati di taglio.
 	Distance	Distanza
 @msg	span must be "object" or "selection", got {v}	span deve essere "object" o "selection", non {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" posiziona un `gradient`, non un campione
@@ -6126,6 +6133,7 @@ lighting	Light	Luce
 	Single Word Justification:	Giustificazione parola singola:
 	Full Justify	Giustificazione completa
 	Minimum must not exceed Desired, nor Desired Maximum.	Il minimo non può superare il valore desiderato, né il desiderato il massimo.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: il minimo non può superare il valore desiderato, né il desiderato il massimo
 	Minimum	Minimo
 	Justification	Giustificazione
 	Add filters from the list above	Aggiungi filtri dall'elenco sopra
@@ -7144,7 +7152,7 @@ breakText	Glyphs	Glifi
 @msg	stroke cannot be set on a symbol instance	stroke non può essere impostato su un’istanza di simbolo
 @msg	fill on a symbol instance must be a solid color or none	il fill di un’istanza di simbolo deve essere un colore pieno o none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} non può essere impostato su un’immagine senza l’effetto Converti in forma o Contorna oggetto
-@msg	pass newName, registration, exportType, nineSlice and/or type	specifica newName, registration, exportType, nineSlice e/o type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	specifica newName, registration, exportType, nineSlice, type e/o alignToPixelGrid
 	Text Flow	Flusso del testo
 	By Rows	Per righe
 	By Columns	Per colonne
@@ -8742,7 +8750,9 @@ breakText	Glyphs	Glifi
 @msg	position must be normal, superscript or subscript	position deve essere normal, superscript o subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position deve essere topLeft, topRight, bottomLeft o bottomRight
 @msg	positions must be between 0 and 100000 pt	le posizioni devono essere comprese tra 0 e 100000 pt
+@msg	ppi can't be more than {max} for this image	ppi non può superare {max} per questa immagine
 @msg	ppi must be a positive number, not {ppi}	ppi deve essere un numero positivo, non {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim mantiene i pixel dell'immagine così come sono: ometti ppi
 @msg	ppi must be between 1 and 2400	ppi deve essere compreso tra 1 e 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` non è transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape deve essere clippingMask|transparency

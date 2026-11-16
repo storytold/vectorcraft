@@ -1004,6 +1004,16 @@ pub fn expand_outlined(doc: Option<&Document>, n: &Node, symbol_art: Option<&Nod
     as_art(doc, n, symbol_art)
 }
 
+/// Symbol instance `n` as plain art for Expand Appearance, with or without geometry effects: the
+/// art it places, reshaped by those effects when it has some, in the form [`expand_outlined`]
+/// gives. `None` for other kinds of objects and for an instance without `symbol_art`.
+pub fn instance_as_art(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
+    if !matches!(n.kind, NodeKind::SymbolInstance { .. }) {
+        return None;
+    }
+    as_art(doc, n, symbol_art)
+}
+
 /// [`reshape`] without its checks (no geometry effects: just the art).
 pub(crate) fn as_art(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
     as_art_with(doc, doc, n, symbol_art, &outline_text, &SymbolNodes::default())

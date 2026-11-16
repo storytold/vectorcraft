@@ -881,7 +881,7 @@ antiAlias	Sharp	शार्प
 	Close Path:	बंद पाथ:
 	Close Path…	बंद पाथ…
 	Close paths when ends are within:	जब समाप्त होता है तो बंद पाथ भीतर होते हैं:
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	खुली प्रोफ़ाइल के गोल सिरे बंद करें। आंशिक स्वीप की कटी हुई साइड खुली रहती हैं।
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	खुली प्रोफ़ाइल के गोल सिरे बंद करें। आंशिक स्वीप की कटी हुई साइड भी बंद होती हैं।
 	Closed	बंद
 	Closing bracket with no opening one	बंद करने वाला ब्रैकेट, जिसका कोई खोलने वाला ब्रैकेट नहीं है
 	Clumped	गुच्छेदार
@@ -2005,6 +2005,8 @@ antiAlias	Sharp	शार्प
 	Font Family, Style & Size	फ़ॉन्ट परिवार, स्टाइल और आकार
 	Font Family:	फ़ॉन्ट परिवार:
 	Font List	फ़ॉन्ट सूची
+	Show Similar Fonts	समान फ़ॉन्ट दिखाएँ
+	Clear Similar Fonts	समान फ़ॉन्ट साफ़ करें
 	Font Preview Size	फ़ॉन्ट प्रीव्यू साइज़
 	Font Size	फ़ॉन्ट साइज़
 	Font Size:	फ़ॉन्ट साइज़:
@@ -2375,6 +2377,10 @@ antiAlias	Sharp	शार्प
 	ICC Profile	ICC प्रोफ़ाइल
 	ICF Bottom/Left	ICF बॉटम/लेफ्ट
 	ICF Box	ICF बॉक्स
+	Show Sample	नमूना दिखाएँ
+	Hide Sample	नमूना छिपाएँ
+	Max Ascent/Descent	अधिकतम एसेंट/डिसेंट
+	Max Ascender	अधिकतम एसेंडर
 	ICF Top/Right	ICF ऊपर/दाएँ
 	Identify Objects By	ऑब्जेक्ट्स की पहचान करके
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	अगर ड्रॉइंग टैबलेट के पेन से ड्रॉ नहीं हो रहा, तो X11 (XWayland) ऑप्शन चुनें।
@@ -7064,6 +7070,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	every search thread stopped on an internal error (please report this bug)	प्रत्येक खोज धागा एक आंतरिक त्रुटि पर बंद कर दिया (कृपया इस बग की रिपोर्ट करें)
 @msg	exit isolation mode first	पहले अलगाव मोड से बाहर निकलें
 @msg	Expand Appearance: the selection has a basic appearance	उपस्थिति का विस्तार: सिलेक्शन में एक बुनियादी उपस्थिति है
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	कुछ रास्टर इफ़ेक्ट इमेज में नहीं बदले गए: उनके लिए 1,024 से अधिक इमेज या कुल 256 मेगापिक्सेल लगते
 @msg	Expand: no brush strokes selected	विस्तार: सिलेक्टेड कोई ब्रश स्ट्रोक नहीं
 @msg	Expand: no gradient fills	एक्सपैंड: कोई ग्रेडिएंट फ़िल नहीं
 @msg	Expand: nothing to expand	विस्तार: विस्तार करने के लिए कुछ नहीं
@@ -7911,7 +7918,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	parameters must be an object	parameters एक ऑब्जेक्ट होना चाहिए
 @msg	params must be an object	params एक ऑब्जेक्ट होना चाहिए
 @msg	part of the program isn't valid PostScript text	कार्यक्रम का हिस्सा मान्य नहीं है PostScript टेक्स्ट
-@msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice और/या type दें
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	newName, registration, exportType, nineSlice, type और/या alignToPixelGrid दें
 @msg	passwords can have up to {MAX_PASSWORD} bytes	पासवर्ड {MAX_PASSWORD} बाइट्स तक हो सकता है
 @msg	paste unavailable	पेस्ट करें अनुपलब्ध
 @msg	Pasting	चिपकाना
@@ -7964,7 +7971,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	position must be normal, superscript or subscript	position normal, superscript या subscript होना चाहिए
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position को topLeft, topRight, bottomLeft या bottomRight होना चाहिए
 @msg	positions must be between 0 and 100000 pt	positions 0 और 100000 pt के बीच होनी चाहिए
+@msg	ppi can't be more than {max} for this image	इस छवि के लिए ppi {max} से अधिक नहीं हो सकता
 @msg	ppi must be a positive number, not {ppi}	ppi एक धनात्मक संख्या होनी चाहिए, {ppi} नहीं
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim छवि के पिक्सेल जैसे हैं वैसे ही रखता है: ppi न दें
 @msg	ppi must be between 1 and 2400	ppi 1 और 2400 के बीच होना चाहिए
 @msg	precision must be from 0.001 to 10 pt	precision 0.001 से 10 pt तक होनी चाहिए
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}`, transforms|bounds|fileDimensions|fit|fill में से नहीं है
