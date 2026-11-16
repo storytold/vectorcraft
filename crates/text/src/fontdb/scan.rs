@@ -160,6 +160,8 @@ fn reader_face_names_within(mut file: impl std::io::Read + std::io::Seek, max_fa
     use std::io::SeekFrom;
     /// The largest table read from a (possibly damaged) file.
     const MAX_NAME_TABLE: u32 = 1 << 20;
+    /// The `post` table's header: version, italic angle, underline and fixed-pitch fields.
+    const POST_HEADER: u32 = 32;
     let mut read = 0u64;
     let mut read_at = |offset: u64, len: usize| -> Option<Vec<u8>> {
         read = read.checked_add(u64::try_from(len).ok()?).filter(|r| *r <= max_read)?;
@@ -186,26 +188,34 @@ fn reader_face_names_within(mut file: impl std::io::Read + std::io::Seek, max_fa
             if !records.as_chunks::<16>().0.iter().any(|r| OUTLINE_TABLES.iter().any(|t| r.starts_with(*t))) {
                 return None;
             }
-            let mut table = |tag: &[u8; 4]| -> Option<Vec<u8>> {
+            // A table's first `most` bytes at most; a table read whole longer than `MAX_NAME_TABLE` gives nothing.
+            let mut table_within = |tag: &[u8; 4], most: u32| -> Option<Vec<u8>> {
                 let rec: &[u8] = records.as_chunks::<16>().0.iter().find(|r| r.starts_with(tag))?;
-                let (offset, len) = (be32(rec, 8)?, be32(rec, 12)?);
+                let (offset, len) = (be32(rec, 8)?, be32(rec, 12)?.min(most));
                 if len > MAX_NAME_TABLE {
                     return None;
                 }
                 read_at(offset.into(), len as usize)
             };
-            let name = table(b"name")?;
+            let name = table_within(b"name", u32::MAX)?;
             // A variable font's named instances are styles too.
-            let fvar = table(b"fvar");
+            let fvar = table_within(b"fvar", u32::MAX);
             // Its OS/2 table (the font's classification, for the menus' filters), when it has one.
-            let os2 = table(b"OS/2");
+            let os2 = table_within(b"OS/2", u32::MAX);
+            // Its units per em and italic angle, for Show Similar Fonts ([`super::FontLikeness`]):
+            // the `head` table and the `post` table's 32-byte header, as a version 3 table (one
+            // without glyph names).
+            let head = table_within(b"head", u32::MAX);
+            let post = table_within(b"post", POST_HEADER).filter(|p| p.len() == POST_HEADER as usize).map(|mut p| {
+                p[..4].copy_from_slice(&0x0003_0000_u32.to_be_bytes());
+                p
+            });
             // A font holding just these tables, to read them as the font itself would.
             let mut tables: Vec<(&[u8; 4], &[u8])> = vec![(b"name", &name)];
-            if let Some(fvar) = &fvar {
-                tables.push((b"fvar", fvar));
-            }
-            if let Some(os2) = &os2 {
-                tables.push((b"OS/2", os2));
+            for (tag, data) in [(b"fvar", &fvar), (b"OS/2", &os2), (b"head", &head), (b"post", &post)] {
+                if let Some(data) = data {
+                    tables.push((tag, data.as_slice()));
+                }
             }
             let font = sfnt_of(&tables)?;
             Some(face_styles(&skrifa::FontRef::new(&font).ok()?))

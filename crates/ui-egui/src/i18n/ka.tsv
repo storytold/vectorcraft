@@ -3670,6 +3670,10 @@ digits	Malayalam	მალაიალამური
 	Em Box	Em-ბლოკი
 	x-Height	x-სიმაღლე
 	ICF Box	ICF-ბლოკი
+	Show Sample	ნიმუშის ჩვენება
+	Hide Sample	ნიმუშის დამალვა
+	Max Ascent/Descent	მაქს. სიმაღლე/სიღრმე
+	Max Ascender	მაქს. ზედა გამონაშვერი
 	Copy Color Value (Hex)	ფერის მნიშვნელობის კოპირება (Hex)
 	Create New Swatch…	ახალი ფერის ნიმუშის შექმნა…
 	Name 40%	სახელი 40%
@@ -5351,6 +5355,8 @@ theme	Appearance	იერსახე
 	Find Font Files	შრიფტის ფაილების ძებნა
 	Add Font Files	შრიფტის ფაილების დამატება
 	Font List	შრიფტების სია
+	Show Similar Fonts	მსგავსი შრიფტების ჩვენება
+	Clear Similar Fonts	მსგავსი შრიფტების გასუფთავება
 	Fonts in Document	დოკუმენტის შრიფტები
 	Refresh Font List	შრიფტების სიის განახლება
 	Replace Font	შრიფტის ჩანაცვლება
@@ -6341,6 +6347,7 @@ font-technology	Variable	ცვლადი
 @msg	Divide Objects Below: select exactly one path	ქვედა ობიექტების დაყოფა: მონიშნეთ ზუსტად ერთი ტრაექტორია
 @msg	Downloaded {what}	ჩამოტვირთულია: {what}
 @msg	Expand Appearance: the selection has a basic appearance	იერსახის გაშლა: მონიშნულს საბაზისო იერსახე აქვს
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	ზოგიერთი რასტრული ეფექტი გამოსახულებად არ გადაიქცა: მათ დასჭირდებოდა 1024-ზე მეტი გამოსახულება ან ჯამში 256 მეგაპიქსელი
 @msg	Expand: no brush strokes selected	გაშლა: ფუნჯის შტრიხები მონიშნული არ არის
 @msg	Expand: no gradient fills	გაშლა: გრადიენტული შევსებები არ არის
 @msg	Expand: nothing to expand	გაშლა: გასაშლელი არაფერია
@@ -8061,7 +8068,7 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	Unknown dimension orientation	ზომის უცნობი ორიენტაცია
 @msg	Unknown dimension style	ზომის უცნობი სტილი
 @msg	Unknown unit	უცნობი ერთეული
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	ღია პროფილების წრიული ბოლოების დახურვა. ნაწილობრივი ბრუნვისას ჭრის მხარეები ღია რჩება.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	ღია პროფილების წრიული ბოლოების დახურვა. ნაწილობრივი ბრუნვისას ჭრის მხარეებიც იხურება.
 	Distance	მანძილი
 # Upstream sync 2026-10-16 (2): Smart Blur modes, Layers panel filter, Color panel options, templates, PostScript files.
 	Mode	რეჟიმი
@@ -9652,7 +9659,7 @@ breakText	Glyphs	გლიფები
 @msg	stroke cannot be set on a symbol instance	stroke ვერ დაყენდება სიმბოლოს ეგზემპლარზე
 @msg	fill on a symbol instance must be a solid color or none	სიმბოლოს ეგზემპლარის fill უნდა იყოს ერთფეროვანი ფერი ან none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} ვერ დაყენდება გამოსახულებაზე „ფიგურად გარდაქმნის“ ან „ობიექტის კონტურებად გარდაქმნის“ ეფექტის გარეშე
-@msg	pass newName, registration, exportType, nineSlice and/or type	მიუთითეთ newName, registration, exportType, nineSlice და/ან type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	მიუთითეთ newName, registration, exportType, nineSlice, type და/ან alignToPixelGrid
 	Text Flow	ტექსტის დინება
 	By Rows	სტრიქონების მიხედვით
 	By Columns	სვეტების მიხედვით

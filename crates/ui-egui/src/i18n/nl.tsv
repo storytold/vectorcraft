@@ -2213,6 +2213,10 @@ digits	Malayalam	Malayalam
 	Em Box	Em-vak
 	x-Height	x-hoogte
 	ICF Box	ICF-vak
+	Show Sample	Voorbeeld tonen
+	Hide Sample	Voorbeeld verbergen
+	Max Ascent/Descent	Max. hoogte/diepte
+	Max Ascender	Max. stijger
 	Copy Color Value (Hex)	Kleurwaarde kopiëren (Hex)
 	Create New Swatch…	Nieuw staal maken…
 	Name 40%	Naam 40%
@@ -3986,6 +3990,8 @@ theme	Appearance	Vormgeving
 	Find Font Files	Lettertypebestanden zoeken
 	Add Font Files	Lettertypebestanden toevoegen
 	Font List	Lettertypelijst
+	Show Similar Fonts	Vergelijkbare lettertypen tonen
+	Clear Similar Fonts	Vergelijkbare lettertypen wissen
 	Fonts in Document	Lettertypen in document
 	Refresh Font List	Lettertypelijst vernieuwen
 	Replace Font	Lettertype vervangen
@@ -5022,6 +5028,7 @@ imageTrace	Outline	Contour
 @msg	Divide Objects Below: select exactly one path	Objecten eronder verdelen: selecteer precies één pad
 @msg	Downloaded {what}	{what} gedownload
 @msg	Expand Appearance: the selection has a basic appearance	Vormgeving uitbreiden: de selectie heeft een basisvormgeving
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	sommige rastereffecten zijn niet omgezet in afbeeldingen: ze zouden meer dan 1.024 afbeeldingen of in totaal 256 megapixel nodig hebben
 @msg	Expand: no brush strokes selected	Uitbreiden: geen penseelstreken geselecteerd
 @msg	Expand: no gradient fills	Uitbreiden: geen verloopvullingen
 @msg	Expand: nothing to expand	Uitbreiden: niets om uit te breiden
@@ -7011,7 +7018,9 @@ imageTrace	Outline	Contour
 @msg	position must be normal, superscript or subscript	position moet normal, superscript of subscript zijn
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position moet topLeft, topRight, bottomLeft of bottomRight zijn
 @msg	positions must be between 0 and 100000 pt	positions moeten tussen 0 en 100000 pt liggen
+@msg	ppi can't be more than {max} for this image	ppi kan voor deze afbeelding niet hoger zijn dan {max}
 @msg	ppi must be a positive number, not {ppi}	ppi moet een positief getal zijn, niet {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim laat de pixels van de afbeelding zoals ze zijn: laat ppi weg
 @msg	ppi must be between 1 and 2400	ppi moet tussen 1 en 2400 liggen
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` is niet transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape moet clippingMask|transparency zijn
@@ -8163,7 +8172,7 @@ mark-style	Japanese	Japans
 @msg	Unknown dimension orientation	Onbekende maatlijnrichting
 @msg	Unknown dimension style	Onbekende maatlijnstijl
 @msg	Unknown unit	Onbekende eenheid
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Sluit de ronde uiteinden van open profielen. Gedeeltelijke omwentelingen houden hun afgesneden zijden open.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Sluit de ronde uiteinden van open profielen. Gedeeltelijke omwentelingen sluiten ook hun afgesneden zijden.
 	Darkness	Donkerte
 	Isolate Selected Object	Geselecteerd object isoleren
 	Keep selected	Geselecteerd houden
@@ -8610,6 +8619,7 @@ swatch	Bright Violet	Felviolet
 	Single Word Justification:	Uitvullen van één woord:
 	Full Justify	Volledig uitvullen
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum mag niet groter zijn dan Gewenst, en Gewenst niet groter dan Maximum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Minimum mag niet groter zijn dan Gewenst, en Gewenst niet groter dan Maximum
 	Justification	Uitvullen
 	Add filters from the list above	Voeg filters toe uit de lijst hierboven
 	Add to Stack	Toevoegen aan stapel
@@ -9391,7 +9401,7 @@ breakText	Glyphs	Glyphs
 @msg	stroke cannot be set on a symbol instance	stroke kan niet worden ingesteld op een symboolinstantie
 @msg	fill on a symbol instance must be a solid color or none	fill van een symboolinstantie moet een egale kleur of none zijn
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kan niet worden ingesteld op een afbeelding zonder het effect Converteren naar vorm of Object omtrekken
-@msg	pass newName, registration, exportType, nineSlice and/or type	geef newName, registration, exportType, nineSlice en/of type op
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	geef newName, registration, exportType, nineSlice, type en/of alignToPixelGrid op
 	Text Flow	Tekstdoorloop
 	By Rows	Per rij
 	By Columns	Per kolom
