@@ -661,15 +661,16 @@ and answers true when the fields show in percent.
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop
 portal's [PickColor](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Screenshot.html)
-on Linux, and the EyeDropper API in browsers that have it. `inspect_ui` reports `screenSampler: true` while it
-waits. The picked sRGB color is converted into the working RGB space and becomes the fill or the stroke of the
-active proxy in one undo step; `stroke: true` picks the stroke, and `picker: true` sends the color to the open
-Color Picker. A cancel leaves the colors as they were. On Linux, a session without a portal that has PickColor
+on Linux, a still copy of every monitor under a crosshair on Windows, and the EyeDropper API in browsers that have
+it. `inspect_ui` reports `screenSampler: true` while it waits. The picked sRGB color is converted into the working
+RGB space and becomes the fill or the stroke of the active proxy in one undo step; `stroke: true` picks the stroke,
+and `picker: true` sends the color to the open Color Picker. A cancel leaves the colors as they were. On Windows,
+Escape, a click of another mouse button or switching to another window cancels, and a screen that can't be copied shows "the screen
+color sampler failed" in the status bar and ends the wait. On Linux, a session without a portal that has PickColor
 shows "this system has no screen color sampler" in the status bar, a portal that does not return from the call
 within 25 seconds (VectorCraft's own limit) or leaves the bus before it answers shows "the screen color sampler
 did not answer", and a portal that ends the request in another way shows "the screen color sampler failed"; each
-ends the wait, so the sampler can be shown again. Windows, the BSDs and headless sessions have no screen color
-sampler.
+ends the wait, so the sampler can be shown again. The BSDs and headless sessions have no screen color sampler.
 
 | Tool | Arguments | Notes |
 |---|---|---|
