@@ -237,10 +237,12 @@ fn carried(app: &VectorcraftApp, ctx: &Context) -> Option<Carried> {
         return None;
     }
     if let Some(art) = egui::DragAndDrop::payload::<Artwork>(ctx) {
-        // The same source check as [`cleanup`]: a floating window's pane takes the release before
-        // cleanup runs, and an edited or closed source carries nothing.
+        // The same checks as [`cleanup`]: a floating window's pane takes the release before cleanup
+        // runs, and an edited or closed source, or a target that is no longer the current
+        // document, carries nothing.
         let source = app.session.documents().iter().any(|d| d.uid == art.origin.uid && d.same_content(&art.source));
-        return source.then(|| Carried { origin: art.origin.clone(), ids: art.ids.clone() });
+        let target = app.session.active().is_some_and(|d| d.uid == art.target);
+        return (source && target).then(|| Carried { origin: art.origin.clone(), ids: art.ids.clone() });
     }
     let origin = ctx.data(|d| d.get_temp::<Origin>(origin_id()))?;
     let st = app.session.active().filter(|d| d.uid == origin.uid)?;
