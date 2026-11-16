@@ -245,7 +245,15 @@ pub fn specs() -> Vec<CommandSpec> {
             crate::cmd::maskedit::outside_mask_editing,
             isolate
         ),
-        cmd!("object.exitIsolation", "Exit Isolation Mode", [], None, "{}", has_doc, exit_isolation),
+        cmd!(
+            "object.exitIsolation",
+            "Exit Isolation Mode",
+            [],
+            None,
+            "{} leave isolation mode; leaving an isolated Live Paint group adds the paths, compound paths and groups of them drawn in it (shown and unlocked with everything in them) to the group as livePaint.merge does, in one undo step, and leaves type, images and other objects in it as they are; object.isolate on a level outside the group does the same",
+            has_doc,
+            exit_isolation
+        ),
         cmd!(
             "object.setProps",
             "Object Properties",
