@@ -768,6 +768,17 @@ Constrain Angle's negative. `shape.arc` takes `rotation` in degrees clockwise on
 reference point `x`, `y`; the arc's bounding box turns with it. Without `rotation`, or at 0° or a whole turn, the arc is
 upright, and a `rotation` that is not a number is an error that adds nothing.
 
+A Spiral tool drag sends `shape.spiral` with the spiral's outer end at the pointer: `radius` is the pointer's distance
+from the center `cx`, `cy` and `rotation` its direction in degrees clockwise on the page from the x axis, left out when
+it is 0, so dragging around the center turns the spiral. A pointer less than 0.01 pt from the center keeps the last
+direction (none before the first). Shift and General › Constrain Angle do not change a dragged spiral's direction. The
+Spiral dialog's spiral, placed by a click, takes a `rotation` of the Constrain Angle's negative when the angle is other
+than 0° or a whole turn, so its outer end starts along the turned x axis, and its bounding box turns with it.
+`shape.spiral` takes `rotation` in degrees clockwise about `cx`, `cy`; without it, or at 0 or a whole turn, the outer
+end is at `cx + radius`, `cy` as before, and a `rotation` that is not a number is an error that adds nothing. The
+bounding box turns only when `rotation` is the Constrain Angle's negative, as for `shape.polygon` and `shape.star`, so a
+drag that points along the turned x axis makes the same spiral, with the same turned box, as the dialog.
+
 While a spiral is being dragged out with the Spiral tool, a `drag` event with `mods.alt` or `mods.cmd` keeps the
 spiral's inner end at the distance from the center it had on the first modified `drag` event, and the outer end follows
 the pointer. With `mods.alt` alone, dragging outward adds whole winds of four segments and dragging inward removes

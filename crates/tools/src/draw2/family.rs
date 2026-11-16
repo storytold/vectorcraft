@@ -5,7 +5,8 @@
 //! start point and the dragged corner snap to Smart Guides ([`DrawSnap`]), hovering too.
 //! While dragging, ↑/↓ change the arc's slope, the spiral's segments, the grid rows or the
 //! concentric dividers; ←/→ change grid columns / radial dividers. C switches the arc between open
-//! and closed, and F switches its base between the X and Y axes. While a spiral is dragged out, Alt
+//! and closed, and F switches its base between the X and Y axes. A spiral's outer end follows the
+//! pointer, so dragging around the center turns the spiral. While a spiral is dragged out, Alt
 //! and Ctrl/Cmd keep its inner end at the distance from the center on the first modified drag as
 //! the outer end follows the pointer: Alt adds or removes whole winds of four segments, and
 //! Ctrl/Cmd changes the decay.
@@ -48,6 +49,9 @@ pub struct FamilyTool {
     spiral_end: Option<f64>,
     /// The segment count when Alt alone starts adjusting winds.
     spiral_alt_base: Option<u32>,
+    /// The direction (degrees clockwise on the page from the x axis) of the drag's last pointer at
+    /// least 0.01 pt from the center, 0 before there is one: the spiral's outer end turns to it.
+    spiral_bearing: f64,
     /// Rows / concentric dividers.
     pub rows: u32,
     /// Columns / radial dividers.
@@ -108,6 +112,7 @@ impl FamilyTool {
             clockwise: true,
             spiral_end: None,
             spiral_alt_base: None,
+            spiral_bearing: 0.0,
             rows: 5,
             columns: 5,
             skew: [0.0; 2],
@@ -202,6 +207,13 @@ impl FamilyTool {
         }
     }
 
+    /// The direction (degrees clockwise on the page from the x axis) from a spiral's center `start`
+    /// to the pointer `p`, or the last one when `p` is less than 0.01 pt from the center.
+    fn spiral_bearing_to(&self, start: Point, p: Point) -> f64 {
+        let d = p - start;
+        if d.hypot() >= 0.01 { d.y.atan2(d.x).to_degrees() } else { self.spiral_bearing }
+    }
+
     /// The skew a letter changes while a grid is dragged out, as an index into `skew`, and the
     /// direction: F lowers and V raises the skew of the horizontal dividers (a rectangular grid's
     /// rows) or the radial dividers (a polar grid's), X lowers and C raises that of the vertical
@@ -244,12 +256,16 @@ impl FamilyTool {
     /// arc and the grids are drawn along the x and y axes turned by it, as the rectangle is.
     pub fn command_at(&self, start: Point, p: Point, m: Mods, base: f64) -> (String, Value) {
         match self.id {
+            // The spiral: its outer end at the pointer, turned about the center.
             "spiral" => {
                 let r = p.distance(start).max(0.01);
-                (
-                    "shape.spiral".into(),
-                    json!({"cx": start.x, "cy": start.y, "radius": r, "decay": self.decay, "segments": self.segments, "clockwise": self.clockwise}),
-                )
+                let mut params =
+                    json!({"cx": start.x, "cy": start.y, "radius": r, "decay": self.decay, "segments": self.segments, "clockwise": self.clockwise});
+                let rotation = self.spiral_bearing_to(start, p);
+                if rotation != 0.0 {
+                    params["rotation"] = json!(rotation);
+                }
+                ("shape.spiral".into(), params)
             }
             // The grids: the dragged box (along the Constrain Angle's axes) with the tool's options.
             "rectangularGrid" | "polarGrid" => {
@@ -308,6 +324,7 @@ impl Tool for FamilyTool {
                 self.began = false;
                 self.spiral_end = None;
                 self.spiral_alt_base = None;
+                self.spiral_bearing = 0.0;
                 self.before_drag = None;
                 vec![]
             }
@@ -329,6 +346,7 @@ impl Tool for FamilyTool {
                 }
                 if self.id == "spiral" {
                     self.hold_spiral_end(s, ev.pos, ev.mods);
+                    self.spiral_bearing = self.spiral_bearing_to(s, ev.pos);
                 }
                 let (c, v) = self.command_at(s, ev.pos, ev.mods, cx.constrain_angle);
                 out.push(Action::Preview(c, v));
@@ -980,6 +998,43 @@ mod tests {
         t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 100.0, 100.0));
         assert_eq!(t.spiral_end, None, "Up after Down clears the held end");
         assert_eq!(t.spiral_alt_base, None, "Up after Down clears the Alt base");
+    }
+
+    /// A spiral dragged out turns to the pointer (`rotation` clockwise from the x axis), none to
+    /// the right as before; a pointer back on the center keeps the last direction, ↑ keeps it,
+    /// Shift and Constrain Angle leave it to the pointer, and the next drag starts from none.
+    #[test]
+    fn spiral_drag_turns_the_spiral_to_the_pointer() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        cx.constrain_angle = 30.0;
+        let preview = |a: Vec<Action>| match &a[..] {
+            [.., Action::Preview(c, v)] if c == "shape.spiral" => v.clone(),
+            _ => panic!("{a:?}"),
+        };
+        let shift = Mods { shift: true, ..Mods::default() };
+        let mut t = FamilyTool::new("spiral");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        let v = preview(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0)));
+        assert!(v.get("rotation").is_none(), "to the right: {v}");
+        assert_eq!(v["radius"], json!(50.0));
+        for ((x, y), rotation) in [((100.0, 150.0), 90.0), ((50.0, 100.0), 180.0), ((100.0, 50.0), -90.0), ((130.0, 130.0), 45.0)] {
+            let v = preview(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, y).with_mods(shift)));
+            assert!((v["rotation"].as_f64().unwrap() - rotation).abs() < 1e-9, "to ({x}, {y}): {v}");
+        }
+        let v = preview(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.0, 100.0)));
+        assert!((v["rotation"].as_f64().unwrap() - 45.0).abs() < 1e-9, "on the center: {v}");
+        assert_eq!(v["radius"], json!(0.01));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.0, 140.0));
+        let v = preview(t.key(&cx, ToolKey::Up, Mods::default()));
+        assert!((v["rotation"].as_f64().unwrap() - 90.0).abs() < 1e-9, "after ↑: {v}");
+        assert_eq!(v["segments"], json!(11));
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 100.0, 140.0)), vec![Action::Commit]);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        assert_eq!(t.spiral_bearing, 0.0, "a new drag starts from none");
     }
 
     #[test]
