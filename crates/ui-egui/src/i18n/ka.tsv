@@ -6103,6 +6103,7 @@ font-technology	Variable	ცვლადი
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} შედეგიდან {shown}. გააგრძელეთ აკრეფა მათ შესამცირებლად.
 	Recent Commands	ბოლო ბრძანებები
 	No recent commands	ბოლო ბრძანებები არ არის
+	Type to search commands, tools, panels and effects	აკრიფეთ ბრძანებების, ხელსაწყოების, პანელებისა და ეფექტების მოსაძებნად
 	Dashed Line	ტირეებიანი ხაზი
 	Panel menu	პანელის მენიუ
 	Unembed…	ჩაშენების მოხსნა…
