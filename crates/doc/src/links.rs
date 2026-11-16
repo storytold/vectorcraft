@@ -145,9 +145,9 @@ impl ImageBlob {
     /// This blob after its pixels are decoded once, within [`crate::MAX_RASTER_ALLOC`], to check
     /// that they can be read; with `proxy`, it also gets the preview [`Self::with_proxy`] makes,
     /// made from that decode. `None` when the pixels can't be read, as with a file cut short that
-    /// has a header but not all its pixels. An image whose pixels would take more than the
-    /// allowance as RGBA is not decoded, and one whose decode needs more than the allowance stops
-    /// decoding; either is returned as it is.
+    /// has a header but not all its pixels, or one the decoder refuses as a decompression bomb.
+    /// An image whose pixels would take more than the allowance as RGBA is not decoded and is
+    /// returned as it is.
     pub fn checked_with_proxy(self, proxy: bool) -> Option<Self> {
         self.checked_with_pixels(proxy).map(|(blob, _)| blob)
     }
@@ -155,22 +155,12 @@ impl ImageBlob {
     /// [`Self::checked_with_proxy`], with the pixels it decoded: `None` beside the blob when it
     /// decoded none (an image past the allowance).
     pub fn checked_with_pixels(mut self, proxy: bool) -> Option<(Self, Option<image::DynamicImage>)> {
-        let max = crate::MAX_RASTER_ALLOC;
-        let reader = || image::ImageReader::new(Cursor::new(self.bytes.as_slice())).with_guessed_format().ok();
-        let (w, h) = reader()?.into_dimensions().ok()?;
-        if u64::from(w) * u64::from(h) > max / 4 {
-            return Some((self, None));
-        }
-        let mut r = reader()?;
-        let mut limits = image::Limits::default();
-        limits.max_alloc = Some(max);
-        r.limits(limits);
-        let img = match r.decode() {
-            Ok(img) => img,
-            Err(image::ImageError::Limits(_)) => return Some((self, None)),
+        let img = match crate::decode::decode_within(&self.bytes, crate::MAX_RASTER_ALLOC) {
+            Ok(Some((img, _))) => img,
+            Ok(None) => return Some((self, None)),
             Err(_) => return None,
         };
-        if proxy && self.proxy.is_none() && w.max(h) > PROXY_SIZE {
+        if proxy && self.proxy.is_none() && img.width().max(img.height()) > PROXY_SIZE {
             self.proxy = proxy_of(&img).map(Arc::new);
         }
         Some((self, Some(img)))
@@ -210,21 +200,16 @@ pub fn missing_placeholder() -> Option<Vec<u8>> {
 /// `bytes` decoded and shrunk to fit [`PROXY_SIZE`] as a PNG; `None` when small enough already or
 /// undecodable.
 fn proxy_png(bytes: &[u8]) -> Option<Vec<u8>> {
-    let (w, h) = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_dimensions().ok()?;
+    let format = craft_image_codecs::detect(bytes)?;
+    let (w, h, _) = crate::decode::decoded_layout(bytes, format)?;
     if w.max(h) <= PROXY_SIZE {
         return None;
     }
-    // The proxy decodes within the project's raster cap, counted as RGBA like every other
-    // decode path (#3597): the header alone decides whether the pixels could ever fit, and the
-    // decoder gets the same budget instead of image's own default.
-    if u64::from(w) * u64::from(h) > crate::MAX_RASTER_ALLOC / 4 {
-        return None;
-    }
-    let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(crate::MAX_RASTER_ALLOC);
-    reader.limits(limits);
-    proxy_of(&reader.decode().ok()?)
+    // The proxy decodes within the project's raster cap, counted as the file's samples and as
+    // RGBA like every other decode path (#3597, #1717): the header alone decides whether the
+    // pixels could ever fit, and the decoder gets the same budget.
+    let (img, _) = crate::decode::decode_within(bytes, crate::MAX_RASTER_ALLOC).ok()??;
+    proxy_of(&img)
 }
 
 /// Decoded image `img` shrunk to fit [`PROXY_SIZE`] as a PNG.
@@ -747,5 +732,38 @@ mod tests {
             assert_eq!(p.dimensions(), (PROXY_SIZE, 1));
             assert!(p.pixels().all(|q| q.0 == [200, 30, 30, 128]), "{:?}", p.get_pixel(0, 0));
         }
+    }
+
+    /// A PNG that says it is `w` × `h` 1-bit grey pixels (header and a stub IDAT, no rows).
+    fn png_header_1bit(w: u32, h: u32) -> Vec<u8> {
+        let mut out = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+        let push = |out: &mut Vec<u8>, chunk: &[u8]| {
+            out.extend((chunk.len() as u32 - 4).to_be_bytes());
+            out.extend(chunk);
+            out.extend(crc32(chunk).to_be_bytes());
+        };
+        let mut ihdr = b"IHDR".to_vec();
+        ihdr.extend(w.to_be_bytes());
+        ihdr.extend(h.to_be_bytes());
+        ihdr.extend([1, 0, 0, 0, 0]);
+        push(&mut out, &ihdr);
+        push(&mut out, b"IDAT\x78\x9c");
+        push(&mut out, b"IEND");
+        out
+    }
+
+    /// A header-only 23,170 × 23,170 1-bit gray PNG is within the 2 GiB RGBA allowance, so Place
+    /// decodes it and must refuse it (no pixel rows). 23,171 × 23,170 is past the allowance and is
+    /// kept unread, not refused. craft-image-codecs reports the cut-short file as LimitExceeded
+    /// (its decompression-bomb guard); that is still "pixels can't be read", not "past the allowance".
+    #[test]
+    fn a_gray_header_within_the_allowance_is_unreadable() {
+        let within = png_header_1bit(23_170, 23_170);
+        let over = png_header_1bit(23_171, 23_170);
+        assert!(crate::decode::decode_within(&within, crate::MAX_RASTER_ALLOC).is_err(), "header-only within the allowance");
+        assert!(matches!(crate::decode::decode_within(&over, crate::MAX_RASTER_ALLOC), Ok(None)), "past the allowance is not decoded");
+        assert!(ImageBlob::new("image/png", within).checked_with_pixels(false).is_none(), "Place refuses the file");
+        let (_, pixels) = ImageBlob::new("image/png", over).checked_with_pixels(false).expect("past the allowance is kept unread");
+        assert!(pixels.is_none());
     }
 }

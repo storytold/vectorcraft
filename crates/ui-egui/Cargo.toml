@@ -46,6 +46,7 @@ egui = { workspace = true, features = ["bytemuck", "default_fonts", "monochrome_
 bytemuck = { version = "1", features = ["extern_crate_alloc"] }
 egui_extras = { workspace = true }
 image = { workspace = true }
+craft-image-codecs = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
