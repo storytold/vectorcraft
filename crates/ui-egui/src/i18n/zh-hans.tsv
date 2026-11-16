@@ -599,6 +599,18 @@ antiAlias	Sharp	锐利
 	Copy Width Point	复制宽度点
 	Copyright	版权
 	Copyright Info URL:	版权信息 URL：
+	Save Metadata Template…	存储元数据模板…
+	Import Options	导入选项
+	Clear existing fields and use the template's	清除现有字段并使用模板中的字段
+	Keep existing fields, but replace those the template has	保留现有字段，但替换模板中包含的字段
+	Keep existing fields, but append those the template has	保留现有字段，但追加模板中包含的字段
+@msg	the template name can't be empty	模板名称不能为空
+@msg	the template name isn't usable as a file name	模板名称不能用作文件名
+@msg	no metadata templates folder here	此处没有元数据模板文件夹
+@msg	give `name` or `path`, not both	请提供 `name` 或 `path`，不能同时提供
+@msg	give one of `path`, `name` and `data`	请提供 `path`、`name` 和 `data` 中的一个
+@msg	mode must be replace, keep or append	模式必须为 replace、keep 或 append
+@msg	the file is not an XMP metadata template	该文件不是 XMP 元数据模板
 	Copyright Notice:	版权声明：
 	Copyright Status:	版权状态：
 	Copyright Symbol	著作权符号
@@ -1380,6 +1392,8 @@ file-filter	Templates	模板
 	Graph	图表
 	Graph Data	图表数据
 	Graph Type	图表类型
+	Graph Type…	图表类型…
+	Graph Data…	图表数据…
 	Graph Options	图表选项
 	Left Axis	左轴
 	Right Axis	右轴
@@ -1494,6 +1508,7 @@ file-filter	Templates	模板
 	Show smooth color wheel	显示平滑色轮
 	Show segmented color wheel	显示分段色轮
 	Show color bars	显示颜色条
+	Find the selected colors in the artwork	在图稿中查找所选颜色
 	Harmony Sets	色彩调和组
 	Height	高度
 	Height:	高度：
@@ -2618,6 +2633,8 @@ font-script	Japanese	汉字
 	Insert Aki Left	在前方插入空白
 	Insert Aki Right	在后方插入空白
 	Tsume	比例间距
+	Adjust Horizontal Diacritic Position	调整变音符号水平位置
+	Adjust Vertical Diacritic Position	调整变音符号垂直位置
 	Character Direction	字符方向
 	Digits	数字
 	Arabic	阿拉伯数字
@@ -3522,6 +3539,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Show Import Options	显示导入选项
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	置入前询问每个 PDF、DXF 或文本文件的导入选项；关闭时使用上次选择的选项
 	Stylistic Alternates	风格替代字
+	Ligatures	连字
+	Ornaments	装饰字
+	Figures	数字
 	Swash	花饰字
 	Swatch Conflict	色板冲突
 	Swatch Conflicts	色板冲突
@@ -4789,6 +4809,8 @@ imageTrace	Outline	轮廓
 @msg	give only one of onto, below and above	onto、below 和 above 只能给出一个
 @msg	column must be true or a number from 1	column 必须是 true 或从 1 开始的数字
 @msg	unknown panel `{raw}`	未知面板 `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` 没有可切换的显示大小
+@msg	the panels are not shown	面板未显示
 @msg	panels can't be shown in Presentation Mode	演示模式下无法显示面板
 @msg	x and y must both be numbers	x 和 y 都必须是数字
 @msg	Downloaded {what}	已下载 {what}
@@ -4973,6 +4995,27 @@ imageTrace	Outline	轮廓
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}：对话框不能在内置函数的回调、getter、转换或 $.evalFile 运行的文件中打开；请从脚本自身的代码中调用
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}：`answers` 中的下一个回答是给 {_1} 的，而不是给 {name} 的
 @msg	{name}: `answers` has no answer left for this dialog	{name}：`answers` 中已没有此对话框的回答
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` 中有 {n} 个脚本未使用的回答
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} 未更改画笔下的 {n} 个对象（{_2}）：它只重塑路径
+liquify-tool	Warp	变形
+liquify-tool	Twirl	旋转扭曲
+liquify-tool	Pucker	收缩
+liquify-tool	Bloat	膨胀
+liquify-tool	Scallop	扇贝
+liquify-tool	Crystallize	晶格化
+liquify-tool	Wrinkle	褶皱
+liquify-kind	graphs	图表
+liquify-kind	type	文字
+liquify-kind	symbols	符号
+liquify-kind	images	图像
+liquify-kind	meshes	网格
+liquify-kind	envelopes	封套
+liquify-kind	repeats	重复
+liquify-kind	placed documents	置入的文档
+liquify-kind	blends	混合
+liquify-list-two	{0}, {1}	{0}和{1}
+liquify-list-middle	{0}, {1}	{0}、{1}
+liquify-list-end	{0}, {1}	{0}和{1}
 @msg	vc.document{place} is too large for a script	vc.document{place}对脚本来说过大
 @msg	vc.log: the log of this run is full	vc.log：本次运行的日志已满
 @msg	this function's script run has ended	此函数的脚本运行已结束
@@ -5830,6 +5873,7 @@ effect	Vertical	垂直
 	Change Panel Layout	更改面板布局
 	Close Panel	关闭面板
 	Collapse Panel Group	折叠面板组
+	Cycle Display Sizes	切换显示大小
 	Move Panel	移动面板
 	Group with	组合到
 	Resize panels	调整面板大小
@@ -5853,6 +5897,8 @@ effect	Vertical	垂直
 	Step up or down	逐级增减
 	Drag values or labels. Double-click a value to type.	拖动数值或标签。双击数值即可输入。
 	Drag rings to rotate. Shift snaps to 15°.	拖动圆环旋转。按住 Shift 以 15° 为步长调整。
+	Track cube	旋转立方体
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	拖动面、边或圆环进行旋转。按住 Shift 绕一个屏幕轴旋转。
 	Drag the light, or its rings. Shift snaps to 15°.	拖动光源或圆环。按住 Shift 以 15° 为步长调整。
 lighting	Light	光源
 	Keep visible surfaces only when expanding	扩展时仅保留可见表面
@@ -6127,6 +6173,7 @@ lighting	Light	光源
 	Export Data Sets…	导出数据集…
 	Load Variable Library…	载入变量库…
 	Save Variable Library…	保存变量库…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	“导入”读取扩展名为 .csv、.tsv、.txt 或 .xml 的数据源文件
 @msg	a variable library holds text variables, and the document has none	变量库包含文本变量，而文档中没有文本变量
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	无法将变量 `{name}` 保存到变量库中：请重命名，使其以字母或 `_` 开头，且不含空格或 `-`、`_`、`.` 以外的符号
 @msg	{k} has control characters	{k} 包含控制字符
@@ -9430,4 +9477,21 @@ breakText	Glyphs	字形
 @msg	{path}: could not be read	{path}：无法读取
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} 像素对 JPEG 而言过大 (每边最多 65535 像素)：请降低分辨率
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} 像素对 Targa 而言过大 (每边最多 65535 像素)：请降低分辨率
+	Packaging Tools	包装工具
+	Fold Lines	折线
+	Make Cut Line	设为切割线
+	Make Crease Line	设为压痕线
+	Make Partial Cut Line	设为半切线
+	Make Perforation Line	设为打孔线
+	Make Fold Line	设为折线
+	Role Swatches…	线条类型色板…
+	Role Swatches	线条类型色板
+	Role	线条类型
+	Cut Line	切割线
+	Crease Line	压痕线
+	Partial Cut Line	半切线
+	Perforation Line	打孔线
+	No objects are selected.	未选择任何对象。
+	Open a document to mark its fold lines.	打开文档以标记其折线。
+	Remove Fold Line Role	移除线条类型
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率

@@ -234,8 +234,11 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
     let item = item_target(s, p, C)?.of_kind(s, false);
     let mut ids = if item == ItemTarget::Top { own_stroke_or_leaves(s, p)? } else { item.targets(s, p)? };
     let new_art = no_targets(&ids, p);
+    let given = !ids.is_empty();
     // The art of a graph design in a series keeps the design's stroke.
-    ids = super::appearance::drop_design_art(&s.doc()?.doc, ids);
+    ids = super::appearance::drop_design_art_rows(s, ids, item, false, C)?;
+    // With only design art, the weight for new art stays as it is too.
+    let only_design_art = given && ids.is_empty();
     if item == ItemTarget::Top {
         // Images and symbol instances take no stroke from the panel.
         let d = &s.doc()?.doc;
@@ -329,7 +332,9 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
     })?;
     // Commit the new-art template only after the complete request is validated
     // and the selected artwork edit has succeeded.
-    if let Some(w) = change.weight {
+    if let Some(w) = change.weight
+        && !only_design_art
+    {
         s.paint.stroke_width = w;
     }
     if new_art && let Some(st) = s.new_art_stroke_mut() {
@@ -372,7 +377,7 @@ fn stroke_step(s: &mut Session, p: &Value, up: bool) -> Result<Value> {
         }
         return Ok(json!({"objects": 0}));
     }
-    let ids = super::appearance::drop_design_art(&s.doc()?.doc, ids);
+    let ids = super::appearance::drop_design_art_rows(s, ids, item, false, c)?;
     let label = if up { "Stroke Weight Up" } else { "Stroke Weight Down" };
     edit_items(s, &ids, item, None, c, label, false, |n, index| {
         if index.is_none()
@@ -517,7 +522,7 @@ fn stroke_advanced(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = item.targets(s, p)?;
     let new_art = no_targets(&ids, p);
     // The art of a graph design in a series keeps the design's stroke.
-    let ids = super::appearance::drop_design_art(&s.doc()?.doc, ids);
+    let ids = super::appearance::drop_design_art_rows(s, ids, item, false, C)?;
     let arrows_and_profile = |st: &mut StrokeLayer| {
         if let Some(sc) = scale {
             st.arrow_scale = sc;
