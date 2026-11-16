@@ -428,7 +428,7 @@ pub(super) fn dashes_from(line: &[Pos2], s: Stroke, from: f64, out: &mut Vec<Sha
             let cut = w[0] + (w[1] - w[0]) * (left / len);
             let mut dash = line[..=i].to_vec();
             dash.push(cut);
-            out.push(Shape::line(dash, s));
+            segments(&dash, s, out);
             let mut rest = vec![cut];
             rest.extend_from_slice(&line[i + 1..]);
             Shape::dashed_line_many_with_offset(&rest, s, &[DASH], &[GAP], GAP, out);
@@ -436,7 +436,13 @@ pub(super) fn dashes_from(line: &[Pos2], s: Stroke, from: f64, out: &mut Vec<Sha
         }
         left -= len;
     }
-    out.push(Shape::line(line.to_vec(), s));
+    segments(line, s, out);
+}
+
+/// Add to `out` each line of `line` that has a length as its own [`Shape::LineSegment`], as
+/// [`Shape::dashed_line`] draws a dash.
+fn segments(line: &[Pos2], s: Stroke, out: &mut Vec<Shape>) {
+    out.extend(line.windows(2).filter(|w| w[0] != w[1]).map(|w| Shape::line_segment([w[0], w[1]], s)));
 }
 
 impl SharedPaths {
