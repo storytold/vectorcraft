@@ -77,6 +77,9 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
             (crate::addons::pathtools::set_corners::KIND, crate::addons::pathtools::set_corners::fields(app))
         }
         crate::addons::pathtools::dashes::COMMAND => (crate::addons::pathtools::dashes::KIND, crate::addons::pathtools::dashes::fields()),
+        crate::addons::pathtools::tangent_circle::COMMAND => {
+            (crate::addons::pathtools::tangent_circle::KIND, crate::addons::pathtools::tangent_circle::fields(app))
+        }
         crate::addons::color::nearest::COMMAND => (crate::addons::color::nearest::KIND, crate::addons::color::nearest::fields()),
         crate::addons::color::legend::COMMAND => (crate::addons::color::legend::KIND, crate::addons::color::legend::fields()),
         crate::addons::typetools::COMMAND => (crate::addons::typetools::KIND, crate::addons::typetools::fields(app)),
@@ -190,6 +193,11 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         if let Err(e) = r {
             app.status(e);
         }
+        return;
+    }
+    // Check Fold Lines shows its summary and lists its issues in the Fold Lines panel.
+    if id == crate::addons::packaging::CHECK {
+        crate::addons::packaging::check(app, p);
         return;
     }
     // A Paste the user gives decodes a bitmap off the UI thread ([`crate::placing::adopt_for_paste`]).

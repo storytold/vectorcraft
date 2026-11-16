@@ -963,6 +963,13 @@ fn structured_junk() {
         ("addon.pathtools.trim", json!({"points": [[0, 0], [1e7, 1e7], [-1e7, 5], [0, 0]]})),
         ("addon.pathtools.trim", json!({"points": [[0, 0], [1, "y"], null]})),
         ("addon.pathtools.trim", json!({"at": [50, 50], "tolerance": 100})),
+        // Path Precision Tools: Tangent Circle.
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 3], "radius": 1e6, "circle": u64::MAX})),
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 3, 4], "radius": f64::MIN_POSITIVE, "circle": -1})),
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 2], "radius": "1 mm"})),
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 3], "radius": 0.01, "circle": 64})),
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 3, 4]})),
+        ("addon.pathtools.tangentCircle", json!({"ids": "x", "radius": f64::NAN, "circle": 1.5})),
         // Arrange Tools add-on.
         ("addon.arrange.grid", json!({"columns": u64::MAX, "gapX": 1e6, "gapY": -1e6, "centerOnArtboard": true})),
         ("addon.arrange.grid", json!({"layout": "row", "gapX": f64::MAX, "columns": -1})),
@@ -984,6 +991,10 @@ fn structured_junk() {
         ("addon.pathtools.divideDashes", json!({"dash": 1e-308, "gap": -1e308, "fit": "x"})),
         ("addon.pathtools.divideDashes", json!({"dash": 0.01, "gap": 1e6, "fit": true, "removeGaps": false})),
         ("addon.pathtools.divideDashes", json!({"dash": f64::MAX, "gap": [0], "removeGaps": null})),
+        ("addon.pathtools.commonTangents", json!({"tangents": "all", "centerline": true})),
+        ("addon.pathtools.commonTangents", json!({"tangents": "x", "centerline": "y", "ids": [u64::MAX, -1]})),
+        ("addon.pathtools.commonTangents", json!({"tangents": null, "ids": [1, 2, 3, 4], "centerline": null})),
+        ("addon.pathtools.commonTangents", json!({"tangents": ["external"], "ids": "all"})),
         ("addon.pathtools.expandDashes", json!({})),
         ("addon.pathtools.expandDashes", json!({"ids": [0, 1, 2, 3, u64::MAX]})),
         ("addon.pathtools.expandDashes", json!({"ids": "x", "junk": f64::MAX})),
@@ -1000,6 +1011,9 @@ fn structured_junk() {
         ("addon.packaging.roles", json!({"ids": [-1, 1e300]})),
         ("addon.packaging.setRoleSwatch", json!({"role": "perforation", "swatch": "[Registration]"})),
         ("addon.packaging.setRoleSwatch", json!({"role": "cut", "swatch": 5})),
+        ("addon.packaging.check", json!({"ids": [u64::MAX, -1], "select": "yes", "tolerance": 1e308})),
+        ("addon.packaging.check", json!({"tolerance": "-5 mm", "select": true})),
+        ("addon.packaging.check", json!({"ids": [], "tolerance": null})),
         // Smart Pen add-on.
         ("addon.pen.append", json!({"id": 2, "x": 1e308, "y": 0, "in": [1e308, -1e308]})),
         ("addon.pen.append", json!({"id": 2, "subpath": u64::MAX, "x": 0, "y": 0, "segment": "curved"})),
@@ -1479,7 +1493,41 @@ fn gradient_mesh_from_images_with_junk_params() {
     use vectorcraft_geom::Affine;
     let img = image::RgbaImage::from_fn(5, 3, |x, y| image::Rgba([x as u8 * 50, y as u8 * 90, 7, if x == 2 { 0 } else { 255 }]));
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let params = [
         json!({}),
         json!({"rows": 1, "cols": 1}),
