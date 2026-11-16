@@ -644,6 +644,11 @@ font-technology	Variable	Променливи
 	Copy Width Point	Копиране на точка на ширина
 	Copyright	Авторско право
 	Copyright Info URL:	URL адрес с информация за авторското право:
+	Save Metadata Template…	Запази шаблон за метаданни…
+	Import Options	Опции за импортиране
+	Clear existing fields and use the template's	Изчисти съществуващите полета и използвай тези от шаблона
+	Keep existing fields, but replace those the template has	Запази съществуващите полета, но замени съдържащите се в шаблона
+	Keep existing fields, but append those the template has	Запази съществуващите полета, но добави съдържащите се в шаблона
 	Copyright Notice:	Бележка за авторското право:
 	Copyright Status:	Статус на авторското право:
 	Copyright Symbol	Символ за авторско право
@@ -1167,6 +1172,7 @@ font-technology	Variable	Променливи
 	Highlight Size	Размер на отблясъка
 	Blend Steps	Стъпки на преливане
 	Shading Color	Цвят на засенчването
+	Black Overprint	Черно с напечатване
 	Draw Hidden Faces	Изчертаване на скритите страни
 	Eyedropper	Пипета
 	Eyedropper Applies:	Пипетата прилага:
@@ -1287,6 +1293,8 @@ font-technology	Variable	Променливи
 	Font Family & Style	Семейство и стил шрифтове
 	Font Family, Style & Size	Семейство, стил и размер на шрифта
 	Font List	Списък с шрифтове
+	Show Similar Fonts	Показване на подобни шрифтове
+	Clear Similar Fonts	Изчистване на подобните шрифтове
 	Font Preview Size	Размер за преглед на шрифта
 	Font Size	Размер на шрифта
 	Variable Font	Променлив шрифт
@@ -1383,6 +1391,8 @@ font-technology	Variable	Променливи
 	Graph	Диаграма
 	Graph Data	Данни за диаграма
 	Graph Type	Тип диаграма
+	Graph Type…	Тип диаграма…
+	Graph Data…	Данни за диаграма…
 	Graph Options	Опции на диаграмата
 	Left Axis	Лява ос
 	Right Axis	Дясна ос
@@ -1400,6 +1410,7 @@ font-technology	Variable	Променливи
 	Connect Data Points	Свързване на точките от данни
 	Edge-to-Edge Lines	Линии от край до край
 	Draw Filled Lines	Чертане на запълнени линии
+	Line Width	Ширина на линията
 	Tick Values	Стойности на отметките
 	Override Calculated Values	Замяна на изчислените стойности
 	Divisions	Деления
@@ -1509,6 +1520,12 @@ font-technology	Variable	Променливи
 	Show smooth color wheel	Показване на плавно цветово колело
 	Show segmented color wheel	Показване на сегментирано цветово колело
 	Show color bars	Показване на цветни ленти
+	Show brightness and hue on wheel	Показване на яркост и оттенък на колелото
+	Show saturation and hue on wheel	Показване на насищане и оттенък на колелото
+	Add Color Tool	Инструмент „Добавяне на цвят“
+	Remove Color Tool	Инструмент „Премахване на цвят“
+	Remove Color	Премахване на цвят
+	Find the selected colors in the artwork	Намиране на избраните цветове в илюстрацията
 	Harmony Sets	Набори от хармонии
 	Height	Височина
 	Height:	Височина:
@@ -1840,6 +1857,8 @@ font-technology	Variable	Променливи
 	Lasso Tool	Инструмент „Ласо“
 	Enclosing Lasso Tool	Инструмент „Обхващащо ласо“
 	Enclosing Lasso	Обхващащо ласо
+	Polygonal Lasso Tool	Инструмент „Многоъгълно ласо“
+	Polygonal Lasso	Многоъгълно ласо
 	Last Effect: {name}	Посл. ефект: {name}
 	Last Effect: {}	Посл. ефект: {}
 	Last Effect…	Посл. ефект…
@@ -2570,6 +2589,10 @@ font-technology	Variable	Променливи
 	Play Current Selection	Изпълнение на текущия избор
 	Save Actions…	Запазване на действия…
 	Load Actions…	Зареждане на действия…
+	Reset Actions	Нулиране на действия
+	Replace the current actions with the default set?	Да се заменят ли текущите действия с набора по подразбиране?
+	Append adds the default set after the current sets instead.	С „Добавяне“ наборът по подразбиране се добавя след текущите набори.
+	Append	Добавяне
 	Plug-in Info	Информация за приставката
 	Plug-ins	Приставки
 	Plug-in…	Приставка…
@@ -2663,6 +2686,8 @@ font-technology	Variable	Променливи
 	Insert Aki Left	Вмъкване на аки отляво
 	Insert Aki Right	Вмъкване на аки отдясно
 	Tsume	Цуме
+	Adjust Horizontal Diacritic Position	Коригиране на хоризонталната позиция на диакритиците
+	Adjust Vertical Diacritic Position	Коригиране на вертикалната позиция на диакритиците
 	Character Direction	Посока на знаците
 	Digits	Цифри
 	Arabic	Арабски
@@ -2961,6 +2986,12 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивен
 	Restore	Възстановяване
 	Restore every preference to its default (applied on OK)	Възстановяване на всички настройки по подразбиране (прилага се при ОПК)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Единицата за новите документи от вградените размери, освен тези в пиксели, и за отворените файлове без записана единица; ако я изберете тук и натиснете ОК, тя става и единица на активния документ.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Дебелините на щрихите, тиретата и междините се показват в тази единица и въведените за тях числа се четат в нея.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Размерите на текста, междуредието и отстъпът на базовата линия се показват в тази единица и въведените за тях числа се четат в нея.
+	The unit for East Asian type measurements, which no field uses yet.	Единицата за мерките на източноазиатски текст, която засега не се използва от нито едно поле.
+	When on, a number typed without a unit into a field in picas is read in points.	Когато е включено, число, въведено без единица в поле в пики, се чете в точки.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	При XML ID имената на обектите се показват като XML ID в Слоеве, Променливи и Опции за слоя.
 	Reset all preferences to their defaults?	Да се нулират ли всички настройки до стойностите по подразбиране?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Стойностите по подразбиране се прилагат, когато щракнете върху ОК в Настройки. Отказ там запазва текущите ви настройки.
 	Restore Recovered Documents	Възстановяване на възстановените документи
@@ -2994,6 +3025,7 @@ digits	Malayalam	Малаялам
 	Roman Hanging Punctuation	Латинска висяща пунктуация
 	Korean Line Break Anywhere	Пренасяне на корейски текст навсякъде
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Настройки за източноазиатска композиция
 	Korean Composition Settings	Настройки за корейска композиция
 	Rotate	Завъртане
@@ -3174,6 +3206,8 @@ digits	Malayalam	Малаялам
 	Search All	Търсене във всички
 	Search commands and tools	Търсене на команди и инструменти
 	Search commands and tools…	Търсене на команди и инструменти…
+	Recent Commands	Последни команди
+	No recent commands	Няма последни команди
 	Search Commands…	Търсене на команди…
 	Secondary	Вторичен
 	Section Symbol	Символ за раздел
@@ -3587,6 +3621,9 @@ digits	Malayalam	Малаялам
 	Show Import Options	Показване на опциите за импортиране
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Питане за опциите за импортиране на всеки PDF, DXF или текстов файл преди поставянето му; изключено: използват се последно избраните опции
 	Stylistic Alternates	Стилистични алтернативи
+	Ligatures	Лигатури
+	Ornaments	Орнаменти
+	Figures	Цифри
 	Set {n}	Набор {n}
 	Swash	Декоративен елемент
 	Swatch Conflict	Конфликт на образци
@@ -4150,6 +4187,7 @@ imageTrace	Outline	Контур
 	 to set spacing and orientation	 за задаване на разстояние и ориентация
 	:	:
 	Isolate Selected Group	Изолиране на избраната група
+	Isolate Selected Path	Изолиране на избрания път
 	Release Clipping Mask	Освобождаване на маска за изрязване
 	Make Compound Path	Създаване на съставен път
 	Release Compound Path	Освобождаване на съставен път
@@ -5026,6 +5064,10 @@ axis	Both	И двете
 	Em Box	Квадратна касетка (Em Box)
 	x-Height	Височина на x
 	ICF Box	Касетка ICF
+	Show Sample	Показване на образец
+	Hide Sample	Скриване на образец
+	Max Ascent/Descent	Макс. височина нагоре/надолу
+	Max Ascender	Макс. възходящ елемент
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` е референцията за стъпка {r}, която се разрешава само от `run` и `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` трябва да бъде масив от идентификатори на обекти, а не {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` трябва да бъде масив от цветове, а не {v}
@@ -5166,6 +5208,7 @@ effect	Soft	Меко
 	Change Panel Layout	Промяна на оформлението на панела
 	Close Panel	Затваряне на панела
 	Collapse Panel Group	Свиване на групата панели
+	Cycle Display Sizes	Превключване на размерите на показване
 	Move Panel	Преместване на панела
 	Group with	Групиране с
 	Resize panels	Преоразмеряване на панели
@@ -5207,6 +5250,8 @@ effect	Soft	Меко
 	Step up or down	Стъпка нагоре или надолу
 	Drag values or labels. Double-click a value to type.	Плъзнете стойности или етикети. Кликнете двукратно върху стойност за въвеждане.
 	Drag rings to rotate. Shift snaps to 15°.	Плъзнете пръстените за завъртане. Shift прилепва към 15°.
+	Track cube	Куб за завъртане
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Плъзнете стена, ръб или пръстена за завъртане. Shift завърта около една ос на екрана.
 	Drag the light, or its rings. Shift snaps to 15°.	Плъзнете светлината или нейните пръстени. Shift прилепва към 15°.
 	Keep visible surfaces only when expanding	Запазване само на видимите повърхности при разширяване
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Изрязване на закритата геометрия при разширяване на оформлението. Живият преглед запазва цялата повърхност. Прозрачните бои и повърхности, надвишаващи границите на видимост, запазват всички лица.
@@ -5888,7 +5933,7 @@ theme	Appearance	Външен вид
 @msg	Unknown dimension orientation	Непозната ориентация на размера
 @msg	Unknown dimension style	Непознат стил на размера
 @msg	Unknown unit	Непозната единица
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Затваря кръговите краища на отворени профили. При частично завъртане срязаните страни остават отворени.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Затваря кръговите краища на отворени профили. При частично завъртане срязаните страни също се затварят.
 
 # Strings added with Drop Shadow Darkness, Isolate Selected Object, Pencil Keep selected, Sample Color from Screen, Tritanopia proofing, Panels Except Tools and Control
 	Darkness	Затъмняване
@@ -6740,9 +6785,43 @@ breakText	Glyphs	Глифи
 	Remove Gaps	Премахване на разстоянията
 @msg	that makes too many pieces (at most 100000): make the dashes longer	така се получават твърде много части (най-много 100000): удължете тиретата
 @msg	select paths, or segments, to divide	изберете пътища или сегменти за разделяне
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Общи допирателни…
+	Common Tangents	Общи допирателни
+	Tangents	Допирателни
+	Centerline	Централна линия
+	External	Външни
+	Internal	Вътрешни
+@msg	select two closed paths	изберете два затворени пътя
+@msg	a selected path is open	избран път е отворен
+@msg	a selected path is not convex	избран път не е изпъкнал
+@msg	a selected path has no area	избран път няма площ
+@msg	a selected path has more than 10000 segments	избран път има повече от 10000 сегмента
+@msg	the two paths have the same outline	двата пътя имат еднакъв контур
+@msg	One path lies inside the other, so they have no common tangents	Единият път е вътре в другия, затова нямат общи допирателни
+@msg	The paths overlap, so they have no internal tangents	Пътищата се припокриват, затова нямат вътрешни допирателни
+@msg	One path lies inside the other, so they have no internal tangents	Единият път е вътре в другия, затова нямат вътрешни допирателни
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Разширяване на тиретата в пътища
 @msg	select paths with dashed strokes to expand	изберете пътища с прекъснат щрих за разширяване
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Допирателна окръжност…
+	Tangent Circle	Допирателна окръжност
+	Circle:	Окръжност:
+@msg	`ids` names an object twice	`ids` посочва обект два пъти
+@msg	select two or three paths or compound paths	изберете два или три пътя или съставни пътя
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` трябва да е от 0.01 до 1000000 pt
+@msg	two shapes need a `radius`	две форми изискват `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	три форми сами задават радиуса: пропуснете `radius`
+@msg	`circle` must be from 0 to 64	`circle` трябва да е от 0 до 64
+@msg	a shape has no outline	една от формите няма контур
+@msg	the shapes are too complex: at most 2000 segments in all	формите са твърде сложни: общо най-много 2000 сегмента
+@msg	these shapes take too long to search	търсенето за тези форми отнема твърде дълго
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	повече от 64 окръжности докосват тези форми: може да ги докосват по цяла крива
+@msg	no circle touches these shapes	никоя окръжност не докосва тези форми
+@msg	`circle` is past the last circle found ({found})	`circle` е след последната намерена окръжност ({found})
+@msg	object {value} is not a path or compound path	обект {value} не е път или съставен път
+@msg	these shapes are too small to measure	тези форми са твърде малки, за да бъдат измерени
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Инструменти за документи
 	Save a Timestamped Copy	Запазване на копие с дата и час
@@ -6764,6 +6843,11 @@ breakText	Glyphs	Глифи
 	Malayalam	Малаялам
 	Odia	Ория
 	Urdu	Урду
+	Sanskrit	Санскрит
+	Nepali	Непалски
+	Assamese	Асамски
+	Konkani	Конкани
+	Sindhi	Синдхи
 	VectorCraft {release} and later (version {n})	VectorCraft {release} и по-нови (версия {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Експортиране на всички отворени документи като PDF
@@ -6797,7 +6881,7 @@ breakText	Glyphs	Глифи
 @msg	stroke cannot be set on a symbol instance	stroke не може да се задава за екземпляр на символ
 @msg	fill on a symbol instance must be a solid color or none	fill на екземпляр на символ трябва да е плътен цвят или none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} не може да се задава за изображение без ефект „Конвертиране в фигура“ или „Преобразуване на обекта в контур“
-@msg	pass newName, registration, exportType, nineSlice and/or type	задайте newName, registration, exportType, nineSlice и/или type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	задайте newName, registration, exportType, nineSlice, type и/или alignToPixelGrid
 	Text Flow	Поток на текста
 	By Rows	По редове
 	By Columns	По колони
@@ -7011,4 +7095,41 @@ breakText	Glyphs	Глифи
 	Nest Shapes…	Подреждане на форми…
 	Nest Shapes	Подреждане на форми
 	Roll	Ролка
+	Packaging Tools	Инструменти за опаковки
+	Fold Lines	Линии на сгъване
+	Make Cut Line	Направи линия за рязане
+	Make Crease Line	Направи линия за биговане
+	Make Partial Cut Line	Направи линия за частично рязане
+	Make Perforation Line	Направи линия за перфорация
+	Make Fold Line	Направи линия на сгъване
+	Role Swatches…	Образци за видовете линии…
+	Role Swatches	Образци за видовете линии
+	Role	Вид линия
+	Cut Line	Линия за рязане
+	Crease Line	Линия за биговане
+	Partial Cut Line	Линия за частично рязане
+	Perforation Line	Линия за перфорация
+	No objects are selected.	Няма избрани обекти.
+	Open a document to mark its fold lines.	Отворете документ, за да отбележите линиите му на сгъване.
+	Remove Fold Line Role	Премахни вида на линията
+	Check	Провери
+	Check Fold Lines	Провери линиите на сгъване
+@msg	No cut lines are in the selection.	В селекцията няма линии за рязане.
+@msg	No cut lines are in the document.	В документа няма линии за рязане.
+@msg	The cut lines do not enclose an area.	Линиите за рязане не ограждат площ.
+@msg	A cut line ends without meeting another cut line.	Линия за рязане завършва, без да срещне друга линия за рязане.
+@msg	A gap between cut lines was closed.	Процеп между линии за рязане беше затворен.
+@msg	The fold lines are too complex to check.	Линиите на сгъване са твърде сложни за проверка.
+@msg	A cut line and a crease lie on top of each other.	Линия за рязане и линия за биговане лежат една върху друга.
+@msg	No cut lines are among the given objects.	Сред дадените обекти няма линии за рязане.
+@msg	Two fold lines lie on top of each other.	Две линии на сгъване лежат една върху друга.
+@msg	A crease ends inside a panel.	Линия за биговане завършва вътре в панел.
+@msg	A crease does not divide two panels.	Линия за биговане не разделя два панела.
+@msg	A crease lies outside the cut outline, wholly or in part.	Линия за биговане лежи изцяло или отчасти извън контура за рязане.
+@msg	The pieces of a hinge are not on one straight line.	Частите на една панта не лежат на една права линия.
+@msg	A gap between cut lines is too narrow to tell apart.	Процеп между линии за рязане е твърде тесен, за да се различи.
+@msg	A cut-out area holds other fold lines or another blank.	Изрязана област съдържа други линии на сгъване или друг разкрой.
+@msg	A panel is not joined to the rest by a crease.	Панел не е свързан с останалите с линия за биговане.
+@msg	A fold line is on a non-printing layer.	Линия на сгъване е на слой, който не се печата.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панели: {panels}, панти: {hinges}, грешки: {errors}, предупреждения: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

@@ -638,6 +638,18 @@ font-technology	Variable	Değişken
 	Copy Width Point	Genişlik Noktasını Kopyala
 	Copyright	Telif hakkı
 	Copyright Info URL:	Telif Hakkı Bilgisi URL'si:
+	Save Metadata Template…	Meta Veri Şablonunu Kaydet…
+	Import Options	İçe Aktarma Seçenekleri
+	Clear existing fields and use the template's	Mevcut alanları temizle ve şablonunkileri kullan
+	Keep existing fields, but replace those the template has	Mevcut alanları koru, ancak şablonda olanları değiştir
+	Keep existing fields, but append those the template has	Mevcut alanları koru, ancak şablonda olanları ekle
+@msg	the template name can't be empty	şablon adı boş olamaz
+@msg	the template name isn't usable as a file name	şablon adı dosya adı olarak kullanılamaz
+@msg	no metadata templates folder here	burada meta veri şablonları klasörü yok
+@msg	give `name` or `path`, not both	`name` veya `path` verin, ikisini birden değil
+@msg	give one of `path`, `name` and `data`	`path`, `name` ve `data` değerlerinden birini verin
+@msg	mode must be replace, keep or append	mod replace, keep veya append olmalıdır
+@msg	the file is not an XMP metadata template	dosya bir XMP meta veri şablonu değil
 	Copyright Notice:	Telif Hakkı Bildirimi:
 	Copyright Status:	Telif Hakkı Durumu:
 	Copyright Symbol	Telif Hakkı Sembolü
@@ -1172,6 +1184,7 @@ font-technology	Variable	Değişken
 	Highlight Size	Parlama Boyutu
 	Blend Steps	Karışım Adımları
 	Shading Color	Gölgeleme Rengi
+	Black Overprint	Siyah Üst Baskı
 	Draw Hidden Faces	Gizli Yüzleri Çiz
 	Eyedropper	Damlalık
 	Sample Color from Screen	Ekrandan Örnek Renk
@@ -1294,6 +1307,8 @@ font-technology	Variable	Değişken
 	Font Family & Style	Yazı Tipi Ailesi ve Stili
 	Font Family, Style & Size	Yazı Tipi Ailesi, Stili ve Boyutu
 	Font List	Yazı Tipi Listesi
+	Show Similar Fonts	Benzer Yazı Tiplerini Göster
+	Clear Similar Fonts	Benzer Yazı Tiplerini Temizle
 	Font Preview Size	Yazı Tipi Önizleme Boyutu
 	Font Size	Yazı Tipi Boyutu
 	Font:	Yazı tipi:
@@ -1362,6 +1377,8 @@ font-technology	Variable	Değişken
 	Graph	Grafik
 	Graph Data	Grafik Verileri
 	Graph Type	Grafik Türü
+	Graph Type…	Grafik Türü…
+	Graph Data…	Grafik Verileri…
 	Graph Options	Grafik Seçenekleri
 	Left Axis	Sol Eksen
 	Right Axis	Sağ Eksen
@@ -1379,6 +1396,7 @@ font-technology	Variable	Değişken
 	Connect Data Points	Veri Noktalarını Bağla
 	Edge-to-Edge Lines	Kenardan Kenara Çizgiler
 	Draw Filled Lines	Dolgulu Çizgiler Çiz
+	Line Width	Çizgi Genişliği
 	Tick Values	Onay İşareti Değerleri
 	Override Calculated Values	Hesaplanan Değerleri Geçersiz Kıl
 	Divisions	Bölümler
@@ -1477,6 +1495,12 @@ font-technology	Variable	Değişken
 	Show smooth color wheel	Kesintisiz renk tekerleğini göster
 	Show segmented color wheel	Bölümlü renk tekerleğini göster
 	Show color bars	Renk çubuklarını göster
+	Show brightness and hue on wheel	Tekerlekte parlaklık ve renk tonunu göster
+	Show saturation and hue on wheel	Tekerlekte doygunluk ve renk tonunu göster
+	Add Color Tool	Renk Ekle aracı
+	Remove Color Tool	Renk Kaldır aracı
+	Remove Color	Rengi kaldır
+	Find the selected colors in the artwork	Seçili renkleri resimde bul
 	Harmony Sets	Armoni Setleri
 	Height	Yükseklik
 	Height:	Yükseklik:
@@ -1722,6 +1746,8 @@ font-technology	Variable	Değişken
 	Lasso Tool	Kement Aracı
 	Enclosing Lasso Tool	Çevreleyen Kement Aracı
 	Enclosing Lasso	Çevreleyen Kement
+	Polygonal Lasso Tool	Çokgen Kement Aracı
+	Polygonal Lasso	Çokgen Kement
 	Last Effect: {name}	Son Etki: {name}
 	Last Effect: {}	Son Etki: {}
 	Last Effect…	Son Etki…
@@ -2424,6 +2450,10 @@ shape	Open	Açık
 	Play Current Selection	Geçerli Seçimi Oynat
 	Save Actions…	Eylemleri Kaydet…
 	Load Actions…	Eylemleri Yükle…
+	Reset Actions	Eylemleri Sıfırla
+	Replace the current actions with the default set?	Geçerli eylemler varsayılan setle değiştirilsin mi?
+	Append adds the default set after the current sets instead.	Ekle bunun yerine varsayılan seti geçerli setlerin sonuna ekler.
+	Append	Ekle
 	Plug-in Info	Eklenti Bilgisi
 	Plug-ins	Eklentiler
 	Plug-in…	Eklenti…
@@ -2517,6 +2547,8 @@ shape	Open	Açık
 	Insert Aki Left	Sola Aki Ekle
 	Insert Aki Right	Sağa Aki Ekle
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Yatay Aksan İşareti Konumunu Ayarla
+	Adjust Vertical Diacritic Position	Dikey Aksan İşareti Konumunu Ayarla
 	Digits	Rakamlar
 	Arabic	Arapça
 	Hindi	Hintçe
@@ -2811,6 +2843,12 @@ digits	Malayalam	Malayalam
 	Responsive	duyarlı
 	Restore	Geri yükle
 	Restore every preference to its default (applied on OK)	Her tercihi varsayılana geri yükleyin (Tamam'a uygulanır)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Piksel boyutları dışındaki yerleşik boyutlardaki yeni belgelerin ve birim kaydetmeyen açılan dosyaların birimi; burada seçip Tamam'a tıkladığınızda etkin belgenin birimi de bu olur.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Kontur kalınlıkları, kısa çizgiler ve boşluklar bu birimde gösterilir ve bunlar için yazılan sayılar bu birimde okunur.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Yazı boyutları, satır aralığı ve taban çizgisi kayması bu birimde gösterilir ve bunlar için yazılan sayılar bu birimde okunur.
+	The unit for East Asian type measurements, which no field uses yet.	Doğu Asya metni ölçüleri için henüz hiçbir alanın kullanmadığı birim.
+	When on, a number typed without a unit into a field in picas is read in points.	Açıkken, pika cinsinden bir alana birimsiz yazılan sayı punto olarak okunur.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML kimliği seçiliyken nesne adları Katmanlar, Değişkenler ve Katman Seçenekleri'nde XML kimliği olarak gösterilir.
 	Reset all preferences to their defaults?	Tüm tercihler varsayılanlarına sıfırlansın mı?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Varsayılanlar, Tercihler'de Tamam'a tıkladığınızda uygulanır. Oradaki İptal, mevcut tercihlerinizi korur.
 	Restore Recovered Documents	Kurtarılan Belgeleri Geri Yükle
@@ -2842,6 +2880,7 @@ digits	Malayalam	Malayalam
 	Roman Hanging Punctuation	Roma Asılı Noktalama İşaretleri
 	Korean Line Break Anywhere	Korece Satırı Her Yerde Kes
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Doğu Asya Dizgi Ayarları
 	Korean Composition Settings	Korece Dizgi Ayarları
 	Rotate	Döndür
@@ -3045,6 +3084,7 @@ digits	Malayalam	Malayalam
 	Letter Spacing:	Harf Boşluğu:
 	Lights	Işıklar
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum, İstenen'i; İstenen ise Maksimum'u aşmamalıdır.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Minimum, İstenen'i; İstenen ise Maksimum'u aşmamalıdır
 	Select by Color	Renge Göre Seç
 	Set History Limit…	Geçmiş Sınırını Ayarla…
 	Single Word Justification:	Tek Sözcük Yaslama:
@@ -3058,6 +3098,8 @@ digits	Malayalam	Malayalam
 @msg	`{key}` must be an array of these names: {_1}	`{key}` şu adlardan oluşan bir dizi olmalıdır: {_1}
 	Search commands and tools	Komutları ve araçları arayın
 	Search commands and tools…	Komutları ve araçları arayın…
+	Recent Commands	Son komutlar
+	No recent commands	Son komut yok
 	Search Commands…	Arama Komutları…
 	Secondary	İkincil
 	Section Symbol	Bölüm Sembolü
@@ -3457,6 +3499,9 @@ digits	Malayalam	Malayalam
 	Show Import Options	İçe Aktarma Seçeneklerini Göster
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Her PDF, DXF veya metin dosyasını yerleştirmeden önce içe aktarma seçeneklerini sor; kapalıyken son seçilen seçenekleri kullan
 	Stylistic Alternates	Stilistik Alternatifler
+	Ligatures	Bitişik Harfler
+	Ornaments	Süslemeler
+	Figures	Rakamlar
 	Swash	çalkalama
 	Swatch Conflict	Renk Örneği Çatışması
 	Swatch Conflicts	Renk Örneği Çatışmaları
@@ -4055,6 +4100,7 @@ imageTrace	Outline	Kontur
 	 to set spacing and orientation	 aralığı ve yönlendirmeyi ayarlamak için
 	:	:
 	Isolate Selected Group	Seçili Grubu İzole Et
+	Isolate Selected Path	Seçili Yolu İzole Et
 	Isolate Selected Object	Seçili Nesneyi Ayır
 	Release Clipping Mask	Kırpma Maskesini Serbest Bırakın
 	Make Compound Path	Bileşik Yol Yap
@@ -4219,6 +4265,31 @@ axis	Both	Her İkisi
 @msg	$.evalFile requires a file path	$.evalFile bir dosya yolu gerektirir
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: zaman aşımı sonlu bir milisaniye sayısı olmalıdır, 0 veya daha fazla
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: bir dosya yolu ve bir zaman aşımı alır
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} tanımlı değil
+@msg	cannot read property '{key}' of {base}	{base} değerinin '{key}' özelliği okunamıyor
+@msg	cannot set property '{key}' of {base}	{base} değerinin '{key}' özelliği ayarlanamıyor
+@msg	cannot read a property of {base}	{base} değerinin bir özelliği okunamıyor
+@msg	cannot set a property of {base}	{base} değerinin bir özelliği ayarlanamıyor
+@msg	cannot define property '{key}': {why}	'{key}' özelliği tanımlanamıyor: {why}
+@msg	cannot assign to property '{key}': {why}	'{key}' özelliğine atama yapılamıyor: {why}
+@msg	cannot delete property '{key}'	'{key}' özelliği silinemiyor
+@msg	cannot declare function {ident}	{ident} işlevi bildirilemiyor
+@msg	invalid assignment target	geçersiz atama hedefi
+@msg	the array's length is read-only	dizinin uzunluğu salt okunur
+@msg	the property cannot be redefined	özellik yeniden tanımlanamaz
+@msg	the object is not extensible	nesne genişletilemez
+@msg	the length cannot be redefined	uzunluk yeniden tanımlanamaz
+@msg	it is read-only	salt okunur
+@msg	an element cannot be deleted	bir öğe silinemez
+@msg	it has only a getter	yalnızca getter'ı var
+@msg	the value is a primitive	değer ilkel
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, satır {line}, sütun {column}: {e} (fırlatıldı)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: satır {line}, sütun {column}: {e} (fırlatıldı)
 @msg	{name}: {e} (thrown)	{name}: {e} (fırlatıldı)
@@ -4259,6 +4330,27 @@ axis	Both	Her İkisi
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: bir iletişim kutusu yerleşik bir işlevin geri çağrısında, bir getter içinde, bir dönüştürmede veya $.evalFile'ın çalıştırdığı bir dosyada açılamaz; bunu betiğin kendi kodundan çağırın
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: `answers` içindeki sonraki yanıt {name} için değil, {_1} için
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` içinde bu iletişim kutusu için yanıt kalmadı
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` içinde betiğin kullanmadığı {n} yanıt var
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1}, fırçanın altındaki {n} nesneyi değiştirmeden bıraktı ({_2}): yalnızca yolları yeniden şekillendirir
+liquify-tool	Warp	Çarpıtma
+liquify-tool	Twirl	Burgu
+liquify-tool	Pucker	Büzülme
+liquify-tool	Bloat	Şişkinlik
+liquify-tool	Scallop	Tarak
+liquify-tool	Crystallize	Kristalleştirme
+liquify-tool	Wrinkle	Kırışıklık
+liquify-kind	graphs	grafikler
+liquify-kind	type	yazı
+liquify-kind	symbols	semboller
+liquify-kind	images	görseller
+liquify-kind	meshes	ağlar
+liquify-kind	envelopes	zarflar
+liquify-kind	repeats	tekrarlar
+liquify-kind	placed documents	yerleştirilen belgeler
+liquify-kind	blends	karışımlar
+liquify-list-two	{0}, {1}	{0} ve {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} bir betik için çok büyük
 @msg	vc.log: the log of this run is full	vc.log: bu çalıştırmanın günlüğü dolu
 @msg	this function's script run has ended	bu işlevin betik çalıştırması sona erdi
@@ -4304,6 +4396,7 @@ axis	Both	Her İkisi
 @msg	Divide Objects Below: select exactly one path	Aşağıdaki Nesneleri Böl: tam olarak bir yol seçin
 @msg	Downloaded {what}	{what} indirildi
 @msg	Expand Appearance: the selection has a basic appearance	Görünümü Genişlet: seçimin temel bir görünümü vardır
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	bazı raster efektleri görüntüye dönüştürülmedi: toplamda 1.024'ten fazla görüntü veya 256 megapiksel gerektirirlerdi
 @msg	Expand: no brush strokes selected	Genişlet: seçili fırça darbesi yok
 @msg	Expand: no gradient fills	Genişlet: degrade dolgu yok
 @msg	Expand: nothing to expand	Genişlet: genişletilecek bir şey yok
@@ -4898,6 +4991,8 @@ axis	Both	Her İkisi
 @msg	unknown option `{path}.{k}`	bilinmeyen seçenek `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	bilinmeyen üst baskılar `{o}` (preserve, simulate veya discard)
 @msg	unknown panel `{raw}`	bilinmeyen panel `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` panelinde geçiş yapılacak görüntü boyutu yok
+@msg	the panels are not shown	paneller gösterilmiyor
 @msg	panels can't be shown in Presentation Mode	Sunum Modunda paneller gösterilemez
 @msg	unknown preference `{key}`	bilinmeyen tercih `{key}`
 @msg	Preferences imported.	Tercihler içe aktarıldı.
@@ -5121,6 +5216,10 @@ axis	Both	Her İkisi
 	Em Box	Em Kutusu
 	x-Height	x-Yüksekliği
 	ICF Box	ICF Kutusu
+	Show Sample	Örneği Göster
+	Hide Sample	Örneği Gizle
+	Max Ascent/Descent	Maks. Yükseklik/Derinlik
+	Max Ascender	Maks. Yükselen
 @msg	`colors` must be an array of colors, not {v}	`colors` {v} değil, bir renk dizisi olmalıdır
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id`, yalnızca `run` ve `command_batch` komutlarının çözümlediği {r} adım referansıdır
 @msg	`ids` must be an array of object ids, not {v}	`ids` bir nesne kimlikleri dizisi olmalıdır, {v} değil
@@ -5350,6 +5449,8 @@ effect	Soft	Yumuşak
 	Reset all Revolve settings to their defaults.	Tüm Revolve ayarlarını varsayılan değerlerine sıfırlayın.
 	Drag values or labels. Double-click a value to type.	Değerleri veya etiketleri sürükleyin. Yazmak için bir değeri çift tıklayın.
 	Drag rings to rotate. Shift snaps to 15°.	Döndürmek için halkaları sürükleyin. Kaydırma 15°'ye sabitlenir.
+	Track cube	Döndürme küpü
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Döndürmek için bir yüzü, kenarı veya halkayı sürükleyin. Shift tek bir ekran ekseni etrafında döndürür.
 	Drag the light, or its rings. Shift snaps to 15°.	Işığı veya halkalarını sürükleyin. Kaydırma 15°'ye sabitlenir.
 	Keep visible surfaces only when expanding	Görünür yüzeyleri yalnızca genişletirken koruyun
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Görünümü Genişlet'te kapsanan geometriyi kırpın. Canlı önizleme tüm yüzeyi korur. Şeffaf boyalar ve görünürlük sınırlarını aşan yüzeyler tüm yüzleri korur.
@@ -6052,7 +6153,7 @@ theme	Appearance	Görünüm
 @msg	Unknown dimension orientation	Bilinmeyen boyut yönü
 @msg	Unknown dimension style	Bilinmeyen boyut stili
 @msg	Unknown unit	Bilinmeyen birim
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Açık profillerin dairesel uçlarını kapatın. Kısmi süpürmeler kesik taraflarını açık tutar.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Açık profillerin dairesel uçlarını kapatın. Kısmi süpürmeler kesik taraflarını da kapatır.
 @msg	span must be "object" or "selection", got {v}	span "object" veya "selection" olmalıdır, {v} değil
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" bir renk örneği değil, bir `gradient` yerleştirir
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" bir degrade yerleştirir: `gradient` verin
@@ -6413,6 +6514,7 @@ theme	Appearance	Görünüm
 	Kashidas	Keşide
 	Load Variable Library…	Değişken Kitaplığı Yükle…
 	Save Variable Library…	Değişken Kitaplığını Kaydet…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	"İthalat" uzantısı .csv, .tsv, .txt veya .xml olan bir veri kaynağı dosyasını okur
 @msg	a variable library holds text variables, and the document has none	değişken kitaplığı metin değişkenleri içerir ve belgede hiç metin değişkeni yok
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	`{name}` değişkeni değişken kitaplığına kaydedilemiyor: adını bir harf veya `_` ile başlayacak, boşluk ya da `-`, `_` ve `.` dışında simge içermeyecek şekilde değiştirin
 @msg	{k} has control characters	{k} denetim karakterleri içeriyor
@@ -6509,6 +6611,7 @@ theme	Appearance	Görünüm
 @msg	a new document refuses this file because of these variables: {names}	yeni bir belge bu değişkenler nedeniyle bu dosyayı reddeder: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}` için `{header}` başlığı `{other}` değişkeni olarak okunur: birini yeniden adlandırın
 	Collapse Panel Group	Panel Grubunu Daralt
+	Cycle Display Sizes	Görüntü Boyutları Arasında Geçiş Yap
 @msg	panel is not in a dock group	panel bir yuva grubunda değil
 @msg	only a dock group above or below others collapses, not one beside another	yalnızca diğerlerinin üstünde veya altındaki bir yuva grubu daraltılabilir, yanındaki değil
 @msg	icon must be true or false	icon true veya false olmalı
@@ -8246,7 +8349,9 @@ axis	Y Axis	Y ekseni
 @msg	position must be normal, superscript or subscript	position normal, superscript veya subscript olmalıdır
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position topLeft, topRight, bottomLeft veya bottomRight olmalıdır
 @msg	positions must be between 0 and 100000 pt	konumlar 0 ile 100000 pt arasında olmalıdır
+@msg	ppi can't be more than {max} for this image	bu görüntü için ppi {max} değerinden büyük olamaz
 @msg	ppi must be a positive number, not {ppi}	ppi pozitif bir sayı olmalıdır, {ppi} değil
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim görüntünün piksellerini olduğu gibi korur: ppi belirtmeyin
 @msg	ppi must be between 1 and 2400	ppi 1 ile 2400 arasında olmalıdır
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}`, transforms|bounds|fileDimensions|fit|fill değerlerinden biri değil
 @msg	preserveShape must be clippingMask|transparency	preserveShape clippingMask|transparency olmalıdır
@@ -9260,9 +9365,43 @@ breakText	Glyphs	Glifler
 	Remove Gaps	Boşlukları Kaldır
 @msg	that makes too many pieces (at most 100000): make the dashes longer	bu çok fazla parça oluşturur (en fazla 100000): tireleri uzatın
 @msg	select paths, or segments, to divide	bölünecek yolları veya bölümleri seçin
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Ortak Teğetler…
+	Common Tangents	Ortak Teğetler
+	Tangents	Teğetler
+	Centerline	Merkez Çizgisi
+	External	Dış
+	Internal	İç
+@msg	select two closed paths	iki kapalı yol seçin
+@msg	a selected path is open	seçili bir yol açık
+@msg	a selected path is not convex	seçili bir yol dışbükey değil
+@msg	a selected path has no area	seçili bir yolun alanı yok
+@msg	a selected path has more than 10000 segments	seçili bir yolun 10000'den fazla bölümü var
+@msg	the two paths have the same outline	iki yolun ana hattı aynı
+@msg	One path lies inside the other, so they have no common tangents	Bir yol diğerinin içinde, bu yüzden ortak teğetleri yok
+@msg	The paths overlap, so they have no internal tangents	Yollar örtüşüyor, bu yüzden iç teğetleri yok
+@msg	One path lies inside the other, so they have no internal tangents	Bir yol diğerinin içinde, bu yüzden iç teğetleri yok
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Tireleri Yollara Genişlet
 @msg	select paths with dashed strokes to expand	genişletilecek kesikli konturlu yolları seçin
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Teğet Daire…
+	Tangent Circle	Teğet Daire
+	Circle:	Daire:
+@msg	`ids` names an object twice	`ids` bir nesneyi iki kez belirtiyor
+@msg	select two or three paths or compound paths	iki veya üç yol ya da bileşik yol seçin
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` 0.01 ile 1000000 pt arasında olmalıdır
+@msg	two shapes need a `radius`	iki şekil için `radius` gerekir
+@msg	three shapes set the radius themselves: leave `radius` out	üç şekil yarıçapı kendisi belirler: `radius` değerini vermeyin
+@msg	`circle` must be from 0 to 64	`circle` 0 ile 64 arasında olmalıdır
+@msg	a shape has no outline	bir şeklin anahattı yok
+@msg	the shapes are too complex: at most 2000 segments in all	şekiller çok karmaşık: toplamda en fazla 2000 bölüm
+@msg	these shapes take too long to search	bu şekiller için arama çok uzun sürüyor
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	bu şekillere 64'ten fazla daire değiyor: bütün bir eğri boyunca değiyor olabilirler
+@msg	no circle touches these shapes	bu şekillere hiçbir daire değmiyor
+@msg	`circle` is past the last circle found ({found})	`circle` bulunan son dairenin ötesinde ({found})
+@msg	object {value} is not a path or compound path	{value} nesnesi bir yol veya bileşik yol değil
+@msg	these shapes are too small to measure	bu şekiller ölçülemeyecek kadar küçük
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Belge Araçları
 	Save a Timestamped Copy	Zaman Damgalı Bir Kopya Kaydet
@@ -9284,6 +9423,11 @@ breakText	Glyphs	Glifler
 	Malayalam	Malayalam dili
 	Odia	Oriya dili
 	Urdu	Urduca
+	Sanskrit	Sanskrit
+	Nepali	Nepalce
+	Assamese	Assamca
+	Konkani	Konkani dili
+	Sindhi	Sindhi dili
 	VectorCraft {release} and later (version {n})	VectorCraft {release} ve sonrası (sürüm {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Tüm Açık Belgeleri PDF Olarak Dışa Aktar
@@ -9317,7 +9461,7 @@ breakText	Glyphs	Glifler
 @msg	stroke cannot be set on a symbol instance	stroke bir sembol örneğinde ayarlanamaz
 @msg	fill on a symbol instance must be a solid color or none	bir sembol örneğinin fill değeri düz renk veya none olmalıdır
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key}, Şekle Dönüştür veya Anahat Nesnesi efekti olmayan bir görüntüde ayarlanamaz
-@msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice ve/veya type verin
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	newName, registration, exportType, nineSlice, type ve/veya alignToPixelGrid verin
 	Text Flow	Metin Akışı
 	By Rows	Satırlara Göre
 	By Columns	Sütunlara Göre
@@ -9543,6 +9687,8 @@ breakText	Glyphs	Glifler
 @msg	No bridge of this width fits across the selected art	Bu genişlikte bir köprü seçili çizime sığmıyor
 @msg	Some islands could not be joined to the area around the art	Bazı adalar çizimin çevresindeki alana bağlanamadı
 @msg	`width` must be from {lo} to {hi} pt	`width` {lo} ile {hi} pt arasında olmalıdır
+@msg	`angle` must be from -180 to 180 degrees	`angle` -180 ile 180 derece arasında olmalıdır
+@msg	`roundness` must be from 1 to 100%	`roundness` %1 ile %100 arasında olmalıdır
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 ile {MAX_BRIDGES_PER_ISLAND} arasında bir tam sayı olmalıdır
 	Weed Box and Lines…	Ayıklama Kutusu ve Çizgileri…
 	Weed Box and Lines	Ayıklama Kutusu ve Çizgileri
@@ -9567,3 +9713,40 @@ breakText	Glyphs	Glifler
 	Nest Shapes…	Şekilleri yerleştir…
 	Nest Shapes	Şekilleri yerleştir
 	Roll	Rulo
+	Packaging Tools	Ambalaj Araçları
+	Fold Lines	Katlama Çizgileri
+	Make Cut Line	Kesim Çizgisi Yap
+	Make Crease Line	Pilyaj Çizgisi Yap
+	Make Partial Cut Line	Yarım Kesim Çizgisi Yap
+	Make Perforation Line	Perforaj Çizgisi Yap
+	Make Fold Line	Katlama Çizgisi Yap
+	Role Swatches…	Çizgi Türü Renk Örnekleri…
+	Role Swatches	Çizgi Türü Renk Örnekleri
+	Role	Çizgi türü
+	Cut Line	Kesim çizgisi
+	Crease Line	Pilyaj çizgisi
+	Partial Cut Line	Yarım kesim çizgisi
+	Perforation Line	Perforaj çizgisi
+	No objects are selected.	Hiçbir nesne seçili değil.
+	Open a document to mark its fold lines.	Katlama çizgilerini işaretlemek için bir belgeyi açın.
+	Remove Fold Line Role	Çizgi Türünü Kaldır
+	Check	Denetle
+	Check Fold Lines	Katlama Çizgilerini Denetle
+@msg	No cut lines are in the selection.	Seçimde kesim çizgisi yok.
+@msg	No cut lines are in the document.	Belgede kesim çizgisi yok.
+@msg	The cut lines do not enclose an area.	Kesim çizgileri bir alanı çevrelemiyor.
+@msg	A cut line ends without meeting another cut line.	Bir kesim çizgisi başka bir kesim çizgisiyle buluşmadan bitiyor.
+@msg	A gap between cut lines was closed.	Kesim çizgileri arasındaki bir boşluk kapatıldı.
+@msg	The fold lines are too complex to check.	Katlama çizgileri denetlenemeyecek kadar karmaşık.
+@msg	A cut line and a crease lie on top of each other.	Bir kesim çizgisi ile bir pilyaj çizgisi üst üste.
+@msg	No cut lines are among the given objects.	Belirtilen nesneler arasında kesim çizgisi yok.
+@msg	Two fold lines lie on top of each other.	İki katlama çizgisi üst üste.
+@msg	A crease ends inside a panel.	Bir pilyaj çizgisi bir panelin içinde bitiyor.
+@msg	A crease does not divide two panels.	Bir pilyaj çizgisi iki paneli ayırmıyor.
+@msg	A crease lies outside the cut outline, wholly or in part.	Bir pilyaj çizgisi tamamen veya kısmen kesim konturunun dışında.
+@msg	The pieces of a hinge are not on one straight line.	Bir menteşenin parçaları tek bir düz çizgi üzerinde değil.
+@msg	A gap between cut lines is too narrow to tell apart.	Kesim çizgileri arasındaki bir boşluk ayırt edilemeyecek kadar dar.
+@msg	A cut-out area holds other fold lines or another blank.	Kesilip çıkarılmış bir alan başka katlama çizgileri veya başka bir açınım içeriyor.
+@msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
+@msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}

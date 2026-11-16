@@ -713,6 +713,23 @@ fn part_picked(cx: &ToolContext, id: NodeId) -> bool {
     cx.selection.symbol_part.as_ref().is_some_and(|sp| sp.instance == id)
 }
 
+/// Whether multiple anchor points are selected (across one or more paths) with Direct Selection.
+fn has_multiple_selected_anchors(cx: &ToolContext) -> bool {
+    let direct_count: usize = cx.selection.anchors.values().map(|s| s.len()).sum();
+    if direct_count >= 2 {
+        return true;
+    }
+    if direct_count >= 1 {
+        let has_whole_path = cx.selection.objects.iter().any(|id| {
+            !cx.selection.anchors.contains_key(id) && cx.doc.node(*id).and_then(|n| n.path_data()).is_some_and(|p| p.anchors().next().is_some())
+        });
+        if has_whole_path {
+            return true;
+        }
+    }
+    false
+}
+
 /// The segment of path `id` nearest to `p`, where the hit test found its stroke.
 fn segment_at(cx: &ToolContext, id: NodeId, p: Point) -> Option<SegmentHit> {
     let pd = cx.doc.node(id)?.path_data()?;
@@ -769,6 +786,9 @@ impl Tool for DirectSelectionTool {
         if key == ToolKey::Escape && self.guide.busy() {
             return self.guide.cancel();
         }
+        if key == ToolKey::Escape && matches!(self.state, State::Idle) && cx.selection.key_anchor.is_some() {
+            return vec![Action::Exec("select.key".into(), json!({}))];
+        }
         if key != ToolKey::Escape || matches!(self.state, State::Idle) {
             return vec![];
         }
@@ -788,6 +808,7 @@ impl Tool for DirectSelectionTool {
             || self.claims_letter(key)
             || self.mesh_nudge(cx, key, Mods::default()).is_some()
             || self.frame_nudge(cx, key, Mods::default()).is_some()
+            || (key == ToolKey::Escape && (cx.selection.key_anchor.is_some() || !matches!(self.state, State::Idle)))
     }
     fn notify(&mut self, cx: &ToolContext, what: &str) {
         if what == FRAME_PICKED {
@@ -1596,7 +1617,15 @@ impl DirectSelectionTool {
             (true, ..) => vec![Action::Commit],
             (false, Some(id), _, _) => vec![Action::Exec("select.toggle".into(), json!({"id": id.0}))],
             (false, None, Some((id, si, ai)), _) => {
-                vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "set"}))]
+                if has_multiple_selected_anchors(cx) {
+                    if cx.selection.key_anchor == Some((id, (si, ai))) {
+                        vec![Action::Exec("select.key".into(), json!({}))]
+                    } else {
+                        vec![Action::Exec("select.key".into(), json!({"id": id.0, "anchor": [si, ai]}))]
+                    }
+                } else {
+                    vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "set"}))]
+                }
             }
             (false, None, None, Some((id, si, seg))) => {
                 vec![Action::Exec("select.segments".into(), json!({"id": id.0, "segments": [[si, seg]]}))]

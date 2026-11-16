@@ -133,8 +133,10 @@ pub(crate) fn chip(ui: &Ui, doc: &Document, keys: &Thumbs, r: egui::Rect, name: 
     }
 }
 
-fn current(app: &mut VectorcraftApp) -> Option<String> {
-    app.run("symbol.list", json!({})).ok().and_then(|v| v["current"].as_str().map(str::to_string))
+/// The active document's current symbol (`symbol.list`'s `current`), read without running a
+/// command; `None` without a document or symbols.
+fn current(app: &VectorcraftApp) -> Option<String> {
+    app.session.active().and_then(|st| vectorcraft_engine::cmd::current_symbol(&st.doc))
 }
 
 /// Does the selection hold (in it or in its groups) a symbol instance that `wanted` takes?
@@ -287,7 +289,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
     {
         app.status(e);
     }
-    if ui.available_width() >= 4.0 {
+    if ui.available_width() >= reserve + 4.0 {
         ui.add_space(4.0);
     }
 }
@@ -944,6 +946,26 @@ mod tests {
         assert_eq!(nine, json!([-0.123456789, 1.5, -1.255, -2.75]));
     }
 
+    /// Symbol Options › Align to Pixel Grid is off for a new symbol, OK sends it, and the dialog
+    /// reopens with the symbol's setting.
+    #[test]
+    fn symbol_options_sets_align_to_pixel_grid() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10.3, "y": 10.6, "width": 30, "height": 20})).unwrap();
+        app.run("ui.symbolOptions", json!({})).unwrap();
+        assert!(!app.ui.dialog.as_ref().unwrap().bool("alignToPixelGrid"));
+        app.ui.dialog.as_mut().unwrap().fields.insert("alignToPixelGrid".into(), json!(true));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let name = symbols(&mut app)[0].clone();
+        assert_eq!(app.run("symbol.list", json!({})).unwrap()["symbols"][0]["alignToPixelGrid"], true);
+        app.run("ui.symbolOptions", json!({"edit": true, "name": name})).unwrap();
+        assert!(app.ui.dialog.as_ref().unwrap().bool("alignToPixelGrid"));
+        app.ui.dialog.as_mut().unwrap().fields.insert("alignToPixelGrid".into(), json!(false));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.run("symbol.list", json!({})).unwrap()["symbols"][0]["alignToPixelGrid"], false);
+    }
+
     /// F8 is Symbol Options… (`ui.symbolOptions`) by default, on every platform. Shift+F8 and Cmd+F8
     /// are still the Transform and Info panels' keys, and Cmd+Shift+F8 is still Edit Pattern's. No
     /// other command, tool or panel has F8 by default.
@@ -1169,7 +1191,7 @@ mod tests {
         let tile = pos2(26.0, 26.0);
         frame(&ctx, &mut app, vec![]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true), button(tile, false)]);
-        assert_eq!((editing(&app), current(&mut app)), (None, Some("Leaf".into())), "a click makes it current");
+        assert_eq!((editing(&app), current(&app)), (None, Some("Leaf".into())), "a click makes it current");
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
         frame(&ctx, &mut app, vec![]);
@@ -1245,7 +1267,7 @@ mod tests {
             let row = rows[2].1;
             app.run("symbol.setCurrent", json!({"name": "ant"})).unwrap();
             frame(&ctx, &mut app, vec![egui::Event::PointerMoved(row), button(row, true), button(row, false)]);
-            assert_eq!((editing(&app), current(&mut app)), (None, Some("Cat".into())), "{view}");
+            assert_eq!((editing(&app), current(&app)), (None, Some("Cat".into())), "{view}");
             let ctx2 = egui::Context::default();
             crate::theme::install_fonts(&ctx2);
             frame(&ctx2, &mut app, vec![]);
@@ -1654,7 +1676,7 @@ mod tests {
         app.run("edit.clear", json!({"ids": [id_b]})).unwrap();
 
         // Currently "B" is the current symbol
-        assert_eq!(current(&mut app), Some("B".to_string()));
+        assert_eq!(current(&app), Some("B".to_string()));
 
         let mut h = egui_kittest::Harness::builder().with_size(vec2(260.0, 400.0)).with_accessibility_check(false).build_ui_state(
             |ui, app: &mut VectorcraftApp| {
@@ -1788,5 +1810,161 @@ mod tests {
         assert!(h.query_by_label("   Place Symbol Instance").is_some());
         h.get_by_label("   Select All Instances").click();
         h.run_steps(2);
+    }
+
+    /// The Control bar's symbol instance controls leave the room `reserve` asks for after them, the
+    /// gap after the controls included, when the row has no room for any of them.
+    #[test]
+    fn control_bar_symbol_controls_leave_the_reserve_when_none_fits() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let art = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+        let instance = app.run("symbol.new", json!({"name": "Mark", "ids": [art]})).unwrap()["id"].clone();
+        app.run("select.set", json!({ "ids": [instance] })).unwrap();
+        let ctx = egui::Context::default();
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(600.0, 100.0))), ..Default::default() };
+        let mut room = None;
+        let mut out = ctx.run_ui(raw, |ui| {
+            ui.horizontal(|ui| {
+                // Two points more than the reserve: too little for Edit Symbol or Replace.
+                let reserve = ui.available_width() - 2.0;
+                control_bar(&mut app, ui, reserve);
+                room = Some((ui.available_width(), reserve));
+            });
+        });
+        out.textures_delta.clear();
+        let (left, reserve) = room.expect("the row was drawn");
+        assert!(left >= reserve, "{left} pt left after the symbol controls, {reserve} pt reserved");
+    }
+
+    /// The current symbol as `symbol.list` answers it, read by running the command.
+    fn listed_current(app: &mut VectorcraftApp) -> Option<String> {
+        app.run("symbol.list", json!({})).ok().and_then(|v| v["current"].as_str().map(str::to_string))
+    }
+
+    fn store_current(app: &mut VectorcraftApp, v: Value) {
+        Arc::make_mut(&mut app.session.doc_mut().unwrap().doc).unknown.insert("currentSymbol".into(), v);
+    }
+
+    /// The panel's current symbol is the one `symbol.list` answers: with no document, with no
+    /// symbols, with several symbols, with an instance of another symbol selected, and with a
+    /// stored name no symbol has.
+    #[test]
+    fn current_is_the_current_symbol_list_answers() {
+        fn check(app: &mut VectorcraftApp, want: Option<&str>, case: &str) {
+            let read = current(app);
+            assert_eq!(read.as_deref(), want, "{case}");
+            assert_eq!(read, listed_current(app), "{case}: symbol.list");
+        }
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        check(&mut app, None, "no document");
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        check(&mut app, None, "a document without symbols");
+        for (name, x) in [("Leaf", 10), ("Dot", 80), ("Star", 150)] {
+            app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 30})).unwrap();
+            app.run("symbol.new", json!({"name": name})).unwrap();
+        }
+        check(&mut app, Some("Star"), "several symbols, the newest current");
+        app.run("symbol.setCurrent", json!({"name": "Leaf"})).unwrap();
+        check(&mut app, Some("Leaf"), "the first symbol made current");
+        let dot = instance_of(&app, "Dot").expect("a Dot instance");
+        app.run("select.set", json!({"ids": [dot.0]})).unwrap();
+        check(&mut app, Some("Leaf"), "an instance of Dot selected");
+        app.run("symbol.setCurrent", json!({"name": "Dot"})).unwrap();
+        check(&mut app, Some("Dot"), "a symbol that is not first");
+        store_current(&mut app, json!("Gone"));
+        check(&mut app, Some("Leaf"), "a stored name no symbol has");
+        store_current(&mut app, json!(7));
+        check(&mut app, Some("Leaf"), "a stored value that is not a name");
+    }
+
+    /// Idle frames of the panel and of its open menu run no command (`symbol.list` included), so
+    /// they leave `run_count`, which the native menus watch, as it was.
+    #[test]
+    fn idle_frames_of_the_panel_and_its_menu_run_no_command() {
+        let mut app = leaf_and_dot();
+        let ctx = egui::Context::default();
+        frame(&ctx, &mut app, vec![]);
+        let commands = app.run_count;
+        frame(&ctx, &mut app, vec![]);
+        frame(&ctx, &mut app, vec![]);
+        assert_eq!(app.run_count, commands, "the panel");
+        let menu_ctx = egui::Context::default();
+        menu_frame(&menu_ctx, &mut app, vec![]);
+        menu_frame(&menu_ctx, &mut app, vec![]);
+        assert_eq!(app.run_count, commands, "the panel menu");
+        assert_eq!(current(&app).as_deref(), Some("Dot"));
+    }
+
+    /// CPU time of this thread in nanoseconds where the system reports it (Linux), else `None`.
+    fn thread_cpu_ns() -> Option<u128> {
+        std::fs::read_to_string("/proc/thread-self/schedstat").ok()?.split_whitespace().next()?.parse().ok()
+    }
+
+    /// Time reading the current symbol of a document with 200 symbols and 50,000 objects (5,000 of
+    /// them instances): by running `symbol.list` and by [`current`]. Per run,
+    /// `symbol.list` reads 20 times and `current` 200,000 times (so the thread's CPU clock, which
+    /// advances in steps of a few milliseconds, sees it); the two sides alternate, and the median
+    /// time per read of 7 runs is printed.
+    /// Run with `cargo test --release -p vectorcraft-ui-egui --lib current_symbol_read_timing -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "manual timing probe; performance depends on machine load"]
+    fn current_symbol_read_timing() {
+        const SYMBOLS: usize = 200;
+        const OBJECTS: usize = 50_000;
+        const INSTANCES: usize = 5_000;
+        const LIST_READS: u32 = 20;
+        const READS: u32 = 200_000;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 2000, "height": 2000})).unwrap();
+        for i in 0..SYMBOLS {
+            app.run("shape.rectangle", json!({"x": i % 40 * 40, "y": i / 40 * 40, "width": 30, "height": 30})).unwrap();
+            app.run("symbol.new", json!({"name": format!("S{i}")})).unwrap();
+        }
+        let rect = app.run("shape.rectangle", json!({"x": 0, "y": 400, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        let rect = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(rect)).cloned().unwrap();
+        app.session
+            .edit("Fill", |d, _| {
+                let layer = d.layers[0].id;
+                for i in 0..OBJECTS - SYMBOLS - 1 {
+                    let id = d.alloc_id();
+                    let node = if i < INSTANCES - SYMBOLS {
+                        let at = vectorcraft_geom::Vec2::new((i % 100) as f64 * 20.0, 600.0 + (i / 100) as f64 * 20.0);
+                        Node::new(id, NodeKind::SymbolInstance { symbol: format!("S{}", i % SYMBOLS), xf: vectorcraft_geom::Affine::translate(at) })
+                    } else {
+                        let mut n = rect.clone();
+                        n.id = id;
+                        n
+                    };
+                    d.insert(Some(layer), usize::MAX, node)?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        app.run("symbol.setCurrent", json!({"name": "S7"})).unwrap();
+        let mut nodes = 0;
+        app.session.active().unwrap().doc.walk(|_| nodes += 1);
+        assert_eq!(listed_current(&mut app), current(&app));
+        let mut time = |reads: u32, f: &mut dyn FnMut(&mut VectorcraftApp) -> Option<String>| {
+            let (cpu, wall) = (thread_cpu_ns(), std::time::Instant::now());
+            for _ in 0..reads {
+                assert_eq!(f(&mut app).as_deref(), Some("S7"));
+            }
+            let ns = thread_cpu_ns().zip(cpu).map_or_else(|| wall.elapsed().as_nanos(), |(b, a)| b - a);
+            ns as f64 / f64::from(reads) / 1000.0
+        };
+        let (mut base, mut new) = (vec![], vec![]);
+        for _ in 0..7 {
+            base.push(time(LIST_READS, &mut listed_current));
+            new.push(time(READS, &mut |app| current(app)));
+        }
+        let median = |v: &mut Vec<f64>| {
+            v.sort_by(f64::total_cmp);
+            v[v.len() / 2]
+        };
+        let clock = if thread_cpu_ns().is_some() { "thread CPU time" } else { "wall-clock time" };
+        eprintln!("{SYMBOLS} symbols, {nodes} nodes; {clock} per read, median of 7 runs");
+        eprintln!("symbol.list ({LIST_READS} reads a run): {:>12.1} us  {base:.1?}", median(&mut base));
+        eprintln!("current ({READS} reads a run):  {:>12.4} us  {new:.4?}", median(&mut new));
     }
 }
