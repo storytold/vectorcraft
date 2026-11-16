@@ -71,23 +71,14 @@ fn inflate(data: &[u8], max: usize) -> Option<Vec<u8>> {
     read(Box::new(flate2::read::ZlibDecoder::new(data))).or_else(|| read(Box::new(flate2::read::DeflateDecoder::new(data))))
 }
 
-/// `data` decoded from LZW, up to one byte past `max`. `early`: the code length grows one code
+/// `data` decoded from LZW, up to `max`. `early`: the code length grows one code
 /// early (`EarlyChange`, 1 by default).
 fn lzw(data: &[u8], early: bool, max: usize) -> Option<Vec<u8>> {
-    use weezl::{BitOrder, LzwStatus, decode::Decoder};
-    let mut decoder = if early { Decoder::with_tiff_size_switch(BitOrder::Msb, 8) } else { Decoder::new(BitOrder::Msb, 8) };
-    let (mut out, mut chunk, mut input) = (vec![], vec![0; 1 << 16], data);
-    while out.len() <= max {
-        let r = decoder.decode_bytes(input, &mut chunk);
-        input = input.get(r.consumed_in..).unwrap_or_default();
-        out.extend_from_slice(chunk.get(..r.consumed_out).unwrap_or_default());
-        match r.status {
-            Ok(LzwStatus::Ok) => {}
-            Ok(LzwStatus::Done | LzwStatus::NoProgress) => break,
-            Err(_) => return (out.len() > max).then_some(out),
-        }
+    match craft_stream_codecs::lzw::decode(data, early, max) {
+        Ok(out) => Some(out),
+        Err(f) if matches!(f.error, craft_stream_codecs::CodecError::LimitExceeded(_)) => Some(vec![0u8; max.saturating_add(1)]),
+        Err(_) => None,
     }
-    Some(out)
 }
 
 /// `data` decoded from run-length encoding, up to one byte past `max`.
