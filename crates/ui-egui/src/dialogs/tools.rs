@@ -18,7 +18,11 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
             kind,
             json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt", "anchors": app.session.tool_options_of(kind)["anchors"]}),
         ),
-        "roundedRectangle" => Dialog::new(kind, json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt", "radius": "12 pt"})),
+        // The radius starts at General › Corner Radius, which OK sets to the radius typed.
+        "roundedRectangle" => {
+            let radius = format!("{} pt", app.session.prefs.corner_radius);
+            Dialog::new(kind, json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt", "radius": radius}))
+        }
         "polygon" => Dialog::new(kind, json!({"x": x, "y": y, "radius": "50 pt", "sides": app.session.tool_options_of(kind)["sides"]})),
         "star" => {
             Dialog::new(kind, json!({"x": x, "y": y, "radius1": "50 pt", "radius2": "25 pt", "points": app.session.tool_options_of(kind)["points"]}))
