@@ -1036,6 +1036,10 @@ font-technology	Variable	Variables
 	Em Box	Cuadro eme
 	x-Height	Altura de la x
 	ICF Box	Cuadro ICF
+	Show Sample	Mostrar muestra
+	Hide Sample	Ocultar muestra
+	Max Ascent/Descent	Altura/profundidad máx.
+	Max Ascender	Ascendente máx.
 	Em Dash	Raya
 	Em Space	Espacio eme
 	Embed	Incrustar
@@ -1349,6 +1353,8 @@ font-technology	Variable	Variables
 	Font Family & Style	Familia y estilo de fuente
 	Font Family, Style & Size	Familia, estilo y tamaño de fuente
 	Font List	Lista de fuentes
+	Show Similar Fonts	Mostrar fuentes similares
+	Clear Similar Fonts	Borrar fuentes similares
 	Font Preview Size	Tamaño de vista previa de fuente
 	Font Size	Tamaño de fuente
 	Variable Font	Fuente variable
@@ -1464,6 +1470,7 @@ font-technology	Variable	Variables
 	Connect Data Points	Conectar puntos de datos
 	Edge-to-Edge Lines	Líneas de borde a borde
 	Draw Filled Lines	Dibujar líneas rellenas
+	Line Width	Ancho de línea
 	Tick Values	Valores de marcas
 	Override Calculated Values	Sustituir valores calculados
 	Divisions	Divisiones
@@ -4622,6 +4629,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	Divide Objects Below: select exactly one path	Dividir objetos inferiores: selecciona exactamente un trazado
 @msg	Downloaded {what}	Se descargó {what}
 @msg	Expand Appearance: the selection has a basic appearance	Expandir apariencia: la selección tiene una apariencia básica
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	algunos efectos ráster no se convirtieron en imágenes: ocuparían más de 1024 imágenes o 256 megapíxeles en total
 @msg	Expand: no brush strokes selected	Expandir: no hay trazos de pincel seleccionados
 @msg	Expand: no gradient fills	Expandir: no hay rellenos de degradado
 @msg	Expand: nothing to expand	Expandir: no hay nada que expandir
@@ -6323,7 +6331,7 @@ mark-style	Japanese	Japonesas
 @msg	Unknown dimension style	Estilo de cota desconocido
 @msg	Unknown unit	Unidad desconocida
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Cierra los extremos circulares de los perfiles abiertos. Los giros parciales mantienen abiertos sus lados de corte.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Cierra los extremos circulares de los perfiles abiertos. Los giros parciales también cierran sus lados de corte.
 	Distance	Distancia
 @msg	span must be "object" or "selection", got {v}	span debe ser "object" o "selection", no {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" coloca un `gradient`, no una muestra
@@ -6476,6 +6484,7 @@ mark-style	Japanese	Japonesas
 	Single Word Justification:	Justificación de una sola palabra:
 	Full Justify	Justificar completamente
 	Minimum must not exceed Desired, nor Desired Maximum.	El mínimo no puede superar el deseado, ni el deseado el máximo.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: el mínimo no puede superar el deseado, ni el deseado el máximo
 	Justification	Justificación
 	Add filters from the list above	Añada filtros de la lista de arriba
 	Add to Stack	Añadir a la pila
@@ -7412,6 +7421,22 @@ breakText	Glyphs	Glifos
 	Remove Gaps	Quitar separaciones
 @msg	that makes too many pieces (at most 100000): make the dashes longer	eso da demasiados trozos (como máximo 100000): alargue los guiones
 @msg	select paths, or segments, to divide	seleccione trazados o segmentos para dividir
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Tangentes comunes…
+	Common Tangents	Tangentes comunes
+	Tangents	Tangentes
+	Centerline	Línea central
+	External	Externas
+	Internal	Internas
+@msg	select two closed paths	seleccione dos trazados cerrados
+@msg	a selected path is open	un trazado seleccionado está abierto
+@msg	a selected path is not convex	un trazado seleccionado no es convexo
+@msg	a selected path has no area	un trazado seleccionado no tiene área
+@msg	a selected path has more than 10000 segments	un trazado seleccionado tiene más de 10000 segmentos
+@msg	the two paths have the same outline	los dos trazados tienen el mismo contorno
+@msg	One path lies inside the other, so they have no common tangents	Un trazado está dentro del otro, por lo que no tienen tangentes comunes
+@msg	The paths overlap, so they have no internal tangents	Los trazados se superponen, por lo que no tienen tangentes internas
+@msg	One path lies inside the other, so they have no internal tangents	Un trazado está dentro del otro, por lo que no tienen tangentes internas
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandir guiones en trazados
 @msg	select paths with dashed strokes to expand	seleccione trazados con trazo discontinuo para expandir
@@ -7487,7 +7512,7 @@ breakText	Glyphs	Glifos
 @msg	stroke cannot be set on a symbol instance	stroke no se puede definir en una instancia de símbolo
 @msg	fill on a symbol instance must be a solid color or none	el fill de una instancia de símbolo debe ser un color sólido o none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} no se puede definir en una imagen sin el efecto Convertir en forma o Contornear objeto
-@msg	pass newName, registration, exportType, nineSlice and/or type	indique newName, registration, exportType, nineSlice y/o type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	indique newName, registration, exportType, nineSlice, type y/o alignToPixelGrid
 	Text Flow	Flujo de texto
 	By Rows	Por filas
 	By Columns	Por columnas
@@ -7848,6 +7873,7 @@ breakText	Glyphs	Glifos
 @msg	style must be "pencil" or "brush"	style debe ser "pencil" o "brush"
 @msg	extend end must be "start" or "end"	el extremo de extend debe ser "start" o "end"
 @msg	connect end must be "start" or "end"	el extremo de connect debe ser "start" o "end"
+@msg	`roundness` must be from 1 to 100%	`roundness` debe estar entre 1 y 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` debe ser un número entero entre 1 y {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Caja y líneas de pelado…
 	Weed Box and Lines	Caja y líneas de pelado

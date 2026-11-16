@@ -1589,6 +1589,8 @@ file-filter	Templates	Mẫu
 	Font Family & Style	Họ phông & kiểu
 	Font Family, Style & Size	Họ phông, kiểu & cỡ
 	Font List	Danh sách phông
+	Show Similar Fonts	Hiển thị phông tương tự
+	Clear Similar Fonts	Xóa phông tương tự
 	Font Preview Size	Cỡ xem trước phông
 	Font Size	Cỡ chữ
 	Variable Font	Phông chữ biến thiên
@@ -1737,6 +1739,7 @@ file-filter	Templates	Mẫu
 	Connect Data Points	Nối các điểm dữ liệu
 	Edge-to-Edge Lines	Đường từ mép đến mép
 	Draw Filled Lines	Vẽ đường tô đầy
+	Line Width	Độ rộng đường
 	Tick Values	Giá trị vạch chia
 	Override Calculated Values	Ghi đè giá trị đã tính
 	Divisions	Số khoảng chia
@@ -2008,6 +2011,10 @@ digits	Hindi	Hindi
 	Cap Height	Chiều cao chữ hoa
 	x-Height	Chiều cao chữ x
 	ICF Box	Ô ICF
+	Show Sample	Hiện mẫu
+	Hide Sample	Ẩn mẫu
+	Max Ascent/Descent	Độ cao/sâu tối đa
+	Max Ascender	Nét chân chữ trên tối đa
 	ICF Top/Right	ICF Trên/Phải
 	Identify Objects By	Nhận diện đối tượng theo
 	Ignore	Bỏ qua
@@ -5115,6 +5122,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	every numbered name for {name} is taken in the document's folder	mọi tên đánh số cho {name} đã được dùng trong thư mục tài liệu
 @msg	every search thread stopped on an internal error (please report this bug)	mọi luồng tìm kiếm đã dừng do lỗi nội bộ (vui lòng báo cáo lỗi này)
 @msg	Expand Appearance: the selection has a basic appearance	Mở rộng diện mạo: vùng chọn có diện mạo cơ bản
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	một số hiệu ứng raster không được chuyển thành hình ảnh: chúng sẽ cần hơn 1.024 hình ảnh hoặc tổng cộng 256 megapixel
 @msg	Expand: no brush strokes selected	Mở rộng: chưa chọn nét cọ
 @msg	Expand: no gradient fills	Mở rộng: không có tô chuyển sắc
 @msg	Expand: nothing to expand	Mở rộng: không có gì để mở rộng
@@ -5983,7 +5991,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	Unknown dimension style	Kiểu kích thước không xác định
 @msg	Unknown unit	Đơn vị không xác định
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Đóng các đầu tròn của biên dạng mở. Khi xoay một phần, các mặt cắt bên vẫn mở.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Đóng các đầu tròn của biên dạng mở. Khi xoay một phần, các mặt cắt bên cũng được đóng.
 	Distance	Khoảng cách
 @msg	span must be "object" or "selection", got {v}	span phải là "object" hoặc "selection", không phải {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" đặt một `gradient`, không phải mẫu màu
@@ -6137,6 +6145,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 	Single Word Justification:	Căn đều một từ:
 	Full Justify	Căn đều hoàn toàn
 	Minimum must not exceed Desired, nor Desired Maximum.	Giá trị tối thiểu không được vượt quá giá trị mong muốn, và giá trị mong muốn không được vượt quá tối đa.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: giá trị tối thiểu không được vượt quá giá trị mong muốn, và giá trị mong muốn không được vượt quá tối đa
 	Minimum	Tối thiểu
 	Justification	Căn đều
 	Add filters from the list above	Thêm bộ lọc từ danh sách phía trên
@@ -7081,6 +7090,22 @@ breakText	Glyphs	Glyph
 	Remove Gaps	Gỡ các khoảng hở
 @msg	that makes too many pieces (at most 100000): make the dashes longer	như vậy tạo ra quá nhiều mảnh (tối đa 100000): hãy kéo dài nét
 @msg	select paths, or segments, to divide	chọn các đường dẫn hoặc đoạn để chia
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Tiếp tuyến chung…
+	Common Tangents	Tiếp tuyến chung
+	Tangents	Tiếp tuyến
+	Centerline	Đường tâm
+	External	Ngoài
+	Internal	Trong
+@msg	select two closed paths	chọn hai đường dẫn khép kín
+@msg	a selected path is open	một đường dẫn đã chọn đang mở
+@msg	a selected path is not convex	một đường dẫn đã chọn không lồi
+@msg	a selected path has no area	một đường dẫn đã chọn không có diện tích
+@msg	a selected path has more than 10000 segments	một đường dẫn đã chọn có hơn 10000 đoạn
+@msg	the two paths have the same outline	hai đường dẫn có cùng đường viền
+@msg	One path lies inside the other, so they have no common tangents	Một đường dẫn nằm bên trong đường dẫn kia, nên chúng không có tiếp tuyến chung
+@msg	The paths overlap, so they have no internal tangents	Các đường dẫn chồng lên nhau, nên chúng không có tiếp tuyến trong
+@msg	One path lies inside the other, so they have no internal tangents	Một đường dẫn nằm bên trong đường dẫn kia, nên chúng không có tiếp tuyến trong
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Mở rộng nét đứt thành đường dẫn
 @msg	select paths with dashed strokes to expand	chọn các đường dẫn có nét đứt để mở rộng
@@ -7156,7 +7181,7 @@ breakText	Glyphs	Glyph
 @msg	stroke cannot be set on a symbol instance	không thể đặt stroke cho thực thể ký hiệu
 @msg	fill on a symbol instance must be a solid color or none	fill của thực thể ký hiệu phải là màu đặc hoặc none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	không thể đặt {key} cho hình ảnh không có hiệu ứng Chuyển thành hình dạng hoặc Đường bao đối tượng
-@msg	pass newName, registration, exportType, nineSlice and/or type	hãy cung cấp newName, registration, exportType, nineSlice và/hoặc type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	hãy cung cấp newName, registration, exportType, nineSlice, type và/hoặc alignToPixelGrid
 	Text Flow	Luồng văn bản
 	By Rows	Theo hàng
 	By Columns	Theo cột
@@ -7401,6 +7426,7 @@ breakText	Glyphs	Glyph
 @msg	style must be "pencil" or "brush"	style phải là "pencil" hoặc "brush"
 @msg	extend end must be "start" or "end"	đầu extend phải là "start" hoặc "end"
 @msg	connect end must be "start" or "end"	đầu connect phải là "start" hoặc "end"
+@msg	`roundness` must be from 1 to 100%	`roundness` phải từ 1 đến 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` phải là số nguyên từ 1 đến {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Khung và đường bóc phần thừa…
 	Weed Box and Lines	Khung và đường bóc phần thừa
