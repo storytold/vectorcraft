@@ -20,4 +20,4 @@ craft-affinity = { workspace = true }
 proptest = { workspace = true }
 # The tests build containers and decode previews.
 crc32fast = { workspace = true }
-image = { workspace = true }
+craft-image-codecs = { workspace = true }

@@ -18,6 +18,7 @@ vectorcraft-text = { workspace = true }
 craft-metafile = { workspace = true }
 kurbo = { workspace = true }
 image = { workspace = true }
+craft-image-codecs = { workspace = true }
 
 [dev-dependencies]
 # The tests lay type out in the bundled fonts (the workspace leaves turning them on to the engine).
