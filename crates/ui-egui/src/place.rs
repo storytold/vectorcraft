@@ -305,14 +305,36 @@ fn open_dialog(app: &mut VectorcraftApp, files: Vec<Value>) {
 }
 
 /// Is dialog file entry `file` a VectorCraft document on disk (what Link places as one locked
-/// object), or a PDF or `.ai` file on disk? A `.ai` saved without PDF compatibility is PostScript,
-/// which `file.place` embeds whether Link is on or not.
+/// object), or a PDF, `.ai`, EPS or PostScript file on disk? A DCS file (an EPS file naming its
+/// plates) is placed as a linked image instead. Where the platform reads part of a file, only the
+/// file's start is read; a file longer than that is taken to be at least as long as its binary EPS
+/// header says, and one whose header can't be told from it counts as a document.
 fn is_vectorcraft_file(app: &VectorcraftApp, file: &Value) -> bool {
+    use vectorcraft_engine::cmd::place::{DCS_HEAD_BYTES, head_is_dcs};
     let Some(path) = file.get("path").and_then(Value::as_str) else { return false };
     let native = ["vectorcraft", vectorcraft_format::LEGACY_EXTENSION, "vctemplate"];
+    // The file's start, and the file's length when that is all of it.
+    let bytes = || match (&app.services.read_head, &app.services.read) {
+        (Some(read_head), _) => read_head(path, DCS_HEAD_BYTES + 1).ok().map(|mut b| {
+            let whole = b.len() <= DCS_HEAD_BYTES;
+            b.truncate(DCS_HEAD_BYTES);
+            let size = if whole { b.len() as u64 } else { u64::MAX };
+            (b, size)
+        }),
+        (None, Some(read)) => read(path).ok().map(|b| {
+            let size = b.len() as u64;
+            (b, size)
+        }),
+        (None, None) => None,
+    };
+    let dcs = |(b, size): &(Vec<u8>, u64)| {
+        let head = b.get(..DCS_HEAD_BYTES).unwrap_or(b);
+        vectorcraft_pdf::is_postscript(head) && head_is_dcs(head, *size).unwrap_or(false)
+    };
     match fileio::extension(path).as_str() {
         e if native.contains(&e) => true,
-        "pdf" | "ai" | "ait" => app.services.read.as_ref().and_then(|r| r(path).ok()).is_none_or(|b| !vectorcraft_pdf::is_postscript(&b)),
+        "pdf" | "ai" | "ait" => bytes().is_none_or(|b| !dcs(&b)),
+        "eps" | "epsf" | "ps" => bytes().is_some_and(|b| vectorcraft_pdf::is_postscript(&b.0) && !dcs(&b)),
         _ => false,
     }
 }

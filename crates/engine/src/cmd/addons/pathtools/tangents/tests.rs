@@ -163,6 +163,19 @@ fn a_convex_bezier_path_and_the_centerline() {
 }
 
 #[test]
+fn tiny_paths_close_together_still_get_the_centerline() {
+    // Two circles a ten-billionth of a point wide, half a billionth apart: separate, with all four
+    // tangents, and centers apart by far more than their sizes' rounding.
+    let mut s = session();
+    let a = circle(&mut s, 1.0, 1.0, 1e-10);
+    let b = circle(&mut s, 1.0 + 5e-10, 1.0, 1e-10);
+    let r = s.execute(C, &json!({"ids": [a.0, b.0], "centerline": true})).unwrap();
+    assert_eq!((r["external"].as_u64(), r["internal"].as_u64()), (Some(2), Some(2)), "{r}");
+    assert_eq!(r["ids"].as_array().map(Vec::len), Some(5), "{r}");
+    assert_eq!(r["centerline"], r["ids"][4]);
+}
+
+#[test]
 fn the_lines_take_the_current_stroke_and_no_fill() {
     let mut s = session();
     let a = circle(&mut s, 100.0, 100.0, 20.0);
