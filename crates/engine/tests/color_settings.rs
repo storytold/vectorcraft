@@ -1066,8 +1066,9 @@ fn color_format_writes_every_css_form_through_the_intent() {
     let icc = cms::register_icc(&cms::icc_bytes(cms::GENERIC_CMYK).unwrap(), Some("Format Intent CMYK".into())).unwrap().name;
     s.execute("edit.colorSettings", &json!({"rgb": cms::SRGB, "cmyk": icc, "intent": "absolute"})).unwrap();
     let cyan = json!({"c": 100, "m": 0, "y": 0, "k": 0});
-    let intents_differ = cms::active().cmyk_to_rgb([1.0, 0.0, 0.0, 0.0], cms::Intent::AbsoluteColorimetric).map(|v| (v * 255.0).round() as u8)
-        != cms::active().cmyk_to_rgb([1.0, 0.0, 0.0, 0.0], cms::Intent::RelativeColorimetric).map(|v| (v * 255.0).round() as u8);
+    let absolute = cms::active().cmyk_to_rgb([1.0, 0.0, 0.0, 0.0], cms::Intent::AbsoluteColorimetric).map(|v| (v * 255.0).round() as u8);
+    let intents_differ =
+        absolute != cms::active().cmyk_to_rgb([1.0, 0.0, 0.0, 0.0], cms::Intent::RelativeColorimetric).map(|v| (v * 255.0).round() as u8);
     // Collected as results, so that a failure still restores the process-wide settings first.
     let mut read_back = vec![];
     for notation in ["hex", "rgb", "hsl", "oklch"] {
@@ -1080,6 +1081,8 @@ fn color_format_writes_every_css_form_through_the_intent() {
     assert!(wide.as_ref().unwrap_err().ends_with("OKLCH needs sRGB as the working RGB space"), "{wide:?}");
     assert!(intents_differ, "absolute and relative colorimetric give cyan the same RGB");
     let hex = read_back[0].1.clone().unwrap();
+    let [r, g, b] = absolute;
+    assert_eq!(hex, format!("#{r:02x}{g:02x}{b:02x}"), "hex is the absolute colorimetric RGB");
     for (notation, text, back) in read_back {
         assert_eq!(back, Ok(json!(hex)), "{notation}: {text:?}");
     }
