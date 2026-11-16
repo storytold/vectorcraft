@@ -5368,7 +5368,6 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	Unembedded to {_1}	{_1}에 포함 해제했습니다
 @msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	이미지 {n}개를 {folder}에 포함 해제했습니다
 @msg	every numbered name for {name} is taken in that folder	해당 폴더에서 {name}을(를) 위한 번호 이름이 모두 사용 중입니다
-@msg	give id and path for one image, or ids and folder for several	이미지 하나에는 id와 path를, 여러 개에는 ids와 folder를 지정하세요
 @msg	no swatch library `{l}` (see swatch.library.list)	견본 라이브러리 `{l}`이(가) 없습니다(swatch.library.list 참조)
 @msg	no user library folder here	여기에는 사용자 라이브러리 폴더가 없습니다
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name}을(를) 가져올 수 없습니다: 놓은 문서가 닫혔습니다

@@ -2751,7 +2751,6 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	Unembedded to {_1}	已取消內嵌至 {_1}
 @msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	已將 {n} 個影像取消內嵌至 {folder}
 @msg	every numbered name for {name} is taken in that folder	該資料夾中 {name} 的所有編號名稱都已被使用
-@msg	give id and path for one image, or ids and folder for several	單一影像請提供 id 和 path，多個影像請提供 ids 和 folder
 @msg	no swatch library `{l}` (see swatch.library.list)	沒有色票資料庫 `{l}` (請參閱 swatch.library.list)
 @msg	no user library folder here	此處沒有使用者資料庫資料夾
 @msg	Couldn't place {name}: the document it was dropped on was closed	無法置入 {name}：放置它的文件已關閉

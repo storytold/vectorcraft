@@ -6031,7 +6031,6 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	Unembedded to {_1}	Beágyazás megszüntetve, ide: {_1}
 @msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Beágyazás megszüntetve, képek: {n}, ide: {folder}
 @msg	every numbered name for {name} is taken in that folder	abban a mappában minden sorszámozott név foglalt: {name}
-@msg	give id and path for one image, or ids and folder for several	egy képhez adja meg az id és a path, többhöz az ids és a folder értékét
 @msg	unknown command `{0}`	ismeretlen parancs: `{0}`
 @msg	step {step} of “{action}” runs the unknown command `{command}`	„{action}”, lépés: {step}: ismeretlen parancsot futtat: `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	ismeretlen parancs: `{0}`; erre gondolt: `{1}`?

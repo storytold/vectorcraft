@@ -5346,7 +5346,6 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	Unembedded to {_1}	Se desincrustó en {_1}
 @msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Se desincrustó {n} imagen en {folder}|Se desincrustaron {n} imágenes en {folder}
 @msg	every numbered name for {name} is taken in that folder	todos los nombres numerados para {name} ya existen en esa carpeta
-@msg	give id and path for one image, or ids and folder for several	indique id y path para una imagen, o ids y folder para varias
 @msg	Reset {_1}	Se restableció {_1}
 @msg	Sent to {_1}	Se envió a {_1}
 @msg	{_1} files	{_1} archivos

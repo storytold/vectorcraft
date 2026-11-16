@@ -5118,7 +5118,6 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	Unembedded to {_1}	已取消嵌入到 {_1}
 @msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	已将 {n} 张图像取消嵌入到 {folder}
 @msg	every numbered name for {name} is taken in that folder	该文件夹中 {name} 的所有带编号的名称均已被占用
-@msg	give id and path for one image, or ids and folder for several	单个图像请提供 id 和 path，多个图像请提供 ids 和 folder
 @msg	no swatch library `{l}` (see swatch.library.list)	没有色板库 `{l}` (请参阅 swatch.library.list)
 @msg	no user library folder here	此处没有用户库文件夹
 @msg	Couldn't place {name}: the document it was dropped on was closed	无法置入 {name}：将它拖放到的文档已关闭

@@ -5638,7 +5638,6 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	Unembedded to {_1}	Vložení zrušeno, uloženo do: {_1}
 @msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Vložení zrušeno u {n} obrázku, uloženo do: {folder}|Vložení zrušeno u {n} obrázků, uloženo do: {folder}|Vložení zrušeno u {n} obrázků, uloženo do: {folder}
 @msg	every numbered name for {name} is taken in that folder	v této složce jsou obsazena všechna číslovaná jména pro {name}
-@msg	give id and path for one image, or ids and folder for several	zadejte id a path pro jeden obrázek, nebo ids a folder pro více obrázků
 @msg	Reset {_1}	Obnoveno: {_1}
 @msg	Sent to {_1}	Odesláno do {_1}
 @msg	{_1} files	Soubory {_1}

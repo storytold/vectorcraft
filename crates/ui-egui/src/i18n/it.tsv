@@ -5372,7 +5372,6 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	Unembedded to {_1}	Incorporamento rimosso, salvato in {_1}
 @msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Incorporamento rimosso per {n} immagine, salvata in {folder}|Incorporamento rimosso per {n} immagini, salvate in {folder}
 @msg	every numbered name for {name} is taken in that folder	tutti i nomi numerati per {name} sono già usati in quella cartella
-@msg	give id and path for one image, or ids and folder for several	indica id e path per un’immagine, oppure ids e folder per più immagini
 @msg	Reset {_1}	Reimpostato {_1}
 @msg	Sent to {_1}	Inviato a {_1}
 @msg	{_1} files	{_1} file

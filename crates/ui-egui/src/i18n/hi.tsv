@@ -8699,7 +8699,6 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	Unembedded to {_1}	एम्बेड हटाकर {_1} में रखा गया
 @msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	{n} इमेज का एम्बेड हटाकर {folder} में रखा गया|{n} इमेज का एम्बेड हटाकर {folder} में रखा गया
 @msg	every numbered name for {name} is taken in that folder	{name} के लिए हर नंबर वाला नाम उस फ़ोल्डर में पहले से लिया गया है
-@msg	give id and path for one image, or ids and folder for several	एक इमेज के लिए id और path दें, या कई के लिए ids और folder दें
 @msg	unexpected host trap	होस्ट में अप्रत्याशित ट्रैप
 @msg	unexpected resources	अप्रत्याशित संसाधन
 @msg	unknown {k} key `{key}` (size, position)	अज्ञात {k} कुंजी `{key}` (size, position)

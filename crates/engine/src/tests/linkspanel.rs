@@ -253,11 +253,20 @@ fn unembed_to_a_folder_writes_each_image_and_links_it_in_one_undo_step() {
     run(&mut s, "edit.undo", json!({}));
     assert!(image(&s, a).link.is_none() && image(&s, b).link.is_none(), "both embedded again");
     assert_eq!(files_in(&out).len(), 3, "undo leaves the files");
+    // `ids` of one image without `folder` is `id`: the bytes, and nothing changes.
+    let one = run(&mut s, "links.unembed", json!({"ids": [a.0]}));
+    assert_eq!(one, run(&mut s, "links.unembed", json!({"id": a.0})));
+    assert!(one["dataBase64"].is_string(), "{one}");
+    assert!(image(&s, a).link.is_none());
     // With no ids, the selected embedded images.
     s.doc_mut().unwrap().selection.objects = vec![b, linked];
     let r = run(&mut s, "links.unembed", json!({"folder": out}));
     assert_eq!(r, json!({"unembedded": [{"id": b.0, "path": file_in(&out, "photo 4.png")}], "skipped": []}));
     assert_eq!(std::fs::read(file_in(&out, "photo 4.png")).unwrap(), blue);
+    // `id` with `folder` is `ids` of that one image.
+    let r = run(&mut s, "links.unembed", json!({"id": a.0, "folder": out}));
+    assert_eq!(r, json!({"unembedded": [{"id": a.0, "path": file_in(&out, "photo 5.png")}], "skipped": []}));
+    assert_eq!(image(&s, a).link.unwrap().path, file_in(&out, "photo 5.png"));
 }
 
 /// A batch that fails part way writes no file and changes nothing; requests that don't fit the
@@ -285,11 +294,14 @@ fn unembed_to_a_folder_that_fails_leaves_no_file_and_no_change() {
     std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).images.insert(key, saved);
 
     let refused = |s: &mut Session, p: Value| s.execute("links.unembed", &p).unwrap_err().to_string();
-    let both = "give id and path for one image, or ids and folder for several";
+    let both = "give `path` or `folder`, not both";
     assert!(refused(&mut s, json!({"ids": [a.0, a.0], "folder": out})).ends_with("`ids` names an object twice"));
-    assert!(refused(&mut s, json!({"id": a.0, "folder": out})).ends_with(both));
-    assert!(refused(&mut s, json!({"ids": [a.0], "path": file_in(&out, "x.png")})).ends_with(both));
-    assert!(refused(&mut s, json!({"ids": [a.0]})).ends_with("missing `folder`"));
+    assert!(refused(&mut s, json!({"id": a.0, "path": file_in(&out, "x.png"), "folder": out})).ends_with(both));
+    assert!(refused(&mut s, json!({"ids": [a.0], "path": file_in(&out, "x.png"), "folder": out})).ends_with(both));
+    assert!(refused(&mut s, json!({"ids": [a.0, b.0]})).ends_with("missing `folder`"));
+    assert!(refused(&mut s, json!({"ids": []})).ends_with("missing `folder`"));
+    assert!(refused(&mut s, json!({"id": a.0, "ids": [b.0], "folder": out})).ends_with("give `id` or `ids`, not both"));
+    assert!(refused(&mut s, json!({"id": a.0, "ids": [b.0]})).ends_with("give `id` or `ids`, not both"));
     assert!(refused(&mut s, json!({"ids": [a.0], "folder": 5})).ends_with("`folder` must be a string"));
     assert!(refused(&mut s, json!({"ids": [], "folder": out})).ends_with("select an image"));
     let file = dir.file("one.png");

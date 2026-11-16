@@ -8278,14 +8278,16 @@ every object in the layers each time the list is read. A `dcsTransparency` that 
 returns `{id, onCanvas: false, owner}`, and the panel says the link has no place on the canvas. `links.embed {ids?}` keeps linked files' pixels in the document (an image whose
 file is missing stays linked: relink it first); `links.unembed {id, path}` writes an embedded image to a file
 (another extension converts it) and links to it, and without `path` returns `{name, dataBase64}`.
-`links.unembed {ids?, folder}` writes each embedded image of `ids` (default: the selected embedded images) to a new
+`ids` of one image works as `id` does. `links.unembed {ids?, folder}` writes each embedded image of `ids` (or of
+`id`; default: the selected embedded images) to a new
 file in `folder`, in the format it is stored in (as PNG when that format is not one of VectorCraft's raster file formats), and links each image to its file, keeping its bounds, in one undo
 step; undo does not remove the files. A file is named after its image, with each character a file name can't hold
 (`/ \ : * ? " < > |` and control characters) as `_` and `Image` when nothing is left; when the name is taken it is
 `Name 2.png` … `Name 99.png`, and a file already in the folder is never replaced. Linked images among `ids` are left
 as they are and listed in `skipped`. It returns `{unembedded: [{id, path}], skipped}`. When an image can't be written,
 the files the call wrote are removed and the document does not change. A folder outside the automation write roots,
-`id` or `path` given with `ids` or `folder`, an id given twice, and `ids` with no embedded image are errors. The Links
+`id` given with `ids`, `path` given with `folder`, `ids` of more or fewer than one image without `folder`, an id given twice, and `ids` with
+no embedded image are errors. The Links
 panel menu's Unembed… with several embedded images selected asks for one folder and runs this form (on the web it
 downloads each image instead and links none).
 `links.placementOptions {ids?, preserve?: transforms|bounds|fileDimensions|fit|fill, align?: topLeft…bottomRight,

@@ -108,7 +108,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Unembed",
             [],
             None,
-            "{id?: an embedded image (default: the one selected), path?, ids?: [image ids] (with folder; default: the selected embedded images), folder?} write the image's pixels to the file at path (PNG, JPEG, GIF or WebP as stored, other images as PNG; a path ending in .png/.jpg/.jpeg/.gif/.webp/.tif/.tiff/.bmp converts them) and link the image to it, keeping its bounds. One undo step → {id, path}; no path → {name, dataBase64} (nothing changes: there is no file to link to). Several images, with ids and folder: write each embedded image to a new file in folder, as stored (as PNG when that format is not one of VectorCraft's raster file formats), named after the image (characters a file name can't hold become _; Image when nothing is left), with Name 2 … Name 99 when the name is taken; a file already there is never replaced. Linked images among ids are left as they are. Each image links to its file and keeps its bounds. One undo step (undo does not remove the files); when a file can't be written, the files this call wrote are removed and nothing changes → {unembedded: [{id, path}], skipped: [ids of linked images]}; id or path with ids or folder is an error",
+            "{id?: an embedded image (default: the one selected), path?, ids?: [image ids] (instead of id; one id is the same as id), folder?} write the image's pixels to the file at path (PNG, JPEG, GIF or WebP as stored, other images as PNG; a path ending in .png/.jpg/.jpeg/.gif/.webp/.tif/.tiff/.bmp converts them) and link the image to it, keeping its bounds. One undo step → {id, path}; no path → {name, dataBase64} (nothing changes: there is no file to link to). With folder: write each embedded image of ids or id (default: the selected embedded images) to a new file in folder, as stored (as PNG when that format is not one of VectorCraft's raster file formats), named after the image (characters a file name can't hold become _; Image when nothing is left), with Name 2 … Name 99 when the name is taken; a file already there is never replaced. Linked images among ids are left as they are. Each image links to its file and keeps its bounds. One undo step (undo does not remove the files); when a file can't be written, the files this call wrote are removed and nothing changes → {unembedded: [{id, path}], skipped: [ids of linked images]}; id with ids, path with folder, and ids of more or fewer than one image without folder are errors",
             has_doc,
             unembed
         ),
@@ -2685,15 +2685,19 @@ fn unembed_bytes(blob: &vectorcraft_doc::ImageBlob, ext: &str) -> std::result::R
 fn unembed(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "links.unembed";
     let given = |k: &str| p.get(k).is_some_and(|v| !v.is_null());
-    if given("ids") || given("folder") {
-        if given("id") || given("path") {
-            return Err(bad(C, "give id and path for one image, or ids and folder for several"));
-        }
-        return unembed_to_folder(s, p);
+    // `id` with `ids`, and `path` with `folder`, are refused, in a replayed step too.
+    super::params::check_exclusive_keys(C, p)?;
+    let ids = ids_param(p, "ids", C)?;
+    if given("folder") || ids.as_ref().is_some_and(|ids| ids.len() != 1) {
+        return unembed_to_folder(s, p, ids);
     }
     let st = s.doc()?;
     let doc = with_brush_art(&st.doc);
-    let id = image_param(st, &doc, p, C)?;
+    // `ids` of one image is `id`.
+    let id = match ids.as_deref() {
+        Some(&[id]) => id,
+        _ => image_param(st, &doc, p, C)?,
+    };
     let n = stored(&doc, id).ok_or(crate::EngineError::NoNode(id))?;
     let im = image_of(&doc, id).ok_or_else(|| bad(C, format!("object {} is not an image", id.0)))?;
     if im.link.is_some() {
@@ -2724,16 +2728,20 @@ fn unembed(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0, "path": path }))
 }
 
-/// `links.unembed {ids?, folder}`: each embedded image of `ids` (default: the selected embedded
-/// images) written to a new file in `folder` as stored (as PNG when that format is not one of
+/// `links.unembed {ids?, folder}`: each embedded image of `ids` (`id` as `ids` of one; default: the
+/// selected embedded images) written to a new file in `folder` as stored (as PNG when that format is not one of
 /// VectorCraft's raster file formats) and linked to it, in one undo step. Linked images are skipped. When any image fails, the files written before it
 /// are removed and the document does not change.
-fn unembed_to_folder(s: &mut Session, p: &Value) -> Result<Value> {
+fn unembed_to_folder(s: &mut Session, p: &Value, ids: Option<Vec<NodeId>>) -> Result<Value> {
     const C: &str = "links.unembed";
     let folder = text_param(p, "folder", C)?.filter(|f| !f.is_empty()).ok_or_else(|| bad(C, "missing `folder`"))?;
+    let ids = match ids {
+        Some(ids) => Some(ids),
+        None => object_param(p, "id", C)?.map(|id| vec![id]),
+    };
     let st = s.doc()?;
     let doc = with_brush_art(&st.doc);
-    let ids = ids_param(p, "ids", C)?.unwrap_or_else(|| selected_images(st, |im| im.link.is_none()));
+    let ids = ids.unwrap_or_else(|| selected_images(st, |im| im.link.is_none()));
     let mut seen = BTreeSet::new();
     if !ids.iter().all(|id| seen.insert(id.0)) {
         return Err(bad(C, "`ids` names an object twice"));

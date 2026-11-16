@@ -5464,7 +5464,6 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	Unembedded to {_1}	Wyodrębniono do {_1}
 @msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Wyodrębniono {n} obraz do {folder}|Wyodrębniono {n} obrazy do {folder}|Wyodrębniono {n} obrazów do {folder}
 @msg	every numbered name for {name} is taken in that folder	wszystkie numerowane nazwy dla {name} są zajęte w tym folderze
-@msg	give id and path for one image, or ids and folder for several	podaj id i path dla jednego obrazu albo ids i folder dla kilku
 @msg	Reset {_1}	Zresetowano {_1}
 @msg	Sent to {_1}	Wysłano do {_1}
 @msg	{_1} files	Pliki {_1}

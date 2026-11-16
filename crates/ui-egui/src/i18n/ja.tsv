@@ -5441,7 +5441,6 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msg	Unembedded to {_1}	埋め込みを解除して {_1} に保存しました
 @msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	{n} 枚の画像の埋め込みを解除して {folder} に保存しました
 @msg	every numbered name for {name} is taken in that folder	そのフォルダーでは、{name} の番号付きの名前がすべて使われています
-@msg	give id and path for one image, or ids and folder for several	1 つの画像には id と path を、複数の画像には ids と folder を指定してください
 @msg	no swatch library `{l}` (see swatch.library.list)	スウォッチライブラリ `{l}` が見つかりません (swatch.library.list を参照)
 @msg	no user library folder here	この環境にはユーザーライブラリフォルダーがありません
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} を配置できませんでした: ドロップ先のドキュメントは閉じられています

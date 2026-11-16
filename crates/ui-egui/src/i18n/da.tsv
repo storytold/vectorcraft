@@ -7744,7 +7744,6 @@ imageTrace	Outline	Kontur
 @msg	Unembedded to {_1}	Fjernede indlejring til {_1}
 @msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Fjernede indlejring af {n} billede til {folder}|Fjernede indlejring af {n} billeder til {folder}
 @msg	every numbered name for {name} is taken in that folder	alle nummererede navne til {name} er optaget i den mappe
-@msg	give id and path for one image, or ids and folder for several	angiv id og path for ét billede, eller ids og folder for flere
 @msg	Reset {_1}	Nulstillede {_1}
 @msg	Sent to {_1}	Sendte til {_1}
 @msg	{_1} files	{_1}-filer
