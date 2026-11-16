@@ -114,6 +114,8 @@ pub(super) struct TileEvents {
     pub(super) drop: Option<Drop>,
     /// A drag is held over a tile or row.
     over: bool,
+    /// A drag of swatches or color groups started on a tile or row.
+    pub(super) started: bool,
 }
 
 /// Clicks, double-clicks, tooltips and drag and drop of the tile or row `resp` of entry `e`
@@ -133,6 +135,7 @@ pub(super) fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], se
             .map(|x| x.name().to_string())
             .collect();
         egui::DragAndDrop::set_payload(ui.ctx(), drag_of(e, names));
+        ev.started = true;
     }
     tile_drop(ui, &resp, e, list, ev);
     // The default swatches' names show in the UI's language; the document keeps them as they are.

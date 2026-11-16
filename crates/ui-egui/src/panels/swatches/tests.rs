@@ -579,6 +579,177 @@ fn only_a_primary_drag_moves_swatches_and_groups() {
     assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
 }
 
+/// One frame of the panel at `time` with `modifiers` held and the accessibility tree on; returns
+/// the frame's output.
+fn frame_out(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>, modifiers: Modifiers, time: f64) -> egui::FullOutput {
+    ctx.enable_accesskit();
+    let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0)));
+    let events = std::iter::once(Event::ModifiersChanged(modifiers)).chain(events).collect();
+    let input = egui::RawInput { events, time: Some(time), screen_rect, ..Default::default() };
+    let mut out = ctx.run_ui(input, |ui| show(app, ui));
+    out.textures_delta.clear();
+    out
+}
+
+/// The Delete Swatch button in `out`: its rectangle and whether it is enabled.
+fn trash_button(out: &egui::FullOutput) -> (Rect, bool) {
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    let node = nodes.iter().map(|(_, n)| n).find(|n| n.label().is_some_and(|l| l.trim() == "Delete Swatch")).expect("a Delete Swatch button");
+    let b = node.bounds().expect("the button's bounds");
+    (Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)), !node.is_disabled())
+}
+
+/// Whether `out` draws the drop outline around `rect`.
+fn outlined(out: &egui::FullOutput, rect: Rect) -> bool {
+    out.shapes.iter().any(|c| match &c.shape {
+        Shape::Rect(r) => r.rect.center().distance(rect.center()) < 0.5 && (r.stroke.width - 1.5).abs() < 0.01,
+        _ => false,
+    })
+}
+
+/// Drag the tile of `name` with `modifiers` held onto Delete Swatch and release the primary button
+/// there, a frame per step from `time`. Returns whether the button was outlined and enabled while
+/// the drag was held over it.
+fn drag_to_trash(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, modifiers: Modifiers, time: f64) -> (bool, bool) {
+    frame_out(app, ctx, vec![], modifiers, time);
+    let (trash, _) = trash_button(&frame_out(app, ctx, vec![], modifiers, time + 0.05));
+    let from = tile_center(ctx, name);
+    let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers };
+    frame_out(app, ctx, vec![Event::PointerMoved(from), button(from, true)], modifiers, time + 0.1);
+    frame_out(app, ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], modifiers, time + 0.2);
+    frame_out(app, ctx, vec![Event::PointerMoved(trash.center())], modifiers, time + 0.3);
+    let held = frame_out(app, ctx, vec![Event::PointerMoved(trash.center())], modifiers, time + 0.4);
+    let seen = (outlined(&held, trash), trash_button(&held).1);
+    frame_out(app, ctx, vec![Event::PointerMoved(trash.center()), button(trash.center(), false)], modifiers, time + 0.5);
+    seen
+}
+
+fn undo_steps(app: &VectorcraftApp) -> usize {
+    app.session.doc().unwrap().history.undo.len()
+}
+
+fn dialog_message(app: &VectorcraftApp) -> Option<String> {
+    app.ui.dialog.as_ref().map(|d| d.str("message"))
+}
+
+/// Swatches and color groups dragged from the list onto Delete Swatch are deleted as a plain click
+/// on the button deletes the selection: the drop asks first, Cancel keeps them, and OK deletes them
+/// in one undo step. The button is outlined and enabled while they are held over it, also with
+/// nothing selected. A selected swatch carries the other selected swatches with it, but not the
+/// selected groups, None or Registration, and Alt does not skip the question.
+#[test]
+fn swatches_dropped_on_delete_swatch_are_deleted_after_asking() {
+    let mut app = app();
+    let ctx = context();
+    let doc = |app: &VectorcraftApp| app.session.doc().unwrap().doc.clone();
+    let has_group = |app: &VectorcraftApp, g: &str| doc(app).swatch_groups.iter().any(|x| x.name == g);
+    assert!(!trash_button(&frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 0.0)).1, "disabled with nothing selected");
+    let undo = undo_steps(&app);
+    // An unselected swatch, nothing selected.
+    assert_eq!(drag_to_trash(&mut app, &ctx, "Orange", Modifiers::NONE, 1.0), (true, true), "outlined and enabled while held");
+    assert_eq!(dialog_message(&app).as_deref(), Some("Delete “Orange”?"));
+    crate::dialogs::cancel(&mut app);
+    assert!(doc(&app).swatch("Orange").is_some(), "Cancel keeps it");
+    assert_eq!(undo_steps(&app), undo, "Cancel adds no undo step");
+    drag_to_trash(&mut app, &ctx, "Orange", Modifiers::NONE, 2.0);
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none() && doc(&app).swatch("Orange").is_none(), "OK deletes it");
+    assert_eq!(undo_steps(&app), undo + 1, "one undo step");
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(doc(&app).swatch("Orange").is_some(), "Undo brings it back");
+    // A selected swatch carries the selected swatches; Alt still asks.
+    let sel = ["[None]", "Red", "Grays", "Lime"].map(String::from).to_vec();
+    set_pstate(&ctx, "swatch-selected", sel);
+    let undo = undo_steps(&app);
+    assert_eq!(drag_to_trash(&mut app, &ctx, "Lime", Modifiers::ALT, 3.0), (true, true));
+    assert_eq!(dialog_message(&app).as_deref(), Some("Delete these 2 swatches and groups?"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    let d = doc(&app);
+    assert!(d.swatch("Red").is_none() && d.swatch("Lime").is_none(), "the dragged selection is deleted");
+    assert!(has_group(&app, "Grays") && d.swatch("[None]").is_some() && d.swatch("Orange").is_some(), "the rest stays");
+    assert_eq!(undo_steps(&app), undo + 1, "one undo step for both");
+    // A color group is deleted with its swatches.
+    drag_to_trash(&mut app, &ctx, "Grays", Modifiers::NONE, 4.0);
+    assert_eq!(dialog_message(&app).as_deref(), Some("Delete “Grays”?"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(!has_group(&app, "Grays") && doc(&app).swatch("K=50").is_none());
+    assert_eq!(undo_steps(&app), undo + 2);
+    // None and Registration are never deleted, and the button does not take them.
+    set_pstate(&ctx, "swatch-selected", Vec::<String>::new());
+    let kept = doc(&app);
+    for (i, name) in ["[None]", REGISTRATION].into_iter().enumerate() {
+        assert_eq!(drag_to_trash(&mut app, &ctx, name, Modifiers::NONE, 5.0 + i as f64), (false, false), "{name}");
+        assert_eq!(dialog_message(&app), None, "{name}");
+        assert_eq!(doc(&app), kept, "{name}");
+    }
+    assert_eq!(undo_steps(&app), undo + 2);
+}
+
+/// Delete Swatch takes only swatches dragged from the active document's list: a paint dragged from
+/// elsewhere, art, and a swatch dragged from another document whose name the active document also
+/// has delete nothing, ask nothing and are not outlined. A secondary button released while a swatch
+/// is held over the button ends the drag without asking.
+#[test]
+fn delete_swatch_ignores_other_drags() {
+    let mut app = app();
+    let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    let ctx = context();
+    let (trash, _) = trash_button(&frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 0.0));
+    let (before, undo) = (app.session.doc().unwrap().doc.clone(), undo_steps(&app));
+    let unchanged = |app: &VectorcraftApp, case: &str| {
+        assert_eq!(dialog_message(app), None, "{case}: asks nothing");
+        assert_eq!(app.session.doc().unwrap().doc, before, "{case}: deletes nothing");
+        assert_eq!(undo_steps(app), undo, "{case}: no undo step");
+    };
+    // The payloads are set directly, as if dragged from this document's list.
+    set_pstate(&ctx, super::actions::DRAG_DOC, app.session.active().map(|st| st.uid));
+    let release = |at| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE };
+    let cases = [
+        ("a paint", PanelDrag::paint(Paint::solid(Color::from_hex("#ed1c24").unwrap()))),
+        ("art", PanelDrag::Art(vec![vectorcraft_doc::NodeId(id)])),
+    ];
+    for (i, (case, drag)) in cases.into_iter().enumerate() {
+        egui::DragAndDrop::set_payload(&ctx, drag);
+        let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 1.0 + i as f64);
+        assert!(!outlined(&held, trash), "{case}: not outlined");
+        frame_out(&mut app, &ctx, vec![release(trash.center())], Modifiers::NONE, 1.5 + i as f64);
+        unchanged(&app, case);
+        egui::DragAndDrop::clear_payload(&ctx);
+    }
+    // A secondary release over the button, then the primary release.
+    frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 3.0);
+    let from = tile_center(&ctx, "Orange");
+    let press = |at, button, pressed| Event::PointerButton { pos: at, button, pressed, modifiers: Modifiers::NONE };
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(from), press(from, PointerButton::Primary, true)], Modifiers::NONE, 3.1);
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], Modifiers::NONE, 3.2);
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 3.3);
+    let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 3.4);
+    assert!(outlined(&held, trash), "Orange is held over the button");
+    frame_out(&mut app, &ctx, vec![press(trash.center(), PointerButton::Secondary, true)], Modifiers::NONE, 3.5);
+    frame_out(&mut app, &ctx, vec![press(trash.center(), PointerButton::Secondary, false)], Modifiers::NONE, 3.6);
+    unchanged(&app, "a secondary release");
+    frame_out(&mut app, &ctx, vec![release(trash.center())], Modifiers::NONE, 3.7);
+    unchanged(&app, "the primary release after it");
+    // A swatch dragged from this document while another document with the same swatches becomes
+    // active.
+    frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 4.0);
+    let from = tile_center(&ctx, "Orange");
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(from), press(from, PointerButton::Primary, true)], Modifiers::NONE, 4.1);
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], Modifiers::NONE, 4.2);
+    assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_some(), "Orange is dragged");
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let undo_new = undo_steps(&app);
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 4.3);
+    let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 4.4);
+    let (trash_new, enabled) = trash_button(&held);
+    assert!(!outlined(&held, trash_new) && !enabled, "not outlined or enabled in the other document");
+    frame_out(&mut app, &ctx, vec![release(trash_new.center())], Modifiers::NONE, 4.5);
+    assert_eq!(dialog_message(&app), None, "the other document asks nothing");
+    assert!(app.session.doc().unwrap().doc.swatch("Orange").is_some() && undo_steps(&app) == undo_new, "the other document keeps Orange");
+    assert!(app.session.set_active(0));
+    unchanged(&app, "the first document");
+}
+
 #[test]
 fn art_dropped_on_the_panel_becomes_a_pattern_swatch() {
     let mut app = app();
