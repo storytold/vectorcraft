@@ -264,6 +264,9 @@ the suite) keep the agent to the folders you give it:
   selected objects only, and `clipboard.exportSvg` checks the copied objects, following a relative path from
   the document they came from while it is open; in a frame a request drives, Copy then puts no SVG on the
   system clipboard. An image whose pixels the document holds exports embedded, and a URL is not checked.
+- With `preserveEditing`, the document an SVG or SVGZ of these outputs carries leaves out the Export for Screens
+  folder (`export_settings.folder`) when it is outside the read roots, as `document.exportSettings` does; the
+  other export settings and the art are kept, and the open document keeps the folder.
 - `plugin.list`, `plugin.safeMode`, `file.recovery.*` and `ui_inspect`'s `scriptReport` leave out the paths
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
   folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`
