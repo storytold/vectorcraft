@@ -238,7 +238,8 @@ pub(crate) fn kind(id: &str, home: Option<&str>) -> u8 {
 }
 
 /// How the whole lowercased `query` matches result `e` ([`EXACT_ID`] to [`NO_PHRASE`]), where
-/// `initials` says whether the query is the initials of one of its labels.
+/// `initials` says whether the query is the initials of one of its labels. A query starts a name
+/// when it starts the name's label, or, for a query that holds `›`, the name with its menu path.
 fn phrase(e: &Entry, query: &str, initials: bool) -> u8 {
     if ids(e).any(|id| id == query) {
         return EXACT_ID;
@@ -248,7 +249,9 @@ fn phrase(e: &Entry, query: &str, initials: bool) -> u8 {
     if labels().any(|l| l == query || l.trim_end_matches('…') == trimmed) {
         return EXACT_LABEL;
     }
-    if labels().any(|l| l.starts_with(query)) {
+    // A menu's title alone does not put the items of that menu in this tier.
+    let with_path = query.contains('›');
+    if names(e).any(|n| split_name(n).0.starts_with(query) || (with_path && n.starts_with(query))) {
         return PREFIX;
     }
     if initials {
@@ -457,9 +460,65 @@ mod tests {
         assert_eq!(ranked(&c, "same zz"), ranked(&c, "same zz"));
     }
 
-    /// Queries from the list of things people type, on the English results.
+    /// A query that is a menu's title ranks a result whose label holds it as a word above the items
+    /// of that menu, which match only by their menu path. A query that names the menu with `›`
+    /// still starts the item's name.
     #[test]
-    fn common_queries_list_the_command_first() {
+    fn a_menu_title_does_not_lift_its_items() {
+        let c = synthetic(vec![entry("Object › Paint", "a.one"), entry("Outline Object", "b.two")]);
+        assert_eq!(ranked(&c, "object"), ["b.two", "a.one"]);
+        assert_eq!(ranked(&c, "object › pa"), ["a.one"]);
+        let en = catalog(Lang::EN, false);
+        for q in ["object", "effect", "select", "view", "type", "edit"] {
+            let first = rank(&en.list, &en.index, q).first().and_then(|&i| en.list.get(i as usize)).map(|e| e.shown.to_lowercase());
+            let label = first.as_deref().map(|n| split_name(n).0.to_string()).unwrap_or_default();
+            assert!(words(&label).any(|w| w.starts_with(q)), "{q}: {first:?}");
+        }
+    }
+
+    /// The application menu of the native Mac menu bar holds the items [`menu_homes`] puts there,
+    /// under the same submenus.
+    #[test]
+    fn native_homes_follow_the_native_application_menu() {
+        use crate::native_menu::{self, MenuRole, Node};
+        fn walk(nodes: &[Node], path: &mut Vec<String>, out: &mut HashMap<String, String>) {
+            for n in nodes {
+                match n {
+                    Node::Item(it) => {
+                        if let Some(id) = it.command {
+                            out.entry(id.to_string()).or_insert_with(|| path.join(" › "));
+                        }
+                    }
+                    Node::Submenu { label, children } => {
+                        path.push(label.clone());
+                        walk(children, path, out);
+                        path.pop();
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let bar = native_menu::mac_layout(&app, &native_menu::from_tree(&app, &menus::menu_tree()), Lang::EN).bar;
+        let app_menu = bar.menus.iter().find(|m| m.role == MenuRole::App).unwrap();
+        let mut found = HashMap::new();
+        walk(&app_menu.children, &mut vec![app_menu.title.clone()], &mut found);
+        // The items the native bar runs itself (Hide, Hide Others, Minimize) are not palette results.
+        found.retain(|id, _| ![native_menu::HIDE, native_menu::HIDE_OTHERS, native_menu::MINIMIZE].contains(&id.as_str()));
+        let homes = menu_homes(true);
+        let expected: HashMap<String, String> = homes
+            .iter()
+            .filter(|(_, (path, _))| path.split(" › ").next() == Some(native_menu::APP_NAME))
+            .map(|(id, (path, _))| (id.clone(), path.clone()))
+            .collect();
+        assert!(!expected.is_empty());
+        assert_eq!(found, expected);
+    }
+
+    /// Queries from the list of things people type, on the English results: some list their command
+    /// first, others within the first few results.
+    #[test]
+    fn common_queries_list_the_command_near_the_top() {
         let c = catalog(Lang::EN, false);
         let first = |q: &str| ranked(&c, q).first().cloned().unwrap_or_default();
         let within = |q: &str, id: &str, n: usize| place(&c, q, id).is_some_and(|p| p < n);
@@ -471,7 +530,7 @@ mod tests {
         assert!(effect.is_some() && tool < effect, "{tool:?} {effect:?}");
         assert!(within("type", "tool:type", 2));
         assert!(within("layers", "panel:layers", 3));
-        assert!(first("drop shadow").starts_with("effect:"), "{}", first("drop shadow"));
+        assert_eq!(first("drop shadow"), "effect:stylize.dropShadow");
         assert_eq!(first("view.goto1"), "view.goto1", "the whole id, above Saved View 10");
         assert_eq!(first("bring front"), "object.arrange.bringToFront");
         assert!(within("ruler", "view.rulers", 4));
