@@ -14,7 +14,10 @@
 //!   that carries an ICC profile is converted from it to sRGB with the same intent and written
 //!   without it ([`ColorOut::image_srgb_intent`]); with `destination` and a destination its
 //!   pixels are converted to (CMYK, another RGB space), a colour image is converted from its
-//!   profile to sRGB and then to the destination. Without conversion it keeps its profile. The
+//!   profile to sRGB and then to the destination. With `preserveNumbers` (and PDF/X-1a), which
+//!   keeps the numbers of untagged colours only, such an image is converted from its profile
+//!   whatever the destination: to sRGB, and then to a CMYK or other RGB destination
+//!   ([`ColorOut::tagged_pixels`]). Without conversion it keeps its profile. The
 //!   destination is a profile name; empty, the document's profile for its colour mode.
 //! - Profiles ([`ProfileInclusion`]): with `all`, with `destination`, and with `taggedSource` on a
 //!   document that was assigned profiles, colours are written in ICC-based colour spaces: CMYK
@@ -84,6 +87,9 @@ pub(crate) struct ColorOut {
     pub srgb_note: Option<String>,
     /// The image transform, built when the first image needs it.
     pixels: OnceLock<Option<Pixels>>,
+    /// The transform of images converted from their profile, when it isn't `pixels`
+    /// ([`Self::tagged_pixels`]).
+    tagged_pixels: OnceLock<Option<Pixels>>,
     /// The CMYK image transform, built when the first CMYK image needs it.
     cmyk_pixels: OnceLock<Option<CmykPixels>>,
     intent: Intent,
@@ -128,6 +134,7 @@ impl Default for ColorOut {
             cmyk_profile,
             srgb_note: None,
             pixels: OnceLock::new(),
+            tagged_pixels: OnceLock::new(),
             cmyk_pixels: OnceLock::new(),
             intent,
             catalog: None,
@@ -361,13 +368,49 @@ impl ColorOut {
     /// The intent a gray or RGB image that carries an ICC profile is converted from it to sRGB
     /// with ([`crate::images::recode`]): the colour settings' intent, with Convert to Destination
     /// and an sRGB destination, also when the document's RGB space is sRGB, or a destination
-    /// colour images' pixels are then converted to ([`Self::pixels`]: CMYK, another RGB space).
-    /// `None` otherwise, Preserve Numbers and an RGB destination that is the document's own RGB
-    /// profile (which leaves RGB colours and RGB images as they are) included: such an image
-    /// keeps its profile, or its numbers are converted as sRGB ones.
+    /// colour images' pixels are then converted to ([`Self::pixels`]: CMYK, another RGB space);
+    /// and with Preserve Numbers (and PDF/X-1a's own conversion), whatever the destination, as
+    /// only untagged colours of the destination's model keep their numbers. The pixels are then
+    /// converted by [`Self::tagged_pixels`]. `None` otherwise, an RGB destination that is the
+    /// document's own RGB profile with Convert to Destination (which leaves RGB colours and RGB
+    /// images as they are) included: such an image keeps its profile.
     pub(crate) fn image_srgb_intent(&self) -> Option<Intent> {
-        let d = self.dest.as_ref().filter(|d| d.destination)?;
-        ((d.model == Model::Rgb && d.srgb) || self.pixels().is_some()).then_some(self.intent)
+        let d = self.dest.as_ref()?;
+        let rgb = d.model == Model::Rgb && (d.srgb || !d.destination);
+        (rgb || self.pixels().is_some()).then_some(self.intent)
+    }
+
+    /// Are gray images that carry an ICC profile converted from it to sRGB grays too
+    /// ([`Self::image_srgb_intent`])? Only with an sRGB destination; in the others, RGB tagged as
+    /// sRGB included, grey pixels are not converted and keep their profile.
+    pub(crate) fn converts_grey_images(&self) -> bool {
+        self.dest.as_ref().is_some_and(|d| d.model == Model::Rgb && d.srgb)
+    }
+
+    /// The destination a colour image converted from its ICC profile to sRGB
+    /// ([`Self::image_srgb_intent`]) is then converted to when other colour images are not
+    /// ([`Self::pixels`]): with Preserve Numbers, an RGB destination other than sRGB, whose
+    /// untagged RGB images keep their numbers (unless RGB is tagged as sRGB).
+    fn tagged_rgb_dest(&self) -> Option<&Dest> {
+        self.dest.as_ref().filter(|d| !d.destination && d.model == Model::Rgb && !d.srgb && !self.tagged)
+    }
+
+    /// Are colour images converted from their ICC profile then converted by
+    /// [`Self::tagged_pixels`]?
+    pub(crate) fn converts_tagged_pixels(&self) -> bool {
+        self.tagged_rgb_dest().is_some()
+    }
+
+    /// How a colour image converted from its ICC profile to sRGB is then converted into that
+    /// destination's RGB space ([`Self::converts_tagged_pixels`]), built when the first such image
+    /// needs it; `None` when there is no such destination.
+    pub(crate) fn tagged_pixels(&self) -> Option<&Pixels> {
+        self.tagged_pixels
+            .get_or_init(|| {
+                let d = self.tagged_rgb_dest()?;
+                Some(Pixels::Rgb(Box::new(ProofLut::build(|rgb| d.cms.srgb_to_rgb(rgb)))))
+            })
+            .as_ref()
     }
 
     /// The CMYK profile CMYK image `blob` is tagged with ([`crate::images::cmyk_icc`]): the one it

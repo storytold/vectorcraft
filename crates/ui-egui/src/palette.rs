@@ -136,6 +136,45 @@ pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
     }
 }
 
+/// How many picks the Recent Commands list beside the search field holds.
+pub(crate) const MAX_RECENT_COMMANDS: usize = 5;
+
+/// How many ids the saved Recent Commands list holds at most, unavailable ones included.
+const MAX_SAVED_RECENT_COMMANDS: usize = 4 * MAX_RECENT_COMMANDS;
+
+/// Puts `id` first in the Recent Commands ids `list`, removing its earlier place, and keeps the
+/// newest [`MAX_RECENT_COMMANDS`] ids that are `known`. An id that is not `known` now (a plug-in
+/// that is disabled or not loaded yet) keeps its place among them, so it shows again when its
+/// command comes back. The list never holds more than [`MAX_SAVED_RECENT_COMMANDS`] ids.
+fn remember(list: &mut Vec<String>, id: &str, known: impl Fn(&str) -> bool) {
+    list.retain(|c| c != id);
+    list.insert(0, id.to_string());
+    let mut kept = 0;
+    let end = list.iter().position(|c| {
+        if known(c) {
+            kept += 1;
+        }
+        kept > MAX_RECENT_COMMANDS
+    });
+    list.truncate(end.unwrap_or(list.len()).min(MAX_SAVED_RECENT_COMMANDS));
+}
+
+/// The entries the Recent Commands list shows for the ids `ids`, most recent first. An id with no
+/// entry (a removed plug-in) is skipped.
+fn recent<'a>(entries: &'a [Entry], ids: &[String]) -> Vec<&'a Entry> {
+    ids.iter().take(MAX_SAVED_RECENT_COMMANDS).filter_map(|id| entries.iter().find(|e| e.id == *id)).take(MAX_RECENT_COMMANDS).collect()
+}
+
+/// The id of the Recent Commands list's popup.
+fn recent_list_id() -> egui::Id {
+    egui::Id::unique("palette-recent-commands")
+}
+
+/// Is the palette's Recent Commands list open?
+pub(crate) fn recent_list_open(ctx: &egui::Context) -> bool {
+    egui::Popup::is_id_open(ctx, recent_list_id())
+}
+
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if !app.ui.palette_open {
         return;
@@ -145,7 +184,12 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let q = app.ui.palette_query.to_lowercase();
     let entries = entries(ctx, crate::i18n::current());
     let matches: Vec<&Entry> = entries.iter().filter(|e| q.split_whitespace().all(|w| e.haystack.contains(w))).take(14).collect();
+    let recent = recent(&entries, &app.ui.recent_commands);
+    // While the Recent Commands list is open, the arrow keys and Enter go to its rows, and the
+    // search field leaves them the keyboard.
+    let list_open = recent_list_open(ctx);
     let mut run: Option<String> = None;
+    let mut history_focused = false;
     // The highlighted result (#1757): Up and Down move it (wrapping), the pointer over a result
     // takes it, and a new query starts again from the first.
     let sel_id = egui::Id::unique("palette-selected");
@@ -153,8 +197,32 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if last_q != q {
         sel = 0;
     }
+    // The Recent Commands row with the keyboard: Up and Down move it, wrapping at the ends, so the
+    // keys never leave the list for the results below it.
+    let rsel_id = egui::Id::unique("palette-recent-selected");
+    let mut rsel = if list_open { ctx.data(|d| d.get_temp::<usize>(rsel_id)).unwrap_or(0) } else { 0 };
+    if list_open && !recent.is_empty() {
+        let rn = recent.len();
+        let (down, up) =
+            ctx.input_mut(|i| (i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown), i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)));
+        if down {
+            rsel = (rsel + 1) % rn;
+        }
+        if up {
+            rsel = (rsel + rn - 1) % rn;
+        }
+        rsel = rsel.min(rn - 1);
+    }
+    // Enter or Space runs the row the arrow keys of this frame moved to. The keys are taken here,
+    // since a row's button turns them into a click of the row that had the keyboard last frame.
+    if list_open
+        && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter) | i.consume_key(egui::Modifiers::NONE, egui::Key::Space))
+        && let Some(e) = recent.get(rsel)
+    {
+        run = Some(e.id.clone());
+    }
     let n = matches.len();
-    if n > 0 {
+    if n > 0 && !list_open {
         let (down, up) =
             ctx.input_mut(|i| (i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown), i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)));
         if down {
@@ -168,13 +236,38 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     egui::Area::new(egui::Id::unique("palette")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, [0.0, 90.0]).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).fill(t.panel).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
             ui.set_width(520.0);
-            let r = ui.add(
-                egui::TextEdit::singleline(&mut app.ui.palette_query)
-                    .align(egui::Align2::LEFT_CENTER)
-                    .hint_text(tl!("Search commands and tools…"))
-                    .desired_width(500.0),
-            );
-            r.request_focus();
+            ui.horizontal(|ui| {
+                let r = ui.add(
+                    egui::TextEdit::singleline(&mut app.ui.palette_query)
+                        .align(egui::Align2::LEFT_CENTER)
+                        .hint_text(tl!("Search commands and tools…"))
+                        .desired_width(470.0),
+                );
+                // Recent Commands: the last picks, most recent first. A choice runs as a pick of
+                // the same result does. The first row takes the keyboard when the list opens, and
+                // the row with the keyboard keeps it while the list is open.
+                let button = crate::widgets::icon_button(ui, "history", tl!("Recent Commands"), false, 24.0);
+                // The search field keeps the keyboard, except while the list is open or Tab has
+                // moved it to the list's button, where Enter or Space opens the list.
+                history_focused = button.has_focus();
+                if !list_open && !history_focused {
+                    r.request_focus();
+                }
+                egui::Popup::menu(&button).id(recent_list_id()).show(|ui| {
+                    if recent.is_empty() {
+                        ui.add_enabled(false, egui::Button::new(tl!("No recent commands")));
+                    }
+                    for (i, e) in recent.iter().enumerate() {
+                        let row = ui.add(egui::Button::new(e.shown.as_str()).shortcut_text(menus::shown_shortcut(&e.shortcut)));
+                        if i == rsel {
+                            row.request_focus();
+                        }
+                        if row.clicked() {
+                            run = Some(e.id.clone());
+                        }
+                    }
+                });
+            });
             ui.add_space(6.0);
             for (i, e) in matches.iter().enumerate() {
                 let resp = ui.add(
@@ -190,16 +283,22 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     run = Some(e.id.clone());
                 }
             }
-            if ui.input(|i| i.key_pressed(egui::Key::Enter))
+            if !list_open
+                && !history_focused
+                && ui.input(|i| i.key_pressed(egui::Key::Enter))
                 && let Some(e) = matches.get(sel)
             {
                 run = Some(e.id.clone());
             }
         });
     });
-    ctx.data_mut(|d| d.insert_temp(sel_id, (sel, q)));
+    ctx.data_mut(|d| {
+        d.insert_temp(sel_id, (sel, q));
+        d.insert_temp(rsel_id, rsel);
+    });
     if let Some(id) = run {
         app.ui.palette_open = false;
+        remember(&mut app.ui.recent_commands, &id, |c| entries.iter().any(|e| e.id == c));
         run_pick(app, &id);
     }
 }
@@ -510,6 +609,268 @@ mod tests {
             assert!(app.ui.dialog.is_none(), "{id}");
             assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1, "{id}: {}", app.ui.status);
         }
+    }
+
+    /// #6376: a pick goes first in Recent Commands, and a pick of a command already listed moves it
+    /// to the top, so each command takes one place. The list is saved with the UI state.
+    #[test]
+    fn recent_commands_put_the_latest_pick_first_and_list_each_command_once() {
+        let mut list = vec![];
+        for id in ["object.group", "paint.swap", "object.group"] {
+            remember(&mut list, id, |_| true);
+        }
+        assert_eq!(list, ["object.group", "paint.swap"]);
+        // A pick with Enter in the open palette is remembered.
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        app.ui.recent_commands = list;
+        app.ui.palette_open = true;
+        app.ui.palette_query = "paint.swap".into();
+        let first = build(crate::i18n::current()).into_iter().find(|e| e.haystack.contains("paint.swap")).unwrap().id;
+        let ctx = egui::Context::default();
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        ctx.run_ui(egui::RawInput { events: vec![enter], ..Default::default() }, |ui| show(&mut app, ui.ctx())).textures_delta.clear();
+        assert!(!app.ui.palette_open);
+        assert_eq!(app.ui.recent_commands.first(), Some(&first));
+        assert_eq!(app.ui.recent_commands.iter().filter(|c| **c == first).count(), 1, "{:?}", app.ui.recent_commands);
+        let restored: crate::state::UiState = serde_json::from_str(&serde_json::to_string(&app.ui).unwrap()).unwrap();
+        assert_eq!(restored.recent_commands, app.ui.recent_commands);
+    }
+
+    /// #6376: Recent Commands keeps the last five picks.
+    #[test]
+    fn recent_commands_keep_the_last_five_picks() {
+        let mut list = vec![];
+        let ids = ["a", "b", "c", "d", "e", "f", "g"];
+        for id in ids {
+            remember(&mut list, id, |_| true);
+        }
+        assert_eq!(list, ["g", "f", "e", "d", "c"]);
+        let entries = build(Lang::EN);
+        let many: Vec<String> = entries.iter().take(MAX_RECENT_COMMANDS + 2).map(|e| e.id.clone()).collect();
+        assert_eq!(recent(&entries, &many).len(), MAX_RECENT_COMMANDS);
+    }
+
+    /// #6376: a command that does not exist now, such as a plug-in's filter while the plug-in is
+    /// not loaded, is left out of Recent Commands. A pick keeps it in the saved list, so it shows
+    /// again when the command comes back; five other commands picked after it push it out.
+    #[test]
+    fn recent_commands_skip_ids_that_no_longer_exist() {
+        let entries = build(Lang::EN);
+        let known = |c: &str| entries.iter().any(|e| e.id == c);
+        let saved: Vec<String> = ["plugin:test.UI.palette_removed", "object.group", "tool:no-such-tool"].map(str::to_string).into();
+        let shown: Vec<&str> = recent(&entries, &saved).iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(shown, ["object.group"]);
+        let mut list = saved;
+        remember(&mut list, "paint.swap", known);
+        assert_eq!(list, ["paint.swap", "plugin:test.UI.palette_removed", "object.group", "tool:no-such-tool"]);
+        let four: Vec<String> = entries.iter().filter(|e| e.id != "paint.swap" && e.id != "object.group").take(4).map(|e| e.id.clone()).collect();
+        for id in &four {
+            remember(&mut list, id, known);
+        }
+        let expected: Vec<String> =
+            four.iter().rev().cloned().chain(["paint.swap".to_string(), "plugin:test.UI.palette_removed".to_string()]).collect();
+        assert_eq!(list, expected, "object.group, the sixth known id, and the ids after it go");
+        // Unavailable ids are capped too.
+        let mut list: Vec<String> = (0..50).map(|i| format!("plugin:test.UI.gone{i}")).collect();
+        remember(&mut list, "paint.swap", known);
+        assert_eq!(list.len(), MAX_SAVED_RECENT_COMMANDS);
+        assert_eq!(list.first().map(String::as_str), Some("paint.swap"));
+    }
+
+    /// The open palette drawn over `app`, after the frame's keys go to the shortcuts as in the app,
+    /// with a query no result matches, so the only command buttons are the Recent Commands list's.
+    fn palette_harness(mut app: VectorcraftApp) -> egui_kittest::Harness<'static, VectorcraftApp> {
+        app.ui.palette_open = true;
+        app.ui.palette_query = "zzqqxxjj".into();
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(800.0, 700.0)).with_accessibility_check(false).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                crate::shortcuts::handle(app, ui.ctx());
+                show(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(3);
+        h
+    }
+
+    /// #6376: the open Recent Commands list has the keyboard: its first row takes it, Down moves to
+    /// the next row and Enter runs that row, not the highlighted search result.
+    #[test]
+    fn the_keyboard_moves_through_recent_commands_and_enter_runs_a_row() {
+        use egui_kittest::kittest::Queryable;
+        let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        app.ui.recent_commands = vec!["object.group".into(), "paint.swap".into()];
+        let mut h = palette_harness(app);
+        h.state_mut().ui.palette_query = "zoom".into();
+        h.run_steps(1);
+        h.get_by_label(tl!("Recent Commands")).click();
+        h.run_steps(2);
+        h.key_press(egui::Key::ArrowDown);
+        h.run_steps(2);
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        assert!(!h.state().ui.palette_open, "the palette closes");
+        assert_eq!(h.state().ui.recent_commands, ["paint.swap", "object.group"]);
+    }
+
+    /// #6376: Down on the last Recent Commands row wraps to the first row, and Up on the first
+    /// wraps to the last, so the keys never reach the search results below the list.
+    #[test]
+    fn the_keys_wrap_within_recent_commands() {
+        use egui_kittest::kittest::Queryable;
+        // (keys pressed after the list opens, the command Enter then runs)
+        let cases = [(vec![egui::Key::ArrowDown, egui::Key::ArrowDown], "object.group"), (vec![egui::Key::ArrowUp], "paint.swap")];
+        for (keys, ran) in cases {
+            let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+            app.ui.recent_commands = vec!["object.group".into(), "paint.swap".into()];
+            let mut h = palette_harness(app);
+            h.state_mut().ui.palette_query = "zoom".into();
+            h.run_steps(1);
+            h.get_by_label(tl!("Recent Commands")).click();
+            h.run_steps(2);
+            for key in &keys {
+                h.key_press(*key);
+                h.run_steps(2);
+            }
+            h.key_press(egui::Key::Enter);
+            h.run_steps(2);
+            assert!(!h.state().ui.palette_open, "{keys:?}: the palette closes");
+            assert_eq!(h.state().ui.recent_commands.first().map(String::as_str), Some(ran), "{keys:?}: {:?}", h.state().ui.recent_commands);
+            assert_eq!(h.state().ui.recent_commands.len(), 2, "{keys:?}: no search result ran");
+        }
+    }
+
+    /// #6376: Down and Enter that arrive in the same frame run the row Down moved to, not the row
+    /// that had the keyboard before.
+    #[test]
+    fn down_and_enter_in_one_frame_run_the_row_down_moved_to() {
+        use egui_kittest::kittest::Queryable;
+        let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        app.ui.recent_commands = vec!["object.group".into(), "paint.swap".into()];
+        let mut h = palette_harness(app);
+        h.get_by_label(tl!("Recent Commands")).click();
+        h.run_steps(2);
+        // `key_press` runs a frame for each event, so both keys go into the next frame's input.
+        for key in [egui::Key::ArrowDown, egui::Key::Enter] {
+            h.input_mut().events.push(egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE });
+        }
+        h.run_steps(2);
+        assert!(!h.state().ui.palette_open, "the palette closes");
+        assert_eq!(h.state().ui.recent_commands, ["paint.swap", "object.group"]);
+    }
+
+    /// #6376: Tab moves the keyboard from the search field to the Recent Commands button and it
+    /// stays there; Enter then opens the list instead of running the highlighted result.
+    #[test]
+    fn tab_reaches_the_recent_commands_button_and_enter_opens_the_list() {
+        use egui_kittest::kittest::Queryable;
+        let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        app.ui.recent_commands = vec!["object.group".into()];
+        let mut h = palette_harness(app);
+        h.state_mut().ui.palette_query = "zoom".into();
+        h.run_steps(2);
+        h.key_press(egui::Key::Tab);
+        h.run_steps(3);
+        assert!(h.get_by_label(tl!("Recent Commands")).is_focused(), "the button keeps the keyboard");
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        assert!(h.state().ui.palette_open, "no search result ran");
+        let shown = build(crate::i18n::current()).into_iter().find(|e| e.id == "object.group").unwrap().shown;
+        assert!(h.query_by(|n| n.label().is_some_and(|l| l.starts_with(&shown))).is_some(), "the list is open");
+        assert_eq!(h.state().ui.recent_commands, ["object.group"]);
+    }
+
+    /// #6376: another open popup leaves the palette's keys alone: Enter still runs the highlighted
+    /// result. Only the Recent Commands list takes them.
+    #[test]
+    fn another_popup_leaves_enter_to_the_palette() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        app.ui.palette_open = true;
+        app.ui.palette_query = "paint.swap".into();
+        let first = build(crate::i18n::current()).into_iter().find(|e| e.haystack.contains("paint.swap")).unwrap().id;
+        let ctx = egui::Context::default();
+        let other = egui::Id::unique("another popup");
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        for events in [vec![], vec![enter]] {
+            ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+                egui::Popup::open_id(ui.ctx(), other);
+                show(&mut app, ui.ctx());
+            })
+            .textures_delta
+            .clear();
+        }
+        assert!(egui::Popup::is_id_open(&ctx, other) && !recent_list_open(&ctx));
+        assert!(!app.ui.palette_open, "Enter runs the highlighted result");
+        assert_eq!(app.ui.recent_commands, [first]);
+    }
+
+    /// #6376: Escape with the Recent Commands list open closes the list and leaves the palette
+    /// open; the next Escape closes the palette.
+    #[test]
+    fn escape_closes_recent_commands_before_the_palette() {
+        use egui_kittest::kittest::Queryable;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        app.ui.recent_commands = vec!["object.group".into()];
+        let mut h = palette_harness(app);
+        h.get_by_label(tl!("Recent Commands")).click();
+        h.run_steps(2);
+        let shown = build(crate::i18n::current()).into_iter().find(|e| e.id == "object.group").unwrap().shown;
+        let row = |h: &egui_kittest::Harness<'_, VectorcraftApp>| h.query_by(|n| n.label().is_some_and(|l| l.starts_with(&shown))).is_some();
+        assert!(row(&h), "the list is open");
+        h.key_press(egui::Key::Escape);
+        h.run_steps(2);
+        assert!(!row(&h), "the list closes");
+        assert!(h.state().ui.palette_open, "the palette stays open");
+        h.key_press(egui::Key::Escape);
+        h.run_steps(2);
+        assert!(!h.state().ui.palette_open, "the next Escape closes the palette");
+    }
+
+    /// #6376: a choice in Recent Commands closes the palette and runs what a pick of the same
+    /// result runs (here Clean Up… opens its dialog), and moves the command to the top.
+    #[test]
+    fn a_recent_command_runs_what_its_pick_runs() {
+        use egui_kittest::kittest::Queryable;
+        let id = "object.path.cleanUp";
+        let session = || vectorcraft_testkit::fixtures::Fixture::Single.session();
+        let mut picked = VectorcraftApp::new(session(), crate::Services::default());
+        picked.ui.status.clear();
+        run_pick(&mut picked, id);
+        assert!(picked.ui.dialog.is_some(), "{}", picked.ui.status);
+
+        let mut app = VectorcraftApp::new(session(), crate::Services::default());
+        app.ui.status.clear();
+        app.ui.recent_commands = vec!["object.group".into(), id.into()];
+        // A result's button is named by its label and its shortcut.
+        let e = build(crate::i18n::current()).into_iter().find(|e| e.id == id).unwrap();
+        let name = format!("{} {}", e.shown, menus::shown_shortcut(&e.shortcut));
+        let mut h = palette_harness(app);
+        h.get_by_label(tl!("Recent Commands")).click();
+        h.run_steps(2);
+        h.get_by_label(&name).click();
+        h.run_steps(2);
+        let app = h.state();
+        assert!(!app.ui.palette_open, "the palette closes");
+        assert_eq!(outcome(app), outcome(&picked));
+        assert_eq!(app.ui.recent_commands, [id, "object.group"]);
+    }
+
+    /// #6376: with nothing picked yet, Recent Commands shows a dimmed No recent commands row.
+    #[test]
+    fn recent_commands_without_picks_show_a_dimmed_row() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let mut h = palette_harness(app);
+        assert!(h.query_by_label(tl!("No recent commands")).is_none(), "the list opens on a click");
+        h.get_by_label(tl!("Recent Commands")).click();
+        h.run_steps(2);
+        assert!(h.get_by_label(tl!("No recent commands")).accesskit_node().is_disabled());
+        assert!(h.state().ui.palette_open);
     }
 
     /// #1757: Up and Down move the highlighted result, wrapping at the ends; a new query starts

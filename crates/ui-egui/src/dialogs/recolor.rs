@@ -9,7 +9,8 @@
 //! CMYK or Lab, and Tint when the new color is a spot color of the library), which edit the
 //! first selected row's new color (once they have, OK gives the art each new color in its own
 //! model), New Row (a row with no current colors above the first selected row, or at the top,
-//! with that row's new color; it recolors nothing until Merge moves colors into it), Merge and
+//! with that row's new color; it recolors nothing until Merge moves colors into it, and until then
+//! the Edit tab, the Color Theme Picker and Save All Colors leave it out), Merge and
 //! Separate, Randomize order or
 //! saturation and brightness, Find (with it on, the art of the selected rows shows as the preview
 //! shows it, their current colors with Preview off, and the rest of the selected art shows its
@@ -38,9 +39,9 @@
 //! The Color Theme Picker button beside the tabs turns on picking from the canvas: a click on an
 //! object takes the palette of the object a Selection tool click takes, a drag takes the palette
 //! of the art inside its marquee, and Shift adds to the picks so far (`recolor.pickTheme`). The
-//! rows that aren't excluded take the picked colors as their new colors, the most used color first
-//! and repeating when the rows outnumber them, and the art previews them; OK keeps them as one
-//! undo step. A new count of Colors keeps the picks: the new rows take them again.
+//! rows that aren't excluded and hold current colors take the picked colors as their new colors,
+//! the most used color first and repeating when the rows outnumber them, and the art previews
+//! them; OK keeps them as one undo step. A new count of Colors keeps the picks: the new rows take them again.
 //!
 //! Fields (`ui.dialog.set`): `rows` ([{from: [keys], to: key, exclude?, tint?: percent of a spot
 //! color}]), `colors` (null: Auto, or a count), `method`, `preserveWhite`, `preserveBlack`,
@@ -391,14 +392,15 @@ fn group_colors<'a>(app: &VectorcraftApp, d: &Dialog, rs: impl Iterator<Item = &
     .collect()
 }
 
-/// The New Color Group menu's request: save the new colors of the rows that aren't excluded (Save
-/// All Colors, in row order; a row without one gives its first current color) or of the Prominent Colors bar (Save Prominent Colors, in its order)
-/// as a new color group, a step of its own (`swatch.newGroup`).
+/// The New Color Group menu's request: save the new colors of the rows that aren't excluded and
+/// hold current colors (Save All Colors, in row order; a row without one gives its first current
+/// color) or of the Prominent Colors bar (Save Prominent Colors, in its order) as a new color
+/// group, a step of its own (`swatch.newGroup`).
 fn save_group(app: &mut VectorcraftApp, d: &mut Dialog, which: &str) {
     let rs = rows(d);
     let order: Vec<usize> = match which {
         "prominent" => prominent_parts(d, &rs).into_iter().map(|p| p.0).collect(),
-        _ => (0..rs.len()).filter(|&i| !excluded(&rs[i])).collect(),
+        _ => (0..rs.len()).filter(|&i| in_group(&rs[i])).collect(),
     };
     let colors = group_colors(app, d, order.iter().filter_map(|&i| rs.get(i)));
     if colors.is_empty() {
@@ -417,10 +419,10 @@ const THEME_PICKER: &str = "themePicker";
 const THEME_PICKS: &str = "themePicks";
 const THEME_DONE: &str = "__themePicked";
 
-/// When the picks of the Color Theme Picker changed, give the rows that aren't excluded the
-/// palette of the art picked (`recolor.pickTheme`, as many colors as those rows), in row order;
-/// with fewer colors than rows, the colors repeat. Picks that touch no art leave the rows as they
-/// are.
+/// When the picks of the Color Theme Picker changed, give the rows that aren't excluded and hold
+/// current colors the palette of the art picked (`recolor.pickTheme`, as many colors as those
+/// rows), in row order; with fewer colors than rows, the colors repeat. Picks that touch no art
+/// leave the rows as they are.
 fn sync_theme(app: &mut VectorcraftApp, d: &mut Dialog) {
     let picks = d.fields.get(THEME_PICKS).cloned().unwrap_or(Value::Null);
     if !picks.as_array().is_some_and(|a| !a.is_empty()) || d.fields.get(THEME_DONE) == Some(&picks) {
@@ -559,6 +561,18 @@ fn excluded(row: &Value) -> bool {
     row["exclude"].as_bool().unwrap_or(false)
 }
 
+/// Whether `row` holds no current colors: a row made with New Row, until colors are merged into it.
+/// Its new color recolors nothing and is no color of a color group, the wheel or the harmony rules.
+fn empty(row: &Value) -> bool {
+    row["from"].as_array().is_some_and(Vec::is_empty)
+}
+
+/// Whether `row`'s new color is one of the colors a color group takes: the row isn't excluded and
+/// holds current colors.
+fn in_group(row: &Value) -> bool {
+    !excluded(row) && !empty(row)
+}
+
 /// The seed for the next Randomize: one past the last, held at `u64::MAX`.
 fn next_seed(d: &Dialog) -> u64 {
     (d.f64("__seed", 0.0) as u64).saturating_add(1)
@@ -574,7 +588,7 @@ fn apply_params(d: &Dialog) -> Value {
     let rs = rows(d);
     let group = d.fields.get("group").and_then(Value::as_str).map(|g| {
         // A row made with New Row that holds no current colors gives the group no color.
-        let filled: Vec<&Value> = rs.iter().filter(|r| !r["from"].as_array().is_some_and(Vec::is_empty)).map(|r| &r["to"]).collect();
+        let filled: Vec<&Value> = rs.iter().filter(|r| !empty(r)).map(|r| &r["to"]).collect();
         let assign = d.fields.get("__assign").and_then(Value::as_array).filter(|_| d.bool("__art"));
         let rest = assign.map_or(&[][..], |a| a.get(filled.len()..).unwrap_or_default());
         let colors: Vec<&Value> = filled.into_iter().chain(rest).collect();
@@ -787,7 +801,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     sync_theme(app, &mut d);
     sync_weights(app, &mut d);
     if d.bool("__newGroup") {
-        let colors = group_colors(app, &d, rows(&d).iter().filter(|r| !excluded(r)));
+        let colors = group_colors(app, &d, rows(&d).iter().filter(|r| in_group(r)));
         return form::commit_preview(app, "swatch.newGroup", json!({"name": d.str("groupName"), "colors": colors, "keepModel": true}));
     }
     let r = form::commit_preview(app, CMD, apply_params(&d))?;
@@ -1000,7 +1014,8 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| mode_menu(ui, d, &target, false));
     });
     ui.add_space(6.0);
-    changed |= sliders(app, ui, d, rows);
+    let row = first_selected(d, rows);
+    changed |= sliders(app, ui, d, rows, row);
     ui.add_space(8.0);
     egui::Grid::new("recolor-options").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
         ui.label(egui::RichText::new(tl!("Method:")).color(t.text_dim));
@@ -1131,8 +1146,13 @@ fn slider_values(d: &Dialog, rows: &[Value], i: usize, c: &Color, mode: Mode) ->
     v.filter(|v| v.len() == mode.labels().len()).unwrap_or_else(|| components(mode, c))
 }
 
-/// What the color sliders edit: the first selected row, its new color, and the name of the
-/// library's spot color that color is.
+/// The first selected row of `rows`.
+fn first_selected(d: &Dialog, rows: &[Value]) -> Option<usize> {
+    selection(d).into_iter().filter(|i| *i < rows.len()).min()
+}
+
+/// What the color sliders edit: a row (the first selected row on the Assign tab, the base color's
+/// row on the Edit tab), its new color, and the name of the library's spot color that color is.
 struct SliderTarget {
     row: Option<usize>,
     color: Option<Color>,
@@ -1141,7 +1161,12 @@ struct SliderTarget {
 
 impl SliderTarget {
     fn of(app: &VectorcraftApp, d: &Dialog, rows: &[Value]) -> Self {
-        let row = selection(d).into_iter().filter(|i| *i < rows.len()).min();
+        Self::at(app, d, rows, first_selected(d, rows))
+    }
+
+    /// What the color sliders edit when they edit row `row`.
+    fn at(app: &VectorcraftApp, d: &Dialog, rows: &[Value], row: Option<usize>) -> Self {
+        let row = row.filter(|i| *i < rows.len());
         let color = row.and_then(|i| to_color(&rows[i]));
         // A row tint acts only on art, so without art a spot color shows the process modes.
         let spot = color.filter(|_| d.bool("__art")).and_then(|c| spot_of(app, d, &c));
@@ -1252,11 +1277,11 @@ fn slider_cell(
     dragged.map(|x| (lo + f64::from(x) * (hi - lo)).round()).or(keyed).or(typed).map(|v| v.clamp(lo, hi)).filter(|v| (v - value).abs() > 1e-6)
 }
 
-/// The color sliders under the rows, two to a line: they edit the first selected row's new color
-/// (the others keep theirs) in the mode of [`mode_menu`], or its tint of a spot color of the
-/// library. Without a selected row they are disabled. Returns true when they changed a row.
-fn sliders(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]) -> bool {
-    let target = SliderTarget::of(app, d, rows);
+/// The color sliders, two to a line: they edit row `row`'s new color (the others keep theirs) in
+/// the mode of [`mode_menu`], or its tint of a spot color of the library. Without a row they are
+/// disabled. Returns true when they changed a row.
+fn sliders(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value], row: Option<usize>) -> bool {
+    let target = SliderTarget::at(app, d, rows, row);
     let mode = target.mode(d);
     let mut changed = false;
     let top = ui.cursor().top();
@@ -1357,9 +1382,17 @@ fn new_row(rows: &mut Vec<Value>, sel: &[usize]) -> usize {
     at
 }
 
-/// The rows the Edit tab shows: those with a new colour, not excluded.
+/// The rows the Edit tab shows, the harmony rules fill and the Color Theme Picker recolors: those
+/// with a new colour that aren't excluded and hold current colors.
 fn active_rows(rows: &[Value]) -> Vec<usize> {
-    (0..rows.len()).filter(|i| !excluded(&rows[*i]) && to_color(&rows[*i]).is_some()).collect()
+    (0..rows.len()).filter(|i| in_group(&rows[*i]) && to_color(&rows[*i]).is_some()).collect()
+}
+
+/// The row the Edit tab's color sliders edit: the first selected row when the tab shows it (one of
+/// `active`), else the base color's row `base`. A selected row the tab does not show (excluded, or
+/// empty) is left as it is.
+fn edit_slider_row(d: &Dialog, rows: &[Value], active: &[usize], base: Option<usize>) -> Option<usize> {
+    first_selected(d, rows).filter(|i| active.contains(i)).or(base)
 }
 
 /// Set row `i`'s new colour to hue/saturation/brightness `hsb` ([`move_on_wheel`]: with `linked`
@@ -1388,7 +1421,8 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value
     let linked = d.bool("linked");
     let active = active_rows(rows);
     let base = selection(d).into_iter().find(|i| active.contains(i)).or(active.first().copied());
-    let target = SliderTarget::of(app, d, rows);
+    let slider_row = edit_slider_row(d, rows, &active, base);
+    let target = SliderTarget::at(app, d, rows, slider_row);
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(tl!("Harmony Rules:")).color(t.text_dim));
         let rule = Harmony::parse(&d.str("rule")).unwrap_or(Harmony::Complementary);
@@ -1411,7 +1445,7 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value
             let button = widgets::icon_button(ui, "dc-folder", tl!("New Color Group"), false, 24.0);
             let prominent = d.bool("__art") && !prominent_parts(d, rows).is_empty();
             let saved = egui::Popup::menu(&button).show(|ui| {
-                if widgets::menu_item_name(ui, tl!("Save All Colors"), rows.iter().any(|r| !excluded(r)), false) {
+                if widgets::menu_item_name(ui, tl!("Save All Colors"), rows.iter().any(in_group), false) {
                     return Some("all");
                 }
                 widgets::menu_item_name(ui, tl!("Save Prominent Colors"), prominent, false).then_some("prominent")
@@ -1489,7 +1523,7 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value
         let sample = base.and_then(|b| to_color(&rows[b])).unwrap_or(Color::rgb(0.8, 0.45, 0.25));
         global_sliders(ui, d, sample);
     } else {
-        changed |= sliders(app, ui, d, rows);
+        changed |= sliders(app, ui, d, rows, slider_row);
     }
     // The new colours: click one to make it the base colour.
     let min_height = (TAB_H - (ui.cursor().top() - top)).max(0.0);
@@ -1708,6 +1742,27 @@ mod tests {
         assert_eq!(p["groupColors"], json!(["rgb 255 0 0", "rgb 0 0 255", "rgb 0 255 0", "rgb 9 9 9"]));
     }
 
+    /// Opened on colors alone, OK saves the new colors of the rows that hold current colors as the
+    /// new color group, in row order: an empty row gives it no color.
+    #[test]
+    fn an_empty_row_gives_a_new_group_no_color() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("ui.recolorDialog", json!({"colors": ["#ff8000", "#0080ff"]})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        let mut rs = super::rows(d);
+        let at = new_row(&mut rs, &[1]);
+        rs[at]["to"] = json!("rgb 255 0 255");
+        d.fields.insert("rows".into(), Value::Array(rs));
+        let d = d.clone();
+        let groups = app.session.doc().unwrap().doc.swatch_groups.len();
+        confirm(&mut app, &d).unwrap();
+        let doc = &app.session.doc().unwrap().doc;
+        assert_eq!(doc.swatch_groups.len(), groups + 1, "a new color group");
+        let colors: Vec<String> = doc.swatch_groups.last().unwrap().swatches.iter().map(|w| w.paint.color().unwrap().to_hex()).collect();
+        assert_eq!(colors, ["#ff8000", "#0080ff"]);
+    }
+
     /// Randomize after a seed past `u64::MAX` keeps the largest seed.
     #[test]
     fn next_seed_holds_at_the_largest() {
@@ -1738,6 +1793,27 @@ mod tests {
         let mut r = rows();
         apply_rule(&mut r, Harmony::Triad, 0, Color::rgb(1.0, 0.0, 0.0), &[0, 1, 2]);
         assert_eq!([&r[0]["to"], &r[1]["to"], &r[2]["to"]], ["rgb 255 0 0", "rgb 0 255 0", "rgb 0 0 255"]);
+    }
+
+    /// A row made with New Row is not on the Edit tab while it is empty: a harmony rule gives it
+    /// no color and a linked move leaves its new color as it is.
+    #[test]
+    fn an_empty_row_takes_no_harmony_or_wheel_color() {
+        let mut r = rows();
+        new_row(&mut r, &[]);
+        assert_eq!(r[0]["to"], "rgb 255 0 0");
+        let active = active_rows(&r);
+        assert_eq!(active, [1, 2, 3]);
+        apply_rule(&mut r, Harmony::Triad, 1, Color::rgb(1.0, 0.0, 0.0), &active);
+        assert_eq!([&r[0]["to"], &r[1]["to"], &r[2]["to"], &r[3]["to"]], ["rgb 255 0 0", "rgb 255 0 0", "rgb 0 255 0", "rgb 0 0 255"]);
+        move_color(&mut r, 1, [120.0, 1.0, 1.0], true);
+        assert_eq!(r[1]["to"], "rgb 0 255 0");
+        assert_eq!(r[0]["to"], "rgb 255 0 0", "the empty row keeps its new color");
+        // With the empty row selected, the sliders edit the base color's row instead.
+        let sel = |s: Value| Dialog::new("recolor", json!({"__sel": s}));
+        assert_eq!(edit_slider_row(&sel(json!([0])), &r, &active, Some(1)), Some(1));
+        assert_eq!(edit_slider_row(&sel(json!([3, 2])), &r, &active, Some(3)), Some(2), "a shown row: the first selected");
+        assert_eq!(edit_slider_row(&sel(json!([0])), &r, &[], None), None, "no row to edit");
     }
 
     /// A rule or a wheel move that gives a row a new color drops the row's tint; a row whose
@@ -1993,6 +2069,23 @@ mod tests {
         assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "the art is unchanged: no undo step");
     }
 
+    /// The Color Theme Picker gives its colors only to the rows that hold current colors: a row
+    /// made with New Row keeps its new color and takes no place in the palette.
+    #[test]
+    fn theme_picks_leave_an_empty_row_out() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        theme_setup(&mut app, &ctx);
+        let d = app.ui.dialog.as_mut().unwrap();
+        let mut rs = super::rows(d);
+        let at = new_row(&mut rs, &[]);
+        rs[at]["to"] = json!("rgb 9 9 9");
+        d.fields.insert("rows".into(), Value::Array(rs));
+        d.fields.insert(THEME_PICKS.into(), json!([{"at": [107, 17]}, {"rect": [125, 5, 150, 30]}]));
+        frame(&mut app, &ctx, 0.1, vec![], 0);
+        assert_eq!(new_colors(&app), [json!("rgb 9 9 9"), json!("rgb 0 255 0"), json!("rgb 255 255 0")]);
+    }
+
     /// A row made with New Row recolors nothing while it is empty, and OK keeps it; the blue art's
     /// color merged into it takes its new color, in the preview and at OK.
     #[test]
@@ -2161,6 +2254,33 @@ mod tests {
         }
         assert_eq!(groups(&app), n + 2);
         assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 2, "a step for each group");
+    }
+
+    /// Save All Colors leaves out a row made with New Row while it is empty; with only empty rows
+    /// it saves no group and records no step.
+    #[test]
+    fn save_all_colors_leaves_an_empty_row_out() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        prominent_setup(&mut app, &ctx);
+        let groups = |app: &VectorcraftApp| app.session.doc().unwrap().doc.swatch_groups.len();
+        let (n, undo) = (groups(&app), app.session.doc().unwrap().history.undo.len());
+        let save = |app: &mut VectorcraftApp, rows: Value, t: f64| {
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("rows".into(), rows);
+            d.fields.insert(SAVE_GROUP.into(), json!("all"));
+            frame(app, &ctx, t, vec![], 0);
+            frame(app, &ctx, t + 0.01, vec![], 0);
+        };
+        let blank = json!({"from": [], "to": "rgb 255 0 255"});
+        save(&mut app, json!([blank, {"from": [BLUE], "to": "rgb 255 255 0"}, {"from": [RED, PURPLE], "to": "rgb 0 255 0"}]), 0.1);
+        let doc = &app.session.doc().unwrap().doc;
+        let colors: Vec<String> = doc.swatch_groups.last().unwrap().swatches.iter().map(|w| w.paint.color().unwrap().to_hex()).collect();
+        assert_eq!(colors, ["#ffff00", "#00ff00"]);
+        assert_eq!(groups(&app), n + 1);
+        save(&mut app, json!([blank, {"from": [BLUE, RED, PURPLE], "to": "rgb 0 255 0", "exclude": true}]), 0.2);
+        assert_eq!(groups(&app), n + 1, "only an empty and an excluded row: no group");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "and no step");
     }
 
     /// One frame with `modifiers` held.

@@ -38,7 +38,7 @@ pub use commands::specs;
 pub(super) use compound::{as_clipping_path, make_clipping_path, release_clip};
 pub(crate) use pixelgrid::{
     align_new_object, can_align, keep_aligned_in, keep_compound_aligned, keep_pixel_aligned, refresh as refresh_pixel_aligned, resnap,
-    snap_if_aligned,
+    snap_if_aligned, snap_symbol_art,
 };
 pub(super) use shape::recut;
 pub(crate) use transform::{apply_transform, preview_copies, scaling, transform_node, transform_patterns, transforms_objects};

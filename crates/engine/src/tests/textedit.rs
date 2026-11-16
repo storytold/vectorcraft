@@ -4027,3 +4027,35 @@ fn apply_fill_to_stroke_with_characters_selected_changes_only_them() {
     let labels = undo_labels(&s);
     assert_eq!((labels.len(), labels.last().map(String::as_str)), (steps + 1, Some("Apply Fill to Stroke")));
 }
+
+/// Redefines `[Normal Character Style]` with `fill` (`charStyle.setAttrs`).
+fn set_normal_fill(s: &mut Session, fill: vectorcraft_color::Paint) {
+    let attrs = crate::cmd::textstyles::char_attrs(&CharStyle { fill, ..CharStyle::default() });
+    s.execute("charStyle.setAttrs", &json!({"name": "[Normal Character Style]", "attrs": {"fill": attrs["fill"]}})).unwrap();
+}
+
+/// #7975: type the Type tool starts is filled as [Normal Character Style] is, black unless it was
+/// redefined, not with the current fill a shape left behind.
+#[test]
+fn new_type_takes_the_normal_character_style_fill_not_the_current_fill() {
+    use vectorcraft_color::{Color, Paint};
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 60, "height": 60})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    assert_eq!(s.paint.fill, Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "the current fill is red");
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    s.tool_text("Black", v).unwrap();
+    let id = s.doc().unwrap().selection.objects[0];
+    assert_eq!(obj(&s, id).runs[0].style.fill, Paint::solid(Color::BLACK));
+    // A redefined [Normal Character Style] gives new type its fill.
+    let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    set_normal_fill(&mut s, blue.clone());
+    let made = s.execute("text.create", &json!({"x": 100, "y": 300, "text": "Blue"})).unwrap();
+    assert_eq!(obj(&s, NodeId(made["id"].as_u64().unwrap())).runs[0].style.fill, blue);
+    // A color given to the command still wins.
+    let made = s.execute("text.create", &json!({"x": 100, "y": 400, "text": "Green", "color": "#00ff00"})).unwrap();
+    assert_eq!(obj(&s, NodeId(made["id"].as_u64().unwrap())).runs[0].style.fill, Paint::solid(Color::rgb(0.0, 1.0, 0.0)));
+}
