@@ -204,3 +204,44 @@ fn a_word_filled_then_stroked_imports_as_one_filled_and_stroked_type() {
     let looks: Vec<_> = types.iter().flat_map(|t| &t.runs).map(|r| (r.style.fill == cream, !r.style.stroke.is_none())).collect();
     assert_eq!(looks, [(true, false), (false, true)], "{content}");
 }
+
+/// Helvetica PDF page drawing `content`, imported: each run of type as its text, size, and
+/// whether it is filled and stroked, in text order.
+fn word_runs(content: &str) -> Vec<(String, f64, bool, bool)> {
+    use vectorcraft_testkit::pdf::{PdfPage, pdf};
+    let resources = "/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >>";
+    let bytes = pdf(&[PdfPage { resources: resources.into(), ..PdfPage::new(300.0, 200.0, content) }], None);
+    let d = import(&bytes).unwrap();
+    let mut runs = vec![];
+    d.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            runs.extend(t.runs.iter().map(|r| (r.text.clone(), r.style.size, !r.style.fill.is_none(), !r.style.stroke.is_none())));
+        }
+    });
+    runs.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
+    runs
+}
+
+/// A stroke goes only over a glyph filled with the very same placement: a word filled, then its
+/// first glyph stroked at another size from the same origin, is two pieces of type, the word
+/// unstroked and the glyph at its own size (#8015).
+#[test]
+fn a_stroke_at_another_size_does_not_go_over_the_filled_glyph() {
+    for mode in ["1", "2"] {
+        let content = format!("0 0 0 RG 1 1 0.8 rg 3 w BT /F1 60 Tf 40 110 Td (WAVE) Tj ET BT {mode} Tr /F1 30 Tf 40 110 Td (W) Tj 0 Tr ET");
+        let filled = mode == "2";
+        assert_eq!(word_runs(&content), [("W".to_string(), 30.0, filled, true), ("WAVE".to_string(), 60.0, true, false)], "{content}");
+    }
+}
+
+/// A stroke over one glyph of a filled word strokes that glyph alone, not the rest of the word
+/// (#8015).
+#[test]
+fn a_stroke_over_one_glyph_of_a_filled_word_strokes_only_that_glyph() {
+    // W alone stroked at the same size from the same origin: W is stroked, AVE not.
+    let content = "0 0 0 RG 1 1 0.8 rg 3 w BT /F1 60 Tf 40 110 Td (WAVE) Tj ET BT 1 Tr /F1 60 Tf 40 110 Td (W) Tj 0 Tr ET";
+    assert_eq!(word_runs(content), [("AVE".to_string(), 60.0, true, false), ("W".to_string(), 60.0, true, true)], "{content}");
+    // Filled and stroked there instead: that W is drawn again, over the word, as type of its own.
+    let content = "0 0 0 RG 1 1 0.8 rg 3 w BT /F1 60 Tf 40 110 Td (WAVE) Tj ET BT 2 Tr /F1 60 Tf 40 110 Td (W) Tj 0 Tr ET";
+    assert_eq!(word_runs(content), [("W".to_string(), 60.0, true, true), ("WAVE".to_string(), 60.0, true, false)], "{content}");
+}
