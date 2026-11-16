@@ -22,6 +22,8 @@
 //! has moved, switches the Blob Brush to the Smooth tool: the drag smooths the selected paths.
 //! Alt held at a Paintbrush press with a selected path also smooths; Alt pressed after its stroke
 //! begins closes the path on release.
+//! Alt held at the Eraser's press draws a marquee instead of a stroke, a square while Shift is
+//! held, and the release erases everything inside it.
 //! Alt held at the Knife's press makes it cut along the straight line from the press point to the
 //! pointer, even if Alt is released during the drag. Shift on each drag or release constrains that
 //! line to 45° steps from the canvas axes.
@@ -163,6 +165,11 @@ pub struct GestureTool {
     /// The pointer has moved from the press point, by any distance (a move too short to add a
     /// point counts).
     moved: bool,
+    /// Active Eraser drag draws a marquee (Alt held at the press): the release erases the
+    /// rectangle from the press point to the pointer, a square while Shift is held.
+    marquee: bool,
+    /// Shift was held at the last event of the Eraser's marquee drag.
+    square: bool,
     /// Active Pencil drag draws a straight line (Shift or Alt held at the press), or active Knife
     /// drag cuts along one (Alt held at the press): the stroke is the press point and the pointer.
     straight: bool,
@@ -190,6 +197,10 @@ pub struct GestureTool {
     /// Which way the pen leaned at the last point of the stroke where it leaned 1° or more from
     /// upright ([`super::pen_bearing`]), for the Eraser's tip outline.
     bearing: Option<f64>,
+    /// `bearing` as it was at each of `poses`, for the outline of the area the Eraser's drag covers.
+    bearings: Vec<Option<f64>>,
+    /// The first of `bearings` that the pen gave: the release gives it to the points before it.
+    first_bearing: Option<f64>,
     /// The length of the stroke, in points.
     length: f64,
     /// The outline of the area a Blob Brush or Eraser drag covers, as far as it is built
@@ -791,9 +802,16 @@ fn redraw_targets(cx: &ToolContext, id: NodeId) -> Vec<NodeId> {
 /// Whether the selection contains a path the Smooth command can act on: one with a subpath of three
 /// or more anchors, or of two anchors joined by a curve.
 fn has_selected_smooth_path(cx: &ToolContext) -> bool {
-    let editable = cx.doc.editable();
+    can_smooth(cx.doc, cx.selection)
+}
+
+/// Whether `selection` in `doc` holds an editable path, selected or inside a selected object, that
+/// the Smooth tool can smooth: one with a subpath of three or more anchors, or of two anchors
+/// joined by a curve.
+pub fn can_smooth(doc: &vectorcraft_doc::Document, selection: &vectorcraft_doc::Selection) -> bool {
+    let editable = doc.editable();
     let smoothable = |sp: &vectorcraft_geom::SubPath| sp.anchors.len() >= 3 || (0..sp.segment_count()).any(|i| !super::segment_is_straight(sp, i));
-    cx.selection.objects.iter().filter_map(|id| cx.doc.node(*id)).any(|n| {
+    selection.objects.iter().filter_map(|id| doc.node(*id)).any(|n| {
         let mut found = false;
         n.walk(&mut |child| {
             if !found
@@ -860,6 +878,8 @@ impl GestureTool {
             smooth_fidelity: SMOOTH_FIDELITY,
             smoothing: false,
             moved: false,
+            marquee: false,
+            square: false,
             straight: false,
             unconstrained: false,
             shift_line: None,
@@ -871,6 +891,8 @@ impl GestureTool {
             tip_at: None,
             light: false,
             bearing: None,
+            bearings: vec![],
+            first_bearing: None,
             length: 0.0,
             area: Cell::new(None),
             area_pending: Cell::new(false),
@@ -938,6 +960,8 @@ impl GestureTool {
             let pose = ev.pen.map(PenPose::sanitized);
             self.bearing = pose.and_then(super::pen_bearing).or(self.bearing);
             self.poses.push(pose);
+            self.bearings.push(self.bearing);
+            self.first_bearing = self.first_bearing.or(self.bearing);
         }
     }
 
@@ -959,6 +983,14 @@ impl GestureTool {
             None if had_bearing => self.poses.iter().rev().find_map(|q| q.and_then(super::pen_bearing)),
             None => self.bearing,
         };
+        if let Some(b) = self.bearings.last_mut() {
+            *b = self.bearing;
+        }
+        // The bearings carry forward, so the last sample gives the first bearing only when the one
+        // before it has none.
+        if self.bearings.len().checked_sub(2).and_then(|i| self.bearings.get(i)).copied().flatten().is_none() {
+            self.first_bearing = self.bearing;
+        }
     }
 
     /// Would a press with `m` held draw a straight Pencil line? Shift or Alt held, unless Alt lends
@@ -971,6 +1003,11 @@ impl GestureTool {
     /// during a drag that has not moved from the press point yet.
     fn blob_alt_smooths(&self, m: Mods) -> bool {
         self.id == "blobBrush" && m.alt && !self.moved
+    }
+
+    /// Would a press with `m` held draw the Eraser's marquee? Alt held at the press.
+    fn alt_marquee(&self, m: Mods) -> bool {
+        self.id == "eraser" && m.alt
     }
 
     /// Shift keeps an active straight Knife cut at 45° steps; without Shift it follows the pointer.
@@ -1036,6 +1073,43 @@ impl GestureTool {
         ]
     }
 
+    /// The Eraser's marquee: the rectangle from the press point to the pointer, or with Shift held
+    /// the square on the larger of its sides, in the direction the pointer went. `None` outside a
+    /// marquee drag.
+    fn marquee_rect(&self) -> Option<Rect> {
+        let (&a, &b) = (self.points.first()?, self.points.last()?);
+        if !self.marquee {
+            return None;
+        }
+        let d = b - a;
+        let b = if self.square {
+            let side = d.x.abs().max(d.y.abs());
+            a + Vec2::new(side.copysign(d.x), side.copysign(d.y))
+        } else {
+            b
+        };
+        Some(Rect::from_points(a, b))
+    }
+
+    /// A drag or the release of the Eraser's marquee: the marquee runs from the press point to the
+    /// pointer, and the release erases it. `None` for any other event.
+    fn marquee_pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Option<Vec<Action>> {
+        if !(self.active && self.marquee && matches!(ev.kind, PointerKind::Drag | PointerKind::Up)) {
+            return None;
+        }
+        self.square = ev.mods.shift;
+        self.points.truncate(1);
+        self.points.push(ev.pos);
+        if !matches!(ev.kind, PointerKind::Up) {
+            return Some(vec![]);
+        }
+        let out = self.finish(cx, ev.mods);
+        self.active = false;
+        self.marquee = false;
+        self.clear();
+        Some(out)
+    }
+
     /// Forget the stroke.
     fn clear(&mut self) {
         self.moved = false;
@@ -1046,6 +1120,8 @@ impl GestureTool {
         self.shift_line = None;
         self.light = false;
         self.bearing = None;
+        self.bearings.clear();
+        self.first_bearing = None;
         self.length = 0.0;
         self.area.set(None);
         self.area_pending.set(false);
@@ -1106,12 +1182,74 @@ impl GestureTool {
         matches!(self.id, "blobBrush" | "eraser")
     }
 
-    /// The pen pressure of each point of a Blob Brush or Eraser stroke whose Size varies with
-    /// Pressure, when a pen pressed less than fully anywhere along it (a stroke without pressure
-    /// keeps its Size).
-    fn size_pressures(&self) -> Option<&[f32]> {
-        let pressed = self.pressures.len() == self.points.len() && self.light;
-        (self.tip_modes()[2] == Variation::Pressure && !self.smoothing && pressed).then_some(self.pressures.as_slice())
+    /// Which of the tip's angle, roundness and size vary along a Blob Brush or Eraser stroke: those
+    /// on a mode the pen gave a reading for anywhere along it (a pressure less than full, a tilt, a
+    /// bearing or a rotation). Random draws one value from the whole drag at the release, and the
+    /// outline shows the value itself.
+    fn tip_varies(&self) -> [bool; 3] {
+        let (pressed, posed) = (self.reads_pressures(), self.reads_poses());
+        let reads = |mode: Variation| match mode {
+            Variation::Pressure => pressed,
+            Variation::Tilt => posed && self.poses.iter().flatten().any(|q| q.tilt.is_some()),
+            Variation::Bearing => posed && self.bearings.iter().any(Option::is_some),
+            Variation::Rotation => posed && self.poses.iter().flatten().any(|q| q.rotation.is_some()),
+            Variation::Fixed | Variation::Random => false,
+        };
+        if self.smoothing {
+            return [false; 3];
+        }
+        self.tip_modes().map(reads)
+    }
+
+    /// Does the release read the stroke's pressures ([`Self::stroke_json`]): one for every point,
+    /// with the pen pressed less than fully somewhere? A mode set to Pressure during the drag
+    /// leaves the points before it without one.
+    fn reads_pressures(&self) -> bool {
+        self.light && self.pressures.len() == self.points.len()
+    }
+
+    /// Does the release read the stroke's tilts and rotations ([`Self::stroke_json`]): a pose for
+    /// every point? A mode set to Tilt, Bearing or Rotation during the drag leaves the points
+    /// before it without one.
+    fn reads_poses(&self) -> bool {
+        self.poses.len() == self.points.len()
+    }
+
+    /// The tip at point `i` of the stroke, as `path.eraseRegion` reads the pen there
+    /// ([`Self::controls_of_point`]).
+    fn tip_of_point(&self, i: usize) -> [f64; 3] {
+        self.tip_of_controls(self.controls_of_point(i))
+    }
+
+    /// The tip halfway along the step from point `j` to point `j + 1`, as `path.eraseRegion` reads
+    /// the pen there: the pressure and tilt halfway between those at the two points, and the
+    /// bearing and rotation halfway between them the shorter way round. A tip whose angle follows
+    /// the pressure from 0 at one point to 1 at the next lies level there, not turned as at
+    /// either end.
+    fn tip_between(&self, j: usize) -> [f64; 3] {
+        let (a, b) = (self.controls_of_point(j), self.controls_of_point(j + 1));
+        // Bearing and rotation read ½ plus the angle over 360° ([`super::pen_controls`]).
+        let turn = |a: f64, b: f64| {
+            let (a, b) = ((a - 0.5) * 360.0, (b - 0.5) * 360.0);
+            0.5 + vectorcraft_geom::normalize_deg(a + vectorcraft_geom::normalize_deg(b - a) / 2.0) / 360.0
+        };
+        self.tip_of_controls([(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0, turn(a[2], b[2]), turn(a[3], b[3])])
+    }
+
+    /// What each of the variation modes Pressure, Tilt, Bearing and Rotation reads at point `i` of
+    /// the stroke, as `path.eraseRegion` reads the pen there ([`super::pen_controls`]): the
+    /// pressure once the pen has pressed less than fully, the tilt and rotation of the point, and
+    /// the bearing of the last point up to it that the pen leaned 1° or more at, or before the
+    /// first such point the bearing of that first one. What the release does not read
+    /// ([`Self::reads_pressures`], [`Self::reads_poses`]) reads ½, the values themselves.
+    fn controls_of_point(&self, i: usize) -> [f64; 4] {
+        let pressure = if self.reads_pressures() { self.pressures.get(i).map_or(0.5, |p| f64::from(*p)) } else { 0.5 };
+        let (pose, bearing) = if self.reads_poses() {
+            (self.poses.get(i).copied().flatten(), self.bearings.get(i).copied().flatten().or(self.first_bearing))
+        } else {
+            (None, None)
+        };
+        super::pen_controls(pressure, pose, bearing)
     }
 
     /// How the tip's angle, roundness and size vary: the Eraser's three modes, the Blob Brush's
@@ -1137,12 +1275,25 @@ impl GestureTool {
     /// more at), as `path.eraseRegion` reads the stroke; before a press, and for Random, Fixed and a
     /// pen that gives no reading, the values themselves. The Blob Brush's are its own values.
     fn tip_now(&self) -> [f64; 3] {
-        let base = [self.angle, self.roundness, self.size];
         if self.id != "eraser" || !self.active {
-            return base;
+            return [self.angle, self.roundness, self.size];
         }
         let pressure = if self.light { self.pressures.last().map_or(0.5, |p| f64::from(*p)) } else { 0.5 };
-        let controls = super::pen_controls(pressure, self.poses.last().copied().flatten(), self.bearing);
+        self.tip_for(pressure, self.poses.last().copied().flatten(), self.bearing)
+    }
+
+    /// The tip's angle, roundness and size for a pen at `pressure` held as `pose`, leaning toward
+    /// `bearing`: each value on a mode that follows the pen goes from the value less its Variation
+    /// to the value plus it ([`super::pen_controls`]); for Random, Fixed and what the pen does not
+    /// give, the values themselves.
+    fn tip_for(&self, pressure: f64, pose: Option<PenPose>, bearing: Option<f64>) -> [f64; 3] {
+        self.tip_of_controls(super::pen_controls(pressure, pose, bearing))
+    }
+
+    /// The tip's angle, roundness and size where the modes Pressure, Tilt, Bearing and Rotation
+    /// read `controls` (0..1 each, [`super::pen_controls`]).
+    fn tip_of_controls(&self, controls: [f64; 4]) -> [f64; 3] {
+        let base = [self.angle, self.roundness, self.size];
         let variations = [self.angle_variation, self.roundness_variation, self.size_variation];
         let mut out = base;
         for (i, (v, mode)) in out.iter_mut().zip(self.tip_modes()).enumerate() {
@@ -1322,6 +1473,13 @@ impl GestureTool {
             }
             return vec![];
         }
+        if let Some(r) = self.marquee_rect() {
+            // A click, or a drag along one axis, encloses no area: nothing is erased.
+            if r.width() <= 0.0 || r.height() <= 0.0 || r.width().max(r.height()) < cx.tol(1.0) {
+                return vec![];
+            }
+            return vec![Action::Exec("path.eraseRegion".into(), json!({"rect": [r.x0, r.y0, r.width(), r.height()]}))];
+        }
         match self.id {
             "pencil" | "paintbrush" => {
                 if !self.began {
@@ -1397,6 +1555,9 @@ impl Tool for GestureTool {
         if self.varies_size() {
             self.tip_at = (!ev.mods.cmd && !self.blob_alt_smooths(ev.mods)).then_some(p);
         }
+        if let Some(out) = self.marquee_pointer(cx, ev) {
+            return out;
+        }
         match ev.kind {
             PointerKind::Down => {
                 self.active = true;
@@ -1413,6 +1574,9 @@ impl Tool for GestureTool {
                 // too, the line keeps Shift's 45° steps. Alt makes the Knife cut along a straight line.
                 self.straight = (self.id == "pencil" && !self.smoothing && (ev.mods.shift || ev.mods.alt)) || (self.id == "knife" && ev.mods.alt);
                 self.unconstrained = self.straight && !ev.mods.shift;
+                // Alt makes the Eraser draw a marquee, and Shift keeps it square.
+                self.marquee = self.alt_marquee(ev.mods);
+                self.square = ev.mods.shift;
                 let extend = if self.draws_path() && !self.smoothing { self.find_extend(cx, p) } else { None };
                 self.set_extend(cx, extend);
                 // The stroke's previews select the path it continues, so the others are kept now.
@@ -1594,6 +1758,7 @@ impl Tool for GestureTool {
                 self.smoothing = false;
                 self.straight = false;
                 self.unconstrained = false;
+                self.marquee = false;
                 self.clear();
                 if began { vec![Action::Cancel] } else { vec![] }
             }
@@ -1626,6 +1791,7 @@ impl Tool for GestureTool {
         self.smoothing = false;
         self.straight = false;
         self.unconstrained = false;
+        self.marquee = false;
         self.clear();
         if began { stale.into_iter().chain([Action::Commit]).collect() } else { vec![] }
     }
@@ -1633,6 +1799,14 @@ impl Tool for GestureTool {
         self.area_pending.set(false);
         self.band_pending.set(false);
         let mut o = self.snap.guides().to_vec();
+        // The Eraser's marquee shows without the tip outline.
+        if self.active
+            && self.points.len() >= 2
+            && let Some(r) = self.marquee_rect()
+        {
+            o.push(Overlay::Marquee(r));
+            return o;
+        }
         // A path being drawn shows itself, except with the Pencil's Live preview off.
         if !self.active || self.points.len() < 2 || (self.began && self.previews()) {
             o.extend(self.tip_outline(cx));
@@ -1653,31 +1827,39 @@ impl Tool for GestureTool {
         };
         let color = if self.id == "eraser" { [0x80, 0x80, 0x80] } else { FEEDBACK };
         // A tip that is not round shows the outline of the area it covers, each step of the drag
-        // as wide as the pen pressed there with Size set to Pressure. So does a round Blob Brush
-        // tip: a line as wide as the brush would end square, where the stroke it adds is round at
-        // both ends (#4343). The outline is built a bounded amount per call ([`AreaPreview`]).
-        if matches!(self.id, "eraser" | "blobBrush") && (self.roundness < 100.0 || self.id == "blobBrush") && !self.smoothing {
-            let pressures = self.size_pressures();
+        // with the tip the pen gives there on the modes that follow the pen. So does a round Blob
+        // Brush tip: a line as wide as the brush would end square, where the stroke it adds is
+        // round at both ends (#4343). The outline is built a bounded amount per call ([`AreaPreview`]).
+        let [angle_varies, roundness_varies, size_varies] = self.tip_varies();
+        // An angle varies the tip only when it is not round.
+        let shaped = roundness_varies || (angle_varies && self.roundness < 100.0);
+        if matches!(self.id, "eraser" | "blobBrush") && (self.roundness < 100.0 || shaped || self.id == "blobBrush") && !self.smoothing {
             let key = AreaKey {
                 blob: self.id == "blobBrush",
                 size: self.size,
-                variation: self.size_variation,
+                variation: if size_varies { self.size_variation } else { 0.0 },
                 angle: self.angle,
                 roundness: self.roundness,
-                pressure: pressures.is_some(),
+                varies: shaped || size_varies,
+                shaped,
+                pressed: self.reads_pressures() && self.tip_modes().contains(&Variation::Pressure),
+                first_bearing: self.first_bearing.filter(|_| self.reads_poses() && self.tip_modes().contains(&Variation::Bearing)),
+                modes: self.tip_modes(),
+                variations: [self.angle_variation, self.roundness_variation, self.size_variation],
             };
             let mut area = self.area.take().filter(|a| a.fits(key, &self.points)).unwrap_or_else(|| AreaPreview::new(key, self.points[0]));
-            area.step(&self.points, pressures);
+            let sized = |[angle, roundness, size]: [f64; 3]| [angle, roundness, if size_varies { size } else { self.size }];
+            area.step(&self.points, &|i| sized(self.tip_of_point(i)), &|j| sized(self.tip_between(j)));
             let paths = area.paths(&self.points);
             o.extend(paths.settled.into_iter().map(|path| Overlay::SharedPath { path, color, width: 1.0 }));
             o.extend(paths.live.into_iter().map(|path| Overlay::Path { path, color, width: 1.0, dashed: false }));
             self.area_pending.set(area.pending(&self.points));
             self.area.set(Some(area));
-        } else if let Some(pressures) = self.size_pressures() {
-            // With Size set to Pressure, each step of the drag shows as wide as the pen pressed there.
-            for (seg, p) in self.points.windows(2).zip(pressures.windows(2)) {
-                let pressure = f64::from(p[0] + p[1]) / 2.0;
-                let width = super::pressure_size(self.size, self.size_variation, pressure) * cx.zoom;
+        } else if size_varies {
+            // With Size on a mode that follows the pen, each step of the drag shows as wide as the
+            // tip the pen gives at its ends.
+            for (j, seg) in self.points.windows(2).enumerate() {
+                let width = (self.tip_of_point(j)[2] + self.tip_of_point(j + 1)[2]) / 2.0 * cx.zoom;
                 o.push(Overlay::Path { path: polyline(seg), color, width: width as f32, dashed: false });
             }
         } else {

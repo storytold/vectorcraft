@@ -573,6 +573,35 @@ fn a_cmyk_image_that_keeps_its_numbers_carries_its_cmyk_profile() {
     assert!(!String::from_utf8_lossy(&bytes).contains("/S/Luminosity"), "no luminosity soft mask");
 }
 
+/// With Don't Include Profiles set, a CMYK JPEG kept as it is is DeviceCMYK without its own
+/// `ICC_PROFILE` segments, its compressed inks unchanged; one resampled and compressed again is
+/// written without a profile too. Left unset, the JPEG data stays as it is.
+#[test]
+fn a_set_dont_include_profiles_takes_a_cmyk_jpegs_profile_out() {
+    let ink = [0u8, 102, 255, 0];
+    let icc = cmyk_profile(|_| {});
+    let jpg = cmyk_jpeg_with(&flat(ink, 64 * 64), 64, 64, &icc);
+    let d = image_doc(ImageBlob::new("image/jpeg", jpg.clone()), 64, 64);
+    let export = |s: serde_json::Value| {
+        let out = export_with_report(&d, &opts(s.clone())).unwrap_or_else(|e| panic!("{s}: {e}"));
+        let w: Vec<Written> = written(&out.bytes).into_iter().filter(|w| w.space != "DeviceGray").collect();
+        assert_eq!(w.len(), 1, "{s}: {w:?}");
+        (w.into_iter().next().unwrap(), out.bytes)
+    };
+    let segment = |data: &[u8]| data.windows(12).any(|w| w == b"ICC_PROFILE\0");
+    let (w, _) = export(json!({}));
+    assert!(w.data == jpg && segment(&w.data), "unset: the JPEG data unchanged");
+    let s = json!({"output": {"profiles": "none"}});
+    let (w, bytes) = export(s.clone());
+    assert_eq!((w.space.as_str(), w.filter.as_deref()), ("DeviceCMYK", Some("DCTDecode")), "{s}");
+    assert!(!segment(&w.data) && w.data.len() < jpg.len(), "{s}: no ICC_PROFILE segment is left");
+    assert!(w.data == vectorcraft_doc::cmyk::jpeg_without_icc(&jpg).unwrap(), "{s}: the other segments and the scan unchanged");
+    assert_eq!(blobs(&import(&bytes).unwrap())[0].cmyk().unwrap().data, ImageBlob::new("image/jpeg", jpg.clone()).cmyk().unwrap().data);
+    let s = json!({"output": {"profiles": "none"}, "compression": {"color": {"downsample": "bicubic", "ppi": 72.0, "abovePpi": 100.0}}});
+    let (w, _) = export(s.clone());
+    assert!(w.icc.is_none() && !segment(&w.data), "{s}: {w:?}");
+}
+
 /// A CMYK JPEG kept as it is whose header declares far more pixels than the app reads is left out
 /// with a warning, as other images that large are.
 #[test]
@@ -590,6 +619,38 @@ fn a_kept_cmyk_jpeg_declaring_too_many_pixels_is_left_out() {
         let out = export_with_report(&d, &opts(s.clone())).unwrap();
         assert!(written(&out.bytes).is_empty(), "{s}");
         assert!(out.warnings.iter().any(|w| w.contains("couldn't be decoded")), "{s}: {:?}", out.warnings);
+    }
+}
+
+/// A CMYK JPEG whose inks can't be read (it declares more pixels than CMYK images are decoded
+/// with, though fewer than the writer embeds) is written with its own numbers only when they are
+/// kept: when the Output settings convert its colors it is left out with a warning, in every
+/// standard.
+#[test]
+fn a_cmyk_jpeg_whose_inks_cant_be_read_is_left_out_when_its_colors_are_converted() {
+    let mut jpg = cmyk_jpeg(&flat([0, 102, 255, 0], 4), 2, 2);
+    // Height and width of the SOF0 segment (after its marker, length and precision): 8200 × 8200.
+    let sof = jpg.windows(2).position(|w| w == [0xFF, 0xC0]).unwrap();
+    jpg[sof + 5..sof + 9].copy_from_slice(&[0x20, 0x08, 0x20, 0x08]);
+    let blob = ImageBlob::new("image/jpeg", jpg);
+    assert!(blob.is_cmyk() && blob.cmyk().is_none());
+    let d = image_doc(blob, 2, 2);
+    let out = export_with_report(&d, &opts(json!({}))).unwrap();
+    let kept = written(&out.bytes);
+    assert!(kept.len() == 1 && kept[0].space == "DeviceCMYK", "kept as it is: {kept:?}");
+    let unconverted = "an image couldn't be converted to the Output destination and is missing from the picture";
+    for s in [
+        json!({"output": {"conversion": "destination", "destination": DEVICE_CMYK}}),
+        json!({"output": {"conversion": "destination", "destination": SRGB}}),
+        json!({"standard": "pdfX1a", "output": {"conversion": "destination", "destination": DEVICE_CMYK}}),
+        json!({"standard": "pdfX4", "output": {"conversion": "destination", "destination": DEVICE_CMYK}}),
+        json!({"standard": "pdfA2b", "output": {"conversion": "destination", "destination": DEVICE_CMYK}}),
+    ] {
+        let out = export_with_report(&d, &opts(s.clone())).unwrap_or_else(|e| panic!("{s}: {e}"));
+        assert!(written(&out.bytes).is_empty(), "{s}");
+        assert!(out.warnings.iter().any(|w| w == unconverted), "{s}: {:?}", out.warnings);
+        let other = out.warnings.iter().any(|w| w.contains("couldn't be decoded") || w.contains("written as it is"));
+        assert!(!other, "{s}: {:?}", out.warnings);
     }
 }
 
