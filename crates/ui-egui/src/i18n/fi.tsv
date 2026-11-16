@@ -3646,6 +3646,8 @@ theme	Appearance	Ulkoasu
 	Font List	Fonttiluettelo
 	Show Similar Fonts	Näytä samankaltaiset fontit
 	Clear Similar Fonts	Tyhjennä samankaltaiset fontit
+	Fonts used in this document	Tässä asiakirjassa käytetyt fontit
+	This document uses no available fonts	Tämä asiakirja ei käytä saatavilla olevia fontteja
 	Fonts in Document	Asiakirjan fontit
 	Refresh Font List	Päivitä fonttiluettelo
 	Replace Font	Korvaa fontti

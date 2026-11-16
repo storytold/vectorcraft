@@ -1303,6 +1303,8 @@ file-filter	Templates	模板
 	Font List	字体列表
 	Show Similar Fonts	显示相似字体
 	Clear Similar Fonts	清除相似字体
+	Fonts used in this document	此文档中使用的字体
+	This document uses no available fonts	此文档未使用任何可用字体
 	Font Preview Size	字体预览大小
 	Font Size	字号
 	Variable Font	可变字体

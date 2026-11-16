@@ -380,15 +380,15 @@ fn the_wheel_follows_the_menus_order_and_filters() {
     }
     let recent = vec![names[2].clone()];
     let look = super::MenuLook { samples: false, recent: &recent, ..Default::default() };
-    let order = super::wheel_order(&super::MenuState::default(), look);
+    let order = super::wheel_order(&mut super::MenuState::default(), look);
     assert_eq!(order.first(), Some(&names[2]), "the recent family first");
     // Other tests add fonts to the process-wide database meanwhile: compare places, not neighbours.
     let at = |f: &String| order.iter().position(|x| x == f);
     assert!(matches!((at(&names[0]), at(&names[1])), (Some(a), Some(b)) if 0 < a && a < b), "then the others in the menu's order");
     assert_eq!(order.iter().filter(|f| **f == names[2]).count(), 1, "once each");
     let favorites = vec![names[0].clone(), names[1].clone()];
-    let st = super::MenuState { favorites_only: true, ..Default::default() };
-    let order = super::wheel_order(&st, super::MenuLook { favorites: &favorites, ..look });
+    let mut st = super::MenuState { favorites_only: true, ..Default::default() };
+    let order = super::wheel_order(&mut st, super::MenuLook { favorites: &favorites, ..look });
     assert_eq!(order, favorites, "the favourites filter");
 }
 
@@ -1130,4 +1130,156 @@ fn show_similar_fonts_orders_the_list_by_likeness() {
     st.last = 0;
     frame(vec![], &mut st);
     assert_eq!((st.similar.as_deref(), families(&st)), (None, menu_order));
+}
+
+/// An app with a new document holding type set in each of `fonts`, one text object each.
+fn app_with_type(fonts: &[&str]) -> crate::VectorcraftApp {
+    let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", serde_json::json!({})).unwrap();
+    for (i, font) in fonts.iter().enumerate() {
+        app.run("text.create", serde_json::json!({"x": 20, "y": 40 + 30 * i, "text": "Type", "font": font})).unwrap();
+    }
+    app
+}
+
+/// Draws the open menu (its header and rows) for `look` under the filters of `st`, with `events`;
+/// returns the shapes drawn.
+fn menu_frame(ctx: &egui::Context, st: &mut super::MenuState, look: super::MenuLook, events: Vec<egui::Event>) -> Vec<egui::epaint::ClippedShape> {
+    let input =
+        egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 900.0))), ..Default::default() };
+    let mut out = ctx.run_ui(input, |ui| {
+        super::list(ui, egui::Id::unique("document-filter"), st, "Inter", None, look);
+    });
+    out.textures_delta.clear();
+    out.shapes
+}
+
+/// The families `st`'s rows list, in their order.
+fn listed_families(st: &super::MenuState) -> Vec<String> {
+    st.rows
+        .iter()
+        .filter_map(|r| match r {
+            Row::Family(f) => Some(f.clone()),
+            Row::Heading(_) | Row::Style(..) => None,
+        })
+        .collect()
+}
+
+/// The Document filter's chip lists only the families the document's type uses (hidden and locked
+/// type included, a missing family left out), in the menu's order, and lists every family again
+/// when it is clicked off.
+#[test]
+fn the_document_filter_lists_the_families_the_documents_type_uses() {
+    let mut app = app_with_type(&["Source Serif 4", "Inter"]);
+    app.run("object.hide", serde_json::json!({})).unwrap();
+    app.run("text.create", serde_json::json!({"x": 20, "y": 120, "text": "Locked", "font": "Source Sans 3"})).unwrap();
+    app.run("object.lock", serde_json::json!({})).unwrap();
+    app.run("text.create", serde_json::json!({"x": 20, "y": 150, "text": "Missing", "font": "Missing Family 7059"})).unwrap();
+    let db = vectorcraft_text::FontDb::global();
+    let used = super::document_families(db, &app.session.active().unwrap().doc);
+    let mut names: Vec<_> = used.iter().cloned().collect();
+    names.sort();
+    assert_eq!(names, ["inter", "missing family 7059", "source sans 3", "source serif 4"], "each run's family, as named");
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut st = super::MenuState::default();
+    let look = super::MenuLook { samples: false, ..super::MenuLook::of(&app) };
+    for _ in 0..3 {
+        menu_frame(&ctx, &mut st, look, vec![]);
+    }
+    let every = listed_families(&st);
+    assert!(every.len() > 3, "every family: {every:?}");
+    let click = |st: &mut super::MenuState, at: egui::Pos2| {
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        menu_frame(&ctx, st, look, vec![egui::Event::PointerMoved(at), button(true)]);
+        menu_frame(&ctx, st, look, vec![button(false)]);
+        menu_frame(&ctx, st, look, vec![])
+    };
+    let chip = text_at(&menu_frame(&ctx, &mut st, look, vec![]), |t| t == "Document").expect("the Document chip is drawn");
+    click(&mut st, chip);
+    assert!(st.document_only);
+    let in_menu: Vec<String> = every.iter().filter(|f| ["Inter", "Source Sans 3", "Source Serif 4"].contains(&f.as_str())).cloned().collect();
+    assert_eq!(listed_families(&st), in_menu, "the document's available families, in the menu's order");
+    click(&mut st, chip);
+    assert!(!st.document_only);
+    assert_eq!(listed_families(&st), every, "every family again");
+}
+
+/// Type kept in a graph design counts as the document's type, as type in a symbol does.
+#[test]
+fn the_document_filter_counts_type_in_graph_designs() {
+    let mut app = app_with_type(&["Inter"]);
+    let id = app.run("text.create", serde_json::json!({"x": 20, "y": 90, "text": "Bar", "font": "JetBrains Mono"})).unwrap()["id"].as_u64().unwrap();
+    let art = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).cloned().expect("the new type");
+    app.run("edit.undo", serde_json::json!({})).unwrap();
+    let mut doc = (*app.session.active().unwrap().doc).clone();
+    let db = vectorcraft_text::FontDb::global();
+    assert!(!super::document_families(db, &doc).contains("jetbrains mono"));
+    doc.graph_designs.push(vectorcraft_doc::GraphDesign { name: "Bars".into(), art: std::sync::Arc::new(art) });
+    let mut names: Vec<_> = super::document_families(db, &doc).into_iter().collect();
+    names.sort();
+    assert_eq!(names, ["inter", "jetbrains mono"]);
+}
+
+/// The Document filter combines with the others and with Recent Fonts, follows edits and undo
+/// without the menu reopening, and steers the closed field's wheel.
+#[test]
+fn the_document_filter_combines_with_the_others_and_follows_edits() {
+    let mut app = app_with_type(&["Inter", "Source Serif 4"]);
+    let ctx = egui::Context::default();
+    let mut st = super::MenuState { document_only: true, favorites_only: true, ..Default::default() };
+    let favorites = vec!["Inter".to_string(), "Source Sans 3".to_string()];
+    let recent = vec!["Source Sans 3".to_string(), "Source Serif 4".to_string()];
+    let frames = |app: &crate::VectorcraftApp, st: &mut super::MenuState| {
+        let look = super::MenuLook { samples: false, favorites: &favorites, recent: &recent, ..super::MenuLook::of(app) };
+        for _ in 0..2 {
+            menu_frame(&ctx, st, look, vec![]);
+        }
+    };
+    frames(&app, &mut st);
+    assert_eq!(listed_families(&st), ["Inter"], "favorites the document uses");
+    st.favorites_only = false;
+    frames(&app, &mut st);
+    assert_eq!(st.rows.first(), Some(&Row::Heading("Recent Fonts")));
+    assert_eq!(listed_families(&st), ["Source Serif 4", "Inter"], "only the recent family the document uses comes first");
+    app.run("text.create", serde_json::json!({"x": 20, "y": 120, "text": "New", "font": "Source Sans 3"})).unwrap();
+    frames(&app, &mut st);
+    assert_eq!(listed_families(&st), ["Source Sans 3", "Source Serif 4", "Inter"], "an edit lists the new family");
+    app.run("edit.undo", serde_json::json!({})).unwrap();
+    frames(&app, &mut st);
+    assert_eq!(listed_families(&st), ["Source Serif 4", "Inter"], "undo takes it out again");
+    let look = super::MenuLook { samples: false, recent: &recent, ..super::MenuLook::of(&app) };
+    assert_eq!(super::wheel_order(&mut st, look), ["Source Serif 4", "Inter"], "the wheel steps through the same families");
+}
+
+/// The Document filter on a document without type lists nothing and says why; without a document
+/// it is unavailable and lists every family; the filter is shared like the others.
+#[test]
+fn the_document_filter_on_an_empty_document_or_none() {
+    let app = app_with_type(&[]);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut st = super::MenuState { document_only: true, ..Default::default() };
+    let look = super::MenuLook { samples: false, ..super::MenuLook::of(&app) };
+    let mut shapes = vec![];
+    for _ in 0..3 {
+        shapes = menu_frame(&ctx, &mut st, look, vec![]);
+    }
+    assert!(st.rows.is_empty(), "{:?}", st.rows);
+    assert!(text_at(&shapes, |t| t == "This document uses no available fonts").is_some(), "the filter says the list is empty because of it");
+    // A search that matches nothing still says so in its own words.
+    st.document_only = false;
+    shapes = menu_frame(&ctx, &mut st, look, vec![egui::Event::Text("NoSuchFontFor7059".into())]);
+    shapes = if st.rows.is_empty() { menu_frame(&ctx, &mut st, look, vec![]) } else { shapes };
+    assert!(text_at(&shapes, |t| t == "No matching fonts").is_some());
+    // No document: the filter, kept on, lists every family.
+    let mut st = super::MenuState { document_only: true, ..Default::default() };
+    let none = egui::Context::default();
+    for _ in 0..3 {
+        menu_frame(&none, &mut st, super::MenuLook { samples: false, ..Default::default() }, vec![]);
+    }
+    assert!(st.document_only && !listed_families(&st).is_empty(), "no document: every family");
+    let mut other = super::MenuState::default();
+    super::Filters::of(&st).apply(&mut other);
+    assert!(other.document_only, "every font menu shares the filter");
 }

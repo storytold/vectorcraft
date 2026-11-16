@@ -1868,6 +1868,8 @@ antiAlias	Sharp	シャープ
 	Font List	フォントリスト
 	Show Similar Fonts	類似フォントを表示
 	Clear Similar Fonts	類似フォントの表示を解除
+	Fonts used in this document	このドキュメントで使用されているフォント
+	This document uses no available fonts	このドキュメントでは使用可能なフォントが使われていません
 	Font Preview Size	フォントプレビューのサイズ
 	Font:	フォント:
 	Fonts	フォント

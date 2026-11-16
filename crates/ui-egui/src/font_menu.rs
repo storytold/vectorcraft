@@ -4,7 +4,9 @@
 //! or reached with ↑/↓ previews its font on the selected text (one live interaction, nothing in
 //! the history); a click or Enter applies it as one step, Escape or closing the menu puts the text
 //! back. The Glyphs panel and Find Font only pick a font ([`picked`]): nothing is previewed on the
-//! document. A star marks a favourite family, and the ★ filter lists only those. The ≈ button
+//! document. A star marks a favourite family, and the ★ filter lists only those. The Document
+//! filter lists only the families that type in the current document is set in
+//! ([`document_families`]), and is unavailable while no document is open. The ≈ button
 //! before a family's star (Show Similar Fonts) orders the listed families by how alike they look to
 //! it ([`vectorcraft_text::FontDb::similar_families`]), that family first and without the Recent
 //! Fonts section, until the ≈ chip under the filters clears it or the menu closes. The Font
@@ -119,10 +121,23 @@ pub struct MenuLook<'a> {
     pub wheel_owner: Option<WheelOwner>,
     /// The name screen readers give the closed field when no label stands beside it.
     pub name: Option<&'a str>,
+    /// The current document, which the Document filter lists the families of. `None`: no document
+    /// is open, and the filter is unavailable.
+    pub document: Option<MenuDocument<'a>>,
+}
+
+/// The current document as the Document filter reads it.
+#[derive(Clone, Copy, Debug)]
+pub struct MenuDocument<'a> {
+    /// The document's identity and revision: its families are listed again when either changes.
+    pub uid: u64,
+    pub revision: u64,
+    pub doc: &'a vectorcraft_doc::Document,
 }
 
 impl Default for MenuLook<'static> {
-    /// Samples on in the theme's colors, English names, medium rows, no favorites, no wheel.
+    /// Samples on in the theme's colors, English names, medium rows, no favorites, no wheel, no
+    /// document.
     fn default() -> Self {
         Self {
             samples: true,
@@ -134,6 +149,7 @@ impl Default for MenuLook<'static> {
             wheel: false,
             wheel_owner: None,
             name: None,
+            document: None,
         }
     }
 }
@@ -155,6 +171,7 @@ impl<'a> MenuLook<'a> {
             wheel: false,
             wheel_owner: None,
             name: None,
+            document: app.session.active().map(|state| MenuDocument { uid: state.uid, revision: state.revision, doc: &state.doc }),
         }
     }
 }
@@ -310,8 +327,13 @@ fn remap_highlight(before: &[Row], selected: Option<usize>, after: &[Row]) -> Op
 
 /// What the rows were listed for: the query, the script, kind, font technology (variable only) and
 /// favourites filters, Show Font Names in English, the expanded families, favourites, recent
-/// history, font list generation and the family Show Similar Fonts orders by.
-type RowsKey = (String, usize, Option<FontClass>, bool, bool, bool, Vec<String>, Vec<String>, Vec<String>, u64, Option<String>);
+/// history, font list generation, the family Show Similar Fonts orders by, and the document (its
+/// uid and revision) while the Document filter lists its families.
+type RowsKey = (String, usize, Option<FontClass>, bool, bool, bool, Vec<String>, Vec<String>, Vec<String>, u64, Option<String>, Option<(u64, u64)>);
+
+/// The families a [`MenuState`] found in a document (lowercase), and the document's uid, revision
+/// and font list generation they were found for.
+type DocumentFonts = ((u64, u64, u64), Arc<HashSet<String>>);
 
 /// The menu's state between frames.
 #[derive(Clone, Default)]
@@ -327,12 +349,18 @@ struct MenuState {
     highlight: Option<usize>,
     query: String,
     /// The filters (kept from one opening to the next, and the same in every font menu:
-    /// [`Filters`]): script (0..[`SCRIPTS`]), kind, font technology (variable fonts only) and
-    /// favorites only.
+    /// [`Filters`]): script (0..[`SCRIPTS`]), kind, font technology (variable fonts only),
+    /// favorites only and the current document's families only.
     script: usize,
     class: Option<FontClass>,
     variable_only: bool,
     favorites_only: bool,
+    document_only: bool,
+    /// The families of the current document the Document filter last listed.
+    document_fonts: Option<DocumentFonts>,
+    /// The Document filter lists nothing because the document's type uses none of the menu's
+    /// families (none at all, or only missing ones), whatever the other filters.
+    none_used: bool,
     /// Families whose styles are listed (lowercase).
     expanded: Vec<String>,
     /// Show Similar Fonts: the family the list is ordered by likeness to, until it is cleared or
@@ -366,11 +394,18 @@ struct Filters {
     class: Option<FontClass>,
     variable_only: bool,
     favorites_only: bool,
+    document_only: bool,
 }
 
 impl Filters {
     fn of(st: &MenuState) -> Self {
-        Self { script: st.script, class: st.class, variable_only: st.variable_only, favorites_only: st.favorites_only }
+        Self {
+            script: st.script,
+            class: st.class,
+            variable_only: st.variable_only,
+            favorites_only: st.favorites_only,
+            document_only: st.document_only,
+        }
     }
 
     fn apply(self, st: &mut MenuState) {
@@ -378,7 +413,49 @@ impl Filters {
         st.class = self.class;
         st.variable_only = self.variable_only;
         st.favorites_only = self.favorites_only;
+        st.document_only = self.document_only;
     }
+}
+
+/// The families the type in `doc` is set in, lowercase and by the name the menu lists them under
+/// ([`vectorcraft_text::FontDb::canonical`]): the runs of every text object in the layers, symbols,
+/// patterns and graph designs, hidden, locked and masked ones included, with a composite font named
+/// as such. A pattern being edited is read from its editing layer only. Styles no type uses are left
+/// out.
+fn document_families(db: &vectorcraft_text::FontDb, doc: &vectorcraft_doc::Document) -> HashSet<String> {
+    // Each name once, so a document with many runs in a few families looks each family up once.
+    let mut named: HashSet<String> = HashSet::new();
+    let mut add = |n: &vectorcraft_doc::Node| {
+        if let vectorcraft_doc::NodeKind::Text(t) = &n.kind {
+            for r in &t.runs {
+                if !named.contains(&r.style.font_family) {
+                    named.insert(r.style.font_family.clone());
+                }
+            }
+        }
+    };
+    let editing = doc.pattern_edit.as_ref().map(|e| e.pattern.as_str());
+    let patterns = doc.patterns.iter().filter(|p| Some(p.name.as_str()) != editing).flat_map(|p| p.art.iter().map(|a| &**a));
+    let designs = doc.graph_designs.iter().map(|g| &*g.art);
+    for n in doc.layers.iter().map(|l| &**l).chain(doc.symbols.iter().map(|s| &*s.art)).chain(patterns).chain(designs) {
+        vectorcraft_doc::swatches::walk_with_masks(n, &mut add);
+    }
+    named.into_iter().map(|f| db.canonical(&f, "").0.to_lowercase()).collect()
+}
+
+/// The families the Document filter lists, when it is on and a document is open: those of
+/// `look`'s document, found again only when the document, its revision or the font list changed.
+fn used_families(db: &vectorcraft_text::FontDb, st: &mut MenuState, look: MenuLook) -> Option<Arc<HashSet<String>>> {
+    let document = look.document.filter(|_| st.document_only)?;
+    let key = (document.uid, document.revision, db.generation());
+    if let Some((k, families)) = &st.document_fonts
+        && *k == key
+    {
+        return Some(families.clone());
+    }
+    let families = Arc::new(document_families(db, document.doc));
+    st.document_fonts = Some((key, families.clone()));
+    Some(families)
 }
 
 /// Where the filters every font menu shares are kept ([`Filters`]).
@@ -448,7 +525,7 @@ pub fn font_menu(
                     WheelInput::Leave => st.wheel_order = None,
                     WheelInput::Notches(notches) => {
                         if st.wheel_order.is_none() {
-                            st.wheel_order = Some(wheel_order(&st, look).into());
+                            st.wheel_order = Some(wheel_order(&mut st, look).into());
                         }
                         if let Some(order) = st.wheel_order.as_deref() {
                             let next = wheel_steps(order, &own, notches);
@@ -488,8 +565,12 @@ pub fn font_menu(
     out
 }
 
-/// Does the menu list family `f` for search `query` (lowercase) under the filters of `st`?
-fn listed(db: &vectorcraft_text::FontDb, f: &str, query: &str, st: &MenuState, look: MenuLook) -> bool {
+/// Does the menu list family `f` for search `query` (lowercase) under the filters of `st`, and
+/// among `used` (lowercase) while the Document filter lists the document's families?
+fn listed(db: &vectorcraft_text::FontDb, f: &str, query: &str, st: &MenuState, look: MenuLook, used: Option<&HashSet<String>>) -> bool {
+    if used.is_some_and(|used| !used.contains(&f.to_lowercase())) {
+        return false;
+    }
     let label = db.family_display_name(f, look.english_names);
     if !(query.is_empty() || f.to_lowercase().contains(query) || label.to_lowercase().contains(query)) {
         return false;
@@ -506,9 +587,10 @@ fn listed(db: &vectorcraft_text::FontDb, f: &str, query: &str, st: &MenuState, l
 
 /// The families the closed field's wheel steps through, in the open menu's order with no search:
 /// the recent families first, then the others, under the menu's filters.
-fn wheel_order(st: &MenuState, look: MenuLook) -> Vec<String> {
+fn wheel_order(st: &mut MenuState, look: MenuLook) -> Vec<String> {
     let db = vectorcraft_text::FontDb::global();
-    let families: Vec<_> = db.menu_family_list().iter().filter(|f| listed(db, f, "", st, look)).cloned().collect();
+    let used = used_families(db, st, look);
+    let families: Vec<_> = db.menu_family_list().iter().filter(|f| listed(db, f, "", st, look, used.as_deref())).cloned().collect();
     grouped_rows(&families, look.recent, &[], |_| vec![])
         .into_iter()
         .filter_map(|r| match r {
@@ -1075,7 +1157,7 @@ fn header<'s>(ui: &mut Ui, db: &'s vectorcraft_text::FontDb, state_id: egui::Id,
         ui.memory_mut(|m| m.request_focus(field.with("edit")));
     }
     let query = widgets::search_field(ui, field, tl!("Search")).to_lowercase();
-    let refilter = filters(ui, st, &t);
+    let refilter = filters(ui, st, &t, look.document.is_some());
     let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
     // The current family by its own name (a document may name it in Japanese: ヒラギノ角ゴシック),
     // as it was before any preview.
@@ -1094,9 +1176,12 @@ fn header<'s>(ui: &mut Ui, db: &'s vectorcraft_text::FontDb, state_id: egui::Id,
         look.recent.to_vec(),
         db.generation(),
         st.similar.clone(),
+        look.document.filter(|_| st.document_only).map(|d| (d.uid, d.revision)),
     );
     if st.rows_key.as_ref() != Some(&key) {
-        let families: Vec<_> = db.menu_family_list().iter().filter(|f| listed(db, f, &query, st, look)).cloned().collect();
+        let used = used_families(db, st, look);
+        let families: Vec<_> = db.menu_family_list().iter().filter(|f| listed(db, f, &query, st, look, used.as_deref())).cloned().collect();
+        st.none_used = families.is_empty() && used.is_some_and(|used| !db.menu_family_list().iter().any(|f| used.contains(&f.to_lowercase())));
         // Show Similar Fonts orders every listed family by likeness, the recent ones among them.
         let rows = match &st.similar {
             Some(base) => grouped_rows(&db.similar_families(base, &families), &[], &st.expanded, |f| db.styles(f)),
@@ -1145,7 +1230,9 @@ fn header<'s>(ui: &mut Ui, db: &'s vectorcraft_text::FontDb, state_id: egui::Id,
     }
     st.header = ui.min_rect().height();
     if rows.is_empty() {
-        widgets::dim_label(ui, tl!("No matching fonts"));
+        // The Document filter on a document whose type uses none of the listed families (none at
+        // all, or only missing ones) says so, whatever the other filters.
+        widgets::dim_label(ui, if st.none_used { tl!("This document uses no available fonts") } else { tl!("No matching fonts") });
     }
     ui.spacing_mut().item_spacing.y = 0.0;
     // The scroll bar beside the rows, not over them: a floating one covered the stars at their
@@ -1160,6 +1247,8 @@ enum Chip {
     /// A script ([`SCRIPTS`]).
     Script(usize),
     Favorites,
+    /// The families the current document's type uses.
+    Document,
     AnyKind,
     Class(FontClass),
     /// The Font Technology label, which filters nothing.
@@ -1167,21 +1256,22 @@ enum Chip {
     Variable,
 }
 
-/// The filters, row by row, the same wherever the menu opens: the scripts; favorites, any kind
-/// and the first three kinds; the other kinds; font technology.
+/// The filters, row by row, the same wherever the menu opens: the scripts; favorites, the
+/// document's fonts, any kind and the first three kinds; the other kinds; font technology.
 fn filter_rows() -> [Vec<Chip>; 4] {
     let (first, rest) = FontClass::ALL.split_at(3);
     [
         (0..SCRIPTS).map(Chip::Script).collect(),
-        [Chip::Favorites, Chip::AnyKind].into_iter().chain(first.iter().copied().map(Chip::Class)).collect(),
+        [Chip::Favorites, Chip::Document, Chip::AnyKind].into_iter().chain(first.iter().copied().map(Chip::Class)).collect(),
         rest.iter().copied().map(Chip::Class).collect(),
         vec![Chip::Technology, Chip::Variable],
     ]
 }
 
 /// The filters on their rows ([`filter_rows`]): a row wraps only where the menu is narrower than
-/// it. Records in `st` the width of the widest row unwrapped; whether a filter changed.
-fn filters(ui: &mut Ui, st: &mut MenuState, t: &Tokens) -> bool {
+/// it. The Document filter is unavailable without a `document`. Records in `st` the width of the
+/// widest row unwrapped; whether a filter changed.
+fn filters(ui: &mut Ui, st: &mut MenuState, t: &Tokens, document: bool) -> bool {
     let mut refilter = false;
     let mut widest = 0.0_f32;
     for row in filter_rows() {
@@ -1194,6 +1284,16 @@ fn filters(ui: &mut Ui, st: &mut MenuState, t: &Tokens) -> bool {
                 let resp = match chip {
                     Chip::Script(i) => ui.selectable_label(st.script == i, text(script_label(i))),
                     Chip::Favorites => ui.selectable_label(st.favorites_only, text("★")).on_hover_text(tl!("Favorites")),
+                    Chip::Document => {
+                        let on = st.document_only && document;
+                        let tip = tl!("Fonts used in this document");
+                        let resp = ui
+                            .add_enabled(document, egui::Button::selectable(on, text(tl!("Document"))))
+                            .on_hover_text(tip)
+                            .on_disabled_hover_text(tip);
+                        resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, document, on, tip));
+                        resp
+                    }
                     Chip::AnyKind => ui.selectable_label(st.class.is_none(), text(tl!("Any Kind"))),
                     Chip::Class(c) => ui.selectable_label(st.class == Some(c), text(class_label(c))),
                     Chip::Technology => ui.label(text(tl!("Font Technology")).color(t.text_dim)),
@@ -1206,6 +1306,7 @@ fn filters(ui: &mut Ui, st: &mut MenuState, t: &Tokens) -> bool {
                 match chip {
                     Chip::Script(i) => st.script = i,
                     Chip::Favorites => st.favorites_only = !st.favorites_only,
+                    Chip::Document => st.document_only = !st.document_only,
                     Chip::AnyKind => st.class = None,
                     Chip::Class(c) => st.class = if st.class == Some(c) { None } else { Some(c) },
                     Chip::Technology => continue,
