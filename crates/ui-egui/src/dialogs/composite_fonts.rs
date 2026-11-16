@@ -5,14 +5,17 @@
 //! out, Import… adds the fonts of a file and Export… writes the one picked to a file. Custom shows
 //! the custom character sets of the font picked: New adds a set based on the one picked, Delete Set
 //! takes it out, and Add puts the characters typed (Direct Entry) or the character of a Unicode code
-//! into it; Delete takes the character picked out. Nothing changes in the document until OK, which
+//! into it; Delete takes the character picked out. Show Sample draws a sample of the font picked
+//! with lines that mark its metrics ([`sample`]). Nothing changes in the document until OK, which
 //! runs `type.compositeFonts.set` with every font as one undo step; Cancel leaves them as they were.
 //!
 //! Fields: `fonts` (the composite fonts as `type.compositeFonts.set` takes them), `selected` (the
 //! index of the one picked) and `name` (its name as typed); `custom` (whether the custom character
 //! sets show), `set` (the index of the set picked), `setName` (its name as typed), `entryMode`
 //! (`direct` or `unicode`), `entry` (the characters or code typed) and `char` (the index of the
-//! character picked in the set).
+//! character picked in the set); `sample` (whether the sample shows), `zoom` (its magnification in
+//! percent) and `lineIcfBox`, `lineEmBox`, `lineBaseline`, `lineCapHeight`, `lineAscentDescent`,
+//! `lineAscender` and `lineXHeight` (whether each of its lines shows).
 //!
 //! Behavior reference (public documentation):
 //! <https://help.adobe.com/archive/en_US/illustrator/cs3/illustrator_cs3_help.pdf#page=347>,
@@ -28,6 +31,8 @@ use super::{DialogSpec, form};
 use crate::picks::PickRequest;
 use crate::state::Dialog;
 use crate::{FilePick, VectorcraftApp, widgets};
+
+mod sample;
 
 /// The dialog kind of Composite Fonts.
 pub const KIND: &str = "compositeFonts";
@@ -53,13 +58,20 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 };
 
 /// Open Composite Fonts on the active document's composite fonts, the first one picked, with the
-/// custom character sets hidden and nothing typed.
+/// custom character sets and the sample hidden and nothing typed.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let fonts = app.session.active().ok_or("no document open")?.doc.composite_fonts.to_vec();
     let mut d = Dialog::new(KIND, json!({ "fonts": fonts, "selected": 0, "custom": false, "entryMode": "direct", "entry": "" }));
+    sample::defaults(&mut d.fields);
     show_selected(&mut d);
     app.ui.dialog = Some(d);
     Ok(Value::Null)
+}
+
+/// Why `ui.dialog.set` can't set `field` of Composite Fonts `d` to the value it now holds (Show
+/// Sample's fields, [`sample::check_field`]).
+pub(super) fn field_set(d: &Dialog, field: &str) -> Result<(), String> {
+    sample::check_field(d, field)
 }
 
 /// The fonts the dialog holds.
@@ -138,6 +150,8 @@ enum Action {
     Export,
     /// Custom: show or hide the custom character sets.
     Custom,
+    /// Show Sample or Hide Sample.
+    Sample,
     NewSet,
     DeleteSet,
     /// Add the characters typed, or the character of the code typed, to the set picked.
@@ -178,6 +192,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         if ui.add_enabled_ui(!list.is_empty(), |ui| widgets::flat_button(ui, tl!("Custom"), 64.0)).inner.clicked() {
             act = Some(Action::Custom);
         }
+        let label = if d.bool("sample") { tl!("Hide Sample") } else { tl!("Show Sample") };
+        if ui.add_enabled_ui(!list.is_empty(), |ui| widgets::flat_button(ui, label, 96.0)).inner.clicked() {
+            act = Some(Action::Sample);
+        }
     });
     if let Some(k) = picked {
         select(d, k);
@@ -192,6 +210,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         f.name = d.str("name");
         ui.add_space(8.0);
         parts_table(app, ui, f);
+        if d.bool("sample") {
+            ui.add_space(8.0);
+            sample::show(ui, d, f);
+        }
         if d.bool("custom") {
             ui.add_space(8.0);
             ui.separator();
@@ -319,6 +341,10 @@ fn run(app: &mut VectorcraftApp, d: &mut Dialog, act: Action) -> Result<(), Stri
             let open = !d.bool("custom");
             d.fields.insert("custom".into(), json!(open));
         }
+        Action::Sample => {
+            let open = !d.bool("sample");
+            d.fields.insert("sample".into(), json!(open));
+        }
         Action::NewSet | Action::DeleteSet | Action::AddChars | Action::DeleteChar => {
             let f = list.get_mut(i).ok_or("no composite font")?;
             let at = edit_sets(d, f, act)?;
@@ -389,7 +415,7 @@ fn edit_sets(d: &mut Dialog, f: &mut CompositeFont, act: Action) -> Result<Optio
             d.fields.remove("char");
             Ok(None)
         }
-        Action::New | Action::Delete | Action::Import | Action::Export | Action::Custom => Ok(None),
+        Action::New | Action::Delete | Action::Import | Action::Export | Action::Custom | Action::Sample => Ok(None),
     }
 }
 

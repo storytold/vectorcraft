@@ -1,6 +1,7 @@
 //! The pieces a raster mesh warp cuts an image into overlap their neighbors: in SVG a partly
 //! transparent image keeps its own alpha where they do, and the pieces share one copy of the image.
 
+use craft_svg::tree::draw::resvg;
 use vectorcraft_doc::live::mesh_warp_image;
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::{Affine, Point};
@@ -14,9 +15,9 @@ fn warped(f: &dyn Fn(Point) -> Point, masked: bool) -> Document {
 
 /// [`warped`] with every pixel `rgba`, after `tweak` adjusts the image object.
 fn warped_pixels(f: &dyn Fn(Point) -> Point, masked: bool, rgba: [u8; 4], tweak: impl FnOnce(&mut Node)) -> Document {
-    let img = image::RgbaImage::from_pixel(4, 4, image::Rgba(rgba));
-    let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let img = craft_image_codecs::Image::from_raw(4, 4, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba.repeat(16))
+        .unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
     let mut d = Document::new(100.0, 100.0);
     d.images.insert("pic".into(), ImageBlob::png(png));
     let im = ImageObject {
@@ -77,9 +78,14 @@ fn a_half_transparent_image_is_half_transparent_where_its_warp_pieces_overlap() 
 /// transparent pixels, and the right half stays half transparent.
 #[test]
 fn opaque_pixels_stay_opaque_where_warp_pieces_overlap() {
-    let img = image::RgbaImage::from_fn(16, 16, |x, _| image::Rgba([255, 0, 0, if x < 8 { 255 } else { 128 }]));
-    let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut data = Vec::with_capacity(16 * 16 * 4);
+    for _ in 0..16 {
+        for x in 0..16 {
+            data.extend_from_slice(&[255, 0, 0, if x < 8 { 255 } else { 128 }]);
+        }
+    }
+    let img = craft_image_codecs::Image::from_raw(16, 16, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, data).unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
     for masked in [false, true] {
         let mut d = Document::new(100.0, 100.0);
         d.images.insert("pic".into(), ImageBlob::png(png.clone()));
