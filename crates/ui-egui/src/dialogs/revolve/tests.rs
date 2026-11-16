@@ -772,6 +772,27 @@ fn every_3d_dialog_has_color_and_reset_all_restores_white() {
 }
 
 #[test]
+fn reset_all_keeps_map_art_and_its_options() {
+    for effect in [CLASSIC_EXTRUDE, CLASSIC_REVOLVE] {
+        let mut h = Harness::with("M100 100L200 100L200 200L100 200Z", effect, vec2(1280.0, 900.0));
+        h.settle();
+        let maps = json!([{"surface": 1, "symbol": "Mark"}]);
+        let d = h.app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("mapArt".into(), maps.clone());
+        d.fields.insert("mapShade".into(), json!(true));
+        d.fields.insert("mapInvisible".into(), json!(true));
+        d.fields.insert("rotationX".into(), json!(40.0));
+        h.settle();
+        h.click(h.response("revolve-reset-all").center());
+        let d = h.app.ui.dialog.as_ref().unwrap();
+        assert_eq!(d.f64("rotationX", 0.0), -21.88, "{effect}: the view is reset");
+        assert_eq!(d.fields.get("mapArt"), Some(&maps), "{effect}: the maps stay");
+        assert!(d.bool("mapShade") && d.bool("mapInvisible"), "{effect}: Shade Artwork and Invisible Geometry stay");
+        dialogs::cancel(&mut h.app);
+    }
+}
+
+#[test]
 fn light_list_add_select_edit_delete_and_reset_keep_each_light_independent() {
     for effect in [REVOLVE, EXTRUDE, INFLATE, vectorcraft_effects::ROTATE] {
         let mut h = Harness::with("M100 100L200 100L200 200L100 200Z", effect, vec2(1280.0, 900.0));
