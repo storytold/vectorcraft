@@ -2194,6 +2194,124 @@ fn recolor_notes_on_objects_left_unchanged_translate_with_their_counts() {
     }
 }
 
+/// A script's error about unused `answers` and Liquify's note on the objects it left as they were
+/// are translated whole for one object as well as for several, in every complete-message language,
+/// and keep their counts.
+#[test]
+fn messages_with_one_or_several_items_translate_in_every_complete_catalog() {
+    let notes = [
+        ("`answers` has 1 answer the script did not use", "1"),
+        ("`answers` has 2 answers the script did not use", "2"),
+        ("`answers` has 5 answers the script did not use", "5"),
+        ("Warp left 1 object under the brush as it was (type): it reshapes paths only", "1"),
+        ("Twirl left 2 objects under the brush as they were (type, images): it reshapes paths only", "2"),
+        ("Pucker left 5 objects under the brush as they were (symbols): it reshapes paths only", "5"),
+    ];
+    // Whole words, so that a word such as Swedish "under" or Dutch "object" is not read as English.
+    let english = ["answer", "did", "use", "left", "brush", "was", "they", "were", "reshapes", "paths", "only"];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (note, count) in notes {
+            let shown = message(lang, note);
+            assert_ne!(shown, note, "{code}");
+            assert!(shown.split(|c: char| !c.is_alphabetic()).all(|w| !english.contains(&w)), "{code}: {shown}");
+            assert!(shown.contains(count) && (!note.starts_with('`') || shown.contains("`answers`")), "{code}: {shown}");
+        }
+    }
+    // The count picks the language's form.
+    let cs = cs();
+    assert!(message(cs, "`answers` has 1 answer the script did not use").contains("1 odpověď,"));
+    assert!(message(cs, "`answers` has 2 answers the script did not use").contains("2 odpovědi,"));
+    assert!(message(cs, "`answers` has 5 answers the script did not use").contains("5 odpovědí,"));
+}
+
+/// Liquify's warning about the objects under the brush that it left as they were shows its tool
+/// and each kind of object in the interface language, the kinds in their order and joined as the
+/// language joins a list, in every complete-message language; the count stays.
+#[test]
+fn liquify_warning_translates_its_tool_and_kinds_in_every_complete_catalog() {
+    const TOOLS: [&str; 7] = ["Warp", "Twirl", "Pucker", "Bloat", "Scallop", "Crystallize", "Wrinkle"];
+    const KINDS: [&str; 9] = ["graphs", "type", "symbols", "images", "meshes", "envelopes", "repeats", "placed documents", "blends"];
+    let warning = |tool: &str, n: usize, kinds: &str| {
+        if n == 1 {
+            format!("{tool} left {n} object under the brush as it was ({kinds}): it reshapes paths only")
+        } else {
+            format!("{tool} left {n} objects under the brush as they were ({kinds}): it reshapes paths only")
+        }
+    };
+    let words = |s: &str| s.split(|c: char| !c.is_alphabetic()).filter(|w| !w.is_empty()).map(str::to_string).collect::<Vec<_>>();
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let cat = lang.catalog();
+        for ctx in ["liquify-list-two", "liquify-list-middle", "liquify-list-end"] {
+            assert!(cat.contextual(ctx, "{0}, {1}").is_some(), "{code} has no {ctx} row");
+        }
+        let kind = |k: &str| cat.contextual("liquify-kind", k).unwrap_or_else(|| panic!("{code} has no liquify-kind row for {k}"));
+        // No English word of `sources` is left in `shown`, unless a translation uses it too.
+        let english_left = |shown: &str, sources: &[&str], translated: &[&str]| {
+            let shown = words(shown);
+            for source in sources {
+                let kept = translated.iter().any(|t| words(t).iter().any(|w| words(source).contains(w)));
+                assert!(kept || words(source).iter().all(|w| !shown.contains(w)), "{code}: {source} stays English in {shown:?}");
+            }
+        };
+        for tool in TOOLS {
+            let label = cat.contextual("liquify-tool", tool).unwrap_or_else(|| panic!("{code} has no liquify-tool row for {tool}"));
+            // All nine kinds, in the engine's order and in reverse.
+            for kinds in [KINDS.to_vec(), KINDS.iter().rev().copied().collect()] {
+                let shown = message(lang, &warning(tool, kinds.len(), &kinds.join(", ")));
+                assert!(shown.contains(label) && shown.contains('9'), "{code}: {shown}");
+                let translated: Vec<&str> = kinds.iter().map(|k| kind(k)).collect();
+                let mut from = 0;
+                for t in &translated {
+                    let at = shown[from..].find(t).unwrap_or_else(|| panic!("{code}: {t} missing or out of order in {shown}"));
+                    from += at + t.len();
+                }
+                english_left(&shown, &kinds, &translated);
+                english_left(&shown, &[tool], &[label]);
+            }
+        }
+        // One kind, for one object and for several.
+        for k in KINDS {
+            for n in [1, 2, 5] {
+                let shown = message(lang, &warning("Bloat", n, k));
+                assert!(shown.contains(kind(k)) && shown.contains(&n.to_string()), "{code}: {shown}");
+                english_left(&shown, &[k], &[kind(k)]);
+            }
+        }
+    }
+    let de = Lang::from_code("de").expect("registered");
+    assert_eq!(
+        message(de, &warning("Warp", 1, "symbols")),
+        "Verkrümmung ließ 1 Objekt unter dem Pinsel unverändert (Symbole): es formt nur Pfade um"
+    );
+    assert_eq!(
+        message(de, &warning("Twirl", 2, "type, images")),
+        "Strudel ließ 2 Objekte unter dem Pinsel unverändert (Text und Bilder): es formt nur Pfade um"
+    );
+    assert_eq!(
+        message(de, &warning("Pucker", 4, "graphs, type, symbols, images")),
+        "Zusammenziehen ließ 4 Objekte unter dem Pinsel unverändert (Diagramme, Text, Symbole und Bilder): es formt nur Pfade um"
+    );
+    // The count picks the language's form.
+    assert_eq!(
+        message(cs(), &warning("Crystallize", 5, "meshes, placed documents")),
+        "Nástroj Krystalizace ponechal 5 objektů pod štětcem beze změny (sítě a umístěné dokumenty): mění pouze cesty"
+    );
+    let ja = Lang::from_code("ja").expect("registered");
+    assert_eq!(
+        message(ja, &warning("Wrinkle", 3, "blends, repeats, envelopes")),
+        "しわ はブラシの下にある 3 個のオブジェクトを変更せずに残しました（ブレンド、リピート、エンベロープ）。パスのみを変形します"
+    );
+    // A kind Liquify does not list leaves the tool and the list as they are.
+    assert_eq!(
+        message(de, &warning("Warp", 2, "type, widgets")),
+        "Warp ließ 2 Objekte unter dem Pinsel unverändert (type, widgets): es formt nur Pfade um"
+    );
+    // English shows the warning as the engine wrote it.
+    assert_eq!(message(Lang::EN, &warning("Warp", 2, "type, images")), warning("Warp", 2, "type, images"));
+}
+
 /// `file.info`'s refusal of a value with control characters is two whole messages, one for the
 /// fields that take line breaks and one for the fields that don't, and each is translated in every
 /// complete-message language with the field's key kept as written.
@@ -4400,6 +4518,31 @@ fn russian_translates_command_script_and_file_messages() {
         ("a \\u escape needs four hexadecimal digits", "после \\u нужны четыре шестнадцатеричные цифры"),
     ] {
         assert_eq!(message(ru, english), russian, "{english}");
+    }
+}
+
+/// Danish shows command, script and file messages in Danish: whole messages, messages with a name,
+/// a number, a size or a command id filled in, a message that keeps its double-quoted values, and
+/// the messages whose catalog rows escape a backslash or double a brace.
+#[test]
+fn danish_translates_command_script_and_file_messages() {
+    let da = Lang::from_code("da").expect("registered");
+    for (english, danish) in [
+        ("CSV is empty", "CSV-filen er tom"),
+        ("Offset Path: the path is too complex to offset", "Forskyd kurve: kurven er for kompleks til at forskyde"),
+        ("no swatch named `Gold`", "ingen farveprøve med navnet `Gold`"),
+        ("object 12 is not an Intertwine group", "objekt 12 er ikke en sammenfletningsgruppe"),
+        ("no slice 4 in the image (see slice.list)", "intet udsnit 4 i billedet (se slice.list)"),
+        ("give origin: [x, y], or reset: true", "angiv origin: [x, y] eller reset: true"),
+        ("`kinsoku` must be \"none\", \"hard\" or \"soft\"", "`kinsoku` skal være \"none\", \"hard\" eller \"soft\""),
+        ("PNG encoding failed: 0 × 0 pixels is not a valid image size", "PNG-kodning mislykkedes: 0 × 0 pixels er ikke en gyldig billedstørrelse"),
+        ("missing `index` (a stop index, or null to clear)", "`index` mangler (et indeks for et gradientstop eller null for at rydde)"),
+        ("JSON.parse: unexpected end (at offset 7)", "JSON.parse: unexpected end (ved forskydning 7)"),
+        ("\\ at end of pattern", "\\ i slutningen af mønsteret"),
+        ("a \\u escape needs four hexadecimal digits", "en \\u-escape kræver fire hexadecimale cifre"),
+        ("not an RTF file: it doesn't start with {\\rtf", "ikke en RTF-fil: den starter ikke med {\\rtf"),
+    ] {
+        assert_eq!(message(da, english), danish, "{english}");
     }
 }
 

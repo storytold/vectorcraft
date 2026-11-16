@@ -102,6 +102,21 @@ pub fn has_solid(n: &Node) -> bool {
     solid(&n.appearance.effects).is_some() || n.appearance.items.iter().any(|i| i.visible() && solid(i.effects()).is_some())
 }
 
+/// Does `n` carry a 3D effect that [`three_d_meshes`] builds solids from: a visible Revolve, or
+/// else a visible Extrude & Bevel, Inflate or Rotate effect, which on a group or layer must be on
+/// the object itself (one on a group's fill or stroke draws nothing to export)? It does not build
+/// the solids, so [`three_d_meshes`] can still refuse an object it passes.
+pub fn exports_three_d(n: &Node) -> bool {
+    let container = is_container(n);
+    if crate::has_revolve(n) {
+        !container || n.appearance.effects.iter().any(|e| e.visible && crate::is_revolve(&e.id))
+    } else if container {
+        solid(&n.appearance.effects).is_some()
+    } else {
+        has_solid(n)
+    }
+}
+
 /// The Position presets: (id, [rotation X, Y, Z]). Front, Back, Left, Right, Top and Bottom face
 /// the art that way; Off-Axis tilts each 20° down and 25° aside (showing the top and right);
 /// Isometric lays the art on the left, right, top or bottom plane of an isometric view (the
