@@ -154,7 +154,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Fill and Stroke",
             [],
             None,
-            "{} → {fill, stroke: the paints the Fill/Stroke proxies show (the Appearance panel's active item for the proxy of its kind, else the first selected object's, a group's first painted object's, type: its first run's; else the defaults for new art; when that object is a gradient mesh with points picked by the Mesh tool, Direct Selection or the Lasso and no fill item is active, the fill is its first picked point's color), fillActive, fillMixed, strokeMixed: the selected objects' (or a selected group's contents') fills (strokes) differ, shown as a \"?\" proxy (a gradient mesh with points picked counts with their colors), fillOpacity, strokeOpacity: 0..100, the opacity of the fill (stroke) item that paint.setFill {opacity} sets, from the first selected object (or painted object in a selected group) that has one (a gradient mesh's first picked point's), or null with nothing selected (the defaults for new art), for an object selected in a symbol instance, while the Type tool has characters selected, and when only type characters or objects without that item are selected}",
+            "{} → {fill, stroke: the paints the Fill/Stroke proxies show (the Appearance panel's active item for the proxy of its kind, else the first selected object's, a group's first painted object's, type: its first run's; else the defaults for new art; when that object is a gradient mesh with points picked by the Mesh tool, Direct Selection or the Lasso and no fill item is active, the fill is its first picked point's color), fillActive, fillMixed, strokeMixed: the selected objects' (or a selected group's contents') fills (strokes) differ, shown as a \"?\" proxy (a gradient mesh with points picked counts with their colors), fillOpacity, strokeOpacity: 0..100, the opacity of the fill (stroke) item that paint.setFill {opacity} sets, from the first selected object (or painted object in a selected group; a selected path of a compound path stands for its compound) that has one (a gradient mesh's first picked point's), or null with nothing selected (the defaults for new art), for an object selected in a symbol instance, while the Type tool has characters selected, and when only type characters or objects without that item are selected}",
             always,
             proxies
         ),
@@ -248,15 +248,32 @@ impl Session {
         // (graph::paint_targets).
         let editable = |id: &&NodeId| !super::graph::is_design_art(&st.doc, **id);
         // As the command picks its rows (ItemTarget::of_kind): the active item when it is a row of
-        // this kind in the first selected object's stack, read in the selected objects' own
-        // stacks; else the topmost one of the painted leaves of the selected objects (a group's
+        // this kind in the first selected object's stack, read in the stacks the command edits;
+        // else the topmost one of the painted leaves of the selected objects (a group's
         // contents; for a targeted layer, its editable art, ItemTarget::targets). A row of a
         // graph design's art selected first stands for nothing (item_target_at).
         let first = subjects.first().filter(editable).and_then(|id| st.doc.node(*id));
         let active = item.filter(|i| first.and_then(|n| n.appearance.items.get(*i)).is_some_and(|it| it.is_fill() == !stroke));
-        if active.is_some() {
-            let targets = super::graph::series_group_marks_where(&st.doc, subjects, |n| n.extras().series_index.is_some());
-            return targets.iter().filter(editable).filter_map(|id| st.doc.node(*id)).find_map(|n| of(n, active));
+        if let Some(index) = active {
+            // The objects whose own stacks the command edits (appearance_targets: a selected
+            // compound-path member stands for its compound, and an object inside another selected
+            // one is left out), with the one whose stack the row belongs to first.
+            // Each target reads the row the command edits there (ItemTarget::per_target and
+            // ItemTarget::resolve): the row equal to the active one, else its topmost of the kind.
+            let row = ItemTarget::Item { index, explicit: false, aligned: true };
+            let mut roots = super::appearance::appearance_targets(self, &Value::Null).ok()?;
+            let anchor = row.anchor(self, &roots);
+            if let Some(head) = roots.get_mut(..=anchor) {
+                head.rotate_right(1);
+            }
+            let targets: Vec<NodeId> = super::graph::series_group_marks_where(&st.doc, &roots, |n| n.extras().series_index.is_some())
+                .into_iter()
+                .filter(|id| editable(&id))
+                .collect();
+            return targets.iter().zip(row.per_target(self, &targets)).find_map(|(id, at)| {
+                let n = st.doc.node(*id)?;
+                of(n, at?.resolve(&n.appearance, !stroke, "paint.proxies").ok()?)
+            });
         }
         let leaves = super::leaf_targets(self, &st.selection.objects).ok()?;
         leaves.iter().filter(editable).filter_map(|id| st.doc.node(*id)).find_map(|n| of(n, None))

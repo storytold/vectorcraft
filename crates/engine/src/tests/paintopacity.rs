@@ -142,6 +142,39 @@ fn the_active_appearance_row_takes_the_opacity() {
     assert_eq!(proxies(&mut s)["fillOpacity"], 30.0);
 }
 
+/// With a path of a compound path selected and its fill row active, the command edits the compound
+/// path's fill, and `paint.proxies` answers that fill's opacity, not the member's own.
+#[test]
+fn an_active_row_of_a_compound_member_answers_for_its_compound() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 10.0), rect(&mut s, 200.0));
+    select(&mut s, &[a, b]);
+    let compound = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [compound.0], "opacity": 40})).unwrap();
+    // A fill row of the member's own, at 100%.
+    s.execute("appearance.addFill", &json!({"ids": [a.0]})).unwrap();
+    assert_eq!(fill_opacity(&s, a), 1.0);
+    select(&mut s, &[a]);
+    let row = node(&s, a).appearance.items.iter().position(|it| it.is_fill()).unwrap();
+    s.execute("appearance.setActiveItem", &json!({"index": row})).unwrap();
+    assert_eq!(proxies(&mut s)["fillOpacity"], 40.0);
+    s.execute("paint.setFill", &json!({"opacity": 70})).unwrap();
+    assert!((fill_opacity(&s, compound) - 0.7).abs() < 1e-6);
+    assert_eq!(proxies(&mut s)["fillOpacity"], 70.0);
+
+    // A fill row of the member's at an index that is not a fill in the compound path: the command
+    // edits the compound path's top fill, which the proxy answers.
+    s.execute("appearance.addFill", &json!({"ids": [a.0]})).unwrap();
+    let (member, outer) = (node(&s, a).appearance, node(&s, compound).appearance);
+    let row = (0..member.items.len()).find(|i| member.items[*i].is_fill() && !outer.items.get(*i).is_some_and(|it| it.is_fill())).unwrap();
+    select(&mut s, &[a]);
+    s.execute("appearance.setActiveItem", &json!({"index": row})).unwrap();
+    assert_eq!(proxies(&mut s)["fillOpacity"], 70.0);
+    s.execute("paint.setFill", &json!({"opacity": 20})).unwrap();
+    assert!((fill_opacity(&s, compound) - 0.2).abs() < 1e-6);
+    assert_eq!(proxies(&mut s)["fillOpacity"], 20.0);
+}
+
 /// A color and an opacity change together in one undo step, and the same call again records no
 /// step.
 #[test]
