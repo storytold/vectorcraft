@@ -188,6 +188,7 @@
 	Align to Artboard	આર્ટબોર્ડ પર સંરેખિત કરો
 	Align to Glyph Bounds	ગ્લિફ સીમા પર સંરેખિત કરો
 	Align to Key Object	કી ઑબ્જેક્ટ પર સંરેખિત કરો
+	Align to Key Anchor	કી એન્કર બિંદુ પર સંરેખિત કરો
 	Align to Page	પેજ પર સંરેખિત કરો
 	Align to Path	પાથ પર સંરેખિત કરો
 	Align to Pixel Grid	પિક્સેલ ગ્રિડ પર સંરેખિત કરો
@@ -471,6 +472,11 @@
 	CMYK Images	CMYK ઇમેજ
 	CMYK colours print with their own values; off, they go through the colour settings too.	CMYK રંગો પોતાની કિંમતો સાથે છાપે છે; બંધ હોય ત્યારે તે રંગ સેટિંગમાંથી પણ પસાર થાય છે.
 	CMYK:	CMYK:
+	RGB Policy:	RGB નીતિ:
+	CMYK Policy:	CMYK નીતિ:
+	Preserve Embedded Profiles	એમ્બેડ કરેલી પ્રોફાઇલ જાળવો
+	Convert to Working Space	કાર્યકારી સ્પેસમાં રૂપાંતરિત કરો
+	Preserve Numbers	સંખ્યાઓ જાળવો
 	CSS Properties	CSS ગુણધર્મો
 	Calligraphic Brush	કેલિગ્રાફિક બ્રશ
 	Calligraphic Brush Options	કેલિગ્રાફિક બ્રશ વિકલ્પો
@@ -550,6 +556,7 @@
 	Chosen: {n} of {total}	પસંદ કરેલ: {total} માંથી {n}
 	Chrome…	ક્રોમ…
 	Circle	વર્તુળ
+	Circle:	વર્તુળ:
 	Classic	ક્લાસિક
 	Clean Up	સાફ કરો
 	Clean Up…	સાફ કરો…
@@ -601,10 +608,11 @@
 	Close Path…	પાથ બંધ કરો…
 	Close or Join	બંધ કરો અથવા જોડો
 	Close paths when ends are within:	છેડા આ અંતરમાં હોય ત્યારે પાથ બંધ કરો:
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	ખુલ્લી પ્રોફાઇલના ગોળ છેડા બંધ કરો. આંશિક સ્વીપ તેમની કાપેલી બાજુઓ ખુલ્લી રાખે છે.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	ખુલ્લી પ્રોફાઇલના ગોળ છેડા બંધ કરો. આંશિક સ્વીપ તેમની કાપેલી બાજુઓ પણ બંધ કરે છે.
 	Closing bracket with no opening one	ખુલતા કૌંસ વગરનો બંધ થતો કૌંસ
 	Coincidence:	સંયોગ:
 	Collapse Panel Group	પેનલ ગ્રૂપ સંકોચો
+	Cycle Display Sizes	પ્રદર્શન કદ બદલો
 	Collapse Panels to Icons	પેનલ્સને આઇકનમાં સંકોચો
 	Collapse to Icons	આઇકનમાં સંકોચો
 	Collate	ક્રમમાં ગોઠવો
@@ -743,6 +751,7 @@
 	Copy Artboard	આર્ટબોર્ડ નકલ કરો
 	Copy Color Value (Hex)	રંગ મૂલ્યની નકલ કરો (Hex)
 	Copy Guide	ગાઇડ નકલ કરો
+	Copy Info	માહિતી નકલ કરો
 	Copy Report	રિપોર્ટ નકલ કરો
 	Copy Script Console	સ્ક્રિપ્ટ કન્સોલ નકલ કરો
 	Copy Selected	પસંદ કરેલું નકલ કરો
@@ -754,6 +763,12 @@
 	Copy to User Defined	વપરાશકર્તા-વ્યાખ્યાયિતમાં નકલ કરો
 	Copyright	કૉપીરાઇટ
 	Copyright Info URL:	કૉપીરાઇટ માહિતી URL:
+	Templates	ટેમ્પલેટ
+	Save Metadata Template…	મેટાડેટા ટેમ્પલેટ સાચવો…
+	Import Options	આયાત વિકલ્પો
+	Clear existing fields and use the template's	હાલના ફીલ્ડ સાફ કરો અને ટેમ્પલેટના ફીલ્ડ વાપરો
+	Keep existing fields, but replace those the template has	હાલના ફીલ્ડ રાખો, પણ ટેમ્પલેટમાં હોય તે બદલો
+	Keep existing fields, but append those the template has	હાલના ફીલ્ડ રાખો, પણ ટેમ્પલેટમાં હોય તે ઉમેરો
 	Copyright Notice:	કૉપીરાઇટ સૂચના:
 	Copyright Status:	કૉપીરાઇટ સ્થિતિ:
 	Copyright Symbol	કૉપીરાઇટ ચિહ્ન
@@ -1028,6 +1043,7 @@
 	Document model	દસ્તાવેજ મોડેલ
 	Document open password	દસ્તાવેજ ખોલવાનો પાસવર્ડ
 	Documents you create appear here.	તમે બનાવેલા દસ્તાવેજો અહીં દેખાશે.
+	Don't Color Manage This Document	આ દસ્તાવેજનું રંગ સંચાલન કરશો નહીં
 	Don't Relink	ફરીથી લિંક કરશો નહીં
 	Don't Save	સાચવશો નહીં
 	Don't Show Center	સેન્ટર બતાવશો નહીં
@@ -1059,6 +1075,8 @@
 	Drag art or swatches here, or use + to add the selection's colors and text styles.	અહીં આર્ટ અથવા સ્વેચ ખેંચો, અથવા પસંદગીના રંગો અને ટેક્સ્ટ સ્ટાઇલ ઉમેરવા + વાપરો.
 	Drag onto art to apply this appearance	આ દેખાવ લાગુ કરવા આર્ટ પર ખેંચો
 	Drag rings to rotate. Shift snaps to 15°.	ફેરવવા રિંગ્સ ખેંચો. Shift 15° પર સ્નેપ કરે છે.
+	Track cube	ફેરવવાનો ઘન
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	ફેરવવા ફલક, ધાર અથવા રિંગ ખેંચો. Shift સ્ક્રીનની એક અક્ષની આસપાસ ફેરવે છે.
 	Drag the art to move it on the paper	કાગળ પર ખસેડવા આર્ટ ખેંચો
 	Drag the light, or its rings. Shift snaps to 15°.	લાઇટ અથવા તેની રિંગ્સ ખેંચો. Shift 15° પર સ્નેપ કરે છે.
 	Drag to float as a toolbar	ટૂલબાર તરીકે ફ્લોટ કરવા ખેંચો
@@ -1233,7 +1251,6 @@
 	Every (minutes)	દર (મિનિટ)
 	Every option is at its default.	દરેક વિકલ્પ ડિફૉલ્ટ પર છે.
 	Every option matches {base}.	દરેક વિકલ્પ {base} સાથે મેળ ખાય છે.
-	Every-line Composer	એવરી-લાઇન કમ્પોઝર
 	Exact dash lengths	ચોક્કસ ડેશ લંબાઈ
 	Exceptions (comma separated)	અપવાદો (અલ્પવિરામથી અલગ)
 	Exclude	બાકાત રાખો
@@ -1441,6 +1458,8 @@
 	Font Family, Style & Size	ફોન્ટ ફેમિલી, સ્ટાઇલ અને સાઇઝ
 	Font Family:	ફોન્ટ ફેમિલી:
 	Font List	ફોન્ટ યાદી
+	Show Similar Fonts	સમાન ફોન્ટ બતાવો
+	Clear Similar Fonts	સમાન ફોન્ટ સાફ કરો
 	Font Preview Size	ફોન્ટ પૂર્વાવલોકન સાઇઝ
 	Font Size	ફોન્ટ સાઇઝ
 	Font Style:	ફોન્ટ સ્ટાઇલ:
@@ -1508,6 +1527,8 @@
 	Global	ગ્લોબલ
 	Global Brush Dimensions	ગ્લોબલ બ્રશ પરિમાણો
 	Global Edit Options	ગ્લોબલ એડિટ વિકલ્પો
+	Select Similar Objects	સમાન ઑબ્જેક્ટ પસંદ કરો
+	Select Similar Options	સમાન પસંદગીના વિકલ્પો
 	Global Process Color	ગ્લોબલ પ્રોસેસ રંગ
 	Glowing Edges…	ગ્લોઇંગ એજિસ…
 	Glyph Bounds	ગ્લિફ બાઉન્ડ્સ
@@ -1537,6 +1558,42 @@
 	Graph Design	ગ્રાફ ડિઝાઇન
 	Graph Marker	ગ્રાફ માર્કર
 	Graph Type	ગ્રાફ પ્રકાર
+	Graph Type…	ગ્રાફ પ્રકાર…
+	Graph Data…	ગ્રાફ ડેટા…
+	Graph Options	ગ્રાફ વિકલ્પો
+	Left Axis	ડાબી અક્ષ
+	Right Axis	જમણી અક્ષ
+	Category Axis	શ્રેણી અક્ષ
+	Separate Scales	અલગ સ્કેલ
+	Add Drop Shadow	ડ્રોપ શેડો ઉમેરો
+	Add Legend Across Top	ઉપર લેજન્ડ ઉમેરો
+	First Row in Front	પ્રથમ પંક્તિ આગળ
+	First Column in Front	પ્રથમ કૉલમ આગળ
+	Legend	લેજન્ડ
+	Column Width	કૉલમ પહોળાઈ
+	Bar Width	બાર પહોળાઈ
+	Cluster Width	જૂથ પહોળાઈ
+	Mark Data Points	ડેટા પોઇન્ટ ચિહ્નિત કરો
+	Connect Data Points	ડેટા પોઇન્ટ જોડો
+	Edge-to-Edge Lines	કિનારીથી કિનારી સુધી રેખાઓ
+	Draw Filled Lines	ભરેલી રેખાઓ દોરો
+	Tick Values	ટિક મૂલ્યો
+	Override Calculated Values	ગણતરી કરેલાં મૂલ્યો બદલો
+	Divisions	વિભાગો
+	Tick Marks	ટિક ચિહ્નો
+	Tick Marks per Division	વિભાગ દીઠ ટિક ચિહ્નો
+	Draw Tick Marks Between Labels	લેબલ વચ્ચે ટિક ચિહ્નો દોરો
+	Add Labels	લેબલ ઉમેરો
+	Maximum must be more than Minimum.	મહત્તમ ન્યૂનતમ કરતાં વધુ હોવું જોઈએ.
+	Column Graph	કૉલમ ગ્રાફ
+	Stacked Column Graph	સ્ટેક્ડ કૉલમ ગ્રાફ
+	Bar Graph	બાર ગ્રાફ
+	Stacked Bar Graph	સ્ટેક્ડ બાર ગ્રાફ
+	Line Graph	રેખા ગ્રાફ
+	Area Graph	ક્ષેત્ર ગ્રાફ
+	Scatter Graph	સ્કેટર ગ્રાફ
+	Pie Graph	પાઇ ગ્રાફ
+	Radar Graph	રડાર ગ્રાફ
 	Graphic Pen…	ગ્રાફિક પેન…
 	Graphic Style	ગ્રાફિક સ્ટાઇલ
 	Graphic Style Libraries	ગ્રાફિક સ્ટાઇલ લાઇબ્રેરીઓ
@@ -1641,6 +1698,7 @@
 	Highlight Substituted Glyphs	બદલાયેલા ગ્લિફ હાઇલાઇટ કરો
 	Highlight Tracking	ટ્રેકિંગ હાઇલાઇટ કરો
 	Highlight Variable	વેરિએબલ હાઇલાઇટ કરો
+	Sort Variables	વેરિએબલનો ક્રમ લગાવો
 	Highlight anchors on mouse over	માઉસ ફેરવતાં એન્કર હાઇલાઇટ કરો
 	Highlight:	હાઇલાઇટ:
 	Hindi	હિન્દી
@@ -1683,6 +1741,10 @@
 	ICC Profile	ICC પ્રોફાઇલ
 	ICF Bottom/Left	ICF નીચે/ડાબે
 	ICF Box	ICF બૉક્સ
+	Show Sample	નમૂનો બતાવો
+	Hide Sample	નમૂનો છુપાવો
+	Max Ascent/Descent	મહત્તમ એસેન્ટ/ડિસેન્ટ
+	Max Ascender	મહત્તમ એસેન્ડર
 	ICF Top/Right	ICF ઉપર/જમણે
 	ID: {id}	ID: {id}
 	Identify Objects By	ઑબ્જેક્ટ્સ આ રીતે ઓળખો
@@ -1712,6 +1774,7 @@
 	Import Library	લાઇબ્રેરી આયાત કરો
 	Import Matches	આયાત મેળ
 	Import PDF	PDF આયાત કરો
+	Import PDF pages as links	PDF પેજને લિંક તરીકે આયાત કરો
 	Import PDF Presets	PDF આયાત પ્રીસેટ્સ
 	Import Perspective Grid Presets	પર્સ્પેક્ટિવ ગ્રિડ પ્રીસેટ્સ આયાત કરો
 	Import Preferences	પસંદગીઓ આયાત કરો
@@ -1862,6 +1925,14 @@
 	Lasso Tool	લાસો ટૂલ
 	Last	છેલ્લું
 	Last Artboard	છેલ્લું આર્ટબોર્ડ
+	Status Bar Show	સ્ટેટસ બારમાં બતાવો
+	Artboard Name	આર્ટબોર્ડનું નામ
+	Current Tool	વર્તમાન ટૂલ
+	Date and Time	તારીખ અને સમય
+	Number of Undos	પૂર્વવત્ કરવાની સંખ્યા
+	Document Color Profile	દસ્તાવેજની રંગ પ્રોફાઇલ
+	Undos	પૂર્વવત્
+	Redos	ફરીથી કરો
 	Last Effect: {name}	છેલ્લી ઇફેક્ટ: {name}
 	Last Effect…	છેલ્લી ઇફેક્ટ…
 	Last Page	છેલ્લું પેજ
@@ -1908,6 +1979,9 @@
 	Light Intensity	લાઇટ તીવ્રતા
 	Light Rough	લાઇટ રફ
 	Light behind the object	ઑબ્જેક્ટની પાછળ લાઇટ
+	Move Light to Back	લાઇટ પાછળ ખસેડો
+	Move Light to Front	લાઇટ આગળ ખસેડો
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	લાઇટ ખસેડવા માટે તેને ખેંચો. ઍરો કી ફોકસ થયેલી લાઇટ ખસેડે છે; Shift સાથે 15° ના પગલાં.
 	Lighten	હળવું કરો
 	Lighting	લાઇટિંગ
 	Lights	લાઇટ્સ
@@ -2100,6 +2174,7 @@
 	Merge Shared Edge	શેર કરેલી કિનાર મર્જ કરો
 	Merge Swatches	સ્વેચ મર્જ કરો
 	Merge colors into one row	રંગોને એક હરોળમાં મર્જ કરો
+	New Row	નવી હરોળ
 	Merge only with selection	માત્ર પસંદગી સાથે મર્જ કરો
 	Merged PRs	મર્જ થયેલા PR
 	Mesh Point Color	મેશ બિંદુનો રંગ
@@ -2742,6 +2817,8 @@
 	Proof Setup	પ્રૂફ સેટઅપ
 	Properties	ગુણધર્મો
 	Proportional Metrics	પ્રમાણસર મેટ્રિક્સ
+	H or V Style	આડી અથવા ઊભી શૈલી
+	Roman Italics	રોમન ઇટાલિક
 	Pucker	પકર
 	Pucker & Bloat…	પકર અને બ્લોટ…
 	Pucker Tool	પકર ટૂલ
@@ -2769,6 +2846,7 @@
 	Radar Graph Tool	રડાર ગ્રાફ ટૂલ
 	Radial	રેડિયલ
 	Radial Blur…	રેડિયલ બ્લર…
+	Blur Center	બ્લરનું કેન્દ્ર
 	Radial Dividers:	રેડિયલ વિભાજક:
 	Radial Glows	રેડિયલ ઝગમગાટ
 	Radial Gradient	રેડિયલ ગ્રેડિઅન્ટ
@@ -3025,6 +3103,12 @@
 	Restore	પુનઃસ્થાપિત કરો
 	Restore Recovered Documents	પુનઃપ્રાપ્ત દસ્તાવેજો પુનઃસ્થાપિત કરો
 	Restore every preference to its default (applied on OK)	દરેક પસંદગી તેના ડિફોલ્ટ પર પુનઃસ્થાપિત કરો (ઠીક પર લાગુ થશે)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	પિક્સેલ સિવાયના બિલ્ટ-ઇન કદના નવા દસ્તાવેજો અને કોઈ એકમ ન નોંધતી ખોલેલી ફાઇલો માટેનો એકમ; અહીં તેને પસંદ કરીને ઠીક ક્લિક કરવાથી સક્રિય દસ્તાવેજનો એકમ પણ તે બને છે.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	સ્ટ્રોકની જાડાઈ, ડૅશ અને અંતર આ એકમમાં દેખાય છે, અને તેમના માટે ટાઇપ કરેલી સંખ્યાઓ આ એકમમાં વંચાય છે.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	ટાઇપના કદ, લીડિંગ અને બેઝલાઇન શિફ્ટ આ એકમમાં દેખાય છે, અને તેમના માટે ટાઇપ કરેલી સંખ્યાઓ આ એકમમાં વંચાય છે.
+	The unit for East Asian type measurements, which no field uses yet.	પૂર્વ એશિયાઈ ટાઇપના માપ માટેનો એકમ, જેનો હજી કોઈ ફીલ્ડ ઉપયોગ કરતું નથી.
+	When on, a number typed without a unit into a field in picas is read in points.	ચાલુ હોય ત્યારે, પાઇકામાં હોય તેવા ફીલ્ડમાં એકમ વિના ટાઇપ કરેલી સંખ્યા પોઇન્ટ્સમાં વંચાય છે.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID પસંદ હોય ત્યારે ઑબ્જેક્ટનાં નામ લેયર્સ, વેરિએબલ્સ અને લેયર વિકલ્પોમાં XML ID તરીકે દેખાય છે.
 	Restored documents open unsaved: save them to keep them.	પુનઃસ્થાપિત દસ્તાવેજો અસાચવેલા ખુલશે: તેમને રાખવા માટે સાચવો.
 	Restrict printing, editing and other tasks	છાપકામ, સંપાદન અને અન્ય કાર્યો પર પ્રતિબંધ મૂકો
 	Reticulation…	રેટિક્યુલેશન…
@@ -3252,6 +3336,8 @@
 	Scale Text Attributes	ટેક્સ્ટ ગુણધર્મો સ્કેલ કરો
 	Scale Tool	સ્કેલ ટૂલ
 	Scale at Center	કેન્દ્રથી સ્કેલ કરો
+	Delete Set	સેટ કાઢી નાખો
+	Direct Entry	સીધી એન્ટ્રી
 	Scale in Perspective	પર્સ્પેક્ટિવમાં સ્કેલ કરો
 	Scale to Fit Artboard	આર્ટબોર્ડમાં બંધબેસતું સ્કેલ કરો
 	Scale:	સ્કેલ:
@@ -3285,6 +3371,8 @@
 	Search Preferences	પસંદગીઓ શોધો
 	Search commands and tools	આદેશો અને ટૂલ્સ શોધો
 	Search commands and tools…	આદેશો અને ટૂલ્સ શોધો…
+	Recent Commands	તાજેતરના આદેશો
+	No recent commands	કોઈ તાજેતરના આદેશો નથી
 	Search images	છબીઓ શોધો
 	Searching…	શોધી રહ્યા છીએ…
 	Secondary	ગૌણ
@@ -3400,6 +3488,7 @@
 	Setup…	સેટઅપ…
 	Shading	શેડિંગ
 	Shading Color	શેડિંગ રંગ
+	Black Overprint	કાળો ઓવરપ્રિન્ટ
 	Shadows and Glows	પડછાયા અને ગ્લો
 	Shape	શેપ
 	Shape Builder	શેપ બિલ્ડર
@@ -3499,6 +3588,7 @@
 	Show all plates	બધી પ્લેટ બતાવો
 	Show axis	અક્ષ બતાવો
 	Show color bars	રંગ બાર બતાવો
+	Find the selected colors in the artwork	પસંદ કરેલા રંગો આર્ટવર્કમાં શોધો
 	Show handles when multiple anchors are selected	બહુવિધ એન્કર પસંદ હોય ત્યારે હૅન્ડલ બતાવો
 	Show in Folder	ફોલ્ડરમાં બતાવો
 	Show its progress, see Cancel and write log lines	તેની પ્રગતિ બતાવવી, રદ કરવાની વિનંતી જોવી અને લૉગ લાઇનો લખવી
@@ -3527,10 +3617,10 @@
 	Single Quotes:	એકલ અવતરણ ચિહ્નો:
 	Single Right Quotation Mark	જમણું એકલ અવતરણ ચિહ્ન
 	Single Word Justification:	એક શબ્દ જસ્ટિફિકેશન:
-	Single-line Composer	સિંગલ-લાઇન કમ્પોઝર
 	Sixth Space	છઠ્ઠી જગ્યા
 	Size	કદ
 	Size Tile to Art	ટાઇલનું કદ આર્ટ પ્રમાણે કરો
+	Move Tile with Art	ટાઇલને આર્ટ સાથે ખસેડો
 	Size/Leading	કદ/લીડિંગ
 	Size:	કદ:
 	Size: {size}  Tracking: {tracking}	કદ: {size}  ટ્રેકિંગ: {tracking}
@@ -3565,6 +3655,18 @@
 	Smart Pen Panel	સ્માર્ટ પેન પેનલ
 	Smart Pen Tool	સ્માર્ટ પેન ટૂલ
 	Smart Punctuation…	સ્માર્ટ વિરામચિહ્નો…
+	Smart Punctuation	સ્માર્ટ વિરામચિહ્નો
+	ff, fi, ffi Ligatures	ff, fi, ffi લિગેચર
+	ff, fl, ffl Ligatures	ff, fl, ffl લિગેચર
+	Smart Quotes	સ્માર્ટ અવતરણચિહ્નો
+	Smart Spaces	સ્માર્ટ જગ્યાઓ
+	En, Em Dashes	En અને Em ડૅશ
+	Ellipses	એલિપ્સિસ
+	Expert Fractions	નિષ્ણાત અપૂર્ણાંકો
+	Replace In	આમાં બદલો
+	Selected Text Only	માત્ર પસંદ કરેલું લખાણ
+	Entire Document	આખો દસ્તાવેજ
+	Report Results	પરિણામોનો અહેવાલ
 	Smooth	સ્મૂધ
 	Smooth Anchors…	એન્કર સ્મૂધ કરો…
 	Smooth Tool	સ્મૂધ ટૂલ
@@ -3691,6 +3793,9 @@
 	Styling:	સ્ટાઇલિંગ:
 	Stylistic	સ્ટાઇલિસ્ટિક
 	Stylistic Alternates	સ્ટાઇલિસ્ટિક વિકલ્પી
+	Ligatures	લિગેચર્સ
+	Ornaments	અલંકારો
+	Figures	અંકો
 	Stylistic Sets	સ્ટાઇલિસ્ટિક સેટ
 	Stylize	સ્ટાઇલાઇઝ
 	Subdivisions	ઉપવિભાગો
@@ -3760,6 +3865,8 @@
 	Table	ટેબલ
 	Tabs	ટૅબ
 	Tamil	તમિલ
+	Tangent Circle	સ્પર્શક વર્તુળ
+	Tangent Circle…	સ્પર્શક વર્તુળ…
 	Taper	ટેપર
 	Target	લક્ષ્ય
 	Target Contents	લક્ષ્ય સામગ્રી
@@ -4157,9 +4264,12 @@
 	Width:	પહોળાઈ:
 	Window	વિન્ડો
 	Wireframe	વાયરફ્રેમ
+	Render Settings	રેન્ડર સેટિંગ્સ
 	Word Spacing:	શબ્દ અંતર:
 	Words Longer Than:	આનાથી લાંબા શબ્દો:
 	Working CMYK	કાર્યકારી CMYK
+	Working CMYK: {name}	કાર્યકારી CMYK: {name}
+	Working RGB: {name}	કાર્યકારી RGB: {name}
 	Workspace	વર્કસ્પેસ
 	Wrinkle	કરચલી
 	Wrinkle Tool	કરચલી ટૂલ
@@ -4364,6 +4474,8 @@ antiAlias	Sharp	શાર્પ
 	Preview:	પ્રીવ્યૂ:
 	Insert Aki Left	ડાબે અકી ઉમેરો
 	Insert Aki Right	જમણે અકી ઉમેરો
+	Adjust Horizontal Diacritic Position	ડાયાક્રિટિકની આડી સ્થિતિ ગોઠવો
+	Adjust Vertical Diacritic Position	ડાયાક્રિટિકની ઊભી સ્થિતિ ગોઠવો
 	Conic Gradient	કોનિક ગ્રેડિયન્ટ
 	Diamond Gradient	ડાયમંડ ગ્રેડિયન્ટ
 	Include Placed Images	પ્લેસ કરેલી ઇમેજો સામેલ કરો
@@ -4388,6 +4500,7 @@ antiAlias	Sharp	શાર્પ
 	Save Prominent Colors	મુખ્ય રંગો સાચવો
 	Korean Line Break Anywhere	કોરિયન લાઇન ગમે ત્યાં તોડો
 	Bunri-Kinshi	બુનરી-કિન્શી
+	Kurikaeshi Moji Shori	કુરિકાએશી મોજી શોરી
 	East Asian Composition Settings	પૂર્વ એશિયાઈ કમ્પોઝિશન સેટિંગ્સ
 	Korean Composition Settings	કોરિયન કમ્પોઝિશન સેટિંગ્સ
 	Show Bounding Box While Moving and Drawing	ખસેડતી અને દોરતી વખતે બાઉન્ડિંગ બોક્સ બતાવો
@@ -4486,6 +4599,13 @@ antiAlias	Sharp	શાર્પ
 	Graphite Pencil	ગ્રેફાઇટ પેન્સિલ
 	Wax Crayon	વેક્સ ક્રેયોન
 	Charcoal Dust	ચારકોલનો ભૂકો
+
+# Original procedural circuit brushes.
+	Tech Circuit	ટેક સર્કિટ
+	Circuit Trace	સર્કિટ પથ
+	Bus Lines	બસ રેખાઓ
+	Terminal Nodes	ટર્મિનલ નોડ્સ
+
 	Notched Ribbon	ખાંચાવાળી રિબન
 	Double Line	બેવડી રેખા
 	Wave	તરંગ
@@ -4687,3 +4807,25 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Repeat Objects	પુનરાવર્તિત ઑબ્જેક્ટ્સ
 @msg	`{path}` must be one of {_1}, not {got}	`{path}` એ {_1}માંથી એક હોવું જોઈએ, {got} નહીં
 	Path Length	પાથની લંબાઈ
+	Packaging Tools	પેકેજિંગ ટૂલ્સ
+	Fold Lines	ફોલ્ડ લાઇન્સ
+	Make Cut Line	કટ લાઇન બનાવો
+	Make Crease Line	ક્રીઝ લાઇન બનાવો
+	Make Partial Cut Line	આંશિક કટ લાઇન બનાવો
+	Make Perforation Line	પર્ફોરેશન લાઇન બનાવો
+	Make Fold Line	ફોલ્ડ લાઇન બનાવો
+	Role Swatches…	લાઇન પ્રકારના સ્વેચ…
+	Role Swatches	લાઇન પ્રકારના સ્વેચ
+	Role	લાઇન પ્રકાર
+	Cut Line	કટ લાઇન
+	Crease Line	ક્રીઝ લાઇન
+	Partial Cut Line	આંશિક કટ લાઇન
+	Perforation Line	પર્ફોરેશન લાઇન
+	No objects are selected.	કોઈ ઑબ્જેક્ટ પસંદ કરેલ નથી.
+	Open a document to mark its fold lines.	તેની ફોલ્ડ લાઇન્સ ચિહ્નિત કરવા દસ્તાવેજ ખોલો.
+	Remove Fold Line Role	લાઇન પ્રકાર દૂર કરો
+	Middle Eastern & South Asian Single-line Composer	સિંગલ-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
+	Middle Eastern & South Asian Every-line Composer	એવરી-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
+	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
+	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"

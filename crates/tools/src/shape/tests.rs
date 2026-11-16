@@ -196,6 +196,356 @@ fn shift_square_alt_center() {
     assert_eq!(v, json!({"x": -10.0, "y": -10.0, "width": 20.0, "height": 20.0}));
 }
 
+/// A 500 × 500 document holding `paths`.
+fn doc_holding_paths(paths: impl IntoIterator<Item = vectorcraft_geom::PathData>) -> vectorcraft_doc::Document {
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    for (i, path) in paths.into_iter().enumerate() {
+        let id = d.alloc_id();
+        d.insert(Some(l), i, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+    }
+    d
+}
+
+/// The box of the last preview of a drag: x, y, width, height.
+fn previewed_box(a: &[Action]) -> [f64; 4] {
+    let Some(Action::Preview(_, v)) = a.last() else { panic!("no preview: {a:?}") };
+    ["x", "y", "width", "height"].map(|k| v[k].as_f64().unwrap_or(f64::NAN))
+}
+
+/// An Alt+Shift drag with the Ellipse tool from `center` to `to`: the circle's box as previewed,
+/// and the overlays it shows.
+fn circle_drag(c: &ToolContext, center: Point, to: Point) -> ([f64; 4], Vec<Overlay>) {
+    let both = Mods { alt: true, shift: true, ..Mods::default() };
+    let mut t = ShapeTool::new("ellipse");
+    t.pointer(c, &PointerEvent::new(PointerKind::Down, center.x, center.y).with_mods(both));
+    let a = t.pointer(c, &PointerEvent::new(PointerKind::Drag, to.x, to.y).with_mods(both));
+    (previewed_box(&a), t.overlays(c))
+}
+
+fn tangent_label_at(o: &[Overlay], at: Point, within: f64) -> bool {
+    o.iter().any(|o| matches!(o, Overlay::Label { text, p, .. } if text == "tangent" && p.distance(at) <= within))
+}
+
+/// Snap to Tangent: a circle drawn from its center takes the radius at which it touches a nearby
+/// straight path, with the "tangent" label at the touch point, also when the touch point is the
+/// middle of the segment; the size label gives the circle as drawn.
+#[test]
+fn a_circle_from_its_center_snaps_its_radius_to_touch_a_line() {
+    // The line's ends and middle line up with none of the corners below.
+    let d = doc_holding_paths([vectorcraft_geom::shapes::line(Point::new(60.0, 300.0), Point::new(380.0, 300.0))]);
+    let (s, p) = (Selection::default(), paint());
+    let c = ToolContext { measurement_labels: true, ..cx(&d, &s, &p) };
+    // The pointer makes the radius 98; the line is 100 below the center.
+    let (b, o) = circle_drag(&c, Point::new(200.0, 200.0), Point::new(203.0, 102.0));
+    assert_eq!(b, [100.0, 100.0, 200.0, 200.0]);
+    assert!(tangent_label_at(&o, Point::new(200.0, 300.0), 1e-9), "{o:?}");
+    assert!(o.iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &c.size_label(200.0, 200.0))), "{o:?}");
+    // From the other side of the touching radius too (102).
+    let (b, _) = circle_drag(&c, Point::new(200.0, 200.0), Point::new(205.0, 98.0));
+    assert_eq!(b, [100.0, 100.0, 200.0, 200.0]);
+    // Space moves the snapped circle and keeps its size.
+    let both = Mods { alt: true, shift: true, ..Mods::default() };
+    let mut t = ShapeTool::new("ellipse");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 200.0, 200.0).with_mods(both));
+    t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 203.0, 102.0).with_mods(both));
+    // Space pressed with the pointer still moves the circle by no more than the snap moved its
+    // corner.
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 203.0, 102.0).with_mods(Mods { space: true, ..both }));
+    let b = previewed_box(&a);
+    assert!(b[2] == 200.0 && b[3] == 200.0 && (b[0] - 100.0).abs() <= 4.0 && (b[1] - 100.0).abs() <= 4.0, "{b:?}");
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 253.0, 152.0).with_mods(Mods { space: true, ..both }));
+    let b = previewed_box(&a);
+    assert!(b[2] == 200.0 && b[3] == 200.0 && (b[0], b[1]) != (100.0, 100.0), "moved, same size: {b:?}");
+    assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &c.size_label(200.0, 200.0))));
+    // Letting go of Space where the moved circle no longer touches the line keeps its size, and
+    // moving on grows it from there.
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 253.0, 152.0).with_mods(both));
+    assert_eq!(previewed_box(&a), b, "Space let go");
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 243.0, 142.0).with_mods(both));
+    let (grown, moved) = (previewed_box(&a), Point::new(b[0] + 100.0, b[1] + 100.0));
+    let radius = (243.0 - moved.x).abs().max((142.0 - moved.y).abs());
+    assert!(grown[2] == 2.0 * radius && grown[3] == 2.0 * radius && radius > 105.0, "{grown:?} from {moved:?}");
+    // Out of reach (radius 90): the pointer sizes it.
+    let (b, o) = circle_drag(&c, Point::new(200.0, 200.0), Point::new(203.0, 110.0));
+    assert_eq!(b, [110.0, 110.0, 180.0, 180.0]);
+    assert!(!o.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "tangent")), "{o:?}");
+}
+
+/// A circle drawn around a center outside another circle touches it from outside at the nearer
+/// side and takes it inside at the farther side, the radii those of the closed form (the distance
+/// between the centers less or plus the other radius) within the error of the curves that draw a
+/// circle. A center inside a circle gives the inscribed circle; its touch point is an anchor of
+/// the circle, where two segments join smoothly. A center at the circle's own center gets no snap:
+/// every point is square to it.
+#[test]
+fn a_circle_from_its_center_snaps_to_touch_another_circle_from_outside_and_inside() {
+    use vectorcraft_geom::shapes::ellipse;
+    // A circle of radius 50 around (350, 300), its center 50√13 from (200, 200).
+    let d = doc_holding_paths([ellipse(Rect::new(300.0, 250.0, 400.0, 350.0))]);
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    let (center, between) = (Point::new(200.0, 200.0), 50.0 * 13f64.sqrt());
+    let toward = Vec2::new(150.0, 100.0) / between;
+    for (radius, pointer) in [(between - 50.0, Vec2::new(20.0, -(between - 52.0))), (between + 50.0, Vec2::new(-20.0, between + 48.0))] {
+        let (b, o) = circle_drag(&c, center, center + pointer);
+        assert!((b[2] / 2.0 - radius).abs() < 0.02 && b[2] == b[3], "{b:?}, want radius {radius}");
+        assert!(tangent_label_at(&o, center + toward * radius, 0.2), "{o:?}");
+    }
+    // Concentric: no tangent snap.
+    let (_, o) = circle_drag(&c, Point::new(350.0, 300.0), Point::new(374.0, 252.0));
+    assert!(!o.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "tangent")), "{o:?}");
+    // Ellipses with radii 10010 and 10000, or 1001 and 1000, around the center are nearly square
+    // to it all round, but they are not circles: a circle touches each at the ends of its axes.
+    for (rx, ry) in [(10_010.0, 10_000.0), (1001.0, 1000.0)] {
+        let d = doc_holding_paths([ellipse(Rect::new(250.0 - rx, 250.0 - ry, 250.0 + rx, 250.0 + ry))]);
+        let c = cx(&d, &s, &p);
+        let (_, o) = circle_drag(&c, Point::new(250.0, 250.0), Point::new(280.0, 252.0 - ry));
+        assert!(tangent_label_at(&o, Point::new(250.0, 250.0 - ry), 1e-6), "{rx} × {ry}: {o:?}");
+    }
+    let near = |b: [f64; 4], want: [f64; 4]| b.iter().zip(want).all(|(a, w)| (a - w).abs() < 1e-6);
+    // Inside a circle of radius 150 around (250, 250), 50 from its center: the inscribed circle has
+    // radius 100.
+    let d = doc_holding_paths([ellipse(Rect::new(100.0, 100.0, 400.0, 400.0))]);
+    let c = cx(&d, &s, &p);
+    let (b, o) = circle_drag(&c, Point::new(200.0, 250.0), Point::new(203.0, 152.0));
+    assert!(near(b, [100.0, 150.0, 200.0, 200.0]), "{b:?}");
+    assert!(tangent_label_at(&o, Point::new(100.0, 250.0), 1e-6), "{o:?}");
+}
+
+/// The touch point can fall inside a curved segment: the radius is the distance to the nearest
+/// point of the curve, measured here by sampling the path's own segments densely.
+#[test]
+fn a_circle_from_its_center_snaps_to_touch_a_curve() {
+    use vectorcraft_geom::ParamCurve;
+    let path = vectorcraft_geom::shapes::ellipse(Rect::new(300.0, 100.0, 500.0, 200.0));
+    let center = Point::new(250.0, 300.0);
+    let sp = &path.subpaths[0];
+    let (want, at) = (0..sp.segment_count())
+        .flat_map(|i| (0..=20_000).map(move |k| (i, f64::from(k) / 20_000.0)))
+        .map(|(i, t)| sp.segment(i).eval(t))
+        .map(|q| (q.distance(center), q))
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .unwrap();
+    let d = doc_holding_paths([path]);
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    let r = want - 2.0;
+    let (b, o) = circle_drag(&c, center, center + Vec2::new(-r * 0.3, r));
+    assert!((b[2] / 2.0 - want).abs() < 1e-4 && (b[3] / 2.0 - want).abs() < 1e-4, "radius {} want {want}", b[2] / 2.0);
+    assert!(tangent_label_at(&o, at, 1e-2), "{at:?} {o:?}");
+    // Straight out from a symmetric curve's middle (t = 0.5, (200, 262.5)), 162.5 from (200, 100).
+    let mut bump = vectorcraft_geom::BezPath::new();
+    bump.move_to((100.0, 300.0));
+    bump.curve_to((150.0, 250.0), (250.0, 250.0), (300.0, 300.0));
+    let d = doc_holding_paths([vectorcraft_geom::PathData::from_bezpath(&bump)]);
+    let c = cx(&d, &s, &p);
+    let (b, o) = circle_drag(&c, Point::new(200.0, 100.0), Point::new(40.0, 40.0));
+    assert!((b[2] - 325.0).abs() < 1e-9 && (b[3] - 325.0).abs() < 1e-9, "{b:?}");
+    assert!(tangent_label_at(&o, Point::new(200.0, 262.5), 1e-9), "{o:?}");
+}
+
+/// The snap is Snap to Tangent's, under Smart Guides: off, the pointer sizes the circle. An
+/// ellipse (no Shift) and a box drawn from a corner (no Alt) do not snap. An open path's end and
+/// a corner square to the center are where a circle meets the path rather than touches it, so
+/// neither is offered.
+#[test]
+fn a_circle_from_its_center_keeps_its_radius_without_the_snap_or_a_smooth_touch() {
+    let line = vectorcraft_geom::shapes::line(Point::new(60.0, 300.0), Point::new(380.0, 300.0));
+    let d = doc_holding_paths([line]);
+    let (s, p) = (Selection::default(), paint());
+    // The pointer makes the radius 98, 2 short of touching the line.
+    let (center, to) = (Point::new(200.0, 200.0), Point::new(215.0, 102.0));
+    for off in [ToolContext { snap_tangent: false, ..cx(&d, &s, &p) }, ToolContext { smart_guides: false, ..cx(&d, &s, &p) }] {
+        assert_eq!(circle_drag(&off, center, to).0, [102.0, 102.0, 196.0, 196.0]);
+    }
+    let c = cx(&d, &s, &p);
+    assert_eq!(circle_drag(&c, center, to).0, [100.0, 100.0, 200.0, 200.0], "on, it snaps");
+    for (mods, want) in
+        [(Mods { alt: true, ..Mods::default() }, [185.0, 102.0, 30.0, 196.0]), (Mods { shift: true, ..Mods::default() }, [200.0, 102.0, 98.0, 98.0])]
+    {
+        let mut t = ShapeTool::new("ellipse");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, center.x, center.y).with_mods(mods));
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x, to.y).with_mods(mods));
+        assert_eq!(previewed_box(&a), want, "{mods:?}");
+    }
+    // The line's left end is square below (60, 200), but it is an open end, also with a second
+    // line starting there the same way, which overlaps it rather than carrying it on.
+    assert_eq!(circle_drag(&c, Point::new(60.0, 200.0), Point::new(63.0, 102.0)).0, [-38.0, 102.0, 196.0, 196.0]);
+    let line = |a: (f64, f64), b: (f64, f64)| vectorcraft_geom::shapes::line(Point::new(a.0, a.1), Point::new(b.0, b.1));
+    let d = doc_holding_paths([line((60.0, 300.0), (380.0, 300.0)), line((60.0, 300.0), (200.0, 300.0))]);
+    let c = cx(&d, &s, &p);
+    assert_eq!(circle_drag(&c, Point::new(60.0, 200.0), Point::new(63.0, 102.0)).0, [-38.0, 102.0, 196.0, 196.0]);
+    // Two lines end to end in one direction meet smoothly under (200, 200): the circle touches there.
+    let d = doc_holding_paths([line((60.0, 300.0), (200.0, 300.0)), line((200.0, 300.0), (380.0, 300.0))]);
+    let c = cx(&d, &s, &p);
+    assert_eq!(circle_drag(&c, center, to).0, [100.0, 100.0, 200.0, 200.0]);
+    // A rectangle's corner (200, 200) is 100√2 from (300, 300), diagonal to both its sides.
+    let (d, _) = doc_with_rect();
+    let c = cx(&d, &s, &p);
+    let r = 100.0 * 2f64.sqrt() - 2.0;
+    let (b, _) = circle_drag(&c, Point::new(300.0, 300.0), Point::new(300.0 + r, 300.0 + r * 0.5));
+    assert!((b[2] - 2.0 * r).abs() < 1e-9, "{b:?}");
+}
+
+/// An anchor the dragged corner snapped to wins over the tangent radius, as it does for a drawn
+/// point. With more segments near the radius than one move measures, the ones nearest the pointer
+/// are measured.
+#[test]
+fn a_circle_from_its_center_prefers_an_anchor_and_measures_the_segments_nearest_the_pointer() {
+    let line = |a: (f64, f64), b: (f64, f64)| vectorcraft_geom::shapes::line(Point::new(a.0, a.1), Point::new(b.0, b.1));
+    let (s, p) = (Selection::default(), paint());
+    let center = Point::new(200.0, 200.0);
+    // Shift keeps the corner on the diagonal, and it slides onto the anchor (297, 103): radius 97.
+    let d = doc_holding_paths([line((60.0, 300.0), (380.0, 300.0)), line((297.0, 103.0), (297.0, 40.0))]);
+    let c = cx(&d, &s, &p);
+    let (b, o) = circle_drag(&c, center, Point::new(203.0, 102.0));
+    assert_eq!(b, [103.0, 103.0, 194.0, 194.0]);
+    assert!(!o.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "tangent")), "{o:?}");
+    // A corner that only lines up with an anchor near it, (300, 104), still takes the tangent.
+    let d = doc_holding_paths([line((60.0, 300.0), (380.0, 300.0)), line((300.0, 104.0), (300.0, 40.0))]);
+    let c = cx(&d, &s, &p);
+    let (b, o) = circle_drag(&c, center, Point::new(203.0, 102.0));
+    assert_eq!(b, [100.0, 100.0, 200.0, 200.0]);
+    assert!(tangent_label_at(&o, Point::new(200.0, 300.0), 1e-9), "{o:?}");
+    // 300 short segments pointing at the center cross the ring above it, ahead of the line below.
+    let spokes = (0..300).map(|i| {
+        let a = (-55.0 + 110.0 * f64::from(i) / 299.0_f64).to_radians();
+        let at = |r: f64| (200.0 + r * a.sin(), 200.0 - r * a.cos());
+        line(at(95.0), at(105.0))
+    });
+    let d = doc_holding_paths(spokes.chain([line((60.0, 300.0), (380.0, 300.0))]));
+    let c = cx(&d, &s, &p);
+    // The press lines up with a spoke's anchor, so the center moves by less than a point.
+    let (b, o) = circle_drag(&c, center, Point::new(215.0, 298.0));
+    assert!((b[2] - 200.0).abs() < 1e-9 && (b[3] - 200.0).abs() < 1e-9 && (b[1] - 100.0).abs() < 1e-9, "{b:?}");
+    assert!(o.iter().any(|o| matches!(o, Overlay::Label { text, p, .. } if text == "tangent" && (p.y - 300.0).abs() < 1e-9)), "{o:?}");
+}
+
+/// With a Constrain Angle the radius is measured, and the snapped box rebuilt, along the turned
+/// axes: the circle still touches the line.
+#[test]
+fn a_circle_snapped_to_touch_keeps_to_the_constrain_angle() {
+    let d = doc_holding_paths([vectorcraft_geom::shapes::line(Point::new(0.0, 300.0), Point::new(450.0, 300.0))]);
+    let (s, p) = (Selection::default(), paint());
+    let c = ToolContext { constrain_angle: 30.0, ..cx(&d, &s, &p) };
+    let axes = vectorcraft_geom::constrain_axes(30.0).unwrap();
+    let center = Point::new(200.0, 200.0);
+    let both = Mods { alt: true, shift: true, ..Mods::default() };
+    let mut t = ShapeTool::new("ellipse");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, center.x, center.y).with_mods(both));
+    let to = center + (axes * Point::new(-40.0, -97.0)).to_vec2();
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x, to.y).with_mods(both));
+    let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+    let (w, h) = (v["width"].as_f64().unwrap(), v["height"].as_f64().unwrap());
+    assert!((w - 200.0).abs() < 1e-9 && (h - 200.0).abs() < 1e-9, "{v}");
+    assert!((v["rotation"].as_f64().unwrap() + 30.0).abs() < 1e-9, "{v}");
+    let mid = Point::new(v["x"].as_f64().unwrap() + w / 2.0, v["y"].as_f64().unwrap() + h / 2.0);
+    assert!(mid.distance(center) < 1e-9, "centered on the press: {mid:?}");
+    // Space pressed with the pointer still keeps the size and moves the circle by no more than
+    // the snap moved its corner.
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x, to.y).with_mods(Mods { space: true, ..both }));
+    let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+    let (w, h) = (v["width"].as_f64().unwrap(), v["height"].as_f64().unwrap());
+    assert!((w - 200.0).abs() < 1e-9 && (h - 200.0).abs() < 1e-9, "{v}");
+    let mid = Point::new(v["x"].as_f64().unwrap() + w / 2.0, v["y"].as_f64().unwrap() + h / 2.0);
+    assert!(mid.distance(center) <= 4.0, "{mid:?}");
+}
+
+/// Snap to Grid and pixel snapping place the drawn point instead of the tangent snap, also when
+/// one is turned on while the circle is dragged out. Snap to Tangent turned off while dragging
+/// stops the snap.
+#[test]
+fn a_circle_from_its_center_does_not_snap_to_touch_with_the_grid_or_pixels() {
+    let d = doc_holding_paths([vectorcraft_geom::shapes::line(Point::new(60.0, 300.0), Point::new(380.0, 300.0))]);
+    let (s, p) = (Selection::default(), paint());
+    let on = cx(&d, &s, &p);
+    let grid = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+    let pixels = ToolContext { snap_to_pixel: true, pixel_snap: crate::PixelSnap { drawing: true, ..on.pixel_snap }, ..cx(&d, &s, &p) };
+    let no_tangent = ToolContext { snap_tangent: false, ..cx(&d, &s, &p) };
+    let both = Mods { alt: true, shift: true, ..Mods::default() };
+    let drag = |press: &ToolContext, moved: &ToolContext, to: Point| {
+        let mut t = ShapeTool::new("ellipse");
+        t.pointer(press, &PointerEvent::new(PointerKind::Down, 200.0, 200.0).with_mods(both));
+        let a = t.pointer(moved, &PointerEvent::new(PointerKind::Drag, to.x, to.y).with_mods(both));
+        (previewed_box(&a), t.overlays(moved))
+    };
+    let tangent = |o: &[Overlay]| o.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "tangent"));
+    // The pointer makes the radius 98: the snap would make it 100.
+    let to = Point::new(203.0, 102.0);
+    assert_eq!(drag(&on, &on, to).0, [100.0, 100.0, 200.0, 200.0], "the snap applies");
+    // Pixels round (203.2, 102.2) to (203, 102): radius 98.
+    let to = Point::new(203.2, 102.2);
+    for (press, moved) in [(&pixels, &pixels), (&on, &pixels)] {
+        let (b, o) = drag(press, moved, to);
+        assert_eq!(b, [102.0, 102.0, 196.0, 196.0]);
+        assert!(!tangent(&o), "{o:?}");
+    }
+    // The grid (every 9 points) puts the corner on (207, 99): radius 101 from (200, 200), or 99
+    // from (198, 198), where the grid puts a press made with it on.
+    for (press, moved, want) in [(&grid, &grid, [99.0, 99.0, 198.0, 198.0]), (&on, &grid, [99.0, 99.0, 202.0, 202.0])] {
+        let (b, o) = drag(press, moved, to);
+        assert_eq!(b, want);
+        assert!(!tangent(&o), "{o:?}");
+    }
+    let (b, o) = drag(&on, &no_tangent, Point::new(203.0, 102.0));
+    assert_eq!(b, [102.0, 102.0, 196.0, 196.0]);
+    assert!(!tangent(&o), "{o:?}");
+}
+
+/// A press and a small jitter is a click, not a drag, even when the tangent snap would size the
+/// circle at the jittered pointer large enough to begin a drag.
+#[test]
+fn a_jittered_alt_shift_press_beside_a_path_is_a_click() {
+    // With a Constrain Angle, Shift does not hold the corner on the page's diagonal, which would
+    // take it onto the line.
+    let d = doc_holding_paths([vectorcraft_geom::shapes::line(Point::new(60.0, 300.0), Point::new(380.0, 300.0))]);
+    let (s, p) = (Selection::default(), paint());
+    let c = ToolContext { constrain_angle: 30.0, ..cx(&d, &s, &p) };
+    let both = Mods { alt: true, shift: true, ..Mods::default() };
+    let mut t = ShapeTool::new("ellipse");
+    // 5.5 above the line, beyond the snapping tolerance of 4. The jitter of 1.9 makes the radius
+    // 1.9 cos 30°, about 1.65, within 4 of the touching radius 5.5.
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 200.0, 294.5).with_mods(both));
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 201.9, 294.5).with_mods(both)), vec![]);
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Up, 201.9, 294.5).with_mods(both));
+    assert!(!a.contains(&Action::Commit), "{a:?}");
+}
+
+/// An anchor or a crossing within the snapping tolerance of the pointer takes the point, and the
+/// circle is not sized to touch the line.
+#[test]
+fn a_circle_from_its_center_prefers_an_anchor_or_a_crossing_at_the_pointer() {
+    let line = |a: (f64, f64), b: (f64, f64)| vectorcraft_geom::shapes::line(Point::new(a.0, a.1), Point::new(b.0, b.1));
+    let (s, p) = (Selection::default(), paint());
+    let center = Point::new(200.0, 200.0);
+    let base = line((60.0, 300.0), (380.0, 300.0));
+    // An anchor at (205, 104), and two lines crossing there.
+    for extra in [vec![line((205.0, 104.0), (260.0, 40.0))], vec![line((185.0, 84.0), (225.0, 124.0)), line((185.0, 124.0), (225.0, 84.0))]] {
+        let d = doc_holding_paths(std::iter::once(base.clone()).chain(extra));
+        let c = cx(&d, &s, &p);
+        let (b, o) = circle_drag(&c, center, Point::new(203.0, 102.0));
+        assert!(b[2] != 200.0, "{b:?}");
+        assert!(!o.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "tangent")), "{o:?}");
+    }
+}
+
+/// A path whose anchor below the center joins two straight curves with their handles drawn back
+/// onto that anchor runs smoothly through it: the circle touches it there.
+#[test]
+fn a_circle_from_its_center_touches_a_path_at_an_anchor_with_retracted_handles() {
+    let mut run = vectorcraft_geom::BezPath::new();
+    run.move_to((60.0, 300.0));
+    run.curve_to((100.0, 300.0), (200.0, 300.0), (200.0, 300.0));
+    run.curve_to((200.0, 300.0), (300.0, 300.0), (380.0, 300.0));
+    let d = doc_holding_paths([vectorcraft_geom::PathData::from_bezpath(&run)]);
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    let (b, o) = circle_drag(&c, Point::new(200.0, 200.0), Point::new(215.0, 102.0));
+    assert_eq!(b, [100.0, 100.0, 200.0, 200.0]);
+    assert!(tangent_label_at(&o, Point::new(200.0, 300.0), 1e-9), "{o:?}");
+}
+
 /// General › Constrain Angle: a Shift-drag squares along the turned axes, and the shape turns
 /// by the angle about its centre.
 #[test]

@@ -1,8 +1,6 @@
 //! The generic parameter dialog (`ui.paramDialog`): edits a command's parameters (`__command`,
 //! headed `__label`) and runs it on OK, with the fixed ones in `__params` (not shown) added.
 
-use std::sync::LazyLock;
-
 use serde_json::{Value, json};
 
 use super::{DialogSpec, form};
@@ -24,6 +22,9 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
         let cmyk = app.session.active().is_some_and(|s| s.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
         let choices = |k: &str| rasterize_color_models(&command, k, cmyk).or_else(|| choices(&command, k));
         form::param_fields(ui, d, &|k| lengths.contains(&k), &choices, &rank, app.session.general_unit());
+        if command == crate::addons::packaging::SET_ROLE_SWATCH {
+            crate::addons::packaging::follow_role(app, d);
+        }
         if linked
             && d.fields.get("rowGutter") == d.fields.get("__rowGutterLinked")
             && let Some(g) = d.fields.get("gutter").cloned()
@@ -161,6 +162,7 @@ fn order(command: &str) -> &'static [&'static str] {
             &["background", "colors", "contiguous", "match", "tolerance", "softness"]
         }
         crate::addons::cutting::BRIDGES => &["width", "count", "direction", "keepOriginal"],
+        crate::addons::packaging::SET_ROLE_SWATCH => &["role", "swatch"],
         _ => &[],
     }
 }
@@ -170,18 +172,13 @@ fn choices(command: &str, key: &str) -> Option<form::Choices> {
     match (command, key) {
         ("type.pathOptions", "effect") => Some(crate::menus::PATH_EFFECTS),
         ("type.pathOptions", "alignToPath") => Some(PATH_ALIGN),
+        (crate::addons::packaging::SET_ROLE_SWATCH, "role") => Some(crate::addons::packaging::ROLES),
         (crate::addons::typetools::RELEASE, "mode") => Some(crate::addons::typetools::RELEASE_MODES),
         (crate::addons::cutting::BRIDGES, "direction") => Some(crate::addons::cutting::BRIDGE_DIRECTIONS),
         ("text.areaOptions", "fit") => Some(AREA_FIT),
         ("text.areaOptions", "firstBaseline") => Some(FIRST_BASELINE),
         ("text.areaOptions", "verticalAlign") => Some(VERTICAL_ALIGN),
         (crate::addons::cutting::WEED, "direction") => Some(crate::addons::cutting::WEED_DIRECTIONS),
-        ("graph.setType", "type") => Some(GRAPH_KINDS.as_slice()),
-        ("graph.setType", "valueAxis") => Some(GRAPH_VALUE_AXIS),
-        ("graph.setType", "tickLength" | "rightTickLength" | "categoryTickLength") => Some(GRAPH_TICK_LENGTH),
-        ("graph.setType", "pieLegend") => Some(PIE_LEGEND),
-        ("graph.setType", "piePosition") => Some(PIE_POSITION),
-        ("graph.setType", "pieSort") => Some(PIE_SORT),
         (crate::addons::image::REMOVE_BACKGROUND | crate::addons::image::COLOR_MASK, "background") => Some(crate::addons::image::BACKGROUNDS),
         (crate::addons::image::REMOVE_BACKGROUND | crate::addons::image::COLOR_MASK, "match") => Some(crate::addons::image::MATCHES),
         _ => None,
@@ -213,21 +210,6 @@ const FIRST_BASELINE: form::Choices =
 
 /// Area Type Options › Align (vertical alignment of the lines in each row/column).
 const VERTICAL_ALIGN: form::Choices = &[("Top", "top"), ("Center", "center"), ("Bottom", "bottom"), ("Justify", "justify")];
-
-/// Graph Type › Type: the nine graph kinds, in the Graph tool group's order.
-static GRAPH_KINDS: LazyLock<Vec<(&'static str, &'static str)>> =
-    LazyLock::new(|| vectorcraft_doc::GraphKind::ALL.iter().map(|k| (k.label(), k.id())).collect());
-
-/// Graph Type › Value Axis (series picked on both axes show none, and OK leaves each where it is).
-const GRAPH_VALUE_AXIS: form::Choices = &[("On Left Side", "left"), ("On Right Side", "right"), ("On Both Sides", "both")];
-
-/// Graph Type › Legend, Position and Sort for pie graphs.
-const PIE_LEGEND: form::Choices = &[("No Legend", "none"), ("Standard Legend", "standard"), ("Legends in Wedges", "wedges")];
-const PIE_POSITION: form::Choices = &[("Ratio", "ratio"), ("Even", "even"), ("Stacked", "stacked")];
-const PIE_SORT: form::Choices = &[("All", "all"), ("First", "first"), ("None", "none")];
-
-/// Graph Type › Tick Marks › Length.
-const GRAPH_TICK_LENGTH: form::Choices = &[("None", "none"), ("Short", "short"), ("Full Width", "full")];
 
 /// Closes before running, so a dialog the command opens stays open. A previewed one keeps its
 /// preview as the one undo step.
@@ -405,42 +387,6 @@ mod tests {
         assert!(p[0] == p[1] && p[1] == p[2] && p[0] < 128, "red in grayscale: {p:?}");
     }
 
-    /// Graph Type › Value Axis is a dropdown of the values `graph.setType` takes, and OK puts the
-    /// value axis on the side picked.
-    #[test]
-    fn graph_type_value_axis_is_a_dropdown_of_its_sides() {
-        let doc = vectorcraft_engine::find_command("graph.setType").unwrap().params;
-        let values: Vec<&str> = choices("graph.setType", "valueAxis").unwrap().iter().map(|(_, v)| *v).collect();
-        assert!(doc.contains(&format!("valueAxis?: {}", values.join("|"))), "{values:?}");
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
-        app.run("graph.create", json!({"type": "column", "x": 0, "y": 0, "width": 200, "height": 150})).unwrap();
-        crate::menus::graph_dialog(&mut app, "graph.setType").unwrap();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("valueAxis"), "left");
-        app.ui.dialog.as_mut().unwrap().fields.insert("valueAxis".into(), json!("both"));
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert_eq!(app.session.execute("graph.setType", &json!({})).unwrap()["valueAxis"], "both");
-    }
-
-    /// Graph Type › Type is a dropdown of the nine graph kinds (#2175), and OK changes the graph's
-    /// type and keeps its data.
-    #[test]
-    fn graph_type_is_a_dropdown_of_the_graph_kinds() {
-        let kinds: Vec<(&str, &str)> = vectorcraft_doc::GraphKind::ALL.iter().map(|k| (k.label(), k.id())).collect();
-        assert_eq!(choices("graph.setType", "type").unwrap().to_vec(), kinds);
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
-        app.run("graph.create", json!({"type": "column", "x": 0, "y": 0, "width": 200, "height": 150, "csv": ",a,b\nQ1,1,2\nQ2,3,4"})).unwrap();
-        let data = app.session.execute("graph.setData", &json!({})).unwrap();
-        assert_eq!(data["rows"], json!([[1.0, 2.0], [3.0, 4.0]]));
-        crate::menus::graph_dialog(&mut app, "graph.setType").unwrap();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("type"), "column");
-        app.ui.dialog.as_mut().unwrap().fields.insert("type".into(), json!("stackedBar"));
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert_eq!(app.session.execute("graph.setType", &json!({})).unwrap()["type"], "stackedBar");
-        assert_eq!(app.session.execute("graph.setData", &json!({})).unwrap(), data);
-    }
-
     /// A document with a rectangle made a 2 x 2 Grid Repeat and selected, its Repeat Options
     /// dialog open.
     fn grid_options_app() -> VectorcraftApp {
@@ -520,7 +466,7 @@ mod tests {
     }
 
     /// Text Wrap Options › Offset is a distance, and its range is the one `object.textWrap.options`
-    /// keeps an Offset to.
+    /// accepts: the command takes the range's ends and refuses an Offset outside them.
     #[test]
     fn text_wrap_offset_is_a_distance_within_the_commands_range() {
         assert!(lengths("object.textWrap.options").contains(&"offset"));
@@ -534,8 +480,11 @@ mod tests {
         s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
         s.execute("select.all", &json!({})).unwrap();
         s.execute("object.textWrap.make", &json!({})).unwrap();
-        for (sent, end) in [(5000.0, *range.end()), (-5000.0, *range.start())] {
-            assert_eq!(s.execute("object.textWrap.options", &json!({ "offset": sent })).unwrap()["offset"], json!(end));
+        for end in [*range.end(), *range.start()] {
+            assert_eq!(s.execute("object.textWrap.options", &json!({ "offset": end })).unwrap()["offset"], json!(end));
+        }
+        for sent in [5000.0, -5000.0] {
+            assert!(s.execute("object.textWrap.options", &json!({ "offset": sent })).is_err(), "{sent}");
         }
     }
 

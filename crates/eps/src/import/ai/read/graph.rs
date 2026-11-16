@@ -631,7 +631,7 @@ impl<'a> Reader<'a> {
             let Some(paints) = series_paints(art, &tags, spec.kind == GraphKind::Line) else { return false };
             spec.series_paints = paints;
             spec.placed = Some(placed);
-            spec.placed_art = art.children().and_then(|c| vectorcraft_doc::graph::art_bounds(c));
+            spec.placed_art = art.children().and_then(|c| vectorcraft_doc::graph::graph_art_without_type(c));
             tag_series(art, &tags);
             art.extras_mut().graph = Some(Box::new(spec));
             true

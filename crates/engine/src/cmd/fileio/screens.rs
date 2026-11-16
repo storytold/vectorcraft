@@ -764,7 +764,7 @@ fn leave_out_folder(r: &mut Value, folder: &str) {
 
 /// Export settings kept in the document or a preset, as the request being served may see them: a
 /// `folder` outside the read roots ([`super::access::shown`]) is left out.
-fn leave_out_unreadable_settings_folder(mut settings: Map<String, Value>) -> Map<String, Value> {
+pub(super) fn leave_out_unreadable_settings_folder(mut settings: Map<String, Value>) -> Map<String, Value> {
     if settings.get("folder").and_then(Value::as_str).is_some_and(|f| !f.is_empty() && !super::access::shown(f)) {
         settings.remove("folder");
     }
@@ -1125,6 +1125,13 @@ pub(crate) fn export(s: &mut Session, p: &Value, asked: &Value) -> Result<Value>
     };
     let crop = rows.iter().any(|r| r.format.id != "pdf");
     let items = items(&doc, &o, selection, &selected, &naming.filename, crop, true)?;
+    // The file each item writes for each SVG row, before the folder is made or any row is written.
+    let base = crate::cmd::links::LinkBase::of(s.doc()?);
+    for r in rows.iter().filter(|r| matches!(r.format.id, "svg" | "svgz")) {
+        for item in &items {
+            super::check_images_in(C, r.format.id, &item.doc, base, &r.options_for(item.region, item.artboard)?)?;
+        }
+    }
     // Appearance of Black › Printing / Exporting for RGB raster rows.
     // Include Artboard Fill off: the encoders leave the background colors out.
     let fill = if o.include_artboard_fill == Some(false) { json!({ "includeArtboardFill": false }) } else { json!({}) };

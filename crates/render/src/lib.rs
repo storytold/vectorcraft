@@ -125,6 +125,10 @@ pub struct Renderer {
     live_root: Option<Arc<Node>>,
     /// Live-effect geometry per node ([`fx::FxGeom`]), keyed by `Arc` identity like `geom`.
     fx_geom: PtrMap<usize, fx::FxGeom>,
+    /// Per node whose Rasterize image moves with the Transform effects after it, keyed by `Arc`
+    /// identity like `fx_geom`: the node, the node it draws its image from and the map that moves
+    /// the image ([`fx::rasterize_stage`]), and the frame it was last drawn in.
+    fx_stages: PtrMap<usize, (Arc<Node>, Arc<Node>, Affine, u64)>,
     stamp: u64,
     /// Opacity folded into paint alpha for the leaf being drawn (avoids a compositing layer).
     alpha: f32,
@@ -274,7 +278,7 @@ mod renderer;
 mod text_geom;
 mod threads;
 
-pub use bounds::{drawn_bounds, drawn_outline, drawn_outlines, effect_bounds, painted_bounds};
+pub use bounds::{drawn_bounds, drawn_outline, drawn_outlines, effect_bounds, painted_bounds, rasterize_stage};
 pub use frame::FrameStats;
 use frame::{
     ClipEntry, ClipPaintEntry, Frame, FxArtEntry, GeomEntry, PlacedEntry, PlacedKey, PtrHasher, PtrMap, SliceEntry, StrokeEntry, StrokeKey,

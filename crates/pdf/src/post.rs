@@ -180,7 +180,7 @@ fn rights_properties(info: &DocMetadata) -> String {
 
 /// `s` as XML character data: `&`, `<`, `>` and `"` escaped, a carriage return written as the
 /// character reference `&#xD;`, and the characters XML 1.0 doesn't allow left out.
-fn xml_text(s: &str) -> String {
+pub(crate) fn xml_text(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
         match c {
