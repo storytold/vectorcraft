@@ -549,8 +549,7 @@ pub(crate) fn toggle_underline(app: &mut VectorcraftApp) -> Result<Value, String
 /// has: `"normal"` only when every character had `position`, else `position`.
 pub(crate) fn toggle_position(app: &mut VectorcraftApp, position: &str) -> Result<Value, String> {
     text_style(app).ok_or("select some type first")?;
-    let now = shared(app, |s| s.position).map(|p| p.id()).unwrap_or("");
-    let change = position_toggle(now, position);
+    let change = position_toggle(shared_position(app), position);
     let to = change["position"].clone();
     run_format(app, change)?;
     Ok(to)
@@ -1451,7 +1450,7 @@ fn attributes(app: &mut VectorcraftApp, ui: &mut Ui, owner: crate::font_menu::Wh
         // On only when every character the panel acts on has it; a mixed selection turns it on.
         let all_caps = shared(app, |s| s.all_caps) == Some(true);
         let small = shared(app, |s| s.small_caps.is_some()) == Some(true);
-        let position = shared(app, |s| s.position).map(|p| p.id()).unwrap_or("");
+        let position = shared_position(app);
         let underline = shared(app, |s| s.underline) == Some(true);
         let strike = shared(app, |s| s.strikethrough) == Some(true);
         for (kind, tip, on, change) in [
@@ -1478,6 +1477,25 @@ fn attributes(app: &mut VectorcraftApp, ui: &mut Ui, owner: crate::font_menu::Wh
             format(app, json!({"language": name}));
         }
     });
+}
+
+/// The position kind (`normal`, `superscript` or `subscript`) that every character a Superscript
+/// or Subscript toggle changes has, else `""`: at a Type tool caret with no characters selected
+/// every character of the text (of each frame of a threaded story), as the toggle changes all of
+/// it there ([`run_format`], [`range_style`]), else the characters [`shared`] reads. Superscripts
+/// in different proportions count as superscript.
+fn shared_position(app: &VectorcraftApp) -> &'static str {
+    let Some((id, _, _)) = text_editing(app).filter(|&(_, a, b)| b <= a) else {
+        return shared(app, |s| s.position.id()).unwrap_or("");
+    };
+    let Some(st) = app.session.active() else { return "" };
+    let mut acc = Shared::None;
+    for frame in text_story(app).unwrap_or_else(|| vec![id]) {
+        if let Some(NodeKind::Text(t)) = st.doc.node(frame).map(|n| &n.kind) {
+            each_paragraph_run(t, None, |_, style, _| acc.add(style.position.id()));
+        }
+    }
+    acc.value().unwrap_or("")
 }
 
 /// The `text.setFormat` params of the Superscript or Subscript toggle `p` for text whose
@@ -1627,7 +1645,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     let small = shared(app, |s| s.small_caps.is_some()) == Some(true);
-    let position = shared(app, |s| s.position).map(|p| p.id()).unwrap_or("");
+    let position = shared_position(app);
     for (label, on, change) in [
         (tl!("Small Caps"), small, json!({"smallCaps": !small})),
         (tl!("Superscript"), position == "superscript", position_toggle(position, "superscript")),

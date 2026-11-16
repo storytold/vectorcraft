@@ -7045,7 +7045,9 @@ Pen's second anchor at (150, 431), in line with the square's centre.
   `type.superscript` (Cmd+Shift+=, `press_key {key: "=", mods: {cmd: true, shift: true}}`) and `type.subscript`
   (Cmd+Alt+Shift+=) do what the Character panel's Superscript and Subscript buttons do on the same text: they set its
   position through `text.setFormat {position}`, or set it back to `"normal"` when every character already has that
-  position, and return the position the text now has. Without selected type or text the Type tool edits, both fail
+  position, and return the position the text now has. At a Type tool caret with no characters selected, the buttons and
+  both commands act on, and check, every character of the text; superscripts in different proportions count as
+  superscript. Without selected type or text the Type tool edits, both fail
   and are dimmed, and Cmd+Shift+= zooms in, as Cmd+= does. In general, when the command a Shift+= chord is bound to is
   dimmed, the press runs what the same chord without Shift is bound to.
 - `missingGlyphProtection` (on by default): `text.setStyle` and `text.setRangeStyle` changing the font leave the

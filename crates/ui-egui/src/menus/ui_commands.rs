@@ -405,13 +405,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "type.superscript",
         "Superscript",
         "Cmd+Shift+=",
-        "{} the Character panel's Superscript button: the selected type (or the Type tool's selection) becomes superscript, or Normal when all of it is superscript already (text.setFormat {position}). Without selected type the keys zoom in, as Cmd+= does → \"superscript\" | \"normal\"",
+        "{} the Character panel's Superscript button: the selected type (or the Type tool's selection, all of its text at a caret) becomes superscript, or Normal when all of it is superscript already (text.setFormat {position}). Without selected type the keys zoom in, as Cmd+= does → \"superscript\" | \"normal\"",
     ),
     (
         "type.subscript",
         "Subscript",
         "Cmd+Alt+Shift+=",
-        "{} the Character panel's Subscript button: the selected type (or the Type tool's selection) becomes subscript, or Normal when all of it is subscript already (text.setFormat {position}) → \"subscript\" | \"normal\"",
+        "{} the Character panel's Subscript button: the selected type (or the Type tool's selection, all of its text at a caret) becomes subscript, or Normal when all of it is subscript already (text.setFormat {position}) → \"subscript\" | \"normal\"",
     ),
     (
         "type.lineComposer",
