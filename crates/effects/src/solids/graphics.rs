@@ -1097,8 +1097,8 @@ impl MembraneFrame {
 
     /// Point `p` of `face` in the art's plane mapped onto the page, or with `from_page` a page point
     /// mapped into the art's plane, through the piece of that face that holds it and is nearest at
-    /// that point of the page. `None` when no piece the viewer sees holds it, or when a nearer piece
-    /// of the other face or a nearer cover hides that point of the page.
+    /// that point of the page. `None` when no piece the viewer sees holds it, or when another nearer
+    /// piece, of either face, or a nearer cover hides that point of the page.
     fn map(&self, face: PlanarFace, p: Point, from_page: bool) -> Option<Point> {
         let inside = |t: &[Point; 3], q: Point| {
             let side = |a: Point, b: Point| (b - a).cross(q - a);
@@ -1113,7 +1113,15 @@ impl MembraneFrame {
             }
             let Some(q) = triangle_map(from, to).map(|m| m * p).filter(|q| q.is_finite()) else { continue };
             let depth = piece.depth_at(if from_page { p } else { q });
-            if best.is_none_or(|(_, nearest, _)| depth > nearest) {
+            // A piece drawn last is drawn over every other one, and the later of two drawn last is
+            // drawn over the other, whatever their planes' depths.
+            let over = |(_, nearest, other): (Point, f64, &MembranePiece)| match (piece.depth == f64::MAX, other.depth == f64::MAX) {
+                (true, true) => piece.index > other.index,
+                (true, false) => true,
+                (false, true) => false,
+                (false, false) => depth > nearest,
+            };
+            if best.is_none_or(over) {
                 best = Some((q, depth, piece));
             }
         }
@@ -1131,7 +1139,7 @@ impl MembraneFrame {
         let covered = self
             .pieces
             .iter()
-            .filter(|piece| piece.face != face)
+            .filter(|piece| !std::ptr::eq(*piece, shown))
             .any(|piece| inside(&piece.page, at) && hides(piece.depth, piece.depth_at(at), piece.index))
             || self.covers.iter().any(|c| c.holds(at) && hides(c.depth, c.plane.and_then(|plane| plane.depth_at(at)).unwrap_or(c.depth), c.index));
         (!covered).then_some(q)

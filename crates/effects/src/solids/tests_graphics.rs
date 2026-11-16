@@ -1056,6 +1056,24 @@ fn overlapping_inflate_pieces_map_a_point_through_the_one_nearer_there() {
     // Near the tilted piece's left corner it is the nearer one.
     let (x, _) = frame.offset_at(PlanarFace::Front, Point::new(2.0, 0.5)).unwrap();
     assert!((x - 2.0).abs() < 1e-6, "{x}");
+    // A graphic's center has a handle only where its own piece is the nearer one, and the handle
+    // maps back to the same offset.
+    let mark = |x: f64, y: f64| MappedGraphic::from_value(&json!({"symbol": "Mark", "face": "front", "x": x, "y": y})).unwrap();
+    assert!(frame.handle(&mark(10.0, 5.0)).is_none());
+    for (x, y) in [(2.0, 0.5), (110.0, 5.0)] {
+        let (at, _) = frame.handle(&mark(x, y)).unwrap();
+        let (bx, by) = frame.offset_at(PlanarFace::Front, at).unwrap();
+        assert!((bx - x).abs() < 1e-6 && (by - y).abs() < 1e-6, "{x} {y}: {bx} {by}");
+    }
+    // Of two overlapping pieces drawn last, the later one is drawn over the other, though the
+    // earlier one's plane is nearer.
+    let last = |shift: f64, offset: f64, index: usize| MembranePiece { index, ..piece(shift, f64::MAX, [0.0, 0.0, 1.0], offset) };
+    let pieces = vec![last(0.0, 10.0, 0), last(100.0, 0.0, 1)];
+    let frame = GraphicFrame::inflated(Rect::new(0.0, 0.0, 20.0, 20.0), MembraneFrame { pieces, covers: vec![] });
+    let (x, _) = frame.offset_at(PlanarFace::Front, Point::new(10.0, 5.0)).unwrap();
+    assert!((x - 110.0).abs() < 1e-6, "{x}");
+    assert!(frame.handle(&mark(10.0, 5.0)).is_none());
+    assert!(frame.handle(&mark(110.0, 5.0)).is_some());
 }
 
 /// A graphic on Inflate's back has no handle where a nearer piece of the front covers its center
