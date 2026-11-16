@@ -223,9 +223,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         if crate::shortcut_editor::is_recording(app) {
             return;
         }
-        // Escape closes a dropdown list or popover open in the dialog (each closes itself on it) and
-        // leaves the dialog open.
-        let popup = app.ui.dialog.as_ref().is_some_and(|d| {
+        // Escape closes a dropdown list or popover open in the dialog, or the palette's Recent
+        // Commands list (each closes itself on it), and leaves the dialog or the palette open.
+        let popup = app.ui.dialog.as_ref().map_or(crate::palette::recent_list_open(ctx), |d| {
             egui::Popup::is_any_open(ctx)
                 || crate::dialogs::brush_options::tips_open(d)
                 || crate::dialogs::new_document_popup_open(d)

@@ -6486,8 +6486,10 @@ mod tests {
     #[test]
     fn place_cursor_exec_checks_recording_step_limit_on_completion() {
         let steps = "the action already has 10,000 steps";
-        let mut png = vec![];
-        image::RgbImage::new(8, 8).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let raw =
+            craft_image_codecs::Image::from_raw(8, 8, craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, vec![0; 8 * 8 * 3])
+                .unwrap();
+        let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
         let placed = |app: &VectorcraftApp| {
             let st = app.session.active().unwrap();
             st.doc.layers.iter().flat_map(|l| l.children().into_iter().flatten()).filter(|n| n.name.as_deref() == Some("a.png")).count()

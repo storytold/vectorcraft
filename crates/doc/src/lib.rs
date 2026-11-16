@@ -14,6 +14,7 @@ pub mod cmyk;
 pub mod color_mask;
 pub mod compound_shape;
 pub mod corners;
+pub mod decode;
 pub mod depth;
 pub mod dimension;
 pub mod graph;
@@ -54,7 +55,7 @@ pub mod overprint;
 pub mod pattern;
 pub mod perspective;
 mod pixels;
-pub use pixels::{GraySource, MAX_RASTER_ALLOC, PixelPick};
+pub use pixels::{GraySource, MAX_RASTER_ALLOC, PixelPick, header_size};
 pub mod placed_document;
 pub mod plugin_data;
 pub mod ppi;
@@ -96,8 +97,8 @@ pub use compound_shape::ShapeMode;
 pub use corners::LiveCorners;
 pub use depth::{MAX_DEPTH, MAX_SYMBOL_NODES};
 pub use graph::{
-    ColumnDesign, ColumnType, Fractions, GraphDesign, GraphKind, GraphSpec, LabelRows, LabelStyles, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES,
-    PiePosition, PieSort, SeriesPaint, TickLength, ValueAxisSide,
+    ColumnDesign, ColumnType, DEFAULT_FILLED_LINE_WIDTH, Fractions, GraphDesign, GraphKind, GraphSpec, LabelRows, LabelStyles, MAX_FILLED_LINE_WIDTH,
+    MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES, MIN_FILLED_LINE_WIDTH, PiePosition, PieSort, SeriesPaint, TickLength, ValueAxisSide,
 };
 pub use hit::{Hit, HitKind};
 pub use links::{LinkInfo, PlacementOptions};

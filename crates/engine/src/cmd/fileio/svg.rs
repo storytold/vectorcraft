@@ -180,12 +180,24 @@ pub(super) fn lost_artboards_warning(doc: &Document, p: &Value, label: &str) -> 
     })
 }
 
+/// The native document Preserve Editing embeds: `doc`, without an Export for Screens `folder`
+/// outside the read roots of the request being served (the open document keeps it).
+fn native_attachment(doc: &Document) -> Vec<u8> {
+    let settings = super::screens::leave_out_unreadable_settings_folder(doc.export_settings.clone());
+    if settings.len() == doc.export_settings.len() {
+        return vectorcraft_format::save(doc, false);
+    }
+    let mut kept = doc.clone();
+    kept.export_settings = settings;
+    vectorcraft_format::save(&kept, false)
+}
+
 /// Encode `doc` as SVG (or gzipped, SVGZ): one file per chosen artboard, with the images they
 /// link to and the writer's warnings.
 pub(super) fn encode(doc: &Document, p: &Value, compressed: bool) -> Result<Encoded, String> {
     let (opts, boards, chosen) = plan(doc, p)?;
     // Preserve editing embeds the native document (once, shared by every file).
-    let native = opts.preserve_editing.then(|| vectorcraft_format::save(doc, false));
+    let native = opts.preserve_editing.then(|| native_attachment(doc));
     // Draw linked files as vectors when available, or their previews with a warning. Keep
     // that preparation out of the native attachment so missing links remain relinkable.
     let (full, warnings) = crate::cmd::place::document::full_documents(doc);
