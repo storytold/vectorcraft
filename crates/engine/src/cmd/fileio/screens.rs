@@ -528,6 +528,8 @@ fn rows_of(s: &Session, p: &Value, preset: Option<&str>) -> Result<Vec<Row>> {
             if let Some(m) = r.options.as_object_mut() {
                 m.entry("antiAlias").or_insert_with(|| aa.clone());
             }
+            // Two rows whose options are now the same are one file.
+            r.key = r.file_key();
         }
     }
     Ok(rows)

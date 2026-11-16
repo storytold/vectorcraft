@@ -641,6 +641,9 @@ fn include_bleed_pdf_pages_trim_at_the_artboard() {
     // A row that sets no bleed writes the same file as one that asks for the document's: one file.
     let r = export(&mut s, json!({"includeBleed": true, "artboard": 0, "formats": [{"format": "pdf"}, document]}));
     assert_eq!(names(&r).len(), 1, "{:?}", names(&r));
+    // So does it with a top-level anti-aliasing mode, which both rows take.
+    let r = export(&mut s, json!({"includeBleed": true, "artboard": 0, "antiAlias": "art", "formats": [{"format": "pdf"}, document]}));
+    assert_eq!(names(&r).len(), 1, "{:?}", names(&r));
     // A raster row of the same export still holds the bleed in its pixels.
     let r = export(&mut s, json!({"includeBleed": true, "artboard": 0, "formats": [document, {"format": "png"}]}));
     let png = files(&r).into_iter().find(|(n, _)| n.ends_with(".png")).unwrap().1;
