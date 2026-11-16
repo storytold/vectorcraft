@@ -718,9 +718,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
         });
     });
-    // A press of any pointer button that the popup's layer does not get closes it: a press on the
-    // backdrop, or on a window above it, which also gets the press, even where that window lies
-    // over the popup.
+    // A press of any pointer button that neither the popup's layer nor its Recent Commands list's
+    // layer gets closes it: a press on the backdrop, or on a window above it, which also gets the
+    // press, even where that window lies over the popup.
     let presses: Vec<egui::Pos2> = ctx.input(|i| {
         i.events
             .iter()
@@ -731,7 +731,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             .collect()
     });
     let popup = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("palette"));
-    let outside = presses.into_iter().any(|p| ctx.layer_id_at(p) != Some(popup));
+    let list = egui::LayerId::new(egui::Order::Foreground, recent_list_id());
+    let outside = presses.into_iter().any(|p| !ctx.layer_id_at(p).is_some_and(|l| l == popup || l == list));
     // The pointer or a scroll moved the highlight after the rows were drawn: the next frame draws
     // it where it now is.
     if sel != drawn {
