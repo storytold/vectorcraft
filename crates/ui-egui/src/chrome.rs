@@ -113,6 +113,13 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let (switcher, ws_w, arrange, learn, discord) = (fit.switcher, fit.switcher_w, fit.arrange, fit.learn, fit.community);
             let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
             let ui = &mut rui;
+            // Who is signed in to cloud storage, drawn first in this right-to-left group so a
+            // build with no service configured (`available` is always false until a host connects
+            // one) subtracts nothing from the room the rest divides up.
+            if crate::cloud::available(app) {
+                crate::cloud::who(app, ui);
+                ui.add_space(8.0);
+            }
             // Workspace switcher: shows the current workspace, opens Window → Workspace.
             if switcher {
                 let (wr, wresp) = ui.allocate_exact_size(vec2(ws_w, WIDGET_H), Sense::click());

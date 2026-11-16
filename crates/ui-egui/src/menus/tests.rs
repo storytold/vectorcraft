@@ -1680,3 +1680,36 @@ fn window_menu_panels_are_sorted_alphabetically_in_active_language() {
 
     set_current(prev);
 }
+
+#[test]
+fn cloud_commands_refuse_without_a_service() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    for id in ["cloud.open", "cloud.saveAs"] {
+        assert_eq!(app.run(id, json!({})).unwrap_err(), crate::cloud::UNAVAILABLE, "{id}");
+    }
+}
+
+#[test]
+fn cloud_menu_items_stay_hidden_without_a_service() {
+    let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    for id in ["cloud.open", "cloud.saveAs"] {
+        assert!(shown_state(&app, id, &json!({})).is_none(), "{id}");
+    }
+}
+
+#[test]
+fn cloud_commands_open_the_right_page_once_connected() {
+    struct Noop;
+    impl crate::cloud::CloudBackend for Noop {
+        fn submit(&self, _job: crate::cloud::Job, _post: crate::cloud::Post) {}
+    }
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.cloud.connect(Noop);
+    assert!(app.cloud_page.is_none());
+
+    app.run("cloud.open", json!({})).unwrap();
+    assert_eq!(app.cloud_page, Some(crate::cloud::CloudPage::Open));
+
+    app.run("cloud.saveAs", json!({})).unwrap();
+    assert_eq!(app.cloud_page, Some(crate::cloud::CloudPage::SaveAs));
+}

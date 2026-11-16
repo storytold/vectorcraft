@@ -31,6 +31,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{path?, params?} → with a path, document.open's result {index, title, format, warnings, …} (null when a dialog asks first or a library loads); `params` are the parameters of the importer plug-in that opens the file",
     ),
     (
+        "cloud.open",
+        "Open from the Cloud…",
+        "",
+        "{} refused with a build with no cloud service configured (crate::cloud); otherwise opens the Open from the Cloud page over the editor and asks the service who is signed in and what is in the user's root folder → null",
+    ),
+    (
+        "cloud.saveAs",
+        "Save to the Cloud…",
+        "",
+        "{} refused with a build with no cloud service configured; otherwise opens the Save to the Cloud page, which writes the active drawing into cloud storage under the typed name (a name with no known extension becomes .vectorcraft) → null",
+    ),
+    (
         "file.openWith",
         "Open With",
         "",

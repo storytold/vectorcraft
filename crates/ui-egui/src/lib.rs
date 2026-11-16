@@ -28,6 +28,7 @@ mod brand;
 pub mod canvas;
 pub mod chrome;
 mod clipboard_probe;
+pub mod cloud;
 pub mod community;
 pub mod control;
 pub mod credits;
@@ -167,6 +168,11 @@ pub struct VectorcraftApp {
     /// The Character panel field that takes the keyboard focus when the panel next draws it
     /// ([`panels::character::highlight`]).
     pub(crate) character_focus: Option<panels::character::Field>,
+    /// Open and Save against cloud storage ([`cloud`]). Nothing cloud-shaped is offered until the
+    /// host connects a backend, so a build with no service configured is the app as it was.
+    pub cloud: cloud::CloudFiles,
+    /// Which cloud page is open over the editor, if any ([`cloud::modal`]).
+    pub cloud_page: Option<cloud::CloudPage>,
     /// Commands run through [`Self::run`] so far: the native menu bar reads its rows again when it
     /// moves ([`native_menu::sync`]).
     run_count: u64,

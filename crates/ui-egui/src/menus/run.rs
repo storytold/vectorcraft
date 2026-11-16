@@ -155,6 +155,22 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             None => io::open_dialog(app).map(|_| Value::Null),
         },
         "file.openWith" => io::open_with(app, p),
+        // Open and Save against cloud storage (`crate::cloud`). Refused in a build with no
+        // service configured; the menu items they belong to are not drawn at all.
+        "cloud.open" => {
+            if !crate::cloud::available(app) {
+                return Some(Err(crate::cloud::UNAVAILABLE.to_owned()));
+            }
+            app.cloud_page = Some(crate::cloud::CloudPage::Open);
+            Ok(Value::Null)
+        }
+        "cloud.saveAs" => {
+            if !crate::cloud::available(app) {
+                return Some(Err(crate::cloud::UNAVAILABLE.to_owned()));
+            }
+            app.cloud_page = Some(crate::cloud::CloudPage::SaveAs);
+            Ok(Value::Null)
+        }
         // Saves write through the app (save panel, download); with no path known the panel and the
         // format's options dialog ask first.
         // A confined request sees the document's own file, and the folder a save suggests, only

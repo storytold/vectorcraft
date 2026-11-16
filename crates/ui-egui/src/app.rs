@@ -10,7 +10,7 @@ use super::state::{
 };
 use super::{
     Arc, AutomationRoots, ControlRequest, Ordering, Receiver, Session, UiState, Value, VectorcraftApp, View, ViewInfo, background, canvas, chrome,
-    clipboard_probe, dialogs, export_progress, file_access, fileio, font_menu, graphics, i18n, io, json, menus, native_menu, opening, palette,
+    clipboard_probe, cloud, dialogs, export_progress, file_access, fileio, font_menu, graphics, i18n, io, json, menus, native_menu, opening, palette,
     panel_docking, panels, picks, place, placing, plugin_runs, prefs_dialog, recovery, screen_color, scrub, shortcut_editor, shortcuts, theme,
     titlebar, toolbar, tools_float, trace_runs, unsaved, updates_ui, widgets,
 };
@@ -111,6 +111,8 @@ impl VectorcraftApp {
             last_pathfinder: None,
             last_warp: None,
             character_focus: None,
+            cloud: cloud::CloudFiles::new(),
+            cloud_page: None,
             run_count: 0,
             clipboard_out: None,
             clipboard_published: None,
@@ -261,6 +263,8 @@ impl VectorcraftApp {
         }
         background::poll(self);
         opening::poll(self);
+        // Answers from the cloud worker, if a backend is connected.
+        cloud::pump(self);
         plugin_runs::poll(self);
         trace_runs::poll(self);
         placing::poll(self);
@@ -632,6 +636,7 @@ impl VectorcraftApp {
         panels::learn::locate::tidy(self, &ctx);
         crate::doc_windows::show(self, &ctx);
         dialogs::show(self, &ctx);
+        cloud::modal(self, &ctx);
         updates_ui::show(self, &ctx);
         export_progress::show(self, &ctx);
         plugin_runs::show(self, &ctx);
