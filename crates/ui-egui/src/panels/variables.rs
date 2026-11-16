@@ -114,7 +114,7 @@ fn variable_row(ui: &mut Ui, row: &VarRow, selected: bool) -> Response {
     let object_cell = Rect::from_min_max(pos2(name_right, rect.top()), rect.max);
     ui.painter().with_clip_rect(object_cell).text(object_cell.left_center() + pad, left, &row.object, font, t.text_dim);
     let full = if row.object.is_empty() { row.name.clone() } else { format!("{} · {}", row.name, row.object) };
-    r.widget_info(|| egui::WidgetInfo::selected(egui::Role::ListItem, true, selected, &full));
+    widgets::list_item_info(&r, selected, || full.clone());
     // A column clips a long name, so the whole of it shows on hover.
     r.on_hover_text(full)
 }
@@ -705,6 +705,23 @@ mod tests {
         assert!(set_names(&mut app).is_empty());
         assert_eq!(undo_steps(&app), before);
         assert_eq!(app.ui.status, "");
+    }
+
+    /// Each variable row is a list item, and only the highlighted one is selected.
+    #[test]
+    fn the_rows_report_the_highlight_as_the_selected_state() {
+        use egui::accesskit::Role;
+        let mut app = app_with_data();
+        app.session.execute("variable.define", &json!({"name": "age", "kind": "visibility"})).unwrap();
+        app.session.execute("variable.highlight", &json!({"variable": "Name"})).unwrap();
+        let nodes = Driver::new().nodes(&mut app);
+        let mut rows: Vec<_> = nodes
+            .iter()
+            .filter(|(_, n)| n.role() == Role::ListItem)
+            .map(|(_, n)| (n.label().map(str::to_string), n.is_selected(), n.toggled()))
+            .collect();
+        rows.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(rows, [(Some("Name · Alice".to_string()), Some(true), None), (Some("age".to_string()), Some(false), None)]);
     }
 
     /// A click on a column header sorts the list by that column, and a second click on it
