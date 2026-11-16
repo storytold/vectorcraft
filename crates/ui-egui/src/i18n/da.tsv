@@ -91,6 +91,44 @@
 @msg	$.evalFile requires a file path	$.evalFile kræver en filsti
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: tidsgrænsen skal være et endeligt antal millisekunder, 0 eller mere
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: tager en filsti og en tidsgrænse
+@msg	assignment to a constant binding	tildeling til en konstant binding
+@msg	invalid array length	ugyldig arraylængde
+@msg	array literal too long	arrayliteralen er for lang
+@msg	the value is not a function	værdien er ikke en funktion
+@msg	apply was called on a value that is not a function	apply blev kaldt på en værdi, der ikke er en funktion
+@msg	the argument list is not an object	argumentlisten er ikke et objekt
+@msg	too many arguments	for mange argumenter
+@msg	the value is not a constructor	værdien er ikke en konstruktør
+@msg	cannot convert the object to a primitive value	objektet kan ikke konverteres til en primitiv værdi
+@msg	cannot convert undefined or null to an object	undefined eller null kan ikke konverteres til et objekt
+@msg	the right side of 'in' is not an object	højre side af 'in' er ikke et objekt
+@msg	the right side of 'instanceof' is not a function	højre side af 'instanceof' er ikke en funktion
+@msg	the function's prototype is not an object	funktionens prototype er ikke et objekt
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} er ikke defineret
+@msg	cannot read property '{key}' of {base}	egenskaben '{key}' for {base} kan ikke læses
+@msg	cannot set property '{key}' of {base}	egenskaben '{key}' for {base} kan ikke sættes
+@msg	cannot read a property of {base}	en egenskab for {base} kan ikke læses
+@msg	cannot set a property of {base}	en egenskab for {base} kan ikke sættes
+@msg	cannot define property '{key}': {why}	egenskaben '{key}' kan ikke defineres: {why}
+@msg	cannot assign to property '{key}': {why}	der kan ikke tildeles til egenskaben '{key}': {why}
+@msg	cannot delete property '{key}'	egenskaben '{key}' kan ikke slettes
+@msg	cannot declare function {ident}	funktionen {ident} kan ikke erklæres
+@msg	invalid assignment target	ugyldigt tildelingsmål
+@msg	the array's length is read-only	arrayets længde er skrivebeskyttet
+@msg	the property cannot be redefined	egenskaben kan ikke defineres igen
+@msg	the object is not extensible	objektet kan ikke udvides
+@msg	the length cannot be redefined	længden kan ikke defineres igen
+@msg	it is read-only	den er skrivebeskyttet
+@msg	an element cannot be deleted	et element kan ikke slettes
+@msg	it has only a getter	den har kun en getter
+@msg	the value is a primitive	værdien er primitiv
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: linje {line}, kolonne {column} i {file}: {e} (kastet)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: linje {line}, kolonne {column}: {e} (kastet)
 @msg	{name}: {e} (thrown)	{name}: {e} (kastet)
@@ -4281,6 +4319,10 @@ digits	Malayalam	Malayalam
 	Em Box	Em-felt
 	x-Height	x-højde
 	ICF Box	ICF-felt
+	Show Sample	Vis eksempel
+	Hide Sample	Skjul eksempel
+	Max Ascent/Descent	Maks. højde/dybde
+	Max Ascender	Maks. overhøjde
 	Copy Color Value (Hex)	Kopiér farveværdi (hex)
 	Create New Swatch…	Opret ny farveprøve…
 	Name 40%	Navn 40%
@@ -6054,6 +6096,8 @@ theme	Appearance	Udseende
 	Find Font Files	Find skrifttypefiler
 	Add Font Files	Tilføj skrifttypefiler
 	Font List	Skrifttypeliste
+	Show Similar Fonts	Vis lignende skrifttyper
+	Clear Similar Fonts	Ryd lignende skrifttyper
 	Fonts in Document	Skrifttyper i dokumentet
 	Refresh Font List	Opdatér skrifttypeliste
 	Replace Font	Erstat skrifttype
@@ -6809,6 +6853,8 @@ font-technology	Variable	Variable
 	Saving	Gemmer
 	Saving {}	Gemmer {}
 	Search commands and tools…	Søg i kommandoer og værktøjer…
+	Recent Commands	Seneste kommandoer
+	No recent commands	Ingen seneste kommandoer
 	Dashed Line	Stiplet linje
 	Panel menu	Panelmenu
 	Unembed…	Ophæv integrering…
@@ -7087,6 +7133,7 @@ imageTrace	Outline	Kontur
 @msg	Divide Objects Below: select exactly one path	Opdel objekter nedenunder: markér præcis én kurve
 @msg	Downloaded {what}	Downloadede {what}
 @msg	Expand Appearance: the selection has a basic appearance	Udvid udseende: markeringen har et grundlæggende udseende
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	nogle rastereffekter blev ikke lavet om til billeder: de ville kræve mere end 1.024 billeder eller i alt 256 megapixel
 @msg	Expand: no brush strokes selected	Udvid: ingen penselstrøg er markeret
 @msg	Expand: no gradient fills	Udvid: ingen gradientfyld
 @msg	Expand: nothing to expand	Udvid: intet at udvide
@@ -8343,7 +8390,7 @@ mark-style	Japanese	Japansk
 @msg	Unknown dimension orientation	Ukendt målretning
 @msg	Unknown dimension style	Ukendt målstil
 @msg	Unknown unit	Ukendt enhed
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Luk de runde ender af åbne profiler. Delvise omdrejninger beholder deres skårne sider åbne.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Luk de runde ender af åbne profiler. Delvise omdrejninger lukker også deres skårne sider.
 	Darkness	Mørke
 	Isolate Selected Object	Isolér markeret objekt
 	Keep selected	Behold markeret
@@ -8748,6 +8795,7 @@ swatch	Bright Violet	Kraftig violet
 	Single Word Justification:	Justering af enkeltord:
 	Full Justify	Lige margener
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum må ikke overstige Ønsket, og Ønsket ikke Maksimum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Minimum må ikke overstige Ønsket, og Ønsket ikke Maksimum
 	Justification	Justering
 	Add filters from the list above	Tilføj filtre fra listen ovenfor
 	Add to Stack	Tilføj til stak
@@ -9457,6 +9505,24 @@ breakText	Glyphs	Glyffer
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Udvid streger til stier
 @msg	select paths with dashed strokes to expand	vælg stier med stiplet streg, der skal udvides
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Tangentcirkel…
+	Tangent Circle	Tangentcirkel
+	Circle:	Cirkel:
+@msg	`ids` names an object twice	`ids` nævner et objekt to gange
+@msg	select two or three paths or compound paths	vælg to eller tre stier eller sammensatte stier
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` skal være fra 0.01 til 1000000 pt
+@msg	two shapes need a `radius`	to figurer kræver en `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	tre figurer bestemmer selv radius: udelad `radius`
+@msg	`circle` must be from 0 to 64	`circle` skal være fra 0 til 64
+@msg	a shape has no outline	en figur har ingen kontur
+@msg	the shapes are too complex: at most 2000 segments in all	figurerne er for komplekse: højst 2000 segmenter i alt
+@msg	these shapes take too long to search	søgningen tager for lang tid for disse figurer
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	mere end 64 cirkler rører disse figurer: de rører dem måske langs en hel kurve
+@msg	no circle touches these shapes	ingen cirkel rører disse figurer
+@msg	`circle` is past the last circle found ({found})	`circle` ligger efter den sidste fundne cirkel ({found})
+@msg	object {value} is not a path or compound path	objekt {value} er ikke en sti eller sammensat sti
+@msg	these shapes are too small to measure	disse figurer er for små til at blive målt
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentværktøjer
 	Save a Timestamped Copy	Gem en kopi med dato og klokkeslæt
@@ -9511,7 +9577,7 @@ breakText	Glyphs	Glyffer
 @msg	stroke cannot be set on a symbol instance	stroke kan ikke angives for en symbolforekomst
 @msg	fill on a symbol instance must be a solid color or none	fill på en symbolforekomst skal være en ensfarvet farve eller none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kan ikke angives for et billede uden effekten Konvertér til form eller Objekt til kontur
-@msg	pass newName, registration, exportType, nineSlice and/or type	angiv newName, registration, exportType, nineSlice og/eller type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	angiv newName, registration, exportType, nineSlice, type og/eller alignToPixelGrid
 	Text Flow	Tekstflow
 	By Rows	Efter rækker
 	By Columns	Efter kolonner

@@ -1232,25 +1232,22 @@ impl<'a> Writer<'a> {
 
     /// A container's members, the first one's outline cutting the others: its fills painted
     /// behind them (cut to the region outside too), its strokes over them, not cut by it. Its text
-    /// wrap options are written once: with its fills, or with its strokes when no fill object is
-    /// written (it has no fills, or the region outside leaves nothing of them).
+    /// wrap options are written once, under them all ([`Self::wrap_carrier`]), and not with its fills
+    /// or strokes, which may be cut or left out.
     fn clip_contents(&mut self, children: &[Arc<Node>]) {
         let Some((first, rest)) = children.split_first() else { return };
+        self.wrap_carrier(first);
         // Nothing to clip by hides the clipped art.
         let Some((outline, rule)) = vectorcraft_effects::clip_outline(first) else { return };
         let mut paint = first.clip_paint();
+        for part in [&mut paint.fill, &mut paint.stroke].into_iter().flatten() {
+            part.extras_mut().wrap = None;
+        }
         let outer = self.clip.clone();
         let region = self.cut(&PathData::from_bezpath(&outline), rule);
         self.clip = Some(region);
         if let Some(fill) = &paint.fill {
-            let objects = self.objects;
             self.node(fill);
-            if self.objects > objects
-                && let Some(stroke) = &mut paint.stroke
-                && stroke.extras().wrap.is_some()
-            {
-                stroke.extras_mut().wrap = None;
-            }
         }
         for c in rest {
             self.node(c);
@@ -1259,6 +1256,28 @@ impl<'a> Writer<'a> {
         if let Some(stroke) = &paint.stroke {
             self.node(stroke);
         }
+    }
+
+    /// The text wrap options of clipping object `first`, when it has them, on an unpainted path
+    /// (a compound path for several subpaths) of the outline area type wraps around
+    /// ([`vectorcraft_doc::text::wrap_outline`]), uncut, locked and hidden as `first` is. Nothing is
+    /// written for an empty outline or without room for the path ([`Self::take_objects`]).
+    fn wrap_carrier(&mut self, first: &Node) {
+        let Some(wrap) = first.extras().wrap.filter(|_| self.drawn == 0 && !self.in_look) else { return };
+        let outline = vectorcraft_doc::text::wrap_outline(first);
+        if outline.is_empty() {
+            return;
+        }
+        self.state(first.locked, !first.visible);
+        let start = self.body.len();
+        self.plain_object(&outline, FillRule::NonZero, None, None, Xy::of(first).object());
+        if self.body.len() == start {
+            return;
+        }
+        self.block_end = usize::MAX;
+        self.body.push_str("%_/ArtDictionary :\n");
+        self.text_wrap(wrap);
+        self.body.push_str("%_;\n%_\n");
     }
 
     /// `path` (filled by `rule`) cut to the region the art is cut to, as a non-zero path.
