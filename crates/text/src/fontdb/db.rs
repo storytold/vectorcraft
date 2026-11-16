@@ -19,9 +19,9 @@ use super::traits::faces_published;
 use super::traits::{Alias, FaceStyle};
 use super::{Arc, AtomicU64, FontDb, FontPaths, HashMap, Mutex, Ordering, Path, PathBuf, RwLock, StringId};
 
-use crate::cjk::{CjkScript, CjkScripts};
 #[cfg(not(target_arch = "wasm32"))]
 use super::{ScanStamp, modified};
+use crate::cjk::{CjkScript, CjkScripts};
 
 impl FontDb {
     /// A database holding the bundled fonts, whose system font scan reads `font_dirs` (folders,

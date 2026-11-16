@@ -80,7 +80,9 @@ pub(super) fn font_items(script: Option<CjkScript>, english_names: bool) -> Vec<
         // as its font menu does; every other language keeps the English-alphabetical order.
         let mut listed: Vec<&String> = fams.iter().collect();
         if let Some(script) = script {
-            listed.sort_by_cached_key(|f| (menu_sort_key(&db.family_display_name(f.as_str(), Some(script), english_names), Some(script)), f.to_lowercase()));
+            listed.sort_by_cached_key(|f| {
+                (menu_sort_key(&db.family_display_name(f.as_str(), Some(script), english_names), Some(script)), f.to_lowercase())
+            });
         }
         let list = listed
             .into_iter()

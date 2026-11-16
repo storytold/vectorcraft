@@ -64,12 +64,7 @@ impl CjkScripts {
 
     /// Both sets' scripts together (a family of faces that serve different ones).
     pub fn or(self, other: Self) -> Self {
-        Self {
-            hans: self.hans || other.hans,
-            hant: self.hant || other.hant,
-            jpan: self.jpan || other.jpan,
-            kore: self.kore || other.kore,
-        }
+        Self { hans: self.hans || other.hans, hant: self.hant || other.hant, jpan: self.jpan || other.jpan, kore: self.kore || other.kore }
     }
 
     pub fn set(&mut self, script: CjkScript) {

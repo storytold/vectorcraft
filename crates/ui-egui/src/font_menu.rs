@@ -16,7 +16,7 @@ use std::sync::Arc;
 use egui::{Color32, Sense, Ui, vec2};
 use serde_json::json;
 
-use vectorcraft_text::cjk::{menu_sort_key, CjkScript};
+use vectorcraft_text::cjk::{CjkScript, menu_sort_key};
 use vectorcraft_text::{FontClass, FontDb};
 
 use crate::VectorcraftApp;
@@ -176,7 +176,13 @@ impl Row {
 /// each in the order `families` has them (the menu sorts them by label in a CJK interface; the
 /// database's order is English-alphabetical). Headings and the separator share the virtual
 /// list's row height, but never act as fonts or take keyboard focus.
-fn grouped_rows(families: &[String], recent: &[String], native: &std::collections::HashSet<String>, expanded: &[String], styles: impl Fn(&str) -> Vec<String>) -> Vec<Row> {
+fn grouped_rows(
+    families: &[String],
+    recent: &[String],
+    native: &std::collections::HashSet<String>,
+    expanded: &[String],
+    styles: impl Fn(&str) -> Vec<String>,
+) -> Vec<Row> {
     let mut first: Vec<&String> = vec![];
     for name in recent {
         if let Some(f) = families.iter().find(|f| f.eq_ignore_ascii_case(name))
@@ -445,7 +451,8 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
         // (pinyin for Chinese), as Photoshop and Illustrator list these fonts; other interfaces
         // keep the database's English-alphabetical order.
         if let Some(script) = look.script {
-            families.sort_by_cached_key(|f| (menu_sort_key(&db.family_display_name(f, look.script, look.english_names), Some(script)), f.to_lowercase()));
+            families
+                .sort_by_cached_key(|f| (menu_sort_key(&db.family_display_name(f, look.script, look.english_names), Some(script)), f.to_lowercase()));
         }
         let rows = grouped_rows(&families, look.recent, &native, &st.expanded, |f| db.styles(f));
         // Filter changes (including un-starring a favourite) may remove rows; expanding

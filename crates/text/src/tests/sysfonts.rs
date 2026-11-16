@@ -861,7 +861,11 @@ fn family_display_name_falls_back_to_localized_legacy_names() {
         for (source, db) in [("loaded", loaded), ("catalog", catalog)] {
             assert_eq!(db.family_display_name("SimSun", None, true), "SimSun", "{source}, case {case}: English requested");
             assert_eq!(db.family_display_name("SimSun", None, false), expected, "{source}, case {case}: native requested");
-            assert_eq!(db.family_display_name("SimSun", Some(crate::cjk::CjkScript::SimplifiedChinese), false), expected, "{source}, case {case}: Simplified Chinese requested");
+            assert_eq!(
+                db.family_display_name("SimSun", Some(crate::cjk::CjkScript::SimplifiedChinese), false),
+                expected,
+                "{source}, case {case}: Simplified Chinese requested"
+            );
             assert_eq!(db.family_display_name("SimSun", None, true), "SimSun", "{source}, case {case}: switch back to English");
             assert_eq!(db.is_loaded("SimSun"), source == "loaded", "{source}, case {case}: catalog names need no face loading");
         }
