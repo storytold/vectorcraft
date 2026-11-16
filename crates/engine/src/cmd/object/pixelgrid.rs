@@ -358,9 +358,10 @@ fn snap_mask(n: &mut Node) -> bool {
 
 /// Move symbol instance `n` to whole points when its transform places its symbol's art at the
 /// symbol's natural size (`natural`, by symbol name), reflected across one axis or not. A scaled,
-/// rotated (a half turn included) or sheared instance stays where it is.
+/// rotated (a half turn included) or sheared instance stays where it is. The instance moves as any
+/// move moves it ([`Node::transform`]), so the art of a linked opacity mask moves with it.
 fn snap_instance(n: &mut Node, natural: &HashMap<String, Affine>) {
-    let NodeKind::SymbolInstance { symbol, xf } = &mut n.kind else { return };
+    let NodeKind::SymbolInstance { symbol, xf } = &n.kind else { return };
     let Some(nat) = natural.get(symbol.as_str()) else { return };
     let [a, b, c, d, e, f] = xf.as_coeffs();
     let [na, _, _, nd, _, _] = nat.as_coeffs();
@@ -373,7 +374,12 @@ fn snap_instance(n: &mut Node, natural: &HashMap<String, Affine>) {
         return;
     }
     let (x, y) = (e.round(), f.round());
-    if x != e || y != f {
+    if x == e && y == f {
+        return;
+    }
+    n.transform(Affine::translate((x - e, y - f)), Scaling::default());
+    // Whole points exactly, which adding the offset to the old position need not give.
+    if let NodeKind::SymbolInstance { xf, .. } = &mut n.kind {
         *xf = Affine::new([a, b, c, d, x, y]);
     }
 }
