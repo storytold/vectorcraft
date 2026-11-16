@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use vectorcraft_geom::{PathData, shapes};
 
-use super::{TextKind, WrapShape};
+use super::{TextKind, TextObject, WrapShape};
 use crate::{Document, Node, NodeId, NodeKind};
 
 /// Outline of a wrap object in document coordinates: its paths, or its bounds for other art.
@@ -30,6 +30,16 @@ fn outline(n: &Node, out: &mut PathData) {
             }
         }
     }
+}
+
+/// The outline area type wraps around for wrap object `n`, in document coordinates, as
+/// [`resolve_wrap`] makes it: a path's subpaths that are closed or have more than two anchors, those
+/// of the shown members of a group or compound path, a clip group's clipping object's, and the
+/// bounds of other art. Empty when `n` has none.
+pub fn wrap_outline(n: &Node) -> PathData {
+    let mut pd = PathData::default();
+    outline(n, &mut pd);
+    pd
 }
 
 enum Item<'a> {
@@ -82,6 +92,57 @@ pub fn wrap_work(doc: &Document) -> usize {
     total
 }
 
+/// Each area text object of `layer`, from the top down, with the wrap objects above it in the
+/// layer whose outlines aren't empty, topmost first, each with the shape its outline makes in
+/// document coordinates. Each wrap object's outline is made once.
+fn each_text<'a>(layer: &'a Node, mut f: impl FnMut(&'a Node, &[(&'a Node, WrapShape)])) {
+    let mut items = vec![];
+    collect(layer, &mut items);
+    let mut above: Vec<(&Node, WrapShape)> = vec![];
+    for it in items.iter().rev() {
+        match it {
+            Item::Wrap(n) => {
+                let mut pd = PathData::default();
+                outline(n, &mut pd);
+                if !pd.is_empty() {
+                    above.push((n, WrapShape { path: pd, wrap: n.extras().wrap.unwrap_or_default() }));
+                }
+            }
+            Item::Text(n) => f(n, &above),
+        }
+    }
+}
+
+/// The wrap shapes of text object `t` (text space) from `above`, the wrap objects above it as
+/// [`each_text`] gives them: bottom first.
+fn shapes_of(t: &TextObject, above: &[(&Node, WrapShape)]) -> Vec<WrapShape> {
+    let inv = t.xf.inverse();
+    above
+        .iter()
+        .rev()
+        .map(|(_, s)| {
+            let mut path = s.path.clone();
+            path.transform(inv);
+            WrapShape { path, wrap: s.wrap }
+        })
+        .collect()
+}
+
+/// Each area text object on `doc`'s layers that [`resolve_wrap`] gives wrap shapes, with the wrap
+/// objects whose outlines make them, bottom first, and those shapes (text space), as
+/// [`resolve_wrap`] works them out. The copying is [`wrap_work`].
+pub fn wrap_sources<'a>(doc: &'a Document, mut f: impl FnMut(&'a Node, Vec<&'a Node>, Vec<WrapShape>)) {
+    for layer in &doc.layers {
+        each_text(layer, |n, above| {
+            if let NodeKind::Text(t) = &n.kind
+                && !above.is_empty()
+            {
+                f(n, above.iter().rev().map(|(s, _)| *s).collect(), shapes_of(t, above));
+            }
+        });
+    }
+}
+
 /// Resolve the wrap shapes (`TextObject::wrap`, text space) of each area text object from the
 /// outlines of the wrap objects above it in its layer. With `before`, the layers it holds unchanged
 /// are skipped; without it, every layer is resolved. Returns the area text objects whose shapes
@@ -95,41 +156,14 @@ pub fn resolve_wrap(before: Option<&Document>, doc: &mut Document) -> Vec<NodeId
         {
             continue;
         }
-        let mut items = vec![];
-        collect(layer, &mut items);
-        if items.is_empty() {
-            continue;
-        }
-        // From the top down, each wrap object's outline is made once; each area text object takes
-        // those above it, bottom first.
-        let mut above: Vec<WrapShape> = vec![];
-        for it in items.iter().rev() {
-            match it {
-                Item::Wrap(n) => {
-                    let mut pd = PathData::default();
-                    outline(n, &mut pd);
-                    if !pd.is_empty() {
-                        above.push(WrapShape { path: pd, wrap: n.extras().wrap.unwrap_or_default() });
-                    }
-                }
-                Item::Text(n) => {
-                    let NodeKind::Text(t) = &n.kind else { continue };
-                    let inv = t.xf.inverse();
-                    let shapes: Vec<WrapShape> = above
-                        .iter()
-                        .rev()
-                        .map(|s| {
-                            let mut path = s.path.clone();
-                            path.transform(inv);
-                            WrapShape { path, wrap: s.wrap }
-                        })
-                        .collect();
-                    if shapes != t.wrap {
-                        updates.push((n.id, shapes));
-                    }
+        each_text(layer, |n, above| {
+            if let NodeKind::Text(t) = &n.kind {
+                let shapes = shapes_of(t, above);
+                if shapes != t.wrap {
+                    updates.push((n.id, shapes));
                 }
             }
-        }
+        });
     }
     let mut changed = Vec::with_capacity(updates.len());
     for (id, shapes) in updates {
