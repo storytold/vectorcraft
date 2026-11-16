@@ -122,3 +122,85 @@ fn imported_stroked_type_keeps_the_files_cap_join_and_miter_limit() {
         assert_eq!(joins, [Some(LineJoin::Round), Some(LineJoin::Miter)], "{content}: {runs:?}");
     }
 }
+
+/// Fill and stroke rendering (mode 2, or 6 with a clip) draws a text-showing operator's glyphs
+/// filled, then the same glyphs stroked: the type comes in once, filled and stroked, whether the
+/// operator shows one glyph or a word, or a TJ array of strings with kerning between them, in an
+/// outline font, with or without replacement text (`ActualText`). Stroke rendering (modes 1 and 5) stays stroke only. A Type 3 glyph is filled in
+/// every one of those modes, once (#8015).
+#[test]
+fn a_word_filled_then_stroked_imports_as_one_filled_and_stroked_type() {
+    use vectorcraft_testkit::pdf::{PdfPage, first_extra, pdf_with};
+    // `/T3`: a Type 3 font whose glyphs take the text's paint (`d1`), `W A V E` mapped by ToUnicode.
+    let t3 = first_extra(1);
+    let glyph = crate::tests_import_fidelity::stream("", "600 0 0 0 600 700 d1 0 0 m 600 0 l 300 700 l h f");
+    let to_unicode = crate::tests_import_fidelity::stream(
+        "",
+        "/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def /CMapName /T3-UCS def /CMapType 2 def 1 begincodespacerange <00> <FF> endcodespacerange 4 beginbfchar\n<41> <0041>\n<45> <0045>\n<56> <0056>\n<57> <0057>\nendbfchar endcmap CMapName currentdict /CMap defineresource pop end end",
+    );
+    let font = format!(
+        "<< /Type /Font /Subtype /Type3 /FontBBox [0 0 600 700] /FontMatrix [0.001 0 0 0.001 0 0] /CharProcs << /g {} 0 R >> /Encoding << /Type /Encoding /Differences [65 /g 69 /g 86 /g 87 /g] >> /FirstChar 65 /LastChar 87 /Widths [600 0 0 0 600 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 600 600] /ToUnicode {} 0 R /Resources << >> >>",
+        t3 + 1,
+        t3 + 2
+    );
+    let page = |content: &str| {
+        let resources = format!("/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> /T3 {t3} 0 R >>");
+        pdf_with(&[PdfPage { resources, ..PdfPage::new(300.0, 200.0, content) }], &[&font, &glyph, &to_unicode], None)
+    };
+    let objects = |content: &str| {
+        let d = import(&page(content)).unwrap();
+        let mut types = vec![];
+        d.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                types.push((**t).clone());
+            }
+        });
+        types
+    };
+    let cream = Paint::solid(Color::rgb8(0xff, 0xff, 0xcc));
+    let black = Paint::solid(Color::BLACK);
+    let shows =
+        ["(WAVE) Tj", "[(WA) -50 (VE)] TJ", "(WA) Tj (VE) Tj", "(W) Tj (A) Tj (V) Tj (E) Tj", "/Span << /ActualText (WAVE) >> BDC (WAVE) Tj EMC"];
+    for font in ["F1", "T3"] {
+        for show in shows {
+            for mode in ["0", "1", "2", "4", "5", "6"] {
+                let content = format!("0 0 0 RG 1 1 0.8 rg 3 w 1 J 1 j BT {mode} Tr /{font} 60 Tf 40 110 Td {show} 0 Tr ET");
+                let types = objects(&content);
+                assert_eq!(types.len(), 1, "{content}: one type object: {types:#?}");
+                let t = &types[0];
+                assert_eq!(t.plain_text(), "WAVE", "{content}");
+                // A Type 3 glyph paints itself: the reader fills it whatever the mode.
+                let (fill, stroke) = match mode {
+                    _ if font == "T3" => (true, false),
+                    "0" | "4" => (true, false),
+                    "1" | "5" => (false, true),
+                    _ => (true, true),
+                };
+                for r in &t.runs {
+                    let s = &r.style;
+                    assert_eq!(s.fill, if fill { cream.clone() } else { Paint::None }, "{content}: fill: {:?}", t.runs);
+                    if stroke {
+                        assert_eq!(s.stroke, black, "{content}: stroke: {:?}", t.runs);
+                        assert!((s.stroke_width - 3.0).abs() < 1e-6, "{content}: width {}", s.stroke_width);
+                        assert_eq!((s.stroke_cap, s.stroke_join), (LineCap::Round, LineJoin::Round), "{content}");
+                    } else {
+                        assert!(s.stroke.is_none(), "{content}: no stroke: {:?}", t.runs);
+                    }
+                }
+            }
+        }
+    }
+    // A word filled, then stroked with another join part way through (one operator each):
+    // each part keeps its own join, all of it filled.
+    let content = "0 0 0 RG 1 1 0.8 rg 3 w BT 2 Tr /F1 60 Tf 40 110 Td 1 j (WA) Tj 0 j (VE) Tj 0 Tr ET";
+    let types = objects(content);
+    assert_eq!(types.len(), 1, "{content}: {types:#?}");
+    let joins: Vec<_> = types[0].runs.iter().map(|r| (r.text.as_str(), r.style.fill == cream, r.style.stroke_join)).collect();
+    assert_eq!(joins, [("WA", true, LineJoin::Round), ("VE", true, LineJoin::Miter)], "{content}");
+    // Filled type, then stroked type of its own elsewhere: a stroke over no filled glyph.
+    let content = "0 0 0 RG 1 1 0.8 rg 3 w BT 0 Tr /F1 60 Tf 40 110 Td (WAVE) Tj 1 Tr 0 -70 Td (WAVE) Tj 0 Tr ET";
+    let types = objects(content);
+    assert_eq!(types.len(), 2, "{content}: {types:#?}");
+    let looks: Vec<_> = types.iter().flat_map(|t| &t.runs).map(|r| (r.style.fill == cream, !r.style.stroke.is_none())).collect();
+    assert_eq!(looks, [(true, false), (false, true)], "{content}");
+}
