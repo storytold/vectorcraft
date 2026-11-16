@@ -4247,7 +4247,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Live corner radii scale with the art, unless the scale chooses otherwise.	即時轉角半徑隨圖稿一起縮放，除非縮放指令另有選擇。
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	筆畫寬度、虛線和效果距離隨圖稿一起縮放，除非縮放指令另有選擇。
 	The mouse wheel zooms the canvas instead of scrolling it.	滑鼠滾輪縮放畫布，而不是捲動畫布。
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	使用滑鼠滾輪縮放關閉時，按住 Cmd/Ctrl 捲動滑鼠滾輪會橫向捲動畫布。
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	按住 Cmd/Ctrl 捲動滑鼠滾輪會橫向捲動畫布。
 	Dragging sideways on a numeric field's label changes the field's value.	在數值欄位的標籤上橫向拖曳可變更欄位的值。
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	在觸控式軌跡板上以雙指旋轉手勢可旋轉畫布檢視。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快速鍵時選擇該工具，放開後重新選擇之前的工具。

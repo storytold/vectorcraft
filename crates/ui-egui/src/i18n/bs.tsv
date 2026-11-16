@@ -4424,7 +4424,7 @@ font-technology	Variable	Varijabilni
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Poluprečnici dinamičnih uglova skaliraju se zajedno s grafikom, osim ako skaliranje ne odabere drugačije.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Debljine poteza, crtice i udaljenosti efekata skaliraju se zajedno s grafikom, osim ako skaliranje ne odabere drugačije.
 	The mouse wheel zooms the canvas instead of scrolling it.	Točkić miša zumira platno umjesto da ga pomjera.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Dok je Zumiraj točkićem miša isključeno, točkić miša uz pritisnut Cmd/Ctrl pomjera platno u stranu.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Točkić miša uz pritisnut Cmd/Ctrl pomjera platno u stranu.
 	Dragging sideways on a numeric field's label changes the field's value.	Prevlačenje u stranu po oznaci brojčanog polja mijenja vrijednost polja.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Pokret rotacije s dva prsta na dodirnoj podlozi rotira prikaz platna.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Držanje prečice alata bira taj alat dok je ne pustite, a zatim se ponovo bira prethodni alat.

@@ -3112,7 +3112,7 @@ digits	Malayalam	Малаялам
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Радіуси динамічних кутів масштабуються разом із графікою, якщо масштабування не задає іншого.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Товщина обведень, штрихи та відстані ефектів масштабуються разом із графікою, якщо масштабування не задає іншого.
 	The mouse wheel zooms the canvas instead of scrolling it.	Колесо миші масштабує полотно, а не прокручує його.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Поки «Масштабувати колесом миші» вимкнено, колесо миші з натиснутою Cmd/Ctrl прокручує полотно по горизонталі.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колесо миші з натиснутою Cmd/Ctrl прокручує полотно по горизонталі.
 	Dragging sideways on a numeric field's label changes the field's value.	Перетягування вбік по підпису числового поля змінює значення поля.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест обертання двома пальцями на трекпаді обертає вигляд полотна.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Поки ви утримуєте клавішу інструмента, його вибрано, а після відпускання знову вибирається попередній інструмент.

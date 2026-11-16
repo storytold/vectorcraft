@@ -3079,7 +3079,7 @@ digits	Malayalam	Malayálam
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Los radios de esquina dinámicos se escalan con la ilustración, salvo que el escalado indique otra cosa.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Los grosores de trazo, los guiones y las distancias de los efectos se escalan con la ilustración, salvo que el escalado indique otra cosa.
 	The mouse wheel zooms the canvas instead of scrolling it.	La rueda del mouse aplica zoom al lienzo en lugar de desplazarlo.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Mientras Zoom con la rueda del mouse está desactivado, la rueda con Cmd/Ctrl pulsado desplaza el lienzo en horizontal.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La rueda del mouse con Cmd/Ctrl pulsado desplaza el lienzo en horizontal.
 	Dragging sideways on a numeric field's label changes the field's value.	Arrastrar en horizontal sobre la etiqueta de un campo numérico cambia el valor del campo.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gesto de giro con dos dedos en un trackpad gira la vista del lienzo.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Mantener pulsado el atajo de una herramienta la elige hasta que lo suelta, y después vuelve a elegirse la herramienta anterior.

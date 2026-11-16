@@ -3039,7 +3039,7 @@ digits	Malayalam	Malayalam
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Live-Eckenradien skalieren mit dem Bildmaterial, sofern die Skalierung nichts anderes wählt.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Konturstärken, Striche und Effektabstände skalieren mit dem Bildmaterial, sofern die Skalierung nichts anderes wählt.
 	The mouse wheel zooms the canvas instead of scrolling it.	Das Mausrad zoomt die Arbeitsfläche, statt sie zu scrollen.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Solange „Mit Mausrad zoomen“ aus ist, scrollt das Mausrad mit gedrückter Befehls-/Strg-Taste die Arbeitsfläche seitwärts.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Mit gedrückter Befehls-/Strg-Taste scrollt das Mausrad die Arbeitsfläche seitwärts.
 	Dragging sideways on a numeric field's label changes the field's value.	Seitliches Ziehen auf der Beschriftung eines Zahlenfelds ändert den Wert des Felds.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Eine Drehgeste mit zwei Fingern auf einem Trackpad dreht die Ansicht der Arbeitsfläche.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Solange Sie das Tastaturkürzel eines Werkzeugs gedrückt halten, ist dieses Werkzeug gewählt; danach wird wieder das vorherige gewählt.

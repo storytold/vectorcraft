@@ -4529,7 +4529,7 @@ font-technology	Variable	Variabilní
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Poloměry živých rohů se mění s velikostí kresby, pokud změna velikosti nezvolí jinak.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Tloušťky tahů, čárky a vzdálenosti efektů se mění s velikostí kresby, pokud změna velikosti nezvolí jinak.
 	The mouse wheel zooms the canvas instead of scrolling it.	Kolečko myši plátno zvětšuje a zmenšuje místo posouvání.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Dokud je Zvětšovat kolečkem myši vypnuto, kolečko myši s podrženou klávesou Cmd/Ctrl posouvá plátno do stran.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Kolečko myši s podrženou klávesou Cmd/Ctrl posouvá plátno do stran.
 	Dragging sideways on a numeric field's label changes the field's value.	Tažení do stran po popisku číselného pole mění hodnotu pole.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gesto otočení dvěma prsty na trackpadu otáčí zobrazení plátna.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Podržení zkratky nástroje vybere nástroj, dokud ji nepustíte, a pak se znovu vybere předchozí nástroj.

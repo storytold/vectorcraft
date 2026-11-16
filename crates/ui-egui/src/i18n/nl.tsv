@@ -4797,7 +4797,7 @@ font-technology	Variable	Variabel
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Dynamische hoekradii schalen mee met de illustratie, tenzij het schalen anders kiest.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Contourdiktes, streepjes en effectafstanden schalen mee met de illustratie, tenzij het schalen anders kiest.
 	The mouse wheel zooms the canvas instead of scrolling it.	Het muiswiel zoomt het canvas in plaats van het te schuiven.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Zolang Zoomen met muiswiel uit staat, schuift het muiswiel met Cmd/Ctrl ingedrukt het canvas zijwaarts.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Het muiswiel met Cmd/Ctrl ingedrukt schuift het canvas zijwaarts.
 	Dragging sideways on a numeric field's label changes the field's value.	Zijwaarts slepen over het label van een numeriek veld wijzigt de waarde van het veld.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Een draaigebaar met twee vingers op een trackpad draait de weergave van het canvas.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Als u de sneltoets van een gereedschap ingedrukt houdt, is dat gereedschap gekozen tot u loslaat, en daarna wordt het vorige gereedschap weer gekozen.

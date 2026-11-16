@@ -3427,7 +3427,7 @@ mark-style	Japanese	Kiểu Nhật
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Bán kính góc động co giãn cùng hình minh họa, trừ khi phép co giãn chọn khác.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Độ dày nét, gạch đứt và khoảng cách hiệu ứng co giãn cùng hình minh họa, trừ khi phép co giãn chọn khác.
 	The mouse wheel zooms the canvas instead of scrolling it.	Con lăn chuột thu phóng khung vẽ thay vì cuộn nó.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Khi Thu phóng bằng con lăn chuột đang tắt, con lăn chuột kèm giữ Cmd/Ctrl cuộn khung vẽ sang ngang.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Con lăn chuột kèm giữ Cmd/Ctrl cuộn khung vẽ sang ngang.
 	Dragging sideways on a numeric field's label changes the field's value.	Kéo sang ngang trên nhãn của một trường số sẽ thay đổi giá trị của trường.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Cử chỉ xoay bằng hai ngón trên bàn di chuột sẽ xoay khung nhìn của khung vẽ.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Giữ phím tắt của một công cụ sẽ chọn công cụ đó cho đến khi bạn thả ra, rồi công cụ trước đó được chọn lại.

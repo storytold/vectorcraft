@@ -3009,7 +3009,7 @@ digits	Malayalam	Malayalam
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Dynamiska hörnradier skalas med grafiken, om inte skalningen väljer annat.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Konturtjocklekar, streck och effektavstånd skalas med grafiken, om inte skalningen väljer annat.
 	The mouse wheel zooms the canvas instead of scrolling it.	Mushjulet zoomar arbetsytan i stället för att rulla den.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Medan Zooma med mushjulet är av rullar mushjulet med Cmd/Ctrl nedtryckt arbetsytan i sidled.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Mushjulet med Cmd/Ctrl nedtryckt rullar arbetsytan i sidled.
 	Dragging sideways on a numeric field's label changes the field's value.	Att dra i sidled på ett sifferfälts etikett ändrar fältets värde.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	En rotationsgest med två fingrar på en styrplatta roterar arbetsytans vy.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	När du håller ned ett verktygs kortkommando är verktyget valt tills du släpper, och sedan väljs det föregående verktyget igen.

@@ -4180,7 +4180,7 @@ font-technology	Variable	Variabel
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Radius sudut dinamis ikut diskalakan dengan karya seni, kecuali penskalaan memilih lain.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Ketebalan stroke, garis putus, dan jarak efek ikut diskalakan dengan karya seni, kecuali penskalaan memilih lain.
 	The mouse wheel zooms the canvas instead of scrolling it.	Roda mouse melakukan zum pada kanvas, bukan menggulirnya.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Selama Zum dengan roda mouse nonaktif, roda mouse dengan Cmd/Ctrl ditahan menggulir kanvas ke samping.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Roda mouse dengan Cmd/Ctrl ditahan menggulir kanvas ke samping.
 	Dragging sideways on a numeric field's label changes the field's value.	Menyeret ke samping pada label bidang angka mengubah nilai bidang itu.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gerakan putar dua jari pada trackpad memutar tampilan kanvas.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Menahan tombol pintasan alat memilih alat itu sampai Anda melepasnya, lalu alat sebelumnya dipilih lagi.

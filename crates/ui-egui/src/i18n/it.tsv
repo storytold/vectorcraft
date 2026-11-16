@@ -3120,7 +3120,7 @@ digits	Malayalam	Malayalam
 	Live corner radii scale with the art, unless the scale chooses otherwise.	I raggi degli angoli dinamici si ridimensionano con la grafica, a meno che il ridimensionamento scelga diversamente.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Spessori delle tracce, trattini e distanze degli effetti si ridimensionano con la grafica, a meno che il ridimensionamento scelga diversamente.
 	The mouse wheel zooms the canvas instead of scrolling it.	La rotellina del mouse esegue lo zoom dell'area di lavoro invece di scorrerla.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Finché Zoom con la rotellina del mouse è disattivato, la rotellina con Cmd/Ctrl premuto scorre l'area di lavoro in orizzontale.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La rotellina del mouse con Cmd/Ctrl premuto scorre l'area di lavoro in orizzontale.
 	Dragging sideways on a numeric field's label changes the field's value.	Trascinare in orizzontale sull'etichetta di un campo numerico ne cambia il valore.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gesto di rotazione con due dita sul trackpad ruota la vista dell'area di lavoro.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Tenere premuta la scorciatoia di uno strumento lo sceglie finché non la rilasci, poi viene scelto di nuovo lo strumento precedente.

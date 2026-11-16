@@ -3109,7 +3109,7 @@ digits	Malayalam	Малаялам
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Радиусы динамических углов масштабируются вместе с графикой, если масштабирование не задаёт иное.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Толщина обводок, штрихи и расстояния эффектов масштабируются вместе с графикой, если масштабирование не задаёт иное.
 	The mouse wheel zooms the canvas instead of scrolling it.	Колесо мыши масштабирует холст, а не прокручивает его.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Пока «Масштабировать колесом мыши» выключено, колесо мыши с нажатой Cmd/Ctrl прокручивает холст по горизонтали.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колесо мыши с нажатой Cmd/Ctrl прокручивает холст по горизонтали.
 	Dragging sideways on a numeric field's label changes the field's value.	Перетаскивание по подписи числового поля в сторону меняет значение поля.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест поворота двумя пальцами на трекпаде поворачивает вид холста.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Пока вы удерживаете клавишу инструмента, он остаётся выбранным, а после отпускания снова выбирается предыдущий инструмент.

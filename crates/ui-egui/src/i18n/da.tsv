@@ -6903,7 +6903,7 @@ font-technology	Variable	Variable
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Live-hjørneradier skaleres med grafikken, medmindre skaleringen vælger andet.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Stregtykkelser, streger i stiplede linjer og effektafstande skaleres med grafikken, medmindre skaleringen vælger andet.
 	The mouse wheel zooms the canvas instead of scrolling it.	Musehjulet zoomer lærredet i stedet for at rulle det.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Mens Zoom med musehjul er slået fra, ruller musehjulet med Cmd/Ctrl holdt nede lærredet sidelæns.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Musehjulet med Cmd/Ctrl holdt nede ruller lærredet sidelæns.
 	Dragging sideways on a numeric field's label changes the field's value.	Når du trækker sidelæns på et talfelts etiket, ændres feltets værdi.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	En rotationsbevægelse med to fingre på en pegeplade roterer visningen af lærredet.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Når du holder et værktøjs genvejstast nede, er værktøjet valgt, indtil du slipper, og derefter vælges det forrige værktøj igen.

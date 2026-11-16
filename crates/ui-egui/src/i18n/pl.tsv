@@ -4370,7 +4370,7 @@ font-technology	Variable	Zmienne
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Promienie narożników dynamicznych skalują się razem z grafiką, chyba że skalowanie wybierze inaczej.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Grubości obrysów, kreski i odległości efektów skalują się razem z grafiką, chyba że skalowanie wybierze inaczej.
 	The mouse wheel zooms the canvas instead of scrolling it.	Kółko myszy powiększa obszar roboczy zamiast go przewijać.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Gdy Powiększaj kółkiem myszy jest wyłączone, kółko myszy z wciśniętym Cmd/Ctrl przewija obszar roboczy w poziomie.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Kółko myszy z wciśniętym Cmd/Ctrl przewija obszar roboczy w poziomie.
 	Dragging sideways on a numeric field's label changes the field's value.	Przeciąganie w bok po etykiecie pola liczbowego zmienia wartość pola.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gest obrotu dwoma palcami na gładziku obraca widok obszaru roboczego.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Przytrzymanie skrótu narzędzia wybiera je do momentu puszczenia klawisza, a potem ponownie wybierane jest poprzednie narzędzie.
