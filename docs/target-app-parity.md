@@ -2304,6 +2304,8 @@ PDF export writes a Perceptual linear or radial gradient whose stops are tints o
 
 In these Separation and DeviceN shadings, a white stop linked to a swatch that is not a spot color (a global White swatch, for example) is paper white, 0% of the ink, as an unlinked white stop is, so a gradient of one spot ink and such a stop stays a Separation shading; a stop linked to a white spot color stays a stop of that ink (VectorCraft's own rule). Test: `engine::tests::linked_stops::white_stops_linked_to_process_swatches_are_paper_in_spot_gradients`.
 
+Legacy `.ai` export writes a Perceptual gradient as it writes a gradient mixed around the hue wheel: the colors on its curve become stops of their own, in process colors, at most 256, in a gradient definition of their own rather than the gradient swatch's, with a warning. In a legacy `.ai` gradient definition, each color stop holds only its color, midpoint and position (`colorSpec colorStyle midPoint rampPoint %_Bs`, [File Format Specification §3.5.2](https://web.archive.org/web/20050126105313/https://partners.adobe.com/public/developer/en/illustrator/sdk/AI7FileFormat.pdf#page=41)). VectorCraft's legacy `.ai` reader opens such a gradient as a Classic gradient and mixes the stop colors directly. Spot color stops lose their inks, as they do in EPS (VectorCraft's own rule). Test: `eps::legacy_ai::tests::perceptual_gradients_are_written_with_the_stops_on_their_curve`.
+
 ## Artwork Cleanup add-on (2026-10-30)
 
 A VectorCraft addition, not a feature of the reference app, so no area score moves. Object › Plug-ins › Artwork Cleanup and its

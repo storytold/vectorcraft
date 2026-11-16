@@ -1633,7 +1633,8 @@ its noise). PDF exports write it the same way, except for a linear, radial, coni
 stops whose other stops are all paper white or written in CMYK or gray, that is not a dithered fill and whose curve
 does not have too many stops (a diamond as four such shadings). An export that converts colors to a CMYK destination profile writes RGB and Lab stops in CMYK, and so does a
 CMYK document unless the export converts colors to an RGB destination profile. PDF writes tints of one spot ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK
-or gray inks as a DeviceN shading.
+or gray inks as a DeviceN shading. A legacy `.ai` file gets the colors between a Perceptual gradient's stops as stops
+of their own, in process colors (at most 256, with a warning).
 `hue-clockwise` and `hue-counterclockwise` (VectorCraft's own methods) mix a linear, radial, conic or diamond
 gradient's colors around the hue wheel: hue, saturation and brightness each change evenly from one stop to the next.
 With `hue-clockwise` the hue angle falls (red, magenta, blue, cyan, green, yellow, red), which is clockwise on the

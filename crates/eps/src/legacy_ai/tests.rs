@@ -238,6 +238,81 @@ fn hue_wheel_gradients_are_written_with_the_stops_on_their_curve() {
     }
 }
 
+/// The written definition of the gradient named `name` in `text`, and how many stops it holds.
+fn definition<'a>(text: &'a str, name: &str) -> (&'a str, usize) {
+    let def = text.split(&format!("%AI5_BeginGradient: ({name})\n")).nth(1).and_then(|d| d.split("%AI5_EndGradient").next()).unwrap();
+    (def, def.matches(" %_Bs\n").count())
+}
+
+/// The format's gradients mix their stops' colors directly: a Perceptual gradient is written in
+/// process colors with the colors on its curve as stops, no more than the reader reads, in a
+/// definition of its own rather than its swatch's, with a warning, and opens with the colors it
+/// had. A Classic gradient keeps its own stops and gives no warning.
+#[test]
+fn perceptual_gradients_are_written_with_the_stops_on_their_curve() {
+    use vectorcraft_color::{GradientMethod, Swatch};
+    let mut doc = Document::new(200.0, 100.0);
+    for (name, color) in [("Night", Color::cmyk(1.0, 1.0, 0.0, 0.0)), ("Sun", Color::cmyk(0.0, 0.0, 1.0, 0.0))] {
+        doc.swatches.push(Swatch { name: name.into(), paint: Paint::solid(color), global: true, spot: true });
+    }
+    let stop = |offset: f32, color: Color, swatch: &str| GradientStop { swatch: Some(swatch.into()), ..GradientStop::new(offset, color) };
+    let stops = vec![stop(0.0, Color::cmyk(1.0, 1.0, 0.0, 0.0), "Night"), stop(1.0, Color::cmyk(0.0, 0.0, 1.0, 0.0), "Sun")];
+    let mut g = GradientPaint::new(Gradient { method: GradientMethod::Perceptual, ..Gradient::new(GradientKind::Linear, stops) });
+    g.swatch = Some("Dusk".into());
+    let want = g.gradient.clone();
+    // The same stops mixed directly stray from the Perceptual curve, so a file holding only the
+    // two stops would not open with the colors it had.
+    let classic = Gradient { method: GradientMethod::Classic, ..want.clone() };
+    assert!(
+        (0..=100).any(|k| {
+            let t = k as f32 / 100.0;
+            want.sample(t).0.to_rgb().iter().zip(classic.sample(t).0.to_rgb()).any(|(a, b)| (a - b).abs() > 0.05)
+        }),
+        "the methods mix alike"
+    );
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Paint::Gradient(Box::new(g)), Paint::None);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == PERCEPTUAL_STOPS), "{:?}", out.warnings);
+    assert!(!out.warnings.iter().any(|w| w == HUE_STOPS), "{:?}", out.warnings);
+    let text = String::from_utf8_lossy(&out.bytes).into_owned();
+    assert!(!text.contains("(Dusk)"), "the curve is not the swatch's gradient");
+    assert!(!text.contains("(Night)") && !text.contains("(Sun)"), "the stops are process colors: {text}");
+    let (_, written) = definition(&text, "Gradient");
+    assert!((3..=crate::import::MAX_GRADIENT_STOPS).contains(&written), "{written} stops");
+    let read = crate::import(&out.bytes).unwrap().document;
+    let mut back = None;
+    read.walk(|n| {
+        if let (None, Paint::Gradient(g)) = (&back, n.appearance.fill_paint()) {
+            back = Some(g.gradient.clone());
+        }
+    });
+    let back = back.unwrap();
+    assert!(back.method.is_classic());
+    assert_eq!(back.stops.len(), written, "every stop written is read");
+    assert!(back.stops.iter().all(|s| s.swatch.is_none()), "{:?}", back.stops);
+    for k in 0..=100 {
+        let t = k as f32 / 100.0;
+        let (a, b) = (want.sample(t).0.to_rgb(), back.sample(t).0.to_rgb());
+        assert!(a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.03), "at {t}: {a:?} vs {b:?}");
+    }
+
+    // Classic: its own two stops, its spot colors and its swatch's name, without the warning.
+    let mut doc = Document::new(200.0, 100.0);
+    doc.swatches.push(Swatch { name: "Night".into(), paint: Paint::solid(Color::cmyk(1.0, 1.0, 0.0, 0.0)), global: true, spot: true });
+    let mut g = GradientPaint::new(classic);
+    g.swatch = Some("Dusk".into());
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Paint::Gradient(Box::new(g)), Paint::None);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let out = write(&doc);
+    assert!(!out.warnings.iter().any(|w| w == PERCEPTUAL_STOPS), "{:?}", out.warnings);
+    let text = String::from_utf8_lossy(&out.bytes).into_owned();
+    assert_eq!(definition(&text, "Dusk").1, 2);
+    assert!(text.contains("%%DocumentCustomColors: (Night)"), "{text}");
+}
+
 /// A radial gradient repeated out from a center far from the shape is written with its ramp points
 /// (percent) to five decimals, so its runs keep their places hundreds of runs out.
 #[test]
