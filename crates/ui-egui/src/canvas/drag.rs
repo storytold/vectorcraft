@@ -325,6 +325,9 @@ pub(super) fn drag_art_out(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response,
 /// panel that takes the art ([`widgets::PanelDrag::Art`]) takes it where it was, and no move is
 /// left open (#2826). The art stays where it last moved while the pointer is over the panel.
 pub(crate) fn release_over_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    // A floating window's pane, or the main window's while the current window floats, takes the
+    // art first.
+    super::release_on_noted(app, ctx);
     crate::document_drag::cleanup(app, ctx);
     let art = matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Art));
     // Over a floating panel's own OS window the pointer is gone from this window, and the release

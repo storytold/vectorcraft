@@ -65,7 +65,7 @@ pub use overlays::SharedPaths;
 use overlays::selected_anchor;
 use overlays::{HandleLook, blend_widgets_overlay, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
 pub use panes::Panes;
-pub(crate) use panes::{consolidate, pane, tile, tiled_area};
+pub(crate) use panes::{consolidate, note_drop, noted_cursor, pane, release_on_noted, tile, tiled_area};
 use raster::{changed_pixels, frame_ppp, pixel_region, upload};
 pub(crate) use raster::{color_image, color_image_owned, render_job};
 pub use selection_marks::SelectionMarks;

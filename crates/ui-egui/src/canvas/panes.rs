@@ -308,6 +308,52 @@ fn artwork_over(app: &mut VectorcraftApp, ui: &Ui, w: Win, area: egui::Rect) -> 
     Some(Over::Released(at, crate::document_drag::take_for_pane(app, ui.ctx())?))
 }
 
+/// Note window `w`'s pane, drawn in `cell` of `ui` outside Tile (a floating window inside the main
+/// window, or the main window while the current window floats), as a place a Selection drag's
+/// artwork can be released in ([`release_on_noted`]): the part inside its rulers and scroll bars.
+pub(crate) fn note_drop(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) {
+    let Some(s) = slot(app, w) else { return };
+    let area = view_rects(app, cell, ui.ctx().pixels_per_point()).1;
+    app.canvas.windows.drops.push((s, area, ui.layer_id()));
+}
+
+/// The noted pane ([`note_drop`]) at `p`, where no panel or other window is over it: its window
+/// and its art area.
+fn noted_at(app: &VectorcraftApp, ctx: &egui::Context, p: egui::Pos2) -> Option<(Win, egui::Rect)> {
+    let top = ctx.layer_id_at(p);
+    let (s, area, _) = app.canvas.windows.drops.iter().rev().find(|(_, area, layer)| area.contains(p) && top.is_none_or(|l| l == *layer))?;
+    let w = crate::doc_windows::windows(app).into_iter().find(|w| slot(app, *w) == Some(*s))?;
+    Some((w, *area))
+}
+
+/// A Selection drag's artwork released over a pane the last frame noted ([`note_drop`]) drops into
+/// its document ([`crate::document_drag::drop_on_pane`]), at the document point under the pointer
+/// in that pane's own view. Runs at the start of a frame, before any canvas sees the release.
+pub(crate) fn release_on_noted(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    if app.canvas.windows.drops.is_empty() || !ctx.input(|i| i.pointer.primary_released()) {
+        return;
+    }
+    let Some(p) = ctx.input(|i| i.pointer.interact_pos()) else { return };
+    let Some((w, area)) = noted_at(app, ctx, p) else { return };
+    let Some(v) = crate::doc_windows::view(app, w).copied() else { return };
+    let at = Xf::at(area, &v, ctx.zoom_factor()).to_doc(p);
+    if let Some(carried) = crate::document_drag::take_for_pane(app, ctx) {
+        crate::document_drag::drop_on_pane(app, ctx, w, at, carried);
+    }
+}
+
+/// While a Selection drag's artwork is held over a pane this frame noted ([`note_drop`]), the cursor
+/// shows whether a release there moves or copies it ([`crate::document_drag::pane_cursor`]).
+pub(crate) fn noted_cursor(app: &VectorcraftApp, ctx: &egui::Context) {
+    let Some(p) = ctx.input(|i| i.pointer.interact_pos()) else { return };
+    if let Some((w, _)) = noted_at(app, ctx, p)
+        && let Some((uid, _)) = slot(app, w)
+        && let Some(c) = crate::document_drag::pane_cursor(app, ctx, uid)
+    {
+        ctx.set_cursor_icon(c);
+    }
+}
+
 /// Window `w`'s [`Slot`].
 fn slot(app: &VectorcraftApp, (i, n): Win) -> Option<Slot> {
     app.session.documents().get(i).map(|d| (d.uid, n))

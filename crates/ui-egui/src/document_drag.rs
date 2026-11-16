@@ -1,5 +1,5 @@
-//! A selection dragged across document tabs, or into another document's tiled pane, remains
-//! editable and leaves its source intact.
+//! A selection dragged across document tabs, or into another document's tiled pane or floating
+//! window, remains editable and leaves its source intact.
 
 use std::sync::Arc;
 

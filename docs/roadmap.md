@@ -203,8 +203,10 @@ on canvas release with the original grab point. Source and clipboard preservatio
 rendering, swatch conflicts, cancellation, rotated/zoomed views and target Undo/Redo have regression
 coverage (`tests_document_drag`, `tests_clipboard`). Under Window › Arrange › Tile, a release over
 another document's pane copies the artwork into that document as well, and a release over another
-view of the source document moves it (`canvas::panes` tests). Overflow-menu drag and drag into a
-floating document window remain separate. Scores and hours unchanged. [Behavior and command details](development.md#drag-artwork-between-document-tabs-2026-10-22).
+view of the source document moves it (`canvas::panes` tests). A release over a floating document
+window drawn inside the main window, or over the main window's pane while the current document
+floats, does the same (`doc_windows` tests); a floating window that is an OS window of its own does
+not take the artwork yet. Overflow-menu drag remains separate. Scores and hours unchanged. [Behavior and command details](development.md#drag-artwork-between-document-tabs-2026-10-22).
 
 ## Revision history
 
