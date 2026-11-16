@@ -6094,6 +6094,9 @@ lighting	Light	광원
 	Continue in Background	백그라운드에서 계속
 	Cancel Export	내보내기 취소
 @msg	Export cancelled	내보내기를 취소했습니다
+	Cancel Save	저장 취소
+@plural	{n} more save waiting|{n} more saves waiting	대기 중인 저장 {n}개 더
+@msg	Save canceled	저장을 취소했습니다
 # Paragraph panel menu › Justification…
 	Desired	희망
 	Word Spacing:	단어 간격:

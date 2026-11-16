@@ -6424,6 +6424,9 @@ mark-style	Japanese	Japonesas
 	Continue in Background	Continuar em Segundo Plano
 	Cancel Export	Cancelar Exportação
 @msg	Export cancelled	Exportação cancelada
+	Cancel Save	Cancelar Salvamento
+@plural	{n} more save waiting|{n} more saves waiting	Mais {n} salvamento aguardando|Mais {n} salvamentos aguardando
+@msg	Save canceled	Salvamento cancelado
 # Paragraph panel menu › Justification…
 	Desired	Desejado
 	Word Spacing:	Espaçamento entre Palavras:

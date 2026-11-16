@@ -6177,6 +6177,9 @@ lighting	Light	ライト
 	Continue in Background	バックグラウンドで続行
 	Cancel Export	書き出しをキャンセル
 @msg	Export cancelled	書き出しをキャンセルしました
+	Cancel Save	保存をキャンセル
+@plural	{n} more save waiting|{n} more saves waiting	待機中の保存: あと {n} 件
+@msg	Save canceled	保存をキャンセルしました
 # Paragraph panel menu › Justification…
 	Desired	最適
 	Word Spacing:	単語間隔:

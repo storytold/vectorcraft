@@ -6366,6 +6366,9 @@ mark-style	Japanese	Japońskie
 	Continue in Background	Kontynuuj w tle
 	Cancel Export	Anuluj eksport
 @msg	Export cancelled	Eksport anulowany
+	Cancel Save	Anuluj zapisywanie
+@plural	{n} more save waiting|{n} more saves waiting	Czeka jeszcze {n} zapis|Czekają jeszcze {n} zapisy|Czeka jeszcze {n} zapisów
+@msg	Save canceled	Zapisywanie anulowane
 # Paragraph panel menu › Justification…
 	Desired	Optymalne
 	Word Spacing:	Odstępy między wyrazami:

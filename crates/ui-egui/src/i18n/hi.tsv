@@ -7085,6 +7085,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	expected {{"objects": [...]}}	अपेक्षित: {{"objects": [...]}}
 @msg	export `{name}`: {e}	निर्यात `{name}`: {e}
 @msg	Export cancelled	निर्यात रद्द
+	Cancel Save	सेव रद्द करना
+@plural	{n} more save waiting|{n} more saves waiting	{n} और सेव प्रतीक्षा में|{n} और सेव प्रतीक्षा में
+@msg	Save canceled	सेव रद्द
 @msg	Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft	स्क्रीन के लिए एक्सपोर्ट png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai या vectorcraft लिखता है
 @msg	export presets file is larger than {MAX_PRESET_FILE_BYTES} bytes	निर्यात प्रीसेट फ़ाइल {MAX_PRESET_FILE_BYTES} bytes से बड़ा है
 @msg	Exported {path}	{path} एक्सपोर्ट किया गया

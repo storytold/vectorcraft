@@ -6492,6 +6492,9 @@ effect	Points	Σημεία
 	Continue in Background	Συνέχεια στο παρασκήνιο
 	Cancel Export	Ακύρωση εξαγωγής
 @msg	Export cancelled	Η εξαγωγή ακυρώθηκε
+	Cancel Save	Ακύρωση αποθήκευσης
+@plural	{n} more save waiting|{n} more saves waiting	{n} ακόμη αποθήκευση σε αναμονή|{n} ακόμη αποθηκεύσεις σε αναμονή
+@msg	Save canceled	Η αποθήκευση ακυρώθηκε
 # Paragraph panel menu › Justification…
 	Desired	Επιθυμητό
 	Word Spacing:	Απόσταση λέξεων:

@@ -6130,6 +6130,9 @@ lighting	Light	Свет
 	Continue in Background	Продолжить в фоне
 	Cancel Export	Отменить экспорт
 @msg	Export cancelled	Экспорт отменён
+	Cancel Save	Отменить сохранение
+@plural	{n} more save waiting|{n} more saves waiting	Ещё {n} сохранение в очереди|Ещё {n} сохранения в очереди|Ещё {n} сохранений в очереди
+@msg	Save canceled	Сохранение отменено
 # Paragraph panel menu › Justification…
 	Desired	Желательно
 	Word Spacing:	Интервал между словами:

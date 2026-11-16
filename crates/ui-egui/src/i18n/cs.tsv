@@ -6512,6 +6512,9 @@ mark-style	Japanese	Japonské
 	Continue in Background	Pokračovat na pozadí
 	Cancel Export	Zrušit export
 @msg	Export cancelled	Export byl zrušen
+	Cancel Save	Zrušit ukládání
+@plural	{n} more save waiting|{n} more saves waiting	Čeká ještě {n} uložení|Čekají ještě {n} uložení|Čeká ještě {n} uložení
+@msg	Save canceled	Ukládání bylo zrušeno
 # Paragraph panel menu › Justification…
 	Desired	Požadované
 	Word Spacing:	Mezery mezi slovy:

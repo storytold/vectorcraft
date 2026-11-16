@@ -1456,6 +1456,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} close the export progress dialog; the exports go on, shown in the status bar → {hidden: n}",
     ),
     (
+        "file.cancelSave",
+        "Cancel Save",
+        "",
+        "{} stop every save running in the background (Background Save) before it replaces its file: the file stays as it was and the document keeps its file and stays modified; a save whose file was already being replaced finishes and is reported as saved → {cancelled: n}",
+    ),
+    (
+        "file.saveInBackground",
+        "Continue in Background",
+        "",
+        "{} close the save progress window; the saves go on, shown in the status bar → {hidden: n}",
+    ),
+    (
         "file.cancelOpen",
         "Cancel Opening",
         "",

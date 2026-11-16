@@ -6507,6 +6507,9 @@ theme	Appearance	Apparence
 	Continue in Background	Continuer en arrière-plan
 	Cancel Export	Annuler l’exportation
 @msg	Export cancelled	Exportation annulée
+	Cancel Save	Annuler l’enregistrement
+@plural	{n} more save waiting|{n} more saves waiting	{n} autre enregistrement en attente|{n} autres enregistrements en attente
+@msg	Save canceled	Enregistrement annulé
 # Paragraph panel menu › Justification…
 	Desired	Optimal
 	Word Spacing:	Espacement des mots :

@@ -6496,6 +6496,9 @@ liquify-list-end	{0}, {1}	{0} és {1}
 	Continue in Background	Folytatás a háttérben
 	Cancel Export	Exportálás megszakítása
 @msg	Export cancelled	Az exportálás megszakítva
+	Cancel Save	Mentés megszakítása
+@plural	{n} more save waiting|{n} more saves waiting	Még {n} mentés várakozik
+@msg	Save canceled	A mentés megszakítva
 # Paragraph panel menu › Justification…
 	Desired	Kívánt
 	Word Spacing:	Szóköz:

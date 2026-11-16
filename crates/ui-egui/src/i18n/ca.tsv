@@ -5887,6 +5887,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	Expand: no gradient fills	Expandeix: no hi ha farciments de degradat
 @msg	Expand: nothing to expand	Expandeix: no hi ha res per expandir
 @msg	Export cancelled	Exportació cancel·lada
+	Cancel Save	Cancel·la el desament
+@plural	{n} more save waiting|{n} more saves waiting	{n} desament més en espera|{n} desaments més en espera
+@msg	Save canceled	Desament cancel·lat
 @msg	Exported {path}	S’ha exportat {path}
 @msg	Exported {what}	S’ha exportat {what}
 @msg	Exporting {_1}	S’està exportant {_1}

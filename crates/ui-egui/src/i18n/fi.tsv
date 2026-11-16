@@ -6502,6 +6502,9 @@ mark-style	Japanese	Japanilainen
 	Continue in Background	Jatka taustalla
 	Cancel Export	Peruuta vienti
 @msg	Export cancelled	Vienti peruutettiin
+	Cancel Save	Peruuta tallennus
+@plural	{n} more save waiting|{n} more saves waiting	{n} tallennus odottaa|{n} tallennusta odottaa
+@msg	Save canceled	Tallennus peruutettiin
 # Paragraph panel menu › Justification…
 	Desired	Haluttu
 	Word Spacing:	Sanaväli:

@@ -8618,6 +8618,9 @@ swatch	Bright Violet	Felviolet
 	Continue in Background	Doorgaan op achtergrond
 	Cancel Export	Export annuleren
 @msg	Export cancelled	Export geannuleerd
+	Cancel Save	Opslaan annuleren
+@plural	{n} more save waiting|{n} more saves waiting	Nog {n} opslagactie in de wachtrij|Nog {n} opslagacties in de wachtrij
+@msg	Save canceled	Opslaan geannuleerd
 # Paragraph panel menu › Justification…
 	Desired	Gewenst
 	Word Spacing:	Woordafstand:

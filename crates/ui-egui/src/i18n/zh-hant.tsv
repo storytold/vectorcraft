@@ -6146,6 +6146,9 @@ lighting	Light	光源
 	Continue in Background	在背景繼續
 	Cancel Export	取消匯出
 @msg	Export cancelled	已取消匯出
+	Cancel Save	取消儲存
+@plural	{n} more save waiting|{n} more saves waiting	另有 {n} 個儲存等待中
+@msg	Save canceled	已取消儲存
 # Paragraph panel menu › Justification…
 	Desired	所需
 	Word Spacing:	字間距：

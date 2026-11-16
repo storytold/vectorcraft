@@ -6552,6 +6552,9 @@ swatch	Yellow Green	Gulgrön
 	Continue in Background	Fortsätt i bakgrunden
 	Cancel Export	Avbryt export
 @msg	Export cancelled	Exporten avbröts
+	Cancel Save	Avbryt sparande
+@plural	{n} more save waiting|{n} more saves waiting	{n} sparande till väntar|{n} sparanden till väntar
+@msg	Save canceled	Sparandet avbröts
 # Paragraph panel menu › Justification…
 	Desired	Önskat
 	Word Spacing:	Ordavstånd:

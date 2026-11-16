@@ -9,6 +9,10 @@
 //! are on disk, and the error names them. Where that copy of the old file can't be made, the file
 //! is left as it was and the save fails.
 //!
+//! Work canceled ([`vectorcraft_doc::cancel`]) by the time the temporary file is written and flushed
+//! puts nothing in place: the temporary file is removed, the file stays as it was (or absent), and
+//! the error wraps [`vectorcraft_doc::cancel::Cancelled`].
+//!
 //! On macOS `File::sync_all` is a full flush (`F_FULLFSYNC`), which SMB shares refuse with
 //! `ENOTSUP` and virtiofs shares (folders shared into a macOS VM) with `ENOTTY`, while a plain
 //! `fsync` works: [`sync_file`] falls back to the plain one there (#1620).
@@ -43,7 +47,8 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
 }
 
 /// Write `path` atomically with `fill`, which writes the content into the temporary file. When
-/// `fill` or flushing fails the temporary file is removed and `path` is left untouched. When the
+/// `fill` or flushing fails, or the work was canceled meanwhile ([`vectorcraft_doc::cancel`]), the
+/// temporary file is removed and `path` is left untouched. When the
 /// folder refuses the temporary file or the rename, the content is copied into `path` instead (see
 /// the module docs).
 pub fn write_atomic_with(path: &Path, fill: impl FnOnce(&mut File) -> io::Result<()>) -> io::Result<()> {
@@ -79,7 +84,7 @@ fn write_atomic_stepping(
             (tmp, f, Some(e))
         }
     };
-    let filled = fill(&mut f).and_then(|()| sync_file(&f));
+    let filled = fill(&mut f).and_then(|()| sync_file(&f)).and_then(|()| not_cancelled());
     drop(f);
     if let Err(e) = filled {
         // Best effort: the temporary file is all there is to clean up.
@@ -176,7 +181,7 @@ fn write_new_linking(
 ) -> io::Result<()> {
     let tmp = temp_path(path)?;
     let mut f = OpenOptions::new().write(true).create_new(true).open(&tmp)?;
-    let filled = fill(&mut f).and_then(|()| sync_file(&f));
+    let filled = fill(&mut f).and_then(|()| sync_file(&f)).and_then(|()| not_cancelled());
     drop(f);
     let placed = filled.and_then(|()| match link(&tmp, path) {
         Err(e) if e.kind() != io::ErrorKind::AlreadyExists => copy_new(&tmp, path),
@@ -185,6 +190,12 @@ fn write_new_linking(
     // Best effort: the temporary file is all there is to clean up.
     let _ = std::fs::remove_file(&tmp);
     placed
+}
+
+/// `Err` wrapping [`vectorcraft_doc::cancel::Cancelled`] when the work running on this thread has
+/// been canceled: the last check before a written temporary file is put in place.
+fn not_cancelled() -> io::Result<()> {
+    vectorcraft_doc::cancel::check().map_err(io::Error::other)
 }
 
 /// Create `path` (never replacing anything) with the content of the file `from`; a failed copy
@@ -405,6 +416,39 @@ mod tests {
         assert_eq!(staging_mode, 0o600, "the staging file must not be group or world readable");
         assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
         assert_eq!(std::fs::read(&path).unwrap(), b"new");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Work canceled by the time the temporary file is written and flushed puts nothing in place:
+    /// the old file stays as it was, also where the folder refuses the rename (no copy over it), a
+    /// new file is not created, and no temporary file is left.
+    #[test]
+    fn canceled_work_puts_nothing_in_place() {
+        use vectorcraft_doc::cancel::{CancelToken, Cancelled, scope};
+        fn cancelled(e: &io::Error) -> bool {
+            e.get_ref().is_some_and(|e| e.is::<Cancelled>())
+        }
+        let d = dir("cancel");
+        let path = d.join("doc.vectorcraft");
+        std::fs::write(&path, b"original").unwrap();
+        let token = CancelToken::new();
+        let r = scope(&token, None, || {
+            write_atomic_with(&path, |f| {
+                f.write_all(b"new")?;
+                token.cancel();
+                Ok(())
+            })
+        });
+        assert!(r.as_ref().is_err_and(cancelled), "{r:?}");
+        let refused = |_: &Path, _: &Path| -> io::Result<()> { Err(io::Error::from(io::ErrorKind::PermissionDenied)) };
+        let r = scope(&token, None, || write_atomic_stepping(&path, |f| f.write_all(b"new"), create_new, refused));
+        assert!(r.as_ref().is_err_and(cancelled), "{r:?}");
+        assert_eq!(std::fs::read(&path).unwrap(), b"original");
+        let new = d.join("new.vectorcraft");
+        let r = scope(&token, None, || write_new_with(&new, |f| f.write_all(b"new")));
+        assert!(r.as_ref().is_err_and(cancelled), "{r:?}");
+        assert!(!new.exists());
+        assert!(leftovers(&d, "doc.vectorcraft").is_empty(), "{:?}", leftovers(&d, "doc.vectorcraft"));
         let _ = std::fs::remove_dir_all(&d);
     }
 

@@ -6622,6 +6622,9 @@ theme	Appearance	Görünüm
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Düz Logo modu görüntüyü {_3} × {_4} boyutundan ortalama alarak küçültüp {_1} × {_2} pikselde izledi.
 @plural	{n} more export waiting|{n} more exports waiting	{n} dışa aktarma daha bekliyor|{n} dışa aktarma daha bekliyor
 @msg	Export cancelled	Dışa aktarma iptal edildi
+	Cancel Save	Kaydetmeyi İptal Et
+@plural	{n} more save waiting|{n} more saves waiting	{n} kaydetme daha bekliyor|{n} kaydetme daha bekliyor
+@msg	Save canceled	Kaydetme iptal edildi
 	Add filters from the list above	Yukarıdaki listeden filtre ekleyin
 	Add to Stack	Yığına Ekle
 	Applied Filters	Uygulanan Filtreler

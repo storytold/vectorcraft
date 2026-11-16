@@ -3094,10 +3094,11 @@ mod tests {
         assert_eq!(shown("file.new"), Some(("File".into(), "New…".into(), true)));
         assert_eq!(shown("text.fitHeadline"), Some(("Type".into(), "Fit Headline".into(), false)));
         assert_eq!(shown("type.fitHeadline"), Some(("Type".into(), "Fit Headline".into(), true)));
-        for id in ["file.exportInBackground", "file.openInBackground"] {
+        for id in ["file.exportInBackground", "file.openInBackground", "file.saveInBackground"] {
             assert_eq!(shown(id), Some(("File".into(), "Continue in Background".into(), true)), "{id}");
         }
         assert_eq!(shown("file.cancelExport"), Some(("File".into(), "Cancel Export".into(), false)));
+        assert_eq!(shown("file.cancelSave"), Some(("File".into(), "Cancel Save".into(), false)));
         let e = entry("type.fitHeadline").unwrap();
         assert!(shown_name(&e).ends_with("Fit Headline (type.fitHeadline)"), "{}", shown_name(&e));
         assert!(row_matches(&e, "type.fitheadline", None));

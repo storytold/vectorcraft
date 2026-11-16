@@ -6063,6 +6063,9 @@ theme	Appearance	Външен вид
 	Continue in Background	Продължаване във фонов режим
 	Cancel Export	Отказ от експортирането
 @msg	Export cancelled	Експортирането е отказано
+	Cancel Save	Отказ от записването
+@plural	{n} more save waiting|{n} more saves waiting	Още {n} записване в изчакване|Още {n} записвания в изчакване
+@msg	Save canceled	Записването е отказано
 # Paragraph panel menu › Justification…
 	Desired	Желано
 	Word Spacing:	Разстояние между думите:

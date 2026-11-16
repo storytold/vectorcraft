@@ -6141,6 +6141,9 @@ liquify-list-end	{0}, {1}	{0} và {1}
 	Continue in Background	Tiếp tục trong nền
 	Cancel Export	Hủy xuất
 @msg	Export cancelled	Đã hủy xuất
+	Cancel Save	Hủy lưu
+@plural	{n} more save waiting|{n} more saves waiting	Còn {n} lượt lưu đang chờ
+@msg	Save canceled	Đã hủy lưu
 # Paragraph panel menu › Justification…
 	Desired	Mong muốn
 	Word Spacing:	Khoảng cách từ:

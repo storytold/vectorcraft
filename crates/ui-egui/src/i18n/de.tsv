@@ -6094,6 +6094,9 @@ effect	Soft	Weich
 	Continue in Background	Im Hintergrund fortsetzen
 	Cancel Export	Export abbrechen
 @msg	Export cancelled	Export abgebrochen
+	Cancel Save	Speichern abbrechen
+@plural	{n} more save waiting|{n} more saves waiting	{n} weiterer Speichervorgang wartet|{n} weitere Speichervorgänge warten
+@msg	Save canceled	Speichern abgebrochen
 # Paragraph panel menu › Justification…
 	Desired	Optimal
 	Word Spacing:	Wortabstand:
