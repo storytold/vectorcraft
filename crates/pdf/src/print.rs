@@ -218,15 +218,16 @@ fn separation_overprint_black(doc: &mut Document, set: &PrintSettings) {
 /// Replace each symbol instance in `doc`'s layers and patterns whose own fill or stroke changes
 /// ([`vectorcraft_doc::symbol_overrides::SymbolOverride`]) or fill stain repaint its symbol's art
 /// ([`repaints`]), or whose symbol's art holds such an instance at any depth, with that art as
-/// the instance prints it ([`Placing::instance`]). The symbols' own art stays as it is, and so do
-/// hidden objects and template layers. Once the layers and patterns, with the art placed for
-/// symbols already, hold [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects, the remaining instances
-/// stay as they are, and so do instances whose art would draw deeper than
-/// [`vectorcraft_doc::depth::MAX_DRAWN_DEPTH`].
+/// the instance prints it ([`Placing::instance`]). Then the same is done inside the art of the
+/// symbols type shows as inline graphics ([`inline_symbols`]), which draw their symbol's art as it
+/// is; the other symbols' own art stays as it is, and so do hidden objects and template layers.
+/// Once the layers and patterns, with the art placed for symbols already, hold
+/// [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects, the remaining instances stay as they are, and so
+/// do instances whose art would draw deeper than [`vectorcraft_doc::depth::MAX_DRAWN_DEPTH`].
 fn place_repainted_instances(doc: &mut Document) {
     let holders = repainting_symbols(doc);
     let art = || doc.layers.iter().chain(doc.patterns.iter().flat_map(|p| p.art.iter()));
-    if !art().any(|n| holds_repaint(n, &holders)) {
+    if holders.is_empty() && !art().any(|n| holds_repaint(n, &holders)) {
         return;
     }
     let held = art().map(|n| n.count_with_masks() as u64).fold(0u64, u64::saturating_add);
@@ -251,9 +252,42 @@ fn place_repainted_instances(doc: &mut Document) {
             }
         }
         if !changed {
+            break;
+        }
+    }
+    let inline = inline_symbols(doc);
+    for _ in 0..=vectorcraft_doc::depth::MAX_DRAWN_DEPTH {
+        let mut changed = false;
+        for i in 0..doc.symbols.len() {
+            if inline.contains(&doc.symbols[i].name)
+                && let Some(art) = placing.subtree(doc, &doc.symbols[i].art, 1)
+            {
+                doc.symbols[i].art = art;
+                changed = true;
+            }
+        }
+        if !changed {
             return;
         }
     }
+}
+
+/// The names of the symbols that type in `doc` shows as inline graphics, in its layers, symbols
+/// and patterns.
+fn inline_symbols(doc: &Document) -> HashSet<String> {
+    fn visit(n: &Node, out: &mut HashSet<String>) {
+        if let NodeKind::Text(t) = &n.kind {
+            out.extend(t.runs.iter().filter_map(|r| r.inline.as_ref()).map(|i| i.symbol.clone()));
+        }
+        for c in n.children().into_iter().flatten() {
+            visit(c, out);
+        }
+    }
+    let mut out = HashSet::new();
+    for n in doc.layers.iter().chain(doc.symbols.iter().map(|s| &s.art)).chain(doc.patterns.iter().flat_map(|p| p.art.iter())) {
+        visit(n, &mut out);
+    }
+    out
 }
 
 /// Does symbol instance `n` repaint its symbol's art: with its own fill or stroke changes, or with
@@ -574,7 +608,7 @@ pub fn plan<'a>(doc: &'a Document, opts: &PrintOptions) -> Result<PrintPlan<'a>,
     let job = Job::new(doc, set, opts.postscript)?;
     let title = opts.title.clone().unwrap_or_else(|| job.doc.title.clone());
     let created = opts.created.or_else(vectorcraft_doc::metadata::output_time);
-    let sep = Separator::new(&job.doc, set);
+    let sep = Separator::new(&job.doc, set, opts.postscript);
     let plates: Vec<Document> = (0..job.plates.len()).filter_map(|p| job.ink(Some(p))).map(|i| sep.plate(&i.name)).collect();
     let marks = set.marks.printer_marks();
     let sheets = job

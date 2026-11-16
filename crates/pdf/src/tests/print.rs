@@ -723,6 +723,29 @@ fn overprint_black_keeps_the_cyan_under_near_and_freeform_blacks_on_postscript_p
 }
 
 #[test]
+fn an_overprinting_fill_keeps_its_faint_ink_on_pdf_plates() {
+    // 0.4% cyan beside 100% K, set to overprint: a PDF plate draws it with Darken, a PostScript
+    // plate draws it as nothing (it has no blending modes).
+    let mut square = Node::path(
+        vectorcraft_doc::NodeId(0),
+        shapes::rectangle(Rect::new(10.0, 15.0, 30.0, 35.0)),
+        Appearance::basic(Paint::solid(Color::cmyk(0.004, 0.0, 0.0, 1.0)), Paint::None, 0.0),
+    );
+    if let Some(f) = square.appearance.fill_mut() {
+        f.overprint = true;
+    }
+    let d = over_cyan(vec![square]);
+    let fills = |postscript: bool| {
+        let opts = PrintOptions { settings: settings(json!({"output": {"mode": "separations"}})), postscript, ..Default::default() };
+        let p = plan(&d, &opts).unwrap();
+        let mut count = 0;
+        p.plates[0].walk(|n| count += usize::from(n.appearance.fill().is_some_and(|f| !f.paint.is_none())));
+        count
+    };
+    assert_eq!((fills(false), fills(true)), (2, 1), "the cyan plate as PDF, as PostScript");
+}
+
+#[test]
 fn overprinting_type_leaves_the_inks_below_on_separations() {
     let style = vectorcraft_doc::CharStyle { fill: Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)), ..Default::default() };
     let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(20.0, 60.0), "Hi", style);
@@ -780,6 +803,30 @@ fn overprint_black_follows_a_symbol_instances_own_fill_on_separations() {
     assert!(!inked(50), "a black symbol's instance painted magenta knocks the cyan out");
     assert!(inked(160), "the instance painted black inside another symbol's art overprints too");
     assert!(!d.symbols.iter().any(|s| s.art.has_overprint()), "the document keeps its own settings");
+}
+
+#[test]
+fn overprint_black_follows_instance_paints_in_inline_graphics() {
+    use vectorcraft_doc::symbol_overrides::SymbolOverride;
+    // Type shows symbol "Holder" inline; its art is an instance of a black symbol painted magenta.
+    let k = Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    let r = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+    let mut inst = Node::new(vectorcraft_doc::NodeId(0), NodeKind::SymbolInstance { symbol: "Black".into(), xf: Default::default() });
+    let magenta = Paint::solid(Color::cmyk(0.0, 1.0, 0.0, 0.0));
+    inst.extras_mut().symbol_overrides = vec![SymbolOverride { path: vec![], fill: Some(magenta), ..Default::default() }];
+    let mut text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(20.0, 60.0), "Hi", Default::default());
+    text.runs.push(vectorcraft_doc::TextRun::inline(vectorcraft_doc::InlineArt::new("Holder"), Default::default()));
+    let mut d = over_cyan(vec![Node::new(vectorcraft_doc::NodeId(0), NodeKind::Text(Box::new(text)))]);
+    let black = Arc::new(Node::path(vectorcraft_doc::NodeId(0), r, Appearance::basic(k, Paint::None, 0.0)));
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: true, name: "Black".into(), art: black });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Holder".into(), art: Arc::new(inst) });
+    let printed = printed_document(&d, &settings(json!({"output": {"mode": "separations", "overprintBlack": true}})));
+    let holder = printed.symbols.iter().find(|s| s.name == "Holder").unwrap();
+    let mut instances = 0;
+    holder.art.walk(&mut |n: &Node| instances += usize::from(matches!(n.kind, NodeKind::SymbolInstance { .. })));
+    assert_eq!(instances, 0, "the instance is placed as the art it prints");
+    assert!(!holder.art.has_overprint(), "its magenta fill knocks out");
+    assert!(matches!(d.symbols[1].art.kind, NodeKind::SymbolInstance { .. }), "the document keeps its art");
 }
 
 #[test]
