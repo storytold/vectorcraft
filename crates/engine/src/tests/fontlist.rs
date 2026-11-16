@@ -51,8 +51,28 @@ fn similar_fonts_lists_every_family_by_likeness() {
     // Other tests running at the same time add and remove composite fonts; the installed families are compared.
     let installed_only = |list: &[String]| list.iter().filter(|f| db.has_installed_family(f)).cloned().collect::<Vec<_>>();
     assert_eq!(installed_only(&sorted), installed_only(&listed), "every family once");
-    let two = s.execute("text.similarFonts", &json!({"family": "Source Sans 3", "limit": 2})).unwrap();
-    assert_eq!(names(&two["families"]), order[..2]);
+    // The two answers are compared whole when the available fonts did not change while both were
+    // made (the same `FontDb::generation`), and by their installed families when they changed
+    // during every try.
+    let mut answers = (vec![], vec![], false);
+    for _ in 0..20 {
+        let generation = db.generation();
+        let all = names(&s.execute("text.similarFonts", &json!({"family": "Source Sans 3"})).unwrap()["families"]);
+        let two = names(&s.execute("text.similarFonts", &json!({"family": "Source Sans 3", "limit": 2})).unwrap()["families"]);
+        let unchanged = db.generation() == generation;
+        answers = (all, two, unchanged);
+        if unchanged {
+            break;
+        }
+    }
+    let (all, two, unchanged) = answers;
+    assert_eq!(two.len(), 2);
+    if unchanged {
+        assert_eq!(two, all[..2], "the first families, in order");
+    } else {
+        let (two, all) = (installed_only(&two), installed_only(&all));
+        assert_eq!(two[..], all[..two.len()], "the first installed families, in order");
+    }
     for (params, error) in [
         (json!({}), "`family` is required"),
         (json!({"family": " "}), "`family` is required"),
