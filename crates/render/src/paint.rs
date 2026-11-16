@@ -190,12 +190,25 @@ fn drawn_format(bytes: &[u8]) -> Option<craft_image_codecs::Format> {
 /// `bytes` decoded as `format` within `allowance` bytes: the pixels as stored, not turned upright,
 /// as the image crate gave them.
 fn decode_as(format: craft_image_codecs::Format, bytes: &[u8], allowance: u64) -> Result<image::DynamicImage, craft_image_codecs::CodecError> {
+    decode_image(format, bytes, allowance).map(|(img, _)| img)
+}
+
+/// `bytes` decoded as `format` within `allowance` bytes, the pixels as stored (not turned
+/// upright) and as the image crate gave them ([`dynamic`]), with the ICC profile the file embeds.
+/// File › Open and Place read images with it as the renderer does.
+pub fn decode_image(
+    format: craft_image_codecs::Format,
+    bytes: &[u8],
+    allowance: u64,
+) -> Result<(image::DynamicImage, Option<Vec<u8>>), craft_image_codecs::CodecError> {
     let opts = craft_image_codecs::DecodeOptions {
         limits: craft_image_codecs::Limits { max_width: u32::MAX, max_height: u32::MAX, max_pixels: u64::MAX, max_alloc: allowance },
         keep_orientation: true,
     };
-    let img = craft_image_codecs::decode_as_with(format, bytes, &opts)?;
-    dynamic(img).ok_or_else(|| craft_image_codecs::CodecError::InvalidImage("the decoded samples don't fit the image".into()))
+    let mut img = craft_image_codecs::decode_as_with(format, bytes, &opts)?;
+    let icc = img.icc.take();
+    let img = dynamic(img).ok_or_else(|| craft_image_codecs::CodecError::InvalidImage("the decoded samples don't fit the image".into()))?;
+    Ok((img, icc))
 }
 
 /// A decoded image as the image crate's: 8- and 16-bit gray, gray and alpha, RGB and RGBA as they
@@ -224,8 +237,9 @@ fn dynamic(img: craft_image_codecs::Image) -> Option<image::DynamicImage> {
 
 /// The image's size and the bytes a pixel of it takes decoded ([`decode_as`]), read from its
 /// header: palettes as RGB (RGBA with a transparent entry; GIF frames always RGBA), bitmaps as 8-bit
-/// gray, 16-bit samples as two bytes. A PNG whose header alone is there is read from its `IHDR`.
-fn decoded_layout(bytes: &[u8], format: craft_image_codecs::Format) -> Option<(u32, u32, u64)> {
+/// gray, 16-bit samples as two bytes. A PNG whose header alone is there is read from its `IHDR`;
+/// a format whose header says only its size (TGA, ICO and the like) counts RGBA.
+pub fn decoded_layout(bytes: &[u8], format: craft_image_codecs::Format) -> Option<(u32, u32, u64)> {
     use craft_image_codecs::{Format as F, RasterColorType as T};
     if let Some(i) = craft_image_codecs::inspect_raster(bytes).ok().flatten() {
         let deep = i.bits_per_sample > 8 && i.color_type != T::Indexed;
@@ -237,7 +251,10 @@ fn decoded_layout(bytes: &[u8], format: craft_image_codecs::Format) -> Option<(u
         };
         return Some((i.width, i.height, channels * if deep { 2 } else { 1 }));
     }
-    if format != F::Png || bytes.get(12..16)? != b"IHDR" {
+    if format != F::Png {
+        return vectorcraft_doc::header_size(bytes).map(|(w, h)| (w, h, 4));
+    }
+    if bytes.get(12..16)? != b"IHDR" {
         return None;
     }
     let be = |at: usize| Some(u32::from_be_bytes(bytes.get(at..at + 4)?.try_into().ok()?));

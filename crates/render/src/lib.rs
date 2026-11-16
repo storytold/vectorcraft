@@ -20,7 +20,7 @@ mod ink;
 mod live;
 mod lru;
 mod paint;
-pub use paint::{decode_failures, image_decodes, reduced_size};
+pub use paint::{decode_failures, decode_image, decoded_layout, image_decodes, reduced_size};
 mod pattern;
 pub mod placed_document;
 pub mod proof;
