@@ -7146,14 +7146,15 @@ shape	Open	Otvoren
 @msg	A gap between cut lines was closed.	Razmak između linija rezanja je zatvoren.
 @msg	The fold lines are too complex to check.	Linije savijanja su previše složene za provjeru.
 @msg	A cut line and a crease lie on top of each other.	Linija rezanja i linija bigovanja leže jedna preko druge.
-@msg	Two lines of the same role lie on top of each other.	Dvije linije iste vrste leže jedna preko druge.
+@msg	No cut lines are among the given objects.	Među zadanim objektima nema linija rezanja.
+@msg	Two fold lines lie on top of each other.	Dvije linije savijanja leže jedna preko druge.
 @msg	A crease ends inside a panel.	Linija bigovanja završava unutar panela.
 @msg	A crease does not divide two panels.	Linija bigovanja ne razdvaja dva panela.
-@msg	A crease lies outside the cut outline.	Linija bigovanja leži izvan konture rezanja.
-@msg	A crease that is not straight is folded along one straight line.	Linija bigovanja koja nije ravna savija se duž jedne prave linije.
+@msg	A crease lies outside the cut outline, wholly or in part.	Linija bigovanja leži potpuno ili djelimično izvan konture rezanja.
+@msg	The pieces of a hinge are not on one straight line.	Dijelovi jedne šarke ne leže na jednoj pravoj liniji.
 @msg	A gap between cut lines is too narrow to tell apart.	Razmak između linija rezanja je preuzak da bi se razlikovao.
-@msg	A cut-out area holds other fold lines.	Izrezana površina sadrži druge linije savijanja.
+@msg	A cut-out area holds other fold lines or another blank.	Izrezana površina sadrži druge linije savijanja ili drugi kroj.
 @msg	A panel is not joined to the rest by a crease.	Panel nije povezan s ostatkom nijednom linijom bigovanja.
 @msg	A fold line is on a non-printing layer.	Linija savijanja je na sloju koji se ne štampa.
-@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Paneli: {panels}, bigovi: {hinges}, greške: {errors}, upozorenja: {warnings}
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneli: {panels}, šarke: {hinges}, greške: {errors}, upozorenja: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"

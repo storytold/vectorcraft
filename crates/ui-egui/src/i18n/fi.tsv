@@ -8011,14 +8011,15 @@ breakText	Glyphs	Merkit
 @msg	A gap between cut lines was closed.	Leikkausviivojen välinen rako suljettiin.
 @msg	The fold lines are too complex to check.	Taittoviivat ovat liian monimutkaisia tarkistettaviksi.
 @msg	A cut line and a crease lie on top of each other.	Leikkausviiva ja nuuttausviiva ovat päällekkäin.
-@msg	Two lines of the same role lie on top of each other.	Kaksi samantyyppistä viivaa on päällekkäin.
+@msg	No cut lines are among the given objects.	Annetuissa objekteissa ei ole leikkausviivoja.
+@msg	Two fold lines lie on top of each other.	Kaksi taittoviivaa on päällekkäin.
 @msg	A crease ends inside a panel.	Nuuttausviiva päättyy paneelin sisään.
 @msg	A crease does not divide two panels.	Nuuttausviiva ei jaa kahta paneelia.
-@msg	A crease lies outside the cut outline.	Nuuttausviiva on leikkausääriviivan ulkopuolella.
-@msg	A crease that is not straight is folded along one straight line.	Nuuttausviiva, joka ei ole suora, taitetaan yhtä suoraa viivaa pitkin.
+@msg	A crease lies outside the cut outline, wholly or in part.	Nuuttausviiva on kokonaan tai osittain leikkausääriviivan ulkopuolella.
+@msg	The pieces of a hinge are not on one straight line.	Saranan osat eivät ole yhdellä suoralla.
 @msg	A gap between cut lines is too narrow to tell apart.	Leikkausviivojen välinen rako on liian kapea erotettavaksi.
-@msg	A cut-out area holds other fold lines.	Leikattu alue sisältää muita taittoviivoja.
+@msg	A cut-out area holds other fold lines or another blank.	Leikattu alue sisältää muita taittoviivoja tai toisen aihion.
 @msg	A panel is not joined to the rest by a crease.	Paneelia ei ole liitetty muihin millään nuuttausviivalla.
 @msg	A fold line is on a non-printing layer.	Taittoviiva on tasolla, jota ei tulosteta.
-@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Paneelit: {panels}, nuuttaukset: {hinges}, virheet: {errors}, varoitukset: {warnings}
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneelit: {panels}, saranat: {hinges}, virheet: {errors}, varoitukset: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"

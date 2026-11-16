@@ -183,10 +183,10 @@ fn check_fold_lines_lists_its_issues_in_the_panel_until_the_document_changes() {
     assert!(!crate::panel_docking::showing(&app.ui, ID));
     menus::invoke(&mut app, CHECK, item.params.clone());
     assert!(crate::panel_docking::showing(&app.ui, ID), "the panel opens");
-    assert_eq!(app.ui.status, "Panels: 2, creases: 1, errors: 1, warnings: 0");
+    assert_eq!(app.ui.status, "Panels: 2, hinges: 1, errors: 1, warnings: 0");
     let text = frames(&mut app, &ctx, None);
     assert!(text.contains("A cut line ends without meeting another cut line."), "{text}");
-    assert!(text.contains("Panels: 2, creases: 1, errors: 1, warnings: 0") && text.contains("Select"), "{text}");
+    assert!(text.contains("Panels: 2, hinges: 1, errors: 1, warnings: 0") && text.contains("Select"), "{text}");
     // Any change to the document takes the list away.
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 5, "height": 5})).unwrap();
     let text = frames(&mut app, &ctx, None);
@@ -209,7 +209,7 @@ fn the_check_button_checks_and_clicking_an_issue_selects_its_lines() {
     // A clean blank: no issues.
     app.run("edit.clear", json!({})).unwrap();
     let text = frames(&mut app, &ctx, Some("Check"));
-    assert!(text.contains("No issues found.") && text.contains("Panels: 2, creases: 1, errors: 0, warnings: 0"), "{text}");
+    assert!(text.contains("No issues found.") && text.contains("Panels: 2, hinges: 1, errors: 0, warnings: 0"), "{text}");
 }
 
 #[test]
@@ -220,25 +220,27 @@ fn issues_and_the_summary_show_in_the_interface_language() {
     let text = frames(&mut app, &ctx, Some(crate::i18n::t("Check")));
     crate::i18n::set_current(crate::i18n::Lang::EN);
     assert!(!text.contains("A cut line ends") && !text.contains("Panels:"), "{text}");
-    assert!(text.contains("Schnittlinie") && text.contains('2'), "{text}");
+    assert!(text.contains("Eine Schnittlinie endet, ohne auf eine andere Schnittlinie zu treffen."), "{text}");
+    assert!(text.contains("Felder: 2, Scharniere: 1, Fehler: 1, Warnungen: 0"), "{text}");
 }
 
-/// The messages `addon.packaging.check` gives its issues, one for each code (two for `noCut`).
-const ISSUE_MESSAGES: [&str; 16] = [
+/// The messages `addon.packaging.check` gives its issues, one for each code (three for `noCut`).
+const ISSUE_MESSAGES: [&str; 17] = [
     "No cut lines are in the selection.",
     "No cut lines are in the document.",
+    "No cut lines are among the given objects.",
     "The cut lines do not enclose an area.",
     "A cut line ends without meeting another cut line.",
     "A gap between cut lines was closed.",
     "The fold lines are too complex to check.",
     "A cut line and a crease lie on top of each other.",
-    "Two lines of the same role lie on top of each other.",
+    "Two fold lines lie on top of each other.",
     "A crease ends inside a panel.",
     "A crease does not divide two panels.",
-    "A crease lies outside the cut outline.",
-    "A crease that is not straight is folded along one straight line.",
+    "A crease lies outside the cut outline, wholly or in part.",
+    "The pieces of a hinge are not on one straight line.",
     "A gap between cut lines is too narrow to tell apart.",
-    "A cut-out area holds other fold lines.",
+    "A cut-out area holds other fold lines or another blank.",
     "A panel is not joined to the rest by a crease.",
     "A fold line is on a non-printing layer.",
 ];
@@ -250,7 +252,7 @@ fn every_issue_message_translates_in_every_complete_message_catalog() {
         "ca", "nl", "da",
     ] {
         let lang = crate::i18n::Lang::from_code(code).unwrap();
-        for m in ISSUE_MESSAGES.into_iter().chain(["Panels: 3, creases: 2, errors: 1, warnings: 0"]) {
+        for m in ISSUE_MESSAGES.into_iter().chain(["Panels: 3, hinges: 2, errors: 1, warnings: 0"]) {
             assert_ne!(crate::i18n::message(lang, m), m, "{code}: {m}");
         }
     }

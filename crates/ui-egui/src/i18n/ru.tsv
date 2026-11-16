@@ -9843,15 +9843,16 @@ shape	Open	Открытый
 @msg	A gap between cut lines was closed.	Зазор между линиями реза закрыт.
 @msg	The fold lines are too complex to check.	Линии сгиба слишком сложны для проверки.
 @msg	A cut line and a crease lie on top of each other.	Линия реза и линия биговки лежат друг на друге.
-@msg	Two lines of the same role lie on top of each other.	Две линии одного типа лежат друг на друге.
+@msg	No cut lines are among the given objects.	Среди указанных объектов нет линий реза.
+@msg	Two fold lines lie on top of each other.	Две линии сгиба лежат друг на друге.
 @msg	A crease ends inside a panel.	Линия биговки заканчивается внутри панели.
 @msg	A crease does not divide two panels.	Линия биговки не разделяет две панели.
-@msg	A crease lies outside the cut outline.	Линия биговки лежит за пределами контура реза.
-@msg	A crease that is not straight is folded along one straight line.	Непрямая линия биговки сгибается по одной прямой.
+@msg	A crease lies outside the cut outline, wholly or in part.	Линия биговки целиком или частично лежит за пределами контура реза.
+@msg	The pieces of a hinge are not on one straight line.	Части шарнира не лежат на одной прямой.
 @msg	A gap between cut lines is too narrow to tell apart.	Зазор между линиями реза слишком узок, чтобы его различить.
-@msg	A cut-out area holds other fold lines.	Вырезанная область содержит другие линии сгиба.
+@msg	A cut-out area holds other fold lines or another blank.	Вырезанная область содержит другие линии сгиба или другую развёртку.
 @msg	A panel is not joined to the rest by a crease.	Панель не соединена с остальными ни одной линией биговки.
 @msg	A fold line is on a non-printing layer.	Линия сгиба находится на непечатаемом слое.
-@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Панели: {panels}, биговки: {hinges}, ошибки: {errors}, предупреждения: {warnings}
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панели: {panels}, шарниры: {hinges}, ошибки: {errors}, предупреждения: {warnings}
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

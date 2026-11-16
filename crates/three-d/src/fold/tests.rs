@@ -13,7 +13,7 @@ fn poly(points: &[(f64, f64)], closed: bool) -> PathData {
 }
 
 fn line(kind: LineKind, points: &[(f64, f64)], closed: bool, key: u64) -> FoldLine {
-    FoldLine { path: poly(points, closed), kind, angle: None, key }
+    FoldLine { path: poly(points, closed), kind, key }
 }
 
 fn cut(points: &[(f64, f64)], key: u64) -> FoldLine {
@@ -131,7 +131,7 @@ fn a_tray_has_a_base_four_walls_and_four_hinges() {
     assert_eq!(areas(&b[0]), vec![1_800_000, 1_800_000, 3_000_000, 3_000_000, 6_000_000]);
     assert_eq!(b[0].hinges.len(), 4);
     for h in &b[0].hinges {
-        assert!(h.straight && h.angle == 90.0 && h.keys.len() == 1, "{h:?}");
+        assert!(h.straight && h.keys.len() == 1, "{h:?}");
         assert!((h.from.distance(h.to) - if h.keys[0] % 2 == 0 { 100.0 } else { 60.0 }).abs() < 1e-6, "{h:?}");
     }
     assert_eq!(base_panel(&b[0].panels).map(|i| (b[0].panels[i].area).round()), Some(6000.0));
@@ -188,7 +188,7 @@ fn a_round_tuck_flap_folds_like_any_panel() {
     bp.curve_to(p(100.0, 10.0), p(80.0, 0.0), p(50.0, 0.0));
     bp.curve_to(p(20.0, 0.0), p(0.0, 10.0), p(0.0, 40.0));
     bp.close_path();
-    let lines = vec![FoldLine { path: PathData::from_bezpath(&bp), kind: LineKind::Cut, angle: None, key: 1 }, crease((0.0, 40.0), (100.0, 40.0), 2)];
+    let lines = vec![FoldLine { path: PathData::from_bezpath(&bp), kind: LineKind::Cut, key: 1 }, crease((0.0, 40.0), (100.0, 40.0), 2)];
     let (b, issues) = check(&lines);
     assert!(issues.is_empty(), "{issues:?}");
     assert_eq!(b[0].panels.len(), 2);
@@ -353,7 +353,7 @@ fn an_outline_drawn_twice_keeps_its_material() {
     // The same two squares as the subpaths of one compound path.
     let mut twice = poly(&square, true);
     twice.subpaths.extend(poly(&square, true).subpaths);
-    let (b, issues) = check(&[FoldLine { path: twice, kind: LineKind::Cut, angle: None, key: 1 }]);
+    let (b, issues) = check(&[FoldLine { path: twice, kind: LineKind::Cut, key: 1 }]);
     assert_eq!(codes(&issues), vec!["duplicate"], "{issues:?}");
     assert_eq!(issues[0].keys, vec![1]);
     assert_eq!(areas(&b[0]), vec![10_000_000]);
@@ -412,6 +412,150 @@ fn a_window_of_open_lines_with_a_slit_to_its_corner_is_still_a_hole() {
     let (b, issues) = check(&lines);
     assert!(issues.is_empty(), "{issues:?}");
     assert_eq!((b[0].holes.len(), areas(&b[0])), (1, areas(&closed[0])));
+    // A cut across the window of open lines, so that three lines meet at two of its corners.
+    let mut lines = vec![cut(&corners, 1), line(LineKind::Cut, &[(40.0, 0.0), (40.0, 40.0)], false, 2)];
+    for k in 0..4 {
+        lines.push(line(LineKind::Cut, &[window[k], window[(k + 1) % 4]], false, 3 + k as u64));
+    }
+    lines.push(line(LineKind::Cut, &[(40.0, 40.0), (60.0, 60.0)], false, 20));
+    let (b, issues) = check(&lines);
+    assert!(issues.is_empty(), "{issues:?}");
+    assert_eq!((b[0].holes.len(), areas(&b[0])), (1, areas(&closed[0])));
+    // The outline and the window both as open lines, joined by two slits: the same as when both are
+    // closed.
+    let slits = [line(LineKind::Cut, &[(0.0, 0.0), (40.0, 40.0)], false, 30), line(LineKind::Cut, &[(100.0, 100.0), (60.0, 60.0)], false, 31)];
+    let (want, want_issues) = check(&[cut(&corners, 1), cut(&window, 3), slits[0].clone(), slits[1].clone()]);
+    let mut lines: Vec<FoldLine> = (0..4).map(|k| line(LineKind::Cut, &[corners[k], corners[(k + 1) % 4]], false, 10 + k as u64)).collect();
+    for k in 0..4 {
+        lines.push(line(LineKind::Cut, &[window[k], window[(k + 1) % 4]], false, 3 + k as u64));
+    }
+    lines.extend(slits);
+    let (b, issues) = check(&lines);
+    assert_eq!(codes(&issues), codes(&want_issues), "{issues:?}");
+    assert_eq!((b[0].holes.len(), areas(&b[0])), (want[0].holes.len(), areas(&want[0])));
+    assert_eq!(want[0].holes.len(), 1);
+}
+
+#[test]
+fn a_slot_drawn_across_the_outline_is_a_notch_not_a_hole() {
+    let outline = || cut(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)], 1);
+    let (b, issues) = check(&[outline(), cut(&[(48.0, -10.0), (52.0, -10.0), (52.0, 20.0), (48.0, 20.0)], 2)]);
+    assert!(issues.is_empty(), "{issues:?}");
+    assert!(b[0].holes.is_empty(), "{:?}", b[0].holes);
+    let notched = cut(&[(0.0, 0.0), (48.0, 0.0), (48.0, 20.0), (52.0, 20.0), (52.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)], 1);
+    assert_eq!(areas(&b[0]), areas(&check(std::slice::from_ref(&notched)).0[0]));
+    // A crease in the notch lies outside the blank, and one that runs on into it from a panel too.
+    let slot = || cut(&[(48.0, -10.0), (52.0, -10.0), (52.0, 20.0), (48.0, 20.0)], 2);
+    let (_, issues) = check(&[outline(), slot(), crease((49.0, 5.0), (51.0, 5.0), 3)]);
+    assert_eq!(codes(&issues), vec!["outside"], "{issues:?}");
+    let (_, issues) = check(&[outline(), slot(), crease((50.0, 5.0), (50.0, 100.0), 3)]);
+    let (_, want) = check(&[notched, crease((50.0, 5.0), (50.0, 100.0), 3)]);
+    assert_eq!(codes(&issues), codes(&want), "{issues:?}");
+    assert!(codes(&issues).contains(&"outside"), "{issues:?}");
+    // A cutout whose top side lies on the outline opens onto the outside directly.
+    let flush = || cut(&[(48.0, 0.0), (52.0, 0.0), (52.0, 20.0), (48.0, 20.0)], 2);
+    let (b, issues) = check(&[outline(), flush()]);
+    assert!(b[0].holes.is_empty() && !codes(&issues).contains(&"ambiguous"), "{:?} {issues:?}", b[0].holes);
+    let (_, issues) = check(&[outline(), flush(), crease((49.0, 5.0), (51.0, 5.0), 3)]);
+    assert!(codes(&issues).contains(&"outside") && !codes(&issues).contains(&"ambiguous"), "{issues:?}");
+    // A window joined to the outline by a slit stays a hole when a cut across it leaves a sliver.
+    let window = || cut(&[(40.0, 40.0), (60.0, 40.0), (60.0, 60.0), (40.0, 60.0)], 4);
+    let slit = || line(LineKind::Cut, &[(40.0, 0.0), (40.0, 40.0)], false, 5);
+    let (b, _) = check(&[outline(), window(), slit(), line(LineKind::Cut, &[(40.0, 40.004), (60.0, 40.004)], false, 6)]);
+    assert_eq!(b[0].holes.len(), 1, "{:?}", b[0].holes);
+    // And a window 0.004 pt below the outline, joined to it at both corners, leaving a sliver.
+    let near = cut(&[(40.0, 0.004), (60.0, 0.004), (60.0, 20.0), (40.0, 20.0)], 4);
+    let joins = [line(LineKind::Cut, &[(40.0, 0.0), (40.0, 0.004)], false, 5), line(LineKind::Cut, &[(60.0, 0.0), (60.0, 0.004)], false, 6)];
+    let (b, _) = check(&[outline(), near, joins[0].clone(), joins[1].clone()]);
+    assert_eq!(b[0].holes.len(), 1, "{:?}", b[0].holes);
+}
+
+#[test]
+fn many_small_outlines_of_open_lines_fit_the_gap_search() {
+    // 784 unit squares 3 pt apart, each four open lines, at a tolerance of 0.5 pt.
+    let mut lines = vec![];
+    for i in 0..28u64 {
+        for j in 0..28u64 {
+            let (x, y) = (3.0 * i as f64, 3.0 * j as f64);
+            let c = [(x, y), (x + 1.0, y), (x + 1.0, y + 1.0), (x, y + 1.0)];
+            for k in 0..4 {
+                lines.push(line(LineKind::Cut, &[c[k], c[(k + 1) % 4]], false, 4 * (28 * i + j) + k as u64));
+            }
+        }
+    }
+    let (b, issues) = blanks(&lines, 0.5);
+    assert!(!codes(&issues).contains(&"tooComplex"), "{issues:?}");
+    assert_eq!(b.len(), 784);
+}
+
+#[test]
+fn thousands_of_cut_lines_on_top_of_each_other_are_too_complex_before_the_gap_search() {
+    let lines: Vec<FoldLine> = (0..3000u64).map(|k| line(LineKind::Cut, &[(0.0, 0.0), (100.0, 0.0)], false, k)).collect();
+    let (b, issues) = check(&lines);
+    assert_eq!(codes(&issues), vec!["tooComplex"], "{issues:?}");
+    assert!(b.is_empty());
+}
+
+#[test]
+fn cut_lines_that_cross_an_outline_of_open_lines_leave_every_cell_material() {
+    // A 90 pt square whose sides are open lines ending every 30 pt, and four cut lines right across
+    // it: nine pieces of material, as with a closed outline.
+    let mut lines = vec![];
+    for k in 0..3 {
+        let (a, b) = (30.0 * k as f64, 30.0 * (k + 1) as f64);
+        for (i, seg) in [[(a, 0.0), (b, 0.0)], [(90.0, a), (90.0, b)], [(b, 90.0), (a, 90.0)], [(0.0, b), (0.0, a)]].iter().enumerate() {
+            lines.push(line(LineKind::Cut, seg, false, 10 + 4 * k as u64 + i as u64));
+        }
+    }
+    let across = [[(30.0, 0.0), (30.0, 90.0)], [(60.0, 0.0), (60.0, 90.0)], [(0.0, 30.0), (90.0, 30.0)], [(0.0, 60.0), (90.0, 60.0)]];
+    for (i, seg) in across.iter().enumerate() {
+        lines.push(line(LineKind::Cut, seg, false, 30 + i as u64));
+    }
+    let mut closed = vec![cut(&[(0.0, 0.0), (90.0, 0.0), (90.0, 90.0), (0.0, 90.0)], 1)];
+    closed.extend(lines.iter().skip(12).cloned());
+    let (want, want_issues) = check(&closed);
+    let (b, issues) = check(&lines);
+    assert_eq!(codes(&issues), codes(&want_issues), "{issues:?}");
+    let pieces = |b: &[Blank]| b.iter().map(|x| (x.panels.len(), x.holes.len())).collect::<Vec<_>>();
+    assert_eq!(pieces(&b), pieces(&want));
+    assert_eq!(b.iter().map(|x| x.panels.len()).sum::<usize>(), 9);
+    // With the crossing lines drawn in 30 pt pieces, the four pieces round the middle cell meet end
+    // to end and count as one closed cut line, whether the outline is closed or drawn in pieces.
+    let mut split = vec![];
+    for (i, seg) in across.iter().enumerate() {
+        let (a, b) = (seg[0], seg[1]);
+        for k in 0..3 {
+            let at = |t: f64| (a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t);
+            split.push(line(LineKind::Cut, &[at(k as f64 / 3.0), at((k + 1) as f64 / 3.0)], false, 40 + 3 * i as u64 + k as u64));
+        }
+    }
+    let mut closed = vec![cut(&[(0.0, 0.0), (90.0, 0.0), (90.0, 90.0), (0.0, 90.0)], 1)];
+    closed.extend(split.iter().cloned());
+    let (want, want_issues) = check(&closed);
+    let mut open: Vec<FoldLine> = lines.iter().take(12).cloned().collect();
+    open.extend(split);
+    let (b, issues) = check(&open);
+    assert_eq!(codes(&issues), codes(&want_issues), "{issues:?}");
+    assert_eq!(pieces(&b), pieces(&want));
+}
+
+#[test]
+fn a_curved_crease_is_measured_at_its_farthest_point_from_its_line() {
+    // A crease from corner to corner of a square: its curve strays about 10.1 pt from the diagonal,
+    // where samples at quarters of it see 9.8 pt.
+    let off = 35.0 / 2f64.sqrt();
+    let mut bp = BezPath::new();
+    bp.move_to(p(0.0, 0.0));
+    bp.curve_to(p(10000.0 / 3.0 - off, 10000.0 / 3.0 + off), p(20000.0 / 3.0 + off, 20000.0 / 3.0 - off), p(10000.0, 10000.0));
+    let lines = vec![
+        cut(&[(0.0, 0.0), (10000.0, 0.0), (10000.0, 10000.0), (0.0, 10000.0)], 1),
+        FoldLine { path: PathData::from_bezpath(&bp), kind: LineKind::Crease, key: 2 },
+    ];
+    let (b, issues) = blanks(&lines, 10.0);
+    assert_eq!(codes(&issues), vec!["notStraight"], "{issues:?}");
+    assert_eq!(b[0].hinges.len(), 1);
+    let (_, issues) = blanks(&lines, 10.5);
+    assert!(issues.is_empty(), "{issues:?}");
 }
 
 #[test]
@@ -541,6 +685,38 @@ fn lines_on_top_of_each_other_are_reported() {
     assert_eq!(issues[0].keys, vec![10, 20]);
     assert_eq!(b[0].hinges.len(), 4);
     assert_eq!(b[0].hinges.iter().find(|h| h.keys.contains(&20)).map(|h| h.keys.clone()), Some(vec![10, 20]));
+
+    // A perforation over a crease, lines of two kinds that fold.
+    let mut lines = tray();
+    lines.push(line(LineKind::Perforation, &[(130.0, 30.0), (30.0, 30.0)], false, 20));
+    let (_, issues) = check(&lines);
+    assert_eq!(codes(&issues), vec!["duplicate"], "{issues:?}");
+    assert_eq!(issues[0].keys, vec![10, 20]);
+
+    // A crease drawn twice outside the blank is reported where it lies as well.
+    let mut lines = tray();
+    lines.push(crease((200.0, 0.0), (250.0, 0.0), 20));
+    lines.push(crease((250.0, 0.0), (200.0, 0.0), 21));
+    let (_, issues) = check(&lines);
+    assert_eq!(codes(&issues), vec!["duplicate", "outside", "outside"], "{issues:?}");
+    assert_eq!((issues[1].keys.clone(), issues[2].keys.clone()), (vec![20], vec![21]));
+}
+
+#[test]
+fn a_crease_that_runs_past_the_outline_is_reported() {
+    let outline = || cut(&[(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0)], 1);
+    // 5 pt past the outline at each end: the hinge is built, and the line is reported.
+    let (b, issues) = check(&[outline(), crease((50.0, -5.0), (50.0, 55.0), 2)]);
+    assert_eq!(codes(&issues), vec!["outside"], "{issues:?}");
+    assert_eq!(issues[0].keys, vec![2]);
+    assert_eq!(b[0].hinges.len(), 1);
+    // Past it by less than the tolerance: no issue.
+    let (b, issues) = check(&[outline(), crease((50.0, -0.05), (50.0, 50.0), 2)]);
+    assert!(issues.is_empty(), "{issues:?}");
+    assert_eq!(b[0].hinges.len(), 1);
+    // A crease drawn round a sliver inside the blank does not run outside it.
+    let (_, issues) = check(&[outline(), line(LineKind::Crease, &[(50.0, 10.0), (50.004, 10.0), (50.004, 40.0), (50.0, 40.0)], true, 2)]);
+    assert!(!codes(&issues).contains(&"outside"), "{issues:?}");
 }
 
 #[test]
@@ -682,15 +858,15 @@ fn lines_in_a_hole_are_ambiguous() {
 }
 
 #[test]
-fn partial_cuts_fold_the_other_way_and_a_line_s_own_angle_wins() {
+fn partial_cuts_and_perforations_make_hinges_as_creases_do() {
     let mut lines = tray();
     lines[1].kind = LineKind::PartialCut;
-    lines[2].angle = Some(45.0);
     lines[3].kind = LineKind::Perforation;
     let (b, issues) = check(&lines);
     assert!(issues.is_empty(), "{issues:?}");
-    let angle = |key: u64| b[0].hinges.iter().find(|h| h.keys == vec![key]).map(|h| h.angle);
-    assert_eq!((angle(10), angle(11), angle(12), angle(13)), (Some(-90.0), Some(45.0), Some(90.0), Some(90.0)));
+    let mut keys: Vec<Vec<u64>> = b[0].hinges.iter().map(|h| h.keys.clone()).collect();
+    keys.sort_unstable();
+    assert_eq!(keys, vec![vec![10], vec![11], vec![12], vec![13]]);
 }
 
 #[test]

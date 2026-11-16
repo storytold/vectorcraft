@@ -13087,8 +13087,8 @@ panel's menu opens it as Role Swatches….
 
 `addon.packaging.check` (`{ids?, select?: false, tolerance?: 0.1}`) finds the blanks, panels and hinges that the fold
 lines make and lists what is wrong with them. It checks the fold lines among the objects (the selection by default),
-through groups and clip groups, or every fold line of the document that is shown while nothing is selected and `ids` is
-left out. `tolerance` is in points, from 0.01 to 10; a value outside that range, or one that is not a number or a length
+through groups and clip groups, or every fold line of the document while nothing is selected and `ids` is left out.
+Hidden lines are left out in every case, also inside a selected group. `tolerance` is in points, from 0.01 to 10; a value outside that range, or one that is not a number or a length
 such as `"2 mm"`, is an error. The command does not change the document and records no undo step.
 
 - Cut lines bound the material. Each connected piece of cut lines that encloses material is one blank. Its outline is its
@@ -13105,17 +13105,17 @@ warnings.
 
 | Code | Reported when |
 |---|---|
-| `noCut` | No cut line is among the objects. |
+| `noCut` | No cut line is among the objects. The message names the selection, the objects `ids` gives, or the document. |
 | `open` | The cut lines enclose no area. |
 | `looseEnd` | An end of a cut line meets no other fold line within `tolerance`, and no gap is closed at it. `at` is the end. |
 | `gap` | An end of a cut line lies within `tolerance` of another cut line without touching it; the panels are built with the gap closed. `at` is the end. |
 | `tooComplex` | The lines have more than 65,536 segments, or a blank has more than 256 panels. |
 | `cutOverCrease` | A cut line and a crease, partial cut or perforation lie on top of each other. |
-| `duplicate` | Two lines of the same role, or two subpaths of one line, lie on top of each other. |
+| `duplicate` | Two cut lines, two crease, partial cut or perforation lines (of the same role or not), or two subpaths of one line, lie on top of each other. |
 | `danglingCrease` | A crease ends inside a panel. |
 | `noSplit` | A crease divides no two panels. |
-| `outside` | A crease lies outside every blank. |
-| `notStraight` | The pieces of a hinge are not on one straight line within `tolerance`; it folds along the line through its longest piece. |
+| `outside` | A crease lies outside every blank, or runs outside it for `tolerance` or more. |
+| `notStraight` | The pieces of a hinge are not on one straight line within `tolerance`. |
 | `sliver` | A gap between lines inside a blank is narrower than 0.01 pt. |
 | `ambiguous` | A hole holds creases, or a blank lies inside another blank's hole. |
 | `loosePanel` | A panel is joined to its blank's largest panel by no chain of hinges. |
@@ -13125,7 +13125,7 @@ Result: `{ok, blanks, panels, hinges, holes, issues: [{severity, code, message, 
 no issue is an error. `message` is in English, and the Fold Lines panel shows it in the interface language. `ids` names
 the objects each issue is about. With `select: true`, those objects become the selection; when no issue names an
 object, the selection stays as it is. The Fold Lines panel's Check button runs the same check, shows a summary line
-(panels, creases, errors and warnings) and lists the issues; clicking an issue or its Select button selects its objects.
+(panels, hinges, errors and warnings) and lists the issues; clicking an issue or its Select button selects its objects.
 The list is shown until the document changes.
 
 ```json

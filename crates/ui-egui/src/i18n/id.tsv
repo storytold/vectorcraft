@@ -7108,14 +7108,15 @@ breakText	Glyphs	Glif
 @msg	A gap between cut lines was closed.	Celah di antara garis potong telah ditutup.
 @msg	The fold lines are too complex to check.	Garis lipat terlalu rumit untuk diperiksa.
 @msg	A cut line and a crease lie on top of each other.	Sebuah garis potong dan sebuah garis lekuk bertumpuk.
-@msg	Two lines of the same role lie on top of each other.	Dua garis dengan jenis yang sama bertumpuk.
+@msg	No cut lines are among the given objects.	Tidak ada garis potong di antara objek yang diberikan.
+@msg	Two fold lines lie on top of each other.	Dua garis lipat bertumpuk.
 @msg	A crease ends inside a panel.	Sebuah garis lekuk berakhir di dalam panel.
 @msg	A crease does not divide two panels.	Sebuah garis lekuk tidak membagi dua panel.
-@msg	A crease lies outside the cut outline.	Sebuah garis lekuk berada di luar kontur potong.
-@msg	A crease that is not straight is folded along one straight line.	Garis lekuk yang tidak lurus dilipat di sepanjang satu garis lurus.
+@msg	A crease lies outside the cut outline, wholly or in part.	Sebuah garis lekuk berada seluruhnya atau sebagian di luar kontur potong.
+@msg	The pieces of a hinge are not on one straight line.	Bagian-bagian sebuah engsel tidak berada pada satu garis lurus.
 @msg	A gap between cut lines is too narrow to tell apart.	Celah di antara garis potong terlalu sempit untuk dibedakan.
-@msg	A cut-out area holds other fold lines.	Area yang dipotong berisi garis lipat lain.
+@msg	A cut-out area holds other fold lines or another blank.	Area yang dipotong berisi garis lipat lain atau bentangan lain.
 @msg	A panel is not joined to the rest by a crease.	Sebuah panel tidak tersambung ke bagian lain oleh garis lekuk apa pun.
 @msg	A fold line is on a non-printing layer.	Sebuah garis lipat berada di lapisan yang tidak dicetak.
-@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Panel: {panels}, lekuk: {hinges}, galat: {errors}, peringatan: {warnings}
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panel: {panels}, engsel: {hinges}, galat: {errors}, peringatan: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"

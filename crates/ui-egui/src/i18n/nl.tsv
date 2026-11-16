@@ -9784,13 +9784,14 @@ breakText	Glyphs	Glyphs
 @msg	A gap between cut lines was closed.	Een opening tussen snijlijnen is gesloten.
 @msg	The fold lines are too complex to check.	De vouwlijnen zijn te complex om te controleren.
 @msg	A cut line and a crease lie on top of each other.	Een snijlijn en een rillijn liggen over elkaar.
-@msg	Two lines of the same role lie on top of each other.	Twee lijnen van dezelfde soort liggen over elkaar.
+@msg	No cut lines are among the given objects.	De opgegeven objecten bevatten geen snijlijnen.
+@msg	Two fold lines lie on top of each other.	Twee vouwlijnen liggen over elkaar.
 @msg	A crease ends inside a panel.	Een rillijn eindigt binnen een paneel.
 @msg	A crease does not divide two panels.	Een rillijn verdeelt geen twee panelen.
-@msg	A crease lies outside the cut outline.	Een rillijn ligt buiten de snijcontour.
-@msg	A crease that is not straight is folded along one straight line.	Een rillijn die niet recht is, wordt langs één rechte lijn gevouwen.
+@msg	A crease lies outside the cut outline, wholly or in part.	Een rillijn ligt geheel of gedeeltelijk buiten de snijcontour.
+@msg	The pieces of a hinge are not on one straight line.	De delen van een scharnier liggen niet op één rechte lijn.
 @msg	A gap between cut lines is too narrow to tell apart.	Een opening tussen snijlijnen is te smal om te onderscheiden.
-@msg	A cut-out area holds other fold lines.	Een uitgesneden gebied bevat andere vouwlijnen.
+@msg	A cut-out area holds other fold lines or another blank.	Een uitgesneden gebied bevat andere vouwlijnen of een andere uitslag.
 @msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
 @msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
-@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, rillijnen: {hinges}, fouten: {errors}, waarschuwingen: {warnings}
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}

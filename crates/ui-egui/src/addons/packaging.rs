@@ -92,7 +92,7 @@ impl Checked {
     fn summary(&self) -> String {
         let errors = self.issues.iter().filter(|i| i.error).count();
         crate::i18n::fmt(
-            "Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}",
+            "Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}",
             &[
                 ("panels", &self.panels.to_string()),
                 ("hinges", &self.hinges.to_string()),

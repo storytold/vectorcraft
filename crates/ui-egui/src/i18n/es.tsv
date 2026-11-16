@@ -7915,14 +7915,15 @@ breakText	Glyphs	Glifos
 @msg	A gap between cut lines was closed.	Se cerró un hueco entre líneas de corte.
 @msg	The fold lines are too complex to check.	Las líneas de plegado son demasiado complejas para comprobarlas.
 @msg	A cut line and a crease lie on top of each other.	Una línea de corte y una de hendido están superpuestas.
-@msg	Two lines of the same role lie on top of each other.	Dos líneas del mismo tipo están superpuestas.
+@msg	No cut lines are among the given objects.	No hay líneas de corte entre los objetos indicados.
+@msg	Two fold lines lie on top of each other.	Dos líneas de plegado están superpuestas.
 @msg	A crease ends inside a panel.	Una línea de hendido termina dentro de un panel.
 @msg	A crease does not divide two panels.	Una línea de hendido no separa dos paneles.
-@msg	A crease lies outside the cut outline.	Una línea de hendido está fuera del contorno de corte.
-@msg	A crease that is not straight is folded along one straight line.	Una línea de hendido que no es recta se pliega a lo largo de una sola línea recta.
+@msg	A crease lies outside the cut outline, wholly or in part.	Una línea de hendido está fuera del contorno de corte, total o parcialmente.
+@msg	The pieces of a hinge are not on one straight line.	Los tramos de una bisagra no están en una sola línea recta.
 @msg	A gap between cut lines is too narrow to tell apart.	Un hueco entre líneas de corte es demasiado estrecho para distinguirlo.
-@msg	A cut-out area holds other fold lines.	Un área recortada contiene otras líneas de plegado.
+@msg	A cut-out area holds other fold lines or another blank.	Un área recortada contiene otras líneas de plegado u otro troquelado.
 @msg	A panel is not joined to the rest by a crease.	Un panel no está unido al resto por ninguna línea de hendido.
 @msg	A fold line is on a non-printing layer.	Una línea de plegado está en una capa que no se imprime.
-@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Paneles: {panels}, hendidos: {hinges}, errores: {errors}, advertencias: {warnings}
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneles: {panels}, bisagras: {hinges}, errores: {errors}, advertencias: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"

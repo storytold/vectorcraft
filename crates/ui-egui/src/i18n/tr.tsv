@@ -9705,13 +9705,14 @@ breakText	Glyphs	Glifler
 @msg	A gap between cut lines was closed.	Kesim çizgileri arasındaki bir boşluk kapatıldı.
 @msg	The fold lines are too complex to check.	Katlama çizgileri denetlenemeyecek kadar karmaşık.
 @msg	A cut line and a crease lie on top of each other.	Bir kesim çizgisi ile bir pilyaj çizgisi üst üste.
-@msg	Two lines of the same role lie on top of each other.	Aynı türden iki çizgi üst üste.
+@msg	No cut lines are among the given objects.	Belirtilen nesneler arasında kesim çizgisi yok.
+@msg	Two fold lines lie on top of each other.	İki katlama çizgisi üst üste.
 @msg	A crease ends inside a panel.	Bir pilyaj çizgisi bir panelin içinde bitiyor.
 @msg	A crease does not divide two panels.	Bir pilyaj çizgisi iki paneli ayırmıyor.
-@msg	A crease lies outside the cut outline.	Bir pilyaj çizgisi kesim konturunun dışında.
-@msg	A crease that is not straight is folded along one straight line.	Düz olmayan bir pilyaj çizgisi tek bir düz çizgi boyunca katlanır.
+@msg	A crease lies outside the cut outline, wholly or in part.	Bir pilyaj çizgisi tamamen veya kısmen kesim konturunun dışında.
+@msg	The pieces of a hinge are not on one straight line.	Bir menteşenin parçaları tek bir düz çizgi üzerinde değil.
 @msg	A gap between cut lines is too narrow to tell apart.	Kesim çizgileri arasındaki bir boşluk ayırt edilemeyecek kadar dar.
-@msg	A cut-out area holds other fold lines.	Kesilip çıkarılmış bir alan başka katlama çizgileri içeriyor.
+@msg	A cut-out area holds other fold lines or another blank.	Kesilip çıkarılmış bir alan başka katlama çizgileri veya başka bir açınım içeriyor.
 @msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
 @msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
-@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, pilyajlar: {hinges}, hatalar: {errors}, uyarılar: {warnings}
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}

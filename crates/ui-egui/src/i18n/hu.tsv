@@ -9739,13 +9739,14 @@ breakText	Glyphs	Glifák
 @msg	A gap between cut lines was closed.	A vágóvonalak közötti rés le lett zárva.
 @msg	The fold lines are too complex to check.	A hajtásvonalak túl összetettek az ellenőrzéshez.
 @msg	A cut line and a crease lie on top of each other.	Egy vágóvonal és egy bigvonal egymáson fekszik.
-@msg	Two lines of the same role lie on top of each other.	Két azonos típusú vonal egymáson fekszik.
+@msg	No cut lines are among the given objects.	A megadott objektumok között nincs vágóvonal.
+@msg	Two fold lines lie on top of each other.	Két hajtásvonal egymáson fekszik.
 @msg	A crease ends inside a panel.	Egy bigvonal egy panelen belül ér véget.
 @msg	A crease does not divide two panels.	Egy bigvonal nem választ el két panelt.
-@msg	A crease lies outside the cut outline.	Egy bigvonal a vágási körvonalon kívül van.
-@msg	A crease that is not straight is folded along one straight line.	Egy nem egyenes bigvonal egyetlen egyenes mentén hajlik.
+@msg	A crease lies outside the cut outline, wholly or in part.	Egy bigvonal teljesen vagy részben a vágási körvonalon kívül van.
+@msg	The pieces of a hinge are not on one straight line.	Egy zsanér részei nem egy egyenesen vannak.
 @msg	A gap between cut lines is too narrow to tell apart.	A vágóvonalak közötti rés túl keskeny a megkülönböztetéshez.
-@msg	A cut-out area holds other fold lines.	Egy kivágott terület további hajtásvonalakat tartalmaz.
+@msg	A cut-out area holds other fold lines or another blank.	Egy kivágott terület további hajtásvonalakat vagy egy másik kiterítéket tartalmaz.
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
-@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, bigek: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}

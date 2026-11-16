@@ -62,6 +62,9 @@ fn the_selection_or_ids_limit_the_check_to_their_lines() {
     assert_eq!(r["issues"][0]["message"], "No cut lines are in the selection.");
     let r = check(&mut s, json!({ "ids": [outline] }));
     assert_eq!((r["scope"].as_str(), r["ok"].as_bool(), r["panels"].as_u64()), (Some("ids"), Some(true), Some(1)), "{r}");
+    let r = check(&mut s, json!({ "ids": [creases[1]] }));
+    assert_eq!((r["scope"].as_str(), codes(&r)), (Some("ids"), vec!["noCut"]));
+    assert_eq!(r["issues"][0]["message"], "No cut lines are among the given objects.");
     // No fold lines at all in the document.
     let mut s = session();
     let r = check(&mut s, json!({}));
@@ -135,6 +138,18 @@ fn hidden_lines_are_left_out_and_lines_on_a_non_printing_layer_are_noted() {
     s.execute("select.none", &json!({})).unwrap();
     let r = check(&mut s, json!({}));
     assert_eq!((r["panels"].as_u64(), r["hinges"].as_u64()), (Some(4), Some(3)), "{r}");
+    // The same in a selected group, and with the group named by `ids`: the hidden member is left
+    // out too.
+    let mut s = session();
+    let (outline, creases) = tray(&mut s);
+    s.execute("select.set", &json!({ "ids": [outline, creases[0], creases[1], creases[2], creases[3]] })).unwrap();
+    let group = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("layer.setProps", &json!({ "ids": [creases[0]], "visible": false })).unwrap();
+    s.execute("select.set", &json!({ "ids": [group] })).unwrap();
+    for p in [json!({}), json!({ "ids": [group] })] {
+        let r = check(&mut s, p);
+        assert_eq!((r["panels"].as_u64(), r["hinges"].as_u64()), (Some(4), Some(3)), "{r}");
+    }
     // A cut line on a layer that does not print.
     let mut s = session();
     s.execute("layer.new", &json!({ "printable": false })).unwrap();

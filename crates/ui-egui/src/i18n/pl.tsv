@@ -9604,13 +9604,14 @@ breakText	Glyphs	Glify
 @msg	A gap between cut lines was closed.	Zamknięto przerwę między liniami cięcia.
 @msg	The fold lines are too complex to check.	Linie zgięcia są zbyt złożone, aby je sprawdzić.
 @msg	A cut line and a crease lie on top of each other.	Linia cięcia i linia bigowania leżą na sobie.
-@msg	Two lines of the same role lie on top of each other.	Dwie linie tego samego rodzaju leżą na sobie.
+@msg	No cut lines are among the given objects.	Wśród podanych obiektów nie ma linii cięcia.
+@msg	Two fold lines lie on top of each other.	Dwie linie zgięcia leżą na sobie.
 @msg	A crease ends inside a panel.	Linia bigowania kończy się wewnątrz panelu.
 @msg	A crease does not divide two panels.	Linia bigowania nie rozdziela dwóch paneli.
-@msg	A crease lies outside the cut outline.	Linia bigowania leży poza konturem cięcia.
-@msg	A crease that is not straight is folded along one straight line.	Linia bigowania, która nie jest prosta, jest zginana wzdłuż jednej linii prostej.
+@msg	A crease lies outside the cut outline, wholly or in part.	Linia bigowania leży całkowicie lub częściowo poza konturem cięcia.
+@msg	The pieces of a hinge are not on one straight line.	Części zawiasu nie leżą na jednej linii prostej.
 @msg	A gap between cut lines is too narrow to tell apart.	Przerwa między liniami cięcia jest zbyt wąska, aby ją rozróżnić.
-@msg	A cut-out area holds other fold lines.	Wycięty obszar zawiera inne linie zgięcia.
+@msg	A cut-out area holds other fold lines or another blank.	Wycięty obszar zawiera inne linie zgięcia lub inny wykrój.
 @msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
 @msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
-@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, bigi: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}

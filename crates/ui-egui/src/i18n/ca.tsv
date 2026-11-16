@@ -7954,14 +7954,15 @@ breakText	Glyphs	Glifs
 @msg	A gap between cut lines was closed.	S’ha tancat un buit entre línies de tall.
 @msg	The fold lines are too complex to check.	Les línies de plegat són massa complexes per comprovar-les.
 @msg	A cut line and a crease lie on top of each other.	Una línia de tall i una d’hendit estan superposades.
-@msg	Two lines of the same role lie on top of each other.	Dues línies del mateix tipus estan superposades.
+@msg	No cut lines are among the given objects.	No hi ha cap línia de tall entre els objectes indicats.
+@msg	Two fold lines lie on top of each other.	Dues línies de plegat estan superposades.
 @msg	A crease ends inside a panel.	Una línia d’hendit acaba dins d’un panell.
 @msg	A crease does not divide two panels.	Una línia d’hendit no separa dos panells.
-@msg	A crease lies outside the cut outline.	Una línia d’hendit és fora del contorn de tall.
-@msg	A crease that is not straight is folded along one straight line.	Una línia d’hendit que no és recta es plega al llarg d’una sola línia recta.
+@msg	A crease lies outside the cut outline, wholly or in part.	Una línia d’hendit és fora del contorn de tall, del tot o en part.
+@msg	The pieces of a hinge are not on one straight line.	Els trams d’una frontissa no són en una sola línia recta.
 @msg	A gap between cut lines is too narrow to tell apart.	Un buit entre línies de tall és massa estret per distingir-lo.
-@msg	A cut-out area holds other fold lines.	Una àrea retallada conté altres línies de plegat.
+@msg	A cut-out area holds other fold lines or another blank.	Una àrea retallada conté altres línies de plegat o un altre troquelat.
 @msg	A panel is not joined to the rest by a crease.	Un panell no està unit a la resta per cap línia d’hendit.
 @msg	A fold line is on a non-printing layer.	Una línia de plegat és en una capa que no s’imprimeix.
-@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Panells: {panels}, hendits: {hinges}, errors: {errors}, avisos: {warnings}
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panells: {panels}, frontisses: {hinges}, errors: {errors}, avisos: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"

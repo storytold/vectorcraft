@@ -9349,13 +9349,14 @@ breakText	Glyphs	Glyphen
 @msg	A gap between cut lines was closed.	Eine Lücke zwischen Schnittlinien wurde geschlossen.
 @msg	The fold lines are too complex to check.	Die Faltlinien sind zu komplex für die Prüfung.
 @msg	A cut line and a crease lie on top of each other.	Eine Schnittlinie und eine Rilllinie liegen übereinander.
-@msg	Two lines of the same role lie on top of each other.	Zwei Linien derselben Linienart liegen übereinander.
+@msg	No cut lines are among the given objects.	Die angegebenen Objekte enthalten keine Schnittlinien.
+@msg	Two fold lines lie on top of each other.	Zwei Faltlinien liegen übereinander.
 @msg	A crease ends inside a panel.	Eine Rilllinie endet innerhalb eines Felds.
 @msg	A crease does not divide two panels.	Eine Rilllinie trennt keine zwei Felder.
-@msg	A crease lies outside the cut outline.	Eine Rilllinie liegt außerhalb der Schnittkontur.
-@msg	A crease that is not straight is folded along one straight line.	Eine nicht gerade Rilllinie wird entlang einer geraden Linie gefaltet.
+@msg	A crease lies outside the cut outline, wholly or in part.	Eine Rilllinie liegt ganz oder teilweise außerhalb der Schnittkontur.
+@msg	The pieces of a hinge are not on one straight line.	Die Teile eines Scharniers liegen nicht auf einer geraden Linie.
 @msg	A gap between cut lines is too narrow to tell apart.	Eine Lücke zwischen Schnittlinien ist zu schmal, um sie zu unterscheiden.
-@msg	A cut-out area holds other fold lines.	Ein ausgeschnittener Bereich enthält weitere Faltlinien.
+@msg	A cut-out area holds other fold lines or another blank.	Ein ausgeschnittener Bereich enthält weitere Faltlinien oder einen anderen Zuschnitt.
 @msg	A panel is not joined to the rest by a crease.	Ein Feld ist durch keine Rilllinie mit den übrigen verbunden.
 @msg	A fold line is on a non-printing layer.	Eine Faltlinie liegt auf einer nicht druckbaren Ebene.
-@msg	Panels: {panels}, creases: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Rilllinien: {hinges}, Fehler: {errors}, Warnungen: {warnings}
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Scharniere: {hinges}, Fehler: {errors}, Warnungen: {warnings}
