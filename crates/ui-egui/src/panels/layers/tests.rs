@@ -1493,6 +1493,48 @@ fn dragging_rows_moves_them_into_other_layers_and_alt_copies() {
     let _ = (layer, c);
 }
 
+/// One headless frame of the panel with `events` (Alt held when `alt`) → the cursor it asks for.
+fn cursor_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, alt: bool) -> egui::CursorIcon {
+    let mut events = events;
+    events.insert(0, egui::Event::ModifiersChanged(egui::Modifiers { alt, ..Default::default() }));
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+    out.textures_delta.clear();
+    out.platform_output.cursor_icon
+}
+
+/// #8217: a row dragged over the list shows the copy cursor while Alt is held, as the drop then
+/// copies, and the grabbing hand otherwise, following Alt as it goes down and up mid-drag.
+#[test]
+fn alt_shows_the_copy_cursor_while_rows_are_dragged() {
+    let (mut app, _) = nested();
+    let ctx = egui::Context::default();
+    // Rows: Layer 1, Sub, g, b, a, c.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 6);
+    let (from, to) = (egui::pos2(150.0, circles[2].y), egui::pos2(150.0, circles[5].y));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)], false);
+    frame(&mut app, &ctx, vec![button(from, true)], false);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from + vec2(0.0, 6.0))], false);
+    assert_eq!(cursor_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(to)], false), egui::CursorIcon::Grabbing, "a move");
+    assert_eq!(cursor_frame(&mut app, &ctx, vec![], true), egui::CursorIcon::Copy, "Alt held: the drop copies");
+    assert_eq!(cursor_frame(&mut app, &ctx, vec![], false), egui::CursorIcon::Grabbing, "Alt let go: a move again");
+    cursor_frame(&mut app, &ctx, vec![button(to, false)], false);
+    assert_ne!(cursor_frame(&mut app, &ctx, vec![], true), egui::CursorIcon::Copy, "no drag, no copy cursor");
+}
+
+/// The selected-art square copies with Alt as rows do; off the list (the trash, New Layer) Alt
+/// copies nothing, and guide rows keep their own cursor.
+#[test]
+fn drag_cursor_shows_a_copy_only_where_the_drop_copies() {
+    let (copy, grabbing) = (Some(egui::CursorIcon::Copy), Some(egui::CursorIcon::Grabbing));
+    for drag in [LayersDrag::Rows(vec![NodeId(1)]), LayersDrag::Art] {
+        assert_eq!(super::drag_cursor(&drag, true, true), copy);
+        assert_eq!(super::drag_cursor(&drag, false, true), grabbing);
+        assert_eq!(super::drag_cursor(&drag, true, false), grabbing, "off the list");
+    }
+    assert_eq!(super::drag_cursor(&LayersDrag::Guides(vec![0]), true, true), None);
+}
+
 /// One headless frame of the panel on a short screen (300 × 260) with `events` (Alt held when
 /// `alt`): for every row name painted inside the list's view, its center, and the view.
 fn short_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, alt: bool) -> (HashMap<String, egui::Pos2>, egui::Rect) {
