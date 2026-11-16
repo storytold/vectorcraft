@@ -2062,6 +2062,12 @@ were. `graph.setType` refuses `` `columnWidth` must be a number, not "50" `` for
 `` `type` must be a string `` for `type`, `valueAxis`, the three tick lengths, `prefix`, `suffix`, `rightPrefix`,
 `rightSuffix`, `pieLegend`, `piePosition` and `pieSort`; and `` `ticks` must be a number, not "5" `` (or
 `` `ticks` must be 0 or more `` for a negative number) for `ticks`, `rightTicks` and the three tick mark counts.
+`lineWidth`, the Line Width of Draw Filled Lines in points (3 when the graph sets none), takes a number from 0.01 to
+1000 (VectorCraft's own range); `"4"` is refused with `` `lineWidth` must be a number, not "4" ``, and a width below
+0.01 or past 1000 with `` `lineWidth` must be from 0.01 to 1000 pt, not 0 ``. The graph stores a width only when it is
+not 3, so a graph without one is saved and drawn as before. A graph with a width of its own is written to `.ai` as its
+art, without the editable graph records. `graph.setType` with options that leave the graph as it is
+records no undo step.
 `axisMin`, `axisMax`, `rightAxisMin` and `rightAxisMax` take a number, or null to go back to the value calculated from
 the data; any other value is refused with `` `axisMin` must be a number or null, not "10" ``. `graph.setData` and
 `graph.create` refuse a `csv` that is not a string, `series` or `categories` that are not lists, and `rows` that are not
@@ -11290,8 +11296,9 @@ A canvas-click dialog also has `preview` (initially on): tentative settings draw
 Object › Graph › Type… (`graph.setType` without params) and a double-click on a graph tool open Graph Type (dialog
 `graphType`) for the selected graph, or for the series picked in it with Group Selection. Its fields are the options
 `graph.setType {}` returns, under the command's names for them. `legend`, `pieLegend`, `piePosition`, `pieSort`,
-`firstRowInFront`, `firstColumnInFront` and `filledLines` are held for every type, so a type picked in the dialog shows
-the options it uses. `overrideValues` and `rightOverrideValues` are Override Calculated Values of the left (or only)
+`firstRowInFront`, `firstColumnInFront`, `filledLines` and `lineWidth` are held for every type, so a type picked in the
+dialog shows the options it uses. The Line Width field next to Draw Filled Lines is available only while Draw Filled
+Lines and Connect Data Points are on. `overrideValues` and `rightOverrideValues` are Override Calculated Values of the left (or only)
 value axis and of the right one. While one is on, OK sends `axisMin`, `axisMax` and `ticks` (or `rightAxisMin`,
 `rightAxisMax` and `rightTicks`), and the dialog fills the ones the graph lacks with the values the axis would be
 calculated with for the type, value axis and Separate Scales the dialog shows.

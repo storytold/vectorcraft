@@ -1739,6 +1739,7 @@ file-filter	Templates	Mẫu
 	Connect Data Points	Nối các điểm dữ liệu
 	Edge-to-Edge Lines	Đường từ mép đến mép
 	Draw Filled Lines	Vẽ đường tô đầy
+	Line Width	Độ rộng đường
 	Tick Values	Giá trị vạch chia
 	Override Calculated Values	Ghi đè giá trị đã tính
 	Divisions	Số khoảng chia

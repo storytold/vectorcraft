@@ -1455,6 +1455,7 @@ file-filter	Templates	Vorlagen
 	Connect Data Points	Datenpunkte verbinden
 	Edge-to-Edge Lines	Linien von Kante zu Kante
 	Draw Filled Lines	Gefüllte Linien zeichnen
+	Line Width	Linienbreite
 	Tick Values	Teilstrichwerte
 	Override Calculated Values	Berechnete Werte überschreiben
 	Divisions	Teilungen

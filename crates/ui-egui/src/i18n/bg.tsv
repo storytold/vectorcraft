@@ -1405,6 +1405,7 @@ font-technology	Variable	Променливи
 	Connect Data Points	Свързване на точките от данни
 	Edge-to-Edge Lines	Линии от край до край
 	Draw Filled Lines	Чертане на запълнени линии
+	Line Width	Ширина на линията
 	Tick Values	Стойности на отметките
 	Override Calculated Values	Замяна на изчислените стойности
 	Divisions	Деления

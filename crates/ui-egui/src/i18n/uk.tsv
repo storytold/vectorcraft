@@ -1483,6 +1483,7 @@ file-filter	Templates	Шаблони
 	Connect Data Points	З'єднувати точки даних
 	Edge-to-Edge Lines	Лінії від краю до краю
 	Draw Filled Lines	Малювати заповнені лінії
+	Line Width	Ширина лінії
 	Tick Values	Значення поділок
 	Override Calculated Values	Замінити обчислені значення
 	Divisions	Поділки

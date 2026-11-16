@@ -3676,6 +3676,7 @@ theme	Appearance	Ulkoasu
 	Connect Data Points	Yhdistä arvopisteet
 	Edge-to-Edge Lines	Viivat reunasta reunaan
 	Draw Filled Lines	Piirrä täytetyt viivat
+	Line Width	Viivan leveys
 	Tick Values	Asteikon arvot
 	Override Calculated Values	Ohita lasketut arvot
 	Divisions	Jaot
