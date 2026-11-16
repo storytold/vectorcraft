@@ -624,6 +624,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "text.fonts",
     "text.getRange",
     "text.glyphAlternates",
+    "text.glyphCategories",
     "text.insertInline",
     "text.missingFonts",
     "text.replaceFont",

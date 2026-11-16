@@ -672,7 +672,7 @@ sampler.
 | `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`, `tripleclick` (`doubleclick` follows the second click's `up`, and `tripleclick` the third's). `backquote` is the held state for each event; the top-level value supplies its default, and a `backquote` that is not a boolean is an error. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
 | `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`, `tripleclick` (`doubleclick` follows the second click's `up`, and `tripleclick` the third's). `backquote` is the held state for each event; the top-level value supplies its default. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. Remote, the events wait until the keys and other input sent before them (`press_key`, `type_text`) have reached the app, so a key pressed between two calls of one drag applies before the release. When that input is dropped because the document, a dialog or the focus changed first, the call fails and its events are not sent. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
 | `draw_path` | `{points \| d, closed?, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `points` is `[[x,y],…]` or `[{x,y,in?,out?,smooth?},…]`. `d` is SVG path data. The options are below. |
-| `draw_shape` | `{shape, …geometry, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `rectangle`/`ellipse`: `x,y,width,height` (plus `radius` for corners). `polygon`: `cx,cy,radius,sides`. `star`: `cx,cy,radius1,radius2,points`. Polygons and stars take `rotation` in degrees clockwise (0: a corner or point straight up). `line`: `x1,y1,x2,y2`. |
+| `draw_shape` | `{shape, …geometry, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `rectangle`/`ellipse`: `x,y,width,height` (plus `radius` for corners; an ellipse takes `anchors`, 2–1000, default 4). `polygon`: `cx,cy,radius,sides`. `star`: `cx,cy,radius1,radius2,points`. Polygons and stars take `rotation` in degrees clockwise (0: a corner or point straight up). `line`: `x1,y1,x2,y2`. |
 | `set_paint` | `{fill?, stroke?, strokeWidth?, ids?}` | Applies to the selection (or `ids`) and becomes the default for new art. Returns `{applied, objects}`: `objects` is the number of objects painted, as the `objects` of the `paint.setFill`, `paint.setStroke` and `stroke.set` replies (the largest of them): a selected group counts the objects inside it. When it is 0, a `note` says that only the paint for new art changed. |
 | `press_key` | `{key, mods?}` | Remote: a real key event. Headless: runs the command or tool bound to that shortcut, or sends the key to the busy tool (digits too: `5` while dragging with the Perspective Selection tool; `e` while dragging a Selection or Group Selection marquee; `c` and `f` while dragging out an arc; `f`, `v`, `x` and `c` while dragging out a rectangular or polar grid). |
 | `type_text` | `{text}` | Remote only. |
@@ -1194,6 +1194,18 @@ snapped to pixels) and, for PNG, `interlaced`. `width` or `height` sets the size
 pixels per point, and the file stores the resolution that results, as with `ppi`. `width` wins over `height`, and
 either one wins over `ppi` and `scale`. A value that is not a positive number is refused. Export for Screens rows keep
 their own size (`scale: "512w"`).
+
+`shape.ellipse` (and `draw_shape` with `shape: "ellipse"`) takes `anchors`, the number of smooth anchors (default 4).
+Without it, or at 4, it draws a live ellipse. Any other count from 2 to 1000 draws a closed plain path with that many
+anchors spaced evenly by angle, clockwise from the left one and fitted to `width` × `height`. The Ellipse dialog (a
+click with the Ellipse tool) has an Anchors field that sends it, as the nearest whole number from 2 to 1000 (an
+empty field, or text that is not a number, sends 4). The count confirmed last is kept as the Ellipse tool's `anchors`
+option (`tool.setOption`), and the next Ellipse dialog opens on it. A drag with the Ellipse tool still draws a live
+ellipse.
+
+```json
+{"name":"run_command","arguments":{"command":"shape.ellipse","params":{"x":100,"y":100,"width":120,"height":80,"anchors":6}}}
+```
 
 Long-tail commands:
 
@@ -2028,9 +2040,10 @@ and `type.fractionalWidths`; `flip` in `type.dynamicTextPreset`; `remove` and `o
 `enhanced` in `imageTrace.make` and `imageTrace.makeAndExpand`. A null is read as a key left out.
 
 These commands refuse a string or another value that is not a number with `` `radius` must be a number, not "2" ``,
-naming the key, and change nothing: `radius` in `shape.rectangle`; `sides` and `rotation` in `shape.polygon`;
-`radius2`, `points` and `rotation` in `shape.star`; `diameter`, `opacity`, `brightness`, `growth`, `fuzziness`,
-`rays`, `longest`, `rayFuzziness`, `rotation`, `rings`, `largest`, `x2`, `y2`, `direction`, `pathLength`, `seed` and
+naming the key, and change nothing: `radius` in `shape.rectangle`; `anchors` in `shape.ellipse` (a number that is
+not a whole number from 2 to 1000 gets `` `anchors` must be a whole number between 2 and 1000 (got 2.5) ``); `sides`
+and `rotation` in `shape.polygon`; `radius2`, `points` and `rotation` in `shape.star`; `diameter`, `opacity`,
+`brightness`, `growth`, `fuzziness`, `rays`, `longest`, `rayFuzziness`, `rotation`, `rings`, `largest`, `x2`, `y2`, `direction`, `pathLength`, `seed` and
 `ringSeed` in `shape.flare` (`seed` must also be a whole number of at least 0, and `ringSeed` a whole number from
 0 to 2^53 - 1); `decay` and `segments` in `shape.spiral`; `rows` and `columns` in `shape.rectangularGrid`; `concentric`
 and `radial` in `shape.polarGrid`; `size` and the `width`, `height` and `fitMinPercent` of `area` in `text.create`;
@@ -3281,16 +3294,24 @@ horizontal guide between its top and bottom. Released anywhere else, it makes no
 These families are in the live catalog (`command_list` / `vectorcraft://commands`); the prompt `trace-and-style`
 already walks Image Trace. Short agent entry points:
 
-- Symbols: `symbol.list` (each row includes `registration` 0..8, `exportType`: `movieClip`|`graphic` and `type`:
-  `static`|`dynamic`),
-  `symbol.new {name?, registration?, exportType?, nineSlice?, nineSliceGuides?, type?, ids?}`,
-  `symbol.options {name?, newName?, registration?, exportType?, nineSlice?, nineSliceGuides?, type?}` (`nineSlice` bool turns
+- Symbols: `symbol.list` (each row includes `registration` 0..8, `exportType`: `movieClip`|`graphic`, `type`:
+  `static`|`dynamic` and `alignToPixelGrid`),
+  `symbol.new {name?, registration?, exportType?, nineSlice?, nineSliceGuides?, type?, alignToPixelGrid?, ids?}`,
+  `symbol.options {name?, newName?, registration?, exportType?, nineSlice?, nineSliceGuides?, type?, alignToPixelGrid?}` (`nineSlice` bool turns
   9-slice guides on or off; `nineSliceGuides` is `[left, top, right, bottom]`, fractions of the symbol size in from
   each edge, each -16..16 with `left + right < 1` and `top + bottom < 1`, a quarter each when none are given; below 0
   or above 1 puts a guide outside the art, and the art then scales by the cells it falls in; rows of `symbol.list` carry `nineSlice`: the guides or `null`; a scaled instance of
   a symbol with guides keeps its corners at their size, and `symbol.breakLink` gives its art as it draws; dragging a
   guide on the canvas in symbol editing mode sends `nineSliceGuides` in one undo step; `type` is
-  Symbol Type, `static` by default for the command and `dynamic` by default in the Symbol Options dialog),
+  Symbol Type, `static` by default for the command and `dynamic` by default in the Symbol Options dialog;
+  `alignToPixelGrid` is Symbol Options › Align to Pixel Grid, off by default: when it is on, the horizontal and
+  vertical straight segments of the paths in the symbol's art snap to whole points (half points for an odd centered
+  stroke) as the art is drawn at the symbol's natural size, its stroke weights become whole points, and each instance
+  placed at that size, reflected across one axis or not, moves to whole points and goes back to them after every move;
+  VectorCraft leaves a scaled, rotated (a half turn included) or sheared instance, and an instance in another symbol's
+  art, where it is, snaps the art again after it is edited, and does not count
+  instances in `select.object.notAlignedToPixelGrid`; `alignToPixelGrid` alone with the value the symbol already has
+  adds no undo step),
   `symbol.place {name?, x?, y?}`, `symbol.breakLink {ids?}` (the art keeps the instance's opacity mask and its bounding box, square after
   `object.resetBoundingBox`; a hidden or locked instance's
   art stays hidden or locked and is not selected), `symbol.replace`,
@@ -3988,11 +4009,11 @@ already walks Image Trace. Short agent entry points:
   edges joined to it end to end that draw with the stroke paint `match`, and `samePaint` paints every edge of the
   group that draws with that stroke paint; the stroke's weight is not compared. An edge draws with the paint of its
   topmost stroke that is shown, with paint, above 0 pt and not fully transparent, and with none when the edge is fully
-  transparent or has no such stroke. Each click of a double-click or triple-click runs as it
-  arrives and is its own undo step when it changes a paint. `match` is the paint the face or edge had before the first of
-  the double-click's two clicks or the triple-click's three that painted it (including a click whose drag or release crossed it), or
-  before the double-click when the triple-click's double-click
-  reached it, so the clicks before the last do not change what it matches;
+  transparent or has no such stroke. Each click of a double-click or triple-click runs as it arrives and is its own
+  undo step when it changes a paint. `match` is the paint the face or edge had before the first of the double-click's
+  two clicks or the triple-click's three that painted it (including a click whose drag or release crossed it), or
+  before the double-click when the triple-click's double-click reached it, so the clicks before the last do not change
+  what it matches;
   a first click that made the Live Paint group counts when the face it filled is the clicked face. Hidden faces and edges are not painted. A face that
   the Bucket fills has all its fills replaced by one fill with the paint, shown, fully opaque and blending normally, in the
   place of its topmost fill; its strokes, their order and the face's own visibility, opacity and blending mode stay as
@@ -4006,10 +4027,12 @@ already walks Image Trace. Short agent entry points:
   `"samePaint"`; any other value is an error and changes nothing. `match` is a paint in the model JSON that
   `document.node {id}` writes for an appearance's paints (`{"type": "none"}` for none), taken only with a scope that compares paints, and
   defaults to the face's fill or the stroke paint the edge draws with. `livePaint.strokeEdge {scope: "connected", through}`
-  takes `through`, at most 4096 edge ids that the join counts as drawing with `match` whatever they draw with now; the tool
-  passes the edge the double-click's first click painted when that edge drew with `match` before the click. `through` with another scope, or one that is not an array of ids, is an error. `livePaint.fill` refuses
-  a `scope` other than `"one"` with `points`. Both replies add `count`, the number of faces or edges the click reaches, including those that already had the
-  paint.
+  takes `through`, at most 4096 ids of the group's edges, each given once, that the join counts as drawing with `match`
+  whatever they draw with now; a hidden edge among them is still skipped. The tool passes each other edge of the group
+  that either of the double-click's two clicks painted and that drew with `match` before that click. `through` with
+  another scope, or one that is not an array of the group's edge ids or names an edge twice, is an error and changes
+  nothing. `livePaint.fill` refuses a `scope` other than `"one"` with `points`. Both replies add `count`, the number of
+  faces or edges the click reaches, including those that already had the paint.
   With the Live Paint Bucket selected and no drag in progress, Left and Right without Shift, Alt or Cmd/Ctrl (which
   keep their shortcuts) run `paint.setFill {swatch, ids: []}` (or
   `paint.setStroke` when the Stroke proxy is in front) with the color swatch before or after the active paint in the
@@ -4394,16 +4417,24 @@ is tall), `bevelInside` (false adds the bevel around the shape, true carves it i
   `softness` are not used). `ambient` (0..100%, default 50) lights every face.
 - `highlightIntensity` (0..100%, default 60) and `highlightSize` (0..100%, default 90; 100 is broad) shape the Plastic
   highlight. `blendSteps` (whole number, 1..256, default 25) is how many levels the shading is rounded to.
-- `shadingColor`: `black` (the default), `custom` (darkens toward `shadingCustom`, a `#rrggbb` color) or `none` (the
-  paint is kept and only the highlight lightens it). `drawHiddenFaces` also draws the faces turned away from the
-  viewer, behind the others.
+- `shadingColor`: `black` (the default), `custom` (darkens toward `shadingCustom`, a `#rrggbb` color), `none` (the
+  paint is kept and only the highlight lightens it) or `blackOverprint`. With `blackOverprint` every face keeps the
+  paint unchanged, and each face that darkens gets overprinting black over it, as strong as `black` would darken it.
+  The paint's own inks print as they are and the shading prints on the black plate. On screen the black is multiplied
+  over the paint, Separations Preview shows it on the Black plate, and `document.exportPdf` writes it as overprinting
+  fills
+  ([Shading Color options](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=188)).
+  The highlight is not drawn with `blackOverprint`; that rule is VectorCraft's own. On a pattern face the black covers
+  the whole face, transparent pattern cells included, as the shading of the other shading colors does.
+  `drawHiddenFaces` also draws the faces turned away from the viewer, behind the others.
 - `preserveSpotColors` (default false) is the Lighting tab's Preserve Spot Colors checkbox. When it is on, a fill or
   stroke linked to a spot or global swatch stays linked on every face, so a spot color prints on its own plate in
   separations and PDF. The highlight lowers the swatch's tint, and a face that darkens gets black at the shade's
   strength over the swatch, multiplied and overprinting. These rules for drawing the shading are VectorCraft's own. The
   option does nothing while `shadingColor` is `custom`, since a custom shading color cannot keep a spot color
   ([Preserve Spot Color](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=260)).
-  Unlinked colors, gradients, patterns and the Wireframe surface draw as they do with it off.
+  Unlinked colors, gradients, patterns and the Wireframe surface draw as they do with it off. With `blackOverprint`
+  every face keeps its paint, swatch link included, whether the option is on or off.
 
 The defaults are VectorCraft's own. An unknown parameter, a number out of range, a flag that is not true or false, or
 an unknown surface or shading color is refused with an error and the document is not changed.
@@ -4540,9 +4571,10 @@ darker than the row's average become tints and shades) or `hueShift` (the most s
 the others turn by the same hue). `limitTo` snaps new colours to a swatch library's nearest colour;
 `recolor.randomize {map, order?, saturationBrightness?, seed?}` shuffles or varies new colours; a row with
 `exclude: true` keeps its colours. A row's `from` may be an empty list: the row recolors nothing, adds no library swatch with
-`limitTo` and gives `group` no color, and `recolor.randomize` and `recolor.weigh` keep it. A row without `from`, or with
+`limitTo` and gives `group` no color, and `recolor.randomize` and `recolor.weigh` keep it; `recolor.randomize` leaves its
+new color as it is and shuffles only the rows that hold current colors. A row without `from`, or with
 a current color that is not a color, is refused. With art selected, the Recolor Artwork dialog's New Row button (beside
-Merge) adds such a row above the first selected row, or at the top, with that row's new color, and selects it; Shift-click another row and Merge to move its colors into it. An
+Merge) adds such a row above the first selected row, or at the top, with that row's new color, and selects it; Shift-click a row below it and Merge to move that row's colors into it (Merge keeps the topmost selected row's new color). An
 empty row does not count toward Colors. With `limitTo`, a row's `tint` (a percentage, default 100) gives the art
 linked to the global or spot swatch its new color is that share of its tint; `tint` must be a number. `recolor.randomize`
 moves a row's `tint` with its new color and removes it from a color it changes, and moves a row's `model` with its new color. `swatch.editGroup {group, colors, rename?}` rewrites a colour group in one undo
@@ -5782,6 +5814,15 @@ outline of the area a drag covers takes, at each step, the tip the pen's reading
 value shows as the value itself there, since the release draws it.
 `tool.setOption {tool: "eraser"}` takes the same keys.
 
+`path.eraseRegion {rect: [x, y, width, height]}` takes a rectangle in place of `points` and erases everything inside
+it from the paths (selected, or all), as an Alt-drag with the Eraser does ([Eraser tool
+reference](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=133)).
+Closed shapes lose the rectangle's area, and open paths are cut where they cross its edges. The tip's size, angle,
+roundness and variations do not apply. A width or height of 0 or less, a value that is not a finite number, or
+`points` and `rect` together is refused, and when nothing is erased no undo step is added. In the desktop app an
+Alt-drag with the Eraser draws the marquee from the press point to the pointer, Alt+Shift keeps it square on its
+larger side, and Escape cancels it.
+
 These commands refuse a string or another value that is not a number with `` `dy` must be a number, not "10" ``,
 naming the key; the document does not change and no undo step is recorded: `t`, `dx` and `dy` in
 `path.reshapeSegment` and `object.blend.spine.reshapeSegment`; `x`, `y` and `t` in `path.curvatureEdit`; `x` and `y`
@@ -5959,12 +6000,21 @@ are converted to, an RGB image that carries an ICC profile is converted from tha
 and then to the destination, instead of having its numbers read as sRGB (a profile the color engine can't read leaves
 them read as sRGB, with a warning); a gray image keeps its profile, as gray is not converted. An RGB destination other
 than sRGB that is the document's own RGB profile leaves RGB colors and RGB images as they are, so a tagged RGB image keeps its profile
-there. Any other image whose colors are converted (a CMYK image, or an RGB image going to a CMYK destination or to an
-RGB one other than sRGB) but whose pixels are more than VectorCraft decodes or can't be written that way is left out with
-the warning "an image couldn't be converted to the Output destination and is missing from the picture", rather than
-written in its own colors. One whose pixel data can't be read is left out with the warning "an image couldn't be decoded
-and is missing from the picture", as without a conversion.
-`preserveNumbers` still reads an image's numbers as sRGB. The destination is any profile `edit.colorSettings` lists (default: the document's
+there.
+`preserveNumbers` (and PDF/X-1a, which converts the same way) keeps the numbers of untagged content only: an RGB image
+that carries an ICC profile is converted from that profile to sRGB with the same intent, and then to a CMYK or other
+RGB destination, the document's own RGB profile included (written as sRGB when colours are ICC-tagged), while an untagged RGB image keeps its numbers in an RGB
+destination and converts from sRGB to a CMYK one. A gray image that carries one is converted to sRGB grays in an
+sRGB destination and keeps its profile in the others, and a profile the color engine can't
+read leaves the image as it is in an RGB destination, with a warning, and its numbers read as sRGB in a CMYK one.
+In both modes, any other image whose colors are converted (a CMYK image, an RGB image going to a CMYK destination, or
+with `destination` an RGB image going to an RGB one other than sRGB) but whose pixels are more than VectorCraft decodes
+or can't be written that way is left out with the warning "an image couldn't be converted to the Output destination and
+is missing from the picture", rather than written in its own colors. One whose pixel data can't be read is left out with
+the warning "an image couldn't be decoded and is missing from the picture", as without a conversion. A tagged RGB image
+that `preserveNumbers` converts in an RGB destination but whose pixels can't be decoded keeps its profile, with a
+warning, as with `destination` and an sRGB destination.
+The destination is any profile `edit.colorSettings` lists (default: the document's
 for its colour mode). `profiles` (`all`, `destination`, or `taggedSource` for a document assigned profiles with
 `edit.assignProfile`) writes colours in ICC-based spaces with their profiles embedded: CMYK with the destination's or
 the document's CMYK profile, RGB as sRGB, grey with the sRGB tone curve (PDF/A, PDF/X-3 and PDF/X-4 files are
@@ -6354,18 +6404,49 @@ path and label, with its id when the row shows it, and the key runs what a click
 {id}`. A removed plug-in's row goes away and its key runs nothing; its shortcut stays saved and applies again when a
 plug-in with the same id is installed.
 
-`shortcuts.exportText {path?}` saves the current set's shortcut list as a UTF-8 text file, as Edit › Keyboard
-Shortcuts › Export Text… does with the dialog's set as edited so far. The file starts with a "Keyboard Shortcuts" line
-and a "Set:" line with the set's name, followed by a Tools section and a Menu Commands section. Each section lists the
-rows Edit › Keyboard Shortcuts lists, in its order and with names as it shows them: one line per row, with the name, a
-tab and the shortcuts as the dialog shows them on the current platform. A row with no shortcut ends after the tab.
-Without `path` a save dialog asks for the file. A `path` that is not a string, or a file that cannot be written,
-returns an error, and nothing is written. The layout is VectorCraft's own. The reference app's [Export keyboard
-shortcuts list as a text document](https://helpx.adobe.com/illustrator/desktop/get-started/preferences-and-settings/export-keyboard-shortcuts-list.html)
+`shortcuts.exportText {path?, format?, pageSize?}` saves the current set's shortcut list as a UTF-8 text file, as
+Edit › Keyboard Shortcuts › Export Text… does with the dialog's set as edited so far. The file starts with a "Keyboard
+Shortcuts" line and a "Set:" line with the set's name, followed by a Tools section and a Menu Commands section. Each
+section lists the rows Edit › Keyboard Shortcuts lists, in its order and with names as it shows them: one line per
+row, with the name, a tab and the shortcuts as the dialog shows them on the current platform. A row with no shortcut
+ends after the tab. Without `path` a save dialog asks for the file. A `path` that is not a string, or a file that
+cannot be written, returns an error, and nothing is written. The layout is VectorCraft's own. The reference app's
+[Export keyboard shortcuts list as a text document](https://helpx.adobe.com/illustrator/desktop/get-started/preferences-and-settings/export-keyboard-shortcuts-list.html)
 page describes saving the list from the Keyboard Shortcuts dialog as a text file, and does not describe its layout.
+
+`format` picks the file: `"text"` (the default) writes the text file above, `"sheet"` a printable shortcut sheet as a
+PDF and `"csv"` a CSV file. A `path` is written as given, in the format `format` names, or as text without `format`.
+In the desktop app, without `path`, the save dialog offers the three formats (Text, Shortcut sheet and CSV, Text first)
+unless `format` names one, and the file type picked in it decides. When `format` names a format, or the dialog reports
+the type picked, the name the dialog returns gets that format's extension (`.txt`, `.pdf` or `.csv`): one of these
+extensions is replaced, and the extension is added to any other name. When that names a file that is already there, a
+question asks before replacing it. The web app downloads the format `format` names, text without it. With no file
+dialog, file writer or download, the command returns the file: the text file and the CSV file as `text`, the sheet in
+base64 as `pdf`. A `format` other than `"text"`, `"sheet"` or `"csv"`, or a `pageSize` other than `"letter"` or
+`"a4"` (lowercase), returns an error, and nothing is written.
+
+The shortcut sheet lists the rows that have a shortcut in groups: the Tools rows under the Tools group, then each
+top-level menu as a group, in the order the dialog first lists a command of it, with the command named without its
+top-level menu. The group names, command names and shortcuts are in the UI language, as the dialog shows them. Each
+group has a colored band with its name, and below it the rows, the shortcut on the left and the name on the right. The
+groups flow down four columns of landscape pages and onto more pages when they do not fit. `pageSize` is `"letter"`
+(792 × 612 pt) or `"a4"` (841.89 × 595.28 pt). Without it the sheet is on A4 when the current document prints on A4
+(its print settings, or, with none saved, a first artboard of A4 size), and on Letter otherwise. Each page is titled
+with "Keyboard Shortcuts" and the set's name. A group that continues in the next column repeats its band there. A row
+with several shortcuts has a line for each, kept in one column unless the row is taller than a column. A shortcut is
+never shortened: one too wide for its column is set smaller. A name too long for its column ends in "…". The type is
+Source Sans 3, which VectorCraft bundles and which has the macOS modifier symbols (⌃ ⌥ ⇧ ⌘). Characters it does not
+have are drawn in another font the app has loaded, when one has them. The layout is VectorCraft's own.
+
+The CSV file is UTF-8 with a byte order mark, with CRLF line ends and fields quoted as
+[RFC 4180](https://www.rfc-editor.org/rfc/rfc4180.txt) describes. Its header row is `Group,Command,Shortcut` in every
+UI language. Each row the dialog lists has one record, in the sheet's groups and with names and shortcuts in the UI
+language, and a row with no shortcut has an empty Shortcut field. A field that starts with `=`, `+`, `-` or `@` and has
+more after it, or that starts with a tab or a carriage return, starts with an apostrophe (`'`).
 
 ```json
 {"name":"run_command","arguments":{"command":"shortcuts.exportText","params":{"path":"/Users/me/Shortcuts.txt"}}}
+{"name":"run_command","arguments":{"command":"shortcuts.exportText","params":{"path":"/Users/me/Shortcuts.pdf","format":"sheet","pageSize":"a4"}}}
 ```
 
 The desktop app adds its active artboard, the one the Artboards panel highlights, to the `object.align`,
@@ -7049,8 +7130,12 @@ A saved or Recent preset whose size (up to 3,999,856 pt), `artboards` (1 to
 1,000), spacing (0 to 100,000 pt) or bleed (0 to 72 pt a side) lies outside those ranges is read with the nearer end of
 each range, and a size of 0 or less is read as 1 pt.
 The desktop app's `file.newDialog` (Cmd/Ctrl+N) opens the New Document dialog on the first Recent entry, or on the
-Print category's Letter while Recent is empty. `file.newWithoutDialog` (Cmd/Ctrl+Alt+N) runs `file.new` with those
-settings and the next untitled name, without opening the dialog, and returns what `file.new` returns.
+Print category's Letter while Recent is empty. The dialog opens in Preferences › Units › General (`unitsGeneral`),
+also when the Recent entry was made in other units. An entry made in pixels, and an entry that is a saved preset in
+the units it was saved in, keep their units. Clicking another Recent or Saved card brings back the units that card was
+made in. Units chosen in the dialog's Units menu, or set with `ui.dialog.set` (the `units` field), stay when another
+tab or preset is chosen. These are VectorCraft's own rules. `file.newWithoutDialog` (Cmd/Ctrl+Alt+N) runs `file.new`
+with those settings and the next untitled name, without opening the dialog, and returns what `file.new` returns.
 `window.nextDocument` (Cmd/Ctrl+F6) and `window.previousDocument` (Cmd/Ctrl+Shift+F6) make the next and the previous
 open document in tab order the current one, as a click on its tab does, and return `{index}`. After the last document
 comes the first, and before the first document comes the last. From the Home screen they go to the first and the last
@@ -7648,6 +7733,34 @@ written unless the whole batch succeeds puts the saves and exports last, or runs
 {"name":"run_command","arguments":{"command":"file.info","params":{"author":"Ada","keywords":"poster, fair","rating":4,"copyrightStatus":"copyrighted","copyrightNotice":"© 2026 Ada"}}}
 ```
 
+A PDF, `.ai` or `.ait` also opens with the `authorTitle` and `rating` its XMP packet gives (`photoshop:AuthorsPosition`,
+`xmp:Rating`, a whole number from 0 to 5).
+
+Metadata templates (the menu at the top of File Info: Save Metadata Template…, Import…, the saved templates and
+Templates Folder; https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=278) keep File
+Info fields in an XMP file. `file.info.saveTemplate {name?, path?, fields?}` writes the `title` (when it is not blank
+or the `Untitled-N` name a new document gets), `author`, `authorTitle`, `description`, `keywords`, `rating` (from 1), `copyrightStatus`,
+`copyrightNotice` and `copyrightUrl` that have a value as an XMP packet, using the properties listed above; the dates
+are left out. `fields` takes `file.info`'s editable keys in place of the document's values. `name` saves into the
+metadata templates folder as `<name>.xmp` (the folder is made when it is missing; a name with characters file systems reject, a dot at either end, or a
+device name such as `CON` is refused, and a template of the same name is replaced), `path` writes that file, and with
+neither the reply's `data` is the packet; `name` and `path` together are refused. In the app the folder is
+`Metadata Templates` in VectorCraft's settings folder; the web build has none.
+`file.info.applyTemplate {path?|name?|data?, mode, apply?, base?}` reads one template (a file, a template in the
+folder, or the packet as text; at most 8 MB, more than any saved template holds) and merges it in one undo step, recording nothing when no field changes.
+`mode` is VectorCraft's own name for the three ways: `replace` clears the fields a template can hold (not the title)
+and takes the template's, `keep` keeps the fields and takes each one the template gives, and `append` keeps the fields,
+adds the template's keywords and takes its other fields only where the field is empty. A value `file.info` would
+refuse is left out. With `apply: false` nothing changes and the reply is the merged File Info, merged into `base` (the
+fields as `file.info` takes them) when given; the File Info dialog uses this for Import. A missing or bad `mode`, a
+file that is not XMP and a file over 8 MB are refused. `file.info.templates {create?}` lists the folder's `.xmp` files
+(the first 1,000 by name) as `{name, file, path}`, with the `folder` where the caller's file access shows full
+paths; `create: true` makes the folder first. `applyTemplate`'s `name` takes either a listed `name` or its `file`.
+
+```json
+{"name":"run_command","arguments":{"command":"file.info.applyTemplate","params":{"name":"Studio","mode":"append"}}}
+```
+
 ## Document Raster Effects Settings
 
 `document.rasterEffectsSettings` holds how raster effects (shadows, glows, blurs, feathers) become images when PDF
@@ -7882,7 +7995,8 @@ Besides SVG, Copy offers other apps PNG and PDF of the copied objects, and their
 preferences: `text/plain` (the text of a type-only copy, else the SVG markup with `copyAsSvg` when the images it
 embeds total at most 1 MiB, so a paste never reads a photo back as text, #2213), `image/svg+xml`
 (`copyAsSvg`), `application/pdf` (`copyAsPdf`) and `image/png` (always; PDF and PNG need objects with an
-area). Each one has a query command:
+area). For a caller with read roots, the list leaves out `image/svg+xml`, and the SVG markup as `text/plain`, when
+`clipboard.exportSvg` would refuse the SVG. Each one has a query command:
 `clipboard.exportSvg`, `clipboard.exportText` (null unless every copied object is type), `clipboard.exportPdf`
 (a one-page PDF, the page the objects' visual bounds) and `clipboard.exportPng {scale?}` (cropped to the objects,
 transparent around them). As in `document.export`, the PDF's and the PNG's replies list their notes in `warnings`
@@ -8614,10 +8728,13 @@ becomes an asset (or one asset with `multiple: false`).
 ### 3D assets
 
 Asset Export's menu item Export 3D Object and the 3D and Materials panel's Export 3D Object button
-(`assets.add3D {ids?, format?}`; the button passes the ids of the selected objects that have a 3D effect and then shows
-the Asset Export panel, [three-d.md](three-d.md#3d-and-materials-panel)) collect each selected object (or `ids`)
+(`assets.add3D {ids?, format?}`; the button then shows the Asset Export panel,
+[three-d.md](three-d.md#3d-and-materials-panel)) collect each selected object (or `ids`)
 that carries Extrude & Bevel, Revolve, Inflate or Rotate as a 3D asset, named after the object; an object already
-collected as a 3D asset keeps it, and an object without such an effect is refused. A 3D asset's Format is `usda` (the
+collected as a 3D asset keeps it. An object in `ids` without such an effect is refused. Without `ids`, the selected
+objects without one are left out, and so are a group or layer whose 3D effect is on a fill or stroke (it draws nothing
+to export) and a selected object inside another selected 3D object; the command is refused when no selected object is
+left. A 3D asset's Format is `usda` (the
 default), `usdz`, `gltf` or `obj`; the panel shows a Format row for the 3D assets it would export, and
 `assets.set3DFormat {assets, format}` sets it (an undo step only when the format changes). `assets.list` gives each
 asset's `format3D` (null for a picture asset).
@@ -8756,7 +8873,10 @@ path is that path, under the even-odd rule, so the image shows only inside it. T
 that can be edited or released. `file.place` answers `image`, the id of the image in the clip group. The
 [import options help page](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html)
 says that a file imported as one flattened image keeps the document's clipping path when it has one. `links.update`
-and `links.relink` read the file's pixels again and leave the clip group and its clipping path as they are. Files that name no clipping path, or name a path
+and `links.relink` read the file again: the clip group's clipping path becomes the one the new file names, under the
+even-odd rule, and the clip group stays as a plain group of the image when the new file names none. A plain image relinked to such a
+file goes into a clip group of its path. A clip group whose clipping path was changed in the document, or whose fill rule was, is kept as a
+clipping mask, with the file's clip group inside it. Files that name no clipping path, or name a path
 they don't have, come in as a plain image. `file.place` with `replace` on such a clip group puts a new image, clipped or
 not, at the scale and rotation of the image in the group.
 
@@ -9523,6 +9643,32 @@ https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"bunriKinshi":true}}}
 ```
 
+## Kurikaeshi Moji Shori
+
+`text.setFormat {kurikaeshiMojiShori: bool}` (Paragraph panel menu › Kurikaeshi Moji Shori, shown with the East Asian
+options) turns it on or off for the paragraphs of the selected type (or `ids`, or the paragraphs a `start` / `end`
+range touches). On, a repeat mark that starts a line of point or area type, horizontal or vertical, or starts a frame
+of type on a path (which holds one line), is drawn as the character it repeats, so both characters show when a line break separates them. The text keeps the mark: copying,
+searching, the caret and the line breaks stay as they were, and the drawn character takes the mark's place and width.
+SVG export with live type writes the drawn character, and embeds its glyph when fonts are embedded; it writes type on a
+path that starts with such a mark as outlines, with a warning.
+VectorCraft's set of marks and its rules: 々 repeats a Han ideograph, ゝ and ゞ a hiragana, and ヽ and ヾ a katakana; the
+repeated character is the last one before the mark in the paragraph that is not a repeat mark, a soft return or a
+combining voicing mark (U+3099, U+309A), looking back into the frames before when threaded type continues a paragraph
+from one frame into the next; ゝ and ヽ draw it without its voicing marks, and ゞ and ヾ draw its voiced form, or the
+plain kana when it has none; ゝ or ヽ followed by a combining voicing mark (U+3099) counts as ゞ or ヾ when the font draws the
+pair as one glyph, and is drawn as it is when the font draws two. A mark is drawn as it is when nothing before it in the paragraph fits, when the font has no glyph for the character, at the start of a
+paragraph, and inside tate-chu-yoko or warichu. Off by default. It is saved with the paragraph
+(`kurikaeshi_moji_shori` in `para`) only when on, paragraph styles carry it (`kurikaeshi_moji_shori` in a paragraph
+style's attributes), and Reset Panel turns it off. A value that is not true, false or null is refused, `null` leaves the
+setting as it is, and a call that gives the value the paragraphs already have records no undo step. One undo step. `.ai` editing data does not hold it, and a
+save reports a paragraph with it on as left out. The help page:
+https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"kurikaeshiMojiShori":true}}}
+```
+
 ## Korean Line Break Anywhere
 
 `text.setFormat {koreanLineBreakAnywhere: bool}` (Paragraph panel menu › Korean Line Break Anywhere, shown with the
@@ -10261,6 +10407,24 @@ off.
 ```json
 {"name":"run_command","arguments":{"command":"text.glyphAlternates","params":{"id":7,"start":2}}}
 {"name":"run_command","arguments":{"command":"text.setGlyphAlternate","params":{"id":7,"start":2,"gid":1043}}}
+```
+
+After Alternates for Current Selection, the Glyphs panel's Show menu and panel menu list the OpenType categories the
+browsed font has, and choosing one shows the glyphs its features give: characters first, then glyphs no character maps,
+which a double-click applies to the selected character as Entire Font does. `text.glyphCategories {family, style?}`
+lists them: `{family, style, categories: [{id, name?, glyphs: [glyph id]}]}`, from the single, alternate, multiple and
+ligature substitutions of the font's `GSUB` features, each glyph once, in this order: `ligatures` (`liga`, `dlig`,
+`hlig`), `swashes` (`swsh`, `cswh`), `stylisticAlternates` (`salt`), `ss01` to `ss20`, `smallCaps` (`smcp`, `c2sc`),
+`ornaments` (`ornm`), `fractions` (`frac`, `afrc`, `numr`, `dnom`) and `figures` (`lnum`, `onum`, `pnum`, `tnum`). A
+category without glyphs is left out, a stylistic set carries the font's name for it as `name` when the font gives one
+(the menu shows that name, else Set N), and contextual lookups are not followed. Without `style` the family's first
+style is used. The command refuses a family or style that is not available and a `family` or `style` that is not a
+string. The categories, their features, their names and their order are VectorCraft's own; the panel restricting its
+glyphs to a category chosen from the Show menu is described in [Glyphs panel
+overview](https://helpx.adobe.com/illustrator/desktop/design-with-text/special-characters-glyphs/glyphs-panel-overview.html).
+
+```json
+{"name":"run_command","arguments":{"command":"text.glyphCategories","params":{"family":"Source Sans 3","style":"Regular"}}}
 ```
 
 ### Alternates as OpenType feature values

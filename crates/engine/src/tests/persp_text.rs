@@ -399,6 +399,22 @@ fn click_to_size_dialogs_draw_on_the_active_plane_in_plane_units() {
     assert!(crate::perspective_click(&s, "shape.rectangle", &json!({}), at).is_none());
 }
 
+/// The Ellipse dialog's anchor count reaches the ellipse drawn on the active plane.
+#[test]
+fn an_ellipse_of_six_anchors_made_by_a_click_draws_on_the_active_plane() {
+    let (mut s, _) = persp_session();
+    s.execute("perspective.grid.show", &json!({"visible": true})).unwrap();
+    s.execute("perspective.plane.set", &json!({"plane": "right"})).unwrap();
+    let at = Point::new(470.0, 300.0);
+    let p = json!({"x": at.x, "y": at.y, "width": 50, "height": 30, "anchors": 6});
+    let (cmd, p) = crate::perspective_click(&s, "shape.ellipse", &p, at).unwrap();
+    let n = undo_len(&s);
+    let id = NodeId(s.execute(&cmd, &p).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(attached(&s, id).map(|a| a.0), Some(Plane::Right));
+    assert_eq!(node(&s, id).path_data().unwrap().anchor_count(), 6);
+}
+
 #[test]
 fn the_canvas_draws_type_in_perspective_foreshortened() {
     let (mut s, rect) = persp_session();

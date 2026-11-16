@@ -613,6 +613,18 @@ font-technology	Variable	Μεταβλητές
 	Copy Width Point	Αντιγραφή σημείου πλάτους
 	Copyright	Πνευματικά δικαιώματα
 	Copyright Info URL:	URL πληροφοριών πνευματικών δικαιωμάτων:
+	Save Metadata Template…	Αποθήκευση προτύπου μεταδεδομένων…
+	Import Options	Επιλογές εισαγωγής
+	Clear existing fields and use the template's	Απαλοιφή των υπαρχόντων πεδίων και χρήση εκείνων του προτύπου
+	Keep existing fields, but replace those the template has	Διατήρηση των υπαρχόντων πεδίων, αλλά αντικατάσταση όσων έχει το πρότυπο
+	Keep existing fields, but append those the template has	Διατήρηση των υπαρχόντων πεδίων, αλλά προσθήκη όσων έχει το πρότυπο
+@msg	the template name can't be empty	το όνομα του προτύπου δεν μπορεί να είναι κενό
+@msg	the template name isn't usable as a file name	το όνομα του προτύπου δεν μπορεί να χρησιμοποιηθεί ως όνομα αρχείου
+@msg	no metadata templates folder here	δεν υπάρχει φάκελος προτύπων μεταδεδομένων εδώ
+@msg	give `name` or `path`, not both	δώστε `name` ή `path`, όχι και τα δύο
+@msg	give one of `path`, `name` and `data`	δώστε ένα από τα `path`, `name` και `data`
+@msg	mode must be replace, keep or append	η λειτουργία πρέπει να είναι replace, keep ή append
+@msg	the file is not an XMP metadata template	το αρχείο δεν είναι πρότυπο μεταδεδομένων XMP
 	Copyright Notice:	Σημείωση πνευματικών δικαιωμάτων:
 	Copyright Status:	Κατάσταση πνευματικών δικαιωμάτων:
 	Copyright Symbol	Σύμβολο πνευματικών δικαιωμάτων
@@ -1146,6 +1158,7 @@ font-technology	Variable	Μεταβλητές
 	Highlight Size	Μέγεθος ανταύγειας
 	Blend Steps	Βήματα ανάμειξης
 	Shading Color	Χρώμα σκίασης
+	Black Overprint	Μαύρο με υπερεκτύπωση
 	Draw Hidden Faces	Σχεδίαση κρυφών εδρών
 	Eyedropper	Σταγονόμετρο (Eyedropper Tool)
 	Eyedropper Applies:	Το σταγονόμετρο εφαρμόζει:
@@ -2082,6 +2095,7 @@ font-technology	Variable	Μεταβλητές
 	Roman Hanging Punctuation	Κρεμαστή στίξη όρθιας γραφής
 	Korean Line Break Anywhere	Αλλαγή γραμμής κορεατικών οπουδήποτε
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Ρυθμίσεις σύνθεσης ανατολικής Ασίας
 	Korean Composition Settings	Ρυθμίσεις κορεατικής σύνθεσης
 	Rotate	Περιστροφή
@@ -2217,6 +2231,9 @@ font-technology	Variable	Μεταβλητές
 	Superscript	Εκθέτης
 	Superscript:	Εκθέτης:
 	Stylistic Alternates	Εναλλακτικοί χαρακτήρες στυλ
+	Ligatures	Συμπλέγματα χαρακτήρων
+	Ornaments	Κοσμήματα
+	Figures	Αριθμοί
 	Swash	Διακοσμητικά τελειώματα
 	Swatches	Δείγματα χρωμάτων
 	New Group	Νέα ομάδα
@@ -2491,6 +2508,27 @@ axis	Both	Και τα δύο
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: ένα παράθυρο διαλόγου δεν μπορεί να ανοίξει μέσα σε επανάκληση ενσωματωμένης συνάρτησης, getter, μετατροπή ή αρχείο που εκτελεί το $.evalFile· καλέστε το από τον κώδικα του ίδιου του σεναρίου
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: η επόμενη απάντηση στο `answers` είναι για το {_1}, όχι για το {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: το `answers` δεν έχει άλλη απάντηση για αυτό το παράθυρο διαλόγου
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	Το `answers` περιέχει {n} απάντηση που δεν χρησιμοποίησε το σενάριο|Το `answers` περιέχει {n} απαντήσεις που δεν χρησιμοποίησε το σενάριο
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	Το {_1} άφησε {n} αντικείμενο κάτω από το πινέλο χωρίς αλλαγή ({_2}): αναδιαμορφώνει μόνο διαδρομές|Το {_1} άφησε {n} αντικείμενα κάτω από το πινέλο χωρίς αλλαγή ({_2}): αναδιαμορφώνει μόνο διαδρομές
+liquify-tool	Warp	εργαλείο Παραμόρφωση
+liquify-tool	Twirl	εργαλείο Στροβιλισμός
+liquify-tool	Pucker	εργαλείο Συρρίκνωση
+liquify-tool	Bloat	εργαλείο Διόγκωση
+liquify-tool	Scallop	εργαλείο Κυματιστά άκρα
+liquify-tool	Crystallize	εργαλείο Κρυσταλλοποίηση
+liquify-tool	Wrinkle	εργαλείο Πτυχώσεις
+liquify-kind	graphs	γραφήματα
+liquify-kind	type	κείμενο
+liquify-kind	symbols	σύμβολα
+liquify-kind	images	εικόνες
+liquify-kind	meshes	πλέγματα
+liquify-kind	envelopes	περιβλήματα
+liquify-kind	repeats	επαναλήψεις
+liquify-kind	placed documents	τοποθετημένα έγγραφα
+liquify-kind	blends	αναμείξεις
+liquify-list-two	{0}, {1}	{0} και {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} και {1}
 @msg	vc.document{place} is too large for a script	το vc.document{place} είναι πολύ μεγάλο για σενάριο
 @msg	vc.log: the log of this run is full	vc.log: το αρχείο καταγραφής αυτής της εκτέλεσης είναι γεμάτο
 @msg	this function's script run has ended	η εκτέλεση σεναρίου αυτής της συνάρτησης έχει τελειώσει
@@ -3750,6 +3788,12 @@ digits	Malayalam	Μαλαγιάλαμ
 	Reshape Type Area	Αναδιαμόρφωση περιοχής κειμένου
 	Responsive	Αποκρινόμενο
 	Restore every preference to its default (applied on OK)	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους (εφαρμογή με το Εντάξει)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Η μονάδα για τα νέα έγγραφα από ενσωματωμένα μεγέθη, εκτός από μεγέθη σε εικονοστοιχεία, και για τα ανοιγμένα αρχεία χωρίς καταγεγραμμένη μονάδα· αν την επιλέξετε εδώ και πατήσετε Εντάξει, γίνεται και μονάδα του ενεργού εγγράφου.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Τα πάχη περιγράμματος, οι παύλες και τα διάκενα εμφανίζονται σε αυτή τη μονάδα και οι αριθμοί που πληκτρολογούνται γι’ αυτά διαβάζονται σε αυτή.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Τα μεγέθη κειμένου, το διάστιχο και η μετατόπιση γραμμής βάσης εμφανίζονται σε αυτή τη μονάδα και οι αριθμοί που πληκτρολογούνται γι’ αυτά διαβάζονται σε αυτή.
+	The unit for East Asian type measurements, which no field uses yet.	Η μονάδα για τις μετρήσεις κειμένου Ανατολικής Ασίας, την οποία δεν χρησιμοποιεί ακόμη κανένα πεδίο.
+	When on, a number typed without a unit into a field in picas is read in points.	Όταν είναι ενεργό, ένας αριθμός που πληκτρολογείται χωρίς μονάδα σε πεδίο σε πίκες διαβάζεται σε σημεία.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Με το Αναγνωριστικό XML, τα ονόματα αντικειμένων εμφανίζονται ως αναγνωριστικά XML στα Επίπεδα, στις Μεταβλητές και στις Επιλογές επιπέδου.
 	Reset all preferences to their defaults?	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους;
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Οι προεπιλογές εφαρμόζονται όταν κάνετε κλικ στο Εντάξει στις Προτιμήσεις. Το Ακύρωση εκεί διατηρεί τις τρέχουσες προτιμήσεις σας.
 	Restore Recovered Documents	Επαναφορά ανακτημένων εγγράφων
