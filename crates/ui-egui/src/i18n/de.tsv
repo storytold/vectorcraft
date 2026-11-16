@@ -5185,6 +5185,8 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	{label}: lost track of a shape's style	{label}: Der Stil einer Form ging verloren
 @msg	{label}: select paths	{label}: Wählen Sie Pfade aus
 @msg	{label}: select paths, compound paths, groups or text	{label}: Wählen Sie Pfade, zusammengesetzte Pfade, Gruppen oder Text aus
+@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	eine Linie oder ein anderer offener Pfad, der keine Fläche umschließt, ändert das Ergebnis nicht; um ihn einzubeziehen, wenden Sie zuerst Objekt › Pfad › Konturlinie darauf an
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} hat ein leeres Ergebnis geliefert: eine Linie oder ein anderer offener Pfad umschließt keine Fläche; um ihn einzubeziehen, wenden Sie zuerst Objekt › Pfad › Konturlinie darauf an
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC stimmt nicht überein
 @msg	{name}: no local header	{name}: kein lokaler Header

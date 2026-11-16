@@ -4592,6 +4592,8 @@ axis	Both	Ambos
 @msg	{label}: lost track of a shape's style	{label}: perdeu o estilo de uma forma
 @msg	{label}: select paths	{label}: selecione traçados
 @msg	{label}: select paths, compound paths, groups or text	{label}: selecione traçados, traçados compostos, grupos ou texto
+@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	uma linha ou outro caminho aberto que não envolve nenhuma área não altera o resultado; para incluí-lo, aplique primeiro Objeto › Caminho › Contornar Traçado a ele
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} produziu um resultado vazio: uma linha ou outro caminho aberto não envolve nenhuma área; para incluí-lo, aplique primeiro Objeto › Caminho › Contornar Traçado a ele
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC não confere
 @msg	{name}: no local header	{name}: sem cabeçalho local

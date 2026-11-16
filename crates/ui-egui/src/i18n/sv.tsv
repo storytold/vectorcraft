@@ -5180,6 +5180,8 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	{label}: lost track of a shape's style	{label}: tappade bort en forms stil
 @msg	{label}: select paths	{label}: markera banor
 @msg	{label}: select paths, compound paths, groups or text	{label}: markera banor, sammansatta banor, grupper eller text
+@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	en linje eller annan öppen bana som inte omsluter någon yta ändrar inte resultatet; för att ta med den, använd först Objekt › Bana › Konvertera kontur till form på den
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} gav ett tomt resultat: en linje eller annan öppen bana omsluter ingen yta; för att ta med den, använd först Objekt › Bana › Konvertera kontur till form på den
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC stämmer inte
 @msg	{name}: no local header	{name}: lokalt huvud saknas

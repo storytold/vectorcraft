@@ -7690,6 +7690,8 @@ imageTrace	Outline	Kontur
 @msg	{label}: lost track of a shape's style	{label}: mistede styr på en forms stil
 @msg	{label}: select paths	{label}: markér stier
 @msg	{label}: select paths, compound paths, groups or text	{label}: markér stier, sammensatte stier, grupper eller tekst
+@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	en linje eller anden åben kurve, der ikke omslutter noget område, ændrer ikke resultatet; anvend først Objekt › Kurve › Streg til kontur på den for at tage den med
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} gav et tomt resultat: en linje eller anden åben kurve omslutter intet område; anvend først Objekt › Kurve › Streg til kontur på den for at tage den med
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC matcher ikke
 @msg	{name}: no local header	{name}: ingen lokal header

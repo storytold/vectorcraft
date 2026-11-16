@@ -5302,6 +5302,8 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	{label}: lost track of a shape's style	{label}: втрачено стиль фігури
 @msg	{label}: select paths	{label}: виділіть контури
 @msg	{label}: select paths, compound paths, groups or text	{label}: виділіть контури, складені контури, групи або текст
+@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	лінія чи інший відкритий контур, що не охоплює площі, не змінює результату; щоб включити його, спершу застосуйте до нього Об’єкт › Контур › Обвести обведення
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} дав порожній результат: лінія чи інший відкритий контур не охоплює площі; щоб включити його, спершу застосуйте до нього Об’єкт › Контур › Обвести обведення
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: розбіжність CRC
 @msg	{name}: no local header	{name}: немає локального заголовка

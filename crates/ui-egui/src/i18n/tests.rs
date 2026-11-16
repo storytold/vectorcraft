@@ -4616,6 +4616,27 @@ fn pdfx_bleed_warning_is_translated() {
     }
 }
 
+/// The Shape Mode commands' warning for a selected line that encloses no area, which the status bar
+/// shows and the message scan doesn't read, and Intersect's error when such a line leaves nothing,
+/// are translated in each language of [`COMPLETE_MESSAGES`].
+#[test]
+fn shape_mode_open_path_warning_is_translated() {
+    let warning = vectorcraft_engine::cmd::SHAPE_MODE_OPEN_PATH_NO_AREA;
+    let mut s = vectorcraft_engine::Session::new();
+    let run = |s: &mut vectorcraft_engine::Session, id: &str, p: serde_json::Value| s.execute(id, &p);
+    run(&mut s, "file.new", serde_json::json!({"width": 200, "height": 200})).unwrap();
+    let square = run(&mut s, "shape.rectangle", serde_json::json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap()["id"].clone();
+    let line = run(&mut s, "shape.line", serde_json::json!({"x1": 20, "y1": 50, "x2": 80, "y2": 50})).unwrap()["id"].clone();
+    run(&mut s, "select.set", serde_json::json!({"ids": [square, line]})).unwrap();
+    let error = run(&mut s, "object.pathfinder.intersect", serde_json::json!({})).unwrap_err().to_string();
+    assert!(error.contains("Outline Stroke"), "{error}");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, warning), warning, "{code}");
+        assert!(!message(lang, &error).contains("encloses no area"), "{code}: {error}");
+    }
+}
+
 /// The errors of saving, renaming and deleting a tracing preset are translated in every language
 /// that translates every message.
 #[test]

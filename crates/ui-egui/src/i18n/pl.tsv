@@ -5410,6 +5410,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	{label}: lost track of a shape's style	{label}: utracono informację o stylu kształtu
 @msg	{label}: select paths	{label}: zaznacz ścieżki
 @msg	{label}: select paths, compound paths, groups or text	{label}: zaznacz ścieżki, ścieżki złożone, grupy lub tekst
+@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	linia lub inna otwarta ścieżka, która nie obejmuje żadnego obszaru, nie zmienia wyniku; aby ją uwzględnić, najpierw zastosuj do niej Obiekt › Ścieżka › Obrys konturu
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} dało pusty wynik: linia lub inna otwarta ścieżka nie obejmuje żadnego obszaru; aby ją uwzględnić, najpierw zastosuj do niej Obiekt › Ścieżka › Obrys konturu
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: niezgodność CRC
 @msg	{name}: no local header	{name}: brak nagłówka lokalnego

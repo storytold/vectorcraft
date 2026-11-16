@@ -5887,6 +5887,8 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	{label}: lost track of a shape's style	{label}: mất dấu kiểu của hình dạng
 @msg	{label}: select paths	{label}: hãy chọn đường dẫn
 @msg	{label}: select paths, compound paths, groups or text	{label}: hãy chọn đường dẫn, đường dẫn phức, nhóm hoặc văn bản
+@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	một đường thẳng hoặc đường dẫn mở khác không bao quanh vùng nào sẽ không làm thay đổi kết quả; để đưa nó vào, trước tiên hãy áp dụng Đối tượng › Đường dẫn › Đường bao nét cho nó
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} tạo ra kết quả trống: một đường thẳng hoặc đường dẫn mở khác không bao quanh vùng nào; để đưa nó vào, trước tiên hãy áp dụng Đối tượng › Đường dẫn › Đường bao nét cho nó
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC không khớp
 @msg	{name}: no local header	{name}: không có tiêu đề cục bộ

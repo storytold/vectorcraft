@@ -5252,6 +5252,8 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	{label}: lost track of a shape's style	{label} : le style d’une forme a été perdu
 @msg	{label}: select paths	{label} : sélectionnez des tracés
 @msg	{label}: select paths, compound paths, groups or text	{label} : sélectionnez des tracés, des tracés transparents, des groupes ou du texte
+@msg	a line or other open path that encloses no area does not change the result; to include it, apply Object › Path › Outline Stroke to it first	une ligne ou un autre tracé ouvert qui n’entoure aucune surface ne modifie pas le résultat ; pour l’inclure, appliquez-lui d’abord Objet › Tracé › Vectoriser le contour
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} a produit un résultat vide : une ligne ou un autre tracé ouvert n’entoure aucune surface ; pour l’inclure, appliquez-lui d’abord Objet › Tracé › Vectoriser le contour
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name} : CRC non concordant
 @msg	{name}: no local header	{name} : aucun en-tête local
