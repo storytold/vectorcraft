@@ -1011,6 +1011,9 @@ fn structured_junk() {
         ("addon.packaging.roles", json!({"ids": [-1, 1e300]})),
         ("addon.packaging.setRoleSwatch", json!({"role": "perforation", "swatch": "[Registration]"})),
         ("addon.packaging.setRoleSwatch", json!({"role": "cut", "swatch": 5})),
+        ("addon.packaging.check", json!({"ids": [u64::MAX, -1], "select": "yes", "tolerance": 1e308})),
+        ("addon.packaging.check", json!({"tolerance": "-5 mm", "select": true})),
+        ("addon.packaging.check", json!({"ids": [], "tolerance": null})),
         // Smart Pen add-on.
         ("addon.pen.append", json!({"id": 2, "x": 1e308, "y": 0, "in": [1e308, -1e308]})),
         ("addon.pen.append", json!({"id": 2, "subpath": u64::MAX, "x": 0, "y": 0, "segment": "curved"})),

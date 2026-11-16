@@ -1245,6 +1245,41 @@ fn single_file_pdfs_hold_every_chosen_artboard() {
     assert!(s.execute("document.exportForScreens", &json!({"pdfs": "both", "formats": [{"format": "pdf"}]})).is_err());
 }
 
+/// Export PDFs As › Single file holds artboards: with assets, layers or a file per selected object,
+/// whose files each hold one item's art, it is refused (the Example line too) instead of writing
+/// the first item alone under the document's name; Multiple files writes a PDF of each item. The
+/// selection as one file is one PDF either way.
+#[test]
+fn single_file_pdfs_are_refused_for_assets_layers_and_each_object() {
+    let mut s = session(1);
+    s.execute("layer.new", &json!({"name": "Second"})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 30, "y": 5, "width": 8, "height": 8})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let layers: Vec<u64> = doc.layers.iter().map(|l| l.id.0).collect();
+    let art: Vec<u64> = doc.layers.iter().filter_map(|l| l.children()).flatten().map(|c| c.id.0).collect();
+    assert_eq!((layers.len(), art.len()), (2, 2));
+    let a = s.execute("assets.add", &json!({"ids": [art[0]], "name": "Square"})).unwrap()["assets"][0].as_u64().unwrap();
+    let b = s.execute("assets.add", &json!({"ids": [art[1]], "name": "Dot"})).unwrap()["assets"][0].as_u64().unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let pdf = json!([{"format": "pdf"}]);
+    for source in [json!({"assets": [a, b]}), json!({"layers": layers}), json!({"selection": "each"})] {
+        let mut p = source.clone();
+        p["formats"] = pdf.clone();
+        p["pdfs"] = json!("multiple");
+        let r = export(&mut s, p.clone());
+        assert_eq!(names(&r).len(), 2, "a PDF each: {:?} ({source})", names(&r));
+        for (name, bytes) in files(&r) {
+            assert_eq!(vectorcraft_pdf::import(&bytes).unwrap().artboards.len(), 1, "{name}");
+        }
+        p["pdfs"] = json!("single");
+        let e = s.execute("document.exportForScreens", &p).unwrap_err().to_string();
+        assert!(e.contains("pdfs `single`"), "{e} ({source})");
+        assert!(super::screens::first_file(&s, &p).is_err(), "{source}");
+    }
+    let r = export(&mut s, json!({"selection": "one", "pdfs": "single", "formats": pdf}));
+    assert_eq!(names(&r), ["Selection.pdf"]);
+}
+
 /// The warnings of reply `r` that name an option the file doesn't read.
 fn unused(r: &Value) -> Vec<String> {
     r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).filter(|w| w.contains("was not used")).map(str::to_string).collect()
