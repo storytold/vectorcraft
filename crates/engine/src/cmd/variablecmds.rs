@@ -11,6 +11,7 @@
 //! visibility, `@` for image, no prefix for text). `variable.loadLibrary` replaces the variables and data sets with the
 //! variables and data sets of a variable library, the XML file of the reference app's Save
 //! Variable Library, and `variable.saveLibrary` writes the variables and data sets as one.
+//! `variable.import` (the panel's Import…) runs one of the two readers by the file's extension.
 //! Agents reach every command through `run_command`, like all engine commands.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -245,39 +246,92 @@ fn define(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"name": name, "kind": kind.label()}))
 }
 
+/// Whether the object `id`, bound to the variable `name`, can stay bound to it once the variable
+/// is of `kind`: a text variable drives type that holds no other text variable, an image variable
+/// drives an image object, a graph variable drives a graph root, and a visibility variable drives
+/// any object. Locks and hidden layers don't count, as they don't unbind anything else either.
+fn keeps_binding(doc: &Document, id: NodeId, name: &str, kind: VariableKind) -> bool {
+    let Some(n) = doc.node(id) else { return false };
+    match kind {
+        VariableKind::Text => {
+            matches!(n.kind, NodeKind::Text(_))
+                && !doc.variables.bindings.get(&id).is_some_and(|bound| {
+                    doc.variables.variables.iter().any(|v| v.kind == VariableKind::Text && v.name != name && bound.contains(&v.name))
+                })
+        }
+        VariableKind::Visibility => true,
+        VariableKind::Image => matches!(n.kind, NodeKind::Image(_)),
+        VariableKind::Graph => n.extras().graph.is_some(),
+        VariableKind::Unknown => false,
+    }
+}
+
+/// Variable Options: rename a variable (`newName`), change its kind (`kind`), or both, in one undo
+/// step, carrying its bindings and its values in every data set to the new name. A kind change
+/// unbinds the objects that can't hold the new kind ([`keeps_binding`]) and drops the variable's
+/// value in every data set. A call that changes nothing adds no undo step.
 fn rename(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "variable.rename";
     let from = var_name(p, C)?;
-    let to = named(p.get("newName").and_then(Value::as_str), "newName", C)?;
-    let st = s.doc()?;
-    if st.doc.variables.variable(&from).is_none() {
-        return Err(bad(C, format!("no variable named `{from}`")));
+    // An omitted key is no change; a null, like any other value that isn't a name or a kind, is refused.
+    let to = match p.get("newName") {
+        None => None,
+        Some(v) => Some(named(v.as_str(), "newName", C)?),
+    };
+    let kind = match p.get("kind") {
+        None => None,
+        Some(v) => Some(v.as_str().and_then(VariableKind::parse).ok_or_else(|| bad(C, "`kind` must be `text`, `visibility`, `image` or `graph`"))?),
+    };
+    if to.is_none() && kind.is_none() {
+        return Err(bad(C, "missing `newName` or `kind`"));
     }
-    if st.doc.variables.variable(&to).is_some() {
+    let doc = &s.doc()?.doc;
+    let Some(old) = doc.variables.variable(&from) else {
+        return Err(bad(C, format!("no variable named `{from}`")));
+    };
+    let to = to.unwrap_or_else(|| from.clone());
+    if to != from && doc.variables.variable(&to).is_some() {
         return Err(bad(C, format!("variable `{to}` already exists")));
     }
-    s.edit("Rename Variable", |d, _| {
-        let v = d.variables.variables.iter_mut().find(|v| v.name == from).ok_or_else(|| bad(C, format!("no variable named `{from}`")))?;
+    let kind = kind.unwrap_or(old.kind);
+    let retyped = kind != old.kind;
+    let unbound: Vec<NodeId> =
+        if retyped { doc.variables.objects_of(&from).into_iter().filter(|id| !keeps_binding(doc, *id, &from, kind)).collect() } else { Vec::new() };
+    let label = if retyped { "Variable Options" } else { "Rename Variable" };
+    let dropped = edit_variables(s, label, |vars| {
+        let v = vars.variables.iter_mut().find(|v| v.name == from).ok_or_else(|| bad(C, format!("no variable named `{from}`")))?;
         v.name = to.clone();
-        for bound in d.variables.bindings.values_mut() {
+        v.kind = kind;
+        for id in &unbound {
+            vars.unbind(*id, &from);
+        }
+        for bound in vars.bindings.values_mut() {
             if bound.remove(&from) {
                 bound.insert(to.clone());
             }
         }
-        for ds in &mut d.variables.datasets {
-            if let Some(value) = ds.values.remove(&from) {
-                ds.values.insert(to.clone(), value);
+        let mut dropped = 0;
+        for ds in &mut vars.datasets {
+            match ds.values.remove(&from) {
+                // A rename alone carries every value, one that doesn't fit the kind included; a kind
+                // change drops them all, as none was given for the new kind.
+                Some(value) if !retyped => {
+                    ds.values.insert(to.clone(), value);
+                }
+                Some(_) => dropped += 1,
+                None => {}
             }
         }
-        Ok(())
+        Ok(dropped)
     })?;
-    // The highlight names a variable, so it follows the rename rather than going stale.
+    // The highlight names a variable, so it follows the rename rather than going stale. A call
+    // that leaves the name as it was leaves the revision alone too.
     let st = s.doc_mut()?;
-    if st.variables_highlight.as_deref() == Some(from.as_str()) {
+    if to != from && st.variables_highlight.as_deref() == Some(from.as_str()) {
         st.variables_highlight = Some(to.clone());
+        st.revision += 1;
     }
-    st.revision += 1;
-    Ok(json!({"from": from, "name": to}))
+    Ok(json!({"from": from, "name": to, "kind": kind.label(), "unbound": unbound.iter().map(|i| i.0).collect::<Vec<_>>(), "droppedValues": dropped}))
 }
 
 /// Make Text / Visibility / Image / Graph Dynamic: define a variable of that kind and bind the
@@ -812,6 +866,22 @@ fn dataset_step(s: &mut Session, cmd: &str, forward: bool) -> Result<Value> {
     apply_dataset(s, &name)
 }
 
+/// The Variables panel's Import…: a data source file read by its extension, a CSV, TSV or TXT
+/// file as `dataset.import` reads it and an XML file as `variable.loadLibrary` reads it. The
+/// result is that command's, with `format` set to `csv` or `xml`.
+fn variable_import(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "variable.import";
+    let path = str_param(p, "path").ok_or_else(|| bad(C, "missing `path`"))?;
+    let ext = std::path::Path::new(path).extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
+    let (format, mut out) = match ext.as_deref() {
+        Some("csv" | "tsv" | "txt") => ("csv", dataset_import(s, &json!({"path": path}))?),
+        Some("xml") => ("xml", load_library(s, &json!({"path": path}))?),
+        _ => return Err(bad(C, "Import reads a data source file ending in .csv, .tsv, .txt or .xml")),
+    };
+    out["format"] = json!(format);
+    Ok(out)
+}
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -837,7 +907,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rename Variable",
             ["Window", "Variables"],
             None,
-            "{name, newName} rename a variable, with its bindings and its values in every dataset; refused while the variables are locked",
+            "{name, newName?, kind?: text|visibility|image|graph} Variable Options: rename a variable, with its bindings and its values in every dataset, change its kind, or both, in one undo step (none when the name and the kind are the ones it has). A kind change unbinds every object that can't hold the new kind (a text variable keeps type that has no other text variable, an image variable keeps image objects, a graph variable keeps graph roots, a visibility variable keeps every object) and drops the variable's values in every dataset; locked and hidden objects keep their binding when they can hold it. Needs `newName` or `kind`, and a null or empty one is refused; refused while the variables are locked → {from, name, kind, unbound: [id…], droppedValues}",
             variables_unlocked,
             rename
         ),
@@ -1003,6 +1073,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{path? | data? | dataBase64? | csv?} replace every dataset with the rows of a CSV, comma- or tab-separated, in UTF-16 (with a byte-order mark, or without one when at least half of its two-byte units hold a NUL byte and only one byte order reads a line break; any other file with NUL bytes is refused), UTF-8 or else Windows-1252 (header: one variable name per column, whatever its case; one row per dataset, named Data Set 1, 2… in file order). The document's variables and their bindings stay. A header that names no variable defines one, unbound: `#Name` defines a visibility variable, `@Name` defines an image variable, and a header without a prefix defines a text variable. A prefixed header whose name is a variable of another kind, and a `%` header that isn't a variable's exact name (graph data files), are refused, and so are two headers that name one variable and a header that would define a variable while the variables are locked. An import that leaves the variables and data sets as they were adds no undo step → {imported, names, defined, deletedDataSets}",
             has_doc,
             dataset_import
+        ),
+        cmd!(
+            "variable.import",
+            "Import…",
+            ["Window", "Variables"],
+            None,
+            "{path} import a data source file, chosen by its extension (any case): a .csv, .tsv or .txt file is read as dataset.import reads it, and an .xml file as variable.loadLibrary reads it, with their refusals and undo steps; any other extension, or none, is refused before the file is read → the result of that command with `format`: `csv` or `xml`",
+            has_doc,
+            variable_import
         ),
         cmd!(
             query "dataset.export",

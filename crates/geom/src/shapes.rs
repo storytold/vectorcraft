@@ -103,6 +103,38 @@ pub fn ellipse(r: Rect) -> PathData {
     PathData::single(SubPath::new(anchors, true))
 }
 
+/// Ellipse inscribed in `r` with `n` smooth anchors (at least 2) spaced evenly by angle, clockwise
+/// on screen from the left one, as [`ellipse`] runs. Each segment is a cubic whose handles are
+/// 4/3·tan(θ/4) of the tangent at its ends (θ = 360°/`n`), scaled along each axis; the path is then
+/// fitted to `r`, so its bounds are `r` whatever the count. 4 anchors give [`ellipse`].
+pub fn ellipse_with_anchors(r: Rect, n: u32) -> PathData {
+    let n = n.max(2);
+    let r = r.abs();
+    let c = r.center();
+    let (rx, ry) = (r.width() / 2.0, r.height() / 2.0);
+    let step = TAU / f64::from(n);
+    let k = 4.0 / 3.0 * (step / 4.0).tan();
+    let anchors = (0..n)
+        .map(|i| {
+            // From the left anchor (angle π). With y down, sin is negative just past π, so the next
+            // anchor is above the centre: left, then top, then right, as `ellipse` runs.
+            let a = PI + step * f64::from(i);
+            let p = Point::new(c.x + rx * a.cos(), c.y + ry * a.sin());
+            let d = Vec2::new(-rx * a.sin(), ry * a.cos()) * k;
+            Anchor { p, h_in: p - d, h_out: p + d, kind: AnchorKind::Smooth }
+        })
+        .collect();
+    let path = PathData::single(SubPath::new(anchors, true));
+    // Between anchors a curve can reach a little past the ellipse or stop short of it (0.15% of
+    // the height with 3 anchors): fit the bounds to `r` along each axis that has a size.
+    let Some(b) = path.bounds() else { return path };
+    let fit = |want: f64, got: f64| if want > 0.0 && got > 0.0 { want / got } else { 1.0 };
+    let (sx, sy) = (fit(r.width(), b.width()), fit(r.height(), b.height()));
+    path.transformed(
+        kurbo::Affine::translate(r.origin().to_vec2()) * kurbo::Affine::scale_non_uniform(sx, sy) * kurbo::Affine::translate(-b.origin().to_vec2()),
+    )
+}
+
 /// How an ellipse or shape arc is closed or left open when cut between start and end angles.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -694,6 +726,29 @@ mod tests {
     }
 
     #[test]
+    fn ellipse_with_four_anchors_is_the_ellipse_and_others_fit_the_box() {
+        let r = Rect::new(10.0, 20.0, 110.0, 80.0);
+        let (four, plain) = (ellipse_with_anchors(r, 4), ellipse(r));
+        for (a, b) in four.subpaths[0].anchors.iter().zip(&plain.subpaths[0].anchors) {
+            assert!(a.p.distance(b.p) < 1e-9 && a.h_in.distance(b.h_in) < 1e-9 && a.h_out.distance(b.h_out) < 1e-9, "{a:?} {b:?}");
+        }
+        for n in [2, 3, 5, 7, 9, 1000] {
+            let p = ellipse_with_anchors(r, n);
+            assert_eq!(p.anchor_count(), n as usize);
+            let b = p.bounds().unwrap();
+            assert!(
+                (b.x0 - r.x0).abs() < 1e-9 && (b.y0 - r.y0).abs() < 1e-9 && (b.x1 - r.x1).abs() < 1e-9 && (b.y1 - r.y1).abs() < 1e-9,
+                "{n}: {b:?}"
+            );
+            let area = p.subpaths[0].area().abs();
+            assert!((area - PI * 50.0 * 30.0).abs() / area < if n == 2 { 0.1 } else { 0.01 }, "{n}: {area}");
+        }
+        // A box with no height leaves the path flat rather than dividing by zero.
+        let flat = ellipse_with_anchors(Rect::new(0.0, 5.0, 40.0, 5.0), 6);
+        assert!(flat.subpaths[0].anchors.iter().all(|a| a.p.y == 5.0 && a.p.x.is_finite()));
+    }
+
+    #[test]
     fn rounded_rect_clamps() {
         let p = rounded_rectangle(Rect::new(0.0, 0.0, 20.0, 10.0), 100.0);
         assert_eq!(p.anchor_count(), 8);
@@ -814,7 +869,7 @@ mod tests {
         for decay in [20.0, 30.0, 50.0, 80.0, 95.0] {
             for clockwise in [true, false] {
                 let p = spiral(center, 100.0, decay, 8, clockwise);
-                let anchors = &p.subpaths[0].anchors;
+                let anchors = &p.subpaths[0].anchors.to_vec();
                 let k = (decay / 100.0_f64).ln() / TAU;
                 let mut worst = 0.0_f64;
                 for pair in anchors.windows(2) {

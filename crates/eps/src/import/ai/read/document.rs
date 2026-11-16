@@ -934,6 +934,13 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// How many times as long [`Self::space`] makes a length in art space: a Large Canvas copy's
+    /// declared scale in the document, and 1 in a pattern's or a symbol's definition.
+    pub(super) fn space_scale(&mut self) -> f64 {
+        let k = self.space().determinant().abs().sqrt();
+        if k.is_finite() && k > 0.0 { k } else { 1.0 }
+    }
+
     /// The space an image's matrix is in → where the art being read goes: [`Self::space`], and in a
     /// symbol's art (outside a pattern's definition) the canvas's space turned y up about art space's
     /// origin there, as an instance's matrix in it is; `None` there without a template box.
@@ -1399,8 +1406,9 @@ impl<'a> Reader<'a> {
 }
 
 /// Link the objects of `links` among `nodes` to their graphic style's id, each only when it has its
-/// style's appearance and transparency (`styles`, whose ids are 1, 2, … in order). A path, which
-/// has no contents, takes the style's contents slot.
+/// style's appearance and transparency (`styles`, whose ids are 1, 2, … in order), their members
+/// and their opacity masks' art included. A path, which has no contents, takes the style's contents
+/// slot.
 fn link_styles(nodes: &mut [Arc<Node>], links: &HashMap<NodeId, u32>, styles: &[GraphicStyle], depth: usize) {
     if depth > MAX_DEPTH {
         return;
@@ -1418,6 +1426,11 @@ fn link_styles(nodes: &mut [Arc<Node>], links: &HashMap<NodeId, u32>, styles: &[
                 n.appearance = appearance.into();
                 n.extras_mut().graphic_style = Some(*id);
             }
+        }
+        if n.extras().mask.is_some()
+            && let Some(m) = Arc::make_mut(n).extras_mut().mask.as_mut()
+        {
+            link_styles(std::slice::from_mut(&mut m.art), links, styles, depth + 1);
         }
         if n.children().is_some_and(|c| !c.is_empty())
             && let Some(c) = Arc::make_mut(n).children_mut()
