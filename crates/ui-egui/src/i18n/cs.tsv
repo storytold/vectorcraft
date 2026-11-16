@@ -1749,6 +1749,10 @@ digits	Malayalam	Malajálamské
 	Em Box	Čtverčík
 	x-Height	Výška x
 	ICF Box	Rámeček ICF
+	Show Sample	Zobrazit ukázku
+	Hide Sample	Skrýt ukázku
+	Max Ascent/Descent	Max. výška/hloubka
+	Max Ascender	Max. horní dotah
 	Copy Color Value (Hex)	Kopírovat hodnotu barvy (hex)
 	Create New Swatch…	Vytvořit novou položku vzorníku…
 	Name 40%	Název 40 %
@@ -3697,6 +3701,8 @@ theme	Appearance	Motiv
 	Find Font Files	Najít soubory písem
 	Add Font Files	Přidat soubory písem
 	Font List	Seznam písem
+	Show Similar Fonts	Zobrazit podobná písma
+	Clear Similar Fonts	Zrušit podobná písma
 	Fonts in Document	Písma v dokumentu
 	Refresh Font List	Obnovit seznam písem
 	Replace Font	Nahradit písmo
@@ -3732,6 +3738,7 @@ theme	Appearance	Motiv
 	Connect Data Points	Spojit datové body
 	Edge-to-Edge Lines	Čáry od okraje k okraji
 	Draw Filled Lines	Kreslit vyplněné čáry
+	Line Width	Šířka čáry
 	Tick Values	Hodnoty značek
 	Override Calculated Values	Přepsat vypočítané hodnoty
 	Divisions	Dílky
@@ -4918,6 +4925,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	Divide Objects Below: select exactly one path	Rozdělit objekty pod: vyberte právě jednu cestu
 @msg	Downloaded {what}	Staženo: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Rozložit vzhled: výběr má základní vzhled
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	některé rastrové efekty nebyly převedeny na obrazy: zabraly by více než 1 024 obrazů nebo celkem 256 megapixelů
 @msg	Expand: no brush strokes selected	Rozložit: nejsou vybrány žádné tahy štětcem
 @msg	Expand: no gradient fills	Rozložit: žádné přechodové výplně
 @msg	Expand: nothing to expand	Rozložit: není co rozložit
@@ -6356,7 +6364,7 @@ mark-style	Japanese	Japonské
 @msg	Unknown dimension style	Neznámý styl kóty
 @msg	Unknown unit	Neznámá jednotka
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Uzavře kruhové konce otevřených profilů. Boční řezy částečného otočení zůstávají otevřené.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Uzavře kruhové konce otevřených profilů. Boční řezy částečného otočení se také uzavřou.
 @msg	span must be "object" or "selection", got {v}	span musí být "object" nebo "selection", ne {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" umísťuje `gradient`, ne vzorník
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" umísťuje přechod: zadejte `gradient`
@@ -6508,6 +6516,7 @@ mark-style	Japanese	Japonské
 	Single Word Justification:	Zarovnání jednoho slova:
 	Full Justify	Zarovnat do bloku
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum nesmí překročit požadovanou hodnotu ani požadovaná hodnota maximum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: minimum nesmí překročit požadovanou hodnotu ani požadovaná hodnota maximum
 	Justification	Zarovnání do bloku
 	Add filters from the list above	Přidejte filtry ze seznamu výše
 	Add to Stack	Přidat na zásobník
@@ -7450,6 +7459,22 @@ breakText	Glyphs	Glyfy
 @msg	one circle is inside the other	jeden kruh je uvnitř druhého
 @msg	the circles are too far apart for this radius: raise the radius	kruhy jsou pro tento poloměr příliš daleko od sebe: zvětšete poloměr
 @msg	the circles are too far apart for this radius	kruhy jsou pro tento poloměr příliš daleko od sebe
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Společné tečny…
+	Common Tangents	Společné tečny
+	Tangents	Tečny
+	Centerline	Středová čára
+	External	Vnější
+	Internal	Vnitřní
+@msg	select two closed paths	vyberte dvě uzavřené cesty
+@msg	a selected path is open	vybraná cesta je otevřená
+@msg	a selected path is not convex	vybraná cesta není konvexní
+@msg	a selected path has no area	vybraná cesta nemá žádnou plochu
+@msg	a selected path has more than 10000 segments	vybraná cesta má více než 10000 segmentů
+@msg	the two paths have the same outline	obě cesty mají stejný obrys
+@msg	One path lies inside the other, so they have no common tangents	Jedna cesta leží uvnitř druhé, takže nemají žádné společné tečny
+@msg	The paths overlap, so they have no internal tangents	Cesty se překrývají, takže nemají žádné vnitřní tečny
+@msg	One path lies inside the other, so they have no internal tangents	Jedna cesta leží uvnitř druhé, takže nemají žádné vnitřní tečny
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Rozložit čárky na cesty
 @msg	select paths with dashed strokes to expand	vyberte cesty s čárkovaným tahem k rozložení
@@ -7525,7 +7550,7 @@ breakText	Glyphs	Glyfy
 @msg	stroke cannot be set on a symbol instance	stroke nelze nastavit u instance symbolu
 @msg	fill on a symbol instance must be a solid color or none	fill instance symbolu musí být plná barva nebo none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} nelze nastavit u obrazu bez efektu Převést na tvar nebo Převést objekt na obrys
-@msg	pass newName, registration, exportType, nineSlice and/or type	zadejte newName, registration, exportType, nineSlice a/nebo type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	zadejte newName, registration, exportType, nineSlice, type a/nebo alignToPixelGrid
 	Text Flow	Tok textu
 	By Rows	Po řádcích
 	By Columns	Po sloupcích
@@ -7867,6 +7892,8 @@ breakText	Glyphs	Glyfy
 @msg	No bridge of this width fits across the selected art	Přes vybranou kresbu se nevejde žádný můstek této šířky
 @msg	Some islands could not be joined to the area around the art	Některé ostrůvky nebylo možné připojit k oblasti kolem kresby
 @msg	`width` must be from {lo} to {hi} pt	`width` musí být od {lo} do {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` musí být od -180 do 180 stupňů
+@msg	`roundness` must be from 1 to 100%	`roundness` musí být od 1 do 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` musí být celé číslo od 1 do {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Rámeček a linie pro vybírání…
 	Weed Box and Lines	Rámeček a linie pro vybírání
@@ -9120,7 +9147,9 @@ breakText	Glyphs	Glyfy
 @msg	position must be normal, superscript or subscript	position musí být normal, superscript nebo subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position musí být topLeft, topRight, bottomLeft nebo bottomRight
 @msg	positions must be between 0 and 100000 pt	positions musí být mezi 0 a 100000 pt
+@msg	ppi can't be more than {max} for this image	ppi nemůže být pro tento obrázek víc než {max}
 @msg	ppi must be a positive number, not {ppi}	ppi musí být kladné číslo, ne {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim ponechává pixely obrázku beze změny: vynechte ppi
 @msg	ppi must be between 1 and 2400	ppi musí být mezi 1 a 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` není transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape musí být clippingMask|transparency

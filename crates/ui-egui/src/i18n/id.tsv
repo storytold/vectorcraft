@@ -1605,6 +1605,10 @@ digits	Malayalam	Malayalam
 	Em Box	Em Box
 	x-Height	Tinggi x
 	ICF Box	Kotak ICF
+	Show Sample	Tampilkan contoh
+	Hide Sample	Sembunyikan contoh
+	Max Ascent/Descent	Tinggi/kedalaman maks.
+	Max Ascender	Ascender maks.
 	Copy Color Value (Hex)	Salin nilai warna (Hex)
 	Create New Swatch…	Buat swatch baru…
 	Name 40%	Nama 40%
@@ -3371,6 +3375,8 @@ theme	Appearance	Tampilan
 	Find Font Files	Cari file font
 	Add Font Files	Tambahkan file font
 	Font List	Daftar font
+	Show Similar Fonts	Tampilkan font serupa
+	Clear Similar Fonts	Hapus font serupa
 	Fonts in Document	Font dalam dokumen
 	Refresh Font List	Segarkan daftar font
 	Replace Font	Ganti font
@@ -3406,6 +3412,7 @@ theme	Appearance	Tampilan
 	Connect Data Points	Hubungkan titik data
 	Edge-to-Edge Lines	Garis dari tepi ke tepi
 	Draw Filled Lines	Gambar garis terisi
+	Line Width	Lebar garis
 	Tick Values	Nilai tanda skala
 	Override Calculated Values	Timpa nilai terhitung
 	Divisions	Pembagian
@@ -5657,7 +5664,7 @@ mark-style	Japanese	Jepang
 @msg	Unknown dimension orientation	Orientasi dimensi tidak dikenal
 @msg	Unknown dimension style	Gaya dimensi tidak dikenal
 @msg	Unknown unit	Satuan tidak dikenal
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Menutup ujung melingkar profil terbuka. Sapuan parsial mempertahankan sisi potongannya tetap terbuka.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Menutup ujung melingkar profil terbuka. Sapuan parsial juga menutup sisi potongannya.
 	Darkness	Kegelapan
 	Isolate Selected Object	Isolasikan objek terpilih
 	Keep selected	Tetap terseleksi
@@ -6773,6 +6780,22 @@ breakText	Glyphs	Glif
 @msg	one circle is inside the other	satu lingkaran berada di dalam lingkaran lainnya
 @msg	the circles are too far apart for this radius: raise the radius	lingkaran terlalu berjauhan untuk radius ini: perbesar radius
 @msg	the circles are too far apart for this radius	lingkaran terlalu berjauhan untuk radius ini
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Garis Singgung Persekutuan…
+	Common Tangents	Garis Singgung Persekutuan
+	Tangents	Garis Singgung
+	Centerline	Garis Tengah
+	External	Luar
+	Internal	Dalam
+@msg	select two closed paths	pilih dua jalur tertutup
+@msg	a selected path is open	jalur yang dipilih terbuka
+@msg	a selected path is not convex	jalur yang dipilih tidak cembung
+@msg	a selected path has no area	jalur yang dipilih tidak memiliki luas
+@msg	a selected path has more than 10000 segments	jalur yang dipilih memiliki lebih dari 10000 segmen
+@msg	the two paths have the same outline	kedua jalur memiliki garis luar yang sama
+@msg	One path lies inside the other, so they have no common tangents	Satu jalur berada di dalam jalur lainnya, sehingga tidak ada garis singgung persekutuan
+@msg	The paths overlap, so they have no internal tangents	Jalur-jalur saling tumpang tindih, sehingga tidak ada garis singgung dalam
+@msg	One path lies inside the other, so they have no internal tangents	Satu jalur berada di dalam jalur lainnya, sehingga tidak ada garis singgung dalam
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Perluas garis putus menjadi jalur
 @msg	select paths with dashed strokes to expand	pilih jalur dengan stroke putus-putus yang akan diperluas
@@ -6848,7 +6871,7 @@ breakText	Glyphs	Glif
 @msg	stroke cannot be set on a symbol instance	stroke tidak dapat diatur pada instans simbol
 @msg	fill on a symbol instance must be a solid color or none	fill pada instans simbol harus berupa warna solid atau none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} tidak dapat diatur pada gambar tanpa efek Konversi ke bentuk atau Kerangka objek
-@msg	pass newName, registration, exportType, nineSlice and/or type	berikan newName, registration, exportType, nineSlice dan/atau type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	berikan newName, registration, exportType, nineSlice, type dan/atau alignToPixelGrid
 	Text Flow	Alur teks
 	By Rows	Per baris
 	By Columns	Per kolom

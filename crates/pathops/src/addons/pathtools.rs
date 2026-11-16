@@ -4,7 +4,8 @@
 //! tool shows over a path, open paths lengthened or shortened at an end ([`extend`]), the places
 //! where paths cross ([`crossings`]), the stretches between them ([`spans`]), anchors slid along
 //! their path ([`slide`]), touching edges merged ([`shared_edge`]), paths divided into dashes
-//! ([`divide_dashes`]), two circles joined by a smooth bridge ([`smooth_bridge`]), the
+//! ([`divide_dashes`]), two circles joined by a smooth bridge ([`smooth_bridge`]), the common
+//! tangents of two convex outlines ([`common_tangents`]), the
 //! Parametric Shape Tool's shapes ([`shapes`]) and the circles that touch two or three shapes
 //! ([`tangent_circles`]).
 
@@ -16,6 +17,7 @@ pub mod shapes;
 mod shared_edge;
 mod slide;
 mod tangent_circle;
+mod tangents;
 #[cfg(test)]
 mod tests;
 mod trim;
@@ -36,6 +38,7 @@ pub use slide::{MAX_SLIDE, slide_anchor, slide_stops, slide_t_at};
 pub use tangent_circle::{
     Circle as TangentCircle, MAX_TANGENT_CIRCLE_SEGMENTS, MAX_TANGENT_CIRCLES, TangentCircleError, tangent_circle_segments, tangent_circles,
 };
+pub use tangents::{Coincide, MAX_TANGENT_SEGMENTS, Outline, OutlineError, Tangent, TangentKind, common_tangents};
 pub use trim::{Span, slice, span_at, spans, without_spans};
 
 use crate::fit::{end_tangent, start_tangent};

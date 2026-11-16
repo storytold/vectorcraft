@@ -706,6 +706,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	No bridge of this width fits across the selected art	Ingen bro med denne bredde passer hen over den markerede grafik
 @msg	Some islands could not be joined to the area around the art	Nogle øer kunne ikke forbindes med området omkring grafikken
 @msg	`width` must be from {lo} to {hi} pt	`width` skal være fra {lo} til {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` skal være fra -180 til 180 grader
+@msg	`roundness` must be from 1 to 100%	`roundness` skal være fra 1 til 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` skal være et heltal fra 1 til {MAX_BRIDGES_PER_ISLAND}
 
 	File	Filer
@@ -4319,6 +4321,10 @@ digits	Malayalam	Malayalam
 	Em Box	Em-felt
 	x-Height	x-højde
 	ICF Box	ICF-felt
+	Show Sample	Vis eksempel
+	Hide Sample	Skjul eksempel
+	Max Ascent/Descent	Maks. højde/dybde
+	Max Ascender	Maks. overhøjde
 	Copy Color Value (Hex)	Kopiér farveværdi (hex)
 	Create New Swatch…	Opret ny farveprøve…
 	Name 40%	Navn 40%
@@ -6092,6 +6098,8 @@ theme	Appearance	Udseende
 	Find Font Files	Find skrifttypefiler
 	Add Font Files	Tilføj skrifttypefiler
 	Font List	Skrifttypeliste
+	Show Similar Fonts	Vis lignende skrifttyper
+	Clear Similar Fonts	Ryd lignende skrifttyper
 	Fonts in Document	Skrifttyper i dokumentet
 	Refresh Font List	Opdatér skrifttypeliste
 	Replace Font	Erstat skrifttype
@@ -6127,6 +6135,7 @@ theme	Appearance	Udseende
 	Connect Data Points	Forbind datapunkter
 	Edge-to-Edge Lines	Linjer fra kant til kant
 	Draw Filled Lines	Tegn udfyldte linjer
+	Line Width	Linjebredde
 	Tick Values	Afmærkningsværdier
 	Override Calculated Values	Tilsidesæt beregnede værdier
 	Divisions	Inddelinger
@@ -7127,6 +7136,7 @@ imageTrace	Outline	Kontur
 @msg	Divide Objects Below: select exactly one path	Opdel objekter nedenunder: markér præcis én kurve
 @msg	Downloaded {what}	Downloadede {what}
 @msg	Expand Appearance: the selection has a basic appearance	Udvid udseende: markeringen har et grundlæggende udseende
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	nogle rastereffekter blev ikke lavet om til billeder: de ville kræve mere end 1.024 billeder eller i alt 256 megapixel
 @msg	Expand: no brush strokes selected	Udvid: ingen penselstrøg er markeret
 @msg	Expand: no gradient fills	Udvid: ingen gradientfyld
 @msg	Expand: nothing to expand	Udvid: intet at udvide
@@ -8382,7 +8392,7 @@ mark-style	Japanese	Japansk
 @msg	Unknown dimension orientation	Ukendt målretning
 @msg	Unknown dimension style	Ukendt målstil
 @msg	Unknown unit	Ukendt enhed
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Luk de runde ender af åbne profiler. Delvise omdrejninger beholder deres skårne sider åbne.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Luk de runde ender af åbne profiler. Delvise omdrejninger lukker også deres skårne sider.
 	Darkness	Mørke
 	Isolate Selected Object	Isolér markeret objekt
 	Keep selected	Behold markeret
@@ -8787,6 +8797,7 @@ swatch	Bright Violet	Kraftig violet
 	Single Word Justification:	Justering af enkeltord:
 	Full Justify	Lige margener
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum må ikke overstige Ønsket, og Ønsket ikke Maksimum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Minimum må ikke overstige Ønsket, og Ønsket ikke Maksimum
 	Justification	Justering
 	Add filters from the list above	Tilføj filtre fra listen ovenfor
 	Add to Stack	Tilføj til stak
@@ -9501,6 +9512,22 @@ breakText	Glyphs	Glyffer
 @msg	one circle is inside the other	den ene cirkel er inden i den anden
 @msg	the circles are too far apart for this radius: raise the radius	cirklerne er for langt fra hinanden til denne radius: gør radius større
 @msg	the circles are too far apart for this radius	cirklerne er for langt fra hinanden til denne radius
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Fælles tangenter…
+	Common Tangents	Fælles tangenter
+	Tangents	Tangenter
+	Centerline	Midterlinje
+	External	Ydre
+	Internal	Indre
+@msg	select two closed paths	vælg to lukkede stier
+@msg	a selected path is open	en valgt sti er åben
+@msg	a selected path is not convex	en valgt sti er ikke konveks
+@msg	a selected path has no area	en valgt sti har intet areal
+@msg	a selected path has more than 10000 segments	en valgt sti har mere end 10000 segmenter
+@msg	the two paths have the same outline	de to stier har samme omrids
+@msg	One path lies inside the other, so they have no common tangents	Den ene sti ligger inden i den anden, så de har ingen fælles tangenter
+@msg	The paths overlap, so they have no internal tangents	Stierne overlapper, så de har ingen indre tangenter
+@msg	One path lies inside the other, so they have no internal tangents	Den ene sti ligger inden i den anden, så de har ingen indre tangenter
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Udvid streger til stier
 @msg	select paths with dashed strokes to expand	vælg stier med stiplet streg, der skal udvides
@@ -9576,7 +9603,7 @@ breakText	Glyphs	Glyffer
 @msg	stroke cannot be set on a symbol instance	stroke kan ikke angives for en symbolforekomst
 @msg	fill on a symbol instance must be a solid color or none	fill på en symbolforekomst skal være en ensfarvet farve eller none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kan ikke angives for et billede uden effekten Konvertér til form eller Objekt til kontur
-@msg	pass newName, registration, exportType, nineSlice and/or type	angiv newName, registration, exportType, nineSlice og/eller type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	angiv newName, registration, exportType, nineSlice, type og/eller alignToPixelGrid
 	Text Flow	Tekstflow
 	By Rows	Efter rækker
 	By Columns	Efter kolonner

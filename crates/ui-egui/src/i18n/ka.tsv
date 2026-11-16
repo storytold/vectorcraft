@@ -3670,6 +3670,10 @@ digits	Malayalam	მალაიალამური
 	Em Box	Em-ბლოკი
 	x-Height	x-სიმაღლე
 	ICF Box	ICF-ბლოკი
+	Show Sample	ნიმუშის ჩვენება
+	Hide Sample	ნიმუშის დამალვა
+	Max Ascent/Descent	მაქს. სიმაღლე/სიღრმე
+	Max Ascender	მაქს. ზედა გამონაშვერი
 	Copy Color Value (Hex)	ფერის მნიშვნელობის კოპირება (Hex)
 	Create New Swatch…	ახალი ფერის ნიმუშის შექმნა…
 	Name 40%	სახელი 40%
@@ -5351,6 +5355,8 @@ theme	Appearance	იერსახე
 	Find Font Files	შრიფტის ფაილების ძებნა
 	Add Font Files	შრიფტის ფაილების დამატება
 	Font List	შრიფტების სია
+	Show Similar Fonts	მსგავსი შრიფტების ჩვენება
+	Clear Similar Fonts	მსგავსი შრიფტების გასუფთავება
 	Fonts in Document	დოკუმენტის შრიფტები
 	Refresh Font List	შრიფტების სიის განახლება
 	Replace Font	შრიფტის ჩანაცვლება
@@ -5386,6 +5392,7 @@ theme	Appearance	იერსახე
 	Connect Data Points	მონაცემთა წერტილების შეერთება
 	Edge-to-Edge Lines	ხაზები კიდიდან კიდემდე
 	Draw Filled Lines	შევსებული ხაზების დახატვა
+	Line Width	ხაზის სიგანე
 	Tick Values	დანაყოფების მნიშვნელობები
 	Override Calculated Values	გამოთვლილი მნიშვნელობების შეცვლა
 	Divisions	დანაყოფები
@@ -6341,6 +6348,7 @@ font-technology	Variable	ცვლადი
 @msg	Divide Objects Below: select exactly one path	ქვედა ობიექტების დაყოფა: მონიშნეთ ზუსტად ერთი ტრაექტორია
 @msg	Downloaded {what}	ჩამოტვირთულია: {what}
 @msg	Expand Appearance: the selection has a basic appearance	იერსახის გაშლა: მონიშნულს საბაზისო იერსახე აქვს
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	ზოგიერთი რასტრული ეფექტი გამოსახულებად არ გადაიქცა: მათ დასჭირდებოდა 1024-ზე მეტი გამოსახულება ან ჯამში 256 მეგაპიქსელი
 @msg	Expand: no brush strokes selected	გაშლა: ფუნჯის შტრიხები მონიშნული არ არის
 @msg	Expand: no gradient fills	გაშლა: გრადიენტული შევსებები არ არის
 @msg	Expand: nothing to expand	გაშლა: გასაშლელი არაფერია
@@ -8061,7 +8069,7 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	Unknown dimension orientation	ზომის უცნობი ორიენტაცია
 @msg	Unknown dimension style	ზომის უცნობი სტილი
 @msg	Unknown unit	უცნობი ერთეული
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	ღია პროფილების წრიული ბოლოების დახურვა. ნაწილობრივი ბრუნვისას ჭრის მხარეები ღია რჩება.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	ღია პროფილების წრიული ბოლოების დახურვა. ნაწილობრივი ბრუნვისას ჭრის მხარეებიც იხურება.
 	Distance	მანძილი
 # Upstream sync 2026-10-16 (2): Smart Blur modes, Layers panel filter, Color panel options, templates, PostScript files.
 	Mode	რეჟიმი
@@ -9566,6 +9574,22 @@ breakText	Glyphs	გლიფები
 @msg	one circle is inside the other	ერთი წრე მეორის შიგნითაა
 @msg	the circles are too far apart for this radius: raise the radius	ამ რადიუსისთვის წრეები ერთმანეთისგან ძალიან შორსაა: გაზარდეთ რადიუსი
 @msg	the circles are too far apart for this radius	ამ რადიუსისთვის წრეები ერთმანეთისგან ძალიან შორსაა
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	საერთო მხებები…
+	Common Tangents	საერთო მხებები
+	Tangents	მხებები
+	Centerline	ცენტრალური ხაზი
+	External	გარე
+	Internal	შიდა
+@msg	select two closed paths	აირჩიეთ ორი დახურული ტრაექტორია
+@msg	a selected path is open	არჩეული ტრაექტორია ღიაა
+@msg	a selected path is not convex	არჩეული ტრაექტორია არ არის ამოზნექილი
+@msg	a selected path has no area	არჩეულ ტრაექტორიას ფართობი არ აქვს
+@msg	a selected path has more than 10000 segments	არჩეულ ტრაექტორიას 10000-ზე მეტი სეგმენტი აქვს
+@msg	the two paths have the same outline	ორივე ტრაექტორიას ერთნაირი კონტური აქვს
+@msg	One path lies inside the other, so they have no common tangents	ერთი ტრაექტორია მეორის შიგნითაა, ამიტომ მათ საერთო მხებები არ აქვთ
+@msg	The paths overlap, so they have no internal tangents	ტრაექტორიები ერთმანეთს ფარავს, ამიტომ მათ შიდა მხებები არ აქვთ
+@msg	One path lies inside the other, so they have no internal tangents	ერთი ტრაექტორია მეორის შიგნითაა, ამიტომ მათ შიდა მხებები არ აქვთ
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	ტირეების ტრაექტორიებად გაშლა
 @msg	select paths with dashed strokes to expand	აირჩიეთ გასაშლელი ტირეებიანი ხაზის კონტურები
@@ -9660,7 +9684,7 @@ breakText	Glyphs	გლიფები
 @msg	stroke cannot be set on a symbol instance	stroke ვერ დაყენდება სიმბოლოს ეგზემპლარზე
 @msg	fill on a symbol instance must be a solid color or none	სიმბოლოს ეგზემპლარის fill უნდა იყოს ერთფეროვანი ფერი ან none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} ვერ დაყენდება გამოსახულებაზე „ფიგურად გარდაქმნის“ ან „ობიექტის კონტურებად გარდაქმნის“ ეფექტის გარეშე
-@msg	pass newName, registration, exportType, nineSlice and/or type	მიუთითეთ newName, registration, exportType, nineSlice და/ან type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	მიუთითეთ newName, registration, exportType, nineSlice, type და/ან alignToPixelGrid
 	Text Flow	ტექსტის დინება
 	By Rows	სტრიქონების მიხედვით
 	By Columns	სვეტების მიხედვით
@@ -9955,6 +9979,8 @@ font-script	Japanese	იაპონური
 @msg	No bridge of this width fits across the selected art	ამ სიგანის ხიდი მონიშნულ ნახატზე არ ეტევა
 @msg	Some islands could not be joined to the area around the art	ზოგიერთი კუნძული ვერ დაუკავშირდა ნახატის გარშემო არეს
 @msg	`width` must be from {lo} to {hi} pt	`width` უნდა იყოს {lo}-დან {hi} pt-მდე
+@msg	`angle` must be from -180 to 180 degrees	`angle` უნდა იყოს -180-დან 180 გრადუსამდე
+@msg	`roundness` must be from 1 to 100%	`roundness` უნდა იყოს 1-დან 100%-მდე
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` უნდა იყოს მთელი რიცხვი 1-დან {MAX_BRIDGES_PER_ISLAND}-მდე
 	Weed Box and Lines…	ნარჩენის მოსაცილებელი ჩარჩო და ხაზები…
 	Weed Box and Lines	ნარჩენის მოსაცილებელი ჩარჩო და ხაზები

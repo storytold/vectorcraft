@@ -929,6 +929,10 @@ antiAlias	Sharp	Nítido
 	Em Box	Caixa Eme
 	x-Height	Altura do x
 	ICF Box	Caixa ICF
+	Show Sample	Mostrar Amostra
+	Hide Sample	Ocultar Amostra
+	Max Ascent/Descent	Altura/Profundidade Máx.
+	Max Ascender	Ascendente Máx.
 	Em Dash	Travessão
 	Em Space	Espaço Em
 	Embed	Incorporar
@@ -1208,6 +1212,8 @@ antiAlias	Sharp	Nítido
 	Font Family & Style	Família e Estilo da Fonte
 	Font Family, Style & Size	Família, Estilo e Tamanho da Fonte
 	Font List	Lista de Fontes
+	Show Similar Fonts	Mostrar Fontes Semelhantes
+	Clear Similar Fonts	Limpar Fontes Semelhantes
 	Font Preview Size	Tamanho da Visualização da Fonte
 	Font Size	Tamanho da Fonte
 	Variable Font	Fonte Variável
@@ -3938,6 +3944,7 @@ axis	Both	Ambos
 @msg	Divide Objects Below: select exactly one path	Dividir objetos abaixo: selecione exatamente um traçado
 @msg	Downloaded {what}	{what} baixado
 @msg	Expand Appearance: the selection has a basic appearance	Expandir aparência: a seleção tem uma aparência básica
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	alguns efeitos de raster não foram transformados em imagens: ocupariam mais de 1.024 imagens ou 256 megapixels no total
 @msg	Expand: no brush strokes selected	Expandir: nenhum traço de pincel selecionado
 @msg	Expand: no gradient fills	Expandir: nenhum preenchimento em gradiente
 @msg	Expand: nothing to expand	Expandir: nada para expandir
@@ -5041,6 +5048,7 @@ axis	Both	Ambos
 	Connect Data Points	Conectar Pontos de Dados
 	Edge-to-Edge Lines	Linhas de Borda a Borda
 	Draw Filled Lines	Desenhar Linhas Preenchidas
+	Line Width	Largura da Linha
 	Tick Values	Valores das Marcas
 	Override Calculated Values	Substituir Valores Calculados
 	Divisions	Divisões
@@ -6237,7 +6245,7 @@ mark-style	Japanese	Japonesas
 	Create Dimension	Criar Cota
 	Update Dimensions	Atualizar Cotas
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Fecha as extremidades circulares dos perfis abertos. Giros parciais mantêm as faces de corte abertas.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Fecha as extremidades circulares dos perfis abertos. Giros parciais também fecham as faces de corte.
 @msg	span must be "object" or "selection", got {v}	span deve ser "object" ou "selection", não {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" posiciona um `gradient`, não uma amostra
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" posiciona um degradê: informe `gradient`
@@ -6420,6 +6428,7 @@ mark-style	Japanese	Japonesas
 	Single Word Justification:	Justificação de Palavra Única:
 	Full Justify	Justificação Completa
 	Minimum must not exceed Desired, nor Desired Maximum.	O mínimo não pode passar do desejado, nem o desejado do máximo.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: o mínimo não pode passar do desejado, nem o desejado do máximo
 	Justification	Justificação
 	Add filters from the list above	Adicione filtros da lista acima
 	Add to Stack	Adicionar à Pilha
@@ -7481,6 +7490,22 @@ breakText	Glyphs	Glifos
 @msg	one circle is inside the other	um círculo está dentro do outro
 @msg	the circles are too far apart for this radius: raise the radius	os círculos estão muito afastados para este raio: aumente o raio
 @msg	the circles are too far apart for this radius	os círculos estão muito afastados para este raio
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Tangentes comuns…
+	Common Tangents	Tangentes comuns
+	Tangents	Tangentes
+	Centerline	Linha central
+	External	Externas
+	Internal	Internas
+@msg	select two closed paths	selecione dois demarcadores fechados
+@msg	a selected path is open	um demarcador selecionado está aberto
+@msg	a selected path is not convex	um demarcador selecionado não é convexo
+@msg	a selected path has no area	um demarcador selecionado não tem área
+@msg	a selected path has more than 10000 segments	um demarcador selecionado tem mais de 10000 segmentos
+@msg	the two paths have the same outline	os dois demarcadores têm o mesmo contorno
+@msg	One path lies inside the other, so they have no common tangents	Um demarcador está dentro do outro, então eles não têm tangentes comuns
+@msg	The paths overlap, so they have no internal tangents	Os demarcadores se sobrepõem, então eles não têm tangentes internas
+@msg	One path lies inside the other, so they have no internal tangents	Um demarcador está dentro do outro, então eles não têm tangentes internas
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandir traços em demarcadores
 @msg	select paths with dashed strokes to expand	selecione demarcadores com traçado tracejado para expandir
@@ -7556,7 +7581,7 @@ breakText	Glyphs	Glifos
 @msg	stroke cannot be set on a symbol instance	stroke não pode ser definido em uma instância de símbolo
 @msg	fill on a symbol instance must be a solid color or none	o fill de uma instância de símbolo deve ser uma cor sólida ou none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} não pode ser definido em uma imagem sem o efeito Converter em Forma ou Contornar Objeto
-@msg	pass newName, registration, exportType, nineSlice and/or type	informe newName, registration, exportType, nineSlice e/ou type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	informe newName, registration, exportType, nineSlice, type e/ou alignToPixelGrid
 # Strings the sibling catalogs translate that pt-BR did not yet cover (translated 2026-10-31).
 	 on the canvas to create one	 na tela para criar um
 	1 Layer	1 camada
@@ -7937,6 +7962,8 @@ swatch	Yellow Green	Verde-amarelado
 @msg	No bridge of this width fits across the selected art	Nenhuma ponte desta largura cabe na arte selecionada
 @msg	Some islands could not be joined to the area around the art	Algumas ilhas não puderam ser unidas à área ao redor da arte
 @msg	`width` must be from {lo} to {hi} pt	`width` deve estar entre {lo} e {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` deve estar entre -180 e 180 graus
+@msg	`roundness` must be from 1 to 100%	`roundness` deve estar entre 1 e 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve ser um número inteiro de 1 a {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Caixa e Linhas de Descasque…
 	Weed Box and Lines	Caixa e Linhas de Descasque
@@ -9181,7 +9208,9 @@ swatch	Yellow Green	Verde-amarelado
 @msg	position must be normal, superscript or subscript	position deve ser normal, superscript ou subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position deve ser topLeft, topRight, bottomLeft ou bottomRight
 @msg	positions must be between 0 and 100000 pt	positions deve estar entre 0 e 100000 pt
+@msg	ppi can't be more than {max} for this image	ppi não pode ser maior que {max} para esta imagem
 @msg	ppi must be a positive number, not {ppi}	ppi deve ser um número positivo, não {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim mantém os pixels da imagem como estão: omita ppi
 @msg	ppi must be between 1 and 2400	ppi deve estar entre 1 e 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` não é transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape deve ser clippingMask|transparency
