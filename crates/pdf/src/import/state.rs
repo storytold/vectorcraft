@@ -336,17 +336,13 @@ pub(super) fn bounds(nodes: &[Arc<Node>]) -> Option<Rect> {
 }
 
 pub(super) fn rgba_png(rgba: Vec<u8>, w: u32, h: u32) -> Option<Vec<u8>> {
-    let img = image::RgbaImage::from_raw(w, h, rgba)?;
-    let mut out = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).ok()?;
-    Some(out)
+    let img = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba).ok()?;
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()
 }
 
 pub(super) fn gray_png(gray: Vec<u8>, w: u32, h: u32) -> Option<Vec<u8>> {
-    let img = image::GrayImage::from_raw(w, h, gray)?;
-    let mut out = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).ok()?;
-    Some(out)
+    let img = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, gray).ok()?;
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()
 }
 
 pub(super) fn resize_alpha(a: &LumaData, w: u32, h: u32) -> Vec<u8> {

@@ -83,6 +83,24 @@ fn select_by_artboards_lists_the_artboards_and_selects_on_ok() {
 }
 
 #[test]
+fn the_rows_report_their_choice_as_the_selected_state() {
+    use egui::accesskit::Role;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("artboard.new", json!({"x": 150, "y": 0, "width": 200, "height": 50, "name": "Banner"})).unwrap();
+    app.run("view.goToArtboard", json!({"index": 0})).unwrap();
+    menus::invoke(&mut app, super::COMMAND, serde_json::Value::Null);
+    let tree = crate::widgets::accessibility_tests::tree(|ui| crate::dialogs::show(&mut app, ui.ctx()));
+    let mut rows: Vec<_> =
+        tree.iter().filter(|n| n.role() == Role::ListItem).map(|n| (n.label().map(str::to_string), n.is_selected(), n.toggled())).collect();
+    rows.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(
+        rows,
+        [(Some("1 Artboard 1 100 × 100 pt".to_string()), Some(true), None), (Some("2 Banner 200 × 50 pt".to_string()), Some(false), None)]
+    );
+}
+
+#[test]
 fn double_clicking_a_row_fits_its_artboard_and_keeps_the_choice() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 100, "height": 100})).unwrap();

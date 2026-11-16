@@ -1,6 +1,6 @@
 //! CSS classes on imported elements come back on export, beside the generated `cls-N` classes.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-use usvg::roxmltree;
+use craft_svg::tree::usvg::roxmltree;
 use vectorcraft_svg::{ExportOptions, Profile, Styling, export, import};
 
 const SRC: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><g id="grp" class="wrap  big"><rect id="r" class="hero hero cls-7" width="20" height="20" fill="red"/><circle id="c" r="5" fill="blue"/></g></svg>"#;

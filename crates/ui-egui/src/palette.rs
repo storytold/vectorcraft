@@ -8,6 +8,8 @@ use serde_json::json;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, menus};
 
+mod search;
+
 /// Engine commands the palette leaves out, each with the UI command of the same name that runs it
 /// the way the panels and menus do: (engine id, UI command id). The Layers panel's Delete
 /// Selection asks before deleting a layer that holds art, and the other UI commands open the
@@ -275,35 +277,82 @@ pub(crate) struct Entry {
     /// label and the id (and the id of the engine command a UI command wraps), lowercased, one per
     /// line: a query word (which has no line break) matches within one of them.
     haystack: String,
+    /// The English menu path of the first item of the menu bar shown that runs the entry
+    /// ([`search::menu_homes`]), if one does.
+    home: Option<String>,
+    /// The English label of that item of the menu bar, which may differ from the entry's (File ›
+    /// Exit runs Quit VectorCraft), or empty.
+    menu_item: &'static str,
+    /// The entry's kind, in the order [`search::kind`] ranks kinds.
+    kind: u8,
 }
 
-/// The palette's entries in `lang`. They are built when the language, the installed plug-ins or
-/// the keyboard shortcuts (shown beside each entry) change, not on every frame while a query is
-/// typed.
+/// The palette's entries, the index a query is looked up in, and the last query's ranked results.
+pub(crate) struct Catalog {
+    list: Vec<Entry>,
+    index: search::Index,
+    ranked: std::sync::Mutex<Option<(String, Arc<[u32]>)>>,
+}
+
+impl std::ops::Deref for Catalog {
+    type Target = [Entry];
+
+    fn deref(&self) -> &[Entry] {
+        &self.list
+    }
+}
+
 /// What the entries depend on: the language, the installed plug-ins and the shortcuts.
 fn cache_key(lang: crate::i18n::Lang) -> (&'static str, u64, u64) {
     (lang.code(), menus::plugin_revision(), crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed))
 }
 
-fn entries(ctx: &egui::Context, lang: crate::i18n::Lang) -> Arc<Vec<Entry>> {
-    type Cached = ((&'static str, u64, u64), Arc<Vec<Entry>>);
+/// The palette's entries in `lang` with the in-window menu bar.
+#[cfg(test)]
+fn entries(ctx: &egui::Context, lang: crate::i18n::Lang) -> Arc<Catalog> {
+    entries_in(ctx, lang, false)
+}
+
+/// The palette's entries in `lang`, with the native menu bar when `native`. They and their index
+/// are built the first time the palette opens after the language, the installed plug-ins, the
+/// keyboard shortcuts (shown beside each entry) or the menu bar change, not at start and not on
+/// every frame while a query is typed.
+fn entries_in(ctx: &egui::Context, lang: crate::i18n::Lang, native: bool) -> Arc<Catalog> {
+    type Cached = ((&'static str, u64, u64), bool, Arc<Catalog>);
     let key = cache_key(lang);
     let id = egui::Id::unique("palette-entries");
-    if let Some((k, v)) = ctx.data(|d| d.get_temp::<Cached>(id))
+    if let Some((k, n, v)) = ctx.data(|d| d.get_temp::<Cached>(id))
         && k == key
+        && n == native
     {
         return v;
     }
-    let built: Arc<Vec<Entry>> = Arc::new(build(lang));
-    ctx.data_mut(|d| d.insert_temp::<Cached>(id, (key, built.clone())));
+    let built = Arc::new(catalog(lang, native));
+    ctx.data_mut(|d| d.insert_temp::<Cached>(id, (key, native, built.clone())));
     built
+}
+
+/// The entries of [`build_in`] and their index.
+fn catalog(lang: crate::i18n::Lang, native: bool) -> Catalog {
+    let list = build_in(lang, native);
+    let shown_homes: Vec<Option<String>> =
+        list.iter().map(|e| e.home.as_deref().map(|h| format!("{} › {}", shown_label(lang, h), crate::i18n::tr(lang, e.menu_item)))).collect();
+    let index = search::Index::build(&list, &shown_homes);
+    Catalog { list, index, ranked: std::sync::Mutex::new(None) }
+}
+
+/// The palette's entries in `lang` with the in-window menu bar.
+#[cfg(test)]
+fn build(lang: crate::i18n::Lang) -> Vec<Entry> {
+    build_in(lang, false)
 }
 
 /// The palette's entries in `lang`: [`items`], then one per filter plug-in's Object › Plug-ins
 /// item (`plugin:<id>`), whose name is not translated, each with a name no result for another id
 /// shows, in English and in `lang` ([`distinct_names`]). A query still matches the name before
-/// it was made distinct.
-fn build(lang: crate::i18n::Lang) -> Vec<Entry> {
+/// it was made distinct. Each entry's menu home is read from the native menu bar when `native`.
+fn build_in(lang: crate::i18n::Lang, native: bool) -> Vec<Entry> {
+    let homes = search::menu_homes(native);
     let mut drafts = drafts();
     drafts.extend(crate::shortcut_editor::filter_items().iter().map(|f| Draft {
         translates: false,
@@ -322,7 +371,9 @@ fn build(lang: crate::i18n::Lang) -> Vec<Entry> {
                 haystack.push('\n');
                 haystack.push_str(&engine.to_lowercase());
             }
-            Entry { id: d.id, shortcut: d.shortcut, shown, haystack }
+            let (home, menu_item) = homes.get(&d.id).map_or((None, ""), |(path, item)| (Some(path.clone()), *item));
+            let kind = search::kind(&d.id, home.as_deref());
+            Entry { id: d.id, shortcut: d.shortcut, shown, haystack, home, menu_item, kind }
         })
         .collect()
 }
@@ -338,8 +389,11 @@ pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
         app.select_tool(tool);
     } else if let Some(panel) = id.strip_prefix("panel:") {
         // A panel that can be seen stays as it is, where `window.panel` would put an open flyout or
-        // a floating panel away.
-        if let Err(e) = crate::panel_docking::reveal_panel(app, panel) {
+        // a floating panel away. In Presentation Mode the pick fails and changes nothing, as
+        // `window.panel` does.
+        if app.ui.screen_mode >= 3 {
+            app.status("panels can't be shown in Presentation Mode");
+        } else if let Err(e) = crate::panel_docking::reveal_panel(app, panel) {
             app.status(e);
         }
     } else if id.starts_with("plugin:") || id.starts_with("effect:") {
@@ -362,19 +416,21 @@ pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
     }
 }
 
-/// Every entry that holds every word of the lowercased query `q`, the ones whose name without its
-/// menu path is the query (the Layers panel for "layers") first, each group in catalog order.
-/// [`show`] lists the first [`MAX_RESULTS`] and counts the rest.
-fn matching<'a>(entries: &'a [Entry], q: &str) -> Vec<&'a Entry> {
-    let words: Vec<&str> = q.split_whitespace().collect();
-    let whole = words.join(" ");
-    // The plain, English and shown names are the haystack's first three lines.
-    let named = |e: &Entry| e.haystack.lines().take(3).any(|l| l.rsplit(" › ").next().is_some_and(|n| n.trim_end_matches('…') == whole));
-    let mut found: Vec<&Entry> = entries.iter().filter(|e| words.iter().all(|w| e.haystack.contains(w))).collect();
-    if !whole.is_empty() {
-        found.sort_by_key(|e| !named(e));
-    }
-    found
+/// The entries the query `q` matches, best first ([`search::rank`]). The ranking of the last query
+/// is kept, so a frame that draws the same query does not rank again. [`show`] lists the first
+/// [`MAX_RESULTS`] and counts the rest.
+fn matching<'a>(catalog: &'a Catalog, q: &str) -> Vec<&'a Entry> {
+    let q = search::normalize(q);
+    let kept = catalog.ranked.lock().ok().and_then(|last| last.as_ref().filter(|(k, _)| *k == q).map(|(_, r)| r.clone()));
+    let ranked = kept.unwrap_or_else(|| {
+        let ranked: Arc<[u32]> = search::rank(&catalog.list, &catalog.index, &q).into();
+        // A poisoned lock only loses the kept ranking: the next frame ranks again.
+        if let Ok(mut last) = catalog.ranked.lock() {
+            *last = Some((q, ranked.clone()));
+        }
+        ranked
+    });
+    ranked.iter().filter_map(|&i| catalog.list.get(i as usize)).collect()
 }
 
 /// The height of a result row, in points: one line of 13-point body text.
@@ -462,8 +518,9 @@ fn nearest_in_view(sel: usize, offset: f32, view: f32, n: usize) -> usize {
     sel.clamp(first, last)
 }
 
-/// The highlighted result, the query it belongs to, the list's scroll offset and the list's height.
-type Highlight = (usize, String, f32, f32);
+/// The highlighted result, the query it belongs to, the list's scroll offset, the list's height
+/// and the highlighted result's id.
+type Highlight = (usize, String, f32, f32, String);
 
 /// How many picks the Recent Commands list beside the search field holds.
 pub(crate) const MAX_RECENT_COMMANDS: usize = 5;
@@ -506,11 +563,20 @@ pub(crate) fn recent_list_open(ctx: &egui::Context) -> bool {
 
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // The widget that had the keyboard focus when the palette opened takes it back when the palette
-    // closes, unless a pick opened a dialog, which focuses its own first field.
+    // closes, unless a pick opened a dialog, which focuses its own first field, or the press that
+    // closed it focused another widget, such as a field in a window above the backdrop.
     let focus_id = egui::Id::unique("palette-focus-before");
+    let field_id = egui::Id::unique("palette-field");
     if !app.ui.palette_open {
+        let field = ctx.data_mut(|d| {
+            let field = d.get_temp::<egui::Id>(field_id);
+            d.remove::<egui::Id>(field_id);
+            field
+        });
+        let now = ctx.memory(|m| m.focused());
         if let Some(Some(before)) = ctx.data_mut(|d| d.remove_temp::<Option<egui::Id>>(focus_id))
             && app.ui.dialog.is_none()
+            && (now.is_none() || now == field)
         {
             ctx.memory_mut(|m| m.request_focus(before));
         }
@@ -523,25 +589,45 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     crate::shortcuts::hold_back_keys(app, ctx);
     let t = Tokens::get(ctx);
     let q = app.ui.palette_query.to_lowercase();
-    let entries = entries(ctx, crate::i18n::current());
+    let entries = entries_in(ctx, crate::i18n::current(), app.services.native_menu.is_some());
     let mut matches = matching(&entries, &q);
     let total = matches.len();
+    // The highlighted result (#1757): Up and Down move it (wrapping), Page Up and Page Down move it
+    // by a page, the pointer over a result takes it, and a new query starts again from the first.
+    let sel_id = egui::Id::unique("palette-selected");
+    let (mut sel, last_q, mut offset, last_view, last_id) = ctx.data(|d| d.get_temp::<Highlight>(sel_id)).unwrap_or_default();
+    let mut view = last_view;
+    let new_query = last_q != q;
+    // A result that ranks above the highlighted one when the results change under the same query
+    // can push it past the last shown result; it then takes the last shown row instead, and
+    // `kept` holds its place among every match.
+    let mut kept = None;
+    if !new_query
+        && let Some(at) = matches.iter().position(|e| e.id == last_id)
+        && at >= MAX_RESULTS
+    {
+        let held_result = matches.remove(at);
+        matches.truncate(MAX_RESULTS - 1);
+        matches.push(held_result);
+        kept = Some(at);
+    }
     matches.truncate(MAX_RESULTS);
-    let recent = recent(&entries, &app.ui.recent_commands);
+    let recent = recent(&entries.list, &app.ui.recent_commands);
     // While the Recent Commands list is open, the arrow keys and Enter go to its rows, and the
     // search field leaves them the keyboard.
     let list_open = recent_list_open(ctx);
     let mut run: Option<String> = None;
     let mut history_focused = false;
-    // The highlighted result (#1757): Up and Down move it (wrapping), Page Up and Page Down move it
-    // by a page, the pointer over a result takes it, and a new query starts again from the first.
-    let sel_id = egui::Id::unique("palette-selected");
-    let (mut sel, last_q, mut offset, last_view) = ctx.data(|d| d.get_temp::<Highlight>(sel_id)).unwrap_or_default();
-    let mut view = last_view;
-    let new_query = last_q != q;
+    // The highlight stays on its result when the results change under the same query, as when a
+    // plug-in is installed, a shortcut changes or the language changes; it goes to the first
+    // result when its result is gone.
+    let held = sel;
     if new_query {
         sel = 0;
+    } else if matches.get(sel).is_none_or(|e| e.id != last_id) {
+        sel = matches.iter().position(|e| e.id == last_id).unwrap_or(0);
     }
+    let moved = sel != held;
     // The Recent Commands row with the keyboard: Up and Down move it, wrapping at the ends, so the
     // keys never leave the list for the results below it.
     let rsel_id = egui::Id::unique("palette-recent-selected");
@@ -584,6 +670,13 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let screen = ctx.content_rect();
     // The highlighted result the rows and the field's description are drawn with.
     let mut drawn = sel;
+    // The backdrop covers the canvas, the toolbars, the docked panels and the app bar under the
+    // popup, in the order of a modal dialog's backdrop (`dialogs::modal::backdrop`), so the press
+    // that closes the palette does not press a control under it. Windows in the Foreground order
+    // stay above it. Not focusable (`Sense::click()` is): Tab stays in the popup.
+    egui::Area::new(egui::Id::unique("palette-backdrop")).order(egui::Order::Middle).fixed_pos(screen.min).show(ctx, |ui| {
+        ui.allocate_rect(screen, egui::Sense::CLICK);
+    });
     // The area keeps itself inside the window (egui's `Area::constrain` is on), so in a window too
     // short for the field, one row and the footer below TOP, the popup moves up.
     egui::Area::new(egui::Id::unique("palette")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, [0.0, TOP]).show(ctx, |ui| {
@@ -625,6 +718,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     r
                 })
                 .inner;
+            ui.ctx().data_mut(|d| d.insert_temp(field_id, r.id));
             ui.add_space(6.0);
             // The list shows as many rows as fit above the footer in the window, up to
             // VISIBLE_ROWS; a page is that many rows.
@@ -641,7 +735,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             // Screen readers stay on the field: its description names the highlighted result and
             // its place among every match, as the footer counts them.
             if let Some(e) = matches.get(sel) {
-                let pos = (sel + 1).to_string();
+                let rank = if sel + 1 == matches.len() { kept.unwrap_or(sel) } else { sel };
+                let pos = (rank + 1).to_string();
                 let of = total.to_string();
                 let said = crate::i18n::fmt(tl!("{pos} of {total}: {name}"), &[("pos", &pos), ("total", &of), ("name", &row_label(e))]);
                 ui.ctx().accesskit_node_builder(r.id, |node| node.set_description(said));
@@ -651,7 +746,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     // `show_rows` adds the item spacing to each row, and rows touch.
                     ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
                     let mut area = egui::ScrollArea::vertical().id_salt("palette-results").max_height(view).auto_shrink([false, true]);
-                    if new_query || moves.any() || resized {
+                    if new_query || moves.any() || resized || moved {
                         offset = offset_showing(sel, if new_query { 0.0 } else { offset }, view);
                         area = area.vertical_scroll_offset(offset);
                     }
@@ -704,19 +799,37 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
         });
     });
+    // A press of any pointer button that neither the popup's layer nor its Recent Commands list's
+    // layer gets closes it: a press on the backdrop, or on a window above it, which also gets the
+    // press, even where that window lies over the popup.
+    let presses: Vec<egui::Pos2> = ctx.input(|i| {
+        i.events
+            .iter()
+            .filter_map(|e| match e {
+                egui::Event::PointerButton { pos, pressed: true, .. } => Some(*pos),
+                _ => None,
+            })
+            .collect()
+    });
+    let popup = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("palette"));
+    let list = egui::LayerId::new(egui::Order::Foreground, recent_list_id());
+    let outside = presses.into_iter().any(|p| !ctx.layer_id_at(p).is_some_and(|l| l == popup || l == list));
     // The pointer or a scroll moved the highlight after the rows were drawn: the next frame draws
     // it where it now is.
     if sel != drawn {
         ctx.request_repaint();
     }
+    let sel_key = matches.get(sel).map(|e| e.id.clone()).unwrap_or_default();
     ctx.data_mut(|d| {
-        d.insert_temp::<Highlight>(sel_id, (sel, q, offset, view));
+        d.insert_temp::<Highlight>(sel_id, (sel, q, offset, view, sel_key));
         d.insert_temp(rsel_id, rsel);
     });
     if let Some(id) = run {
         app.ui.palette_open = false;
-        remember(&mut app.ui.recent_commands, &id, |c| entries.iter().any(|e| e.id == c));
+        remember(&mut app.ui.recent_commands, &id, |c| entries.list.iter().any(|e| e.id == c));
         run_pick(app, &id);
+    } else if outside {
+        app.ui.palette_open = false;
     }
 }
 
@@ -1646,7 +1759,7 @@ mod tests {
     /// leaves it showing rather than hiding it as the Window menu item does.
     #[test]
     fn a_panel_is_a_result_whose_pick_shows_it() {
-        let entries = build(Lang::EN);
+        let entries = catalog(Lang::EN, false);
         let panels: Vec<&Entry> = entries.iter().filter(|e| e.id.starts_with("panel:")).collect();
         assert_eq!(panels.len(), crate::state::all_panels().count());
         // Many results hold "layers" in their menu path; the panel, named Layers, is shown first, and "color guide" shows the Color Guide panel first too.
@@ -1670,6 +1783,20 @@ mod tests {
             run_pick(&mut app, &format!("panel:{id}"));
             assert!(crate::panel_docking::showing(&app.ui, id), "{id}: picked twice, still showing");
         }
+    }
+
+    /// In Presentation Mode a panel's pick fails as `window.panel` does: the status line says why,
+    /// and the panel does not show when the mode ends.
+    #[test]
+    fn a_panel_pick_in_presentation_mode_changes_nothing() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let (open_panel, dock) = (app.ui.open_panel.clone(), app.ui.dock);
+        app.ui.screen_mode = 3;
+        run_pick(&mut app, "panel:swatches");
+        assert_eq!(app.ui.status, "panels can't be shown in Presentation Mode");
+        assert_eq!((app.ui.open_panel.clone(), app.ui.dock), (open_panel, dock));
+        app.ui.screen_mode = 0;
+        assert!(!crate::panel_docking::showing(&app.ui, "swatches"), "the pick did not place the panel");
     }
 
     /// Each Effect menu item is a result under its menu path, with its shortcut. With a document
@@ -2207,5 +2334,347 @@ mod tests {
         frame(&mut app, false);
         frame(&mut app, false);
         assert_ne!(ctx.memory(|m| m.focused()), Some(field), "the dialog keeps the focus");
+        // A click on a field in a window above the backdrop closes the palette and leaves the
+        // focus in that field.
+        let ctx = egui::Context::default();
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let (mut text, mut above_text) = (String::new(), String::new());
+        let above = egui::Id::unique("field above");
+        let corner = egui::pos2(40.0, 400.0);
+        let mut time = 0.0;
+        let mut frame = |app: &mut VectorcraftApp, focus: bool, events: Vec<egui::Event>| {
+            time += 0.1;
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, WINDOW);
+            let input = egui::RawInput { time: Some(time), screen_rect: Some(screen), events, ..Default::default() };
+            ctx.run_ui(input, |ui| {
+                let r = ui.add(egui::TextEdit::singleline(&mut text).id(field));
+                if focus {
+                    r.request_focus();
+                }
+                // Drawn before the palette, so the palette's own focus requests come after the field's.
+                egui::Area::new(egui::Id::unique("window above")).order(egui::Order::Foreground).fixed_pos(corner).show(ui.ctx(), |ui| {
+                    ui.add(egui::TextEdit::singleline(&mut above_text).id(above));
+                });
+                show(app, ui.ctx());
+            })
+            .textures_delta
+            .clear();
+        };
+        frame(&mut app, true, vec![]);
+        frame(&mut app, false, vec![]);
+        app.ui.palette_open = true;
+        frame(&mut app, false, vec![]);
+        frame(&mut app, false, vec![]);
+        let at = corner + egui::vec2(20.0, 8.0);
+        let button =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        frame(&mut app, false, vec![egui::Event::PointerMoved(at)]);
+        frame(&mut app, false, vec![button(true)]);
+        frame(&mut app, false, vec![button(false)]);
+        assert!(!app.ui.palette_open, "the click on the window above closes the palette");
+        frame(&mut app, false, vec![]);
+        frame(&mut app, false, vec![]);
+        assert_eq!(ctx.memory(|m| m.focused()), Some(above), "the clicked field keeps the focus");
+    }
+
+    /// The whole window, with a document whose rectangle is selected, drawn a frame at a time in
+    /// English with screen readers on.
+    struct Window {
+        app: VectorcraftApp,
+        ctx: egui::Context,
+        time: f64,
+        /// Draw a window with an "Above" button at this place, in the Foreground order after the
+        /// app, as a progress window is drawn, and count its clicks.
+        above: Option<egui::Pos2>,
+        above_clicks: usize,
+    }
+
+    impl Window {
+        fn new() -> Window {
+            crate::i18n::set_current(Lang::EN);
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+            app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+            app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+            assert!(!app.session.doc().unwrap().selection.is_empty());
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            let mut window = Window { app, ctx, time: 0.0, above: None, above_clicks: 0 };
+            window.frame(vec![]);
+            window.frame(vec![]);
+            window
+        }
+
+        /// One frame of the whole window with `events`: its screen-reader tree.
+        fn frame(&mut self, events: Vec<egui::Event>) -> Vec<egui::accesskit::Node> {
+            self.time += 0.1;
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, WINDOW);
+            let input = egui::RawInput { time: Some(self.time), screen_rect: Some(screen), events, ..Default::default() };
+            let app = &mut self.app;
+            let (above, clicks) = (self.above, &mut self.above_clicks);
+            let mut out = self.ctx.run_ui(input, |ui| {
+                app.logic(ui.ctx());
+                app.ui(ui);
+                if let Some(at) = above {
+                    let area = egui::Area::new(egui::Id::unique("test-above")).order(egui::Order::Foreground).fixed_pos(at);
+                    area.show(ui.ctx(), |ui| {
+                        if ui.button("Above").clicked() {
+                            *clicks += 1;
+                        }
+                    });
+                }
+            });
+            out.textures_delta.clear();
+            out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default()
+        }
+
+        /// A primary click at `at`, a frame for the move, the press and the release: the release
+        /// frame's screen-reader tree.
+        fn click(&mut self, at: egui::Pos2) -> Vec<egui::accesskit::Node> {
+            let button =
+                |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+            self.frame(vec![egui::Event::PointerMoved(at)]);
+            self.frame(vec![button(true)]);
+            self.frame(vec![button(false)])
+        }
+
+        /// A press of `button` at `from`, a move to `to` and the release there, a frame each.
+        fn drag(&mut self, button: egui::PointerButton, from: egui::Pos2, to: egui::Pos2) {
+            let event = |pos, pressed| egui::Event::PointerButton { pos, button, pressed, modifiers: egui::Modifiers::NONE };
+            self.frame(vec![egui::Event::PointerMoved(from)]);
+            self.frame(vec![event(from, true)]);
+            self.frame(vec![egui::Event::PointerMoved(to)]);
+            self.frame(vec![event(to, false)]);
+        }
+
+        fn selection(&self) -> String {
+            format!("{:?}", self.app.session.doc().unwrap().selection)
+        }
+
+        fn popup(&self) -> egui::Rect {
+            self.ctx.memory(|m| m.area_rect(egui::Id::unique("palette"))).unwrap()
+        }
+    }
+
+    /// The middle of the button whose screen-reader name is `name`, alone or followed by its
+    /// shortcut in parentheses.
+    fn button_at(nodes: &[egui::accesskit::Node], name: &str) -> egui::Pos2 {
+        let names: Vec<_> = nodes.iter().filter(|n| n.role() == egui::accesskit::Role::Button).filter_map(|n| n.label()).collect();
+        let named = |l: &str| l == name || l.strip_prefix(name).is_some_and(|rest| rest.starts_with(' ') && rest.trim_start().starts_with('('));
+        let node = nodes
+            .iter()
+            .find(|n| n.role() == egui::accesskit::Role::Button && n.label().is_some_and(named))
+            .unwrap_or_else(|| panic!("a button named {name}: {names:?}"));
+        let b = node.bounds().unwrap();
+        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
+    }
+
+    /// A click on the canvas outside the popup closes it and leaves the selection as it was.
+    #[test]
+    fn a_click_on_the_canvas_closes_the_palette() {
+        let mut window = Window::new();
+        let before = window.selection();
+        window.app.ui.palette_open = true;
+        window.frame(vec![]);
+        let canvas = window.app.canvas_rect.expect("the canvas is drawn");
+        let at = canvas.left_bottom() + egui::vec2(30.0, -30.0);
+        assert!(!window.popup().contains(at), "{at:?} is outside {:?}", window.popup());
+        window.click(at);
+        assert!(!window.app.ui.palette_open, "the click outside closes the palette");
+        window.frame(vec![]);
+        assert_eq!(window.selection(), before, "the click does not reach the canvas");
+    }
+
+    /// A click on another control outside the popup closes the popup and does not press the
+    /// control.
+    #[test]
+    fn a_click_on_another_control_closes_the_palette_without_pressing_it() {
+        let mut window = Window::new();
+        let tool = window.app.session.tool_id();
+        window.app.ui.palette_open = true;
+        let nodes = window.frame(vec![]);
+        let at = button_at(&nodes, "Pen Tool");
+        assert!(!window.popup().contains(at), "{at:?} is outside {:?}", window.popup());
+        window.click(at);
+        assert!(!window.app.ui.palette_open, "the click outside closes the palette");
+        window.frame(vec![]);
+        assert_eq!(window.app.session.tool_id(), tool, "the click does not pick the tool");
+        // With the palette closed, the same click picks it.
+        window.click(at);
+        assert_eq!(window.app.session.tool_id(), "pen");
+    }
+
+    /// A right-click outside the popup closes it, and so does a drag that starts outside it.
+    #[test]
+    fn a_right_click_or_a_drag_outside_closes_the_palette() {
+        let mut window = Window::new();
+        let before = window.selection();
+        let canvas = window.app.canvas_rect.expect("the canvas is drawn");
+        let at = canvas.left_bottom() + egui::vec2(30.0, -30.0);
+        window.app.ui.palette_open = true;
+        window.frame(vec![]);
+        assert!(!window.popup().contains(at), "{at:?} is outside {:?}", window.popup());
+        window.drag(egui::PointerButton::Secondary, at, at);
+        assert!(!window.app.ui.palette_open, "the right-click outside closes the palette");
+        window.app.ui.palette_open = true;
+        window.frame(vec![]);
+        window.drag(egui::PointerButton::Primary, at, at + egui::vec2(80.0, -60.0));
+        assert!(!window.app.ui.palette_open, "the drag outside closes the palette");
+        window.frame(vec![]);
+        assert_eq!(window.selection(), before, "the drag does not reach the canvas");
+    }
+
+    /// A click on a window drawn above the backdrop, as a progress window is, closes the palette
+    /// and presses that window's button, beside the popup and where the window lies over it.
+    #[test]
+    fn a_click_on_a_window_above_closes_the_palette_and_reaches_it() {
+        for over in [false, true] {
+            let mut window = Window::new();
+            window.app.ui.palette_open = true;
+            window.frame(vec![]);
+            let popup = window.popup();
+            window.above = Some(if over { popup.center() } else { egui::pos2(40.0, 400.0) });
+            window.frame(vec![]);
+            let nodes = window.frame(vec![]);
+            let at = button_at(&nodes, "Above");
+            assert_eq!(popup.contains(at), over, "{at:?} and the popup {popup:?}");
+            window.click(at);
+            assert!(!window.app.ui.palette_open, "over the popup: {over}; the click on the window closes the palette");
+            assert_eq!(window.above_clicks, 1, "over the popup: {over}; the window gets the click");
+        }
+    }
+
+    /// The click on the app bar's search button that opens the palette leaves it open; the next
+    /// click on the button closes it.
+    #[test]
+    fn the_click_that_opens_the_palette_does_not_close_it() {
+        let mut window = Window::new();
+        let nodes = window.frame(vec![]);
+        let at = button_at(&nodes, "Search commands, tools, panels and effects");
+        window.click(at);
+        assert!(window.app.ui.palette_open, "the click opens the palette");
+        window.frame(vec![]);
+        window.frame(vec![]);
+        assert!(window.app.ui.palette_open, "and it stays open");
+        window.click(at);
+        assert!(!window.app.ui.palette_open, "a second click closes it");
+    }
+
+    /// Clicks inside the popup keep it open: one in the search field, and one on a result, which
+    /// runs that result.
+    #[test]
+    fn clicks_inside_the_palette_keep_it_or_run_a_result() {
+        let mut window = Window::new();
+        window.app.ui.palette_open = true;
+        window.app.ui.palette_query = "show panel".into();
+        window.frame(vec![]);
+        let nodes = window.frame(vec![]);
+        let popup = window.popup();
+        let middle = |b: egui::accesskit::Rect| egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32);
+        let field = nodes
+            .iter()
+            .filter(|n| n.role() == egui::accesskit::Role::TextInput)
+            .filter_map(|n| n.bounds().map(middle))
+            .find(|p| popup.contains(*p))
+            .expect("the search field");
+        window.click(field);
+        window.frame(vec![]);
+        assert!(window.app.ui.palette_open, "a click in the field keeps the palette open");
+        assert_eq!(window.app.ui.palette_query, "show panel");
+        let nodes = window.frame(vec![]);
+        let entries = entries(&window.ctx, Lang::EN);
+        let listed: Vec<_> = matching(&entries, "show panel").into_iter().take(MAX_RESULTS).collect();
+        let hidden = |e: &&&Entry| e.id.strip_prefix("panel:").is_some_and(|p| !crate::panel_docking::showing(&window.app.ui, p));
+        let e = listed.iter().find(hidden).expect("a hidden panel's result");
+        let label = row_label(e);
+        let row = rows(&nodes).into_iter().find(|r| r.0 == label).expect("its row is drawn");
+        let panel = e.id.strip_prefix("panel:").unwrap_or_default().to_string();
+        window.click(egui::pos2(window.popup().center().x, ((row.2 + row.3) / 2.0) as f32));
+        assert!(!window.app.ui.palette_open);
+        assert!(crate::panel_docking::showing(&window.app.ui, &panel), "{panel}: {}", window.app.ui.status);
+    }
+
+    /// The entries and their index are built when the palette first opens, not before.
+    #[test]
+    fn the_search_index_is_built_when_the_palette_opens() {
+        type Cached = ((&'static str, u64, u64), bool, Arc<Catalog>);
+        let built = |ctx: &egui::Context| ctx.data(|d| d.get_temp::<Cached>(egui::Id::unique("palette-entries"))).is_some();
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let ctx = egui::Context::default();
+        let frame = |app: &mut VectorcraftApp| {
+            ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui.ctx())).textures_delta.clear();
+        };
+        frame(&mut app);
+        assert!(!built(&ctx), "nothing is built while the palette is closed");
+        app.ui.palette_open = true;
+        frame(&mut app);
+        assert!(built(&ctx));
+    }
+
+    /// The highlight stays on its result when the results change under the same query: when a
+    /// plug-in whose name ranks above it is installed, a shortcut changes, or the language
+    /// changes.
+    #[test]
+    fn the_highlight_stays_on_its_result_when_the_results_change() {
+        use vectorcraft_plugins::wat as tpl;
+        let mut open = Open::new("group", WINDOW);
+        // Deep enough in the list that the highlighted result's name does not start with the query,
+        // also while other tests' "Group" filter plug-ins are installed.
+        open.press(egui::Key::ArrowDown, 6);
+        let held = |open: &Open| open.ctx.data(|d| d.get_temp::<Highlight>(egui::Id::unique("palette-selected"))).unwrap();
+        let id = held(&open).4;
+        assert_eq!(open.listed().get(6), Some(&id));
+        // A name no other test gives a plug-in, so the other tests' results keep their names.
+        let filter = "test.UI.palette_highlight-group";
+        let manifest = format!(r#"{{"id":"{filter}","name":"Group Highlight Probe","version":"1","kind":"filter","params":{{}}}}"#);
+        vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+        open.frame(vec![]);
+        let listed = open.listed();
+        let plugin = listed.iter().position(|r| *r == format!("plugin:{filter}"));
+        vectorcraft_plugins::registry::remove(filter);
+        let was = listed.iter().position(|r| *r == id);
+        assert!(plugin.is_some() && plugin < was, "the plug-in ranks above the highlight: {listed:?}");
+        let (sel, .., now) = held(&open);
+        assert_eq!((listed.get(sel), &now), (Some(&id), &id), "after the plug-in was installed");
+        crate::shortcut_editor::GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        open.frame(vec![]);
+        assert_eq!(held(&open).4, id, "after a shortcut changed");
+        crate::i18n::set_current(Lang::from_code("de").unwrap());
+        open.frame(vec![]);
+        let (sel, .., now) = held(&open);
+        let de = entries(&open.ctx, Lang::from_code("de").unwrap());
+        let de_listed: Vec<String> = matching(&de, "group").iter().map(|e| e.id.clone()).collect();
+        crate::i18n::set_current(Lang::EN);
+        assert_eq!((de_listed.get(sel), &now), (Some(&id), &id), "after the language changed");
+    }
+
+    /// A highlighted last shown result that a new result pushes past the limit stays shown and
+    /// highlighted, in the last row, so Enter still runs it; screen readers hear its place among
+    /// every match.
+    #[test]
+    fn the_highlighted_last_result_stays_shown_when_a_result_ranks_above_it() {
+        use vectorcraft_plugins::wat as tpl;
+        // A query no other test searches for, so the plug-in below leaves their results alone.
+        let mut open = Open::new("path", WINDOW);
+        assert!(matching(&entries(&open.ctx, Lang::EN), "path").len() > MAX_RESULTS);
+        open.press(egui::Key::ArrowUp, 1);
+        let held = |open: &Open| open.ctx.data(|d| d.get_temp::<Highlight>(egui::Id::unique("palette-selected"))).unwrap();
+        let (sel, .., id) = held(&open);
+        assert_eq!(sel, MAX_RESULTS - 1);
+        let filter = "test.UI.palette_last-highlight-path";
+        let manifest = format!(r#"{{"id":"{filter}","name":"Path Last Highlight Probe","version":"1","kind":"filter","params":{{}}}}"#);
+        vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+        open.frame(vec![]);
+        let entries = entries(&open.ctx, Lang::EN);
+        let ranked: Vec<&Entry> = matching(&entries, "path");
+        let nodes = open.frame(vec![]);
+        let (sel, .., now) = held(&open);
+        vectorcraft_plugins::registry::remove(filter);
+        let plugin = ranked.iter().position(|e| e.id == format!("plugin:{filter}"));
+        assert!(plugin.is_some_and(|p| p < MAX_RESULTS), "the plug-in is shown: {plugin:?}");
+        assert_eq!(ranked.iter().position(|e| e.id == id), Some(MAX_RESULTS), "the plug-in pushed the highlight past the limit");
+        assert_eq!((sel, &now), (MAX_RESULTS - 1, &id), "the highlight stays on its result, in the last row");
+        let label = row_label(ranked[MAX_RESULTS]);
+        assert!(rows(&nodes).iter().any(|r| r.1 && r.0 == label), "its row is drawn and highlighted");
+        assert_eq!(field_description(&nodes), format!("{} of {}: {label}", MAX_RESULTS + 1, ranked.len()));
     }
 }
