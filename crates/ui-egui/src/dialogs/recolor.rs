@@ -412,12 +412,13 @@ fn group_colors<'a>(app: &VectorcraftApp, d: &Dialog, rs: impl Iterator<Item = &
 }
 
 /// The New Color Group menu's request: save the new colors of the rows that aren't excluded (Save
-/// All Colors, in row order; a row whose new color was removed gives none) or of the Prominent Colors bar (Save Prominent Colors, in its order)
-/// as a new color group, a step of its own (`swatch.newGroup`).
+/// All Colors, in row order) or of the Prominent Colors bar (Save Prominent Colors, in its order)
+/// as a new color group, a step of its own (`swatch.newGroup`). Either way a row whose new color
+/// was removed gives none.
 fn save_group(app: &mut VectorcraftApp, d: &mut Dialog, which: &str) {
     let rs = rows(d);
     let order: Vec<usize> = match which {
-        "prominent" => prominent_parts(d, &rs).into_iter().map(|p| p.0).collect(),
+        "prominent" => prominent_parts(d, &rs).into_iter().map(|p| p.0).filter(|&i| to_color(&rs[i]).is_some()).collect(),
         _ => (0..rs.len()).filter(|&i| !excluded(&rs[i]) && to_color(&rs[i]).is_some()).collect(),
     };
     let colors = group_colors(app, d, order.iter().filter_map(|&i| rs.get(i)));
@@ -1756,7 +1757,7 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
             }
             // New Color Group: save the wheel's colors or the Prominent Colors as a color group.
             let button = widgets::icon_button(ui, "dc-folder", tl!("New Color Group"), false, 24.0);
-            let prominent = d.bool("__art") && !prominent_parts(d, rows).is_empty();
+            let prominent = d.bool("__art") && prominent_parts(d, rows).iter().any(|p| rows.get(p.0).and_then(to_color).is_some());
             let saved = egui::Popup::menu(&button).show(|ui| {
                 if widgets::menu_item_name(ui, tl!("Save All Colors"), rows.iter().any(|r| !excluded(r) && to_color(r).is_some()), false) {
                     return Some("all");
@@ -2801,7 +2802,8 @@ mod tests {
     }
 
     /// A color removed on the Edit tab leaves its row with no new color, and neither Save All
-    /// Colors nor OK on colors opened alone puts the row's current color in the new color group.
+    /// Colors, Save Prominent Colors nor OK on colors opened alone puts the row's current color in
+    /// the new color group.
     #[test]
     fn a_removed_color_joins_no_saved_color_group() {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
@@ -2817,6 +2819,12 @@ mod tests {
         frame(&mut app, &ctx, 0.1, vec![], 0);
         frame(&mut app, &ctx, 0.11, vec![], 0);
         assert_eq!(last(&app), ["#00ff00"], "Save All Colors");
+        let n = app.session.doc().unwrap().doc.swatch_groups.len();
+        app.ui.dialog.as_mut().unwrap().fields.insert(SAVE_GROUP.into(), json!("prominent"));
+        frame(&mut app, &ctx, 0.2, vec![], 0);
+        frame(&mut app, &ctx, 0.21, vec![], 0);
+        assert_eq!(app.session.doc().unwrap().doc.swatch_groups.len(), n + 1, "Save Prominent Colors makes a group");
+        assert_eq!(last(&app), ["#00ff00"], "Save Prominent Colors");
 
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
