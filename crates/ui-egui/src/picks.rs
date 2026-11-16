@@ -82,6 +82,7 @@ const DOCUMENT_FREE: &[&str] = &[
     "ui.shortcutImportDialog",
     crate::panels::actions::SAVE_SET,
     crate::panels::actions::LOAD_SET,
+    crate::panels::actions::REPLACE_SET,
 ];
 
 impl Entry {
