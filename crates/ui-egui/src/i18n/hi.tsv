@@ -4468,8 +4468,12 @@ antiAlias	Sharp	शार्प
 	Search	खोजें
 	Search All	सभी खोजें
 	Search artboards	खोज आर्टबोर्ड
-	Search commands and tools	खोज आदेश और टूल
-	Search commands and tools…	आदेश और टूल खोजें…
+	Search commands, tools, panels and effects	आदेश, टूल, पैनल्स और इफ़ेक्ट्स खोजें
+	Search commands, tools, panels and effects…	आदेश, टूल, पैनल्स और इफ़ेक्ट्स खोजें…
+	No commands match	कोई आदेश मेल नहीं खाता
+	{pos} of {total}: {name}	{total} में से {pos}: {name}
+@plural	{n} result|{n} results	{n} परिणाम|{n} परिणाम
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।|{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।
 	Recent Commands	हाल के आदेश
 	No recent commands	कोई हाल का आदेश नहीं
 	Search Commands…	कमांड खोजें…
