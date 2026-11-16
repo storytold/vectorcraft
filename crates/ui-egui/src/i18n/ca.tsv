@@ -1945,6 +1945,7 @@ digits	Malayalam	Malaiàlam
 	Connect Data Points	Connecta els punts de dades
 	Edge-to-Edge Lines	Línies de vora a vora
 	Draw Filled Lines	Dibuixa línies emplenades
+	Line Width	Amplada de línia
 	Tick Values	Valors de les marques
 	Override Calculated Values	Substitueix els valors calculats
 	Divisions	Divisions
@@ -2043,6 +2044,9 @@ digits	Malayalam	Malaiàlam
 	Show smooth color wheel	Mostra la roda de color contínua
 	Show segmented color wheel	Mostra la roda de color segmentada
 	Show color bars	Mostra les barres de color
+	Add Color Tool	Eina Afegeix color
+	Remove Color Tool	Eina Elimina color
+	Remove Color	Elimina el color
 	Find the selected colors in the artwork	Troba els colors seleccionats a l’obra
 	Harmony Sets	Conjunts d’harmonia
 	HDTV 1080p	HDTV 1080p
@@ -2347,6 +2351,8 @@ digits	Malayalam	Malaiàlam
 	Lasso Tool	Eina de llaç
 	Enclosing Lasso Tool	Eina de llaç envoltant
 	Enclosing Lasso	Llaç envoltant
+	Polygonal Lasso Tool	Eina de llaç poligonal
+	Polygonal Lasso	Llaç poligonal
 	Last	Últim
 	Last Artboard	Últim tauler
 	Status Bar Show	Mostra a la barra d'estat
@@ -7459,6 +7465,22 @@ breakText	Glyphs	Glifs
 	Remove Gaps	Elimina les separacions
 @msg	that makes too many pieces (at most 100000): make the dashes longer	això fa massa trossos (com a màxim 100000): allargueu els guions
 @msg	select paths, or segments, to divide	seleccioneu camins o segments per dividir
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Tangents comunes…
+	Common Tangents	Tangents comunes
+	Tangents	Tangents
+	Centerline	Línia central
+	External	Externes
+	Internal	Internes
+@msg	select two closed paths	seleccioneu dos camins tancats
+@msg	a selected path is open	un camí seleccionat és obert
+@msg	a selected path is not convex	un camí seleccionat no és convex
+@msg	a selected path has no area	un camí seleccionat no té àrea
+@msg	a selected path has more than 10000 segments	un camí seleccionat té més de 10000 segments
+@msg	the two paths have the same outline	els dos camins tenen el mateix contorn
+@msg	One path lies inside the other, so they have no common tangents	Un camí és dins de l’altre, per tant no tenen tangents comunes
+@msg	The paths overlap, so they have no internal tangents	Els camins se superposen, per tant no tenen tangents internes
+@msg	One path lies inside the other, so they have no internal tangents	Un camí és dins de l’altre, per tant no tenen tangents internes
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandeix els guions en camins
 @msg	select paths with dashed strokes to expand	seleccioneu camins amb traç discontinu per expandir
@@ -7773,6 +7795,8 @@ breakText	Glyphs	Glifs
 @msg	No bridge of this width fits across the selected art	Cap pont d’aquesta amplada no cap a la il·lustració seleccionada
 @msg	Some islands could not be joined to the area around the art	Algunes illes no s’han pogut unir a l’àrea que envolta la il·lustració
 @msg	`width` must be from {lo} to {hi} pt	`width` ha d’estar entre {lo} i {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` ha d’estar entre -180 i 180 graus
+@msg	`roundness` must be from 1 to 100%	`roundness` ha d’estar entre 1 i 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` ha de ser un nombre enter d’1 a {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Caixa i línies de pelat…
 	Weed Box and Lines	Caixa i línies de pelat

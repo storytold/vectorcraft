@@ -1470,6 +1470,7 @@ font-technology	Variable	Variables
 	Connect Data Points	Conectar puntos de datos
 	Edge-to-Edge Lines	Líneas de borde a borde
 	Draw Filled Lines	Dibujar líneas rellenas
+	Line Width	Ancho de línea
 	Tick Values	Valores de marcas
 	Override Calculated Values	Sustituir valores calculados
 	Divisions	Divisiones
@@ -1568,6 +1569,9 @@ font-technology	Variable	Variables
 	Show smooth color wheel	Mostrar rueda de color continua
 	Show segmented color wheel	Mostrar rueda de color segmentada
 	Show color bars	Mostrar barras de color
+	Add Color Tool	Herramienta Añadir color
+	Remove Color Tool	Herramienta Eliminar color
+	Remove Color	Eliminar color
 	Find the selected colors in the artwork	Buscar los colores seleccionados en la ilustración
 	Harmony Sets	Conjuntos de armonía
 	Height	Altura
@@ -1902,6 +1906,8 @@ font-technology	Variable	Variables
 	Lasso Tool	Herramienta Lazo
 	Enclosing Lasso Tool	Herramienta Lazo envolvente
 	Enclosing Lasso	Lazo envolvente
+	Polygonal Lasso Tool	Herramienta Lazo poligonal
+	Polygonal Lasso	Lazo poligonal
 	Last Effect: {name}	Último efecto: {name}
 	Last Effect: {}	Último efecto: {}
 	Last Effect…	Último efecto…
@@ -7420,6 +7426,22 @@ breakText	Glyphs	Glifos
 	Remove Gaps	Quitar separaciones
 @msg	that makes too many pieces (at most 100000): make the dashes longer	eso da demasiados trozos (como máximo 100000): alargue los guiones
 @msg	select paths, or segments, to divide	seleccione trazados o segmentos para dividir
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Tangentes comunes…
+	Common Tangents	Tangentes comunes
+	Tangents	Tangentes
+	Centerline	Línea central
+	External	Externas
+	Internal	Internas
+@msg	select two closed paths	seleccione dos trazados cerrados
+@msg	a selected path is open	un trazado seleccionado está abierto
+@msg	a selected path is not convex	un trazado seleccionado no es convexo
+@msg	a selected path has no area	un trazado seleccionado no tiene área
+@msg	a selected path has more than 10000 segments	un trazado seleccionado tiene más de 10000 segmentos
+@msg	the two paths have the same outline	los dos trazados tienen el mismo contorno
+@msg	One path lies inside the other, so they have no common tangents	Un trazado está dentro del otro, por lo que no tienen tangentes comunes
+@msg	The paths overlap, so they have no internal tangents	Los trazados se superponen, por lo que no tienen tangentes internas
+@msg	One path lies inside the other, so they have no internal tangents	Un trazado está dentro del otro, por lo que no tienen tangentes internas
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandir guiones en trazados
 @msg	select paths with dashed strokes to expand	seleccione trazados con trazo discontinuo para expandir
@@ -7850,6 +7872,8 @@ breakText	Glyphs	Glifos
 @msg	No bridge of this width fits across the selected art	Ningún puente de este ancho cabe en la ilustración seleccionada
 @msg	Some islands could not be joined to the area around the art	Algunas islas no se pudieron unir al área que rodea la ilustración
 @msg	`width` must be from {lo} to {hi} pt	`width` debe estar entre {lo} y {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` debe estar entre -180 y 180 grados
+@msg	`roundness` must be from 1 to 100%	`roundness` debe estar entre 1 y 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` debe ser un número entero entre 1 y {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Caja y líneas de pelado…
 	Weed Box and Lines	Caja y líneas de pelado

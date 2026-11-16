@@ -1489,6 +1489,7 @@ file-filter	Templates	Modelli
 	Connect Data Points	Collega punti dati
 	Edge-to-Edge Lines	Linee da bordo a bordo
 	Draw Filled Lines	Disegna linee piene
+	Line Width	Spessore linea
 	Tick Values	Valori delle tacche
 	Override Calculated Values	Sostituisci valori calcolati
 	Divisions	Divisioni
@@ -1587,6 +1588,9 @@ file-filter	Templates	Modelli
 	Show smooth color wheel	Mostra ruota dei colori continua
 	Show segmented color wheel	Mostra ruota dei colori segmentata
 	Show color bars	Mostra barre di colore
+	Add Color Tool	Strumento Aggiungi colore
+	Remove Color Tool	Strumento Rimuovi colore
+	Remove Color	Rimuovi colore
 	Find the selected colors in the artwork	Trova i colori selezionati nella grafica
 	Harmony Sets	Gruppi di armonia
 	Height	Altezza
@@ -1938,6 +1942,8 @@ file-filter	Templates	Modelli
 	Lasso Tool	Strumento Lazo
 	Enclosing Lasso Tool	Strumento Lazo di inclusione
 	Enclosing Lasso	Lazo di inclusione
+	Polygonal Lasso Tool	Strumento Lazo poligonale
+	Polygonal Lasso	Lazo poligonale
 	Last Effect: {name}	Ultimo effetto: {name}
 	Last Effect: {}	Ultimo effetto: {}
 	Last Effect…	Ultimo effetto…
@@ -7077,6 +7083,22 @@ breakText	Glyphs	Glifi
 	Remove Gaps	Rimuovi le distanze
 @msg	that makes too many pieces (at most 100000): make the dashes longer	così si ottengono troppi pezzi (al massimo 100000): allunga i trattini
 @msg	select paths, or segments, to divide	seleziona tracciati o segmenti da dividere
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Tangenti comuni…
+	Common Tangents	Tangenti comuni
+	Tangents	Tangenti
+	Centerline	Linea centrale
+	External	Esterne
+	Internal	Interne
+@msg	select two closed paths	seleziona due tracciati chiusi
+@msg	a selected path is open	un tracciato selezionato è aperto
+@msg	a selected path is not convex	un tracciato selezionato non è convesso
+@msg	a selected path has no area	un tracciato selezionato non ha area
+@msg	a selected path has more than 10000 segments	un tracciato selezionato ha più di 10000 segmenti
+@msg	the two paths have the same outline	i due tracciati hanno lo stesso contorno
+@msg	One path lies inside the other, so they have no common tangents	Un tracciato si trova dentro l’altro, quindi non hanno tangenti comuni
+@msg	The paths overlap, so they have no internal tangents	I tracciati si sovrappongono, quindi non hanno tangenti interne
+@msg	One path lies inside the other, so they have no internal tangents	Un tracciato si trova dentro l’altro, quindi non hanno tangenti interne
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Espandi trattini in tracciati
 @msg	select paths with dashed strokes to expand	seleziona tracciati con traccia tratteggiata da espandere
@@ -7378,6 +7400,8 @@ breakText	Glyphs	Glifi
 @msg	No bridge of this width fits across the selected art	Nessun ponte di questa larghezza entra nella grafica selezionata
 @msg	Some islands could not be joined to the area around the art	Non è stato possibile collegare alcune isole all’area intorno alla grafica
 @msg	`width` must be from {lo} to {hi} pt	`width` deve essere compreso tra {lo} e {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` deve essere compreso tra -180 e 180 gradi
+@msg	`roundness` must be from 1 to 100%	`roundness` deve essere compreso tra 1 e 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve essere un numero intero compreso tra 1 e {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Riquadro e linee di spellicolatura…
 	Weed Box and Lines	Riquadro e linee di spellicolatura

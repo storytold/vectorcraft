@@ -1418,6 +1418,7 @@ file-filter	Templates	模板
 	Connect Data Points	连接数据点
 	Edge-to-Edge Lines	边到边线条
 	Draw Filled Lines	绘制填充线
+	Line Width	线宽
 	Tick Values	刻度值
 	Override Calculated Values	覆盖计算值
 	Divisions	刻度数
@@ -1515,6 +1516,9 @@ file-filter	Templates	模板
 	Show smooth color wheel	显示平滑色轮
 	Show segmented color wheel	显示分段色轮
 	Show color bars	显示颜色条
+	Add Color Tool	添加颜色工具
+	Remove Color Tool	删除颜色工具
+	Remove Color	删除颜色
 	Find the selected colors in the artwork	在图稿中查找所选颜色
 	Harmony Sets	色彩调和组
 	Height	高度
@@ -1814,6 +1818,8 @@ file-filter	Templates	模板
 	Lasso Tool	套索工具
 	Enclosing Lasso Tool	包围套索工具
 	Enclosing Lasso	包围套索
+	Polygonal Lasso Tool	多边形套索工具
+	Polygonal Lasso	多边形套索
 	Last Effect: {name}	最后一次效果：{name}
 	Last Effect: {}	上次效果：{}
 	Last Effect…	上次效果…
@@ -7291,6 +7297,22 @@ breakText	Glyphs	字形
 	Remove Gaps	移除间隙
 @msg	that makes too many pieces (at most 100000): make the dashes longer	这会产生过多片段（最多 100000 个）：请加长短划线
 @msg	select paths, or segments, to divide	请选择要分割的路径或线段
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	公切线…
+	Common Tangents	公切线
+	Tangents	切线
+	Centerline	中心线
+	External	外部
+	Internal	内部
+@msg	select two closed paths	请选择两条闭合路径
+@msg	a selected path is open	所选路径是开放的
+@msg	a selected path is not convex	所选路径不是凸形
+@msg	a selected path has no area	所选路径没有面积
+@msg	a selected path has more than 10000 segments	所选路径的线段超过 10000 条
+@msg	the two paths have the same outline	两条路径的轮廓相同
+@msg	One path lies inside the other, so they have no common tangents	一条路径位于另一条之内，因此它们没有公切线
+@msg	The paths overlap, so they have no internal tangents	路径相互重叠，因此它们没有内公切线
+@msg	One path lies inside the other, so they have no internal tangents	一条路径位于另一条之内，因此它们没有内公切线
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	将短划线扩展为路径
 @msg	select paths with dashed strokes to expand	请选择要扩展的虚线描边路径
@@ -7589,6 +7611,8 @@ breakText	Glyphs	字形
 @msg	No bridge of this width fits across the selected art	此宽度的连接桥无法放入所选图稿
 @msg	Some islands could not be joined to the area around the art	部分孤岛无法连接到图稿周围的区域
 @msg	`width` must be from {lo} to {hi} pt	`width` 必须介于 {lo} 到 {hi} pt 之间
+@msg	`angle` must be from -180 to 180 degrees	`angle` 必须介于 -180 到 180 度之间
+@msg	`roundness` must be from 1 to 100%	`roundness` 必须介于 1 到 100% 之间
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必须是 1 到 {MAX_BRIDGES_PER_ISLAND} 之间的整数
 	Weed Box and Lines…	除废框和除废线…
 	Weed Box and Lines	除废框和除废线
