@@ -211,7 +211,8 @@ fn tool_takes(app: &mut VectorcraftApp, key: Key, text: &str) -> bool {
 /// Runs the single-key shortcuts of the texts typed before the event at `start` that no wait took,
 /// in order, as the frame's shortcuts would run them, and takes them and their presses from the
 /// frame. A text typed with Cmd, Ctrl or Alt, by a key the active tool takes, or with no shortcut,
-/// is left to the frame. True when one opened a dialog or the palette.
+/// is left to the frame. When one opened a dialog or the palette, the position of its first event
+/// in the frame: its press, or its text where the text came first (the web build).
 fn run_typed_before(
     app: &mut VectorcraftApp,
     ctx: &egui::Context,
@@ -219,7 +220,7 @@ fn run_typed_before(
     typed_by: &[Option<usize>],
     start: usize,
     taken: &mut Vec<usize>,
-) -> bool {
+) -> Option<usize> {
     for (k, e) in events.iter().enumerate().take(start) {
         let egui::Event::Text(text) = e else { continue };
         let by = typed_by.get(k).copied().flatten();
@@ -246,10 +247,10 @@ fn run_typed_before(
         taken.push(k);
         taken.extend(by);
         if super::run_single_key(app, ctx, &chords, key, repeat) {
-            return true;
+            return Some(by.map_or(k, |b| b.min(k)));
         }
     }
-    false
+    None
 }
 
 /// Before the frame's shortcuts run: goes through the frame's events in order. A release of the
@@ -301,10 +302,10 @@ pub(super) fn intake(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
                 // A key typed before it that opened a dialog or the palette ends the wait without
                 // running it.
                 if let Some(start) = started.take()
-                    && run_typed_before(app, ctx, &events, &typed_by, start, &mut taken)
+                    && let Some(opened) = run_typed_before(app, ctx, &events, &typed_by, start, &mut taken)
                 {
                     cancel(app, ctx);
-                    stop_at = Some(j);
+                    stop_at = Some(opened);
                     break;
                 }
                 if settle(app, ctx, hold, down) {
@@ -351,7 +352,8 @@ pub(super) fn intake(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
         app.hold_keys.pending = Some(Pending { entry, chords, key: *key, physical: *physical_key, mods: *m, since: now, delay, viewport });
     }
     // Take the waiting presses and their texts, and after a result that opened a dialog, the key
-    // event that ended the wait and every later key event and text of the frame, with the text a
+    // event that ended the wait (or the typed key that opened the dialog, when that came earlier)
+    // and every later key event and text of the frame, with the text a
     // press typed before it (the web build sends a press's text first): none of them reaches the
     // dialog.
     ctx.input_mut(|i| {
