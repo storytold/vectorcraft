@@ -1,6 +1,6 @@
 use super::common::{
-    PenRecord, Sample, dist_to_polyline, fill_targets, ids_json, path_mut, path_of, points_param, poly_bounds, pressure_region, replace_with_pieces,
-    samples_param, sibling_with, size_pressure, target_paths, usize_opt,
+    PenRecord, SIZE_VARIATIONS, SIZES, Sample, dist_to_polyline, fill_targets, ids_json, path_mut, path_of, points_param, poly_bounds,
+    pressure_region, ranged, replace_with_pieces, samples_param, sibling_with, size_pressure, target_paths, usize_opt,
 };
 use super::{
     Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, EngineError, FillRule, Join, NodeId, Paint, ParamCurve, PathData, Point, Rect, Result, Session,
@@ -293,10 +293,7 @@ pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
         return erase_rect(s, marquee_param(rect, C)?);
     }
     let samples = samples_param(p, "points", C)?;
-    let size = number_or(p, "size", 10.0, C)?;
-    if !(size.is_finite() && size > 0.0) {
-        return Err(bad(C, "size must be positive"));
-    }
+    let size = ranged(p, "size", 10.0, SIZES, C)?;
     let angle = number_or(p, "angle", 0.0, C)?;
     let roundness = number_or(p, "roundness", 100.0, C)?;
     let vary = eraser_variations(p, C)?;
@@ -401,12 +398,13 @@ const ERASER_MODES: &str = "\"fixed\", \"random\", \"pressure\", \"tilt\", \"bea
 
 /// Eraser Tool Options' Angle, Roundness and Size variations: for each of angle (`angleMode` with
 /// `angleVariation` in degrees, at most 180), roundness (`roundnessMode` with `roundnessVariation`
-/// in percent, at most 100) and size (`sizeMode` with `sizeVariation` in points), its mode and how
-/// far it varies either way. A mode left out or null is Fixed, and a variation left out or null
-/// is 0; any other mode, or a variation that is negative or past its most, is refused.
+/// in percent, at most 100) and size (`sizeMode` with `sizeVariation` in points, at most 1000), its
+/// mode and how far it varies either way. A mode left out or null is Fixed, and a variation left
+/// out or null is 0; any other mode, or a variation that is negative or past its most, is refused,
+/// in every mode.
 fn eraser_variations(p: &Value, cmd: &str) -> Result<[(Variation, f64); 3]> {
     const KEYS: [(&str, &str, f64); 3] =
-        [("angleMode", "angleVariation", 180.0), ("roundnessMode", "roundnessVariation", 100.0), ("sizeMode", "sizeVariation", f64::INFINITY)];
+        [("angleMode", "angleVariation", 180.0), ("roundnessMode", "roundnessVariation", 100.0), ("sizeMode", "sizeVariation", SIZE_VARIATIONS.1)];
     let mut out = [(Variation::Fixed, 0.0); 3];
     for (slot, (mode_key, var_key, most)) in out.iter_mut().zip(KEYS) {
         let mode = match p.get(mode_key).filter(|v| !v.is_null()) {
@@ -419,7 +417,11 @@ fn eraser_variations(p: &Value, cmd: &str) -> Result<[(Variation, f64); 3]> {
             return Err(bad(cmd, format!("{var_key} must be 0 or more")));
         }
         if variation > most {
-            return Err(bad(cmd, format!("{var_key} must be at most {most}")));
+            // Size Variation is refused as path.blob refuses it.
+            return Err(match var_key {
+                "sizeVariation" => bad(cmd, format!("`{var_key}` must be from {} to {most}", SIZE_VARIATIONS.0)),
+                _ => bad(cmd, format!("{var_key} must be at most {most}")),
+            });
         }
         *slot = (mode, variation);
     }

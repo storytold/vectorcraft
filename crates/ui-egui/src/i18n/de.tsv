@@ -1185,6 +1185,7 @@ font-technology	Variable	Variabel
 	Highlight Size	Glanzpunktgröße
 	Blend Steps	Angleichungsstufen
 	Shading Color	Schattierungsfarbe
+	Black Overprint	Überdruckendes Schwarz
 	Draw Hidden Faces	Verdeckte Flächen zeichnen
 	Eyedropper	Pipette
 	Sample Color from Screen	Farbe vom Bildschirm aufnehmen
@@ -3008,6 +3009,12 @@ digits	Malayalam	Malayalam
 	Responsive	Responsiv
 	Restore	Wiederherstellen
 	Restore every preference to its default (applied on OK)	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen (wird bei OK angewendet)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Die Einheit für neue Dokumente in den integrierten Größen außer Pixelgrößen und für geöffnete Dateien ohne gespeicherte Einheit; wenn Sie sie hier wählen und auf OK klicken, erhält auch das aktive Dokument diese Einheit.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Konturstärken, Striche und Lücken werden in dieser Einheit angezeigt, und dafür eingegebene Zahlen werden in ihr gelesen.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Schriftgrade, Zeilenabstand und Grundlinienversatz werden in dieser Einheit angezeigt, und dafür eingegebene Zahlen werden in ihr gelesen.
+	The unit for East Asian type measurements, which no field uses yet.	Die Einheit für Maße in ostasiatischem Text, die noch kein Feld verwendet.
+	When on, a number typed without a unit into a field in picas is read in points.	Wenn aktiviert, wird eine ohne Einheit eingegebene Zahl in einem Feld in Pica als Punkt gelesen.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Mit XML-ID werden Objektnamen in „Ebenen“, „Variablen“ und „Ebenenoptionen“ als XML-IDs angezeigt.
 	Reset all preferences to their defaults?	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Die Standardwerte werden angewendet, wenn Sie in den Voreinstellungen auf OK klicken. Abbrechen dort behält Ihre aktuellen Voreinstellungen.
 	Restore Recovered Documents	Wiederhergestellte Dokumente öffnen
@@ -3041,6 +3048,7 @@ digits	Malayalam	Malayalam
 	Roman Hanging Punctuation	Hängende Interpunktion (lateinisch)
 	Korean Line Break Anywhere	Koreanischer Zeilenumbruch überall
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Einstellungen für ostasiatischen Satz
 	Korean Composition Settings	Einstellungen für koreanischen Satz
 	Rotate	Drehen
@@ -3235,6 +3243,8 @@ digits	Malayalam	Malayalam
 @msg	`{key}` must be an array of these names: {_1}	`{key}` muss ein Array mit diesen Namen sein: {_1}
 	Search commands and tools	Befehle und Werkzeuge suchen
 	Search commands and tools…	Befehle und Werkzeuge suchen…
+	Recent Commands	Zuletzt verwendete Befehle
+	No recent commands	Keine zuletzt verwendeten Befehle
 	Search Commands…	Befehle suchen…
 	Secondary	Sekundär
 	Section Symbol	Paragrafenzeichen
@@ -4383,6 +4393,31 @@ theme	Appearance	Erscheinungsbild
 @msg	$.evalFile requires a file path	$.evalFile erfordert einen Dateipfad
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: Die Zeitüberschreitung muss eine endliche Anzahl von Millisekunden sein, 0 oder mehr
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: nimmt einen Dateipfad und eine Zeitüberschreitung
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} ist nicht definiert
+@msg	cannot read property '{key}' of {base}	die Eigenschaft '{key}' von {base} kann nicht gelesen werden
+@msg	cannot set property '{key}' of {base}	die Eigenschaft '{key}' von {base} kann nicht gesetzt werden
+@msg	cannot read a property of {base}	eine Eigenschaft von {base} kann nicht gelesen werden
+@msg	cannot set a property of {base}	eine Eigenschaft von {base} kann nicht gesetzt werden
+@msg	cannot define property '{key}': {why}	die Eigenschaft '{key}' kann nicht definiert werden: {why}
+@msg	cannot assign to property '{key}': {why}	der Eigenschaft '{key}' kann nichts zugewiesen werden: {why}
+@msg	cannot delete property '{key}'	die Eigenschaft '{key}' kann nicht gelöscht werden
+@msg	cannot declare function {ident}	die Funktion {ident} kann nicht deklariert werden
+@msg	invalid assignment target	ungültiges Zuweisungsziel
+@msg	the array's length is read-only	die Länge des Arrays ist schreibgeschützt
+@msg	the property cannot be redefined	die Eigenschaft kann nicht neu definiert werden
+@msg	the object is not extensible	das Objekt ist nicht erweiterbar
+@msg	the length cannot be redefined	die Länge kann nicht neu definiert werden
+@msg	it is read-only	sie ist schreibgeschützt
+@msg	an element cannot be deleted	ein Element kann nicht gelöscht werden
+@msg	it has only a getter	sie hat nur einen Getter
+@msg	the value is a primitive	der Wert ist ein primitiver Wert
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: Zeile {line}, Spalte {column} in {file}: {e} (ausgelöst)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: Zeile {line}, Spalte {column}: {e} (ausgelöst)
 @msg	{name}: {e} (thrown)	{name}: {e} (ausgelöst)
@@ -7004,6 +7039,24 @@ breakText	Glyphs	Glyphen
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Striche in Pfade umwandeln
 @msg	select paths with dashed strokes to expand	wählen Sie Pfade mit gestrichelter Kontur zum Umwandeln aus
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Tangentialkreis…
+	Tangent Circle	Tangentialkreis
+	Circle:	Kreis:
+@msg	`ids` names an object twice	`ids` nennt ein Objekt zweimal
+@msg	select two or three paths or compound paths	wählen Sie zwei oder drei Pfade oder zusammengesetzte Pfade aus
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` muss von 0.01 bis 1000000 pt sein
+@msg	two shapes need a `radius`	zwei Formen brauchen einen `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	drei Formen legen den Radius selbst fest: lassen Sie `radius` weg
+@msg	`circle` must be from 0 to 64	`circle` muss von 0 bis 64 sein
+@msg	a shape has no outline	eine Form hat keinen Umriss
+@msg	the shapes are too complex: at most 2000 segments in all	die Formen sind zu komplex: höchstens 2000 Segmente insgesamt
+@msg	these shapes take too long to search	diese Formen brauchen zu lange für die Suche
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	mehr als 64 Kreise berühren diese Formen: sie berühren sie womöglich entlang einer ganzen Kurve
+@msg	no circle touches these shapes	kein Kreis berührt diese Formen
+@msg	`circle` is past the last circle found ({found})	`circle` liegt hinter dem letzten gefundenen Kreis ({found})
+@msg	object {value} is not a path or compound path	Objekt {value} ist kein Pfad oder zusammengesetzter Pfad
+@msg	these shapes are too small to measure	diese Formen sind zu klein zum Messen
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentwerkzeuge
 	Save a Timestamped Copy	Kopie mit Zeitstempel speichern

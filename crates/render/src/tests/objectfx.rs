@@ -1242,3 +1242,45 @@ fn each_copy_of_a_transform_effect_draws_its_own_shadow() {
     let b = crate::fx::visual_bounds(&d.symbol_boxes(), n).unwrap();
     assert!(b.x1 >= 80.0 - 1e-9, "{b:?}");
 }
+
+/// Each copy of an image's Transform effect draws the drop shadow listed before the effect under
+/// itself, scaled with it: the red image (20..50) has its green shadow 10 pt to its right, and its
+/// copy scaled 50 % and moved 40 pt down (27.5..42.5 across, 67.5..82.5 down) has its own 5 pt to
+/// its right.
+#[test]
+fn each_copy_of_an_images_transform_effect_draws_its_own_shadow() {
+    let shadow = fx("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"}));
+    let copies = fx("distort.transform", json!({"scaleH": 50, "scaleV": 50, "moveV": 40, "copies": 1}));
+    let img = render(&image_doc(vec![shadow, copies]));
+    assert_eq!(img.pixel(35, 35), [255, 0, 0, 255], "the image");
+    assert_eq!(img.pixel(55, 35), [0, 255, 0, 255], "the image's shadow");
+    assert_eq!(img.pixel(35, 75), [255, 0, 0, 255], "the copy");
+    assert_eq!(img.pixel(45, 75), [0, 255, 0, 255], "the copy's shadow, 5 pt to its right");
+    assert_eq!(img.pixel(50, 75), [255, 255, 255, 255], "past the copy's shadow");
+}
+
+/// Each copy of a symbol instance's Transform effect draws the drop shadow listed before the effect
+/// under itself, scaled with it: the black square (40..60) has its green shadow 10 pt to its right,
+/// and its copy scaled 150 % and moved 30 pt down (35..65 across, 65..95 down) has its own 15 pt to
+/// its right. The bounds reach as far as the copy's shadow, and as far as a shadow listed after the
+/// Transform effect paints below all of them.
+#[test]
+fn each_copy_of_a_symbol_instances_transform_effect_draws_its_own_shadow() {
+    let shadow = fx("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"}));
+    let copies = fx("distort.transform", json!({"scaleH": 150, "scaleV": 150, "moveV": 30, "copies": 1}));
+    let below = fx("stylize.dropShadow", json!({"x": 0, "y": 20, "blur": 0, "opacity": 100, "mode": "normal", "color": "#0000ff"}));
+    let d = symbol_doc(vec![shadow.clone(), copies.clone(), below]);
+    let n = &d.layers[0].children().unwrap()[0];
+    let b = crate::brush_fx::cull_bounds(&d.symbol_boxes(), n).unwrap();
+    assert!(b.x1 >= 80.0 - 1e-9 && b.y1 >= 115.0 - 1e-9, "{b:?}");
+    let d = symbol_doc(vec![shadow, copies]);
+    let img = render(&d);
+    assert_eq!(img.pixel(50, 50), [0, 0, 0, 255], "the instance");
+    assert_eq!(img.pixel(65, 50), [0, 255, 0, 255], "the instance's shadow");
+    assert_eq!(img.pixel(50, 80), [0, 0, 0, 255], "the copy");
+    assert_eq!(img.pixel(77, 80), [0, 255, 0, 255], "the copy's shadow, 15 pt to its right");
+    assert_eq!(img.pixel(85, 80), [255, 255, 255, 255], "past the copy's shadow");
+    let n = &d.layers[0].children().unwrap()[0];
+    let b = crate::brush_fx::cull_bounds(&d.symbol_boxes(), n).unwrap();
+    assert!(b.x1 >= 80.0 - 1e-9, "{b:?}");
+}
