@@ -263,7 +263,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if let Some(to) = typed {
             rename_active_dataset(app, current, &to);
         }
-        let picked = widgets::dropdown_names_named(ui, "variables-active", Some(tl!("Data Sets")), "", &names, 26.0);
+        // The closed list button is too narrow for a name and shows none; the open list marks the
+        // current data set.
+        let picked = widgets::combo_named(ui, "variables-active", Some(tl!("Data Sets")), "", 26.0, |ui| {
+            let mut chosen = None;
+            for (i, name) in names.iter().enumerate() {
+                if ui.add(egui::Button::selectable(*name == current, *name)).clicked() {
+                    chosen = Some(i);
+                }
+            }
+            chosen
+        });
         if let Some(name) = picked.and_then(|i| names.get(i))
             && *name != current
         {
@@ -583,6 +593,37 @@ mod tests {
             self.frame(app, vec![Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: none }]);
             self.frame(app, vec![]);
         }
+
+        /// The panel's accessibility nodes after two frames without input.
+        fn nodes(&mut self, app: &mut VectorcraftApp) -> Vec<(egui::accesskit::NodeId, egui::accesskit::Node)> {
+            self.frame(app, vec![]);
+            let out = self.frame(app, vec![]);
+            out.platform_output.accesskit_update.expect("an accessibility tree").nodes
+        }
+
+        /// Clicks the center of `node`.
+        fn click(&mut self, app: &mut VectorcraftApp, node: &egui::accesskit::Node) {
+            use egui::{Event, Modifiers, PointerButton};
+            let b = node.bounds().expect("bounds");
+            let pos = egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5);
+            let (button, none) = (PointerButton::Primary, Modifiers::default());
+            self.frame(app, vec![Event::PointerMoved(pos), Event::PointerButton { pos, button, pressed: true, modifiers: none }]);
+            self.frame(app, vec![Event::PointerButton { pos, button, pressed: false, modifiers: none }]);
+            self.frame(app, vec![]);
+        }
+
+        /// Clicks the Data Set list button and returns the rows of the open list: the buttons that
+        /// were not in the panel before it opened.
+        fn open_data_set_list(&mut self, app: &mut VectorcraftApp) -> Vec<egui::accesskit::Node> {
+            use egui::accesskit::Role;
+            let before = self.nodes(app);
+            let (_, list) =
+                before.iter().find(|(_, n)| n.role() == Role::ComboBox && n.label() == Some("Data Sets")).expect("the Data Set list button");
+            let list = list.clone();
+            self.click(app, &list);
+            let after = self.nodes(app);
+            after.into_iter().filter(|(id, n)| n.role() == Role::Button && !before.iter().any(|(b, _)| b == id)).map(|(_, n)| n).collect()
+        }
     }
 
     fn set_names(app: &mut VectorcraftApp) -> Vec<String> {
@@ -595,7 +636,8 @@ mod tests {
     }
 
     /// A name typed in the Data Set box and entered renames the current data set in one undo step;
-    /// the list still chooses another data set afterward.
+    /// the open list then marks the renamed data set as the current one, and a click on another
+    /// row chooses that data set.
     #[test]
     fn the_data_set_box_renames_the_current_data_set() {
         let mut app = app_with_data();
@@ -608,10 +650,16 @@ mod tests {
         assert_eq!(app.session.active().unwrap().doc.variables.active_dataset.as_deref(), Some("Spring"));
         assert_eq!(undo_steps(&app), before + 1);
         assert_eq!(app.session.active().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Rename Data Set"));
-        // The new name is what the box shows, and what the list offers with the other row.
+        // The new name is what the box shows, and what the list offers, marked, with the other row.
         let text = crate::tests_labels::painted_text(&mut app, show);
         assert!(text.contains("Spring"), "{text}");
-        app.run("dataset.select", json!({"name": "Data Set 2"})).unwrap();
+        let rows = d.open_data_set_list(&mut app);
+        // The accessibility update lists nodes in hash-map order, so the rows are compared by name.
+        let mut marked: Vec<(Option<&str>, bool)> = rows.iter().map(|n| (n.label(), n.toggled() == Some(egui::accesskit::Toggled::True))).collect();
+        marked.sort();
+        assert_eq!(marked, [(Some("Data Set 2"), false), (Some("Spring"), true)]);
+        let other = rows.iter().find(|n| n.label() == Some("Data Set 2")).expect("the Data Set 2 row").clone();
+        d.click(&mut app, &other);
         assert_eq!(app.session.active().unwrap().doc.variables.active_dataset.as_deref(), Some("Data Set 2"));
     }
 
@@ -647,6 +695,12 @@ mod tests {
         app.session.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
         let before = undo_steps(&app);
         let mut d = Driver::new();
+        let nodes = d.nodes(&mut app);
+        let (_, field) = nodes
+            .iter()
+            .find(|(_, n)| matches!(n.role(), egui::accesskit::Role::TextInput | egui::accesskit::Role::MultilineTextInput))
+            .expect("the Data Set box");
+        assert!(field.is_disabled(), "the Data Set box is enabled without a data set");
         d.type_name(&mut app, "Spring");
         assert!(set_names(&mut app).is_empty());
         assert_eq!(undo_steps(&app), before);

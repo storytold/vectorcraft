@@ -22,6 +22,8 @@
 //! has moved, switches the Blob Brush to the Smooth tool: the drag smooths the selected paths.
 //! Alt held at a Paintbrush press with a selected path also smooths; Alt pressed after its stroke
 //! begins closes the path on release.
+//! Alt held at the Eraser's press draws a marquee instead of a stroke, a square while Shift is
+//! held, and the release erases everything inside it.
 //! Alt held at the Knife's press makes it cut along the straight line from the press point to the
 //! pointer, even if Alt is released during the drag. Shift on each drag or release constrains that
 //! line to 45° steps from the canvas axes.
@@ -163,6 +165,11 @@ pub struct GestureTool {
     /// The pointer has moved from the press point, by any distance (a move too short to add a
     /// point counts).
     moved: bool,
+    /// Active Eraser drag draws a marquee (Alt held at the press): the release erases the
+    /// rectangle from the press point to the pointer, a square while Shift is held.
+    marquee: bool,
+    /// Shift was held at the last event of the Eraser's marquee drag.
+    square: bool,
     /// Active Pencil drag draws a straight line (Shift or Alt held at the press), or active Knife
     /// drag cuts along one (Alt held at the press): the stroke is the press point and the pointer.
     straight: bool,
@@ -871,6 +878,8 @@ impl GestureTool {
             smooth_fidelity: SMOOTH_FIDELITY,
             smoothing: false,
             moved: false,
+            marquee: false,
+            square: false,
             straight: false,
             unconstrained: false,
             shift_line: None,
@@ -996,6 +1005,11 @@ impl GestureTool {
         self.id == "blobBrush" && m.alt && !self.moved
     }
 
+    /// Would a press with `m` held draw the Eraser's marquee? Alt held at the press.
+    fn alt_marquee(&self, m: Mods) -> bool {
+        self.id == "eraser" && m.alt
+    }
+
     /// Shift keeps an active straight Knife cut at 45° steps; without Shift it follows the pointer.
     /// Releasing Alt does not end a straight cut.
     fn knife_shift(&mut self, m: Mods) {
@@ -1057,6 +1071,43 @@ impl GestureTool {
             Overlay::Path { path: path.clone(), color: [0xff, 0xff, 0xff], width: 3.0, dashed: false },
             Overlay::Path { path, color: [0, 0, 0], width: 1.0, dashed: false },
         ]
+    }
+
+    /// The Eraser's marquee: the rectangle from the press point to the pointer, or with Shift held
+    /// the square on the larger of its sides, in the direction the pointer went. `None` outside a
+    /// marquee drag.
+    fn marquee_rect(&self) -> Option<Rect> {
+        let (&a, &b) = (self.points.first()?, self.points.last()?);
+        if !self.marquee {
+            return None;
+        }
+        let d = b - a;
+        let b = if self.square {
+            let side = d.x.abs().max(d.y.abs());
+            a + Vec2::new(side.copysign(d.x), side.copysign(d.y))
+        } else {
+            b
+        };
+        Some(Rect::from_points(a, b))
+    }
+
+    /// A drag or the release of the Eraser's marquee: the marquee runs from the press point to the
+    /// pointer, and the release erases it. `None` for any other event.
+    fn marquee_pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Option<Vec<Action>> {
+        if !(self.active && self.marquee && matches!(ev.kind, PointerKind::Drag | PointerKind::Up)) {
+            return None;
+        }
+        self.square = ev.mods.shift;
+        self.points.truncate(1);
+        self.points.push(ev.pos);
+        if !matches!(ev.kind, PointerKind::Up) {
+            return Some(vec![]);
+        }
+        let out = self.finish(cx, ev.mods);
+        self.active = false;
+        self.marquee = false;
+        self.clear();
+        Some(out)
     }
 
     /// Forget the stroke.
@@ -1422,6 +1473,13 @@ impl GestureTool {
             }
             return vec![];
         }
+        if let Some(r) = self.marquee_rect() {
+            // A click, or a drag along one axis, encloses no area: nothing is erased.
+            if r.width() <= 0.0 || r.height() <= 0.0 || r.width().max(r.height()) < cx.tol(1.0) {
+                return vec![];
+            }
+            return vec![Action::Exec("path.eraseRegion".into(), json!({"rect": [r.x0, r.y0, r.width(), r.height()]}))];
+        }
         match self.id {
             "pencil" | "paintbrush" => {
                 if !self.began {
@@ -1497,6 +1555,9 @@ impl Tool for GestureTool {
         if self.varies_size() {
             self.tip_at = (!ev.mods.cmd && !self.blob_alt_smooths(ev.mods)).then_some(p);
         }
+        if let Some(out) = self.marquee_pointer(cx, ev) {
+            return out;
+        }
         match ev.kind {
             PointerKind::Down => {
                 self.active = true;
@@ -1513,6 +1574,9 @@ impl Tool for GestureTool {
                 // too, the line keeps Shift's 45° steps. Alt makes the Knife cut along a straight line.
                 self.straight = (self.id == "pencil" && !self.smoothing && (ev.mods.shift || ev.mods.alt)) || (self.id == "knife" && ev.mods.alt);
                 self.unconstrained = self.straight && !ev.mods.shift;
+                // Alt makes the Eraser draw a marquee, and Shift keeps it square.
+                self.marquee = self.alt_marquee(ev.mods);
+                self.square = ev.mods.shift;
                 let extend = if self.draws_path() && !self.smoothing { self.find_extend(cx, p) } else { None };
                 self.set_extend(cx, extend);
                 // The stroke's previews select the path it continues, so the others are kept now.
@@ -1694,6 +1758,7 @@ impl Tool for GestureTool {
                 self.smoothing = false;
                 self.straight = false;
                 self.unconstrained = false;
+                self.marquee = false;
                 self.clear();
                 if began { vec![Action::Cancel] } else { vec![] }
             }
@@ -1726,6 +1791,7 @@ impl Tool for GestureTool {
         self.smoothing = false;
         self.straight = false;
         self.unconstrained = false;
+        self.marquee = false;
         self.clear();
         if began { stale.into_iter().chain([Action::Commit]).collect() } else { vec![] }
     }
@@ -1733,6 +1799,14 @@ impl Tool for GestureTool {
         self.area_pending.set(false);
         self.band_pending.set(false);
         let mut o = self.snap.guides().to_vec();
+        // The Eraser's marquee shows without the tip outline.
+        if self.active
+            && self.points.len() >= 2
+            && let Some(r) = self.marquee_rect()
+        {
+            o.push(Overlay::Marquee(r));
+            return o;
+        }
         // A path being drawn shows itself, except with the Pencil's Live preview off.
         if !self.active || self.points.len() < 2 || (self.began && self.previews()) {
             o.extend(self.tip_outline(cx));

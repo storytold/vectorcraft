@@ -73,8 +73,10 @@ pub struct RasterImage {
     pub height: u32,
     /// The resolution the file declares (see [`super::ppi::resolution`]).
     pub ppi: Option<(f64, f64)>,
-    /// A DCS file's clipping path, in the image's pixel space ([`crate::cmd::place::dcs`]).
-    pub clip: Option<vectorcraft_geom::PathData>,
+    /// The clipping path its file draws it through, in the image's pixel space, with its fill rule:
+    /// a DCS file's (nonzero, [`crate::cmd::place::dcs`]), or a PSD or PSB file's (even-odd,
+    /// [`psdread::clipping_path`]).
+    pub clip: Option<(vectorcraft_geom::PathData, vectorcraft_geom::FillRule)>,
 }
 
 pub(super) fn err(e: impl std::fmt::Display) -> EngineError {
@@ -949,7 +951,8 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// or TIFF keeps its inks, at the 8 or 16 bits the file has, and its CMYK ICC profile as a CMYK
 /// TIFF ([`vectorcraft_doc::cmyk::turned_cmyk`]). An image the decoder reads and that is stored as
 /// PNG keeps its gray or RGB samples at 8 or 16 bits, and the gray or RGB ICC profile they are in;
-/// other samples become 8-bit RGBA.
+/// other samples become 8-bit RGBA. A Photoshop document's PNG keeps the clipping path the file
+/// names ([`png_with_clip`]).
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let ppi = super::ppi::resolution(bytes);
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
@@ -957,7 +960,8 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     }
     if psdread::is_psd(bytes) {
         let cms = vectorcraft_color::cms::active();
-        return as_png(psdread::decode(bytes, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)).map_err(err)?, None, ppi);
+        let img = as_png(psdread::decode(bytes, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)).map_err(err)?, None, ppi)?;
+        return Ok(png_with_clip(img, psdread::clipping_path(bytes)));
     }
     if jxlread::is_jxl(bytes) {
         let (img, icc, orientation) = jxlread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?;
@@ -1125,10 +1129,48 @@ fn stored(bytes: Vec<u8>, mime: &'static str, (width, height): (u32, u32), ppi: 
     Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi, clip: None })
 }
 
+/// The keyword of the PNG text chunk holding the clipping path of the file a PNG was made from
+/// ([`png_with_clip`]).
+const CLIP_KEYWORD: &str = "VectorCraft clip";
+
+/// Longest clipping path a PNG keeps (bytes of its JSON).
+const MAX_PNG_CLIP: usize = 16 << 20;
+
+/// `img`, a PNG made from a PSD or PSB file, with `clip`, the clipping path that file names in the
+/// image's pixel space (even-odd): the image keeps it, and its PNG keeps it in a text chunk, so the
+/// Links commands know a clip group of that path as the file's ([`png_clip`]). A path whose JSON is
+/// longer than [`MAX_PNG_CLIP`] is left out, and the image comes in unclipped.
+fn png_with_clip(mut img: RasterImage, clip: Option<vectorcraft_geom::PathData>) -> RasterImage {
+    let Some(clip) = clip else { return img };
+    let Some(json) = serde_json::to_string(&clip).ok().filter(|j| j.len() <= MAX_PNG_CLIP) else { return img };
+    let png = vectorcraft_render::encode::png::with_text(img.blob.bytes.to_vec(), &[(CLIP_KEYWORD, json.into())]);
+    img.blob = ImageBlob::new("image/png", png);
+    img.key = img.blob.content_key();
+    img.clip = Some((clip, vectorcraft_geom::FillRule::EvenOdd));
+    img
+}
+
+/// The clipping path a PNG made from a PSD or PSB file keeps ([`png_with_clip`]), in its pixel
+/// space; `None` for other images, and for a text chunk longer than [`MAX_PNG_CLIP`] or a path
+/// past [`vectorcraft_geom::path::MAX_READ_ANCHORS`]. Reads only the chunks before the image data.
+pub(crate) fn png_clip(png: &[u8]) -> Option<vectorcraft_geom::PathData> {
+    if !png.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return None;
+    }
+    let keyword = [CLIP_KEYWORD.as_bytes(), &[0]].concat();
+    let json = super::ppi::png_chunks(png)
+        .take_while(|(ty, _)| *ty != b"IDAT")
+        .find_map(|(ty, data)| data.strip_prefix(keyword.as_slice()).filter(|_| ty == b"tEXt"))?;
+    if json.len() > MAX_PNG_CLIP {
+        return None;
+    }
+    vectorcraft_geom::path::with_anchor_budget(vectorcraft_geom::path::MAX_READ_ANCHORS, || serde_json::from_slice(json).ok())
+}
+
 /// An image as a document of its physical size at the resolution it declares (as Place sizes it;
 /// 72 ppi, 1 px = 1 pt, when it declares none), the image named after the file.
 pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
-    let RasterImage { key, blob, width, height, ppi, .. } = raster_image(bytes)?;
+    let RasterImage { key, blob, width, height, ppi, clip } = raster_image(bytes)?;
     let (sx, sy) = crate::cmd::place::pt_per_px(ppi);
     let mut d = Document::new(width as f64 * sx, height as f64 * sy);
     let layer = d.layers[0].id;
@@ -1138,7 +1180,7 @@ pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
         id,
         NodeKind::Image(Box::new(ImageObject { key: key.clone(), width, height, xf, link: None, placement: Default::default(), pixels: None })),
     );
-    let mut n = file_clipped(&mut d, n, psdread::clipping_path(bytes));
+    let mut n = file_clipped(&mut d, n, clip.map(|(path, _)| path));
     n.name = Some(name.to_string());
     d.images.insert(key, blob);
     d.insert(Some(layer), 0, n).map_err(err)?;
