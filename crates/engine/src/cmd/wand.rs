@@ -382,6 +382,7 @@ mod tests {
             json!({"fillColor": "yes"}),
             json!({"fillTolerance": null}),
             json!({"strokeColor": null}),
+            json!({"reset": "yes", "fillColor": false}),
             json!({"reset": true, "fillTolerance": 101}),
             json!({"fillColor": false, "strokeTolerance": 101}),
         ] {
