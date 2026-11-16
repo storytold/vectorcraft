@@ -437,6 +437,9 @@ pub struct PrintOutput {
     pub image: PrintImage,
     /// Separate spot colours into process inks: no spot plates.
     pub spots_to_process: bool,
+    /// Separations: solid 100% black fills and strokes overprint, the characters' too, in the
+    /// printed copy only ([`super::printed_document`]). Composite output leaves it unused.
+    pub overprint_black: bool,
     /// Per-ink options, by ink name; inks not listed print with their defaults.
     pub inks: Vec<InkSettings>,
 }

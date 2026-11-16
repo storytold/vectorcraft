@@ -5,12 +5,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use vectorcraft_color::Color;
 use vectorcraft_color::cms::{self, Cms, Model, ProfileKind};
 use vectorcraft_color::swatch::REGISTRATION;
+use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::inks::{Link, StopPlates, inks, plates, spot_color, stop_inks, visit_node_colors};
-use vectorcraft_doc::overprint::darken_overprints;
-use vectorcraft_doc::{ColorMode, Document, ImageBlob, Node, NodeKind};
+use vectorcraft_doc::overprint::{darken_overprints, is_white};
+use vectorcraft_doc::{AppearanceItem, ColorMode, Document, ImageBlob, Node, NodeKind};
 
 use super::{DEFAULT_FREQUENCY, PrintInk, PrintSettings};
 
@@ -131,6 +131,57 @@ impl<'a> Separator<'a> {
         });
     }
 
+    /// Whether paint `p` puts none of ink `plate` down, to within half a percent (the other inks a
+    /// black may carry and still count as black, [`vectorcraft_doc::overprint::is_black_ink`]): a
+    /// solid color, a gradient whose every stop does, or a freeform gradient with color points
+    /// whose every point does (points carry no swatch link).
+    fn no_ink(&self, plate: &str, p: &Paint) -> bool {
+        const NONE: f32 = 0.005;
+        match p {
+            Paint::Solid { color, swatch, tint } => self.ink(plate, color, swatch.as_deref().map(|s| (s, *tint))) <= NONE,
+            Paint::Gradient(g) => match g.freeform.as_ref().filter(|f| !f.points.is_empty()) {
+                Some(f) => f.points.iter().all(|pt| self.ink(plate, &pt.color, None) <= NONE),
+                None => {
+                    !g.gradient.stops.is_empty()
+                        && g.gradient.stops.iter().all(|s| self.stop_ink(plate, &s.color, s.swatch.as_deref().map(|n| (n, s.tint)), s.plates) <= NONE)
+                }
+            },
+            _ => false,
+        }
+    }
+
+    /// Overprinting fills and strokes of `a`'s subtree with a Normal blending mode, and
+    /// overprinting character fills and strokes, that put none of ink `plate` down leave its plate
+    /// as it is: they are drawn as nothing on it (white ones with `discard_white` aside, which
+    /// knock out). A writer without blending modes (PostScript) then keeps the ink below them,
+    /// where it would draw their Darken as a knockout.
+    fn clear_inkless_overprints(&self, plate: &str, a: &mut Arc<Node>, discard_white: bool) {
+        let inkless = |overprint: bool, p: &Paint| overprint && !p.is_none() && !(discard_white && is_white(p)) && self.no_ink(plate, p);
+        let n = Arc::make_mut(a);
+        for it in &mut n.appearance.items {
+            let normal = match it {
+                AppearanceItem::Fill(l) => l.blend == BlendMode::Normal,
+                AppearanceItem::Stroke(l) => l.blend == BlendMode::Normal,
+            };
+            if normal && inkless(it.overprint(), it.paint()) {
+                *it.paint_mut() = Paint::None;
+            }
+        }
+        if let NodeKind::Text(t) = &mut n.kind {
+            for r in &mut t.runs {
+                if inkless(r.style.overprint_fill, &r.style.fill) {
+                    r.style.fill = Paint::None;
+                }
+                if inkless(r.style.overprint_stroke, &r.style.stroke) {
+                    r.style.stroke = Paint::None;
+                }
+            }
+        }
+        for c in n.children_mut().into_iter().flatten() {
+            self.clear_inkless_overprints(plate, c, discard_white);
+        }
+    }
+
     /// The document as plate `plate`: art, symbols, pattern tiles and images in the grey of the
     /// ink's coverage. Overprinting fills and strokes darken, so where they have none of this
     /// ink the plate below shows through instead of being knocked out.
@@ -140,6 +191,7 @@ impl<'a> Separator<'a> {
         let mut colorized = BTreeSet::new();
         let nodes = d.layers.iter_mut().chain(d.symbols.iter_mut().map(|s| &mut s.art)).chain(d.patterns.iter_mut().flat_map(|p| p.art.iter_mut()));
         for n in nodes {
+            self.clear_inkless_overprints(plate, n, discard_white);
             darken_overprints(n, discard_white);
             self.node(plate, Arc::make_mut(n));
             keep_colorized_pixels(n, &d.images, &mut colorized);

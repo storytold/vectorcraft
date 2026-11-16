@@ -611,6 +611,20 @@ impl Exporter<'_> {
         }
     }
 
+    /// [`Self::overprinting`] for a character fill or stroke, which has no blend mode of its own:
+    /// with [`Self::darken_overprints`] an overprinting one is drawn with Darken (not a white one
+    /// with Discard White Overprint).
+    pub(super) fn char_overprinting(&mut self, s: &mut Surface, overprints: bool, paint: &Paint, draw: impl FnOnce(&mut Self, &mut Surface)) {
+        let white = vectorcraft_doc::overprint::is_white(paint) && self.doc.setup.discard_white_overprint;
+        if overprints && self.darken_overprints && !paint.is_none() && !white {
+            s.push_blend_mode(krilla::blend::BlendMode::Darken);
+            self.overprinting(s, overprints, paint, draw);
+            s.pop();
+        } else {
+            self.overprinting(s, overprints, paint, draw);
+        }
+    }
+
     /// Is `p` a paint PDF has no paint for when it paints a fill (`fill`) or a stroke, which
     /// [`Self::area`] draws as art: a pattern swatch or a gradient drawn as pixels
     /// ([`vectorcraft_color::GradientPaint::draws_as_pixels`]), but not a Perceptual one of spot

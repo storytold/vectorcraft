@@ -689,6 +689,7 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>) {
     });
     let separations = choice::<OutputMode>(d, "output.mode") == Some(OutputMode::Separations);
     flag(ui, d, "output.spotsToProcess", tl!("Convert All Spot Colors to Process"), separations);
+    flag(ui, d, "output.overprintBlack", tl!("Overprint Black"), separations);
     heading(ui, tl!("Document Ink Options"));
     let inks = pv.as_ref().ok().and_then(|v| v["inks"].as_array()).map(Vec::as_slice).unwrap_or_default();
     if !separations || inks.is_empty() {

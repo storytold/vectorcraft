@@ -8531,10 +8531,18 @@ documents every field:
   them all.
 - `marks` and `bleed` as `document.exportPdf` takes them (the bleed is the document's unless `useDocument: false`),
   drawn around the artboard at the paper's scale; the page information adds the tile and the ink with its screen.
-- `output: {mode: composite|separations, emulsion: up|down, image: positive|negative, spotsToProcess, inks: [{name,
-  print, frequency, angle}]}`: separations print one page per ink in the grey of its coverage (images too;
-  overprinting fills and strokes don't knock out), Registration on every plate; emulsion down mirrors the page and a
-  negative inverts it.
+- `output: {mode: composite|separations, emulsion: up|down, image: positive|negative, spotsToProcess, overprintBlack,
+  inks: [{name, print, frequency, angle}]}`: separations print one page per ink in the gray of its coverage (images
+  too; overprinting fills, strokes and characters don't knock out), Registration on every plate; emulsion down mirrors
+  the page and a negative inverts it.
+- `output.overprintBlack` (default false) makes black ink overprint in separations, as the Output step of
+  [Print color separations](https://helpx.adobe.com/illustrator/using/printing-color-separations.html) describes:
+  black art leaves the inks under it on the other plates. Which paints count as black is VectorCraft's own rule: a
+  fill, stroke or character paint of solid 100% process K or 100% gray, or a gradient whose every stop is (every
+  color point of a freeform gradient), each to within half a percent (99.5% K counts, and so does 0.4% cyan beside
+  it). Rich black, RGB and Lab black, tints below 99.5% and colors linked to a spot swatch or to Registration still
+  knock out. Only the printed copy is marked: the document and its own overprint settings do not change. Composite
+  output ignores the option, and the Print dialog's Overprint Black checkbox is disabled unless Mode is Separations.
 - `graphics: {autoFlatness, flatness, fonts}` and `color: {intent, preserveNumbers}` (the intent colours separate
   with; without preserveNumbers CMYK colours are separated again).
 

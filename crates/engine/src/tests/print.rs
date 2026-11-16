@@ -48,6 +48,28 @@ fn setup_is_saved_with_the_document_as_one_undo_step() {
 }
 
 #[test]
+fn overprint_black_is_saved_with_the_setup_and_in_presets() {
+    let (mut s, _) = session();
+    assert_eq!(s.execute("print.setup", &json!({})).unwrap()["settings"]["output"]["overprintBlack"], false, "off by default");
+    let v = s.execute("print.setup", &json!({"settings": {"output": {"mode": "separations", "overprintBlack": true}}})).unwrap();
+    assert_eq!(v["settings"]["output"]["overprintBlack"], true);
+    let doc = &s.doc().unwrap().doc;
+    let back = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
+    assert!(back.print_setup.as_ref().is_some_and(|p| p["output"]["overprintBlack"] == true), "kept in the native file");
+    // Settings saved before the option load with it off; a value that is not true or false is refused.
+    let old: vectorcraft_pdf::PrintSettings = serde_json::from_value(json!({"output": {"mode": "separations"}})).unwrap();
+    assert!(!old.output.overprint_black);
+    assert!(matches!(s.execute("print.setup", &json!({"settings": {"output": {"overprintBlack": "yes"}}})), Err(EngineError::BadParams { .. })));
+    // Print presets keep it and list it as a change from [Default].
+    let mut s = Session::new();
+    s.execute("print.presets.save", &json!({"name": "Seps", "settings": {"output": {"overprintBlack": true}}})).unwrap();
+    assert!(s.prefs.print_presets[0].settings.output.overprint_black);
+    let v = s.execute("print.presets.list", &json!({})).unwrap();
+    let changed: Vec<&str> = v["presets"][1]["changed"].as_array().unwrap().iter().map(|c| c["option"].as_str().unwrap()).collect();
+    assert_eq!(changed, ["output.overprintBlack"]);
+}
+
+#[test]
 fn print_writes_the_saved_setup_with_overrides() {
     let (mut s, _) = session();
     s.execute("print.setup", &json!({"settings": {"media": "a4", "scaling": "fit"}})).unwrap();

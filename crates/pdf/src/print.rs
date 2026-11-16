@@ -39,7 +39,7 @@ use kurbo::{Affine, Rect, Vec2};
 use serde::Serialize;
 use vectorcraft_color::cms::{self, ProfileKind};
 use vectorcraft_doc::marks::PrinterMarks;
-use vectorcraft_doc::overprint::{clear_overprints, darken_overprints};
+use vectorcraft_doc::overprint::{OverprintBlack, clear_overprints, darken_overprints};
 use vectorcraft_doc::{ColorMode, Document, Node, NodeKind};
 
 pub use layout::{MAX_COPIES_PER_SHEET, MAX_TILES, TileGrid};
@@ -181,7 +181,7 @@ pub fn keep_layers(nodes: &mut Vec<Arc<Node>>, which: PrintLayers) {
 
 /// `doc` as `set` prints it: live effects applied (raster effects are rendered by the app first),
 /// only the layers that print, overprints in composite output as [`PrintAdvanced::overprints`]
-/// says.
+/// says, and black art overprinting in separations with [`PrintOutput::overprint_black`].
 pub fn printed_document<'a>(doc: &'a Document, set: &PrintSettings) -> Cow<'a, Document> {
     // The layers that do not print are left out first, so the art placed for symbols is only
     // the art that prints; the layers kept are shown.
@@ -190,7 +190,26 @@ pub fn printed_document<'a>(doc: &'a Document, set: &PrintSettings) -> Cow<'a, D
     let layers = vectorcraft_effects::WrittenLayers { hidden: false, non_printing: true, hidden_objects: false };
     let mut d = vectorcraft_effects::bake_document_placing_symbols(&kept, true, layers).unwrap_or(kept);
     composite_overprints(&mut d, set);
+    separation_overprint_black(&mut d, set);
     Cow::Owned(d)
+}
+
+/// Output › Overprint Black in separations: every fill and stroke of solid 100% process black or
+/// 100% gray, each to within half a percent ([`vectorcraft_doc::overprint::is_black_ink`]), or a
+/// gradient whose every stop is (every point of a freeform one), the characters' too, overprints. Rich black, RGB and Lab black,
+/// tints below 99.5%, and colors linked to a spot swatch or to Registration keep
+/// knocking out ([`OverprintBlack::default`]). Art that overprints already keeps doing so.
+fn separation_overprint_black(doc: &mut Document, set: &PrintSettings) {
+    if set.output.mode != OutputMode::Separations || !set.output.overprint_black {
+        return;
+    }
+    let mut spots = doc.spot_names();
+    spots.push(vectorcraft_color::swatch::REGISTRATION.to_string());
+    let op = OverprintBlack::default();
+    let symbols = doc.symbols.iter_mut().map(|s| &mut s.art);
+    for n in doc.layers.iter_mut().chain(symbols).chain(doc.patterns.iter_mut().flat_map(|p| p.art.iter_mut())) {
+        op.apply_deep(n, &spots);
+    }
 }
 
 /// Overprinting fills and strokes in composite output: discarded (they knock out) or simulated
@@ -482,6 +501,8 @@ fn print_inner(doc: &Document, opts: &PrintOptions, left_out: &mut HashSet<Strin
         ex.out = w.out.clone();
         // Composite output keeps overprints as the Advanced option says (plates darken them).
         ex.overprint = !separations && pdf.advanced.overprint == Overprint::Preserve;
+        // A plate's overprinting characters darken, as its fills and strokes do.
+        ex.darken_overprints = separations;
         ex.left_out = left_out.clone();
     }
     for &i in &plan.order {
