@@ -1,8 +1,6 @@
 //! Device-independent bitmaps (DIBs), the pixels inside image records: written bottom-up as 24-bit
 //! (opaque, composited over white) or 32-bit premultiplied BGRA (AlphaBlend's source).
 
-use std::io::Cursor;
-
 use vectorcraft_doc::resample::{Resample, resized};
 
 /// Most pixels along a side of an image the writers store (larger ones are scaled down).
@@ -54,10 +52,9 @@ impl Rgba {
 
     /// As PNG bytes.
     pub fn to_png(&self) -> Result<Vec<u8>, String> {
-        let img = image::RgbaImage::from_raw(self.width, self.height, self.pixels.clone()).ok_or("the image's pixels don't match its size")?;
-        let mut png = vec![];
-        img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| e.to_string())?;
-        Ok(png)
+        let img = craft_image_codecs::Image::from_u8(self.width, self.height, craft_image_codecs::ChannelLayout::Rgba, self.pixels.clone())
+            .map_err(|_| "the image's pixels don't match its size")?;
+        craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).map_err(|e| e.to_string())
     }
 }
 
