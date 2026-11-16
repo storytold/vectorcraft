@@ -150,11 +150,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_enabled_ui(selected && spined, |ui| {
         let modes = ["linear", "easeIn", "easeOut", "easeInOut", "easeOutIn"];
         let labels = [tl!("Linear"), tl!("Ease In"), tl!("Ease Out"), tl!("Ease In Out"), tl!("Ease Out In")];
-        let current_mode = pending
-            .easing_type
-            .as_deref()
-            .or_else(|| info["easingType"].as_str())
-            .unwrap_or(modes[1]);
+        let current_mode = pending.easing_type.as_deref().or_else(|| info["easingType"].as_str()).unwrap_or(modes[1]);
         let index = modes.iter().position(|m| *m == current_mode).unwrap_or(1);
         widgets::label_row(ui, tl!("Type:"), LABEL_W, |ui| {
             if let Some(i) = widgets::dropdown(ui, "blend-panel-easing", labels[index], &labels, ui.available_width().max(FIELD_W))
@@ -168,10 +164,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
         widgets::label_row(ui, tl!("Ramp:"), LABEL_W, |ui| {
-            let mut ramp = pending
-                .ramp
-                .or_else(|| info["ramp"].as_f64().filter(|n| n.is_finite()))
-                .map_or(0.0, |n| n.clamp(0.0, 100.0));
+            let mut ramp = pending.ramp.or_else(|| info["ramp"].as_f64().filter(|n| n.is_finite())).map_or(0.0, |n| n.clamp(0.0, 100.0));
             if widgets::slider(ui, egui::Slider::new(&mut ramp, 0.0..=100.0).suffix("%").step_by(1.0)).changed() {
                 let clamped = ramp.clamp(0.0, 100.0);
                 if preview {
@@ -184,10 +177,8 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     ui.add_enabled_ui(selected, |ui| {
         widgets::label_row(ui, tl!("Shift:"), LABEL_W, |ui| {
-            let mut shift = pending
-                .color_shift
-                .or_else(|| info["colorShift"].as_f64().filter(|n| n.is_finite()))
-                .map_or(0.0, |n| n.clamp(-100.0, 100.0));
+            let mut shift =
+                pending.color_shift.or_else(|| info["colorShift"].as_f64().filter(|n| n.is_finite())).map_or(0.0, |n| n.clamp(-100.0, 100.0));
             if widgets::slider(ui, egui::Slider::new(&mut shift, -100.0..=100.0).suffix("%").step_by(1.0)).changed() {
                 let clamped = shift.clamp(-100.0, 100.0);
                 if preview {
