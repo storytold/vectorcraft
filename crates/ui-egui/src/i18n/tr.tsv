@@ -7576,6 +7576,8 @@ axis	Y Axis	Y ekseni
 @msg	`{f}` is the copy of a document open now	`{f}` şu anda açık olan bir belgenin kopyası
 @msg	`{id}` is no writable format (see document.formats)	`{id}` yazılabilir bir biçim değil (bkz. document.formats)
 @msg	`{id}` isn't a loaded library	`{id}` yüklenmiş bir kütüphane değil
+@msg	`{file}` has no swatches of its own	`{file}` dosyasının kendi renk örnekleri yok
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` desen örnekleri içeriyor ve bir .vcswatches dosyası bunları tutamaz
 @msg	`{key}` has no colours	`{key}` renk içermiyor
 @msg	`{key}` is a design name	`{key}` bir tasarım adıdır
 @msg	`{key}` is a design name or a list of them	`{key}` bir tasarım adı veya tasarım adları listesidir

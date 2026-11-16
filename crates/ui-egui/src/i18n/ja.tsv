@@ -7193,6 +7193,8 @@ axis	Y Axis	Y 軸
 @msg	`{f}` is the copy of a document open now	`{f}` は現在開いているドキュメントのコピーです
 @msg	`{id}` is no writable format (see document.formats)	`{id}` は書き出せる形式ではありません (document.formats を参照)
 @msg	`{id}` isn't a loaded library	`{id}` は読み込まれているライブラリではありません
+@msg	`{file}` has no swatches of its own	`{file}` には独自のスウォッチがありません
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` にはパターンスウォッチがあり、.vcswatches ファイルには保存できません
 @msg	`{key}` has no colours	`{key}` にカラーがありません
 @msg	`{key}` is a design name	`{key}` にはデザイン名を指定してください
 @msg	`{key}` is a design name or a list of them	`{key}` にはデザイン名またはそのリストを指定してください

@@ -8099,6 +8099,8 @@ breakText	Glyphs	Glifák
 @msg	`{f}` is the copy of a document open now	egy most megnyitott dokumentum másolata: `{f}`
 @msg	`{id}` is no writable format (see document.formats)	nem írható formátum: `{id}` (lásd: document.formats)
 @msg	`{id}` isn't a loaded library	nem betöltött könyvtár: `{id}`
+@msg	`{file}` has no swatches of its own	nincsenek saját színminták: `{file}`
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	mintázatszínmintákat tartalmaz, amelyeket egy .vcswatches fájl nem tud tárolni: `{_1}`
 @msg	`{key}` has no colours	`{key}`: nincsenek benne színek
 @msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}`: több mint {MAX_EDIT_WORDS} szót tartalmaz
 @msg	`{key}` is a design name	`{key}`: diagramminta neve

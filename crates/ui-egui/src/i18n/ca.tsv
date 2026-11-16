@@ -6173,6 +6173,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no target object has an opacity mask: select one or give `id`	no hi ha cap objecte de destinació amb màscara d’opacitat: seleccioneu-ne un o doneu `id`
 @msg	no threaded text selected	no hi ha cap text encadenat seleccionat
 @msg	no user library folder here	aquí no hi ha cap carpeta de biblioteca d’usuari
+@msg	`{file}` has no swatches of its own	`{file}` no té mostres pròpies
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` té mostres de motius, que un fitxer .vcswatches no pot contenir
 @msg	no user workspace `{from}`	no hi ha l’espai de treball d’usuari `{from}`
 @msg	node {_1} is not text	el node {_1} no és text
 @msg	node {_1} is on a locked artboard	el node {_1} és en un tauler bloquejat

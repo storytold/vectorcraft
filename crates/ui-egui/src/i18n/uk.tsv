@@ -7827,6 +7827,8 @@ breakText	Glyphs	Гліфи
 @msg	`{f}` is the copy of a document open now	`{f}` — це копія документа, відкритого зараз
 @msg	`{id}` is no writable format (see document.formats)	`{id}` не є форматом, доступним для запису (див. document.formats)
 @msg	`{id}` isn't a loaded library	`{id}` не є завантаженою бібліотекою
+@msg	`{file}` has no swatches of its own	у `{file}` немає власних зразків
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	у `{_1}` є зразки візерунків, яких файл .vcswatches не може містити
 @msg	`{key}` has no colours	`{key}` не містить кольорів
 @msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` містить понад {MAX_EDIT_WORDS} слів
 @msg	`{key}` is a design name	`{key}` — це назва дизайну

@@ -7793,6 +7793,8 @@ digits	Hindi	Hindi
 @msg	`{file}` is over {_1} MB	`{file}` är större än {_1} MB
 @msg	`{id}` is no writable format (see document.formats)	`{id}` är inget skrivbart format (se document.formats)
 @msg	`{id}` isn't a loaded library	`{id}` är inte ett inläst bibliotek
+@msg	`{file}` has no swatches of its own	`{file}` har inga egna färgrutor
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` har mönsterprover, som en .vcswatches-fil inte kan innehålla
 @msg	`{k}.family` is required	`{k}.family` är obligatoriskt
 @msg	`{k}` is a number 0..1	`{k}` är ett tal 0..1
 @msg	`{k}` is true or false	`{k}` är true eller false

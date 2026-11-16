@@ -5012,6 +5012,8 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	no target object has an opacity mask: select one or give `id`	ningún objeto de destino tiene máscara de opacidad: selecciona uno o indica `id`
 @msg	no threaded text selected	no hay texto enlazado seleccionado
 @msg	no user library folder here	aquí no hay ninguna carpeta de bibliotecas de usuario
+@msg	`{file}` has no swatches of its own	`{file}` no tiene muestras propias
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` tiene muestras de motivo, que un archivo .vcswatches no puede contener
 @msg	no user workspace `{from}`	no existe el espacio de trabajo de usuario `{from}`
 @msg	node {_1} is not text	el nodo {_1} no es texto
 @msg	node {_1} is on a locked artboard	el nodo {_1} está en una mesa de trabajo bloqueada

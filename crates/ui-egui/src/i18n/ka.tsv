@@ -408,6 +408,8 @@
 @msg	`{f}` is the copy of a document open now	`{f}` ახლა გახსნილი დოკუმენტის ასლია
 @msg	`{id}` is no writable format (see document.formats)	`{id}` ჩაწერადი ფორმატი არ არის (იხ. document.formats)
 @msg	`{id}` isn't a loaded library	`{id}` ჩატვირთული ბიბლიოთეკა არ არის
+@msg	`{file}` has no swatches of its own	`{file}`-ს საკუთარი ფერის ნიმუშები არ აქვს
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}`-ს აქვს პატერნის ნიმუშები, რომლებსაც .vcswatches ფაილი ვერ შეინახავს
 @msg	`{key}` has no colours	`{key}`: ფერები არ არის
 @msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` {MAX_EDIT_WORDS}-ზე მეტ სიტყვას შეიცავს
 @msg	`{key}` is a design name	`{key}` არის დიზაინის სახელი

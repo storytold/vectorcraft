@@ -300,6 +300,47 @@ fn another_documents_swatches_load_as_a_library() {
     assert!(s.execute("swatch.library.load", &json!({"data": "hello", "name": "x.txt"})).is_err());
 }
 
+/// Three pattern swatches of another document that paint one pattern, one of them turned, load as
+/// three library swatches and come into a document as three swatches of one pattern, each with its
+/// own name and placement.
+#[test]
+fn another_documents_pattern_swatches_of_one_pattern_add_as_separate_swatches() {
+    use std::sync::Arc;
+    let turned = vectorcraft_geom::Affine::rotate(0.5);
+    let mut s = session();
+    s.edit("Pattern", |d, _| {
+        let path = vectorcraft_geom::shapes::ellipse(vectorcraft_geom::Rect::new(0.0, 0.0, 4.0, 4.0));
+        let dot = vectorcraft_doc::Node::path(d.alloc_id(), path, vectorcraft_doc::Appearance::default_art());
+        let tile = vectorcraft_geom::Rect::new(0.0, 0.0, 8.0, 8.0);
+        d.patterns.push(vectorcraft_doc::PatternDef { tile, ..vectorcraft_doc::PatternDef::new("Dots", vec![Arc::new(dot)]) });
+        let swatch = |name: &str, xf| vectorcraft_color::Swatch {
+            name: name.into(),
+            paint: Paint::Pattern { pattern: "Dots".into(), xf },
+            global: false,
+            spot: false,
+        };
+        d.swatches.push(swatch("Tiles", vectorcraft_geom::Affine::IDENTITY));
+        d.swatches.push(swatch("More tiles", vectorcraft_geom::Affine::IDENTITY));
+        d.swatches.push(swatch("Turned tiles", turned));
+        Ok(())
+    })
+    .unwrap();
+    let b64 = run(&mut s, "document.serialize", json!({}))["dataBase64"].as_str().unwrap().to_string();
+    let id = run(&mut s, "swatch.library.load", json!({"dataBase64": b64, "name": "Dots.vectorcraft"}))["library"].clone();
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let r = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Tiles", "More tiles", "Turned tiles"]}));
+    assert_eq!(r["added"], json!(["Tiles", "More tiles", "Turned tiles"]), "{r}");
+    let d = doc(&s);
+    assert_eq!(d.patterns.iter().filter(|p| p.name.starts_with("Dots")).count(), 1, "one pattern");
+    let xf = |name: &str| match d.swatch(name).map(|w| &w.paint) {
+        Some(Paint::Pattern { pattern, xf }) if pattern == "Dots" => Some(*xf),
+        _ => None,
+    };
+    assert_eq!((xf("Tiles"), xf("Turned tiles")), (Some(vectorcraft_geom::Affine::IDENTITY), Some(turned)));
+    let again = run(&mut s, "swatch.library.add", json!({"library": id}));
+    assert_eq!(again["added"], json!([]), "{again}");
+}
+
 #[test]
 fn swatch_exchange_files_load_add_and_list_as_user_libraries() {
     let bytes = vectorcraft_testkit::ase::sample();

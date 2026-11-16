@@ -6099,6 +6099,8 @@ antiAlias	Sharp	शार्प
 @msg	`{id}` is no writable format (see document.formats)	`{id}` लिखने योग्य फ़ॉर्मैट नहीं है (document.formats देखें)
 @msg	`{id}` is not a colour adjustment	`{id}` एक रंग समायोजन नहीं है
 @msg	`{id}` isn't a loaded library	`{id}` एक लोड लाइब्रेरी नहीं है
+@msg	`{file}` has no swatches of its own	`{file}` में अपने कोई स्वॉचेस नहीं हैं
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` में पैटर्न स्वॉचेस हैं, जिन्हें .vcswatches फ़ाइल नहीं रख सकती
 @msg	`{k}.family` is required	`{k}.family` की आवश्यकता है
 @msg	`{k}` is a number 0..1	`{k}` एक नंबर 0..1 है।
 @msg	`{k}` is true or false	`{k}` true या false है

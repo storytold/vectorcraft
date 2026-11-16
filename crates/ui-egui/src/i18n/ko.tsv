@@ -7823,6 +7823,8 @@ breakText	Glyphs	글리프
 @msg	`{f}` is the copy of a document open now	`{f}`은(는) 지금 열려 있는 문서의 복사본입니다
 @msg	`{id}` is no writable format (see document.formats)	`{id}`은(는) 기록할 수 있는 형식이 아닙니다(document.formats 참조)
 @msg	`{id}` isn't a loaded library	`{id}`은(는) 불러온 라이브러리가 아닙니다
+@msg	`{file}` has no swatches of its own	`{file}`에 자체 견본이 없습니다
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}`에 패턴 견본이 있어 .vcswatches 파일에 담을 수 없습니다
 @msg	`{key}` has no colours	`{key}`에 색상이 없습니다
 @msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}`에 단어가 {MAX_EDIT_WORDS}개보다 많습니다
 @msg	`{key}` is a design name	`{key}`은(는) 디자인 이름입니다

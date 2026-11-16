@@ -4966,6 +4966,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no target object has an opacity mask: select one or give `id`	κανένα αντικείμενο-στόχος δεν έχει μάσκα αδιαφάνειας: επιλέξτε ένα ή δώστε `id`
 @msg	no threaded text selected	δεν έχει επιλεγεί συνδεδεμένο κείμενο
 @msg	no user library folder here	δεν υπάρχει φάκελος βιβλιοθήκης χρήστη εδώ
+@msg	`{file}` has no swatches of its own	το `{file}` δεν έχει δικά του δείγματα χρωμάτων
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	το `{_1}` έχει δείγματα μοτίβου, που ένα αρχείο .vcswatches δεν μπορεί να περιέχει
 @msg	no user workspace `{from}`	δεν υπάρχει χώρος εργασίας χρήστη `{from}`
 @msg	node {_1} is not text	ο κόμβος {_1} δεν είναι κείμενο
 @msg	node {_1} is on a locked artboard	ο κόμβος {_1} βρίσκεται σε κλειδωμένο πίνακα σχεδίασης

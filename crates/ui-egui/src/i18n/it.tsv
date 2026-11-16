@@ -8028,6 +8028,8 @@ breakText	Glyphs	Glifi
 @msg	`{f}` is the copy of a document open now	`{f}` è la copia di un documento aperto in questo momento
 @msg	`{id}` is no writable format (see document.formats)	`{id}` non è un formato scrivibile (vedi document.formats)
 @msg	`{id}` isn't a loaded library	`{id}` non è una libreria caricata
+@msg	`{file}` has no swatches of its own	`{file}` non ha campioni propri
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` ha campioni motivo, che un file .vcswatches non può contenere
 @msg	`{key}` has no colours	`{key}` non ha colori
 @msg	`{key}` is a design name	`{key}` è il nome di un design
 @msg	`{key}` is a design name or a list of them	`{key}` è il nome di un design o un elenco di nomi

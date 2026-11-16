@@ -8213,6 +8213,8 @@ shape	Open	Открытый
 @msg	`{f}` is the copy of a document open now	`{f}` — копия документа, открытого сейчас
 @msg	`{id}` is no writable format (see document.formats)	`{id}` не является форматом для записи (см. document.formats)
 @msg	`{id}` isn't a loaded library	`{id}` не является загруженной библиотекой
+@msg	`{file}` has no swatches of its own	в `{file}` нет собственных образцов
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	в `{_1}` есть образцы узоров, которые файл .vcswatches не может хранить
 @msg	`{key}` has no colours	в `{key}` нет цветов
 @msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` содержит больше {MAX_EDIT_WORDS} слов
 @msg	`{key}` is a design name	`{key}` — имя дизайна
