@@ -2689,6 +2689,10 @@ diagnostics	ui	интерфейс
 	Play Current Selection	Воспроизвести текущее выделение
 	Save Actions…	Сохранить действия…
 	Load Actions…	Загрузить действия…
+	Reset Actions	Сбросить действия
+	Replace the current actions with the default set?	Заменить текущие действия набором по умолчанию?
+	Append adds the default set after the current sets instead.	Кнопка «Добавить» вместо этого добавляет набор по умолчанию после текущих наборов.
+	Append	Добавить
 	Plug-in Info	Сведения о модуле
 	Plug-ins	Модули
 	Plug-in…	Модуль…

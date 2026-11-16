@@ -4104,6 +4104,10 @@ lighting	Light	Lys
 	Play Current Selection	Afspil aktuel markering
 	Save Actions…	Gem handlinger…
 	Load Actions…	Indlæs handlinger…
+	Reset Actions	Nulstil handlinger
+	Replace the current actions with the default set?	Vil du erstatte de aktuelle handlinger med standardsættet?
+	Append adds the default set after the current sets instead.	Tilføj tilføjer i stedet standardsættet efter de aktuelle sæt.
+	Append	Tilføj
 	Reflect Horizontal	Spejl vandret
 	Rotate 90° CW	Rotér 90° med uret
 	Set 1	Sæt 1

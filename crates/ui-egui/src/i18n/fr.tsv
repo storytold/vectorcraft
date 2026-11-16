@@ -2650,6 +2650,10 @@ font-technology	Variable	Variables
 	Play Current Selection	Exécuter la sélection actuelle
 	Save Actions…	Enregistrer les scripts…
 	Load Actions…	Charger des scripts…
+	Reset Actions	Réinitialiser les scripts
+	Replace the current actions with the default set?	Remplacer les scripts actuels par le jeu par défaut ?
+	Append adds the default set after the current sets instead.	Le bouton Ajouter ajoute plutôt le jeu par défaut après les jeux actuels.
+	Append	Ajouter
 	Plug-in Info	Informations sur le module externe
 	Plug-ins	Modules externes
 	Plug-in…	Module externe…

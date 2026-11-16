@@ -2593,6 +2593,10 @@ font-technology	Variable	Variabla
 	Play Current Selection	Spela upp aktuell markering
 	Save Actions…	Spara åtgärder…
 	Load Actions…	Läs in åtgärder…
+	Reset Actions	Återställ åtgärder
+	Replace the current actions with the default set?	Vill du ersätta de aktuella åtgärderna med standarduppsättningen?
+	Append adds the default set after the current sets instead.	Lägg till lägger i stället till standarduppsättningen efter de aktuella uppsättningarna.
+	Append	Lägg till
 	Plug-in Info	Information om plugin
 	Plug-ins	Plugins
 	Plug-in…	Plugin…

@@ -3824,6 +3824,10 @@ diagnostics	ui	介面
 	Play Current Selection	播放目前選取項目
 	Save Actions…	儲存動作…
 	Load Actions…	載入動作…
+	Reset Actions	重設動作
+	Replace the current actions with the default set?	要用預設動作組取代目前的動作嗎？
+	Append adds the default set after the current sets instead.	「附加」會改為將預設動作組加到目前動作組之後。
+	Append	附加
 	Plug-in Info	增效模組資訊
 	Plug-ins	增效模組
 	Plug-in…	增效模組…

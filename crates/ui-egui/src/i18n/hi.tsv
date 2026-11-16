@@ -2757,6 +2757,10 @@ antiAlias	Sharp	शार्प
 	Live Shape	लाइव आकार
 	Live Shape Properties	लाइव शेप प्रॉपर्टीज़
 	Load Actions…	एक्शन्स लोड करें…
+	Reset Actions	एक्शन्स रीसेट करें
+	Replace the current actions with the default set?	मौजूदा एक्शन्स को डिफ़ॉल्ट सेट से बदलें?
+	Append adds the default set after the current sets instead.	जोड़ें इसके बजाय डिफ़ॉल्ट सेट को मौजूदा सेट के बाद जोड़ता है।
+	Append	जोड़ें
 	Load Color Profile…	लोड कलर प्रोफ़ाइल…
 	Load EPS into Clipboard	ईपीएस को क्लिपबोर्ड में लोड करें
 	Load Image into Clipboard	क्लिपबोर्ड में इमेज लोड करें

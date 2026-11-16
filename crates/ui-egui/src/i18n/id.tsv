@@ -1430,6 +1430,10 @@ lighting	Light	Cahaya
 	Play Current Selection	Putar seleksi saat ini
 	Save Actions…	Simpan tindakan…
 	Load Actions…	Muat tindakan…
+	Reset Actions	Atur ulang tindakan
+	Replace the current actions with the default set?	Ganti tindakan saat ini dengan set default?
+	Append adds the default set after the current sets instead.	Tambahkan justru menambahkan set default setelah set saat ini.
+	Append	Tambahkan
 	Reflect Horizontal	Pencerminan horizontal
 	Rotate 90° CW	Putar 90° searah jarum jam
 	Set 1	Set 1
