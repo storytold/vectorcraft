@@ -69,6 +69,15 @@ fn nine_slice_param(p: &Value, cmd: &str, current: Option<SymbolNineSlice>) -> R
     })
 }
 
+/// `alignToPixelGrid` (Symbol Options › Align to Pixel Grid): `None` when it is not given; any
+/// value other than true or false, null included, is an error.
+fn pixel_grid_param(p: &Value, cmd: &str) -> Result<Option<bool>> {
+    match p.get("alignToPixelGrid") {
+        None => Ok(None),
+        Some(v) => v.as_bool().map(Some).ok_or_else(|| bad(cmd, "alignToPixelGrid must be true or false")),
+    }
+}
+
 fn nine_slice_json(d: &Document, name: &str) -> Value {
     d.symbol_nine_slice(name).map_or(Value::Null, SymbolNineSlice::to_value)
 }
@@ -187,6 +196,7 @@ pub(super) fn symbol_list(s: &mut Session, _: &Value) -> Result<Value> {
                 "exportType": d.symbol_export_type(&sym.name).id(),
                 "nineSlice": nine_slice_json(d, &sym.name),
                 "type": type_id(sym.dynamic),
+                "alignToPixelGrid": d.symbol_pixel_aligned(&sym.name),
             })
         })
         .collect();
@@ -239,6 +249,7 @@ pub(super) fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
     let export = export_type_param(p, C)?.unwrap_or_default();
     let nine = nine_slice_param(p, C, None)?.flatten();
     let dynamic = type_param(p, C)?.unwrap_or(false);
+    let pixel = pixel_grid_param(p, C)?.unwrap_or(false);
     // Keep the art where it was: the geometric centre stays at `c`, whatever the registration is.
     let place = place_xf(c + reg.offset_from_center(size.0, size.1), size, reg);
     let id = s.edit("New Symbol", |d, sel| {
@@ -249,6 +260,7 @@ pub(super) fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
         d.set_symbol_registration(&name, reg);
         d.set_symbol_export_type(&name, export);
         d.set_symbol_nine_slice(&name, nine);
+        d.set_symbol_pixel_aligned(&name, pixel);
         let id = instance_in_place(d, &ids, &name, place)?;
         sel.set([id]);
         Ok(id)
@@ -260,6 +272,7 @@ pub(super) fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
         "exportType": export.id(),
         "nineSlice": nine.map_or(Value::Null, SymbolNineSlice::to_value),
         "type": type_id(dynamic),
+        "alignToPixelGrid": pixel,
     }))
 }
 
@@ -270,9 +283,15 @@ pub(super) fn symbol_options(s: &mut Session, p: &Value) -> Result<Value> {
     let reg = registration_param(p, C)?;
     let nine = nine_slice_param(p, C, s.doc()?.doc.symbol_nine_slice(&name))?;
     let dynamic = type_param(p, C)?;
+    let pixel = pixel_grid_param(p, C)?;
     let new_name = str_param(p, "newName").map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
     if new_name.is_none() && export.is_none() && reg.is_none() && nine.is_none() && dynamic.is_none() {
-        return Err(bad(C, "pass newName, registration, exportType, nineSlice and/or type"));
+        match pixel {
+            None => return Err(bad(C, "pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid")),
+            // Align to Pixel Grid alone, already as asked: nothing changes and no undo step is added.
+            Some(on) if on == s.doc()?.doc.symbol_pixel_aligned(&name) => return Ok(options_json(&s.doc()?.doc, &name)),
+            Some(_) => {}
+        }
     }
     if let Some(ref n) = new_name
         && n != &name
@@ -324,6 +343,7 @@ pub(super) fn symbol_options(s: &mut Session, p: &Value) -> Result<Value> {
             d.rename_symbol_registration(&name, n);
             d.rename_symbol_export_type(&name, n);
             d.rename_symbol_nine_slice(&name, n);
+            d.rename_symbol_pixel_aligned(&name, n);
             if d.unknown.get(CURRENT_SYMBOL).and_then(Value::as_str) == Some(name.as_str()) {
                 d.unknown.insert(CURRENT_SYMBOL.into(), json!(n));
             }
@@ -352,16 +372,26 @@ pub(super) fn symbol_options(s: &mut Session, p: &Value) -> Result<Value> {
             sym.dynamic = dynamic;
             fit_overrides(d, &instances_of(d, Some(&final_name)));
         }
+        // Turning it on snaps the art and the instances at actual size when the edit ends
+        // (`object::refresh_pixel_aligned`).
+        if let Some(on) = pixel {
+            d.set_symbol_pixel_aligned(&final_name, on);
+        }
         Ok(())
     })?;
-    let d = &s.doc()?.doc;
-    Ok(json!({
-        "name": final_name,
-        "registration": d.symbol_registration(&final_name).0,
-        "exportType": d.symbol_export_type(&final_name).id(),
-        "nineSlice": nine_slice_json(d, &final_name),
-        "type": type_id(d.symbols.iter().any(|x| x.name == final_name && x.dynamic)),
-    }))
+    Ok(options_json(&s.doc()?.doc, &final_name))
+}
+
+/// What `symbol.options` answers for symbol `name`.
+fn options_json(d: &Document, name: &str) -> Value {
+    json!({
+        "name": name,
+        "registration": d.symbol_registration(name).0,
+        "exportType": d.symbol_export_type(name).id(),
+        "nineSlice": nine_slice_json(d, name),
+        "type": type_id(d.symbols.iter().any(|x| x.name == name && x.dynamic)),
+        "alignToPixelGrid": d.symbol_pixel_aligned(name),
+    })
 }
 
 fn resolve_symbol(d: &Document, p: &Value, cmd: &str) -> Result<String> {
@@ -702,6 +732,7 @@ pub(super) fn symbol_delete(s: &mut Session, p: &Value) -> Result<Value> {
             d.set_symbol_registration(name, SymbolRegistration::CENTER);
             d.clear_symbol_export_type(name);
             d.set_symbol_nine_slice(name, None);
+            d.set_symbol_pixel_aligned(name, false);
             if d.unknown.get(CURRENT_SYMBOL).and_then(Value::as_str) == Some(name.as_str()) {
                 d.unknown.remove(CURRENT_SYMBOL);
             }
@@ -725,6 +756,7 @@ pub(super) fn symbol_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     let reg = d.symbol_registration(&name);
     let export = d.symbol_export_type(&name);
     let nine = d.symbol_nine_slice(&name);
+    let pixel = d.symbol_pixel_aligned(&name);
     s.edit("Duplicate Symbol", |d, _| {
         let art = d.reid(&sym.art);
         d.symbols.push(Symbol { dynamic: sym.dynamic, name: new.clone(), art: Arc::new(art) });
@@ -732,6 +764,7 @@ pub(super) fn symbol_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
         d.set_symbol_registration(&new, reg);
         d.set_symbol_export_type(&new, export);
         d.set_symbol_nine_slice(&new, nine);
+        d.set_symbol_pixel_aligned(&new, pixel);
         Ok(())
     })?;
     Ok(json!({ "name": new, "registration": reg.0, "exportType": export.id(), "nineSlice": nine.map_or(Value::Null, SymbolNineSlice::to_value) }))

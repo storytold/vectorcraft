@@ -686,6 +686,7 @@ font-technology	Variable	Változó
 	Close Library	Könyvtár bezárása
 	Close Panel	Panel bezárása
 	Collapse Panel Group	Panelcsoport összecsukása
+	Cycle Display Sizes	Megjelenítési méretek váltása
 	Close Path	Útvonal lezárása
 	Close paths when ends are within:	Útvonalak lezárása, ha a végek távolsága legfeljebb:
 	Clumped	Csomós
@@ -853,6 +854,18 @@ font-technology	Variable	Változó
 	Copyright	Szerzői jog
 	Copyright and Contact Info	Szerzői jogi és kapcsolati adatok
 	Copyright Info URL:	Szerzői jogi információ URL-je:
+	Save Metadata Template…	Metaadatsablon mentése…
+	Import Options	Importálási beállítások
+	Clear existing fields and use the template's	Meglévő mezők törlése és a sablon mezőinek használata
+	Keep existing fields, but replace those the template has	Meglévő mezők megtartása, de a sablonban szereplők cseréje
+	Keep existing fields, but append those the template has	Meglévő mezők megtartása, de a sablonban szereplők hozzáfűzése
+@msg	the template name can't be empty	a sablon neve nem lehet üres
+@msg	the template name isn't usable as a file name	a sablon neve nem használható fájlnévként
+@msg	no metadata templates folder here	itt nincs metaadatsablon-mappa
+@msg	give `name` or `path`, not both	adja meg a `name` vagy a `path` paramétert, de ne mindkettőt
+@msg	give one of `path`, `name` and `data`	adja meg a `path`, a `name` és a `data` paraméterek egyikét
+@msg	mode must be replace, keep or append	a mód értéke replace, keep vagy append lehet
+@msg	the file is not an XMP metadata template	a fájl nem XMP-metaadatsablon
 	Copyright Notice:	Szerzői jogi közlemény:
 	Copyright Status:	Szerzői jogi állapot:
 	Copyright Symbol	Szerzői jogi jel
@@ -1208,6 +1221,8 @@ font-technology	Variable	Változó
 	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	Húzz ide grafikát, színeket és szövegstílusokat, hogy más dokumentumokban is használhasd őket. A könyvtárak ezen a gépen tárolódnak, fiók nem kell hozzájuk.
 	Drag onto art to apply this appearance	Grafikára húzva alkalmazza ezt a megjelenést
 	Drag rings to rotate. Shift snaps to 15°.	Forgatáshoz húzd a gyűrűket. Shift: illesztés 15°-onként.
+	Track cube	Forgatókocka
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Forgatáshoz húzz egy lapot, egy élt vagy a gyűrűt. Shift: forgatás egy képernyőtengely körül.
 	Drag the art to move it on the paper	Húzd a grafikát a papíron való áthelyezéshez
 	Drag the light, or its rings. Shift snaps to 15°.	Húzd a fényt vagy a gyűrűit. Shift: illesztés 15°-onként.
 	Drag to float as a toolbar	Húzd el, hogy önálló eszköztárként lebegjen
@@ -1782,6 +1797,8 @@ file-filter	Templates	Sablonok
 	Graph	Diagram
 	Graph Data	Diagramadatok
 	Graph Type	Diagramtípus
+	Graph Type…	Diagramtípus…
+	Graph Data…	Diagramadatok…
 	Graph Options	Diagrambeállítások
 	Left Axis	Bal tengely
 	Right Axis	Jobb tengely
@@ -1951,6 +1968,7 @@ file-filter	Templates	Sablonok
 	Show smooth color wheel	Folytonos színkör megjelenítése
 	Show segmented color wheel	Szegmentált színkör megjelenítése
 	Show color bars	Színsávok megjelenítése
+	Find the selected colors in the artwork	A kijelölt színek keresése a grafikában
 	Harmony Sets	Harmóniakészletek
 	HDTV 1080p	HDTV 1080p
 	HDTV 720p	HDTV 720p
@@ -3287,6 +3305,8 @@ mark-style	Japanese	Japán
 	Insert Aki Left	Aki beszúrása balra
 	Insert Aki Right	Aki beszúrása jobbra
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Mellékjelek vízszintes helyzetének igazítása
+	Adjust Vertical Diacritic Position	Mellékjelek függőleges helyzetének igazítása
 	Proportional Lining	Arányos modern
 	Position:	Pozíció:
 	Default Position	Alapértelmezett pozíció
@@ -4356,6 +4376,9 @@ mark-style	Japanese	Japán
 	Show Import Options	Importálási beállítások megjelenítése
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Elhelyezés előtt rákérdez minden PDF-, DXF- vagy szövegfájl importálási beállításaira; kikapcsolva a legutóbb választott beállításokat használja
 	Stylistic Alternates	Stilisztikai változatok
+	Ligatures	Ligatúrák
+	Ornaments	Díszek
+	Figures	Számjegyek
 	Swash	Cifra változatok
 	Swatch Conflict	Színminta-ütközés
 	Swatch Conflicts	Színminta-ütközések
@@ -5301,6 +5324,27 @@ imageTrace	Outline	Körvonal
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: párbeszédpanel nem nyílhat meg beépített függvény visszahívásában, getterben, átalakításban vagy a $.evalFile által futtatott fájlban; hívja a parancsfájl saját kódjából
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: a következő válasz az `answers` listában ehhez tartozik: {_1}, nem ehhez: {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: az `answers` listában nem maradt válasz ehhez a párbeszédpanelhez
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	Az `answers` listában {n} válasz maradt, amelyet a parancsfájl nem használt fel
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1}: az ecset alatt {n} objektum változatlan maradt ({_2}); csak útvonalakat alakít át
+liquify-tool	Warp	Hajlítás
+liquify-tool	Twirl	Örvénylés
+liquify-tool	Pucker	Összehúzás
+liquify-tool	Bloat	Felfújás
+liquify-tool	Scallop	Csipkézés
+liquify-tool	Crystallize	Kristályosítás
+liquify-tool	Wrinkle	Gyűrés
+liquify-kind	graphs	grafikonok
+liquify-kind	type	szöveg
+liquify-kind	symbols	szimbólumok
+liquify-kind	images	képek
+liquify-kind	meshes	rácsok
+liquify-kind	envelopes	burkolók
+liquify-kind	repeats	ismétlések
+liquify-kind	placed documents	elhelyezett dokumentumok
+liquify-kind	blends	összemosások
+liquify-list-two	{0}, {1}	{0} és {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} és {1}
 @msg	vc.document{place} is too large for a script	a vc.document{place} túl nagy egy parancsfájlhoz
 @msg	vc.log: the log of this run is full	vc.log: ennek a futásnak a naplója megtelt
 @msg	this function's script run has ended	ennek a függvénynek a parancsfájl-futása véget ért
@@ -5975,6 +6019,8 @@ imageTrace	Outline	Körvonal
 @msg	unknown option `{path}.{k}`	ismeretlen beállítás: `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ismeretlen felülnyomás-kezelés: `{o}` (preserve, simulate vagy discard)
 @msg	unknown panel `{raw}`	ismeretlen panel: `{raw}`
+@msg	`{panel}` has no display sizes to cycle	a(z) `{panel}` panelnek nincsenek váltható megjelenítési méretei
+@msg	the panels are not shown	a panelek nem láthatók
 @msg	panels can't be shown in Presentation Mode	bemutató módban a panelek nem jeleníthetők meg
 @msg	unknown preference `{key}`	ismeretlen beállítás: `{key}`
 @msg	Preferences imported.	A beállítások importálva.
@@ -6296,6 +6342,7 @@ imageTrace	Outline	Körvonal
 	Export Data Sets…	Adatkészletek exportálása…
 	Load Variable Library…	Változókönyvtár betöltése…
 	Save Variable Library…	Változókönyvtár mentése…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	Az „Importálás” .csv, .tsv, .txt vagy .xml kiterjesztésű adatforrásfájlt olvas be
 @msg	a variable library holds text variables, and the document has none	a változókönyvtár szöveges változókat tartalmaz, a dokumentumban pedig nincs ilyen
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	a(z) `{name}` változó nem menthető változókönyvtárba: nevezze át úgy, hogy betűvel vagy `_` jellel kezdődjön, szóközök és a `-`, `_` és `.` jeltől eltérő szimbólumok nélkül
 @msg	{k} has control characters	{k} vezérlőkaraktereket tartalmaz
@@ -9605,3 +9652,20 @@ breakText	Glyphs	Glifák
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pixel túl nagy a JPEG formátumhoz (oldalanként legfeljebb 65535 pixel): csökkentsd a felbontást
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pixel túl nagy a Targa formátumhoz (oldalanként legfeljebb 65535 pixel): csökkentsd a felbontást
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixel túl nagy a PSD formátumhoz (oldalanként legfeljebb {MAX_SIDE} pixel): csökkentsd a felbontást
+	Packaging Tools	Csomagolóeszközök
+	Fold Lines	Hajtásvonalak
+	Make Cut Line	Vágóvonallá alakítás
+	Make Crease Line	Bigvonallá alakítás
+	Make Partial Cut Line	Részleges vágóvonallá alakítás
+	Make Perforation Line	Perforációs vonallá alakítás
+	Make Fold Line	Hajtásvonallá alakítás
+	Role Swatches…	Vonaltípusok színmintái…
+	Role Swatches	Vonaltípusok színmintái
+	Role	Vonaltípus
+	Cut Line	Vágóvonal
+	Crease Line	Bigvonal
+	Partial Cut Line	Részleges vágóvonal
+	Perforation Line	Perforációs vonal
+	No objects are selected.	Nincs kijelölt objektum.
+	Open a document to mark its fold lines.	Nyiss meg egy dokumentumot a hajtásvonalai megjelöléséhez.
+	Remove Fold Line Role	Vonaltípus eltávolítása
