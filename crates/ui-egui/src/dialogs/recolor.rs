@@ -24,7 +24,13 @@
 //! show the new colors on the smooth wheel, on a segmented wheel (solid patches of 24 hues by 5
 //! saturations; its markers move as freely) or as color bars (one per new color, in row order: click
 //! one to select it for the sliders, drag one to move its row, which changes no color); the dialog
-//! opens on the smooth wheel. With art, the Prominent Colors bar under the wheel shows the new
+//! opens on the smooth wheel. Under them, the Add Color tool adds a click on either wheel as a new
+//! color (the hue and saturation clicked, at the wheel's brightness; on the segmented wheel the
+//! patch's color) in a new row with no current colors, which becomes the selected one, and the
+//! Remove Color tool removes the color whose marker is clicked; a bar's right-click menu has Remove
+//! Color too. The base color can't be removed. A removed color's row goes, unless it has current
+//! colors and art or a group is open: it then keeps them, with no new color, so that art keeps its
+//! colors and the group's swatch at that place goes. With art, the Prominent Colors bar under the wheel shows the new
 //! colors, each part as wide as its row's share of the art's uses, the largest first; dragging the
 //! edge between two parts moves width between them, and when the drag ends the rows' current
 //! colors move toward those widths (`recolor.weigh`), and the art previews them. The New Color
@@ -39,19 +45,22 @@
 //! The Color Theme Picker button beside the tabs turns on picking from the canvas: a click on an
 //! object takes the palette of the object a Selection tool click takes, a drag takes the palette
 //! of the art inside its marquee, and Shift adds to the picks so far (`recolor.pickTheme`). The
-//! rows that aren't excluded and hold current colors take the picked colors as their new colors,
+//! rows that aren't excluded and hold current colors (or were added on the Edit tab) take the
+//! picked colors as their new colors,
 //! the most used color first and repeating when the rows outnumber them, and the art previews
 //! them; OK keeps them as one undo step. A new count of Colors keeps the picks: the new rows take them again.
 //!
 //! Fields (`ui.dialog.set`): `rows` ([{from: [keys], to: key, exclude?, tint?: percent of a spot
-//! color}]), `colors` (null: Auto, or a count), `method`, `preserveWhite`, `preserveBlack`,
+//! color, added?}]; a row with no current colors, `from: []`, recolors no art, and with `added: true`
+//! (a color the Add Color tool added) adds its new color to the color group; `to: null`, no new color), `colors` (null: Auto, or a count), `method`, `preserveWhite`, `preserveBlack`,
 //! `preserveGrays`, `limitTo` (library id, "document" for the document's swatches, "" for none),
 //! `group`, `groupName`, `tab` (`assign` or `edit`), `rule` (harmony id), `linked`, `preview`,
 //! `sliderMode` (`hsb`, `rgb`, `cmyk`, `lab` or `tint`; unset: the row color's own model, HSB for
 //! a gray and Tint for a spot color; `global`: Global Adjust, on the Edit tab), `globalAdjust`
 //! (`{saturation, brightness, temperature, luminosity}` in percent, sent as `recolor.apply`'s
 //! `globalAdjust` in every slider mode), `display` (the Edit tab's `smooth`, `segmented` or `bars`;
-//! unset: `smooth`), `themePicker` (the Color Theme Picker is on), `themePicks` (its picks, as
+//! unset: `smooth`), `wheelTool` (`add`: the Add Color tool, `remove`: the Remove Color tool;
+//! unset: neither, a click on the wheel selects a marker), `themePicker` (the Color Theme Picker is on), `themePicks` (its picks, as
 //! `recolor.pickTheme`'s `picks`; a new list recolors the rows), `weights` (one per row, as
 //! `recolor.weigh`'s; a new list moves the rows' current colors toward them), `findColors` (Find is
 //! on; it shows the art so on the Assign tab, with art and rows selected). Changing `colors`, a
@@ -393,7 +402,7 @@ fn group_colors<'a>(app: &VectorcraftApp, d: &Dialog, rs: impl Iterator<Item = &
 }
 
 /// The New Color Group menu's request: save the new colors of the rows that aren't excluded and
-/// hold current colors (Save All Colors, in row order; a row without one gives its first current
+/// hold current colors or were added on the Edit tab (Save All Colors, in row order; a row without one gives its first current
 /// color) or of the Prominent Colors bar (Save Prominent Colors, in its order) as a new color
 /// group, a step of its own (`swatch.newGroup`).
 fn save_group(app: &mut VectorcraftApp, d: &mut Dialog, which: &str) {
@@ -420,7 +429,7 @@ const THEME_PICKS: &str = "themePicks";
 const THEME_DONE: &str = "__themePicked";
 
 /// When the picks of the Color Theme Picker changed, give the rows that aren't excluded and hold
-/// current colors the palette of the art picked (`recolor.pickTheme`, as many colors as those
+/// current colors or were added on the Edit tab the palette of the art picked (`recolor.pickTheme`, as many colors as those
 /// rows), in row order; with fewer colors than rows, the colors repeat. Picks that touch no art
 /// leave the rows as they are.
 fn sync_theme(app: &mut VectorcraftApp, d: &mut Dialog) {
@@ -561,14 +570,25 @@ fn excluded(row: &Value) -> bool {
     row["exclude"].as_bool().unwrap_or(false)
 }
 
-/// Whether `row` holds no current colors: a row made with New Row, until colors are merged into it.
-/// Its new color recolors nothing and is no color of a color group, the wheel or the harmony rules.
+/// Whether `row` has no current colors (a row made with New Row, or a color added on the Edit tab).
+fn no_current(row: &Value) -> bool {
+    row["from"].as_array().is_none_or(Vec::is_empty)
+}
+
+/// Whether `row` is a color added on the Edit tab (`added`), which joins the color group.
+fn is_added(row: &Value) -> bool {
+    row["added"].as_bool().unwrap_or(false)
+}
+
+/// Whether `row` is a row made with New Row that holds no current colors, until colors are merged
+/// into it. Its new color recolors nothing and is no color of a color group, the wheel or the
+/// harmony rules. A color added on the Edit tab (`added`) is not empty: it joins the color group.
 fn empty(row: &Value) -> bool {
-    row["from"].as_array().is_some_and(Vec::is_empty)
+    row["from"].as_array().is_some_and(Vec::is_empty) && !is_added(row)
 }
 
 /// Whether `row`'s new color is one of the colors a color group takes: the row isn't excluded and
-/// holds current colors.
+/// holds current colors or is a color added on the Edit tab.
 fn in_group(row: &Value) -> bool {
     !excluded(row) && !empty(row)
 }
@@ -583,15 +603,19 @@ fn selection(d: &Dialog) -> Vec<usize> {
 }
 
 /// `recolor.apply` parameters: the rows, method, library and the group with its new name and
-/// colours: the rows' new colours, then (with art) the group's colours no row took.
+/// colors: the new colors of the rows with current colors, each in its swatch's place (`null`
+/// for a row whose new color was removed, which removes its swatch), then (with art) the group's
+/// colors no row took, then the colors added on the Edit tab.
 fn apply_params(d: &Dialog) -> Value {
     let rs = rows(d);
     let group = d.fields.get("group").and_then(Value::as_str).map(|g| {
-        // A row made with New Row that holds no current colors gives the group no color.
-        let filled: Vec<&Value> = rs.iter().filter(|r| !empty(r)).map(|r| &r["to"]).collect();
+        // A row made with New Row that holds no current colors gives the group no color; a color
+        // added on the Edit tab (`added`) joins it after the others.
+        let took: Vec<&Value> = rs.iter().filter(|r| !no_current(r)).map(|r| &r["to"]).collect();
         let assign = d.fields.get("__assign").and_then(Value::as_array).filter(|_| d.bool("__art"));
-        let rest = assign.map_or(&[][..], |a| a.get(filled.len()..).unwrap_or_default());
-        let colors: Vec<&Value> = filled.into_iter().chain(rest).collect();
+        let rest = assign.map_or(&[][..], |a| a.get(took.len()..).unwrap_or_default());
+        let added = rs.iter().filter(|r| no_current(r) && is_added(r) && !excluded(r)).map(|r| &r["to"]).filter(|c| !c.is_null());
+        let colors: Vec<&Value> = took.into_iter().chain(rest).chain(added).collect();
         let name = d.str("groupName");
         let rename = (!name.trim().is_empty() && name != g).then_some(name);
         json!({"group": g, "groupColors": colors, "rename": rename})
@@ -921,15 +945,21 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
                     let (nr, _) = ui.allocate_exact_size(vec2(46.0, 20.0), Sense::hover());
                     let nresp = ui.interact(nr, egui::Id::unique((NEW_CHIP, i)), Sense::click());
                     let to = to_color(row).unwrap_or_default();
-                    chip(ui, nr, shown.get(i).copied().unwrap_or_default(), off);
+                    // A row whose new color was removed shows an empty frame and an empty hex field.
+                    let has_new = to_color(row).is_some();
+                    if has_new {
+                        chip(ui, nr, shown.get(i).copied().unwrap_or_default(), off);
+                    } else {
+                        ui.painter().rect_stroke(nr, 1.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+                    }
                     if nresp.clicked() {
                         clicked = Some(i);
                     }
-                    if nresp.double_clicked() {
+                    if nresp.double_clicked() && has_new {
                         pick = Some(i);
                     }
                     ui.add_space(6.0);
-                    let hex = crate::panels::color::hex_digits(&to);
+                    let hex = if has_new { crate::panels::color::hex_digits(&to) } else { String::new() };
                     let hex_name = format!("{} {}", tl!("Color"), i + 1);
                     if let Some(h) = widgets::hex_field_named(ui, ("recolor-hex", i), Some(&hex_name), &hex)
                         && let Some(c) = crate::panels::color::parse_hex(&h)
@@ -1383,7 +1413,7 @@ fn new_row(rows: &mut Vec<Value>, sel: &[usize]) -> usize {
 }
 
 /// The rows the Edit tab shows, the harmony rules fill and the Color Theme Picker recolors: those
-/// with a new colour that aren't excluded and hold current colors.
+/// with a new colour that aren't excluded and hold current colors or were added on the Edit tab.
 fn active_rows(rows: &[Value]) -> Vec<usize> {
     (0..rows.len()).filter(|i| in_group(&rows[*i]) && to_color(&rows[*i]).is_some()).collect()
 }
@@ -1413,8 +1443,61 @@ fn move_color(rows: &mut [Value], i: usize, hsb: [f32; 3], linked: bool) {
 /// The rows when a drag on the Edit tab's wheel started.
 const DRAG: &str = "__drag";
 
+/// The field of the Edit tab's wheel tools: `add` (Add Color) or `remove` (Remove Color).
+const WHEEL_TOOL: &str = "wheelTool";
+
+/// The new color the Add Color tool gives a click at hue `h` (degrees) and saturation `s`: at the
+/// brightness of `base` (the base color, whose brightness the wheel shows; full without one), the
+/// segmented wheel's patch color with `segmented`, in `base`'s model.
+fn added_color(base: Option<Color>, h: f32, s: f32, segmented: bool) -> Color {
+    let v = base.map_or(1.0, |b| b.to_hsb()[2]);
+    let c = if segmented { widgets::segment_color(h, s, v) } else { Color::from_hsb(h, s, v) };
+    base.map_or(c, |b| keep_model(b, c))
+}
+
+/// Add new color `c` as a row with no current colors, marked `added`, after the others. Returns
+/// its index.
+fn add_color(rows: &mut Vec<Value>, c: &Color) -> usize {
+    rows.push(json!({"from": [], "to": key(c), "added": true}));
+    rows.len() - 1
+}
+
+/// Remove row `i`'s new color: a row with no current colors (or, without `keep`, any row) goes,
+/// and with `keep` (art, or a color group whose swatches the rows are) a row with current colors
+/// stays with no new color, so that its art keeps its colors and its group swatch is removed in
+/// its place. The base row `base` stays. Returns the base row's index afterwards, or `None` when
+/// nothing changed.
+fn remove_color(rows: &mut Vec<Value>, i: usize, base: Option<usize>, keep: bool) -> Option<usize> {
+    if Some(i) == base || i >= rows.len() || to_color(&rows[i]).is_none() {
+        return None;
+    }
+    if keep && !no_current(&rows[i]) {
+        rows[i]["to"] = Value::Null;
+        if let Some(r) = rows[i].as_object_mut() {
+            r.remove("tint");
+            r.remove("model");
+        }
+        return Some(base.unwrap_or(0));
+    }
+    rows.remove(i);
+    Some(base.map_or(0, |b| if b > i { b - 1 } else { b }))
+}
+
+/// Whether Remove Color keeps a row with current colors (see [`remove_color`]): with art, or with a
+/// color group.
+fn keeps_rows(d: &Dialog) -> bool {
+    d.bool("__art") || d.fields.get("group").is_some_and(Value::is_string)
+}
+
+/// After Remove Color: select the base row at `base`; the slider values held were for a row index
+/// that may now hold another row.
+fn removed(d: &mut Dialog, base: usize) {
+    d.fields.insert("__sel".into(), json!([base]));
+    d.fields.remove(COMPS);
+}
+
 /// The Edit tab. Returns true when the rows changed.
-fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]) -> bool {
+fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>) -> bool {
     let top = ui.cursor().top();
     let t = Tokens::get(ui.ctx());
     let mut changed = false;
@@ -1468,6 +1551,9 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value
     let colors: Vec<Color> = active.iter().filter_map(|&i| to_color(&rows[i])).collect();
     let marked = base.and_then(|b| active.iter().position(|&i| i == b));
     let display = d.str("display");
+    let tool = d.str(WHEEL_TOOL);
+    // The tools act on either wheel, not on the color bars.
+    let on_wheel = display != "bars";
     let mut w = widgets::WheelResponse::default();
     ui.horizontal(|ui| {
         // The display buttons, beside the wheel so the tab keeps its height.
@@ -1482,6 +1568,14 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value
                     d.fields.insert("display".into(), json!(id));
                 }
             }
+            // The wheel tools: a click on the button turns its tool on, or off again.
+            ui.add_space(8.0);
+            for (id, icon, tip) in [("add", "plus", tl!("Add Color Tool")), ("remove", "minus", tl!("Remove Color Tool"))] {
+                let on = tool == id;
+                if widgets::icon_button_enabled(ui, icon, tip, on && on_wheel, on_wheel, 24.0).clicked() {
+                    d.fields.insert(WHEEL_TOOL.into(), if on { Value::Null } else { json!(id) });
+                }
+            }
         });
         ui.vertical(|ui| match display.as_str() {
             "segmented" => w = widgets::segmented_wheel(ui, "recolor-wheel", WHEEL, &colors, marked),
@@ -1489,17 +1583,33 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value
             _ => w = widgets::harmony_wheel(ui, "recolor-wheel", WHEEL, &colors, marked),
         });
     });
+    // A click with a wheel tool adds a color there, or removes the color of the marker clicked.
+    let clicked = w.clicked.filter(|_| on_wheel && matches!(tool.as_str(), "add" | "remove"));
+    if let Some((hit, [h, s])) = clicked {
+        if tool == "add" {
+            let c = added_color(base.and_then(|b| to_color(&rows[b])), h, s, display == "segmented");
+            let i = add_color(rows, &c);
+            d.fields.insert("__sel".into(), json!([i]));
+            d.fields.remove(COMPS);
+            changed = true;
+        } else if let Some(b) = hit.and_then(|k| remove_color(rows, active[k], base, keeps_rows(d))) {
+            removed(d, b);
+            changed = true;
+        }
+    }
     // Prominent Colors: the art's new colors, each as wide as its share of the art.
     if art {
         prominent_bar(ui, d, rows);
     }
-    if let Some(k) = w.pressed {
+    // A tool's click selects no marker: Add Color selects the new row, and Remove Color keeps the
+    // base color.
+    if let Some(k) = w.pressed.filter(|_| clicked.is_none()) {
         d.fields.insert("__sel".into(), json!([active[k]]));
     }
     // A drag (of a marker or the brightness slider) moves the rows as they were when it started:
     // a new colour read back from its model (CMYK through the colour profile) isn't exactly the
     // colour written, so building on last frame's rows drifted the linked colours (#1733).
-    if let Some((k, set)) = w.moved {
+    if let Some((k, set)) = w.moved.filter(|_| clicked.is_none()) {
         let start = match d.fields.get(DRAG).and_then(Value::as_array) {
             Some(s) if s.len() == rows.len() => s.clone(),
             _ => rows.to_vec(),
@@ -1519,6 +1629,9 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value
     if !art {
         ui.add_space(SLIDERS_GAP);
     }
+    // A color added or removed above changed the rows, so the sliders and chips read them afresh.
+    let active = active_rows(rows);
+    let base = selection(d).into_iter().find(|i| active.contains(i)).or(active.first().copied());
     if d.str("sliderMode") == GLOBAL {
         let sample = base.and_then(|b| to_color(&rows[b])).unwrap_or(Color::rgb(0.8, 0.45, 0.25));
         global_sliders(ui, d, sample);
@@ -1549,11 +1662,12 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value
 /// The Edit tab's color bars: a solid bar per row of `active` with its new color, in row order, the
 /// base row's framed, scrolling past the wheel's height. A click on a bar selects its row (the
 /// sliders under it edit that row's new color); a drag moves the bar's row to where the line under
-/// the pointer shows, keeping every new color. Returns true when the rows moved.
-fn color_bars(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value], active: &[usize], base: Option<usize>) -> bool {
+/// the pointer shows, keeping every new color. A bar's right-click menu has Remove Color (not for the
+/// base row's). Returns true when the rows moved or a color was removed.
+fn color_bars(ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>, active: &[usize], base: Option<usize>) -> bool {
     let t = Tokens::get(ui.ctx());
     let mut rects: Vec<Rect> = Vec::with_capacity(active.len());
-    let (mut dragging, mut released, mut dropped) = (None, None, None);
+    let (mut dragging, mut released, mut dropped, mut remove) = (None, None, None, None);
     // The area is given its full height first: in the row beside the display buttons a scroll area
     // alone is only as tall as the room the row has.
     let area = vec2(ui.available_width(), BARS_H);
@@ -1584,7 +1698,12 @@ fn color_bars(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value], active: &[usize],
                     released = Some(n);
                 }
                 rects.push(r);
-                resp.on_hover_text(rows[i]["to"].as_str().unwrap_or_default());
+                let resp = resp.on_hover_text(rows[i]["to"].as_str().unwrap_or_default());
+                resp.context_menu(|ui| {
+                    if widgets::menu_item_name(ui, tl!("Remove Color"), Some(i) != base, false) {
+                        remove = Some(i);
+                    }
+                });
             }
             // The place a dragged bar goes: before the first bar whose middle is below the pointer.
             let at = ui.input(|i| i.pointer.latest_pos()).map(|p| rects.iter().filter(|r| r.center().y < p.y).count());
@@ -1599,6 +1718,10 @@ fn color_bars(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value], active: &[usize],
             dropped = released.zip(at);
         });
     });
+    if let Some(b) = remove.and_then(|i| remove_color(rows, i, base, keeps_rows(d))) {
+        removed(d, b);
+        return true;
+    }
     let Some(moved) = dropped.and_then(|(n, to)| move_bar(rows, active, n, to)) else { return false };
     d.fields.insert("__sel".into(), json!([moved]));
     // The slider values held are those of a row index that may now hold another row.
@@ -1687,6 +1810,58 @@ mod tests {
         let g = app.session.doc().unwrap().doc.swatch_groups.last().expect("a new color group");
         let c = g.swatches[0].paint.color().unwrap();
         assert!(c.to_hsb()[1] < 1e-3, "{c:?}");
+    }
+
+    /// Remove Color: a row with no current colors goes, with art or a group a row's current colors
+    /// stay with no new color, without either the row goes, and the base row stays; the base row's
+    /// index follows.
+    #[test]
+    fn remove_color_drops_added_rows_and_empties_rows_of_art() {
+        let mut r = rows();
+        assert_eq!(add_color(&mut r, &Color::rgb(0.0, 1.0, 1.0)), 3);
+        assert_eq!(r[3], json!({"from": [], "to": "rgb 0 255 255", "added": true}));
+        assert_eq!(remove_color(&mut r, 0, Some(0), true), None, "the base row stays");
+        r[1]["tint"] = json!(50);
+        assert_eq!(remove_color(&mut r, 1, Some(2), true), Some(2));
+        assert_eq!(r[1], json!({"from": ["rgb 0 0 255", "rgb 0 0 128"], "to": null}), "the art's colors stay, without a tint");
+        assert_eq!(remove_color(&mut r, 1, Some(2), true), None, "no new color left to remove");
+        assert_eq!(remove_color(&mut r, 3, Some(2), true), Some(2));
+        assert_eq!(r.len(), 3, "the added row goes");
+        assert_eq!(remove_color(&mut r, 9, Some(2), true), None);
+        let mut r = rows();
+        assert_eq!(remove_color(&mut r, 0, Some(2), false), Some(1), "without art the row goes, and the base row moves up");
+        assert_eq!(r.len(), 2);
+        assert_eq!(r[1]["from"], json!(["rgb 0 255 0"]));
+    }
+
+    /// An added color is the hue and saturation clicked at the base color's brightness (full without
+    /// one), the patch's color on the segmented wheel, in the base color's model.
+    #[test]
+    fn an_added_color_takes_the_base_colors_brightness_and_model() {
+        let near = |a: [f32; 3], b: [f32; 3]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-3);
+        let base = Color::from_hsb(10.0, 0.8, 0.6);
+        assert!(near(added_color(Some(base), 120.0, 0.5, false).to_hsb(), [120.0, 0.5, 0.6]));
+        assert!(near(added_color(None, 200.0, 0.25, false).to_hsb(), [200.0, 0.25, 1.0]));
+        assert!(near(added_color(None, 7.0, 0.95, true).to_hsb(), [0.0, 0.9, 1.0]), "the patch's color");
+        let cmyk = color_value(&json!("cmyk 0 100 100 0")).unwrap();
+        assert!(matches!(added_color(Some(cmyk), 120.0, 0.5, false), Color::Cmyk { .. }));
+    }
+
+    /// With a color group and art, a row without a new color removes its swatch in its place, the
+    /// group's colors no row of art took stay in theirs, and a color added on the Edit tab adds its
+    /// new color after them; a row made with New Row, which holds no current colors, adds none.
+    #[test]
+    fn apply_params_give_the_group_added_colors_and_keep_its_other_colors() {
+        let mut d = Dialog::new(KIND, json!({"group": "G", "groupName": "G", "__art": true, "__assign": ["rgb 1 1 1", "rgb 2 2 2", "rgb 3 3 3"]}));
+        let mut rs = vec![json!({"from": ["rgb 255 0 0"], "to": "rgb 1 1 1"}), json!({"from": ["rgb 0 0 255"], "to": null})];
+        new_row(&mut rs, &[]);
+        add_color(&mut rs, &Color::rgb(9.0 / 255.0, 9.0 / 255.0, 9.0 / 255.0));
+        d.fields.insert("rows".into(), json!(rs));
+        assert_eq!(apply_params(&d)["groupColors"], json!(["rgb 1 1 1", null, "rgb 3 3 3", "rgb 9 9 9"]));
+        // An added color whose row is excluded joins no group.
+        rs[3]["exclude"] = json!(true);
+        d.fields.insert("rows".into(), json!(rs));
+        assert_eq!(apply_params(&d)["groupColors"], json!(["rgb 1 1 1", null, "rgb 3 3 3"]));
     }
 
     #[test]
@@ -1814,6 +1989,17 @@ mod tests {
         assert_eq!(edit_slider_row(&sel(json!([0])), &r, &active, Some(1)), Some(1));
         assert_eq!(edit_slider_row(&sel(json!([3, 2])), &r, &active, Some(3)), Some(2), "a shown row: the first selected");
         assert_eq!(edit_slider_row(&sel(json!([0])), &r, &[], None), None, "no row to edit");
+    }
+
+    /// A color added on the Edit tab holds no current colors but is not an empty row: the Edit tab
+    /// shows it and a color group takes it.
+    #[test]
+    fn an_added_color_is_not_an_empty_row() {
+        let added = json!({"from": [], "to": "rgb 0 255 255", "added": true});
+        assert!(!empty(&added) && in_group(&added));
+        let mut r = rows();
+        r.push(added);
+        assert_eq!(active_rows(&r), [0, 1, 2, 3]);
     }
 
     /// A rule or a wheel move that gives a row a new color drops the row's tint; a row whose

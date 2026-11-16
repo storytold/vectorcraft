@@ -2050,6 +2050,9 @@ digits	Malayalam	Malaiàlam
 	Show smooth color wheel	Mostra la roda de color contínua
 	Show segmented color wheel	Mostra la roda de color segmentada
 	Show color bars	Mostra les barres de color
+	Add Color Tool	Eina Afegeix color
+	Remove Color Tool	Eina Elimina color
+	Remove Color	Elimina el color
 	Find the selected colors in the artwork	Troba els colors seleccionats a l’obra
 	Harmony Sets	Conjunts d’harmonia
 	HDTV 1080p	HDTV 1080p
@@ -2354,6 +2357,8 @@ digits	Malayalam	Malaiàlam
 	Lasso Tool	Eina de llaç
 	Enclosing Lasso Tool	Eina de llaç envoltant
 	Enclosing Lasso	Llaç envoltant
+	Polygonal Lasso Tool	Eina de llaç poligonal
+	Polygonal Lasso	Llaç poligonal
 	Last	Últim
 	Last Artboard	Últim tauler
 	Status Bar Show	Mostra a la barra d'estat

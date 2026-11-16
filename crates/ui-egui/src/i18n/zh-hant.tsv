@@ -1559,6 +1559,9 @@ file-filter	Templates	範本
 	Show smooth color wheel	顯示平滑色輪
 	Show segmented color wheel	顯示分段色輪
 	Show color bars	顯示顏色條
+	Add Color Tool	新增顏色工具
+	Remove Color Tool	移除顏色工具
+	Remove Color	移除顏色
 	Find the selected colors in the artwork	在圖稿中尋找所選顏色
 	Harmony Sets	色彩調和組
 	Height	高度
@@ -3095,6 +3098,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Lasso Tool	套索工具
 	Enclosing Lasso Tool	包圍套索工具
 	Enclosing Lasso	包圍套索
+	Polygonal Lasso Tool	多邊形套索工具
+	Polygonal Lasso	多邊形套索
 	Last Effect: {name}	最後一次效果：{name}
 	Last Effect: {}	上次效果：{}
 	Last Effect…	最後一次效果…

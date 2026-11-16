@@ -2741,6 +2741,8 @@
 	Polygon	બહુકોણ
 	Polygon Properties:	બહુકોણના ગુણધર્મો:
 	Polygon Tool	બહુકોણ ટૂલ
+	Polygonal Lasso	બહુકોણીય લાસો
+	Polygonal Lasso Tool	બહુકોણીય લાસો ટૂલ
 	Portrait	પોટ્રેટ
 	Portuguese	પોર્ટુગીઝ
 	Position	સ્થિતિ
@@ -3611,6 +3613,9 @@
 	Show all plates	બધી પ્લેટ બતાવો
 	Show axis	અક્ષ બતાવો
 	Show color bars	રંગ બાર બતાવો
+	Add Color Tool	રંગ ઉમેરો સાધન
+	Remove Color Tool	રંગ દૂર કરો સાધન
+	Remove Color	રંગ દૂર કરો
 	Find the selected colors in the artwork	પસંદ કરેલા રંગો આર્ટવર્કમાં શોધો
 	Show handles when multiple anchors are selected	બહુવિધ એન્કર પસંદ હોય ત્યારે હૅન્ડલ બતાવો
 	Show in Folder	ફોલ્ડરમાં બતાવો

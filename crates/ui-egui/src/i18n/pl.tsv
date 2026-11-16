@@ -1362,6 +1362,8 @@ lighting	Light	Światło
 	Lasso Tool	Narzędzie Lasso
 	Enclosing Lasso Tool	Narzędzie lassa obejmującego
 	Enclosing Lasso	Lasso obejmujące
+	Polygonal Lasso Tool	Narzędzie lassa wielokątnego
+	Polygonal Lasso	Lasso wielokątne
 	Line Cut Tool	Narzędzie Cięcie linią
 	Line Graph Tool	Narzędzie Wykres liniowy
 	Line Segment Tool	Narzędzie Odcinek
@@ -2926,6 +2928,9 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Pokaż płynne koło kolorów
 	Show segmented color wheel	Pokaż segmentowe koło kolorów
 	Show color bars	Pokaż paski kolorów
+	Add Color Tool	Narzędzie Dodaj kolor
+	Remove Color Tool	Narzędzie Usuń kolor
+	Remove Color	Usuń kolor
 	Find the selected colors in the artwork	Znajdź zaznaczone kolory w kompozycji
 	Keep this row's colors (exclude)	Zachowaj kolory tego wiersza (wyklucz)
 	Limit to Library:	Ogranicz do biblioteki:
