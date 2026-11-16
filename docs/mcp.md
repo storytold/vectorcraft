@@ -12343,8 +12343,9 @@ Commands:
 - `addon.pathtools.crossings {cut?, selfCrossings?, ids?}` adds anchors where the selected paths cross one another (and
   where each crosses itself, with `selfCrossings`), or with `cut` also cuts them there: a path of one subpath becomes a
   path per piece. Segments that meet at an anchor they share, or with only segments of no length between them, don't
-  cross there, and they cross where they meet again elsewhere. With `selfCrossings`, a curved segment that loops over
-  itself crosses itself. At most 10,000 segments at once.
+  cross there, and they cross where they meet again elsewhere. An open end of a path that lies within 0.001 pt of
+  another path crosses it there. With `selfCrossings`, a curved segment that loops over itself crosses itself. At most
+  10,000 segments at once.
 - `addon.pathtools.divideDashes {dash?, gap?, fit?, removeGaps?}` cuts the selected paths into separate open paths
   along the curve, each `dash` long (0.01 to 1,000,000 pt, 10 by default) with `gap` between them (0 to 1,000,000 pt,
   0 by default: the pieces touch), every piece keeping the path's appearance, as one undo step. The gap pieces are left
@@ -12426,7 +12427,7 @@ Commands:
   Every path that can be edited takes part, selected or not, compound path members included. Hidden and locked paths,
   guides and clipping paths are not trimmed and do not count as crossing, the members of a compound clipping path
   included; type, images and symbol instances take no part. In isolation mode only paths inside the isolated object
-  are trimmed, and paths outside it still count as crossing. A path that ends on another marks a place on the other. Paths that lie along each other do not cross there.
+  are trimmed, and paths outside it still count as crossing. A path that ends on another, or within 0.001 pt of it, marks a place on the other. Paths that lie along each other do not cross there.
   Crossings are found on the paths' own outlines, without strokes, brushes or effects. A closed path that loses a
   stretch becomes open. An open path that loses a middle stretch becomes two paths with its appearance, in its place in
   the stacking order. A path that nothing crosses is removed whole, a compound path that loses its last member is
