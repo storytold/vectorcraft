@@ -12,8 +12,8 @@ use crate::DocState;
 use super::super::{Result, Session, bad, check_switches, edit, number_or, switch_or, text_param};
 use super::encode::single_artboard;
 use super::{
-    ARTBOARD_PARAMS, Format, check_linked_scripts, default_name, encode_all, encode_with_warnings, merge, with_black_output, writable, write_encoded,
-    write_or_return,
+    ARTBOARD_PARAMS, Format, check_images_in, check_linked_scripts, default_name, encode_all, encode_with_warnings, merge, with_black_output,
+    writable, write_encoded, write_or_return,
 };
 
 /// The keys the export commands take for every format, beside the path, the format and the
@@ -53,10 +53,10 @@ pub(super) fn export_reads(f: &Format, legacy: bool, key: &str) -> bool {
 
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.serialize", Some(text_param(p, "format", "document.serialize")?.unwrap_or("vectorcraft")), None)?;
-    check_linked_scripts("document.serialize", f.id, s.doc()?)?;
     let unused = unused_option_notes("document.serialize", f, p);
     let expanded = expand_presets(s, "document.serialize", p)?;
     let p = with_black_output(s, &expanded);
+    check_linked_scripts("document.serialize", f.id, s.doc()?, &p)?;
     let (doc, display_doc_title) = source(s, f, &p, "document.serialize")?;
     let doc = &*doc;
     let mut q = p.clone();
@@ -97,10 +97,10 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
         super::check_not_lossy_overwrite(s.doc()?, path, p, "document.export")?;
     }
     let f = writable("document.export", text_param(p, "format", "document.export")?, path)?;
-    check_linked_scripts("document.export", f.id, s.doc()?)?;
     let unused = unused_option_notes("document.export", f, p);
     let expanded = expand_presets(s, "document.export", p)?;
     let p = with_black_output(s, &expanded);
+    check_linked_scripts("document.export", f.id, s.doc()?, &p)?;
     let (doc, display_doc_title) = source(s, f, &p, "document.export")?;
     let doc = &*doc;
     let mut q = p.clone();
@@ -199,8 +199,12 @@ fn selected_part(n: &Arc<Node>, keep: &HashSet<NodeId>, holders: &HashSet<NodeId
 /// out, at any depth of layers, sublayers and groups that don't clip, unless what the renderer
 /// draws for them, their effects included ([`vectorcraft_render::effect_bounds`]), reaches it.
 /// Objects that reach it stay whole (the file's bounds clip them), as DXF's crop leaves them.
-/// Symbol instances are measured by their art, and the box of one whose art holds brushed strokes
-/// grows by as far as their brush art can paint ([`SymbolBoxes::with_brush_art`]). An object that
+/// Both boxes grow by the room brush art can paint past the brushed strokes of the object and of
+/// the objects in it ([`vectorcraft_brush::reach_within`]: a clipping group or layer by its clipping
+/// path's, a compound path by its own strokes'), so a brushed path just off `rect` stays when its
+/// brush art reaches it. Symbol instances are measured by their art, and the box of one whose art
+/// holds brushed strokes grows by as far as their brush art can paint
+/// ([`SymbolBoxes::with_brush_art`]). An object that
 /// holds a symbol instance also stays when what the canvas paints for it reaches `rect`
 /// ([`vectorcraft_render::painted_bounds`]: the effects in the symbols' art and its own effects). A
 /// clipping layer keeps every object, its clipping path among them. An artboard's file then holds
@@ -233,7 +237,9 @@ pub(super) fn art_over(doc: &Document, rect: vectorcraft_geom::Rect, renderer: &
         let mut holds_instance = false;
         n.walk(&mut |c| holds_instance |= matches!(c.kind, NodeKind::SymbolInstance { .. }));
         let painted = || holds_instance && vectorcraft_render::painted_bounds(doc, n).is_some_and(over);
-        (n.visual_bounds_with(symbols).is_none_or(over) || renderer.effect_bounds(symbols, n).is_some_and(over) || painted()).then(|| n.clone())
+        let reach = vectorcraft_brush::reach_within(n);
+        let brushed = |b: vectorcraft_geom::Rect| over(if reach > 0.0 { b.inflate(reach, reach) } else { b });
+        (n.visual_bounds_with(symbols).is_none_or(brushed) || renderer.effect_bounds(symbols, n).is_some_and(brushed) || painted()).then(|| n.clone())
     }
     let symbols = doc.symbol_boxes().with_brush_art();
     let mut d = doc.clone();
@@ -287,6 +293,8 @@ fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<(C
     }
     let st = s.doc()?;
     let doc = export_doc(st, f, p)?;
+    // The objects written (all, or with selectedOnly the selected ones) are checked.
+    check_images_in(cmd, f.id, &doc, crate::cmd::links::LinkBase::of(st), p)?;
     let display_doc_title = super::has_own_title(&doc);
     Ok((super::titled_for_export(&doc, st.path.as_deref(), f.id).map_or(doc, Cow::Owned), display_doc_title))
 }
@@ -367,11 +375,14 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
         super::check_not_lossy_overwrite(s.doc()?, path, p, C)?;
     }
     let f = writable(C, text_param(p, "format", C)?, path)?;
-    check_linked_scripts(C, f.id, s.doc()?)?;
     let unused = unused_option_notes(C, f, p);
     let expanded = expand_presets(s, C, p)?;
     let p = with_black_output(s, &expanded);
+    // The selection is written on one artboard of its own: every artboard, whatever `p` picks.
+    check_linked_scripts(C, f.id, s.doc()?, &without_artboards(&p))?;
     let (d, bounds) = selection(s, C, f.id == "txt")?;
+    // The selected objects' links are looked for from the document they are in.
+    check_images_in(C, f.id, &d, crate::cmd::links::LinkBase::of(s.doc()?), &without_artboards(&p))?;
     // The encoder's warnings (options accepted but not applied, features approximated or left
     // out), as document.export reports them.
     let (bytes, mut warnings) = encode_with_warnings(&d, f.id, &without_artboards(&p))?;

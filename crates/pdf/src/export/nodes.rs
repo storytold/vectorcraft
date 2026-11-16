@@ -14,6 +14,11 @@ struct Measured {
     members: Vec<Measured>,
 }
 
+/// Box `b` grown by `reach`, the room brush art can paint past it; `b` itself when `reach` is 0.
+fn brushed(b: Option<Rect>, reach: f64) -> Option<Rect> {
+    if reach > 0.0 { b.map(|b| b.inflate(reach, reach)) } else { b }
+}
+
 #[cfg(test)]
 std::thread_local! {
     /// The objects this thread has measured for the walk and for the links (tests).
@@ -312,15 +317,17 @@ impl Exporter<'_> {
         krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity)
     }
 
-    /// The box of `n`, and of the members of a plain group or layer.
+    /// The box of `n`, and of the members of a plain group or layer. A box grows by the room brush
+    /// art can paint past the brushed strokes of `n` and of the objects in it
+    /// ([`vectorcraft_brush::reach_within`]), as the renderer culls it.
     fn measure(&self, n: &Node) -> Measured {
         if !matches!(n.kind, NodeKind::Layer { clip: false, .. } | NodeKind::Group { clip: false, .. }) {
             #[cfg(test)]
             MEASURES.with(|m| m.set(m.get() + 1));
-            return Measured { bounds: n.visual_bounds_with(&self.symbols), members: vec![] };
+            return Measured { bounds: brushed(n.visual_bounds_with(&self.symbols), vectorcraft_brush::reach_within(n)), members: vec![] };
         }
         let members: Vec<_> = n.editing_children().iter().map(|c| self.measure(c)).collect();
-        Measured { bounds: n.visual_of_members(members.iter().map(|m| m.bounds)), members }
+        Measured { bounds: brushed(n.visual_of_members(members.iter().map(|m| m.bounds)), vectorcraft_brush::reach(n)), members }
     }
 
     pub(super) fn node(&mut self, s: &mut Surface, n: &Node, page: Rect, force: bool) {
@@ -852,7 +859,9 @@ impl Exporter<'_> {
 /// Opens the blend mode and the transparency group `n` is drawn with (`container` when it is a
 /// group or layer whose children `knockout` each other). Returns how many were opened, and
 /// whether the children are to be drawn in an isolated group of their own: the knockout group of
-/// an unclipped group's elements is its isolated group too.
+/// an unclipped group's elements is its isolated group too. An opaque knockout group in Normal
+/// mode that does not isolate opens no group: its elements are drawn on the art below it, in a
+/// knockout group without `/I` when there are several.
 fn transparency(s: &mut Surface, n: &Node, page: Rect, container: bool, knockout: bool) -> (usize, bool) {
     let mut pushes = 0;
     if n.blend != BlendMode::Normal {
@@ -869,6 +878,8 @@ fn transparency(s: &mut Surface, n: &Node, page: Rect, container: bool, knockout
         } else if n.opacity < 1.0 {
             s.push_opacity(norm(n.opacity));
             pushes += 1;
+        } else if knockout && !n.isolate && n.blend == BlendMode::Normal {
+            // A knockout group that does not isolate: its elements start from the art below it.
         } else if knockout && matches!(n.kind, NodeKind::Layer { clip: false, .. } | NodeKind::Group { clip: false, .. }) {
             isolated_children = true;
         } else {

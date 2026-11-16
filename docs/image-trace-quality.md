@@ -82,6 +82,9 @@ gradient, texture, sensor noise):
 (The last two rows were measured without a limit; they are refused now.) The 4000 × 3000 High Fidelity
 Photo trace was 86,000 anchors under the old limit; a noisier scan of the same size would have been
 refused. At 8,000,000 anchors a trace keeps about 0.7 GB, with a peak of about 0.9 GB while tracing.
+The preset rows were measured with the earlier preset values: High Fidelity Photo at Paths 90, Corners 25
+and Noise 4, Low Fidelity Photo at Paths 60, Noise 12 and 16 Colors at Paths 70, Corners 55 and Noise 10
+(see [Preset Paths, Corners and Noise](#preset-paths-corners-and-noise)).
 ## Collapsed loops keep few segments
 A small closed loop (or a piece that returns to its own junction) whose fit collapsed to a single
 cubic cannot stay as one, so it kept every positioned point as a straight segment. A looser Paths
@@ -225,6 +228,49 @@ in a smooth area), `a_staircase_that_runs_on_from_a_smooth_area_into_an_edge_kee
 `a_staircase_of_mixed_one_pixel_and_longer_steps_is_one_slope_without_a_notch`,
 `a_run_of_two_steps_keeps_its_corners`, `a_junction_on_a_step_ends_the_staircase_there` and
 `a_step_whose_cracks_read_as_an_edge_ends_the_staircase_there`.
+## Preset Paths, Corners and Noise
+Every built-in preset other than Auto Color and Flat Logo traces at Paths 50. Corners and Noise are:
+
+| preset | Paths | Corners | Noise | before |
+|:--|--:|--:|--:|:--|
+| Default | 50 | 75 | 25 | unchanged |
+| High Fidelity Photo | 50 | 50 | 5 | 90, 25, 4 |
+| Low Fidelity Photo | 50 | 50 | 10 | 60, 50, 12 |
+| 3 Colors | 50 | 50 | 15 | 60, 60, 20 |
+| 6 Colors | 50 | 50 | 8 | 65, 60, 16 |
+| 16 Colors | 50 | 50 | 8 | 70, 55, 10 |
+| Shades of Gray | 50 | 50 | 15 | 60, 50, 10 |
+| Black and White Logo | 50 | 75 | 5 | 95, 80, 8 |
+| Sketched Art | 50 | 50 | 20 | 50, 50, 100 |
+| Silhouettes | 50 | 50 | 90 | 40, 60, 30 |
+| Line Art | 50 | 75 | 20 | 80, 70, 10 |
+| Technical Drawing | 50 | 100 | 1 | 95, 90, 4 |
+| Outline | 50 | 75 | 20 | 80, 70, 10 |
+
+The palettes, color counts, thresholds and other options of the presets did not change. The enhanced
+versions of these presets use the same Paths, Corners and Noise. 6 Colors and 16 Colors were at Noise 15
+and Black and White Logo at 25 until [Noise joins the nearest color](#noise-joins-the-nearest-color);
+the measurements below were made at those values.
+
+Measured with the harness below (section 1, each preset on the inputs it is meant for), before and after:
+anchors fall in 10 of the 12 changed presets, for example 5,494 to 3,136 (High Fidelity Photo), 33 to 27
+(16 Colors), 27 to 14 (Black and White Logo) and 43 to 28 (Line Art); Silhouettes rises from 13 to 15 and
+Sketched Art does not change. Outlines on flat art lie further from the true edge: off mean 0.100 to 0.123
+px (16 Colors), 0.101 to 0.119 (6 Colors), 0.104 to 0.129 (3 Colors), 0.064 to 0.092 (Black and White Logo)
+and 0.056 to 0.074 (Line Art), and off max 1.00 to 1.16 px in 6 Colors and 16 Colors. Technical Drawing
+leaves 1.4 specks (was 0.5), and Outline's stroked center lines lie 0.095 px off (was 0.086) with 2.7
+anchors a stroke (was 3.0). ΔE changes by 0.01 or less except Line Art and Outline (2.62 and 2.61 to 2.66
+and 2.67); edge ΔE rises in 8 of the 12, for example 4.79 to 5.25 (16 Colors), 3.98 to 4.46 (3 Colors) and 9.46 to 10.03
+(Black and White Logo). On synthetic shapes and photos of 300 to 4,000 px traced outside this harness,
+High Fidelity Photo makes 41% fewer anchors and 16 Colors 20% fewer; the mean pixel difference of each
+trace changes by −0.23 to +0.26 of a level; 16 Colors leaves 41 staircases of steps of 2 px or more where it left 40, High
+Fidelity Photo 440 where it left 391, Low Fidelity Photo 96 where it left 77, Line Art 17 where it left 13, Outline 13
+where it left 10 and 3 Colors 14 where it left 12. On the same images Sketched Art makes 4,084 anchors where it made
+3,936 and Silhouettes 1,608 where it made 1,578. The figures for these twelve presets and their enhanced versions in
+the other sections of this file, and in the Image Trace entries of
+[target-app-parity.md](target-app-parity.md), were measured at the earlier values.
+Test: `presets_have_their_paths_corners_and_noise` in `crates/trace/src/tests.rs`.
+
 ## A simpler contour walk
 `contour::trace_mask` follows each region's outline along the pixel cracks with the inside on the
 right. It used to build a table of outgoing directions for every pixel corner in a raster pass and
@@ -264,6 +310,47 @@ photo quality must also be checked. Local photo/scan validation uses fixed hashe
 identical settings on unchanged current source and the candidate, including separate portrait
 crops and white-composited PNG comparisons. These local fixtures are not repository assets.
 The parity score is unchanged.
+
+## Noise joins the nearest color
+
+A region below Noise used to join the color it shares the longest border with. Along a thin dark
+line on a light ground, a dark speck of the line touches the ground on more sides than the line, so
+it joined the ground and the line broke into dashes. Now, when the color of the longest border is
+10 or more apart from the region's own color (Oklab × 100), the region joins the neighboring color
+nearest the average of its pixels, among the colors that share at least a tenth of the longest
+border. The average is taken in the image as prepared for tracing (deblocked, and smoothed for a
+photo) and leaves out the semi-transparent pixels along a cut-out image's edge that are the color
+beside them blended with the transparent background. A single pixel whose longest border is tied
+between colors keeps the previous rule. The rule changes only which
+color a region joins, and higher Noise still continues the same merge sequence. It applies in Color
+and Grayscale: in Black and White a region has only one neighboring color. The values are
+VectorCraft's own. 6 Colors and 16 Colors move from Noise 15 to 8, and Black and White Logo from 25 to 5.
+The new Noise values were chosen with the rule in place, and the measurements below include both
+changes.
+
+Measured on 17 local images (synthetic shapes and photos at several sizes, a geometric drawing and
+eight illustrations; not repository assets), against `main` at `ea3f81d9c3`, with the mean absolute
+difference per channel (0 to 255) against the image on white:
+
+| preset | three illustrations with fine dark lines | four other illustrations | synthetic shapes and photos |
+|:--|:--|:--|:--|
+| 16 Colors | 8.15 / 10.80 / 8.69 → 5.82 / 6.25 / 6.01; anchors +72% to +99% | −1.8% to −11.9%; anchors +20% to +39% | within 0.08 of a level; anchors 0% to +37% |
+| 6 Colors | 7.24 / 9.14 / 9.21 → 5.87 / 6.66 / 7.87; anchors +55% to +73% | −0.6% to −3.5%; anchors +13% to +20% | within 0.03; anchors 0% to +22% |
+| High Fidelity Photo | 8.42 / 10.11 / 7.46 → 6.85 / 7.54 / 6.00; anchors +31% to +51% | −1.4% to −5.8%; anchors −9% to +4% | within 0.08; anchors −6% to +5% |
+
+With Black and White Logo, where only the Noise value changes, the pixels that differ from the image
+thresholded at 128 fall from 2.00 / 2.42 / 1.96% to 1.49 / 1.58 / 1.23% on the three illustrations,
+with 37% to 64% more anchors, and from 1.19 to 2.37% to 1.14 to 1.94% on the other four, with 5% to
+41% more anchors; the synthetic inputs change by 0.01% or less. On a simple flat illustration the
+difference changes by 1.0% or less in every preset, with up to 21% more anchors, and the geometric
+drawing keeps its anchor count and difference in every preset. Tests:
+`a_dark_speck_beside_a_dark_line_joins_the_line`, `a_speck_close_to_its_longest_border_color_joins_it`,
+`a_color_with_a_short_border_is_not_chosen`, `a_lone_pixel_tied_between_colors_merges_by_border`,
+`a_speck_of_settled_cut_edge_pixels_merges_by_border`, `noise_still_removes_every_region_below_it` and
+`a_source_that_does_not_cover_the_labels_is_not_read` in `crates/trace/src/quantize/denoise.rs`.
+`the_borders_of_a_gradients_bands_follow_its_contours` now traces at Noise 15: at 16 Colors' new
+Noise 8 the borders of its noisy gradient stray 0.92 px from the contours, above the test's 0.9 px
+limit.
 
 ## Pieces returning to a junction
 An outline piece can return to its starting junction while being fitted as an open chain. At loose

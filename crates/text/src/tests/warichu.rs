@@ -626,6 +626,24 @@ fn a_block_of_several_fonts_keeps_the_tallest_of_them() {
     assert!(first_short.0 >= plain[pair.0].0 - 1e-6 && first_short.1 >= deepest - 1e-6, "{first_short:?} {plain:?}");
 }
 
+/// The line holds each block line's characters at their own height: with a wide Line Gap, the
+/// ascent of the top block line's characters and the descent of the bottom one's stay inside the
+/// line.
+#[test]
+fn a_wide_line_gap_keeps_the_outer_block_lines_inside_the_line() {
+    let small = layout(db(), &point("x", style(10.0)));
+    let (ascent, descent) = (small.lines[0].ascent, small.lines[0].descent);
+    for lines in [2, 3] {
+        let l = layout(db(), &with_block("cdefgh", CharStyle { warichu_lines: lines, warichu_gap: 20.0, ..marked(20.0) }));
+        let line = &l.lines[0];
+        let block = &l.glyphs[2..8];
+        let top = block.iter().map(|g| g.origin.y).fold(f64::INFINITY, f64::min);
+        let bottom = block.iter().map(|g| g.origin.y).fold(f64::NEG_INFINITY, f64::max);
+        assert!(line.baseline - line.ascent <= top - ascent + 1e-6, "{lines}: {} {} {top} {ascent}", line.baseline, line.ascent);
+        assert!(line.baseline + line.descent >= bottom + descent - 1e-6, "{lines}: {} {} {bottom} {descent}", line.baseline, line.descent);
+    }
+}
+
 /// Warichu Settings on characters not marked Warichu leave their shaping alone: "fi" keeps its
 /// ligature when only the f has other settings.
 #[test]

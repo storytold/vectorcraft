@@ -399,6 +399,8 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
         json!({"akiRight": 1000.1}),
         json!({"tsume": -0.1}),
         json!({"tsume": 100.1}),
+        json!({"diacriticHorizontal": -1000.1}),
+        json!({"diacriticVertical": 1000.1}),
     ] {
         let key = attrs.as_object().unwrap().keys().next().unwrap();
         for cmd in ["charStyle.edit", "charStyle.setAttrs", "charStyle.new"] {
@@ -422,7 +424,8 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
             "baseline_shift": -1296.0,
             "tcyUpDown": 1296.0, "tcyLeftRight": -1296.0,
             "akiLeft": 0.0, "akiRight": 1000.0,
-            "tsume": 100.0
+            "tsume": 100.0,
+            "diacriticHorizontal": -1000.0, "diacriticVertical": 1000.0
         }}),
     )
     .unwrap();
@@ -1650,6 +1653,30 @@ fn paragraph_style_options_edit_applies_to_users_and_is_one_saved_undo_step() {
         let error = s.execute("paraStyle.edit", &params).unwrap_err().to_string();
         assert!(error.contains(why), "{params}: {error}");
     }
+}
+
+/// A paragraph style can hold a Standard composer: it applies to its paragraphs, redefining and
+/// resetting treat it like any attribute, and the style and the paragraphs keep it through a save.
+#[test]
+fn paragraph_styles_keep_a_standard_composer_through_a_save() {
+    use vectorcraft_doc::Composer;
+    let (mut s, id) = session_with_text("One\nTwo");
+    s.execute("paraStyle.new", &json!({"name": "Legacy", "attrs": {"composer": "standardSingleLine"}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Legacy", "id": id, "start": 0, "end": 0})).unwrap();
+    assert_eq!(paras(&s, id).iter().map(|p| p.composer).collect::<Vec<_>>(), [Composer::StandardSingleLine, Composer::EveryLine]);
+    let doc = s.doc().unwrap().doc.clone();
+    let saved = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    let style = saved.para_styles.iter().find(|d| d.name == "Legacy").unwrap();
+    assert_eq!(style.attrs["composer"], json!("standardSingleLine"));
+    let mut composers = vec![];
+    saved.walk(|n| {
+        if let vectorcraft_doc::NodeKind::Text(t) = &n.kind {
+            composers.extend(t.paragraph_styles().iter().map(|p| p.composer));
+        }
+    });
+    assert_eq!(composers, [Composer::StandardSingleLine, Composer::EveryLine]);
+    s.execute("paraStyle.setAttrs", &json!({"name": "Legacy", "attrs": {"composer": "standardEveryLine"}})).unwrap();
+    assert_eq!(paras(&s, id)[0].composer, Composer::StandardEveryLine, "an edited style reaches its paragraphs");
 }
 
 /// A changed paragraph attribute outside the range `text.setFormat` keeps it to is an error for
