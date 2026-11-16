@@ -14,6 +14,9 @@ pub(super) struct Content<'a> {
     pub(super) cache: Option<usize>,
     /// Document-space bounds of the painted content.
     pub(super) reach: Rect,
+    /// `reach` before the effects of an earlier part of a split stack spread it: the bounds Radial
+    /// Blur's Blur Center is placed in, so the center stays put wherever the stack splits.
+    pub(super) object: Rect,
     /// Its silhouette: Feather and Inner Glow clip to it (without one, Feather only blurs and
     /// Inner Glow is skipped).
     pub(super) outline: Option<(&'a BezPath, FillRule)>,

@@ -480,12 +480,14 @@
 	Rotate (Classic)…	Putar (klasik)…
 	Surface	Permukaan
 	Wireframe	Kerangka kawat
+	Render Settings	Pengaturan render
 	No Shading	Tanpa pengarsiran
 	Plastic	Plastik
 	Highlight Intensity	Intensitas kilau
 	Highlight Size	Ukuran kilau
 	Blend Steps	Langkah campuran
 	Shading Color	Warna pengarsiran
+	Black Overprint	Hitam overprint
 	Draw Hidden Faces	Gambar sisi tersembunyi
 	Revolve…	Revolusi…
 	Inflate…	Gelembungkan…
@@ -832,6 +834,7 @@
 	Auto Color	Warna otomatis
 	Automatic	Otomatis
 	Isolate Selected Group	Isolasi grup terseleksi
+	Isolate Selected Path	Isolasi jalur terseleksi
 	Exit Isolation Mode	Keluar dari mode isolasi
 	Make Clipping Mask	Buat masker kliping
 	Release Clipping Mask	Lepaskan masker kliping
@@ -921,6 +924,7 @@
 	Free Transform	Transformasi bebas
 	Perspective Distort	Distorsi perspektif
 	Radial Blur…	Kabur radial…
+	Blur Center	Pusat kabur
 	Smart Blur…	Kabur cerdas…
 	Sharpen	Pertajam
 	Unsharp Mask…	Unsharp Mask…
@@ -934,6 +938,11 @@
 	NTSC Colors	Warna NTSC
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Kebijakan RGB:
+	CMYK Policy:	Kebijakan CMYK:
+	Preserve Embedded Profiles	Pertahankan Profil Tersemat
+	Convert to Working Space	Konversi ke Ruang Kerja
+	Preserve Numbers	Pertahankan Angka
 	CMYK	CMYK
 	Texture	Tekstur
 	Craquelure…	Craquelure…
@@ -958,6 +967,7 @@
 	Change Panel Layout	Ubah tata letak panel
 	Close Panel	Tutup panel
 	Collapse Panel Group	Ciutkan grup panel
+	Cycle Display Sizes	Ganti ukuran tampilan
 	Move Panel	Pindahkan panel
 	Group with	Grupkan dengan
 	Resize panels	Ubah ukuran panel
@@ -977,6 +987,8 @@
 	Reset all Revolve settings to their defaults.	Atur ulang semua pengaturan Revolusi ke defaultnya.
 	Drag values or labels. Double-click a value to type.	Seret nilai atau label. Klik dua kali pada nilai untuk mengetik.
 	Drag rings to rotate. Shift snaps to 15°.	Seret cincin untuk memutar. Shift mengunci ke kelipatan 15°.
+	Track cube	Kubus putar
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Seret sisi, tepi, atau cincin untuk memutar. Shift memutar pada satu sumbu layar.
 	Drag the light, or its rings. Shift snaps to 15°.	Seret cahaya atau cincinnya. Shift mengunci ke kelipatan 15°.
 lighting	Light	Cahaya
 	Keep visible surfaces only when expanding	Pertahankan hanya permukaan yang terlihat saat memperluas
@@ -1337,6 +1349,8 @@ lighting	Light	Cahaya
 	Lasso Tool	Alat lasso
 	Enclosing Lasso Tool	Alat laso pengeliling
 	Enclosing Lasso	Laso pengeliling
+	Polygonal Lasso Tool	Alat laso poligonal
+	Polygonal Lasso	Laso poligonal
 	Lasso	Lasso
 	Line Cut Tool	Alat potong garis
 	Line Graph Tool	Alat grafik garis
@@ -1424,6 +1438,10 @@ lighting	Light	Cahaya
 	Play Current Selection	Putar seleksi saat ini
 	Save Actions…	Simpan tindakan…
 	Load Actions…	Muat tindakan…
+	Reset Actions	Atur ulang tindakan
+	Replace the current actions with the default set?	Ganti tindakan saat ini dengan set default?
+	Append adds the default set after the current sets instead.	Tambahkan justru menambahkan set default setelah set saat ini.
+	Append	Tambahkan
 	Reflect Horizontal	Pencerminan horizontal
 	Rotate 90° CW	Putar 90° searah jarum jam
 	Set 1	Set 1
@@ -1433,6 +1451,7 @@ lighting	Light	Cahaya
 	Align to Artboard	Ratakan ke artboard
 	Align to Glyph Bounds	Ratakan ke batas glif
 	Align to Key Object	Ratakan ke objek kunci
+	Align to Key Anchor	Ratakan ke titik jangkar kunci
 	Align to Selection	Ratakan ke seleksi
 	Align To:	Ratakan ke:
 	Cancel Key Object	Batalkan objek kunci
@@ -1527,9 +1546,13 @@ lighting	Light	Cahaya
 	Leading	Leading
 	No Break	Tanpa pemenggalan
 	Proportional Metrics	Metrik proporsional
+	H or V Style	Gaya horizontal atau vertikal
+	Roman Italics	Miring Romawi
 	Insert Aki Left	Sisipkan aki kiri
 	Insert Aki Right	Sisipkan aki kanan
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Sesuaikan posisi horizontal diakritik
+	Adjust Vertical Diacritic Position	Sesuaikan posisi vertikal diakritik
 	Character Direction	Arah karakter
 	Digits	Digit
 	Arabic	Arab
@@ -1580,6 +1603,8 @@ digits	Malayalam	Malayalam
 	Kana	Kana
 	Numerals	Angka
 	Scale at Center	Skalakan dari tengah
+	Delete Set	Hapus set
+	Direct Entry	Entri langsung
 	Up/Down:	Atas/bawah:
 	Left/Right:	Kiri/kanan:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko atas/bawah
@@ -1595,6 +1620,10 @@ digits	Malayalam	Malayalam
 	Em Box	Em Box
 	x-Height	Tinggi x
 	ICF Box	Kotak ICF
+	Show Sample	Tampilkan contoh
+	Hide Sample	Sembunyikan contoh
+	Max Ascent/Descent	Tinggi/kedalaman maks.
+	Max Ascender	Ascender maks.
 	Copy Color Value (Hex)	Salin nilai warna (Hex)
 	Create New Swatch…	Buat swatch baru…
 	Name 40%	Nama 40%
@@ -1858,12 +1887,18 @@ digits	Malayalam	Malayalam
 	Select text to set its OpenType features.	Pilih teks untuk mengatur fitur OpenType-nya.
 	Standard Ligatures	Ligatur standar
 	Stylistic Alternates	Alternatif gaya
+	Ligatures	Ligatur
+	Ornaments	Ornamen
+	Figures	Angka
 	Set {n}	Set {n}
 	Swash	Swash
 	Tabular Lining	Lining tabular
 	Tabular Oldstyle	Oldstyle tabular
 	Titling Alternates	Alternatif judul
-	Every-line Composer	Komposer tiap baris
+	Middle Eastern & South Asian Single-line Composer	Komposer satu baris (Timur Tengah dan Asia Selatan)
+	Middle Eastern & South Asian Every-line Composer	Komposer tiap baris (Timur Tengah dan Asia Selatan)
+	Standard Single-line Composer	Komposer standar satu baris
+	Standard Every-line Composer	Komposer standar tiap baris
 	First-line Left Indent	Indentasi kiri baris pertama
 	Hyphenation…	Pemenggalan kata…
 	Justification…	Justifikasi…
@@ -1892,10 +1927,10 @@ digits	Malayalam	Malayalam
 	Roman Hanging Punctuation	Tanda baca gantung Romawi
 	Korean Line Break Anywhere	Putus baris Korea di mana saja
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Pengaturan komposisi Asia Timur
 	Korean Composition Settings	Pengaturan komposisi Korea
 	Select a text object to edit its paragraph attributes.	Pilih objek teks untuk mengedit atribut paragrafnya.
-	Single-line Composer	Komposer satu baris
 	Toggle Line Composer	Alihkan komposer baris
 	Space After Paragraph	Spasi setelah paragraf
 	Space Before Paragraph	Spasi sebelum paragraf
@@ -1939,6 +1974,7 @@ digits	Malayalam	Malayalam
 	Show Swatch Bounds	Tampilkan batas swatch
 	Show Tile Edge	Tampilkan tepi ubin
 	Size Tile to Art	Sesuaikan ukuran ubin dengan karya seni
+	Move Tile with Art	Pindahkan ubin bersama karya seni
 	Tile Type:	Jenis ubin:
 	Top in Front	Atas di depan
 	V Spacing:	Jarak V:
@@ -1981,6 +2017,9 @@ digits	Malayalam	Malayalam
 	Use Black Point Compensation	Gunakan kompensasi titik hitam
 	Working CMYK (don't tag)	CMYK kerja (tanpa tag)
 	Working RGB (don't tag)	RGB kerja (tanpa tag)
+	Don't Color Manage This Document	Jangan kelola warna dokumen ini
+	Working RGB: {name}	RGB kerja: {name}
+	Working CMYK: {name}	CMYK kerja: {name}
 	{name} (spot)	{name} (spot)
 	Add to Profiles…	Tambahkan ke profil…
 	Align Stroke to Center	Ratakan stroke ke tengah
@@ -2376,6 +2415,11 @@ digits	Malayalam	Malayalam
 	Author Title:	Judul penulis:
 	Author:	Penulis:
 	Copyright Info URL:	URL info hak cipta:
+	Save Metadata Template…	Simpan templat metadata…
+	Import Options	Opsi impor
+	Clear existing fields and use the template's	Hapus bidang yang ada dan gunakan bidang templat
+	Keep existing fields, but replace those the template has	Pertahankan bidang yang ada, tetapi ganti bidang yang dimiliki templat
+	Keep existing fields, but append those the template has	Pertahankan bidang yang ada, tetapi tambahkan bidang yang dimiliki templat
 	Copyright Notice:	Pemberitahuan hak cipta:
 	Copyright Status:	Status hak cipta:
 	Created:	Dibuat:
@@ -2524,6 +2568,7 @@ digits	Malayalam	Malayalam
 	Transparent Background	Latar belakang transparan
 	Choose…	Pilih…
 	Copy Fonts Used in the Document	Salin font yang digunakan dalam dokumen
+	Copy Info	Salin info
 	Copy Links	Salin tautan
 	Create Report	Buat laporan
 	Fonts whose licence doesn't allow embedding are not copied.	Font yang lisensinya tidak mengizinkan penyematan tidak disalin.
@@ -2574,6 +2619,8 @@ digits	Malayalam	Malayalam
 	Keep a link to an image file instead of only embedding it	Pertahankan tautan ke file gambar alih-alih hanya menyematkannya
 	Place onto a new locked, dimmed template layer below the current layer	Tempatkan pada lapisan templat baru yang terkunci dan diredupkan di bawah lapisan saat ini
 	Swap the selected object for the file, keeping its place and transform	Tukar objek terpilih dengan file, mempertahankan tempat dan transformasinya
+	Show Import Options	Tampilkan Opsi Impor
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Tanyakan opsi impor setiap file PDF, DXF, atau teks sebelum menempatkannya; nonaktif: gunakan opsi yang terakhir dipilih
 	On: one locked object showing the document, updated when it changes.	Aktif: satu objek terkunci yang menampilkan dokumen, diperbarui saat dokumen berubah.
 	Off: an editable copy of its art, embedded in this document.	Nonaktif: salinan karya seninya yang dapat diedit, tersemat dalam dokumen ini.
 	Images: link to the file instead of only embedding it.	Gambar: tautkan ke file alih-alih hanya menyematkannya.
@@ -2703,11 +2750,18 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Tampilkan roda warna halus
 	Show segmented color wheel	Tampilkan roda warna bersegmen
 	Show color bars	Tampilkan bilah warna
+	Show brightness and hue on wheel	Tampilkan kecerahan dan rona pada roda
+	Show saturation and hue on wheel	Tampilkan saturasi dan rona pada roda
+	Add Color Tool	Alat Tambah Warna
+	Remove Color Tool	Alat Hapus Warna
+	Remove Color	Hapus Warna
+	Find the selected colors in the artwork	Temukan warna yang dipilih di karya seni
 	Harmony Rules	Aturan harmoni
 	Keep this row's colors (exclude)	Pertahankan warna baris ini (kecualikan)
 	Limit to Library:	Batasi ke pustaka:
 	Link harmony colors	Tautkan warna harmoni
 	Merge colors into one row	Gabungkan warna ke dalam satu baris
+	New Row	Baris baru
 	No colors to recolor (preserved colors are left out).	Tidak ada warna untuk diwarnai ulang (warna yang dipertahankan dikesampingkan).
 	Preserve:	Pertahankan:
 	Randomly change color order	Ubah urutan warna secara acak
@@ -3341,6 +3395,8 @@ theme	Appearance	Tampilan
 	Find Font Files	Cari file font
 	Add Font Files	Tambahkan file font
 	Font List	Daftar font
+	Show Similar Fonts	Tampilkan font serupa
+	Clear Similar Fonts	Hapus font serupa
 	Fonts in Document	Font dalam dokumen
 	Refresh Font List	Segarkan daftar font
 	Replace Font	Ganti font
@@ -3357,6 +3413,43 @@ theme	Appearance	Tampilan
 	Create Graph	Buat grafik
 	Graph Data	Data grafik
 	Graph Type	Jenis grafik
+	Graph Type…	Jenis grafik…
+	Graph Data…	Data grafik…
+	Graph Options	Opsi grafik
+	Left Axis	Sumbu kiri
+	Right Axis	Sumbu kanan
+	Category Axis	Sumbu kategori
+	Separate Scales	Skala terpisah
+	Add Drop Shadow	Tambahkan bayangan jatuh
+	Add Legend Across Top	Tambahkan legenda di atas
+	First Row in Front	Baris pertama di depan
+	First Column in Front	Kolom pertama di depan
+	Legend	Legenda
+	Column Width	Lebar kolom
+	Bar Width	Lebar batang
+	Cluster Width	Lebar kelompok
+	Mark Data Points	Tandai titik data
+	Connect Data Points	Hubungkan titik data
+	Edge-to-Edge Lines	Garis dari tepi ke tepi
+	Draw Filled Lines	Gambar garis terisi
+	Line Width	Lebar garis
+	Tick Values	Nilai tanda skala
+	Override Calculated Values	Timpa nilai terhitung
+	Divisions	Pembagian
+	Tick Marks	Tanda skala
+	Tick Marks per Division	Tanda skala per pembagian
+	Draw Tick Marks Between Labels	Gambar tanda skala di antara label
+	Add Labels	Tambahkan label
+	Maximum must be more than Minimum.	Maksimum harus lebih besar dari minimum.
+	Column Graph	Grafik kolom
+	Stacked Column Graph	Grafik kolom bertumpuk
+	Bar Graph	Grafik batang
+	Stacked Bar Graph	Grafik batang bertumpuk
+	Line Graph	Grafik garis
+	Area Graph	Grafik area
+	Scatter Graph	Grafik sebar
+	Pie Graph	Grafik pai
+	Radar Graph	Grafik radar
 	Vector Halftone	Halftone vektor
 	spot	spot
 	Text	Teks
@@ -3944,6 +4037,7 @@ axis	Both	Keduanya
 	Replace:	Ganti:
 	Type on a Path Options	Opsi teks pada jalur
 	Highlight Variable	Sorot variabel
+	Sort Variables	Urutkan variabel
 	New Variable	Variabel baru
 	List Variables	Daftar variabel
 	Bind Variable	Ikat variabel
@@ -4059,6 +4153,8 @@ font-technology	Variable	Variabel
 	Saving	Menyimpan
 	Saving {}	Menyimpan {}
 	Search commands and tools…	Cari perintah dan alat…
+	Recent Commands	Perintah terbaru
+	No recent commands	Tidak ada perintah terbaru
 	Dashed Line	Garis putus-putus
 	Panel menu	Menu panel
 	Unembed…	Lepaskan sematan…
@@ -4069,6 +4165,12 @@ font-technology	Variable	Variabel
 	Preferences	Preferensi
 	Previous	Sebelumnya
 	Restore every preference to its default (applied on OK)	Kembalikan semua preferensi ke defaultnya (diterapkan saat OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Satuan untuk dokumen baru dari ukuran bawaan selain ukuran piksel dan untuk file yang dibuka tanpa satuan tercatat; jika Anda memilihnya di sini lalu mengklik OK, satuan dokumen aktif juga menjadi satuan ini.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Ketebalan stroke, putus-putus, dan jarak ditampilkan dalam satuan ini, dan angka yang diketik untuknya dibaca dalam satuan ini.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Ukuran teks, leading, dan pergeseran garis dasar ditampilkan dalam satuan ini, dan angka yang diketik untuknya dibaca dalam satuan ini.
+	The unit for East Asian type measurements, which no field uses yet.	Satuan untuk ukuran teks Asia Timur, yang belum digunakan bidang mana pun.
+	When on, a number typed without a unit into a field in picas is read in points.	Jika aktif, angka yang diketik tanpa satuan di bidang dalam pica dibaca dalam titik.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Dengan ID XML, nama objek ditampilkan sebagai ID XML di Lapisan, Variabel, dan Opsi lapisan.
 	Reset all preferences to their defaults?	Atur ulang semua preferensi ke defaultnya?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Nilai default diterapkan saat Anda mengklik OK di Preferensi. Batal di sana mempertahankan preferensi Anda saat ini.
 	Smaller ↔ Larger	Lebih kecil ↔ Lebih besar
@@ -4306,6 +4408,7 @@ imageTrace	Outline	Kontur
 	Stop the script and undo what it did? Then quit again.	Hentikan skrip dan batalkan yang telah dilakukannya? Lalu keluar lagi.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Skrip ini telah menambahkan sangat banyak objek. Lanjutkan, atau hentikan dan batalkan yang telah dilakukannya?
 @msg	Copied the script report	Berhasil menyalin laporan skrip
+@msg	Copied the link info	Berhasil menyalin info tautan
 @msg	Corners edits the corners of a path	Corners menyunting sudut jalur
 @msg	Couldn't copy to the system clipboard: {e}	Tidak dapat menyalin ke papan klip sistem: {e}
 @msg	Couldn't open {name}: {e}	Tidak dapat membuka {name}: {e}
@@ -5447,6 +5550,9 @@ mark-style	Japanese	Jepang
 	Softness	Kelembutan
 	Ambient Light	Cahaya ambient
 	Light behind the object	Cahaya di belakang objek
+	Move Light to Back	Pindahkan Cahaya ke Belakang
+	Move Light to Front	Pindahkan Cahaya ke Depan
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Seret cahaya untuk memindahkannya. Tombol panah memindahkan cahaya yang difokuskan; Shift memindahkannya 15°.
 	Shadows	Bayangan
 	Distance from Object	Jarak dari objek
 	Shadow Bounds	Batas bayangan
@@ -5578,7 +5684,7 @@ mark-style	Japanese	Jepang
 @msg	Unknown dimension orientation	Orientasi dimensi tidak dikenal
 @msg	Unknown dimension style	Gaya dimensi tidak dikenal
 @msg	Unknown unit	Satuan tidak dikenal
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Menutup ujung melingkar profil terbuka. Sapuan parsial mempertahankan sisi potongannya tetap terbuka.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Menutup ujung melingkar profil terbuka. Sapuan parsial juga menutup sisi potongannya.
 	Darkness	Kegelapan
 	Isolate Selected Object	Isolasikan objek terpilih
 	Keep selected	Tetap terseleksi
@@ -5809,6 +5915,14 @@ swatch	Bright Violet	Violet cerah
 	Color wheel	Roda warna
 	First Artboard	Artboard pertama
 	Last Artboard	Artboard terakhir
+	Status Bar Show	Tampilkan di bilah status
+	Artboard Name	Nama artboard
+	Current Tool	Alat saat ini
+	Date and Time	Tanggal dan waktu
+	Number of Undos	Jumlah urungkan
+	Document Color Profile	Profil warna dokumen
+	Undos	Urungkan
+	Redos	Ulangi
 	Next Artboard	Artboard berikutnya
 	Previous Artboard	Artboard sebelumnya
 	Step up or down	Naikkan atau turunkan bertahap
@@ -6164,6 +6278,8 @@ axis	Y Axis	Sumbu Y
 	Create New Set	Buat set baru
 	Stop Global Edit	Hentikan edit global
 	Global Edit Options	Opsi edit global
+	Select Similar Objects	Pilih objek serupa
+	Select Similar Options	Opsi pilih serupa
 	Leave Out of Global Edit	Keluarkan dari edit global
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Edit global berfungsi pada jalur, jalur gabungan, instans simbol, dan grupnya
 	Match	Cocokkan
@@ -6275,6 +6391,13 @@ axis	Y Axis	Sumbu Y
 	Graphite Pencil	Pensil grafit
 	Wax Crayon	Krayon lilin
 	Charcoal Dust	Debu arang
+
+# Original procedural circuit brushes.
+	Tech Circuit	Sirkuit teknologi
+	Circuit Trace	Jalur sirkuit
+	Bus Lines	Jalur bus
+	Terminal Nodes	Simpul terminal
+
 	Notched Ribbon	Pita bertakik
 	Double Line	Garis ganda
 	Wave	Gelombang
@@ -6671,9 +6794,43 @@ breakText	Glyphs	Glif
 	Remove Gaps	Hapus celah
 @msg	that makes too many pieces (at most 100000): make the dashes longer	itu menghasilkan terlalu banyak potongan (paling banyak 100000): perpanjang garisnya
 @msg	select paths, or segments, to divide	pilih jalur atau segmen yang akan dibagi
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Garis Singgung Persekutuan…
+	Common Tangents	Garis Singgung Persekutuan
+	Tangents	Garis Singgung
+	Centerline	Garis Tengah
+	External	Luar
+	Internal	Dalam
+@msg	select two closed paths	pilih dua jalur tertutup
+@msg	a selected path is open	jalur yang dipilih terbuka
+@msg	a selected path is not convex	jalur yang dipilih tidak cembung
+@msg	a selected path has no area	jalur yang dipilih tidak memiliki luas
+@msg	a selected path has more than 10000 segments	jalur yang dipilih memiliki lebih dari 10000 segmen
+@msg	the two paths have the same outline	kedua jalur memiliki garis luar yang sama
+@msg	One path lies inside the other, so they have no common tangents	Satu jalur berada di dalam jalur lainnya, sehingga tidak ada garis singgung persekutuan
+@msg	The paths overlap, so they have no internal tangents	Jalur-jalur saling tumpang tindih, sehingga tidak ada garis singgung dalam
+@msg	One path lies inside the other, so they have no internal tangents	Satu jalur berada di dalam jalur lainnya, sehingga tidak ada garis singgung dalam
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Perluas garis putus menjadi jalur
 @msg	select paths with dashed strokes to expand	pilih jalur dengan stroke putus-putus yang akan diperluas
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Lingkaran singgung…
+	Tangent Circle	Lingkaran singgung
+	Circle:	Lingkaran:
+@msg	`ids` names an object twice	`ids` menyebut satu objek dua kali
+@msg	select two or three paths or compound paths	pilih dua atau tiga jalur atau jalur gabungan
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` harus dari 0.01 sampai 1000000 pt
+@msg	two shapes need a `radius`	dua bentuk memerlukan `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	tiga bentuk menentukan jari-jarinya sendiri: hilangkan `radius`
+@msg	`circle` must be from 0 to 64	`circle` harus dari 0 sampai 64
+@msg	a shape has no outline	sebuah bentuk tidak punya garis luar
+@msg	the shapes are too complex: at most 2000 segments in all	bentuknya terlalu rumit: paling banyak 2000 segmen seluruhnya
+@msg	these shapes take too long to search	pencarian untuk bentuk ini memakan waktu terlalu lama
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	lebih dari 64 lingkaran menyentuh bentuk ini: mungkin menyentuhnya di sepanjang satu kurva utuh
+@msg	no circle touches these shapes	tidak ada lingkaran yang menyentuh bentuk ini
+@msg	`circle` is past the last circle found ({found})	`circle` melewati lingkaran terakhir yang ditemukan ({found})
+@msg	object {value} is not a path or compound path	objek {value} bukan jalur atau jalur gabungan
+@msg	these shapes are too small to measure	bentuk ini terlalu kecil untuk diukur
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Alat dokumen
 	Save a Timestamped Copy	Simpan salinan bercap waktu
@@ -6695,6 +6852,11 @@ breakText	Glyphs	Glif
 	Malayalam	Malayalam
 	Odia	Oriya
 	Urdu	Urdu
+	Sanskrit	Sanskerta
+	Nepali	Nepali
+	Assamese	Assam
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} dan yang lebih baru (versi {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Ekspor Semua Dokumen Terbuka sebagai PDF
@@ -6728,7 +6890,7 @@ breakText	Glyphs	Glif
 @msg	stroke cannot be set on a symbol instance	stroke tidak dapat diatur pada instans simbol
 @msg	fill on a symbol instance must be a solid color or none	fill pada instans simbol harus berupa warna solid atau none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} tidak dapat diatur pada gambar tanpa efek Konversi ke bentuk atau Kerangka objek
-@msg	pass newName, registration, exportType, nineSlice and/or type	berikan newName, registration, exportType, nineSlice dan/atau type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	berikan newName, registration, exportType, nineSlice, type dan/atau alignToPixelGrid
 	Text Flow	Alur teks
 	By Rows	Per baris
 	By Columns	Per kolom
@@ -6942,3 +7104,41 @@ breakText	Glyphs	Glif
 	Nest Shapes…	Susun Bentuk…
 	Nest Shapes	Susun Bentuk
 	Roll	Gulungan
+	Packaging Tools	Alat kemasan
+	Fold Lines	Garis lipat
+	Make Cut Line	Jadikan garis potong
+	Make Crease Line	Jadikan garis lekuk
+	Make Partial Cut Line	Jadikan garis potong sebagian
+	Make Perforation Line	Jadikan garis perforasi
+	Make Fold Line	Jadikan garis lipat
+	Role Swatches…	Swatch jenis garis…
+	Role Swatches	Swatch jenis garis
+	Role	Jenis garis
+	Cut Line	Garis potong
+	Crease Line	Garis lekuk
+	Partial Cut Line	Garis potong sebagian
+	Perforation Line	Garis perforasi
+	No objects are selected.	Tidak ada objek yang dipilih.
+	Open a document to mark its fold lines.	Buka dokumen untuk menandai garis lipatnya.
+	Remove Fold Line Role	Hapus jenis garis
+	Check	Periksa
+	Check Fold Lines	Periksa garis lipat
+@msg	No cut lines are in the selection.	Tidak ada garis potong dalam seleksi.
+@msg	No cut lines are in the document.	Tidak ada garis potong dalam dokumen.
+@msg	The cut lines do not enclose an area.	Garis potong tidak melingkupi area apa pun.
+@msg	A cut line ends without meeting another cut line.	Sebuah garis potong berakhir tanpa bertemu garis potong lain.
+@msg	A gap between cut lines was closed.	Celah di antara garis potong telah ditutup.
+@msg	The fold lines are too complex to check.	Garis lipat terlalu rumit untuk diperiksa.
+@msg	A cut line and a crease lie on top of each other.	Sebuah garis potong dan sebuah garis lekuk bertumpuk.
+@msg	No cut lines are among the given objects.	Tidak ada garis potong di antara objek yang diberikan.
+@msg	Two fold lines lie on top of each other.	Dua garis lipat bertumpuk.
+@msg	A crease ends inside a panel.	Sebuah garis lekuk berakhir di dalam panel.
+@msg	A crease does not divide two panels.	Sebuah garis lekuk tidak membagi dua panel.
+@msg	A crease lies outside the cut outline, wholly or in part.	Sebuah garis lekuk berada seluruhnya atau sebagian di luar kontur potong.
+@msg	The pieces of a hinge are not on one straight line.	Bagian-bagian sebuah engsel tidak berada pada satu garis lurus.
+@msg	A gap between cut lines is too narrow to tell apart.	Celah di antara garis potong terlalu sempit untuk dibedakan.
+@msg	A cut-out area holds other fold lines or another blank.	Area yang dipotong berisi garis lipat lain atau bentangan lain.
+@msg	A panel is not joined to the rest by a crease.	Sebuah panel tidak tersambung ke bagian lain oleh garis lekuk apa pun.
+@msg	A fold line is on a non-printing layer.	Sebuah garis lipat berada di lapisan yang tidak dicetak.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panel: {panels}, engsel: {hinges}, galat: {errors}, peringatan: {warnings}
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"

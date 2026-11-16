@@ -226,6 +226,27 @@ impl Default for Work {
     }
 }
 
+impl Work {
+    /// One `n`th of the work of [`Work::default`] (all of it for `n` of 0 or 1).
+    pub const fn share(n: usize) -> Work {
+        let n = if n == 0 { 1 } else { n };
+        Work { pairs: MAX_PAIRS / n, steps: MAX_STEPS / n }
+    }
+
+    /// The work done since the budget was `before`.
+    pub fn spent_since(self, before: Work) -> Work {
+        Work { pairs: before.pairs.saturating_sub(self.pairs), steps: before.steps.saturating_sub(self.steps) }
+    }
+
+    /// Take `cost` (from [`Work::spent_since`]) out of what is left, as if that work were done
+    /// again. `None`, leaving the budget as it was, when less than `cost` is left.
+    pub fn draw(&mut self, cost: Work) -> Option<()> {
+        let (pairs, steps) = (self.pairs.checked_sub(cost.pairs)?, self.steps.checked_sub(cost.steps)?);
+        *self = Work { pairs, steps };
+        Some(())
+    }
+}
+
 /// Where `others` cross `path`, and where `path` crosses itself (a segment that loops over itself
 /// included): the places on `path`, in order, within the work of [`Work::default`].
 pub fn crossings_on(path: &PathData, others: &[&PathData]) -> Option<Vec<Place>> {

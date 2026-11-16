@@ -38,6 +38,101 @@ fn nth<T>(list: &[Option<T>], s: usize) -> Option<&T> {
     list.get(s).and_then(Option::as_ref)
 }
 
+/// The data a value range is read from: each series' type, the cells (a blank is `None`), which series use the right
+/// axis' own scale, and the number of categories.
+struct Values<'a> {
+    kinds: &'a [GraphKind],
+    cells: &'a [Vec<Option<f64>>],
+    on_right: &'a [bool],
+    ncat: usize,
+}
+
+impl Values<'_> {
+    fn cell(&self, c: usize, s: usize) -> Option<f64> {
+        self.cells.get(c).and_then(|r| r.get(s)).copied().flatten()
+    }
+
+    fn axis(&self, s: usize) -> usize {
+        usize::from(self.on_right.get(s).copied().unwrap_or(false))
+    }
+
+    /// The value range per axis (stacked graphs stack positives and negatives separately), and a scatter's x range.
+    fn range(&self, scatter: bool) -> ([f64; 2], [f64; 2], f64, f64) {
+        let (mut lo, mut hi) = ([0.0f64; 2], [0.0f64; 2]);
+        let (mut xlo, mut xhi) = (f64::MAX, f64::MIN);
+        for c in 0..self.ncat {
+            if !scatter {
+                for (a, (lo, hi)) in lo.iter_mut().zip(hi.iter_mut()).enumerate() {
+                    self.extend(c, a, (lo, hi));
+                }
+            } else {
+                for s in (0..self.kinds.len()).step_by(2) {
+                    if let (Some(y), Some(x)) = (self.cell(c, s), self.cell(c, s + 1)) {
+                        hi[0] = hi[0].max(y);
+                        lo[0] = lo[0].min(y);
+                        xlo = xlo.min(x);
+                        xhi = xhi.max(x);
+                    }
+                }
+            }
+        }
+        (lo, hi, xlo, xhi)
+    }
+
+    /// Widen the range of axis `a` by category `c`'s values.
+    fn extend(&self, c: usize, a: usize, (lo, hi): (&mut f64, &mut f64)) {
+        let val = |s: usize| self.cell(c, s).unwrap_or(0.0);
+        let on = |s: &usize, kinds: &[GraphKind]| self.axis(*s) == a && self.kinds.get(*s).is_some_and(|k| kinds.contains(k));
+        // Stacked columns (or bars) stack together, and so do areas; other series count one value each.
+        for stack in [[GraphKind::StackedColumn, GraphKind::StackedBar], [GraphKind::Area, GraphKind::Area]] {
+            let members = || (0..self.kinds.len()).filter(|s| on(s, &stack));
+            *hi = hi.max(members().map(|s| val(s).max(0.0)).sum());
+            *lo = lo.min(members().map(|s| val(s).min(0.0)).sum());
+        }
+        let single = |s: &usize| on(s, &[GraphKind::Column, GraphKind::Bar, GraphKind::Line]);
+        for v in (0..self.kinds.len()).filter(single).filter_map(|s| self.cell(c, s)) {
+            *hi = hi.max(v);
+            *lo = lo.min(v);
+        }
+    }
+}
+
+/// The tick values `g`'s value axes are drawn with while they are calculated from the data (Graph Type › Tick Values
+/// without Override Calculated Values): the least value, the greatest and the number of divisions of the left (or
+/// only) axis, then of the right axis' own scale, which is the left one's unless Separate Scales gives the series on
+/// the right axis a scale of their own. A pie graph has no value axis and gives the axis of a graph without data. A
+/// single bound the graph has (only a minimum or only a maximum) is calculated with, as the axis is drawn.
+pub fn calculated_axes(g: &GraphSpec) -> [(f64, f64, usize); 2] {
+    // Adding 0 makes a negative zero, which a nice axis around 0 can start at, a plain 0.
+    let divisions = |(lo, hi, step): (f64, f64, f64)| (lo + 0.0, hi + 0.0, ((hi - lo) / step).round().clamp(1.0, 100.0) as usize);
+    // The bounds the axis is calculated with: all but a pair that overrides the calculation.
+    let partial = |min: Option<f64>, max: Option<f64>| match (min, max) {
+        (Some(a), Some(b)) if b > a && (b - a).is_finite() => (None, None),
+        bounds => bounds,
+    };
+    let (min, max) = partial(g.axis_min, g.axis_max);
+    if g.kind == GraphKind::Radar {
+        let top = g.rows.iter().flatten().copied().fold(0.0, f64::max);
+        return [divisions(value_axis(g.ticks, min, max, 0.0, top)); 2];
+    }
+    let nser = g.rows.iter().map(Vec::len).max().unwrap_or(0).clamp(1, vectorcraft_doc::MAX_GRAPH_SERIES);
+    let kinds: Vec<GraphKind> = (0..nser).map(|s| g.series_kind(s)).collect();
+    let (scatter, horizontal) = (g.kind == GraphKind::Scatter, matches!(g.kind, GraphKind::Bar | GraphKind::StackedBar));
+    let separate = g.separate_scales && g.value_axis == ValueAxisSide::Both && !horizontal && !scatter;
+    let on_right: Vec<bool> = (0..nser).map(|s| separate && g.right_series.contains(&s)).collect();
+    let cells = if g.kind == GraphKind::Pie { vec![] } else { g.cells() };
+    let ncat = g.rows.len().clamp(1, vectorcraft_doc::MAX_GRAPH_CATEGORIES);
+    let (lo, hi, ..) = Values { kinds: &kinds, cells: &cells, on_right: &on_right, ncat }.range(scatter);
+    let left = divisions(value_axis(g.ticks, min, max, lo[0], hi[0]));
+    let used = |right: bool| on_right.contains(&right);
+    if !used(true) {
+        return [left; 2];
+    }
+    let (right_min, right_max) = partial(g.right_axis_min, g.right_axis_max);
+    let right = divisions(value_axis(g.right_ticks, right_min, right_max, lo[1], hi[1]));
+    if used(false) { [left, right] } else { [right; 2] }
+}
+
 /// One graph being generated: its data, the nodes drawn so far and what the legend and shadows still need.
 struct Plot<'a> {
     g: &'a GraphSpec,
@@ -198,7 +293,7 @@ fn bar_rect(horizontal: bool, a: f64, w: f64, v0: f64, v1: f64) -> Rect {
 }
 
 /// White text on a dark wedge.
-fn is_dark(fill: &Paint) -> bool {
+pub(super) fn is_dark(fill: &Paint) -> bool {
     fill.color().is_some_and(|c| {
         let [r, g, b] = c.to_rgb();
         0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5
@@ -298,6 +393,16 @@ impl<'a> Plot<'a> {
         series_marks(self.g, i, series_fill, stroke, width)
     }
 
+    /// The stroke paint and width series `s`'s filled marks and its legend swatch get when the series keeps no stroke
+    /// of its own: a white line between stacked segments, area bands and pie wedges, none on other marks.
+    fn mark_stroke(&self, s: usize) -> (Paint, f64) {
+        match self.kind(s) {
+            GraphKind::StackedColumn | GraphKind::StackedBar | GraphKind::Area => (Paint::solid(Color::WHITE), 0.25),
+            GraphKind::Pie => (Paint::solid(Color::WHITE), 0.5),
+            _ => (Paint::None, 0.0),
+        }
+    }
+
     fn series_label(&self, i: usize) -> String {
         self.g.series.get(i).cloned().unwrap_or_default()
     }
@@ -376,7 +481,8 @@ impl<'a> Plot<'a> {
             }
             let sweep = v / total * std::f64::consts::TAU;
             let bp = wedge_path(ring, a0, sweep);
-            let (fill, stroke, sw) = self.mark(s, true, Paint::solid(Color::WHITE), 0.5);
+            let (stroke, width) = self.mark_stroke(s);
+            let (fill, stroke, sw) = self.mark(s, true, stroke, width);
             let dark = is_dark(&fill);
             let n = self.b.path(PathData::from_bezpath(&bp), fill, stroke, sw);
             self.push_shadowed(s, n);
@@ -437,7 +543,7 @@ impl<'a> Plot<'a> {
         }
         for v in tick_values(lo, hi, step).into_iter().skip(1) {
             let ring: Vec<Point> = (0..ncat).map(|c| at(c, v)).collect();
-            axes.push(self.b.path(polyline(&ring, true), Paint::None, Paint::solid(Color::rgb(0.6, 0.6, 0.6)), 0.25));
+            axes.push(self.b.ring(polyline(&ring, true)));
         }
         let ax = self.b.group("Axes", axes);
         self.b.out.push(ax);
@@ -526,41 +632,7 @@ impl<'a> Plot<'a> {
 
     /// The value range per axis (stacked graphs stack positives and negatives separately), and a scatter's x range.
     fn value_range(&self, geo: &Geo, scatter: bool) -> ([f64; 2], [f64; 2], f64, f64) {
-        let (mut lo, mut hi) = ([0.0f64; 2], [0.0f64; 2]);
-        let (mut xlo, mut xhi) = (f64::MAX, f64::MIN);
-        for c in 0..self.ncat {
-            if !scatter {
-                for (a, (lo, hi)) in lo.iter_mut().zip(hi.iter_mut()).enumerate() {
-                    self.extend_range(geo, c, a, (lo, hi));
-                }
-            } else {
-                for s in (0..self.nser).step_by(2) {
-                    if let (Some(y), Some(x)) = (self.cell(c, s), self.cell(c, s + 1)) {
-                        hi[0] = hi[0].max(y);
-                        lo[0] = lo[0].min(y);
-                        xlo = xlo.min(x);
-                        xhi = xhi.max(x);
-                    }
-                }
-            }
-        }
-        (lo, hi, xlo, xhi)
-    }
-
-    /// Widen the range of axis `a` by category `c`'s values.
-    fn extend_range(&self, geo: &Geo, c: usize, a: usize, (lo, hi): (&mut f64, &mut f64)) {
-        let nser = self.nser;
-        // Stacked columns (or bars) stack together, and so do areas; other series count one value each.
-        for stack in [[GraphKind::StackedColumn, GraphKind::StackedBar], [GraphKind::Area, GraphKind::Area]] {
-            let members = || (0..nser).filter(|s| geo.axis(*s) == a && stack.contains(&self.kind(*s)));
-            *hi = hi.max(members().map(|s| self.val(c, s).max(0.0)).sum());
-            *lo = lo.min(members().map(|s| self.val(c, s).min(0.0)).sum());
-        }
-        let single = |s: &usize| geo.axis(*s) == a && matches!(self.kind(*s), GraphKind::Column | GraphKind::Bar | GraphKind::Line);
-        for v in (0..nser).filter(single).filter_map(|s| self.cell(c, s)) {
-            *hi = hi.max(v);
-            *lo = lo.min(v);
-        }
+        Values { kinds: &self.kinds, cells: &self.cells, on_right: &geo.on_right, ncat: self.ncat }.range(scatter)
     }
 
     /// The value axes with ticks and labels, the legend's start after them, and the axis lines.
@@ -826,7 +898,8 @@ impl<'a> Plot<'a> {
             let Some(base) = (if v >= 0.0 { pos.get_mut(ax) } else { neg.get_mut(ax) }) else { continue };
             let (v0, v1) = (geo.vpos(ax, *base), geo.vpos(ax, *base + v));
             *base += v;
-            let paint = self.mark(s, true, Paint::solid(Color::WHITE), 0.25);
+            let (stroke, width) = self.mark_stroke(s);
+            let paint = self.mark(s, true, stroke, width);
             let rect = bar_rect(geo.horizontal, a, w, v0, v1);
             // A segment of 0 has no area to shade.
             let n = self.bar_node(Bar { s, rect, value: v, down: v1 < v0, per_unit: geo.per_unit(ax) }, paint, v != 0.0);
@@ -846,7 +919,8 @@ impl<'a> Plot<'a> {
             let at = |c: usize, v: &[f64]| Point::new(geo.cat_mid(c), geo.vpos(a, v.get(c).copied().unwrap_or(0.0)));
             let mut pts: Vec<Point> = (0..ncat).map(|c| at(c, &above)).collect();
             pts.extend((0..ncat).rev().map(|c| at(c, below)));
-            let (fill, stroke, w) = self.mark(s, true, Paint::solid(Color::WHITE), 0.25);
+            let (stroke, width) = self.mark_stroke(s);
+            let (fill, stroke, w) = self.mark(s, true, stroke, width);
             let n = self.b.path(polyline(&pts, true), fill, stroke, w);
             self.push_series(s, n);
             *below = above;
@@ -890,10 +964,11 @@ impl<'a> Plot<'a> {
     }
 
     /// The swatch of series `s` at `(x, y)`: series drawn with markers show their marker design in the legend, and
-    /// series drawn with a column design that design.
+    /// series drawn with a column design that design. A default swatch has the stroke of its series' marks.
     fn legend_swatch(&mut self, s: usize, (x, y): (f64, f64)) {
         let marked = matches!(self.g.kind, GraphKind::Scatter | GraphKind::Radar) || self.kind(s) == GraphKind::Line;
-        let paint = self.mark(s, true, Paint::None, 0.0);
+        let (stroke, width) = self.mark_stroke(s);
+        let paint = self.mark(s, true, stroke, width);
         let column = nth(self.column_looks, s).filter(|_| self.columnar(s));
         let swatch = self.b.swatch(column, nth(&self.designs, s).filter(|_| marked), Rect::new(x, y, x + 8.0, y + 8.0), paint);
         self.push_series(s, swatch);
