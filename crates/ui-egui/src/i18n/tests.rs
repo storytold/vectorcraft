@@ -4521,6 +4521,31 @@ fn russian_translates_command_script_and_file_messages() {
     }
 }
 
+/// Danish shows command, script and file messages in Danish: whole messages, messages with a name,
+/// a number, a size or a command id filled in, a message that keeps its double-quoted values, and
+/// the messages whose catalog rows escape a backslash or double a brace.
+#[test]
+fn danish_translates_command_script_and_file_messages() {
+    let da = Lang::from_code("da").expect("registered");
+    for (english, danish) in [
+        ("CSV is empty", "CSV-filen er tom"),
+        ("Offset Path: the path is too complex to offset", "Forskyd kurve: kurven er for kompleks til at forskyde"),
+        ("no swatch named `Gold`", "ingen farveprøve med navnet `Gold`"),
+        ("object 12 is not an Intertwine group", "objekt 12 er ikke en sammenfletningsgruppe"),
+        ("no slice 4 in the image (see slice.list)", "intet udsnit 4 i billedet (se slice.list)"),
+        ("give origin: [x, y], or reset: true", "angiv origin: [x, y] eller reset: true"),
+        ("`kinsoku` must be \"none\", \"hard\" or \"soft\"", "`kinsoku` skal være \"none\", \"hard\" eller \"soft\""),
+        ("PNG encoding failed: 0 × 0 pixels is not a valid image size", "PNG-kodning mislykkedes: 0 × 0 pixels er ikke en gyldig billedstørrelse"),
+        ("missing `index` (a stop index, or null to clear)", "`index` mangler (et indeks for et gradientstop eller null for at rydde)"),
+        ("JSON.parse: unexpected end (at offset 7)", "JSON.parse: unexpected end (ved forskydning 7)"),
+        ("\\ at end of pattern", "\\ i slutningen af mønsteret"),
+        ("a \\u escape needs four hexadecimal digits", "en \\u-escape kræver fire hexadecimale cifre"),
+        ("not an RTF file: it doesn't start with {\\rtf", "ikke en RTF-fil: den starter ikke med {\\rtf"),
+    ] {
+        assert_eq!(message(da, english), danish, "{english}");
+    }
+}
+
 /// The errors of the parameter checks that many commands share (a number given as text, a missing
 /// number or index, a fraction for a whole number, `ids` that aren't a list of object ids, an
 /// `ids` entry or an `id` that is negative, an object id that names no object, a date that isn't
