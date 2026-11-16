@@ -1415,6 +1415,8 @@ lighting	Light	Valo
 	Lasso Tool	Lassotyökalu
 	Enclosing Lasso Tool	Sulkeva lassotyökalu
 	Enclosing Lasso	Sulkeva lasso
+	Polygonal Lasso Tool	Monikulmiolassotyökalu
+	Polygonal Lasso	Monikulmiolasso
 	Lasso	Lasso
 	Line Cut Tool	Viivaleikkaustyökalu
 	Line Graph Tool	Viivakaaviotyökalu
@@ -2954,6 +2956,9 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Näytä liukuva väriympyrä
 	Show segmented color wheel	Näytä segmentoitu väriympyrä
 	Show color bars	Näytä väripalkit
+	Add Color Tool	Lisää väri -työkalu
+	Remove Color Tool	Poista väri -työkalu
+	Remove Color	Poista väri
 	Find the selected colors in the artwork	Etsi valitut värit kuvituksesta
 	Harmony Rules	Harmoniasäännöt
 	Keep this row's colors (exclude)	Säilytä tämän rivin värit (jätä pois)
@@ -3676,6 +3681,7 @@ theme	Appearance	Ulkoasu
 	Connect Data Points	Yhdistä arvopisteet
 	Edge-to-Edge Lines	Viivat reunasta reunaan
 	Draw Filled Lines	Piirrä täytetyt viivat
+	Line Width	Viivan leveys
 	Tick Values	Asteikon arvot
 	Override Calculated Values	Ohita lasketut arvot
 	Divisions	Jaot
@@ -7508,6 +7514,22 @@ breakText	Glyphs	Merkit
 	Remove Gaps	Poista välit
 @msg	that makes too many pieces (at most 100000): make the dashes longer	siitä tulee liian monta osaa (enintään 100000): pidennä viivoja
 @msg	select paths, or segments, to divide	valitse jaettavat polut tai segmentit
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Yhteiset tangentit…
+	Common Tangents	Yhteiset tangentit
+	Tangents	Tangentit
+	Centerline	Keskilinja
+	External	Ulkoiset
+	Internal	Sisäiset
+@msg	select two closed paths	valitse kaksi suljettua polkua
+@msg	a selected path is open	valittu polku on avoin
+@msg	a selected path is not convex	valittu polku ei ole kupera
+@msg	a selected path has no area	valitulla polulla ei ole pinta-alaa
+@msg	a selected path has more than 10000 segments	valitussa polussa on yli 10000 segmenttiä
+@msg	the two paths have the same outline	kahdella polulla on sama ääriviiva
+@msg	One path lies inside the other, so they have no common tangents	Toinen polku on toisen sisällä, joten niillä ei ole yhteisiä tangentteja
+@msg	The paths overlap, so they have no internal tangents	Polut ovat päällekkäin, joten niillä ei ole sisäisiä tangentteja
+@msg	One path lies inside the other, so they have no internal tangents	Toinen polku on toisen sisällä, joten niillä ei ole sisäisiä tangentteja
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Laajenna viivat poluiksi
 @msg	select paths with dashed strokes to expand	valitse laajennettavat polut, joissa on katkoviiva
@@ -7827,6 +7849,8 @@ breakText	Glyphs	Merkit
 @msg	No bridge of this width fits across the selected art	Näin leveä silta ei mahdu valitun grafiikan poikki
 @msg	Some islands could not be joined to the area around the art	Joitakin saarekkeita ei voitu yhdistää grafiikkaa ympäröivään alueeseen
 @msg	`width` must be from {lo} to {hi} pt	`width`-arvon on oltava {lo}–{hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle`-arvon on oltava -180–180 astetta
+@msg	`roundness` must be from 1 to 100%	`roundness`-arvon on oltava 1–100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` on oltava kokonaisluku 1–{MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Karsintakehys ja -viivat…
 	Weed Box and Lines	Karsintakehys ja -viivat

@@ -244,7 +244,13 @@ the suite) keep the agent to the folders you give it:
   `export`), `document.exportSelection`, `document.exportForScreens` and `assets.export` (before the folder is
   made or any row is written), `document.save`, `file.save`, `file.saveAs` and `file.saveCopy` (also a save
   without a path of a document whose own format is SVG or SVGZ), `file.exportAs`, and the SVG Options dialog's
-  Show Code. A file given as another URL (`https://…`) is not checked. The document keeps the link, and the
+  Show Code. The same error refuses, before any file is written, every output that carries the native document,
+  which holds the link: a native file or template, an EPS file, a `.ai` or `.ait` file of every artboard (not a
+  legacy version 7 `.ai` file; a save of a `.ai` file always has every artboard), a PDF of every artboard with
+  Preserve Editing on (also from `document.exportPdf`), and `file.package` (also when a linked native document,
+  or the native document a linked PDF, `.ai` or EPS file carries, links such a file). A PDF or `.ai` file of
+  some of the artboards or of the art's bounds (`useArtboards: false`), a PDF without Preserve Editing, and an
+  image are written as before. A file given as another URL (`https://…`) is not checked. The document keeps the link, and the
   person at the keyboard exports it as stored.
 - The same SVG and SVGZ outputs are refused with "a linked image file is outside the read roots", which names no
   file or folder, when the file would name a linked image's file outside the read roots (a path, a `file:` URL,
@@ -991,7 +997,9 @@ when the line still shows different ones until the graph is drawn again. `paint.
 `addon.color.fillToStroke` and `addon.color.strokeToFill` also store the paint they write on a line's topmost visible
 fill or stroke row when the line already showed it. `appearance.setItem` and an `appearance.copyFrom` of some
 attributes store the paint, stroke weight, and row opacity and blend mode they write to that row in the same way, and
-`stroke.set` stores the weight it writes there. An `appearance.copyFrom` that does not apply
+`stroke.set` stores the weight it writes there. When a kind keeps no stroke paint and a zero weight (a line's stroke was
+set to None), a stroke painted on another line of that kind stores that line's weight for the kind; a zero weight set
+together with a stroke color, or kept with a painted stroke, stays as set. An `appearance.copyFrom` that does not apply
 the object's transparency, and `graphicStyle.apply` with `add`, leave the object opacity and blend mode a kind keeps as
 they are, also when the line still shows other ones. `paint.default` stores the default fill and stroke rows for a
 line's kind even when the line already showed them, and leaves the object opacity and blend mode the kind keeps. Rows
@@ -1462,7 +1470,9 @@ Preserve Editing (`preserveEditing`, on in the `VectorCraft Default` preset) emb
 an embedded file (`vectorcraft-editing.vectorcraft`; files named `drawcraft-editing.drawcraft` are read too) with a
 hash of the pages it was written with. `open_file` / `document.open` of such a PDF, `.ai` or `.ait` (no `pages` picked) restores the
 document exactly (`restored: true`); when another app changed the pages, or the data can't be read, the artwork is
-imported instead and the first warning says why. Choosing a standard turns it off (PDF/A refuses it). Save to a `.ai`
+imported instead and the first warning says why. Choosing a standard turns it off (PDF/A refuses it). Under automation
+read roots, a PDF that carries the native document is refused while the document links a JavaScript file outside them
+(see [Confining file access](#confining-file-access)). Save to a `.ai`
 path (`document.save {path: "art.ai"}` or `{format: "ai"}`) writes a PDF-compatible file that always carries the
 document, takes the PDF options and keeps its path when reopened, so Save writes `.ai` again; a `.ait` opens untitled.
 The restored document opens on the artboard its editing copy names as active. A file saved with `editingData: false` has
@@ -2062,6 +2072,12 @@ were. `graph.setType` refuses `` `columnWidth` must be a number, not "50" `` for
 `` `type` must be a string `` for `type`, `valueAxis`, the three tick lengths, `prefix`, `suffix`, `rightPrefix`,
 `rightSuffix`, `pieLegend`, `piePosition` and `pieSort`; and `` `ticks` must be a number, not "5" `` (or
 `` `ticks` must be 0 or more `` for a negative number) for `ticks`, `rightTicks` and the three tick mark counts.
+`lineWidth`, the Line Width of Draw Filled Lines in points (3 when the graph sets none), takes a number from 0.01 to
+1000 (VectorCraft's own range); `"4"` is refused with `` `lineWidth` must be a number, not "4" ``, and a width below
+0.01 or past 1000 with `` `lineWidth` must be from 0.01 to 1000 pt, not 0 ``. The graph stores a width only when it is
+not 3, so a graph without one is saved and drawn as before. A graph with a width of its own is written to `.ai` as its
+art, without the editable graph records. `graph.setType` with options that leave the graph as it is
+records no undo step.
 `axisMin`, `axisMax`, `rightAxisMin` and `rightAxisMax` take a number, or null to go back to the value calculated from
 the data; any other value is refused with `` `axisMin` must be a number or null, not "10" ``. `graph.setData` and
 `graph.create` refuse a `csv` that is not a string, `series` or `categories` that are not lists, and `rows` that are not
@@ -4350,8 +4366,11 @@ The document stores their numeric settings; manual edits remain possible through
 Revolve, Extrude & Bevel, Inflate and Rotate take `shadow` (boolean, default false), `shadowPosition` (`"behind"`
 or `"below"`, default `"behind"`), `shadowDistance` (0..100%, default 0) and `shadowBounds` (10..400%, default 100),
 set with `effect.apply` or `effect.setParams` in one undo step. With `shadow` on, the first light casts a
-hard-edged shadow of the solid, drawn behind the solid as one path filled black at 50% opacity times the opacity
-of the art that casts it, in that art's blending mode. `"behind"` puts it
+shadow of the solid, drawn behind the solid as one path filled black at 50% opacity times the opacity
+of the art that casts it, in that art's blending mode. At the first light's `softness` (or `lightSoftness`) 0 the
+path is hard-edged; above 0 it carries a Gaussian Blur of radius softness × the object's largest size × (5% + 20% ×
+`shadowDistance`), at most 1,000 pt (VectorCraft's own mapping), drawn, measured, exported and expanded (to an
+image) as that effect is. `"behind"` puts it
 on a plane square to the view behind the object; `"below"` puts it on the floor under the object, square to the
 object's own vertical axis and turned with it, so with no X rotation the floor is seen edge-on and draws nothing.
 `shadowDistance` moves the plane away from the object by that share of the object's largest size. `shadowBounds`
@@ -4654,8 +4673,10 @@ darker than the row's average become tints and shades) or `hueShift` (the most s
 the others turn by the same hue). `limitTo` snaps new colours to a swatch library's nearest colour;
 `recolor.randomize {map, order?, saturationBrightness?, seed?}` shuffles or varies new colours; a row with
 `exclude: true` keeps its colours. A row's `from` may be an empty list: the row recolors nothing, adds no library swatch with
-`limitTo` and gives `group` no color, and `recolor.randomize` and `recolor.weigh` keep it; `recolor.randomize` leaves its
-new color as it is and shuffles only the rows that hold current colors. A row without `from`, or with
+`limitTo` and gives `group` no color, unless it has `added: true` (a color the Edit tab's Add Color tool added):
+without `groupColors`, its new color then joins `group` after the new colors of the rows with current colors.
+`recolor.randomize` leaves a row without current colors as it is and shuffles only the rows that hold current colors.
+`recolor.randomize` and `recolor.weigh` keep such a row, and `recolor.randomize` keeps its `added`. A row without `from`, or with
 a current color that is not a color, is refused. With art selected, the Recolor Artwork dialog's New Row button (beside
 Merge) adds such a row above the first selected row, or at the top, with that row's new color, and selects it; Shift-click a row below it and Merge to move that row's colors into it (Merge keeps the topmost selected row's new color). An
 empty row does not count toward Colors. While it is empty, the dialog's Edit tab does not show it (its sliders edit
@@ -4665,7 +4686,8 @@ from colors alone leave its new color out. With `limitTo`, a row's `tint` (a per
 linked to the global or spot swatch its new color is that share of its tint; `tint` must be a number. `recolor.randomize`
 moves a row's `tint` with its new color and removes it from a color it changes, and moves a row's `model` with its new color. `swatch.editGroup {group, colors, rename?}` rewrites a colour group in one undo
 step (art linked to its global swatches follows), and `recolor.apply` with `group` recolours the art and rewrites the
-group together. Art linked to one of the group's global swatches stays linked when the swatch is rewritten with its
+group together. A `null` in `groupColors` removes the group's swatch at that place, and the swatches after it keep
+their colors and names; art linked to a removed global swatch keeps its color and is no longer linked to it. Art linked to one of the group's global swatches stays linked when the swatch is rewritten with its
 row's new color (the default without `groupColors` when the rows follow the group's order), so a later `swatch.edit` still
 reaches it; the reply's `relinked` counts the other linked paints that took the group's new colors. Art in a row that
 is linked to a swatch rewritten with another color keeps its row's new color, even an unchanged one, and is no longer
@@ -5946,6 +5968,12 @@ string, with "x and y must both be numbers". All of them except `path.curvature`
 rotation that is neither a number nor null with `` `pressure` must be a number, not "0.5" ``, naming the key
 (`pressure`, `tiltX`, `tiltY` or `rotation`). `path.close` refuses an `at`, `in` or `out` that is not `[x, y]`
 with `` `in` must be [x, y] ``, naming the key.
+
+`path.eraseRegion` refuses an `angle` outside -180° to 180° with `` `angle` must be from -180 to 180 degrees `` and a
+`roundness` outside 1% to 100% with `` `roundness` must be from 1 to 100% ``. `path.split` refuses a `t` outside 0 to 1
+with `` `t` must be from 0 to 1 ``, with `segment` or with `anchor`. The document does not change and no undo step is
+recorded. Left out or null, `angle` is 0° and `roundness` is 100%; left out, `t` is 0.5. The Eraser's ranges are
+VectorCraft's own values.
 
 These commands refuse a string, a number or another value that is not true or false with
 `` `closed` must be true or false ``, naming the key; the document does not change and no undo step is recorded:
@@ -8280,7 +8308,9 @@ type uses in `Fonts/` (fonts whose licence doesn't allow embedding are listed in
 the copies (each file copied once); one that can't be read is copied as it is, and a cycle of placed documents or one
 past the nesting limit stops there, each with a line in `warnings` and the report. A `folder/name` where a packaged file
 would replace the document or one of its linked files (the document's own folder, say) is an error, and nothing is
-written. Every option defaults to true. An option that is not true or false, or a `folder` or `name` that is not a
+written. Under automation read roots, the package is refused, and nothing is written, while the document, a linked
+native document or the native document a linked PDF, `.ai` or EPS file carries links a JavaScript file outside them
+(see [Confining file access](#confining-file-access)). Every option defaults to true. An option that is not true or false, or a `folder` or `name` that is not a
 string, is an error naming the key, and nothing is written; null is the same as leaving the key out. Without `folder` (the web, or an agent that wants the bytes) the
 result carries the same files as a zip (`{name: "<name>.zip", dataBase64}`, entries under `<name>/`).
 
@@ -8928,6 +8958,18 @@ has the option as Preserve Text Editability
 ```json
 {"name":"export","arguments":{"path":"/tmp/poster.psd","options":{"ppi":300,"preserveText":true}}}
 ```
+
+With or without layers, the file keeps the document's slices in image resource 1050, in version 6 of the slices
+resource format of the [Photoshop File Formats Specification](https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/).
+`importSlices` reads that form, so the slices of an opened PSD file come back when the export is opened. The rest are
+VectorCraft's own rules:
+
+- The user and object slices that reach into the exported artboard are written, each clipped to it, in its pixels,
+  at least one pixel each way. Auto slices aren't written; the document that opens the file lays them out again.
+- An object slice is written as a user slice over its object's bounds. Each slice keeps its name, its type (Image
+  or No Image), its link, target, message, alternative text, cell text and background color. An HTML Text slice is
+  written as No Image with its type's text as HTML. Text alignment is written as the default.
+- More than 10000 slices, a slice text longer than 65536 characters, or a slice without finite bounds is an error.
 
 PSD files (`.psd`, and `.psb`, the large document format) place as their merged image, the
 flattened picture every PSD file carries: Bitmap, Grayscale, Duotone, Indexed, RGB, CMYK
@@ -11278,8 +11320,9 @@ A canvas-click dialog also has `preview` (initially on): tentative settings draw
 Object › Graph › Type… (`graph.setType` without params) and a double-click on a graph tool open Graph Type (dialog
 `graphType`) for the selected graph, or for the series picked in it with Group Selection. Its fields are the options
 `graph.setType {}` returns, under the command's names for them. `legend`, `pieLegend`, `piePosition`, `pieSort`,
-`firstRowInFront`, `firstColumnInFront` and `filledLines` are held for every type, so a type picked in the dialog shows
-the options it uses. `overrideValues` and `rightOverrideValues` are Override Calculated Values of the left (or only)
+`firstRowInFront`, `firstColumnInFront`, `filledLines` and `lineWidth` are held for every type, so a type picked in the
+dialog shows the options it uses. The Line Width field next to Draw Filled Lines is available only while Draw Filled
+Lines and Connect Data Points are on. `overrideValues` and `rightOverrideValues` are Override Calculated Values of the left (or only)
 value axis and of the right one. While one is on, OK sends `axisMin`, `axisMax` and `ticks` (or `rightAxisMin`,
 `rightAxisMax` and `rightTicks`), and the dialog fills the ones the graph lacks with the values the axis would be
 calculated with for the type, value axis and Separate Scales the dialog shows.
@@ -12369,6 +12412,26 @@ Commands:
 - `addon.pathtools.shape.convert {ids?}` makes the selected plain closed paths that are rectangles, ellipses or
   polygons with equal sides and corners (stretched along their own axes at most) parametric shapes with the same
   outline. → `{ids}` (those converted).
+- `addon.pathtools.commonTangents {tangents?, centerline?, ids?}` adds the common tangent lines of two convex closed
+  paths (`ids`, or the two selected objects) as separate open paths: lines that touch both paths without crossing into
+  either. `tangents`: `external` (both paths on the same side of the line), `internal` (lines that run between them)
+  or `all` (default). With `centerline: true` it also adds the line joining the two centers: an ellipse's center, or
+  a path's center of area. Each tangent of paths that do not touch runs from where it touches the lower path to
+  where it touches the upper one; where a straight side of a path lies along the line, the line covers the whole
+  side. An ellipse drawn with the Ellipse tool, then moved, turned or scaled, is measured as an exact ellipse. Any
+  other path must be closed, have one outline, bend the same way all around and have at most 10,000 segments; an open
+  path, a path that bends inward, a path without area, a group, a compound path or type is refused, and so are two
+  paths whose outlines are the same to within the touching tolerance given below. Two separate paths have two
+  external and two internal tangents. Overlapping paths have external tangents only. A path inside the other has
+  none. Paths that touch, from outside or from inside, share one tangent there instead: a line centered on the point
+  where they touch and as long as the narrower path is wide along it. Paths that meet at a corner or along a shared
+  stretch of outline get one such line, at the middle of the directions that touch both. Paths count as touching when
+  the gap between them is less than the tolerance, a billionth of the larger of their sizes and the distance between
+  their centers. The lines are stroked with the current stroke color and weight (black when the stroke is None), have
+  no fill, go directly above the upper of the two paths and are selected; one undo step. When there is no tangent of
+  the kind asked for, nothing changes, and the result's `warning` says why. Common Tangents…
+  opens a dialog (Tangents, Centerline) with Preview. → `{ids, external, internal, centerline, warning?}`
+  (`centerline`: the centerline's id, or null).
 
 A parametric shape is an ordinary path. It keeps its numbers, with a fingerprint of the outline they drew, in one
 entry of its object data (`vc-pathtools-shape`, as `document.node` lists `attrs.data`), which SVG export leaves out;
@@ -12382,6 +12445,7 @@ plain path from then on.
 {"name":"run_command","arguments":{"command":"addon.pathtools.crossings","params":{"cut":true}}}
 {"name":"run_command","arguments":{"command":"addon.pathtools.shape.create","params":{"kind":"star","center":[200,150],"width":120,"height":120,"count":7,"a":0.4}}}
 {"name":"run_command","arguments":{"command":"addon.pathtools.shape.set","params":{"id":14,"kind":"gear","count":16,"radius":2}}}
+{"name":"run_command","arguments":{"command":"addon.pathtools.commonTangents","params":{"ids":[3,4],"tangents":"external","centerline":true}}}
 ```
 
 ### Path Effects (live)

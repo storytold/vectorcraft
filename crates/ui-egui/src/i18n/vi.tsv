@@ -1739,6 +1739,7 @@ file-filter	Templates	Mẫu
 	Connect Data Points	Nối các điểm dữ liệu
 	Edge-to-Edge Lines	Đường từ mép đến mép
 	Draw Filled Lines	Vẽ đường tô đầy
+	Line Width	Độ rộng đường
 	Tick Values	Giá trị vạch chia
 	Override Calculated Values	Ghi đè giá trị đã tính
 	Divisions	Số khoảng chia
@@ -1818,6 +1819,9 @@ file-filter	Templates	Mẫu
 	Show smooth color wheel	Hiện bánh xe màu liền mạch
 	Show segmented color wheel	Hiện bánh xe màu phân đoạn
 	Show color bars	Hiện các thanh màu
+	Add Color Tool	Công cụ Thêm màu
+	Remove Color Tool	Công cụ Xóa màu
+	Remove Color	Xóa màu
 	Find the selected colors in the artwork	Tìm các màu đã chọn trong tác phẩm
 	Harmony Sets	Bộ hài hòa màu
 	Height	Chiều cao
@@ -2213,6 +2217,8 @@ digits	Hindi	Hindi
 	Lasso Tool	Công cụ Lasso
 	Enclosing Lasso Tool	Công cụ Lasso bao quanh
 	Enclosing Lasso	Lasso bao quanh
+	Polygonal Lasso Tool	Công cụ Lasso đa giác
+	Polygonal Lasso	Lasso đa giác
 	Last	Cuối cùng
 	Last commit	Commit cuối cùng
 	Last Effect: {name}	Hiệu ứng vừa dùng: {name}
@@ -7089,6 +7095,22 @@ breakText	Glyphs	Glyph
 	Remove Gaps	Gỡ các khoảng hở
 @msg	that makes too many pieces (at most 100000): make the dashes longer	như vậy tạo ra quá nhiều mảnh (tối đa 100000): hãy kéo dài nét
 @msg	select paths, or segments, to divide	chọn các đường dẫn hoặc đoạn để chia
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Tiếp tuyến chung…
+	Common Tangents	Tiếp tuyến chung
+	Tangents	Tiếp tuyến
+	Centerline	Đường tâm
+	External	Ngoài
+	Internal	Trong
+@msg	select two closed paths	chọn hai đường dẫn khép kín
+@msg	a selected path is open	một đường dẫn đã chọn đang mở
+@msg	a selected path is not convex	một đường dẫn đã chọn không lồi
+@msg	a selected path has no area	một đường dẫn đã chọn không có diện tích
+@msg	a selected path has more than 10000 segments	một đường dẫn đã chọn có hơn 10000 đoạn
+@msg	the two paths have the same outline	hai đường dẫn có cùng đường viền
+@msg	One path lies inside the other, so they have no common tangents	Một đường dẫn nằm bên trong đường dẫn kia, nên chúng không có tiếp tuyến chung
+@msg	The paths overlap, so they have no internal tangents	Các đường dẫn chồng lên nhau, nên chúng không có tiếp tuyến trong
+@msg	One path lies inside the other, so they have no internal tangents	Một đường dẫn nằm bên trong đường dẫn kia, nên chúng không có tiếp tuyến trong
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Mở rộng nét đứt thành đường dẫn
 @msg	select paths with dashed strokes to expand	chọn các đường dẫn có nét đứt để mở rộng
@@ -7403,6 +7425,8 @@ breakText	Glyphs	Glyph
 @msg	No bridge of this width fits across the selected art	Không có cầu nối nào rộng như vậy vừa với hình vẽ đã chọn
 @msg	Some islands could not be joined to the area around the art	Không thể nối một số đảo với vùng xung quanh hình vẽ
 @msg	`width` must be from {lo} to {hi} pt	`width` phải từ {lo} đến {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` phải từ -180 đến 180 độ
+@msg	`roundness` must be from 1 to 100%	`roundness` phải từ 1 đến 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` phải là số nguyên từ 1 đến {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Khung và đường bóc phần thừa…
 	Weed Box and Lines	Khung và đường bóc phần thừa

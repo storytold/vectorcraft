@@ -1362,6 +1362,8 @@ lighting	Light	Światło
 	Lasso Tool	Narzędzie Lasso
 	Enclosing Lasso Tool	Narzędzie lassa obejmującego
 	Enclosing Lasso	Lasso obejmujące
+	Polygonal Lasso Tool	Narzędzie lassa wielokątnego
+	Polygonal Lasso	Lasso wielokątne
 	Line Cut Tool	Narzędzie Cięcie linią
 	Line Graph Tool	Narzędzie Wykres liniowy
 	Line Segment Tool	Narzędzie Odcinek
@@ -2920,6 +2922,9 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Pokaż płynne koło kolorów
 	Show segmented color wheel	Pokaż segmentowe koło kolorów
 	Show color bars	Pokaż paski kolorów
+	Add Color Tool	Narzędzie Dodaj kolor
+	Remove Color Tool	Narzędzie Usuń kolor
+	Remove Color	Usuń kolor
 	Find the selected colors in the artwork	Znajdź zaznaczone kolory w kompozycji
 	Keep this row's colors (exclude)	Zachowaj kolory tego wiersza (wyklucz)
 	Limit to Library:	Ogranicz do biblioteki:
@@ -3617,6 +3622,7 @@ theme	Appearance	Wygląd
 	Connect Data Points	Połącz punkty danych
 	Edge-to-Edge Lines	Linie od krawędzi do krawędzi
 	Draw Filled Lines	Rysuj wypełnione linie
+	Line Width	Szerokość linii
 	Tick Values	Wartości podziałki
 	Override Calculated Values	Zastąp obliczone wartości
 	Divisions	Podziały
@@ -7306,6 +7312,22 @@ breakText	Glyphs	Glify
 	Remove Gaps	Usuń odstępy
 @msg	that makes too many pieces (at most 100000): make the dashes longer	to daje za dużo części (najwyżej 100000): wydłuż kreski
 @msg	select paths, or segments, to divide	zaznacz ścieżki lub segmenty do podzielenia
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Wspólne styczne…
+	Common Tangents	Wspólne styczne
+	Tangents	Styczne
+	Centerline	Linia środkowa
+	External	Zewnętrzne
+	Internal	Wewnętrzne
+@msg	select two closed paths	zaznacz dwie zamknięte ścieżki
+@msg	a selected path is open	zaznaczona ścieżka jest otwarta
+@msg	a selected path is not convex	zaznaczona ścieżka nie jest wypukła
+@msg	a selected path has no area	zaznaczona ścieżka nie ma pola
+@msg	a selected path has more than 10000 segments	zaznaczona ścieżka ma więcej niż 10000 segmentów
+@msg	the two paths have the same outline	obie ścieżki mają ten sam kontur
+@msg	One path lies inside the other, so they have no common tangents	Jedna ścieżka leży wewnątrz drugiej, więc nie mają wspólnych stycznych
+@msg	The paths overlap, so they have no internal tangents	Ścieżki nachodzą na siebie, więc nie mają stycznych wewnętrznych
+@msg	One path lies inside the other, so they have no internal tangents	Jedna ścieżka leży wewnątrz drugiej, więc nie mają stycznych wewnętrznych
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Rozszerz kreski na ścieżki
 @msg	select paths with dashed strokes to expand	zaznacz ścieżki z przerywanym konturem do rozszerzenia
@@ -7607,6 +7629,8 @@ breakText	Glyphs	Glify
 @msg	No bridge of this width fits across the selected art	Żaden mostek o tej szerokości nie mieści się w zaznaczonej grafice
 @msg	Some islands could not be joined to the area around the art	Niektórych wysp nie udało się połączyć z obszarem wokół grafiki
 @msg	`width` must be from {lo} to {hi} pt	`width` musi mieścić się w zakresie od {lo} do {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` musi mieścić się w zakresie od -180 do 180 stopni
+@msg	`roundness` must be from 1 to 100%	`roundness` musi mieścić się w zakresie od 1 do 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` musi być liczbą całkowitą od 1 do {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Ramka i linie do wybierania…
 	Weed Box and Lines	Ramka i linie do wybierania

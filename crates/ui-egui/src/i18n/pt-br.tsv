@@ -1354,6 +1354,9 @@ antiAlias	Sharp	Nítido
 	Show smooth color wheel	Mostrar roda de cores contínua
 	Show segmented color wheel	Mostrar roda de cores segmentada
 	Show color bars	Mostrar barras de cores
+	Add Color Tool	Ferramenta Adicionar cor
+	Remove Color Tool	Ferramenta Remover cor
+	Remove Color	Remover cor
 	Find the selected colors in the artwork	Localizar as cores selecionadas na arte
 	Harmony Sets	Conjuntos de Harmonia
 	Height	Altura
@@ -1603,6 +1606,8 @@ antiAlias	Sharp	Nítido
 	Lasso Tool	Ferramenta Laço
 	Enclosing Lasso Tool	Ferramenta Laço envolvente
 	Enclosing Lasso	Laço envolvente
+	Polygonal Lasso Tool	Ferramenta Laço poligonal
+	Polygonal Lasso	Laço poligonal
 	Last Effect: {name}	Último Efeito: {name}
 	Last Effect…	Último Efeito…
 	Last Page	Última Página
@@ -5048,6 +5053,7 @@ axis	Both	Ambos
 	Connect Data Points	Conectar Pontos de Dados
 	Edge-to-Edge Lines	Linhas de Borda a Borda
 	Draw Filled Lines	Desenhar Linhas Preenchidas
+	Line Width	Largura da Linha
 	Tick Values	Valores das Marcas
 	Override Calculated Values	Substituir Valores Calculados
 	Divisions	Divisões
@@ -7481,6 +7487,22 @@ breakText	Glyphs	Glifos
 	Remove Gaps	Remover distâncias
 @msg	that makes too many pieces (at most 100000): make the dashes longer	isso gera peças demais (no máximo 100000): aumente os traços
 @msg	select paths, or segments, to divide	selecione demarcadores ou segmentos para dividir
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Tangentes comuns…
+	Common Tangents	Tangentes comuns
+	Tangents	Tangentes
+	Centerline	Linha central
+	External	Externas
+	Internal	Internas
+@msg	select two closed paths	selecione dois demarcadores fechados
+@msg	a selected path is open	um demarcador selecionado está aberto
+@msg	a selected path is not convex	um demarcador selecionado não é convexo
+@msg	a selected path has no area	um demarcador selecionado não tem área
+@msg	a selected path has more than 10000 segments	um demarcador selecionado tem mais de 10000 segmentos
+@msg	the two paths have the same outline	os dois demarcadores têm o mesmo contorno
+@msg	One path lies inside the other, so they have no common tangents	Um demarcador está dentro do outro, então eles não têm tangentes comuns
+@msg	The paths overlap, so they have no internal tangents	Os demarcadores se sobrepõem, então eles não têm tangentes internas
+@msg	One path lies inside the other, so they have no internal tangents	Um demarcador está dentro do outro, então eles não têm tangentes internas
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandir traços em demarcadores
 @msg	select paths with dashed strokes to expand	selecione demarcadores com traçado tracejado para expandir
@@ -7937,6 +7959,8 @@ swatch	Yellow Green	Verde-amarelado
 @msg	No bridge of this width fits across the selected art	Nenhuma ponte desta largura cabe na arte selecionada
 @msg	Some islands could not be joined to the area around the art	Algumas ilhas não puderam ser unidas à área ao redor da arte
 @msg	`width` must be from {lo} to {hi} pt	`width` deve estar entre {lo} e {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` deve estar entre -180 e 180 graus
+@msg	`roundness` must be from 1 to 100%	`roundness` deve estar entre 1 e 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve ser um número inteiro de 1 a {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Caixa e Linhas de Descasque…
 	Weed Box and Lines	Caixa e Linhas de Descasque

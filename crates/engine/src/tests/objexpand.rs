@@ -278,6 +278,30 @@ fn each_copys_shadow_expands_as_the_canvas_draws_it() {
     assert_eq!(diff, 0, "{diff} pixels differ");
 }
 
+/// Each copy of a fill's own Transform effect, and each copy of its object's Transform effect,
+/// draws the fill's drop shadow under itself, scaled with it, and Expand Appearance keeps those
+/// shadows: the copy (10..50 across, 90..130 down) has its own shadow 40 pt to its right.
+#[test]
+fn each_copys_fill_shadow_expands_as_the_canvas_draws_it() {
+    let shadow = json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+    let copies = json!({"scaleH": 200, "scaleV": 200, "moveV": 80, "copies": 1});
+    for own in [true, false] {
+        let mut s = session();
+        run(&mut s, "shape.rectangle", json!({"x": 20, "y": 20, "width": 20, "height": 20}));
+        run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+        run(&mut s, "paint.setStroke", json!({"none": true}));
+        run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "params": shadow, "item": 0}));
+        let item = if own { json!(0) } else { json!(null) };
+        run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": copies, "item": item}));
+        let before = render(&s);
+        assert_eq!(before.pixel(80, 110), [0, 255, 0, 255], "own {own}: the copy's shadow");
+        run(&mut s, "effect.expandAppearance", json!({}));
+        let after = render(&s);
+        let diff = differing(&before, &after, 64);
+        assert_eq!(diff, 0, "own {own}: {diff} pixels differ");
+    }
+}
+
 /// Each copy of a group's Transform effect draws the drop shadow listed before the effect under
 /// itself, of both its squares together and scaled with it, and Expand Appearance keeps those
 /// shadows: the squares (20..40 together) have their shadow 20 pt to their right, and their copy
