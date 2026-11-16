@@ -835,6 +835,20 @@ look was edited keep their look. Read as a source, by `graphicStyle.new`, `graph
 style link of its own gives the look and the style link of the topmost path directly in it, and a move with
 `appearance.transfer` clears each of those paths; a series group that has one of them is read itself.
 
+The commands in the paragraph above read a graph's Axes group and Legend group, given by id or selected with Group
+Selection, as they read a series group: the Axes group stands for the axis lines, tick marks, radar rings and labels
+directly in it, and the Legend group for the legend labels directly in it. The graph stores what they set for every
+line and label of each kind, as described below for a line or label given itself, and the groups keep no rows of their
+own. An Axes or Legend group that has a fill or stroke row of its own, or holds no line or label, is edited itself,
+except by `graphicStyle.redefine`, which passes the style to the lines and labels of a linked group whatever the group
+holds. An `index`, `indices` or fill or stroke `item` given an Axes or Legend group whose lines and labels have
+different rows, as the lines and labels of a new graph do, is an error unless `aligned` is true, which makes it a row
+of the stack of the backmost line or label in the group, and `appearance.moveItem` does not move the rows of such a
+group. With `aligned`, the graph stores the rows of only the lines and labels that have that row; a kind of label none
+of whose labels has it keeps what it stored before. The graph keeps no graphic style link on its lines and
+labels: they keep the look of a style applied to them, and are unlinked when the graph is drawn again. The commands
+find these groups by their names, so a renamed Axes or Legend group is edited itself.
+
 `transparency.set` and `object.setProps` with an opacity, blend mode, isolation, knockout or knockout shape for the
 object, given a series group's id or the selected series group, set them on the group itself, and the graph stores them
 for that series. The series group has them again when the graph is drawn again, and they apply to the group as a whole
@@ -843,10 +857,12 @@ in addition to each path's own opacity and blend mode. `addon.arrange.randomizeO
 what they change on the group the same way. Each of the commands above that clears the group's own opacity, blend mode, isolation
 and knockout also removes what the graph stores for it.
 
-The other commands given a series group's id edit the group itself, and the graph does not store what they set on it:
-the `effect.*` commands and `appearance.addEffect`, and the paint, stroke and gradient commands with a fill or stroke
-`item`, which is a row of the group's own stack. The Appearance panel and `appearance.setActiveItem` read the selected
-group's own rows.
+The other commands given a series group's id, or a graph's Axes or Legend group, edit the group itself, and the graph
+does not store what they set on it: the `effect.*` commands and `appearance.addEffect`, and the paint, stroke and
+gradient commands with a fill or stroke `item`, which is a row of the group's own stack. `transparency.set` and
+`object.setProps` with an opacity or blend mode for the object, given an Axes or Legend group, edit the group itself the
+same way. `paint.setFill`, `paint.setStroke` and the recolor commands given the Axes group store the line rows, as
+described below. The Appearance panel and `appearance.setActiveItem` read the selected group's own rows.
 
 When a graph is drawn again (a change to its data, its type, or its column or marker designs), it draws the art of a
 column or marker design in a series again from the design, and an edit made to that art is lost. The art is any object
@@ -909,9 +925,11 @@ placement they set there. A stroke weight and dashes are stored as the label sho
 scaled. When the characters of labels of one kind change differently, the frontmost label sets what the kind keeps. On
 a pie with Legends in Wedges, a fill a command sets on the legend labels is drawn on every wedge, black included, until
 that command is undone; a size, font or stroke change does not set one. Before that, their fill is stored only when
-every legend label the command reaches ends up with the same fill. Otherwise they are drawn again in black, or white on
-a dark wedge. These commands do not store the colors they give a graph's axis lines, ticks and radar rings, which are
-drawn again with their default paint.
+every legend label the command reaches ends up with the same fill. The recolor commands also need to be given the legend
+labels themselves: a recolor given the graph or a group that holds it does not store their fill. When their fill is not
+stored, they are drawn again in black, or white on a dark wedge. `paint.default` stores the black fill and no stroke for
+the kind of each label it reaches, also when the label already showed them. What these commands change on a graph's
+axis lines, tick marks and radar rings is stored as described below.
 
 `text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
 it sets for each kind of label it reaches (value axis numbers, category labels, legend labels), and every label of that
@@ -935,17 +953,52 @@ The `appearance.*` commands, `graphicStyle.apply` and `graphicStyle.redefine`, a
 transparency commands given an `item` (or the Appearance panel's active row) store a graph label's object rows for its
 kind of label: the paint, weight, opacity and blend mode of its topmost visible fill and stroke row, their order and
 their place relative to the Characters row, and the label's object opacity and blend mode. They store them even when the
-label already showed them. `transparency.set` without an `item`, `object.setProps` with an opacity or blend mode, and
+label already showed them, but an edit of a hidden row that leaves the topmost visible rows as they were, and an
+`appearance.moveItem` of the Contents row that leaves them in place, store nothing. `transparency.set` without an `item`, `object.setProps` with an opacity or blend mode, and
 an `appearance.copyFrom` (Eyedropper) pick of transparency store only the label's object opacity and blend mode;
-`appearance.copyFrom` with `append` stores the rows. When the graph is drawn again, every label of that kind gets what
-is stored, with a placed gradient fitted to each label, and the graph saves it as `valuesRows`, `categoriesRows` and
-`legendRows` in its label styles. Rows below the topmost one of each kind, a row's effects, other stroke options (caps,
+`appearance.copyFrom` with `append` stores the rows of the kinds it adds (fill, stroke or both), and the object opacity
+and blend mode only when it also applies the object's transparency. `graphicStyle.apply` with `add` stores the rows of
+the kinds the style shows. Both leave a row of the other kind as the kind keeps it, and `graphicStyle.apply` with `add`
+also leaves the object opacity and blend mode the kind keeps. When the graph is drawn again, every label of that kind gets what is stored, with a placed
+gradient fitted to each label, and the graph saves it as `valuesRows`, `categoriesRows` and `legendRows` in its label styles. Rows below the topmost one of each kind, a row's effects, other stroke options (caps,
 joins, dashes) and effects applied with `effect.*` are not stored. When labels of one kind are edited together, the
 last one in the order of the targets (`ids` as given, otherwise paint order) sets what the kind keeps.
 `appearance.copyFrom` onto the whole text of a label also stores the character attributes it applies and, from type,
 the paragraph attributes. `paint.setFill` and `paint.setStroke` store a character fill or stroke when the paint goes to
 the label's characters (the whole label, or all of its text highlighted with the Type tool), and the row when it goes to
 a row. A stored character gradient also fits each label.
+
+On a graph's axis lines and tick marks, and separately on a radar graph's rings, `paint.setFill`, `paint.setStroke`,
+`addon.color.fillToStroke`, `addon.color.strokeToFill`, the stroke, gradient and recolor commands above, `paint.swap`,
+`paint.default`, the `appearance.*` commands (`appearance.copyFrom`, the Eyedropper, included), `graphicStyle.apply`,
+`graphicStyle.redefine`, `transparency.set` and `object.setProps` store what a line shows for every line of its kind:
+the paint, weight, opacity and blend mode of its topmost visible fill and stroke row, their order, and the line's object
+opacity and blend mode. `paint.setFill`, `paint.setStroke` and the recolor commands also store them when given the
+graph, its Axes group or a group that holds the graph, so the lines keep the paint those commands give a whole graph.
+The other commands store them when given the line itself, and the `appearance.*` and graphic style commands and
+`transparency.set` with an `item` also when given the Axes group, as described above. `transparency.set` without an
+`item` and `object.setProps` store only the object opacity and blend mode. `appearance.clear`, `appearance.transfer`,
+`graphicStyle.apply`, `graphicStyle.redefine`, and `appearance.copyFrom` with every attribute picked up and applied or
+with `append`, store a line's rows even when the line already showed them; `graphicStyle.apply` with `add` and
+`appearance.copyFrom` with `append` store only the kinds of row they add. `appearance.addFill` and
+`appearance.addStroke` store the row they add when it becomes the line's topmost visible row of its kind, also when the
+line already showed its paint, weight and opacity. The other commands, an `appearance.copyFrom`
+of some attributes included, store only what they change on a line's rows; the kind keeps its other attributes, also
+when the line still shows different ones until the graph is drawn again. `paint.setFill`, `paint.setStroke`,
+`addon.color.fillToStroke` and `addon.color.strokeToFill` also store the paint they write on a line's topmost visible
+fill or stroke row when the line already showed it. `appearance.setItem` and an `appearance.copyFrom` of some
+attributes store the paint, stroke weight, and row opacity and blend mode they write to that row in the same way, and
+`stroke.set` stores the weight it writes there. An `appearance.copyFrom` that does not apply
+the object's transparency, and `graphicStyle.apply` with `add`, leave the object opacity and blend mode a kind keeps as
+they are, also when the line still shows other ones. `paint.default` stores the default fill and stroke rows for a
+line's kind even when the line already showed them, and leaves the object opacity and blend mode the kind keeps. Rows
+equal to a kind's default stroke (0.5 pt black for axis lines and tick marks, 0.25 pt gray for rings) are not saved, and
+an edit of a hidden row that leaves the topmost visible rows as they were stores nothing. When one command reaches
+several lines of one kind, the frontmost line in
+paint order sets what the kind keeps, whatever order the `ids` are in. A gradient is stored without its placement, and
+each line fits it when the graph is drawn again. The graph saves the rows as `axisRows` and `ringRows` in its label
+styles. Other stroke options (caps, joins, miter limit, alignment, dashes and arrowheads), rows below the topmost one of
+each kind, and effects are not stored, so a dash set on a line is drawn solid again.
 
 `effect.apply {"effect": "path.outlineObject"}` (Effect › Path › Outline Object) takes no parameters. Type that carries
 it is drawn, exported and expanded as its glyph outlines and stays editable type, and the effects after it reshape
