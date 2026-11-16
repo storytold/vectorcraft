@@ -9357,3 +9357,23 @@ breakText	Glyphs	Гліфи
 	No objects are selected.	Об’єкти не виділено.
 	Open a document to mark its fold lines.	Відкрийте документ, щоб позначити його лінії згину.
 	Remove Fold Line Role	Прибрати тип лінії
+	Check	Перевірити
+	Check Fold Lines	Перевірити лінії згину
+@msg	No cut lines are in the selection.	У виділенні немає ліній різу.
+@msg	No cut lines are in the document.	У документі немає ліній різу.
+@msg	The cut lines do not enclose an area.	Лінії різу не обмежують жодної області.
+@msg	A cut line ends without meeting another cut line.	Лінія різу закінчується, не зустрівши іншої лінії різу.
+@msg	A gap between cut lines was closed.	Зазор між лініями різу закрито.
+@msg	The fold lines are too complex to check.	Лінії згину надто складні для перевірки.
+@msg	A cut line and a crease lie on top of each other.	Лінія різу та лінія біговки лежать одна на одній.
+@msg	No cut lines are among the given objects.	Серед указаних об’єктів немає ліній різу.
+@msg	Two fold lines lie on top of each other.	Дві лінії згину лежать одна на одній.
+@msg	A crease ends inside a panel.	Лінія біговки закінчується всередині панелі.
+@msg	A crease does not divide two panels.	Лінія біговки не розділяє двох панелей.
+@msg	A crease lies outside the cut outline, wholly or in part.	Лінія біговки повністю або частково лежить поза контуром різу.
+@msg	The pieces of a hinge are not on one straight line.	Частини шарніра не лежать на одній прямій.
+@msg	A gap between cut lines is too narrow to tell apart.	Зазор між лініями різу надто вузький, щоб його розрізнити.
+@msg	A cut-out area holds other fold lines or another blank.	Вирізана область містить інші лінії згину або іншу розгортку.
+@msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
+@msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}

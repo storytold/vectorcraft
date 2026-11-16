@@ -9355,3 +9355,23 @@ theme	Appearance	अपीयरेंस
 	No objects are selected.	कोई ऑब्जेक्ट सिलेक्ट नहीं है।
 	Open a document to mark its fold lines.	फ़ोल्ड लाइनें मार्क करने के लिए कोई डॉक्यूमेंट ओपन करें।
 	Remove Fold Line Role	लाइन प्रकार हटाएँ
+	Check	चेक करें
+	Check Fold Lines	फ़ोल्ड लाइनें चेक करें
+@msg	No cut lines are in the selection.	सिलेक्शन में कोई कट लाइन नहीं है।
+@msg	No cut lines are in the document.	डॉक्यूमेंट में कोई कट लाइन नहीं है।
+@msg	The cut lines do not enclose an area.	कट लाइनें कोई एरिया नहीं घेरतीं।
+@msg	A cut line ends without meeting another cut line.	एक कट लाइन किसी दूसरी कट लाइन से मिले बिना खत्म हो जाती है।
+@msg	A gap between cut lines was closed.	कट लाइनों के बीच का गैप बंद कर दिया गया।
+@msg	The fold lines are too complex to check.	फ़ोल्ड लाइनें चेक करने के लिए बहुत जटिल हैं।
+@msg	A cut line and a crease lie on top of each other.	एक कट लाइन और एक क्रीज़ लाइन एक-दूसरे के ऊपर हैं।
+@msg	No cut lines are among the given objects.	दिए गए ऑब्जेक्ट में कोई कट लाइन नहीं है।
+@msg	Two fold lines lie on top of each other.	दो फ़ोल्ड लाइनें एक-दूसरे के ऊपर हैं।
+@msg	A crease ends inside a panel.	एक क्रीज़ लाइन किसी पैनल के अंदर खत्म होती है।
+@msg	A crease does not divide two panels.	एक क्रीज़ लाइन दो पैनलों को अलग नहीं करती।
+@msg	A crease lies outside the cut outline, wholly or in part.	एक क्रीज़ लाइन पूरी तरह या आंशिक रूप से कट आउटलाइन के बाहर है।
+@msg	The pieces of a hinge are not on one straight line.	एक हिंज के हिस्से एक सीधी लाइन पर नहीं हैं।
+@msg	A gap between cut lines is too narrow to tell apart.	कट लाइनों के बीच का गैप पहचानने के लिए बहुत पतला है।
+@msg	A cut-out area holds other fold lines or another blank.	एक कट-आउट एरिया में दूसरी फ़ोल्ड लाइनें या दूसरा ब्लैंक है।
+@msg	A panel is not joined to the rest by a crease.	कोई पैनल किसी क्रीज़ लाइन से बाकी से जुड़ा नहीं है।
+@msg	A fold line is on a non-printing layer.	एक फ़ोल्ड लाइन नॉन-प्रिंटिंग लेयर पर है।
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	पैनल: {panels}, हिंज: {hinges}, एरर: {errors}, वॉर्निंग: {warnings}
