@@ -722,8 +722,9 @@ For SVG/SVGZ, `export`'s top-level `outlineText: true` writes text as paths; DXF
 PDF instead uses `options: {"advanced": {"outlineText": true}}`; its default is false (live text).
 
 With `mods.shift`, a marquee dragged with the Selection tool toggles the objects it reaches (the selected ones leave
-the selection, the others join it, the rest stays), and one dragged with Direct or Group Selection toggles the anchors
-inside it (a path left with none leaves the selection, one with all of them is selected whole). The Lasso adds anchors
+the selection, the others join it, the rest stays), one dragged with Group Selection toggles the objects it touches,
+whole, and one dragged with Direct Selection toggles the anchors inside it (a path left with none leaves the
+selection, one with all of them is selected whole). The Lasso adds anchors
 with `mods.shift` and takes them away with `mods.alt`. They run `select.toggle {ids}` and `select.anchorsMany {items,
 mode: "set"|"add"|"toggle"|"subtract"}`:
 
