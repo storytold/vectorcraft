@@ -1467,7 +1467,7 @@ fn export_bytes_match_shared_writer_goldens() {
             std::fs::write(&path, got).unwrap();
             continue;
         }
-        let expected = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+        let expected = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display())).replace("\r\n", "\n");
         assert_eq!(got, expected, "DXF bytes changed versus {}", path.display());
     }
 }

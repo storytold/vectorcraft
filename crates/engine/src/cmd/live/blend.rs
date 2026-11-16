@@ -368,7 +368,10 @@ pub(super) fn blend_options(s: &mut Session, p: &Value) -> Result<Value> {
         Some(id) => {
             let doc = &s.doc()?.doc;
             match doc.node(id).map(|n| &n.kind) {
-                Some(NodeKind::Blend { spec, children }) => Some((id, (**spec).clone(), children.iter().map(|c| c.id).collect())),
+                Some(NodeKind::Blend { spec, children }) if doc.is_editable(id) => {
+                    Some((id, (**spec).clone(), children.iter().map(|c| c.id).collect()))
+                }
+                Some(NodeKind::Blend { .. }) => return Err(bad(C, "the object is hidden or locked")),
                 _ => return Err(bad(C, "not a blend")),
             }
         }

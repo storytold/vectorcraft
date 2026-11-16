@@ -801,4 +801,23 @@ fn blend_options_targets_specific_id_when_provided() {
     s.execute("object.blend.options", &json!({"orientation": "path"})).unwrap();
     assert_eq!(spec(&s, b1).1.orientation, BlendOrientation::AlignToPath);
     assert_eq!(spec(&s, b2).1.orientation, BlendOrientation::AlignToPath);
+
+    // An explicit id must not bypass the visibility or lock guard.
+    s.execute("select.none", &json!({})).unwrap();
+    for (visible, locked) in [(false, false), (true, true)] {
+        s.edit("state", |d, _| {
+            let target = d.node_mut(b1).unwrap();
+            (target.visible, target.locked) = (visible, locked);
+            Ok(())
+        })
+        .unwrap();
+        let (before, depth) = (spec(&s, b1).1, s.doc().unwrap().history.undo.len());
+        let error = s.execute("object.blend.options", &json!({"id": b1.0, "colorShift": 25})).unwrap_err().to_string();
+        assert!(error.contains("the object is hidden or locked"), "{error}");
+        assert_eq!(spec(&s, b1).1, before);
+        assert_eq!(s.doc().unwrap().history.undo.len(), depth);
+    }
+    let other = rect(&mut s, 300.0, 0.0, 10.0);
+    let error = s.execute("object.blend.options", &json!({"id": other.0, "colorShift": 25})).unwrap_err().to_string();
+    assert!(error.contains("not a blend"), "{error}");
 }

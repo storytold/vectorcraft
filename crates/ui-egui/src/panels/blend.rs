@@ -189,23 +189,23 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Synchronize staged values after external on-canvas edits:
     // If an active parameter changed externally since staging, invalidate its staged value
     // so Preview does not overwrite newer on-canvas edits, while retaining unchanged staged parameters.
-    if let Some(ref staged_active) = draft.staged_active_easing_type {
-        if active_easing.as_ref() != Some(staged_active) {
-            draft.easing_type = None;
-            draft.staged_active_easing_type = None;
-        }
+    if let Some(ref staged_active) = draft.staged_active_easing_type
+        && active_easing.as_ref() != Some(staged_active)
+    {
+        draft.easing_type = None;
+        draft.staged_active_easing_type = None;
     }
-    if let Some(staged_active) = draft.staged_active_ramp {
-        if active_ramp != Some(staged_active) {
-            draft.ramp = None;
-            draft.staged_active_ramp = None;
-        }
+    if let Some(staged_active) = draft.staged_active_ramp
+        && active_ramp != Some(staged_active)
+    {
+        draft.ramp = None;
+        draft.staged_active_ramp = None;
     }
-    if let Some(staged_active) = draft.staged_active_color_shift {
-        if active_shift != Some(staged_active) {
-            draft.color_shift = None;
-            draft.staged_active_color_shift = None;
-        }
+    if let Some(staged_active) = draft.staged_active_color_shift
+        && active_shift != Some(staged_active)
+    {
+        draft.color_shift = None;
+        draft.staged_active_color_shift = None;
     }
 
     let preview = app.ui.blend_preview;
