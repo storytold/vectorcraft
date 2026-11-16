@@ -8870,10 +8870,18 @@ breakText	Glyphs	字形
 	Smooth Bridge…	スムーズブリッジ…
 	Smooth Bridge	スムーズブリッジ
 	Keep Originals	オリジナルを保持
-@msg	select two circles to bridge	ブリッジでつなぐ円を 2 つ選択してください
+@msg	select two or more circles to bridge	ブリッジでつなぐ円を 2 つ以上選択してください
 @msg	one circle is inside the other	一方の円がもう一方の円の内側にあります
 @msg	the circles are too far apart for this radius: raise the radius	この半径では円が離れすぎています：半径を大きくしてください
 @msg	the circles are too far apart for this radius	この半径では円が離れすぎています
+	Constant Gap	一定の間隔
+	Reach:	到達距離:
+@msg	the circles are too far apart for this gap: raise the gap	この間隔では円が離れすぎています：間隔を大きくしてください
+@msg	the circles are too far apart for this gap	この間隔では円が離れすぎています
+@msg	no two circles are within reach: raise the reach	到達距離内にある円の組がありません：到達距離を大きくしてください
+@msg	select at most 2000 circles to bridge	ブリッジでつなぐ円は 2000 個以下で選択してください
+@msg	that makes too many bridges (at most 8000): lower the reach	ブリッジが多すぎます（最大 8000）：到達距離を小さくしてください
+@msg	the bridged circles are too complex to unite	ブリッジでつないだ円が複雑すぎて合体できません
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	破線をパスに拡張
 @msg	select paths with dashed strokes to expand	拡張する破線のパスを選択してください

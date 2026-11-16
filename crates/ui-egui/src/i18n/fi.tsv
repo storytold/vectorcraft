@@ -7411,10 +7411,18 @@ breakText	Glyphs	Merkit
 	Smooth Bridge…	Pehmeä silta…
 	Smooth Bridge	Pehmeä silta
 	Keep Originals	Säilytä alkuperäiset
-@msg	select two circles to bridge	valitse kaksi yhdistettävää ympyrää
+@msg	select two or more circles to bridge	valitse vähintään kaksi yhdistettävää ympyrää
 @msg	one circle is inside the other	toinen ympyrä on toisen sisällä
 @msg	the circles are too far apart for this radius: raise the radius	ympyrät ovat liian kaukana toisistaan tälle säteelle: suurenna sädettä
 @msg	the circles are too far apart for this radius	ympyrät ovat liian kaukana toisistaan tälle säteelle
+	Constant Gap	Vakioväli
+	Reach:	Ulottuvuus:
+@msg	the circles are too far apart for this gap: raise the gap	ympyrät ovat liian kaukana toisistaan tälle välille: suurenna väliä
+@msg	the circles are too far apart for this gap	ympyrät ovat liian kaukana toisistaan tälle välille
+@msg	no two circles are within reach: raise the reach	mitkään kaksi ympyrää eivät ole ulottuvilla: suurenna ulottuvuutta
+@msg	select at most 2000 circles to bridge	valitse enintään 2000 yhdistettävää ympyrää
+@msg	that makes too many bridges (at most 8000): lower the reach	siitä tulee liikaa siltoja (enintään 8000): pienennä ulottuvuutta
+@msg	the bridged circles are too complex to unite	yhdistetyt ympyrät ovat liian monimutkaisia koottaviksi yhdeksi muodoksi
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Laajenna viivat poluiksi
 @msg	select paths with dashed strokes to expand	valitse laajennettavat polut, joissa on katkoviiva

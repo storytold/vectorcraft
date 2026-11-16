@@ -7351,10 +7351,18 @@ breakText	Glyphs	Glifák
 	Smooth Bridge…	Sima híd…
 	Smooth Bridge	Sima híd
 	Keep Originals	Eredetik megtartása
-@msg	select two circles to bridge	jelöljön ki két kört az összekötéshez
+@msg	select two or more circles to bridge	jelöljön ki legalább két kört az összekötéshez
 @msg	one circle is inside the other	az egyik kör a másikon belül van
 @msg	the circles are too far apart for this radius: raise the radius	a körök túl messze vannak egymástól ehhez a sugárhoz: növelje a sugarat
 @msg	the circles are too far apart for this radius	a körök túl messze vannak egymástól ehhez a sugárhoz
+	Constant Gap	Állandó hézag
+	Reach:	Hatótávolság:
+@msg	the circles are too far apart for this gap: raise the gap	a körök túl messze vannak egymástól ehhez a hézaghoz: növelje a hézagot
+@msg	the circles are too far apart for this gap	a körök túl messze vannak egymástól ehhez a hézaghoz
+@msg	no two circles are within reach: raise the reach	nincs két kör hatótávolságon belül: növelje a hatótávolságot
+@msg	select at most 2000 circles to bridge	legfeljebb 2000 kört jelöljön ki az összekötéshez
+@msg	that makes too many bridges (at most 8000): lower the reach	ez túl sok hidat eredményez (legfeljebb 8000): csökkentse a hatótávolságot
+@msg	the bridged circles are too complex to unite	az összekötött körök túl összetettek az egyesítéshez
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Szaggatások kibontása útvonalakká
 @msg	select paths with dashed strokes to expand	jelöljön ki szaggatott körvonalú útvonalakat a kibontáshoz

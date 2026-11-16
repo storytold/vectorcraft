@@ -7415,10 +7415,18 @@ breakText	Glyphs	Glyffer
 	Smooth Bridge…	Blød bro…
 	Smooth Bridge	Blød bro
 	Keep Originals	Behold originaler
-@msg	select two circles to bridge	vælg to cirkler, der skal forbindes
+@msg	select two or more circles to bridge	vælg to eller flere cirkler, der skal forbindes
 @msg	one circle is inside the other	den ene cirkel er inden i den anden
 @msg	the circles are too far apart for this radius: raise the radius	cirklerne er for langt fra hinanden til denne radius: gør radius større
 @msg	the circles are too far apart for this radius	cirklerne er for langt fra hinanden til denne radius
+	Constant Gap	Konstant afstand
+	Reach:	Rækkevidde:
+@msg	the circles are too far apart for this gap: raise the gap	cirklerne er for langt fra hinanden til denne afstand: gør afstanden større
+@msg	the circles are too far apart for this gap	cirklerne er for langt fra hinanden til denne afstand
+@msg	no two circles are within reach: raise the reach	ingen to cirkler er inden for rækkevidde: gør rækkevidden større
+@msg	select at most 2000 circles to bridge	vælg højst 2000 cirkler, der skal forbindes
+@msg	that makes too many bridges (at most 8000): lower the reach	det giver for mange broer (højst 8000): gør rækkevidden mindre
+@msg	the bridged circles are too complex to unite	de forbundne cirkler er for komplekse til at blive samlet
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Udvid streger til stier
 @msg	select paths with dashed strokes to expand	vælg stier med stiplet streg, der skal udvides

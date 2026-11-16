@@ -258,7 +258,8 @@ pub fn check_keys(id: &str, doc: &'static str, params: &Value) -> Result<()> {
 
 /// Parameters a command takes instead of one another: (command, key, other key). Giving both,
 /// neither null, is a parameter error ([`check_exclusive_keys`]).
-const EXCLUSIVE_KEYS: &[(&str, &str, &str)] = &[("addon.pathtools.cornerSet", "items", "ids"), ("addon.pathtools.cornerRemove", "items", "ids")];
+const EXCLUSIVE_KEYS: &[(&str, &str, &str)] =
+    &[("addon.pathtools.cornerSet", "items", "ids"), ("addon.pathtools.cornerRemove", "items", "ids"), ("addon.pathtools.bridge", "radius", "gap")];
 
 /// `params` of command `id` give at most one of each pair in [`EXCLUSIVE_KEYS`], or the parameter
 /// error naming the pair.

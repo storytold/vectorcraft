@@ -6975,10 +6975,18 @@ breakText	Glyphs	Гліфи
 	Smooth Bridge…	Плавний міст…
 	Smooth Bridge	Плавний міст
 	Keep Originals	Зберегти оригінали
-@msg	select two circles to bridge	виділіть два кола для з’єднання
+@msg	select two or more circles to bridge	виділіть два або більше кіл для з’єднання
 @msg	one circle is inside the other	одне коло всередині іншого
 @msg	the circles are too far apart for this radius: raise the radius	кола надто далеко одне від одного для цього радіуса: збільште радіус
 @msg	the circles are too far apart for this radius	кола надто далеко одне від одного для цього радіуса
+	Constant Gap	Сталий проміжок
+	Reach:	Охоплення:
+@msg	the circles are too far apart for this gap: raise the gap	кола надто далеко одне від одного для цього проміжку: збільште проміжок
+@msg	the circles are too far apart for this gap	кола надто далеко одне від одного для цього проміжку
+@msg	no two circles are within reach: raise the reach	жодні два кола не перебувають у межах охоплення: збільште охоплення
+@msg	select at most 2000 circles to bridge	виділіть не більше 2000 кіл для з’єднання
+@msg	that makes too many bridges (at most 8000): lower the reach	це дає забагато мостів (не більше 8000): зменште охоплення
+@msg	the bridged circles are too complex to unite	з’єднані кола надто складні для об’єднання
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Розібрати штрихи на контури
 @msg	select paths with dashed strokes to expand	виділіть контури зі штриховим обведенням для розбору

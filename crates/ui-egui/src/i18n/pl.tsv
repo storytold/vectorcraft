@@ -7222,10 +7222,18 @@ breakText	Glyphs	Glify
 	Smooth Bridge…	Gładki most…
 	Smooth Bridge	Gładki most
 	Keep Originals	Zachowaj oryginały
-@msg	select two circles to bridge	zaznacz dwa okręgi do połączenia
+@msg	select two or more circles to bridge	zaznacz co najmniej dwa okręgi do połączenia
 @msg	one circle is inside the other	jeden okrąg jest wewnątrz drugiego
 @msg	the circles are too far apart for this radius: raise the radius	okręgi są zbyt daleko od siebie dla tego promienia: zwiększ promień
 @msg	the circles are too far apart for this radius	okręgi są zbyt daleko od siebie dla tego promienia
+	Constant Gap	Stały odstęp
+	Reach:	Zasięg:
+@msg	the circles are too far apart for this gap: raise the gap	okręgi są zbyt daleko od siebie dla tego odstępu: zwiększ odstęp
+@msg	the circles are too far apart for this gap	okręgi są zbyt daleko od siebie dla tego odstępu
+@msg	no two circles are within reach: raise the reach	żadne dwa okręgi nie są w zasięgu: zwiększ zasięg
+@msg	select at most 2000 circles to bridge	zaznacz najwyżej 2000 okręgów do połączenia
+@msg	that makes too many bridges (at most 8000): lower the reach	to daje zbyt wiele mostów (najwyżej 8000): zmniejsz zasięg
+@msg	the bridged circles are too complex to unite	połączone okręgi są zbyt złożone, aby je scalić
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Rozszerz kreski na ścieżki
 @msg	select paths with dashed strokes to expand	zaznacz ścieżki z przerywanym konturem do rozszerzenia

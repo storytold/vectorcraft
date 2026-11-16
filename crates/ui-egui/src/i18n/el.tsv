@@ -7335,10 +7335,18 @@ breakText	Glyphs	Γλύφοι
 	Smooth Bridge…	Ομαλή γέφυρα…
 	Smooth Bridge	Ομαλή γέφυρα
 	Keep Originals	Διατήρηση πρωτοτύπων
-@msg	select two circles to bridge	επιλέξτε δύο κύκλους για γεφύρωση
+@msg	select two or more circles to bridge	επιλέξτε δύο ή περισσότερους κύκλους για γεφύρωση
 @msg	one circle is inside the other	ο ένας κύκλος βρίσκεται μέσα στον άλλο
 @msg	the circles are too far apart for this radius: raise the radius	οι κύκλοι απέχουν πολύ μεταξύ τους για αυτή την ακτίνα: αυξήστε την ακτίνα
 @msg	the circles are too far apart for this radius	οι κύκλοι απέχουν πολύ μεταξύ τους για αυτή την ακτίνα
+	Constant Gap	Σταθερή απόσταση
+	Reach:	Εμβέλεια:
+@msg	the circles are too far apart for this gap: raise the gap	οι κύκλοι απέχουν πολύ μεταξύ τους για αυτή την απόσταση: αυξήστε την απόσταση
+@msg	the circles are too far apart for this gap	οι κύκλοι απέχουν πολύ μεταξύ τους για αυτή την απόσταση
+@msg	no two circles are within reach: raise the reach	δεν υπάρχουν δύο κύκλοι εντός εμβέλειας: αυξήστε την εμβέλεια
+@msg	select at most 2000 circles to bridge	επιλέξτε έως 2000 κύκλους για γεφύρωση
+@msg	that makes too many bridges (at most 8000): lower the reach	αυτό δημιουργεί πάρα πολλές γέφυρες (έως 8000): μειώστε την εμβέλεια
+@msg	the bridged circles are too complex to unite	οι γεφυρωμένοι κύκλοι είναι πολύ σύνθετοι για ένωση
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Επέκταση παυλών σε διαδρομές
 @msg	select paths with dashed strokes to expand	επιλέξτε διαδρομές με διακεκομμένο περίγραμμα για επέκταση

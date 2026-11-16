@@ -6957,10 +6957,18 @@ breakText	Glyphs	글리프
 	Smooth Bridge…	부드러운 브리지…
 	Smooth Bridge	부드러운 브리지
 	Keep Originals	원본 유지
-@msg	select two circles to bridge	연결할 원 두 개를 선택하십시오
+@msg	select two or more circles to bridge	연결할 원을 두 개 이상 선택하십시오
 @msg	one circle is inside the other	한 원이 다른 원 안에 있습니다
 @msg	the circles are too far apart for this radius: raise the radius	이 반경에서는 원이 너무 멀리 떨어져 있습니다. 반경을 늘리십시오
 @msg	the circles are too far apart for this radius	이 반경에서는 원이 너무 멀리 떨어져 있습니다
+	Constant Gap	일정한 간격
+	Reach:	도달 거리:
+@msg	the circles are too far apart for this gap: raise the gap	이 간격에서는 원이 너무 멀리 떨어져 있습니다. 간격을 늘리십시오
+@msg	the circles are too far apart for this gap	이 간격에서는 원이 너무 멀리 떨어져 있습니다
+@msg	no two circles are within reach: raise the reach	도달 거리 안에 있는 두 원이 없습니다. 도달 거리를 늘리십시오
+@msg	select at most 2000 circles to bridge	연결할 원을 2000개 이하로 선택하십시오
+@msg	that makes too many bridges (at most 8000): lower the reach	브리지가 너무 많아집니다(최대 8000개). 도달 거리를 줄이십시오
+@msg	the bridged circles are too complex to unite	연결된 원이 너무 복잡하여 합칠 수 없습니다
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	대시를 패스로 확장
 @msg	select paths with dashed strokes to expand	확장할 점선 획의 패스를 선택하십시오

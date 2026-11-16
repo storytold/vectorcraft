@@ -7016,10 +7016,18 @@ breakText	Glyphs	字符
 	Smooth Bridge…	平滑橋接…
 	Smooth Bridge	平滑橋接
 	Keep Originals	保留原始物件
-@msg	select two circles to bridge	請選取兩個要橋接的圓形
+@msg	select two or more circles to bridge	請選取兩個或更多要橋接的圓形
 @msg	one circle is inside the other	一個圓形位於另一個圓形內
 @msg	the circles are too far apart for this radius: raise the radius	就此半徑而言，兩個圓形相距太遠：請增加半徑
 @msg	the circles are too far apart for this radius	就此半徑而言，兩個圓形相距太遠
+	Constant Gap	固定間隙
+	Reach:	範圍：
+@msg	the circles are too far apart for this gap: raise the gap	就此間隙而言，兩個圓形相距太遠：請增加間隙
+@msg	the circles are too far apart for this gap	就此間隙而言，兩個圓形相距太遠
+@msg	no two circles are within reach: raise the reach	範圍內沒有任何兩個圓形：請增加範圍
+@msg	select at most 2000 circles to bridge	最多選取 2000 個圓形進行橋接
+@msg	that makes too many bridges (at most 8000): lower the reach	這會產生過多橋接（最多 8000 個）：請減少範圍
+@msg	the bridged circles are too complex to unite	橋接的圓形過於複雜，無法合併
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	將短破折號展開為路徑
 @msg	select paths with dashed strokes to expand	請選取要展開的虛線筆畫路徑

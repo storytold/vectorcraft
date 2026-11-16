@@ -6782,10 +6782,18 @@ shape	Open	Otvoren
 	Smooth Bridge…	Glatki most…
 	Smooth Bridge	Glatki most
 	Keep Originals	Zadrži originale
-@msg	select two circles to bridge	odaberite dva kruga za premošćavanje
+@msg	select two or more circles to bridge	odaberite dva ili više krugova za premošćavanje
 @msg	one circle is inside the other	jedan krug je unutar drugog
 @msg	the circles are too far apart for this radius: raise the radius	krugovi su predaleko jedan od drugog za ovaj radijus: povećajte radijus
 @msg	the circles are too far apart for this radius	krugovi su predaleko jedan od drugog za ovaj radijus
+	Constant Gap	Stalni razmak
+	Reach:	Domet:
+@msg	the circles are too far apart for this gap: raise the gap	krugovi su predaleko jedan od drugog za ovaj razmak: povećajte razmak
+@msg	the circles are too far apart for this gap	krugovi su predaleko jedan od drugog za ovaj razmak
+@msg	no two circles are within reach: raise the reach	nijedna dva kruga nisu u dometu: povećajte domet
+@msg	select at most 2000 circles to bridge	odaberite najviše 2000 krugova za premošćavanje
+@msg	that makes too many bridges (at most 8000): lower the reach	to daje previše mostova (najviše 8000): smanjite domet
+@msg	the bridged circles are too complex to unite	premošteni krugovi su previše složeni za spajanje
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Proširi crtice u putanje
 @msg	select paths with dashed strokes to expand	odaberite putanje s isprekidanim potezom za proširivanje

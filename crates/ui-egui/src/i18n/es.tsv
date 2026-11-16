@@ -7323,10 +7323,18 @@ breakText	Glyphs	Glifos
 	Smooth Bridge…	Puente suave…
 	Smooth Bridge	Puente suave
 	Keep Originals	Conservar originales
-@msg	select two circles to bridge	seleccione dos círculos para unir
+@msg	select two or more circles to bridge	seleccione dos o más círculos para unir
 @msg	one circle is inside the other	un círculo está dentro del otro
 @msg	the circles are too far apart for this radius: raise the radius	los círculos están demasiado separados para este radio: aumente el radio
 @msg	the circles are too far apart for this radius	los círculos están demasiado separados para este radio
+	Constant Gap	Separación constante
+	Reach:	Alcance:
+@msg	the circles are too far apart for this gap: raise the gap	los círculos están demasiado separados para esta separación: aumente la separación
+@msg	the circles are too far apart for this gap	los círculos están demasiado separados para esta separación
+@msg	no two circles are within reach: raise the reach	no hay dos círculos dentro del alcance: aumente el alcance
+@msg	select at most 2000 circles to bridge	seleccione como máximo 2000 círculos para unir
+@msg	that makes too many bridges (at most 8000): lower the reach	eso crea demasiados puentes (como máximo 8000): reduzca el alcance
+@msg	the bridged circles are too complex to unite	los círculos unidos son demasiado complejos para combinarlos
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandir guiones en trazados
 @msg	select paths with dashed strokes to expand	seleccione trazados con trazo discontinuo para expandir

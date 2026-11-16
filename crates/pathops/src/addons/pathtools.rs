@@ -4,7 +4,8 @@
 //! tool shows over a path, open paths lengthened or shortened at an end ([`extend`]), the places
 //! where paths cross ([`crossings`]), the stretches between them ([`spans`]), anchors slid along
 //! their path ([`slide`]), touching edges merged ([`shared_edge`]), paths divided into dashes
-//! ([`divide_dashes`]), two circles joined by a smooth bridge ([`smooth_bridge`]) and the
+//! ([`divide_dashes`]), two circles joined by a smooth bridge ([`smooth_bridge`]) or many circles
+//! joined to their neighbors ([`bridge_many`]) and the
 //! Parametric Shape Tool's shapes ([`shapes`]).
 
 mod bridge;
@@ -23,7 +24,9 @@ use std::collections::BTreeSet;
 use kurbo::{CubicBez, ParamCurve, ParamCurveArclen, ParamCurveNearest, Point, Vec2};
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
 
-pub use bridge::{BridgeError, Circle, circle_of, smooth_bridge};
+pub use bridge::{
+    ArcRadius, BridgeError, Bridged, Circle, Joined, MAX_BRIDGED_CIRCLES, MAX_BRIDGES, ManyError, bridge_many, circle_of, smooth_bridge,
+};
 pub use crossings::{MAX_CROSSED_BY_SEGMENTS, MAX_CROSSING_SEGMENTS, Place, Work, crossings, crossings_on, crossings_on_within, insert_at};
 pub use dashes::{DashSpec, Piece, divide_dashes};
 pub use extend::{ExtendMode, extend_length_to, extend_open};

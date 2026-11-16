@@ -11845,18 +11845,33 @@ Commands:
   drawn, and the path's fills stay on it, below its dashes (a path without fills goes). A compound path's dashes are
   plain paths with its appearance. Paths without a dashed stroke stay as they are, and it is an error if none has one.
   The dashes are selected; more than 100,000 (or a pattern too fine to draw) is refused. → `{ids, dashes}`.
-- `addon.pathtools.bridge {radius?, keepOriginals?, ids?}` joins two circles (`ids`, default: the selection; paths
-  whose outline is a circle, not hidden or locked) into one closed outline, as one undo step (Object › Plug-ins › Path
-  Precision Tools › Smooth Bridge…). The outline goes around each circle on its side away from the other and along two
-  concave arcs, one on each side of the line through the centers, each touching both circles from outside, so every
-  anchor is smooth. `radius` is the arcs' radius as a percentage of the smaller circle's radius (1 to 1,000, 100 by
-  default): a larger radius makes a wider, gentler bridge. Overlapping and touching circles are joined at every radius.
-  One circle inside the other is an error, and so are circles too far apart for the radius: the arcs would not reach
-  both circles, or would cross before they do. The error suggests a larger radius only when one up to 1,000 would
-  bridge the circles. The outline replaces the two circles, painted as the upper one (a plain
-  path), unless `keepOriginals` is true: then it goes directly above the upper circle, painted as it, and the circles
-  stay. The outline is selected. → `{id}`. Smooth Bridge… opens a dialog (`ui.menuDialog {command}`, kind
-  `smoothBridge`) with a Radius field in percent, Keep Originals and Preview.
+- `addon.pathtools.bridge {radius?, gap?, reach?, keepOriginals?, ids?}` joins circles (`ids`, default: the selection;
+  paths whose outline is a circle, not hidden or locked) into metaball (aka meatball) shapes, as one undo step (Object ›
+  Plug-ins › Path Precision Tools › Smooth Bridge…). Two circles become one closed outline that goes around each circle
+  on its side away from the other and along two concave arcs, one on each side of the line through the centers, each
+  touching both circles from outside, so every anchor is smooth. `radius` is the arcs' radius as a percentage of the
+  smaller circle's radius (1 to 1,000, 100 by default): a larger radius makes a wider, gentler bridge. `gap` (0 to 1,000
+  pt) sets the arcs' radius instead to the smaller circle's radius plus the gap, so each arc stays that gap away from a
+  circle of the smaller circle's size about the arc's center. For equal circles that gap apart, that center is where a
+  third circle the gap from both would sit, as in a triangular grid, so the channels around an empty place in such a
+  grid are one width; in a square grid they are not. Giving both `radius` and `gap` is an error. Overlapping and
+  touching circles are joined at every radius. One circle inside the other is an error, and so are circles too far apart
+  for the radius or gap: the arcs would not reach both circles, or would cross before they do. The error suggests a
+  larger radius or gap only when the largest (1,000% or 1,000 pt) would bridge the circles. The outline replaces the two
+  circles, painted as the upper one (a plain path), unless `keepOriginals` is true: then it goes directly above the
+  upper circle, painted as it, and the circles stay. The outline is selected. Two circles are bridged however far apart
+  their outlines are; `reach` does not apply to them.
+  With three or more circles, every two whose outlines are at most `reach` apart (0 to 10,000 pt, 10 by default;
+  overlapping ones included) are bridged the same way, and the bridges that connect are united into one shape each,
+  which can have holes where bridges enclose space; holes smaller than 1% of the smallest circle's area are filled. A
+  pair within reach but too far apart for the radius or gap gets no bridge. Each shape replaces its circles, painted as
+  the topmost of them and in its place, or with `keepOriginals` goes directly above that circle. A circle bridged to no
+  other stays as it is. The shapes and the circles left as they are are selected. It is an error when any pair within
+  reach has one circle inside the other, when no pair within reach can be bridged (with the same suggestion of a larger
+  radius or gap), when no two circles are within reach, and above 2,000 circles or 8,000 bridges. → `{ids, alone}`:
+  the shapes and the circles left as they are, with `id` as well for two circles. Smooth Bridge… opens a dialog
+  (`ui.menuDialog {command}`, kind `smoothBridge`) with Constant Gap (a Gap field in place of the Radius field in
+  percent), Reach (unavailable with two circles selected), Keep Originals and Preview.
 - `addon.pathtools.cornerSet {ids?, anchors?, items?, radius, kind?, every?, minAngle?, maxAngle?}` cuts live corners, the ones Direct Selection's
   corner widgets and the Corners dialog edit, as one undo step. `ids` (default: the selection) are the paths and
   `anchors` the anchor indices of each path's outline with no corners cut; without `anchors`, a path's direct-selected

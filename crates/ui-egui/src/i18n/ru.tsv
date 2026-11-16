@@ -7356,10 +7356,18 @@ breakText	Glyphs	Глифы
 	Smooth Bridge…	Плавный мост…
 	Smooth Bridge	Плавный мост
 	Keep Originals	Сохранить оригиналы
-@msg	select two circles to bridge	выделите две окружности для соединения
+@msg	select two or more circles to bridge	выделите две или более окружностей для соединения
 @msg	one circle is inside the other	одна окружность находится внутри другой
 @msg	the circles are too far apart for this radius: raise the radius	окружности слишком далеко друг от друга для этого радиуса: увеличьте радиус
 @msg	the circles are too far apart for this radius	окружности слишком далеко друг от друга для этого радиуса
+	Constant Gap	Постоянный зазор
+	Reach:	Охват:
+@msg	the circles are too far apart for this gap: raise the gap	окружности слишком далеко друг от друга для этого зазора: увеличьте зазор
+@msg	the circles are too far apart for this gap	окружности слишком далеко друг от друга для этого зазора
+@msg	no two circles are within reach: raise the reach	нет двух окружностей в пределах охвата: увеличьте охват
+@msg	select at most 2000 circles to bridge	выделите не более 2000 окружностей для соединения
+@msg	that makes too many bridges (at most 8000): lower the reach	получается слишком много мостов (не более 8000): уменьшите охват
+@msg	the bridged circles are too complex to unite	соединяемые окружности слишком сложны для объединения
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Разобрать штрихи на контуры
 @msg	select paths with dashed strokes to expand	выделите контуры со штриховой обводкой для разбора

@@ -6957,10 +6957,18 @@ breakText	Glyphs	Glyphen
 	Smooth Bridge…	Weiche Brücke…
 	Smooth Bridge	Weiche Brücke
 	Keep Originals	Originale beibehalten
-@msg	select two circles to bridge	wählen Sie zwei Kreise zum Verbinden aus
+@msg	select two or more circles to bridge	wählen Sie zwei oder mehr Kreise zum Verbinden aus
 @msg	one circle is inside the other	ein Kreis liegt im anderen
 @msg	the circles are too far apart for this radius: raise the radius	die Kreise liegen für diesen Radius zu weit auseinander: vergrößern Sie den Radius
 @msg	the circles are too far apart for this radius	die Kreise liegen für diesen Radius zu weit auseinander
+	Constant Gap	Konstanter Abstand
+	Reach:	Reichweite:
+@msg	the circles are too far apart for this gap: raise the gap	die Kreise liegen für diesen Abstand zu weit auseinander: vergrößern Sie den Abstand
+@msg	the circles are too far apart for this gap	die Kreise liegen für diesen Abstand zu weit auseinander
+@msg	no two circles are within reach: raise the reach	keine zwei Kreise liegen in Reichweite: vergrößern Sie die Reichweite
+@msg	select at most 2000 circles to bridge	wählen Sie höchstens 2000 Kreise zum Verbinden aus
+@msg	that makes too many bridges (at most 8000): lower the reach	das ergibt zu viele Brücken (höchstens 8000): verringern Sie die Reichweite
+@msg	the bridged circles are too complex to unite	die verbundenen Kreise sind zu komplex zum Vereinen
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Striche in Pfade umwandeln
 @msg	select paths with dashed strokes to expand	wählen Sie Pfade mit gestrichelter Kontur zum Umwandeln aus

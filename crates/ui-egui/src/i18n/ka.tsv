@@ -9482,10 +9482,18 @@ breakText	Glyphs	გლიფები
 	Smooth Bridge…	გლუვი ხიდი…
 	Smooth Bridge	გლუვი ხიდი
 	Keep Originals	ორიგინალების შენარჩუნება
-@msg	select two circles to bridge	აირჩიეთ ორი წრე დასაკავშირებლად
+@msg	select two or more circles to bridge	აირჩიეთ ორი ან მეტი წრე დასაკავშირებლად
 @msg	one circle is inside the other	ერთი წრე მეორის შიგნითაა
 @msg	the circles are too far apart for this radius: raise the radius	ამ რადიუსისთვის წრეები ერთმანეთისგან ძალიან შორსაა: გაზარდეთ რადიუსი
 @msg	the circles are too far apart for this radius	ამ რადიუსისთვის წრეები ერთმანეთისგან ძალიან შორსაა
+	Constant Gap	მუდმივი ღრეჩო
+	Reach:	მიწვდომა:
+@msg	the circles are too far apart for this gap: raise the gap	ამ ღრეჩოსთვის წრეები ერთმანეთისგან ძალიან შორსაა: გაზარდეთ ღრეჩო
+@msg	the circles are too far apart for this gap	ამ ღრეჩოსთვის წრეები ერთმანეთისგან ძალიან შორსაა
+@msg	no two circles are within reach: raise the reach	არცერთი ორი წრე არ არის მიწვდომის ფარგლებში: გაზარდეთ მიწვდომა
+@msg	select at most 2000 circles to bridge	აირჩიეთ არაუმეტეს 2000 წრე დასაკავშირებლად
+@msg	that makes too many bridges (at most 8000): lower the reach	ეს ძალიან ბევრ ხიდს ქმნის (არაუმეტეს 8000): შეამცირეთ მიწვდომა
+@msg	the bridged circles are too complex to unite	დაკავშირებული წრეები ძალიან რთულია გასაერთიანებლად
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	ტირეების ტრაექტორიებად გაშლა
 @msg	select paths with dashed strokes to expand	აირჩიეთ გასაშლელი ტირეებიანი ხაზის კონტურები

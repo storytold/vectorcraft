@@ -7361,10 +7361,18 @@ breakText	Glyphs	Glyphes
 	Smooth Bridge…	Pont lissé…
 	Smooth Bridge	Pont lissé
 	Keep Originals	Conserver les originaux
-@msg	select two circles to bridge	sélectionnez deux cercles à relier
+@msg	select two or more circles to bridge	sélectionnez au moins deux cercles à relier
 @msg	one circle is inside the other	un cercle est à l’intérieur de l’autre
 @msg	the circles are too far apart for this radius: raise the radius	les cercles sont trop éloignés pour ce rayon : augmentez le rayon
 @msg	the circles are too far apart for this radius	les cercles sont trop éloignés pour ce rayon
+	Constant Gap	Écart constant
+	Reach:	Portée :
+@msg	the circles are too far apart for this gap: raise the gap	les cercles sont trop éloignés pour cet écart : augmentez l’écart
+@msg	the circles are too far apart for this gap	les cercles sont trop éloignés pour cet écart
+@msg	no two circles are within reach: raise the reach	aucun couple de cercles n’est à portée : augmentez la portée
+@msg	select at most 2000 circles to bridge	sélectionnez au plus 2000 cercles à relier
+@msg	that makes too many bridges (at most 8000): lower the reach	cela crée trop de ponts (au plus 8000) : réduisez la portée
+@msg	the bridged circles are too complex to unite	les cercles reliés sont trop complexes pour être réunis
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Décomposer les tirets en tracés
 @msg	select paths with dashed strokes to expand	sélectionnez des tracés à contour pointillé à décomposer

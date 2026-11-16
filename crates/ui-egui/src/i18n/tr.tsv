@@ -9244,10 +9244,18 @@ breakText	Glyphs	Glifler
 	Smooth Bridge…	Yumuşak Köprü…
 	Smooth Bridge	Yumuşak Köprü
 	Keep Originals	Orijinalleri Koru
-@msg	select two circles to bridge	köprüyle birleştirilecek iki daire seçin
+@msg	select two or more circles to bridge	köprüyle birleştirilecek iki veya daha fazla daire seçin
 @msg	one circle is inside the other	bir daire diğerinin içinde
 @msg	the circles are too far apart for this radius: raise the radius	daireler bu yarıçap için birbirinden çok uzak: yarıçapı artırın
 @msg	the circles are too far apart for this radius	daireler bu yarıçap için birbirinden çok uzak
+	Constant Gap	Sabit Boşluk
+	Reach:	Erişim:
+@msg	the circles are too far apart for this gap: raise the gap	daireler bu boşluk için birbirinden çok uzak: boşluğu artırın
+@msg	the circles are too far apart for this gap	daireler bu boşluk için birbirinden çok uzak
+@msg	no two circles are within reach: raise the reach	erişim içinde hiçbir iki daire yok: erişimi artırın
+@msg	select at most 2000 circles to bridge	köprüyle birleştirmek için en fazla 2000 daire seçin
+@msg	that makes too many bridges (at most 8000): lower the reach	bu çok fazla köprü oluşturur (en fazla 8000): erişimi azaltın
+@msg	the bridged circles are too complex to unite	köprülenen daireler birleştirilemeyecek kadar karmaşık
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Tireleri Yollara Genişlet
 @msg	select paths with dashed strokes to expand	genişletilecek kesikli konturlu yolları seçin

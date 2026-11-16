@@ -9240,10 +9240,18 @@ breakText	Glyphs	Glyphs
 	Smooth Bridge…	Vloeiende brug…
 	Smooth Bridge	Vloeiende brug
 	Keep Originals	Originelen behouden
-@msg	select two circles to bridge	selecteer twee cirkels om te verbinden
+@msg	select two or more circles to bridge	selecteer twee of meer cirkels om te verbinden
 @msg	one circle is inside the other	de ene cirkel ligt binnen de andere
 @msg	the circles are too far apart for this radius: raise the radius	de cirkels liggen te ver uit elkaar voor deze straal: vergroot de straal
 @msg	the circles are too far apart for this radius	de cirkels liggen te ver uit elkaar voor deze straal
+	Constant Gap	Constante tussenruimte
+	Reach:	Bereik:
+@msg	the circles are too far apart for this gap: raise the gap	de cirkels liggen te ver uit elkaar voor deze tussenruimte: vergroot de tussenruimte
+@msg	the circles are too far apart for this gap	de cirkels liggen te ver uit elkaar voor deze tussenruimte
+@msg	no two circles are within reach: raise the reach	geen twee cirkels liggen binnen bereik: vergroot het bereik
+@msg	select at most 2000 circles to bridge	selecteer hoogstens 2000 cirkels om te verbinden
+@msg	that makes too many bridges (at most 8000): lower the reach	dat geeft te veel bruggen (hoogstens 8000): verklein het bereik
+@msg	the bridged circles are too complex to unite	de verbonden cirkels zijn te complex om samen te voegen
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Streepjes uitbreiden tot paden
 @msg	select paths with dashed strokes to expand	selecteer paden met een streepjeslijn om uit te breiden

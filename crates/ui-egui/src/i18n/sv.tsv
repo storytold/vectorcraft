@@ -7382,10 +7382,18 @@ breakText	Glyphs	Glyfer
 	Smooth Bridge…	Mjuk brygga…
 	Smooth Bridge	Mjuk brygga
 	Keep Originals	Behåll original
-@msg	select two circles to bridge	markera två cirklar att förbinda
+@msg	select two or more circles to bridge	markera två eller fler cirklar att förbinda
 @msg	one circle is inside the other	den ena cirkeln ligger inuti den andra
 @msg	the circles are too far apart for this radius: raise the radius	cirklarna ligger för långt ifrån varandra för den här radien: öka radien
 @msg	the circles are too far apart for this radius	cirklarna ligger för långt ifrån varandra för den här radien
+	Constant Gap	Konstant mellanrum
+	Reach:	Räckvidd:
+@msg	the circles are too far apart for this gap: raise the gap	cirklarna ligger för långt ifrån varandra för det här mellanrummet: öka mellanrummet
+@msg	the circles are too far apart for this gap	cirklarna ligger för långt ifrån varandra för det här mellanrummet
+@msg	no two circles are within reach: raise the reach	inga två cirklar ligger inom räckvidd: öka räckvidden
+@msg	select at most 2000 circles to bridge	markera högst 2000 cirklar att förbinda
+@msg	that makes too many bridges (at most 8000): lower the reach	det ger för många bryggor (högst 8000): minska räckvidden
+@msg	the bridged circles are too complex to unite	de förbundna cirklarna är för komplexa för att slås ihop
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandera streck till banor
 @msg	select paths with dashed strokes to expand	markera banor med streckad kontur att expandera

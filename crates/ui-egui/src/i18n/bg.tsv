@@ -6730,10 +6730,18 @@ breakText	Glyphs	Глифи
 	Smooth Bridge…	Плавен мост…
 	Smooth Bridge	Плавен мост
 	Keep Originals	Запазване на оригиналите
-@msg	select two circles to bridge	изберете два кръга за свързване
+@msg	select two or more circles to bridge	изберете два или повече кръга за свързване
 @msg	one circle is inside the other	единият кръг е вътре в другия
 @msg	the circles are too far apart for this radius: raise the radius	кръговете са твърде далеч един от друг за този радиус: увеличете радиуса
 @msg	the circles are too far apart for this radius	кръговете са твърде далеч един от друг за този радиус
+	Constant Gap	Постоянно разстояние
+	Reach:	Обхват:
+@msg	the circles are too far apart for this gap: raise the gap	кръговете са твърде далеч един от друг за това разстояние: увеличете разстоянието
+@msg	the circles are too far apart for this gap	кръговете са твърде далеч един от друг за това разстояние
+@msg	no two circles are within reach: raise the reach	няма два кръга в обхват: увеличете обхвата
+@msg	select at most 2000 circles to bridge	изберете най-много 2000 кръга за свързване
+@msg	that makes too many bridges (at most 8000): lower the reach	това дава твърде много мостове (най-много 8000): намалете обхвата
+@msg	the bridged circles are too complex to unite	свързаните кръгове са твърде сложни за обединяване
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Разширяване на тиретата в пътища
 @msg	select paths with dashed strokes to expand	изберете пътища с прекъснат щрих за разширяване

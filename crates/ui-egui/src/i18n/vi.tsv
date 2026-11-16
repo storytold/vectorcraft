@@ -6992,10 +6992,18 @@ breakText	Glyphs	Glyph
 	Smooth Bridge…	Cầu nối mượt…
 	Smooth Bridge	Cầu nối mượt
 	Keep Originals	Giữ bản gốc
-@msg	select two circles to bridge	chọn hai hình tròn để nối
+@msg	select two or more circles to bridge	chọn hai hình tròn trở lên để nối
 @msg	one circle is inside the other	một hình tròn nằm bên trong hình tròn kia
 @msg	the circles are too far apart for this radius: raise the radius	các hình tròn cách nhau quá xa so với bán kính này: hãy tăng bán kính
 @msg	the circles are too far apart for this radius	các hình tròn cách nhau quá xa so với bán kính này
+	Constant Gap	Khoảng hở cố định
+	Reach:	Tầm với:
+@msg	the circles are too far apart for this gap: raise the gap	các hình tròn cách nhau quá xa so với khoảng hở này: hãy tăng khoảng hở
+@msg	the circles are too far apart for this gap	các hình tròn cách nhau quá xa so với khoảng hở này
+@msg	no two circles are within reach: raise the reach	không có hai hình tròn nào trong tầm với: hãy tăng tầm với
+@msg	select at most 2000 circles to bridge	chọn tối đa 2000 hình tròn để nối
+@msg	that makes too many bridges (at most 8000): lower the reach	thao tác này tạo quá nhiều cầu nối (tối đa 8000): hãy giảm tầm với
+@msg	the bridged circles are too complex to unite	các hình tròn được nối quá phức tạp để hợp nhất
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Mở rộng nét đứt thành đường dẫn
 @msg	select paths with dashed strokes to expand	chọn các đường dẫn có nét đứt để mở rộng

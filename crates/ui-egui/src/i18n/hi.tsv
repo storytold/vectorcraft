@@ -1014,6 +1014,7 @@ antiAlias	Sharp	शार्प
 	Connect Selected End Points	सिलेक्टेड एंड पॉइंट्स कनेक्ट करें
 	Consider Open Filled Paths as Closed	बंद के रूप में ओपन भरा पाथ पर विचार करें
 	Consolidate All Windows	सभी विंडो एक साथ लाएँ
+	Constant Gap	स्थिर गैप
 	Constrain	सीमित करें
 	Constrain Angle	कंस्ट्रेन एंगल
 	Constrain Width and Height Proportions	चौड़ाई और ऊंचाई का अनुपात बनाए रखें
@@ -3838,6 +3839,7 @@ antiAlias	Sharp	शार्प
 	Rating:	रेटिंग:
 	Ratio	अनुपात
 	Rays	रे
+	Reach:	पहुँच:
 	Read Action Set File	एक्शन सेट फ़ाइल पढ़ें
 	Read Shortcut Set File	शॉर्टकट सेट फ़ाइल पढ़ें
 	Reads or sets environment variables	एनवायरनमेंट वेरिएबल्स पढ़ता है या सेट करता है
@@ -7757,6 +7759,7 @@ antiAlias	Sharp	शार्प
 @msg	Offset Path: select paths	ऑफसेट पाथ: सिलेक्शन पाथ
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	ऑफसेट पाथ: ऑफ़सेट सिलेक्टेड पाथ की कुछ भी नहीं छोड़ता है (आकार की तुलना में एक निर्धारित बड़ा)
 @msg	Offset Path: the path is too complex to offset	ऑफसेट पाथ: पाथ ऑफसेट करने के लिए बहुत जटिल है
+@msg	no two circles are within reach: raise the reach	कोई भी दो वृत्त पहुँच के भीतर नहीं हैं: पहुँच बढ़ाएँ
 @msg	on must be true or false	on को true या false होना चाहिए
 @msg	one circle is inside the other	एक वृत्त दूसरे के अंदर है
 @msg	only a dock group above or below others collapses, not one beside another	केवल दूसरों के ऊपर या नीचे एक डॉक समूह गिर जाता है, एक दूसरे के बगल में नहीं
@@ -8019,6 +8022,7 @@ antiAlias	Sharp	शार्प
 @msg	select artwork to make a group of its colours	अपने रंगों का एक समूह बनाने के लिए आर्टवर्क सिलेक्ट करें
 @msg	select artwork to recolour, or give a colour `group`	रंग बदलने के लिए आर्टवर्क चुनें या रंग `group` दें
 @msg	select at least two objects	कम से कम दो ऑब्जेक्ट चुनें
+@msg	select at most 2000 circles to bridge	जोड़ने के लिए अधिकतम 2000 वृत्त चुनें
 @msg	Select dimensions to update	अद्यतन करने के लिए आयाम सिलेक्ट करें
 @msg	select exactly two objects	वास्तव में दो ऑब्जेक्ट चुनें
 @msg	select exactly two path ends to join	जोड़ने के लिए ठीक दो पाथ एंड पॉइंट्स सिलेक्ट करें
@@ -8067,7 +8071,7 @@ antiAlias	Sharp	शार्प
 @msg	select the objects to attach to the path	ऑब्जेक्ट्स का सिलेक्ट करने के लिए संलग्न करने के लिए पाथ
 @msg	select the objects to bind	ऑब्जेक्ट्स को बांधने के लिए चुनें
 @msg	select the objects to transform in perspective	ऑब्जेक्ट्स को पर्सपेक्टिव में बदलने के लिए चुनें
-@msg	select two circles to bridge	जोड़ने के लिए दो वृत्त चुनें
+@msg	select two or more circles to bridge	जोड़ने के लिए दो या अधिक वृत्त चुनें
 @msg	select two open path ends, or two open paths, to average and join	औसत निकालकर जोड़ने के लिए दो खुले पाथ एंड पॉइंट्स या दो खुले पाथ सिलेक्ट करें
 @msg	select two or more graphic styles to merge	दो या अधिक ग्राफिक स्टाइल्स का सिलेक्ट करने के लिए विलय
 @msg	select two or more objects to distribute	वितरित करने के लिए दो या दो से अधिक ऑब्जेक्ट चुनें
@@ -8144,6 +8148,7 @@ antiAlias	Sharp	शार्प
 @msg	the active document changed while the question was open; nothing was deleted	प्रश्न खुला रहते हुए सक्रिय डॉक्यूमेंट बदल गया; कुछ भी नहीं हटाया गया
 @msg	that document is no longer open	यह डॉक्यूमेंट अब खुला नहीं है
 @msg	that makes more than {MAX_PIECES} slices	जो {MAX_PIECES} स्लाइस से अधिक बनाता है
+@msg	that makes too many bridges (at most 8000): lower the reach	इससे बहुत अधिक ब्रिज बनते हैं (अधिकतम 8000): पहुँच घटाएँ
 @msg	that makes too many pieces (at most 100000): make the dashes longer	जो बहुत सारे टुकड़े बनाता है (अधिकांश 100000 में): डैश को लंबे समय तक बनाते हैं
 @msg	that object is not in the overlap	उस ऑब्जेक्ट को ओवरलैप में नहीं है
 @msg	the {tool} tool has no options	{tool} टूल में कोई ऑप्शन्स नहीं है
@@ -8232,7 +8237,10 @@ antiAlias	Sharp	शार्प
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	आर्टबोर्ड कैनवास पर फिट नहीं हैं: कम आर्टबोर्ड, कम रिक्ति या छोटे आकार
 @msg	the background worker stopped	पृष्ठभूमि कार्यकर्ता बंद कर दिया
 @msg	the blend has no spine	मिश्रण में कोई रीढ़ नहीं है
+@msg	the bridged circles are too complex to unite	जोड़े गए वृत्त मिलाने के लिए बहुत जटिल हैं
 @msg	the character's size can't be measured	कैरेक्टर का आकार मापा नहीं जा सकता है
+@msg	the circles are too far apart for this gap	इस गैप के लिए वृत्त एक-दूसरे से बहुत दूर हैं
+@msg	the circles are too far apart for this gap: raise the gap	इस गैप के लिए वृत्त एक-दूसरे से बहुत दूर हैं: गैप बढ़ाएँ
 @msg	the circles are too far apart for this radius	इस त्रिज्या के लिए वृत्त एक-दूसरे से बहुत दूर हैं
 @msg	the circles are too far apart for this radius: raise the radius	इस त्रिज्या के लिए वृत्त एक-दूसरे से बहुत दूर हैं: त्रिज्या बढ़ाएँ
 @msg	the CMYK image couldn't be written	CMYK इमेज को नहीं लिखा जा सकता
