@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use vectorcraft_color::{BlendMode, Color, Paint};
+use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
 
 use crate::{Document, Node, NodeId, NodeKind};
 
@@ -55,7 +55,8 @@ impl OverprintBlack {
         };
         match p {
             Paint::Solid { color, swatch, .. } => ink(color, swatch),
-            Paint::Gradient(g) => match g.freeform.as_ref().filter(|f| !f.points.is_empty()) {
+            // Only a freeform gradient draws its points; another kind draws its stops whatever it holds.
+            Paint::Gradient(g) => match g.freeform.as_ref().filter(|f| g.gradient.kind == GradientKind::Freeform && !f.points.is_empty()) {
                 Some(f) => f.points.iter().all(|pt| is_black_ink(&pt.color, self.min_k, self.rich)),
                 // Without points of its own a freeform gradient places them from its stops.
                 None => !g.gradient.stops.is_empty() && g.gradient.stops.iter().all(|s| ink(&s.color, &s.swatch)),
@@ -292,7 +293,7 @@ mod tests {
     fn a_freeform_gradient_is_black_when_every_point_is() {
         use vectorcraft_color::freeform::{Freeform, FreeformPoint};
         let k = Color::cmyk(0.0, 0.0, 0.0, 1.0);
-        let mut g = vectorcraft_color::GradientPaint::new(Default::default());
+        let mut g = vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient { kind: GradientKind::Freeform, ..Default::default() });
         for s in &mut g.gradient.stops {
             s.color = k;
         }
@@ -301,6 +302,11 @@ mod tests {
         let fill = |g: &vectorcraft_color::GradientPaint| Appearance::basic(Paint::Gradient(Box::new(g.clone())), Paint::None, 0.0);
         let mut n = Node::path(NodeId(1), Default::default(), fill(&g));
         assert!(!OverprintBlack::default().apply(&mut n, &[]), "a cyan point is drawn, whatever the stops");
+        // Another kind of gradient draws its black stops, not the points it still holds.
+        let mut linear = g.clone();
+        linear.gradient.kind = GradientKind::Linear;
+        let mut n = Node::path(NodeId(1), Default::default(), fill(&linear));
+        assert!(OverprintBlack::default().apply(&mut n, &[]), "a linear gradient is judged by its stops");
         if let Some(f) = &mut g.freeform {
             f.points[1].color = Color::gray(1.0);
         }

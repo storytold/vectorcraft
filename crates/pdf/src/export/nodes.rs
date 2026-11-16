@@ -39,14 +39,15 @@ impl Exporter<'_> {
             cover(&mut ms, page, if m.clip { 0 } else { 255 }, 1.0);
         }
         // Mask art is a picture of its own: it takes no part in a knockout group around the object,
-        // and has no inks to overprint.
+        // and has no inks to overprint (its characters do not darken either).
         let knockout = std::mem::take(&mut self.knockout);
         let overprint = std::mem::take(&mut self.overprint);
+        let darken = std::mem::take(&mut self.darken_overprints);
         let image_left_out = self.image_left_out.replace(false);
         self.node(&mut ms, &m.art, page, true);
         let incomplete = self.image_left_out.unwrap_or(false);
         self.image_left_out = image_left_out.map(|outer| outer || incomplete);
-        (self.knockout, self.overprint) = (knockout, overprint);
+        (self.knockout, self.overprint, self.darken_overprints) = (knockout, overprint, darken);
         if incomplete {
             ms.pop();
             ms.finish();

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use vectorcraft_color::cms::{self, Cms, Model, ProfileKind};
 use vectorcraft_color::swatch::REGISTRATION;
-use vectorcraft_color::{BlendMode, Color, Paint};
+use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
 use vectorcraft_doc::inks::{Link, StopPlates, inks, plates, spot_color, stop_inks, visit_node_colors};
 use vectorcraft_doc::overprint::{darken_overprints, is_white};
 use vectorcraft_doc::{AppearanceItem, ColorMode, Document, ImageBlob, Node, NodeKind};
@@ -78,11 +78,13 @@ pub(crate) struct Separator<'a> {
     pub doc: &'a Document,
     cms: Arc<Cms>,
     set: &'a PrintSettings,
+    /// The plates are written as PostScript, which has no blending modes.
+    postscript: bool,
 }
 
 impl<'a> Separator<'a> {
-    pub fn new(doc: &'a Document, set: &'a PrintSettings) -> Self {
-        Self { doc, cms: separation_cms(doc, set), set }
+    pub fn new(doc: &'a Document, set: &'a PrintSettings, postscript: bool) -> Self {
+        Self { doc, cms: separation_cms(doc, set), set, postscript }
     }
 
     /// How much of ink `plate` colour `c` (with swatch link `link`) prints, 0..1.
@@ -131,19 +133,19 @@ impl<'a> Separator<'a> {
         });
     }
 
-    /// Whether paint `p` puts none of ink `plate` down, to within half a percent (the other inks a
-    /// black may carry and still count as black, [`vectorcraft_doc::overprint::is_black_ink`]): a
-    /// solid color, a gradient whose every stop does, or a freeform gradient with color points
-    /// whose every point does (points carry no swatch link).
+    /// Whether paint `p` puts none of ink `plate` down: a solid color, a gradient whose every stop
+    /// does, or a freeform gradient with color points whose every point does (points carry no
+    /// swatch link). On PostScript plates, to within half a percent (the other inks a black may
+    /// carry and still count as black, [`vectorcraft_doc::overprint::is_black_ink`]).
     fn no_ink(&self, plate: &str, p: &Paint) -> bool {
-        const NONE: f32 = 0.005;
+        let none = if self.postscript { 0.005 } else { 0.0 };
         match p {
-            Paint::Solid { color, swatch, tint } => self.ink(plate, color, swatch.as_deref().map(|s| (s, *tint))) <= NONE,
-            Paint::Gradient(g) => match g.freeform.as_ref().filter(|f| !f.points.is_empty()) {
-                Some(f) => f.points.iter().all(|pt| self.ink(plate, &pt.color, None) <= NONE),
+            Paint::Solid { color, swatch, tint } => self.ink(plate, color, swatch.as_deref().map(|s| (s, *tint))) <= none,
+            Paint::Gradient(g) => match g.freeform.as_ref().filter(|f| g.gradient.kind == GradientKind::Freeform && !f.points.is_empty()) {
+                Some(f) => f.points.iter().all(|pt| self.ink(plate, &pt.color, None) <= none),
                 None => {
                     !g.gradient.stops.is_empty()
-                        && g.gradient.stops.iter().all(|s| self.stop_ink(plate, &s.color, s.swatch.as_deref().map(|n| (n, s.tint)), s.plates) <= NONE)
+                        && g.gradient.stops.iter().all(|s| self.stop_ink(plate, &s.color, s.swatch.as_deref().map(|n| (n, s.tint)), s.plates) <= none)
                 }
             },
             _ => false,

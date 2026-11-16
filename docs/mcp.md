@@ -8615,7 +8615,8 @@ documents every field:
   fill, stroke or character paint of solid 100% process K or 100% gray, or a gradient whose every stop is (every
   color point of a freeform gradient), each to within half a percent (99.5% K counts, and so does 0.4% cyan beside
   it). Rich black, RGB and Lab black, tints below 99.5% and colors linked to a spot swatch or to Registration still
-  knock out. Only the printed copy is marked: the document and its own overprint settings do not change. Composite
+  knock out. A symbol instance's art is judged with the paints the instance prints it in, its own fill and stroke
+  changes and its fill's stain included. Only the printed copy is marked: the document and its own overprint settings do not change. Composite
   output ignores the option, and the Print dialog's Overprint Black checkbox is disabled unless Mode is Separations.
 - `graphics: {autoFlatness, flatness, fonts}` and `color: {intent, preserveNumbers}` (the intent colours separate
   with; without preserveNumbers CMYK colours are separated again).
