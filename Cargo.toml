@@ -11,7 +11,7 @@ rust-version = "1.95"
 repository = "https://github.com/storytold/vectorcraft"
 
 [workspace.dependencies]
-craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd", default-features = false, features = ["interpret", "write"] }
+craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "ed850ede0f26ef0b8ff9b4d1fc08466a1cf21375", default-features = false, features = ["interpret", "write"] }
 craft-print = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
 craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
 craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd", features = ["serde"] }
@@ -181,13 +181,13 @@ lto = "thin"
 codegen-units = 1
 
 [patch.crates-io]
-hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
-hayro-interpret = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
-hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
-hayro-cmap = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
-hayro-postscript = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
-krilla = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
-linesweeper = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
+hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "ed850ede0f26ef0b8ff9b4d1fc08466a1cf21375" }
+hayro-interpret = { git = "https://github.com/storytold/craft-libs", rev = "ed850ede0f26ef0b8ff9b4d1fc08466a1cf21375" }
+hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "ed850ede0f26ef0b8ff9b4d1fc08466a1cf21375" }
+hayro-cmap = { git = "https://github.com/storytold/craft-libs", rev = "ed850ede0f26ef0b8ff9b4d1fc08466a1cf21375" }
+hayro-postscript = { git = "https://github.com/storytold/craft-libs", rev = "ed850ede0f26ef0b8ff9b4d1fc08466a1cf21375" }
+krilla = { git = "https://github.com/storytold/craft-libs", rev = "ed850ede0f26ef0b8ff9b4d1fc08466a1cf21375" }
+linesweeper = { git = "https://github.com/storytold/craft-libs", rev = "ed850ede0f26ef0b8ff9b4d1fc08466a1cf21375" }
 ecolor = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
 emath = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
 epaint = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
