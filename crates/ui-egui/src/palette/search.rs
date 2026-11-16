@@ -561,6 +561,18 @@ mod tests {
         }
     }
 
+    /// How the whole query matches comes before the word grades, so a stem form ranks above a word
+    /// the query starts only among results in the same whole-query tier: "scale" lists Scale, then
+    /// Scalers, which starts with the query, then Scaling, and "scale zz" lists Zz Scaling above Zz
+    /// Scalers.
+    #[test]
+    fn a_whole_query_tier_comes_before_a_stem_form() {
+        let c = synthetic(vec![entry("Scaling", "c.three"), entry("Scalers", "b.two"), entry("Scale", "a.one")]);
+        assert_eq!(ranked(&c, "scale"), ["a.one", "b.two", "c.three"]);
+        let c = synthetic(vec![entry("Zz Scalers", "b.two"), entry("Zz Scaling", "a.one"), entry("Zz Scale", "c.three")]);
+        assert_eq!(ranked(&c, "scale zz"), ["c.three", "a.one", "b.two"]);
+    }
+
     /// Results that no stem form matches keep the order they had before stems were added: two
     /// results whose grades summed the same still tie on the sum, and the shorter label comes
     /// first.

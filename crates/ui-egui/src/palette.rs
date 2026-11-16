@@ -1803,8 +1803,16 @@ mod tests {
     /// does, and changes nothing until the dialog is confirmed.
     #[test]
     fn an_effect_is_a_result_whose_pick_runs_its_menu_item() {
-        let entries = build(Lang::EN);
-        let effects = crate::shortcut_editor::effect_items();
+        // Both reads see the same plug-in revision: another test may install or remove a live
+        // effect plug-in between them.
+        let (entries, effects) = loop {
+            let revision = menus::plugin_revision();
+            let entries = build(Lang::EN);
+            let effects = crate::shortcut_editor::effect_items();
+            if menus::plugin_revision() == revision {
+                break (entries, effects);
+            }
+        };
         for e in effects.iter() {
             let key = format!("effect:{}", e.effect);
             assert_eq!(entries.iter().filter(|r| r.id == key).count(), 1, "{key}");
