@@ -242,20 +242,25 @@ fn with_a_none_fill_the_strip_reads_zero_and_its_actions_set_the_fill() {
     assert!(near(hsb(&fill(h.state())), [last[0], last[1], 0.25], 0.01), "{last:?} → {:?}", hsb(&fill(h.state())));
 }
 
-/// With None, a screen reader's set value equal to the last solid color's own number still sets
-/// the fill.
+/// With None, a screen reader's set-value action or an increment at the top of the strip sets the
+/// fill, even when the number equals the last solid color's.
 #[test]
-fn with_a_none_fill_a_set_value_equal_to_the_hidden_number_sets_the_fill() {
+fn with_a_none_fill_the_strip_applies_an_action_that_leaves_its_number() {
     let mut app = app(json!("#ff0000"), "brightness");
     app.run("paint.setFill", json!({"none": true})).unwrap();
     let mut h = harness(app);
     let last = hsb(&h.state().session.last_solid);
     assert!((last[2] - 1.0).abs() < 0.01, "{last:?}");
-    let (target_node, target_tree) = h.get_by_label("Brightness").accesskit_node().locate();
-    let data = Some(ActionData::NumericValue(100.0));
-    h.event(Event::AccessKitActionRequest(ActionRequest { target_node, target_tree, action: Action::SetValue, data }));
-    h.run_steps(1);
-    assert!(near(hsb(&fill(h.state())), last, 0.01), "{last:?} → {:?}", crate::panels::current_paints(h.state()).0);
+    for (action, data) in [(Action::SetValue, Some(ActionData::NumericValue(100.0))), (Action::Increment, None)] {
+        h.state_mut().run("paint.setFill", json!({"none": true})).unwrap();
+        h.run_steps(1);
+        let (target_node, target_tree) = h.get_by_label("Brightness").accesskit_node().locate();
+        h.event(Event::AccessKitActionRequest(ActionRequest { target_node, target_tree, action, data }));
+        h.run_steps(1);
+        let paint = crate::panels::current_paints(h.state()).0;
+        let c = paint.color().unwrap_or_else(|| panic!("{action:?} left the fill as {paint:?}"));
+        assert!(near(hsb(&c), last, 0.01), "{action:?}: {last:?} → {:?}", hsb(&c));
+    }
 }
 
 /// `ui.colorWheel` answers every junk parameter without a panic.

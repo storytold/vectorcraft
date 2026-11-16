@@ -141,7 +141,7 @@ pub fn color_slider_stepped(
 ) -> (Option<f32>, Live, Option<f64>) {
     let id = id_with(ui.scope_id(), id);
     let (resp, picked, phase) = color_rail(ui, id, name, shown.clone(), value, width, track);
-    let stepped = slider_keys(ui, &resp, shown);
+    let stepped = slider_keys(ui, &resp, shown, false);
     (picked, phase, stepped.filter(|_| picked.is_none()))
 }
 
@@ -173,7 +173,7 @@ pub fn opacity_slider(
     ramp.add_triangle(0, 2, 3);
     shapes.push(egui::Shape::mesh(ramp));
     ui.painter().set(under, egui::Shape::Vec(shapes));
-    let stepped = slider_keys(ui, &resp, shown);
+    let stepped = slider_keys(ui, &resp, shown, false);
     (picked, phase, stepped.filter(|_| picked.is_none()))
 }
 
@@ -184,12 +184,13 @@ pub fn opacity_slider(
 /// `shown`'s units that a key or an action gives.
 pub fn stepped_area(ui: &Ui, resp: &Response, name: &str, shown: Option<SliderValue>) -> Option<f64> {
     slider_info(ui, resp, name, shown.clone());
-    slider_keys(ui, resp, shown)
+    slider_keys(ui, resp, shown, false)
 }
 
 /// The focus, keys, actions and focus outline of [`color_slider_stepped`] on the control `resp`:
-/// the number a key or an action gives.
-fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>) -> Option<f64> {
+/// the number a key or an action gives. With `always`, a key or an action that leaves the number
+/// as it was still gives it.
+fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>, always: bool) -> Option<f64> {
     let id = resp.id;
     // Focus a click or a drag gave shows no outline until a key steps the rail: the outline tells
     // a keyboard user where the focus is, and after a drag it only framed the rail.
@@ -209,7 +210,7 @@ fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>) -> Option<f
             node.add_action(egui::accesskit::Action::Increment);
             node.add_action(egui::accesskit::Action::Decrement);
         });
-        rail_step(ui, id, focused, &s)
+        rail_step(ui, id, focused, always, &s)
     });
     if stepped.is_some() {
         ui.data_mut(|d| d.remove_temp::<bool>(by_pointer));
@@ -222,8 +223,9 @@ fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>) -> Option<f
 }
 
 /// The number of slider `id` (`s`) after this frame's keys while it is `focused`, and after screen
-/// readers' actions on it ([`color_slider_stepped`]); `None` when they leave it as it was.
-fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f64> {
+/// readers' actions on it ([`color_slider_stepped`]); `None` when they leave it as it was, unless
+/// `always` and a key or an action came.
+fn rail_step(ui: &Ui, id: egui::Id, focused: bool, always: bool, s: &SliderValue) -> Option<f64> {
     use egui::accesskit::{Action, ActionData};
     use egui::{Event, Key};
     let (lo, hi) = (*s.range.start(), *s.range.end());
@@ -240,6 +242,8 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
     };
     // Home or End: an end of the range, which also replaces a number past it.
     let mut end = false;
+    // A key or an action came this frame.
+    let mut asked = false;
     if focused {
         // The arrows step the rail and do not move the focus. egui keeps the filter only when the
         // rail also had the focus in the frame before, and applies it from the next frame; until
@@ -267,6 +271,7 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
                     }
                     _ => return true,
                 }
+                asked = true;
                 false
             });
         });
@@ -278,8 +283,9 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
     // asked; only the keys' and the steps' numbers are rounded to `STEP_DECIMALS`.
     let mut exact = false;
     ui.input(|i| {
-        let n = i.num_accesskit_action_requests(id, Action::Increment) as f64 - i.num_accesskit_action_requests(id, Action::Decrement) as f64;
-        v = by(v, n).clamp(lo, hi);
+        let (up, down) = (i.num_accesskit_action_requests(id, Action::Increment), i.num_accesskit_action_requests(id, Action::Decrement));
+        asked |= up + down > 0;
+        v = by(v, up as f64 - down as f64).clamp(lo, hi);
         // The last set-value request this frame.
         let set = i.accesskit_action_requests(id, Action::SetValue).last().and_then(|request| match request.data {
             Some(ActionData::NumericValue(value)) if value.is_finite() => Some(value),
@@ -292,9 +298,10 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
             v = shown.clamp(lo.min(s.value), hi.max(s.value));
             end = true;
             exact = true;
+            asked = true;
         }
     });
-    (v != from || (end && v != s.value)).then_some(if exact { v } else { round_to(v, STEP_DECIMALS).clamp(lo, hi) })
+    (v != from || (end && v != s.value) || (always && asked)).then_some(if exact { v } else { round_to(v, STEP_DECIMALS).clamp(lo, hi) })
 }
 
 /// The colored bar inside the rail `rect` of [`color_slider_stepped`] and its siblings.
@@ -545,9 +552,9 @@ pub fn channel_slider_valued(
 /// the rail of [`color_slider_stepped`] does: a click or a drag gives it the keyboard focus, and
 /// while it has the focus ↑ and → raise the number `shown` holds and ↓ and ← lower it. When not
 /// `marked`, the rail draws no arrows and screen readers read 0, as [`hue_ring`] does, while the
-/// keys and actions still step from `shown`, and a set value applies even when it equals `shown`'s
-/// number. Returns the new value from 0 to 1 that a click or a drag gives, its phase, and the
-/// number in `shown`'s units that a key or an action gives.
+/// keys and actions still step from `shown` and give a number even when it equals `shown`'s, as
+/// [`color_field`] does. Returns the new value from 0 to 1 that a click or a
+/// drag gives, its phase, and the number in `shown`'s units that a key or an action gives.
 #[allow(clippy::too_many_arguments)]
 pub fn channel_slider_stepped(
     ui: &mut Ui,
@@ -559,22 +566,10 @@ pub fn channel_slider_stepped(
     size: Vec2,
     track: &dyn Fn(f32) -> Color32,
 ) -> (Option<f32>, Live, Option<f64>) {
-    use egui::accesskit::{Action, ActionData};
     let id = id_with(ui.scope_id(), id);
     let read = if marked { shown.clone() } else { shown.as_ref().map(|s| SliderValue { value: 0.0, text: None, ..s.clone() }) };
     let (resp, picked, phase) = channel_rail(ui, id, name, read, value, marked, size, track);
-    let unmarked = shown.as_ref().filter(|_| !marked && ui.is_enabled()).map(|s| s.value);
-    let mut stepped = slider_keys(ui, &resp, shown);
-    // Without a marker there is no color yet, so a set value applies even when it leaves the number
-    // as it was.
-    if stepped.is_none()
-        && let Some(v) = unmarked
-        && ui.input(|i| {
-            i.accesskit_action_requests(resp.id, Action::SetValue).any(|r| matches!(r.data, Some(ActionData::NumericValue(n)) if n.is_finite()))
-        })
-    {
-        stepped = Some(v);
-    }
+    let stepped = slider_keys(ui, &resp, shown, !marked);
     (picked, phase, stepped.filter(|_| picked.is_none()))
 }
 
