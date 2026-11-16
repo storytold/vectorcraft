@@ -1253,11 +1253,11 @@ dependencies = [
 [[package]]
 name = "craft-stream-codecs"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=a499742a9389f47d10cdc61e4cdbf4e5f07f48cd#a499742a9389f47d10cdc61e4cdbf4e5f07f48cd"
+source = "git+https://github.com/storytold/craft-libs?rev=ed850ede0f26ef0b8ff9b4d1fc08466a1cf21375#ed850ede0f26ef0b8ff9b4d1fc08466a1cf21375"
 dependencies = [
  "fax",
  "hayro-ccitt",
- "hayro-jbig2",
+ "hayro-jbig2 0.3.0 (git+https://github.com/storytold/craft-libs?rev=ed850ede0f26ef0b8ff9b4d1fc08466a1cf21375)",
  "thiserror 2.0.21",
 ]
 
@@ -2541,6 +2541,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "hayro-jbig2"
+version = "0.3.0"
+source = "git+https://github.com/storytold/craft-libs?rev=ed850ede0f26ef0b8ff9b4d1fc08466a1cf21375#ed850ede0f26ef0b8ff9b4d1fc08466a1cf21375"
+dependencies = [
+ "hayro-ccitt",
+]
+
+[[package]]
 name = "hayro-jpeg2000"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2561,7 +2569,7 @@ source = "git+https://github.com/storytold/craft-libs?rev=a499742a9389f47d10cdc6
 dependencies = [
  "flate2",
  "hayro-ccitt",
- "hayro-jbig2",
+ "hayro-jbig2 0.3.0 (git+https://github.com/storytold/craft-libs?rev=a499742a9389f47d10cdc61e4cdbf4e5f07f48cd)",
  "hayro-jpeg2000",
  "memchr",
  "rustc-hash 2.1.3",
