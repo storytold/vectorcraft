@@ -1388,7 +1388,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{path?, preset?, range?, useArtboards?, …document.exportPdf options} open the Save PDF dialog with these options (fields = the options, sections are objects; OK writes path, else asks); useArtboards: false: one page of the visible art's bounds, with no Artboards section",
     ),
     (
-        crate::dialogs::SAVE_PDF_SUMMARY,
+        "ui.pdfSummary.save",
         "Save Summary…",
         "",
         "{path} write the Summary of the open Save PDF dialog (or PDF preset editor) to path as UTF-8 text without a byte order mark, with LF line endings, line for line as the Summary section shows it: Options and each option that differs from the preset (or the line saying none does), a blank line, then Warnings and each warning (or None.). The Summary the section last drew for the same fields and document is used without computing the settings again. The web downloads the file under path's file name. The Summary section's Save Summary… button writes the same text to a file picked in a save panel that suggests `<document> PDF Summary.txt` in the document's folder. The dialog stays open and the document does not change. No such dialog open, a path that is missing, empty or not a string, a path outside the automation write roots and a failed document.pdfSettings are errors that write nothing; a failed write is an error → {path, bytes}",
