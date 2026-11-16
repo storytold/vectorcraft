@@ -981,6 +981,10 @@ antiAlias	Sharp	锐利
 	Cap Height	大写字母高度
 	x-Height	x 字高
 	ICF Box	ICF 框
+	Show Sample	显示样本
+	Hide Sample	隐藏样本
+	Max Ascent/Descent	最大上升/下降
+	Max Ascender	最大上伸部
 	Em Dash	长破折号
 	Em Space	全角空格
 	Embed	嵌入
@@ -1302,6 +1306,8 @@ file-filter	Templates	模板
 	Font Family & Style	字体系列和样式
 	Font Family, Style & Size	字体系列、样式和字号
 	Font List	字体列表
+	Show Similar Fonts	显示相似字体
+	Clear Similar Fonts	清除相似字体
 	Font Preview Size	字体预览大小
 	Font Size	字号
 	Variable Font	可变字体
@@ -1417,6 +1423,7 @@ file-filter	Templates	模板
 	Connect Data Points	连接数据点
 	Edge-to-Edge Lines	边到边线条
 	Draw Filled Lines	绘制填充线
+	Line Width	线宽
 	Tick Values	刻度值
 	Override Calculated Values	覆盖计算值
 	Divisions	刻度数
@@ -1514,6 +1521,9 @@ file-filter	Templates	模板
 	Show smooth color wheel	显示平滑色轮
 	Show segmented color wheel	显示分段色轮
 	Show color bars	显示颜色条
+	Add Color Tool	添加颜色工具
+	Remove Color Tool	删除颜色工具
+	Remove Color	删除颜色
 	Find the selected colors in the artwork	在图稿中查找所选颜色
 	Harmony Sets	色彩调和组
 	Height	高度
@@ -1813,6 +1823,8 @@ file-filter	Templates	模板
 	Lasso Tool	套索工具
 	Enclosing Lasso Tool	包围套索工具
 	Enclosing Lasso	包围套索
+	Polygonal Lasso Tool	多边形套索工具
+	Polygonal Lasso	多边形套索
 	Last Effect: {name}	最后一次效果：{name}
 	Last Effect: {}	上次效果：{}
 	Last Effect…	上次效果…
@@ -4326,6 +4338,7 @@ imageTrace	Outline	轮廓
 @msg	no history to clear	没有可清除的历史记录
 @msg	no history state {v}	没有历史记录状态 {v}
 @msg	Expand Appearance: the selection has a basic appearance	扩展外观：所选对象只有基本外观
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	部分栅格效果未转换为图像：它们会超过 1,024 个图像或总计 256 兆像素
 @msg	select (or target) objects whose appearance isn't basic	请选择 (或定位) 外观不是基本外观的对象
 @msg	{C}: no effect at index {from}	{C}：索引 {from} 处没有效果
 @msg	Expand: no gradient fills	扩展：没有渐变填色
@@ -6209,7 +6222,7 @@ lighting	Light	光源
 @msg	Choose a circle or a perfect arc	请选择圆或标准圆弧
 @msg	Choose a precision from 0 to 6	请选择 0 到 6 之间的精度
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	封闭开放轮廓的圆形端部。部分旋转的切割侧面保持开放。
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	封闭开放轮廓的圆形端部。部分旋转的切割侧面也会封闭。
 	Distance	距离
 	Make Image Dynamic	使图像动态化
 	Import Data Sets…	导入数据集…
@@ -6352,6 +6365,7 @@ lighting	Light	光源
 	Single Word Justification:	单字对齐：
 	Full Justify	全部强制双齐
 	Minimum must not exceed Desired, nor Desired Maximum.	最小值不能超过所需值，所需值不能超过最大值。
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`：最小值不能超过所需值，所需值不能超过最大值
 	Minimum	最小值
 	Justification	对齐设置
 	Add filters from the list above	从上方列表添加滤镜
@@ -7296,6 +7310,22 @@ breakText	Glyphs	字形
 	Remove Gaps	移除间隙
 @msg	that makes too many pieces (at most 100000): make the dashes longer	这会产生过多片段（最多 100000 个）：请加长短划线
 @msg	select paths, or segments, to divide	请选择要分割的路径或线段
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	公切线…
+	Common Tangents	公切线
+	Tangents	切线
+	Centerline	中心线
+	External	外部
+	Internal	内部
+@msg	select two closed paths	请选择两条闭合路径
+@msg	a selected path is open	所选路径是开放的
+@msg	a selected path is not convex	所选路径不是凸形
+@msg	a selected path has no area	所选路径没有面积
+@msg	a selected path has more than 10000 segments	所选路径的线段超过 10000 条
+@msg	the two paths have the same outline	两条路径的轮廓相同
+@msg	One path lies inside the other, so they have no common tangents	一条路径位于另一条之内，因此它们没有公切线
+@msg	The paths overlap, so they have no internal tangents	路径相互重叠，因此它们没有内公切线
+@msg	One path lies inside the other, so they have no internal tangents	一条路径位于另一条之内，因此它们没有内公切线
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	将短划线扩展为路径
 @msg	select paths with dashed strokes to expand	请选择要扩展的虚线描边路径
@@ -7371,7 +7401,7 @@ breakText	Glyphs	字形
 @msg	stroke cannot be set on a symbol instance	无法为符号实例设置 stroke
 @msg	fill on a symbol instance must be a solid color or none	符号实例的 fill 必须是纯色或 none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	无法为没有“转换为形状”或“轮廓化对象”效果的图像设置 {key}
-@msg	pass newName, registration, exportType, nineSlice and/or type	请提供 newName、registration、exportType、nineSlice 和/或 type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	请提供 newName、registration、exportType、nineSlice、type 和/或 alignToPixelGrid
 	Text Flow	文本流向
 	By Rows	按行
 	By Columns	按列
@@ -7594,6 +7624,8 @@ breakText	Glyphs	字形
 @msg	No bridge of this width fits across the selected art	此宽度的连接桥无法放入所选图稿
 @msg	Some islands could not be joined to the area around the art	部分孤岛无法连接到图稿周围的区域
 @msg	`width` must be from {lo} to {hi} pt	`width` 必须介于 {lo} 到 {hi} pt 之间
+@msg	`angle` must be from -180 to 180 degrees	`angle` 必须介于 -180 到 180 度之间
+@msg	`roundness` must be from 1 to 100%	`roundness` 必须介于 1 到 100% 之间
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必须是 1 到 {MAX_BRIDGES_PER_ISLAND} 之间的整数
 	Weed Box and Lines…	除废框和除废线…
 	Weed Box and Lines	除废框和除废线
@@ -8982,7 +9014,9 @@ breakText	Glyphs	字形
 @msg	position must be normal, superscript or subscript	position 必须是 normal、superscript 或 subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position 必须是 topLeft、topRight、bottomLeft 或 bottomRight
 @msg	positions must be between 0 and 100000 pt	positions 必须介于 0 到 100000 pt 之间
+@msg	ppi can't be more than {max} for this image	此图像的 ppi 不能超过 {max}
 @msg	ppi must be a positive number, not {ppi}	ppi 必须是正数，不能是 {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim 会保持图像像素不变：请省略 ppi
 @msg	ppi must be between 1 and 2400	ppi 必须介于 1 到 2400 之间
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` 不是 transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape 必须是 clippingMask|transparency

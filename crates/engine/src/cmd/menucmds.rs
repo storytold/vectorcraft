@@ -133,7 +133,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Crop Image",
             ["Object"],
             None,
-            "{rect?: [x, y, width, height] | trim?: true (to the pixels that aren't fully transparent, pixel for pixel; an image with none to cut is left as it is, trimmed: false)} crop the selected image (default: to the artboard it sits on) → {id, width, height, trimmed? (with trim), warning? (without trim: the image couldn't be decoded, as object.rasterize says)}",
+            "{rect?: [x, y, width, height] | trim?: true (to the pixels that aren't fully transparent, pixel for pixel; an image with none to cut is left as it is, trimmed: false), ppi?: number (without trim: the cropped image's resolution in pixels per inch, resampled from the cut pixels; 1 to 2400, at most the image's own, or 300 for a linked image; default the image's own; a rect over the whole image with a new ppi only resamples it)} crop the selected image (default: to the artboard it sits on) → {id, width, height, trimmed? (with trim), warning? (without trim: the image couldn't be decoded, as object.rasterize says)}",
             has_image,
             crop_image
         ),
@@ -967,10 +967,10 @@ fn polygon_path(pts: &[Point]) -> PathData {
     PathData::single(vectorcraft_geom::SubPath::new(pts.iter().map(|p| Anchor::corner(*p)).collect(), true))
 }
 
-/// The part of an image under `r` (in document space) copied out of its pixels, as PNG bytes, with its size and
-/// placement. `None` when the image can't be cut that way (turned or skewed, CMYK, pixels that can't be read, or
-/// `r` not on the pixel grid), so the caller draws it instead.
-fn crop_pixels(doc: &vectorcraft_doc::Document, im: &ImageObject, r: Rect) -> Option<(Vec<u8>, u32, u32, Affine)> {
+/// The part of an image under `r` (in document space) copied out of its pixels, with its placement. `None` when
+/// the image can't be cut that way (turned or skewed, CMYK, pixels that can't be read, or `r` not on the pixel
+/// grid), so the caller draws it instead.
+fn crop_pixels(doc: &vectorcraft_doc::Document, im: &ImageObject, r: Rect) -> Option<(image::RgbaImage, Affine)> {
     let blob = doc.images.get(&im.key)?;
     let [a, b, c, d, _, _] = im.xf.as_coeffs();
     if blob.is_cmyk() || b.abs() > 1e-9 || c.abs() > 1e-9 || a.abs() < 1e-9 || d.abs() < 1e-9 {
@@ -996,9 +996,85 @@ fn crop_pixels(doc: &vectorcraft_doc::Document, im: &ImageObject, r: Rect) -> Op
         return None;
     }
     let cut = image::imageops::crop_imm(&px, x0, y0, x1 - x0, y1 - y0).to_image();
+    Some((cut, im.xf * Affine::translate((f64::from(x0), f64::from(y0)))))
+}
+
+/// Crop Image's `ppi`: the resolution asked for, in pixels per point, and whether it keeps the image's pixels as
+/// they are (its own, with square pixels); `None` for the image's own. Refuses a resolution that isn't a positive
+/// number or is above what the image allows: its own, or 300 ppi for a linked image, within 1 to 2400 ppi as
+/// Rasterize's.
+fn crop_resolution(p: &Value, im: &ImageObject) -> Result<Option<(f64, bool)>> {
+    const C: &str = "object.cropImage";
+    let Some(ppi) = p.get("ppi").filter(|v| !v.is_null()) else { return Ok(None) };
+    let ppi = ppi.as_f64().filter(|v| v.is_finite() && *v > 0.0).ok_or_else(|| bad(C, format!("ppi must be a positive number, not {ppi}")))?;
+    if !(1.0..=2400.0).contains(&ppi) {
+        return Err(bad(C, "ppi must be between 1 and 2400"));
+    }
+    let (_, max) = vectorcraft_tools::cropimage::image_ppi(im);
+    if ppi > max + 1e-6 {
+        let max = (max * 100.0 + 1e-6).floor() / 100.0;
+        return Err(bad(C, format!("ppi can't be more than {max} for this image")));
+    }
+    // An image whose pixels are not square is resampled on both sides, even at its denser side's resolution.
+    Ok(Some((ppi / 72.0, vectorcraft_tools::cropimage::keeps_resolution(im, ppi, 1e-6))))
+}
+
+/// A `w` × `h` image resampled at a resolution asked for, held to the size a drawing may have ([`MAX_PIXELS`], and
+/// no side past the renderer's).
+fn check_crop_size(w: f64, h: f64) -> Result<()> {
+    let side = f64::from(vectorcraft_render::MAX_RASTER_SIDE);
+    if w * h > MAX_PIXELS || w > side || h > side {
+        let (w, h) = (w as u64, h as u64);
+        return Err(bad("object.cropImage", format!("an image of {w} × {h} pixels is too large to draw")));
+    }
+    Ok(())
+}
+
+/// `img` resampled to `w` × `h` with its colors weighted by their alpha, so the color of a fully
+/// transparent pixel does not show at the edges of what is opaque. The weighted colors are held in
+/// 16 bits a channel until the end, so a nearly transparent pixel keeps its color. An error when
+/// the working copies would not fit ([`check_resample_size`]).
+fn resize_premultiplied(img: &image::RgbaImage, w: u32, h: u32) -> Result<image::RgbaImage> {
+    check_resample_size(img.width(), img.height(), w, h)?;
+    let mut pre = image::ImageBuffer::<image::Rgba<u16>, Vec<u16>>::new(img.width(), img.height());
+    for (d, s) in pre.pixels_mut().zip(img.pixels()) {
+        let a = u32::from(s[3]);
+        for (dc, sc) in d.0[..3].iter_mut().zip(&s.0[..3]) {
+            // c × 257 × a / 255, rounded: the color scaled to 16 bits and weighted.
+            *dc = ((u32::from(*sc) * 257 * a + 127) / 255) as u16;
+        }
+        d.0[3] = (a * 257) as u16;
+    }
+    let out = image::imageops::resize(&pre, w, h, image::imageops::FilterType::Lanczos3);
+    let mut res = image::RgbaImage::new(out.width(), out.height());
+    for (d, s) in res.pixels_mut().zip(out.pixels()) {
+        let a = u64::from(s[3]);
+        for (dc, sc) in d.0[..3].iter_mut().zip(&s.0[..3]) {
+            // c × 65535 / a back to 8 bits (÷ 257), rounded: c × 255 / a.
+            *dc = (u64::from(*sc) * 255 + a / 2).checked_div(a).unwrap_or(0).min(255) as u8;
+        }
+        d.0[3] = ((a + 128) / 257).min(255) as u8;
+    }
+    Ok(res)
+}
+
+/// Whether resampling a `sw` × `sh` image to `w` × `h` fits in [`MAX_RASTER_ALLOC`]: the source and
+/// its weighted 16-bit copy (12 bytes a pixel), the resampler's float rows between its two passes
+/// (16 bytes a pixel, `sw` × `h`) and the 16-bit and 8-bit results (12 bytes a pixel of `w` × `h`).
+pub(crate) fn check_resample_size(sw: u32, sh: u32, w: u32, h: u32) -> Result<()> {
+    let (sw, sh, w, h) = (u64::from(sw), u64::from(sh), u64::from(w), u64::from(h));
+    let bytes = (sw * sh).saturating_mul(12).saturating_add((sw * h).saturating_mul(16)).saturating_add((w * h).saturating_mul(12));
+    if bytes > crate::cmd::fileio::MAX_RASTER_ALLOC {
+        return Err(bad("object.cropImage", format!("an image of {sw} × {sh} pixels is too large to resample")));
+    }
+    Ok(())
+}
+
+/// `img` as PNG bytes.
+fn encode_png(img: &image::RgbaImage) -> Result<Vec<u8>> {
     let mut png = Vec::new();
-    cut.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
-    Some((png, x1 - x0, y1 - y0, im.xf * Affine::translate((f64::from(x0), f64::from(y0)))))
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| bad("object.cropImage", e.to_string()))?;
+    Ok(png)
 }
 
 fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1014,9 +1090,15 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     let node = st.doc.node(id).cloned().ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
     if switch_or(p, "trim", false, C)? {
+        if p.get("ppi").is_some_and(|v| !v.is_null()) {
+            return Err(bad(C, "trim keeps the image's pixels as they are: leave out ppi"));
+        }
         return trim_image(s, id, (**im).clone());
     }
     let ib = node.geometric_bounds().ok_or_else(|| bad(C, "image has no bounds"))?;
+    let asked = crop_resolution(p, im)?;
+    // The resolution the image's pixels are resampled to when they are cut straight.
+    let target = asked.and_then(|(t, keeps)| (!keeps).then_some(t));
     let rect = match p.get("rect").filter(|v| !v.is_null()) {
         Some(Value::Array(a)) if a.len() == 4 => {
             let v: Vec<f64> = a.iter().filter_map(Value::as_f64).collect();
@@ -1038,16 +1120,49 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     if r.width() <= 0.0 || r.height() <= 0.0 {
         return Err(bad(C, "crop rectangle doesn't overlap the image"));
     }
-    if (r.x0 - ib.x0).abs() < 1e-6 && (r.y0 - ib.y0).abs() < 1e-6 && (r.x1 - ib.x1).abs() < 1e-6 && (r.y1 - ib.y1).abs() < 1e-6 {
+    // A box over the whole image still resamples it to a new resolution.
+    let whole = (r.x0 - ib.x0).abs() < 1e-6 && (r.y0 - ib.y0).abs() < 1e-6 && (r.x1 - ib.x1).abs() < 1e-6 && (r.y1 - ib.y1).abs() < 1e-6;
+    // A turned or skewed image is drawn, so a resolution asked for, even its own, still makes a new image.
+    let [_, xb, xc, _, _, _] = im.xf.as_coeffs();
+    let turned = xb.abs() > 1e-9 || xc.abs() > 1e-9;
+    if whole && target.is_none() && (asked.is_none() || !turned) {
         return Err(bad(C, "nothing to crop"));
     }
-    // A plain, axis-aligned raster is cut straight from its pixels, so nothing is resampled.
-    if let Some((png, cw, ch, xf)) = crop_pixels(&st.doc, im, r) {
-        put_pixels(s, id, png, cw, ch, xf)?;
+    if let Some(t) = target {
+        check_crop_size((r.width() * t).round().max(1.0), (r.height() * t).round().max(1.0))?;
+    }
+    // A plain, axis-aligned raster is cut straight from its pixels, so nothing is resampled unless a
+    // resolution is asked for.
+    if let Some((cut, xf)) = crop_pixels(&st.doc, im, r) {
+        let (cut, xf) = match target {
+            Some(t) => {
+                let (cw, ch) = cut.dimensions();
+                let (w, h) = ((r.width() * t).round().max(1.0) as u32, (r.height() * t).round().max(1.0) as u32);
+                let resized = resize_premultiplied(&cut, w, h)?;
+                (resized, xf * Affine::scale_non_uniform(f64::from(cw) / f64::from(w), f64::from(ch) / f64::from(h)))
+            }
+            None => (cut, xf),
+        };
+        let (cw, ch) = cut.dimensions();
+        put_pixels(s, id, encode_png(&cut)?, cw, ch, xf)?;
         return Ok(json!({ "id": id.0, "width": cw, "height": ch }));
     }
-    // Keep the image's pixel density.
-    let scale = (im.width as f64 / ib.width().max(1e-9)).max(im.height as f64 / ib.height().max(1e-9));
+    // A drawn crop is made at a resolution asked for even when it is the image's own: the box of a
+    // turned or skewed image holds fewer of its pixels a point than the image does.
+    let target = asked.map(|(t, _)| t);
+    if let Some(t) = target {
+        check_crop_size((r.width() * t).round().max(1.0), (r.height() * t).round().max(1.0))?;
+    }
+    // Drawn at the image's pixel density, or for a resolution asked for at up to twice that (no more
+    // than the image's own, measured on its pixel grid however it is turned, nor past the size a
+    // drawing may have), and resampled to it.
+    let native = (im.width as f64 / ib.width().max(1e-9)).max(im.height as f64 / ib.height().max(1e-9));
+    let scale = target.map_or(native, |t| {
+        let own = native.max(vectorcraft_tools::cropimage::image_ppi(im).0 / 72.0);
+        let side = f64::from(vectorcraft_render::MAX_RASTER_SIDE);
+        let budget = (MAX_PIXELS / (r.width() * r.height()).max(1e-9)).sqrt().min(side / r.width().max(1e-9)).min(side / r.height().max(1e-9));
+        (2.0 * t).min(own).min(budget).max(t.min(own))
+    });
     let mut bare = node.clone();
     bare.opacity = 1.0;
     bare.blend = Default::default();
@@ -1058,23 +1173,41 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(e) = bare.extras_if_any() {
         e.color_mask = None;
     }
+    let (dw, dh) = ((r.width() * scale).round().max(1.0), (r.height() * scale).round().max(1.0));
+    let region = Rect::new(r.x0, r.y0, r.x0 + dw / scale, r.y0 + dh / scale);
+    // At a resolution asked for, the drawing is fitted to the box below: the image is stretched
+    // about the box's corner so the box fills the whole pixels drawn, and nothing past it is drawn.
+    if target.is_some()
+        && let NodeKind::Image(bi) = &mut bare.kind
+    {
+        let o = r.origin().to_vec2();
+        bi.xf = Affine::translate(o)
+            * Affine::scale_non_uniform(region.width() / r.width(), region.height() / r.height())
+            * Affine::translate(-o)
+            * bi.xf;
+    }
     let tmp = isolated_doc(&st.doc, vec![bare]);
-    let region = Rect::new(r.x0, r.y0, r.x0 + (r.width() * scale).round().max(1.0) / scale, r.y0 + (r.height() * scale).round().max(1.0) / scale);
     let (png, w, h, warning) =
         render_png(&tmp, region, scale, &RasterExportOptions::default().render_options(RasterFormat::Png), RasterColorModel::Document)?;
+    // At a resolution asked for, the drawing is resampled to the box's size at that resolution and
+    // fitted to the box, so the image keeps its size.
+    let (png, w, h, xf) = match target {
+        Some(t) => {
+            let drawn = image::load_from_memory(&png).map_err(|e| bad(C, e.to_string()))?.into_rgba8();
+            // Only the decoded pixels are held while they are resampled.
+            drop(png);
+            let (tw, th) = ((r.width() * t).round().max(1.0) as u32, (r.height() * t).round().max(1.0) as u32);
+            let resized = resize_premultiplied(&drawn, tw, th)?;
+            let xf = Affine::translate(r.origin().to_vec2()) * Affine::scale_non_uniform(r.width() / f64::from(tw), r.height() / f64::from(th));
+            (encode_png(&resized)?, tw, th, xf)
+        }
+        None => (png, w, h, Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale)),
+    };
     s.edit("Crop Image", |d, _| {
         let key = unique_key(d, "crop");
         d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", png));
         if let Some(n) = d.node_mut(id) {
-            n.kind = NodeKind::Image(Box::new(ImageObject {
-                key,
-                width: w,
-                height: h,
-                xf: Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale),
-                link: None,
-                placement: Default::default(),
-                pixels: None,
-            }));
+            n.kind = NodeKind::Image(Box::new(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None }));
         }
         Ok(())
     })?;
