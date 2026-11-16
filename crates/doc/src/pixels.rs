@@ -34,7 +34,27 @@ pub fn header_size(bytes: &[u8]) -> Option<(u32, u32)> {
         // A GIF frame may be larger than the logical screen the image crate gave as its size.
         return craft_image_codecs::probe_size(bytes).ok();
     }
-    craft_image_codecs::probe_allocation_size(bytes).ok().or_else(|| craft_image_codecs::probe_size(bytes).ok())
+    craft_image_codecs::probe_allocation_size(bytes)
+        .ok()
+        .or_else(|| craft_image_codecs::probe_size(bytes).ok())
+        // A BMP whose pixel data does not match its header (a truncated file, or a header that
+        // declares more pixels than the file holds) is refused by the image crate decoder the
+        // probes use. The BITMAPINFOHEADER still names the size, which Place, Paste and Open
+        // need so they can say the image is too large to draw instead of that its size can't
+        // be read.
+        .or_else(|| bmp_header_size(bytes))
+}
+
+/// Width and height from a BMP file's BITMAPINFOHEADER, without opening it as a decoder would.
+/// Height may be negative (top-down storage); the stored magnitude is the size.
+fn bmp_header_size(bytes: &[u8]) -> Option<(u32, u32)> {
+    if bytes.get(..2) != Some(b"BM") {
+        return None;
+    }
+    let dim = |at: usize| -> Option<i32> { Some(i32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?)) };
+    let width = u32::try_from(dim(18)?).ok().filter(|&n| n > 0)?;
+    let height = dim(22)?.unsigned_abs();
+    (height > 0).then_some((width, height))
 }
 
 impl ImageBlob {
@@ -625,5 +645,18 @@ mod tests {
             }
         }
         assert!(checked >= 20, "{checked}");
+    }
+
+    /// A BMP header that declares 30,000 × 30,000 pixels, with only one pixel of data, still
+    /// reports that size: Paste and Place can then say the image is too large to draw.
+    #[test]
+    fn a_truncated_bmp_header_still_gives_its_declared_size() {
+        let mut bmp = vec![];
+        image::RgbImage::from_pixel(1, 1, image::Rgb([200, 40, 40])).write_to(&mut Cursor::new(&mut bmp), image::ImageFormat::Bmp).unwrap();
+        bmp[18..22].copy_from_slice(&30_000i32.to_le_bytes());
+        bmp[22..26].copy_from_slice(&30_000i32.to_le_bytes());
+        assert_eq!(header_size(&bmp), Some((30_000, 30_000)));
+        let (w, h, _) = crate::decode::decoded_layout(&bmp, craft_image_codecs::Format::Bmp).expect("layout from the header");
+        assert_eq!((w, h), (30_000, 30_000));
     }
 }
