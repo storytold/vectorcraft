@@ -705,6 +705,7 @@ font-technology	Variable	Biến thiên
 	Constrain	Giữ tỷ lệ
 	Constrain Angle	Ràng buộc góc
 	Constrain Width and Height Proportions	Ràng buộc tỷ lệ chiều rộng và chiều cao
+	Copy Width to Height	Sao chép chiều rộng sang chiều cao
 	Construction Guides	Đường căn xây dựng
 	Contextual Alternates	Ký tự thay thế theo ngữ cảnh
 	Contextual Task Bar	Thanh tác vụ theo ngữ cảnh

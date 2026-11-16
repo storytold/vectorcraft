@@ -1368,6 +1368,7 @@ antiAlias	Sharp	シャープ
 	Conflict {n} of {count}	競合 {n} / {count}
 	Constrain Angle	角度を制限
 	Constrain Width and Height Proportions	幅と高さの縦横比を固定
+	Copy Width to Height	幅を高さにコピー
 	Construction Guides	作図ガイド
 	Contextual Alternates	前後関係に依存する字形
 	Convert	変換
