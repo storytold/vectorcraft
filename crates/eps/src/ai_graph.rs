@@ -17,8 +17,8 @@ use std::fmt::Write;
 use kurbo::{PathSeg, Point};
 use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::{
-    Appearance, AppearanceItem, GraphKind, GraphSpec, LabelStyles, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES, Node, NodeId, NodeKind, PiePosition,
-    PieSort, TickLength, ValueAxisSide,
+    Appearance, AppearanceItem, DEFAULT_FILLED_LINE_WIDTH, FILLED_LINE_OUTLINE_WIDTH, GraphKind, GraphSpec, LabelStyles, MAX_GRAPH_CATEGORIES,
+    MAX_GRAPH_SERIES, MIN_FILLED_LINE_WIDTH, Node, NodeId, NodeKind, PiePosition, PieSort, TickLength, ValueAxisSide,
 };
 use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, Rect};
@@ -45,6 +45,9 @@ const EDGE: f64 = 0.01;
 
 /// Most values one `Gc` takes.
 const CELLS_PER_RECORD: usize = 15;
+
+/// Widest `lineShapeWidth` the records give, in points (appendix A, `Gy`).
+const MAX_LINE_WIDTH: f64 = 100.0;
 
 /// A graph's records: what goes before its group (`%_Gs` to `%_GC`), and the `Go` line that follows
 /// each series' group, by the group's id. `%_GS` follows the group.
@@ -89,7 +92,8 @@ pub(crate) fn records(n: &Node, to_art: Affine) -> Option<Records> {
     (r.is_finite() && r.width() > 0.0 && r.height() > 0.0).then_some(())?;
     let plot = to_art.transform_rect_bbox(r);
     (plot.is_finite() && plot.width() > 0.0 && plot.height() > 0.0).then_some(())?;
-    let tags = series_groups(children, width, first_col, g.kind == GraphKind::Line)?;
+    let line = g.kind == GraphKind::Line;
+    let tags = series_groups(children, width, first_col, line, line && g.filled_lines)?;
     draws_axes(n, r).then_some(())?;
     let placed = n.geometric_bounds()?;
     (r.x0 >= placed.x0 - EDGE && r.y0 >= placed.y0 - EDGE && r.x1 <= placed.x1 + EDGE && r.y1 <= placed.y1 + EDGE).then_some(())?;
@@ -97,14 +101,17 @@ pub(crate) fn records(n: &Node, to_art: Affine) -> Option<Records> {
     let mut head = String::from("%_Gs\n");
     let _ = writeln!(head, "%_{} {} {} {} Gb", real(plot.x0), real(plot.y1), real(plot.x1), real(plot.y0));
     let flag = |b: bool| u8::from(b);
+    // `lineShapeWidth`: the width filled lines are drawn at, the graph's default included.
     let _ = writeln!(
         head,
-        "%_{ty} {} {} 14 {} {} 0 {} 6 44 Gy",
+        "%_{ty} {} {} 14 {} {} {} {} {} 44 Gy",
         flag(g.drop_shadow),
         flag(g.first_row_in_front),
         flag(g.mark_points),
         flag(g.connect_points),
-        flag(g.legend_across_top)
+        flag(g.filled_lines),
+        flag(g.legend_across_top),
+        real(g.line_width.unwrap_or(DEFAULT_FILLED_LINE_WIDTH))
     );
     let _ =
         writeln!(head, "%_10 2 {} 0 {} {} {} Gd", flag(g.first_column_in_front), real(g.column_width), real(g.cluster_width), flag(g.edge_to_edge));
@@ -233,10 +240,11 @@ fn tick(t: TickLength) -> u8 {
 }
 
 /// Whether `g`'s settings are ones the records give and the reader keeps: a legend beside or across
-/// the top, every series of the graph's type, one value axis on the left, lines not filled and no
-/// Line Width of their own, no graph
-/// designs, label formatting or pie settings, column and cluster widths of 1% to 1000%, and at most
-/// [`MAX_TICK_MARKS`] tick marks a division.
+/// the top, every series of the graph's type, one value axis on the left, lines filled only where
+/// they connect the points (the records ignore the setting otherwise), a Line Width of 0.01 to
+/// [`MAX_LINE_WIDTH`] points, with filled lines no series stroked as the bands' outline
+/// ([`band_outline`]), which the reader reads as bands, no graph designs, label formatting or pie settings, column and
+/// cluster widths of 1% to 1000%, and at most [`MAX_TICK_MARKS`] tick marks a division.
 fn settings_kept(g: &GraphSpec) -> bool {
     let percent = |p: f64| (1.0..=1000.0).contains(&p);
     g.legend
@@ -244,8 +252,9 @@ fn settings_kept(g: &GraphSpec) -> bool {
         && g.value_axis == ValueAxisSide::Left
         && !g.separate_scales
         && g.right_series.is_empty()
-        && !g.filled_lines
-        && g.line_width.is_none()
+        && (g.connect_points || !g.filled_lines)
+        && g.line_width.is_none_or(|w| (MIN_FILLED_LINE_WIDTH..=MAX_LINE_WIDTH).contains(&w))
+        && !(g.kind == GraphKind::Line && g.filled_lines && g.series_paints.iter().any(|p| band_outline(&p.stroke.clone().zip(p.stroke_width))))
         && g.series_markers.iter().all(Option::is_none)
         && g.series_columns.iter().all(Option::is_none)
         && g.label_styles == LabelStyles::default()
@@ -320,10 +329,13 @@ fn plain_paint(p: &Node) -> Option<(Option<Paint>, Option<(Paint, f64)>)> {
 
 /// The `Go` line of each series' group among `children`: a group whose series index is one of the
 /// `series` the table has, each once, of paths [`as_drawn`] with one fill and one line alike
-/// ([`plain_paint`]), every path filled unless the graph draws lines (`line`). Its column is the
+/// ([`plain_paint`]), every path filled unless the graph draws lines (`line`). With filled lines
+/// (`bands`), a filled path outlined as [`band_outline`] says is a band, any other filled path is a
+/// [`square`] marker or swatch, and the line of the paths that are not bands is the series' line,
+/// as the reader reads it. Its column is the
 /// table's: after the label column when there is one (`first_col`). `None` when a series has no
 /// such group.
-fn series_groups(children: &[std::sync::Arc<Node>], series: usize, first_col: usize, line: bool) -> Option<HashMap<NodeId, String>> {
+fn series_groups(children: &[std::sync::Arc<Node>], series: usize, first_col: usize, line: bool, bands: bool) -> Option<HashMap<NodeId, String>> {
     let mut tags = HashMap::new();
     let mut seen = vec![false; series];
     for c in children {
@@ -334,19 +346,61 @@ fn series_groups(children: &[std::sync::Arc<Node>], series: usize, first_col: us
         *slot = true;
         let NodeKind::Group { children: paths, clip: false } = &c.kind else { return None };
         (as_drawn(c) && *c.appearance == Appearance::default() && !paths.is_empty()).then_some(())?;
-        let mut paints = vec![];
+        let (mut paints, mut strokes) = (vec![], vec![]);
         for p in paths {
             as_drawn(p).then_some(())?;
-            paints.push(plain_paint(p)?);
+            let (fill, outline) = plain_paint(p)?;
+            if bands && fill.is_some() && band_outline(&outline) {
+                // A band, or a mark outlined as one, which the reader reads as a band.
+            } else if bands && fill.is_some() && !square(p) {
+                return None;
+            } else {
+                strokes.push(outline);
+            }
+            paints.push(fill);
         }
-        let fill = paints.iter().find_map(|(f, _)| f.clone());
-        paints.iter().all(|(f, _)| f.is_none() || *f == fill).then_some(())?;
-        (line || paints.iter().all(|(f, _)| f.is_some())).then_some(())?;
-        let stroke = paints.first().and_then(|(_, s)| s.clone());
-        paints.iter().all(|(_, s)| *s == stroke).then_some(())?;
+        let fill = paints.iter().find_map(Clone::clone);
+        paints.iter().all(|f| f.is_none() || *f == fill).then_some(())?;
+        (line || paints.iter().all(Option::is_some)).then_some(())?;
+        let stroke = strokes.first().cloned().flatten();
+        strokes.iter().all(|s| *s == stroke).then_some(())?;
         tags.insert(c.id, format!("%_2 {} 0 0 Go", s + first_col));
     }
     seen.iter().all(|s| *s).then_some(tags)
+}
+
+/// Whether `stroke`, a path's line and its weight, is the thin black outline Draw Filled Lines
+/// draws around a band, whatever the series' own line.
+pub(crate) fn band_outline(stroke: &Option<(Paint, f64)>) -> bool {
+    stroke
+        .as_ref()
+        .is_some_and(|(paint, width)| *width == FILLED_LINE_OUTLINE_WIDTH && paint.color().is_some_and(|c| c.to_rgb_uncalibrated() == [0.0; 3]))
+}
+
+/// Whether path `p` is a square with sides along the page's axes, as a data point's default
+/// marker and a legend swatch are: four straight sides, closed, as wide as it is tall. In a series
+/// with filled lines, every other filled path is a band.
+pub(crate) fn square(p: &Node) -> bool {
+    let NodeKind::Path { path, .. } = &p.kind else { return false };
+    if path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).count() != 1 {
+        return false;
+    }
+    let near = |a: f64, b: f64| (a - b).abs() <= EDGE;
+    let mut sides = vec![];
+    for s in path.to_bezpath().segments() {
+        let PathSeg::Line(l) = s else { return false };
+        if !(near(l.p0.x, l.p1.x) && near(l.p0.y, l.p1.y)) {
+            sides.push(l);
+        }
+    }
+    let [first, _, _, last] = sides.as_slice() else { return false };
+    let (x0, x1) = sides.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), l| (lo.min(l.p0.x), hi.max(l.p0.x)));
+    let (y0, y1) = sides.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), l| (lo.min(l.p0.y), hi.max(l.p0.y)));
+    near(last.p1.x, first.p0.x)
+        && near(last.p1.y, first.p0.y)
+        && sides.iter().all(|l| near(l.p0.x, l.p1.x) || near(l.p0.y, l.p1.y))
+        && x1 - x0 > EDGE
+        && near(x1 - x0, y1 - y0)
 }
 
 /// Whether `art` draws plot `plot`'s left edge and its bottom edge (the document's y runs down) as
@@ -409,7 +463,8 @@ pub(crate) mod sample {
     }
 
     /// Graph `g` drawn as a group: a group of each series' marks (a line graph's series as an unfilled
-    /// line, the others' as filled columns), its axes on the plot's left and bottom edges, and a
+    /// line, or with filled lines as an outlined band and its markers, the others' as filled
+    /// columns), its axes on the plot's left and bottom edges, and a
     /// legend of a swatch for each series; its series groups named after the series.
     pub(crate) fn graph(doc: &mut Document, g: GraphSpec) -> Node {
         let r = g.rect;
@@ -430,7 +485,27 @@ pub(crate) mod sample {
                     row.get(s).copied().flatten().map(|v| Point::new(r.x0 + 20.0 + 60.0 * c as f64 + 15.0 * s as f64, r.y1 - v * 10.0))
                 })
                 .collect();
-            let marks: Vec<Arc<Node>> = if g.kind == GraphKind::Line {
+            let marks: Vec<Arc<Node>> = if g.kind == GraphKind::Line && g.filled_lines {
+                // A band around the line, as wide as the Line Width, with the thin black outline, and a
+                // marker on each point.
+                let half = g.filled_line_width() / 2.0;
+                let mut bp = kurbo::BezPath::new();
+                for (i, p) in points.iter().enumerate() {
+                    if i == 0 { bp.move_to((p.x, p.y - half)) } else { bp.line_to((p.x, p.y - half)) }
+                }
+                for p in points.iter().rev() {
+                    bp.line_to((p.x, p.y + half));
+                }
+                bp.close_path();
+                let band = Node::path(
+                    doc.alloc_id(),
+                    PathData::from_bezpath(&bp),
+                    Appearance::basic(gray.clone(), Paint::solid(Color::BLACK), super::FILLED_LINE_OUTLINE_WIDTH),
+                );
+                let mut marks = vec![Arc::new(band)];
+                marks.extend(points.iter().map(|p| path(doc, shapes::rectangle(Rect::from_center_size(*p, (5.0, 5.0))), gray.clone(), Paint::None)));
+                marks
+            } else if g.kind == GraphKind::Line {
                 let mut bp = kurbo::BezPath::new();
                 for (i, p) in points.iter().enumerate() {
                     if i == 0 { bp.move_to(*p) } else { bp.line_to(*p) }
@@ -472,7 +547,7 @@ pub(crate) mod sample {
 
     /// Graphs whose records read back whole: each type the records give, every setting they keep
     /// changed, labels with parentheses, backslashes and non-ASCII characters, a label of 255 bytes,
-    /// and a table without labels.
+    /// a table without labels, and line graphs with filled lines and Line Widths the records give.
     pub(crate) fn kept() -> Vec<(&'static str, Document)> {
         let mut cases = vec![
             ("column", document(spec(GraphKind::Column))),
@@ -497,6 +572,18 @@ pub(crate) mod sample {
         let mut g = spec(GraphKind::Column);
         (g.series, g.categories) = (vec![], vec![]);
         cases.push(("no labels", document(g)));
+        let line = |f: &dyn Fn(&mut GraphSpec)| {
+            let mut g = spec(GraphKind::Line);
+            f(&mut g);
+            document(g)
+        };
+        cases.extend([
+            ("filled lines", line(&|g| g.filled_lines = true)),
+            ("filled lines 8 pt wide", line(&|g| (g.filled_lines, g.line_width) = (true, Some(8.0)))),
+            ("filled lines 100 pt wide", line(&|g| (g.filled_lines, g.line_width) = (true, Some(100.0)))),
+            ("filled lines 0.01 pt wide", line(&|g| (g.filled_lines, g.line_width) = (true, Some(0.01)))),
+            ("a Line Width without filled lines", line(&|g| g.line_width = Some(8.0))),
+        ]);
         cases
     }
 
@@ -515,8 +602,20 @@ pub(crate) mod sample {
             .collect();
         cases.extend([
             ("no legend", with(&|g| g.legend = false)),
-            ("filled lines", with(&|g| (g.kind, g.filled_lines) = (GraphKind::Line, true))),
-            ("a filled line width", with(&|g| (g.kind, g.line_width) = (GraphKind::Line, Some(8.0)))),
+            ("a Line Width past 100 pt", with(&|g| (g.kind, g.filled_lines, g.line_width) = (GraphKind::Line, true, Some(150.0)))),
+            ("a Line Width under 0.01 pt", with(&|g| (g.kind, g.filled_lines, g.line_width) = (GraphKind::Line, true, Some(0.001)))),
+            ("filled lines without connected points", with(&|g| (g.kind, g.filled_lines, g.connect_points) = (GraphKind::Line, true, false))),
+            (
+                "filled lines with series stroked as their outline",
+                with(&|g| {
+                    (g.kind, g.filled_lines) = (GraphKind::Line, true);
+                    g.series_paints = vec![vectorcraft_doc::SeriesPaint {
+                        stroke: Some(Paint::solid(Color::BLACK)),
+                        stroke_width: Some(super::FILLED_LINE_OUTLINE_WIDTH),
+                        ..Default::default()
+                    }];
+                }),
+            ),
             ("a series of another type", with(&|g| g.series_kinds = vec![None, Some(GraphKind::Line)])),
             ("a marker design", with(&|g| g.series_markers = vec![Some("Star".into())])),
             ("a column design", with(&|g| g.series_columns = vec![Some(Default::default())])),
@@ -643,6 +742,29 @@ mod tests {
         let head = records(&n, Affine::IDENTITY).map(|r| r.head).unwrap_or_default();
         let marks: Vec<&str> = head.lines().filter(|l| l.ends_with(" GA")).map(|l| l.split(' ').nth(5).unwrap_or("")).collect();
         assert_eq!(marks, ["1", "1", "1"], "{head}");
+    }
+
+    /// A marker or swatch is a square along the page's axes; a band, a rotated square, a rectangle
+    /// of other proportions and an open path are not.
+    #[test]
+    fn markers_are_squares_and_bands_are_not() {
+        use vectorcraft_geom::shapes;
+        let node = |p: vectorcraft_geom::PathData| Node::path(NodeId(1), p, Appearance::default());
+        assert!(square(&node(shapes::rectangle(Rect::new(10.0, 10.0, 15.0, 15.0)))), "a 5 pt marker");
+        assert!(!square(&node(shapes::rectangle(Rect::new(10.0, 10.0, 60.0, 13.0)))), "a band along a level line");
+        let mut diamond = kurbo::BezPath::new();
+        diamond.move_to((0.0, 5.0));
+        diamond.line_to((5.0, 0.0));
+        diamond.line_to((10.0, 5.0));
+        diamond.line_to((5.0, 10.0));
+        diamond.close_path();
+        assert!(!square(&node(vectorcraft_geom::PathData::from_bezpath(&diamond))), "a rotated square");
+        let mut open = kurbo::BezPath::new();
+        open.move_to((0.0, 0.0));
+        for p in [(5.0, 0.0), (5.0, 5.0), (0.0, 5.0), (0.0, 1.0)] {
+            open.line_to(p);
+        }
+        assert!(!square(&node(vectorcraft_geom::PathData::from_bezpath(&open))), "an open path");
     }
 
     /// A table's cells go fifteen to a record, with one string at most in each.

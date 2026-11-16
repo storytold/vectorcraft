@@ -520,16 +520,15 @@ fn the_filter_is_drawn_and_written_from_its_filter_parts_alone() {
 #[test]
 fn filter_images_are_small_raster_images() {
     fn png(w: u32, h: u32) -> Vec<u8> {
-        let mut out = vec![];
-        image::ImageEncoder::write_image(
-            image::codecs::png::PngEncoder::new(&mut out),
-            &vec![0; (w * h * 4) as usize],
+        let img = craft_image_codecs::Image::from_raw(
             w,
             h,
-            image::ExtendedColorType::Rgba8,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            vec![0; (w * h * 4) as usize],
         )
         .unwrap();
-        out
+        craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
     }
     let raster_image = |data| raster_image_sized(data).map(|(kind, _)| kind);
     assert!(matches!(raster_image(Arc::new(png(2, 2))), Some(usvg::ImageKind::PNG(_))));
@@ -547,8 +546,12 @@ fn filter_images_are_small_raster_images() {
 
 /// A 2 × 2 PNG whose header claims `w` × `h` pixels (its IHDR rewritten, with the CRC fixed).
 fn png_claiming(w: u32, h: u32) -> Vec<u8> {
-    let mut out = vec![];
-    image::ImageEncoder::write_image(image::codecs::png::PngEncoder::new(&mut out), &[0; 16], 2, 2, image::ExtendedColorType::Rgba8).unwrap();
+    let mut out = craft_image_codecs::encode(
+        &craft_image_codecs::Image::from_raw(2, 2, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, vec![0; 16]).unwrap(),
+        craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
+    )
+    .unwrap();
     out[16..20].copy_from_slice(&w.to_be_bytes());
     out[20..24].copy_from_slice(&h.to_be_bytes());
     let crc = crc32(&out[12..29]);
