@@ -1479,6 +1479,8 @@ font-technology	Variable	Değişken
 	Show smooth color wheel	Kesintisiz renk tekerleğini göster
 	Show segmented color wheel	Bölümlü renk tekerleğini göster
 	Show color bars	Renk çubuklarını göster
+	Show brightness and hue on wheel	Tekerlekte parlaklık ve renk tonunu göster
+	Show saturation and hue on wheel	Tekerlekte doygunluk ve renk tonunu göster
 	Add Color Tool	Renk Ekle aracı
 	Remove Color Tool	Renk Kaldır aracı
 	Remove Color	Rengi kaldır

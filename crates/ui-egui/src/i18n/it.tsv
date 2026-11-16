@@ -1588,6 +1588,8 @@ file-filter	Templates	Modelli
 	Show smooth color wheel	Mostra ruota dei colori continua
 	Show segmented color wheel	Mostra ruota dei colori segmentata
 	Show color bars	Mostra barre di colore
+	Show brightness and hue on wheel	Mostra luminosità e tonalità sulla ruota
+	Show saturation and hue on wheel	Mostra saturazione e tonalità sulla ruota
 	Add Color Tool	Strumento Aggiungi colore
 	Remove Color Tool	Strumento Rimuovi colore
 	Remove Color	Rimuovi colore

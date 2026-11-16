@@ -1522,6 +1522,8 @@ font-technology	Variable	Variabla
 	Show smooth color wheel	Visa steglöst färghjul
 	Show segmented color wheel	Visa segmenterat färghjul
 	Show color bars	Visa färgstaplar
+	Show brightness and hue on wheel	Visa ljusstyrka och nyans på hjulet
+	Show saturation and hue on wheel	Visa mättnad och nyans på hjulet
 	Add Color Tool	Verktyget Lägg till färg
 	Remove Color Tool	Verktyget Ta bort färg
 	Remove Color	Ta bort färg

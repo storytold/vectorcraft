@@ -2957,6 +2957,8 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Näytä liukuva väriympyrä
 	Show segmented color wheel	Näytä segmentoitu väriympyrä
 	Show color bars	Näytä väripalkit
+	Show brightness and hue on wheel	Näytä kirkkaus ja sävy ympyrässä
+	Show saturation and hue on wheel	Näytä kylläisyys ja sävy ympyrässä
 	Add Color Tool	Lisää väri -työkalu
 	Remove Color Tool	Poista väri -työkalu
 	Remove Color	Poista väri

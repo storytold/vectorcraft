@@ -1516,6 +1516,8 @@ file-filter	Templates	模板
 	Show smooth color wheel	显示平滑色轮
 	Show segmented color wheel	显示分段色轮
 	Show color bars	显示颜色条
+	Show brightness and hue on wheel	在色轮上显示亮度和色相
+	Show saturation and hue on wheel	在色轮上显示饱和度和色相
 	Add Color Tool	添加颜色工具
 	Remove Color Tool	删除颜色工具
 	Remove Color	删除颜色

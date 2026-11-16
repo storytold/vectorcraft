@@ -1504,6 +1504,8 @@ font-technology	Variable	Променливи
 	Show smooth color wheel	Показване на плавно цветово колело
 	Show segmented color wheel	Показване на сегментирано цветово колело
 	Show color bars	Показване на цветни ленти
+	Show brightness and hue on wheel	Показване на яркост и оттенък на колелото
+	Show saturation and hue on wheel	Показване на насищане и оттенък на колелото
 	Add Color Tool	Инструмент „Добавяне на цвят“
 	Remove Color Tool	Инструмент „Премахване на цвят“
 	Remove Color	Премахване на цвят

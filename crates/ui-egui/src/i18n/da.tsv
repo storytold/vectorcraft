@@ -5461,6 +5461,8 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Vis glat farvehjul
 	Show segmented color wheel	Vis segmenteret farvehjul
 	Show color bars	Vis farvebjælker
+	Show brightness and hue on wheel	Vis lysstyrke og farvetone på hjulet
+	Show saturation and hue on wheel	Vis mætning og farvetone på hjulet
 	Add Color Tool	Værktøjet Tilføj farve
 	Remove Color Tool	Værktøjet Fjern farve
 	Remove Color	Fjern farve

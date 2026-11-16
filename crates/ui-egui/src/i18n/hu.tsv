@@ -1972,6 +1972,8 @@ file-filter	Templates	Sablonok
 	Show smooth color wheel	Folytonos színkör megjelenítése
 	Show segmented color wheel	Szegmentált színkör megjelenítése
 	Show color bars	Színsávok megjelenítése
+	Show brightness and hue on wheel	Fényesség és színárnyalat megjelenítése a színkörön
+	Show saturation and hue on wheel	Telítettség és színárnyalat megjelenítése a színkörön
 	Add Color Tool	Szín hozzáadása eszköz
 	Remove Color Tool	Szín eltávolítása eszköz
 	Remove Color	Szín eltávolítása
