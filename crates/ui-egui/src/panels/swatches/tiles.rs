@@ -64,7 +64,8 @@ pub(crate) fn draw_folder(ui: &Ui, r: Rect) {
 }
 
 /// The ink colours of the CMYK glyph (cyan, magenta, yellow, black) and the RGB glyph's bars.
-const CMYK_INKS: [Color32; 4] = [Color32::from_rgb(0, 174, 239), Color32::from_rgb(236, 0, 140), Color32::from_rgb(255, 242, 0), Color32::BLACK];
+pub(crate) const CMYK_INKS: [Color32; 4] =
+    [Color32::from_rgb(0, 174, 239), Color32::from_rgb(236, 0, 140), Color32::from_rgb(255, 242, 0), Color32::BLACK];
 
 const RGB_BARS: [Color32; 3] = [Color32::from_rgb(255, 0, 0), Color32::from_rgb(0, 200, 0), Color32::from_rgb(0, 0, 255)];
 

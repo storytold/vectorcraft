@@ -440,3 +440,43 @@ fn the_dimmed_scale_link_ignores_the_keyboard() {
     screen.run(&mut app, vec![]);
     assert_eq!(scale(&mut app), (100.0, 100.0, true));
 }
+
+/// The node screen readers call `label` with role `role`, and whether it is dimmed.
+fn node(screen: &mut Screen, app: &mut VectorcraftApp, label: &str, role: egui::accesskit::Role) -> Option<(egui::accesskit::NodeId, bool)> {
+    screen.run(app, vec![]);
+    let out = screen.run(app, vec![]);
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    nodes.iter().find(|(_, n)| n.label() == Some(label) && n.role() == role).map(|(id, n)| (*id, n.is_disabled()))
+}
+
+#[test]
+fn a_spot_inks_icon_converts_it_to_process_and_back() {
+    use egui::accesskit::{Action, ActionRequest, Role, TreeId};
+    let (mut app, _) = app();
+    app.run("swatch.new", json!({"name": "Gold", "color": {"model": "cmyk", "c": 0, "m": 0.2, "y": 0.8, "k": 0.1}, "spot": true})).unwrap();
+    app.run("file.print", json!({})).unwrap();
+    set(&mut app, "__section", json!("Output"));
+    set(&mut app, "output", json!({"mode": "separations"}));
+    let mut screen = Screen::new();
+    let click = |target_node| {
+        egui::Event::AccessKitActionRequest(ActionRequest { action: Action::Click, target_node, target_tree: TreeId::ROOT, data: None })
+    };
+    // Only the spot ink has the icon.
+    assert!(node(&mut screen, &mut app, "Convert Cyan to process", Role::Button).is_none());
+    let (convert, dimmed) = node(&mut screen, &mut app, "Convert Gold to process", Role::Button).expect("Gold's icon");
+    assert!(!dimmed);
+    assert_eq!(node(&mut screen, &mut app, "Gold", Role::CheckBox).map(|n| n.1), Some(false));
+    screen.run(&mut app, vec![click(convert)]);
+    assert_eq!(dialog(&mut app).fields["output"]["inks"], json!([{"name": "Gold", "print": true, "convertToProcess": true}]));
+    // Converted, it has no plate: its Print box is dimmed, and the icon turns it back.
+    assert_eq!(node(&mut screen, &mut app, "Gold", Role::CheckBox).map(|n| n.1), Some(true));
+    let (keep, _) = node(&mut screen, &mut app, "Keep Gold as spot", Role::Button).expect("the process icon");
+    screen.run(&mut app, vec![click(keep)]);
+    assert_eq!(dialog(&mut app).fields["output"]["inks"], json!([{"name": "Gold", "print": true, "convertToProcess": false}]));
+    // Convert All Spot Colors to Process converts it and dims the icon, keeping its own choice.
+    dialog(&mut app).fields["output"]["spotsToProcess"] = json!(true);
+    let (keep, dimmed) = node(&mut screen, &mut app, "Keep Gold as spot", Role::Button).expect("the process icon");
+    assert!(dimmed);
+    screen.run(&mut app, vec![click(keep)]);
+    assert_eq!(dialog(&mut app).fields["output"]["inks"], json!([{"name": "Gold", "print": true, "convertToProcess": false}]));
+}

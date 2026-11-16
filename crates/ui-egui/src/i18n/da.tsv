@@ -5390,6 +5390,8 @@ digits	Malayalam	Malayalam
 	Collate	Sortér
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Kompositfarver konverteres til den; separationer separeres med den, når det er en CMYK-profil.
 	Convert All Spot Colors to Process	Konvertér alle spotfarver til procesfarver
+	Convert {name} to process	Konvertér {name} til procesfarve
+	Keep {name} as spot	Behold {name} som spotfarve
 	Default Printer	Standardprinter
 	Document Ink Options	Indstillinger for dokumentblæk
 	Download:	Download:

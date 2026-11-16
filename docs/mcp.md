@@ -7509,7 +7509,7 @@ nothing. Opening a document reads a DCS file and its plates again even with the 
 keeps the saved preview of other linked EPS files. These rules are VectorCraft's own: the screen, composite print and exports show the image as its plates
 mixed into CMYK (each ink amount times the ink's CMYK values, plates combined as `1 − (1 − a)(1 − b)`); Separations
 Preview and `file.print` separations show each plate on its own ink, and a spot plate prints as the document's swatch
-of its ink (else its CMYK values) with `spotsToProcess`. Separations Preview shows a reduced image's plates as the
+of its ink (else its CMYK values) with `spotsToProcess` or that ink's own `convertToProcess`. Separations Preview shows a reduced image's plates as the
 mean of the plate pixels each shown pixel covers. A file may name 64 plates, a plate file may be 1 GB, and the plates together may hold 512 MB of
 ink amounts; a plate that can't be read is an error naming the plate, and nothing is placed. The plates go on the first
 plate's pixel grid, grown to hold every plate where it prints; a plate of another size or position is resampled onto
@@ -8578,7 +8578,9 @@ picked as the printer, File → Print saves the PDF instead (see Printing). Head
 `{pages, path | dataBase64, bytes, warnings}`; `print.preview {settings?}`
 answers what it would print without writing it: `{pages (copies included), sheets: [{artboard, tile?, ink?, width,
 height, orientation, scale}] (one copy, in order), tiles: [{artboard, columns, rows, printed, tiles}] (document
-space), inks: [{name, spot, print, frequency, angle}], warnings, settings}`. `print.setup {settings?}` saves the
+space), inks: [{name, spot, print, frequency, angle}] (the plates), documentInks: [{name, spot, print, frequency,
+angle, convertToProcess?}] (every ink of the document, the spot inks printing as process included), warnings,
+settings}`. `print.setup {settings?}` saves the
 settings with the document (one undo step, kept in the native file as `print_setup`); both other commands start from
 the saved settings, or from a print preset's with `preset` (see Print presets), with `settings` over them (`null` keeps
 a value). `list_commands` with filter `print.setup`
@@ -8608,9 +8610,19 @@ documents every field:
 - `marks` and `bleed` as `document.exportPdf` takes them (the bleed is the document's unless `useDocument: false`),
   drawn around the artboard at the paper's scale; the page information adds the tile and the ink with its screen.
 - `output: {mode: composite|separations, emulsion: up|down, image: positive|negative, spotsToProcess, overprintBlack,
-  inks: [{name, print, frequency, angle}]}`: separations print one page per ink in the gray of its coverage (images
-  too; overprinting fills, strokes and characters don't knock out), Registration on every plate; emulsion down mirrors
-  the page and a negative inverts it.
+  inks: [{name, print, frequency, angle, convertToProcess}]}`: separations print one page per ink in the gray of its
+  coverage (images too; overprinting fills, strokes and characters don't knock out), Registration on every plate;
+  emulsion down mirrors the page and a negative inverts it.
+- `output.inks[].convertToProcess` (default false) prints one spot ink as process inks: it gets no plate of its own,
+  and its color prints on the Cyan, Magenta, Yellow and Black plates, while other spot inks keep their plates. The
+  Print dialog's Document Ink Options list shows an icon before each spot ink's name, and a click on it switches that
+  ink between spot and process output, as
+  [the help page](https://helpx.adobe.com/illustrator/using/printing-color-separations.html) describes for single
+  spot colors. The rest is VectorCraft's own rule. `spotsToProcess` converts every spot ink whatever each one's
+  own setting says, and the dialog then dims the icons; turning it off again applies each ink's own setting. A
+  converted ink's `print`, `frequency` and `angle` are kept for when it prints as a spot ink again, and its Print
+  checkbox and fields are dimmed: `print: false` does not leave its color out of the process plates. Process inks and
+  Registration have no icon, and `convertToProcess` on a process ink is ignored with a setting note.
 - `output.overprintBlack` (default false) makes black ink overprint in separations, as the Output step of
   [Print color separations](https://helpx.adobe.com/illustrator/using/printing-color-separations.html) describes:
   black art leaves the inks under it on the other plates. Which paints count as black is VectorCraft's own rule: a

@@ -2923,6 +2923,8 @@ digits	Malayalam	Malajálamské
 	Collate	Kompletovat
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Kompozitní barvy se na něj převádějí; separace podle něj separují, pokud je to profil CMYK.
 	Convert All Spot Colors to Process	Převést všechny přímé barvy na procesní
+	Convert {name} to process	Převést {name} na procesní
+	Keep {name} as spot	Ponechat {name} jako přímou barvu
 	Default Printer	Výchozí tiskárna
 	Document Ink Options	Možnosti inkoustů dokumentu
 	Download:	Stahování:

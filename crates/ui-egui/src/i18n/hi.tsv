@@ -1033,6 +1033,8 @@ antiAlias	Sharp	शार्प
 	Control	नियंत्रण
 	Convert	कन्वर्ट करें
 	Convert All Spot Colors to Process	सभी स्पॉट कलर्स को प्रोसेस में कनवर्ट करें
+	Convert {name} to process	{name} को प्रोसेस में कनवर्ट करें
+	Keep {name} as spot	{name} को स्पॉट के रूप में रखें
 	Convert All Strokes to Outlines	सभी स्ट्रोक को आउटलाइन में कनवर्ट करें
 	Convert All Text to Outlines	सभी टेक्स्ट को आउटलाइन में कनवर्ट करें
 	Convert Anchor Point	एंकर पॉइंट कनवर्ट करें

@@ -562,6 +562,8 @@ antiAlias	Sharp	锐利
 	Control	控制栏
 	Convert	转换
 	Convert All Spot Colors to Process	将所有专色转换为印刷色
+	Convert {name} to process	将 {name} 转换为印刷色
+	Keep {name} as spot	将 {name} 保留为专色
 	Convert All Strokes to Outlines	将所有描边转换为轮廓
 	Convert All Text to Outlines	将所有文字转换为轮廓
 	Convert Anchor Point	转换锚点

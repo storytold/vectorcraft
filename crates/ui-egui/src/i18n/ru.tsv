@@ -615,6 +615,8 @@ font-technology	Variable	Вариативные
 	Control	Control
 	Convert	Преобразовать
 	Convert All Spot Colors to Process	Преобразовать все плашечные цвета в составные
+	Convert {name} to process	Преобразовать {name} в составной цвет
+	Keep {name} as spot	Оставить {name} плашечным цветом
 	Convert All Strokes to Outlines	Преобразовать все обводки в контуры
 	Convert All Text to Outlines	Преобразовать весь текст в контуры
 	Convert Anchor Point	Преобразовать опорную точку

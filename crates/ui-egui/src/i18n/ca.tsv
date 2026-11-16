@@ -896,6 +896,8 @@ antiAlias	Sharp	Nítid
 	Conté Crayon…	Llapis Conté…
 	Convert	Converteix
 	Convert All Spot Colors to Process	Converteix tots els colors directes a quadricromia
+	Convert {name} to process	Converteix {name} a quadricromia
+	Keep {name} as spot	Mantén {name} com a color directe
 	Convert All Strokes to Outlines	Converteix tots els traços en contorns
 	Convert All Text to Outlines	Converteix tot el text en contorns
 	Convert Anchor Point	Converteix el punt d’ancoratge

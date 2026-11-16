@@ -576,6 +576,8 @@ font-technology	Variable	Μεταβλητές
 	Control	Έλεγχος
 	Convert	Μετατροπή
 	Convert All Spot Colors to Process	Μετατροπή όλων των πλακάτων χρωμάτων σε χρώματα τετραχρωμίας
+	Convert {name} to process	Μετατροπή του {name} σε χρώμα τετραχρωμίας
+	Keep {name} as spot	Διατήρηση του {name} ως πλακάτου χρώματος
 	Convert All Strokes to Outlines	Μετατροπή όλων των περιγραμμάτων σε διαδρομές
 	Convert All Text to Outlines	Μετατροπή όλου του κειμένου σε περιγράμματα
 	Convert Anchor Point	Μετατροπή σημείου αγκύρωσης

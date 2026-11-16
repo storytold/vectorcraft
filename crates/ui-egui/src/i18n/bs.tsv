@@ -2839,6 +2839,8 @@ digits	Malayalam	Malajalam
 	Collate	Složi po kopijama
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Kompozitne boje se pretvaraju u njega; separacije se razdvajaju njime kad je CMYK profil.
 	Convert All Spot Colors to Process	Pretvori sve spot boje u procesne
+	Convert {name} to process	Pretvori {name} u procesnu
+	Keep {name} as spot	Zadrži {name} kao spot
 	Overprint Black	Pretisak crne
 	Default Printer	Zadani štampač
 	Document Ink Options	Opcije tinti dokumenta

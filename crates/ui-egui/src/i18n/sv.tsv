@@ -604,6 +604,8 @@ font-technology	Variable	Variabla
 	Control	Kontroll
 	Convert	Konvertera
 	Convert All Spot Colors to Process	Konvertera alla dekorfärger till process
+	Convert {name} to process	Konvertera {name} till process
+	Keep {name} as spot	Behåll {name} som dekorfärg
 	Convert All Strokes to Outlines	Konvertera alla konturer till konturbanor
 	Convert All Text to Outlines	Konvertera all text till konturbanor
 	Convert Anchor Point	Konvertera ankarpunkt

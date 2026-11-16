@@ -2867,6 +2867,8 @@ digits	Malayalam	Malajalam
 	Collate	Lajittele
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Yhdistelmävärit muunnetaan siihen; erottelut tehdään sen mukaan, kun se on CMYK-profiili.
 	Convert All Spot Colors to Process	Muunna kaikki spottivärit prosessiväreiksi
+	Convert {name} to process	Muunna {name} prosessiväriksi
+	Keep {name} as spot	Säilytä {name} spottivärinä
 	Default Printer	Oletustulostin
 	Document Ink Options	Asiakirjan musteasetukset
 	Download:	Lataus:

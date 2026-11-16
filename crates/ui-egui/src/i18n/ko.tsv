@@ -1363,6 +1363,8 @@ antiAlias	Sharp	날카롭게
 	Contextual Alternates	문맥 대체 글자
 	Convert	변환
 	Convert All Spot Colors to Process	모든 별색을 프로세스 색상으로 변환
+	Convert {name} to process	{name}을(를) 프로세스 색상으로 변환
+	Keep {name} as spot	{name}을(를) 별색으로 유지
 	Convert All Strokes to Outlines	모든 선을 윤곽선으로 변환
 	Convert All Text to Outlines	모든 문자를 윤곽선으로 변환
 	Convert Anchor Point	앵커 포인트 변환

@@ -595,6 +595,8 @@ font-technology	Variable	Variabel
 	Control	Steuerung
 	Convert	Konvertieren
 	Convert All Spot Colors to Process	Alle Volltonfarben in Prozessfarben konvertieren
+	Convert {name} to process	{name} in Prozessfarbe konvertieren
+	Keep {name} as spot	{name} als Volltonfarbe beibehalten
 	Convert All Strokes to Outlines	Alle Konturen in Pfade umwandeln
 	Convert All Text to Outlines	Gesamten Text in Pfade umwandeln
 	Convert Anchor Point	Ankerpunkt umwandeln

@@ -810,6 +810,8 @@ font-technology	Variable	Változó
 	Control	Vezérlősáv
 	Convert	Átalakítás
 	Convert All Spot Colors to Process	Minden direktszín átalakítása skálaszínné
+	Convert {name} to process	{name} átalakítása skálaszínné
+	Keep {name} as spot	{name} megtartása direktszínként
 	Convert All Strokes to Outlines	Minden körvonal útvonallá alakítása
 	Convert All Text to Outlines	Minden szöveg útvonallá alakítása
 	Convert Anchor Point	Horgonypont átalakítása

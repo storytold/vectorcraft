@@ -2,7 +2,7 @@
 //! colour (and image pixel) replaced by the grey of that ink's coverage. An image placed from a
 //! DCS file prints its own plates ([`vectorcraft_doc::separated`]).
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use vectorcraft_color::cms::{self, Cms, Model, ProfileKind};
@@ -12,48 +12,70 @@ use vectorcraft_doc::inks::{Link, StopPlates, inks, plates, spot_color, stop_ink
 use vectorcraft_doc::overprint::{darken_overprints, is_white};
 use vectorcraft_doc::{AppearanceItem, ColorMode, Document, ImageBlob, Node, NodeKind};
 
-use super::{DEFAULT_FREQUENCY, PrintInk, PrintSettings};
+use super::{DEFAULT_FREQUENCY, InkSettings, PrintInk, PrintSettings};
 
-/// The inks of a separation of `doc`: the process inks, then one per spot swatch (none when
-/// spots print as process), with the options of [`super::PrintOutput::inks`]; and a warning
-/// naming the options that name no ink.
-pub fn print_inks(doc: &Document, set: &PrintSettings) -> (Vec<PrintInk>, Vec<String>) {
-    let out = &set.output;
-    // Options by ink name, the first for a name winning: looked up, not searched for each ink.
-    let mut options = std::collections::HashMap::new();
-    for o in &out.inks {
+/// The options of [`super::PrintOutput::inks`] by ink name, the first for a name winning: looked
+/// up, not searched for each ink.
+fn ink_options(set: &PrintSettings) -> HashMap<&str, &InkSettings> {
+    let mut options = HashMap::new();
+    for o in &set.output.inks {
         options.entry(o.name.as_str()).or_insert(o);
     }
+    options
+}
+
+/// The inks of a separation of `doc`: the process inks, then one per spot swatch (none for a spot
+/// ink that prints as process, [`document_inks`]), with the options of
+/// [`super::PrintOutput::inks`]; and the notes of [`document_inks`].
+pub fn print_inks(doc: &Document, set: &PrintSettings) -> (Vec<PrintInk>, Vec<String>) {
+    let (mut list, notes) = document_inks(doc, set);
+    list.retain(|p| !p.convert_to_process);
+    (list, notes)
+}
+
+/// Every ink of `doc` as a separation lists it: the process inks, then one per spot swatch, with
+/// the options of [`super::PrintOutput::inks`]. A spot ink prints as process inks
+/// ([`PrintInk::convert_to_process`]) with Convert All Spot Colors to Process or its own
+/// `convertToProcess`; its other options are kept for when it prints as a spot ink again. Notes:
+/// one warning naming the options that name no ink, and one naming the process inks whose
+/// options ask for a conversion they don't take.
+pub fn document_inks(doc: &Document, set: &PrintSettings) -> (Vec<PrintInk>, Vec<String>) {
+    let out = &set.output;
+    let options = ink_options(set);
     let list: Vec<PrintInk> = plates(doc)
         .into_iter()
-        .filter(|p| !(p.spot && out.spots_to_process))
         .map(|p| {
             let o = options.get(p.name.as_str()).copied();
             PrintInk {
                 print: o.is_none_or(|o| o.print),
                 frequency: o.and_then(|o| o.frequency).unwrap_or(DEFAULT_FREQUENCY),
                 angle: o.and_then(|o| o.angle).unwrap_or_else(|| PrintInk::default_angle(&p.name)),
+                convert_to_process: p.spot && (out.spots_to_process || o.is_some_and(|o| o.convert_to_process)),
                 spot: p.spot,
                 name: p.name,
             }
         })
         .collect();
+    let few = |all: Vec<&str>| {
+        let more = all.len().saturating_sub(MAX_NAMED);
+        let shown = all.into_iter().take(MAX_NAMED).map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", ");
+        if more > 0 { format!("{shown} and {more} more") } else { shown }
+    };
     // One warning for all the options naming no ink, each list cut short: the options and the
-    // inks both come from the file.
+    // inks both come from the file. A spot ink printing as process is still an ink of the job.
     let names: BTreeSet<&str> = list.iter().map(|p| p.name.as_str()).collect();
     let unknown: Vec<&str> = out.inks.iter().map(|i| i.name.as_str()).filter(|n| !names.contains(n)).collect();
-    let warnings = if unknown.is_empty() {
-        vec![]
-    } else {
-        let few = |all: Vec<&str>| {
-            let more = all.len().saturating_sub(MAX_NAMED);
-            let shown = all.into_iter().take(MAX_NAMED).map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", ");
-            if more > 0 { format!("{shown} and {more} more") } else { shown }
-        };
+    let mut notes = vec![];
+    if !unknown.is_empty() {
         let inks = few(list.iter().map(|p| p.name.as_str()).collect());
-        vec![format!("there is no ink named {} to print (inks: {inks})", few(unknown))]
-    };
-    (list, warnings)
+        notes.push(format!("there is no ink named {} to print (inks: {inks})", few(unknown)));
+    }
+    let process: Vec<&str> =
+        list.iter().filter(|p| !p.spot && options.get(p.name.as_str()).is_some_and(|o| o.convert_to_process)).map(|p| p.name.as_str()).collect();
+    if !process.is_empty() {
+        notes.push(format!("{} print as process inks already: only spot inks convert to process", few(process)));
+    }
+    (list, notes)
 }
 
 /// The most names a warning of [`print_inks`] lists.
@@ -78,20 +100,30 @@ pub(crate) struct Separator<'a> {
     pub doc: &'a Document,
     cms: Arc<Cms>,
     set: &'a PrintSettings,
+    /// The inks whose own options convert them to process ([`InkSettings::convert_to_process`]).
+    converted: HashSet<&'a str>,
     /// The plates are written as PostScript, which has no blending modes.
     postscript: bool,
 }
 
 impl<'a> Separator<'a> {
     pub fn new(doc: &'a Document, set: &'a PrintSettings, postscript: bool) -> Self {
-        Self { doc, cms: separation_cms(doc, set), set, postscript }
+        let converted = ink_options(set).into_iter().filter(|(_, o)| o.convert_to_process).map(|(name, _)| name).collect();
+        Self { doc, cms: separation_cms(doc, set), set, converted, postscript }
+    }
+
+    /// Whether colors linked to swatch `name` print as process inks: every swatch but
+    /// Registration with Convert All Spot Colors to Process, else the inks converted one by one.
+    /// A link to a process swatch separates as its color either way.
+    fn converts(&self, name: &str) -> bool {
+        name != REGISTRATION && (self.set.output.spots_to_process || self.converted.contains(name))
     }
 
     /// How much of ink `plate` colour `c` (with swatch link `link`) prints, 0..1.
     fn ink(&self, plate: &str, c: &Color, link: Link) -> f32 {
         let color = &self.set.color;
-        // Spot colours as process: only Registration keeps its link.
-        let link = link.filter(|(name, _)| !self.set.output.spots_to_process || *name == REGISTRATION);
+        // Spot colors as process lose their link; Registration always keeps its.
+        let link = link.filter(|(name, _)| !self.converts(name));
         // Without Preserve Numbers, CMYK colours are separated again from their appearance.
         let lab;
         let c = if !color.preserve_numbers && matches!(c, Color::Cmyk { .. }) {
@@ -104,15 +136,16 @@ impl<'a> Separator<'a> {
     }
 
     /// [`Self::ink`] of a colour that prints process plates `plates` with its spot tint
-    /// ([`stop_inks`]): the spot plate prints the tint and the process plates print `plates`. With
-    /// spots as process, each process plate prints `plates` layered with the spot tint's process
-    /// equivalent, as a separated image's plates layer ([`vectorcraft_doc::separated::Separated::coverage_as`]).
+    /// ([`stop_inks`]): the spot plate prints the tint and the process plates print `plates`. When
+    /// its spot ink prints as process, each process plate prints `plates` layered with the spot
+    /// tint's process equivalent, as a separated image's plates layer
+    /// ([`vectorcraft_doc::separated::Separated::coverage_as`]).
     fn stop_ink(&self, plate: &str, c: &Color, link: Link, plates: StopPlates) -> f32 {
         let own = stop_inks(self.doc, &self.cms, c, link, plates, self.set.color.intent);
         let (Some(_), Some((name, tint))) = (plates, own.spot.as_ref()) else {
             return self.ink(plate, c, link);
         };
-        if !self.set.output.spots_to_process {
+        if !self.converts(name) {
             return own.on_plate(plate);
         }
         let Some(i) = cms::PROCESS_PLATES.iter().position(|p| *p == plate) else {
@@ -207,12 +240,8 @@ impl<'a> Separator<'a> {
             }
         }
         // A DCS file's image prints its own plates: a spot plate on its ink when the job prints
-        // that ink, else as its process equivalent.
-        let spots: BTreeSet<String> = if self.set.output.spots_to_process {
-            BTreeSet::new()
-        } else {
-            plates(self.doc).into_iter().filter(|p| p.spot).map(|p| p.name).collect()
-        };
+        // that ink as a spot ink, else as its process equivalent.
+        let spots: BTreeSet<String> = plates(self.doc).into_iter().filter(|p| p.spot && !self.converts(&p.name)).map(|p| p.name).collect();
         let own = |name: &str| spots.contains(name);
         // A spot plate printing as process prints as the document's swatch of its ink does, when
         // there is one; else as the process equivalent its file gives.

@@ -596,6 +596,8 @@ font-technology	Variable	Değişken
 	Control	Kontrol
 	Convert	Dönüştür
 	Convert All Spot Colors to Process	Tüm Spot Renkleri Proses Renklere Dönüştür
+	Convert {name} to process	{name} Rengini Prosese Dönüştür
+	Keep {name} as spot	{name} Rengini Spot Olarak Koru
 	Convert All Strokes to Outlines	Tüm Konturları Anahatlara Dönüştür
 	Convert All Text to Outlines	Tüm Metni Ana Hatlara Dönüştür
 	Convert Anchor Point	Bağlantı Noktasını Dönüştür

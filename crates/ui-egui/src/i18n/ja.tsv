@@ -1373,6 +1373,8 @@ antiAlias	Sharp	シャープ
 	Contextual Alternates	前後関係に依存する字形
 	Convert	変換
 	Convert All Spot Colors to Process	すべての特色をプロセスカラーに変換
+	Convert {name} to process	{name} をプロセスカラーに変換
+	Keep {name} as spot	{name} を特色のままにする
 	Convert All Strokes to Outlines	すべての線をアウトラインに変換
 	Convert All Text to Outlines	すべてのテキストをアウトラインに変換
 	Convert Anchor Point	アンカーポイントの切り替え

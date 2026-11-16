@@ -2836,6 +2836,8 @@ digits	Malayalam	Malajalam
 	Collate	Sortuj
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Kolory kompozytowe są do niego konwertowane; rozbarwienia korzystają z niego, gdy jest profilem CMYK.
 	Convert All Spot Colors to Process	Konwertuj wszystkie kolory dodatkowe na triadowe
+	Convert {name} to process	Konwertuj {name} na kolor triadowy
+	Keep {name} as spot	Zachowaj {name} jako kolor dodatkowy
 	Default Printer	Drukarka domyślna
 	Document Ink Options	Opcje farb dokumentu
 	Download:	Pobieranie:

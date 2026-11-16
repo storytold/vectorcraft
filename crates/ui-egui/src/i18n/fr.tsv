@@ -618,6 +618,8 @@ font-technology	Variable	Variables
 	Control	Contrôle
 	Convert	Convertir
 	Convert All Spot Colors to Process	Convertir tous les tons directs en couleurs quadrichromiques
+	Convert {name} to process	Convertir {name} en couleur quadrichromique
+	Keep {name} as spot	Conserver {name} en ton direct
 	Convert All Strokes to Outlines	Vectoriser tous les contours
 	Convert All Text to Outlines	Vectoriser tout le texte
 	Convert Anchor Point	Convertir le point d’ancrage

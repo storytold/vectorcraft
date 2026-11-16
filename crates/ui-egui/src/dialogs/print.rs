@@ -779,11 +779,13 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>) {
     flag(ui, d, "output.spotsToProcess", tl!("Convert All Spot Colors to Process"), separations);
     flag(ui, d, "output.overprintBlack", tl!("Overprint Black"), separations);
     heading(ui, tl!("Document Ink Options"));
-    let inks = pv.as_ref().ok().and_then(|v| v["inks"].as_array()).map(Vec::as_slice).unwrap_or_default();
+    // Every ink of the document, the spot inks printing as process (no plate) included.
+    let inks = pv.as_ref().ok().and_then(|v| v["documentInks"].as_array()).map(Vec::as_slice).unwrap_or_default();
     if !separations || inks.is_empty() {
         note(ui, tl!("Separations list the document's inks here: one page per ink that prints."));
         return;
     }
+    let all_spots = get(d, "output.spotsToProcess").as_bool() == Some(true);
     let t = Tokens::get(ui.ctx());
     egui::Grid::new("print-inks").num_columns(4).spacing([12.0, 4.0]).show(ui, |ui| {
         for h in [tl!("Print"), tl!("Ink"), tl!("Frequency"), tl!("Angle")] {
@@ -792,17 +794,31 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>) {
         ui.end_row();
         for ink in inks {
             let name = ink["name"].as_str().unwrap_or_default();
+            // A spot ink printing as process has no plate: its plate options wait, dimmed, for it
+            // to print as a spot ink again.
+            let process = ink["convertToProcess"] == true;
             let on = ink["print"].as_bool().unwrap_or(true);
-            if widgets::check_box(ui, name, on, true) {
+            if widgets::check_box(ui, name, on, !process) {
                 set_ink(d, name, "print", json!(!on));
             }
-            let spot = if ink["spot"] == true { format!(" ({})", tl!("spot")) } else { String::new() };
-            ui.label(egui::RichText::new(format!("{name}{spot}")).color(t.text));
+            ui.horizontal(|ui| {
+                if ink["spot"] == true {
+                    if ink_kind_button(ui, name, process, !all_spots) {
+                        set_ink(d, name, "convertToProcess", json!(!process));
+                    }
+                } else {
+                    ui.add_space(INK_KIND);
+                }
+                let spot = if ink["spot"] == true { format!(" ({})", tl!("spot")) } else { String::new() };
+                ui.label(egui::RichText::new(format!("{name}{spot}")).color(t.text));
+            });
             for (k, suffix) in [("frequency", " lpi"), ("angle", "°")] {
                 let v = ink[k].as_f64().unwrap_or(0.0);
                 let heading = if k == "frequency" { tl!("Frequency") } else { tl!("Angle") };
                 let field_name = format!("{heading} {name}");
-                if let Some(x) = widgets::plain_field_named(ui, ("print-ink", name, k), Some(&field_name), v, suffix, 2, 72.0) {
+                let typed =
+                    ui.add_enabled_ui(!process, |ui| widgets::plain_field_named(ui, ("print-ink", name, k), Some(&field_name), v, suffix, 2, 72.0));
+                if let Some(x) = typed.inner {
                     set_ink(d, name, k, json!(x));
                 }
             }
@@ -810,6 +826,42 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>) {
         }
     });
     note(ui, tl!("Frequencies and angles are the output device's to apply."));
+}
+
+/// The size of the spot or process icon before a spot ink's name.
+const INK_KIND: f32 = 18.0;
+
+/// The icon before spot ink `name`'s name: a spot icon while it prints as a spot ink, the four
+/// process inks while it prints as process (`process`). A click switches it; dimmed (`enabled`
+/// off) while Convert All Spot Colors to Process converts every spot ink. Whether it was clicked.
+fn ink_kind_button(ui: &mut egui::Ui, name: &str, process: bool, enabled: bool) -> bool {
+    let label = if process {
+        crate::i18n::fmt(tl!("Keep {name} as spot"), &[("name", name)])
+    } else {
+        crate::i18n::fmt(tl!("Convert {name} to process"), &[("name", name)])
+    };
+    let sense = if enabled { egui::Sense::click() } else { egui::Sense::hover() };
+    let (rect, resp) = ui.allocate_exact_size(egui::Vec2::splat(INK_KIND), sense);
+    let t = Tokens::get(ui.ctx());
+    if enabled && resp.hovered() {
+        ui.painter().rect_filled(rect, 3.0, t.hover);
+    }
+    let icon = rect.shrink(4.0);
+    if process {
+        let q = icon.size() / 2.0;
+        for (i, c) in crate::panels::swatches::CMYK_INKS.into_iter().enumerate() {
+            let c = if enabled { c } else { c.gamma_multiply(0.4) };
+            let at = icon.min + egui::vec2((i % 2) as f32 * q.x, (i / 2) as f32 * q.y);
+            ui.painter().rect_filled(egui::Rect::from_min_size(at, q), 0.0, c);
+        }
+    } else {
+        let color = if enabled { t.icon } else { t.text_disabled };
+        ui.painter().circle_stroke(icon.center(), icon.width() / 2.0, egui::Stroke::new(1.0, color));
+        ui.painter().circle_filled(icon.center(), icon.width() / 5.0, color);
+    }
+    resp.widget_info(|| widgets::icon_button_info(enabled, false, &label));
+    let resp = resp.on_hover_text(label);
+    enabled && resp.clicked()
 }
 
 /// Set option `key` of ink `name` in `output.inks` (the ink gets its own entry the first time).

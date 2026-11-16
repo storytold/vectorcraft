@@ -611,6 +611,8 @@ font-technology	Variable	Варіативні
 	Control	Панель керування
 	Convert	Перетворити
 	Convert All Spot Colors to Process	Перетворити всі плашкові кольори на складові
+	Convert {name} to process	Перетворити {name} на складовий колір
+	Keep {name} as spot	Залишити {name} плашковим кольором
 	Convert All Strokes to Outlines	Перетворити всі обведення на контури
 	Convert All Text to Outlines	Перетворити весь текст на контури
 	Convert Anchor Point	Перетворити опорну точку

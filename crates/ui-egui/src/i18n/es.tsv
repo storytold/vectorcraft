@@ -617,6 +617,8 @@ font-technology	Variable	Variables
 	Control	Control
 	Convert	Convertir
 	Convert All Spot Colors to Process	Convertir todas las tintas planas en cuatricromía
+	Convert {name} to process	Convertir {name} en cuatricromía
+	Keep {name} as spot	Mantener {name} como tinta plana
 	Convert All Strokes to Outlines	Convertir todos los trazos en contornos
 	Convert All Text to Outlines	Convertir todo el texto en contornos
 	Convert Anchor Point	Convertir punto de ancla

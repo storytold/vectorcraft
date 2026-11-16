@@ -2648,6 +2648,8 @@ digits	Malayalam	Malayalam
 	Collate	Susun
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Warna komposit dikonversi ke profil ini; separasi memisah dengannya bila merupakan profil CMYK.
 	Convert All Spot Colors to Process	Konversi semua warna spot menjadi proses
+	Convert {name} to process	Konversi {name} menjadi proses
+	Keep {name} as spot	Pertahankan {name} sebagai spot
 	Default Printer	Printer default
 	Document Ink Options	Opsi tinta dokumen
 	Download:	Unduh:

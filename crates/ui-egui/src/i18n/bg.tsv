@@ -602,6 +602,8 @@ font-technology	Variable	Променливи
 	Control	Контрол
 	Convert	Конвертиране
 	Convert All Spot Colors to Process	Конвертиране на всички спот цветове в трихромни
+	Convert {name} to process	Конвертиране на {name} в трихромен
+	Keep {name} as spot	Запазване на {name} като спот
 	Convert All Strokes to Outlines	Конвертиране на всички щрихове в контури
 	Convert All Text to Outlines	Конвертиране на целия текст в контури
 	Convert Anchor Point	Преобразуване на опорна точка

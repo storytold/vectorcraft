@@ -617,6 +617,8 @@ font-technology	Variable	Variabili
 	Control	Controllo
 	Convert	Converti
 	Convert All Spot Colors to Process	Converti tutti i colori spot in quadricromia
+	Convert {name} to process	Converti {name} in quadricromia
+	Keep {name} as spot	Mantieni {name} come colore spot
 	Convert All Strokes to Outlines	Converti tutte le tracce in contorni
 	Convert All Text to Outlines	Converti tutto il testo in contorni
 	Convert Anchor Point	Converti punto di ancoraggio

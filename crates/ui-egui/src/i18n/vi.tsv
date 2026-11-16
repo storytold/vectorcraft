@@ -714,6 +714,8 @@ font-technology	Variable	Biến thiên
 	Control	Điều khiển
 	Convert	Chuyển đổi
 	Convert All Spot Colors to Process	Chuyển tất cả màu đặc thành màu lai
+	Convert {name} to process	Chuyển {name} thành màu lai
+	Keep {name} as spot	Giữ {name} là màu đặc
 	Convert All Strokes to Outlines	Chuyển tất cả nét thành đường bao
 	Convert All Text to Outlines	Chuyển tất cả văn bản thành đường bao
 	Convert Anchor Point	Chuyển đổi điểm neo

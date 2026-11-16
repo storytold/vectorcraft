@@ -561,6 +561,8 @@ antiAlias	Sharp	Nítido
 	Control	Controle
 	Convert	Converter
 	Convert All Spot Colors to Process	Converter Todas as Cores Spot em Processo
+	Convert {name} to process	Converter {name} em Processo
+	Keep {name} as spot	Manter {name} como Spot
 	Convert All Strokes to Outlines	Converter Todos os Traçados em Contornos
 	Convert All Text to Outlines	Converter Todo o Texto em Contornos
 	Convert Anchor Point	Converter Ponto de Ancoragem
