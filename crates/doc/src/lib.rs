@@ -29,6 +29,7 @@ pub mod shared;
 mod symbol_export_type;
 mod symbol_nine_slice;
 pub mod symbol_overrides;
+mod symbol_pixel_aligned;
 mod symbol_registration;
 pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
@@ -38,6 +39,7 @@ pub use symbol_nine_slice::{
     SymbolNineSlice, charge_symbol_art,
 };
 pub use symbol_overrides::SymbolOverride;
+pub use symbol_pixel_aligned::SYMBOL_PIXEL_ALIGNED;
 pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
 pub mod links;
 pub mod live;
@@ -95,8 +97,8 @@ pub use compound_shape::ShapeMode;
 pub use corners::LiveCorners;
 pub use depth::{MAX_DEPTH, MAX_SYMBOL_NODES};
 pub use graph::{
-    ColumnDesign, ColumnType, Fractions, GraphDesign, GraphKind, GraphSpec, LabelRows, LabelStyles, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES,
-    PiePosition, PieSort, SeriesPaint, TickLength, ValueAxisSide,
+    ColumnDesign, ColumnType, DEFAULT_FILLED_LINE_WIDTH, Fractions, GraphDesign, GraphKind, GraphSpec, LabelRows, LabelStyles, MAX_FILLED_LINE_WIDTH,
+    MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES, MIN_FILLED_LINE_WIDTH, PiePosition, PieSort, SeriesPaint, TickLength, ValueAxisSide,
 };
 pub use hit::{Hit, HitKind};
 pub use links::{LinkInfo, PlacementOptions};

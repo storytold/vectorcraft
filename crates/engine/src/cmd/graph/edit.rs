@@ -230,6 +230,7 @@ fn query_type_options(spec: &GraphSpec, count: usize, picked: &[usize]) -> Value
         "prefix": one_line(&spec.prefix), "suffix": one_line(&spec.suffix), "rightPrefix": one_line(&spec.right_prefix),
         "rightSuffix": one_line(&spec.right_suffix), "dropShadow": spec.drop_shadow, "legendAcrossTop": spec.legend_across_top,
         "firstRowInFront": spec.first_row_in_front, "firstColumnInFront": spec.first_column_in_front, "filledLines": spec.filled_lines,
+        "lineWidth": spec.filled_line_width(),
     });
     // Only the options this graph's types use: overlap order for columns and bars, filled lines for lines.
     let kinds: Vec<GraphKind> = (0..count.max(1)).map(|i| spec.series_kind(i)).collect();
@@ -241,6 +242,7 @@ fn query_type_options(spec: &GraphSpec, count: usize, picked: &[usize]) -> Value
         }
         if !has(&[GraphKind::Line, GraphKind::Scatter, GraphKind::Radar]) {
             o.remove("filledLines");
+            o.remove("lineWidth");
         }
     }
     // Pie graphs: Legend, Position and Sort (their Legend stands for the legend checkbox).
@@ -266,6 +268,7 @@ pub(super) fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "graph.setType";
     let id = target(s, p, C)?;
     let mut spec = spec_of(s, id)?;
+    let stored = spec.clone();
     // The series to retype: `seriesIndexes`, else, with no `id`, a selection made only of this graph's series (Group
     // Selection). Anything else selected, the graph itself for one, is the whole graph.
     let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).min(vectorcraft_doc::MAX_GRAPH_SERIES);
@@ -311,6 +314,7 @@ pub(super) fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
         "firstRowInFront",
         "firstColumnInFront",
         "filledLines",
+        "lineWidth",
         "pieLegend",
         "piePosition",
         "pieSort",
@@ -404,6 +408,15 @@ pub(super) fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     spec.first_row_in_front = switch_or(p, "firstRowInFront", spec.first_row_in_front, C)?;
     spec.first_column_in_front = switch_or(p, "firstColumnInFront", spec.first_column_in_front, C)?;
     spec.filled_lines = switch_or(p, "filledLines", spec.filled_lines, C)?;
+    if let Some(w) = p.get("lineWidth").filter(|v| !v.is_null()) {
+        let w = w.as_f64().ok_or_else(|| bad(C, format!("`lineWidth` must be a number, not {w}")))?;
+        let (min, max) = (vectorcraft_doc::MIN_FILLED_LINE_WIDTH, vectorcraft_doc::MAX_FILLED_LINE_WIDTH);
+        if !(min..=max).contains(&w) {
+            return Err(bad(C, format!("`lineWidth` must be from {min} to {max} pt, not {w}")));
+        }
+        // The default width is stored as no width.
+        spec.line_width = (w != vectorcraft_doc::DEFAULT_FILLED_LINE_WIDTH).then_some(w);
+    }
     spec.legend_across_top = switch_or(p, "legendAcrossTop", spec.legend_across_top, C)?;
     // After `legend`, which the Graph Type dialog sends too.
     if let Some(v) = text_param(p, "pieLegend", C)? {
@@ -418,6 +431,10 @@ pub(super) fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     spec.connect_points = switch_or(p, "connectPoints", spec.connect_points, C)?;
     spec.edge_to_edge = switch_or(p, "edgeToEdge", spec.edge_to_edge, C)?;
     spec.ticks = count_given(p, "ticks", 100, C)?.unwrap_or(spec.ticks);
+    // Options that leave the graph as it is record no step of history.
+    if spec == stored {
+        return Ok(json!({ "id": id.0 }));
+    }
     let label = format!("{} Graph", spec.kind.label());
     s.edit("Graph Type", |d, sel| {
         regenerate(d, id, spec)?;
