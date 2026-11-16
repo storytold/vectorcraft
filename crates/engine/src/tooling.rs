@@ -173,12 +173,21 @@ impl Session {
         let text_selection = ((id == "eyedropper" && is_type(self.tool.id())) || (self.tool.id() == "eyedropper" && is_type(id)))
             .then(|| self.tool.options())
             .filter(|o| o.get("editing").is_some_and(|v| !v.is_null()) && o.get("start") != o.get("end"));
+        // The gradient mesh points the Mesh tool, Direct Selection or the Lasso picked stay picked
+        // for the Eyedropper, which samples into them (#8090), and for the tool after it.
+        let mesh_points = (id == "eyedropper" || self.tool.id() == "eyedropper")
+            .then(|| self.tool.options().get("meshPoints").cloned())
+            .flatten()
+            .filter(|v| v.as_array().is_some_and(|a| !a.is_empty()));
         let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
         self.apply_actions(acts)?;
         self.keep_tool_settings();
         self.tool = self.make_tool(id);
         if let Some(selection) = text_selection {
             self.tool.set_option("textSelection", &selection);
+        }
+        if let Some(points) = mesh_points {
+            self.tool.set_option("meshPoints", &points);
         }
         if vectorcraft_tools::catalog::is_selection_tool(id) {
             self.last_selection_tool = Some(self.tool.id());

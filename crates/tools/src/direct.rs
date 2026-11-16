@@ -760,6 +760,13 @@ impl Tool for DirectSelectionTool {
     fn options(&self) -> Value {
         self.mesh.options()
     }
+    /// Direct Selection picks the gradient mesh points the Eyedropper held (`meshPoints`); Group
+    /// Selection, which selects whole objects, does not.
+    fn set_option(&mut self, key: &str, value: &Value) {
+        if key == "meshPoints" && !self.group {
+            self.mesh.set_options(value);
+        }
+    }
     /// Escape during a drag (anchors, handles, segments, objects, type areas, blend spines, mesh
     /// points, corner widgets, the brackets of type on a path, a marquee) cancels it: what it moved
     /// goes back and the tool waits for the next press (#1743).

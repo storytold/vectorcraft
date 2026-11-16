@@ -34,6 +34,13 @@ pub fn grid_of(n: &Node) -> Option<Cow<'_, GradientMesh>> {
     }
 }
 
+/// The `{id, index}` entries of a `meshPoints` option ([`MeshEdit::options`]); malformed entries
+/// are left out.
+pub fn points_of(value: &Value) -> Vec<(NodeId, usize)> {
+    let Some(v) = value.as_array() else { return vec![] };
+    v.iter().filter_map(|p| Some((NodeId(p.get("id")?.as_u64()?), usize::try_from(p.get("index")?.as_u64()?).ok()?))).collect()
+}
+
 /// Can `n` have an editable grid ([`grid_of`])? Its kind alone answers, without building the grid.
 pub fn may_have_grid(n: &Node) -> bool {
     match &n.kind {
@@ -305,6 +312,16 @@ impl MeshEdit {
     /// gradient mesh.
     pub fn options(&self) -> Value {
         json!({"meshPoints": self.picked.iter().map(|(id, index)| json!({"id": id.0, "index": index})).collect::<Vec<_>>()})
+    }
+
+    /// Pick the points a `meshPoints` option lists (see [`points_of`]), with none focused: the
+    /// points the Eyedropper held when the tool switched back.
+    pub fn set_options(&mut self, value: &Value) {
+        if self.drag.is_some() {
+            return;
+        }
+        self.picked = points_of(value).into_iter().collect();
+        (self.focus, self.click) = (None, None);
     }
 
     /// The picked points of the meshes `shown` accepts, filled, and the focused point's handles
@@ -636,5 +653,22 @@ mod tests {
         let out = t.pointer(&c, &PointerEvent::new(PointerKind::Down, 125.0, 125.0));
         assert_eq!(out, vec![Action::Exec("select.set".into(), json!({"ids": [m.0]})), Action::Begin("Move Mesh Points".into())]);
         assert_eq!(picked(&t), set(&[(100.0, 100.0), (150.0, 100.0), (100.0, 150.0), (150.0, 150.0)]));
+    }
+
+    /// The tools that pick mesh points pick again the points a `meshPoints` option lists (those the
+    /// Eyedropper held), leaving malformed entries out; Group Selection picks none.
+    #[test]
+    fn mesh_point_tools_take_back_the_eyedroppers_picks() {
+        let points = json!([{"id": 7, "index": 2}, {"id": 7}, {"id": 7, "index": 0}]);
+        for id in ["mesh", "directSelection", "lasso", crate::addons::polygonal_lasso::ID] {
+            let mut t = crate::create(id);
+            t.set_option("meshPoints", &points);
+            assert_eq!(picked(&*t), [0, 2], "{id}");
+            t.set_option("meshPoints", &json!([]));
+            assert!(picked(&*t).is_empty(), "{id}");
+        }
+        let mut t = crate::create("groupSelection");
+        t.set_option("meshPoints", &points);
+        assert!(picked(&*t).is_empty(), "Group Selection");
     }
 }

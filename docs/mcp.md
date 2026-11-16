@@ -11985,7 +11985,12 @@ away); its click on a gradient mesh's line picks the line's two
 ends, and a click inside a patch picks the four points around it. The picked points show filled. Dragging one of them
 moves them all as one undo step (`object.mesh.movePoints`), a click on one of several picked points picks it alone,
 and the arrow keys nudge them by the keyboard increment. The active tool lists them in its options
-(`tool.setOption {}` returns them as `meshPoints: [{id, index}…]`). On gradient meshes a solid fill colour (`paint.setFill`, from the
+(`tool.setOption {}` returns them as `meshPoints: [{id, index}…]`). Switching to the Eyedropper keeps them picked, its
+options list them too, and the Mesh tool, Direct Selection or a Lasso chosen next picks them again. While a selected, editable mesh has
+points picked, an Eyedropper click or Shift-click on an image or other art samples the color under the pointer into
+those points alone as `paint.sampleColor {color, stroke: false, ids}` with the meshes that have points picked: one undo
+step, none when the color is unchanged. Other selected objects keep their paint. A click on one of those meshes, and
+Alt-click and Shift+Alt-click anywhere, are unchanged. On gradient meshes a solid fill colour (`paint.setFill`, from the
 Color panel, Swatches or the Eyedropper) recolours just the picked points, and when every target of
 `transparency.set` is a gradient mesh with points picked, its `opacity` fades those points instead of the objects
 (`transparency.info` then shows their opacity, `null` when it differs). Both are one undo step, and neither goes to the

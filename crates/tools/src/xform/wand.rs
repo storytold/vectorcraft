@@ -165,6 +165,13 @@ impl Tool for LassoTool {
         self.mesh.options()
     }
 
+    /// Pick the gradient mesh points the Eyedropper held (`meshPoints`).
+    fn set_option(&mut self, key: &str, value: &Value) {
+        if key == "meshPoints" {
+            self.mesh.set_options(value);
+        }
+    }
+
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut out = self.mesh.overlays(cx, &|id| cx.selection.contains(id));
         if self.active && self.points.len() >= 2 {
