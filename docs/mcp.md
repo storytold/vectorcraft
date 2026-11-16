@@ -2062,6 +2062,12 @@ were. `graph.setType` refuses `` `columnWidth` must be a number, not "50" `` for
 `` `type` must be a string `` for `type`, `valueAxis`, the three tick lengths, `prefix`, `suffix`, `rightPrefix`,
 `rightSuffix`, `pieLegend`, `piePosition` and `pieSort`; and `` `ticks` must be a number, not "5" `` (or
 `` `ticks` must be 0 or more `` for a negative number) for `ticks`, `rightTicks` and the three tick mark counts.
+`lineWidth`, the Line Width of Draw Filled Lines in points (3 when the graph sets none), takes a number from 0.01 to
+1000 (VectorCraft's own range); `"4"` is refused with `` `lineWidth` must be a number, not "4" ``, and a width below
+0.01 or past 1000 with `` `lineWidth` must be from 0.01 to 1000 pt, not 0 ``. The graph stores a width only when it is
+not 3, so a graph without one is saved and drawn as before. A graph with a width of its own is written to `.ai` as its
+art, without the editable graph records. `graph.setType` with options that leave the graph as it is
+records no undo step.
 `axisMin`, `axisMax`, `rightAxisMin` and `rightAxisMax` take a number, or null to go back to the value calculated from
 the data; any other value is refused with `` `axisMin` must be a number or null, not "10" ``. `graph.setData` and
 `graph.create` refuse a `csv` that is not a string, `series` or `categories` that are not lists, and `rows` that are not
@@ -5997,6 +6003,12 @@ rotation that is neither a number nor null with `` `pressure` must be a number, 
 (`pressure`, `tiltX`, `tiltY` or `rotation`). `path.close` refuses an `at`, `in` or `out` that is not `[x, y]`
 with `` `in` must be [x, y] ``, naming the key.
 
+`path.eraseRegion` refuses an `angle` outside -180° to 180° with `` `angle` must be from -180 to 180 degrees `` and a
+`roundness` outside 1% to 100% with `` `roundness` must be from 1 to 100% ``. `path.split` refuses a `t` outside 0 to 1
+with `` `t` must be from 0 to 1 ``, with `segment` or with `anchor`. The document does not change and no undo step is
+recorded. Left out or null, `angle` is 0° and `roundness` is 100%; left out, `t` is 0.5. The Eraser's ranges are
+VectorCraft's own values.
+
 These commands refuse a string, a number or another value that is not true or false with
 `` `closed` must be true or false ``, naming the key; the document does not change and no undo step is recorded:
 `independent` in `path.close` and `path.setHandle`; `patterns` in `path.moveAnchors`; `closed`, `keepSelected` and
@@ -8979,6 +8991,18 @@ has the option as Preserve Text Editability
 {"name":"export","arguments":{"path":"/tmp/poster.psd","options":{"ppi":300,"preserveText":true}}}
 ```
 
+With or without layers, the file keeps the document's slices in image resource 1050, in version 6 of the slices
+resource format of the [Photoshop File Formats Specification](https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/).
+`importSlices` reads that form, so the slices of an opened PSD file come back when the export is opened. The rest are
+VectorCraft's own rules:
+
+- The user and object slices that reach into the exported artboard are written, each clipped to it, in its pixels,
+  at least one pixel each way. Auto slices aren't written; the document that opens the file lays them out again.
+- An object slice is written as a user slice over its object's bounds. Each slice keeps its name, its type (Image
+  or No Image), its link, target, message, alternative text, cell text and background color. An HTML Text slice is
+  written as No Image with its type's text as HTML. Text alignment is written as the default.
+- More than 10000 slices, a slice text longer than 65536 characters, or a slice without finite bounds is an error.
+
 PSD files (`.psd`, and `.psb`, the large document format) place as their merged image, the
 flattened picture every PSD file carries: Bitmap, Grayscale, Duotone, Indexed, RGB, CMYK
 (converted with the colour settings' CMYK) and Lab, at 1, 8, 16 and 32 bits per channel, sized by their resolution.
@@ -11337,8 +11361,9 @@ A canvas-click dialog also has `preview` (initially on): tentative settings draw
 Object › Graph › Type… (`graph.setType` without params) and a double-click on a graph tool open Graph Type (dialog
 `graphType`) for the selected graph, or for the series picked in it with Group Selection. Its fields are the options
 `graph.setType {}` returns, under the command's names for them. `legend`, `pieLegend`, `piePosition`, `pieSort`,
-`firstRowInFront`, `firstColumnInFront` and `filledLines` are held for every type, so a type picked in the dialog shows
-the options it uses. `overrideValues` and `rightOverrideValues` are Override Calculated Values of the left (or only)
+`firstRowInFront`, `firstColumnInFront`, `filledLines` and `lineWidth` are held for every type, so a type picked in the
+dialog shows the options it uses. The Line Width field next to Draw Filled Lines is available only while Draw Filled
+Lines and Connect Data Points are on. `overrideValues` and `rightOverrideValues` are Override Calculated Values of the left (or only)
 value axis and of the right one. While one is on, OK sends `axisMin`, `axisMax` and `ticks` (or `rightAxisMin`,
 `rightAxisMax` and `rightTicks`), and the dialog fills the ones the graph lacks with the values the axis would be
 calculated with for the type, value axis and Separate Scales the dialog shows.
@@ -12428,6 +12453,26 @@ Commands:
 - `addon.pathtools.shape.convert {ids?}` makes the selected plain closed paths that are rectangles, ellipses or
   polygons with equal sides and corners (stretched along their own axes at most) parametric shapes with the same
   outline. → `{ids}` (those converted).
+- `addon.pathtools.commonTangents {tangents?, centerline?, ids?}` adds the common tangent lines of two convex closed
+  paths (`ids`, or the two selected objects) as separate open paths: lines that touch both paths without crossing into
+  either. `tangents`: `external` (both paths on the same side of the line), `internal` (lines that run between them)
+  or `all` (default). With `centerline: true` it also adds the line joining the two centers: an ellipse's center, or
+  a path's center of area. Each tangent of paths that do not touch runs from where it touches the lower path to
+  where it touches the upper one; where a straight side of a path lies along the line, the line covers the whole
+  side. An ellipse drawn with the Ellipse tool, then moved, turned or scaled, is measured as an exact ellipse. Any
+  other path must be closed, have one outline, bend the same way all around and have at most 10,000 segments; an open
+  path, a path that bends inward, a path without area, a group, a compound path or type is refused, and so are two
+  paths whose outlines are the same to within the touching tolerance given below. Two separate paths have two
+  external and two internal tangents. Overlapping paths have external tangents only. A path inside the other has
+  none. Paths that touch, from outside or from inside, share one tangent there instead: a line centered on the point
+  where they touch and as long as the narrower path is wide along it. Paths that meet at a corner or along a shared
+  stretch of outline get one such line, at the middle of the directions that touch both. Paths count as touching when
+  the gap between them is less than the tolerance, a billionth of the larger of their sizes and the distance between
+  their centers. The lines are stroked with the current stroke color and weight (black when the stroke is None), have
+  no fill, go directly above the upper of the two paths and are selected; one undo step. When there is no tangent of
+  the kind asked for, nothing changes, and the result's `warning` says why. Common Tangents…
+  opens a dialog (Tangents, Centerline) with Preview. → `{ids, external, internal, centerline, warning?}`
+  (`centerline`: the centerline's id, or null).
 
 A parametric shape is an ordinary path. It keeps its numbers, with a fingerprint of the outline they drew, in one
 entry of its object data (`vc-pathtools-shape`, as `document.node` lists `attrs.data`), which SVG export leaves out;
@@ -12441,6 +12486,7 @@ plain path from then on.
 {"name":"run_command","arguments":{"command":"addon.pathtools.crossings","params":{"cut":true}}}
 {"name":"run_command","arguments":{"command":"addon.pathtools.shape.create","params":{"kind":"star","center":[200,150],"width":120,"height":120,"count":7,"a":0.4}}}
 {"name":"run_command","arguments":{"command":"addon.pathtools.shape.set","params":{"id":14,"kind":"gear","count":16,"radius":2}}}
+{"name":"run_command","arguments":{"command":"addon.pathtools.commonTangents","params":{"ids":[3,4],"tangents":"external","centerline":true}}}
 ```
 
 ### Path Effects (live)

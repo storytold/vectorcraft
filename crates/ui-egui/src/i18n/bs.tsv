@@ -3635,6 +3635,7 @@ theme	Appearance	Izgled
 	Connect Data Points	Poveži tačke podataka
 	Edge-to-Edge Lines	Linije od ivice do ivice
 	Draw Filled Lines	Crtaj ispunjene linije
+	Line Width	Širina linije
 	Tick Values	Vrijednosti crtica
 	Override Calculated Values	Zamijeni izračunate vrijednosti
 	Divisions	Podioci
@@ -6808,6 +6809,22 @@ shape	Open	Otvoren
 	Remove Gaps	Ukloni razmake
 @msg	that makes too many pieces (at most 100000): make the dashes longer	to daje previše dijelova (najviše 100000): produžite crtice
 @msg	select paths, or segments, to divide	odaberite putanje ili segmente za dijeljenje
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Zajedničke tangente…
+	Common Tangents	Zajedničke tangente
+	Tangents	Tangente
+	Centerline	Središnja linija
+	External	Vanjske
+	Internal	Unutrašnje
+@msg	select two closed paths	odaberite dvije zatvorene putanje
+@msg	a selected path is open	odabrana putanja je otvorena
+@msg	a selected path is not convex	odabrana putanja nije konveksna
+@msg	a selected path has no area	odabrana putanja nema površinu
+@msg	a selected path has more than 10000 segments	odabrana putanja ima više od 10000 segmenata
+@msg	the two paths have the same outline	obje putanje imaju isti obris
+@msg	One path lies inside the other, so they have no common tangents	Jedna putanja leži unutar druge, pa nemaju zajedničkih tangenti
+@msg	The paths overlap, so they have no internal tangents	Putanje se preklapaju, pa nemaju unutrašnjih tangenti
+@msg	One path lies inside the other, so they have no internal tangents	Jedna putanja leži unutar druge, pa nemaju unutrašnjih tangenti
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Proširi crtice u putanje
 @msg	select paths with dashed strokes to expand	odaberite putanje s isprekidanim potezom za proširivanje
