@@ -8,6 +8,8 @@
 //! adds the selected objects that have a 3D effect to Asset Export as 3D assets (`assets.add3D`)
 //! and shows that panel with their assets selected.
 
+use std::sync::Arc;
+
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node, NodeId, NodeKind};
@@ -392,7 +394,7 @@ fn materials_open(ctx: &egui::Context) -> bool {
 
 /// What [`graphic_handles`] gives: the object's frame, its graphics, and each seen graphic's index
 /// and page point.
-type Handles = (vectorcraft_effects::GraphicFrame, Vec<vectorcraft_effects::MappedGraphic>, Vec<(usize, vectorcraft_geom::Point)>);
+type Handles = (Arc<vectorcraft_effects::GraphicFrame>, Vec<vectorcraft_effects::MappedGraphic>, Vec<(usize, vectorcraft_geom::Point)>);
 
 /// The handles of the graphics mapped onto the first selected object, while the Materials tab is
 /// open: each graphic's index, its face and where its center lands on the page, for the graphics
@@ -410,8 +412,6 @@ fn graphic_handles(app: &VectorcraftApp, ctx: &egui::Context) -> Option<Handles>
     if t.item.is_some_and(|k| n.appearance.items.get(k).is_none_or(|it| !it.visible())) {
         return None;
     }
-    // The frame of the effect whose graphics are listed: none while that effect is hidden.
-    let frame = vectorcraft_effects::graphic_frame_at(Some(&st.doc), n, t.item, t.index)?;
     // A geometry effect after the 3D effect of any selected object moves or bends its drawn
     // graphics away from their places in the frame: no handles, so a drag does not put a graphic
     // away from the pointer.
@@ -420,13 +420,38 @@ fn graphic_handles(app: &VectorcraftApp, ctx: &egui::Context) -> Option<Handles>
         return None;
     }
     let list = vectorcraft_effects::mapped_graphics(&vectorcraft_effects::merged_params(&t.effect, &t.params));
+    // Without graphics there are no handles, and no frame is built.
+    if list.is_empty() {
+        return None;
+    }
     // Selected objects with different graphics show no handles: a drag sends the whole list.
     let graphics_of = |t: Target| vectorcraft_effects::mapped_graphics(&vectorcraft_effects::merged_params(&t.effect, &t.params));
     if st.selection.objects.iter().skip(1).filter_map(|id| find(st.doc.node(*id)?)).any(|o| graphics_of(o) != list) {
         return None;
     }
+    // The frame of the effect whose graphics are listed: none while that effect is hidden. It is
+    // built once for each revision of the document, not on every frame the panel draws.
+    let key: FrameKey = (st.uid, st.revision, n.id.0, t.item, t.index);
+    let cached = ctx.data(|m| m.get_temp::<(FrameKey, Option<Arc<vectorcraft_effects::GraphicFrame>>)>(frame_cache_id()));
+    let frame = match cached {
+        Some((k, frame)) if k == key => frame,
+        _ => {
+            let frame = vectorcraft_effects::graphic_frame_at(Some(&st.doc), n, t.item, t.index).map(Arc::new);
+            ctx.data_mut(|m| m.insert_temp(frame_cache_id(), (key, frame.clone())));
+            frame
+        }
+    }?;
     let handles = list.iter().enumerate().filter_map(|(i, g)| frame.handle(g).filter(|(_, seen)| *seen).map(|(p, _)| (i, p))).collect();
     Some((frame, list, handles))
+}
+
+/// What the cached frame of [`graphic_handles`] was built for: the document's uid and revision, the
+/// object's id, and the fill or stroke and index of its 3D effect.
+type FrameKey = (u64, u64, u64, Option<usize>, usize);
+
+/// Temp-memory key of the frame [`graphic_handles`] last built.
+fn frame_cache_id() -> egui::Id {
+    egui::Id::unique("three-d-graphic-frame")
 }
 
 /// Temp-memory key of a drag of a graphic's handle on the artboard.

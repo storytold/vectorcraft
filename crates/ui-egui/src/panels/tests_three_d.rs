@@ -624,6 +624,8 @@ fn a_graphics_handle_drags_it_over_its_face_in_one_undo_step() {
         let n = std::sync::Arc::make_mut(&mut st.doc).node_mut(id).unwrap();
         n.appearance.effects[0].visible = false;
         n.appearance.effects.push(vectorcraft_effects::new_effect("threeD.extrude", &json!({})).unwrap());
+        // An edit moves the revision, as a command's does.
+        st.revision += 1;
     }
     let mut shown = true;
     ctx.run_ui(egui::RawInput::default(), |ui| {
@@ -637,6 +639,35 @@ fn a_graphics_handle_drags_it_over_its_face_in_one_undo_step() {
     crate::panels::set_pstate(&ctx, super::UI_STATE, Map::from_iter([("__tab".to_string(), json!("rotation"))]));
     frame(&mut app, vec![egui::Event::PointerMoved(target)]);
     assert!(!frame(&mut app, vec![button(target, true)]));
+}
+
+/// The frame the graphics' handles are placed on is built once for each revision of the document,
+/// and not at all for an object without graphics.
+#[test]
+fn the_graphics_frame_is_built_once_for_each_revision() {
+    type Cached = (super::FrameKey, Option<std::sync::Arc<vectorcraft_effects::GraphicFrame>>);
+    let (mut app, ctx) = materials_app();
+    let cached = |ctx: &egui::Context| ctx.data(|m| m.get_temp::<Cached>(super::frame_cache_id())).and_then(|(_, frame)| frame);
+    let handles = |app: &VectorcraftApp| {
+        let mut shown = false;
+        ctx.run_ui(egui::RawInput::default(), |ui| {
+            crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
+            shown = super::graphic_handles(app, ui.ctx()).is_some();
+        })
+        .textures_delta
+        .clear();
+        shown
+    };
+    assert!(!handles(&app));
+    assert!(cached(&ctx).is_none(), "no graphics, no frame");
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    assert!(handles(&app));
+    let first = cached(&ctx).unwrap();
+    assert!(handles(&app));
+    assert!(std::sync::Arc::ptr_eq(&first, &cached(&ctx).unwrap()), "the same revision reuses the frame");
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    assert!(handles(&app));
+    assert!(!std::sync::Arc::ptr_eq(&first, &cached(&ctx).unwrap()), "an edit builds it again");
 }
 
 /// One frame of the artboard's graphic handles over an 800 × 600 canvas with `events`: whether the
