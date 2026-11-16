@@ -3476,7 +3476,7 @@ mark-style	Japanese	Kiểu Nhật
 	The color of Smart Guide lines and labels.	Màu của đường và nhãn của đường căn thông minh.
 	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Hiện một đường dọc theo cạnh hoặc tâm mà hình vẽ thẳng hàng với; khi tắt, hình vẽ vẫn thẳng hàng mà không có đường, và Hút vào glyph không áp dụng.
 	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Với công cụ chọn, viền đối tượng chưa chọn dưới con trỏ bằng màu lớp của nó khi bạn không kéo.
-	Shows the size or angle next to the pointer while you scale or rotate art.	Hiện kích thước hoặc góc bên cạnh con trỏ khi bạn co giãn hoặc xoay hình vẽ.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Hiện kích thước hoặc góc bên cạnh con trỏ khi bạn co giãn, xoay, làm nghiêng hoặc phản chiếu hình vẽ.
 	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Khi bạn vẽ, các điểm hút vào những đường theo các góc đã chọn đi qua điểm bắt đầu của đoạn hoặc hình.
 	The set of angles the construction guides follow while Construction Guides is on.	Tập hợp các góc mà đường căn xây dựng đi theo khi Đường căn xây dựng đang bật.
 	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Gọi tên thứ mà điểm hút vào, như điểm neo, đường dẫn hoặc căn chỉnh; khi tắt, các điểm vẫn hút như vậy nhưng không có tên.

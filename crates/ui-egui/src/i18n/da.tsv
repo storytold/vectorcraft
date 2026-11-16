@@ -6971,7 +6971,7 @@ font-technology	Variable	Variable
 	The color of Smart Guide lines and labels.	Farven på de smarte hjælpelinjers linjer og etiketter.
 	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Viser en linje langs den kant eller midte, som grafikken flugter med; når den er slået fra, flugter grafikken stadig uden linjen, og Fastgør til tegn gælder ikke.
 	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Med et markeringsværktøj får det ikke-markerede objekt under markøren en kontur i lagets farve, mens du ikke trækker.
-	Shows the size or angle next to the pointer while you scale or rotate art.	Viser størrelsen eller vinklen ved markøren, mens du skalerer eller roterer grafik.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Viser størrelsen eller vinklen ved markøren, mens du skalerer, roterer, vrider eller spejler grafik.
 	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Mens du tegner, fastgøres punkter til linjer i de valgte vinkler gennem det punkt, segmentet eller formen starter fra.
 	The set of angles the construction guides follow while Construction Guides is on.	Det sæt vinkler, som konstruktionshjælpelinjerne følger, mens Konstruktionshjælpelinjer er slået til.
 	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Navngiver det, et punkt fastgøres til, f.eks. et ankerpunkt, en kurve eller en justering; når den er slået fra, fastgøres punkter på samme måde uden navnene.

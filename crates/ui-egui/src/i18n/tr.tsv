@@ -2895,7 +2895,7 @@ digits	Malayalam	Malayalam
 	The color of Smart Guide lines and labels.	Akıllı Kılavuz çizgilerinin ve etiketlerinin rengi.
 	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Çizimin hizalandığı kenar veya merkez boyunca bir çizgi gösterir; kapalıyken çizim çizgi olmadan da hizalanır ve Glif'e Yapış uygulanmaz.
 	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Bir seçim aracıyla, siz sürüklemezken işaretçinin altındaki seçili olmayan nesnenin çevresini katmanının rengiyle çizer.
-	Shows the size or angle next to the pointer while you scale or rotate art.	Çizimi ölçeklerken veya döndürürken işaretçinin yanında boyutu veya açıyı gösterir.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Çizimi ölçeklerken, döndürürken, eğerken veya yansıtırken işaretçinin yanında boyutu veya açıyı gösterir.
 	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Siz çizerken noktalar, parçanın veya şeklin başladığı noktadan geçen seçili açılardaki çizgilere yaslanır.
 	The set of angles the construction guides follow while Construction Guides is on.	İnşaat Kılavuzları açıkken inşaat kılavuzlarının izlediği açı kümesi.
 	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Bir noktanın neye yaslandığını adlandırır, örneğin bir bağlantı noktası, bir yol veya bir hizalama; kapalıyken noktalar adlar olmadan aynı şekilde yaslanır.

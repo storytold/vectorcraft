@@ -4419,7 +4419,7 @@ font-technology	Variable	Zmienne
 	The color of Smart Guide lines and labels.	Kolor linii i etykiet inteligentnych linii pomocniczych.
 	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Pokazuje linię wzdłuż krawędzi lub środka, do których wyrównuje się grafika; po wyłączeniu grafika nadal się wyrównuje bez linii, a Przyciągaj do glifów nie działa.
 	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Przy narzędziu zaznaczania obrysowuje niezaznaczony obiekt pod wskaźnikiem kolorem jego warstwy, dopóki nie przeciągasz.
-	Shows the size or angle next to the pointer while you scale or rotate art.	Pokazuje rozmiar lub kąt obok wskaźnika podczas skalowania lub obracania grafiki.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Pokazuje rozmiar lub kąt obok wskaźnika podczas skalowania, obracania, pochylania lub odbijania grafiki.
 	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Podczas rysowania punkty przyciągają się do linii pod wybranymi kątami przechodzących przez punkt, od którego zaczyna się segment lub kształt.
 	The set of angles the construction guides follow while Construction Guides is on.	Zestaw kątów, wzdłuż których biegną linie konstrukcyjne, gdy Linie konstrukcyjne są włączone.
 	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Nazywa to, do czego przyciąga się punkt, np. punkt kontrolny, ścieżkę lub wyrównanie; po wyłączeniu punkty przyciągają się tak samo, bez nazw.

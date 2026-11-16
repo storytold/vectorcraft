@@ -4296,7 +4296,7 @@ digits	Malayalam	馬來亞拉姆數字
 	The color of Smart Guide lines and labels.	智慧型參考線的線條和標籤顏色。
 	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	沿著圖稿對齊的邊緣或中心顯示一條線；關閉時圖稿仍會對齊，只是不顯示線條，且靠齊字符不會作用。
 	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	使用選取工具且未拖曳時，以圖層顏色描出指標下未選取物件的外框。
-	Shows the size or angle next to the pointer while you scale or rotate art.	縮放或旋轉圖稿時，在指標旁顯示尺寸或角度。
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	縮放、旋轉、傾斜或鏡射圖稿時，在指標旁顯示尺寸或角度。
 	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	繪製時，點會靠齊到通過線段或形狀起點、依所選角度延伸的線上。
 	The set of angles the construction guides follow while Construction Guides is on.	建構參考線開啟時，建構參考線所依循的角度組合。
 	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	顯示點靠齊的對象名稱，例如錨點、路徑或對齊；關閉時點仍以相同方式靠齊，只是不顯示名稱。

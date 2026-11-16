@@ -4238,7 +4238,7 @@ antiAlias	Sharp	शार्प
 	The color of Smart Guide lines and labels.	स्मार्ट गाइड्स की रेखाओं और लेबल का रंग।
 	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	उस किनारे या केंद्र के साथ रेखा दिखाता है जिससे आर्ट संरेखित होता है; बंद होने पर आर्ट रेखा के बिना भी संरेखित होता है, और ग्लिफ़ पर स्नैप करें लागू नहीं होता।
 	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	सिलेक्शन टूल के साथ, जब आप ड्रैग नहीं कर रहे हों, पॉइंटर के नीचे के असिलेक्टेड ऑब्जेक्ट की रूपरेखा उसकी लेयर के रंग में दिखाता है।
-	Shows the size or angle next to the pointer while you scale or rotate art.	आर्ट को स्केल या घुमाते समय पॉइंटर के पास आकार या कोण दिखाता है।
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	आर्ट को स्केल करते, घुमाते, शियर करते या परावर्तित करते समय पॉइंटर के पास आकार या कोण दिखाता है।
 	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	ड्रॉ करते समय पॉइंट उन रेखाओं पर स्नैप होते हैं जो चुने गए कोणों पर उस पॉइंट से गुज़रती हैं जहाँ से सेगमेंट या आकृति शुरू होती है।
 	The set of angles the construction guides follow while Construction Guides is on.	निर्माण गाइड चालू होने पर निर्माण गाइड जिन कोणों का पालन करते हैं, उनका समूह।
 	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	बताता है कि पॉइंट किस पर स्नैप होता है, जैसे एंकर, पाथ या संरेखण; बंद होने पर पॉइंट नामों के बिना उसी तरह स्नैप होते हैं।

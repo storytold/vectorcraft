@@ -4473,7 +4473,7 @@ font-technology	Variable	Varijabilni
 	The color of Smart Guide lines and labels.	Boja linija i oznaka pametnih vodilica.
 	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Prikazuje liniju duž ivice ili centra s kojim se objekti poravnavaju; kad je isključeno, objekti se i dalje poravnavaju bez linije, a Prilijepi uz glif ne djeluje.
 	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	S alatom za odabir ocrtava neodabrani objekat ispod pokazivača bojom njegovog sloja dok ne prevlačite.
-	Shows the size or angle next to the pointer while you scale or rotate art.	Prikazuje veličinu ili ugao pored pokazivača dok skalirate ili rotirate objekte.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Prikazuje veličinu ili ugao pored pokazivača dok skalirate, rotirate, smičete ili odražavate objekte.
 	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Dok crtate, tačke se hvataju uz linije pod odabranim uglovima kroz tačku od koje počinje segment ili oblik.
 	The set of angles the construction guides follow while Construction Guides is on.	Skup uglova koje prate konstrukcijske vodilice dok su Konstrukcijske vodilice uključene.
 	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Imenuje za šta se tačka hvata, npr. sidrenu tačku, putanju ili poravnanje; kad je isključeno, tačke se hvataju isto, bez naziva.

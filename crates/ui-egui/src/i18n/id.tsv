@@ -4229,7 +4229,7 @@ font-technology	Variable	Variabel
 	The color of Smart Guide lines and labels.	Warna garis dan label panduan cerdas.
 	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Menampilkan garis di sepanjang tepi atau pusat yang sejajar dengan karya; saat mati, karya tetap sejajar tanpa garis, dan Snap ke glif tidak berlaku.
 	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Dengan alat seleksi, menggaris tepi objek yang tidak dipilih di bawah penunjuk dengan warna lapisannya selama Anda tidak menyeret.
-	Shows the size or angle next to the pointer while you scale or rotate art.	Menampilkan ukuran atau sudut di samping penunjuk saat Anda menskalakan atau memutar karya.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Menampilkan ukuran atau sudut di samping penunjuk saat Anda menskalakan, memutar, memiringkan atau memantulkan karya.
 	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Saat Anda menggambar, titik menjepret ke garis pada sudut yang dipilih melalui titik awal segmen atau bentuk.
 	The set of angles the construction guides follow while Construction Guides is on.	Kumpulan sudut yang diikuti panduan konstruksi selama Panduan konstruksi aktif.
 	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Menamai tempat titik menjepret, misalnya jangkar, jalur, atau perataan; saat mati, titik menjepret dengan cara yang sama tanpa nama.

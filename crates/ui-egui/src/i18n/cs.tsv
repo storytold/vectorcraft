@@ -4578,7 +4578,7 @@ font-technology	Variable	Variabilní
 	The color of Smart Guide lines and labels.	Barva čar a popisků chytrých vodítek.
 	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Ukazuje čáru podél okraje nebo středu, ke kterému se kresba zarovnává; když je vypnuto, kresba se zarovnává i bez čáry a Přichytávat ke glyfům neplatí.
 	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	S nástrojem pro výběr obtáhne nevybraný objekt pod ukazatelem barvou jeho vrstvy, dokud netáhnete.
-	Shows the size or angle next to the pointer while you scale or rotate art.	Ukazuje u ukazatele velikost nebo úhel, když měníte velikost kresby nebo ji otáčíte.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Ukazuje u ukazatele velikost nebo úhel, když měníte velikost kresby nebo ji otáčíte, zkosujete či zrcadlíte.
 	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Při kreslení se body přichytávají k čarám ve zvolených úhlech procházejícím bodem, kde začíná segment nebo tvar.
 	The set of angles the construction guides follow while Construction Guides is on.	Sada úhlů, které konstrukční vodítka sledují, když jsou Konstrukční vodítka zapnutá.
 	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Pojmenuje, k čemu se bod přichytí, například kotevní bod, cestu nebo zarovnání; když je vypnuto, body se přichytávají stejně, jen bez názvů.

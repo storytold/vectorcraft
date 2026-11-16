@@ -3128,7 +3128,7 @@ digits	Malayalam	Malayálam
 	The color of Smart Guide lines and labels.	El color de las líneas y etiquetas de las guías inteligentes.
 	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Muestra una línea a lo largo del borde o el centro con el que se alinea la ilustración; desactivada, la ilustración se sigue alineando sin la línea, y Ajustar a glifo no se aplica.
 	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Con una herramienta de selección, contornea el objeto no seleccionado bajo el puntero con el color de su capa mientras no arrastra.
-	Shows the size or angle next to the pointer while you scale or rotate art.	Muestra el tamaño o el ángulo junto al puntero mientras escala o gira la ilustración.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Muestra el tamaño o el ángulo junto al puntero mientras escala, gira, inclina o refleja la ilustración.
 	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Mientras dibuja, los puntos se ajustan a líneas con los ángulos elegidos que pasan por el punto donde empieza el segmento o la forma.
 	The set of angles the construction guides follow while Construction Guides is on.	El conjunto de ángulos que siguen las guías de construcción mientras Guías de construcción está activado.
 	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Nombra a qué se ajusta un punto, como un punto de ancla, un trazado o una alineación; desactivado, los puntos se ajustan igual, sin los nombres.

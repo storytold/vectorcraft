@@ -3058,7 +3058,7 @@ digits	Malayalam	Malayalam
 	The color of Smart Guide lines and labels.	Färgen på de smarta stödlinjernas linjer och etiketter.
 	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Visar en linje längs den kant eller mitt som teckningen linjerar med; avstängd linjerar teckningen ändå utan linjen, och Fäst mot glyf gäller inte.
 	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Med ett markeringsverktyg får det omarkerade objektet under pekaren en kontur i lagrets färg medan du inte drar.
-	Shows the size or angle next to the pointer while you scale or rotate art.	Visar storleken eller vinkeln bredvid pekaren medan du skalar eller roterar teckningar.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Visar storleken eller vinkeln bredvid pekaren medan du skalar, roterar, skjuvar eller speglar teckningar.
 	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Medan du ritar fästs punkter mot linjer i de valda vinklarna genom punkten där segmentet eller formen börjar.
 	The set of angles the construction guides follow while Construction Guides is on.	Uppsättningen vinklar som konstruktionsstödlinjerna följer medan Konstruktionsstödlinjer är på.
 	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Namnger det som en punkt fäster mot, till exempel en ankarpunkt, en bana eller en justering; avstängd fäster punkterna på samma sätt utan namnen.

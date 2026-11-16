@@ -3038,7 +3038,7 @@ digits	Malayalam	Малаялам
 	The color of Smart Guide lines and labels.	Цветът на линиите и етикетите на интелигентните водачи.
 	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Показва линия по ръба или центъра, с който обектите се подравняват; когато е изключено, те пак се подравняват без линията, а „Прилепване към глиф“ не действа.
 	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	С инструмент за селекция очертава неселектирания обект под показалеца в цвета на неговия слой, докато не влачите.
-	Shows the size or angle next to the pointer while you scale or rotate art.	Показва размера или ъгъла до показалеца, докато мащабирате или завъртате обекти.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Показва размера или ъгъла до показалеца, докато мащабирате, завъртате, срязвате или отразявате обекти.
 	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Докато рисувате, точките прилепват към линии под избраните ъгли през точката, от която започва сегментът или фигурата.
 	The set of angles the construction guides follow while Construction Guides is on.	Наборът ъгли, които конструкционните водачи следват, докато „Конструкционни водачи“ е включено.
 	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Назовава към какво прилепва точката, например опорна точка, път или подравняване; когато е изключено, точките прилепват по същия начин без имената.

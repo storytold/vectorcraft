@@ -4497,7 +4497,7 @@ font-technology	Variable	Muuttuvat
 	The color of Smart Guide lines and labels.	Älykkäiden apuviivojen viivojen ja selitteiden väri.
 	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Näyttää viivan sitä reunaa tai keskikohtaa pitkin, johon grafiikka tasautuu; pois päältä grafiikka tasautuu yhä ilman viivaa, eikä Kohdista merkkiin ole käytössä.
 	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Valintatyökalulla osoittimen alla oleva valitsematon objekti saa ääriviivan tasonsa värillä, kun et vedä.
-	Shows the size or angle next to the pointer while you scale or rotate art.	Näyttää koon tai kulman osoittimen vieressä, kun skaalaat tai kierrät grafiikkaa.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Näyttää koon tai kulman osoittimen vieressä, kun skaalaat, kierrät, vinoutat tai peilaat grafiikkaa.
 	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Piirtäessä pisteet kohdistuvat valituissa kulmissa kulkeviin viivoihin, jotka kulkevat segmentin tai muodon alkupisteen kautta.
 	The set of angles the construction guides follow while Construction Guides is on.	Kulmat, joita rakenneapuviivat seuraavat, kun Rakenneapuviivat on käytössä.
 	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Nimeää, mihin piste kohdistuu, esimerkiksi ankkuripisteen, polun tai tasauksen; pois päältä pisteet kohdistuvat samoin ilman nimiä.

@@ -6181,7 +6181,7 @@ font-technology	Variable	ცვლადი
 	The color of Smart Guide lines and labels.	ჭკვიანი დამხმარე ხაზების ხაზებისა და წარწერების ფერი.
 	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	აჩვენებს ხაზს იმ კიდის ან ცენტრის გასწვრივ, რომელსაც გრაფიკა უსწორდება; გამორთვისას გრაფიკა მაინც სწორდება ხაზის გარეშე, გლიფზე მიბმა კი არ მოქმედებს.
 	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	მონიშვნის ხელსაწყოთი, სანამ არ ათრევთ, მაჩვენებლის ქვეშ მყოფ მოუნიშნავ ობიექტს მისი შრის ფერით შემოხაზავს.
-	Shows the size or angle next to the pointer while you scale or rotate art.	გრაფიკის მასშტაბირების ან მობრუნებისას მაჩვენებლის გვერდით აჩვენებს ზომას ან კუთხეს.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	გრაფიკის მასშტაბირების, მობრუნების, დახრის ან არეკვლისას მაჩვენებლის გვერდით აჩვენებს ზომას ან კუთხეს.
 	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	ხატვისას წერტილები ებმის არჩეული კუთხის ხაზებს, რომლებიც სეგმენტის ან ფიგურის საწყის წერტილზე გადის.
 	The set of angles the construction guides follow while Construction Guides is on.	კუთხეების ნაკრები, რომელსაც სამშენებლო დამხმარე ხაზები მიჰყვება, სანამ სამშენებლო დამხმარე ხაზები ჩართულია.
 	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	ასახელებს, რას ებმის წერტილი, მაგალითად, საყრდენ წერტილს, ტრაექტორიას ან გასწორებას; გამორთვისას წერტილები ისევე ებმის, სახელების გარეშე.

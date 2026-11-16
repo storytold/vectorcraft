@@ -140,7 +140,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.",
     ),
     ("objectHighlighting", "With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging."),
-    ("transformToolsGuides", "Shows the size or angle next to the pointer while you scale or rotate art."),
+    ("transformToolsGuides", "Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art."),
     ("constructionGuides", "While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from."),
     ("constructionAngles", "The set of angles the construction guides follow while Construction Guides is on."),
     ("anchorPathLabels", "Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names."),

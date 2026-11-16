@@ -3195,7 +3195,7 @@
 	The color of Smart Guide lines and labels.	સ્માર્ટ ગાઇડની રેખાઓ અને લેબલનો રંગ.
 	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	આર્ટ જે કિનારી અથવા કેન્દ્ર સાથે સંરેખિત થાય તેની સાથે રેખા બતાવે છે; બંધ હોય ત્યારે આર્ટ રેખા વિના પણ સંરેખિત થાય છે, અને ગ્લિફ પર સ્નેપ લાગુ પડતું નથી.
 	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	પસંદગી ટૂલ સાથે, તમે ખેંચતા ન હો ત્યારે પોઇન્ટર નીચેના પસંદ ન કરેલા ઑબ્જેક્ટની રૂપરેખા તેના લેયરના રંગમાં બતાવે છે.
-	Shows the size or angle next to the pointer while you scale or rotate art.	તમે આર્ટને સ્કેલ કે ફેરવો ત્યારે પોઇન્ટર પાસે કદ અથવા ખૂણો બતાવે છે.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	તમે આર્ટને સ્કેલ કરો, ફેરવો, શિયર કરો કે પ્રતિબિંબિત કરો ત્યારે પોઇન્ટર પાસે કદ અથવા ખૂણો બતાવે છે.
 	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	તમે દોરો ત્યારે, બિંદુઓ સેગમેન્ટ કે આકાર જ્યાંથી શરૂ થાય તે બિંદુમાંથી પસાર થતી પસંદ કરેલા ખૂણાની રેખાઓ પર સ્નેપ થાય છે.
 	The set of angles the construction guides follow while Construction Guides is on.	બાંધકામ ગાઇડ્સ ચાલુ હોય ત્યારે બાંધકામ ગાઇડ્સ જે ખૂણાઓને અનુસરે છે તેનો સમૂહ.
 	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	બિંદુ શેના પર સ્નેપ થાય છે તેનું નામ બતાવે છે, જેમ કે એન્કર, પાથ અથવા સંરેખણ; બંધ હોય ત્યારે બિંદુઓ નામ વિના એ જ રીતે સ્નેપ થાય છે.

@@ -4846,7 +4846,7 @@ font-technology	Variable	Variabel
 	The color of Smart Guide lines and labels.	De kleur van de lijnen en labels van slimme hulplijnen.
 	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Toont een lijn langs de rand of het midden waarmee de illustratie uitlijnt; uit lijnt de illustratie nog steeds uit zonder de lijn, en Uitlijnen op glyph geldt niet.
 	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Met een selectiegereedschap krijgt het niet-geselecteerde object onder de aanwijzer een omtrek in de kleur van zijn laag, zolang u niet sleept.
-	Shows the size or angle next to the pointer while you scale or rotate art.	Toont de grootte of hoek naast de aanwijzer terwijl u een illustratie schaalt of draait.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Toont de grootte of hoek naast de aanwijzer terwijl u een illustratie schaalt, draait, schuintrekt of spiegelt.
 	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Tijdens het tekenen worden punten uitgelijnd op lijnen in de gekozen hoeken door het punt waar het segment of de vorm begint.
 	The set of angles the construction guides follow while Construction Guides is on.	De set hoeken die de bouwhulplijnen volgen terwijl Bouwhulplijnen aan staat.
 	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Noemt waarop een punt uitlijnt, zoals een ankerpunt, een pad of een uitlijning; uit worden punten op dezelfde manier uitgelijnd, zonder de namen.
