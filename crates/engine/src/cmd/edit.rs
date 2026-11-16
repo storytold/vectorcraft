@@ -1189,9 +1189,7 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
             d.retain_guides(sel, |g| !g.id.is_some_and(|id| gone.contains(&id)));
         }
         if is_explicit {
-            for id in &ids {
-                sel.remove(*id);
-            }
+            sel.remove_all(ids.iter().copied());
             sel.prune(d);
         } else {
             sel.clear();

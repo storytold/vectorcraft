@@ -384,7 +384,7 @@
 	Insert Whitespace Character	Umetni znak razmaka
 	Em Space	Široki razmak (em)
 	En Space	Polu-široki razmak (en)
-	Hair Space	Tanki razmak
+	Hair Space	Najtanji razmak
 	Sixth Space	Šestina razmaka
 	Thin Space	Tanki razmak
 	Nonbreaking Space	Neprelomivi razmak
@@ -1301,7 +1301,7 @@ lighting	Light	Svjetlo
 	Name* @ 66.67% (RGB/Preview)	Naziv* @ 66,67% (RGB/pregled)
 	No Document	Nema dokumenta
 	Press 	Pritisnite 
-	Search commands and tools	Pretraži naredbe i alate
+	Search commands, tools, panels and effects	Pretraži naredbe, alate, panele i efekte
 	Style:	Stil:
 	Switch workspace	Promijeni radni prostor
 	Show all open documents	Prikaži sve otvorene dokumente
@@ -4388,7 +4388,11 @@ font-technology	Variable	Varijabilni
 	Saved {path}	Sačuvano: {path}
 	Saving	Čuvanje
 	Saving {}	Čuvanje {}
-	Search commands and tools…	Pretraži naredbe i alate…
+	Search commands, tools, panels and effects…	Pretraži naredbe, alate, panele i efekte…
+	No commands match	Nijedna naredba se ne podudara
+	{pos} of {total}: {name}	{pos} od {total}: {name}
+@plural	{n} result|{n} results	{n} rezultat|{n} rezultata|{n} rezultata
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.
 	Recent Commands	Nedavne naredbe
 	No recent commands	Nema nedavnih naredbi
 	Dashed Line	Isprekidana linija

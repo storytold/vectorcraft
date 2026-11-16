@@ -34,7 +34,7 @@
 	Clear Recent Files	Kosongkan berkas terbaru
 	Show in Folder	Tampilkan di folder
 	Close	Tutup
-@id	file.close	berkas.tutup
+@id	file.close	Tutup
 	Close All	Tutup semua
 	Save	Simpan
 	Save As…	Simpan sebagai…
@@ -513,7 +513,7 @@
 	Zig Zag…	Zig Zag…
 	Pathfinder	Pathfinder
 	Add	Tambah
-@id	pathfinder.add	pathfinder.tambah
+@id	pathfinder.add	Satukan
 	Intersect	Iris
 	Exclude	Kecualikan
 	Subtract	Kurangi
@@ -1228,7 +1228,7 @@ lighting	Light	Cahaya
 	Name* @ 66.67% (RGB/Preview)	Nama* @ 66.67% (RGB/Pratinjau)
 	No Document	Tidak ada dokumen
 	Press 	Tekan 
-	Search commands and tools	Cari perintah dan alat
+	Search commands, tools, panels and effects	Cari perintah, alat, panel, dan efek
 	Style:	Gaya:
 	Switch workspace	Ganti ruang kerja
 	Show all open documents	Tampilkan semua dokumen terbuka
@@ -4144,7 +4144,11 @@ font-technology	Variable	Variabel
 	Saved {path}	Berhasil menyimpan {path}
 	Saving	Menyimpan
 	Saving {}	Menyimpan {}
-	Search commands and tools…	Cari perintah dan alat…
+	Search commands, tools, panels and effects…	Cari perintah, alat, panel, dan efek…
+	No commands match	Tidak ada perintah yang cocok
+	{pos} of {total}: {name}	{pos} dari {total}: {name}
+@plural	{n} result|{n} results	{n} hasil
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} dari {n} hasil. Terus ketik untuk mempersempitnya.
 	Recent Commands	Perintah terbaru
 	No recent commands	Tidak ada perintah terbaru
 	Dashed Line	Garis putus-putus

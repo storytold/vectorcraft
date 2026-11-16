@@ -8,7 +8,9 @@
 //! without changing the base, and selects it; Shift- or Cmd/Ctrl-click adds
 //! cells to the selection that Save Colors as Swatches saves as swatches and Save Color Group to
 //! Swatches saves as one group (without a selection, the group holds the harmony colors). The
-//! selection lasts until the guide changes. Limit to Library (the library button,
+//! selection lasts until the guide changes. A harmony color or a cell dragged with the primary button
+//! carries its color alone, as shown, without applying it or changing the selection; the Swatches
+//! panel makes a swatch of it. Limit to Library (the library button,
 //! `ui.colorGuideLimit`) snaps every colour to a swatch library or the document's swatches; Edit or
 //! Apply Colors opens Recolor Artwork with the harmony colours, limited the same way.
 
@@ -21,7 +23,7 @@ use vectorcraft_engine::cmd::swatchlib;
 use super::swatches::{self, colour_libraries, limit_key, limit_name};
 use super::{active_paint, apply_click, c32, color_json, library_panel, pstate, set_pstate};
 use crate::VectorcraftApp;
-use crate::widgets::{self, menu_item};
+use crate::widgets::{self, PanelDrag, menu_item};
 
 /// The base colour before one is set: an orange.
 const DEFAULT_BASE: Color = Color::Rgb { r: 230.0 / 255.0, g: 120.0 / 255.0, b: 40.0 / 255.0 };
@@ -217,7 +219,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let w = strip.width() / g.colors.len() as f32;
     for (i, c) in g.colors.iter().enumerate() {
         let r = Rect::from_min_size(strip.min + vec2(i as f32 * w, 0.0), vec2(w, strip.height()));
-        let resp = ui.interact(r, ui.scope_id().with(("cg-h", i)), Sense::click());
+        let resp = ui.interact(r, ui.scope_id().with(("cg-h", i)), Sense::click_and_drag());
+        widgets::drag_source(ui, &resp, || PanelDrag::paint(Paint::solid(*c)));
         ui.painter().rect_filled(r, 0.0, c32(c));
         if resp.on_hover_text(c.to_hex()).clicked() {
             chosen = Some(*c);
@@ -237,7 +240,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let (rr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
         for (ci, v) in row.iter().enumerate() {
             let r = Rect::from_min_size(rr.min + vec2(x(ci), 0.0), vec2(x(ci + 1) - x(ci) - gap, 17.0));
-            let resp = ui.interact(r, ui.scope_id().with(("cg-v", ri, ci)), Sense::click());
+            let resp = ui.interact(r, ui.scope_id().with(("cg-v", ri, ci)), Sense::click_and_drag());
+            widgets::drag_source(ui, &resp, || PanelDrag::paint(Paint::solid(*v)));
             ui.painter().rect_filled(r, 0.0, c32(v));
             if sel.contains(&(ri, ci)) {
                 ui.painter().rect_stroke(r.shrink(1.0), 0.0, egui::Stroke::new(1.0, egui::Color32::WHITE), egui::StrokeKind::Inside);
@@ -431,6 +435,119 @@ mod tests {
         out.textures_delta.clear();
         click(&mut app, &ctx, chip.expect("the panel is drawn"));
         assert_eq!(base_color(&app).to_hex(), variation, "the base chip adopts the current color");
+    }
+
+    /// One frame at `time` with `events` of the Color Guide panel, followed by the Swatches panel when
+    /// `swatches` is set; → the center of the guide widget `id` as laid out in that frame.
+    fn guide_frame(
+        app: &mut VectorcraftApp,
+        ctx: &egui::Context,
+        events: Vec<egui::Event>,
+        time: f64,
+        swatches: bool,
+        id: impl std::hash::Hash + std::fmt::Debug,
+    ) -> egui::Pos2 {
+        let screen_rect = Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(280.0, 900.0)));
+        let input = egui::RawInput { events, time: Some(time), screen_rect, ..Default::default() };
+        let mut at = None;
+        let mut out = ctx.run_ui(input, |ui| {
+            show(app, ui);
+            at = ctx.read_response(ui.scope_id().with(&id)).map(|r| r.rect.center());
+            if swatches {
+                super::swatches::show(app, ui);
+            }
+        });
+        out.textures_delta.clear();
+        at.expect("the guide widget is drawn")
+    }
+
+    /// Press on the guide widget `id`, move far enough to start a drag, move to `to` (the widget
+    /// itself when None) and release there, a frame per step from `time`. → the drag the panel
+    /// started, read before the release.
+    fn drag_from(
+        app: &mut VectorcraftApp,
+        ctx: &egui::Context,
+        id: (&str, usize, usize),
+        to: Option<egui::Pos2>,
+        time: f64,
+        swatches: bool,
+    ) -> Option<PanelDrag> {
+        let from = match id.0 {
+            "cg-h" => guide_frame(app, ctx, vec![], time, swatches, ("cg-h", id.1)),
+            _ => guide_frame(app, ctx, vec![], time, swatches, ("cg-v", id.1, id.2)),
+        };
+        let to = to.unwrap_or(from);
+        let button =
+            |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        let step = |app: &mut VectorcraftApp, events, t| {
+            guide_frame(app, ctx, events, t, swatches, ("cg-h", 0usize));
+        };
+        step(app, vec![egui::Event::PointerMoved(from), button(from, true)], time + 0.1);
+        step(app, vec![egui::Event::PointerMoved(from + vec2(8.0, 3.0))], time + 0.2);
+        let held = egui::DragAndDrop::payload::<PanelDrag>(ctx).map(|d| (*d).clone());
+        step(app, vec![egui::Event::PointerMoved(to)], time + 0.3);
+        step(app, vec![egui::Event::PointerMoved(to), button(to, false)], time + 0.4);
+        held
+    }
+
+    /// A harmony color or a variation dragged from the guide carries that color alone, as a solid
+    /// paint; the drag applies nothing to the selected art and leaves the base and the selected
+    /// cells as they were.
+    #[test]
+    fn a_dragged_guide_color_carries_its_color_and_applies_nothing() {
+        let mut app = app();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+        app.run("paint.setFill", json!({"color": "#3366cc"})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        let g = guide(&app, &ctx);
+        set_pstate(&ctx, "cg-sel", vec![(0usize, 1usize), (1, 2)]);
+        let fill = |app: &VectorcraftApp| crate::panels::current_paints(app).0.color().map(|c| c.to_hex());
+        let held = drag_from(&mut app, &ctx, ("cg-h", 1, 0), None, 1.0, false);
+        assert_eq!(held, Some(PanelDrag::paint(Paint::solid(g.colors[1]))), "the harmony color");
+        let held = drag_from(&mut app, &ctx, ("cg-v", 0, 4), None, 2.0, false);
+        assert_eq!(held, Some(PanelDrag::paint(Paint::solid(g.grid[0][4]))), "the grabbed cell only, not the selected ones");
+        assert_eq!(held.and_then(|d| d.color()), Some(g.grid[0][4]));
+        assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none(), "the release ends the drag");
+        assert_eq!(fill(&app).as_deref(), Some("#3366cc"), "the drag paints no art");
+        assert_eq!(base_color(&app).to_hex(), "#3366cc", "the base stays");
+        assert_eq!(selected(&ctx), [(0, 1), (1, 2)], "the selected cells stay");
+    }
+
+    /// A variation of a guide limited to a library, dragged onto the Swatches panel, becomes one
+    /// swatch of the color the cell shows, in its own model in a CMYK document, as one undo step; the
+    /// same color dragged again is added under another name.
+    #[test]
+    fn a_guide_color_dragged_onto_the_swatches_panel_becomes_a_swatch() {
+        let mut app = app();
+        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        app.run("paint.setFill", json!({"color": "#c04020", "keepModel": true})).unwrap();
+        app.run("ui.colorGuideLimit", json!({"library": "web-safe-216"})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        guide_frame(&mut app, &ctx, vec![], 0.0, true, ("cg-h", 0usize));
+        let g = guide(&app, &ctx);
+        let cell = g.grid[0][1];
+        assert!(matches!(cell, Color::Rgb { .. }), "{cell:?}");
+        assert!(library_hexes(&app, "web-safe-216").contains(&cell.to_hex()), "the cell shows a library color");
+        let tile = |ctx: &egui::Context| ctx.read_response(egui::Id::unique(("swatch-tile", "Red"))).expect("the Red swatch is drawn").rect.center();
+        let (count, undo) = {
+            let st = app.session.doc().unwrap();
+            (st.doc.swatches_iter().count(), st.history.undo.len())
+        };
+        drag_from(&mut app, &ctx, ("cg-v", 0, 1), Some(tile(&ctx)), 1.0, true);
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc.swatches_iter().count(), count + 1, "{}", app.ui.status);
+        assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
+        let first = st.doc.swatches.last().cloned().expect("a swatch");
+        assert_eq!(first.paint, Paint::solid(cell), "the shown color, still RGB");
+        assert!(!first.global, "a plain process color");
+        drag_from(&mut app, &ctx, ("cg-v", 0, 1), Some(tile(&ctx)), 2.0, true);
+        let newest = app.session.doc().unwrap().doc.swatches.last().cloned().expect("a swatch");
+        assert_eq!(newest.paint, Paint::solid(cell));
+        assert_ne!(newest.name, first.name, "another name");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc.swatches_iter().count(), count + 1, "Undo takes the second one off");
     }
 
     #[test]

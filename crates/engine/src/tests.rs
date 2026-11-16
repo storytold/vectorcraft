@@ -122,6 +122,7 @@ mod panelcmds;
 mod paragraphs;
 mod params;
 mod path_menu_enabled;
+mod pathfinder_clip;
 mod pathops;
 mod pathtype;
 mod pattern;
