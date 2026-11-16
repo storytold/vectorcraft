@@ -956,6 +956,22 @@ mod tests {
         h.run_steps(3);
         assert_eq!(dialog_size(&h), (50.0, 50.0));
 
+        // A Height typed and not committed does not outlast the copy: a distance is replaced by
+        // Width, and a Height the field refuses keeps the copy from happening, as it keeps OK from
+        // confirming.
+        for (typed, after) in [("70 pt", (50.0, 50.0)), ("tall", (50.0, 30.0))] {
+            h.state_mut().ui.dialog.as_mut().unwrap().fields.insert("height".into(), json!(30.0));
+            h.run_steps(2);
+            h.get_by_role_and_label(Role::TextInput, "Height:").focus();
+            h.run_steps(2);
+            h.key_press_modifiers(all, egui::Key::A);
+            h.get_by_role_and_label(Role::TextInput, "Height:").type_text(typed);
+            h.run_steps(2);
+            h.get_by_role_and_label(Role::Button, "Height:").click();
+            h.run_steps(3);
+            assert_eq!(dialog_size(&h), after, "{typed:?}");
+        }
+
         // Cancel: nothing is drawn.
         let undo = |h: &egui_kittest::Harness<'_, VectorcraftApp>| h.state().session.active().unwrap().history.undo.len();
         let before = undo(&h);
