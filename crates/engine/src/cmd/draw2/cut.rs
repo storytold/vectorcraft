@@ -1,6 +1,7 @@
 use super::common::{
     PenRecord, SIZE_VARIATIONS, SIZES, Sample, dist_to_polyline, fill_targets, has_fill, has_painted_stroke, ids_json, path_mut, path_of,
-    points_param, poly_bounds, pressure_region, ranged, replace_with_pieces, samples_param, sibling_with, size_pressure, target_paths, usize_opt,
+    points_param, poly_bounds, pressure_region, ranged, replace_with_pieces, samples_param, set_geometry, sibling_with, size_pressure, target_paths,
+    usize_opt,
 };
 use super::{
     Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, Document, EngineError, FillRule, Join, NodeId, NodeKind, Paint, ParamCurve, PathData, Point,
@@ -510,7 +511,15 @@ fn apply_plan(s: &mut Session, label: &str, plan: Vec<(NodeId, Vec<PathData>)>) 
         let mut all = vec![];
         let mut cut = Beside::replacing(d, &plan.iter().map(|(id, _)| *id).collect::<Vec<_>>());
         for (id, pieces) in plan {
-            all.extend(replace_with_pieces(d, &mut cut, id, pieces)?);
+            let clipping_path = d.position(id).is_some_and(|(parent, i, _)| i == 0 && parent.and_then(|p| d.node(p)).is_some_and(|p| p.clips()));
+            if clipping_path {
+                // Keep every clipping contour in its original first child slot. An empty mask
+                // must also stay there so the clipped artwork cannot become the new mask.
+                set_geometry(d, id, PathData::new(pieces.into_iter().flat_map(|p| p.subpaths).collect()))?;
+                all.push(id);
+            } else {
+                all.extend(replace_with_pieces(d, &mut cut, id, pieces)?);
+            }
         }
         cut.finish(d)?;
         sel.set(all.iter().copied());
