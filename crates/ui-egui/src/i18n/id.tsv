@@ -4126,6 +4126,8 @@ font-technology	Variable	Variabel
 	Saving	Menyimpan
 	Saving {}	Menyimpan {}
 	Search commands and tools…	Cari perintah dan alat…
+	Recent Commands	Perintah terbaru
+	No recent commands	Tidak ada perintah terbaru
 	Dashed Line	Garis putus-putus
 	Panel menu	Menu panel
 	Unembed…	Lepaskan sematan…
@@ -6766,6 +6768,24 @@ breakText	Glyphs	Glif
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Perluas garis putus menjadi jalur
 @msg	select paths with dashed strokes to expand	pilih jalur dengan stroke putus-putus yang akan diperluas
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Lingkaran singgung…
+	Tangent Circle	Lingkaran singgung
+	Circle:	Lingkaran:
+@msg	`ids` names an object twice	`ids` menyebut satu objek dua kali
+@msg	select two or three paths or compound paths	pilih dua atau tiga jalur atau jalur gabungan
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` harus dari 0.01 sampai 1000000 pt
+@msg	two shapes need a `radius`	dua bentuk memerlukan `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	tiga bentuk menentukan jari-jarinya sendiri: hilangkan `radius`
+@msg	`circle` must be from 0 to 64	`circle` harus dari 0 sampai 64
+@msg	a shape has no outline	sebuah bentuk tidak punya garis luar
+@msg	the shapes are too complex: at most 2000 segments in all	bentuknya terlalu rumit: paling banyak 2000 segmen seluruhnya
+@msg	these shapes take too long to search	pencarian untuk bentuk ini memakan waktu terlalu lama
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	lebih dari 64 lingkaran menyentuh bentuk ini: mungkin menyentuhnya di sepanjang satu kurva utuh
+@msg	no circle touches these shapes	tidak ada lingkaran yang menyentuh bentuk ini
+@msg	`circle` is past the last circle found ({found})	`circle` melewati lingkaran terakhir yang ditemukan ({found})
+@msg	object {value} is not a path or compound path	objek {value} bukan jalur atau jalur gabungan
+@msg	these shapes are too small to measure	bentuk ini terlalu kecil untuk diukur
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Alat dokumen
 	Save a Timestamped Copy	Simpan salinan bercap waktu
