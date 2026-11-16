@@ -1034,7 +1034,9 @@ art's colours (by default as global swatches the art links to).
 `swatch.move {names, to?, group?}` reorders swatches or moves them into or out of a colour group (as dragging
 them in the Swatches panel does); give colour group names instead to reorder the groups. Dropping a swatch on art
 in the app runs `paint.setFill` (or `paint.setStroke`, the active proxy) with `ids: [the object under the pointer]`.
-The Swatches panel menu's commands: `swatch.addUsedColors {selection?, global?}`, `swatch.unused` (a query: the
+The Swatches panel menu's commands: `swatch.addUsedColors {selection?, global?}` (Add Used Colors sends `{}`; Add
+Selected Colors, on while art is selected, sends `{selection: true, global: true}`; a run with no new color records no
+undo step), `swatch.unused` (a query: the
 names Select All Unused selects; a spot swatch counts as used while an image placed from a DCS file has a plate of
 its ink), `swatch.merge {names}` (the first is kept; gradient stops linked to the others drop their process
 plates), `swatch.ungroup {name}` and

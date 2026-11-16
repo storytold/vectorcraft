@@ -1069,3 +1069,42 @@ fn the_list_fills_a_tall_panel_above_its_footer() {
     let loose = list(None);
     assert!(loose.height() <= 150.5, "unsized, the list keeps its height: {loose:?}");
 }
+
+/// The panel menu's Add Selected Colors adds only the selected art's new colors, as global swatches
+/// the art links to, in one undo step; with nothing selected it is off.
+#[test]
+fn add_selected_colors_adds_the_selection_colors_as_global_swatches() {
+    let mut app = app();
+    let rect = |app: &mut VectorcraftApp, color: &str| {
+        let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [id], "color": color})).unwrap();
+        app.run("paint.setStroke", json!({"ids": [id], "none": true})).unwrap();
+        id
+    };
+    let picked = rect(&mut app, "#abcdef");
+    rect(&mut app, "#fedcba");
+    let ctx = context();
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    app.run("select.set", json!({"ids": []})).unwrap();
+    let (before, steps) = (app.session.active().unwrap().doc.clone(), undo(&app));
+    click_menu_item(&mut app, &ctx, "Add Selected Colors");
+    assert_eq!(app.session.active().unwrap().doc, before, "off with nothing selected");
+    assert_eq!(undo(&app), steps);
+    app.run("select.set", json!({"ids": [picked]})).unwrap();
+    let (before, steps) = (app.session.active().unwrap().doc.clone(), undo(&app));
+    click_menu_item(&mut app, &ctx, "Add Selected Colors");
+    let doc = &app.session.active().unwrap().doc;
+    let swatch = doc.swatch("R=171 G=205 B=239").expect("the selected art's color is a swatch");
+    assert!(swatch.global);
+    assert!(doc.swatch("R=254 G=220 B=186").is_none(), "unselected art adds nothing");
+    let fill = doc.node(vectorcraft_doc::NodeId(picked.as_u64().unwrap())).unwrap().appearance.fill_paint();
+    assert!(matches!(fill, Paint::Solid { swatch: Some(ref n), .. } if n == "R=171 G=205 B=239"), "{fill:?}");
+    assert_eq!(undo(&app), steps + 1);
+    // Run again, the color is in the panel already: nothing is added and no undo step is recorded.
+    let after = app.session.active().unwrap().doc.clone();
+    click_menu_item(&mut app, &ctx, "Add Selected Colors");
+    assert_eq!(app.session.active().unwrap().doc, after);
+    assert_eq!(undo(&app), steps + 1);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().doc, before);
+}

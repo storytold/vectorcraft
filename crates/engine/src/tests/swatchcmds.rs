@@ -125,6 +125,27 @@ fn add_used_colors_skips_colours_that_have_swatches() {
     assert!(doc(&s).swatch("R=171 G=205 B=239").unwrap().global);
 }
 
+/// A run that finds no new color, over all the art or the selection, records no undo step.
+#[test]
+fn add_used_colors_with_no_new_color_records_no_undo_step() {
+    let mut s = session();
+    let a = rect_filled(&mut s, json!({"color": "#123456"}));
+    run(&mut s, "swatch.addUsedColors", json!({}));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let before = doc(&s).clone();
+    let undo = undo_len(&s);
+    for p in [json!({}), json!({"selection": true, "global": true})] {
+        assert_eq!(run(&mut s, "swatch.addUsedColors", p), json!({"added": [], "linked": 0}));
+        assert_eq!(undo_len(&s), undo);
+        assert_eq!(*doc(&s), before);
+    }
+    // An empty selection is still an error, with nothing changed.
+    run(&mut s, "select.set", json!({"ids": []}));
+    let undo = undo_len(&s);
+    assert!(s.execute("swatch.addUsedColors", &json!({"selection": true})).is_err());
+    assert_eq!(undo_len(&s), undo);
+}
+
 /// Give `id` the fill `p` exactly as written (a command would round or convert some colors).
 fn set_fill(s: &mut Session, id: NodeId, p: Paint) {
     std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().appearance.set_fill(p);
