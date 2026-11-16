@@ -203,6 +203,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.trimView", "Trim View", "", "{} toggle: hide everything outside the artboards"),
     ("view.cornerWidget", "Hide Corner Widget", "", "{} toggle the live corner widgets"),
     (
+        "view.shapeWidgets",
+        "Hide Shape Widgets",
+        "",
+        "{on?: bool} hide or show selected live shapes' corner, pie and side widgets for the Selection tool and the shape tools (the shape tools' Control bar button); without `on` it toggles; returns the new state. Direct Selection's corner widgets follow view.cornerWidget alone",
+    ),
+    (
         "view.snapToPixel",
         "Snap to Pixel",
         "",

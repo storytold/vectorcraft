@@ -281,6 +281,12 @@ fn run_ui_part3(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "view.pixelPreview" => flag(&mut app.ui.view.pixel_preview),
         "view.trimView" => flag(&mut app.ui.view.trim_view),
         "view.cornerWidget" => flag(&mut app.ui.view.corner_widgets),
+        // Hide/Show Shape Widgets: `on` sets the state, and without it the state flips.
+        "view.shapeWidgets" => opt_bool(p, "on").map(|on| {
+            let v = &mut app.ui.view.shape_widgets;
+            *v = on.unwrap_or(!*v);
+            json!(*v)
+        }),
         // New View: the engine stores the current zoom, centre and rotation under the given name.
         "view.saved.new" if p.get("zoom").is_none() => {
             let Some(v) = app.view().copied() else { return Some(Err("no document".into())) };

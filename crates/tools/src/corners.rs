@@ -132,9 +132,11 @@ impl CornerWidgets {
         Self::of(doc, selection, zoom, any_path)?.within_angle(max_angle)
     }
 
-    /// The widgets the active tool can drag (Direct Selection: `any_path`).
+    /// The widgets the active tool can drag (Direct Selection: `any_path`). The live shapes' widgets
+    /// of the other tools also need Show Shape Widgets.
     pub fn for_tool(cx: &ToolContext, any_path: bool) -> Option<Self> {
-        Self::showing(cx.doc, cx.selection, cx.zoom, any_path, cx.corner_widgets, cx.corner_widget_max_angle)
+        let on = cx.corner_widgets && (any_path || cx.shape_widgets);
+        Self::showing(cx.doc, cx.selection, cx.zoom, any_path, on, cx.corner_widget_max_angle)
     }
 
     /// The centres of the widgets that show.

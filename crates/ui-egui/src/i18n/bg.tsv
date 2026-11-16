@@ -1525,6 +1525,8 @@ font-technology	Variable	Променливи
 	More Options	Още опции
 	Show Properties Panel	Показване на панела със свойства
 	Hide Corner Widget	Скриване на приспособлението за ъгли
+	Hide Shape Widgets	Скриване на приспособленията за фигури
+	Show Shape Widgets	Показване на приспособленията за фигури
 	Hide Corner Widget for angles greater than	Скриване на приспособлението за ъгли за ъгли, по-големи от
 	Hide Edges	Скриване на ръбовете
 	Hide Gradient Annotator	Скриване на анотатора за градиент

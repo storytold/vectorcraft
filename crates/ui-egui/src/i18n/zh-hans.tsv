@@ -1537,6 +1537,8 @@ file-filter	Templates	模板
 	More Options	更多选项
 	Show Properties Panel	显示属性面板
 	Hide Corner Widget	隐藏角控件
+	Hide Shape Widgets	隐藏形状控件
+	Show Shape Widgets	显示形状控件
 	Hide Corner Widget for angles greater than	角度大于此值时隐藏圆角控件
 	Hide Edges	隐藏边缘
 	Hide Gradient Annotator	隐藏渐变批注器

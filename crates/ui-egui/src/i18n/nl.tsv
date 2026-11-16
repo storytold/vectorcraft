@@ -1168,6 +1168,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Hide Gradient Annotator	Verloopaanduiding verbergen
 	Show Gradient Annotator	Verloopaanduiding tonen
 	Hide Corner Widget	Hoekwidget verbergen
+	Hide Shape Widgets	Vormwidgets verbergen
+	Show Shape Widgets	Vormwidgets tonen
 	Show Corner Widget	Hoekwidget tonen
 	Guides	Hulplijnen
 	Hide Guides	Hulplijnen verbergen

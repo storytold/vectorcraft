@@ -48,6 +48,12 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) -> bool 
         }
         fit.separator(ui);
     }
+    // The tools with live shape widgets: Hide/Show Shape Widgets first, so a narrow bar leaves out
+    // the shape's fields before it.
+    if vectorcraft_tools::shape::shows_shape_widgets(&tool) {
+        shape_widgets_button(app, ui, fit);
+        fit.separator(ui);
+    }
 
     match active_shape.as_str() {
         "ellipse" => draw_ellipse_controls(app, ui, fit, &opts, selected_custom),
@@ -58,6 +64,15 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) -> bool 
         _ => return false,
     }
     true
+}
+
+/// Hide Shape Widgets, or Show Shape Widgets while they are hidden (`view.shapeWidgets`), at least 52
+/// points wide and wider for a longer translated label, while `fit` has room for it.
+fn shape_widgets_button(app: &mut VectorcraftApp, ui: &mut Ui, fit: &mut Fit) {
+    let label = if app.ui.view.shape_widgets { tl!("Hide Shape Widgets") } else { tl!("Show Shape Widgets") };
+    if fit.room(ui, &[widgets::flat_button_fit_width(ui, label, 52.0)]) && widgets::flat_button_fit(ui, label, 52.0).clicked() {
+        app.run("view.shapeWidgets", json!({})).ok();
+    }
 }
 
 /// Whether `fit` has room in the row `ui` for the label `text` with a field `field` wide after it.

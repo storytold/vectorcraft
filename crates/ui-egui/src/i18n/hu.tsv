@@ -1996,6 +1996,8 @@ file-filter	Templates	Sablonok
 	Hide Bounding Box	Befoglaló keret elrejtése
 	Hide Code	Kód elrejtése
 	Hide Corner Widget	Sarokfogantyú elrejtése
+	Hide Shape Widgets	Alakzatfogantyúk elrejtése
+	Show Shape Widgets	Alakzatfogantyúk megjelenítése
 	Hide Corner Widget for angles greater than	Sarokfogantyú elrejtése, ha a szög nagyobb, mint
 	Hide Edges	Élek elrejtése
 	Hide Gradient Annotator	Színátmenet-jelölő elrejtése

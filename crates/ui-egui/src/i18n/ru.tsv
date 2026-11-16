@@ -1600,6 +1600,8 @@ file-filter	Templates	Шаблоны
 	More Options	Дополнительные параметры
 	Show Properties Panel	Показать панель «Свойства»
 	Hide Corner Widget	Скрыть угловой виджет
+	Hide Shape Widgets	Скрыть виджеты фигур
+	Show Shape Widgets	Показать виджеты фигур
 	Hide Corner Widget for angles greater than	Скрывать угловой виджет для углов больше
 	Hide Edges	Скрыть края
 	Hide Gradient Annotator	Скрыть аннотатор градиента

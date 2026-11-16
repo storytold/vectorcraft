@@ -1500,6 +1500,8 @@ font-technology	Variable	Değişken
 	More Options	Daha Fazla Seçenek
 	Show Properties Panel	Özellikler Panelini Göster
 	Hide Corner Widget	Köşe Widget'ını Gizle
+	Hide Shape Widgets	Şekil Widget'larını Gizle
+	Show Shape Widgets	Şekil Widget'larını Göster
 	Hide Corner Widget for angles greater than	Şu değerden daha büyük açılar için Köşe Widget'ını gizle:
 	Hide Edges	Kenarları Gizle
 	Hide Gradient Annotator	Degrade Açıklayıcıyı Gizle

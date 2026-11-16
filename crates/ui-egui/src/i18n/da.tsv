@@ -3293,6 +3293,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Hide Gradient Annotator	Skjul gradientanmærkning
 	Show Gradient Annotator	Vis gradientanmærkning
 	Hide Corner Widget	Skjul hjørnehåndtag
+	Hide Shape Widgets	Skjul formhåndtag
+	Show Shape Widgets	Vis formhåndtag
 	Show Corner Widget	Vis hjørnehåndtag
 	Guides	Hjælpelinjer
 	Hide Guides	Skjul hjælpelinjer

@@ -1575,6 +1575,8 @@ file-filter	Templates	Vorlagen
 	More Options	Weitere Optionen
 	Show Properties Panel	Bedienfeld „Eigenschaften“ einblenden
 	Hide Corner Widget	Ecken-Widget ausblenden
+	Hide Shape Widgets	Form-Widgets ausblenden
+	Show Shape Widgets	Form-Widgets einblenden
 	Hide Corner Widget for angles greater than	Ecken-Widget ausblenden bei Winkeln größer als
 	Hide Edges	Kanten ausblenden
 	Hide Gradient Annotator	Verlaufsoptimierer ausblenden

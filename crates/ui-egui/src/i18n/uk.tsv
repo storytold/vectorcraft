@@ -1603,6 +1603,8 @@ file-filter	Templates	Шаблони
 	More Options	Додаткові параметри
 	Show Properties Panel	Показати панель «Властивості»
 	Hide Corner Widget	Приховати кутовий віджет
+	Hide Shape Widgets	Приховати віджети фігур
+	Show Shape Widgets	Показати віджети фігур
 	Hide Corner Widget for angles greater than	Приховувати кутовий віджет для кутів, більших за
 	Hide Edges	Приховати краї
 	Hide Gradient Annotator	Приховати маркер градієнта

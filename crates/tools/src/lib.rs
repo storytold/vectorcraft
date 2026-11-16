@@ -610,6 +610,7 @@ pub(crate) mod testutil {
             snap_to_glyph: false,
             glyph_snap: GlyphSnap::default(),
             corner_widgets: true,
+            shape_widgets: true,
             fill_active: true,
             gradient_stop: None,
             appearance_item: None,

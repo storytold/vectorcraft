@@ -1580,6 +1580,8 @@ font-technology	Variable	Variables
 	More Options	Plus d’options
 	Show Properties Panel	Afficher le panneau Propriétés
 	Hide Corner Widget	Masquer le widget d’angle
+	Hide Shape Widgets	Masquer les widgets de forme
+	Show Shape Widgets	Afficher les widgets de forme
 	Hide Corner Widget for angles greater than	Masquer le widget d’angle pour les angles supérieurs à
 	Hide Edges	Masquer les contours
 	Hide Gradient Annotator	Masquer l’annotateur de dégradé

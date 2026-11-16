@@ -222,6 +222,10 @@ pub struct ToolContext<'a> {
     pub glyph_snap: GlyphSnap,
     /// View → Show Corner Widget: paths show draggable Live Corners widgets in their corners.
     pub corner_widgets: bool,
+    /// The Control bar's Show Shape Widgets: selected live shapes show their corner, pie and side
+    /// widgets to the Selection tool and the shape tools. Direct Selection's corner widgets follow
+    /// [`Self::corner_widgets`] alone.
+    pub shape_widgets: bool,
     /// Which paint proxy is in front (true = Fill): the one the Gradient tool edits.
     pub fill_active: bool,
     /// The selected gradient stop (`gradient.selectStop`), marked on the gradient annotator.

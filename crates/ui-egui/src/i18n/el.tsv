@@ -1507,6 +1507,8 @@ font-technology	Variable	Μεταβλητές
 	More Options	Περισσότερες επιλογές
 	Show Properties Panel	Εμφάνιση πίνακα ιδιοτήτων
 	Hide Corner Widget	Απόκρυψη χειριστηρίου γωνιών
+	Hide Shape Widgets	Απόκρυψη χειριστηρίων σχημάτων
+	Show Shape Widgets	Εμφάνιση χειριστηρίων σχημάτων
 	Hide Corner Widget for angles greater than	Απόκρυψη χειριστηρίου γωνιών για γωνίες μεγαλύτερες από
 	Hide Edges	Απόκρυψη ακμών
 	Hide Gradient Annotator	Απόκρυψη χειριστηρίου ντεγκραντέ

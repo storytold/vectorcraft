@@ -54,10 +54,10 @@ impl SideWidget {
         (at.x.is_finite() && at.y.is_finite()).then_some(Self { id, at, sides: *sides })
     }
 
-    /// The widget the tool can drag (its bounding box showing).
+    /// The widget the tool can drag (its bounding box and the shape widgets showing).
     pub fn for_tool(cx: &ToolContext) -> Option<(Self, OrientedBox)> {
         // One object or none: a larger selection's box is not measured.
-        if cx.selection.objects.len() != 1 {
+        if !cx.shape_widgets || cx.selection.objects.len() != 1 {
             return None;
         }
         let bx = shown_box(cx)?;
@@ -226,8 +226,12 @@ mod tests {
         assert!(w.at.distance(want(1.0)) < 1e-9, "{w:?} {bx:?}");
         assert!(SideWidget::of(&d, &s, &bx, 4.0).unwrap().at.distance(want(4.0)) < 1e-9);
         assert!(over_widget(&c, w.at) && !over_widget(&c, w.at + vectorcraft_geom::Vec2::new(0.0, 8.0)));
-        // Hidden with the bounding box hidden, with an anchor or segment selected, or with no zoom.
+        // Hidden with the bounding box or the shape widgets hidden, with an anchor or segment
+        // selected, or with no zoom.
         assert!(SideWidget::for_tool(&ToolContext { show_bbox: false, ..cx(&d, &s, &p) }).is_none());
+        let hidden = ToolContext { shape_widgets: false, ..cx(&d, &s, &p) };
+        assert!(SideWidget::for_tool(&hidden).is_none() && !over_widget(&hidden, w.at));
+        assert!(SideDrag::hit(&hidden, &PointerEvent::new(PointerKind::Down, w.at.x, w.at.y)).is_none());
         let mut part = s.clone();
         part.segments.insert(id, Default::default());
         assert!(SideWidget::of(&d, &part, &bx, 1.0).is_none());

@@ -2459,6 +2459,71 @@ fn full_screen_modes_fill_the_screen_and_normal_mode_restores_the_window() {
     assert!(sent(&mut app, true).is_empty(), "still full screen, as the user had it");
 }
 
+/// The Rectangle, Rounded Rectangle, Ellipse, Polygon and Star tools show Hide Shape Widgets in the
+/// Control bar, with a selection and without one; a click hides the widgets and the button then reads
+/// Show Shape Widgets, and a second click shows them again. The button comes before the shape's own
+/// fields, so a window too narrow for the Polygon tool's Reset button still shows it. The Selection,
+/// Spiral and Line Segment tools show no such button.
+#[test]
+fn the_shape_tools_control_bar_hides_and_shows_the_shape_widgets() {
+    struct RestoreLanguage(crate::i18n::Lang);
+    impl Drop for RestoreLanguage {
+        fn drop(&mut self) {
+            crate::i18n::set_current(self.0);
+        }
+    }
+    let _language = RestoreLanguage(crate::i18n::current());
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let frame_in = |app: &mut crate::VectorcraftApp, width: f32, events: Vec<egui::Event>| {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, 400.0));
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| frame_in(app, 1600.0, events);
+    let button_in = |app: &mut crate::VectorcraftApp, width: f32, name: &str| {
+        frame_in(app, width, vec![]);
+        frame_in(app, width, vec![]).into_iter().find(|(_, n)| n.label() == Some(name)).and_then(|(_, n)| n.bounds())
+    };
+    let button = |app: &mut crate::VectorcraftApp, name: &str| button_in(app, 1600.0, name);
+    let click = |app: &mut crate::VectorcraftApp, name: &str| {
+        let b = button(app, name).unwrap_or_else(|| panic!("no {name}"));
+        let at = egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32);
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(app, vec![press(false)]);
+    };
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+    for ids in [json!([id]), json!([])] {
+        app.run("select.set", json!({ "ids": ids })).unwrap();
+        for tool in ["rectangle", "roundedRectangle", "ellipse", "polygon", "star"] {
+            app.select_tool(tool);
+            assert!(button(&mut app, "Hide Shape Widgets").is_some(), "{tool} {ids}");
+            click(&mut app, "Hide Shape Widgets");
+            assert!(!app.ui.view.shape_widgets, "{tool} {ids}");
+            assert!(button(&mut app, "Hide Shape Widgets").is_none(), "{tool} {ids}");
+            click(&mut app, "Show Shape Widgets");
+            assert!(app.ui.view.shape_widgets, "{tool} {ids}");
+        }
+    }
+    // Narrower and narrower: once the Polygon tool's Reset button is left out, the toggle still shows.
+    app.select_tool("polygon");
+    let reset = button(&mut app, "Reset").expect("Reset in a wide window");
+    let toggle = button(&mut app, "Hide Shape Widgets").expect("the toggle in a wide window");
+    assert!(toggle.x1 <= reset.x0, "the toggle comes first: {toggle:?} {reset:?}");
+    let narrow = (400..1600).step_by(10).rev().map(|w| w as f32).find(|w| button_in(&mut app, *w, "Reset").is_none()).expect("a width without Reset");
+    assert!(button_in(&mut app, narrow, "Hide Shape Widgets").is_some(), "{narrow} wide");
+    for tool in ["selection", "spiral", "lineSegment"] {
+        app.select_tool(tool);
+        assert!(button(&mut app, "Hide Shape Widgets").is_none(), "{tool}");
+    }
+}
+
 /// Snapping quick access includes the existing glyph and alignment settings. Pointer clicks use
 /// their commands, and reopening reads the same state as View and Preferences (#6164).
 #[test]

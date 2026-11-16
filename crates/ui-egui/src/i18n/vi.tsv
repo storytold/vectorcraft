@@ -1838,6 +1838,8 @@ file-filter	Templates	Mẫu
 	Hide Bounding Box	Ẩn hộp giới hạn
 	Hide Code	Ẩn mã
 	Hide Corner Widget	Ẩn tiện ích góc
+	Hide Shape Widgets	Ẩn tiện ích hình dạng
+	Show Shape Widgets	Hiện tiện ích hình dạng
 	Hide Corner Widget for angles greater than	Ẩn tiện ích góc với góc lớn hơn
 	Hide Edges	Ẩn cạnh
 	Hide Gradient Annotator	Ẩn chú thích chuyển sắc

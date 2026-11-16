@@ -1574,6 +1574,8 @@ file-filter	Templates	範本
 	More Options	更多選項
 	Show Properties Panel	顯示內容面板
 	Hide Corner Widget	隱藏轉角 Widget
+	Hide Shape Widgets	隱藏形狀 Widget
+	Show Shape Widgets	顯示形狀 Widget
 	Hide Corner Widget for angles greater than	角度大於以下數值時隱藏轉角 Widget
 	Hide Edges	隱藏邊緣
 	Hide Gradient Annotator	隱藏漸層註解者

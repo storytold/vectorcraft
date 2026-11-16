@@ -1148,6 +1148,64 @@ fn a_shape_tool_drags_a_polygons_side_widget() {
     assert!(matches!(a.last(), Some(Action::Preview(cmd, _)) if cmd == "shape.line"), "{a:?}");
 }
 
+/// With Show Shape Widgets off, the shape tools neither show nor take a selected live rectangle's
+/// corner widget, a live ellipse's pie widget or a live polygon's side widget: the pointer there is
+/// the tool's own, a drag from there draws a new shape and a double-click asks for nothing. With it
+/// on, the same drag adjusts the widget.
+#[test]
+fn hidden_shape_widgets_do_not_answer_a_shape_tool() {
+    use vectorcraft_doc::{Appearance, LiveShape, Node, NodeKind};
+    let live = |shape: LiveShape| {
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let (l, id) = (d.layers[0].id, d.alloc_id());
+        let mut n = Node::path(id, shape.to_path(), Appearance::default_art());
+        if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+            *slot = Some(Box::new(shape));
+        }
+        d.insert(Some(l), 0, n).unwrap();
+        let mut s = Selection::default();
+        s.add(id);
+        (d, s)
+    };
+    let xf = Affine::translate((100.0, 100.0));
+    let p = paint();
+    let rect = live(LiveShape::Rectangle { w: 100.0, h: 100.0, radii: [0.0; 4], kinds: Default::default(), radii_relative: false, xf });
+    let ellipse = live(LiveShape::Ellipse { w: 200.0, h: 100.0, pie: (0.0, 360.0), xf });
+    let polygon = live(LiveShape::Polygon {
+        radius: 80.0,
+        sides: 5,
+        xf: Affine::translate((250.0, 250.0)),
+        radii: vec![],
+        kinds: vec![],
+        radii_relative: false,
+    });
+    let side = crate::sidewidget::SideWidget::for_tool(&cx(&polygon.0, &polygon.1, &p)).expect("a side widget").0.at;
+    // The corner widget 10 px inside the box's top-left corner, the pie widgets 12 px right of the
+    // ellipse, and the side widget.
+    let (far, m) = (Point::new(480.0, 480.0), Mods::default());
+    for ((d, s), at) in [(&rect, Point::new(110.0, 110.0)), (&ellipse, Point::new(312.0, 150.0)), (&polygon, side)] {
+        let shown = cx(d, s, &p);
+        let hidden = ToolContext { shape_widgets: false, ..cx(d, s, &p) };
+        let drag = |t: &mut ShapeTool, c: &ToolContext| {
+            t.pointer(c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+            let a = t.pointer(c, &PointerEvent::new(PointerKind::Drag, at.x + 20.0, at.y + 25.0));
+            t.pointer(c, &PointerEvent::new(PointerKind::Up, at.x + 20.0, at.y + 25.0));
+            a
+        };
+        for id in ["rectangle", "roundedRectangle", "ellipse", "polygon", "star"] {
+            let mut t = ShapeTool::new(id);
+            assert_ne!(t.cursor(&shown, at, m), t.cursor(&shown, far, m), "{id} at {at:?}");
+            assert_eq!(t.cursor(&hidden, at, m), t.cursor(&hidden, far, m), "{id} at {at:?}");
+            let a = drag(&mut t, &shown);
+            assert!(matches!(a.last(), Some(Action::Preview(cmd, _)) if cmd == "object.setLiveShape"), "{id} at {at:?}: {a:?}");
+            let a = drag(&mut t, &hidden);
+            assert!(matches!(a.last(), Some(Action::Preview(cmd, _)) if cmd.starts_with("shape.")), "{id} at {at:?}: {a:?}");
+            assert!(t.pointer(&hidden, &PointerEvent::new(PointerKind::DoubleClick, at.x, at.y)).is_empty(), "{id} at {at:?}");
+            assert!(!t.busy(), "{id}");
+        }
+    }
+}
+
 /// A double-click on a corner widget of a selected live shape, with a shape tool that shows the
 /// widgets, asks for the Transform panel and nothing else: neither click draws, edits or begins an
 /// undo step, and the tool stays idle. Line Segment, a plain path, a pie widget, a hidden or

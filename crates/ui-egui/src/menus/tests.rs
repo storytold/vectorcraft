@@ -843,6 +843,32 @@ fn recent_fonts_and_corner_widget_toggle() {
     assert_eq!(dynamic_label(&app, "view.cornerWidget", ""), "Show Corner Widget");
 }
 
+/// Hide Shape Widgets (`view.shapeWidgets`, the shape tools' Control bar button) flips its label and
+/// the setting, `on` sets it, a non-boolean `on` is an error that leaves it, the setting is saved
+/// with the interface state, and state saved before the setting existed loads with the widgets on.
+#[test]
+fn shape_widgets_command_toggles_and_takes_on() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    assert!(app.ui.view.shape_widgets, "on by default");
+    assert_eq!(dynamic_label(&app, "view.shapeWidgets", ""), "Hide Shape Widgets");
+    assert_eq!(app.run("view.shapeWidgets", json!({})).unwrap(), json!(false));
+    assert_eq!(dynamic_label(&app, "view.shapeWidgets", ""), "Show Shape Widgets");
+    assert!(!app.view_info().shape_widgets);
+    assert_eq!(app.run("view.shapeWidgets", json!({"on": false})).unwrap(), json!(false));
+    assert!(app.run("view.shapeWidgets", json!({"on": "yes"})).is_err());
+    assert!(!app.ui.view.shape_widgets, "a bad `on` changes nothing");
+    assert_eq!(app.run("view.shapeWidgets", json!({"on": true})).unwrap(), json!(true));
+    assert!(app.view_info().shape_widgets);
+    app.ui.view.shape_widgets = false;
+    let mut saved = serde_json::to_value(&app.ui).unwrap();
+    let loaded: crate::UiState = serde_json::from_value(saved.clone()).unwrap();
+    assert!(!loaded.view.shape_widgets, "the setting is saved");
+    saved["view"].as_object_mut().unwrap().remove("shape_widgets");
+    let older: crate::UiState = serde_json::from_value(saved).unwrap();
+    assert!(older.view.shape_widgets, "older saved state shows the widgets");
+    assert!(UI_COMMANDS.iter().any(|c| c.0 == "view.shapeWidgets" && c.2.is_empty()), "no default key");
+}
+
 /// View › Precise Cursors has no menu item or default key, but the command (assignable in Keyboard Shortcuts)
 /// writes General › Use Precise Cursors, the value the dialog and the saved preferences read.
 #[test]
