@@ -76,6 +76,8 @@ type CidWidths = Rc<[(u32, f32)]>;
 struct Walk {
     /// Each font's characters and widths; `None` when two subsets disagree.
     fonts: HashMap<String, Option<FontWidths>>,
+    /// The narrowest and widest width given each character of each font so far.
+    bounds: HashMap<String, BTreeMap<char, (f32, f32)>>,
     /// The font dictionaries, form XObjects and resource dictionaries already looked at.
     seen_fonts: HashSet<(usize, usize)>,
     seen_forms: HashSet<ObjectIdentifier>,
@@ -96,18 +98,23 @@ struct Walk {
 }
 
 impl Walk {
-    /// Note `widths`, characters of the font of PostScript name `name` and their widths. A width
-    /// another subset gave the character already must be the same.
+    /// Note `widths`, characters of the font of PostScript name `name` and their widths. All the
+    /// widths given one character, by this and the other subsets, must be the same: no two more
+    /// than [`SAME_WIDTH`] apart.
     fn add(&mut self, name: String, widths: Vec<(char, f32)>) {
-        let slot = self.fonts.entry(name).or_insert_with(|| Some(BTreeMap::new()));
+        let slot = self.fonts.entry(name.clone()).or_insert_with(|| Some(BTreeMap::new()));
         let Some(have) = slot else { return };
+        let bounds = self.bounds.entry(name).or_default();
         for (c, w) in widths {
-            if have.get(&c).is_some_and(|was| (was - w).abs() > SAME_WIDTH) {
-                *slot = None;
-                return;
-            }
-            if have.len() < MAX_CHARS {
+            if let Some((lo, hi)) = bounds.get_mut(&c) {
+                (*lo, *hi) = (lo.min(w), hi.max(w));
+                if *hi - *lo > SAME_WIDTH {
+                    *slot = None;
+                    return;
+                }
+            } else if have.len() < MAX_CHARS {
                 have.insert(c, w);
+                bounds.insert(c, (w, w));
             }
         }
     }
@@ -486,6 +493,32 @@ mod tests {
         let w = walked(&pdf_with(&[page], &refs, None));
         assert_eq!(w.arrays_read, 5);
         assert_eq!(w.fonts.values().filter(|f| f.as_ref().is_some_and(|f| !f.is_empty())).count(), 5);
+    }
+
+    /// Widths that drift past [`super::SAME_WIDTH`] over several subsets are two widths, though
+    /// each lies within it of the one read before: subsets giving `A` 600, 600.8 and 601.6 give the
+    /// font none, as do subsets giving `B` 501.5, 500.6 and 500. Two within it still give one. Each
+    /// subset is on a page of its own, so they are read in turn (a font dictionary's entries come in
+    /// no set order).
+    #[test]
+    fn widths_that_drift_apart_over_several_subsets_give_none() {
+        let tags = ["AAAAAA", "BBBBBB", "CCCCCC"];
+        let pages: Vec<PdfPage> = (0..3)
+            .map(|i| {
+                let mut fonts = vec![
+                    format!("/D {}", simple("TrueType", &format!("{}+Drift", tags[i]), "WinAnsiEncoding", 65, ["600", "600.8", "601.6"][i])),
+                    format!("/B {}", simple("TrueType", &format!("{}+Back", tags[i]), "WinAnsiEncoding", 65, ["0 501.5", "0 500.6", "0 500"][i])),
+                ];
+                if i < 2 {
+                    fonts.push(format!("/S {}", simple("TrueType", &format!("{}+Steady", tags[i]), "WinAnsiEncoding", 65, ["600", "600.8"][i])));
+                }
+                PdfPage { resources: format!("/Font << {} >>", fonts.join(" ")), ..PdfPage::new(100.0, 100.0, "") }
+            })
+            .collect();
+        let widths = crate::open_pdf(&pdf_with(&pages, &[], None), None).unwrap().page_widths();
+        assert!(widths.widths("Drift").is_none());
+        assert!(widths.widths("Back").is_none());
+        assert!(widths.widths("Steady").is_some_and(|w| w.contains_key(&'A')));
     }
 
     /// [`crate::import_scan::cid_ranges`] gives each CID of a `W` its values, a list's in turn (an
