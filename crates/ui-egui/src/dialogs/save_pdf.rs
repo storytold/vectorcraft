@@ -325,6 +325,19 @@ pub(super) fn pick<T: Choice>(ui: &mut egui::Ui, d: &mut Dialog, path: &str, wid
     true
 }
 
+/// [`pick`] with a first entry, `unset`, for a setting that isn't set: shown while the value at
+/// `path` isn't one of the choices, and stored as [`vectorcraft_pdf::UNSET_CHOICE`] when chosen.
+fn pick_or_unset<T: Choice>(ui: &mut egui::Ui, d: &mut Dialog, path: &str, width: f32, unset: &str) -> bool {
+    let current = choice_index::<T>(d, path).map_or(0, |i| i + 1);
+    let lang = crate::i18n::current();
+    let labels: Vec<&str> = std::iter::once(unset).chain(T::LABELS.iter().map(|label| choice_label(lang, path, label))).collect();
+    let label = labels.get(current).copied().unwrap_or(unset);
+    let Some(i) = widgets::dropdown_with(ui, path, label, &labels, width, |_| true) else { return false };
+    let id = i.checked_sub(1).and_then(|i| T::IDS.get(i)).copied().unwrap_or(vectorcraft_pdf::UNSET_CHOICE);
+    set(d, path, json!(id));
+    true
+}
+
 /// Printer mark styles use adjectives, separately from interface language names.
 pub(super) fn choice_label<'a>(lang: crate::i18n::Lang, path: &str, label: &'a str) -> &'a str {
     if path == "marks.kind" { crate::i18n::tr_ctx(lang, "mark-style", label) } else { crate::i18n::tr(lang, label) }
@@ -663,8 +676,9 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog) {
         .collect();
     row(ui, tl!("Destination:"), |ui| profile_pick(ui, d, "output.destination", &destinations, 2, converting));
     row(ui, tl!("Profile inclusion:"), |ui| {
-        // A standard decides whether colours are tagged.
-        ui.add_enabled_ui(standard == Standard::None, |ui| pick::<ProfileInclusion>(ui, d, "output.profiles", 300.0, |_| true));
+        // A standard decides whether colours are tagged. Not set, colors are untagged and gray and
+        // RGB images keep their profiles (shown as Default).
+        ui.add_enabled_ui(standard == Standard::None, |ui| pick_or_unset::<ProfileInclusion>(ui, d, "output.profiles", 300.0, tl!("Default")));
     });
     if standard.cmyk_only() {
         note(ui, tl!("PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged."));

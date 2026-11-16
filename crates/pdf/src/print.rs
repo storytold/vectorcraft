@@ -187,7 +187,7 @@ pub fn printed_document<'a>(doc: &'a Document, set: &PrintSettings) -> Cow<'a, D
     // the art that prints; the layers kept are shown.
     let mut kept = doc.clone();
     keep_layers(&mut kept.layers, set.print_layers);
-    let layers = vectorcraft_effects::WrittenLayers { hidden: false, non_printing: true };
+    let layers = vectorcraft_effects::WrittenLayers { hidden: false, non_printing: true, hidden_objects: false };
     let mut d = vectorcraft_effects::bake_document_placing_symbols(&kept, true, layers).unwrap_or(kept);
     composite_overprints(&mut d, set);
     Cow::Owned(d)

@@ -268,6 +268,8 @@ struct RasterOptions {
     /// PSD: Write Layers.
     layers: Option<bool>,
     max_editability: Option<bool>,
+    /// PSD: Preserve Text Editability (with layers).
+    preserve_text: Option<bool>,
     hidden_layers: Option<bool>,
     /// Appearance of Black › Printing / Exporting (`prefs.blackOutput`); agents can set it here too.
     rich_black: Option<bool>,
@@ -350,6 +352,7 @@ impl RasterOptions {
                 color_model,
                 layers: self.layers.unwrap_or(true),
                 max_editability: self.max_editability.unwrap_or(false),
+                preserve_text: self.preserve_text.unwrap_or(false),
                 hidden_layers: self.hidden_layers.unwrap_or(false),
                 embed_icc,
             },
@@ -374,6 +377,7 @@ fn check_options(format: RasterFormat, o: &RasterExportOptions) -> Result<()> {
     let r = match format {
         RasterFormat::Bmp if model == jpeg::ColorModel::Cmyk => Err("BMP files are RGB or grayscale: colorModel rgb or gray".to_string()),
         RasterFormat::Tga if model != jpeg::ColorModel::Rgb => Err("Targa files are RGB: colorModel rgb".to_string()),
+        RasterFormat::Psd if o.psd.preserve_text && !o.psd.layers => Err("preserveText writes type layers: it needs layers: true".to_string()),
         RasterFormat::Bmp => o.bmp.check(),
         RasterFormat::Tga => o.tga.check(),
         _ => Ok(()),

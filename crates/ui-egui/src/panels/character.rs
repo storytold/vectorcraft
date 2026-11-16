@@ -28,6 +28,8 @@ pub const SCALE_PRESETS: [f64; 8] = [25.0, 50.0, 75.0, 90.0, 100.0, 110.0, 125.0
 pub const AKI_PRESETS: [f64; 4] = [0.0, 250.0, 500.0, 1000.0];
 /// Tsume presets, in percent.
 pub const TSUME_PRESETS: [f64; 5] = [0.0, 25.0, 50.0, 75.0, 100.0];
+/// Adjust Horizontal and Vertical Diacritic Position presets, in thousandths of an em.
+pub const DIACRITIC_PRESETS: [f64; 7] = [-200.0, -100.0, -50.0, 0.0, 50.0, 100.0, 200.0];
 
 /// The stored character style: the selected range's (or the caret's) while the Type
 /// tool edits text, else the first selected text object's first run (including groups). With it, the paragraph
@@ -881,9 +883,10 @@ fn cell(ui: &mut Ui, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
 /// The Character panel's grid of fields, `w` wide: Font Size, Leading, Kerning and Tracking,
 /// then with `more` the scales, Baseline Shift and Character Rotation, and a row with the
 /// Anti-aliasing Method dropdown under Character Rotation (`s`: the style shown), and with Show East
-/// Asian Options on a row with Insert Aki Left and Right and a row with Tsume. With Show Font
-/// Height Options on, a row under Font Size holds the Set Font Height Reference dropdown. The
-/// Properties panel shows its first rows.
+/// Asian Options on a row with Insert Aki Left and Right and a row with Tsume, and with Show Indic
+/// Options (the Middle Eastern options) on a row with Adjust Horizontal and Vertical Diacritic
+/// Position. With Show Font Height Options on, a row under Font Size holds the Set Font Height
+/// Reference dropdown. The Properties panel shows its first rows.
 pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &CharStyle, w: f32, more: bool) {
     let fw = ((w - 66.0) / 2.0).clamp(60.0, 100.0);
     let unit = app.session.type_unit();
@@ -984,6 +987,24 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
                     format(app, json!({ "tsume": v.min(vectorcraft_doc::text::MAX_TSUME) }));
                 }
             });
+            ui.end_row();
+        }
+        // Adjust Horizontal and Vertical Diacritic Position, with the Middle Eastern options: the
+        // marks of the characters move across and up, in thousandths of an em.
+        if app.session.prefs.show_indic_options {
+            let max = vectorcraft_doc::text::MAX_DIACRITIC_POSITION;
+            for (field, label, key, icon) in [
+                ("ch-diacritic-h", tl!("Adjust Horizontal Diacritic Position"), "diacriticHorizontal", "´↔"),
+                ("ch-diacritic-v", tl!("Adjust Vertical Diacritic Position"), "diacriticVertical", "´↕"),
+            ] {
+                cell(ui, icon, label, |ui| {
+                    let value = shared(app, |s| if key == "diacriticHorizontal" { s.diacritic_horizontal } else { s.diacritic_vertical });
+                    if let Some(v) = widgets::spin_plain(ui, field, value, "", 0, fw, 10.0, -max, &DIACRITIC_PRESETS) {
+                        // The field stops at the largest value the command takes.
+                        format(app, json!({ key: v.min(max) }));
+                    }
+                });
+            }
             ui.end_row();
         }
     });
@@ -1730,7 +1751,8 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// character alignment, Proportional Metrics, Tate-chu-yoko, Warichu, Standard Vertical Roman Alignment and
 /// No Break off, Tate-chu-yoko Settings Up/Down and Left/Right 0, the default Warichu Settings (2 lines, no
 /// line gap, 50%, Auto alignment), Insert Aki Left and Right 0, Tsume 0, the Default character direction,
-/// Kashidas on, the Default digits and the Em Box font height reference, whether or not Show East Asian
+/// Kashidas on, the Default digits, Adjust Horizontal and Vertical Diacritic Position 0 and the Em Box
+/// font height reference, whether or not Show East Asian
 /// Options, Show Indic Options and Show Font Height Options are on. Inside an undo group that is
 /// already open, the reset is part of that group's step.
 fn reset_panel(app: &mut VectorcraftApp) {
@@ -1752,7 +1774,8 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "tsume": d.tsume, "warichu": d.warichu, "warichuLines": d.warichu_lines, "warichuGap": d.warichu_gap, "warichuScale": d.warichu_scale,
             "warichuAlign": d.warichu_align,
             "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default", "kashidas": d.kashidas,
-            "digits": d.digits, "fontHeightReference": d.font_height_reference
+            "digits": d.digits, "diacriticHorizontal": d.diacritic_horizontal, "diacriticVertical": d.diacritic_vertical,
+            "fontHeightReference": d.font_height_reference
         }),
     );
     set_anti_alias(app, TypeAntiAlias::Sharp);

@@ -3292,7 +3292,7 @@ fn the_control_bar_s_controls_stay_inside_the_bar_in_a_narrow_window() {
     wide(&mut app, "an embedded image", &["Unembed…", "Image Trace", "Mask", "Crop Image", "Remove Background"]);
     app.select_tool(vectorcraft_tools::cropimage::ID);
     check(&mut app, "Crop Image");
-    wide(&mut app, "Crop Image", &["X:", "Y:", "W:"]);
+    wide(&mut app, "Crop Image", &["PPI", "X:", "Y:", "W:", "H:"]);
     app.select_tool("selection");
     app.run("imageTrace.make", json!({"preset": "Default"})).unwrap();
     let trace = selected(&app);
