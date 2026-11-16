@@ -1555,6 +1555,8 @@ file-filter	Templates	Vorlagen
 	Show smooth color wheel	Stufenlosen Farbkreis anzeigen
 	Show segmented color wheel	Segmentierten Farbkreis anzeigen
 	Show color bars	Farbbalken anzeigen
+	Show brightness and hue on wheel	Helligkeit und Farbton im Farbkreis anzeigen
+	Show saturation and hue on wheel	Sättigung und Farbton im Farbkreis anzeigen
 	Add Color Tool	Farbe-hinzufügen-Werkzeug
 	Remove Color Tool	Farbe-entfernen-Werkzeug
 	Remove Color	Farbe entfernen
@@ -2618,6 +2620,10 @@ diagnostics	ui	Oberfläche
 	Play Current Selection	Aktuelle Auswahl abspielen
 	Save Actions…	Aktionen speichern…
 	Load Actions…	Aktionen laden…
+	Reset Actions	Aktionen zurücksetzen
+	Replace the current actions with the default set?	Aktuelle Aktionen durch den Standardsatz ersetzen?
+	Append adds the default set after the current sets instead.	Mit „Anhängen“ wird der Standardsatz stattdessen nach den aktuellen Sätzen hinzugefügt.
+	Append	Anhängen
 	Plug-in Info	Plug-in-Informationen
 	Plug-ins	Plug-ins
 	Plug-in…	Plug-in…
@@ -4224,6 +4230,7 @@ imageTrace	Outline	Kontur
 	 to set spacing and orientation	 legt Abstand und Ausrichtung fest
 	:	:
 	Isolate Selected Group	Ausgewählte Gruppe isolieren
+	Isolate Selected Path	Ausgewählten Pfad isolieren
 	Isolate Selected Object	Ausgewähltes Objekt isolieren
 	Release Clipping Mask	Schnittmaske zurückwandeln
 	Make Compound Path	Zusammengesetzten Pfad erstellen
@@ -9346,3 +9353,23 @@ breakText	Glyphs	Glyphen
 	No objects are selected.	Es sind keine Objekte ausgewählt.
 	Open a document to mark its fold lines.	Öffnen Sie ein Dokument, um seine Faltlinien festzulegen.
 	Remove Fold Line Role	Linienart entfernen
+	Check	Prüfen
+	Check Fold Lines	Faltlinien prüfen
+@msg	No cut lines are in the selection.	Die Auswahl enthält keine Schnittlinien.
+@msg	No cut lines are in the document.	Das Dokument enthält keine Schnittlinien.
+@msg	The cut lines do not enclose an area.	Die Schnittlinien umschließen keine Fläche.
+@msg	A cut line ends without meeting another cut line.	Eine Schnittlinie endet, ohne auf eine andere Schnittlinie zu treffen.
+@msg	A gap between cut lines was closed.	Eine Lücke zwischen Schnittlinien wurde geschlossen.
+@msg	The fold lines are too complex to check.	Die Faltlinien sind zu komplex für die Prüfung.
+@msg	A cut line and a crease lie on top of each other.	Eine Schnittlinie und eine Rilllinie liegen übereinander.
+@msg	No cut lines are among the given objects.	Die angegebenen Objekte enthalten keine Schnittlinien.
+@msg	Two fold lines lie on top of each other.	Zwei Faltlinien liegen übereinander.
+@msg	A crease ends inside a panel.	Eine Rilllinie endet innerhalb eines Felds.
+@msg	A crease does not divide two panels.	Eine Rilllinie trennt keine zwei Felder.
+@msg	A crease lies outside the cut outline, wholly or in part.	Eine Rilllinie liegt ganz oder teilweise außerhalb der Schnittkontur.
+@msg	The pieces of a hinge are not on one straight line.	Die Teile eines Scharniers liegen nicht auf einer geraden Linie.
+@msg	A gap between cut lines is too narrow to tell apart.	Eine Lücke zwischen Schnittlinien ist zu schmal, um sie zu unterscheiden.
+@msg	A cut-out area holds other fold lines or another blank.	Ein ausgeschnittener Bereich enthält weitere Faltlinien oder einen anderen Zuschnitt.
+@msg	A panel is not joined to the rest by a crease.	Ein Feld ist durch keine Rilllinie mit den übrigen verbunden.
+@msg	A fold line is on a non-printing layer.	Eine Faltlinie liegt auf einer nicht druckbaren Ebene.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Scharniere: {hinges}, Fehler: {errors}, Warnungen: {warnings}
