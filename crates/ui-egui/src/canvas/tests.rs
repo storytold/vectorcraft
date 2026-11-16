@@ -11045,6 +11045,28 @@ fn the_task_bar_recolors_coloured_art() {
     assert!(app.ui.dialog.is_none(), "no Recolor button without colours");
 }
 
+/// Recolor Artwork shows in the bars when any selected object has a color, whichever of them it is,
+/// and not for an empty selection or ids that are gone.
+#[test]
+fn has_colors_looks_at_every_selected_object() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let mut rect = |x: i32| {
+        vectorcraft_doc::NodeId(s.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap())
+    };
+    let (blank, colored) = (rect(10), rect(80));
+    s.execute("paint.setFill", &json!({"ids": [blank.0], "none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [blank.0], "none": true})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [colored.0], "color": "#cc3322"})).unwrap();
+    let doc = &s.active().unwrap().doc;
+    let gone = vectorcraft_doc::NodeId(u64::MAX);
+    assert!(!has_colors(doc, &[]), "nothing selected");
+    assert!(!has_colors(doc, &[gone]), "an id that is gone");
+    assert!(!has_colors(doc, &[blank, gone]));
+    assert!(has_colors(doc, &[blank, colored]), "the color is on the second object");
+    assert!(has_colors(doc, &[colored, blank, gone]), "the color is on the first object");
+}
+
 /// The Contextual Task Bar's Lock button locks the selected member in isolation mode and the
 /// selected group outside isolation mode.
 #[test]
