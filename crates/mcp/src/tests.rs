@@ -16,6 +16,7 @@ mod gradient;
 mod limits;
 mod links;
 mod liquify;
+mod livepaint;
 mod pen;
 mod persp;
 mod place;
@@ -488,6 +489,43 @@ fn trace_and_style_prompt_steps_run_in_order() {
     }
     assert!(!kinds.iter().any(|k| k == "Image"), "{kinds:?}");
     assert!(fills.len() > 1 && fills.contains("#00aa00") && !fills.contains(&from), "{fills:?}");
+}
+
+/// A window capture and an artboard preview scaled down keep the color of opaque pixels beside
+/// clear ones: the clear black beside them does not darken them.
+#[test]
+fn scaled_down_pictures_keep_the_color_beside_clear_pixels() {
+    struct Striped;
+    impl Backend for Striped {
+        fn call(&mut self, method: &str, _: Value) -> Result<Value, String> {
+            let mut png = std::io::Cursor::new(Vec::new());
+            image::RgbaImage::from_fn(64, 4, |x, _| if x % 2 == 0 { image::Rgba([200, 30, 30, 255]) } else { image::Rgba([0, 0, 0, 0]) })
+                .write_to(&mut png, image::ImageFormat::Png)
+                .unwrap();
+            let png = vectorcraft_format::base64_encode(png.get_ref());
+            Ok(match method {
+                "document.inspect" => json!({"artboards": [{"width": 64, "height": 4}]}),
+                _ => json!({"pngBase64": png, "width": 64, "height": 4}),
+            })
+        }
+        fn has_ui(&self) -> bool {
+            true
+        }
+        fn describe(&self) -> String {
+            "test".into()
+        }
+    }
+
+    let mut s = Server::new(Box::new(Striped));
+    let shots = [("screenshot", json!({"window": true, "max_side": 16})), ("render_preview", json!({"max_side": 16}))];
+    for (id, (tool, args)) in (1..).zip(shots) {
+        let r = call(&mut s, id, tool, args);
+        let data =
+            r["content"].as_array().unwrap().iter().find(|c| c["type"] == "image").unwrap_or_else(|| panic!("{tool}: {r}"))["data"].as_str().unwrap();
+        let img = image::load_from_memory(&vectorcraft_format::base64_decode(data).unwrap()).unwrap().into_rgba8();
+        assert_eq!(img.dimensions(), (16, 1), "{tool}");
+        assert!(img.pixels().all(|p| p.0 == [200, 30, 30, 128]), "{tool}: {:?}", img.get_pixel(0, 0));
+    }
 }
 
 /// `screenshot` and `render_preview` with `traceViews: true` draw an Image Trace object in the
@@ -1506,6 +1544,8 @@ fn headless_backend_methods() {
         let selected = h.call("ui.tool.select", json!({"tool": tool.id})).unwrap();
         assert_eq!(selected["tool"], tool.id);
     }
+    let polygonal = groups.iter().flat_map(|group| group.as_array().unwrap()).find(|entry| entry["id"] == "polygonalLasso");
+    assert_eq!(polygonal.map(|entry| entry["label"].clone()), Some(json!("Polygonal Lasso Tool")));
     assert!(h.call("ui.resize", json!({})).is_err());
 }
 
@@ -1597,6 +1637,27 @@ fn text_effect_pathfinder_transform_graph_and_wrap_tools() {
     let ds = d.to_string();
     // The wrap object carries the options and the area type resolved its shape.
     assert!(ds.contains("\"wrap\":{\"invert\":false,\"offset\":8.0}") && ds.contains("\"wrap\":[{\"invert\":false,\"offset\":8.0"), "{area}");
+    // An offset outside -1000 to 1000 pt, an invert or a release that is not true or false is an
+    // error, with release too, and the wrap and the selection stay as they were.
+    let r = call(&mut s, 20, "run_command", json!({"command": "select.set", "params": {"ids": [g]}}));
+    assert_eq!(r["isError"], false, "{r}");
+    for (id, args) in [
+        (21, json!({"ids": [c], "offset": 5000})),
+        (22, json!({"ids": [c], "offset": "8"})),
+        (23, json!({"ids": [c], "invert": "true"})),
+        (24, json!({"ids": [c], "release": "true"})),
+        (25, json!({"ids": [c], "release": true, "offset": -5000})),
+    ] {
+        let r = call(&mut s, id, "text_wrap", args.clone());
+        assert_eq!(r["isError"], true, "{args}: {r}");
+        assert!(doc_json(&mut s).to_string().contains("\"wrap\":{\"invert\":false,\"offset\":8.0}"), "{args}");
+    }
+    // The graph is still the selection: a wrap made without ids goes on it, not on the circle.
+    let r = call(&mut s, 26, "text_wrap", json!({"offset": 9}));
+    assert_eq!(r["isError"], false, "{r}");
+    let made: Value = serde_json::from_str(&text_of(&r)).unwrap();
+    assert_eq!(made["ids"], json!([g]), "{r}");
+    call(&mut s, 27, "text_wrap", json!({"release": true}));
     call(&mut s, 15, "text_wrap", json!({"ids": [c], "release": true}));
     assert!(!doc_json(&mut s).to_string().contains("\"offset\":8.0"));
 }

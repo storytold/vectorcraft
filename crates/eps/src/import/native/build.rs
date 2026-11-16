@@ -10,7 +10,7 @@ use super::slots::{
 use super::{
     Affine, Arc, BTreeSet, Document, Node, NodeId, NodeKind, PathData, Rect, Scaling, Story, Structure, Texts, Unit, VariableKind, Vec2, ai,
 };
-use vectorcraft_doc::PlacedDocument;
+use vectorcraft_doc::{PlacedDocument, Symbol};
 
 /// Which box of the editing copy is the page.
 #[derive(Clone, Copy)]
@@ -19,6 +19,16 @@ pub(super) enum Page {
     Art,
     /// A `.ai` is read on its (first and only) artboard.
     Artboard,
+    /// A `.ai` in the legacy format (PostScript, not an EPS): its page is its art's bounding box, as
+    /// an EPS's is, and its artboard is the one its header gives.
+    Program,
+}
+
+impl Page {
+    /// Is the page the art's bounding box?
+    fn of_art(self) -> bool {
+        matches!(self, Page::Art | Page::Program)
+    }
 }
 
 /// How art moved from a page to its place in the layers' document transforms: its pattern tiles
@@ -62,8 +72,12 @@ pub(super) fn build(
 ) -> Result<(Document, Vec<String>), String> {
     // An EPS (its page is its art) draws a Large Canvas page at full size; a `.ai` keeps its art
     // space, as its PDF part may (#2031).
-    let large_canvas = matches!(page, Page::Art);
-    let structure = if visible.is_some() { ai::read_over_page(data, large_canvas, names)? } else { ai::read_in(data, large_canvas, names)? };
+    let large_canvas = page.of_art();
+    let structure = match page {
+        Page::Program => ai::read_program(data, large_canvas, visible.is_some(), names)?,
+        _ if visible.is_some() => ai::read_over_page(data, large_canvas, names)?,
+        _ => ai::read_in(data, large_canvas, names)?,
+    };
     build_from(structure, data, visible, page, outlined, trust, unit)
 }
 
@@ -83,12 +97,11 @@ pub(super) fn build_on_page(data: &[u8], page: (f64, f64), unit: f64, names: ai:
     };
     let in_units = |r: Option<Rect>, k: f64| k.is_finite() && k > 1.0 && fits(r, k) && !fits(r, 1.0);
     let scale = [unit, structure.canvas_scale].into_iter().find(|&k| in_units(board, k) || (!fits(board, 1.0) && in_units(art, k)));
-    let styles = structure.styles_read;
+    let (styles, own_size) = (structure.styles_read, structure.symbols_own_size);
     let (mut doc, notes) = build_from(structure, data, None, Page::Artboard, false, false, 1.0)?;
     if let Some(k) = scale {
         // The graphic styles read from the file are drawn in its units too.
-        scale_document(&mut doc, k, styles);
-        relayout_wrapped(&mut doc);
+        scale_read_document(&mut doc, k, styles, own_size);
     }
     Ok((doc, notes))
 }
@@ -108,12 +121,11 @@ pub(super) fn build_without_page(structure: Structure, data: &[u8], pages: &[(f6
     let Some(scale) = alone_scale(&structure, data, pages, unit) else {
         return Err(Box::new(structure));
     };
-    let styles = structure.styles_read;
+    let (styles, own_size) = (structure.styles_read, structure.symbols_own_size);
     let built = build_from(structure, data, None, Page::Artboard, false, false, 1.0).map(|(mut doc, notes)| {
         if scale != 1.0 {
             // The graphic styles read from the file are drawn in its units too.
-            scale_document(&mut doc, scale, styles);
-            relayout_wrapped(&mut doc);
+            scale_read_document(&mut doc, scale, styles, own_size);
         }
         (doc, notes)
     });
@@ -186,7 +198,7 @@ fn page_scale_alone(structure: &Structure, pages: &[(f64, f64)], unit: f64) -> O
 /// page, which draws nothing for them, the linked images' `placeholders`. A PDF part draws those
 /// images' pixels, which the placeholders don't match.
 fn left_out_of_comparisons(page: Page, mut restyled: Vec<Rect>, placeholders: Vec<Rect>) -> Vec<Rect> {
-    if matches!(page, Page::Art) {
+    if page.of_art() {
         restyled.extend(placeholders);
     }
     restyled
@@ -268,6 +280,7 @@ pub(super) fn build_weighing(
         styles_read,
         text_patterns,
         canvas_scale,
+        symbols_own_size,
         xml_ids,
         bindings,
         bindings_skipped,
@@ -296,7 +309,7 @@ pub(super) fn build_weighing(
     let mut frame = None;
     if let Some(visible) = visible {
         let art_box = match page {
-            Page::Art => bbox.map(|[a, b, c, d]| Rect::new(a, b, c, d)).ok_or("its editing data doesn't say where its art is")?,
+            Page::Art | Page::Program => bbox.map(|[a, b, c, d]| Rect::new(a, b, c, d)).ok_or("its editing data doesn't say where its art is")?,
             Page::Artboard => artboard.ok_or("its editing data doesn't say where its artboard is")?,
         };
         let page_rect = visible.artboards.first().map(|a| a.rect).ok_or("it has no page")?;
@@ -394,8 +407,9 @@ pub(super) fn build_weighing(
         // An EPS saved as its artboard has the art outside it left out of its page.
         let artboard_page =
             artboard.is_some_and(|a| [a.x0 - art_box.x0, a.y0 - art_box.y0, a.x1 - art_box.x1, a.y1 - art_box.y1].iter().all(|d| d.abs() <= 1.0));
-        let whole = matches!(page, Page::Art) && !artboard_page;
-        if whole {
+        let whole = page.of_art() && !artboard_page;
+        // A `.ai` keeps the artboard its editing copy gives, with the art outside it.
+        if whole && matches!(page, Page::Art) {
             // Its page is the file's own (its bounding box), as when it comes in as its page: art
             // reaching past the editing data's artboard stays on it (#1102).
             doc.artboards.truncate(1);
@@ -577,8 +591,7 @@ pub(super) fn build_weighing(
     bind_variables(&mut doc, &bindings, bindings_skipped, &xml_ids, &filled, &mut notes);
     placed_documents(&mut doc, &placed_pages);
     if small.is_some() {
-        scale_document(&mut doc, unit, styles_read);
-        relayout_wrapped(&mut doc);
+        scale_read_document(&mut doc, unit, styles_read, symbols_own_size);
     }
     Ok((doc, notes))
 }
@@ -760,7 +773,7 @@ fn settle_warped_type(
 }
 
 /// Most anchors copied into the wrap shapes of a file's area type ([`vectorcraft_doc::text::wrap_work`]).
-const MAX_WRAP_WORK: usize = 2_000_000;
+pub(crate) const MAX_WRAP_WORK: usize = 2_000_000;
 
 /// [`relayout_wrapped`], or an error when the wrap shapes would hold more than [`MAX_WRAP_WORK`]
 /// anchors.
@@ -1817,7 +1830,7 @@ fn last_boards(boards: &[vectorcraft_doc::Artboard], pages: &[Rect]) -> Option<V
 /// the one whose art draws most like the page, the first of them on a tie. Else (and for an EPS,
 /// whose page is its art) the first artboard (0).
 fn shown_artboard(doc: &Document, visible: &Document, page: Page, page_rect: Rect, fits: impl Fn(&Rect) -> bool) -> usize {
-    if matches!(page, Page::Art) || visible.artboards.len() >= doc.artboards.len() {
+    if page.of_art() || visible.artboards.len() >= doc.artboards.len() {
         return 0;
     }
     let pages: Vec<Rect> = visible.artboards.iter().map(|a| a.rect).collect();
@@ -1916,7 +1929,7 @@ fn drop_guides_off_boards(doc: &mut Document) {
 /// styles.
 pub(crate) fn scale_document(doc: &mut Document, k: f64, styles: bool) {
     let a = Affine::scale(k);
-    let scaling = Scaling { strokes: true, effects: Some(vectorcraft_effects::scale_effect), patterns: true, ..Default::default() };
+    let scaling = document_scaling();
     for layer in &mut doc.layers {
         let layer = Arc::make_mut(layer);
         layer.transform(a, scaling);
@@ -1931,6 +1944,101 @@ pub(crate) fn scale_document(doc: &mut Document, k: f64, styles: bool) {
         for g in doc.graphic_styles.iter_mut() {
             g.appearance.scale_strokes(k);
             g.appearance.scale_effects(k, vectorcraft_effects::scale_effect);
+        }
+    }
+}
+
+/// What [`scale_document`] and [`scale_symbols`] scale with the art: strokes, effects and pattern
+/// tiles.
+fn document_scaling() -> Scaling {
+    Scaling { strokes: true, effects: Some(vectorcraft_effects::scale_effect), patterns: true, ..Default::default() }
+}
+
+/// A document read in units of `1/k` points drawn at its size: [`scale_document`], and its wrapped
+/// type laid out again. Unless `own_size` (data VectorCraft wrote, whose symbols and opacity masks
+/// that don't move with their object are at their own size), also the art of those masks on the
+/// layers and its symbols ([`scale_symbols`]).
+fn scale_read_document(doc: &mut Document, k: f64, styles: bool, own_size: bool) {
+    scale_document(doc, k, styles);
+    if !own_size {
+        let a = Affine::scale(k);
+        for layer in &mut doc.layers {
+            transform_unlinked_masks(Arc::make_mut(layer), a, document_scaling());
+        }
+        scale_symbols(doc, k);
+    }
+    relayout_wrapped(doc);
+}
+
+/// Draw the art of `doc`'s symbols `k` times as large ([`scale_symbol_art`]), with every instance
+/// on the layers and in a pattern's tile (opacity masks included) placed by its transform times
+/// `1/k`, so it draws where and as large as before, with the symbol's strokes and effects `k`
+/// times as wide.
+pub(crate) fn scale_symbols(doc: &mut Document, k: f64) {
+    if !(k.is_finite() && k > 0.0) || k == 1.0 || doc.symbols.is_empty() {
+        return;
+    }
+    scale_symbol_art(&mut doc.symbols, k);
+    let back = Affine::scale(1.0 / k);
+    for n in doc.layers.iter_mut().chain(doc.patterns.iter_mut().flat_map(|p| p.art.iter_mut())) {
+        place_instances_by(n, back);
+    }
+}
+
+/// Draw the art of `symbols` `k` times as large, from each symbol's origin, with its strokes,
+/// effects and pattern tiles, as [`scale_document`] draws the layers. An instance in the art keeps
+/// its own scale and turn: it is placed by its transform times `1/k`.
+pub(crate) fn scale_symbol_art(symbols: &mut [Symbol], k: f64) {
+    if !(k.is_finite() && k > 0.0) || k == 1.0 {
+        return;
+    }
+    let (a, back) = (Affine::scale(k), Affine::scale(1.0 / k));
+    for s in symbols {
+        let art = Arc::make_mut(&mut s.art);
+        art.transform(a, document_scaling());
+        transform_unlinked_masks(art, a, document_scaling());
+        scale_wrap_offsets(art, k);
+        place_instances_by(&mut s.art, back);
+    }
+}
+
+/// The art of the opacity masks in `n` that don't move with their object, which
+/// [`Node::transform`] leaves where it is, transformed by `a` with `scaling` as `n` was: a change of
+/// units moves them too.
+fn transform_unlinked_masks(n: &mut Node, a: Affine, scaling: Scaling) {
+    if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
+        let linked = m.linked;
+        let art = Arc::make_mut(&mut m.art);
+        if !linked {
+            art.transform(a, scaling);
+        }
+        transform_unlinked_masks(art, a, scaling);
+    }
+    if let Some(children) = n.children_mut() {
+        for c in children {
+            transform_unlinked_masks(Arc::make_mut(c), a, scaling);
+        }
+    }
+}
+
+/// Every symbol instance in `n` (opacity masks included) placed by its transform times `m`. Only
+/// the objects on the way to an instance are copied.
+fn place_instances_by(n: &mut Arc<Node>, m: Affine) {
+    let mut holds = false;
+    vectorcraft_doc::swatches::walk_with_masks(n, &mut |c| holds |= matches!(c.kind, NodeKind::SymbolInstance { .. }));
+    if !holds {
+        return;
+    }
+    let n = Arc::make_mut(n);
+    if let NodeKind::SymbolInstance { xf, .. } = &mut n.kind {
+        *xf *= m;
+    }
+    if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
+        place_instances_by(&mut mask.art, m);
+    }
+    if let Some(children) = n.children_mut() {
+        for c in children {
+            place_instances_by(c, m);
         }
     }
 }
@@ -2254,6 +2362,85 @@ mod candidate_tests {
         let offsets: Vec<_> = ids.iter().map(|id| doc.node(*id).and_then(|n| n.extras().wrap)).collect();
         let wrap = |offset| Some(vectorcraft_doc::TextWrap { offset, invert: true });
         assert_eq!(offsets, [wrap(60.0), wrap(1000.0), wrap(-1000.0)]);
+    }
+
+    /// Symbols drawn ten times as large keep every instance where and as large as it was (on a layer,
+    /// in an opacity mask's art, linked or not, and in a pattern's tile), and an instance in a
+    /// symbol's art keeps its own scale and turn, moved with the art.
+    #[test]
+    fn scaling_the_symbols_keeps_their_instances_in_place() {
+        let mut doc = Document::new(100.0, 100.0);
+        let boxed = Node::path(doc.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(-1.0, -0.5, 1.0, 0.5)), Default::default());
+        doc.symbols.push(Symbol { name: "Box".into(), art: Arc::new(boxed), dynamic: false });
+        let turn = Affine::translate((3.0, 4.0)) * Affine::rotate(0.5) * Affine::scale(2.0);
+        let nested = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Box".into(), xf: turn });
+        let mut pair = Node::group(doc.alloc_id(), vec![Arc::new(nested)]);
+        // An opacity mask that doesn't move with its object, holding an instance too.
+        let masking = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Box".into(), xf: turn });
+        let mut unlinked = vectorcraft_doc::OpacityMask::new(masking, true);
+        unlinked.linked = false;
+        pair.extras_mut().mask = Some(Box::new(unlinked));
+        doc.symbols.push(Symbol { name: "Pair".into(), art: Arc::new(pair), dynamic: false });
+        let place = Affine::translate((40.0, 30.0)) * Affine::scale(3.0);
+        let mut on_layer = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Pair".into(), xf: place });
+        let in_mask = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Box".into(), xf: place });
+        on_layer.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(in_mask, true)));
+        doc.insert(Some(doc.layers[0].id), 0, on_layer).unwrap();
+        let tiled = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Box".into(), xf: place });
+        doc.patterns.push(vectorcraft_doc::PatternDef::new("Tiles", vec![Arc::new(tiled)]));
+        // Each instance's box on the page, by the art of Box it places (through Pair's instance).
+        let placed = |d: &Document| {
+            let xf = |n: &Node| match &n.kind {
+                NodeKind::SymbolInstance { xf, .. } => *xf,
+                other => panic!("an instance: {other:?}"),
+            };
+            let art = d.symbols[0].art.geometric_bounds().unwrap();
+            let layer = &d.layers[0].children().unwrap()[0];
+            let mask = &layer.extras().mask.as_ref().unwrap().art;
+            let tile = &d.patterns[0].art[0];
+            let nested = &d.symbols[1].art.children().unwrap()[0];
+            let masking = &d.symbols[1].art.extras().mask.as_ref().unwrap().art;
+            [xf(layer) * xf(nested), xf(layer) * xf(masking), xf(mask), xf(tile)].map(|m| m.transform_rect_bbox(art))
+        };
+        let before = placed(&doc);
+        scale_symbols(&mut doc, 10.0);
+        let after = placed(&doc);
+        for (a, b) in after.iter().zip(&before) {
+            let far = [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().fold(0.0f64, |m, v| m.max(v.abs()));
+            assert!(far < 1e-9, "{after:?} {before:?}");
+        }
+        let pair = &doc.symbols[1].art.children().unwrap()[0];
+        let NodeKind::SymbolInstance { xf, .. } = &pair.kind else { panic!("an instance") };
+        let want = Affine::translate((30.0, 40.0)) * Affine::rotate(0.5) * Affine::scale(2.0);
+        let far = xf.as_coeffs().iter().zip(want.as_coeffs()).fold(0.0f64, |m, (a, b)| m.max((a - b).abs()));
+        assert!(far < 1e-9, "{xf:?}");
+        let art = doc.symbols[0].art.geometric_bounds().unwrap();
+        assert_eq!(art, Rect::new(-10.0, -5.0, 10.0, 5.0));
+    }
+
+    /// Layers read in the units of a page scaled up to points take the art of their opacity masks
+    /// with them, a mask that doesn't move with its object included, except in data VectorCraft
+    /// wrote, where that mask's art is at its own size.
+    #[test]
+    fn scaling_a_read_document_scales_unlinked_opacity_masks() {
+        for own_size in [false, true] {
+            let mut doc = Document::new(100.0, 100.0);
+            let mut boxes = vec![];
+            for linked in [true, false] {
+                let mask = Node::path(doc.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(1.0, 2.0, 3.0, 4.0)), Default::default());
+                let mut mask = vectorcraft_doc::OpacityMask::new(mask, true);
+                mask.linked = linked;
+                let mut n = Node::path(doc.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 5.0, 5.0)), Default::default());
+                n.extras_mut().mask = Some(Box::new(mask));
+                boxes.push((linked, doc.insert(Some(doc.layers[0].id), 0, n).unwrap()));
+            }
+            scale_read_document(&mut doc, 10.0, false, own_size);
+            for (linked, id) in boxes {
+                let mask = doc.node(id).and_then(|n| n.extras().mask.as_ref().and_then(|m| m.art.geometric_bounds()));
+                let want = if linked || !own_size { Rect::new(10.0, 20.0, 30.0, 40.0) } else { Rect::new(1.0, 2.0, 3.0, 4.0) };
+                assert_eq!(mask, Some(want), "linked {linked}, own size {own_size}");
+            }
+        }
     }
 
     /// Area type in `doc`'s first layer at `index`, in the frame `r`.

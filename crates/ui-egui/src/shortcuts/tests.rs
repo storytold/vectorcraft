@@ -296,11 +296,11 @@ fn a_shortcut_runs_what_its_menu_item_runs() {
 /// Smooth and Simplify, Offset Path, the Object › Transform dialogs, Average, Split Into Grid,
 /// Vector Halftone, Rearrange All Artboards, Pathfinder Options, the Object › Plug-ins dialogs
 /// (Arrange in Grid, Replace with Top Object, the size, opacity and sort dialogs of the Arrange
-/// add-on, Set Corners…, Divide into Dashes, Find Nearest Swatch, the swatch legend, the type
-/// tools, the select add-on and Select by Link Status…), four "…" items whose menu entry gives
-/// params, Edit Custom Dictionary…, Composite Fonts…, Recolor Artwork…, the Edit menu's preset
+/// add-on, Set Corners…, Divide into Dashes, Tangent Circle…, Find Nearest Swatch, the swatch legend, the type
+/// tools, the select add-on and Select by Link Status…), three "…" items whose menu entry gives
+/// params, Smart Punctuation…, Edit Custom Dictionary…, Composite Fonts…, Recolor Artwork…, the Edit menu's preset
 /// dialogs and Apply SVG Filter….
-const MENU_DIALOG_COMMANDS: [&str; 39] = [
+const MENU_DIALOG_COMMANDS: [&str; 40] = [
     "object.path.smooth",
     "object.path.simplify",
     "object.path.offsetPath",
@@ -323,6 +323,7 @@ const MENU_DIALOG_COMMANDS: [&str; 39] = [
     "addon.arrange.sort",
     crate::addons::pathtools::set_corners::COMMAND,
     crate::addons::pathtools::dashes::COMMAND,
+    crate::addons::pathtools::tangent_circle::COMMAND,
     crate::addons::color::nearest::COMMAND,
     crate::addons::color::legend::COMMAND,
     crate::addons::typetools::COMMAND,
@@ -1252,6 +1253,48 @@ fn enclosing_lasso_escape_cancels_and_q_returns_to_anchor_lasso() {
     keys.push(egui::Event::Text("q".into()));
     frame(&mut app, keys);
     assert_eq!(app.session.tool_id(), "lasso");
+}
+
+/// While a Polygonal Lasso loop is open, Backspace and Delete remove its last vertex instead of
+/// deleting the selected art, Enter closes it, and Escape drops it and leaves the selection.
+#[test]
+fn polygonal_lasso_takes_backspace_delete_enter_and_escape_while_a_loop_is_open() {
+    use vectorcraft_doc::NodeId;
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    crate::shortcut_editor::sync(&app.ui);
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let id = NodeId(app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.set", json!({"ids": [id.0]})).unwrap();
+    app.select_tool(vectorcraft_tools::addons::polygonal_lasso::ID);
+    let view = app.view_info();
+    let click = |app: &mut VectorcraftApp, x: f64, y: f64| {
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, x, y), view).unwrap();
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, x, y), view).unwrap();
+    };
+    for (x, y) in [(80.0, 80.0), (140.0, 80.0), (300.0, 300.0)] {
+        click(&mut app, x, y);
+    }
+    frame(&mut app, press(Key::Backspace, Modifiers::NONE));
+    assert!(app.session.active().unwrap().doc.node(id).is_some(), "Backspace leaves the selected art");
+    click(&mut app, 300.0, 300.0);
+    frame(&mut app, press(Key::Delete, Modifiers::NONE));
+    assert!(app.session.active().unwrap().doc.node(id).is_some(), "Delete leaves the selected art");
+    assert!(app.session.tool_ends_on_escape(view));
+    frame(&mut app, press(Key::Escape, Modifiers::NONE));
+    assert!(!app.session.tool_ends_on_escape(view));
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![id]);
+    for (x, y) in [(80.0, 80.0), (140.0, 80.0), (300.0, 300.0)] {
+        click(&mut app, x, y);
+    }
+    frame(&mut app, press(Key::Backspace, Modifiers::NONE));
+    click(&mut app, 80.0, 140.0);
+    frame(&mut app, press(Key::Enter, Modifiers::NONE));
+    assert!(!app.session.tool_ends_on_escape(view));
+    let sel = &app.session.active().unwrap().selection;
+    assert_eq!(sel.objects, vec![id]);
+    assert_eq!(sel.anchors.get(&id).map(|a| a.len()), Some(1), "only the corner inside the loop");
 }
 
 /// Binds Show Grid to `chord`, or with `None` leaves every command its default shortcut.
@@ -2220,6 +2263,15 @@ fn alt_arrows_step_selected_type_object() {
     assert_eq!(r["runs"][0]["style"]["tracking"], json!(20.0));
     assert_eq!(app.session.active().unwrap().selection.objects, [vectorcraft_doc::NodeId(id)]);
 
+    // Alt released within the frame of the press: the press's Alt still steps the spacing.
+    frame(
+        &mut app,
+        vec![egui::Event::ModifiersChanged(Modifiers::ALT), press(Key::ArrowRight, Modifiers::ALT), egui::Event::ModifiersChanged(Modifiers::NONE)],
+    );
+    let r = app.session.execute("text.getRange", &json!({"id": id})).unwrap();
+    assert_eq!(r["runs"][0]["style"]["tracking"], json!(40.0));
+    assert_eq!(app.session.active().unwrap().selection.objects, [vectorcraft_doc::NodeId(id)], "the text is not copied");
+
     frame(&mut app, vec![egui::Event::ModifiersChanged(Modifiers::ALT), press(Key::ArrowDown, Modifiers::ALT)]);
     let r = app.session.execute("text.getRange", &json!({"id": id})).unwrap();
     assert_eq!(r["runs"][0]["style"]["leading"], json!(26.0));
@@ -2243,6 +2295,65 @@ fn alt_arrows_step_selected_type_object() {
     let selected = &app.session.active().unwrap().selection.objects;
     assert_eq!(selected.len(), 1);
     assert_ne!(selected[0], vectorcraft_doc::NodeId(rect), "a non-type object is still copied by Alt+arrow");
+}
+
+/// With the Live Paint Bucket, a plain Right picks the next color swatch, while Alt+Right keeps
+/// copying and nudging the selection, and a Shift+Right released within the same frame is still a
+/// Shift+Right that picks no swatch.
+#[test]
+fn live_paint_bucket_takes_only_plain_arrows_for_swatches() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let rect = app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [rect]})).unwrap();
+    let first = vectorcraft_tools::builder::color_swatches(&app.session.active().unwrap().doc)[0].name.clone();
+    app.session.execute("paint.setFill", &json!({"swatch": first, "ids": []})).unwrap();
+    app.select_tool("livePaintBucket");
+    let fill = app.session.paint.fill.clone();
+
+    frame(&mut app, press(Key::ArrowRight, Modifiers::ALT));
+    assert_eq!(app.session.paint.fill, fill, "Alt+Right picks no swatch");
+    let selected = &app.session.active().unwrap().selection.objects;
+    assert_ne!(selected.as_slice(), [vectorcraft_doc::NodeId(rect)], "Alt+Right copies and nudges the selection");
+
+    let shift_then_released = vec![
+        egui::Event::ModifiersChanged(Modifiers::SHIFT),
+        egui::Event::Key { key: Key::ArrowRight, physical_key: Some(Key::ArrowRight), pressed: true, repeat: false, modifiers: Modifiers::SHIFT },
+        egui::Event::ModifiersChanged(Modifiers::NONE),
+    ];
+    frame(&mut app, shift_then_released);
+    assert_eq!(app.session.paint.fill, fill, "Shift+Right picks no swatch");
+
+    frame(&mut app, press(Key::ArrowRight, Modifiers::NONE));
+    assert_ne!(app.session.paint.fill, fill, "a plain Right picks the next swatch");
+}
+
+/// An arrow nudge takes Shift and Alt from the key press, also when they are released within the
+/// same frame: Shift+Right moves 10 points, and Alt+Right copies.
+#[test]
+fn arrow_nudge_takes_the_modifiers_of_the_key_press() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let rect = app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    let rect = vectorcraft_doc::NodeId(rect);
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    let released = |modifiers| {
+        vec![
+            egui::Event::ModifiersChanged(modifiers),
+            egui::Event::Key { key: Key::ArrowRight, physical_key: Some(Key::ArrowRight), pressed: true, repeat: false, modifiers },
+            egui::Event::ModifiersChanged(Modifiers::NONE),
+        ]
+    };
+    let left = |app: &VectorcraftApp, id| app.session.active().unwrap().doc.bounds_of(&[id], false).unwrap().x0;
+
+    frame(&mut app, released(Modifiers::SHIFT));
+    assert_eq!(left(&app, rect), 10.0, "Shift+Right moves 10 points");
+
+    frame(&mut app, released(Modifiers::ALT));
+    let selected = app.session.active().unwrap().selection.objects.clone();
+    assert_ne!(selected.as_slice(), [rect], "Alt+Right copies");
+    assert_eq!(left(&app, rect), 10.0, "the original stays");
 }
 
 /// #793: with a layout without Latin letters the one-key shortcuts go by the key's position:

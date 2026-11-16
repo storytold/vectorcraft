@@ -40,7 +40,7 @@ fn close(a: f64, b: f64) -> bool {
 fn segment_angles(p: &PathData) -> Vec<f64> {
     p.subpaths
         .iter()
-        .flat_map(|sp| sp.anchors.windows(2).map(|w| w[1].p - w[0].p))
+        .flat_map(|sp| sp.anchors.iter().zip(sp.anchors.iter().skip(1)).map(|(a, b)| b.p - a.p))
         .filter(|v| v.hypot() > 1e-9)
         .map(|v| (-v.y).atan2(v.x).to_degrees().rem_euclid(90.0))
         .collect()
@@ -250,6 +250,25 @@ fn constrain_angle_turns_shapes_made_by_a_click() {
     assert!(path.subpaths[0].anchors.iter().any(|a| close(a.p.x, 10.0) && close(a.p.y, 200.0)), "{path:?}");
     for a in segment_angles(path) {
         assert!(close(a, 30.0), "a side at {a}°");
+    }
+}
+
+/// An ellipse of another anchor count made by a click turns along the Constrain Angle like the
+/// live ellipse: it keeps its anchors and its box runs along the turned axes from the click.
+#[test]
+fn constrain_angle_turns_an_ellipse_of_six_anchors_made_by_a_click() {
+    let mut s = new_doc();
+    set_angle(&mut s, 90.0);
+    let p = json!({"x": 10, "y": 200, "width": 100, "height": 50, "anchors": 6});
+    let p = constrain_click(&s, "shape.ellipse", p.clone(), corner(&p));
+    assert_eq!(p["anchors"], json!(6));
+    let id = NodeId(s.execute("shape.ellipse", &p).unwrap()["id"].as_u64().unwrap());
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert!(n.live_shape().is_none());
+    assert_eq!(n.path_data().unwrap().anchor_count(), 6);
+    let b = bounds(&s, id);
+    for (got, want) in [(b.x0, 10.0), (b.y0, 100.0), (b.x1, 60.0), (b.y1, 200.0)] {
+        assert!(close(got, want), "{b:?}");
     }
 }
 

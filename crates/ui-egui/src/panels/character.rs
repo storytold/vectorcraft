@@ -2,6 +2,7 @@
 //! scale, baseline shift, character rotation, the anti-aliasing method and the All Caps, Small Caps,
 //! Superscript, Subscript, Underline and Strikethrough toggles and the Language menu.
 
+use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
 
 use egui::{Key, Ui, vec2};
@@ -25,6 +26,10 @@ pub const SCALE_PRESETS: [f64; 8] = [25.0, 50.0, 75.0, 90.0, 100.0, 110.0, 125.0
 /// Insert Aki Left and Right presets, in thousandths of an em: none, a quarter, half and a whole
 /// full-width space.
 pub const AKI_PRESETS: [f64; 4] = [0.0, 250.0, 500.0, 1000.0];
+/// Tsume presets, in percent.
+pub const TSUME_PRESETS: [f64; 5] = [0.0, 25.0, 50.0, 75.0, 100.0];
+/// Adjust Horizontal and Vertical Diacritic Position presets, in thousandths of an em.
+pub const DIACRITIC_PRESETS: [f64; 7] = [-200.0, -100.0, -50.0, 0.0, 50.0, 100.0, 200.0];
 
 /// The stored character style: the selected range's (or the caret's) while the Type
 /// tool edits text, else the first selected text object's first run (including groups). With it, the paragraph
@@ -99,10 +104,24 @@ pub(crate) fn shared_text_flag(app: &VectorcraftApp, f: impl Fn(&vectorcraft_doc
 }
 
 /// `f` of the character styles the panels act on: the runs the Type tool's selection covers (the
-/// caret's style at a caret), else every run of the selected type, groups' included. `None` (a
-/// blank field) where they differ, or with no type.
+/// caret's style at a caret), else every run of every frame of the selected stories
+/// ([`selected_stories`]). `None` (a blank field) where they differ, or with no type.
 pub(crate) fn shared<T: PartialEq>(app: &VectorcraftApp, f: impl Fn(&CharStyle) -> T) -> Option<T> {
     shared_styles(app, |_, _, style, _| Some(f(style)))
+}
+
+/// The fonts (family and style) of the character styles the panels act on ([`shared`]), each
+/// once, in the order the runs come.
+pub(crate) fn selected_fonts(app: &VectorcraftApp) -> Vec<(String, String)> {
+    let fonts = std::cell::RefCell::new(Vec::<(String, String)>::new());
+    shared_styles(app, |_, _, style, _| {
+        let mut fonts = fonts.borrow_mut();
+        if !fonts.iter().any(|(family, face)| *family == style.font_family && *face == style.font_style) {
+            fonts.push((style.font_family.clone(), style.font_style.clone()));
+        }
+        Some(())
+    });
+    fonts.into_inner()
 }
 
 /// Dimensional controls use document units and tolerate arithmetic roundoff when comparing
@@ -140,37 +159,52 @@ fn shared_styles<T: PartialEq>(
     app: &VectorcraftApp,
     f: impl Fn(&vectorcraft_doc::TextObject, &vectorcraft_doc::ParaStyle, &CharStyle, bool) -> Option<T>,
 ) -> Option<T> {
-    let st = app.session.active()?;
+    let mut acc = Shared::None;
+    each_style(app, |t, para, style, inline| acc.add(f(t, para, style, inline)));
+    acc.value().flatten()
+}
+
+/// Whether `f` holds for any of the character styles [`shared`] reads.
+pub(crate) fn any_style(app: &VectorcraftApp, f: impl Fn(&CharStyle) -> bool) -> bool {
+    let mut any = false;
+    each_style(app, |_, _, style, _| any = any || f(style));
+    any
+}
+
+/// Call `f` with each character style the panels act on, as [`shared_styles`] describes: the
+/// caret's style at a Type tool caret, else each piece of the runs the Type tool's selection
+/// covers, else of every run of every frame of the selected stories.
+fn each_style(app: &VectorcraftApp, mut f: impl FnMut(&vectorcraft_doc::TextObject, &vectorcraft_doc::ParaStyle, &CharStyle, bool)) {
+    let Some(st) = app.session.active() else {
+        return;
+    };
     let text = |id: NodeId| match st.doc.node(id).map(|n| &n.kind) {
         Some(NodeKind::Text(t)) => Some(t),
         _ => None,
     };
-    let mut acc = Shared::None;
     if let Some((id, a, b)) = text_editing(app) {
-        let t = text(id)?;
+        let Some(t) = text(id) else {
+            return;
+        };
         if b <= a {
             let para = t.plain_text().get(..a).map_or(0, |s| s.bytes().filter(|&c| c == b'\n').count());
-            return f(t, t.para_at(para), &vectorcraft_text::edit::insertion_style(&t.runs, a, b), false);
+            f(t, t.para_at(para), &vectorcraft_text::edit::insertion_style(&t.runs, a, b), false);
+            return;
         }
         match text_story(app) {
             // After Select All in threaded text: all the text of every frame of the story.
             Some(story) => {
                 for t in story.into_iter().filter_map(text) {
-                    each_paragraph_run(t, None, |para, style, inline| acc.add(f(t, para, style, inline)));
+                    each_paragraph_run(t, None, |para, style, inline| f(t, para, style, inline));
                 }
             }
-            None => each_paragraph_run(t, Some((a, b)), |para, style, inline| acc.add(f(t, para, style, inline))),
+            None => each_paragraph_run(t, Some((a, b)), |para, style, inline| f(t, para, style, inline)),
         }
     } else {
-        for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
-            n.walk(&mut |c| {
-                if let NodeKind::Text(t) = &c.kind {
-                    each_paragraph_run(t, None, |para, style, inline| acc.add(f(t, para, style, inline)));
-                }
-            });
+        for t in selected_story_texts(app) {
+            each_paragraph_run(t, None, |para, style, inline| f(t, para, style, inline));
         }
     }
-    acc.value().flatten()
 }
 
 /// `f` of the paragraph and style of each piece of `t`'s runs that lies in one paragraph (a
@@ -243,9 +277,12 @@ pub(crate) fn format(app: &mut VectorcraftApp, p: Value) {
 
 /// [`format`] that returns the command's result: `text.setRangeStyle` on the range the Type tool
 /// has selected (the whole text when nothing is selected) while it edits text, else
-/// `text.setFormat` on the selected text objects.
+/// `text.setFormat` on the selected stories ([`selected_stories`]).
 pub(crate) fn run_format(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, String> {
-    let Some((id, a, b)) = text_editing(app) else { return app.run("text.setFormat", p) };
+    let Some((id, a, b)) = text_editing(app) else {
+        target_selected_stories(app, &mut p);
+        return app.run("text.setFormat", p);
+    };
     if let Some(first) = text_story(app).and_then(|story| story.first().copied()) {
         return story_style(app, first, p);
     }
@@ -283,9 +320,11 @@ pub(crate) fn shared_warichu(app: &VectorcraftApp) -> SharedWarichu {
 }
 
 /// Apply character attributes: to the selected range while the Type tool edits text (the whole
-/// object when nothing is selected), else to the selected text objects.
-fn char_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
+/// object when nothing is selected), else to every frame of the selected stories
+/// ([`selected_stories`]).
+fn char_cmd(app: &mut VectorcraftApp, cmd: &str, mut p: Value) {
     if text_editing(app).is_none() {
+        target_selected_stories(app, &mut p);
         app.run(cmd, p).ok();
         return;
     }
@@ -546,6 +585,55 @@ pub(crate) fn text_story(app: &VectorcraftApp) -> Option<Vec<NodeId>> {
     (ids.len() >= 2).then_some(ids)
 }
 
+/// The type objects the panels act on with the Selection tool: the selected type objects and those
+/// in selected groups, each with every frame of its threaded story (locked and hidden frames
+/// included), each once, the frames of a story in thread order.
+pub(crate) fn selected_stories(app: &VectorcraftApp) -> Vec<NodeId> {
+    let Some(st) = app.session.active() else { return Vec::new() };
+    let mut frames = Vec::new();
+    let mut taken = HashSet::new();
+    for selected in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
+        selected.walk(&mut |child| {
+            if matches!(child.kind, NodeKind::Text(_)) && !taken.contains(&child.id) {
+                for id in st.doc.story_of(child.id) {
+                    if taken.insert(id) {
+                        frames.push(id);
+                    }
+                }
+            }
+        });
+    }
+    frames
+}
+
+/// The type objects of [`selected_stories`].
+pub(crate) fn selected_story_texts(app: &VectorcraftApp) -> Vec<&vectorcraft_doc::TextObject> {
+    let Some(st) = app.session.active() else { return Vec::new() };
+    selected_stories(app)
+        .into_iter()
+        .filter_map(|id| match st.doc.node(id).map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => Some(t.as_ref()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Give the command parameters `p` the `ids` of [`selected_stories`], so a command run with the
+/// Selection tool sets every frame of each selected story. `p` stays as it is when it names its
+/// targets, with no type selected, and while an object of a symbol instance's art is selected,
+/// which the commands refuse.
+pub(crate) fn target_selected_stories(app: &VectorcraftApp, p: &mut Value) {
+    if p.get("ids").is_some() || p.get("id").is_some() || app.session.active().is_none_or(|st| st.selection.symbol_part.is_some()) {
+        return;
+    }
+    let ids = selected_stories(app);
+    if let Some(params) = p.as_object_mut()
+        && !ids.is_empty()
+    {
+        params.insert("ids".into(), json!(ids.iter().map(|id| id.0).collect::<Vec<_>>()));
+    }
+}
+
 /// `text.setRangeStyle` with `p` on all the text of every frame of the story that `first` is a
 /// frame of, as one undo step.
 fn story_style(app: &mut VectorcraftApp, first: NodeId, mut p: Value) -> Result<Value, String> {
@@ -795,9 +883,10 @@ fn cell(ui: &mut Ui, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
 /// The Character panel's grid of fields, `w` wide: Font Size, Leading, Kerning and Tracking,
 /// then with `more` the scales, Baseline Shift and Character Rotation, and a row with the
 /// Anti-aliasing Method dropdown under Character Rotation (`s`: the style shown), and with Show East
-/// Asian Options on a row with Insert Aki Left and Right. With Show Font
-/// Height Options on, a row under Font Size holds the Set Font Height Reference dropdown. The
-/// Properties panel shows its first rows.
+/// Asian Options on a row with Insert Aki Left and Right and a row with Tsume, and with Show Indic
+/// Options (the Middle Eastern options) on a row with Adjust Horizontal and Vertical Diacritic
+/// Position. With Show Font Height Options on, a row under Font Size holds the Set Font Height
+/// Reference dropdown. The Properties panel shows its first rows.
 pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &CharStyle, w: f32, more: bool) {
     let fw = ((w - 66.0) / 2.0).clamp(60.0, 100.0);
     let unit = app.session.type_unit();
@@ -891,6 +980,32 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
                 });
             }
             ui.end_row();
+            // Tsume: the share of the blank space beside each character's ink taken away.
+            cell(ui, "→A←", tl!("Tsume"), |ui| {
+                if let Some(v) = widgets::spin_plain(ui, "ch-tsume", shared(app, |s| s.tsume), "%", 1, fw, 1.0, 0.0, &TSUME_PRESETS) {
+                    // The field stops at the largest value the command takes.
+                    format(app, json!({ "tsume": v.min(vectorcraft_doc::text::MAX_TSUME) }));
+                }
+            });
+            ui.end_row();
+        }
+        // Adjust Horizontal and Vertical Diacritic Position, with the Middle Eastern options: the
+        // marks of the characters move across and up, in thousandths of an em.
+        if app.session.prefs.show_indic_options {
+            let max = vectorcraft_doc::text::MAX_DIACRITIC_POSITION;
+            for (field, label, key, icon) in [
+                ("ch-diacritic-h", tl!("Adjust Horizontal Diacritic Position"), "diacriticHorizontal", "´↔"),
+                ("ch-diacritic-v", tl!("Adjust Vertical Diacritic Position"), "diacriticVertical", "´↕"),
+            ] {
+                cell(ui, icon, label, |ui| {
+                    let value = shared(app, |s| if key == "diacriticHorizontal" { s.diacritic_horizontal } else { s.diacritic_vertical });
+                    if let Some(v) = widgets::spin_plain(ui, field, value, "", 0, fw, 10.0, -max, &DIACRITIC_PRESETS) {
+                        // The field stops at the largest value the command takes.
+                        format(app, json!({ key: v.min(max) }));
+                    }
+                });
+            }
+            ui.end_row();
         }
     });
 }
@@ -910,7 +1025,8 @@ fn anti_alias_method(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
 }
 
 /// The anti-aliasing method of the type objects the panel acts on: the one the Type tool edits,
-/// else the selected type (groups' included). `None` where they differ, or with no type.
+/// else every frame of the selected stories ([`selected_stories`]). `None` where they differ, or
+/// with no type.
 fn shared_anti_alias(app: &VectorcraftApp) -> Option<TypeAntiAlias> {
     let st = app.session.active()?;
     let mut acc = Shared::None;
@@ -921,12 +1037,8 @@ fn shared_anti_alias(app: &VectorcraftApp) -> Option<TypeAntiAlias> {
             }
         }
         None => {
-            for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
-                n.walk(&mut |c| {
-                    if let NodeKind::Text(t) = &c.kind {
-                        acc.add(t.anti_alias);
-                    }
-                });
+            for t in selected_story_texts(app) {
+                acc.add(t.anti_alias);
             }
         }
     }
@@ -934,12 +1046,14 @@ fn shared_anti_alias(app: &VectorcraftApp) -> Option<TypeAntiAlias> {
 }
 
 /// Set the anti-aliasing method `m` of the frame the Type tool edits, whatever part of its text
-/// is selected, else the selected type objects (`text.setFormat {antiAlias}`).
+/// is selected, else every frame of the selected stories (`text.setFormat {antiAlias}`).
 fn set_anti_alias(app: &mut VectorcraftApp, m: TypeAntiAlias) {
     let mut p = json!({"antiAlias": m.id()});
     if let Some((id, _, _)) = text_editing(app) {
         end_typing(app);
         p["ids"] = json!([id.0]);
+    } else {
+        target_selected_stories(app, &mut p);
     }
     app.run("text.setFormat", p).ok();
 }
@@ -1160,25 +1274,49 @@ fn axes_cmd(app: &mut VectorcraftApp, axes: Value, phase: widgets::Live) {
             }
             super::live_run(app, "Character", "text.setRangeStyle", q, phase);
         }
-        None => super::live_run(app, "Character", "text.setFormat", json!({ "fontAxes": axes }), phase),
+        None => {
+            let mut p = json!({ "fontAxes": axes });
+            target_selected_stories(app, &mut p);
+            super::live_run(app, "Character", "text.setFormat", p, phase);
+        }
     }
 }
 
 /// The Control bar's type controls while type is selected or edited: the Character link (the
-/// Character panel in a popover), the font family and style menus and the Font Size combo.
-pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let Some((s, _)) = text_style(app) else { return };
-    let link = ui
-        .link(egui::RichText::new(tl!("Character:")).size(12.0).color(Tokens::get(ui.ctx()).text).underline())
-        .on_hover_text(tl!("Character options"));
+/// Character panel in a popover), the font family and style menus and the Font Size combo. They
+/// show whole, with `reserve` left after them, or not at all: it returns false when type is selected
+/// or edited and the row has no room for them.
+pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) -> bool {
+    let Some((s, _)) = text_style(app) else { return true };
+    if ui.available_width() < control_bar_width(ui) + reserve {
+        return false;
+    }
+    let link = ui.link(control_bar_link_text(ui)).on_hover_text(tl!("Character options"));
     widgets::popover(&link, link.clicked(), |ui| {
         ui.set_width(260.0);
         show_owned(app, ui, crate::font_menu::WheelOwner::ControlPopover(link.id));
     });
-    font_pickers(app, ui, &s, ("cb-font", "cb-font-style"), (150.0, 96.0));
-    size_field(app, ui, "cb-font-size", 96.0);
+    let [family, style, size] = CONTROL_BAR_WIDTHS;
+    font_pickers(app, ui, &s, ("cb-font", "cb-font-style"), (family, style));
+    size_field(app, ui, "cb-font-size", size);
     ui.add_space(4.0);
     crate::chrome::group_separator(ui);
+    true
+}
+
+/// The Control bar's widths of the font family menu, the font style dropdown and the Font Size combo.
+const CONTROL_BAR_WIDTHS: [f32; 3] = [150.0, 96.0, 96.0];
+
+/// The text of the Control bar's Character link, as [`control_bar`] draws it.
+fn control_bar_link_text(ui: &Ui) -> egui::RichText {
+    egui::RichText::new(tl!("Character:")).size(12.0).color(Tokens::get(ui.ctx()).text).underline()
+}
+
+/// The room [`control_bar`]'s link, menus and Font Size combo take in the Control bar's row, with
+/// the spacing after each.
+fn control_bar_width(ui: &Ui) -> f32 {
+    let spacing = ui.spacing().item_spacing.x;
+    widgets::text_width(ui, control_bar_link_text(ui)) + CONTROL_BAR_WIDTHS.iter().sum::<f32>() + 4.0 * spacing
 }
 
 /// The Contextual Task Bar's widths of the font family menu, the font style dropdown and the
@@ -1612,8 +1750,9 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
 /// character alignment, Proportional Metrics, Tate-chu-yoko, Warichu, Standard Vertical Roman Alignment and
 /// No Break off, Tate-chu-yoko Settings Up/Down and Left/Right 0, the default Warichu Settings (2 lines, no
-/// line gap, 50%, Auto alignment), Insert Aki Left and Right 0, the Default character direction,
-/// Kashidas on, the Default digits and the Em Box font height reference, whether or not Show East Asian
+/// line gap, 50%, Auto alignment), Insert Aki Left and Right 0, Tsume 0, the Default character direction,
+/// Kashidas on, the Default digits, Adjust Horizontal and Vertical Diacritic Position 0 and the Em Box
+/// font height reference, whether or not Show East Asian
 /// Options, Show Indic Options and Show Font Height Options are on. Inside an undo group that is
 /// already open, the reset is part of that group's step.
 fn reset_panel(app: &mut VectorcraftApp) {
@@ -1632,10 +1771,11 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "allCaps": false, "smallCaps": d.small_caps.is_some(), "position": d.position.id(), "charAlign": d.char_align,
             "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko,
             "tcyUpDown": d.tcy_up_down, "tcyLeftRight": d.tcy_left_right, "akiLeft": d.aki_left, "akiRight": d.aki_right,
-            "warichu": d.warichu, "warichuLines": d.warichu_lines, "warichuGap": d.warichu_gap, "warichuScale": d.warichu_scale,
+            "tsume": d.tsume, "warichu": d.warichu, "warichuLines": d.warichu_lines, "warichuGap": d.warichu_gap, "warichuScale": d.warichu_scale,
             "warichuAlign": d.warichu_align,
             "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default", "kashidas": d.kashidas,
-            "digits": d.digits, "fontHeightReference": d.font_height_reference
+            "digits": d.digits, "diacriticHorizontal": d.diacritic_horizontal, "diacriticVertical": d.diacritic_vertical,
+            "fontHeightReference": d.font_height_reference
         }),
     );
     set_anti_alias(app, TypeAntiAlias::Sharp);

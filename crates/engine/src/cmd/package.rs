@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Package",
         [],
         None,
-        "{folder?, name?: (default: \"<document> Folder\"), copyLinks?: true, linksFolder?: true (the linked files go in Links/, else next to the document), relink?: true (the packaged document links to the copies), copyFonts?: true (the fonts its type uses go in Fonts/; fonts whose licence doesn't allow embedding are left out), report?: true (<document> Report.txt)} copy the saved document as it is now into folder/name as <document>.vectorcraft with its linked files and fonts; the open document doesn't change → {folder, files: [paths relative to folder/name], links, fonts (counts copied), missingLinks: [file names not found], skippedFonts: [{font, reason}], warnings: [nested files copied unchanged or cycles/depth stopped]}; no folder → the same with {name: \"<name>.zip\", dataBase64} (a zip of the files in <name>/) instead of folder. The warnings and the report name a file outside the automation read roots by its file name",
+        "{folder?, name?: (default: \"<document> Folder\"), copyLinks?: true, linksFolder?: true (the linked files go in Links/, else next to the document), relink?: true (the packaged document links to the copies), copyFonts?: true (the fonts its type uses go in Fonts/; fonts whose licence doesn't allow embedding are left out), report?: true (<document> Report.txt)} copy the saved document as it is now into folder/name as <document>.vectorcraft with its linked files and fonts; the open document doesn't change → {folder, files: [paths relative to folder/name], links, fonts (counts copied), missingLinks: [file names not found], skippedFonts: [{font, reason}], warnings: [nested files copied unchanged or cycles/depth stopped]}; no folder → the same with {name: \"<name>.zip\", dataBase64} (a zip of the files in <name>/) instead of folder. The warnings and the report name a file outside the automation read roots by its file name. Under automation read roots, the package is refused, before any file is written, while the document, or a linked native document or a linked PDF, .ai or EPS file's native document, links a JavaScript file outside them (svgInteractivity; a URL is not checked)",
         has_doc,
         package
     )]
@@ -111,6 +111,30 @@ thread_local! {
     /// Tests: how many linked `.vectorcraft` files had their preview and PDF read on this thread,
     /// to keep them in the rewritten copy.
     pub(crate) static PARTS_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The native document that the linked file `name` (`bytes`) is, or carries as the editing data of
+/// a PDF, `.ai` or EPS file; `None` for other files and for data that can't be read.
+fn carried_document(name: &str, bytes: &[u8]) -> Option<Document> {
+    if super::place::document::is_native(name, bytes) {
+        return vectorcraft_format::load_file(bytes).ok().map(|f| f.doc);
+    }
+    let data =
+        if super::place::document::is_pdf(name, bytes) { vectorcraft_pdf::editing(bytes).map(|e| e.data) } else { vectorcraft_eps::native(bytes) };
+    vectorcraft_format::load(&data?).ok()
+}
+
+/// Under read roots, the linked file `name` (`bytes`, found at `path`) is copied only when the
+/// native document it is or carries ([`carried_document`]) links no JavaScript file outside them (a
+/// relative path taken from the file's folder): the copy would name it.
+fn check_carried_scripts(name: &str, bytes: &[u8], path: &str) -> Result<()> {
+    if crate::file_access::current().is_none() {
+        return Ok(());
+    }
+    match carried_document(name, bytes) {
+        Some(carried) => super::fileio::check_scripts_of(C, &carried, Some(path), || true),
+        None => Ok(()),
+    }
 }
 
 /// The fonts of the type on `pages` of the PDF or `.ai` file `name` (`bytes`, found at `path`);
@@ -229,7 +253,7 @@ impl<'a> Collector<'a> {
             Some((d, base)) => super::links::linked_files(d, base),
             None => super::links::linked_files(doc, LinkBase::file(Some(source))),
         };
-        doc.visit_placed(|_, p| {
+        super::links::with_brush_art(doc).visit_placed(|_, p| {
             let page = (p.link.page.unwrap_or(1), p.bounding, p.page_box);
             let pages = placed.entry(p.link.path.clone()).or_default();
             if !pages.contains(&page) {
@@ -291,6 +315,7 @@ impl<'a> Collector<'a> {
                 // read from its editing data links are copied beside it.
                 let pages = placed.get(&file.path);
                 let placed_file = pages.is_some();
+                check_carried_scripts(&file.name, &bytes, found_path)?;
                 if placed_file && let Some(mut art) = super::place::document::editing_data(&file.name, &bytes) {
                     if depth >= vectorcraft_doc::placed_document::MAX_DEPTH {
                         self.warn(&mut lines, format!("{shown}: nesting limit reached; copied unchanged without collecting its own links"));
@@ -389,16 +414,20 @@ impl<'a> Collector<'a> {
         }
         if self.opts.relink {
             // The child files have already been rewritten; the hash and size of each
-            // target must reflect the *packaged* bytes rather than the original.
-            doc.update_links(|link: &mut LinkInfo| {
-                if let Some(copy) = local.get(&link.path) {
-                    let relative = relative_in_package(destination, &copy.name);
-                    link.path = self.root.as_ref().map_or_else(|| copy.name.clone(), |r| r.join(&copy.name).to_string_lossy().into_owned());
-                    link.relative = Some(relative);
-                    link.size = copy.size;
-                    link.hash = copy.hash.clone();
-                    link.modified = None;
-                }
+            // target must reflect the *packaged* bytes rather than the original. The links in the
+            // art of the stored brushes are written back into the brush library.
+            let root = &self.root;
+            super::links::editing_brush_art(doc, |doc| {
+                doc.update_links(|link: &mut LinkInfo| {
+                    if let Some(copy) = local.get(&link.path) {
+                        let relative = relative_in_package(destination, &copy.name);
+                        link.path = root.as_ref().map_or_else(|| copy.name.clone(), |r| r.join(&copy.name).to_string_lossy().into_owned());
+                        link.relative = Some(relative);
+                        link.size = copy.size;
+                        link.hash = copy.hash.clone();
+                        link.modified = None;
+                    }
+                })
             });
         }
         if let Some(s) = self.sections.get_mut(section) {
@@ -467,6 +496,8 @@ fn prepare(s: &mut Session, p: &Value) -> Result<Package> {
     let given_name = text_param(p, "name", C)?;
     let folder = text_param(p, "folder", C)?;
     let doc_path = s.doc()?.path.clone().ok_or_else(|| bad(C, "save the document first: Package collects a saved document"))?;
+    // Before anything is collected or written, here where the request's read roots are in force.
+    super::fileio::check_linked_scripts(C, "vectorcraft", s.doc()?, &Value::Null)?;
     let stem = Path::new(&doc_path).file_stem().map_or_else(|| "Untitled".into(), |s| s.to_string_lossy().into_owned());
     let name = given_name.map_or_else(|| format!("{stem} Folder"), str::to_string);
     if name.trim().is_empty() || name == "." || name == ".." || name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) {

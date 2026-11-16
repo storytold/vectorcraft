@@ -1043,6 +1043,107 @@ fn create_outlines_matches_text_bounds() {
     assert!(s.doc().unwrap().doc.node(t).is_some());
 }
 
+/// The type object's own fills and strokes (not its characters') become paths of its whole outline,
+/// with ids of their own: those below the Characters row under the glyph paths, the others over
+/// them, in their order. The group keeps no appearance of its own, and Undo brings the type back.
+#[test]
+fn create_outlines_keeps_the_objects_own_fills_and_strokes() {
+    let mut s = session();
+    let t = text(&mut s, "Hi", 64.0);
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    for (cmd, p) in [
+        ("appearance.addFill", json!({"target": "object"})),
+        ("appearance.setItem", json!({"index": 0, "color": "#ff0000"})),
+        ("appearance.addStroke", json!({"target": "object"})),
+        ("appearance.setItem", json!({"index": 1, "color": "#0000ff", "weight": 5})),
+        ("appearance.addFill", json!({"target": "object"})),
+        ("appearance.setItem", json!({"index": 2, "color": "#00ff00", "opacity": 50})),
+        // The red fill paints below the characters; the stroke and the green fill over them.
+        ("appearance.moveItem", json!({"from": "contents", "to": 1})),
+    ] {
+        s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"));
+    }
+    let own = node(&s, t).appearance.items.clone();
+    assert_eq!(own.len(), 3);
+    let r = ids(&s.execute("type.createOutlines", &json!({})).unwrap());
+    let g = node(&s, r[0]);
+    assert!(g.appearance.items.is_empty(), "the group paints nothing of its own");
+    let ch = g.children().unwrap();
+    assert_eq!(ch.len(), 4, "a path below, the two glyphs, a path above");
+    let (first, last) = (&ch[0], &ch[3]);
+    assert_eq!(first.appearance.items, own[..1], "the item below the characters");
+    assert_eq!(last.appearance.items, own[1..], "the items over them, in their order");
+    for c in [first, last] {
+        assert!(matches!(c.kind, NodeKind::Path { .. }), "{:?}", c.kind);
+        assert!(c.id != t && c.id != g.id, "a fresh id");
+    }
+    assert!(first.id != last.id);
+    for c in &ch[1..3] {
+        assert_eq!(c.appearance.fill_paint(), Paint::solid(Color::BLACK), "the characters keep their own paint");
+    }
+    // The whole-outline paths cover both glyphs.
+    let glyphs = ch[1].geometric_bounds().unwrap().union(ch[2].geometric_bounds().unwrap());
+    assert!(close(first.geometric_bounds().unwrap(), glyphs, 1e-6), "{:?} vs {glyphs:?}", first.geometric_bounds());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(node(&s, t).appearance.items, own, "one undo step brings the type back");
+}
+
+/// The type object's own effects go on the group once, in their order, with their settings and a
+/// hidden one still hidden; a fill's own effect stays on its path of the whole outline, and no
+/// glyph or whole-outline path takes the object's effects. Undo brings the type back with them.
+#[test]
+fn create_outlines_keeps_the_objects_own_effects_on_the_group() {
+    let mut s = session();
+    let t = text(&mut s, "Hi", 64.0);
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    for (cmd, p) in [
+        ("appearance.addFill", json!({"target": "object"})),
+        ("appearance.setItem", json!({"index": 0, "color": "#ff0000"})),
+        ("effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 2}, "item": 0})),
+        ("effect.apply", json!({"effect": "stylize.dropShadow", "params": {"x": 7, "y": 3, "blur": 0, "opacity": 60}, "item": null})),
+        ("effect.apply", json!({"effect": "distort.transform", "params": {"rotate": 15}, "item": null})),
+        ("effect.setParams", json!({"index": 1, "visible": false, "item": null})),
+    ] {
+        s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"));
+    }
+    let own: Appearance = (*node(&s, t).appearance).clone();
+    let ids_of = |fx: &[vectorcraft_doc::Effect]| fx.iter().map(|e| (e.id.clone(), e.visible)).collect::<Vec<_>>();
+    assert_eq!(ids_of(&own.effects), [("stylize.dropShadow".to_string(), true), ("distort.transform".to_string(), false)]);
+    assert_eq!(ids_of(own.items[0].effects()), [("path.offsetPath".to_string(), true)]);
+    let r = ids(&s.execute("type.createOutlines", &json!({})).unwrap());
+    let g = node(&s, r[0]);
+    assert_eq!(g.appearance.effects, own.effects, "the group holds the object's effects as they were");
+    let ch = g.children().unwrap();
+    assert!(ch.iter().all(|c| c.appearance.effects.is_empty()), "no piece takes the object's effects");
+    let rows: Vec<_> = ch.iter().filter(|c| c.appearance.items == own.items).collect();
+    assert_eq!(rows.len(), 1, "one path of the whole outline paints the object's fill");
+    assert_eq!(rows[0].appearance.items[0].effects(), own.items[0].effects(), "the fill keeps its own effect");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(*node(&s, t).appearance, own, "one undo step brings the type back with its effects");
+}
+
+/// The group takes the type object's opacity, blend mode, Isolate Blending, Opacity & Mask Define
+/// Knockout Shape and opacity mask.
+#[test]
+fn create_outlines_keeps_the_objects_transparency_and_opacity_mask() {
+    let mut s = session();
+    let t = text(&mut s, "Hi", 64.0);
+    let m = rect(&mut s, 0.0, 0.0, 40.0, 80.0);
+    s.execute("select.set", &json!({"ids": [t.0, m.0]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    let p = json!({"ids": [t.0], "opacity": 70, "blend": "multiply", "isolate": true, "knockoutShape": true});
+    s.execute("transparency.set", &p).unwrap();
+    let before = node(&s, t);
+    assert!(before.extras().mask.is_some(), "the type has a mask");
+    let look = |n: &vectorcraft_doc::Node| (n.opacity, n.blend, n.isolate, n.knockout_shape);
+    assert_eq!(look(&before), (0.7, vectorcraft_color::BlendMode::Multiply, true, true));
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    let r = ids(&s.execute("type.createOutlines", &json!({})).unwrap());
+    let g = node(&s, r[0]);
+    assert_eq!(look(&g), look(&before));
+    assert_eq!(g.extras().mask, before.extras().mask, "the group keeps the type's opacity mask");
+}
+
 /// Colour bitmap glyphs (emoji) become embedded images where they sat; glyphs showing one image
 /// share its pixels.
 #[test]

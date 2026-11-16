@@ -9,13 +9,14 @@
 //! ([`use_front_profiles`]): when they are assigned, when the working settings change, and when the
 //! document comes to the front or its assignment comes back (an open, a switch, a close, a revert,
 //! an undo or a rollback, [`Session::sync_front_profiles`]); the working spaces stay as Edit → Color
-//! Settings set them.
+//! Settings set them. A document drawn while another is in front draws through its own profiles
+//! ([`doc_cms`]).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_color::cms::{self, ColorSettings, Intent, Model, ProofTarget};
+use vectorcraft_color::cms::{self, ColorSettings, Intent, Model, Policy, ProofTarget};
 use vectorcraft_color::recolor::Neutral;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::ColorMode;
@@ -36,7 +37,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Color Settings…",
             ["Edit"],
             Some("Cmd+Shift+K"),
-            "{rgb?: profile, cmyk?: profile, intent?: \"perceptual\"|\"relative\"|\"saturation\"|\"absolute\", bpc?: bool} set the working spaces → {rgb, cmyk, intent, bpc, profiles: [{name, kind, builtin}]}. The desktop app and vectorcraft-cli keep them in `Color Settings.json` next to the preferences and use them again at the next start (not with VECTORCRAFT_NO_PREFS); saved settings naming a profile that is gone leave the defaults",
+            "{rgb?: profile, cmyk?: profile, intent?: \"perceptual\"|\"relative\"|\"saturation\"|\"absolute\", bpc?: bool, rgbPolicy?: \"off\"|\"preserveEmbedded\"|\"convert\", cmykPolicy?: \"off\"|\"preserveEmbedded\"|\"convert\"|\"preserveNumbers\"} set the working spaces and the color management policies → {rgb, cmyk, intent, bpc, rgbPolicy, cmykPolicy, profiles: [{name, kind, builtin}]}. A policy decides what opening a document (document.open, file.newFromTemplate, file.revert) does with an RGB or CMYK profile it is tagged with that is not the working space: preserveEmbedded (default) keeps it; off and preserveNumbers take it off and keep the color numbers; convert converts the colors of that model into the working space with the intent and bpc and takes it off. The open reply's warnings name each profile taken off or converted, and a document a policy changed opens with unsaved changes. The desktop app and vectorcraft-cli keep them in `Color Settings.json` next to the preferences and use them again at the next start (not with VECTORCRAFT_NO_PREFS); saved settings naming a profile that is gone leave the defaults",
             always,
             color_settings
         ),
@@ -63,7 +64,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Assign Profile…",
             ["Edit"],
             None,
-            "{rgb?: profile|null, cmyk?: profile|null} tag the document with profiles (color numbers are kept; null: the working space). Colors then show and convert through the profiles assigned; the working spaces stay as edit.colorSettings set them → {rgb, cmyk}",
+            "{rgb?: profile|null, cmyk?: profile|null} tag the document with profiles (color numbers are kept; null: no profile, Don't Color Manage This Document, so colors show through the working space; the working space's name: that profile stays assigned when the working space changes). Colors then show and convert through the profiles assigned; the working spaces stay as edit.colorSettings set them → {rgb, cmyk}",
             has_doc,
             assign_profile
         ),
@@ -162,12 +163,26 @@ fn on_param(p: &Value, key: &str, cmd: &str) -> Result<Option<bool>> {
     switch_or(p, key, false, cmd).map(Some)
 }
 
+/// The policy `p` gives for `key`, one of `allowed`, or `None` when `p` leaves it out.
+fn policy_param(p: &Value, key: &str, allowed: &[Policy], cmd: &str) -> Result<Option<Policy>> {
+    let Some(v) = text_param(p, key, cmd)? else { return Ok(None) };
+    match Policy::parse(v).filter(|x| allowed.contains(x)) {
+        Some(x) => Ok(Some(x)),
+        None => {
+            let ids: Vec<&str> = allowed.iter().map(Policy::id).collect();
+            Err(bad(cmd, format!("`{key}` must be one of {}", ids.join(", "))))
+        }
+    }
+}
+
 fn settings_json(st: &ColorSettings) -> Value {
     json!({
         "rgb": st.rgb,
         "cmyk": st.cmyk,
         "intent": st.intent.id(),
         "bpc": st.bpc,
+        "rgbPolicy": st.rgb_policy.id(),
+        "cmykPolicy": st.cmyk_policy.id(),
         "profiles": cms::profiles().iter().map(|p| json!({"name": p.name, "kind": p.kind, "builtin": p.builtin})).collect::<Vec<_>>(),
     })
 }
@@ -204,6 +219,12 @@ fn color_settings(s: &mut Session, p: &Value) -> Result<Value> {
         st.intent = i;
     }
     st.bpc = switch_or(p, "bpc", st.bpc, C)?;
+    if let Some(v) = policy_param(p, "rgbPolicy", &Policy::RGB, C)? {
+        st.rgb_policy = v;
+    }
+    if let Some(v) = policy_param(p, "cmykPolicy", &Policy::CMYK, C)? {
+        st.cmyk_policy = v;
+    }
     if st != before {
         cms::set_active(&st).map_err(|e| bad(C, e.to_string()))?;
         // Saved for the next start when the app attached a settings file (#6335).
@@ -236,6 +257,9 @@ fn load_profile(s: &mut Session, p: &Value) -> Result<Value> {
     } else if proof_targets(&info.name) {
         // A new file of the CMYK profile View → Proof Setup targets: redraw.
         touch_all(s);
+    } else {
+        // Documents behind the front one draw through their own profiles: those assigned it redraw.
+        touch_assigned(s, &info.name);
     }
     Ok(json!({"name": info.name, "kind": info.kind, "remembered": remembered}))
 }
@@ -266,7 +290,19 @@ fn remove_profile(s: &mut Session, p: &Value) -> Result<Value> {
     if proof_targets(&info.name) {
         touch_all(s);
     }
+    // Documents behind the front one draw through their own profiles: those assigned it redraw.
+    touch_assigned(s, &info.name);
     Ok(json!({"removed": info.name}))
+}
+
+/// Redraw the open documents assigned the profile `name`.
+fn touch_assigned(s: &mut Session, name: &str) {
+    for d in &mut s.docs {
+        let (rgb, cmyk) = doc_profiles(&d.doc);
+        if [rgb, cmyk].iter().any(|n| n.as_deref() == Some(name)) {
+            d.revision += 1;
+        }
+    }
 }
 
 /// Whether View → Proof Setup targets the CMYK profile `name`.
@@ -283,6 +319,14 @@ fn load_profile(_: &mut Session, _: &Value) -> Result<Value> {
 pub fn doc_profiles(d: &vectorcraft_doc::Document) -> (Option<String>, Option<String>) {
     let get = |n: &Option<String>| n.as_deref().map(|n| cms::canonical_name(n).to_string());
     (get(&d.color_profiles.rgb), get(&d.color_profiles.cmyk))
+}
+
+/// The color-management context the document draws through: the working settings with its
+/// assigned profiles in place of the working spaces, whether or not it is in front
+/// ([`cms::for_document`]).
+pub fn doc_cms(d: &vectorcraft_doc::Document) -> Arc<cms::Cms> {
+    let (rgb, cmyk) = doc_profiles(d);
+    cms::for_document(rgb.as_deref(), cmyk.as_deref())
 }
 
 fn assign_profile(s: &mut Session, p: &Value) -> Result<Value> {
@@ -506,13 +550,23 @@ pub(crate) fn set_color_mode(d: &mut vectorcraft_doc::Document, mode: ColorMode,
     if !convert {
         return 0;
     }
-    let conv = mode_converter(mode, intent, grays);
+    convert_colors(d, &mode_converter(mode, intent, grays))
+}
+
+/// Every color of `d` that [`set_color_mode`] converts, converted with `conv` → how many colors of
+/// the art changed, as [`set_color_mode`] counts them.
+fn convert_colors(d: &mut vectorcraft_doc::Document, conv: &dyn Fn(&Color) -> Color) -> usize {
     for sw in d.swatches_iter_mut() {
         match &mut sw.paint {
             Paint::Solid { color, .. } => *color = conv(color),
             Paint::Gradient(g) => {
                 for st in &mut g.gradient.stops {
                     st.color = conv(&st.color);
+                }
+                if let Some(freeform) = &mut g.freeform {
+                    for point in &mut freeform.points {
+                        point.color = conv(&point.color);
+                    }
                 }
             }
             _ => {}
@@ -597,6 +651,102 @@ pub(crate) fn set_color_mode(d: &mut vectorcraft_doc::Document, mode: ColorMode,
     in_art
 }
 
+/// Apply the color management policies of Edit → Color Settings to `d`, a document being opened:
+/// each RGB or CMYK profile it is tagged with that is not the working space of its model is kept
+/// (Preserve Embedded Profiles), taken off with the color numbers kept (Off, Preserve Numbers), or
+/// taken off after the colors of that model were converted from it into the working space with the
+/// working intent (Convert to Working Space). A profile that is not available here is taken off
+/// by Off and Preserve Numbers and kept by Convert to Working Space, which has nothing to convert
+/// from. → a note for each profile, and whether `d` changed.
+pub(crate) fn apply_open_policies(d: &mut vectorcraft_doc::Document) -> (Vec<String>, bool) {
+    let working = cms::working_settings();
+    let (rgb, cmyk) = doc_profiles(d);
+    let mut notes = Vec::new();
+    // What each model's policy does with its profile: `None` keeps it; `Some` takes it off, after
+    // converting the colors from the profile it holds.
+    let mut decide = |label: &str, tag: Option<String>, working: &str, policy: Policy, kind: cms::ProfileKind| -> Option<Option<String>> {
+        let tag = tag.filter(|t| t != working)?;
+        let available = cms::profile(&tag).is_some_and(|p| p.kind == kind);
+        match policy {
+            Policy::PreserveEmbedded => None,
+            Policy::Off | Policy::PreserveNumbers => {
+                notes.push(format!(
+                    "the {label} profile “{tag}” the file is tagged with was not used: Color Settings' {label} policy is {}",
+                    policy.label()
+                ));
+                Some(None)
+            }
+            Policy::Convert if available => {
+                notes.push(format!(
+                    "the {label} colors were converted from the profile “{tag}” the file is tagged with into the working space “{working}”"
+                ));
+                Some(Some(tag))
+            }
+            Policy::Convert => {
+                notes.push(format!("the {label} profile “{tag}” the file is tagged with is not available, so its colors were not converted"));
+                None
+            }
+        }
+    };
+    let rgb_do = decide("RGB", rgb, &working.rgb, working.rgb_policy, cms::ProfileKind::Rgb);
+    let cmyk_do = decide("CMYK", cmyk, &working.cmyk, working.cmyk_policy, cms::ProfileKind::Cmyk);
+    if rgb_do.is_none() && cmyk_do.is_none() {
+        return (notes, false);
+    }
+    let (from_rgb, from_cmyk) = (rgb_do.clone().flatten(), cmyk_do.clone().flatten());
+    if from_rgb.is_some() || from_cmyk.is_some() {
+        let source = cms::for_document(from_rgb.as_deref(), from_cmyk.as_deref());
+        let dest = cms::working();
+        let intent = working.intent;
+        let (rgb_on, cmyk_on) = (from_rgb.is_some(), from_cmyk.is_some());
+        let conv = |c: &Color| match c {
+            Color::Rgb { .. } if rgb_on => source.convert_into(&dest, c, intent),
+            Color::Cmyk { .. } if cmyk_on => source.convert_into(&dest, c, intent),
+            _ => *c,
+        };
+        convert_colors(d, &conv);
+        convert_setting_colors(d, &conv);
+    }
+    if rgb_do.is_some() {
+        d.color_profiles.rgb = None;
+    }
+    if cmyk_do.is_some() {
+        d.color_profiles.cmyk = None;
+    }
+    (notes, true)
+}
+
+/// The colors of `d` outside its art that [`convert_colors`] leaves, converted with `conv`: each
+/// artboard's background, the transparency grid and simulated paper colors of Document Setup, and
+/// the fill and stroke of the character and paragraph styles.
+fn convert_setting_colors(d: &mut vectorcraft_doc::Document, conv: &dyn Fn(&Color) -> Color) {
+    for c in d.artboards.iter_mut().filter_map(|a| a.color.as_mut()) {
+        *c = conv(c);
+    }
+    for c in &mut d.setup.grid_colors {
+        *c = conv(c);
+    }
+    // A tint of a global swatch is the converted swatch's color at its tint, which
+    // [`convert_colors`] already gave it.
+    let bases = global_bases(d);
+    let mut f = |c: &Color, link: proof::Link| mode_color(c, link, &bases, conv);
+    for styles in [&mut d.char_styles, &mut d.para_styles] {
+        if !styles.iter().any(|s| s.attrs.contains_key("fill") || s.attrs.contains_key("stroke")) {
+            continue;
+        }
+        for def in styles.iter_mut() {
+            for key in ["fill", "stroke"] {
+                let Some(value) = def.attrs.get_mut(key) else { continue };
+                let Ok(mut paint) = serde_json::from_value::<Paint>(value.clone()) else { continue };
+                map_paint_colors(&mut paint, &mut f);
+                if let Ok(v) = serde_json::to_value(&paint) {
+                    *value = v;
+                }
+            }
+        }
+    }
+}
+
 /// [`proof::map_node_colors`] over `n`'s subtree, then [`map_more_colors`].
 fn map_art_colors(n: &mut vectorcraft_doc::Node, f: &mut dyn FnMut(&Color, proof::Link) -> Color) {
     proof::map_node_colors(n, f);
@@ -653,8 +803,8 @@ fn map_effect_colors(a: &mut vectorcraft_doc::Appearance, f: &mut dyn FnMut(&Col
     }
 }
 
-/// `f` applied to the series paints and the label styles that graph `g` keeps, which its marks and
-/// labels take each time it is drawn again.
+/// `f` applied to the series paints, the label styles and the line rows that graph `g` keeps, which
+/// its marks, labels and lines take each time it is drawn again.
 fn map_graph_colors(g: &mut vectorcraft_doc::GraphSpec, f: &mut dyn FnMut(&Color, proof::Link) -> Color) {
     for p in g.series_paints.iter_mut() {
         for paint in [&mut p.fill, &mut p.stroke].into_iter().flatten() {
@@ -662,11 +812,21 @@ fn map_graph_colors(g: &mut vectorcraft_doc::GraphSpec, f: &mut dyn FnMut(&Color
         }
     }
     let styles = &mut g.label_styles;
-    for st in [&mut styles.values, &mut styles.categories, &mut styles.legend].into_iter().flatten() {
-        map_paint_colors(&mut st.fill, f);
+    // A legend fill of the labels' own stays theirs when `f` makes it black. The default black legend fill stays black,
+    // so the labels on dark pie wedges are still drawn white.
+    styles.mark_own_legend_fill();
+    let own = styles.legend_fill_is_own();
+    for (st, fill) in [(&mut styles.values, true), (&mut styles.categories, true), (&mut styles.legend, own)] {
+        let Some(st) = st else { continue };
+        if fill {
+            map_paint_colors(&mut st.fill, f);
+        }
         map_paint_colors(&mut st.stroke, f);
     }
-    for r in [&mut styles.values_rows, &mut styles.categories_rows, &mut styles.legend_rows].into_iter().flatten() {
+    for r in [&mut styles.values_rows, &mut styles.categories_rows, &mut styles.legend_rows, &mut styles.axis_rows, &mut styles.ring_rows]
+        .into_iter()
+        .flatten()
+    {
         for paint in [&mut r.paint.fill, &mut r.paint.stroke].into_iter().flatten() {
             map_paint_colors(paint, f);
         }

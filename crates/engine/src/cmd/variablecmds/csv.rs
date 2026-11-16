@@ -32,20 +32,17 @@ fn datasets_csv_bytes(p: &Value, cmd: &str) -> Result<(Vec<u8>, bool)> {
 }
 
 /// The text of a datasets CSV given as a file or as `dataBase64`: UTF-16 after a UTF-16
-/// byte-order mark, else UTF-8, with or without a byte-order mark, else Windows-1252. A file
-/// that starts with a byte-order mark must be valid in its encoding, and a file without one must
-/// not hold NUL bytes (UTF-16 without a byte-order mark).
+/// byte-order mark, else UTF-16 without one when the file holds NUL bytes (see
+/// [`utf16_without_mark`]), else UTF-8, with or without a byte-order mark, else Windows-1252. A
+/// file that starts with a byte-order mark must be valid in its encoding, and a file with NUL
+/// bytes and no byte-order mark must read as UTF-16 by [`utf16_without_mark`]'s rule.
 fn datasets_csv_text(bytes: &[u8], cmd: &str) -> Result<String> {
-    let utf16 = |rest: &[u8], le: bool| {
-        let (units, odd) = rest.as_chunks::<2>();
-        let units = units.iter().map(|&c| if le { u16::from_le_bytes(c) } else { u16::from_be_bytes(c) });
-        let text = char::decode_utf16(units).collect::<std::result::Result<String, _>>();
-        text.ok().filter(|_| odd.is_empty()).ok_or_else(|| bad(cmd, "CSV is not UTF-16"))
-    };
     match bytes {
-        [0xFF, 0xFE, rest @ ..] => return utf16(rest, true),
-        [0xFE, 0xFF, rest @ ..] => return utf16(rest, false),
-        _ if bytes.contains(&0) => return Err(bad(cmd, "CSV holds NUL bytes: save it as UTF-8, or as UTF-16 with a byte-order mark")),
+        [0xFF, 0xFE, rest @ ..] => return utf16(rest, true).ok_or_else(|| bad(cmd, "CSV is not UTF-16")),
+        [0xFE, 0xFF, rest @ ..] => return utf16(rest, false).ok_or_else(|| bad(cmd, "CSV is not UTF-16")),
+        _ if bytes.contains(&0) => {
+            return utf16_without_mark(bytes).ok_or_else(|| bad(cmd, "CSV holds NUL bytes: save it as UTF-8, or as UTF-16 with a byte-order mark"));
+        }
         _ => {}
     }
     match std::str::from_utf8(bytes) {
@@ -53,6 +50,44 @@ fn datasets_csv_text(bytes: &[u8], cmd: &str) -> Result<String> {
         Err(_) if bytes.starts_with(b"\xEF\xBB\xBF") => Err(bad(cmd, "CSV is not UTF-8")),
         Err(_) => Ok(bytes.iter().map(|&b| windows_1252(b)).collect()),
     }
+}
+
+/// `bytes` as UTF-16, little-endian when `le` is set, or `None` when they aren't valid UTF-16.
+fn utf16(bytes: &[u8], le: bool) -> Option<String> {
+    let (units, odd) = bytes.as_chunks::<2>();
+    let units = units.iter().map(|&c| if le { u16::from_le_bytes(c) } else { u16::from_be_bytes(c) });
+    char::decode_utf16(units).collect::<std::result::Result<String, _>>().ok().filter(|_| odd.is_empty())
+}
+
+/// The byte order of `bytes`, which hold NUL bytes and no byte-order mark, read as UTF-16:
+/// `Some(true)` for little-endian, or `None` when they don't read as UTF-16. At least half of the
+/// two-byte units must hold a NUL byte, as characters from U+0001 to U+00FF do; a file with fewer,
+/// such as UTF-8 or Windows-1252 text with stray NUL bytes, is refused. The byte order is the one
+/// that reads a line break (`\n` or `\r`). The other order reads one only from U+0A00 or U+0D00,
+/// so a file that reads one in both orders is refused. A file that reads none in either order (one
+/// line) is big-endian when more of its units start with a NUL byte than end with one, as
+/// characters from U+0001 to U+00FF do in that order, and little-endian otherwise. An odd last
+/// byte is left out of the count.
+pub fn utf16_order_without_mark(bytes: &[u8]) -> Option<bool> {
+    let units = bytes.as_chunks::<2>().0;
+    if units.iter().filter(|c| c.contains(&0)).count() * 2 < units.len() {
+        return None;
+    }
+    let is_line_break = |u: u16| matches!(u, 0x0A | 0x0D);
+    let lines_le = units.iter().any(|&c| is_line_break(u16::from_le_bytes(c)));
+    let lines_be = units.iter().any(|&c| is_line_break(u16::from_be_bytes(c)));
+    match (lines_le, lines_be) {
+        (true, true) => None,
+        (false, false) => Some(units.iter().filter(|c| c[0] == 0).count() <= units.iter().filter(|c| c[1] == 0).count()),
+        (_, lines_be) => Some(!lines_be),
+    }
+}
+
+/// `bytes`, which hold NUL bytes and no byte-order mark, as UTF-16 in the byte order
+/// [`utf16_order_without_mark`] gives, or `None`. The file must have an even length, and the text
+/// must be valid UTF-16 in that order and hold no NUL character.
+fn utf16_without_mark(bytes: &[u8]) -> Option<String> {
+    utf16(bytes, utf16_order_without_mark(bytes)?).filter(|text| !text.contains('\0'))
 }
 
 /// A row of a datasets CSV: the file line it starts on, its cells, and for each cell whether it was quoted.

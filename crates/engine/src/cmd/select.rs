@@ -8,9 +8,10 @@ use vectorcraft_doc::{Document, LockedArtboards, Node, NodeId, NodeKind};
 use vectorcraft_tools::builder::is_live_paint;
 
 use super::object::can_align;
+use super::panelcmds::artboard_at;
 use super::wand::{fill_of, stroke_of};
 use super::{
-    CommandSpec, Result, Session, bad, bool_or, checked_id, checked_ids_param, cmd, color_value, has_doc, has_selection, index, ok, str_param,
+    CommandSpec, Result, Session, bad, bool_or, checked_id, checked_ids_param, cmd, color_value, has_doc, has_selection, index_opt, ok, str_param,
     switch_or, text_param,
 };
 use crate::DocState;
@@ -31,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "All on Active Artboard",
             ["Select"],
             Some("Cmd+Alt+A"),
-            "{artboard?: index (0-based; the app passes the active one; default: the first)}",
+            "{artboard?: index (0-based whole number; the app passes the active one; default, or null: the first)}",
             has_doc,
             all_on_artboard
         ),
@@ -81,7 +82,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cancel Key Object",
             [],
             None,
-            "{id?: a selected top-level object (not a layer, a compound-path member or an object inside another selected object); one of two or more or the only one with ruler guides selected (the Selection tool: a click on one object of a selection of several, or of one with guides; on the key again: no id), guide?: index (a selected ruler guide, guide.list, with one or more objects selected: the Selection tool's click on a selected guide; Align lines the objects up on it and the guide stays put)} the key object Align aligns to and Distribute Spacing spaces from; without `id` or `guide` it cancels the key, as does a selection that holds only the key and objects inside it (one object, or a group key and its own members) and no ruler guide, or a key guide with no object selected or taken out of the selection; any other id or guide is an error that leaves the key as it was → {key, guide?} (the resulting key object, or null; guide: the key guide, left out without one)",
+            "{id?: a selected top-level object (not a layer, a compound-path member or an object inside another selected object); one of two or more or the only one with ruler guides selected (the Selection tool: a click on one object of a selection of several, or of one with guides; on the key again: no id), guide?: index (a selected ruler guide, guide.list, with one or more objects selected: the Selection tool's click on a selected guide; Align lines the objects up on it and the guide stays put), anchor?: [subpath, anchor] with `id` the path (an anchor point selected with Direct Selection beside at least one other point becomes the key anchor: Align and Distribute move the other points relative to it and it stays put; a click without modifiers on an already-selected anchor point makes it the key anchor)} the key object Align aligns to and Distribute Spacing spaces from; without `id` or `guide` it cancels the key, as does a selection that holds only the key and objects inside it (one object, or a group key and its own members) and no ruler guide, or a key guide with no object selected or taken out of the selection, or a key anchor that is deselected, deleted or left as the only selected point; any other id, guide or anchor is an error that leaves the key as it was → {key, guide?, keyAnchor?} (the resulting key object, or null; guide: the key guide, left out without one; keyAnchor: {id, anchor}, left out without one)",
             has_doc,
             key
         ),
@@ -221,11 +222,71 @@ pub fn specs() -> Vec<CommandSpec> {
             "Appearance Attribute",
             ["Select", "Same"],
             None,
-            "{item?: appearance item index} the objects sharing an appearance attribute of the first selected object: its fill or stroke `item` (default: the Appearance panel's active item), else its first effect, else its topmost fill (compound paths as select.same.fillColor)",
+            "{item?: appearance item index (0-based whole number; default, or null: the Appearance panel's active item)} the objects sharing an appearance attribute of the first selected object: its fill or stroke `item` (default: the Appearance panel's active item), else its first effect, else its topmost fill (compound paths as select.same.fillColor)",
             has_selection,
             same_attribute
         ),
+        cmd!(
+            "select.similar",
+            "Select Similar Objects",
+            [],
+            None,
+            "{by?: \"all\"|\"fillColor\"|\"fillAndStroke\"|\"strokeColor\"|\"strokeWeight\"|\"opacity\"|\"blendingMode\"|\"appearance\"|\"graphicStyle\"|\"shapeType\"|\"symbolInstance\"} the Control bar's Select Similar Objects button and its menu: selects the objects like the first selected object by `by`, running the select.same command of that name; `all` selects the objects with its fill and stroke colours, stroke weight, opacity and blending mode (tints, compound paths and Live Paint faces as select.same.fillColor). A `by` given is kept for the session once the selection is made; without it, the kept one (`all` until one is given). Any other `by` is an error that keeps the selection and the kept attribute → {count, by}",
+            has_selection,
+            similar
+        ),
     ]
+}
+
+/// The attributes Select Similar Objects (`select.similar`) selects by, in its menu's order, each
+/// with the Select › Same command it runs; `all` compares the fill and stroke colours, the stroke
+/// weight, the opacity and the blending mode at once, with no command of its own.
+pub const SIMILAR: [(&str, Option<&str>); 11] = [
+    ("all", None),
+    ("fillColor", Some("select.same.fillColor")),
+    ("fillAndStroke", Some("select.same.fillAndStroke")),
+    ("strokeColor", Some("select.same.strokeColor")),
+    ("strokeWeight", Some("select.same.strokeWeight")),
+    ("opacity", Some("select.same.opacity")),
+    ("blendingMode", Some("select.same.blendingMode")),
+    ("appearance", Some("select.same.appearance")),
+    ("graphicStyle", Some("select.same.graphicStyle")),
+    ("shapeType", Some("select.same.shapeType")),
+    ("symbolInstance", Some("select.same.symbolInstance")),
+];
+
+fn similar(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "select.similar";
+    let by = match text_param(p, "by", C)? {
+        Some(name) => *SIMILAR.iter().find(|(n, _)| *n == name).ok_or_else(|| {
+            let names: Vec<&str> = SIMILAR.iter().map(|(n, _)| *n).collect();
+            bad(C, format!("unknown `by` \"{name}\": expected one of {}", names.join(", ")))
+        })?,
+        None => *SIMILAR.iter().find(|(n, _)| *n == s.select_similar).unwrap_or(&SIMILAR[0]),
+    };
+    let mut r = match by.1 {
+        Some(same_cmd) => s.execute(same_cmd, &json!({}))?,
+        None => {
+            let tint = s.prefs.select_same_tint_percent;
+            let r = same_fill(s, C, |a, b| {
+                same_paint(&fill_of(a), &fill_of(b), tint)
+                    && same_paint(&stroke_of(a).0, &stroke_of(b).0, tint)
+                    && (stroke_weight(a) - stroke_weight(b)).abs() < 1e-9
+                    && (a.opacity - b.opacity).abs() < 1e-6
+                    && a.blend == b.blend
+            })?;
+            // Select › Reselect repeats `all`, whichever attribute is kept by then.
+            if let Some(last) = s.doc_mut()?.last_selection_cmd.as_mut() {
+                last.1 = json!({ "by": by.0 });
+            }
+            r
+        }
+    };
+    s.select_similar = by.0;
+    // A recorded action or the journal repeats the attribute used, not the one kept by then.
+    s.note_journal("by", json!(by.0));
+    r["by"] = json!(by.0);
+    Ok(r)
 }
 
 /// Selectable objects: children of visible, unlocked layers (or of the isolation container).
@@ -360,7 +421,7 @@ fn all(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn all_on_artboard(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let i = p.get("artboard").and_then(Value::as_u64).map_or(0, index);
+    let i = artboard_at(&st.doc, p, "artboard", "select.allOnArtboard")?.unwrap_or(0);
     let r = st.doc.artboards.get(i).map(|a| a.rect).ok_or_else(|| bad("select.allOnArtboard", "no such artboard"))?;
     let symbols = st.doc.symbol_boxes();
     let ids: Vec<NodeId> =
@@ -610,6 +671,9 @@ fn key(s: &mut Session, p: &Value) -> Result<Value> {
         }
         None => None,
     };
+    if let Some(v) = p.get("anchor").filter(|v| !v.is_null()) {
+        return key_anchor(s, id, guide, v);
+    }
     if let Some(g) = guide {
         let sel = &s.doc()?.selection;
         if id.is_some() {
@@ -624,6 +688,7 @@ fn key(s: &mut Session, p: &Value) -> Result<Value> {
         }
         s.select(|_, sel| {
             sel.key = None;
+            sel.key_anchor = None;
             sel.key_guide = Some(gid);
         })?;
         return key_result(s);
@@ -640,16 +705,66 @@ fn key(s: &mut Session, p: &Value) -> Result<Value> {
     s.select(|_, sel| {
         sel.key = id;
         sel.key_guide = None;
+        sel.key_anchor = None;
     })?;
     key_result(s)
 }
 
-/// `{key}`, with `guide` when a guide is the key.
+/// `select.key {id, anchor: [subpath, anchor]}`: anchor point `anchor` of path `id`, selected with
+/// Direct Selection beside at least one other point, becomes the key anchor
+/// ([`vectorcraft_doc::Selection::key_anchor`]).
+fn key_anchor(s: &mut Session, id: Option<NodeId>, guide: Option<usize>, v: &Value) -> Result<Value> {
+    const C: &str = "select.key";
+    let r = match checked_refs(Some(&Value::Array(vec![v.clone()])), C)?.as_slice() {
+        [r] => *r,
+        _ => return Err(bad(C, "`anchor` must be a [subpath, anchor] pair")),
+    };
+    if guide.is_some() {
+        return Err(bad(C, "give `anchor` or `guide`, not both"));
+    }
+    let id = id.ok_or_else(|| bad(C, "`anchor` needs `id`, the path the point is on"))?;
+    let st = s.doc()?;
+    let sel = &st.selection;
+    let on_path = st.doc.node(id).and_then(|n| n.path_data()).is_some_and(|p| p.subpaths.get(r.0).is_some_and(|sp| r.1 < sp.anchors.len()));
+    let is_selected_anchor = on_path
+        && !sel.segments.contains_key(&id)
+        && (sel.anchors.get(&id).is_some_and(|set| set.contains(&r)) || (!sel.anchors.contains_key(&id) && sel.contains(id)));
+    if !is_selected_anchor {
+        return Err(bad(C, format!("anchor [{}, {}] of object {id} is not a selected anchor point", r.0, r.1)));
+    }
+    // Check the new key on a copy first, so a request that fails leaves the key as it was.
+    let mut trial = sel.clone();
+    if !trial.anchors.contains_key(&id)
+        && let Some(p) = st.doc.node(id).and_then(|n| n.path_data())
+    {
+        trial.anchors.insert(id, p.anchors().map(|(s, a, _)| (s, a)).collect());
+    }
+    trial.key_anchor = Some((id, r));
+    trial.prune(&st.doc);
+    if trial.key_anchor.is_none() {
+        return Err(bad(C, "select another anchor point to align to the key anchor"));
+    }
+    s.select(|d, sel| {
+        if !sel.anchors.contains_key(&id)
+            && let Some(p) = d.node(id).and_then(|n| n.path_data())
+        {
+            sel.anchors.insert(id, p.anchors().map(|(s, a, _)| (s, a)).collect());
+        }
+        sel.key_anchor = Some((id, r));
+    })?;
+    key_result(s)
+}
+
+/// `{key}`, with `guide` when a guide is the key and `keyAnchor` (`{id, anchor}`) when an anchor
+/// point is.
 fn key_result(s: &Session) -> Result<Value> {
     let st = s.doc()?;
     let mut out = json!({ "key": st.selection.key });
     if let Some(g) = st.selection.key_guide.and_then(|id| super::docmenu::guide_indexes(&st.doc, &[id]).first().copied()) {
         out["guide"] = json!(g);
+    }
+    if let Some((id, (si, ai))) = st.selection.key_anchor {
+        out["keyAnchor"] = json!({ "id": id.0, "anchor": [si, ai] });
     }
     Ok(out)
 }
@@ -1102,10 +1217,10 @@ enum Attribute {
 
 fn same_attribute(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "select.same.appearanceAttribute";
+    let item = index_opt(p, "item", cmd)?.or(s.appearance_item());
     let st = s.doc()?;
     let (refn, _) = same_reference(st, cmd)?;
     let ap = &refn.appearance;
-    let item = p.get("item").and_then(Value::as_u64).map(index).or(s.appearance_item());
     let attr = match (item.and_then(|i| ap.items.get(i)), ap.effects.first()) {
         (Some(it), _) => Attribute::Item(it.clone()),
         (None, Some(e)) => Attribute::Effect(e.clone()),

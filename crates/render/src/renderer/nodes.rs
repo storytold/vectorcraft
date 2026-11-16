@@ -122,7 +122,8 @@ impl Renderer {
     /// When a plug-in has been installed or removed since the last check
     /// ([`effects::plugin_revision`]), drop what the caches keep from plug-in effects: the effect
     /// geometry of paths with a plug-in effect, the cull bounds of objects that have one or hold one,
-    /// of symbol instances and of the objects that hold them, and the art drawn for the effects of
+    /// of symbol instances and of the objects that hold them, the regions of clipping paths that
+    /// have one or hold one, and the art drawn for the effects of
     /// objects that have a plug-in effect or hold one. Rasters of raster effects and evaluations of live objects hold
     /// the revision in their keys when what they draw has a plug-in effect (`fx::Inputs`,
     /// `live::resources_key`).
@@ -145,9 +146,12 @@ impl Renderer {
         }
         if stale {
             self.fx_geom.retain(|_, e| !effects::has_plugin_effect(&e.node));
+            self.fx_stages.retain(|_, e| !effects::has_plugin_effect(&e.0));
             self.geom.retain(|_, e| !holds_plugin_effect(&e.node) && !holds_instance(&e.node));
             // The art of a group holds what its members' plug-in effects draw.
             self.fx_arts.retain(|(node, ..)| !holds_plugin_effect(node));
+            // A clipping path's plug-in effects shape the region it clips to.
+            self.clips.retain(|(node, _)| !holds_plugin_effect(node));
         }
     }
 
@@ -649,7 +653,20 @@ impl Renderer {
         if view.shows_outlines() {
             let opts = RenderOptions { outline: true, ..f.opts.clone() };
             let frame = Frame { opts: &opts, ..*f };
-            for c in shapes {
+            // An Abutting trace's seam fills hold no traced outline: a clip group of paths that are
+            // each stroked without a fill or (on a stretched image, the strokes' outlines) filled
+            // without a stroke, named "Seam Fills" or, renamed, still the lowest shape, where the
+            // trace puts it.
+            let seam_fills = |i: usize, c: &Arc<Node>| {
+                let one_paint = |m: &Arc<Node>| {
+                    matches!(m.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
+                        && m.appearance.fill_paint().is_none() != m.appearance.stroke_paint().is_none()
+                };
+                (i == 0 || c.name.as_deref() == Some("Seam Fills"))
+                    && matches!(&c.kind, NodeKind::Group { clip: true, children }
+                    if children.split_first().is_some_and(|(_, members)| !members.is_empty() && members.iter().all(one_paint)))
+            };
+            for (_, c) in shapes.iter().enumerate().filter(|(i, c)| !seam_fills(*i, c)) {
                 self.draw_outline_member(ctx, &frame, c);
             }
         }

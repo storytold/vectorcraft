@@ -143,6 +143,10 @@
 //!   A path or compound path with a brush the reader reads live is written with an art style whose
 //!   stroke is the brush's filter (`writer::brushes`). A brush is written only when the reader reads
 //!   it back with its settings.
+//! - Graphs, as the reader reads them (`read/graph.rs`): a graph on the layers whose records the
+//!   reader reads back as the same graph ([`crate::ai_graph`]) is written as its group between
+//!   `%_Gs`, its functional records and `%_GS`, each series' group tagged `Go` right after its end;
+//!   any other graph, and a graph with art left out, as its art, with a warning.
 //!
 //! Lines end in CR LF. Strings are written in UTF-8. Art space is ruler space: y up, its origin at
 //! the first artboard's top-left corner. On the canvas ([`CANVAS_SIZE`] points square, y down) the
@@ -228,8 +232,9 @@ const GRID_GRAY: f64 = 200.0 / 255.0;
 
 /// `%%Creator`: the creator line VectorCraft writes in the header of the editing data. It names
 /// VectorCraft and the format's app, and holds no version number; the version is written on its
-/// own in `%%AI8_CreatorVersion` ([`CREATOR_VERSION`]).
-const CREATOR_TEXT: &str = "VectorCraft, editing data for Illustrator"; // brand-ok: the creator line VectorCraft writes
+/// own in `%%AI8_CreatorVersion` ([`CREATOR_VERSION`]). The reader reads the symbols of data with
+/// this creator at their own size, as [`export_ai_editing`] writes them on a large canvas.
+pub(crate) const CREATOR_TEXT: &str = "VectorCraft, editing data for Illustrator"; // brand-ok: the creator line VectorCraft writes
 
 /// The first line of a PostScript file (the DSC version comment).
 const PS_HEADER: &str = "%!PS-Adobe-3.0"; // brand-ok: the PostScript header comment
@@ -260,6 +265,15 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
 
 /// [`export_ai_editing`] writing at most `max_objects` objects, counted as the reader counts them.
 fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Result<AiEditingOutput, String> {
+    export_held(doc, o, max_objects, true)
+}
+
+/// [`export_within`]; with `keep_wraps`, wrapped area type the reader wraps the same is written as
+/// type ([`writer::wraps_held`]). When such type is written and art is left out at the object
+/// limit, the wrap objects above it may be among what is left out, and the document is written
+/// again with that type as its outlines.
+fn export_held(source: &Document, o: &AiEditingOptions, max_objects: usize, keep_wraps: bool) -> Result<AiEditingOutput, String> {
+    let doc = source;
     let board = doc.artboards.first().ok_or("the document has no artboard")?.rect;
     if !(board.is_finite() && board.width() > 0.0 && board.height() > 0.0) {
         return Err("the document has no artboard".into());
@@ -269,8 +283,11 @@ fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Re
     // The objects that may keep their effects in an art style, as they are before baking (not on
     // a large canvas, whose scale the styles' strokes and effects would need).
     let styled = writer::styled_objects(doc);
+    let (symbol_styled, pattern_styled) = writer::styled_definitions(doc);
     let own_styles = doc.graphic_styles != Document::new(1.0, 1.0).graphic_styles;
     let links = writer::style_links(doc);
+    // Before baking, which leaves the wrap objects that may be written as they are unchanged.
+    let wraps_held = if keep_wraps { writer::wraps_held(doc, &styled) } else { HashSet::new() };
     // Live geometry effects as their result, as the PDF part draws them.
     let baked = baked(doc);
     let doc = baked.as_ref().unwrap_or(doc);
@@ -303,18 +320,20 @@ fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Re
     w.brushes_live = scale == 1.0;
     w.symbol_doc = symbol_doc;
     w.max_objects = max_objects;
+    w.wraps_held = wraps_held;
     w.reserve_swatch_gradients();
     if scale == 1.0 {
         w.styled = styled;
+        (w.symbol_styled, w.pattern_styled) = (symbol_styled, pattern_styled);
         w.panel_styles();
-    } else if !styled.is_empty() || own_styles || links > 0 {
+    } else if !styled.is_empty() || !symbol_styled.is_empty() || !pattern_styled.is_empty() || own_styles || links > 0 {
         w.warnings.push(writer::LARGE_CANVAS_STYLES.to_string());
     }
     for layer in &doc.layers {
         w.layer(layer);
     }
-    if scale == 1.0 {
-        w.lost_links(links);
+    if w.wrapped_type_cut() {
+        return export_held(source, o, max_objects, false);
     }
     // The symbols no instance uses too; their art adds definitions.
     w.symbols();
@@ -323,6 +342,10 @@ fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Re
     // The palette first: its gradient and pattern swatches add definitions.
     let mut palette = String::new();
     w.palette(&mut palette);
+    // Once every definition is written: their opacity masks' art keeps links too.
+    if scale == 1.0 {
+        w.lost_links(links);
+    }
     let library = w.variable_library();
     let first = to_art.transform_rect_bbox(board);
     let art = doc
