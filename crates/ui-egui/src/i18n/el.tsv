@@ -1273,6 +1273,8 @@ font-technology	Variable	Μεταβλητές
 	Font Family & Style	Οικογένεια και στυλ γραμματοσειράς
 	Font Family, Style & Size	Οικογένεια, στυλ και μέγεθος γραμματοσειράς
 	Font List	Λίστα γραμματοσειρών
+	Show Similar Fonts	Εμφάνιση παρόμοιων γραμματοσειρών
+	Clear Similar Fonts	Απαλοιφή παρόμοιων γραμματοσειρών
 	Font Preview Size	Μέγεθος προεπισκόπησης γραμματοσειράς
 	Font Size	Μέγεθος γραμματοσειράς
 	Variable Font	Μεταβλητή γραμματοσειρά
@@ -2617,6 +2619,7 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	Divide Objects Below: select exactly one path	Διαίρεση αντικειμένων από κάτω: επιλέξτε ακριβώς μία διαδρομή
 @msg	Downloaded {what}	Έγινε λήψη του {what}
 @msg	Expand Appearance: the selection has a basic appearance	Επέκταση εμφάνισης: η επιλογή έχει βασική εμφάνιση
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	ορισμένα εφέ ράστερ δεν μετατράπηκαν σε εικόνες: θα χρειάζονταν περισσότερες από 1.024 εικόνες ή συνολικά 256 megapixel
 @msg	Expand: no brush strokes selected	Επέκταση: δεν επιλέχθηκαν πινελιές
 @msg	Expand: no gradient fills	Επέκταση: δεν υπάρχουν γεμίσματα ντεγκραντέ
 @msg	Expand: nothing to expand	Επέκταση: δεν υπάρχει περιεχόμενο προς επέκταση
@@ -5403,6 +5406,10 @@ digits	Malayalam	Μαλαγιάλαμ
 	Em Box	Τετράγωνο em
 	x-Height	Ύψος x
 	ICF Box	Πλαίσιο ICF
+	Show Sample	Εμφάνιση δείγματος
+	Hide Sample	Απόκρυψη δείγματος
+	Max Ascent/Descent	Μέγ. ύψος/βάθος
+	Max Ascender	Μέγ. άνω επέκταση
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	το `id` είναι η αναφορά βήματος {r}, την οποία αναλύουν μόνο τα `run` και `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	το `ids` πρέπει να είναι πίνακας αναγνωριστικών αντικειμένων, όχι {v}
 @msg	`colors` must be an array of colors, not {v}	το `colors` πρέπει να είναι πίνακας χρωμάτων, όχι {v}
@@ -6234,7 +6241,7 @@ effect	Points	Σημεία
 	By Object	Ανά αντικείμενο
 	Check an artboard to save.	Επιλέξτε έναν πίνακα σχεδίασης για αποθήκευση.
 	Clear All	Εκκαθάριση όλων
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Κλείσιμο των κυκλικών άκρων των ανοιχτών προφίλ. Οι μερικές περιστροφές κρατούν ανοιχτές τις πλευρές τομής τους.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Κλείσιμο των κυκλικών άκρων των ανοιχτών προφίλ. Οι μερικές περιστροφές κλείνουν επίσης τις πλευρές τομής τους.
 	Color Panel Options	Επιλογές πίνακα χρώματος
 	Color blindness – Tritanopia-type	Αχρωματοψία – τύπου τριτανοπίας
 	Create Dimension	Δημιουργία διάστασης
@@ -6488,6 +6495,7 @@ effect	Points	Σημεία
 	Single Word Justification:	Στοίχιση μεμονωμένης λέξης:
 	Full Justify	Στοίχιση και στα δύο άκρα
 	Minimum must not exceed Desired, nor Desired Maximum.	Το ελάχιστο δεν πρέπει να υπερβαίνει το επιθυμητό, ούτε το επιθυμητό το μέγιστο.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: το ελάχιστο δεν πρέπει να υπερβαίνει το επιθυμητό, ούτε το επιθυμητό το μέγιστο
 	Justification	Πλήρης στοίχιση
 	Add filters from the list above	Προσθέστε φίλτρα από τη λίστα παραπάνω
 	Add to Stack	Προσθήκη στη στοίβα
@@ -7499,7 +7507,7 @@ breakText	Glyphs	Γλύφοι
 @msg	stroke cannot be set on a symbol instance	το stroke δεν μπορεί να οριστεί σε στιγμιότυπο συμβόλου
 @msg	fill on a symbol instance must be a solid color or none	το fill ενός στιγμιότυπου συμβόλου πρέπει να είναι συμπαγές χρώμα ή none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	το {key} δεν μπορεί να οριστεί σε εικόνα χωρίς το εφέ «Μετατροπή σε σχήμα» ή «Μετατροπή αντικειμένου σε περιγράμματα»
-@msg	pass newName, registration, exportType, nineSlice and/or type	δώστε newName, registration, exportType, nineSlice ή/και type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	δώστε newName, registration, exportType, nineSlice, type ή/και alignToPixelGrid
 	Text Flow	Ροή κειμένου
 	By Rows	Κατά γραμμές
 	By Columns	Κατά στήλες

@@ -1034,6 +1034,10 @@ font-technology	Variable	Вариативные
 	Em Box	Кегельная площадка
 	x-Height	Высота строчных
 	ICF Box	Рамка ICF
+	Show Sample	Показать образец
+	Hide Sample	Скрыть образец
+	Max Ascent/Descent	Макс. высота/глубина
+	Max Ascender	Макс. выносной элемент вверх
 	Em Dash	Длинное тире
 	Em Space	Круглая шпация
 	Embed	Внедрить
@@ -1359,6 +1363,8 @@ file-filter	Templates	Шаблоны
 	Font Family & Style	Семейство и стиль шрифта
 	Font Family, Style & Size	Семейство, стиль и размер шрифта
 	Font List	Список шрифтов
+	Show Similar Fonts	Показать похожие шрифты
+	Clear Similar Fonts	Сбросить похожие шрифты
 	Font Preview Size	Размер предварительного просмотра шрифта
 	Font Size	Размер шрифта
 	Variable Font	Вариативный шрифт
@@ -4646,6 +4652,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	Divide Objects Below: select exactly one path	Разделение объектов ниже: выделите ровно один контур
 @msg	Downloaded {what}	Скачано: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Разбор оформления: у выделения основное оформление
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	некоторые растровые эффекты не преобразованы в изображения: для них нужно больше 1024 изображений или 256 мегапикселей в сумме
 @msg	Expand: no brush strokes selected	Разбор: не выделены мазки кисти
 @msg	Expand: no gradient fills	Разбор: нет градиентных заливок
 @msg	Expand: nothing to expand	Разбор: нечего разбирать
@@ -5972,7 +5979,7 @@ lighting	Light	Свет
 @msg	Unknown dimension style	Неизвестный стиль размера
 @msg	Unknown unit	Неизвестная единица
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Закрывает круглые торцы открытых профилей. При неполном вращении боковые срезы остаются открытыми.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Закрывает круглые торцы открытых профилей. При неполном вращении боковые срезы тоже закрываются.
 	Distance	Расстояние
 @msg	span must be "object" or "selection", got {v}	span должен быть "object" или "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" размещает `gradient`, а не образец
@@ -6126,6 +6133,7 @@ lighting	Light	Свет
 	Single Word Justification:	Выключка одного слова:
 	Full Justify	Полная выключка
 	Minimum must not exceed Desired, nor Desired Maximum.	Минимум не может превышать желательное значение, а желательное — максимум.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: минимум не может превышать желательное значение, а желательное — максимум
 	Minimum	Минимум
 	Justification	Выключка
 	Add filters from the list above	Добавьте фильтры из списка выше
@@ -7507,7 +7515,7 @@ breakText	Glyphs	Глифы
 @msg	stroke cannot be set on a symbol instance	stroke нельзя задать для экземпляра символа
 @msg	fill on a symbol instance must be a solid color or none	fill экземпляра символа должен быть сплошным цветом или none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} нельзя задать для изображения без эффекта «Преобразовать в фигуру» или «Обвести объект»
-@msg	pass newName, registration, exportType, nineSlice and/or type	укажите newName, registration, exportType, nineSlice и/или type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	укажите newName, registration, exportType, nineSlice, type и/или alignToPixelGrid
 	Text Flow	Поток текста
 	By Rows	По строкам
 	By Columns	По столбцам
