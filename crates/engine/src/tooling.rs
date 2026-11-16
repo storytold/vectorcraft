@@ -255,7 +255,7 @@ impl Session {
         }
         // The Selection and Group Selection tools act on the instance whole.
         self.select_whole_instance(id);
-        // The tool lent to does not see the press: it counts as a press elsewhere for the clicks a
+        // The lending tool does not see the press: it counts as a press elsewhere for the clicks a
         // double-click or triple-click compares.
         self.tool.press_elsewhere();
         let lent = self.make_tool(id);
