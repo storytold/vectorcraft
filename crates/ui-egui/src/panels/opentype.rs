@@ -312,8 +312,9 @@ fn offered_sets(st: &vectorcraft_doc::CharStyle) -> Vec<StylisticSet> {
 }
 
 /// A Stylistic Sets menu entry: the font's own name for the set, shown as the font gives it, or
-/// `Set 1` through `Set 20` in the UI language.
-fn set_label(set: &StylisticSet) -> String {
+/// `Set 1` through `Set 20` in the UI language. The Glyphs panel's Show menu names its stylistic
+/// set entries the same way.
+pub(super) fn set_label(set: &StylisticSet) -> String {
     match &set.name {
         Some(name) => name.clone(),
         None => crate::i18n::fmt(tl!("Set {n}"), &[("n", &set.number.to_string())]),

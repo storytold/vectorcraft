@@ -31,6 +31,7 @@ pub(crate) fn panel_body(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, width:
                 ui.set_max_height(tall);
                 panels::libraries(app, ui);
             }
+            None if id == "color" && widgets::panel_footer_bottom(ui).is_some() => panels::color::show_sized(app, ui, tall),
             None => panels::show_icon_panel(app, ui, id),
         }
     });
