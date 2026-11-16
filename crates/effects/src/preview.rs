@@ -1,4 +1,4 @@
-//! Use Preview Bounds: objects measured as they are drawn, with their geometry effects.
+//! Use Preview Bounds: objects measured as they are drawn, with geometry and projected 3D effects.
 //!
 //! [`drawn_art`] gives an object whose geometry effects change what it draws as plain art. A path
 //! or compound path is given as its effected geometry, and a fill or stroke with geometry effects
@@ -11,12 +11,14 @@
 //! ([`expanded_live_group`]), with each of those objects given as its own art. A clip group or
 //! layer whose clipping path has strokes with geometry effects is given as that path's geometry
 //! before its effects, which the renderer clips by, and those strokes as drawn. Fills and
-//! strokes that paint nothing (hidden, or painted None) are left out. [`bounds_of`],
+//! strokes that paint nothing (hidden, or painted None) are left out. Extrude & Bevel, Revolve,
+//! Inflate and Rotate are measured by the same projected vector art the renderer draws, with
+//! any geometry effects after projection applied to that art. [`bounds_of`],
 //! [`oriented_bounds`] and [`anchor_bounds`] measure the visual bounds of that art, strokes
 //! included, where [`Document::bounds_of`], [`Document::oriented_bounds`] and
 //! [`Selection::anchor_bounds`] measure the objects themselves. Raster effects (shadows, glows,
 //! blurs) are not measured. In one object, the art of at most 4,096 symbol instances is measured
-//! with its geometry effects, and the other instances in it are measured without them.
+//! with its geometry and 3D effects, and the other instances in it are measured without them.
 //! [`bounds_of_with`], [`oriented_bounds_with`] and [`anchor_bounds_with`] measure as these do and,
 //! with [`Measure::glyphs`], take point type by the ink of its glyphs (Measure Type by Glyph Bounds).
 
@@ -31,12 +33,12 @@ use vectorcraft_geom::{Affine, PathData, Rect, Shape, union_opt};
 use crate::group::has_own_paint;
 use crate::reshape::{geometry_effects, leaf_geometry};
 use crate::{
-    GeomContext, apply_geometry_with, evaluate_container, expanded_live_group, has_geometry, has_item_geometry, has_pathfinder, has_transform_art,
-    needs_outline, outline_art, paints, reshape,
+    GeomContext, apply_geometry_with, evaluate_container, expanded_live_group, has_geometry, has_item_geometry, has_pathfinder, has_revolve,
+    has_solid, has_transform_art, needs_outline, outline_art, paints, reshape, revolve_art_in, solid_art_in,
 };
 
-/// Most symbol instances in one object whose art [`Drawn`] measures with its geometry effects:
-/// past it, the other instances in the object are measured without geometry effects.
+/// Most symbol instances in one object whose art [`Drawn`] measures with geometry or 3D effects:
+/// past it, the other instances in the object are measured without those effects.
 const MAX_INSTANCES: usize = 4096;
 
 /// The bounds of `ids`: with `preview`, their visual bounds as drawn ([`visual_bounds`]), else
@@ -203,23 +205,23 @@ pub fn bounds_in(symbols: &SymbolBoxes, n: &Node, a: Affine) -> Option<Rect> {
     Drawn::new(symbols).bounds_in(n, a)
 }
 
-/// `n` as plain art with the geometry effects in it applied, at every depth, symbol instances
+/// `n` as plain art with geometry and projected 3D effects applied, at every depth, symbol instances
 /// measured by `symbols`. Raster effects stay on the art. A group, layer or intertwine without a
 /// clip is rebuilt with the drawn art of each member that has one. A clip group or layer becomes a
 /// group of its clipping path without strokes and the drawn art of the path's strokes, when they
-/// have one. `None` when no geometry effect in `n` changes what it draws.
+/// have one. `None` when no supported geometry or 3D effect in `n` changes what it draws.
 pub fn drawn_art(symbols: &SymbolBoxes, n: &Node) -> Option<Node> {
     Drawn::new(symbols).drawn_art(n)
 }
 
 /// Whether [`drawn_art`] gives `n` art of its own, or would give one to an object in it. A symbol
-/// instance in `n` counts when its symbol's art has a geometry effect.
+/// instance in `n` counts when its symbol's art has geometry or 3D effects.
 pub fn draws_geometry(symbols: &SymbolBoxes, n: &Node) -> bool {
     Drawn::new(symbols).draws_geometry(n)
 }
 
-/// One measurement: whether the art of each symbol checked so far draws geometry, by symbol name,
-/// and how many more instances' art it measures with its geometry effects in the current object ([`MAX_INSTANCES`]).
+/// One measurement: whether each symbol checked so far draws geometry or 3D art, by symbol name,
+/// and how many more instances it measures with those effects in the current object ([`MAX_INSTANCES`]).
 struct Drawn<'s, 'd> {
     symbols: &'s SymbolBoxes<'d>,
     draws: RefCell<HashMap<String, bool>>,
@@ -273,6 +275,8 @@ impl<'s, 'd> Drawn<'s, 'd> {
         let mut found = false;
         n.walk(&mut |c| {
             found = found
+                || has_revolve(c)
+                || has_solid(c)
                 || match &c.kind {
                     NodeKind::SymbolInstance { symbol, .. } => !geometry_effects(c).is_empty() || self.symbol_draws(symbol),
                     _ => reshapes(c),
@@ -292,14 +296,27 @@ impl<'s, 'd> Drawn<'s, 'd> {
         d
     }
 
-    /// The art the geometry effects of `n` itself give it, or that a symbol instance gets from the
-    /// geometry effects in its symbol's art. A group or layer with fills or strokes of its own that
+    /// The art the geometry or 3D effects of `n` itself give it, or that a symbol instance gets from
+    /// those effects in its symbol's art, with the instance's appearance overrides applied.
+    /// A group or layer with fills or strokes of its own that
     /// paint, around members with geometry effects, is evaluated too: its fills and strokes paint
     /// the members' geometry before their effects. A blend, envelope or repeat whose objects have
     /// geometry effects is evaluated as the renderer evaluates it ([`expanded_live_group`]), and
     /// the objects in its evaluated art keep their geometry effects. `None` when it has none, and
     /// for a symbol instance past [`MAX_INSTANCES`].
     fn own_art(&self, n: &Node) -> Option<Node> {
+        let doc = Some(self.symbols.document());
+        // A symbol instance with a 3D effect of its own counts toward MAX_INSTANCES before its art is built.
+        let counted = matches!(n.kind, NodeKind::SymbolInstance { .. }) && (has_revolve(n) || has_solid(n));
+        if counted {
+            let left = self.left.get().checked_sub(1)?;
+            self.left.set(left);
+        }
+        if let Some(art) = revolve_art_in(doc, n).or_else(|| solid_art_in(doc, n)) {
+            // The builders retain later geometry on the projected group. Measure it after that
+            // geometry too; item-level effects are handled by the ordinary member traversal.
+            return Some(self.own_art(&art).unwrap_or(art));
+        }
         let inner = || n.children().is_some_and(|ch| ch.iter().any(|c| self.draws_geometry(c)));
         let painted = || has_own_paint(n) && inner();
         match &n.kind {
@@ -312,9 +329,14 @@ impl<'s, 'd> Drawn<'s, 'd> {
                 if geometry_effects(n).is_empty() && !self.symbol_draws(symbol) {
                     return None;
                 }
-                let left = self.left.get().checked_sub(1)?;
-                self.left.set(left);
+                if !counted {
+                    let left = self.left.get().checked_sub(1)?;
+                    self.left.set(left);
+                }
                 let art = self.symbols.measure_art(symbol, Arc::clone)?;
+                // Paint overrides can remove a projected surface or change its stroke outline.
+                let art =
+                    if n.extras().symbol_overrides.is_empty() { art } else { Arc::new(vectorcraft_doc::symbol_overrides::dynamic_art(&art, n)) };
                 // An instance in perspective is projected by `reshape`.
                 let doc = Some(self.symbols.document());
                 reshape(doc, n, Some(&*art)).or_else(|| outline_art(doc, n, Some(&*art)))
