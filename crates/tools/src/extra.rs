@@ -1,8 +1,10 @@
 //! Flare, Reshape, Shaper and Graph tools.
 //!
 //! Flare: drag sets the center and its size and turns the rays as the pointer moves up or down
-//! (Shift holds their turn; click without dragging opens the Flare Tool Options), then a click
-//! sets the end point of the rings; Space held during either drag moves the flare. The rest comes
+//! (Shift holds their turn, ↑/↓ add or remove rays and Ctrl/Cmd keeps the center's size while the
+//! drag sizes the halo; click without dragging opens the Flare Tool Options), then a click sets the
+//! end point of the rings (↑/↓ add or remove rings and ~ places them anew); Space held during
+//! either drag moves the flare. The rest comes
 //! from the tool's options (the Flare Tool Options, which last). Reshape: a click on a selected
 //! path sets a focal point (adding an anchor on a segment), Shift-click adds or removes more, and
 //! a drag from a focal point moves them all; the engine's `path.reshape` stretches the selected
@@ -57,8 +59,19 @@ pub struct FlareTool {
     /// The pointer at the last press or drag, from which Space held moves the flare.
     last: Point,
     began: bool,
-    /// Ray count changed with ↑/↓ during the gesture (None = the options' count).
+    /// Ray count changed with ↑/↓ during the center drag (None = the options' count).
     rays: Option<u64>,
+    /// Ring count changed with ↑/↓ while the rings' end point is placed (None = the options' count).
+    rings: Option<u64>,
+    /// The rings' placement ~ chose (`shape.flare`'s `ringSeed`; None = the placement `seed` gives).
+    ring_seed: Option<u64>,
+    /// Whether backquote (the ~ key) was held at the last pointer event.
+    quote: bool,
+    /// Ctrl/Cmd held in the center drag: the center's diameter, the Halo growth (%) and the
+    /// pointer's distance from the center when the key went down.
+    held: Option<(f64, f64, f64)>,
+    /// The Halo growth (%) the drag set while Ctrl/Cmd held the center (None = the options').
+    growth: Option<f64>,
     /// The rays' turn (`shape.flare`'s `rotation`, degrees) the center drag set.
     turn: f64,
     /// The options' values, in [`FLARE_OPTIONS`] order.
@@ -77,6 +90,11 @@ impl Default for FlareTool {
             last: Point::ZERO,
             began: false,
             rays: None,
+            rings: None,
+            ring_seed: None,
+            quote: false,
+            held: None,
+            growth: None,
             turn: 0.0,
             values: FLARE_OPTIONS.map(|(_, default, _, _)| default),
             rays_on: true,
@@ -123,9 +141,27 @@ fn ray_turn(turn: f64, dy: f64, shift: bool) -> f64 {
     (turn + dy * RAY_DEGREES_PER_POINT).rem_euclid(360.0)
 }
 
+/// The ring placement ~ chooses after `last`, with the pointer at `at`: a new number below 2^53, so
+/// a JSON client reads it exactly, and never `last` again.
+fn next_ring_seed(last: Option<u64>, at: Point) -> u64 {
+    let mut x = last.unwrap_or(0x9e37_79b9_7f4a_7c15) ^ at.x.to_bits() ^ at.y.to_bits().rotate_left(29);
+    loop {
+        // SplitMix64.
+        x = x.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        let mut z = x;
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        let seed = (z ^ (z >> 31)) & ((1 << 53) - 1);
+        if Some(seed) != last {
+            return seed;
+        }
+    }
+}
+
 impl FlareTool {
     /// `shape.flare`'s params: the options, with the dragged center and diameter, the rays' turn,
-    /// the ray count ↑/↓ chose and the rings' end point once clicked.
+    /// the ray and ring counts ↑/↓ chose, the Halo growth Ctrl/Cmd set, the ring placement ~ chose
+    /// and the rings' end point once placed.
     fn params(&self, c: Point, diameter: f64, end: Option<Point>) -> Value {
         let mut v = flare_params(&self.options(), c);
         v["diameter"] = json!(diameter.max(1.0));
@@ -133,11 +169,61 @@ impl FlareTool {
         if let Some(r) = self.rays.filter(|_| self.rays_on) {
             v["rays"] = json!(r);
         }
+        if let Some(r) = self.rings.filter(|_| self.rings_on) {
+            v["rings"] = json!(r);
+        }
+        if let Some(g) = self.growth {
+            v["growth"] = json!(g);
+        }
+        if let Some(s) = self.ring_seed.filter(|_| self.rings_on) {
+            v["ringSeed"] = json!(s);
+        }
         if let Some(e) = end {
             v["x2"] = json!(e.x);
             v["y2"] = json!(e.y);
         }
         v
+    }
+
+    /// Flare Tool Options value `key` as the tool has it.
+    fn option(&self, key: &str) -> f64 {
+        FLARE_OPTIONS.iter().position(|(k, ..)| *k == key).map_or(0.0, |i| self.values[i])
+    }
+
+    /// Count `now` (else the options' `key`) one up or down, within the options' range for `key`.
+    fn step_count(&self, key: &str, now: Option<u64>, up: bool) -> u64 {
+        let most = FLARE_OPTIONS.iter().find(|(k, ..)| *k == key).map_or(0.0, |o| o.3) as u64;
+        let r = now.unwrap_or(self.option(key) as u64);
+        if up { (r + 1).min(most) } else { r.saturating_sub(1).min(most) }
+    }
+
+    /// Ctrl/Cmd in the center drag, with the pointer `dist` from the center after `before` at the
+    /// last drag: once the flare has begun, the center keeps the diameter it showed when the key
+    /// went down, and the halo's radius keeps its ratio to the pointer's distance through the Halo
+    /// growth, within the options' 0 to 300 %. Letting the key go sizes the center with the drag
+    /// again, and the flare keeps the new Halo growth. The key is pressed while dragging: a press
+    /// made with it already held goes to the selection tool the session lends for Ctrl/Cmd.
+    fn hold_center(&mut self, before: f64, dist: f64, cmd: bool) {
+        match (cmd, self.held) {
+            (true, None) if self.began && before > 0.0 => {
+                let growth = self.growth.unwrap_or_else(|| self.option("growth"));
+                self.held = Some((2.0 * before, growth, before));
+            }
+            (false, Some(_)) => self.held = None,
+            _ => {}
+        }
+        if let Some((_, growth, at)) = self.held {
+            let most = FLARE_OPTIONS.iter().find(|(k, ..)| *k == "growth").map_or(0.0, |o| o.3);
+            let g = (100.0 + growth) * dist / at - 100.0;
+            if g.is_finite() {
+                self.growth = Some(g.clamp(0.0, most));
+            }
+        }
+    }
+
+    /// The center's diameter with the pointer `dist` from it: twice that, unless Ctrl/Cmd holds it.
+    fn center_diameter(&self, dist: f64) -> f64 {
+        self.held.map_or(2.0 * dist, |(d, ..)| d)
     }
 }
 
@@ -150,34 +236,47 @@ impl Tool for FlareTool {
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         self.hover = ev.pos;
+        // ~ pressed while the rings' end point is placed places the rings anew (Rings on).
+        let quote_pressed = ev.backquote && !self.quote;
+        self.quote = ev.backquote;
+        if quote_pressed && self.rings_on && self.placed.is_some() && matches!(ev.kind, PointerKind::Drag | PointerKind::Move | PointerKind::Up) {
+            self.ring_seed = Some(next_ring_seed(self.ring_seed, ev.pos));
+        }
         match ev.kind {
             PointerKind::Down => {
                 if self.placed.is_none() {
                     self.drag = Some((ev.pos, ev.pos));
                     self.rays = None;
+                    self.rings = None;
+                    self.ring_seed = None;
+                    self.held = None;
+                    self.growth = None;
                     self.turn = 0.0;
                 }
                 self.last = ev.pos;
                 vec![]
             }
             PointerKind::Drag => {
-                if let Some((mut c, _)) = self.drag {
+                if let Some((mut c, p)) = self.drag {
                     // Space held moves the center with the pointer, so the size and the turn stay.
+                    let before = p.distance(c);
                     let dy = ev.pos.y - self.last.y;
                     crate::shape::space_moves(&mut c, &mut self.last, ev, self.began);
                     self.drag = Some((c, ev.pos));
                     if !ev.mods.space {
                         self.turn = ray_turn(self.turn, dy, ev.mods.shift);
                     }
-                    if !self.began && ev.pos.distance(c) >= cx.tol(3.0) {
-                        self.began = true;
-                        return vec![
-                            Action::Begin("Flare".into()),
-                            Action::Preview("shape.flare".into(), self.params(c, 2.0 * ev.pos.distance(c), None)),
-                        ];
+                    let dist = ev.pos.distance(c);
+                    let begins = !self.began && dist >= cx.tol(3.0);
+                    self.began |= begins;
+                    // With the key held from the start, the center keeps the first size the flare shows.
+                    self.hold_center(if begins { dist } else { before }, dist, ev.mods.cmd);
+                    let preview = Action::Preview("shape.flare".into(), self.params(c, self.center_diameter(dist), None));
+                    if begins {
+                        return vec![Action::Begin("Flare".into()), preview];
                     }
                     if self.began {
-                        return vec![Action::Preview("shape.flare".into(), self.params(c, 2.0 * ev.pos.distance(c), None))];
+                        return vec![preview];
                     }
                 } else if let Some((mut c, d)) = self.placed {
                     // Space held moves the whole flare, rings' end point included.
@@ -196,7 +295,8 @@ impl Tool for FlareTool {
                 let Some((c, p)) = self.drag.take() else { return vec![] };
                 if self.began {
                     // Keep the interaction open: the next click places the end point.
-                    self.placed = Some((c, 2.0 * p.distance(c)));
+                    self.placed = Some((c, self.center_diameter(p.distance(c))));
+                    self.held = None;
                     vec![]
                 } else {
                     vec![Action::Dialog("flare".into(), json!({ "x": c.x, "y": c.y }))]
@@ -212,19 +312,28 @@ impl Tool for FlareTool {
         }
     }
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
-        // ↑/↓ while drawing add/remove rays.
-        if matches!(key, ToolKey::Up | ToolKey::Down) && self.began && self.rays_on {
-            let r = self.rays.unwrap_or_else(|| self.options()["rays"].as_u64().unwrap_or(0));
-            self.rays = Some(if key == ToolKey::Up { (r + 1).min(50) } else { r.saturating_sub(1) });
+        // ↑/↓ add/remove rays in the center drag and rings while the rings' end point is placed.
+        if matches!(key, ToolKey::Up | ToolKey::Down) && self.began {
+            let up = key == ToolKey::Up;
             let preview = match (self.drag, self.placed) {
-                (Some((c, p)), _) => self.params(c, 2.0 * p.distance(c), None),
-                (_, Some((c, d))) => self.params(c, d, Some(self.hover)),
+                (Some((c, p)), _) if self.rays_on => {
+                    self.rays = Some(self.step_count("rays", self.rays, up));
+                    self.params(c, self.center_diameter(p.distance(c)), None)
+                }
+                (_, Some((c, d))) if self.rings_on => {
+                    self.rings = Some(self.step_count("rings", self.rings, up));
+                    self.params(c, d, Some(self.hover))
+                }
                 _ => return vec![],
             };
             return vec![Action::Preview("shape.flare".into(), preview)];
         }
         if key == ToolKey::Escape && self.busy() {
             self.rays = None;
+            self.rings = None;
+            self.ring_seed = None;
+            self.held = None;
+            self.growth = None;
             self.drag = None;
             self.placed = None;
             let began = std::mem::take(&mut self.began);
@@ -235,12 +344,14 @@ impl Tool for FlareTool {
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         // Switching away after the centre drag keeps the flare with the rings its options give.
         self.drag = None;
+        self.held = None;
         if self.placed.take().is_some() && std::mem::take(&mut self.began) { vec![Action::Commit] } else { vec![] }
     }
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
         match (self.drag, self.placed) {
             (Some((c, p)), _) => {
-                vec![Overlay::Path { path: ellipse_path(c, p.distance(c), p.distance(c), 0.0), color: BLUE, width: 1.0, dashed: false }]
+                let r = self.center_diameter(p.distance(c)) / 2.0;
+                vec![Overlay::Path { path: ellipse_path(c, r, r, 0.0), color: BLUE, width: 1.0, dashed: false }]
             }
             (_, Some((c, _))) => vec![Overlay::Line { a: c, b: self.hover, color: BLUE, dashed: true }],
             _ => vec![],
@@ -837,6 +948,131 @@ mod tests {
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 320.0, 300.0));
         let v = flare_preview(&t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 340.0, 310.0).with_mods(space)));
         assert_eq!((v["cx"].as_f64(), v["cy"].as_f64(), v["x2"].as_f64()), (Some(120.0), Some(110.0), Some(340.0)));
+    }
+
+    /// ↑/↓ change the rays in the center drag and the rings while the rings' end point is placed,
+    /// within the options' 0 to 50; with Rings off they leave the second drag alone.
+    #[test]
+    fn flare_arrows_change_the_rays_then_the_rings() {
+        use crate::testutil::*;
+        use vectorcraft_doc::Selection;
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let counts = |v: &Value| (v["rays"].as_u64(), v["rings"].as_u64());
+        let mut t = FlareTool::default();
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 140.0, 100.0));
+        assert_eq!(counts(&flare_preview(&t.key(&cx, ToolKey::Up, Mods::default()))), (Some(16), Some(10)));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 140.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 300.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 320.0, 300.0));
+        assert_eq!(counts(&flare_preview(&t.key(&cx, ToolKey::Up, Mods::default()))), (Some(16), Some(11)));
+        t.key(&cx, ToolKey::Down, Mods::default());
+        assert_eq!(counts(&flare_preview(&t.key(&cx, ToolKey::Down, Mods::default()))), (Some(16), Some(9)));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 330.0, 300.0));
+        assert_eq!(a.last(), Some(&Action::Commit));
+        assert_eq!(counts(&flare_preview(&a)), (Some(16), Some(9)));
+        // The next flare starts from the options' counts; the counts stop at 0 and 50.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 140.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 140.0, 100.0));
+        let mut v = Value::Null;
+        for _ in 0..12 {
+            v = flare_preview(&t.key(&cx, ToolKey::Down, Mods::default()));
+        }
+        assert_eq!(counts(&v), (Some(15), Some(0)));
+        for _ in 0..60 {
+            v = flare_preview(&t.key(&cx, ToolKey::Up, Mods::default()));
+        }
+        assert_eq!(counts(&v), (Some(15), Some(50)));
+        t.key(&cx, ToolKey::Escape, Mods::default());
+        // Rings off: the arrows do nothing in the second drag.
+        t.set_option("ringsOn", &json!(false));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 140.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 140.0, 100.0));
+        assert!(t.key(&cx, ToolKey::Up, Mods::default()).is_empty());
+    }
+
+    /// ~ (backquote) pressed while the rings' end point is placed gives the rings a new placement
+    /// each time, which the flare drawn keeps; holding it, the center drag, Rings off and the next
+    /// flare give none.
+    #[test]
+    fn flare_tilde_places_the_rings_anew() {
+        use crate::testutil::*;
+        use vectorcraft_doc::Selection;
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let quote = |kind, x, y, held| PointerEvent { backquote: held, ..PointerEvent::new(kind, x, y) };
+        let seed = |a: &[Action]| flare_preview(a).get("ringSeed").and_then(Value::as_u64);
+        let mut t = FlareTool::default();
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        // In the center drag ~ does nothing.
+        assert_eq!(seed(&t.pointer(&cx, &quote(PointerKind::Drag, 140.0, 100.0, true))), None);
+        t.pointer(&cx, &quote(PointerKind::Drag, 141.0, 100.0, false));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 141.0, 100.0));
+        assert_eq!(seed(&t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 200.0, 200.0))), None);
+        let first = seed(&t.pointer(&cx, &quote(PointerKind::Move, 200.0, 200.0, true)));
+        assert!(first.is_some_and(|s| s < 1 << 53));
+        // Held, it places them once; pressed again, anew.
+        assert_eq!(seed(&t.pointer(&cx, &quote(PointerKind::Move, 210.0, 200.0, true))), first);
+        t.pointer(&cx, &quote(PointerKind::Down, 210.0, 200.0, false));
+        t.pointer(&cx, &quote(PointerKind::Drag, 220.0, 200.0, false));
+        let second = seed(&t.pointer(&cx, &quote(PointerKind::Drag, 220.0, 200.0, true)));
+        assert!(second.is_some() && second != first);
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 230.0, 200.0));
+        assert_eq!((a.last(), seed(&a)), (Some(&Action::Commit), second));
+        // The next flare starts without one, and with Rings off ~ does not change the flare.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        assert_eq!(seed(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 140.0, 100.0))), None);
+        t.set_option("ringsOn", &json!(false));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 140.0, 100.0));
+        assert_eq!(seed(&t.pointer(&cx, &quote(PointerKind::Move, 200.0, 200.0, true))), None);
+        assert_eq!(t.ring_seed, None);
+    }
+
+    /// Ctrl/Cmd in the center drag keeps the center's diameter as the last drag showed it, and the
+    /// drag sizes the halo through the Halo growth (0 to 300 %); let go, the drag sizes the center
+    /// again and the flare keeps the new growth.
+    #[test]
+    fn flare_ctrl_keeps_the_center_and_the_drag_sizes_the_halo() {
+        use crate::testutil::*;
+        use vectorcraft_doc::Selection;
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let cmd = Mods { cmd: true, ..Default::default() };
+        let sized = |a: &[Action]| {
+            let v = flare_preview(a);
+            (v["diameter"].as_f64().unwrap_or(0.0), v["growth"].as_f64().unwrap_or(0.0))
+        };
+        let mut t = FlareTool::default();
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        assert_eq!(sized(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 140.0, 100.0))), (80.0, 20.0));
+        // The key goes down with the pointer's next move: the center stays as the last drag showed it.
+        assert_eq!(sized(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 180.0, 100.0).with_mods(cmd))), (80.0, 140.0));
+        assert_eq!(sized(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 120.0, 100.0).with_mods(cmd))), (80.0, 0.0));
+        assert_eq!(sized(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 900.0, 100.0).with_mods(cmd))), (80.0, 300.0));
+        assert_eq!(sized(&t.key(&cx, ToolKey::Up, Mods::default())), (80.0, 300.0));
+        // Let go: the center follows the drag again and the growth stays.
+        assert_eq!(sized(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0))), (100.0, 300.0));
+        // Pressed again, the hold starts from the new center and growth.
+        assert_eq!(sized(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 125.0, 100.0).with_mods(cmd))), (100.0, 100.0));
+        // A release with the key held places the held center; the second drag draws with it.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 125.0, 100.0).with_mods(cmd));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 300.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 300.0, 330.0));
+        assert_eq!((a.last(), sized(&a)), (Some(&Action::Commit), (100.0, 100.0)));
+        // With the key held from the press, the center keeps the first size the flare shows; the
+        // next flare starts from the options' growth.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        assert_eq!(sized(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.0, 110.0).with_mods(cmd))), (20.0, 20.0));
+        assert_eq!(sized(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.0, 120.0).with_mods(cmd))), (20.0, 140.0));
     }
 
     #[test]

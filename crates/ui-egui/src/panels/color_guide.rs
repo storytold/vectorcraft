@@ -6,7 +6,9 @@
 //! ("Set base color to the current color") takes the current color, such as a cell applied from
 //! the guide or the selected artwork's color. A click on a cell applies it to the active proxy,
 //! without changing the base, and selects it; Shift- or Cmd/Ctrl-click adds
-//! cells to the selection that Save Colors as Swatches saves. Limit to Library (the library button,
+//! cells to the selection that Save Colors as Swatches saves as swatches and Save Color Group to
+//! Swatches saves as one group (without a selection, the group holds the harmony colors). The
+//! selection lasts until the guide changes. Limit to Library (the library button,
 //! `ui.colorGuideLimit`) snaps every colour to a swatch library or the document's swatches; Edit or
 //! Apply Colors opens Recolor Artwork with the harmony colours, limited the same way.
 
@@ -48,6 +50,33 @@ fn selected(ctx: &egui::Context) -> Vec<(usize, usize)> {
 
 fn clear_selection(ctx: &egui::Context) {
     set_pstate(ctx, "cg-sel", Vec::<(usize, usize)>::new());
+}
+
+/// The guide a cell selection was made in: its base, options, harmony rule, library limit and the
+/// colors of its grid (which change when the document's swatches limit the guide and are edited).
+#[derive(Clone, PartialEq)]
+struct SelKey {
+    base: Color,
+    opts: GuideOptions,
+    rule: usize,
+    limit: String,
+    grid: Vec<Vec<Color>>,
+}
+
+fn sel_key(app: &VectorcraftApp, ctx: &egui::Context, g: &Guide) -> SelKey {
+    SelKey {
+        base: base_color(app),
+        opts: app.ui.color_guide,
+        rule: pstate(ctx, "cg-harmony"),
+        limit: app.ui.color_guide_limit.clone(),
+        grid: g.grid.clone(),
+    }
+}
+
+/// The selected cells while they belong to the guide `g` shown now; none once the base, the
+/// options, the harmony rule, the library limit or the grid's colors changed since they were picked.
+fn live_selection(app: &VectorcraftApp, ctx: &egui::Context, g: &Guide) -> Vec<(usize, usize)> {
+    if pstate::<Option<SelKey>>(ctx, "cg-sel-key") == Some(sel_key(app, ctx, g)) { selected(ctx) } else { Vec::new() }
 }
 
 /// What the panel's guide is made from: with a library limit, snapping every cell is too slow to
@@ -99,7 +128,7 @@ pub(crate) fn set_limit(app: &mut VectorcraftApp, p: &Value) -> Result<Value, St
 
 /// The Limit to Library popup: None, Document Swatches, then the colour libraries.
 fn limit_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    ui.set_min_width(200.0);
+    widgets::menu_min_width(ui, 200.0);
     let cur = app.ui.color_guide_limit.clone();
     let mut chosen = None;
     for (key, label) in [("", tl!("None")), (swatchlib::DOCUMENT_SWATCHES, swatches::DOCUMENT_SWATCHES)] {
@@ -128,10 +157,26 @@ fn edit_or_apply(app: &mut VectorcraftApp, g: &Guide) {
 /// Save the selected cells' colors as swatches (one undo step), each in its own model.
 fn save_selected(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let g = guide(app, ctx);
-    let colors: Vec<Value> = selected(ctx).into_iter().filter_map(|(r, c)| g.grid.get(r)?.get(c)).map(color_json).collect();
+    let colors: Vec<Value> = live_selection(app, ctx, &g).into_iter().filter_map(|(r, c)| g.grid.get(r)?.get(c)).map(color_json).collect();
     if !colors.is_empty() {
         app.run("swatch.new", json!({ "colors": colors, "keepModel": true })).ok();
     }
+}
+
+/// Save Color Group to Swatches: the selected cells as one swatch group, in grid order (row by
+/// row, left to right), each cell once; with no cell of the shown guide selected, the harmony
+/// colors. The group is named after the harmony rule, saved in one undo step, and each color
+/// keeps its own model.
+fn save_group(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let g = guide(app, ctx);
+    let mut cells = live_selection(app, ctx, &g);
+    cells.sort_unstable();
+    cells.dedup();
+    let mut colors: Vec<Value> = cells.into_iter().filter_map(|(r, c)| g.grid.get(r)?.get(c)).map(color_json).collect();
+    if colors.is_empty() {
+        colors = g.colors.iter().map(color_json).collect();
+    }
+    app.run("swatch.newGroup", json!({"name": rule(ctx).label(), "colors": colors, "keepModel": true})).ok();
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -141,13 +186,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // leaves it as it is.
     let first = base_color(app);
     let set = *app.ui.color_guide_base.get_or_insert(first);
-    // Selected cells belong to the guide they were picked from: a new base clears them.
-    if pstate::<Option<Color>>(&ctx, "cg-sel-base") != Some(set) {
-        set_pstate(&ctx, "cg-sel-base", Some(set));
-        clear_selection(&ctx);
-    }
     let h = rule(&ctx);
     let g = guide(app, &ctx);
+    // Selected cells belong to the guide they were picked from: a new base, new options, another
+    // harmony rule, another library limit or new grid colors clear them.
+    let key = SelKey { base: set, ..sel_key(app, &ctx, &g) };
+    if pstate::<Option<SelKey>>(&ctx, "cg-sel-key").as_ref() != Some(&key) {
+        set_pstate(&ctx, "cg-sel-key", Some(key));
+        clear_selection(&ctx);
+    }
     let base = g.colors[0];
     let mut chosen: Option<Color> = None;
     ui.horizontal(|ui| {
@@ -245,8 +292,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             save_selected(app, &ctx);
         }
         if widgets::icon_button(ui, "dc-folder", tl!("Save color group to Swatch panel"), false, 24.0).clicked() {
-            let cs: Vec<_> = g.colors.iter().map(color_json).collect();
-            app.run("swatch.newGroup", json!({"name": h.label(), "colors": cs, "keepModel": true})).ok();
+            save_group(app, &ctx);
         }
     });
     if let Some(c) = chosen {
@@ -267,7 +313,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.separator();
     let ctx = ui.ctx().clone();
-    if menu_item(ui, tl!("Save Colors as Swatches"), !selected(&ctx).is_empty(), false) {
+    if menu_item(ui, tl!("Save Colors as Swatches"), !live_selection(app, &ctx, &guide(app, &ctx)).is_empty(), false) {
         save_selected(app, &ctx);
     }
     if menu_item(ui, tl!("Color Guide Options…"), true, false) {
@@ -418,6 +464,126 @@ mod tests {
         let sw = &app.session.doc().unwrap().doc.swatches;
         let saved: Vec<Color> = sw[sw.len() - 2..].iter().filter_map(|w| w.paint.color()).collect();
         assert_eq!(saved, [g.grid[0][0], g.grid[0][6]]);
+    }
+
+    /// The colors of the document's newest swatch group, and the group's name.
+    fn last_group(app: &VectorcraftApp) -> (String, Vec<Color>) {
+        let g = app.session.doc().unwrap().doc.swatch_groups.last().cloned().expect("a swatch group");
+        (g.name, g.swatches.iter().filter_map(|w| w.paint.color()).collect())
+    }
+
+    /// With cells selected, Save Color Group to Swatches saves exactly those cells as one group, in
+    /// grid order and each cell once, in one undo step that Undo removes.
+    #[test]
+    fn save_color_group_saves_the_selected_cells_in_grid_order() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        let st = app.session.doc().unwrap();
+        let (groups, swatches, undo) = (st.doc.swatch_groups.len(), st.doc.swatches.len(), st.history.undo.len());
+        set_pstate(&ctx, "cg-sel", vec![(1usize, 4usize), (0, 8), (0, 0), (1, 4)]);
+        save_group(&mut app, &ctx);
+        let g = guide(&app, &ctx);
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc.swatch_groups.len(), groups + 1, "one new group");
+        assert_eq!(st.doc.swatches.len(), swatches, "no loose swatches");
+        assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
+        let (name, made) = last_group(&app);
+        assert_eq!(name, rule(&ctx).label());
+        assert_eq!(made, [g.grid[0][0], g.grid[0][8], g.grid[1][4]]);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc.swatch_groups.len(), groups, "Undo removes the group");
+    }
+
+    /// With no cell selected, or only cells outside the shown grid, the group holds the harmony
+    /// colors.
+    #[test]
+    fn save_color_group_without_a_selection_saves_the_harmony_colors() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        let g = guide(&app, &ctx);
+        save_group(&mut app, &ctx);
+        assert_eq!(last_group(&app).1, g.colors);
+        set_pstate(&ctx, "cg-sel", vec![(99usize, 0usize), (0, 99)]);
+        save_group(&mut app, &ctx);
+        assert_eq!(last_group(&app).1, g.colors, "cells outside the grid are ignored");
+    }
+
+    /// A guide limited to a library saves its snapped cells, and an RGB cell stays RGB in a CMYK
+    /// document.
+    #[test]
+    fn save_color_group_saves_limited_cells_in_their_own_model() {
+        let mut app = app();
+        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        app.run("paint.setFill", json!({"color": "#c04020", "keepModel": true})).unwrap();
+        app.run("ui.colorGuideLimit", json!({"library": "web-safe-216"})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        set_pstate(&ctx, "cg-sel", vec![(0usize, 1usize), (0, 7)]);
+        save_group(&mut app, &ctx);
+        let g = guide(&app, &ctx);
+        let made = last_group(&app).1;
+        assert_eq!(made, [g.grid[0][1], g.grid[0][7]]);
+        assert!(made.iter().all(|c| matches!(c, Color::Rgb { .. })), "{made:?}");
+        let members = library_hexes(&app, "web-safe-216");
+        assert!(made.iter().all(|c| members.contains(&c.to_hex())), "the snapped colors");
+    }
+
+    /// A selection made in one guide is not saved from another: new options, the variation-mode
+    /// menu, the harmony rule or the library limit clear it.
+    #[test]
+    fn a_changed_guide_drops_the_cell_selection() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        let pick = |ctx: &egui::Context| set_pstate(ctx, "cg-sel", vec![(0usize, 1usize), (0, 2)]);
+        type Change = fn(&mut VectorcraftApp, &egui::Context);
+        let changes: [Change; 4] = [
+            |app, _| app.ui.color_guide.steps = 6,
+            |app, _| app.ui.color_guide.variation = Variation::WarmCool,
+            |_, ctx| set_pstate(ctx, "cg-harmony", 3usize),
+            |app, _| {
+                app.run("ui.colorGuideLimit", json!({"library": "web-safe-216"})).unwrap();
+            },
+        ];
+        for (i, change) in changes.iter().enumerate() {
+            frame(&mut app, &ctx);
+            pick(&ctx);
+            assert_eq!(live_selection(&app, &ctx, &guide(&app, &ctx)).len(), 2, "change {i}: the selection holds");
+            change(&mut app, &ctx);
+            let g = guide(&app, &ctx);
+            assert!(live_selection(&app, &ctx, &g).is_empty(), "change {i}: nothing is saved from the old guide");
+            save_group(&mut app, &ctx);
+            assert_eq!(last_group(&app).1, g.colors, "change {i}: the harmony colors");
+            frame(&mut app, &ctx);
+            assert!(selected(&ctx).is_empty(), "change {i}: the panel clears the selection");
+        }
+    }
+
+    /// Limited to the document's swatches, painting art keeps the cell selection, and a new swatch
+    /// that changes the grid's colors drops it.
+    #[test]
+    fn a_new_document_swatch_drops_the_cell_selection() {
+        let mut app = app();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+        choose_base(&mut app, Color::from_hex("#3a7bd5").unwrap());
+        app.run("ui.colorGuideLimit", json!({"library": "document"})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        set_pstate(&ctx, "cg-sel", vec![(0usize, 1usize), (0, 2)]);
+        app.run("paint.setFill", json!({"color": "#102030"})).unwrap();
+        frame(&mut app, &ctx);
+        assert_eq!(selected(&ctx).len(), 2, "an edit that leaves the grid as it is keeps the selection");
+        let before = guide(&app, &ctx);
+        app.run("swatch.new", json!({"colors": ["#3a7bd5"]})).unwrap();
+        let g = guide(&app, &ctx);
+        assert_ne!(g.grid, before.grid, "the new swatch changes the grid");
+        assert!(live_selection(&app, &ctx, &g).is_empty(), "nothing is saved from the old grid");
+        save_group(&mut app, &ctx);
+        assert_eq!(last_group(&app).1, g.colors);
+        frame(&mut app, &ctx);
+        assert!(selected(&ctx).is_empty(), "the panel clears the selection");
     }
 
     /// Every colour of the panel's guide.

@@ -173,6 +173,8 @@ fn paint_only_keeps_every_drawing_attribute_and_partial_equality() {
         b.style_name = a.style_name.clone();
         b.kerning_before = a.kerning_before;
         b.features = a.features.clone();
+        b.diacritic_horizontal = a.diacritic_horizontal;
+        b.diacritic_vertical = a.diacritic_vertical;
         *a == b
     }
 
@@ -226,6 +228,8 @@ fn paint_only_keeps_every_drawing_attribute_and_partial_equality() {
     field!(tcy_left_right, 1.0, false);
     field!(standard_vertical_roman, true, false);
     field!(digits, Digits::Hindi, false);
+    field!(diacritic_horizontal, 100.0, true);
+    field!(diacritic_vertical, -100.0, true);
     field!(font_height_reference, FontHeightReference::CapHeight, false);
     field!(no_break, true, false);
     field!(language, Some("ar".into()), false);
@@ -329,6 +333,74 @@ fn feature_only_harakat_boundaries_keep_attachment_and_ownership() {
             }
         }
     }
+}
+
+/// Adjust Horizontal and Vertical Diacritic Position move the mark glyphs (GDEF class 3) by
+/// thousandths of an em of the glyph size, right and up for positive values, and leave the letters
+/// where they were. A mark styled apart from its letter takes its own values.
+#[test]
+fn diacritic_positions_move_marks_and_keep_letters() {
+    let db = FontDb::with_font_dirs(vec![]);
+    assert_eq!(db.add_font(crate::test_fonts::lam_alef_font(b"rlig").expect("the test font builds")), 1);
+    let family = crate::test_fonts::lam_alef_family(b"rlig");
+    let face = db.face(family, "Regular").expect("the test face");
+    const WORD: &str = "بَبَبَ";
+    let plain = TextObject::point(Point::ZERO, WORD, style(family));
+    let before = layout(&db, &plain);
+    assert_eq!(before.glyphs.len(), 6, "three bases with their attached marks");
+    let (h, v) = (200.0, 100.0);
+    let moved = (h / 1000.0 * 48.0, -v / 1000.0 * 48.0);
+    // (letters set, marks set): which glyphs move.
+    for (letters, marks) in [(true, true), (false, true), (true, false), (false, false)] {
+        let mut text = plain.clone();
+        for (byte, ch) in WORD.char_indices() {
+            if (is_harakat(ch) && marks) || (!is_harakat(ch) && letters) {
+                crate::edit::style_range(&mut text.runs, byte, byte + ch.len_utf8(), |st| {
+                    st.diacritic_horizontal = h;
+                    st.diacritic_vertical = v;
+                });
+            }
+        }
+        let after = layout(&db, &text);
+        assert_eq!(after.glyphs.len(), before.glyphs.len(), "letters {letters}, marks {marks}");
+        let mut marks_seen = 0;
+        for (a, b) in before.glyphs.iter().zip(&after.glyphs) {
+            assert_eq!((a.gid, a.byte, a.origin, a.advance), (b.gid, b.byte, b.origin, b.advance), "letters {letters}, marks {marks}");
+            let (ta, tb) = (a.xf.translation(), b.xf.translation());
+            let delta = (tb.x - ta.x, tb.y - ta.y);
+            let mark = is_gdef_mark(&face, a.gid);
+            marks_seen += usize::from(mark);
+            let want = if mark && marks { moved } else { (0.0, 0.0) };
+            assert!(
+                (delta.0 - want.0).abs() < 1e-9 && (delta.1 - want.1).abs() < 1e-9,
+                "letters {letters}, marks {marks}: glyph {} moved {delta:?}, want {want:?}",
+                a.gid
+            );
+        }
+        assert_eq!(marks_seen, 3, "the three fathas are marks");
+    }
+}
+
+/// Hebrew points count as diacritics as well as Arabic harakat; Latin accents and letters do not.
+/// A boundary where only the diacritic positions differ asks for the character-level pass only
+/// at such a mark.
+#[test]
+fn hebrew_points_and_harakat_are_diacritics() {
+    use crate::harakat::{diacritic_mark_boundary, is_diacritic};
+    for c in ['\u{05B8}', '\u{05C1}', '\u{05BC}', '\u{064E}', '\u{0651}'] {
+        assert!(is_diacritic(c), "{c:?}");
+    }
+    for c in ['\u{05D0}', '\u{0628}', '\u{0301}', 'a', '\u{05BE}'] {
+        assert!(!is_diacritic(c), "{c:?}");
+    }
+    let a = style(FAMILY);
+    let b = CharStyle { diacritic_vertical: 150.0, ..a.clone() };
+    assert!(diacritic_mark_boundary("שָׁ", 2, &a, &b), "a Hebrew point styled apart");
+    assert!(diacritic_mark_boundary("بَ", 2, &a, &b), "a fatha styled apart");
+    assert!(!diacritic_mark_boundary("e\u{301}", 1, &a, &b), "a Latin accent keeps its cluster's values");
+    assert!(!diacritic_mark_boundary("بَ", 2, &a, &a), "the same values");
+    let c = CharStyle { size: 20.0, ..b.clone() };
+    assert!(!diacritic_mark_boundary("بَ", 2, &a, &c), "a size change splits the run anyway");
 }
 
 /// A range is normalised as `edit::style_range` takes one: clamped, each end moved back to the
@@ -649,6 +721,7 @@ fn duplicate_authored_glyphs_keep_occurrence_order() {
         width_start: 0.0,
         warichu: None,
         warichu_line: 0.0,
+        off_path: false,
     };
     let before = TextLayout { glyphs: vec![glyph(0), glyph(1)], ..TextLayout::default() };
     assert_eq!(assert_kashida_ownership(&text, &before, &before, &red(), "duplicate glyphs", false), 0);

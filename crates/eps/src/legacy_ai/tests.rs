@@ -58,7 +58,41 @@ fn sample() -> Document {
     doc.insert(Some(front), usize::MAX, ellipse).unwrap();
     let mut png = vec![];
     let img = image::RgbaImage::from_raw(2, 1, vec![255, 0, 0, 255, 0, 0, 255, 255]).unwrap();
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let blob = ImageBlob::new("image/png", png);
     let key = blob.content_key();
     doc.images.insert(key.clone(), blob);
@@ -507,11 +541,15 @@ fn writes_the_documented_operators() {
 #[test]
 fn a_rotated_image_keeps_its_place() {
     let mut doc = Document::new(200.0, 100.0);
-    let mut png = vec![];
-    image::RgbaImage::from_raw(2, 1, vec![255, 0, 0, 255, 0, 0, 255, 255])
-        .unwrap()
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    let img = craft_image_codecs::Image::from_raw(
+        2,
+        1,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        vec![255, 0, 0, 255, 0, 0, 255, 255],
+    )
+    .unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
     let blob = ImageBlob::new("image/png", png);
     let key = blob.content_key();
     doc.images.insert(key.clone(), blob);
@@ -545,9 +583,41 @@ fn a_rotated_image_keeps_its_place() {
 /// A 16 × 16 RGB image of `doc` filling `r`.
 fn picture(doc: &mut Document, r: Rect) -> Node {
     let mut png = vec![];
-    image::RgbaImage::from_fn(16, 16, |u, v| image::Rgba([(u * 16) as u8, (v * 16) as u8, 128, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_fn(16, 16, |u, v| image::Rgba([(u * 16) as u8, (v * 16) as u8, 128, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let blob = ImageBlob::new("image/png", png);
     let key = blob.content_key();
     doc.images.insert(key.clone(), blob);
@@ -666,9 +736,42 @@ fn the_pieces_of_a_warped_image_are_written_as_the_parts_they_show() {
     // GUARDS: each of a warped image's 200 pieces was written with all of the image's samples.
     let mut doc = Document::new(200.0, 160.0);
     let mut png = vec![];
-    image::RgbaImage::from_fn(64, 64, |x, y| image::Rgba([(x * 4) as u8, (y * 4) as u8, ((x * 7 + y * 13) % 256) as u8, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage =
+            (image::RgbaImage::from_fn(64, 64, |x, y| image::Rgba([(x * 4) as u8, (y * 4) as u8, ((x * 7 + y * 13) % 256) as u8, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let blob = ImageBlob::new("image/png", png);
     let key = blob.content_key();
     doc.images.insert(key.clone(), blob);
@@ -725,7 +828,41 @@ fn empty_images_get_the_size_note_and_undecodable_ones_the_decode_note() {
 /// at (`x`, `y`).
 fn colorized_image(doc: &mut Document, (w, h): (u32, u32), gray: Vec<u8>, paint: &Paint, (x, y): (f64, f64)) -> Node {
     let mut png = vec![];
-    image::GrayImage::from_raw(w, h, gray).unwrap().write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::GrayImage::from_raw(w, h, gray).unwrap()).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let blob = ImageBlob::new("image/png", png);
     let key = blob.content_key();
     doc.images.insert(key.clone(), blob);
@@ -787,6 +924,41 @@ fn colorized_images_keep_their_color() {
     let [_, _, xi, data @ .., _, _] = images[0].as_slice() else { panic!("{:?}", images[0]) };
     assert!(xi.ends_with(" ] 0 0 2 1 2 1 8 3 0 0 0 0 XI"), "{xi}");
     assert_eq!(data, &["%FF0000FF8080"], "{text}");
+    assert_eq!(out.warnings, [IMAGE_ALPHA]);
+}
+
+/// The pieces of a colorized warped image work out the image's coverage once, and an image with
+/// other data works out its own: a black and white image's pieces are written as image masks
+/// in its color, and a gray image's pieces with its color in their pixels.
+#[test]
+fn the_pieces_of_a_colorized_warped_image_work_out_its_coverage_once() {
+    // GUARDS: each piece of a colorized warped image decoded the image again for its coverage.
+    let mut doc = Document::new(400.0, 200.0);
+    doc.layers.clear();
+    let layer = doc.add_layer(Some("Art"));
+    let paint = Paint::solid(Color::cmyk(0.0, 0.5, 1.0, 0.0));
+    let checks: Vec<u8> = (0..16 * 16).map(|i| if (i % 16 + i / 16) % 2 == 0 { 0 } else { 255 }).collect();
+    let ramp: Vec<u8> = (0..16 * 16).map(|i| (i % 16 * 16) as u8).collect();
+    for (gray, x) in [(checks, 10.0), (ramp, 210.0)] {
+        let photo = colorized_image(&mut doc, (16, 16), gray, &paint, (x, 10.0));
+        let NodeKind::Image(im) = &photo.kind else { panic!("{:?}", photo.kind) };
+        let bend = move |p: vectorcraft_geom::Point| vectorcraft_geom::Point::new(p.x, p.y + 8.0 * ((p.x - x) / 160.0 * std::f64::consts::PI).sin());
+        let warped = vectorcraft_doc::live::mesh_warp_image(&photo, im, &bend, 4, false, false);
+        doc.insert(Some(layer), usize::MAX, warped).unwrap();
+    }
+    super::writer::COVERAGE_RUNS.with(|n| n.set(0));
+    let out = write(&doc);
+    assert_eq!(super::writer::COVERAGE_RUNS.with(std::cell::Cell::get), 2, "once for each image");
+    let text = String::from_utf8(out.bytes).unwrap();
+    let images = rasters(&text);
+    assert_eq!(images.len(), 64, "32 pieces of each image");
+    let xi = |piece: &Vec<&str>| piece.iter().find(|l| l.ends_with(" XI")).map(|l| l.to_string()).unwrap_or_default();
+    assert!(images[..32].iter().all(|p| xi(p).ends_with(" 1 1 0 0 0 1 XI")), "{:?}", images[..32].iter().map(xi).collect::<Vec<_>>());
+    assert!(images[32..].iter().all(|p| xi(p).ends_with(" 8 3 0 0 0 0 XI")), "{:?}", images[32..].iter().map(xi).collect::<Vec<_>>());
+    // The first piece holds the whole image: each row of 16 pixels in two bytes, its black pixels 0 bits.
+    assert!(xi(&images[0]).ends_with(" ] 0 0 16 16 16 16 1 1 0 0 0 1 XI"), "{}", xi(&images[0]));
+    let data: Vec<&str> = images[0].iter().filter_map(|l| l.strip_prefix('%')).filter(|l| l.bytes().all(|b| b.is_ascii_hexdigit())).collect();
+    assert_eq!(data.concat(), "5555AAAA".repeat(8));
     assert_eq!(out.warnings, [IMAGE_ALPHA]);
 }
 
@@ -1560,6 +1732,22 @@ fn type_on_a_path_alignment_and_end_bracket_are_warned_as_left_out() {
     assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(true), start: 0.7, end: Some(0.5) }));
     // An open path's end bracket before its start bracket.
     assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(false), start: 0.5, end: Some(0.3) }));
+    // Type that starts before its open path: the text path holds a start on the path only.
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(false), start: -0.25, end: None }));
+    assert!(!warned(&|t| t.kind = TextKind::OnPath { path: along(false), start: 0.0, end: None }));
+    // It is written starting at the path's start: the same text object as a start of 0.
+    let written = |start: f64| {
+        let mut doc = Document::new(300.0, 200.0);
+        let layer = doc.layers[0].id;
+        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "Along", style(12.0, Paint::solid(Color::BLACK)));
+        t.kind = TextKind::OnPath { path: along(false), start, end: None };
+        t.xf = Affine::IDENTITY;
+        let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        write(&doc).bytes
+    };
+    assert_eq!(written(-0.25), written(0.0));
+    assert_ne!(written(0.25), written(0.0));
     let two = |first_closed: bool| {
         let mut path = along(first_closed);
         let pts = [(150.0, 100.0).into(), (250.0, 100.0).into()];
