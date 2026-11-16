@@ -306,7 +306,7 @@ fn load_into(p: &Value, cmd: &str, board: Option<Rect>, link_pdf: bool, slices_o
         let link = src.path.filter(|_| !embed).map(|path| super::links::link_info(path, &src.bytes));
         let mut warnings: Vec<String> = unread.into_iter().chain(fileio::size_note(&img.blob.bytes)).collect();
         *slices_out = psd_slices(slices_from, natural, &mut warnings);
-        let clip = fileio::psdread::clipping_path(&src.bytes);
+        let clip = img.clip.clone().map(|(path, _)| path);
         return Ok(Loaded { name, format, art: Art::Image(img, clip), natural, warnings, link, board: None });
     }
     if pdf {

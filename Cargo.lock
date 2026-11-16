@@ -1017,6 +1017,14 @@ version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=c4b8405d5fd8f29cf77de528206bd2b38bb0ecb6#c4b8405d5fd8f29cf77de528206bd2b38bb0ecb6"
 
 [[package]]
+name = "craft-gzip"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=b0d84cd15db39f2af9869cfb47b8b72cbeca3f20#b0d84cd15db39f2af9869cfb47b8b72cbeca3f20"
+dependencies = [
+ "flate2",
+]
+
+[[package]]
 name = "craft-i18n"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=c4b8405d5fd8f29cf77de528206bd2b38bb0ecb6#c4b8405d5fd8f29cf77de528206bd2b38bb0ecb6"
@@ -1212,7 +1220,7 @@ dependencies = [
 [[package]]
 name = "craft-vectorcraft-format"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=e98299546f5c5c3c22388d16507f8b5e61a5f280#e98299546f5c5c3c22388d16507f8b5e61a5f280"
+source = "git+https://github.com/storytold/craft-libs?rev=b0d84cd15db39f2af9869cfb47b8b72cbeca3f20#b0d84cd15db39f2af9869cfb47b8b72cbeca3f20"
 dependencies = [
  "flate2",
  "serde",
@@ -6741,6 +6749,7 @@ dependencies = [
 name = "vectorcraft-format"
 version = "0.24.1"
 dependencies = [
+ "craft-gzip",
  "craft-vectorcraft-format",
  "flate2",
  "proptest",
