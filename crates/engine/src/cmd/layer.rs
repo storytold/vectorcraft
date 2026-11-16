@@ -722,19 +722,18 @@ fn select_art(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         vec![id]
     };
-    let all_selected = !ids.is_empty() && ids.iter().all(|i| st.selection.contains(*i));
+    let all_selected = add && !ids.is_empty() && {
+        let selected: HashSet<NodeId> = st.selection.objects.iter().copied().collect();
+        ids.iter().all(|i| selected.contains(i))
+    };
     let rows = st.layer_rows.clone();
     s.select(|_, sel| {
         if !add {
             sel.set(ids.iter().copied());
         } else if all_selected {
-            for i in &ids {
-                sel.remove(*i);
-            }
+            sel.remove_all(ids.iter().copied());
         } else {
-            for i in &ids {
-                sel.add(*i);
-            }
+            sel.add_all(ids.iter().copied());
         }
     })?;
     let st = s.doc_mut()?;
