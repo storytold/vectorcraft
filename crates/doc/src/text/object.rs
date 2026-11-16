@@ -94,6 +94,7 @@ impl TextObject {
             para: ParaStyle::default(),
             paras: Vec::new(),
             first_para_continues: false,
+            first_para_lead: None,
             area: AreaOptions::default(),
             path_effect: PathEffect::default(),
             path_align: PathAlign::default(),

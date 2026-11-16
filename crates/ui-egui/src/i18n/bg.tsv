@@ -1167,6 +1167,7 @@ font-technology	Variable	Променливи
 	Highlight Size	Размер на отблясъка
 	Blend Steps	Стъпки на преливане
 	Shading Color	Цвят на засенчването
+	Black Overprint	Черно с напечатване
 	Draw Hidden Faces	Изчертаване на скритите страни
 	Eyedropper	Пипета
 	Eyedropper Applies:	Пипетата прилага:
@@ -2955,6 +2956,12 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивен
 	Restore	Възстановяване
 	Restore every preference to its default (applied on OK)	Възстановяване на всички настройки по подразбиране (прилага се при ОПК)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Единицата за новите документи от вградените размери, освен тези в пиксели, и за отворените файлове без записана единица; ако я изберете тук и натиснете ОК, тя става и единица на активния документ.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Дебелините на щрихите, тиретата и междините се показват в тази единица и въведените за тях числа се четат в нея.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Размерите на текста, междуредието и отстъпът на базовата линия се показват в тази единица и въведените за тях числа се четат в нея.
+	The unit for East Asian type measurements, which no field uses yet.	Единицата за мерките на източноазиатски текст, която засега не се използва от нито едно поле.
+	When on, a number typed without a unit into a field in picas is read in points.	Когато е включено, число, въведено без единица в поле в пики, се чете в точки.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	При XML ID имената на обектите се показват като XML ID в Слоеве, Променливи и Опции за слоя.
 	Reset all preferences to their defaults?	Да се нулират ли всички настройки до стойностите по подразбиране?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Стойностите по подразбиране се прилагат, когато щракнете върху ОК в Настройки. Отказ там запазва текущите ви настройки.
 	Restore Recovered Documents	Възстановяване на възстановените документи
@@ -2988,6 +2995,7 @@ digits	Malayalam	Малаялам
 	Roman Hanging Punctuation	Латинска висяща пунктуация
 	Korean Line Break Anywhere	Пренасяне на корейски текст навсякъде
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Настройки за източноазиатска композиция
 	Korean Composition Settings	Настройки за корейска композиция
 	Rotate	Завъртане

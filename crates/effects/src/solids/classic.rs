@@ -20,8 +20,8 @@ pub const ROTATE_SURFACES: [&str; 2] = ["none", "diffuse"];
 /// The width of a Wireframe edge, in points.
 const WIRE: f64 = 0.5;
 
-/// The Shading Color choices: black, a custom color, or none.
-pub const SHADING_COLORS: [&str; 3] = ["black", "custom", "none"];
+/// The Shading Color choices: black, a custom color, none, or black overprinting the paint.
+pub const SHADING_COLORS: [&str; 4] = ["black", "custom", "none", "blackOverprint"];
 
 /// The surface settings of Extrude & Bevel (Classic)'s parameters.
 pub fn classic_shading(p: &Value) -> ClassicShading {
@@ -55,8 +55,8 @@ pub fn classic_extrude_options(p: &Value) -> Extrude {
     }
 }
 
-/// The color faces darken toward: black, the custom color, or none (faces keep their paint and only
-/// the highlight lightens them).
+/// The color faces darken toward: black (for Black Overprint too), the custom color, or none (faces
+/// keep their paint and only the highlight lightens them).
 fn shading_color(p: &Value) -> Option<Color> {
     match text(p, "shadingColor", "black") {
         "none" => None,
@@ -200,24 +200,51 @@ fn preserves_spot_colors(p: &Value) -> bool {
 
 /// A face of `paint`, a color linked to a swatch, with Preserve Spot Colors: the swatch at a lower
 /// tint for the highlight `spec`, its link kept so a spot color stays on its own plate, and, where
-/// tone `tone` is below full light and the faces darken (`shade`), black over it at `1 - tone`,
-/// multiplied and overprinting, so it prints on the black plate. `seam` is the width of the seam
+/// tone `tone` is below full light and the faces darken (`shade`), black over it as
+/// [`overprinting_black`] draws it, so it prints on the black plate. `seam` is the width of the seam
 /// stroke each layer draws around the face.
 fn linked_face(paint: &Paint, tone: f64, spec: f64, shade: Option<Color>, seam: f64) -> Vec<AppearanceItem> {
     let Paint::Solid { color, swatch, tint } = paint else { return vec![] };
     let keep = (1.0 - spec).clamp(0.0, 1.0) as f32;
     let fill = Paint::Solid { color: color.tinted(keep), swatch: swatch.clone(), tint: tint * keep };
     let mut items = vec![AppearanceItem::Fill(FillLayer::new(fill.clone())), AppearanceItem::Stroke(crate::lighting::seam_stroke(fill, seam))];
-    if shade.is_some() && tone < 1.0 {
-        let black = Paint::solid(Color::gray((1.0 - tone).clamp(0.0, 1.0) as f32));
-        let mut layer = FillLayer::new(black.clone());
-        layer.blend = BlendMode::Multiply;
-        layer.overprint = true;
-        let mut edge = crate::lighting::seam_stroke(black, seam);
-        edge.blend = BlendMode::Multiply;
-        edge.overprint = true;
-        items.extend([AppearanceItem::Fill(layer), AppearanceItem::Stroke(edge)]);
+    if shade.is_some() {
+        items.extend(overprinting_black(tone, seam));
     }
+    items
+}
+
+/// The black that shades a face at tone `tone` on the black plate, when the tone is below full
+/// light: a fill of black at `1 - tone`, multiplied and overprinting, and its seam stroke `seam`
+/// wide, overprinting with Darken, so where the stroke lies over the face's own black, or over a
+/// neighbor's, the face is not darkened twice.
+fn overprinting_black(tone: f64, seam: f64) -> Vec<AppearanceItem> {
+    if tone >= 1.0 {
+        return vec![];
+    }
+    let black = Paint::solid(Color::gray((1.0 - tone).clamp(0.0, 1.0) as f32));
+    let mut layer = FillLayer::new(black.clone());
+    layer.blend = BlendMode::Multiply;
+    layer.overprint = true;
+    let mut edge = crate::lighting::seam_stroke(black, seam);
+    edge.blend = BlendMode::Darken;
+    edge.overprint = true;
+    vec![AppearanceItem::Fill(layer), AppearanceItem::Stroke(edge)]
+}
+
+/// Whether the shading color of parameters `p` is Black Overprint.
+fn black_overprint(p: &Value) -> bool {
+    text(p, "shadingColor", "black") == "blackOverprint"
+}
+
+/// A face of `paint` with Black Overprint: the paint unchanged, and where tone `tone` is below full
+/// light, black over it as [`overprinting_black`] draws it, so the paint's own inks print as they
+/// are and the shading prints on the black plate. The highlight is not drawn. `seam` is the width of
+/// the seam stroke each layer draws around the face.
+fn overprinted_face(paint: &Paint, tone: f64, seam: f64) -> Vec<AppearanceItem> {
+    let mut items =
+        vec![AppearanceItem::Fill(FillLayer::new(paint.clone())), AppearanceItem::Stroke(crate::lighting::seam_stroke(paint.clone(), seam))];
+    items.extend(overprinting_black(tone, seam));
     items
 }
 
@@ -229,15 +256,17 @@ pub(crate) fn stroke_width(face: &Facet, p: &Value) -> f64 {
 
 /// One solid's faces in paint `paint`, as a group with the paint's opacity and blend mode, one child
 /// for each facet: the edges of the faces on Wireframe, else each face filled in its paint shaded by
-/// its tone and highlight (with Preserve Spot Colors, a color linked to a swatch as [`linked_face`]
-/// draws it). A gradient with transparent stops is shaded opaque and then masked by
-/// its own transparency, so the shading follows the gradient's coverage; without a placement of its
-/// own, it is placed once on all the faces ([`crate::lighting::opaque_surface_paint`]).
+/// its tone and highlight (with Black Overprint, as [`overprinted_face`] draws it; with Preserve Spot
+/// Colors, a color linked to a swatch as [`linked_face`] draws it). A gradient with transparent stops
+/// is shaded opaque and then masked by its own transparency, so the shading follows the gradient's
+/// coverage; without a placement of its own, it is placed once on all the faces
+/// ([`crate::lighting::opaque_surface_paint`]).
 pub(crate) fn surface(n: &Node, facets: Vec<Facet>, source: &Paint, opacity: f32, blend: BlendMode, p: &Value) -> Node {
     let shading = classic_shading(p);
     let lights = lights(p);
     let shade = shading_color(p);
     let preserve = preserves_spot_colors(p);
+    let overprint = black_overprint(p);
     let wire = shading.surface == ClassicSurface::Wireframe;
     let (paint, mask) = if wire { (source.clone(), None) } else { crate::lighting::opaque_surface_paint(source, || super::facets_bounds(&facets)) };
     let paint = &paint;
@@ -252,6 +281,10 @@ pub(crate) fn surface(n: &Node, facets: Vec<Facet>, source: &Paint, opacity: f32
             let (tone, spec) = shading.tone(face.normal, &lights);
             // A narrow stroke of the face's own paint closes the hairline seams between faces.
             let seam = super::seam_width(&face);
+            if overprint {
+                let items = overprinted_face(paint, tone, seam);
+                return Arc::new(Node::path(n.id, face.path(), Appearance { items, ..Default::default() }));
+            }
             let items = match paint.color() {
                 // Unshaded (No Shading, no shading color, or a face in full light) with no
                 // highlight: the paint itself, its color space and swatch kept.

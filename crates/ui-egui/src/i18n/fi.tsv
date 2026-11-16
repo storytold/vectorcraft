@@ -530,6 +530,7 @@
 	Highlight Size	Kiillon koko
 	Blend Steps	Sulautusvaiheet
 	Shading Color	Varjostusväri
+	Black Overprint	Päällepainettu musta
 	Draw Hidden Faces	Piirrä piilotetut pinnat
 	Revolve…	Pyöräytä…
 	Inflate…	Täytä ilmalla…
@@ -2118,6 +2119,7 @@ digits	Malayalam	Malajalam
 	Roman Hanging Punctuation	Latinalaiset riippuvat välimerkit
 	Korean Line Break Anywhere	Korean rivinvaihto missä tahansa
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Itäaasialaisen ladonnan asetukset
 	Korean Composition Settings	Korean ladonnan asetukset
 	Select a text object to edit its paragraph attributes.	Valitse tekstiobjekti, jonka kappalemääritteitä haluat muokata.
@@ -4402,6 +4404,12 @@ font-technology	Variable	Muuttuvat
 	Preferences	Asetukset
 	Previous	Edellinen
 	Restore every preference to its default (applied on OK)	Palauta kaikki asetukset oletuksiin (käytetään, kun valitaan OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Yksikkö uusille asiakirjoille valmiissa kooissa pikselikokoja lukuun ottamatta ja avatuille tiedostoille, joihin ei ole tallennettu yksikköä; kun valitset sen tässä ja napsautat OK, siitä tulee myös aktiivisen asiakirjan yksikkö.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Viivan paksuudet, katkoviivat ja välit näytetään tässä yksikössä, ja niille kirjoitetut luvut luetaan siinä.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Tekstin koot, riviväli ja perusviivan siirto näytetään tässä yksikössä, ja niille kirjoitetut luvut luetaan siinä.
+	The unit for East Asian type measurements, which no field uses yet.	Itä-Aasian tekstin mittojen yksikkö, jota mikään kenttä ei vielä käytä.
+	When on, a number typed without a unit into a field in picas is read in points.	Kun asetus on käytössä, picoina näytettävään kenttään ilman yksikköä kirjoitettu luku luetaan pisteinä.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML-tunnus-asetuksella objektien nimet näytetään XML-tunnuksina kohteissa Tasot, Muuttujat ja Tason asetukset.
 	Reset all preferences to their defaults?	Palautetaanko kaikki asetukset oletuksiin?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Oletukset otetaan käyttöön, kun valitset Asetuksissa OK. Peruuta siellä säilyttää nykyiset asetuksesi.
 	Smaller ↔ Larger	Pienempi ↔ Suurempi

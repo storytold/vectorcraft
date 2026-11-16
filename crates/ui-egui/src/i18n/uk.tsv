@@ -1209,6 +1209,7 @@ font-technology	Variable	Варіативні
 	Highlight Size	Розмір відблиску
 	Blend Steps	Кроки переходу
 	Shading Color	Колір затінення
+	Black Overprint	Чорний із накладенням
 	Draw Hidden Faces	Малювати приховані грані
 	Eyedropper	Піпетка
 	Sample Color from Screen	Взяти колір з екрана
@@ -3074,6 +3075,12 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивний
 	Restore	Відновити
 	Restore every preference to its default (applied on OK)	Відновити всі параметри за промовчанням (застосовується при натисканні ОК)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Одиниця нових документів вбудованих розмірів, крім розмірів у пікселях, і відкритих файлів без записаної одиниці; якщо вибрати її тут і натиснути ОК, вона стане й одиницею активного документа.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Товщина обведення, штрихи й зазори показуються в цій одиниці, і введені для них числа читаються в ній.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Розміри тексту, інтерліньяж і зміщення базової лінії показуються в цій одиниці, і введені для них числа читаються в ній.
+	The unit for East Asian type measurements, which no field uses yet.	Одиниця для розмірів східноазіатського тексту, якої поки не використовує жодне поле.
+	When on, a number typed without a unit into a field in picas is read in points.	Якщо ввімкнено, число, введене без одиниці в поле в піках, читається в пунктах.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	З XML ID назви об’єктів показуються як XML ID у «Шарах», «Змінних» і «Параметрах шару».
 	Reset all preferences to their defaults?	Скинути всі налаштування до значень за промовчанням?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Значення за промовчанням застосовуються, коли ви натискаєте ОК у вікні «Налаштування». Скасувати там зберігає поточні налаштування.
 	Restore Recovered Documents	Відновити відновлені документи
@@ -3107,6 +3114,7 @@ digits	Malayalam	Малаялам
 	Roman Hanging Punctuation	Римська висяча пунктуація
 	Korean Line Break Anywhere	Перенесення корейського тексту будь-де
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Параметри східноазійського набору
 	Korean Composition Settings	Параметри корейського набору
 	Rotate	Повернути
