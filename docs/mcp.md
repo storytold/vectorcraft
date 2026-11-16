@@ -5662,6 +5662,17 @@ link, the dimension stays where it was, no longer linked (see [dimensions.md](di
 `object.expand` rejects a param of the wrong type, such as `"fill": "yes"`, `"gradient": 3` or `"steps": "16"`, and
 changes nothing. Omitting a param or giving null keeps its default.
 
+`ui.expandDialog {immediate?}` opens the Expand dialog (`object.expand` with no params opens it too). The dialog opens on
+the Object, Fill, Stroke, Expand Gradient To and steps choices that OK last expanded with since the app started, and on
+the defaults before that; Cancel and an OK that fails leave the kept choices as they were, and they are not kept across
+launches. Choosing Object → Expand… in the in-window menu bar with Alt (Option on macOS) held sends `immediate: true`, which expands the selection
+at once with those choices, or the defaults before any OK, in one undo step, as OK in the dialog would
+([the help page](https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/expand-objects.html)
+describes this shortcut for a gradient; VectorCraft applies it to whatever the choices expand). When none of the kept
+choices has something to expand in the selection, `immediate: true` opens the dialog on them instead and changes
+nothing. A selection with appearance attributes refuses both, as the dimmed menu item does. An `immediate` of null is
+treated as omitted, and any other value that is not true or false is an error.
+
 ```json
 {"name":"run_command","arguments":{"command":"object.expand","params":{"stroke":false,"gradient":"mesh"}}}
 {"name":"run_command","arguments":{"command":"object.expand","params":{"steps":16}}}

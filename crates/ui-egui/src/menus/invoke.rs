@@ -17,10 +17,12 @@ pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
 /// What an in-window menu click on `target` (a [`click_target`]) runs with `held` held: Object ›
 /// Unlock All and Object › Show All chosen with Shift+Alt (Shift+Option) act only inside the groups
 /// that hold the selected objects (`scope: "group"`); Select Linked, Embedded, Missing and Modified
-/// chosen with Shift add to the selection (`add: true`).
+/// chosen with Shift add to the selection (`add: true`); Object › Expand… chosen with Alt (Option)
+/// expands at once with the choices its dialog last expanded with (`immediate: true`).
 pub(crate) fn with_held_keys(target: (String, Value), held: egui::Modifiers) -> (String, Value) {
     match target.0.as_str() {
         "object.unlockAll" | "object.showAll" if held.shift && held.alt => (target.0, json!({"scope": "group"})),
+        "ui.expandDialog" if held.alt => (target.0, json!({"immediate": true})),
         // Select Linked, Embedded, Missing and Modified with Shift add to the selection.
         crate::addons::select::link_status::COMMAND if held.shift => (target.0, crate::addons::select::link_status::with_shift(target.1)),
         _ => target,
