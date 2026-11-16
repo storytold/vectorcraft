@@ -183,8 +183,8 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(corners::specs());
     v.extend(shared_edge::specs());
     v.extend(trim::specs());
-    v.extend(tangents::specs());
     v.extend(tangent_circle::specs());
+    v.extend(tangents::specs());
     v
 }
 

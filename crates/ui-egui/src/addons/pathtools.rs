@@ -75,8 +75,8 @@ pub fn menu() -> Vec<Item> {
         Item::Cmd("Divide into Dashes…", dashes::COMMAND, Value::Null),
         Item::Cmd("Expand Dashes into Paths", "addon.pathtools.expandDashes", json!({})),
         Item::Cmd("Convert to Parametric Shape", "addon.pathtools.shape.convert", json!({})),
-        Item::Cmd("Common Tangents…", COMMON_TANGENTS, json!({ "tangents": "all", "centerline": false })),
         Item::Cmd("Tangent Circle…", tangent_circle::COMMAND, Value::Null),
+        Item::Cmd("Common Tangents…", COMMON_TANGENTS, json!({ "tangents": "all", "centerline": false })),
     ]
 }
 

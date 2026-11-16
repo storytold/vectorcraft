@@ -11,10 +11,20 @@
 //! - `change_to`: the replacement word (from suggestions or typed)
 //! - `node_id`, `start`, `end`, `lang`: location of the current misspelling
 //! - `ids`: object IDs checked (None: entire document)
-//! - `skipped`: list of `[node_id, start]` skipped by Ignore
+//! - `skipped`: list of `[node_id, start, word]` skipped by Ignore, which Change All leaves alone
+//! - `queue`: the words the last check listed after the one shown, last first; `queue_more`
+//!   whether that check had more, and `queue_from` (`[node_id, byte]`) where the next check goes
+//!   on from
+//! - `revision`: `[document revision, custom dictionary generation]` as of the word shown; when
+//!   either has moved, the next step checks the scope again from its start
 //! - `done`: whether spell checking has finished (or no unrecognized words found)
+//!
+//! Ignore and Ignore All take the next word from `queue`, and a new check (`text.spelling.check`'s
+//! `from`) goes on from `queue_from` once it is empty, through the rest of that type object and
+//! then the objects after it, so every word is reached however many come before it. Change All
+//! looks through the whole scope, one check after another, before it changes anything.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
 
 use serde_json::{Value, json};
@@ -56,30 +66,22 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     if app.session.active().is_none() {
         return Err("no document".into());
     }
-    let doc_uid = app.session.doc().map_err(|e| e.to_string())?.uid;
-    let (ids, remaining_ids): (Option<Vec<u64>>, Vec<u64>) = {
+    let (doc_uid, ids) = {
         let st = app.session.doc().map_err(|e| e.to_string())?;
-        let selected = &st.selection.objects;
-        if !selected.is_empty() {
-            let selected_ids: Vec<u64> = selected.iter().map(|n| n.0).collect();
-            (Some(selected_ids.clone()), selected_ids)
-        } else {
-            let mut all_ordered = Vec::new();
-            st.doc.walk(|n| {
-                if matches!(n.kind, vectorcraft_doc::NodeKind::Text(_)) && st.doc.is_editable(n.id) {
-                    all_ordered.push(n.id.0);
-                }
-            });
-            (None, all_ordered)
-        }
+        // The selection (groups too: the check goes through the type inside them), or, with
+        // nothing selected, every visible, unlocked type object (the check's default).
+        let selected: Vec<u64> = st.selection.objects.iter().map(|n| n.0).collect();
+        (st.uid, (!selected.is_empty()).then_some(selected))
     };
     let mut d = Dialog::new(
         KIND,
         json!({
             "doc_uid": doc_uid,
             "ids": ids,
-            "remaining_ids": remaining_ids,
             "skipped": [],
+            "queue": [],
+            "queue_more": false,
+            "queue_from": null,
             "not_in_dictionary": "",
             "context": "",
             "context_before": "",
@@ -95,29 +97,67 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
             "done": false,
         }),
     );
-    advance(app, &mut d)?;
+    advance(app, &mut d, None, 1)?;
     app.ui.dialog = Some(d);
     Ok(Value::Null)
 }
 
-fn get_skipped(d: &Dialog) -> Vec<(u64, u64)> {
+/// An occurrence Ignore skipped: (id, start, word). The word is kept with its bytes, so after
+/// another command moves the text, a different word that now starts there is not skipped.
+type Skip = (u64, u64, String);
+
+fn get_skipped(d: &Dialog) -> BTreeSet<Skip> {
     d.fields
         .get("skipped")
         .and_then(Value::as_array)
         .map(|arr| {
             arr.iter()
-                .filter_map(|pair| {
-                    let a = pair.as_array()?;
-                    if a.len() == 2 { Some((a[0].as_u64()?, a[1].as_u64()?)) } else { None }
+                .filter_map(|s| match s.as_array().map(Vec::as_slice) {
+                    Some([id, start, word]) => Some((id.as_u64()?, start.as_u64()?, word.as_str()?.to_string())),
+                    _ => None,
                 })
                 .collect()
         })
         .unwrap_or_default()
 }
 
-fn set_skipped(d: &mut Dialog, skipped: &[(u64, u64)]) {
-    let arr: Vec<Value> = skipped.iter().map(|&(id, start)| json!([id, start])).collect();
+fn set_skipped(d: &mut Dialog, skipped: &BTreeSet<Skip>) {
+    let arr: Vec<Value> = skipped.iter().map(|(id, start, word)| json!([id, start, word])).collect();
     d.fields.insert("skipped".into(), json!(arr));
+}
+
+/// Whether Ignore skipped this occurrence of a word.
+fn is_skipped(skipped: &BTreeSet<Skip>, w: &Word) -> bool {
+    skipped.contains(&(w.0, w.1 as u64, w.3.clone()))
+}
+
+/// Moves the Ignore positions in `id` that come after edits there by what each edit changed in
+/// length: `edits` are the (start, end) bytes each replaced with `new_len` bytes.
+fn shift_skipped(d: &mut Dialog, id: u64, edits: &[(usize, usize)], new_len: usize) {
+    let skipped = get_skipped(d)
+        .into_iter()
+        .map(|(sid, start, word)| if sid == id { (sid, shifted(start as usize, edits, new_len) as u64, word) } else { (sid, start, word) })
+        .collect();
+    set_skipped(d, &skipped);
+}
+
+/// Where byte `at` of a text ends up after `edits` ((start, end) bytes, none of them overlapping
+/// `at`) are each replaced with `new_len` bytes.
+fn shifted(at: usize, edits: &[(usize, usize)], new_len: usize) -> usize {
+    edits.iter().filter(|(_, end)| *end <= at).fold(at, |at, (start, end)| (at + new_len).saturating_sub(end - start))
+}
+
+/// Most unknown words one check lists when the dialog reads on through the scope (Ignore once
+/// the queue is empty, a check started again, Change All): the check's own limit, or a smaller
+/// one in tests.
+#[cfg(not(test))]
+fn page() -> usize {
+    vectorcraft_engine::cmd::spelling::MAX_WORDS
+}
+
+#[cfg(test)]
+fn page() -> usize {
+    tests::PAGE.with(std::cell::Cell::get)
 }
 
 /// Extracts the sentence containing `range` within `text`, returning (before, word, after).
@@ -210,103 +250,212 @@ fn set_done(d: &mut Dialog) {
     d.fields.insert("lang".into(), Value::Null);
 }
 
-/// Advance to the next unrecognized word or complete the spell check.
-pub fn advance(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
-    let mut remaining_ids: Vec<u64> =
-        d.fields.get("remaining_ids").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).collect()).unwrap_or_default();
+/// One unknown word: (id, start, end, word, lang).
+type Word = (u64, usize, usize, String, String);
 
-    if remaining_ids.is_empty() && d.fields.get("ids").is_none_or(Value::is_null) {
-        let st = app.session.doc().map_err(|e| e.to_string())?;
-        st.doc.walk(|n| {
-            if matches!(n.kind, vectorcraft_doc::NodeKind::Text(_)) && st.doc.is_editable(n.id) {
-                remaining_ids.push(n.id.0);
-            }
-        });
-        d.fields.insert("remaining_ids".into(), json!(remaining_ids));
+/// One word of a `text.spelling.check` result.
+fn word_at(w: &Value) -> Option<Word> {
+    let id = w.get("id")?.as_u64()?;
+    let start = usize::try_from(w.get("start")?.as_u64()?).ok()?;
+    let end = usize::try_from(w.get("end")?.as_u64()?).ok()?;
+    let word = w.get("word")?.as_str()?.to_string();
+    let lang = w.get("lang").and_then(Value::as_str).unwrap_or("en").to_string();
+    Some((id, start, end, word, lang))
+}
+
+/// One word of `queue`, kept as `[id, start, end, word, lang]`.
+fn queued_word(w: &Value) -> Option<Word> {
+    match w.as_array().map(Vec::as_slice) {
+        Some([id, start, end, word, lang]) => Some((
+            id.as_u64()?,
+            usize::try_from(start.as_u64()?).ok()?,
+            usize::try_from(end.as_u64()?).ok()?,
+            word.as_str()?.to_string(),
+            lang.as_str()?.to_string(),
+        )),
+        _ => None,
     }
+}
 
+/// The check's params for the dialog's scope, going on from `from` ((id, byte)) when given. A
+/// selected object that another command deleted is left out, so the rest of the selection is still
+/// checked; with every one deleted, the list is empty and the check finds nothing (not the whole
+/// document, which `ids` left out would check).
+fn check_params(app: &VectorcraftApp, d: &Dialog, from: Option<(u64, usize)>, max: usize) -> Value {
+    let ids = match d.fields.get("ids") {
+        Some(Value::Array(ids)) => {
+            let exists =
+                |id: &Value| id.as_u64().is_some_and(|id| app.session.doc().is_ok_and(|st| st.doc.node(vectorcraft_doc::NodeId(id)).is_some()));
+            Value::Array(ids.iter().filter(|id| exists(id)).cloned().collect())
+        }
+        _ => Value::Null,
+    };
+    match from {
+        Some((id, byte)) => json!({ "ids": ids, "from": { "id": id, "byte": byte }, "max": max }),
+        None => json!({ "ids": ids, "max": max }),
+    }
+}
+
+/// Checks from `from` ((id, byte); the start of the scope when None), listing at most `max`
+/// words, and shows the first one Ignore did not skip, keeping the rest in `queue`; completes the
+/// spell check when there is none. Past a check whose words were all skipped it lists [`page`]
+/// words at a time.
+pub fn advance(app: &mut VectorcraftApp, d: &mut Dialog, mut from: Option<(u64, usize)>, mut max: usize) -> Result<(), String> {
     let skipped = get_skipped(d);
-
     loop {
-        if remaining_ids.is_empty() {
-            set_done(d);
-            return Ok(());
-        }
-
-        let check_res = app.run("text.spelling.check", json!({ "ids": remaining_ids })).map_err(|e| e.to_string())?;
-        let words = check_res.get("words").and_then(Value::as_array).cloned().unwrap_or_default();
+        let params = check_params(app, d, from, max);
+        let check_res = match app.run("text.spelling.check", params) {
+            Ok(r) => r,
+            // The object `from` names left the scope (another command hid, locked or deleted
+            // it): start the scope again, where every word before is now right or skipped.
+            Err(_) if from.is_some() => {
+                from = None;
+                max = page();
+                continue;
+            }
+            Err(e) => return Err(e.to_string()),
+        };
+        let words: Vec<Word> = check_res.get("words").and_then(Value::as_array).map(|a| a.iter().filter_map(word_at).collect()).unwrap_or_default();
         let more = check_res.get("more").and_then(Value::as_bool).unwrap_or(false);
-
-        let next_word = words
-            .iter()
-            .find(|w| {
-                let id = w.get("id").and_then(Value::as_u64).unwrap_or(0);
-                let start = w.get("start").and_then(Value::as_u64).unwrap_or(0);
-                !skipped.contains(&(id, start))
-            })
-            .cloned();
-
-        if let Some(w) = next_word {
-            let id = w["id"].as_u64().unwrap_or(0);
-            let start = w["start"].as_u64().unwrap_or(0) as usize;
-            let end = w["end"].as_u64().unwrap_or(0) as usize;
-            let word = w["word"].as_str().unwrap_or("").to_string();
-            let lang = w["lang"].as_str().unwrap_or("en").to_string();
-
-            let (before, target, after) = {
-                let st = app.session.doc().map_err(|e| e.to_string())?;
-                if let Some(vectorcraft_doc::NodeKind::Text(t)) = st.doc.node(vectorcraft_doc::NodeId(id)).map(|n| &n.kind) {
-                    extract_sentence_context(&t.plain_text(), start..end)
-                } else {
-                    (String::new(), word.clone(), String::new())
-                }
-            };
-
-            let sugg_res = app.run("text.spelling.suggest", json!({ "word": word, "lang": lang, "max": 10 })).map_err(|e| e.to_string())?;
-            let suggestions: Vec<String> = sugg_res
-                .get("suggestions")
-                .and_then(Value::as_array)
-                .map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect())
-                .unwrap_or_default();
-
-            let change_to = suggestions.first().cloned().unwrap_or_else(|| word.clone());
-            let full_context = format!("{before}{target}{after}");
-
-            d.fields.insert("not_in_dictionary".into(), json!(word));
-            d.fields.insert("context".into(), json!(full_context));
-            d.fields.insert("context_before".into(), json!(before));
-            d.fields.insert("context_word".into(), json!(target));
-            d.fields.insert("context_after".into(), json!(after));
-            d.fields.insert("suggestions".into(), json!(suggestions));
-            d.fields.insert("selected_suggestion".into(), json!(suggestions.first().cloned()));
-            d.fields.insert("change_to".into(), json!(change_to));
-            d.fields.insert("node_id".into(), json!(id));
-            d.fields.insert("start".into(), json!(start));
-            d.fields.insert("end".into(), json!(end));
-            d.fields.insert("lang".into(), json!(lang));
-            d.fields.insert("done".into(), json!(false));
-            return Ok(());
+        let next_from = words.last().map(|w| (w.0, w.2));
+        let mut rest = words.into_iter().filter(|w| !is_skipped(&skipped, w));
+        if let Some(w) = rest.next() {
+            let mut queue: Vec<Value> = rest.map(|(id, start, end, word, lang)| json!([id, start, end, word, lang])).collect();
+            queue.reverse();
+            d.fields.insert("queue".into(), Value::Array(queue));
+            d.fields.insert("queue_more".into(), json!(more));
+            d.fields.insert("queue_from".into(), json!(next_from.map(|(id, byte)| [id, byte as u64])));
+            return show(app, d, w);
         }
-
-        if more && !words.is_empty() {
-            let last_id = words.last().and_then(|w| w.get("id")).and_then(Value::as_u64).unwrap_or(0);
-            if let Some(pos) = remaining_ids.iter().position(|&id| id == last_id)
-                && pos > 0
-            {
-                remaining_ids.drain(0..pos);
-                d.fields.insert("remaining_ids".into(), json!(remaining_ids));
-                continue;
+        match next_from {
+            Some(f) if more => {
+                from = Some(f);
+                max = page();
             }
-            if remaining_ids.len() > 1 {
-                remaining_ids.remove(0);
-                d.fields.insert("remaining_ids".into(), json!(remaining_ids));
-                continue;
+            _ => {
+                set_done(d);
+                return Ok(());
             }
         }
-
-        set_done(d);
-        return Ok(());
     }
+}
+
+/// Shows the next word of `queue` that Ignore did not skip and Ignore All did not add, or goes on
+/// with a new check from `queue_from` when the queue runs out. The queue holds what a check listed
+/// at the document revision of the word shown, so callers use it only while [`resume_at`] gives
+/// Some.
+fn step(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
+    let skipped = get_skipped(d);
+    loop {
+        let next = d.fields.get_mut("queue").and_then(Value::as_array_mut).and_then(Vec::pop);
+        let Some(next) = next else { break };
+        let Some(w) = queued_word(&next) else { continue };
+        if is_skipped(&skipped, &w) || ignored_all(app, &w.3) {
+            continue;
+        }
+        return show(app, d, w);
+    }
+    let from = d.fields.get("queue_from").and_then(Value::as_array).and_then(|a| match a.as_slice() {
+        [id, byte] => Some((id.as_u64()?, usize::try_from(byte.as_u64()?).ok()?)),
+        _ => None,
+    });
+    match from {
+        Some(from) if d.bool("queue_more") => advance(app, d, Some(from), page()),
+        _ => {
+            set_done(d);
+            Ok(())
+        }
+    }
+}
+
+/// Whether the active document's check skips `word` (Ignore All).
+fn ignored_all(app: &VectorcraftApp, word: &str) -> bool {
+    let Some(w) = vectorcraft_engine::cmd::spelling::custom_word(word) else { return false };
+    app.session.doc().is_ok_and(|st| st.spelling_ignored.contains(&w))
+}
+
+/// Shows `w` with its sentence and suggestions.
+fn show(app: &mut VectorcraftApp, d: &mut Dialog, w: Word) -> Result<(), String> {
+    let (id, start, end, word, lang) = w;
+    let (before, target, after) = {
+        let st = app.session.doc().map_err(|e| e.to_string())?;
+        if let Some(vectorcraft_doc::NodeKind::Text(t)) = st.doc.node(vectorcraft_doc::NodeId(id)).map(|n| &n.kind) {
+            extract_sentence_context(&t.plain_text(), start..end)
+        } else {
+            (String::new(), word.clone(), String::new())
+        }
+    };
+
+    let sugg_res = app.run("text.spelling.suggest", json!({ "word": word, "lang": lang, "max": 10 })).map_err(|e| e.to_string())?;
+    let suggestions: Vec<String> = sugg_res
+        .get("suggestions")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect())
+        .unwrap_or_default();
+
+    let change_to = suggestions.first().cloned().unwrap_or_else(|| word.clone());
+    let full_context = format!("{before}{target}{after}");
+
+    d.fields.insert("not_in_dictionary".into(), json!(word));
+    d.fields.insert("context".into(), json!(full_context));
+    d.fields.insert("context_before".into(), json!(before));
+    d.fields.insert("context_word".into(), json!(target));
+    d.fields.insert("context_after".into(), json!(after));
+    d.fields.insert("suggestions".into(), json!(suggestions));
+    d.fields.insert("selected_suggestion".into(), json!(suggestions.first().cloned()));
+    d.fields.insert("change_to".into(), json!(change_to));
+    d.fields.insert("node_id".into(), json!(id));
+    d.fields.insert("start".into(), json!(start));
+    d.fields.insert("end".into(), json!(end));
+    d.fields.insert("lang".into(), json!(lang));
+    d.fields.insert("done".into(), json!(false));
+    remember_revision(app, d);
+    Ok(())
+}
+
+/// Notes the document's revision and the custom dictionary's generation as of the word shown,
+/// which [`resume_at`] compares.
+fn remember_revision(app: &VectorcraftApp, d: &mut Dialog) {
+    d.fields.insert("revision".into(), json!(revision(app)));
+}
+
+/// The document's revision and the custom dictionary's generation: when either moves, the words
+/// before the one shown may have changed.
+fn revision(app: &VectorcraftApp) -> Option<[u64; 2]> {
+    let doc = app.session.doc().map(|st| st.revision).ok()?;
+    Some([doc, vectorcraft_engine::cmd::spelling::dictionary_generation()])
+}
+
+/// The word shown: (id, start, end).
+fn current(d: &Dialog) -> Option<(u64, usize, usize)> {
+    let id = d.fields.get("node_id").and_then(Value::as_u64)?;
+    let start = usize::try_from(d.fields.get("start").and_then(Value::as_u64)?).ok()?;
+    let end = usize::try_from(d.fields.get("end").and_then(Value::as_u64)?).ok()?;
+    Some((id, start, end))
+}
+
+/// Where the next check goes on from: the start of the word shown. When another command changed
+/// the document or the custom dictionary since the word was shown, the text before the word may
+/// hold new unknown words, and `queue` may be out of date, so the check starts the scope again
+/// (None); [`advance`] still skips the occurrences Ignore skipped.
+fn resume_at(app: &VectorcraftApp, d: &Dialog) -> Option<(u64, usize)> {
+    let now = revision(app)?;
+    if d.fields.get("revision") != Some(&json!(now)) {
+        return None;
+    }
+    let (id, start, _, true) = shown_word(app, d)? else { return None };
+    Some((id, start))
+}
+
+/// The word shown, (id, start, end), and whether its object still holds it at those bytes; None
+/// when there is none or its object is no longer type.
+fn shown_word(app: &VectorcraftApp, d: &Dialog) -> Option<(u64, usize, usize, bool)> {
+    let (id, start, end) = current(d)?;
+    let st = app.session.doc().ok()?;
+    let Some(vectorcraft_doc::NodeKind::Text(t)) = st.doc.node(vectorcraft_doc::NodeId(id)).map(|n| &n.kind) else { return None };
+    let word = d.str("not_in_dictionary");
+    let still_there = !word.is_empty() && t.plain_text().get(start..end).is_some_and(|w| w == word);
+    Some((id, start, end, still_there))
 }
 
 fn check_doc_uid(app: &VectorcraftApp, d: &Dialog) -> Result<(), String> {
@@ -323,12 +472,19 @@ fn ignore(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     if d.bool("done") {
         return Ok(());
     }
-    let id = d.fields.get("node_id").and_then(Value::as_u64).unwrap_or(0);
-    let start = d.fields.get("start").and_then(Value::as_u64).unwrap_or(0);
-    let mut skipped = get_skipped(d);
-    skipped.push((id, start));
-    set_skipped(d, &skipped);
-    advance(app, d)
+    let unchanged = resume_at(app, d).is_some();
+    if let Some((id, start, _, true)) = shown_word(app, d) {
+        let mut skipped = get_skipped(d);
+        skipped.insert((id, start as u64, d.str("not_in_dictionary")));
+        set_skipped(d, &skipped);
+    }
+    go_on(app, d, unchanged)
+}
+
+/// On past the word shown: the next word of the queue while nothing changed since it was shown,
+/// otherwise the scope checked again from its start.
+fn go_on(app: &mut VectorcraftApp, d: &mut Dialog, unchanged: bool) -> Result<(), String> {
+    if unchanged { step(app, d) } else { advance(app, d, None, page()) }
 }
 
 fn ignore_all(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
@@ -336,11 +492,13 @@ fn ignore_all(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     if d.bool("done") {
         return Ok(());
     }
+    let unchanged = resume_at(app, d).is_some();
     let word = d.str("not_in_dictionary");
     if !word.is_empty() {
         app.run("text.spelling.ignoreAll", json!({ "word": word })).map_err(|e| e.to_string())?;
     }
-    advance(app, d)
+    // The queue's other occurrences of the word are passed over too.
+    go_on(app, d, unchanged)
 }
 
 fn change(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
@@ -348,29 +506,31 @@ fn change(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     if d.bool("done") {
         return Ok(());
     }
-    let id = d.fields.get("node_id").and_then(Value::as_u64).unwrap_or(0);
-    let start = d.fields.get("start").and_then(Value::as_u64).unwrap_or(0) as usize;
-    let end = d.fields.get("end").and_then(Value::as_u64).unwrap_or(0) as usize;
-    let expected_word = d.str("not_in_dictionary");
+    let from = resume_at(app, d);
     let change_to = d.str("change_to");
-    if !change_to.trim().is_empty() && id > 0 {
-        let text_matches = {
-            let st = app.session.doc().map_err(|e| e.to_string())?;
-            if let Some(vectorcraft_doc::NodeKind::Text(t)) = st.doc.node(vectorcraft_doc::NodeId(id)).map(|n| &n.kind) {
-                let plain = t.plain_text();
-                plain.get(start..end).map(|s| s == expected_word).unwrap_or(false)
-            } else {
-                false
-            }
-        };
-
-        if text_matches {
-            app.run("text.editRange", json!({ "id": id, "start": start, "end": end, "insert": change_to })).map_err(|e| e.to_string())?;
-        } else {
-            return advance(app, d);
-        }
+    // Changed only while the word is still at the bytes shown.
+    let Some((id, start, end, true)) = shown_word(app, d) else { return advance(app, d, None, page()) };
+    if change_to.trim().is_empty() {
+        return recheck(app, d, from);
     }
-    advance(app, d)
+    if change_to == d.str("not_in_dictionary") {
+        // Nothing to change, so no undo step: on past the word.
+        return go_on(app, d, from.is_some());
+    }
+    app.run("text.editRange", json!({ "id": id, "start": start, "end": end, "insert": change_to })).map_err(|e| e.to_string())?;
+    shift_skipped(d, id, &[(start, end)], change_to.len());
+    // On from the replacement, which is shown when the dictionaries don't know it either (or
+    // from the start of the scope, when the document changed under the dialog).
+    recheck(app, d, from)
+}
+
+/// A new check after a change: on from `from` until the next unknown word, or the scope from its
+/// start when `from` is None.
+fn recheck(app: &mut VectorcraftApp, d: &mut Dialog, from: Option<(u64, usize)>) -> Result<(), String> {
+    match from {
+        Some(from) => advance(app, d, Some(from), 1),
+        None => advance(app, d, None, page()),
+    }
 }
 
 fn change_all(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
@@ -380,120 +540,48 @@ fn change_all(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     }
     let word = d.str("not_in_dictionary");
     let change_to = d.str("change_to");
+    let here = resume_at(app, d);
     if word.is_empty() || change_to.trim().is_empty() {
-        return advance(app, d);
+        return recheck(app, d, here);
     }
-    let initial_ids = d.fields.get("ids").cloned().unwrap_or(Value::Null);
     let skipped = get_skipped(d);
 
-    let mut undo_group_started = false;
-    let mut execute_changes = || -> Result<(), String> {
-        let mut replaced_spans: Vec<(u64, usize, usize)> = Vec::new();
-        let mut all_commands = Vec::new();
-        loop {
-            let check_res = app.run("text.spelling.check", json!({ "ids": initial_ids })).map_err(|e| e.to_string())?;
-            let words = check_res.get("words").and_then(Value::as_array).cloned().unwrap_or_default();
-            let more = check_res.get("more").and_then(Value::as_bool).unwrap_or(false);
-
-            let mut by_node: BTreeMap<u64, Vec<(usize, usize)>> = BTreeMap::new();
-            let mut new_edits = 0;
-            for w in &words {
-                let id = w.get("id").and_then(Value::as_u64).unwrap_or(0);
-                let start = w.get("start").and_then(Value::as_u64).unwrap_or(0) as usize;
-                let end = w.get("end").and_then(Value::as_u64).unwrap_or(0) as usize;
-                let w_str = w.get("word").and_then(Value::as_str).unwrap_or("");
-                if skipped.contains(&(id, start as u64)) {
-                    continue;
-                }
-                if replaced_spans.iter().any(|&(r_id, r_start, r_end)| r_id == id && start >= r_start && start < r_end) {
-                    continue;
-                }
-                if w_str.eq_ignore_ascii_case(&word) {
-                    by_node.entry(id).or_default().push((start, end));
-                    new_edits += 1;
-                }
-            }
-
-            if new_edits == 0 {
-                break;
-            }
-
-            let new_len = change_to.len() as isize;
-            for (r_id, r_start, r_end) in &mut replaced_spans {
-                if let Some(ranges) = by_node.get(r_id) {
-                    let delta: isize = ranges.iter().filter(|(_, end)| *end <= *r_start).map(|(start, end)| new_len - (*end - *start) as isize).sum();
-                    *r_start = (*r_start as isize + delta).max(0) as usize;
-                    *r_end = (*r_end as isize + delta).max(0) as usize;
-                }
-            }
-            for (&id, ranges) in &by_node {
-                for &(start, _) in ranges {
-                    let delta: isize = ranges
-                        .iter()
-                        .filter(|(_, other_end)| *other_end <= start)
-                        .map(|(other_start, other_end)| new_len - (*other_end - *other_start) as isize)
-                        .sum();
-                    let post_start = (start as isize + delta).max(0) as usize;
-                    let post_end = post_start + change_to.len();
-                    replaced_spans.push((id, post_start, post_end));
-                }
-            }
-
-            let mut batch_commands = Vec::new();
-            for (id, mut ranges) in by_node {
-                ranges.sort_by_key(|a| std::cmp::Reverse(a.0));
-                for (start, end) in ranges {
-                    batch_commands.push(json!({
-                        "command": "text.editRange",
-                        "params": {
-                            "id": id,
-                            "start": start,
-                            "end": end,
-                            "insert": change_to,
-                        }
-                    }));
-                }
-            }
-
-            if !batch_commands.is_empty() {
-                if batch_commands.len() == 1 && !more && all_commands.is_empty() && !undo_group_started {
-                    let cmd = &batch_commands[0];
-                    app.run(cmd["command"].as_str().unwrap_or("text.editRange"), cmd["params"].clone()).map_err(|e| e.to_string())?;
-                    break;
-                } else if more {
-                    if !undo_group_started {
-                        app.run("edit.undoGroup.begin", json!({ "label": "Change All" })).map_err(|e| e.to_string())?;
-                        undo_group_started = true;
-                    }
-                    app.run("command.batch", json!({ "label": "Change All", "commands": batch_commands })).map_err(|e| e.to_string())?;
-                    continue;
-                } else {
-                    all_commands.extend(batch_commands);
-                    break;
-                }
-            }
-
-            break;
-        }
-
-        if !all_commands.is_empty() {
-            if all_commands.len() == 1 && !undo_group_started {
-                let cmd = &all_commands[0];
-                app.run(cmd["command"].as_str().unwrap_or("text.editRange"), cmd["params"].clone()).map_err(|e| e.to_string())?;
-            } else {
-                app.run("command.batch", json!({ "label": "Change All", "commands": all_commands })).map_err(|e| e.to_string())?;
+    // Every occurrence in the scope, found before anything changes, so the bytes each check gives
+    // stay true: one check after another, each going on from the end of the last word listed,
+    // until none says `more`.
+    let mut by_node: BTreeMap<u64, Vec<(usize, usize)>> = BTreeMap::new();
+    let mut from = None;
+    loop {
+        let params = check_params(app, d, from, page());
+        let check_res = app.run("text.spelling.check", params).map_err(|e| e.to_string())?;
+        let words: Vec<Word> = check_res.get("words").and_then(Value::as_array).map(|a| a.iter().filter_map(word_at).collect()).unwrap_or_default();
+        let more = check_res.get("more").and_then(Value::as_bool).unwrap_or(false);
+        for w in &words {
+            // An occurrence that already reads as the replacement is left alone: no edit, no undo step.
+            if w.3.eq_ignore_ascii_case(&word) && w.3 != change_to && !is_skipped(&skipped, w) {
+                by_node.entry(w.0).or_default().push((w.1, w.2));
             }
         }
-        Ok(())
-    };
-
-    let res = execute_changes();
-    if undo_group_started {
-        let cancel = res.is_err();
-        let _ = app.run("edit.undoGroup.end", json!({ "cancel": cancel }));
+        match words.last() {
+            Some((id, _, end, _, _)) if more => from = Some((*id, *end)),
+            _ => break,
+        }
     }
-    res?;
-    advance(app, d)
+
+    if by_node.is_empty() {
+        // Nothing to change: on past the word shown, as Change does.
+        return go_on(app, d, here.is_some());
+    }
+    // Every edit in one command: one undo step, each object laid out once.
+    let words: Vec<Value> =
+        by_node.iter().flat_map(|(&id, ranges)| ranges.iter().map(move |&(start, end)| json!({ "id": id, "start": start, "end": end }))).collect();
+    app.run("text.spelling.change", json!({ "to": change_to, "words": words })).map_err(|e| e.to_string())?;
+    for (&id, ranges) in &by_node {
+        shift_skipped(d, id, ranges, change_to.len());
+    }
+    // On from the shown word's replacement, where it moved to.
+    let from = here.map(|(id, start)| (id, by_node.get(&id).map_or(start, |ranges| shifted(start, ranges, change_to.len()))));
+    recheck(app, d, from)
 }
 
 fn add_to_dictionary(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
@@ -501,11 +589,13 @@ fn add_to_dictionary(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), Str
     if d.bool("done") {
         return Ok(());
     }
+    // The check takes the word as right from now on, so it goes on from where the word starts.
+    let from = resume_at(app, d);
     let word = d.str("not_in_dictionary");
     if !word.is_empty() {
         app.run("text.spelling.addWord", json!({ "word": word })).map_err(|e| e.to_string())?;
     }
-    advance(app, d)
+    recheck(app, d, from)
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> DialogAction {
@@ -690,6 +780,378 @@ mod tests {
     const WORD_A: &str = "zqvspella";
     const WORD_B: &str = "zqvspellb";
     const WORD_C: &str = "zqvspellc";
+    /// Never added to the custom dictionary, which the whole process shares (unlike WORD_C).
+    const WORD_D: &str = "zqvspelld";
+
+    thread_local! {
+        /// The most words one Change All check lists in this test thread ([`super::change_all_page`]).
+        pub(super) static PAGE: std::cell::Cell<usize> = const { std::cell::Cell::new(vectorcraft_engine::cmd::spelling::MAX_WORDS) };
+    }
+
+    fn plain(app: &VectorcraftApp, id: u64) -> String {
+        match &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+            vectorcraft_doc::NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("not text"),
+        }
+    }
+
+    /// The word the dialog shows: (id, start, word).
+    fn shown(app: &VectorcraftApp) -> (u64, u64, String) {
+        let d = app.ui.dialog.as_ref().unwrap();
+        (d.fields["node_id"].as_u64().unwrap(), d.fields["start"].as_u64().unwrap(), d.str("not_in_dictionary"))
+    }
+
+    fn act(app: &mut VectorcraftApp, f: fn(&mut VectorcraftApp, &mut crate::state::Dialog) -> Result<(), String>) {
+        let mut d = app.ui.dialog.take().unwrap();
+        f(app, &mut d).unwrap();
+        app.ui.dialog = Some(d);
+    }
+
+    #[test]
+    fn ignore_goes_on_through_the_rest_of_the_same_type_object() {
+        let mut app = app();
+        let id = text(&mut app, 50.0, &format!("{WORD_B} one {WORD_B} two {WORD_B}"));
+        let other = text(&mut app, 100.0, &format!("then {WORD_A}"));
+        app.run("select.none", json!({})).unwrap();
+        super::open(&mut app).unwrap();
+        // Each step asks for one word on from the last, so every occurrence in the object is shown
+        // in turn before the next object's.
+        let mut seen = vec![shown(&app)];
+        for _ in 0..4 {
+            act(&mut app, super::ignore);
+            if !app.ui.dialog.as_ref().unwrap().bool("done") {
+                seen.push(shown(&app));
+            }
+        }
+        assert!(app.ui.dialog.as_ref().unwrap().bool("done"));
+        let b = WORD_B.len() as u64;
+        let want =
+            vec![(id, 0, WORD_B.to_string()), (id, b + 5, WORD_B.to_string()), (id, 2 * b + 10, WORD_B.to_string()), (other, 5, WORD_A.to_string())];
+        assert_eq!(seen, want);
+    }
+
+    #[test]
+    fn ignore_and_change_all_reach_every_word_of_a_selected_groups_type() {
+        let mut app = app();
+        let a = text(&mut app, 50.0, &format!("{WORD_B} {WORD_D} {WORD_B}"));
+        let b = text(&mut app, 100.0, &format!("{WORD_D} {WORD_B}"));
+        let outside = text(&mut app, 150.0, &format!("{WORD_B} outside"));
+        app.run("select.set", json!({ "ids": [a, b] })).unwrap();
+        let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({ "ids": [group] })).unwrap();
+        PAGE.with(|p| p.set(1));
+
+        super::open(&mut app).unwrap();
+        let mut seen = vec![shown(&app)];
+        for _ in 0..5 {
+            act(&mut app, super::ignore);
+            if !app.ui.dialog.as_ref().unwrap().bool("done") {
+                seen.push(shown(&app));
+            }
+        }
+        assert!(app.ui.dialog.as_ref().unwrap().bool("done"));
+        let ids: Vec<(u64, String)> = seen.into_iter().map(|(id, _, w)| (id, w)).collect();
+        let want = [(a, WORD_B), (a, WORD_D), (a, WORD_B), (b, WORD_D), (b, WORD_B)].map(|(id, w)| (id, w.to_string()));
+        assert_eq!(ids, want, "the group's descendants, one word at a time; not the object outside it");
+
+        // Change All goes through the group one listed word at a time too.
+        super::open(&mut app).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("change_to".into(), json!("fixed"));
+        act(&mut app, super::change_all);
+        assert_eq!(plain(&app, a), format!("fixed {WORD_D} fixed"));
+        assert_eq!(plain(&app, b), format!("{WORD_D} fixed"));
+        assert_eq!(plain(&app, outside), format!("{WORD_B} outside"), "outside the selection");
+    }
+
+    #[test]
+    fn change_all_reaches_a_target_past_a_full_check_of_other_words() {
+        let mut app = app();
+        // The second WORD_A comes after a whole check's worth of other unknown words.
+        PAGE.with(|p| p.set(2));
+        let id = text(&mut app, 50.0, &format!("{WORD_A} {WORD_B} {WORD_D} {WORD_A} {WORD_B} {WORD_A}"));
+        super::open(&mut app).unwrap();
+        // Ignore the first WORD_A, then change all from the second.
+        act(&mut app, super::ignore);
+        act(&mut app, super::ignore);
+        act(&mut app, super::ignore);
+        assert_eq!(shown(&app).2, WORD_A);
+        app.ui.dialog.as_mut().unwrap().fields.insert("change_to".into(), json!("fixed"));
+        act(&mut app, super::change_all);
+        assert_eq!(plain(&app, id), format!("{WORD_A} {WORD_B} {WORD_D} fixed {WORD_B} fixed"), "the ignored one stays");
+        // On from the replacement: the WORD_B after it.
+        assert_eq!(shown(&app).2, WORD_B);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(plain(&app, id), format!("{WORD_A} {WORD_B} {WORD_D} {WORD_A} {WORD_B} {WORD_A}"), "one undo step");
+    }
+
+    #[test]
+    fn change_all_reaches_a_target_past_the_checks_limit_in_one_object() {
+        use vectorcraft_engine::cmd::spelling::MAX_WORDS;
+        let mut app = app();
+        // A target, then the most other words one check lists, then a second target, all in one
+        // type object.
+        let others = vec![WORD_B; MAX_WORDS].join(" ");
+        let id = text(&mut app, 50.0, &format!("{WORD_A} {others} {WORD_A}"));
+        super::open(&mut app).unwrap();
+        assert_eq!(shown(&app), (id, 0, WORD_A.to_string()));
+        app.ui.dialog.as_mut().unwrap().fields.insert("change_to".into(), json!("fixed"));
+        act(&mut app, super::change_all);
+        assert_eq!(plain(&app, id), format!("fixed {others} fixed"));
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(plain(&app, id), format!("{WORD_A} {others} {WORD_A}"), "one undo step");
+    }
+
+    #[test]
+    fn text_changed_under_the_dialog_is_checked_again_from_its_start() {
+        // A word of its own: Add to Dictionary puts it in the custom dictionary the process shares.
+        const STALE: &str = "zqvstaleword";
+        for f in [super::ignore, super::ignore_all, super::change, super::change_all, super::add_to_dictionary] {
+            let mut app = app();
+            let id = text(&mut app, 50.0, &format!("hello {STALE}"));
+            super::open(&mut app).unwrap();
+            assert_eq!(shown(&app), (id, 6, STALE.to_string()));
+            // Another command replaces the text with a shorter one: the shown bytes are gone.
+            app.run("text.editRange", json!({ "id": id, "start": 0, "end": 6 + STALE.len(), "insert": WORD_D })).unwrap();
+            app.ui.dialog.as_mut().unwrap().fields.insert("change_to".into(), json!("fixed"));
+            act(&mut app, f);
+            forget(&mut app, &[STALE]);
+            assert_eq!(plain(&app, id), WORD_D, "nothing is changed at stale bytes");
+            assert_eq!(shown(&app), (id, 0, WORD_D.to_string()), "the object is checked again from its start");
+        }
+    }
+
+    #[test]
+    fn a_restarted_check_still_skips_the_ignored_occurrences() {
+        let mut app = app();
+        let id = text(&mut app, 50.0, &format!("{WORD_A} {WORD_B} {WORD_A}"));
+        super::open(&mut app).unwrap();
+        act(&mut app, super::ignore);
+        assert_eq!(shown(&app), (id, 10, WORD_B.to_string()));
+        // Another command changes the word shown, so the next step checks the object from its start.
+        app.run("text.editRange", json!({ "id": id, "start": 10, "end": 10 + WORD_B.len(), "insert": WORD_D })).unwrap();
+        act(&mut app, super::ignore);
+        assert_eq!(shown(&app), (id, 10, WORD_D.to_string()), "the ignored first word is not shown again");
+    }
+
+    #[test]
+    fn an_unknown_word_brought_back_before_the_shown_one_is_shown_again() {
+        // Words of their own: Add to Dictionary puts one in the custom dictionary the process shares.
+        // FIRST has as many bytes as "different", so the second word stays at the bytes shown.
+        const FIRST: &str = "zqvbckone";
+        const SECOND: &str = "zqvbacktwo";
+        for f in [super::ignore, super::ignore_all, super::change, super::change_all, super::add_to_dictionary] {
+            let mut app = app();
+            let id = text(&mut app, 50.0, &format!("{FIRST} {SECOND}"));
+            super::open(&mut app).unwrap();
+            app.ui.dialog.as_mut().unwrap().fields.insert("change_to".into(), json!("different"));
+            act(&mut app, super::change);
+            // Drawing the dialog leaves the document's revision alone, so the next step goes on
+            // from the word shown rather than starting again.
+            let ctx = context();
+            frame(&mut app, &ctx, vec![]);
+            frame(&mut app, &ctx, vec![]);
+            let d = app.ui.dialog.as_ref().unwrap();
+            assert_eq!(d.fields["revision"][0], json!(app.session.doc().unwrap().revision));
+            assert_eq!(shown(&app), (id, 10, SECOND.to_string()));
+            // Another command (Undo) brings the first word back before the one shown.
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!(plain(&app, id), format!("{FIRST} {SECOND}"));
+            app.ui.dialog.as_mut().unwrap().fields.insert("change_to".into(), json!("fixed"));
+            act(&mut app, f);
+            forget(&mut app, &[SECOND]);
+            assert_eq!(shown(&app), (id, 0, FIRST.to_string()), "the check starts again and finds it");
+        }
+    }
+
+    #[test]
+    fn a_word_taken_out_of_the_custom_dictionary_is_shown_again() {
+        // Words of their own: the custom dictionary is shared by the whole process.
+        const FIRST: &str = "zqvdictone";
+        const SECOND: &str = "zqvdicttwo";
+        let mut app = app();
+        let id = text(&mut app, 50.0, &format!("{FIRST} {SECOND}"));
+        super::open(&mut app).unwrap();
+        act(&mut app, super::add_to_dictionary);
+        assert_eq!(shown(&app), (id, 11, SECOND.to_string()));
+        // Another command takes the first word out of the dictionary again.
+        app.run("text.spelling.removeWord", json!({ "word": FIRST })).unwrap();
+        act(&mut app, super::ignore);
+        assert_eq!(shown(&app), (id, 0, FIRST.to_string()), "the check starts again and finds it");
+    }
+
+    #[test]
+    fn a_shown_object_that_leaves_the_scope_starts_the_scope_again() {
+        let mut app = app();
+        let first = text(&mut app, 50.0, &format!("{WORD_A} here"));
+        let second = text(&mut app, 100.0, &format!("{WORD_B} there"));
+        app.run("select.none", json!({})).unwrap();
+        super::open(&mut app).unwrap();
+        assert_eq!(shown(&app).0, first);
+        app.run("object.lock", json!({ "ids": [first] })).unwrap();
+        act(&mut app, super::ignore);
+        assert_eq!(shown(&app), (second, 0, WORD_B.to_string()), "on to the type still in the scope");
+    }
+
+    #[test]
+    fn a_selected_object_deleted_under_the_dialog_leaves_the_scope() {
+        let mut app = app();
+        let first = text(&mut app, 50.0, &format!("{WORD_A} here"));
+        let second = text(&mut app, 100.0, &format!("{WORD_B} there"));
+        let outside = text(&mut app, 150.0, &format!("{WORD_C} elsewhere"));
+        app.run("select.set", json!({ "ids": [first, second] })).unwrap();
+        super::open(&mut app).unwrap();
+        assert_eq!(shown(&app).0, first);
+        app.run("edit.clear", json!({ "ids": [first] })).unwrap();
+        act(&mut app, super::ignore);
+        assert_eq!(shown(&app), (second, 0, WORD_B.to_string()), "on to the selected type that is left");
+        app.run("edit.clear", json!({ "ids": [second] })).unwrap();
+        act(&mut app, super::ignore);
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert!(d.bool("done"), "nothing left in the selection: not the rest of the document ({outside})");
+    }
+
+    /// Marks the first `n` occurrences of WORD_B in `id` (each WORD_B and a space) as skipped by
+    /// Ignore, with the last of them shown.
+    fn ignored_b_words(app: &mut VectorcraftApp, id: u64, n: usize) {
+        let step = WORD_B.len() + 1;
+        let d = app.ui.dialog.as_mut().unwrap();
+        let skipped: Vec<_> = (0..n).map(|i| json!([id, i * step, WORD_B])).collect();
+        d.fields.insert("skipped".into(), json!(skipped));
+        let last = (n - 1) * step;
+        for (k, v) in [("node_id", json!(id)), ("start", json!(last)), ("end", json!(last + WORD_B.len())), ("not_in_dictionary", json!(WORD_B))] {
+            d.fields.insert(k.into(), v);
+        }
+    }
+
+    #[test]
+    fn ignore_reaches_the_last_of_more_unknown_words_than_one_check_lists() {
+        use vectorcraft_engine::cmd::spelling::MAX_WORDS;
+        let mut app = app();
+        let id = text(&mut app, 50.0, &vec![WORD_B; MAX_WORDS + 1].join(" "));
+        super::open(&mut app).unwrap();
+        ignored_b_words(&mut app, id, MAX_WORDS);
+        // Another command changes the document, so the next step checks the scope from its start,
+        // where every word one check lists was skipped.
+        text(&mut app, 100.0, "hello");
+        act(&mut app, super::ignore);
+        assert_eq!(shown(&app), (id, (MAX_WORDS * (WORD_B.len() + 1)) as u64, WORD_B.to_string()), "the last occurrence");
+        act(&mut app, super::ignore);
+        assert!(app.ui.dialog.as_ref().unwrap().bool("done"));
+    }
+
+    #[test]
+    fn ignore_and_change_all_reach_a_selected_groups_type_past_the_checks_limit() {
+        use vectorcraft_engine::cmd::spelling::MAX_WORDS;
+        let mut app = app();
+        let a = text(&mut app, 50.0, &vec![WORD_B; MAX_WORDS].join(" "));
+        let b = text(&mut app, 100.0, &format!("{WORD_A} end"));
+        let outside = text(&mut app, 150.0, &format!("{WORD_D} outside"));
+        app.run("select.set", json!({ "ids": [a, b] })).unwrap();
+        let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({ "ids": [group] })).unwrap();
+        super::open(&mut app).unwrap();
+        ignored_b_words(&mut app, a, MAX_WORDS);
+        // An edit outside the group moves the document's revision: the group is checked again.
+        app.run("text.editRange", json!({ "id": outside, "start": 0, "end": 0, "insert": "the " })).unwrap();
+        act(&mut app, super::ignore);
+        assert_eq!(shown(&app), (b, 0, WORD_A.to_string()), "the next object in the group");
+        act(&mut app, super::ignore);
+        assert!(app.ui.dialog.as_ref().unwrap().bool("done"), "not the object outside the group");
+
+        // Change All: a target, then the most words one check lists, then a target in the next object.
+        app.run("text.editRange", json!({ "id": a, "start": 0, "end": 0, "insert": format!("{WORD_A} ") })).unwrap();
+        super::open(&mut app).unwrap();
+        assert_eq!(shown(&app), (a, 0, WORD_A.to_string()));
+        app.ui.dialog.as_mut().unwrap().fields.insert("change_to".into(), json!("fixed"));
+        act(&mut app, super::change_all);
+        assert!(plain(&app, a).starts_with(&format!("fixed {WORD_B} ")));
+        assert_eq!(plain(&app, b), "fixed end");
+    }
+
+    #[test]
+    fn ignore_all_and_add_to_dictionary_go_on_past_each_check() {
+        PAGE.with(|p| p.set(2));
+        let mut app = app();
+        let id = text(&mut app, 50.0, &format!("{WORD_A} {WORD_B} {WORD_A} {WORD_D} {WORD_A}"));
+        super::open(&mut app).unwrap();
+        assert_eq!(shown(&app), (id, 0, WORD_A.to_string()));
+        act(&mut app, super::ignore_all);
+        let mut seen = vec![shown(&app)];
+        act(&mut app, super::ignore);
+        seen.push(shown(&app));
+        act(&mut app, super::ignore);
+        assert!(app.ui.dialog.as_ref().unwrap().bool("done"));
+        assert_eq!(seen, vec![(id, 10, WORD_B.to_string()), (id, 30, WORD_D.to_string())], "no WORD_A after Ignore All");
+
+        // Words of their own: the custom dictionary is shared by the whole process.
+        const ADDED: &str = "zqvaddone";
+        const OTHER: &str = "zqvaddtwo";
+        PAGE.with(|p| p.set(1));
+        let mut app = super::tests::app();
+        let id = text(&mut app, 50.0, &format!("{ADDED} {OTHER} {ADDED} {OTHER}"));
+        super::open(&mut app).unwrap();
+        act(&mut app, super::add_to_dictionary);
+        let mut seen = vec![shown(&app)];
+        act(&mut app, super::ignore);
+        seen.push(shown(&app));
+        act(&mut app, super::ignore);
+        let done = app.ui.dialog.as_ref().unwrap().bool("done");
+        forget(&mut app, &[ADDED]);
+        assert!(done);
+        assert_eq!(seen, vec![(id, 10, OTHER.to_string()), (id, 30, OTHER.to_string())]);
+    }
+
+    #[test]
+    fn change_to_the_same_word_changes_nothing_and_goes_on() {
+        for f in [super::change, super::change_all] {
+            let mut app = app();
+            let id = text(&mut app, 50.0, &format!("{WORD_D} and {WORD_D} {WORD_A}"));
+            super::open(&mut app).unwrap();
+            app.ui.dialog.as_mut().unwrap().fields.insert("change_to".into(), json!(WORD_D));
+            let depth = app.session.doc().unwrap().history.undo.len();
+            act(&mut app, f);
+            assert_eq!(app.session.doc().unwrap().history.undo.len(), depth, "no undo step");
+            assert_eq!(plain(&app, id), format!("{WORD_D} and {WORD_D} {WORD_A}"));
+            let d = WORD_D.len() as u64;
+            assert_eq!(shown(&app), (id, d + 5, WORD_D.to_string()), "on past the word shown");
+        }
+    }
+
+    #[test]
+    fn a_word_moved_by_another_command_is_not_taken_for_an_ignored_one() {
+        let mut app = app();
+        let id = text(&mut app, 50.0, &format!("{WORD_A} {WORD_B} {WORD_A}"));
+        super::open(&mut app).unwrap();
+        act(&mut app, super::ignore);
+        assert_eq!(shown(&app), (id, 10, WORD_B.to_string()));
+        // Another command puts a different unknown word where the ignored one was.
+        let len = plain(&app, id).len();
+        app.run("text.editRange", json!({ "id": id, "start": 0, "end": len, "insert": format!("{WORD_D} {WORD_A} {WORD_B}") })).unwrap();
+        act(&mut app, super::ignore);
+        assert_eq!(shown(&app), (id, 0, WORD_D.to_string()), "the word now at the ignored bytes is shown");
+    }
+
+    #[test]
+    fn change_all_changes_a_whole_checks_worth_of_occurrences_in_one_edit() {
+        use vectorcraft_engine::cmd::spelling::MAX_WORDS;
+        let mut app = app();
+        let id = text(&mut app, 50.0, &vec![WORD_A; MAX_WORDS + 1].join(" "));
+        super::open(&mut app).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("change_to".into(), json!("fixed"));
+        let depth = app.session.doc().unwrap().history.undo.len();
+        act(&mut app, super::change_all);
+        assert_eq!(plain(&app, id), vec!["fixed"; MAX_WORDS + 1].join(" "));
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), depth + 1, "one undo step");
+        assert!(app.ui.dialog.as_ref().unwrap().bool("done"));
+    }
+
+    #[test]
+    fn ignore_positions_move_with_the_edits_before_them() {
+        // "ab cd ef": cd (3..5) replaced with "wxyz" moves byte 6 to 8; byte 0 stays.
+        assert_eq!(super::shifted(6, &[(3, 5)], 4), 8);
+        assert_eq!(super::shifted(0, &[(3, 5)], 4), 0);
+        assert_eq!(super::shifted(9, &[(0, 2), (3, 5)], 1), 7);
+    }
 
     fn app() -> VectorcraftApp {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
@@ -1066,12 +1528,13 @@ mod tests {
         app.run("select.set", json!({ "ids": [] })).unwrap();
 
         super::open(&mut app).unwrap();
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert_eq!(d.str("not_in_dictionary"), WORD_A);
+        let ctx = context();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("not_in_dictionary"), WORD_A);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["node_id"], json!(editable_id));
 
-        let rem = d.fields.get("remaining_ids").and_then(serde_json::Value::as_array).unwrap();
-        assert!(rem.iter().any(|v| v.as_u64() == Some(editable_id)));
-        assert!(!rem.iter().any(|v| v.as_u64() == Some(locked_id)));
+        // The locked object's word is never shown.
+        click(&mut app, &ctx, "Ignore");
+        assert!(app.ui.dialog.as_ref().unwrap().bool("done"), "locked type {locked_id} is left out");
     }
 
     #[test]

@@ -1302,6 +1302,8 @@ font-technology	Variable	Değişken
 	Font Family & Style	Yazı Tipi Ailesi ve Stili
 	Font Family, Style & Size	Yazı Tipi Ailesi, Stili ve Boyutu
 	Font List	Yazı Tipi Listesi
+	Show Similar Fonts	Benzer Yazı Tiplerini Göster
+	Clear Similar Fonts	Benzer Yazı Tiplerini Temizle
 	Font Preview Size	Yazı Tipi Önizleme Boyutu
 	Font Size	Yazı Tipi Boyutu
 	Font:	Yazı tipi:
@@ -1389,6 +1391,7 @@ font-technology	Variable	Değişken
 	Connect Data Points	Veri Noktalarını Bağla
 	Edge-to-Edge Lines	Kenardan Kenara Çizgiler
 	Draw Filled Lines	Dolgulu Çizgiler Çiz
+	Line Width	Çizgi Genişliği
 	Tick Values	Onay İşareti Değerleri
 	Override Calculated Values	Hesaplanan Değerleri Geçersiz Kıl
 	Divisions	Bölümler
@@ -3054,6 +3057,7 @@ digits	Malayalam	Malayalam
 	Letter Spacing:	Harf Boşluğu:
 	Lights	Işıklar
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum, İstenen'i; İstenen ise Maksimum'u aşmamalıdır.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Minimum, İstenen'i; İstenen ise Maksimum'u aşmamalıdır
 	Select by Color	Renge Göre Seç
 	Set History Limit…	Geçmiş Sınırını Ayarla…
 	Single Word Justification:	Tek Sözcük Yaslama:
@@ -4364,6 +4368,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	Divide Objects Below: select exactly one path	Aşağıdaki Nesneleri Böl: tam olarak bir yol seçin
 @msg	Downloaded {what}	{what} indirildi
 @msg	Expand Appearance: the selection has a basic appearance	Görünümü Genişlet: seçimin temel bir görünümü vardır
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	bazı raster efektleri görüntüye dönüştürülmedi: toplamda 1.024'ten fazla görüntü veya 256 megapiksel gerektirirlerdi
 @msg	Expand: no brush strokes selected	Genişlet: seçili fırça darbesi yok
 @msg	Expand: no gradient fills	Genişlet: degrade dolgu yok
 @msg	Expand: nothing to expand	Genişlet: genişletilecek bir şey yok
@@ -5177,6 +5182,10 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 	Em Box	Em Kutusu
 	x-Height	x-Yüksekliği
 	ICF Box	ICF Kutusu
+	Show Sample	Örneği Göster
+	Hide Sample	Örneği Gizle
+	Max Ascent/Descent	Maks. Yükseklik/Derinlik
+	Max Ascender	Maks. Yükselen
 @msg	`colors` must be an array of colors, not {v}	`colors` {v} değil, bir renk dizisi olmalıdır
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id`, yalnızca `run` ve `command_batch` komutlarının çözümlediği {r} adım referansıdır
 @msg	`ids` must be an array of object ids, not {v}	`ids` bir nesne kimlikleri dizisi olmalıdır, {v} değil
@@ -6110,7 +6119,7 @@ theme	Appearance	Görünüm
 @msg	Unknown dimension orientation	Bilinmeyen boyut yönü
 @msg	Unknown dimension style	Bilinmeyen boyut stili
 @msg	Unknown unit	Bilinmeyen birim
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Açık profillerin dairesel uçlarını kapatın. Kısmi süpürmeler kesik taraflarını açık tutar.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Açık profillerin dairesel uçlarını kapatın. Kısmi süpürmeler kesik taraflarını da kapatır.
 @msg	span must be "object" or "selection", got {v}	span "object" veya "selection" olmalıdır, {v} değil
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" bir renk örneği değil, bir `gradient` yerleştirir
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" bir degrade yerleştirir: `gradient` verin
@@ -8306,7 +8315,9 @@ axis	Y Axis	Y ekseni
 @msg	position must be normal, superscript or subscript	position normal, superscript veya subscript olmalıdır
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position topLeft, topRight, bottomLeft veya bottomRight olmalıdır
 @msg	positions must be between 0 and 100000 pt	konumlar 0 ile 100000 pt arasında olmalıdır
+@msg	ppi can't be more than {max} for this image	bu görüntü için ppi {max} değerinden büyük olamaz
 @msg	ppi must be a positive number, not {ppi}	ppi pozitif bir sayı olmalıdır, {ppi} değil
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim görüntünün piksellerini olduğu gibi korur: ppi belirtmeyin
 @msg	ppi must be between 1 and 2400	ppi 1 ile 2400 arasında olmalıdır
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}`, transforms|bounds|fileDimensions|fit|fill değerlerinden biri değil
 @msg	preserveShape must be clippingMask|transparency	preserveShape clippingMask|transparency olmalıdır
@@ -9411,7 +9422,7 @@ breakText	Glyphs	Glifler
 @msg	stroke cannot be set on a symbol instance	stroke bir sembol örneğinde ayarlanamaz
 @msg	fill on a symbol instance must be a solid color or none	bir sembol örneğinin fill değeri düz renk veya none olmalıdır
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key}, Şekle Dönüştür veya Anahat Nesnesi efekti olmayan bir görüntüde ayarlanamaz
-@msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice ve/veya type verin
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	newName, registration, exportType, nineSlice, type ve/veya alignToPixelGrid verin
 	Text Flow	Metin Akışı
 	By Rows	Satırlara Göre
 	By Columns	Sütunlara Göre
@@ -9637,6 +9648,8 @@ breakText	Glyphs	Glifler
 @msg	No bridge of this width fits across the selected art	Bu genişlikte bir köprü seçili çizime sığmıyor
 @msg	Some islands could not be joined to the area around the art	Bazı adalar çizimin çevresindeki alana bağlanamadı
 @msg	`width` must be from {lo} to {hi} pt	`width` {lo} ile {hi} pt arasında olmalıdır
+@msg	`angle` must be from -180 to 180 degrees	`angle` -180 ile 180 derece arasında olmalıdır
+@msg	`roundness` must be from 1 to 100%	`roundness` %1 ile %100 arasında olmalıdır
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 ile {MAX_BRIDGES_PER_ISLAND} arasında bir tam sayı olmalıdır
 	Weed Box and Lines…	Ayıklama Kutusu ve Çizgileri…
 	Weed Box and Lines	Ayıklama Kutusu ve Çizgileri

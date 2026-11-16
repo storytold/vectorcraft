@@ -1605,6 +1605,10 @@ digits	Malayalam	Malayalam
 	Em Box	Em Box
 	x-Height	Tinggi x
 	ICF Box	Kotak ICF
+	Show Sample	Tampilkan contoh
+	Hide Sample	Sembunyikan contoh
+	Max Ascent/Descent	Tinggi/kedalaman maks.
+	Max Ascender	Ascender maks.
 	Copy Color Value (Hex)	Salin nilai warna (Hex)
 	Create New Swatch…	Buat swatch baru…
 	Name 40%	Nama 40%
@@ -3371,6 +3375,8 @@ theme	Appearance	Tampilan
 	Find Font Files	Cari file font
 	Add Font Files	Tambahkan file font
 	Font List	Daftar font
+	Show Similar Fonts	Tampilkan font serupa
+	Clear Similar Fonts	Hapus font serupa
 	Fonts in Document	Font dalam dokumen
 	Refresh Font List	Segarkan daftar font
 	Replace Font	Ganti font
@@ -3406,6 +3412,7 @@ theme	Appearance	Tampilan
 	Connect Data Points	Hubungkan titik data
 	Edge-to-Edge Lines	Garis dari tepi ke tepi
 	Draw Filled Lines	Gambar garis terisi
+	Line Width	Lebar garis
 	Tick Values	Nilai tanda skala
 	Override Calculated Values	Timpa nilai terhitung
 	Divisions	Pembagian
@@ -5657,7 +5664,7 @@ mark-style	Japanese	Jepang
 @msg	Unknown dimension orientation	Orientasi dimensi tidak dikenal
 @msg	Unknown dimension style	Gaya dimensi tidak dikenal
 @msg	Unknown unit	Satuan tidak dikenal
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Menutup ujung melingkar profil terbuka. Sapuan parsial mempertahankan sisi potongannya tetap terbuka.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Menutup ujung melingkar profil terbuka. Sapuan parsial juga menutup sisi potongannya.
 	Darkness	Kegelapan
 	Isolate Selected Object	Isolasikan objek terpilih
 	Keep selected	Tetap terseleksi
@@ -6856,7 +6863,7 @@ breakText	Glyphs	Glif
 @msg	stroke cannot be set on a symbol instance	stroke tidak dapat diatur pada instans simbol
 @msg	fill on a symbol instance must be a solid color or none	fill pada instans simbol harus berupa warna solid atau none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} tidak dapat diatur pada gambar tanpa efek Konversi ke bentuk atau Kerangka objek
-@msg	pass newName, registration, exportType, nineSlice and/or type	berikan newName, registration, exportType, nineSlice dan/atau type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	berikan newName, registration, exportType, nineSlice, type dan/atau alignToPixelGrid
 	Text Flow	Alur teks
 	By Rows	Per baris
 	By Columns	Per kolom

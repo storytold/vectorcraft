@@ -608,7 +608,7 @@
 	Close Path…	પાથ બંધ કરો…
 	Close or Join	બંધ કરો અથવા જોડો
 	Close paths when ends are within:	છેડા આ અંતરમાં હોય ત્યારે પાથ બંધ કરો:
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	ખુલ્લી પ્રોફાઇલના ગોળ છેડા બંધ કરો. આંશિક સ્વીપ તેમની કાપેલી બાજુઓ ખુલ્લી રાખે છે.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	ખુલ્લી પ્રોફાઇલના ગોળ છેડા બંધ કરો. આંશિક સ્વીપ તેમની કાપેલી બાજુઓ પણ બંધ કરે છે.
 	Closing bracket with no opening one	ખુલતા કૌંસ વગરનો બંધ થતો કૌંસ
 	Coincidence:	સંયોગ:
 	Collapse Panel Group	પેનલ ગ્રૂપ સંકોચો
@@ -1458,6 +1458,8 @@
 	Font Family, Style & Size	ફોન્ટ ફેમિલી, સ્ટાઇલ અને સાઇઝ
 	Font Family:	ફોન્ટ ફેમિલી:
 	Font List	ફોન્ટ યાદી
+	Show Similar Fonts	સમાન ફોન્ટ બતાવો
+	Clear Similar Fonts	સમાન ફોન્ટ સાફ કરો
 	Font Preview Size	ફોન્ટ પૂર્વાવલોકન સાઇઝ
 	Font Size	ફોન્ટ સાઇઝ
 	Font Style:	ફોન્ટ સ્ટાઇલ:
@@ -1575,6 +1577,7 @@
 	Connect Data Points	ડેટા પોઇન્ટ જોડો
 	Edge-to-Edge Lines	કિનારીથી કિનારી સુધી રેખાઓ
 	Draw Filled Lines	ભરેલી રેખાઓ દોરો
+	Line Width	રેખાની પહોળાઈ
 	Tick Values	ટિક મૂલ્યો
 	Override Calculated Values	ગણતરી કરેલાં મૂલ્યો બદલો
 	Divisions	વિભાગો
@@ -1739,6 +1742,10 @@
 	ICC Profile	ICC પ્રોફાઇલ
 	ICF Bottom/Left	ICF નીચે/ડાબે
 	ICF Box	ICF બૉક્સ
+	Show Sample	નમૂનો બતાવો
+	Hide Sample	નમૂનો છુપાવો
+	Max Ascent/Descent	મહત્તમ એસેન્ટ/ડિસેન્ટ
+	Max Ascender	મહત્તમ એસેન્ડર
 	ICF Top/Right	ICF ઉપર/જમણે
 	ID: {id}	ID: {id}
 	Identify Objects By	ઑબ્જેક્ટ્સ આ રીતે ઓળખો
