@@ -367,9 +367,14 @@ fn compound_shape_art_in(doc: Option<&Document>, n: &Node, hook: Option<OutlineH
 fn styled(src: &Node, path: PathData, outline: bool) -> Node {
     let mut appearance = Appearance { items: src.appearance.items.clone(), ..Default::default() };
     if outline {
-        let fill = src.appearance.fill_paint();
-        let paint = if fill.is_none() { src.appearance.stroke_paint() } else { fill };
-        appearance = Appearance { items: vec![AppearanceItem::Stroke(StrokeLayer::new(paint, 1.0))], ..Default::default() };
+        // The edges take the paint, opacity, blend mode and overprint of the top fill that paints,
+        // or of the top stroke that paints when no fill does.
+        let layer = top_painting_fill(&src.appearance).or_else(|| src.appearance.items.iter().rev().find(|i| paints(i)));
+        let mut stroke = StrokeLayer::new(layer.map_or(Paint::None, |i| i.paint().clone()), 1.0);
+        if let Some(i) = layer {
+            (stroke.opacity, stroke.blend, stroke.overprint) = (i.opacity(), i.blend(), i.overprint());
+        }
+        appearance = Appearance { items: vec![AppearanceItem::Stroke(stroke)], ..Default::default() };
     }
     let mut n = Node::path(src.id, path, appearance);
     n.opacity = src.opacity;
@@ -504,7 +509,8 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
                 .iter()
                 .filter_map(|l| {
                     let (path, rule) = geometry(l)?;
-                    Some((l.id, crate::trap::TrapSource { path, rule, fill: l.appearance.fill_paint() }))
+                    let fill = top_painting_fill(&l.appearance).map_or(Paint::None, |i| i.paint().clone());
+                    Some((l.id, crate::trap::TrapSource { path, rule, fill }))
                 })
                 .unzip();
             let made = crate::trap::traps(&srcs, &crate::trap::TrapOptions::from_params(&e.params));
@@ -580,7 +586,8 @@ fn mixing_rate(params: &Value) -> f64 {
 }
 
 fn fill_cmyk(src: &Node) -> Option<[f32; 4]> {
-    let paint = src.appearance.fill_paint();
+    // The top fill that paints: a hidden fill adds no color.
+    let paint = top_painting_fill(&src.appearance)?.paint().clone();
     let color = paint.color()?;
     let tinted = match paint {
         Paint::Solid { tint, .. } => color.tinted(tint),
@@ -635,6 +642,11 @@ fn soft_mix_styled(path: PathData, covering: &[usize], shapes: &[po::Shape], sou
 
 fn is_container(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. })
+}
+
+/// The top fill of `a` that paints: hidden fills and fills of no paint are skipped.
+fn top_painting_fill(a: &Appearance) -> Option<&AppearanceItem> {
+    a.items.iter().rev().find(|i| i.is_fill() && paints(i))
 }
 
 /// Does `item` paint anything?

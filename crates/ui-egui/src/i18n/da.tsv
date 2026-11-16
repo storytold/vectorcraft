@@ -131,6 +131,27 @@
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: en dialog kan ikke åbne i et tilbagekald fra en indbygget funktion, en getter, en konvertering eller en fil, som $.evalFile kører; kald den fra scriptets egen kode
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: det næste svar i `answers` er til {_1}, ikke til {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` har intet svar tilbage til denne dialog
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` har {n} svar, som scriptet ikke brugte|`answers` har {n} svar, som scriptet ikke brugte
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} lod {n} objekt under penslen være uændret ({_2}): det omformer kun kurver|{_1} lod {n} objekter under penslen være uændrede ({_2}): det omformer kun kurver
+liquify-tool	Warp	Vridning
+liquify-tool	Twirl	Hvirvel
+liquify-tool	Pucker	Krymp
+liquify-tool	Bloat	Opsvulm
+liquify-tool	Scallop	Muslingekant
+liquify-tool	Crystallize	Krystallisering
+liquify-tool	Wrinkle	Rynke
+liquify-kind	graphs	diagrammer
+liquify-kind	type	tekst
+liquify-kind	symbols	symboler
+liquify-kind	images	billeder
+liquify-kind	meshes	net
+liquify-kind	envelopes	konvolutter
+liquify-kind	repeats	gentagelser
+liquify-kind	placed documents	placerede dokumenter
+liquify-kind	blends	blandinger
+liquify-list-two	{0}, {1}	{0} og {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} og {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} er for stort til et script
 @msg	vc.log: the log of this run is full	vc.log: loggen for denne kørsel er fuld
 @msg	this function's script run has ended	denne funktions scriptkørsel er afsluttet
@@ -2533,6 +2554,9 @@ digits	Malayalam	Malayalam
 	Select text to set its OpenType features.	Markér tekst for at angive dens OpenType-funktioner.
 	Standard Ligatures	Standardligaturer
 	Stylistic Alternates	Stilistiske alternativer
+	Ligatures	Ligaturer
+	Ornaments	Ornamenter
+	Figures	Cifre
 	Set {n}	Sæt {n}
 	Swash	Sving
 	Tabular Lining	Tabulære versalcifre
@@ -3057,6 +3081,18 @@ digits	Malayalam	Malayalam
 	Author Title:	Forfattertitel:
 	Author:	Forfatter:
 	Copyright Info URL:	URL til ophavsretinfo:
+	Save Metadata Template…	Gem metadataskabelon…
+	Import Options	Importindstillinger
+	Clear existing fields and use the template's	Ryd eksisterende felter, og brug skabelonens
+	Keep existing fields, but replace those the template has	Behold eksisterende felter, men erstat dem, skabelonen har
+	Keep existing fields, but append those the template has	Behold eksisterende felter, men tilføj dem, skabelonen har
+@msg	the template name can't be empty	skabelonnavnet må ikke være tomt
+@msg	the template name isn't usable as a file name	skabelonnavnet kan ikke bruges som filnavn
+@msg	no metadata templates folder here	der er ingen mappe til metadataskabeloner her
+@msg	give `name` or `path`, not both	angiv `name` eller `path`, ikke begge
+@msg	give one of `path`, `name` and `data`	angiv én af `path`, `name` og `data`
+@msg	mode must be replace, keep or append	tilstanden skal være replace, keep eller append
+@msg	the file is not an XMP metadata template	filen er ikke en XMP-metadataskabelon
 	Copyright Notice:	Ophavsretserklæring:
 	Copyright Status:	Ophavsretstatus:
 	Created:	Oprettet:
