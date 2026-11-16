@@ -799,7 +799,8 @@ fn art_colors(app: &VectorcraftApp) -> Vec<Vec<Value>> {
 /// leave the group's colors as saved ([`SAVED_COLORS`]) and change only its name.
 const SAVED_ROWS: &str = "__savedRows";
 
-/// The selected group's colors after Save Changes, which OK gives it again with a new name.
+/// The selected group's colors after Save Changes. OK with a new name keeps the color of each of
+/// those swatches (`"keep"`).
 const SAVED_COLORS: &str = "__savedColors";
 
 /// With art, for each swatch of the selected group after Save Changes, the color that found the row
@@ -1136,9 +1137,9 @@ fn apply_params(d: &Dialog) -> Value {
         let name = d.str("groupName");
         let rename = (!name.trim().is_empty() && name != g).then_some(name);
         let colors: Vec<&Value> = if saved {
-            // Only a new name changes the group.
+            // Only a new name changes the group: each swatch keeps its exact color.
             rename.as_ref()?;
-            d.fields.get(SAVED_COLORS).and_then(Value::as_array).map(|a| a.iter().collect())?
+            d.fields.get(SAVED_COLORS).and_then(Value::as_array).map(|a| a.iter().map(|_| &keep).collect())?
         } else {
             // A row made with New Row that holds no current colors gives the group no color; a color
             // added on the Edit tab (`added`) joins it after the others.
@@ -3664,6 +3665,46 @@ mod tests {
         assert_eq!(undo_len(&app), undo + 1);
     }
 
+    /// OK with only a new name after Save Changes leaves every swatch of the group its exact color:
+    /// a CMYK swatch no row lists keeps components finer than a hundredth of a percent.
+    #[test]
+    fn renaming_a_saved_group_keeps_its_exact_colors() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        app.run("file.new", json!({"width": 300, "height": 100})).unwrap();
+        let (red, blue) = (square(&mut app, 10.0, "#ff0000"), square(&mut app, 40.0, "#0000ff"));
+        app.run("select.set", json!({"ids": [red, blue]})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "Linked", "fromArtwork": true, "toGlobal": true})).unwrap();
+        let fine = Color::cmyk(0.123_456, 0.654_321, 0.0, 0.010_101);
+        let doc = std::sync::Arc::make_mut(&mut app.session.doc_mut().unwrap().doc);
+        let g = doc.swatch_groups.iter_mut().find(|g| g.name == "Linked").unwrap();
+        g.swatches.push(vectorcraft_color::Swatch { name: "Fine".into(), paint: vectorcraft_color::Paint::solid(fine), global: false, spot: false });
+        app.run("ui.recolorDialog", json!({"group": "Linked"})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("method".into(), json!(Method::Exact.id()));
+        crate::theme::install_fonts(&ctx);
+        frame(&mut app, &ctx, 0.0, vec![], 0);
+        let d = app.ui.dialog.as_mut().unwrap();
+        let mut rs = super::rows(d);
+        for r in &mut rs {
+            if r["from"].as_array().is_some_and(|f| f.contains(&json!("rgb 255 0 0"))) {
+                r["to"] = json!("rgb 0 128 0");
+            }
+        }
+        d.fields.insert("rows".into(), Value::Array(rs));
+        act(&mut app, &ctx, 0.1, "save").unwrap();
+        frame(&mut app, &ctx, 0.2, vec![], 0);
+        let swatches = |app: &VectorcraftApp, name: &str| {
+            let doc = &app.session.doc().unwrap().doc;
+            doc.swatch_groups.iter().find(|g| g.name == name).map(|g| g.swatches.iter().map(|w| w.paint.color()).collect::<Vec<_>>())
+        };
+        let saved = swatches(&app, "Linked").unwrap();
+        assert_eq!(saved.last(), Some(&Some(fine)), "Save Changes keeps the swatch no row lists");
+        let mut d = app.ui.dialog.clone().unwrap();
+        d.fields.insert("groupName".into(), json!("Renamed"));
+        confirm(&mut app, &d).unwrap();
+        assert_eq!(swatches(&app, "Renamed"), Some(saved), "the rename keeps every color exactly");
+    }
+
     /// Save Changes where one row's new color is another row's current color: the art linked to the
     /// group keeps the colors the save gave it, and is not recolored again by the other row; a
     /// Global Adjust set afterwards gives OK the group again.
@@ -4062,8 +4103,10 @@ mod tests {
         d.fields.insert("groupName".into(), json!("Dark"));
         let p = apply_params(app.ui.dialog.as_ref().unwrap());
         assert!(p.get("globalAdjust").is_none(), "{p}");
-        let sent: Vec<String> = p["groupColors"].as_array().unwrap().iter().map(|k| to_color(&json!({"to": k})).unwrap().to_hex()).collect();
-        assert_eq!(sent, saved, "OK renames the group with its saved colors");
+        assert_eq!(p["groupColors"], json!(vec!["keep"; saved.len()]), "OK keeps each saved color");
+        let d = app.ui.dialog.clone().unwrap();
+        confirm(&mut app, &d).unwrap();
+        assert_eq!(group_hex(&app, "Dark"), Some(saved), "OK renames the group with its saved colors");
     }
 
     /// Without art, Save Changes with a Global Adjust gives the group the rows' new colors with the
