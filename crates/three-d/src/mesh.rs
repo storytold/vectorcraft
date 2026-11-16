@@ -408,6 +408,11 @@ fn clip(ring: &[Corner], out: &mut Vec<[V3; 3]>, work: &mut usize, keep_straight
                     ear = false;
                     break;
                 }
+                // A kept corner on the ear's new edge would be left off every triangle.
+                if keep_straight && touches((p.x, p.y), (pc.x, pc.y), (pa.x, pa.y)) {
+                    ear = false;
+                    break;
+                }
                 k = next[k];
             }
         }

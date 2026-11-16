@@ -192,6 +192,20 @@ fn flat_triangles_keep_corners_that_lie_along_an_edge() {
 }
 
 #[test]
+fn flat_triangles_keep_corners_on_the_edge_an_ear_would_cut() {
+    // The first ear's new edge runs along the bottom, through its two middle corners.
+    let p = |x: f64, y: f64| Point::new(x, y);
+    let outline = vec![p(0.0, 3.0), p(0.0, 0.0), p(1.0, 0.0), p(2.0, 0.0), p(3.0, 0.0)];
+    let mut work = 0;
+    let triangles = flat_triangles(std::slice::from_ref(&outline), &mut work, usize::MAX).unwrap();
+    let area = |t: &[Point; 3]| ((t[1].x - t[0].x) * (t[2].y - t[0].y) - (t[1].y - t[0].y) * (t[2].x - t[0].x)) / 2.0;
+    assert!((triangles.iter().map(area).sum::<f64>() - 4.5).abs() < 1e-9);
+    for q in &outline {
+        assert!(triangles.iter().any(|t| t.contains(q)), "{q:?} is no triangle's corner");
+    }
+}
+
+#[test]
 fn flat_triangles_stop_at_their_budget() {
     let p = |x: f64, y: f64| Point::new(x, y);
     let outline = vec![p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(0.0, 10.0)];

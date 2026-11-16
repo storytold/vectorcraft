@@ -508,7 +508,8 @@ These rules are VectorCraft's own:
   not drawn); it reads the right way round from behind, and Twist and Taper turn and shrink its graphics with it.
   The membrane is cut into triangles, and each one draws the part of the graphic that falls on it, shaded as
   that triangle is shaded and drawn only where the surface's outside faces the viewer; nearer triangles drawn
-  after it cover it. A cell of the membrane that cannot be cut into triangles takes no graphic. Every solid of
+  after it cover it. When a cell of the membrane cannot be cut into triangles, the object draws without its
+  graphics and commands refuse them, as when the triangles take more faces than a 3D effect draws. Every solid of
   the object (a fill's, and a stroke's outline) carries the graphics. The handle sits on the point of the puffed
   face above the graphic's center, and only where the viewer sees that face. The cutting into straight pieces,
   the seam strokes and the limits below are those of Revolve; when the triangles take more faces than a 3D
