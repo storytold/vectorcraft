@@ -112,10 +112,16 @@ fn rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     form::check(ui, d, "showBrush", tl!("Show Brush Size and Intensity"));
 }
 
-/// The selected symbol sets.
+/// The selected symbol sets that can be edited (a locked or hidden one keeps its density).
 fn selected_sets(app: &VectorcraftApp) -> Vec<u64> {
     let Some(st) = app.session.active() else { return vec![] };
-    st.selection.objects.iter().filter(|id| st.doc.node(**id).is_some_and(vectorcraft_engine::cmd::is_symbol_set)).map(|id| id.0).collect()
+    let editable = st.doc.editable();
+    st.selection
+        .objects
+        .iter()
+        .filter(|id| st.doc.node(**id).is_some_and(vectorcraft_engine::cmd::is_symbol_set) && editable(**id))
+        .map(|id| id.0)
+        .collect()
 }
 
 /// OK: set the brush the Symbolism tools share (the tool keeps it within its ranges), after giving
@@ -308,6 +314,27 @@ mod tests {
             let o = app.session.tool_options_of("symbolSizer");
             assert_eq!((o["density"].as_f64(), o["usePressure"].as_bool()), (Some(5.0), Some(false)), "{k}");
         }
+        // A selected set that is locked keeps its density, and OK still sets the options.
+        let lock = |app: &mut VectorcraftApp, on: bool| {
+            app.session
+                .edit("Lock", |d, _| {
+                    d.node_mut(vectorcraft_doc::NodeId(set)).unwrap().locked = on;
+                    Ok(())
+                })
+                .unwrap();
+        };
+        lock(&mut app, true);
+        let steps_locked = undo(&app);
+        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("density".into(), json!(8));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!((width(&app), undo(&app)), (was, steps_locked));
+        assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(8.0));
+        lock(&mut app, false);
+        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("density".into(), json!(5));
+        super::super::confirm(&mut app).unwrap();
+        let steps = undo(&app);
         // A higher density packs the set closer, as one undo step.
         app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
         app.ui.dialog.as_mut().unwrap().fields.insert("density".into(), json!(9));
