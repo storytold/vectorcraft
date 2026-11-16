@@ -137,14 +137,18 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
     let mut values: Map<String, Value> = NUMBERS.iter().filter_map(|k| Some((k.to_string(), stored(k)?))).collect();
     values.extend(SWITCHES.iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))));
     values.extend(SPRAY.iter().chain(&["method"]).filter(|k| d.fields.contains_key(**k)).map(|k| (k.to_string(), json!(d.str(k)))));
-    // A value `tool.setOption` refuses changes no density either.
-    vectorcraft_tools::symbolism::check_options(&d.str("tool"), &values)?;
+    // A tool or a value `tool.setOption` refuses changes no density either.
+    let tool = d.str("tool");
+    if !SYMBOLISM.contains(&tool.as_str()) {
+        return Err(format!("unknown tool `{tool}`"));
+    }
+    vectorcraft_tools::symbolism::check_options(&tool, &values)?;
     let (from, to) = (d.f64(DENSITY_WAS, 0.0).clamp(1.0, 10.0), d.f64("density", 0.0).clamp(1.0, 10.0));
     let sets = selected_sets(app);
     if d.fields.contains_key(DENSITY_WAS) && from != to && !sets.is_empty() {
         app.run("symbol.setDensity", json!({ "from": from, "to": to, "ids": sets }))?;
     }
-    run_and_close(app, "tool.setOption", json!({ "tool": d.str("tool"), "values": values }))
+    run_and_close(app, "tool.setOption", json!({ "tool": tool, "values": values }))
 }
 
 #[cfg(test)]
@@ -304,7 +308,14 @@ mod tests {
         assert_eq!((width(&app), undo(&app)), (was, steps));
         assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(5.0));
         // So does a checkbox or a number stored as a value of the wrong kind.
-        for (k, v) in [("usePressure", json!("invalid")), ("proportional", json!(1)), ("intensity", json!("strong")), ("diameter", json!(true))] {
+        for (k, v) in [
+            ("usePressure", json!("invalid")),
+            ("proportional", json!(1)),
+            ("intensity", json!("strong")),
+            ("diameter", json!(true)),
+            ("tool", json!("pen")),
+            ("tool", json!(null)),
+        ] {
             app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
             let fields = &mut app.ui.dialog.as_mut().unwrap().fields;
             fields.insert("density".into(), json!(9));
