@@ -63,6 +63,7 @@ impl Identity {
 struct Request {
     identity: Identity,
     jobs: [Job; 2],
+    placed_generation: u64,
 }
 
 impl Request {
@@ -81,7 +82,7 @@ impl Request {
             job.may_copy = false;
             job.may_keep = false;
         }
-        Some(Self { identity: Identity::of(&jobs), jobs })
+        Some(Self { identity: Identity::of(&jobs), jobs, placed_generation: vectorcraft_render::placed_document::generation() })
     }
 }
 
@@ -171,13 +172,15 @@ impl SplitCache {
         if self.pending.is_some() || self.draining.is_some() {
             return;
         }
-        let Some(request) = self.latest.take() else { return };
+        let Some(mut request) = self.latest.take() else { return };
         if !self.has_worker() {
             self.render_sync(ctx, request);
             return;
         }
         let sequence = self.next_sequence();
         let keys = [0, 1].map(|side| CompletionKey { epoch: self.epoch, sequence, side });
+        // Capture the raw generation before either side can read the shared placed cache.
+        request.placed_generation = vectorcraft_render::placed_document::generation();
         let sent = request.jobs.iter().zip(keys).all(|(job, key)| {
             let job = clone_job(job);
             self.submit(key.side, key, Box::new(move |renderer| Some(render(renderer, &job))))
@@ -209,7 +212,7 @@ impl SplitCache {
             && let Some(batch) = self.pending.take()
             && let [Some(a), Some(b)] = batch.images
         {
-            self.publish(ctx, batch.request.identity, [a, b], batch.ms, batch.sequence);
+            self.publish(ctx, batch.request, [a, b], batch.ms, batch.sequence);
         }
     }
 
@@ -259,18 +262,30 @@ impl SplitCache {
         // `started` stays true: a disconnect never creates another worker thread.
     }
 
-    fn render_sync(&mut self, ctx: &egui::Context, request: Request) {
+    fn render_sync(&mut self, ctx: &egui::Context, mut request: Request) {
         let sequence = self.next_sequence();
         let renderer = self.renderer.get_or_insert_with(Renderer::new);
         let t0 = crate::now_ms();
+        request.placed_generation = vectorcraft_render::placed_document::generation();
         let images = request.jobs.each_ref().map(|job| render(renderer, job));
-        self.publish(ctx, request.identity, images, crate::now_ms() - t0, sequence);
+        self.publish(ctx, request, images, crate::now_ms() - t0, sequence);
     }
 
-    fn publish(&mut self, ctx: &egui::Context, identity: Identity, images: [Rendered; 2], ms: f64, sequence: u64) {
-        if sequence <= self.shown_sequence || !self.context.as_ref().is_some_and(|current| current.same_context(&identity)) {
+    fn publish(&mut self, ctx: &egui::Context, request: Request, images: [Rendered; 2], ms: f64, sequence: u64) {
+        if sequence <= self.shown_sequence || !self.context.as_ref().is_some_and(|current| current.same_context(&request.identity)) {
             return;
         }
+        if super::placed_changed(
+            &request.jobs[0].doc,
+            request.placed_generation,
+            vectorcraft_render::placed_document::generation(),
+            vectorcraft_render::placed_document::made_between,
+        ) {
+            // Neither side is uploaded. Keep the last coherent pair and ask for a fresh request.
+            ctx.request_repaint();
+            return;
+        }
+        let identity = request.identity;
         let options = identity.keys.each_ref().map(|key| if key.pixel.is_some() { TextureOptions::NEAREST } else { TextureOptions::LINEAR });
         let images = images.map(super::color_image_owned);
         let textures = match self.shown.take() {

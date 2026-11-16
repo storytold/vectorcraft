@@ -229,6 +229,7 @@ pub(super) fn paper(app: &VectorcraftApp, ui: &Ui, painter: &egui::Painter, xf: 
 
 pub(super) fn draw_art(app: &mut VectorcraftApp, ui: &Ui, painter: &egui::Painter, xf: &Xf, rect: egui::Rect, t: &Tokens) {
     let Some(v) = app.view().copied() else { return };
+    let placed_generation = vectorcraft_render::placed_document::generation();
     let Some(st) = app.session.active() else { return };
     let mode = ModeContext {
         doc: st.uid,
@@ -272,6 +273,15 @@ pub(super) fn draw_art(app: &mut VectorcraftApp, ui: &Ui, painter: &egui::Painte
                 super::reproject_texture(&painter.with_clip_rect(clip), xf, rect, texture, key, v.rotation);
             }
         }
+        // Retire only the document whose complete pair was drawn, never a merely queued view.
+        if let Some(st) = app.session.active().filter(|st| pair.keys.iter().all(|key| key.doc == st.uid as usize)) {
+            st.plugin_effects.first_view_done();
+        }
+    }
+    // Bitmaps can start and finish while a synchronous pair is drawn. Their generation changes
+    // before busy becomes false, so also wake for a completion since the pair was prepared.
+    if vectorcraft_render::placed_document::busy() || vectorcraft_render::placed_document::generation() != placed_generation {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(30));
     }
 }
 

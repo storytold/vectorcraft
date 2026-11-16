@@ -734,23 +734,37 @@ fn placed_key_at(
         Some(p) if p.checked == now => return p.key,
         None => crate::PlacedKey { checked: now, key: now, before: (now, now) },
         Some(p) => {
-            let images = &st.doc.images;
-            // The files made that `st` holds: a placed document of one of them may show.
-            let files: std::collections::HashSet<String> = if images.is_empty() {
-                Default::default()
-            } else {
-                match made(p.checked, now) {
-                    Some(files) => files.into_iter().filter(|f| images.contains_key(f)).collect(),
-                    None => images.keys().cloned().collect(),
-                }
-            };
-            let stays = matches!(vectorcraft_render::placed_area(&st.doc, &files), vectorcraft_render::Changed::Nothing);
+            let stays = !placed_changed(&st.doc, p.checked, now, made);
             if stays { crate::PlacedKey { checked: now, ..p } } else { crate::PlacedKey { checked: now, key: now, before: (p.key, p.checked) } }
         }
     };
     keys.retain(|uid, _| session.documents().iter().any(|d| d.uid == *uid));
     keys.insert(st.uid, entry);
     entry.key
+}
+
+/// Whether bitmaps made between two raw generations can change placed art in `doc`.
+/// Keep the same file/Undo filtering for the canvas key and coherent split-pair publication.
+fn placed_changed(
+    doc: &vectorcraft_doc::Document,
+    from: u64,
+    to: u64,
+    made: impl FnOnce(u64, u64) -> Option<std::collections::HashSet<String>>,
+) -> bool {
+    if from == to {
+        return false;
+    }
+    let images = &doc.images;
+    // The files made that `doc` holds: a placed document of one of them may show.
+    let files: std::collections::HashSet<String> = if images.is_empty() {
+        Default::default()
+    } else {
+        match made(from, to) {
+            Some(files) => files.into_iter().filter(|f| images.contains_key(f)).collect(),
+            None => images.keys().cloned().collect(),
+        }
+    };
+    !matches!(vectorcraft_render::placed_area(doc, &files), vectorcraft_render::Changed::Nothing)
 }
 
 /// The generation after which the bitmaps made decide what a frame shown at [`CacheKey::placed`]

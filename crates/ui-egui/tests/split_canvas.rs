@@ -17,6 +17,64 @@ use vectorcraft_ui_egui::{
     theme,
 };
 
+// Each integration case needs a fresh process: render workers read SYNC during startup,
+// and a placed-bitmap Loader must be registered before any Session is created.
+// Command::env changes only the child's environment, safely before that process starts.
+const CHILD_CASE: &str = "VECTORCRAFT_SPLIT_CANVAS_TEST_CASE";
+const CASE_COMPLETED: &str = "VECTORCRAFT_SPLIT_CANVAS_COMPLETED";
+
+macro_rules! synchronous_test {
+    ($name:ident, $body:block) => {
+        #[test]
+        fn $name() {
+            run_canvas_case(stringify!($name), true, || $body);
+        }
+    };
+}
+
+macro_rules! asynchronous_test {
+    ($name:ident, $body:block) => {
+        #[test]
+        fn $name() {
+            run_canvas_case(stringify!($name), false, || $body);
+        }
+    };
+}
+
+fn run_canvas_case(name: &str, synchronous: bool, body: impl FnOnce()) {
+    if let Some(selected) = std::env::var_os(CHILD_CASE) {
+        assert_eq!(selected, std::ffi::OsStr::new(name), "the child must run exactly its selected case");
+        assert_eq!(std::env::var_os("VECTORCRAFT_SYNC_RENDER").is_some(), synchronous, "the child must receive its rendering mode before startup");
+        body();
+        // The closure and its locals have completed. A zero-selected libtest run cannot emit this.
+        eprintln!("\n{CASE_COMPLETED}:{name}");
+        return;
+    }
+
+    // Serialize launches in this process. The child owns a different GLOBALS lock.
+    let _lock = GLOBALS.lock().unwrap_or_else(|e| e.into_inner());
+    let mut command = std::process::Command::new(std::env::current_exe().expect("the actual integration test binary"));
+    if synchronous {
+        command.env("VECTORCRAFT_SYNC_RENDER", "1");
+    } else {
+        command.env_remove("VECTORCRAFT_SYNC_RENDER");
+    }
+    let output = command
+        .args(["--exact", name, "--nocapture", "--test-threads=1"])
+        .env(CHILD_CASE, name)
+        .output()
+        .expect("run the exact canvas case in this test binary");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "isolated canvas case {name} failed: {}\n{stdout}\n{stderr}", output.status);
+    let completed = format!("{CASE_COMPLETED}:{name}");
+    assert_eq!(
+        stderr.lines().filter(|line| *line == completed).count(),
+        1,
+        "the isolated child must complete this case, not pass with zero selected tests\n{stdout}\n{stderr}"
+    );
+}
+
 static GLOBALS: Mutex<()> = Mutex::new(());
 const MAIN: &str = "canvas-split-main";
 const COMPARISON: &str = "canvas-split-comparison";
@@ -31,7 +89,6 @@ struct Globals {
 impl Globals {
     fn new() -> Self {
         let lock = GLOBALS.lock().unwrap_or_else(|e| e.into_inner());
-        assert!(std::env::var_os("VECTORCRAFT_SYNC_RENDER").is_some(), "run this actual canvas target with VECTORCRAFT_SYNC_RENDER=1");
         let language = i18n::current();
         let colors = cms::active_settings();
         let proof = vectorcraft_render::proof::view();
@@ -453,8 +510,7 @@ impl Scene {
     }
 }
 
-#[test]
-fn split_canvas_real_modes_share_geometry_and_complementary_clips() {
+synchronous_test!(split_canvas_real_modes_share_geometry_and_complementary_clips, {
     let _globals = Globals::new();
     let mut s = Scene::new();
     s.idle();
@@ -485,10 +541,9 @@ fn split_canvas_real_modes_share_geometry_and_complementary_clips() {
     s.assert_no_art_uploads(ids);
     s.assert_complementary_meshes();
     assert_eq!(s.snapshot(), before, "view composition never edits art/selection/history");
-}
+});
 
-#[test]
-fn split_canvas_divider_owns_only_its_press_and_escape_restores_fraction() {
+synchronous_test!(split_canvas_divider_owns_only_its_press_and_escape_restores_fraction, {
     let _globals = Globals::new();
     let mut s = Scene::new();
     s.enable();
@@ -604,10 +659,9 @@ fn split_canvas_divider_owns_only_its_press_and_escape_restores_fraction() {
     fingers.idle();
     assert_eq!(fingers.fraction(), handed_off);
     assert_eq!(fingers.snapshot(), before, "the moved multi-touch handoff is neither an art edit nor an Undo tap");
-}
+});
 
-#[test]
-fn split_canvas_side_specific_picking_and_crossing_drag_keep_one_undo() {
+synchronous_test!(split_canvas_side_specific_picking_and_crossing_drag_keep_one_undo, {
     let _globals = Globals::new();
     let mut s = Scene::new();
     s.enable();
@@ -657,10 +711,9 @@ fn split_canvas_side_specific_picking_and_crossing_drag_keep_one_undo() {
     s.click(p);
     assert_eq!(s.fraction(), 0.5);
     assert_eq!(s.app.session.active().unwrap().selection.objects, vec![s.rectangle]);
-}
+});
 
-#[test]
-fn split_canvas_comparison_modes_independent_pixel_region_and_shared_camera() {
+synchronous_test!(split_canvas_comparison_modes_independent_pixel_region_and_shared_camera, {
     let _globals = Globals::new();
     let mut s = Scene::new();
     s.enable();
@@ -733,10 +786,9 @@ fn split_canvas_comparison_modes_independent_pixel_region_and_shared_camera() {
     assert_eq!(s.image(a), s.image(b), "shared camera after pan/zoom/rotate/resize");
     s.assert_complementary_meshes();
     assert_eq!(s.snapshot(), before);
-}
+});
 
-#[test]
-fn split_canvas_disable_presentation_and_document_transfer_release_art_pair() {
+synchronous_test!(split_canvas_disable_presentation_and_document_transfer_release_art_pair, {
     let _globals = Globals::new();
     let mut s = Scene::new();
     s.enable();
@@ -769,4 +821,285 @@ fn split_canvas_disable_presentation_and_document_transfer_release_art_pair() {
     assert_eq!(s.document(), doc_before);
     assert_eq!(s.app.view().unwrap().split, settings);
     s.pair();
-}
+});
+
+synchronous_test!(split_canvas_first_shown_pair_retires_the_current_documents_effect_budget, {
+    let _globals = Globals::new();
+    let mut s = Scene::new();
+    let effects = s.app.session.active().unwrap().plugin_effects.clone();
+    assert!(effects.opening(), "the document has not had a first frame");
+    s.app.run("view.splitView", json!({})).unwrap();
+    // Do not use Scene::enable/command here: they render idle frames before the assertion.
+    assert!(effects.opening(), "enabling/submitting no frame must not retire the budget");
+    s.frame(vec![]);
+    for name in [MAIN, COMPARISON] {
+        assert!(s.uploaded.names.values().any(|n| n.as_str() == name), "both actual artwork textures were uploaded");
+    }
+    assert!(!effects.opening(), "a complete current-document pair ends the first-view budget");
+    s.frame(vec![]);
+    assert!(!effects.opening(), "reusing the pair is idempotent");
+
+    // Opening a different document must not retire that new document before its own pair exists.
+    s.app.run("file.new", json!({"width": 320, "height": 240})).unwrap();
+    let next = s.app.session.active().unwrap().plugin_effects.clone();
+    assert!(next.opening(), "an old document's textures cannot retire the new document");
+    s.app.run("view.splitView", json!({})).unwrap();
+    assert!(next.opening(), "the new view has not been drawn");
+    s.frame(vec![]);
+    assert!(!next.opening(), "only the new document's own complete pair retires it");
+    assert!(!effects.opening(), "the old document remains settled");
+});
+
+synchronous_test!(split_canvas_pending_placed_bitmap_requests_a_repaint_without_input, {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex, OnceLock, mpsc};
+    use std::time::{Duration, Instant};
+
+    const FILE: &str = "8211-channel-held-blue-page";
+    struct LoaderGate {
+        entered: mpsc::Sender<()>,
+        release: Mutex<mpsc::Receiver<()>>,
+    }
+    static GATE: OnceLock<LoaderGate> = OnceLock::new();
+    // Failure-before must still release the actual bitmap worker before the child exits.
+    struct ReleaseOnDrop(Option<mpsc::Sender<()>>);
+    impl Drop for ReleaseOnDrop {
+        fn drop(&mut self) {
+            if let Some(release) = self.0.take() {
+                let _ = release.send(());
+            }
+        }
+    }
+    fn held_blue_page(
+        placed: &vectorcraft_doc::PlacedDocument,
+        _bytes: &[u8],
+    ) -> Option<(vectorcraft_doc::Document, vectorcraft_doc::Node, vectorcraft_geom::Rect)> {
+        if placed.key != FILE {
+            return None;
+        }
+        let gate = GATE.get()?;
+        gate.entered.send(()).ok()?;
+        gate.release.lock().ok()?.recv_timeout(Duration::from_secs(30)).ok()?;
+        let mut doc = vectorcraft_doc::Document::new(40.0, 20.0);
+        doc.layers.clear();
+        let fill = vectorcraft_doc::Appearance::basic(
+            vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0)),
+            vectorcraft_color::Paint::None,
+            0.0,
+        );
+        let rect = vectorcraft_geom::Rect::new(0.0, 0.0, 40.0, 20.0);
+        let art = vectorcraft_doc::Node::path(vectorcraft_doc::NodeId(1), vectorcraft_geom::shapes::rectangle(rect), fill);
+        Some((doc, art, rect))
+    }
+
+    let (entered, began) = mpsc::channel();
+    let (release, held) = mpsc::channel();
+    assert!(GATE.set(LoaderGate { entered, release: Mutex::new(held) }).is_ok());
+    let mut release_on_drop = ReleaseOnDrop(Some(release));
+    // This child has initialized no Session yet. The existing registration is first-wins.
+    vectorcraft_doc::placed_document::set_loader(held_blue_page);
+    let _globals = Globals::new();
+    let mut s = Scene::new();
+    // A fresh blank document: the generated blue page cannot hide behind Scene's original art.
+    s.app.run("file.new", json!({"width":320,"height":240})).unwrap();
+    let st = s.app.session.active_mut().unwrap();
+    let doc = Arc::make_mut(&mut st.doc);
+    doc.images.insert(FILE.into(), vectorcraft_doc::ImageBlob::new("application/json", b"blue-page-fixture".to_vec()));
+    let id = doc.alloc_id();
+    let layer = doc.layers[0].id;
+    let placed = vectorcraft_doc::PlacedDocument {
+        link: vectorcraft_doc::LinkInfo::new("split-lifecycle.vectorcraft"),
+        key: FILE.into(),
+        bounding: false,
+        page_box: Default::default(),
+        width: 40.0,
+        height: 20.0,
+        xf: vectorcraft_geom::Affine::translate((100.0, 100.0)),
+        placement: Default::default(),
+    };
+    doc.insert(Some(layer), 0, vectorcraft_doc::Node::new(id, vectorcraft_doc::NodeKind::PlacedDocument(Box::new(placed)))).unwrap();
+    st.revision += 1;
+    let view = s.app.view_mut().unwrap();
+    view.fitted = true;
+    view.center = Point::new(160.0, 120.0);
+    view.zoom = 1.5;
+    view.split.enabled = true;
+    // Outline draws placed art exactly, invoking the loader on the UI thread. Both Preview
+    // sides exercise the real progressive bitmap route and its pending-set deduplication.
+    view.split.comparison = SplitMode::Preview;
+    assert!(!vectorcraft_render::placed_document::busy());
+    let generation = vectorcraft_render::placed_document::generation();
+
+    let polls = Arc::new(AtomicUsize::new(0));
+    let observed = polls.clone();
+    s.ctx.set_repaint_observer(move |info| {
+        if info.delay == Duration::from_millis(30) {
+            observed.fetch_add(1, Ordering::SeqCst);
+        }
+    });
+    s.frame(vec![]);
+    began.recv_timeout(Duration::from_secs(10)).expect("the real bitmap loader entered while its pending key is held");
+    assert!(vectorcraft_render::placed_document::busy(), "the worker is actually pending, not merely slow by assumption");
+    let pair = s.pair();
+    let at = Point::new(120.0, 110.0);
+    for texture in pair {
+        assert_ne!(s.raster_at(texture, at), Color32::BLUE, "the held real bitmap has not replaced the placeholder");
+    }
+    // Only idle time, no new pointer or document input. Observe the exact request, not egui's
+    // effective deadline, which an unrelated immediate repaint could otherwise mask.
+    polls.store(0, Ordering::SeqCst);
+    s.frame(vec![]);
+    assert!(polls.load(Ordering::SeqCst) > 0, "a pending placed bitmap schedules an idle repaint while Split View owns rendering");
+
+    release_on_drop.0.take().unwrap().send(()).unwrap();
+    let until = Instant::now() + Duration::from_secs(10);
+    while vectorcraft_render::placed_document::busy() && Instant::now() < until {
+        std::thread::yield_now();
+    }
+    assert!(!vectorcraft_render::placed_document::busy(), "the signaled bitmap completed within the bound");
+    assert_ne!(vectorcraft_render::placed_document::generation(), generation, "completion advances generation before pending clears");
+    // Advance to the already-observed scheduled wakeup. No artificial user event forces it.
+    s.time += 0.03;
+    s.frame(vec![]);
+    for texture in s.pair() {
+        assert_eq!(s.raster_at(texture, at), Color32::BLUE, "the scheduled idle frame shows the real completed bitmap");
+    }
+    assert!(!s.uploaded.art_sets.is_empty(), "actual artwork textures were refreshed after bitmap completion");
+    polls.store(0, Ordering::SeqCst);
+    s.frame(vec![]);
+    assert_eq!(polls.load(Ordering::SeqCst), 0, "settled bitmap work does not keep requesting 30 ms polls");
+    assert!(s.uploaded.art_sets.is_empty(), "the settled pair is reused");
+});
+
+asynchronous_test!(split_canvas_rejects_a_bitmap_completion_between_side_renders, {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex, OnceLock, mpsc};
+    use std::time::{Duration, Instant};
+
+    const FILE: &str = "8211-between-sides-blue-page";
+    struct LoaderGate {
+        entered: mpsc::Sender<()>,
+        release: Mutex<mpsc::Receiver<()>>,
+    }
+    static GATE: OnceLock<LoaderGate> = OnceLock::new();
+    // Failure-before must still release the actual bitmap worker before the child exits.
+    struct ReleaseOnDrop(Option<mpsc::Sender<()>>);
+    impl Drop for ReleaseOnDrop {
+        fn drop(&mut self) {
+            if let Some(release) = self.0.take() {
+                let _ = release.send(());
+            }
+        }
+    }
+    fn held_blue_page(
+        placed: &vectorcraft_doc::PlacedDocument,
+        _bytes: &[u8],
+    ) -> Option<(vectorcraft_doc::Document, vectorcraft_doc::Node, vectorcraft_geom::Rect)> {
+        if placed.key != FILE {
+            return None;
+        }
+        let gate = GATE.get()?;
+        gate.entered.send(()).ok()?;
+        gate.release.lock().ok()?.recv_timeout(Duration::from_secs(30)).ok()?;
+        let mut doc = vectorcraft_doc::Document::new(40.0, 20.0);
+        doc.layers.clear();
+        let fill = vectorcraft_doc::Appearance::basic(
+            vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0)),
+            vectorcraft_color::Paint::None,
+            0.0,
+        );
+        let rect = vectorcraft_geom::Rect::new(0.0, 0.0, 40.0, 20.0);
+        let art = vectorcraft_doc::Node::path(vectorcraft_doc::NodeId(1), vectorcraft_geom::shapes::rectangle(rect), fill);
+        Some((doc, art, rect))
+    }
+
+    let (entered, began) = mpsc::channel();
+    let (release, held) = mpsc::channel();
+    assert!(GATE.set(LoaderGate { entered, release: Mutex::new(held) }).is_ok());
+    let _release_on_drop = ReleaseOnDrop(Some(release.clone()));
+    // This child has initialized no Session yet. The existing registration is first-wins.
+    vectorcraft_doc::placed_document::set_loader(held_blue_page);
+    let _globals = Globals::new();
+    let mut s = Scene::new();
+    // A fresh blank document: the generated blue page cannot hide behind Scene's original art.
+    s.app.run("file.new", json!({"width":320,"height":240})).unwrap();
+    let st = s.app.session.active_mut().unwrap();
+    let doc = Arc::make_mut(&mut st.doc);
+    doc.images.insert(FILE.into(), vectorcraft_doc::ImageBlob::new("application/json", b"blue-page-fixture".to_vec()));
+    let id = doc.alloc_id();
+    let layer = doc.layers[0].id;
+    let placed = vectorcraft_doc::PlacedDocument {
+        link: vectorcraft_doc::LinkInfo::new("split-lifecycle.vectorcraft"),
+        key: FILE.into(),
+        bounding: false,
+        page_box: Default::default(),
+        width: 40.0,
+        height: 20.0,
+        xf: vectorcraft_geom::Affine::translate((100.0, 100.0)),
+        placement: Default::default(),
+    };
+    doc.insert(Some(layer), 0, vectorcraft_doc::Node::new(id, vectorcraft_doc::NodeKind::PlacedDocument(Box::new(placed)))).unwrap();
+    st.revision += 1;
+    let view = s.app.view_mut().unwrap();
+    view.fitted = true;
+    view.center = Point::new(160.0, 120.0);
+    view.zoom = 1.5;
+    view.split.enabled = true;
+    // Outline draws placed art exactly, invoking the loader on the UI thread. Both Preview
+    // sides exercise the real progressive bitmap route and its pending-set deduplication.
+    view.split.comparison = SplitMode::Preview;
+    assert!(!vectorcraft_render::placed_document::busy());
+    let generation = vectorcraft_render::placed_document::generation();
+
+    let first_completion = Arc::new(AtomicBool::new(false));
+    let observed = first_completion.clone();
+    let began = Mutex::new(began);
+    let (report, result) = mpsc::channel::<Result<(), String>>();
+    s.ctx.set_repaint_observer(move |_| {
+        if std::thread::current().name() != Some("vectorcraft-split-canvas") || observed.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        // ThumbWorker sends side 0's actual image, then calls request_repaint, then starts
+        // side 1. Do not re-enter Context here: this callback may hold egui's context lock.
+        // Errors return to the test thread; never panic and disconnect the background worker.
+        let outcome = (|| -> Result<(), String> {
+            began
+                .lock()
+                .map_err(|_| "loader receiver poisoned".to_owned())?
+                .recv_timeout(Duration::from_secs(10))
+                .map_err(|e| format!("loader did not enter: {e}"))?;
+            if !vectorcraft_render::placed_document::busy() {
+                return Err("held loader was not actually pending".into());
+            }
+            release.send(()).map_err(|e| format!("could not release loader: {e}"))?;
+            let until = Instant::now() + Duration::from_secs(10);
+            while vectorcraft_render::placed_document::busy() && Instant::now() < until {
+                std::thread::yield_now();
+            }
+            if vectorcraft_render::placed_document::busy() {
+                return Err("released bitmap did not finish within bound".into());
+            }
+            if vectorcraft_render::placed_document::generation() == generation {
+                return Err("completion did not advance generation before pending cleared".into());
+            }
+            Ok(())
+        })();
+        let _ = report.send(outcome);
+    });
+
+    // No ordinary canvas idle frame has primed a bitmap or uploaded either split texture.
+    s.frame(vec![]);
+    result.recv_timeout(Duration::from_secs(20)).expect("first actual split completion callback").unwrap();
+    assert!(first_completion.load(Ordering::SeqCst));
+    // Observe the FIRST published pair, not a later repaired frame. In the original, side 0
+    // is a placeholder and side 1 is blue. The guard must discard that entire pair before
+    // upload; a fresh pair renders after generation is stable and both sides are blue.
+    let until = Instant::now() + Duration::from_secs(10);
+    while s.uploaded.art_sets.is_empty() && Instant::now() < until {
+        s.frame(vec![]);
+        std::thread::yield_now();
+    }
+    assert_eq!(s.uploaded.art_sets.len(), 2, "first publication uploads both actual artwork textures");
+    let colors = s.pair().map(|texture| s.raster_at(texture, Point::new(120.0, 110.0)));
+    assert_eq!(colors, [Color32::BLUE; 2], "first published pair must not mix placeholder and ready pixels");
+});
