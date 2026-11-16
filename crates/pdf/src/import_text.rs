@@ -626,7 +626,7 @@ impl TextLine {
             // glyphs filled before it, so no stroke looks through them again.
             self.stroked = self.filled.len();
             // Nor does a stroke at another opacity join the glyph just filled: the line has one.
-            return opacity == self.opacity && self.stroke_last(font, at, stroke, overprint);
+            return opacity == self.opacity && self.stroke_last(font, at, text, stroke, overprint);
         };
         let continues = self
             .pending
@@ -728,19 +728,22 @@ impl TextLine {
         }
     }
 
-    /// A stroke over the glyph just drawn at `at` in `font`, which `overprint`s or not: that glyph
-    /// is stroked. `false`: it isn't that glyph.
+    /// A stroke over glyph `glyph` just drawn at `at` in `font`, which `overprint`s or not: that
+    /// glyph is stroked. `false`: it isn't that glyph (another place, font or text).
     ///
     /// A filled glyph joins a run of the same fill whatever its stroke ([`Look::takes`]), so the
     /// run can hold glyphs before it that are stroked otherwise or not at all: then the glyph's
     /// text becomes a run of its own with this stroke, and the glyphs before it keep theirs
     /// (#7741). The line's text is the same either way, so the characters' slots, gaps and
     /// authored flags, kept along the whole line, still line up.
-    fn stroke_last(&mut self, font: u128, at: Placement, stroke: TypeStroke, overprint: bool) -> bool {
+    fn stroke_last(&mut self, font: u128, at: Placement, glyph: &str, stroke: TypeStroke, overprint: bool) -> bool {
         self.flush_stroke();
         let start = self.last_start;
         let last_at = self.last_at;
-        let Some((look, shift, text)) = self.runs.last_mut().filter(|(l, ..)| l.font == font && last_at.same_as(&at)) else {
+        // The glyph just filled, in the same font and placement, with the same text.
+        let Some((look, shift, text)) =
+            self.runs.last_mut().filter(|(l, _, t)| l.font == font && last_at.same_as(&at) && t.get(start..) == Some(glyph))
+        else {
             return false;
         };
         let same = look.stroke.as_ref() == Some(&stroke) && look.overprint_stroke == overprint;

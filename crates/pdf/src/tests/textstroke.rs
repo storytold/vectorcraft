@@ -266,3 +266,12 @@ fn a_glyph_stroked_at_another_opacity_than_its_fill_stays_its_own_type() {
         assert_eq!(texts, want, "{content}");
     }
 }
+
+/// A stroke goes only over a glyph filled with the same text: "AB" filled, its "A" stroked, then
+/// an "X" stroked where the "B" stands is type of its own, and the "B" stays unstroked (#8015).
+#[test]
+fn a_stroke_of_another_glyph_where_one_was_filled_stays_its_own_type() {
+    let content = "0 0 0 RG 1 1 0.8 rg 3 w BT /F1 60 Tf 1 0 0 1 40 110 Tm (AB) Tj 1 Tr 1 0 0 1 40 110 Tm (A) Tj (X) Tj 0 Tr ET";
+    let want = [("A".to_string(), 60.0, true, true), ("B".to_string(), 60.0, true, false), ("X".to_string(), 60.0, false, true)];
+    assert_eq!(word_runs(content), want, "{content}");
+}
