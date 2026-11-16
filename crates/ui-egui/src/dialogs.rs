@@ -828,6 +828,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if after_panel && !ctx.input(|i| i.key_down(egui::Key::Enter) || i.key_pressed(egui::Key::Enter)) {
         d.fields.remove(AFTER_PANEL);
     }
+    // A body can open another dialog in its place (EPS Options' Custom…): this frame's Enter
+    // doesn't confirm that one.
+    let opened = d.kind.clone();
     let heading = (spec.heading)(&d);
     let revolves = revolve_gizmo::active(&d);
     if revolves {
@@ -927,7 +930,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if ok_clicked && !rejected && !refused_during_click {
         ok = true;
     }
-    if spec.ok.is_some() && ok_enabled && !after_panel && !rejected && crate::shortcuts::pressed_anew(ctx, egui::Key::Enter) {
+    if spec.ok.is_some() && ok_enabled && !after_panel && !rejected && d.kind == opened && crate::shortcuts::pressed_anew(ctx, egui::Key::Enter) {
         ok = true;
     }
     if discard {

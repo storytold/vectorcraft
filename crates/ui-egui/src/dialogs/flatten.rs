@@ -48,6 +48,32 @@ pub(crate) fn put_options(fields: &mut Map<String, Value>, o: &FlattenOptions) {
     }
 }
 
+/// Write into the option fields only the options that differ between `shown` and `edited`, so
+/// that a value the editor could not show stays in the fields as it was entered.
+pub(crate) fn put_changed_options(fields: &mut Map<String, Value>, shown: &FlattenOptions, edited: &FlattenOptions) {
+    let (Ok(Value::Object(old)), Ok(Value::Object(new))) = (serde_json::to_value(shown), serde_json::to_value(edited)) else { return };
+    for (k, v) in new {
+        if old.get(&k) != Some(&v) {
+            fields.insert(k, v);
+        }
+    }
+}
+
+/// The options `fields` hold over `base` as they were entered, values out of range included, for
+/// the editor to show while [`FlattenOptions::from_params_with`] refuses them. A value of the wrong
+/// type shows as `base`'s.
+pub(crate) fn entered_options(fields: &Map<String, Value>, base: &FlattenOptions) -> FlattenOptions {
+    let Ok(Value::Object(mut v)) = serde_json::to_value(base) else { return base.clone() };
+    for (k, val) in fields {
+        let Some(slot) = v.get_mut(k) else { continue };
+        let old = std::mem::replace(slot, val.clone());
+        if serde_json::from_value::<FlattenOptions>(Value::Object(v.clone())).is_err() {
+            v.insert(k.clone(), old);
+        }
+    }
+    serde_json::from_value(Value::Object(v)).unwrap_or_else(|_| base.clone())
+}
+
 /// The options the fields hold (a `preset` not loaded yet: its own).
 fn options(d: &Dialog, saved: &[FlattenerPreset]) -> Result<FlattenOptions, String> {
     if d.str("preset") != d.str(APPLIED) {
@@ -101,9 +127,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         save_row(app, ui, d);
     }
     ui.add_space(10.0);
-    let mut o = current.clone().unwrap_or_default();
+    // Values refused stay as entered, so that changing another option keeps them.
+    let mut o = current.clone().unwrap_or_else(|_| entered_options(&d.fields, &FlattenOptions::default()));
+    let shown = o.clone();
     if options_editor(ui, "flatten-dialog", &mut o, true) {
-        put_options(&mut d.fields, &o);
+        put_changed_options(&mut d.fields, &shown, &o);
     }
     if let Err(e) = &current {
         ui.label(egui::RichText::new(e).color(Tokens::get(ui.ctx()).text_dim).size(11.5));
@@ -403,5 +431,28 @@ mod tests {
         frame(&mut app);
         assert!(super::super::confirm(&mut app).unwrap_err().contains("resolutions"));
         assert!(app.ui.dialog.is_some());
+    }
+
+    /// Changing a switch beside a value out of range keeps the values entered.
+    #[test]
+    fn a_switch_changed_beside_a_bad_value_keeps_the_values_entered() {
+        let mut app = scene();
+        app.run("ui.flattenTransparencyDialog", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("balance".into(), json!(20));
+        d.fields.insert("gradientPpi".into(), json!(9000));
+        d.fields.insert("lineArtPpi".into(), json!("many"));
+        let mut f = super::super::tests_eps::Frames::new();
+        let (_, at) = f.control(&mut app, "Convert All Text to Outlines", egui::accesskit::Role::CheckBox);
+        let before = app.ui.dialog.as_ref().unwrap().bool("textToOutlines");
+        f.click(&mut app, at);
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!(d.bool("textToOutlines"), !before, "the switch changes");
+        assert_eq!((d.f64("balance", 0.0), d.f64("gradientPpi", 0.0)), (20.0, 9000.0), "the other values stay as entered");
+        assert_eq!(d.fields["lineArtPpi"], json!("many"), "a value of the wrong type stays to be refused");
+        assert!(super::super::confirm(&mut app).is_err());
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("lineArtPpi".into(), json!(300));
+        assert!(super::super::confirm(&mut app).unwrap_err().contains("resolutions"));
     }
 }

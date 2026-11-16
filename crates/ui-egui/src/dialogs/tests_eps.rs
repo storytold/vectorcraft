@@ -169,6 +169,93 @@ fn bad_custom_flattener_options_keep_the_dialog_open() {
     assert_eq!((d.fields["flattener"]["preserveOverprints"].as_bool(), d.fields["flattener"]["preserveAlpha"].as_bool()), (Some(true), Some(false)));
 }
 
+/// Headless frames of the dialog layer with screen-reader output, input events and a clock.
+pub(super) struct Frames {
+    ctx: egui::Context,
+    time: f64,
+}
+
+impl Frames {
+    pub(super) fn new() -> Self {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        crate::theme::install_fonts(&ctx);
+        Self { ctx, time: 0.0 }
+    }
+
+    fn run(&mut self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
+        self.time += 0.1;
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let input = egui::RawInput { events, time: Some(self.time), screen_rect: Some(screen), ..Default::default() };
+        let mut out = self.ctx.run_ui(input, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out
+    }
+
+    /// The screen-reader node of the control of `role` named `label`, with its center.
+    pub(super) fn control(&mut self, app: &mut VectorcraftApp, label: &str, role: egui::accesskit::Role) -> (egui::accesskit::NodeId, egui::Pos2) {
+        self.run(app, vec![]);
+        let out = self.run(app, vec![]);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let (id, n) =
+            nodes.iter().find(|(_, n)| n.label() == Some(label) && n.role() == role).unwrap_or_else(|| panic!("no {role:?} named {label:?}"));
+        let b = n.bounds().expect("bounds");
+        (*id, egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5))
+    }
+
+    pub(super) fn click(&mut self, app: &mut VectorcraftApp, at: egui::Pos2) {
+        for pressed in [true, false] {
+            let button = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+            self.run(app, vec![egui::Event::PointerMoved(at), button]);
+        }
+    }
+}
+
+/// Enter on the focused Custom… button opens the custom options and does not also confirm them.
+#[test]
+fn enter_on_the_custom_button_opens_the_custom_options() {
+    use egui::accesskit::{Action, ActionRequest, Role, TreeId};
+    let (mut app, _) = app(1);
+    app.run("flattener.presets.save", json!({"name": "Mine", "balance": 0})).unwrap();
+    app.run("ui.epsOptionsDialog", json!({"path": "/out/a.eps", "flattenerPreset": "Mine"})).unwrap();
+    let mut f = Frames::new();
+    let (node, _) = f.control(&mut app, "Custom…", Role::Button);
+    f.run(
+        &mut app,
+        vec![egui::Event::AccessKitActionRequest(ActionRequest { action: Action::Focus, target_node: node, target_tree: TreeId::ROOT, data: None })],
+    );
+    let enter = |pressed| egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    f.run(&mut app, vec![enter(true)]);
+    f.run(&mut app, vec![enter(false)]);
+    assert_eq!(kind(&app), Some(eps_options::CUSTOM_KIND), "the custom options stay open");
+    let parent = super::parent(app.ui.dialog.as_ref().unwrap()).unwrap();
+    assert_eq!(parent.str("flattenerPreset"), "Mine", "EPS Options keep their preset");
+}
+
+/// With a value out of range, the editor shows the values entered, and changing a switch keeps
+/// them, so OK still refuses the bad value.
+#[test]
+fn a_switch_changed_beside_a_bad_value_keeps_the_values_entered() {
+    let (mut app, _) = app(1);
+    app.run("ui.epsOptionsDialog", json!({"path": "/out/a.eps"})).unwrap();
+    frame(&mut app);
+    open_custom(&mut app);
+    set(&mut app, "balance", json!(20));
+    set(&mut app, "gradientPpi", json!(9000));
+    set(&mut app, "lineArtPpi", json!("many"));
+    let mut f = Frames::new();
+    let (_, at) = f.control(&mut app, "Convert All Text to Outlines", egui::accesskit::Role::CheckBox);
+    let before = app.ui.dialog.as_ref().unwrap().bool("textToOutlines");
+    f.click(&mut app, at);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.bool("textToOutlines"), !before, "the switch changes");
+    assert_eq!((d.f64("balance", 0.0), d.f64("gradientPpi", 0.0)), (20.0, 9000.0), "the other values stay as entered");
+    assert_eq!(d.fields["lineArtPpi"], json!("many"), "a value of the wrong type stays to be refused");
+    assert!(confirm(&mut app).is_err());
+    set(&mut app, "lineArtPpi", json!(300));
+    assert!(confirm(&mut app).unwrap_err().contains("resolutions"));
+}
+
 #[test]
 fn the_eps_options_dialog_needs_a_document() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
