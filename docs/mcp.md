@@ -8442,7 +8442,8 @@ height (`"100h"`) or a resolution (`"72ppi"`); raster rows name their files `@2x
 otherwise. `fullDocument` writes one file per row instead (a PDF of every artboard, other formats the bounds of all
 art), `includeBleed` grows each artboard by the document's bleed, `includeArtboardFill: false` (Include Artboard
 Fill unchecked) leaves the artboards' background colors out of the files, `pdfs: "single"` (Export PDFs As › Single file)
-writes the artboards a PDF row exports as the pages of one PDF named after the document, `subfolders` puts each
+writes the artboards a PDF row exports as the pages of one PDF named after the document (it is refused with
+`assets`, `layers` or `selection: "each"`, whose files each hold one item's art), `subfolders` puts each
 row's files in a sub-folder (its size or format, or its own `folder`; `folders: "format"` sorts by format instead), `preset: "mobile"` or `"density"` (Android-style ldpi…xxxhdpi
 sub-folders) replaces the rows, and `settings: {png: {…}, jpg: {…}, svg: {…}, pdf: {preset}}` gives every row of a
 format its options. On every platform, `/`, `\`, `:`, `<`, `>`, `"`, `|`, `?`, `*` and control characters from a
