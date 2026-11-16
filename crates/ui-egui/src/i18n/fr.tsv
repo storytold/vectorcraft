@@ -3284,7 +3284,7 @@ digits	Malayalam	Malayalam
 	Search commands, tools, panels and effects	Chercher commandes, outils, panneaux et effets
 	Search commands, tools, panels and effects…	Chercher commandes, outils, panneaux et effets…
 	No commands match	Aucune commande ne correspond
-	{pos} of {total}: {name}	{pos} sur {total} : {name}
+	{pos} of {total}: {name}	{pos} sur {total} : {name}
 @plural	{n} result|{n} results	{n} résultat|{n} résultats
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} sur {n} résultat. Continuez à taper pour les affiner.|{shown} sur {n} résultats. Continuez à taper pour les affiner.
 	Recent Commands	Commandes récentes
