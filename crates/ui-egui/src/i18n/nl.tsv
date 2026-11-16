@@ -1394,6 +1394,7 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Auto Color	Automatische kleur
 	Automatic	Automatisch
 	Isolate Selected Group	Geselecteerde groep isoleren
+	Isolate Selected Path	Geselecteerd pad isoleren
 	Exit Isolation Mode	Isolatiemodus verlaten
 	Make Clipping Mask	Knipmasker maken
 	Release Clipping Mask	Knipmasker vrijgeven
@@ -1795,7 +1796,7 @@ lighting	Light	Licht
 	Name* @ 66.67% (RGB/Preview)	Naam* @ 66.67% (RGB/Voorbeeld)
 	No Document	Geen document
 	Press 	Druk op 
-	Search commands and tools	Opdrachten en gereedschappen zoeken
+	Search commands, tools, panels and effects	Opdrachten, gereedschappen, panelen en effecten zoeken
 	Style:	Stijl:
 	Switch workspace	Werkruimte wisselen
 	Show all open documents	Alle geopende documenten tonen
@@ -1997,6 +1998,10 @@ lighting	Light	Licht
 	Play Current Selection	Huidige selectie afspelen
 	Save Actions…	Acties opslaan…
 	Load Actions…	Acties laden…
+	Reset Actions	Acties opnieuw instellen
+	Replace the current actions with the default set?	De huidige acties vervangen door de standaardset?
+	Append adds the default set after the current sets instead.	Toevoegen voegt in plaats daarvan de standaardset toe na de huidige sets.
+	Append	Toevoegen
 	Reflect Horizontal	Horizontaal spiegelen
 	Rotate 90° CW	90° met de klok mee draaien
 	Set 1	Set 1
@@ -3354,6 +3359,8 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Vloeiend kleurenwiel tonen
 	Show segmented color wheel	Gesegmenteerd kleurenwiel tonen
 	Show color bars	Kleurbalken tonen
+	Show brightness and hue on wheel	Helderheid en tint op het wiel tonen
+	Show saturation and hue on wheel	Verzadiging en tint op het wiel tonen
 	Add Color Tool	Gereedschap Kleur toevoegen
 	Remove Color Tool	Gereedschap Kleur verwijderen
 	Remove Color	Kleur verwijderen
@@ -4754,7 +4761,11 @@ font-technology	Variable	Variabel
 	Saved {path}	{path} opgeslagen
 	Saving	Bezig met opslaan
 	Saving {}	{} wordt opgeslagen
-	Search commands and tools…	Opdrachten en gereedschappen zoeken…
+	Search commands, tools, panels and effects…	Opdrachten, gereedschappen, panelen en effecten zoeken…
+	No commands match	Geen opdrachten gevonden
+	{pos} of {total}: {name}	{pos} van {total}: {name}
+@plural	{n} result|{n} results	{n} resultaat|{n} resultaten
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} van {n} resultaat. Typ verder om ze te beperken.|{shown} van {n} resultaten. Typ verder om ze te beperken.
 	Recent Commands	Recente opdrachten
 	No recent commands	Geen recente opdrachten
 	Dashed Line	Streepjeslijn
@@ -9393,6 +9404,11 @@ breakText	Glyphs	Glyphs
 	Malayalam	Malayalam
 	Odia	Odia
 	Urdu	Urdu
+	Sanskrit	Sanskriet
+	Nepali	Nepalees
+	Assamese	Assamees
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} en nieuwer (versie {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Alle geopende documenten exporteren als PDF
@@ -9776,3 +9792,23 @@ breakText	Glyphs	Glyphs
 	No objects are selected.	Er zijn geen objecten geselecteerd.
 	Open a document to mark its fold lines.	Open een document om de vouwlijnen te markeren.
 	Remove Fold Line Role	Lijnsoort verwijderen
+	Check	Controleren
+	Check Fold Lines	Vouwlijnen controleren
+@msg	No cut lines are in the selection.	De selectie bevat geen snijlijnen.
+@msg	No cut lines are in the document.	Het document bevat geen snijlijnen.
+@msg	The cut lines do not enclose an area.	De snijlijnen sluiten geen gebied in.
+@msg	A cut line ends without meeting another cut line.	Een snijlijn eindigt zonder een andere snijlijn te raken.
+@msg	A gap between cut lines was closed.	Een opening tussen snijlijnen is gesloten.
+@msg	The fold lines are too complex to check.	De vouwlijnen zijn te complex om te controleren.
+@msg	A cut line and a crease lie on top of each other.	Een snijlijn en een rillijn liggen over elkaar.
+@msg	No cut lines are among the given objects.	De opgegeven objecten bevatten geen snijlijnen.
+@msg	Two fold lines lie on top of each other.	Twee vouwlijnen liggen over elkaar.
+@msg	A crease ends inside a panel.	Een rillijn eindigt binnen een paneel.
+@msg	A crease does not divide two panels.	Een rillijn verdeelt geen twee panelen.
+@msg	A crease lies outside the cut outline, wholly or in part.	Een rillijn ligt geheel of gedeeltelijk buiten de snijcontour.
+@msg	The pieces of a hinge are not on one straight line.	De delen van een scharnier liggen niet op één rechte lijn.
+@msg	A gap between cut lines is too narrow to tell apart.	Een opening tussen snijlijnen is te smal om te onderscheiden.
+@msg	A cut-out area holds other fold lines or another blank.	Een uitgesneden gebied bevat andere vouwlijnen of een andere uitslag.
+@msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
+@msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}

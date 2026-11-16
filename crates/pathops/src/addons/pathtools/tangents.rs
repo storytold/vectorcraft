@@ -77,7 +77,10 @@ impl Outline {
     pub fn ellipse(unit: Affine) -> Result<Self, OutlineError> {
         let [a, b, c, d, e, f] = unit.as_coeffs();
         let norm = a.abs().max(b.abs()).max(c.abs()).max(d.abs());
-        if !unit.as_coeffs().iter().all(|v| v.is_finite()) || norm <= 0.0 || (a * d - b * c).abs() <= 1e-12 * norm * norm {
+        // The determinant is rounded by about `f64::EPSILON * norm²`; one no larger than that may
+        // belong to a map with no area. An ellipse whose determinant is larger is measured
+        // exactly.
+        if !unit.as_coeffs().iter().all(|v| v.is_finite()) || norm <= 0.0 || (a * d - b * c).abs() <= f64::EPSILON * norm * norm {
             return Err(OutlineError::Empty);
         }
         Ok(Outline::Ellipse { center: Point::new(e, f), m: [a, b, c, d] })
@@ -151,6 +154,16 @@ impl Outline {
         // A short bend the other way can lie between two of the points: each segment is checked
         // whole.
         if segments.iter().any(|s| bends_against(s, sign)) {
+            return Err(OutlineError::NotConvex);
+        }
+        // A corner can also turn inward between two of the points: each join is checked by the
+        // directions the segments leave and reach it in. Segments of no length are passed over.
+        let nonzero = |vs: [Vec2; 3]| vs.into_iter().find(|v| v.hypot() > 1e-9 * size).map(|v| v / v.hypot());
+        let ends: Vec<(Vec2, Vec2)> = segments
+            .iter()
+            .filter_map(|s| nonzero([s.p1 - s.p0, s.p2 - s.p0, s.p3 - s.p0]).zip(nonzero([s.p3 - s.p2, s.p3 - s.p1, s.p3 - s.p0])))
+            .collect();
+        if ends.iter().enumerate().any(|(i, (_, end))| ends[(i + 1) % ends.len()].0.cross(*end) * sign > 1e-9) {
             return Err(OutlineError::NotConvex);
         }
         let center = (Vec2::new(cx / (3.0 * area2), cy / (3.0 * area2)) * size + origin).to_point();
@@ -246,7 +259,7 @@ impl Outline {
     }
 
     /// The diagonal of the bounds (an ellipse's: of the box its axes span).
-    fn size(&self) -> f64 {
+    pub fn size(&self) -> f64 {
         match self {
             Outline::Ellipse { m, .. } => {
                 let [a, b, c, d] = *m;
@@ -270,11 +283,13 @@ impl Outline {
         }
     }
 
-    /// The points of the outline on the line `p · n = h`, its support value: the point where
-    /// `p · n` is largest, and the ends of any straight side along the line. Another point counts
-    /// when it lies within `tol` of the line plus `slope` times its distance from that largest
-    /// point, where `slope` is how far off the normal's angle may be.
-    fn touching(&self, n: Vec2, h: f64, tol: f64, slope: f64) -> Vec<Point> {
+    /// The points of the outline on the line `p · n = h`, its support value, which is reached on
+    /// segment `at`: the point where `p · n` is largest, and the ends of any straight side along
+    /// the line. Another point counts when it lies within `tol` of the line plus `slope` times its
+    /// distance from that largest point, where `slope` is how far off the normal's angle may be.
+    /// On a convex outline the points that count form one run around the largest one, so the
+    /// segments are measured from `at` outward both ways until a segment's end does not count.
+    fn touching(&self, n: Vec2, h: f64, tol: f64, slope: f64, at: usize) -> Vec<Point> {
         match self {
             Outline::Ellipse { center, m: [a, b, c, d] } => {
                 let w = Vec2::new(a * n.x + b * n.y, c * n.x + d * n.y);
@@ -282,9 +297,25 @@ impl Outline {
                 vec![*center + Vec2::new(a * w.x + c * w.y, b * w.x + d * w.y)]
             }
             Outline::Convex { segments, .. } => {
+                let len = segments.len();
                 let mut all = vec![];
-                for s in segments {
-                    each_extreme(s, n, |p, v| all.push((p, v)));
+                let Some(first) = segments.get(at % len.max(1)) else { return vec![] };
+                each_extreme(first, n, |p, v| all.push((p, v)));
+                let Some(&(peak, _)) = all.iter().max_by(|x, y| x.1.total_cmp(&y.1)) else { return vec![] };
+                let counts = |p: Point| h - p.to_vec2().dot(n) <= tol + slope * (p - peak).hypot();
+                let mut ahead = 0;
+                for j in 1..len {
+                    match segments.get((at + j) % len) {
+                        Some(s) if counts(s.p0) => each_extreme(s, n, |p, v| all.push((p, v))),
+                        _ => break,
+                    }
+                    ahead = j;
+                }
+                for j in 1..len - ahead {
+                    match segments.get((at + len - j) % len) {
+                        Some(s) if counts(s.p3) => each_extreme(s, n, |p, v| all.push((p, v))),
+                        _ => break,
+                    }
                 }
                 let Some(&(peak, _)) = all.iter().max_by(|x, y| x.1.total_cmp(&y.1)) else { return vec![] };
                 all.into_iter().filter(|(p, v)| h - v <= tol + slope * (*p - peak).hypot()).map(|(p, _)| p).collect()
@@ -293,8 +324,6 @@ impl Outline {
     }
 }
 
-/// Calls `f` with each point of `s` where `p · n` can be largest (its ends and the places where
-/// the curve runs square to `n`) and the value there.
 /// Whether cubic `s` bends against `sign` (the way its outline turns) anywhere. The cross product
 /// of its first and second derivatives is a quadratic in t; its lowest value on [0, 1] is compared
 /// with the segment's control polygon length squared.
@@ -321,7 +350,17 @@ fn bends_against(s: &CubicBez, sign: f64) -> bool {
     low < -1e-9 * scale
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many times [`each_extreme`] has measured a segment on this thread, for the tests.
+    static EXTREMES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Calls `f` with each point of `s` where `p · n` can be largest (its ends and the places where
+/// the curve runs square to `n`) and the value there.
 fn each_extreme(s: &CubicBez, n: Vec2, mut f: impl FnMut(Point, f64)) {
+    #[cfg(test)]
+    EXTREMES.with(|n| n.set(n.get() + 1));
     let [v0, v1, v2, v3] = [s.p0, s.p1, s.p2, s.p3].map(|p| p.to_vec2().dot(n));
     f(s.p0, v0);
     f(s.p3, v3);
@@ -396,10 +435,11 @@ pub fn common_tangents(a: &Outline, b: &Outline) -> Result<Vec<Tangent>, Coincid
     let hint = |h: &[usize], k: usize| h.get(k).copied().unwrap_or(0);
     let external = roots(&at, &|t, k| a.support_from(dir(t), hint(&ha, k)).0 - b.support_from(dir(t), hint(&hb, k)).0, tol)?;
     let internal = roots(&at, &|t, k| a.support_from(dir(t), hint(&ha, k)).0 + b.support_from(-dir(t), hint(&hb_back, k)).0, tol)?;
+    let (a, b) = (Hinted { o: a, at: &at, hints: &ha }, Hinted { o: b, at: &at, hints: &hb });
     let mut out = Vec::with_capacity(external.len() + internal.len());
     for (kind, list) in [(TangentKind::External, external), (TangentKind::Internal, internal)] {
         for root in list {
-            let t = tangent_at(a, b, kind, dir(root.angle), root.double, size);
+            let t = tangent_at(&a, &b, kind, root.angle, root.double, size);
             out.push(Tangent { from: t.from + origin, to: t.to + origin, ..t });
         }
     }
@@ -414,21 +454,47 @@ struct Root {
     double: bool,
 }
 
-/// The tangent of `kind` whose normal is `n`: `a` lies where `p · n` is at most the line's value,
-/// and `b` on the same side (external) or the other side (internal). `double` when the outlines
-/// touch there.
-fn tangent_at(a: &Outline, b: &Outline, kind: TangentKind, n: Vec2, double: bool, size: f64) -> Tangent {
+/// An outline with the segment it is touched on at each sampled normal angle.
+struct Hinted<'a> {
+    o: &'a Outline,
+    at: &'a [f64],
+    hints: &'a [usize],
+}
+
+impl Hinted<'_> {
+    /// The support value at the normal angle `angle` and the segment it is reached on, walking on
+    /// from the segment of the sample at or before `angle`.
+    fn support(&self, angle: f64) -> (f64, usize) {
+        let angle = angle.rem_euclid(TAU);
+        // Before the first sample, the last one (taken 2π back) comes before `angle`.
+        let k = self.at.partition_point(|t| *t <= angle).checked_sub(1).unwrap_or(self.at.len().saturating_sub(1));
+        self.o.support_from(dir(angle), self.hints.get(k).copied().unwrap_or(0))
+    }
+}
+
+/// The tangent of `kind` whose normal is at `angle`: `a` lies where `p · n` is at most the line's
+/// value, and `b` on the same side (external) or the other side (internal). `double` when the
+/// outlines touch there.
+fn tangent_at(a: &Hinted, b: &Hinted, kind: TangentKind, angle: f64, double: bool, size: f64) -> Tangent {
+    let n = dir(angle);
     // The rounding allowed in `p · n` grows with each outline's own size and its distance from the
     // origin.
     let rounding = |o: &Outline| 1e-12 * o.size() + 1e-14 * (o.center().to_vec2().hypot() + o.size());
-    let (tol_a, tol_b) = (rounding(a), rounding(b));
+    let (tol_a, tol_b) = (rounding(a.o), rounding(b.o));
     // Bisection finds a simple root's angle to about the rounding of the support values; the
     // golden-section search finds a double root's to about 1e-8 radians.
     let slope = if double { 1e-7 } else { 1e-10 };
-    let ha = a.support(n);
-    let (on_a, on_b) = match kind {
-        TangentKind::External => (a.touching(n, ha, tol_a, slope), b.touching(n, b.support(n), tol_b, slope)),
-        TangentKind::Internal => (a.touching(n, ha, tol_a, slope), b.touching(-n, b.support(-n), tol_b, slope)),
+    let (ha, sa) = a.support(angle);
+    let on_a = a.o.touching(n, ha, tol_a, slope, sa);
+    let on_b = match kind {
+        TangentKind::External => {
+            let (hb, sb) = b.support(angle);
+            b.o.touching(n, hb, tol_b, slope, sb)
+        }
+        TangentKind::Internal => {
+            let (hb, sb) = b.support(angle + TAU / 2.0);
+            b.o.touching(-n, hb, tol_b, slope, sb)
+        }
     };
     // Positions along the line, which runs square to `n` through `n * ha`.
     let t = Vec2::new(-n.y, n.x);
@@ -441,7 +507,7 @@ fn tangent_at(a: &Outline, b: &Outline, kind: TangentKind, n: Vec2, double: bool
     // stand a little apart.
     let (from, to) = if double && hi - lo <= 1e-6 * size {
         // Touching at one point: the narrower outline's width along the line, centered there.
-        let width = [a, b].map(|o| o.support(t) + o.support(-t)).into_iter().fold(f64::MAX, f64::min);
+        let width = [a, b].map(|o| o.support(angle + TAU / 4.0).0 + o.support(angle - TAU / 4.0).0).into_iter().fold(f64::MAX, f64::min);
         let mid = (lo + hi) / 2.0;
         (mid - width / 2.0, mid + width / 2.0)
     } else if mean(&on_a) <= mean(&on_b) {
@@ -575,6 +641,8 @@ fn golden(g: &dyn Fn(f64) -> f64, mut lo: f64, mut hi: f64) -> (f64, f64) {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+
     use kurbo::Rect;
     use vectorcraft_geom::shapes;
 
@@ -851,6 +919,53 @@ mod tests {
     }
 
     #[test]
+    fn each_tangent_measures_only_the_segments_near_where_it_touches() {
+        // Two regular 2,000-gons about one center, one turned half a step: 4,000 external
+        // tangents. Measuring every segment of both outlines for every tangent takes about 8,000
+        // measurements per tangent.
+        let sides = 2_000;
+        let gon = |turn: f64| {
+            let pts: Vec<Point> = (0..sides).map(|k| (dir(turn + TAU * k as f64 / sides as f64) * 100.0).to_point()).collect();
+            SubPath::polyline(&pts, true)
+        };
+        let (a, b) = (Outline::convex(&gon(0.0)).unwrap(), Outline::convex(&gon(TAU / (2 * sides) as f64)).unwrap());
+        EXTREMES.with(|c| c.set(0));
+        let all = common_tangents(&a, &b).unwrap();
+        let calls = EXTREMES.with(Cell::get);
+        assert_eq!(all.iter().filter(|t| t.kind == TangentKind::External).count(), 2 * sides);
+        assert!(calls < 1_000 * all.len(), "{calls} measurements for {} tangents", all.len());
+        let r = 100.0 * (TAU / (4 * sides) as f64).sin();
+        assert!(all.iter().all(|t| ((t.to - t.from).hypot() - 2.0 * r).abs() < 1e-6), "{:?}", all.first());
+    }
+
+    #[test]
+    fn a_very_thin_ellipse_is_measured_exactly() {
+        // Semi-axes 1e6 and 1e-7, a ratio of 1e13, beside a circle, then the whole figure turned
+        // 30 degrees: the tangents run from the ellipse's tips to the circle.
+        for deg in [0.0, 30.0] {
+            let turn = Affine::rotate(f64::to_radians(deg));
+            let thin = turn * Affine::scale_non_uniform(1e6, 1e-7);
+            let round = turn * Affine::new([10.0, 0.0, 0.0, 10.0, 0.0, 100.0]);
+            let all = common_tangents(&Outline::ellipse(thin).unwrap(), &Outline::ellipse(round).unwrap()).unwrap();
+            assert_eq!(all.iter().filter(|t| t.kind == TangentKind::External).count(), 2, "{all:?}");
+            assert_eq!(all.iter().filter(|t| t.kind == TangentKind::Internal).count(), 2, "{all:?}");
+            let (sa, sb) = (sample_ellipse(thin, 20_000), sample_ellipse(round, 5_000));
+            for t in &all {
+                check_against_samples(t, &sa, &sb, 1e-3);
+                // The end on the ellipse, taken back to the unturned figure.
+                let (from, to) = (turn.inverse() * t.from, turn.inverse() * t.to);
+                let tip = if (from.x.abs() - 1e6).abs() < 1e-3 { from } else { to };
+                assert!((tip.x.abs() - 1e6).abs() < 1e-3 && tip.y.abs() < 1e-6, "{deg} {t:?}");
+            }
+        }
+        // A determinant a few times its rounding is taken; one lost in the rounding of the map's
+        // entries is still refused.
+        assert!(Outline::ellipse(Affine::new([1.0, 0.0, 0.0, 4.0 * f64::EPSILON, 0.0, 0.0])).is_ok());
+        assert_eq!(Outline::ellipse(Affine::new([1.0, 0.0, 0.0, f64::EPSILON, 0.0, 0.0])).err(), Some(OutlineError::Empty));
+        assert_eq!(Outline::ellipse(Affine::new([1.0, 1.0, 1.0, 1.0 + f64::EPSILON, 0.0, 0.0])).err(), Some(OutlineError::Empty));
+    }
+
+    #[test]
     fn a_curve_peaking_inside_a_segment_is_measured_at_its_peak() {
         // p(t) · n has the control values 0, 0.25, 0.5, -0.25: its derivative's linear term is
         // zero, and the peak, 0.25 at t = 0.5, lies inside the segment.
@@ -877,6 +992,15 @@ mod tests {
         bp.close_path();
         let bend = vectorcraft_geom::PathData::from_bezpath(&bp).subpaths[0].clone();
         assert_eq!(Outline::convex(&bend).err(), Some(OutlineError::NotConvex));
+        // A triangle whose first side is a cubic that leaves its start a little the wrong way: the
+        // corner there turns inward, though the checked points and the curve itself turn one way.
+        let mut bp = vectorcraft_geom::BezPath::new();
+        bp.move_to((0.0, 0.0));
+        bp.curve_to((-1.0, -1.0), (66.0, -2.0), (100.0, 0.0));
+        bp.line_to((50.0, 100.0));
+        bp.close_path();
+        let notch = vectorcraft_geom::PathData::from_bezpath(&bp).subpaths[0].clone();
+        assert_eq!(Outline::convex(&notch).err(), Some(OutlineError::NotConvex));
         // A square traced twice around winds around twice.
         let twice: Vec<Point> = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)].repeat(2).into_iter().map(Point::from).collect();
         assert_eq!(Outline::convex(&SubPath::polyline(&twice, true)).err(), Some(OutlineError::NotConvex));
