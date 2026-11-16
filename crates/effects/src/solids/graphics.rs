@@ -1018,10 +1018,41 @@ pub struct GraphicFrame {
 /// The pieces of Inflate's front and puffed back that show their outside to the viewer, as the
 /// graphics are drawn on them ([`surface_parts`]): each piece's face, its corners in the art's plane
 /// (offsets from the center of the object's bounds) and on the page, its depth (larger is nearer)
-/// and its plane, for its depth at a point of the page.
+/// and its plane, for its depth at a point of the page. The other facets the viewer sees (the
+/// sides, and pieces that show the surface's inside) are kept as `covers`, for where they hide
+/// a piece.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct MembraneFrame {
     pieces: Vec<MembranePiece>,
+    covers: Vec<Cover>,
+}
+
+/// A facet that can hide a piece of Inflate's front or back: its contours on the page (nonzero
+/// winding), its depth, its plane and its place among the solid's facets.
+#[derive(Clone, Debug, PartialEq)]
+struct Cover {
+    contours: Vec<Vec<Point>>,
+    depth: f64,
+    plane: Option<DepthPlane>,
+    index: usize,
+}
+
+impl Cover {
+    /// Does the facet hold page point `p`?
+    fn holds(&self, p: Point) -> bool {
+        let mut winding = 0i32;
+        for c in &self.contours {
+            for (a, b) in c.iter().zip(c.iter().cycle().skip(1)).take(c.len()) {
+                let side = (*b - *a).cross(p - *a);
+                if a.y <= p.y && b.y > p.y && side > 0.0 {
+                    winding += 1;
+                } else if a.y > p.y && b.y <= p.y && side < 0.0 {
+                    winding -= 1;
+                }
+            }
+        }
+        winding != 0
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1031,6 +1062,9 @@ struct MembranePiece {
     page: [Point; 3],
     depth: f64,
     plane: Option<DepthPlane>,
+    /// The piece's place among the solid's facets: of two facets drawn last, the later one is drawn
+    /// over the other.
+    index: usize,
 }
 
 impl MembranePiece {
@@ -1043,31 +1077,35 @@ impl MembranePiece {
 
 impl MembraneFrame {
     /// The pieces of `facets` that carry where they lie in the art's plane and show the outside of
-    /// Inflate's front or back.
+    /// Inflate's front or back, and the other facets not turned away from the viewer as covers.
     pub(super) fn of<'a>(facets: impl IntoIterator<Item = &'a Facet>) -> Self {
-        let pieces = facets
-            .into_iter()
-            .filter_map(|f| {
-                let face = f.membrane?;
-                let cell = f.surface.as_ref().filter(|c| c.outward)?;
+        let (mut pieces, mut covers) = (Vec::new(), Vec::new());
+        for (index, f) in facets.into_iter().enumerate() {
+            let piece = f.membrane.zip(f.surface.as_ref().filter(|c| c.outward)).and_then(|(face, cell)| {
                 let uv = <[Point; 3]>::try_from(cell.uv.as_slice()).ok()?;
                 let page = <[Point; 3]>::try_from(cell.page.as_slice()).ok()?;
-                Some(MembranePiece { face, uv, page, depth: f.depth, plane: f.plane })
-            })
-            .collect();
-        Self { pieces }
+                Some(MembranePiece { face, uv, page, depth: f.depth, plane: f.plane, index })
+            });
+            match piece {
+                Some(piece) => pieces.push(piece),
+                None if !f.away => covers.push(Cover { contours: f.contours.clone(), depth: f.depth, plane: f.plane, index }),
+                None => {}
+            }
+        }
+        Self { pieces, covers }
     }
 
     /// Point `p` of `face` in the art's plane mapped onto the page, or with `from_page` a page point
     /// mapped into the art's plane, through the piece of that face that holds it and is nearest at
-    /// that point of the page. `None` when no piece the viewer sees holds it.
+    /// that point of the page. `None` when no piece the viewer sees holds it, or when a nearer piece
+    /// of the other face or a nearer cover hides that point of the page.
     fn map(&self, face: PlanarFace, p: Point, from_page: bool) -> Option<Point> {
         let inside = |t: &[Point; 3], q: Point| {
             let side = |a: Point, b: Point| (b - a).cross(q - a);
             let s = [side(t[0], t[1]), side(t[1], t[2]), side(t[2], t[0])];
             s.iter().all(|v| *v >= -1e-9) || s.iter().all(|v| *v <= 1e-9)
         };
-        let mut best: Option<(Point, f64)> = None;
+        let mut best: Option<(Point, f64, &MembranePiece)> = None;
         for piece in self.pieces.iter().filter(|piece| piece.face == face) {
             let (from, to) = if from_page { (&piece.page, &piece.uv) } else { (&piece.uv, &piece.page) };
             if !inside(from, p) {
@@ -1075,11 +1113,28 @@ impl MembraneFrame {
             }
             let Some(q) = triangle_map(from, to).map(|m| m * p).filter(|q| q.is_finite()) else { continue };
             let depth = piece.depth_at(if from_page { p } else { q });
-            if best.is_none_or(|(_, nearest)| depth > nearest) {
-                best = Some((q, depth));
+            if best.is_none_or(|(_, nearest, _)| depth > nearest) {
+                best = Some((q, depth, piece));
             }
         }
-        best.map(|(q, _)| q)
+        let (q, depth, shown) = best?;
+        let at = if from_page { p } else { q };
+        // A facet drawn last (depth `f64::MAX`) is drawn over every other one, and over another
+        // drawn last before it. Otherwise, where the front, the back and the sides meet, they give
+        // the same depth there, and only a facet clearly nearer covers.
+        let hides = |raw: f64, there: f64, index: usize| match (raw == f64::MAX, shown.depth == f64::MAX) {
+            (true, true) => index > shown.index,
+            (true, false) => true,
+            (false, true) => false,
+            (false, false) => there > depth + 1e-6 * depth.abs().max(1.0),
+        };
+        let covered = self
+            .pieces
+            .iter()
+            .filter(|piece| piece.face != face)
+            .any(|piece| inside(&piece.page, at) && hides(piece.depth, piece.depth_at(at), piece.index))
+            || self.covers.iter().any(|c| c.holds(at) && hides(c.depth, c.plane.and_then(|plane| plane.depth_at(at)).unwrap_or(c.depth), c.index));
+        (!covered).then_some(q)
     }
 }
 

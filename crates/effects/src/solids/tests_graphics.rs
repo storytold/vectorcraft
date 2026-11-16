@@ -1044,15 +1044,66 @@ fn overlapping_inflate_pieces_map_a_point_through_the_one_nearer_there() {
         page,
         depth,
         plane: Some(DepthPlane { normal, offset, center: Point::ORIGIN, eye: None }),
+        index: 0,
     };
     // The tilted piece is nearer at its center (depth 10) but at depth 0 where x is 10; the flat
     // one lies at depth 5 everywhere.
     let tilted = piece(0.0, 10.0, [1.0, 0.0, 1.0], 10.0);
     let flat = piece(100.0, 5.0, [0.0, 0.0, 1.0], 5.0);
-    let frame = GraphicFrame::inflated(Rect::new(0.0, 0.0, 20.0, 20.0), MembraneFrame { pieces: vec![tilted, flat] });
+    let frame = GraphicFrame::inflated(Rect::new(0.0, 0.0, 20.0, 20.0), MembraneFrame { pieces: vec![tilted, flat], covers: vec![] });
     let (x, y) = frame.offset_at(PlanarFace::Front, Point::new(10.0, 5.0)).unwrap();
     assert!((x - 110.0).abs() < 1e-6 && (y - 5.0).abs() < 1e-6, "{x} {y}");
     // Near the tilted piece's left corner it is the nearer one.
     let (x, _) = frame.offset_at(PlanarFace::Front, Point::new(2.0, 0.5)).unwrap();
     assert!((x - 2.0).abs() < 1e-6, "{x}");
+}
+
+/// A graphic on Inflate's back has no handle where a nearer piece of the front covers its center
+/// on the page, and the back has no offset there; where the back is nearer, it has both.
+#[test]
+fn an_inflate_back_graphic_covered_by_a_nearer_front_piece_has_no_handle() {
+    let page = [Point::new(0.0, 0.0), Point::new(20.0, 0.0), Point::new(10.0, 20.0)];
+    let piece = |face: PlanarFace, depth: f64| MembranePiece { face, uv: page, page, depth, plane: None, index: 0 };
+    let frame = |front: f64, back: f64| {
+        let pieces = vec![piece(PlanarFace::Front, front), piece(PlanarFace::Back, back)];
+        GraphicFrame::inflated(Rect::new(0.0, 0.0, 20.0, 20.0), MembraneFrame { pieces, covers: vec![] })
+    };
+    let g = MappedGraphic::from_value(&json!({"symbol": "Mark", "face": "back", "x": -10.0, "y": 5.0})).unwrap();
+    let covered = frame(10.0, 5.0);
+    assert!(covered.handle(&g).is_none());
+    assert!(covered.offset_at(PlanarFace::Back, Point::new(10.0, 5.0)).is_none());
+    assert!(covered.offset_at(PlanarFace::Front, Point::new(10.0, 5.0)).is_some());
+    let seen = frame(5.0, 10.0);
+    let (at, _) = seen.handle(&g).unwrap();
+    assert!((at.x - 10.0).abs() < 1e-6 && (at.y - 5.0).abs() < 1e-6, "{at:?}");
+    assert!(seen.offset_at(PlanarFace::Back, Point::new(10.0, 5.0)).is_some());
+}
+
+/// A nearer side facet that covers a graphic's center on Inflate's front hides its handle; one
+/// behind the front, or beside the center, leaves it. A facet drawn last (a back cap) hides it
+/// whatever its plane's depth, unless the front piece is drawn last too, after it.
+#[test]
+fn an_inflate_graphic_covered_by_a_nearer_side_has_no_handle() {
+    let page = [Point::new(0.0, 0.0), Point::new(20.0, 0.0), Point::new(10.0, 20.0)];
+    let front = |depth: f64, index: usize| MembranePiece { face: PlanarFace::Front, uv: page, page, depth, plane: None, index };
+    let side = |x0: f64, depth: f64, index: usize| Cover {
+        contours: vec![vec![Point::new(x0, 0.0), Point::new(x0 + 4.0, 0.0), Point::new(x0 + 4.0, 20.0), Point::new(x0, 20.0)]],
+        depth,
+        // A plane behind the front, as a back cap's is.
+        plane: Some(DepthPlane { normal: [0.0, 0.0, 1.0], offset: 1.0, center: Point::ORIGIN, eye: None }),
+        index,
+    };
+    let frame = |piece: MembranePiece, cover: Cover| {
+        GraphicFrame::inflated(Rect::new(0.0, 0.0, 20.0, 20.0), MembraneFrame { pieces: vec![piece], covers: vec![cover] })
+    };
+    let g = MappedGraphic::from_value(&json!({"symbol": "Mark", "face": "front", "x": 10.0, "y": 5.0})).unwrap();
+    let mut nearer = side(8.0, 10.0, 1);
+    nearer.plane = None;
+    assert!(frame(front(5.0, 0), nearer.clone()).handle(&g).is_none());
+    assert!(frame(front(5.0, 0), nearer).offset_at(PlanarFace::Front, Point::new(10.0, 5.0)).is_none());
+    assert!(frame(front(5.0, 0), side(8.0, 10.0, 1)).handle(&g).is_some());
+    assert!(frame(front(5.0, 0), side(14.0, 10.0, 1)).handle(&g).is_some());
+    assert!(frame(front(5.0, 0), side(8.0, f64::MAX, 1)).handle(&g).is_none());
+    assert!(frame(front(f64::MAX, 0), side(8.0, f64::MAX, 1)).handle(&g).is_none());
+    assert!(frame(front(f64::MAX, 2), side(8.0, f64::MAX, 1)).handle(&g).is_some());
 }
