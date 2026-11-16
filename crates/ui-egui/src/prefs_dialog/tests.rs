@@ -1075,7 +1075,9 @@ fn scroll_sideways_with_cmd_wheel_dims_with_zoom_with_mouse_wheel() {
     let mut frame = |d: &mut Dialog, events: Vec<egui::Event>| {
         let raw =
             egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 900.0))), events, ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| category_fields(ui, &mut a, d, "General"));
+        let mut out = ctx.run_ui(raw, |ui| {
+            category_fields(ui, &mut a, d, "General");
+        });
         out.textures_delta.clear();
         out.shapes.iter().find_map(|c| label(&c.shape, "Scroll Sideways with Cmd/Ctrl + Wheel"))
     };
@@ -1113,7 +1115,9 @@ fn show_samples_on_white_dims_without_in_menu_font_previews() {
             events,
             ..Default::default()
         };
-        let mut out = ctx.run_ui(raw, |ui| category_fields(ui, &mut a, d, "Type"));
+        let mut out = ctx.run_ui(raw, |ui| {
+            category_fields(ui, &mut a, d, "Type");
+        });
         out.textures_delta.clear();
         out.shapes.iter().find_map(|c| label(&c.shape, "Show samples on white"))
     };
@@ -1624,4 +1628,243 @@ fn ok_refuses_a_typed_folder_outside_the_automation_roots_before_looking_at_it()
         assert!(a.ui.dialog.is_some(), "{key}: the dialog stays open");
     }
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// One frame of the open Preferences dialog with `events`, a quarter second after the last. → The
+/// texts it painted where they show (a text its clip rectangle hides is left out), with their
+/// rectangles, and the description of each accessibility node that has one.
+fn description_frame(a: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> (Vec<(String, egui::Rect)>, Vec<String>) {
+    let time = ctx.input(|i| i.time) + 0.25;
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0)));
+    let raw = egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| show(a, ui.ctx()));
+    out.textures_delta.clear();
+    fn walk(s: &egui::Shape, clip: egui::Rect, v: &mut Vec<(String, egui::Rect)>) {
+        match s {
+            egui::Shape::Text(t) => {
+                let r = egui::Rect::from_min_size(t.pos, t.galley.size());
+                if r.intersects(clip) {
+                    v.push((t.galley.text().to_string(), r));
+                }
+            }
+            egui::Shape::Vec(s) => s.iter().for_each(|s| walk(s, clip, v)),
+            _ => {}
+        }
+    }
+    let mut texts = vec![];
+    out.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect, &mut texts));
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    let described = nodes.iter().filter_map(|(_, n)| n.description().map(str::to_string)).collect();
+    (texts, described)
+}
+
+/// The Preferences window's rectangle.
+fn preferences_window(ctx: &egui::Context) -> egui::Rect {
+    ctx.memory(|m| m.area_rect(egui::Id::unique("dialog-preferences"))).expect("the dialog window is shown")
+}
+
+/// Whether one of `texts` is `sentence`.
+fn painted(texts: &[(String, egui::Rect)], sentence: &str) -> bool {
+    texts.iter().any(|(t, _)| t == sentence)
+}
+
+/// The pointer over a Units row shows that row's sentence at the bottom of the dialog, and the
+/// dialog keeps its size.
+#[test]
+fn hovering_a_units_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Units"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    let size = preferences_window(&ctx).size();
+    let general = descriptions::description("unitsGeneral").expect("Units › General has a sentence");
+    let stroke = descriptions::description("unitsStroke").expect("Units › Stroke has a sentence");
+    assert!(!painted(&texts, general), "nothing is described before the pointer comes");
+    let row = |texts: &[(String, egui::Rect)], label: &str| {
+        texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
+    };
+    let at = row(&texts, "General:");
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(at)]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    assert!(painted(&texts, general), "the General row's sentence shows: {texts:?}");
+    assert!(!painted(&texts, stroke));
+    let line = texts.iter().find(|(t, _)| t == general).map(|(_, r)| *r).unwrap();
+    let ok = row(&texts, "OK");
+    assert!(line.bottom() < ok.y, "the sentence is above OK: {line:?}, {ok:?}");
+    assert_eq!(preferences_window(&ctx).size(), size, "the dialog keeps its size");
+    let at = row(&texts, "Stroke:");
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(at)]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    assert!(painted(&texts, stroke) && !painted(&texts, general), "the Stroke row's sentence replaces it");
+    // Moving from row to row, across the spacing between them, never leaves the line empty.
+    let (from, to) = (row(&texts, "General:"), row(&texts, "Stroke:"));
+    let mut y = from.y;
+    while y <= to.y {
+        let (texts, _) = description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(egui::pos2(from.x, y))]);
+        assert!(painted(&texts, general) || painted(&texts, stroke), "a sentence shows with the pointer at y = {y}");
+        y += 1.0;
+    }
+    // Moving down onto the line keeps the sentence there to read.
+    let line = description_line_rects(&ctx).line;
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(line.center())]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    assert!(painted(&texts, stroke), "the sentence stays while the pointer is on the line: {texts:?}");
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerGone]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    assert!(!painted(&texts, stroke), "the sentence goes with the pointer");
+    assert_eq!(preferences_window(&ctx).size(), size);
+}
+
+/// With nothing under the pointer, the row whose control has the keyboard focus is described, and a
+/// screen reader gets the same sentence as that control's description.
+#[test]
+fn keyboard_focus_on_a_units_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Units"));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    let general = descriptions::description("unitsGeneral").expect("Units › General has a sentence");
+    assert!(ctx.memory(|m| m.has_focus(search_edit_id())), "the search field has the focus on open");
+    assert!(!painted(&texts, general));
+    // Tab from the search field through the category list to the first Units control.
+    let mut shown = None;
+    for _ in 0..40 {
+        let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
+        if painted(&texts, general) {
+            shown = Some(described);
+            break;
+        }
+    }
+    let described = shown.expect("Tab reaches the General row and its sentence shows");
+    assert!(described.iter().any(|d| d == general), "the focused control carries the sentence: {described:?}");
+}
+
+/// The field list with the description line under it, and the description line, in the last frame.
+struct DescriptionRects {
+    column: egui::Rect,
+    line: egui::Rect,
+}
+
+fn description_line_rects(ctx: &egui::Context) -> DescriptionRects {
+    let (column, line) =
+        ctx.data(|m| m.get_temp::<(egui::Rect, egui::Rect)>(egui::Id::unique("prefs-description-rects"))).expect("the description line is shown");
+    DescriptionRects { column, line }
+}
+
+/// A row with no sentence leaves the description line empty, also after another category's row
+/// was described, and the dialog keeps its size.
+#[test]
+fn a_row_without_a_description_leaves_the_line_empty() {
+    let mut a = app();
+    open(&mut a, Some("Units"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    let at = |texts: &[(String, egui::Rect)], label: &str| {
+        texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
+    };
+    let general = descriptions::description("unitsGeneral").expect("Units › General has a sentence");
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(at(&texts, "General:"))]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    assert!(painted(&texts, general), "the General row's sentence shows: {texts:?}");
+    // Go to the General category and point at a row with no sentence.
+    let button = at(&texts, "General");
+    let press = |pressed| egui::Event::PointerButton { pos: button, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(button), press(true), press(false)]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    let size = preferences_window(&ctx).size();
+    let line = description_line_rects(&ctx).line;
+    let empty = |texts: &[(String, egui::Rect)], when: &str| {
+        let drawn: Vec<_> = texts.iter().filter(|(_, r)| r.intersects(line)).collect();
+        assert!(drawn.is_empty(), "{when}: nothing is drawn on the line: {drawn:?}");
+    };
+    // The Units sentence does not follow the pointer onto the line of another category.
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(line.center())]);
+    let (after, _) = description_frame(&mut a, &ctx, vec![]);
+    empty(&after, "on the line after changing category");
+    assert_eq!(descriptions::description("keyboardIncrement"), None);
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(at(&texts, "Keyboard Increment:"))]);
+    let (after, _) = description_frame(&mut a, &ctx, vec![]);
+    empty(&after, "on Keyboard Increment");
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(line.center())]);
+    let (after, _) = description_frame(&mut a, &ctx, vec![]);
+    empty(&after, "on the line after Keyboard Increment");
+    assert_eq!(preferences_window(&ctx).size(), size);
+}
+
+/// A sentence shown when the dialog closed does not come back when it opens again with the
+/// pointer away from the rows.
+#[test]
+fn opening_the_dialog_again_starts_with_an_empty_line() {
+    let mut a = app();
+    open(&mut a, Some("Units"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    let general = descriptions::description("unitsGeneral").expect("Units › General has a sentence");
+    let at = texts.iter().find(|(t, _)| t == "General:").map(|(_, r)| r.center()).expect("the General row is shown");
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(at)]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    assert!(painted(&texts, general), "the General row's sentence shows: {texts:?}");
+    let line = description_line_rects(&ctx).line;
+    a.ui.dialog = None;
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(line.center())]);
+    description_frame(&mut a, &ctx, vec![]);
+    open(&mut a, Some("Units"));
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    assert!(!painted(&texts, general), "the old sentence does not come back: {texts:?}");
+}
+
+/// The field list and the description line under it together take the height the field list
+/// alone took before the line, in every category, so the dialog keeps its size.
+#[test]
+fn the_description_line_keeps_the_fields_column_height() {
+    let mut a = app();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    for cat in PREF_CATEGORIES {
+        open(&mut a, Some(*cat));
+        description_frame(&mut a, &ctx, vec![]);
+        description_frame(&mut a, &ctx, vec![]);
+        let kept = description_line_rects(&ctx);
+        assert!((kept.column.height() - 400.0).abs() < 0.01, "{cat}: the column is {} tall, not 400", kept.column.height());
+        assert!((kept.line.height() - DESCRIPTION_HEIGHT).abs() < 0.01, "{cat}: the line is {} tall", kept.line.height());
+    }
+}
+
+/// Each sentence describes a setting the dialog shows, and every complete catalog translates it
+/// into at most the three lines the description line holds.
+#[test]
+fn every_description_names_a_setting_and_fits_in_every_language() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut bad = vec![];
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        for (key, sentence) in descriptions::DESCRIPTIONS {
+            if !settings().any(|s| s.key == *key) {
+                bad.push(format!("`{key}` is not a setting the dialog shows"));
+            }
+            for lang in crate::i18n::Lang::all() {
+                let text = crate::i18n::tr(lang, sentence);
+                if lang != crate::i18n::Lang::EN && text == *sentence {
+                    bad.push(format!("{}: no row for {sentence:?}", lang.code()));
+                }
+                let mut job = egui::text::LayoutJob::simple(text.to_string(), egui::FontId::proportional(11.5), egui::Color32::WHITE, 530.0);
+                job.wrap.max_rows = 3;
+                let galley = ui.painter().layout_job(job);
+                if galley.elided || galley.size().y > DESCRIPTION_HEIGHT {
+                    bad.push(format!("{}: {text:?} takes more than three lines", lang.code()));
+                }
+            }
+        }
+    });
+    out.textures_delta.clear();
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
