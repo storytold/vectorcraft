@@ -799,8 +799,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             None => form::preview(app, ui, d, "Recolor Artwork", CMD, apply_params(d)),
         }
     }
-    if let Some(c) = pick.and_then(|i| Some((i, to_color(rows(d).get(i)?)?))) {
-        *d = super::color_picker::over_recolor(d, c.1, c.0);
+    if let Some((i, swatches)) = pick
+        && let Some(row) = rows(d).get(i)
+    {
+        let c = to_color(row).or_else(|| from_colors(row).first().copied()).unwrap_or_default();
+        *d = super::color_picker::over_recolor(d, c, i, swatches);
     }
     false
 }
@@ -868,8 +871,8 @@ fn chip(ui: &Ui, r: Rect, c: Color, dim: bool) {
 }
 
 /// The Assign tab. Returns true when the rows changed, and the row whose new colour was
-/// double-clicked.
-fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>) -> (bool, Option<usize>) {
+/// double-clicked or chosen via "Pick from Swatches" (with `true` for swatches view).
+fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>) -> (bool, Option<(usize, bool)>) {
     let t = Tokens::get(ui.ctx());
     let mut changed = false;
     let total: usize = rows.iter().map(|r| r["from"].as_array().map_or(0, Vec::len)).sum();
@@ -907,7 +910,8 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
     });
     let mut sel = selection(d);
     let mut clicked: Option<usize> = None;
-    let mut pick: Option<usize> = None;
+    let mut pick: Option<(usize, bool)> = None;
+    let mut limit_to: Option<String> = None;
     let shown: Vec<Color> = rows.iter().map(|r| new_shown(app, d, r)).collect();
     widgets::list_box(ui, |ui| {
         egui::ScrollArea::vertical().id_salt("recolor-rows").max_height(TABLE_H).show(ui, |ui| {
@@ -956,7 +960,7 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
                         clicked = Some(i);
                     }
                     if nresp.double_clicked() && has_new {
-                        pick = Some(i);
+                        pick = Some((i, false));
                     }
                     ui.add_space(6.0);
                     let hex = if has_new { crate::panels::color::hex_digits(&to) } else { String::new() };
@@ -967,6 +971,40 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
                         set_to(row, &keep_model(to, c));
                         changed = true;
                     }
+                    let mut row_menu = |ui: &mut Ui| {
+                        if widgets::menu_item(ui, tl!("Pick from Swatches"), true, false) {
+                            pick = Some((i, true));
+                            ui.close();
+                        }
+                        ui.menu_button(tl!("Limit to Library"), |ui| {
+                            let cur = d.str("limitTo");
+                            if widgets::menu_item(ui, tl!("None"), true, cur.is_empty()) {
+                                limit_to = Some("".to_string());
+                                ui.close();
+                            }
+                            ui.separator();
+                            if let Some(k) = crate::panels::swatches::library_list(app, ui, &cur) {
+                                limit_to = Some(k);
+                                ui.close();
+                            }
+                        });
+                    };
+                    if (cr.secondary_clicked() || nresp.secondary_clicked()) && !sel.contains(&i) {
+                        clicked = Some(i);
+                    }
+                    cr.context_menu(&mut row_menu);
+                    nresp.context_menu(&mut row_menu);
+                    let empty_w = ui.available_width();
+                    if empty_w > 0.0 {
+                        let (_, empty_resp) = ui.allocate_exact_size(vec2(empty_w, 20.0), Sense::click());
+                        if empty_resp.clicked() {
+                            clicked = Some(i);
+                        }
+                        if empty_resp.secondary_clicked() && !sel.contains(&i) {
+                            clicked = Some(i);
+                        }
+                        empty_resp.context_menu(&mut row_menu);
+                    }
                 });
                 if sel.contains(&i) {
                     ui.painter().set(bg, egui::Shape::rect_filled(r.response.rect.expand2(vec2(2.0, 1.0)), 2.0, t.row_selected));
@@ -974,6 +1012,10 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
             }
         });
     });
+    if let Some(k) = limit_to {
+        d.fields.insert("limitTo".into(), json!(k));
+        changed = true;
+    }
     if let Some(i) = clicked {
         let m = ui.input(|i| i.modifiers);
         match sel.iter().position(|s| *s == i) {
@@ -2176,6 +2218,14 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let to = super::rows(app.ui.dialog.as_ref().unwrap())[i]["to"].clone();
         assert!(to.as_str().is_some_and(|k| k.starts_with("cmyk ")), "a color picked as RGB is CMYK in a CMYK document: {to}");
+
+        let rect = settled(&mut app, &ctx, 3.0, i).unwrap();
+        double_click(&mut app, &ctx, rect, 3.1, i);
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("color".into(), json!({"l": 55.0, "a": 20.0, "b": -30.0}));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let to = super::rows(app.ui.dialog.as_ref().unwrap())[i]["to"].clone();
+        assert_eq!(to, "lab 55 20 -30", "a Lab color picked in the picker is kept as Lab: {to}");
     }
 
     /// A 15 pt square at (`x`, 10) filled with `fill`, without a stroke.
