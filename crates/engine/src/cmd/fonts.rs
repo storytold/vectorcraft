@@ -247,10 +247,11 @@ impl Resources {
     fn expand(&mut self, d: &Document) {
         let mut symbols: Vec<String> = self.symbols.iter().cloned().collect();
         let mut patterns: Vec<String> = self.patterns.iter().cloned().collect();
+        let boxes = d.symbol_boxes();
         while !symbols.is_empty() || !patterns.is_empty() {
             let mut more = Resources::default();
             for name in symbols.drain(..) {
-                if let Some(sym) = d.symbols.iter().find(|sym| sym.name == name) {
+                if let Some(sym) = boxes.symbol(&name) {
                     more.add(&sym.art);
                 }
             }
@@ -511,7 +512,7 @@ pub(super) fn art_fonts(d: &Document, art: &[Node]) -> BTreeSet<UsedFont> {
 /// art of a placed document (`d` as [`Document::with_placed_art`] gives it, for that art's
 /// resources).
 pub(super) fn printed_type(d: &Document, layers: &[Arc<Node>], areas: &[Rect]) -> (BTreeSet<UsedFont>, BTreeSet<NodeId>) {
-    let mut walk = Printed { d, own: true, fonts: BTreeSet::new(), overflow: BTreeSet::new(), symbols: BTreeSet::new(), patterns: BTreeSet::new() };
+    let mut walk = Printed::new(d);
     for l in layers {
         walk.node(l, Some(areas));
     }
@@ -523,7 +524,7 @@ pub(super) fn printed_type(d: &Document, layers: &[Arc<Node>], areas: &[Rect]) -
 /// found as [`printed_type`] finds them for Print: visible objects of the document that aren't on
 /// a template layer.
 pub(super) fn export_overflow_warning(d: &Document, layers: &[Arc<Node>], areas: Option<&[Rect]>) -> Option<String> {
-    let mut walk = Printed { d, own: true, fonts: BTreeSet::new(), overflow: BTreeSet::new(), symbols: BTreeSet::new(), patterns: BTreeSet::new() };
+    let mut walk = Printed::new(d);
     for l in layers {
         walk.node(l, areas);
     }
@@ -534,6 +535,8 @@ pub(super) fn export_overflow_warning(d: &Document, layers: &[Arc<Node>], areas:
 /// The walk of [`printed_type`].
 struct Printed<'a> {
     d: &'a Document,
+    /// `d`'s symbols, found by name and measured once for the walk.
+    boxes: vectorcraft_doc::SymbolBoxes<'a>,
     /// Whether the walk is among the objects of the document, not in art drawn for one.
     own: bool,
     fonts: BTreeSet<UsedFont>,
@@ -544,7 +547,13 @@ struct Printed<'a> {
     patterns: BTreeSet<String>,
 }
 
-impl Printed<'_> {
+impl<'a> Printed<'a> {
+    /// A walk of `d` among its own objects, nothing found yet.
+    fn new(d: &'a Document) -> Self {
+        let boxes = d.symbol_boxes();
+        Self { d, boxes, own: true, fonts: BTreeSet::new(), overflow: BTreeSet::new(), symbols: BTreeSet::new(), patterns: BTreeSet::new() }
+    }
+
     /// Adds the fonts of `n` and its descendants that print, and the ids of those that don't fit
     /// while [`Printed::own`] is set: those whose bounds meet one of `areas`, or with `None` (in the
     /// art of a symbol, opacity mask, pattern or placed document, in brush pieces, or in a live
@@ -625,7 +634,7 @@ impl Printed<'_> {
                 let clipped = match (clip, areas) {
                     (false, _) => None,
                     (true, Some(a)) => Some(self.clip(n, a)),
-                    (true, None) => vectorcraft_render::painted_bounds(self.d, n).map(|c| vec![c]),
+                    (true, None) => vectorcraft_render::painted_bounds_with(&self.boxes, n).map(|c| vec![c]),
                 };
                 for c in children {
                     self.node(c, clipped.as_deref().or(areas));
@@ -641,9 +650,8 @@ impl Printed<'_> {
 
     /// Adds the fonts of symbol `name`'s art, the first time it is shown.
     fn symbol(&mut self, name: &str) {
-        let d = self.d;
         if self.symbols.insert(name.to_string())
-            && let Some(s) = d.symbols.iter().find(|s| s.name == name)
+            && let Some(s) = self.boxes.symbol(name)
         {
             self.art(&s.art);
         }
@@ -660,12 +668,13 @@ impl Printed<'_> {
 
     /// Whether what `n` paints, its effects applied, meets one of `areas`.
     fn meets(&self, n: &Node, areas: &[Rect]) -> bool {
-        vectorcraft_render::painted_bounds(self.d, n).is_some_and(|b| areas.iter().any(|r| b.intersect(*r).area() > 0.0 || r.contains_rect(b)))
+        vectorcraft_render::painted_bounds_with(&self.boxes, n)
+            .is_some_and(|b| areas.iter().any(|r| b.intersect(*r).area() > 0.0 || r.contains_rect(b)))
     }
 
     /// The parts of `areas` inside the bounds of clip group `n` (its clipping path's).
     fn clip(&self, n: &Node, areas: &[Rect]) -> Vec<Rect> {
-        let Some(c) = vectorcraft_render::painted_bounds(self.d, n) else { return areas.to_vec() };
+        let Some(c) = vectorcraft_render::painted_bounds_with(&self.boxes, n) else { return areas.to_vec() };
         areas.iter().filter(|r| c.intersect(**r).area() > 0.0 || r.contains_rect(c)).map(|r| r.intersect(c)).collect()
     }
 }

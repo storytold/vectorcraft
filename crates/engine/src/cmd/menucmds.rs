@@ -830,8 +830,9 @@ pub(crate) fn rasterize_art(doc: &vectorcraft_doc::Document, nodes: Vec<Node>, p
     let clip = look
         .clipping_mask
         .then(|| {
+            let symbols = doc.symbol_boxes();
             let outlines = nodes.iter().filter_map(|n| {
-                let (bp, rule) = vectorcraft_render::drawn_outline(doc, n)?;
+                let (bp, rule) = vectorcraft_render::drawn_outline_with(&symbols, n)?;
                 let mut p = Node::path(n.id, PathData::from_bezpath(&bp), Appearance::default());
                 if let NodeKind::Path { rule: r, .. } = &mut p.kind {
                     *r = rule;

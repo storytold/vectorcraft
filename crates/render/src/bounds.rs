@@ -6,7 +6,13 @@ use super::{BezPath, Document, FillRule, Node, NodeKind, Rect, SymbolBoxes, brus
 /// geometry effects, and the shadows and glows of it and its members. Symbol instances are
 /// measured by their art in `doc` ([`Node::visual_bounds_with`]).
 pub fn painted_bounds(doc: &Document, n: &Node) -> Option<Rect> {
-    brush_fx::cull_bounds(&doc.symbol_boxes(), n)
+    painted_bounds_with(&doc.symbol_boxes(), n)
+}
+
+/// [`painted_bounds`] with symbol instances measured by their art in `symbols` (made with
+/// [`Document::symbol_boxes`]).
+pub fn painted_bounds_with(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
+    brush_fx::cull_bounds(symbols, n)
 }
 
 /// [`painted_bounds`] of `n` without the room it leaves for brush art past the brushed strokes of
@@ -70,7 +76,13 @@ pub fn rasterize_stage(doc: &Document, n: &Node) -> Option<(Node, vectorcraft_ge
 /// The outline, with `n`'s geometry effects applied, that the canvas clips `n`'s Rasterize with
 /// Create Clipping Mask to. Object › Rasterize's clipping mask follows it.
 pub fn drawn_outline(doc: &Document, n: &Node) -> Option<(BezPath, FillRule)> {
-    fx::drawn_outline(doc, n)
+    drawn_outline_with(&doc.symbol_boxes(), n)
+}
+
+/// [`drawn_outline`] with the symbols of instances found in `symbols` (made with
+/// [`Document::symbol_boxes`]).
+pub fn drawn_outline_with(symbols: &SymbolBoxes, n: &Node) -> Option<(BezPath, FillRule)> {
+    fx::drawn_outline(symbols, n)
 }
 
 /// The outlines a drag draws for `nodes` with Real-time Drawing off: one for each object in them,

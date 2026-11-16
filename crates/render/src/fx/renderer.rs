@@ -460,7 +460,7 @@ impl Renderer {
 
     /// What [`Self::draw_object_fx`] draws inside the object's transparency group.
     fn draw_object_fx_art(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>, cache: bool) {
-        if !self.charge_fx_instance(f.doc, a) {
+        if !self.charge_fx_instance(f.symbols, a) {
             return;
         }
         // A path whose Transform effects after its Rasterize effect hold options that reach its
@@ -472,7 +472,7 @@ impl Renderer {
         {
             return self.draw_staged(ctx, f, stage, &bp, *rule);
         }
-        let art = self.fx_art(f.doc, a, cache);
+        let art = self.fx_art(f.symbols, a, cache);
         // Art the cache did not keep is made again in the next frame.
         let kept = cache && self.fx_arts.get(&(Arc::as_ptr(a) as usize), self.stamp).is_some_and(|e| Arc::ptr_eq(&e.1, &art));
         let outer = self.made_again;
@@ -524,9 +524,9 @@ impl Renderer {
     /// frame's symbol budget as an instance without effects is (`draw_node`): an instance whose
     /// effects reshape its art draws through here, and nested instances would otherwise expand
     /// without a limit. True for any other object.
-    pub(crate) fn charge_fx_instance(&mut self, doc: &vectorcraft_doc::Document, a: &Node) -> bool {
+    pub(crate) fn charge_fx_instance(&mut self, symbols: &SymbolBoxes, a: &Node) -> bool {
         let NodeKind::SymbolInstance { symbol, .. } = &a.kind else { return true };
-        let count = doc.symbols.iter().find(|s| &s.name == symbol).map_or(0, |s| s.art.count() as u64);
+        let count = symbols.symbol(symbol).map_or(0, |s| s.art.count() as u64);
         let mut used = self.symbol_nodes;
         let room = vectorcraft_doc::charge_symbol_art(&mut used, count, || ((), count)).is_some();
         self.symbol_nodes = used;
@@ -541,7 +541,8 @@ impl Renderer {
     /// is made from live objects it evaluated ([`evaluates_live`]), or from type, symbol art or
     /// colors shaded through the color settings ([`reads_outside`]), is kept only while what it
     /// reads from outside `a` stays the same ([`Self::live_found`]).
-    pub(super) fn fx_art(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>, cache: bool) -> Arc<Node> {
+    pub(super) fn fx_art(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>, cache: bool) -> Arc<Node> {
+        let doc = symbols.document();
         let key = Arc::as_ptr(a) as usize;
         let mut kept = None;
         if cache
@@ -571,9 +572,9 @@ impl Renderer {
                     Some(f) => Some(f.0),
                     None => self.outside_key(doc, a),
                 };
-                if was == now { art } else { self.make_fx_art(doc, a) }
+                if was == now { art } else { self.make_fx_art(symbols, a) }
             }
-            None => self.make_fx_art(doc, a),
+            None => self.make_fx_art(symbols, a),
         };
         if cache {
             let bytes = crate::lru::node_bytes(&art);
@@ -586,7 +587,8 @@ impl Renderer {
     /// held until the frame ends ([`Renderer::measured`]), for [`Self::fx_art`] to keep if `a` is
     /// drawn. What is measured but never drawn (culled, off the view) is let go, and isn't kept in
     /// place of what is drawn.
-    pub(crate) fn measured_fx_art(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>) -> Arc<Node> {
+    pub(crate) fn measured_fx_art(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>) -> Arc<Node> {
+        let doc = symbols.document();
         let key = Arc::as_ptr(a) as usize;
         if let Some((node, art, found)) = self.fx_arts.get(&key, self.stamp)
             && Arc::ptr_eq(node, a)
@@ -603,7 +605,7 @@ impl Renderer {
         {
             return art.clone();
         }
-        let art = self.make_fx_art(doc, a);
+        let art = self.make_fx_art(symbols, a);
         // Art held for an object before (made from what it read then) gives way.
         if let Some(old) = self.measured.remove(&key) {
             self.measured_bytes = self.measured_bytes.saturating_sub(crate::lru::node_bytes(&old.1));
@@ -641,13 +643,12 @@ impl Renderer {
     }
 
     /// The art [`Self::fx_art`] draws for `a`, made now.
-    fn make_fx_art(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>) -> Arc<Node> {
+    fn make_fx_art(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>) -> Arc<Node> {
+        let doc = symbols.document();
         // Whether the art is a 3D effect's ([`Self::three_d_art_bounds`]).
         let mut three_d = false;
         let symbol = match &a.kind {
-            NodeKind::SymbolInstance { symbol, .. } => {
-                doc.symbols.iter().find(|s| s.name == *symbol).map(|s| crate::brush_fx::instance_art(&s.art, a))
-            }
+            NodeKind::SymbolInstance { symbol, .. } => symbols.symbol(symbol).map(|s| crate::brush_fx::instance_art(&s.art, a)),
             _ => None,
         };
         let container = is_container(a);

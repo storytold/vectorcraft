@@ -223,6 +223,39 @@ fn an_instance_whose_art_reaches_the_page_is_written() {
     assert!(fills.contains(&[255, 0, 0, 255]) && fills.contains(&[0, 0, 255, 255]), "{fills:?}");
 }
 
+/// 2,000 symbols, then two named "Mark" (a red square, then a blue one), with an instance of
+/// "Mark" at (25, 25) and, in a knockout group above a green square, a half-opaque one at (70, 70).
+/// With `second` the blue square's symbol is named that instead.
+fn marks(second: &str) -> Document {
+    let mut d = doc(100.0, 100.0);
+    for i in 0..2000 {
+        let art = rect_node(Rect::new(0.0, 0.0, 1.0, 1.0), Color::BLACK);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("Filler {i}"), art: Arc::new(art) });
+    }
+    for (name, color) in [("Mark", Color::rgb(1.0, 0.0, 0.0)), (second, Color::rgb(0.0, 0.0, 1.0))] {
+        let art = rect_node(Rect::new(-10.0, -10.0, 10.0, 10.0), color);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+    }
+    add(&mut d, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((25.0, 25.0)) }));
+    let green = rect_node(Rect::new(60.0, 60.0, 80.0, 80.0), Color::rgb(0.0, 1.0, 0.0));
+    let mut above = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((70.0, 70.0)) });
+    above.opacity = 0.5;
+    let mut group = Node::group(NodeId(0), vec![Arc::new(green), Arc::new(above)]);
+    group.knockout = vectorcraft_doc::Knockout::On;
+    add(&mut d, group);
+    d
+}
+
+/// Instances among many symbols are written with the first symbol of their name, the same bytes
+/// as when no other symbol has that name.
+#[test]
+fn instances_are_written_with_the_first_symbol_of_their_name() {
+    let d = marks("Mark");
+    assert!(uncompressed(&d) == uncompressed(&marks("Other")), "the files differ");
+    let fills: Vec<[u8; 4]> = leaves(&roundtrip(&d)).iter().filter_map(|n| Some(n.appearance.fill_paint().color()?.to_rgba8(1.0))).collect();
+    assert!(fills.contains(&[255, 0, 0, 255]) && !fills.contains(&[0, 0, 255, 255]), "{fills:?}");
+}
+
 #[test]
 fn an_instance_whose_brush_art_reaches_the_page_is_written() {
     // The symbol's art: a line from (0, 40) to (0, 60) with a 1 pt stroke painted by a 20 pt round

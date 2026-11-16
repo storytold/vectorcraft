@@ -134,7 +134,7 @@ impl Exporter<'_> {
             self.inline_depth += 1;
             for ig in &layout.inlines {
                 let Some(art) = t.runs.get(ig.run).and_then(|r| r.inline.as_ref()) else { continue };
-                let Some(sym) = doc.symbols.iter().find(|x| x.name == art.symbol) else { continue };
+                let Some(sym) = self.symbols.symbol(&art.symbol) else { continue };
                 let mut node = (*sym.art).clone();
                 // Strokes scale with the art, as on the canvas.
                 node.transform(t.xf * ig.xf * doc.symbol_natural_xf(&art.symbol), true);

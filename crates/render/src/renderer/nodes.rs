@@ -36,7 +36,7 @@ impl Renderer {
             // drawn otherwise, measured as below.
             _ if measures_three_d(a)
                 && let Some(b) = {
-                    let art = self.measured_fx_art(symbols.document(), a);
+                    let art = self.measured_fx_art(symbols, a);
                     self.three_d_art_bounds(symbols, &art)
                 } =>
             {
@@ -578,7 +578,7 @@ impl Renderer {
                 self.draw_image_in(ctx, f, &f.doc.shown_image(n, im), None, images::image_tint(f.doc, n, f.ink), n.extras().pixelated)
             }
             NodeKind::SymbolInstance { symbol, xf } => {
-                if let Some(sym) = f.doc.symbols.iter().find(|s| &s.name == symbol) {
+                if let Some(sym) = f.symbols.symbol(symbol) {
                     // The instance draws when the frame has room for its art's objects; a symbol
                     // with 9-slice guides is placed cell by cell (`Self::sliced_art`).
                     let mut used = self.symbol_nodes;

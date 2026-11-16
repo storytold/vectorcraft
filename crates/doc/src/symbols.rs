@@ -9,7 +9,7 @@ use std::sync::Arc;
 use vectorcraft_geom::{Affine, Rect};
 
 use crate::symbol_nine_slice::transformed;
-use crate::{AppearanceItem, Document, MAX_SYMBOL_NODES, NineSliceMap, Node, NodeKind, SYMBOL_HALF};
+use crate::{AppearanceItem, Document, MAX_SYMBOL_NODES, NineSliceMap, Node, NodeKind, SYMBOL_HALF, Symbol};
 
 /// The box a symbol instance is measured by when its symbol's art has no box
 /// ([`SymbolBoxes::art`]), and in [`Node::geometric_bounds`]: the 20 × 20 square around the origin
@@ -163,17 +163,22 @@ impl<'a> SymbolBoxes<'a> {
         self
     }
 
-    /// The art of the first symbol of the document named `name`, found in time independent of the
-    /// number of symbols after the first lookup.
-    pub(crate) fn symbol_art(&self, name: &str) -> Option<&'a Arc<Node>> {
+    /// The first symbol of the document named `name`, found in time independent of the number of
+    /// symbols after the first lookup.
+    pub fn symbol(&self, name: &str) -> Option<&'a Symbol> {
         let doc: &'a Document = self.doc;
         let names = self.names.get_or_init(|| Arc::new(doc.symbol_names()));
         let i = *names.get(name)?;
         match doc.symbols.get(i) {
-            Some(s) if s.name == name => Some(&s.art),
+            Some(s) if s.name == name => Some(s),
             // Names that no longer match the symbols: the first symbol of that name.
-            _ => doc.symbols.iter().find(|s| s.name == name).map(|s| &s.art),
+            _ => doc.symbols.iter().find(|s| s.name == name),
         }
+    }
+
+    /// The art of the first symbol of the document named `name` ([`Self::symbol`]).
+    pub(crate) fn symbol_art(&self, name: &str) -> Option<&'a Arc<Node>> {
+        self.symbol(name).map(|s| &s.art)
     }
 
     /// Makes these boxes measure every symbol instance as [`Node::reach_bounds_with`] does, by its
@@ -720,6 +725,28 @@ mod tests {
         let s = d.symbol_boxes().quick();
         assert!(masked.visual_bounds_with(&s).is_some());
         assert_eq!(s.sliced_placed.get(), 13);
+    }
+
+    #[test]
+    fn symbols_are_found_by_name_reading_the_list_once() {
+        // 2,000 symbols, then two named "Mark": a name finds the first.
+        let mut d = Document::new(200.0, 200.0);
+        for i in 0..2000 {
+            let r = rect(&mut d, Rect::new(0.0, 0.0, 1.0, 1.0), 0.0);
+            symbol(&mut d, &format!("Filler {i}"), vec![r]);
+        }
+        let (first, second) = (rect(&mut d, Rect::new(0.0, 0.0, 10.0, 10.0), 0.0), rect(&mut d, Rect::new(0.0, 0.0, 20.0, 20.0), 0.0));
+        symbol(&mut d, "Mark", vec![first]);
+        symbol(&mut d, "Mark", vec![second]);
+        let read = || SYMBOLS_READ.with(Cell::get);
+        let before = read();
+        let s = d.symbol_boxes();
+        for _ in 0..1000 {
+            assert!(s.symbol("Mark").is_some_and(|m| std::ptr::eq(m, &d.symbols[2000])));
+            assert!(s.symbol("Filler 7").is_some_and(|m| std::ptr::eq(m, &d.symbols[7])));
+            assert!(s.symbol("Nowhere").is_none());
+        }
+        assert_eq!(read() - before, d.symbols.len());
     }
 
     #[test]

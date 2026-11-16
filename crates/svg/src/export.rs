@@ -117,6 +117,7 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         linked: Vec::new(),
         instance_xf: Affine::IDENTITY,
         symbols: HashMap::new(),
+        symbol_lookup: doc.symbol_boxes(),
         symbol_nest: 0,
         symbol_nodes: 0,
         inline_graphic: false,
@@ -301,6 +302,9 @@ struct Writer<'a> {
     instance_xf: Affine,
     /// What each symbol's instances can share, by symbol name (see [`Writer::symbol_use`]).
     symbols: HashMap<String, SymbolDef>,
+    /// The document's symbols, found by name ([`vectorcraft_doc::SymbolBoxes::symbol`]) in time
+    /// independent of how many symbols the document holds.
+    symbol_lookup: vectorcraft_doc::SymbolBoxes<'a>,
     /// Symbols being written inside one another (instances nested deeper are left out: a symbol
     /// can't contain itself).
     symbol_nest: u32,

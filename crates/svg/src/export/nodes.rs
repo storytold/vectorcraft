@@ -2,8 +2,8 @@ use super::output::{sanitize_id, valid_xml_value, xml_attr_escape, xml_attr_vali
 use super::paint::{StrokePlan, has_raster, pixel_gradient};
 use super::text::OUTLINE_TOLERANCE;
 use super::{
-    Affine, AppearanceItem, BezPath, BlendMode, Document, FillRule, HashMap, Node, NodeKind, Paint, PathData, Props, Rect, StrokeAlign, StrokeLayer,
-    Writer, Written, WrittenShape, blend_css, css, fmt_num, stroke, xml_escape,
+    Affine, AppearanceItem, BezPath, BlendMode, FillRule, HashMap, Node, NodeKind, Paint, PathData, Props, Rect, StrokeAlign, StrokeLayer, Writer,
+    Written, WrittenShape, blend_css, css, fmt_num, stroke, xml_escape,
 };
 
 /// A symbol's `<symbol>` def and the instance transforms that can `<use>` it.
@@ -51,15 +51,16 @@ fn export_shape_bounds(n: &Node) -> Option<Rect> {
 impl Reuse {
     const NONE: Self = Self { moves: false, turns: false, scales: false };
 
-    /// What a def of symbol art `art` stands for.
-    pub(crate) fn of(doc: &Document, art: &Node) -> Self {
+    /// What a def of symbol art `art` stands for, the symbols it holds instances of found in
+    /// `symbols`.
+    pub(crate) fn of(symbols: &vectorcraft_doc::SymbolBoxes, art: &Node) -> Self {
         let mut r = Self { moves: true, turns: true, scales: true };
-        r.scan(doc, art, 0);
+        r.scan(symbols, art, 0);
         r
     }
 
     /// Narrow down to what `n` (inside symbols nested `depth` deep) allows.
-    fn scan(&mut self, doc: &Document, n: &Node, depth: u32) {
+    fn scan(&mut self, symbols: &vectorcraft_doc::SymbolBoxes, n: &Node, depth: u32) {
         let pattern = |p: &Paint| matches!(p, Paint::Pattern { .. });
         let text_patterns = matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(|r| pattern(&r.style.fill) || pattern(&r.style.stroke)));
         let unlinked_mask = n.extras().mask.as_ref().is_some_and(|m| !m.linked);
@@ -92,20 +93,20 @@ impl Reuse {
             NodeKind::SymbolInstance { symbol, .. } => {
                 // A scale reaching an instance of a symbol with 9-slice guides changes how its
                 // cells are sized.
-                if doc.symbol_nine_slice(symbol).is_some() {
+                if symbols.document().symbol_nine_slice(symbol).is_some() {
                     self.scales = false;
                 }
-                if let Some(s) = doc.symbols.iter().find(|s| s.name == *symbol) {
-                    self.scan(doc, &s.art, depth + 1);
+                if let Some(s) = symbols.symbol(symbol) {
+                    self.scan(symbols, &s.art, depth + 1);
                 }
             }
             _ => {}
         }
         if let Some(m) = &n.extras().mask {
-            self.scan(doc, &m.art, depth);
+            self.scan(symbols, &m.art, depth);
         }
         for c in n.children().into_iter().flatten() {
-            self.scan(doc, c, depth);
+            self.scan(symbols, c, depth);
         }
     }
 
@@ -481,7 +482,7 @@ impl Writer<'_> {
             if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
                 let custom = !n.extras().symbol_overrides.is_empty();
                 if symbols.insert((symbol.clone(), custom.then_some(n.id)))
-                    && let Some(s) = self.doc.symbols.iter().find(|s| s.name == *symbol)
+                    && let Some(s) = self.symbol_lookup.symbol(symbol)
                 {
                     stack.push(if custom { std::sync::Arc::new(vectorcraft_brush::instance_art(&s.art, n)) } else { s.art.clone() });
                 }
@@ -615,7 +616,7 @@ impl Writer<'_> {
             return Some(own + past + self.paint_reach(symbols, art_reach, &g, gb, depth + 1)?);
         }
         let symbol = match &n.kind {
-            NodeKind::SymbolInstance { symbol, xf } => self.doc.symbols.iter().find(|s| s.name == *symbol).map(|s| (s, xf)),
+            NodeKind::SymbolInstance { symbol, xf } => self.symbol_lookup.symbol(symbol).map(|s| (s, xf)),
             _ => None,
         };
         if n.children().is_none_or(|c| c.is_empty()) && symbol.is_none() {
@@ -1026,7 +1027,7 @@ impl Writer<'_> {
                 let doc = self.doc;
                 // The instances nested in an inline graphic's art are ordinary instances again.
                 let inline = std::mem::take(&mut self.inline_graphic);
-                let Some(sym) = doc.symbols.iter().find(|s| s.name == *symbol) else { return };
+                let Some(sym) = self.symbol_lookup.symbol(symbol) else { return };
                 if self.symbol_nest > MAX_SYMBOL_NEST {
                     return;
                 }
@@ -1113,7 +1114,7 @@ impl Writer<'_> {
             return None;
         }
         if !self.symbols.contains_key(&sym.name) {
-            let reuse = Reuse::of(self.doc, &sym.art);
+            let reuse = Reuse::of(&self.symbol_lookup, &sym.art);
             self.symbols.insert(sym.name.clone(), SymbolDef { id: None, reuse, nodes: 0 });
         }
         let def = self.symbols.get(&sym.name)?;
