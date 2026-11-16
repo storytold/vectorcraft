@@ -1493,3 +1493,49 @@ fn art_edited_in_symbol_editing_mode_stays_on_the_pixel_grid() {
     let pts = placed_points(&s, inst);
     assert!(whole(&pts), "{pts:?}");
 }
+
+/// Turning it on while the symbol is open in symbol editing mode shows its art on the pixel grid
+/// on the editing layer at once, and its instance stays on it after editing ends.
+#[test]
+fn turning_it_on_in_symbol_editing_mode_snaps_the_editing_layer() {
+    let mut s = new_doc();
+    path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 2.0);
+    let inst = s.execute("symbol.new", &json!({"name": "Px"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("symbol.edit", &json!({"ids": [inst]})).unwrap();
+    let st = s.doc().unwrap();
+    let layer = st.doc.symbol_edit.as_ref().unwrap().layer;
+    let part = st.doc.node(layer).unwrap().children().unwrap()[0].id.0;
+    let before = points(&s, part);
+    s.execute("symbol.options", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let xf = d.symbol_edit.as_ref().unwrap().xf;
+    let art = &d.symbols.iter().find(|x| x.name == "Px").unwrap().art;
+    let stored: Vec<_> = art.path_data().unwrap().anchors().map(|(_, _, a)| xf * a.p).map(|p| (p.x, p.y)).collect();
+    let shown = points(&s, part);
+    assert!(shown.iter().zip(&stored).all(|(a, b)| close(*a, *b)) && shown != before, "{shown:?} != {stored:?}");
+    s.execute("symbol.exitEditing", &json!({})).unwrap();
+    let pts = placed_points(&s, inst);
+    assert!(whole(&pts), "{pts:?}");
+}
+
+/// An instance of a pixel-aligned symbol on the editing layer of another symbol is part of that
+/// symbol's art, so turning it on leaves the instance and the other symbol's art where they are.
+#[test]
+fn an_instance_on_another_symbols_editing_layer_is_left_as_it_is() {
+    let mut s = new_doc();
+    path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 2.0);
+    let a = s.execute("symbol.new", &json!({"name": "Px"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    let b = s.execute("symbol.new", &json!({"name": "Outer"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("symbol.edit", &json!({"ids": [b]})).unwrap();
+    let st = s.doc().unwrap();
+    let layer = st.doc.symbol_edit.as_ref().unwrap().layer;
+    let inner = st.doc.node(layer).unwrap().children().unwrap()[0].id.0;
+    let outer_art = st.doc.symbols.iter().find(|x| x.name == "Outer").unwrap().art.clone();
+    let shown = instance_xf(&s, inner);
+    assert!(!whole(&placed_points(&s, inner)));
+    s.execute("symbol.options", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap();
+    assert_eq!(instance_xf(&s, inner), shown);
+    let d = &s.doc().unwrap().doc;
+    assert!(std::sync::Arc::ptr_eq(&d.symbols.iter().find(|x| x.name == "Outer").unwrap().art, &outer_art));
+}

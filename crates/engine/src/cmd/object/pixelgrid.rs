@@ -166,8 +166,8 @@ const ACTUAL_SIZE_TOLERANCE: f64 = 1e-9;
 /// (while it is edited, the art snaps as the editing layer is written back to it). Every instance
 /// of such a symbol then goes to whole points ([`snap_instance`]), and so does each instance of a
 /// pixel-aligned symbol in an object the edit changed or added, the art of opacity masks included.
-/// An instance in another symbol's art is placed by that symbol's instances and is left as it is.
-/// A document without pixel-aligned symbols is not walked.
+/// An instance in another symbol's art, the art on the symbol editing layer included, is placed by
+/// that symbol's instances and is left as it is. A document without pixel-aligned symbols is not walked.
 fn refresh_symbols(before: &Document, doc: &mut Document) {
     let aligned = doc.pixel_aligned_symbols();
     if aligned.is_empty() {
@@ -193,16 +193,23 @@ fn refresh_symbols(before: &Document, doc: &mut Document) {
         }
     }
     let natural: HashMap<String, Affine> = aligned.iter().map(|name| (name.clone(), doc.symbol_natural_xf(name))).collect();
+    // The symbol editing layer holds another symbol's art.
+    let editing = doc.symbol_edit.as_ref().map(|e| e.layer);
     if every {
         for layer in doc.layers.iter_mut() {
-            if holds_instance(layer, &natural) {
+            if Some(layer.id) != editing && holds_instance(layer, &natural) {
                 snap_instances_in(Arc::make_mut(layer), &natural);
             }
         }
         return;
     }
     let (mut ids, mut masked) = (vec![], vec![]);
-    changed_instances(&before.layers, &doc.layers, &natural, &mut ids, &mut masked);
+    if let Some(layer) = editing {
+        let outside = |layers: &[Arc<Node>]| layers.iter().filter(|l| l.id != layer).cloned().collect::<Vec<_>>();
+        changed_instances(&outside(&before.layers), &outside(&doc.layers), &natural, &mut ids, &mut masked);
+    } else {
+        changed_instances(&before.layers, &doc.layers, &natural, &mut ids, &mut masked);
+    }
     for id in ids {
         if let Some(n) = doc.node_mut(id) {
             snap_instance(n, &natural);
