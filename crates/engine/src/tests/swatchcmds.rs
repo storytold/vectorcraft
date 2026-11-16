@@ -445,6 +445,35 @@ fn edit_color_group_with_its_own_colors_records_no_undo_step() {
     assert_eq!(undo_len(&s), undo + 2, "a new name is a step");
 }
 
+/// `swatch.editGroup` with the color keys of the group's own colors records no undo step when a
+/// color lies between the keys' steps, and a rename keeps that color unrounded; a color given as a
+/// value is taken as it is.
+#[test]
+fn edit_color_group_with_its_own_color_keys_keeps_the_colors() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Mine", "colors": [{"c": 60.005, "m": 0, "y": 0, "k": 0}, "#00ff00"], "keepModel": true}));
+    let colors = |s: &Session| -> Vec<Color> {
+        doc(s).swatch_groups.iter().find(|g| g.name == "Mine" || g.name == "Yours").unwrap().swatches.iter().filter_map(|w| w.paint.color()).collect()
+    };
+    let own = colors(&s);
+    let keys: Vec<String> = own.iter().map(|c| vectorcraft_color::recolor::ColorKey::of(c).to_string()).collect();
+    assert_ne!(crate::cmd::color_value(&json!(keys[0])), Some(own[0]), "the key rounds the color");
+    let undo = undo_len(&s);
+    run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": keys}));
+    assert_eq!(undo_len(&s), undo, "the group's own colors record no step");
+    run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": keys, "rename": "Yours"}));
+    assert_eq!(undo_len(&s), undo + 1, "a new name is a step");
+    assert_eq!(colors(&s), own, "the colors are kept unrounded");
+    // A color given as a value, not a key, is taken exactly, also within a key's step.
+    let Color::Cmyk { c, .. } = own[0] else { panic!("a CMYK swatch: {:?}", own[0]) };
+    let nudged = Color::cmyk(c - 0.000_002, 0.0, 0.0, 0.0);
+    assert_eq!(vectorcraft_color::recolor::ColorKey::of(&nudged), vectorcraft_color::recolor::ColorKey::of(&own[0]));
+    let p = json!({"group": "Yours", "colors": [{"c": c - 0.000_002, "m": 0, "y": 0, "k": 0}, "#00ff00"], "keepModel": true});
+    run(&mut s, "swatch.editGroup", p);
+    assert_eq!(undo_len(&s), undo + 2, "a new value is a step");
+    assert_eq!(colors(&s)[0], nudged);
+}
+
 #[test]
 fn edit_color_group_with_a_null_removes_that_swatch() {
     let mut s = session();

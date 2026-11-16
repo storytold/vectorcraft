@@ -4686,9 +4686,12 @@ from colors alone leave its new color out. With `limitTo`, a row's `tint` (a per
 linked to the global or spot swatch its new color is that share of its tint; `tint` must be a number. `recolor.randomize`
 moves a row's `tint` with its new color and removes it from a color it changes, and moves a row's `model` with its new color. `swatch.editGroup {group, colors, rename?}` rewrites a colour group in one undo
 step (art linked to its global swatches follows); a `null` in `colors` removes the group's swatch at that place, and
-given the group's own colors in order and no new name, it records no undo step. And `recolor.apply` with `group` recolours the art and rewrites the
+given the group's own colors in order and no new name, it records no undo step. A color key (`recolor.colors`) that
+names a swatch's color, rounded to the key's steps, counts as that color, and the swatch keeps its color unrounded. And `recolor.apply` with `group` recolours the art and rewrites the
 group together. A `null` in `groupColors` removes the group's swatch at that place, and the swatches after it keep
-their colors and names; art linked to a removed global swatch keeps its color and is no longer linked to it. Art linked to one of the group's global swatches stays linked when the swatch is rewritten with its
+their colors and names; art linked to a removed global swatch keeps its color and is no longer linked to it. `"keep"` in
+`groupColors` leaves the swatch at that place its color, without the Global Adjust; past the group's swatches it adds
+nothing, and it is refused for a swatch that is not a color. Art linked to one of the group's global swatches stays linked when the swatch is rewritten with its
 row's new color (the default without `groupColors` when the rows follow the group's order), so a later `swatch.edit` still
 reaches it; the reply's `relinked` counts the other linked paints that took the group's new colors. Art in a row that
 is linked to a swatch rewritten with another color keeps its row's new color, even an unchanged one, and is no longer
@@ -4765,9 +4768,10 @@ dialog runs it (OK with it set in the same request runs it first):
 `save` (Save Changes) runs `swatch.editGroup` on the selected group with the colors OK would give it and the name in
 `groupName`, `new` (New Color Group) saves the new colors of the rows that are not excluded as `swatch.newGroup` does,
 and `delete` (Delete) runs `swatch.delete` on the selected group. Each is its own undo step, and the art keeps its
-preview. When the art has colors of the group, `save` keeps the group's swatches in order: a swatch whose color a row
-lists takes that row's new color (its own color when the row is excluded), so art linked to the swatch takes the color
-its row shows, and every other swatch keeps its color. A row whose color was removed (`to: null`) and is not excluded
+preview. An excluded row leaves its swatch its own color, with or without art. When the art has colors of the group,
+`save` and OK keep the group's swatches in order: a swatch whose color a row lists, or to which an earlier `save` gave
+a row's new color, takes that row's new color (its own color when the row is
+excluded), so art linked to the swatch takes the color its row shows, and every other swatch keeps its color. A row whose color was removed (`to: null`) and is not excluded
 removes its swatch, and the colors added on the Edit tab follow the group's other colors, as at OK. After a `save` with art, the rows' new colors take the Global
 Adjust and it goes back to 0%; when the save recolored linked art, the rows are read from the art again and a row with a
 color the save gave the art is excluded, also when other art has that color, since a row recolors every use of its

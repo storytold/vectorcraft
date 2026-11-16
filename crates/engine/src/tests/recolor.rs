@@ -489,6 +489,17 @@ fn edit_group_relinks_art_and_apply_rewrites_the_group_with_the_art() {
     run(&mut s, "recolor.apply", json!({"map": [], "group": "Theme", "groupColors": ["#010203", "cmyk 0 0 0 20"]}));
     let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Theme").unwrap().clone();
     assert_eq!(g.swatches.iter().map(|w| w.paint.color().unwrap()).collect::<Vec<_>>(), [Color::rgb8(1, 2, 3), Color::cmyk(0.0, 0.0, 0.0, 0.2)]);
+    // "keep" leaves a swatch its color, without the Global Adjust that the other colors take.
+    let adjust = json!({"brightness": -50});
+    run(&mut s, "recolor.apply", json!({"map": [], "group": "Theme", "groupColors": ["keep", "#ffffff"], "globalAdjust": adjust}));
+    let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Theme").unwrap().clone();
+    let colors: Vec<Color> = g.swatches.iter().map(|w| w.paint.color().unwrap()).collect();
+    assert_eq!(colors[0], Color::rgb8(1, 2, 3));
+    assert_ne!(colors[1].to_hex(), "#ffffff", "the other color takes the Global Adjust");
+    // Past the group's swatches it adds nothing.
+    run(&mut s, "recolor.apply", json!({"map": [], "group": "Theme", "groupColors": ["keep", "keep", "keep"]}));
+    let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Theme").unwrap().clone();
+    assert_eq!(g.swatches.iter().map(|w| w.paint.color().unwrap()).collect::<Vec<_>>(), colors);
 }
 
 /// Art linked to a global swatch of the group that `recolor.apply` rewrites stays linked when the
