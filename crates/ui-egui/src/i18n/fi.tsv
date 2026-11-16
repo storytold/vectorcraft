@@ -1415,6 +1415,8 @@ lighting	Light	Valo
 	Lasso Tool	Lassotyökalu
 	Enclosing Lasso Tool	Sulkeva lassotyökalu
 	Enclosing Lasso	Sulkeva lasso
+	Polygonal Lasso Tool	Monikulmiolassotyökalu
+	Polygonal Lasso	Monikulmiolasso
 	Lasso	Lasso
 	Line Cut Tool	Viivaleikkaustyökalu
 	Line Graph Tool	Viivakaaviotyökalu

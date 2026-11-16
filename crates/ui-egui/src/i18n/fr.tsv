@@ -1893,6 +1893,8 @@ font-technology	Variable	Variables
 	Lasso Tool	Outil Lasso
 	Enclosing Lasso Tool	Outil Lasso englobant
 	Enclosing Lasso	Lasso englobant
+	Polygonal Lasso Tool	Outil Lasso polygonal
+	Polygonal Lasso	Lasso polygonal
 	Last Effect: {name}	Dernier effet : {name}
 	Last Effect: {}	Dernier effet : {}
 	Last Effect…	Dernier effet…

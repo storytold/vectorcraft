@@ -1933,6 +1933,8 @@ file-filter	Templates	Шаблони
 	Lasso Tool	Інструмент «Ласо»
 	Enclosing Lasso Tool	Інструмент «Охоплювальне ласо»
 	Enclosing Lasso	Охоплювальне ласо
+	Polygonal Lasso Tool	Інструмент «Багатокутне ласо»
+	Polygonal Lasso	Багатокутне ласо
 	Last Effect: {name}	Останній ефект: {name}
 	Last Effect: {}	Останній ефект: {}
 	Last Effect…	Останній ефект…

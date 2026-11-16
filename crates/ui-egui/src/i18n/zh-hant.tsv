@@ -3046,6 +3046,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Lasso Tool	套索工具
 	Enclosing Lasso Tool	包圍套索工具
 	Enclosing Lasso	包圍套索
+	Polygonal Lasso Tool	多邊形套索工具
+	Polygonal Lasso	多邊形套索
 	Last Effect: {name}	最後一次效果：{name}
 	Last Effect: {}	上次效果：{}
 	Last Effect…	最後一次效果…
