@@ -307,6 +307,107 @@ fn drop_shadow_darkens_outside_the_shape() {
     assert_eq!(lum(img.pixel(15, 15)), WHITE);
 }
 
+/// A Transform effect listed after a Drop Shadow transforms the shadow with the art: halving a
+/// 40 pt square about its center halves the shadow's 10 pt offset, with Scale Strokes & Effects
+/// off or on, and for a group as for a path.
+#[test]
+fn a_transform_after_a_drop_shadow_scales_the_shadow_with_the_art() {
+    let r = Rect::new(20.0, 20.0, 60.0, 60.0);
+    let shadow = ("stylize.dropShadow", json!({"x": 10, "y": 10, "blur": 0, "opacity": 100, "mode": "normal"}));
+    for strokes in [false, true] {
+        let transform = ("distort.transform", json!({"scaleH": 50, "scaleV": 50, "strokes": strokes}));
+        let path = doc_with(r, Color::rgb(1.0, 0.0, 0.0), vec![shadow.clone(), transform.clone()]);
+        let mut group = doc_with(r, Color::rgb(1.0, 0.0, 0.0), vec![]);
+        let l = group.layers[0].id;
+        let square = group.layers[0].children().and_then(|c| c.first()).cloned().unwrap();
+        group.remove(square.id).unwrap();
+        let mut g = Node::group(group.alloc_id(), vec![square]);
+        g.appearance.effects = [shadow.clone(), transform].into_iter().map(|(id, p)| Effect { id: id.into(), params: p, visible: true }).collect();
+        group.insert(Some(l), 0, g).unwrap();
+        for (what, d) in [("path", path), ("group", group)] {
+            let img = render(&d);
+            // The square now covers 30..50 and its shadow 35..55.
+            assert_eq!(img.pixel(40, 40), [255, 0, 0, 255], "{what}, Scale Strokes & Effects {strokes}");
+            assert!(lum(img.pixel(53, 37)) < 100, "{what}, {strokes}: the shadow reaches up to 35: {:?}", img.pixel(53, 37));
+            assert_eq!(lum(img.pixel(57, 57)), WHITE, "{what}, {strokes}: the shadow ends at 55");
+            // The area redrawn for it takes in the 5 pt shadow around the 30..50 square.
+            let b = super::cull_bounds(&d.symbol_boxes(), &d.layers[0].children().unwrap()[0]).unwrap();
+            assert!((b.x0 - 25.0).abs() < 1e-9 && (b.x1 - 55.0).abs() < 1e-9, "{what}, {strokes}: {b:?}");
+        }
+    }
+}
+
+/// A Transform effect listed after a Bas Relief turns its light with the art: a group of a black
+/// square centered on a white one, lit from the top and turned 90° counterclockwise about its
+/// center, draws as the group lit from the left.
+#[test]
+fn a_transform_after_bas_relief_turns_its_light_with_the_art() {
+    let relieved = |effects: Vec<(&str, serde_json::Value)>| {
+        let mut d = Document::new(100.0, 100.0);
+        let mut square =
+            |r: Rect, c: Color| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::basic(Paint::solid(c), Paint::None, 0.0)));
+        let members = vec![square(Rect::new(20.0, 20.0, 80.0, 80.0), Color::WHITE), square(Rect::new(40.0, 40.0, 60.0, 60.0), Color::BLACK)];
+        let mut g = Node::group(d.alloc_id(), members);
+        g.appearance.effects = effects.into_iter().map(|(id, p)| Effect { id: id.into(), params: p, visible: true }).collect();
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, g).unwrap();
+        render(&d)
+    };
+    let relief = |light: &str| ("sketch.basRelief", json!({"lightDirection": light}));
+    let turned = relieved(vec![relief("top"), ("distort.transform", json!({"rotate": 90}))]);
+    let left = relieved(vec![relief("left")]);
+    let top = relieved(vec![relief("top")]);
+    // The largest difference of a channel between two images.
+    let diff = |a: &Rendered, b: &Rendered| {
+        (0..100u32)
+            .flat_map(|y| (0..100u32).map(move |x| (x, y)))
+            .map(|(x, y)| a.pixel(x, y).iter().zip(b.pixel(x, y)).map(|(p, q)| p.abs_diff(q)).max().unwrap_or(0))
+            .max()
+            .unwrap_or(0)
+    };
+    assert!(diff(&left, &top) > 50, "the light's direction shows: {}", diff(&left, &top));
+    assert!(diff(&turned, &left) <= 2, "turned top light draws as a left light: {}", diff(&turned, &left));
+}
+
+/// An object's or a group's Transform effect transforms the raster effects of what it holds with
+/// the art: halving a 40 pt square about its center halves the 10 pt offset of its fill's shadow,
+/// and of a group member's own shadow, with Scale Strokes & Effects off or on.
+#[test]
+fn a_transform_scales_the_shadows_of_fills_and_members_with_the_art() {
+    let r = Rect::new(20.0, 20.0, 60.0, 60.0);
+    let shadow =
+        Effect { id: "stylize.dropShadow".into(), params: json!({"x": 10, "y": 10, "blur": 0, "opacity": 100, "mode": "normal"}), visible: true };
+    for strokes in [false, true] {
+        let transform = ("distort.transform", json!({"scaleH": 50, "scaleV": 50, "strokes": strokes}));
+        let mut fill = doc_with(r, Color::rgb(1.0, 0.0, 0.0), vec![transform.clone()]);
+        let l = fill.layers[0].id;
+        let mut square = (*fill.layers[0].children().and_then(|c| c.first()).cloned().unwrap()).clone();
+        fill.remove(square.id).unwrap();
+        if let Some(item) = square.appearance.items.first_mut() {
+            *item.effects_mut() = vec![shadow.clone()];
+        }
+        fill.insert(Some(l), 0, square.clone()).unwrap();
+        let mut member = doc_with(r, Color::rgb(1.0, 0.0, 0.0), vec![]);
+        let l = member.layers[0].id;
+        let mut square = (*member.layers[0].children().and_then(|c| c.first()).cloned().unwrap()).clone();
+        member.remove(square.id).unwrap();
+        square.appearance.effects = vec![shadow.clone()];
+        let mut g = Node::group(member.alloc_id(), vec![Arc::new(square)]);
+        g.appearance.effects = [transform].into_iter().map(|(id, p)| Effect { id: id.into(), params: p, visible: true }).collect();
+        member.insert(Some(l), 0, g).unwrap();
+        for (what, d) in [("fill", fill), ("member", member)] {
+            let img = render(&d);
+            // The square now covers 30..50 and its shadow 35..55.
+            assert_eq!(img.pixel(40, 40), [255, 0, 0, 255], "{what}, Scale Strokes & Effects {strokes}");
+            assert!(lum(img.pixel(53, 37)) < 100, "{what}, {strokes}: the shadow reaches up to 35: {:?}", img.pixel(53, 37));
+            assert_eq!(lum(img.pixel(57, 57)), WHITE, "{what}, {strokes}: the shadow ends at 55");
+            // The area redrawn for it takes in the 5 pt shadow around the 30..50 square.
+            let b = super::cull_bounds(&d.symbol_boxes(), &d.layers[0].children().unwrap()[0]).unwrap();
+            assert!((b.x0 - 25.0).abs() < 1e-9 && (b.x1 - 55.0).abs() < 1e-9, "{what}, {strokes}: {b:?}");
+        }
+    }
+}
+
 /// A red square's drop shadow at Darkness `darkness` (%), opaque and sharp, 10 pt down and
 /// right; `shade` "color" or "darkness".
 fn shaded_doc(mode: vectorcraft_doc::ColorMode, fill: Color, shade: &str, darkness: f64) -> Document {
@@ -610,6 +711,96 @@ fn an_export_and_rasterize_hold_the_solid_of_3d_type() {
     });
     assert!(solid.width() > letters.width() + 15.0, "{letters:?} {solid:?}");
     assert!(rasterized.width() > letters.width() + 15.0, "{letters:?} {rasterized:?}");
+}
+
+/// A symbol instance, a blend and a clipping group with Extrude & Bevel, alone or in a group, draw
+/// their solids on the canvas, in an export and in Object › Rasterize, not their flat art.
+#[test]
+fn a_symbol_instance_a_blend_and_a_clipping_group_draw_their_solids() {
+    use vectorcraft_doc::{BlendSpacing, BlendSpec, NodeId, NodeKind, Symbol};
+    let square = |x: f64, y: f64| {
+        Arc::new(Node::path(
+            NodeId(0),
+            shapes::rectangle(Rect::new(x, y, x + 20.0, y + 20.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.2, 0.5, 0.8)), Paint::None, 0.0),
+        ))
+    };
+    let mut d = Document::new(200.0, 200.0);
+    d.symbols.push(Symbol { dynamic: false, name: "Box".into(), art: square(0.0, 0.0) });
+    let mut clip = (*square(30.0, 30.0)).clone();
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let spec = Box::new(BlendSpec { spacing: BlendSpacing::Steps(2), ..Default::default() });
+    let instance = NodeKind::SymbolInstance { symbol: "Box".into(), xf: Affine::translate((40.0, 40.0)) };
+    let clipped = NodeKind::Group { children: vec![Arc::new(clip), square(20.0, 20.0)], clip: true };
+    let in_group = |kind: NodeKind| NodeKind::Group { children: vec![Arc::new(Node::new(NodeId(0), kind)), square(100.0, 100.0)], clip: false };
+    let kinds = [
+        ("a symbol instance", instance.clone()),
+        ("a blend", NodeKind::Blend { children: vec![square(30.0, 30.0), square(60.0, 40.0)], spec }),
+        ("a clipping group", clipped.clone()),
+        ("a group holding a symbol instance", in_group(instance)),
+        ("a group holding a clipping group", in_group(clipped)),
+    ];
+    for (what, kind) in kinds {
+        let mut n = Node::new(d.alloc_id(), kind);
+        let flat = crate::encode::art_bounds(&doc_of(&mut d.clone(), n.clone())).unwrap();
+        n.appearance.effects =
+            vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 60.0, "position": "isometricTop"}), visible: true }];
+        let solid_doc = doc_of(&mut d.clone(), n);
+        let n = &solid_doc.layers[0].children().unwrap()[0];
+        let (solid, rasterized) = (crate::encode::art_bounds(&solid_doc).unwrap(), crate::drawn_bounds(&solid_doc, n).unwrap());
+        let size = |r: Rect| r.width() + r.height();
+        assert!(size(solid) > size(flat) + 20.0, "{what}: {flat:?} {solid:?}");
+        assert!(size(rasterized) > size(flat) + 20.0, "{what}: {flat:?} {rasterized:?}");
+        // The renderer builds the solid from the object itself, with the document's symbols, as
+        // the effect builds it: one solid built, not the object's art drawn again with the effect.
+        let built = vectorcraft_effects::solid_art_in(Some(&solid_doc), n).and_then(|a| a.visual_bounds()).unwrap();
+        assert!((solid.x0 - built.x0).abs() < 1.0 && (solid.x1 - built.x1).abs() < 1.0, "{what}: {built:?} {solid:?}");
+        let mut r = Renderer::new();
+        r.art_bounds_on(&solid_doc, Rect::new(0.0, 0.0, 200.0, 200.0));
+        assert_eq!(r.stats.three_d_built, 1, "{what}");
+    }
+}
+
+/// A loaded file can hold a 3D effect on art past the limits commands check: a blend of more
+/// than 4,096 objects, art nested more than 64 levels deep in a clipping group. The art then draws
+/// as it does without the effect, and drawing it does not fail.
+#[test]
+fn art_past_the_three_d_limits_draws_as_without_the_effect() {
+    use vectorcraft_doc::{BlendSpacing, BlendSpec, NodeId, NodeKind};
+    let square = |x: f64| {
+        Arc::new(Node::path(
+            NodeId(0),
+            shapes::rectangle(Rect::new(x, 10.0, x + 20.0, 30.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.2, 0.5, 0.8)), Paint::None, 0.0),
+        ))
+    };
+    let mut clip = (*square(0.0)).clone();
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let mut deep = (*square(0.0)).clone();
+    for _ in 0..200 {
+        deep = Node::group(NodeId(0), vec![Arc::new(deep)]);
+    }
+    let spec = Box::new(BlendSpec { spacing: BlendSpacing::Steps(1000), ..Default::default() });
+    let kinds = [
+        ("a blend of 6,000 objects", NodeKind::Blend { children: (0..6).map(|i| square(30.0 * i as f64)).collect(), spec }),
+        ("art 200 levels deep in a clip", NodeKind::Group { children: vec![Arc::new(clip), Arc::new(deep)], clip: true }),
+    ];
+    let d = Document::new(200.0, 200.0);
+    for (what, kind) in kinds {
+        let mut n = Node::new(NodeId(500), kind);
+        let flat = crate::encode::art_bounds(&doc_of(&mut d.clone(), n.clone())).unwrap();
+        n.appearance.effects =
+            vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 60.0, "position": "isometricTop"}), visible: true }];
+        let loaded = doc_of(&mut d.clone(), n);
+        let n = &loaded.layers[0].children().unwrap()[0];
+        assert!(vectorcraft_effects::validate_three_d_in(Some(&loaded), n, "threeD.extrude", &json!({})).is_err(), "{what}");
+        assert_eq!(crate::encode::art_bounds(&loaded), Some(flat), "{what}");
+        assert!(crate::drawn_bounds(&loaded, n).is_some(), "{what}");
+    }
 }
 
 fn doc_of(d: &mut Document, n: Node) -> Document {

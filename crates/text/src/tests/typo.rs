@@ -66,6 +66,24 @@ fn optical_pairs_cross_paint_runs_and_manual_and_tracking_are_independent() {
     assert!((pair_advance(&rtl_manual) - pair_advance(&rtl_pair_zero) - 20.0).abs() < 0.01, "manual spacing changes the adjacent right-to-left pair");
 }
 
+/// At 50% Horizontal Scale the tracking adds half the space it adds at 100% (`spacing_scale`),
+/// and the Optical pairs measure their gaps without it: tracked, each advance is the untracked
+/// Optical one and the tracking, the corrections unchanged.
+#[test]
+fn optical_pairs_in_horizontally_scaled_type_measure_without_the_scaled_tracking() {
+    let st = CharStyle { font_family: "JetBrains Mono".into(), size: 100.0, optical_kerning: true, h_scale: 50.0, ..CharStyle::default() };
+    let advances = |st: CharStyle| layout(db(), &TextObject::point(Point::ZERO, "IIAV", st)).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
+    let optical = advances(st.clone());
+    let unkerned = advances(CharStyle { kerning: Some(0.0), ..st.clone() });
+    assert!((optical[0] - unkerned[0]).abs() > 0.1, "Optical changes the monospaced pair at 50%: {optical:?} {unkerned:?}");
+    let tracked = advances(CharStyle { tracking: 100.0, ..st });
+    assert_eq!(optical.len(), tracked.len());
+    for (o, t) in optical.iter().zip(&tracked) {
+        // 100/1000 of the 100 pt em drawn 50% wide.
+        assert!((t - o - 5.0).abs() < 0.01, "{optical:?} {tracked:?}");
+    }
+}
+
 #[test]
 fn rtl_manual_kerning_spaces_the_character_from_the_next_in_reading_order() {
     for optical_kerning in [false, true] {
@@ -2022,4 +2040,41 @@ fn soft_return_breaks_line_even_inside_no_break() {
     let t = area("First\u{2028}Second", st, Rect::new(0.0, 0.0, 300.0, 200.0), Justify::Left);
     let lay = layout(db(), &t);
     assert_eq!(lay.lines.len(), 2, "soft return honors line break despite no_break");
+}
+
+/// An East Asian glyph form (the Glyphs panel menu's Traditional Forms, JIS 78 Forms, …) draws
+/// the characters with the font's glyphs of that form, and Default with its default glyphs. Needs
+/// craft-fonts' BIZ UDMincho, which has traditional, expert, JIS 78, 83 and 90, full-width and
+/// half-width forms and no JIS 04 forms (skipped without it). A form on one character of a run
+/// changes that character only.
+#[test]
+fn glyph_forms_draw_the_fonts_east_asian_forms() {
+    use vectorcraft_doc::GlyphForm;
+    const FAMILY: &str = "BIZ UDMincho";
+    if db().face(FAMILY, "Regular").is_none_or(|f| f.family != FAMILY) {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+        return;
+    }
+    let st = |form| CharStyle { size: 20.0, font_family: FAMILY.into(), glyph_form: form, ..CharStyle::default() };
+    let glyphs = |text: &str, form| layout(db(), &TextObject::point(Point::ZERO, text, st(form))).glyphs;
+    let gids = |text: &str, form| glyphs(text, form).iter().map(|g| g.gid).collect::<Vec<_>>();
+    for (form, text) in
+        [(GlyphForm::Traditional, "亜"), (GlyphForm::Expert, "唖"), (GlyphForm::Jis78, "唖"), (GlyphForm::Jis83, "芦"), (GlyphForm::Jis90, "芦")]
+    {
+        assert_ne!(gids(text, form), gids(text, GlyphForm::Default), "{form:?} {text}");
+    }
+    // The font has no JIS 04 forms, so the characters keep their glyphs.
+    assert_eq!(gids("亜唖芦", GlyphForm::Jis04), gids("亜唖芦", GlyphForm::Default));
+    // Full-width Latin takes a whole em, half-width punctuation half of one.
+    let advance = |text: &str, form| glyphs(text, form).first().map_or(0.0, |g| g.advance);
+    assert!(advance("A", GlyphForm::Default) < 15.0, "{}", advance("A", GlyphForm::Default));
+    assert!((advance("A", GlyphForm::FullWidth) - 20.0).abs() < 0.01, "{}", advance("A", GlyphForm::FullWidth));
+    assert!((advance("、", GlyphForm::Default) - 20.0).abs() < 0.01, "{}", advance("、", GlyphForm::Default));
+    assert!((advance("、", GlyphForm::HalfWidth) - 10.0).abs() < 0.01, "{}", advance("、", GlyphForm::HalfWidth));
+    // Traditional Forms on the middle character only.
+    let mut t = TextObject::point(Point::ZERO, "亜亜亜", st(GlyphForm::Default));
+    edit::style_range(&mut t.runs, 3, 6, |s| s.glyph_form = GlyphForm::Traditional);
+    let ids: Vec<u32> = layout(db(), &t).glyphs.iter().map(|g| g.gid).collect();
+    let (plain, traditional) = (gids("亜", GlyphForm::Default), gids("亜", GlyphForm::Traditional));
+    assert_eq!(ids, [plain[0], traditional[0], plain[0]]);
 }

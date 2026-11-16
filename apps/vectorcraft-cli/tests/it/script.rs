@@ -2,11 +2,9 @@ use std::process::Command;
 
 use serde_json::{Value, json};
 
-const BIN: &str = env!("CARGO_BIN_EXE_vectorcraft-cli");
-
 /// `run` with `script.run` after `file.new`, with `params`.
 fn run_script(params: &Value) -> std::process::Output {
-    Command::new(BIN).args(["run", "--cmd", "file.new", "--cmd", "script.run", "--params", &params.to_string()]).output().unwrap()
+    Command::new(crate::bin()).args(["run", "--cmd", "file.new", "--cmd", "script.run", "--params", &params.to_string()]).output().unwrap()
 }
 
 /// `run` runs a script headless: the reply holds the report, with what the script logged and the

@@ -326,7 +326,7 @@ fn an_importer_past_its_budget_opens_nothing() {
     ];
     for (id, limits, _) in &cases {
         let wasm = wat::parse_str(tpl::module(&tpl::importer(id, r#"["tbg"]"#, "{}"), SPINS, "", 1)).unwrap();
-        vectorcraft_plugins::registry::install(Plugin::load(&wasm, limits.clone()).unwrap());
+        vectorcraft_plugins::registry::install(Plugin::load(&wasm, limits.clone()).unwrap()).unwrap();
     }
     let mut s = Session::new();
     for (id, _, why) in &cases {

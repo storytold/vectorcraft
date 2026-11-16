@@ -1,4 +1,4 @@
-use super::{GraphSpec, Value};
+use super::{GraphSpec, Result, Value, bad};
 
 pub(super) const LABEL_SIZE: f64 = 9.0;
 
@@ -20,6 +20,16 @@ pub(super) fn count_param(p: &Value, key: &str, max: u64) -> Option<usize> {
     let v = p.get(key)?;
     let n = v.as_u64().or_else(|| v.as_f64().filter(|x| x.is_finite() && *x >= 0.0).map(|x| x.round().min(max as f64) as u64))?;
     usize::try_from(n.min(max)).ok()
+}
+
+/// [`count_param`], or `None` when `p` leaves `key` out or gives null. A negative number is an error, and so is any
+/// other value, such as `"5"`.
+pub(super) fn count_given(p: &Value, key: &str, max: u64, cmd: &str) -> Result<Option<usize>> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) if !v.is_number() => Err(bad(cmd, format!("`{key}` must be a number, not {v}"))),
+        Some(_) => count_param(p, key, max).map(Some).ok_or_else(|| bad(cmd, format!("`{key}` must be 0 or more"))),
+    }
 }
 
 /// A "nice" axis: (min, max, step).

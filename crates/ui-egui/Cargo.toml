@@ -54,6 +54,9 @@ log = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 craft-ui = { workspace = true, features = ["native-windows"] }
 craft-update = { workspace = true }
+# The local date and time the status bar's Date and Time readout shows (`chrono::Local`). Already in
+# Cargo.lock with the time-zone crates `clock` uses.
+chrono = { workspace = true, features = ["clock"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # `now_ms` (src/lib.rs) reads the page's `performance.now()` with this crate in the web build. It is
@@ -68,6 +71,7 @@ rustix = { workspace = true, features = ["std", "process"] }
 
 [dev-dependencies]
 egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
+vectorcraft-apischema = { workspace = true }
 vectorcraft-testkit = { workspace = true }
 # A variable font built in code (no font file is committed).
 vectorcraft-text = { workspace = true, features = ["test-fonts"] }

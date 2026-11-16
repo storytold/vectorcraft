@@ -69,3 +69,29 @@ fn dublin_core_metadata_control_chars_are_filtered() {
     assert!(svg.contains("<dc:subject>kw</dc:subject>"));
     assert!(svg.contains("<dc:rights>(c) me</dc:rights>"));
 }
+
+/// The root's `<title>` is the File Info title of the imported document ([`Document::info_title`]);
+/// its name stays what `Document::new` gave it, and a shape's `<title>` is that shape's tooltip.
+#[test]
+fn the_roots_title_is_the_file_info_title_not_the_documents_name() {
+    let svg = |inner: &str| {
+        format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">{inner}<rect width="5" height="5"><title>Tip</title></rect></svg>"#)
+    };
+    let d = import(&svg("<title>\n Access\n paths </title>")).unwrap();
+    assert_eq!((d.title.as_str(), d.metadata.title.as_deref(), d.info_title()), ("Untitled-1", Some("Access paths"), "Access paths"));
+    for none in [svg(""), svg("<title>  </title>")] {
+        let d = import(&none).unwrap();
+        assert_eq!((d.title.as_str(), d.metadata.title.as_deref(), d.info_title()), ("Untitled-1", None, "Untitled-1"));
+    }
+}
+
+/// Exports write the File Info title, where the document has one, in place of its name.
+#[test]
+fn exports_write_the_file_info_title() {
+    let mut d = Document::new(200.0, 200.0);
+    d.title = "box.svg".into();
+    d.metadata.title = Some("Access paths".into());
+    let svg = export(&d, &ExportOptions { metadata: true, ..ExportOptions::default() });
+    assert!(svg.contains("<title>Access paths</title>") && svg.contains("<dc:title>Access paths</dc:title>"), "{svg}");
+    assert!(!svg.contains("box.svg"), "{svg}");
+}

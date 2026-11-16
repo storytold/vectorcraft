@@ -36,6 +36,13 @@ impl VectorcraftApp {
         self.ui.answering_control || self.synthetic_frame
     }
 
+    /// Did automation ask for what is being handled now: [`Self::automation_is_acting`], or the
+    /// answer of a file dialog that automation opened ([`crate::picks::as_automated`]), even when a
+    /// person picked the file in it?
+    pub(crate) fn automation_asked(&self) -> bool {
+        self.automation_is_acting() || self.picks.automated()
+    }
+
     /// Run a Help link command and open the URL it returns.
     pub fn open_link(&mut self, id: &str) {
         if let Ok(v) = self.run(id, serde_json::json!({}))

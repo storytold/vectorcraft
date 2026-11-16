@@ -104,6 +104,45 @@ fn the_object_brought_over_shows_no_seam_of_the_one_below() {
     assert!(worst < 8, "blue shows through ring A at the top crossing (blue {worst})");
 }
 
+fn green(r: &Rendered, x: u32, y: u32) -> bool {
+    let p = r.pixel(x, y);
+    p[3] > 200 && p[1] > 200 && p[0] < 60 && p[2] < 60
+}
+
+/// The margin an object brought over another is raised in past their overlap reaches only where
+/// that object alone paints: a third member that meets the overlap's edge stays in front of it
+/// there. Red A (20..80 × 20..60) and blue B (40..60 × 30..70) overlap in 40..60 × 30..60; the
+/// green sliver C (38..40 × 40..50), in front of both, meets that overlap at x = 40 over A only.
+#[test]
+fn raising_one_overlap_keeps_an_adjacent_third_member_above_its_seam() {
+    let mut s = session();
+    let rect = |s: &mut Session, x: f64, y: f64, w: f64, h: f64, color: &str| {
+        let id = id_of(&s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": w, "height": h})).unwrap());
+        s.execute("paint.setFill", &json!({"ids": [id.0], "color": color})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [id.0], "none": true})).unwrap();
+        id
+    };
+    let a = rect(&mut s, 20.0, 20.0, 60.0, 40.0, "#ff0000");
+    let b = rect(&mut s, 40.0, 30.0, 20.0, 40.0, "#0000ff");
+    let c = rect(&mut s, 38.0, 40.0, 2.0, 10.0, "#00ff00");
+    select(&mut s, &[a, b, c]);
+    let g = id_of(&s.execute("object.intertwine.make", &json!({})).unwrap());
+    let r = render(&s);
+    assert!(green(&r, 39, 45) && blue(&r, 50, 45) && red(&r, 39, 55));
+    let v = arrange(&mut s, json!({"at": [50, 45], "order": "front", "member": a.0}));
+    assert_eq!((&v["count"], &v["top"]), (&json!(1), &json!([a.0])));
+    assert_eq!(order_at(&s.doc().unwrap().doc, g, 50.0, 45.0), [b, a]);
+    let r = render(&s);
+    assert!(red(&r, 50, 45), "A is brought over B");
+    assert!(green(&r, 39, 45), "C stays in front of A within the margin");
+    assert!(red(&r, 39, 55));
+    let raised = area(&s, a).unwrap();
+    let inside = |x, y| vectorcraft_tools::intertwine::contains(&raised, vectorcraft_geom::Point::new(x, y));
+    assert!(inside(50.5, 45.5), "the overlap");
+    assert!(inside(39.5, 55.5), "the margin where only A paints");
+    assert!(!inside(39.5, 45.5), "the margin leaves out where C paints too");
+}
+
 #[test]
 fn clicking_the_same_overlap_again_swaps_back() {
     let mut s = session();

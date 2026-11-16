@@ -5,31 +5,54 @@
 //! Illustrator). ↑/↓ during a polygon/star drag change the side/point count; during a star drag,
 //! Ctrl/Cmd keeps the inner radius where it is while the outer one follows the pointer, and Alt
 //! keeps the star's shoulders straight (#812). The start point and
-//! the dragged corner snap to Smart Guides ([`DrawSnap`]), hovering before the press too.
+//! the dragged corner snap to Smart Guides ([`DrawSnap`]), hovering before the press too. With Snap
+//! to Tangent on, a line pressed on one convex curved path and dragged near another lands on a
+//! common tangent of the two, both its ends moving to the touch points ([`TangentLine`]).
 //! Escape cancels the drag and puts back the options its keys and Ctrl/Cmd changed.
 //!
 //! The selection keeps its bounding box and its Live Shape widgets on show with the Rectangle,
 //! Rounded Rectangle, Ellipse, Polygon and Star tools, so a shape just drawn can be adjusted at
 //! once: a drag on a live rectangle's or polygon's corner widget rounds its corners and a drag on
-//! a live ellipse's pie widget sets its pie angle, as with the Selection tool; a press on the
-//! selection's centre point (Show Center) moves it, and one just outside a corner of its box turns
-//! it about that centre, as the Selection tool's rotate zone does; a press anywhere else draws a
-//! new shape (#5477).
+//! a live ellipse's pie widget sets its pie angle, as with the Selection tool; a drag on one of the
+//! box's eight handles scales the selection, a press on the selection's centre point (Show Center)
+//! moves it, and one just outside a corner of its box turns it about that centre, as the Selection
+//! tool's handles, centre point and rotate zone do; a press anywhere else draws a new shape (#5477).
+//!
+//! With Smart Guides and Snap to Tangent on, a circle drawn from its center with the Ellipse tool (Alt and Shift)
+//! takes the radius at which it touches a nearby path whenever its radius comes within the
+//! snapping tolerance of it ([`DrawSnap::circle_radius`]).
 
 use serde_json::{Value, json};
+use vectorcraft_doc::OrientedBox;
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
-use crate::bbox::{move_delta, rotate_for_drag};
+use crate::bbox::{Handle, move_delta, rotate_for_drag, scale_for_drag};
 use crate::corners::{self, CornerDrag};
-use crate::guides::{DrawSnap, Leave, square};
+use crate::guides::{DrawSnap, Leave, PointSnap, TangentLine, Targets, square};
 use crate::pie::{self, PieDrag};
-use crate::select::{MoveSnap, hit_center, matrix_json, rotate_zone, shown_box};
+use crate::select::{MoveSnap, handle_cursor, hit_center, is_area_type, matrix_json, rotate_zone, shown_box};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 /// The largest corner radius the Rounded Rectangle tool draws, points: the range of General ›
 /// Corner Radius, which the tool's radius is (its `prefs.list` spec), so ↑ and a Tool Options
 /// value stop there too.
 pub const MAX_CORNER_RADIUS: f64 = 1296.0;
+
+/// How far (screen points, along each axis) from a bounding-box handle's centre a shape tool's
+/// press scales the selection: half the drawn handle square, which is 6 points wide at the default
+/// Selection & Anchor Display › Size 3 and a point wider or narrower per step. The Selection tool
+/// takes 5 points.
+fn handle_reach(cx: &ToolContext) -> f64 {
+    (6.0 + f64::from(cx.anchor_size.clamp(1, 7)) - 3.0) / 2.0
+}
+
+/// A document offset `d` in screen points: across and down the window.
+fn screen_offset(cx: &ToolContext, d: Vec2) -> (f64, f64) {
+    match cx.screen {
+        Some(s) if s.right.hypot2() > 0.0 && s.down.hypot2() > 0.0 => (d.dot(s.right) / s.right.hypot2(), d.dot(s.down) / s.down.hypot2()),
+        _ => (d.x * cx.zoom, d.y * cx.zoom),
+    }
+}
 
 /// Does tool `id` keep the selection's bounding box and Live Shape widgets on show and let its
 /// corner and pie widgets be dragged (#5477)? The shape tools that draw a box: not Line Segment.
@@ -43,9 +66,15 @@ enum WidgetDrag {
     Pie(PieDrag),
 }
 
-/// A drag of the selection itself, taken by a shape tool: the centre point moves it and the zone
-/// just outside a corner of its box turns it, as the Selection tool's drags do (#5477).
+/// A drag of the selection itself, taken by a shape tool: a handle of its box scales it, the centre
+/// point moves it and the zone just outside a corner of its box turns it, as the Selection tool's
+/// drags do (#5477).
 enum SelectionDrag {
+    /// Scaling the selection by `handle` of its box `bx`, as it was when the press came. `areas`:
+    /// area type is selected, and its frame resizes while its type keeps its size. `snap` holds
+    /// what the moved handle snaps to. `last`: where the last drag was, and whether Backtick was
+    /// down then.
+    Scale { handle: Handle, bx: OrientedBox, areas: bool, snap: Box<PointSnap>, last: Option<(Point, bool)> },
     /// Moving the selection by the centre point `hold`: `start` is where the press was, and the
     /// move has begun once the pointer left the drag threshold.
     Move { start: Point, hold: Point, began: bool, snap: Box<MoveSnap> },
@@ -61,17 +90,26 @@ pub struct ShapeTool {
     began: bool,
     pub sides: u32,
     pub points: u32,
+    /// The anchors an ellipse made by a click has (the Ellipse dialog opens on it); 4 is a live
+    /// ellipse.
+    pub anchors: u32,
     pub corner_radius: f64,
     /// Star inner radius as a fraction of the outer radius.
     pub star_ratio: f64,
     /// The star's inner radius held while Ctrl/Cmd is down in a drag.
     inner: Option<f64>,
+    /// Where the last drag put the dragged corner of a circle drawn from its center, from the
+    /// center, when Snap to Tangent sized it ([`Self::tangent_circle`]); none when the pointer
+    /// sized it. Space moving the circle moves the corner it was drawn with there and clears it.
+    tangent_corner: Option<Vec2>,
     /// Line Segment Tool Options: the length and angle (degrees) a click's dialog opens with, and
     /// Fill Line (new lines take the current fill).
     pub line_length: f64,
     pub line_angle: f64,
     pub fill_line: bool,
     snap: DrawSnap,
+    /// Snap to Tangent for a line from one curve to another: both ends on a common tangent.
+    tangent_line: TangentLine,
     /// The options a drag's keys and Ctrl/Cmd change, as they were when the drag began: Escape
     /// puts them back.
     before_drag: Option<DragOptions>,
@@ -123,10 +161,13 @@ impl ShapeTool {
             began: false,
             sides: 6,
             points: 5,
+            anchors: 4,
             corner_radius: 12.0,
             star_ratio: 0.5,
             inner: None,
+            tangent_corner: None,
             snap: DrawSnap::default(),
+            tangent_line: TangentLine::default(),
             line_length: 100.0,
             line_angle: 0.0,
             fill_line: false,
@@ -178,6 +219,22 @@ impl ShapeTool {
         rotate_zone(cx, &self.box_of(cx)?, p)
     }
 
+    /// The handle of the selection's box under `p`, with the box: a press there scales the
+    /// selection, as with the Selection tool. A shape tool takes only the drawn handle square
+    /// ([`handle_reach`]), which stays square to the screen when the box or the view is turned, so
+    /// a press just beside a handle still draws a new shape.
+    fn over_handle(&self, cx: &ToolContext, p: Point) -> Option<(Handle, OrientedBox)> {
+        let bx = self.box_of(cx)?;
+        let reach = handle_reach(cx);
+        Handle::ALL
+            .into_iter()
+            .find(|h| {
+                let (x, y) = screen_offset(cx, p - bx.to_doc() * h.pos(bx.rect));
+                x.abs() <= reach && y.abs() <= reach
+            })
+            .map(|h| (h, bx))
+    }
+
     /// Is `p` over the centre point of a selected object (Attributes › Show Center), where a press
     /// moves the selection? The point shows whatever View › Show Bounding Box says, so the press
     /// takes it too.
@@ -185,22 +242,35 @@ impl ShapeTool {
         shows_shape_widgets(self.id) && hit_center(cx, p, cx.point_tol()).is_some()
     }
 
-    /// A press on the selection's centre point or just outside a corner of its box: the drag moves
-    /// or turns the selection instead of drawing a new shape (#5477). A turn begins with the press,
-    /// as the Selection tool's does; a move begins once the pointer leaves the drag threshold.
+    /// A press on a handle of the selection's box, on its centre point or just outside a corner of
+    /// its box: the drag scales, moves or turns the selection instead of drawing a new shape
+    /// (#5477). The handles come first, as with the Selection tool. A scale or a turn begins with
+    /// the press, as the Selection tool's do; a move begins once the pointer leaves the drag
+    /// threshold.
     fn press_selection(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Option<Vec<Action>> {
         if !shows_shape_widgets(self.id) {
             return None;
         }
-        self.selection = match hit_center(cx, ev.pos, cx.point_tol()) {
-            Some((_, hold)) => Some(SelectionDrag::Move { start: ev.pos, hold, began: false, snap: Box::new(MoveSnap::new(cx)) }),
-            None => self.over_rotate(cx, ev.pos).map(|center| SelectionDrag::Rotate { center, start: ev.pos }),
+        self.selection = if let Some((handle, bx)) = self.over_handle(cx, ev.pos) {
+            let is_area = |id: &vectorcraft_doc::NodeId| cx.doc.node(*id).is_some_and(is_area_type);
+            let areas = cx.selection.objects.iter().any(is_area);
+            Some(SelectionDrag::Scale { handle, bx, areas, snap: Box::new(PointSnap::scaling(cx, || Targets::for_scale(cx))), last: None })
+        } else {
+            match hit_center(cx, ev.pos, cx.point_tol()) {
+                Some((_, hold)) => Some(SelectionDrag::Move { start: ev.pos, hold, began: false, snap: Box::new(MoveSnap::new(cx)) }),
+                None => self.over_rotate(cx, ev.pos).map(|center| SelectionDrag::Rotate { center, start: ev.pos }),
+            }
         };
         self.selection.as_ref()?;
         self.snap.clear();
         self.guides.clear();
         self.measure = None;
         Some(match self.selection {
+            // Only area type: the step resizes type areas; anything else scales.
+            Some(SelectionDrag::Scale { areas, .. }) => {
+                let only_areas = areas && cx.selection.objects.iter().all(|id| cx.doc.node(*id).is_some_and(is_area_type));
+                vec![Action::Begin(if only_areas { "Resize Type Area" } else { "Scale" }.into())]
+            }
             Some(SelectionDrag::Rotate { .. }) => vec![Action::Begin("Rotate".into())],
             _ => vec![],
         })
@@ -235,6 +305,32 @@ impl ShapeTool {
                 self.measure = cx.transform_tools_guides.then(|| (ev.pos, format!("{:.1}°", -deg)));
                 vec![Action::Preview("object.transform".into(), json!({"matrix": matrix_json(a), "copy": false}))]
             }
+            (PointerKind::Drag, SelectionDrag::Scale { handle, bx, areas, snap, last }) => {
+                // As the Selection tool scales: in the box's own frame, the moved handle snapped,
+                // and with Use Preview Bounds by the visual box's size unless the drag flips it.
+                *last = Some((ev.pos, ev.backquote));
+                let m = ev.mods;
+                let a = scale_for_drag(bx.rect, *handle, bx.to_local(ev.pos), m.shift, m.alt);
+                let (a, guides) = snap.snap_scale(cx, bx, *handle, a, m.shift, m.alt);
+                self.guides = guides;
+                let nr = a.transform_rect_bbox(bx.rect);
+                self.measure = cx.transform_tools_guides.then(|| (ev.pos, cx.size_label(nr.width(), nr.height())));
+                let [sx, _, _, sy, _, _] = a.as_coeffs();
+                let (cmd, mut params) = if !ev.backquote && cx.preview_bounds && sx > 0.0 && sy > 0.0 {
+                    let reference = if m.alt { 4 } else { handle.opposite().reference() };
+                    ("object.setBounds", json!({ "width": nr.width(), "height": nr.height(), "reference": reference, "copy": false }))
+                } else {
+                    ("object.transform", json!({ "matrix": matrix_json(bx.conjugate(a)), "copy": false }))
+                };
+                if *areas {
+                    params["typeAreas"] = json!(true);
+                }
+                if ev.backquote {
+                    params["objects"] = json!(false);
+                    params["patterns"] = json!(true);
+                }
+                vec![Action::Preview(cmd.into(), params)]
+            }
             (PointerKind::Up, SelectionDrag::Move { began, .. }) => {
                 let began = *began;
                 self.selection = None;
@@ -243,8 +339,22 @@ impl ShapeTool {
                 self.snapped = false;
                 if began { vec![Action::Commit] } else { vec![] }
             }
+            (PointerKind::Up, SelectionDrag::Scale { last, .. }) => {
+                // Backtick pressed or let go after the last drag: the scale is previewed again at
+                // that drag's position with the key as it is at the release, as the Selection tool
+                // does.
+                let again = last.filter(|(_, backquote)| *backquote != ev.backquote).map(|(pos, _)| pos);
+                let mut out =
+                    again.and_then(|pos| self.selection_pointer(cx, &PointerEvent { kind: PointerKind::Drag, pos, ..*ev })).unwrap_or_default();
+                self.selection = None;
+                self.guides.clear();
+                self.measure = None;
+                out.push(Action::Commit);
+                out
+            }
             (PointerKind::Up, SelectionDrag::Rotate { .. }) => {
                 self.selection = None;
+                self.guides.clear();
                 self.measure = None;
                 vec![Action::Commit]
             }
@@ -320,6 +430,27 @@ impl ShapeTool {
             // ([`Self::command_at`]), not the page's diagonal.
             _ => Some(Leave::diagonal(start, m.shift && vectorcraft_geom::constrain_axes(cx.constrain_angle).is_none())),
         }
+    }
+
+    /// Snap to Tangent for a circle drawn from its center `s` (the Ellipse tool with Alt and
+    /// Shift): the dragged corner `p` moved toward or away from `s` so that the circle touches a
+    /// nearby path, when its radius is within the snapping tolerance of a touching one
+    /// ([`DrawSnap::circle_radius`]); `raw` is the pointer before snapping. The radius is measured
+    /// along the Constrain Angle's axes, as the drawn box is ([`turned_box`]). None for any other
+    /// shape or modifiers, or with `p` on `s`.
+    fn tangent_circle(&mut self, cx: &ToolContext, s: Point, raw: Point, p: Point, m: Mods) -> Option<Point> {
+        if self.id != "ellipse" || !(m.alt && m.shift) || m.space {
+            return None;
+        }
+        let axes = vectorcraft_geom::constrain_axes(cx.constrain_angle).unwrap_or(Affine::IDENTITY);
+        let back = axes.inverse();
+        let (c, d) = (back * s, back * p - back * s);
+        let r = d.x.abs().max(d.y.abs());
+        if r.is_nan() || r <= 0.0 {
+            return None;
+        }
+        let radius = self.snap.circle_radius(cx, s, raw, p, r)?;
+        Some(axes * (c + d * (radius / r)))
     }
 
     /// The command for a drag from `start` to `p` (snapped: a line's end already keeps Shift's
@@ -422,8 +553,9 @@ impl Tool for ShapeTool {
     fn busy(&self) -> bool {
         self.start.is_some() || self.widget.is_some() || self.selection.is_some()
     }
-    /// A widget or selection drag takes the pointer; otherwise a press draws, unless it lands on
-    /// the selection's centre point or in the rotate zone just outside its box's corner.
+    /// A widget or selection drag takes the pointer; otherwise a press draws, unless it lands on a
+    /// handle of the selection's box, its centre point or the rotate zone just outside its box's
+    /// corner.
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         if let Some(out) = self.widget_pointer(cx, ev) {
             return out;
@@ -434,7 +566,11 @@ impl Tool for ShapeTool {
         match ev.kind {
             PointerKind::Move => {
                 // Over a widget a press would drag, no Smart Guide for a new shape's start.
-                if self.over_widget(cx, ev.pos) || self.over_center(cx, ev.pos) || self.over_rotate(cx, ev.pos).is_some() {
+                if self.over_widget(cx, ev.pos)
+                    || self.over_handle(cx, ev.pos).is_some()
+                    || self.over_center(cx, ev.pos)
+                    || self.over_rotate(cx, ev.pos).is_some()
+                {
                     self.snap.clear();
                 } else {
                     self.snap.hover(cx, ev.pos, &[], None);
@@ -450,6 +586,12 @@ impl Tool for ShapeTool {
                     return out;
                 }
                 let p = self.snap.press(cx, ev.pos, &[], None);
+                if self.id == "lineSegment" {
+                    // The pressed spot finds the curve; a press that snapped to an anchor, center
+                    // or crossing off that curve keeps the line's start there.
+                    let held = self.snap.snapped_to_point(cx, ev.pos, p).then_some(p);
+                    self.tangent_line.press(cx, ev.pos, held);
+                }
                 self.start = Some(p);
                 self.last = ev.pos;
                 self.began = false;
@@ -459,6 +601,7 @@ impl Tool for ShapeTool {
             }
             PointerKind::Drag => {
                 let Some(mut s) = self.start else { return vec![] };
+                let raw = ev.pos;
                 let pos = self.snap.drag(cx, ev.pos, self.leave(cx, s, ev.mods).as_ref());
                 let ev = &PointerEvent { pos, ..*ev };
                 // The inner radius of the star the last drag showed, with the ratio it drew with:
@@ -466,28 +609,57 @@ impl Tool for ShapeTool {
                 // first arrives with the next position.
                 let ratio = if self.mods.alt { straight_ratio(self.points).unwrap_or(self.star_ratio) } else { self.star_ratio };
                 let shown = (self.last - s).hypot() * ratio;
+                // Space moves a circle Snap to Tangent sized from the corner it was drawn with, so
+                // it keeps that size while it moves and after Space is let go.
+                if ev.mods.space
+                    && self.began
+                    && let Some(d) = self.tangent_corner.take()
+                {
+                    self.last = s + d;
+                }
                 space_moves(&mut s, &mut self.last, ev, self.began);
+                if ev.mods.space && self.began {
+                    // The start no longer lies on the pressed path.
+                    self.tangent_line.clear();
+                }
                 self.start = Some(s);
                 self.mods = ev.mods;
                 if self.id == "star" {
                     self.hold_inner(shown, s, ev.pos, ev.mods);
                 }
+                // A circle from its center takes a radius that touches a nearby path. Whether the
+                // drag has begun is judged before that snap.
+                let dragged = ev.pos;
+                self.tangent_corner = self.tangent_circle(cx, s, raw, ev.pos, ev.mods).map(|q| q - s);
+                let ev = &PointerEvent { pos: self.tangent_corner.map_or(ev.pos, |d| s + d), ..*ev };
                 let mut out = vec![];
                 if !self.began {
-                    if ev.pos.distance(s) < cx.tol(2.0) {
+                    if dragged.distance(s) < cx.tol(2.0) {
                         return out;
                     }
                     self.began = true;
                     self.before_drag = Some(self.drag_options());
                     out.push(Action::Begin(self.label().into()));
                 }
-                let (c, v) = self.command_at(s, ev.pos, ev.mods, cx.constrain_angle);
+                // Snap to Tangent: a line pressed on one curve and ending near another moves both
+                // its ends onto a common tangent of the two, unless Shift, Alt or Space is held or
+                // an anchor or crossing nearer the pointer pulls it.
+                let tangent = if self.id == "lineSegment" && !(ev.mods.shift || ev.mods.alt || ev.mods.space) {
+                    let rival = self.snap.point_within_reach(cx, raw);
+                    self.tangent_line.snap(cx, raw, rival)
+                } else {
+                    self.tangent_line.drop_line();
+                    None
+                };
+                let (a, b) = tangent.unwrap_or((s, ev.pos));
+                let (c, v) = self.command_at(a, b, ev.mods, cx.constrain_angle);
                 out.push(Action::Preview(c, v));
                 out
             }
             PointerKind::Up => {
                 let Some(s) = self.start.take() else { return vec![] };
                 self.snap.clear();
+                self.tangent_line.clear();
                 self.inner = None;
                 self.before_drag = None;
                 if self.began {
@@ -561,10 +733,25 @@ impl Tool for ShapeTool {
                 self.restore_drag_options(o);
             }
             self.snap.clear();
+            self.tangent_line.clear();
             vec![Action::Cancel]
         } else {
             vec![]
         }
+    }
+    /// A drag of a handle of the selection's box: the canvas keeps drawing the box at the changing
+    /// bounds, as for the Selection tool.
+    fn resizing(&self) -> bool {
+        matches!(self.selection, Some(SelectionDrag::Scale { .. }))
+    }
+    /// A move of the selection by its center point, as the Selection tool's move.
+    fn moving(&self) -> bool {
+        matches!(self.selection, Some(SelectionDrag::Move { began: true, .. }))
+    }
+    /// Drawing a shape with a tool that shows the selection's bounding box. The Line Segment tool
+    /// shows no box, so it reports none.
+    fn drawing_boxed(&self) -> bool {
+        shows_shape_widgets(self.id) && self.began
     }
     /// Adjusting a widget (the canvas hides the bounding box meanwhile, as for the Selection tool).
     fn transforming(&self) -> bool {
@@ -573,7 +760,7 @@ impl Tool for ShapeTool {
             Some(WidgetDrag::Pie(d)) => d.adjusting(),
             None => match &self.selection {
                 Some(SelectionDrag::Move { began, .. }) => *began,
-                Some(SelectionDrag::Rotate { .. }) => true,
+                Some(SelectionDrag::Rotate { .. } | SelectionDrag::Scale { .. }) => true,
                 None => false,
             },
         }
@@ -595,7 +782,9 @@ impl Tool for ShapeTool {
             Some(WidgetDrag::Pie(d)) => return d.overlays(cx),
             None => {}
         }
-        let mut o = self.snap.guides().to_vec();
+        // A line on a common tangent shows that snap's guides, and its length and angle.
+        let tangent = self.tangent_line.line().filter(|_| self.start.is_some());
+        let mut o = if tangent.is_some() { self.tangent_line.guides(cx) } else { self.snap.guides().to_vec() };
         o.extend(self.guides.iter().cloned());
         if let Some((p, text)) = &self.measure {
             o.push(Overlay::Measure { p: *p, text: text.clone() });
@@ -603,7 +792,8 @@ impl Tool for ShapeTool {
         if let Some(s) = self.start.filter(|_| self.began && cx.measurement_labels) {
             let p = self.last + Vec2::new(cx.tol(12.0), cx.tol(12.0));
             let text = if self.id == "lineSegment" {
-                cx.segment_measure_label(s, self.last)
+                let (a, b) = tangent.unwrap_or((s, self.last));
+                cx.segment_measure_label(a, b)
             } else {
                 // A box's size as drawn (from its centre with Alt, square with Shift).
                 match self.id {
@@ -618,7 +808,9 @@ impl Tool for ShapeTool {
                         let (w, h) = match self.id {
                             "polygon" => ((self.last - s).x.abs(), (self.last - s).y.abs()),
                             _ => {
-                                let (r, _) = turned_box(s, self.last, self.mods, cx.constrain_angle);
+                                // The corner Snap to Tangent moved a circle's to, as the preview draws it.
+                                let corner = self.tangent_corner.map_or(self.last, |d| s + d);
+                                let (r, _) = turned_box(s, corner, self.mods, cx.constrain_angle);
                                 (r.width(), r.height())
                             }
                         };
@@ -630,9 +822,9 @@ impl Tool for ShapeTool {
         }
         o
     }
-    /// The Selection tool's pointer over a Live Shape widget, the selection's centre point or the
-    /// rotate zone just outside its box's corner; the crosshair everywhere else, where a press
-    /// draws.
+    /// The Selection tool's pointer over a Live Shape widget, a handle of the selection's box, its
+    /// centre point or the rotate zone just outside its box's corner; the crosshair everywhere
+    /// else, where a press draws.
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
         // Over a widget a press would drag (or dragging one), the Selection tool's pointer for it.
         let idle = self.start.is_none();
@@ -645,19 +837,23 @@ impl Tool for ShapeTool {
         // move snaps, as the Selection tool's.
         match &self.selection {
             Some(SelectionDrag::Rotate { center, .. }) => return Cursor::rotate_about_in_view(*center, p, cx.view_angle()),
+            Some(SelectionDrag::Scale { handle, bx, .. }) => return handle_cursor(*handle, bx.angle - cx.view_angle()),
             Some(SelectionDrag::Move { began: true, .. }) if m.alt => return Cursor::SelectionCopy,
             Some(SelectionDrag::Move { began: true, .. }) => return if self.snapped { Cursor::ArrowHollow } else { Cursor::Arrow },
             Some(_) => return Cursor::Arrow,
             None => {}
         }
-        // A press takes the corner and pie widgets first, then the centre point, then the zone
-        // just outside a corner; everywhere else it draws a new shape.
+        // A press takes the corner and pie widgets first, then the box's handles, then the centre
+        // point, then the zone just outside a corner; everywhere else it draws a new shape.
         if idle {
             if shows_shape_widgets(self.id) && corners::over_widget(cx, p, false) {
                 return Cursor::CornerRadius;
             }
             if self.over_widget(cx, p) {
                 return Cursor::ArrowHollow;
+            }
+            if let Some((handle, bx)) = self.over_handle(cx, p) {
+                return handle_cursor(handle, bx.angle - cx.view_angle());
             }
             if self.over_center(cx, p) {
                 return Cursor::Move;
@@ -672,6 +868,7 @@ impl Tool for ShapeTool {
         json!({
             "sides": self.sides,
             "points": self.points,
+            "anchors": self.anchors,
             "cornerRadius": self.corner_radius,
             "starRatio": self.star_ratio,
             "length": self.line_length,
@@ -684,6 +881,7 @@ impl Tool for ShapeTool {
         match key {
             "sides" => self.sides = v.as_u64().unwrap_or(6).clamp(3, 1000) as u32,
             "points" => self.points = v.as_u64().unwrap_or(5).clamp(3, 1000) as u32,
+            "anchors" => self.anchors = v.as_u64().unwrap_or(4).clamp(2, 1000) as u32,
             "cornerRadius" => self.corner_radius = finite.unwrap_or(12.0).clamp(0.0, MAX_CORNER_RADIUS),
             "starRatio" => self.star_ratio = v.as_f64().unwrap_or(0.5).clamp(0.01, 1.0),
             "length" => self.line_length = finite.map_or(self.line_length, |n| n.abs().min(1e6)),

@@ -28,8 +28,9 @@ pub const ALIGNMENTS: [(Justify, &str, &str, &str); 7] = [
     (Justify::JustifyAll, "dc-para-justify-all", "Justify all lines", "justifyAll"),
 ];
 
-/// Paragraph attributes apply to the selected text objects' paragraphs or, while the Type tool
-/// edits text, to the paragraphs its selection (or caret) touches (ending its typing session).
+/// Paragraph attributes apply to the paragraphs of every frame of the selected stories or, while
+/// the Type tool edits text, to the paragraphs its selection (or caret) touches (ending its typing
+/// session).
 fn format(app: &mut VectorcraftApp, p: Value) {
     para_cmd(app, "text.setFormat", p);
 }
@@ -53,13 +54,27 @@ pub(crate) fn align(app: &mut VectorcraftApp, justify: &str) -> Result<Value, St
 }
 
 /// `type.lineComposer` (Cmd+Alt+Shift+C): the Single-line Composer for the paragraphs the panel
-/// acts on when they all use the Every-line Composer, else the Every-line Composer. Returns the
-/// composer set.
+/// acts on when they all break their lines every-line (either shaping), else the Every-line
+/// Composer. Paragraphs that all use a Standard composer keep it; any other mix takes the Middle
+/// Eastern & South Asian one. Returns the composer set.
 pub(crate) fn toggle_composer(app: &mut VectorcraftApp) -> Result<Value, String> {
     text_style(app).ok_or("select some type first")?;
-    let id = if shared_composer(app) == Some(Composer::EveryLine) { "singleLine" } else { "everyLine" };
+    let to_single = shared_para(app, |p| p.composer.is_single_line()) == Some(false);
+    let standard = shared_para(app, |p| p.composer.shapes_complex_scripts()) == Some(false);
+    let base = if standard { Composer::StandardEveryLine } else { Composer::EveryLine };
+    let id = composer_id(base.with_breaking(to_single));
     format(app, json!({ "composer": id }));
     Ok(json!(id))
+}
+
+/// The `text.setFormat` value of `composer`.
+fn composer_id(composer: Composer) -> &'static str {
+    match composer {
+        Composer::SingleLine => "singleLine",
+        Composer::EveryLine => "everyLine",
+        Composer::StandardSingleLine => "standardSingleLine",
+        Composer::StandardEveryLine => "standardEveryLine",
+    }
 }
 
 /// `type.hyphenate` (Cmd+Alt+Shift+H): what the Hyphenate checkbox does, on the paragraphs the
@@ -75,7 +90,9 @@ fn para_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
     run_on_paragraphs(app, cmd, p).ok();
 }
 
-/// Run `cmd` on the paragraphs the Paragraph panel acts on ([`format`]) and return its result.
+/// Run `cmd` on the paragraphs the Paragraph panel acts on ([`format`]) and return its result. With
+/// the Selection tool these are the paragraphs of every frame of the selected stories
+/// ([`super::character::selected_stories`]).
 pub(crate) fn run_on_paragraphs(app: &mut VectorcraftApp, cmd: &str, mut p: Value) -> Result<Value, String> {
     if let Some((id, a, b)) = super::character::text_editing(app) {
         super::character::end_typing(app);
@@ -88,6 +105,8 @@ pub(crate) fn run_on_paragraphs(app: &mut VectorcraftApp, cmd: &str, mut p: Valu
                 p["end"] = json!(b);
             }
         }
+    } else {
+        super::character::target_selected_stories(app, &mut p);
     }
     app.run(cmd, p)
 }
@@ -208,14 +227,10 @@ fn visit_paragraphs(app: &VectorcraftApp, mut f: impl FnMut(&ParaStyle)) {
         }
         return;
     }
-    for node in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
-        node.walk(&mut |c| {
-            if let NodeKind::Text(t) = &c.kind {
-                for i in 0..t.paragraph_count() {
-                    f(t.para_at(i));
-                }
-            }
-        });
+    for t in super::character::selected_story_texts(app) {
+        for i in 0..t.paragraph_count() {
+            f(t.para_at(i));
+        }
     }
 }
 
@@ -253,7 +268,7 @@ pub(crate) fn shared_single_word_justify(app: &VectorcraftApp) -> Option<SingleW
 }
 
 /// A paragraph attribute shared by every paragraph in scope, or `None` when they differ.
-pub(crate) fn shared_para<T: PartialEq + Copy>(app: &VectorcraftApp, field: impl Fn(&ParaStyle) -> T) -> Option<T> {
+pub(crate) fn shared_para<T: PartialEq>(app: &VectorcraftApp, field: impl Fn(&ParaStyle) -> T) -> Option<T> {
     let mut acc = Shared::None;
     let mut any = false;
     visit_paragraphs(app, |p| {
@@ -328,18 +343,8 @@ fn selected_paragraph_direction(app: &VectorcraftApp, fallback: &ParaStyle) -> O
     {
         return if collect_text_direction(text, Some((a, b)), &mut shared) { shared.or(default) } else { None };
     }
-    fn collect(node: &vectorcraft_doc::Node, shared: &mut Option<bool>) -> bool {
-        if let NodeKind::Text(text) = &node.kind {
-            return collect_text_direction(text, None, shared);
-        }
-        node.children().is_none_or(|children| children.iter().all(|child| collect(child, shared)))
-    }
-    for node in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
-        if !collect(node, &mut shared) {
-            return None;
-        }
-    }
-    shared.or(default)
+    let texts = super::character::selected_story_texts(app);
+    if texts.into_iter().all(|t| collect_text_direction(t, None, &mut shared)) { shared.or(default) } else { None }
 }
 
 /// A hyphenation option shared by every paragraph in scope, or `None` when they differ.
@@ -365,18 +370,8 @@ fn selected_alignment(app: &VectorcraftApp, fallback: &ParaStyle) -> Option<Just
     {
         return if collect_text_alignment(text, Some((a, b)), &mut shared) { shared.or(default) } else { None };
     }
-    fn collect(node: &vectorcraft_doc::Node, shared: &mut Option<Justify>) -> bool {
-        if let NodeKind::Text(text) = &node.kind {
-            return collect_text_alignment(text, None, shared);
-        }
-        node.children().is_none_or(|children| children.iter().all(|child| collect(child, shared)))
-    }
-    for node in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
-        if !collect(node, &mut shared) {
-            return None;
-        }
-    }
-    shared.or(default)
+    let texts = super::character::selected_story_texts(app);
+    if texts.into_iter().all(|t| collect_text_alignment(t, None, &mut shared)) { shared.or(default) } else { None }
 }
 
 /// The seven alignment buttons shared by Paragraph and Properties; no button is selected
@@ -418,7 +413,7 @@ fn control_bar_link_text(ui: &Ui) -> egui::RichText {
 /// Character controls: the Paragraph link, which opens the Paragraph panel in a popover under it,
 /// and the Align left, Align center and Align right buttons, `size` points square as the bar's others. `reserve` gives the room the controls
 /// after them keep, asked only when type is selected: short of room, the buttons are left out,
-/// then the link too. Returns whether the link shows.
+/// then the link too, each noted with [`crate::chrome::left_out`]. Returns whether the link shows.
 pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, size: f32, reserve: impl FnOnce(&Ui) -> f32) -> bool {
     let Some((_, para)) = text_style(app) else { return false };
     let text = control_bar_link_text(ui);
@@ -426,6 +421,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, size: f32, rese
     let room = ui.available_width() - reserve(ui);
     let link_room = link_width + ui.spacing().item_spacing.x;
     if room < link_room {
+        crate::chrome::left_out(ui);
         return false;
     }
     let link = ui.link(text).on_hover_text(tl!("Paragraph options"));
@@ -438,6 +434,8 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, size: f32, rese
         ui.spacing_mut().item_spacing.x = CONTROL_BAR_BUTTON_SPACING;
         first_alignment_buttons(app, ui, &para, size, CONTROL_BAR_ALIGNMENTS);
         ui.spacing_mut().item_spacing.x = spacing;
+    } else {
+        crate::chrome::left_out(ui);
     }
     true
 }
@@ -487,9 +485,10 @@ pub(crate) fn number_sample(style: vectorcraft_doc::text::NumberStyle, n: u32) -
 }
 
 /// Type › Bullets and Numbering › Convert to Text (`type.convertListToText`): the markers of the
-/// list paragraphs of the selected type, or of those the Type tool's selection touches, become
-/// characters of the text and the lists are turned off (`text.convertListToText`, which also moves
-/// the Type tool's anchor and caret past the characters inserted at or before them).
+/// list paragraphs the Paragraph panel acts on ([`run_on_paragraphs`]: with the Selection tool,
+/// every frame of the selected stories) become characters of the text and the lists are turned
+/// off (`text.convertListToText`, which also moves the Type tool's anchor and caret past the
+/// characters inserted at or before them).
 pub(crate) fn convert_list_to_text(app: &mut VectorcraftApp) -> Result<Value, String> {
     text_style(app).ok_or("select some type first")?;
     run_on_paragraphs(app, "text.convertListToText", json!({}))
@@ -783,15 +782,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.prefs.show_east_asian_options {
         ui.horizontal(|ui| {
             widgets::dim_label(ui, tl!("Mojikumi Set"));
-            let sets = [tl!("None"), tl!("Line-end Punctuation Half Width")];
-            let current = match shared_para(app, |p| p.mojikumi) {
-                Some(Mojikumi::LineEndHalf) => sets[1],
-                Some(Mojikumi::None) => sets[0],
-                None => "",
-            };
+            let sets = mojikumi_sets();
+            let names = sets.map(|s| s.0);
+            let current = shared_para(app, |p| p.mojikumi).and_then(|m| sets.iter().find(|s| s.1 == m).map(|s| s.0)).unwrap_or("");
             // Already translated: shown as they are.
-            if let Some(i) = widgets::dropdown_names(ui, "pa-mojikumi", current, &sets, ui.available_width() - 4.0) {
-                format(app, json!({"mojikumi": if i == 1 { "lineEndHalf" } else { "none" }}));
+            if let Some(i) = widgets::dropdown_names(ui, "pa-mojikumi", current, &names, ui.available_width() - 4.0)
+                && let Some((_, _, key)) = sets.get(i)
+            {
+                format(app, json!({"mojikumi": key}));
             }
         });
         // Which characters may not start or end a line.
@@ -861,6 +859,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             });
         });
+        // A repeat mark starting a line is drawn as the character it repeats.
+        let repeat = shared_para(app, |p| p.kurikaeshi_moji_shori) == Some(true);
+        if menu_item(ui, tl!("Kurikaeshi Moji Shori"), has, repeat) {
+            toggle_kurikaeshi_moji_shori(app);
+        }
         // How a line keeps the kinsoku characters off its ends: the selected paragraphs' type is
         // checked, and none is when they differ.
         let kinsoku_type = shared_para(app, |p| p.kinsoku_type);
@@ -877,14 +880,27 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             });
         });
+        // Inseparable pairs stay on one line; only with a kinsoku set.
+        let (kinsoku_on, bunri) = bunri_kinshi_item(app);
+        if menu_item(ui, tl!("Bunri-Kinshi"), has && kinsoku_on, bunri) {
+            toggle_bunri_kinshi(app);
+        }
+        // Korean lines break between any two syllables, not only between words.
+        let anywhere = shared_para(app, |p| p.korean_line_break_anywhere) == Some(true);
+        if menu_item(ui, tl!("Korean Line Break Anywhere"), has, anywhere) {
+            toggle_korean_line_break_anywhere(app);
+        }
     }
     ui.separator();
     let composer = shared_composer(app);
-    for (c, label, id) in
-        [(Composer::SingleLine, tl!("Single-line Composer"), "singleLine"), (Composer::EveryLine, tl!("Every-line Composer"), "everyLine")]
-    {
+    for (c, label) in [
+        (Composer::SingleLine, tl!("Middle Eastern & South Asian Single-line Composer")),
+        (Composer::EveryLine, tl!("Middle Eastern & South Asian Every-line Composer")),
+        (Composer::StandardSingleLine, tl!("Standard Single-line Composer")),
+        (Composer::StandardEveryLine, tl!("Standard Every-line Composer")),
+    ] {
         if menu_item(ui, label, has, composer == Some(c)) {
-            format(app, json!({ "composer": id }));
+            format(app, json!({ "composer": composer_id(c) }));
         }
     }
     ui.separator();
@@ -899,12 +915,55 @@ fn set_kinsoku_type(app: &mut VectorcraftApp, key: &str) {
     format(app, json!({"kinsokuType": key}));
 }
 
+/// The Mojikumi Set menu's entries, translated: each one's label, its set and its `mojikumi` value
+/// for `text.setFormat`. The five predefined sets come first, then Line-end Punctuation Half Width,
+/// the set new type gets.
+fn mojikumi_sets() -> [(&'static str, Mojikumi, &'static str); 6] {
+    [
+        (tl!("None"), Mojikumi::None, "none"),
+        (tl!("YakumonoHankaku"), Mojikumi::YakumonoHankaku, "yakumonoHankaku"),
+        (tl!("GyomatsuYakumonoHankaku"), Mojikumi::GyomatsuYakumonoHankaku, "gyomatsuYakumonoHankaku"),
+        (tl!("GyomatsuYakumonoZenkaku"), Mojikumi::GyomatsuYakumonoZenkaku, "gyomatsuYakumonoZenkaku"),
+        (tl!("YakumonoZenkaku"), Mojikumi::YakumonoZenkaku, "yakumonoZenkaku"),
+        (tl!("Line-end Punctuation Half Width"), Mojikumi::LineEndHalf, "lineEndHalf"),
+    ]
+}
+
+/// Bunri-Kinshi's menu item for the paragraphs the panel acts on ([`format`]): (available, checked).
+/// It is available when none of them has kinsoku None, and checked when every one of them has it.
+fn bunri_kinshi_item(app: &VectorcraftApp) -> (bool, bool) {
+    (shared_para(app, |p| p.kinsoku == Kinsoku::None) == Some(false), shared_para(app, |p| p.bunri_kinshi) == Some(true))
+}
+
+/// Bunri-Kinshi (Paragraph panel menu): a click turns it off for all the paragraphs the panel acts
+/// on ([`format`]) when every one of them has it, and on for all of them otherwise, in one undo step.
+fn toggle_bunri_kinshi(app: &mut VectorcraftApp) {
+    let on = shared_para(app, |p| p.bunri_kinshi) == Some(true);
+    format(app, json!({"bunriKinshi": !on}));
+}
+
+/// Kurikaeshi Moji Shori (Paragraph panel menu): the menu item is checked when every paragraph the
+/// panel acts on ([`format`]) has it, and a click turns it off for all of them then, and on for all
+/// of them otherwise, in one undo step.
+fn toggle_kurikaeshi_moji_shori(app: &mut VectorcraftApp) {
+    let on = shared_para(app, |p| p.kurikaeshi_moji_shori) == Some(true);
+    format(app, json!({"kurikaeshiMojiShori": !on}));
+}
+
+/// Korean Line Break Anywhere (Paragraph panel menu): the menu item is checked when every paragraph
+/// the panel acts on ([`format`]) has it, and a click turns it off for all of them then, and on for
+/// all of them otherwise, in one undo step.
+fn toggle_korean_line_break_anywhere(app: &mut VectorcraftApp) {
+    let on = shared_para(app, |p| p.korean_line_break_anywhere) == Some(true);
+    format(app, json!({"koreanLineBreakAnywhere": !on}));
+}
+
 /// Reset Panel: the paragraphs the panel acts on ([`format`]) take Auto alignment, no list, no
 /// indents or paragraph spacing, Hyphenate off with the default Hyphenation and Justification
 /// options, Auto direction, Bottom-to-Bottom Leading, the Line-end Punctuation Half Width Mojikumi
-/// Set, Regular burasagari, the Hard kinsoku set, Push Out Only, the Every-line Composer, Roman
-/// Hanging Punctuation off, no kashidas and no tab stops, as one undo step named Reset Panel (inside
-/// an undo group that is already open, as part of its step).
+/// Set, Regular burasagari, the Hard kinsoku set, Push Out Only, the Every-line Composer, Bunri-Kinshi,
+/// Kurikaeshi Moji Shori, Roman Hanging Punctuation and Korean Line Break Anywhere off, no kashidas and no tab stops, as one undo
+/// step named Reset Panel (inside an undo group that is already open, as part of its step).
 fn reset_panel(app: &mut VectorcraftApp) {
     let h = HyphenationOptions::default();
     let j = vectorcraft_doc::JustificationOptions::default();
@@ -924,7 +983,8 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "wordSpacing": j.word_spacing, "letterSpacing": j.letter_spacing, "glyphScaling": j.glyph_scaling,
             "autoLeading": j.auto_leading, "singleWordJustification": "fullJustify",
             "direction": "auto", "leadingModel": "romanBaseline", "mojikumi": "lineEndHalf", "burasagari": "standard", "kinsoku": "hard",
-            "kinsokuType": "pushOutOnly", "composer": "everyLine", "romanHangingPunctuation": false
+            "kinsokuType": "pushOutOnly", "composer": "everyLine", "romanHangingPunctuation": false, "koreanLineBreakAnywhere": false,
+            "bunriKinshi": false, "kurikaeshiMojiShori": false
         }),
     );
     para_cmd(app, "text.tabs.clear", json!({}));

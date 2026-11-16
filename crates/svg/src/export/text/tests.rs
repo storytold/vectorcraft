@@ -90,6 +90,17 @@ fn japanese_type_with_mojikumi_is_laid_out_again() {
     assert_eq!(layouts_again(&none, true), 0);
 }
 
+/// A middle dot is a character the Mojikumi sets space: type holding only middle dots is laid out
+/// again with each set that spaces them.
+#[test]
+fn middle_dots_with_mojikumi_are_laid_out_again() {
+    for set in [Mojikumi::YakumonoHankaku, Mojikumi::GyomatsuYakumonoHankaku] {
+        let mut t = point("・・");
+        t.para.mojikumi = set;
+        assert_eq!(layouts_again(&t, true), 1, "{set:?}");
+    }
+}
+
 #[test]
 fn a_japanese_run_or_paragraph_lays_the_whole_object_out_again() {
     let mut runs = point("Latin ");

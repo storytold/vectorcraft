@@ -44,7 +44,7 @@ impl Measure {
 }
 
 /// The unit a Units preference value names (points when it names none).
-fn pref_unit(value: &str) -> Unit {
+pub(crate) fn pref_unit(value: &str) -> Unit {
     Unit::named(value).unwrap_or_default()
 }
 

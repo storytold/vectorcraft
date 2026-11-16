@@ -112,11 +112,16 @@ fn confirm_stopped(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String
     Ok(Value::Null)
 }
 
-/// Help › Safe Mode: the disabled plug-ins, none ticked for Enable on Re-launch.
+/// Help › Safe Mode: the disabled plug-ins, none ticked for Enable on Re-launch. A plug-in disabled
+/// by its id and found under several files has an entry for each file; it is listed once, and
+/// Enable on Re-launch turns on every entry with its id.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let items: Vec<Value> = safe_mode::disabled()
+    let disabled = safe_mode::disabled();
+    let items: Vec<Value> = disabled
         .iter()
-        .map(|i| {
+        .enumerate()
+        .filter(|(k, i)| i.id.is_none() || !disabled[..*k].iter().any(|e| e.id == i.id))
+        .map(|(_, i)| {
             let mut v = i.to_json();
             v["enable"] = json!(false);
             v

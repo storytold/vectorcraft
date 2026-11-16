@@ -24,6 +24,8 @@ mod state;
 mod strips;
 
 pub(crate) use paint::collapse;
+#[cfg(test)]
+pub(crate) use paint::tilings_compared;
 pub(crate) use state::{GState, Out, Space, process};
 pub(crate) use strips::merge_strips;
 

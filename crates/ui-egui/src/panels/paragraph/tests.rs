@@ -82,6 +82,83 @@ fn paragraph_mixed_composer_checks_neither_menu_item() {
     assert_eq!(shared_composer(&app), Some(Composer::EveryLine));
 }
 
+/// Cmd+Alt+Shift+C switches between Single-line and Every-line and keeps what each paragraph's
+/// composer does with complex scripts: a Standard composer toggles to the other Standard one.
+#[test]
+fn toggling_the_line_composer_keeps_the_shaping() {
+    let (mut app, id) = editing_text("A\nB\n");
+    for (from, first, second) in [
+        ("standardEveryLine", "standardSingleLine", "standardEveryLine"),
+        ("everyLine", "singleLine", "everyLine"),
+        ("standardSingleLine", "standardEveryLine", "standardSingleLine"),
+    ] {
+        app.run("text.setFormat", json!({"id": id, "composer": from})).unwrap();
+        app.session.set_tool_option("selectAll", &json!(true));
+        assert_eq!(toggle_composer(&mut app).unwrap(), json!(first), "{from}");
+        assert_eq!(toggle_composer(&mut app).unwrap(), json!(second), "{from} again");
+    }
+    // Paragraphs that break differently take Every-line, as before the Standard composers existed.
+    app.run("text.setFormat", json!({"id": id, "composer": "standardSingleLine"})).unwrap();
+    app.run("text.setFormat", json!({"id": id, "start": 2, "end": 3, "composer": "singleLine"})).unwrap();
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(toggle_composer(&mut app).unwrap(), json!("everyLine"));
+    // Paragraphs that both break every-line but differ in shaping: Single-line, Middle Eastern & South Asian.
+    app.run("text.setFormat", json!({"id": id, "composer": "everyLine"})).unwrap();
+    app.run("text.setFormat", json!({"id": id, "start": 2, "end": 3, "composer": "standardEveryLine"})).unwrap();
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(toggle_composer(&mut app).unwrap(), json!("singleLine"));
+}
+
+/// The Paragraph panel menu lists the four composers, and ticks the one every selected paragraph has.
+#[test]
+fn the_paragraph_menu_sets_each_of_the_four_composers() {
+    let (mut app, id) = editing_text("A\nB\n");
+    app.session.set_tool_option("selectAll", &json!(true));
+    let ctx = egui::Context::default();
+    let items = |app: &mut VectorcraftApp| {
+        let mut seen = vec![];
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| menu(app, ui));
+        out.textures_delta.clear();
+        for shape in out.shapes {
+            collect_texts(&shape.shape, &mut seen);
+        }
+        seen
+    };
+    fn collect_texts(shape: &egui::Shape, out: &mut Vec<String>) {
+        match shape {
+            egui::Shape::Vec(v) => v.iter().for_each(|s| collect_texts(s, out)),
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            _ => {}
+        }
+    }
+    let labels = [
+        ("singleLine", "Middle Eastern & South Asian Single-line Composer"),
+        ("everyLine", "Middle Eastern & South Asian Every-line Composer"),
+        ("standardSingleLine", "Standard Single-line Composer"),
+        ("standardEveryLine", "Standard Every-line Composer"),
+    ];
+    // The menu lists all four, each row ticked (and only that one) when every selected paragraph has it.
+    for (value, _) in labels {
+        app.run("text.setFormat", json!({"id": id, "composer": value})).unwrap();
+        app.session.set_tool_option("selectAll", &json!(true));
+        let texts = items(&mut app);
+        for (v, label) in labels {
+            let row = if v == value { format!("✓ {label}") } else { format!("   {label}") };
+            assert!(texts.contains(&row), "{value}: {row:?} in {texts:?}");
+        }
+    }
+    // Choosing a row sets its composer: the row is a `text.setFormat {composer}` with the row's id.
+    for (value, want) in [
+        ("standardEveryLine", Composer::StandardEveryLine),
+        ("singleLine", Composer::SingleLine),
+        ("standardSingleLine", Composer::StandardSingleLine),
+    ] {
+        app.run("text.setFormat", json!({"id": id, "composer": value})).unwrap();
+        assert_eq!(shared_composer(&app), Some(want), "{value}");
+        assert_eq!(composer_id(want), value);
+    }
+}
+
 #[test]
 fn paragraph_mixed_hyphenate_checks_off() {
     let (mut app, id) = editing_text("A\nB\n");
@@ -105,6 +182,45 @@ fn paragraph_mixed_kinsoku_and_mojikumi_show_blank_dropdowns() {
     app.run("text.setFormat", json!({"id": id, "kinsoku": "hard", "mojikumi": "lineEndHalf"})).unwrap();
     assert_eq!(shared_para(&app, |p| p.kinsoku), Some(Kinsoku::Hard));
     assert_eq!(shared_para(&app, |p| p.mojikumi), Some(Mojikumi::LineEndHalf));
+}
+
+/// The Mojikumi Set menu lists None, the four other predefined sets and Line-end Punctuation Half
+/// Width, each under its own label in every interface language. Each entry sets the selected
+/// paragraphs' set in one undo step and is shown as the current set; paragraphs with different
+/// sets show a blank menu, and Reset Panel gives them Line-end Punctuation Half Width.
+#[test]
+fn mojikumi_menu_offers_and_sets_every_predefined_set() {
+    let keys: Vec<&str> = mojikumi_sets().iter().map(|s| s.2).collect();
+    assert_eq!(keys, ["none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku", "lineEndHalf"]);
+    for lang in crate::i18n::Lang::all() {
+        crate::i18n::set_current(lang);
+        let labels: std::collections::BTreeSet<&str> = mojikumi_sets().iter().map(|s| s.0).collect();
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(labels.len(), 6, "{}: {labels:?}", lang.code());
+    }
+    let (mut app, id) = editing_text("「あ」。\nい、");
+    app.session.prefs.show_east_asian_options = true;
+    app.session.set_tool_option("selectAll", &json!(true));
+    let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    for (_, set, key) in mojikumi_sets() {
+        app.session.set_tool_option("selectAll", &json!(true));
+        let before = (shared_para(&app, |p| p.mojikumi), steps(&app));
+        format(&mut app, json!({"mojikumi": key}));
+        assert_eq!(shared_para(&app, |p| p.mojikumi), Some(set), "{key}");
+        if before.0 == Some(set) {
+            continue;
+        }
+        assert_eq!(steps(&app), before.1 + 1, "{key}: one undo step");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(shared_para(&app, |p| p.mojikumi), before.0, "{key}: undone");
+        app.run("edit.redo", json!({})).unwrap();
+    }
+    app.run("text.setFormat", json!({"id": id, "start": 0, "end": 0, "mojikumi": "yakumonoHankaku"})).unwrap();
+    app.run("text.setFormat", json!({"id": id, "start": 13, "end": 13, "mojikumi": "gyomatsuYakumonoZenkaku"})).unwrap();
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(shared_para(&app, |p| p.mojikumi), None, "mixed sets");
+    reset_panel(&mut app);
+    assert_eq!(shared_para(&app, |p| p.mojikumi), Some(Mojikumi::LineEndHalf), "Reset Panel");
 }
 
 /// Kinsoku Shori Type: the menu's item sets the type of the paragraphs the Type tool's selection
@@ -131,6 +247,112 @@ fn kinsoku_shori_type_sets_the_selected_paragraphs_in_one_undo_step() {
     app.run("edit.undo", json!({})).unwrap();
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(types(&app), (KinsokuShoriType::PushOutOnly, KinsokuShoriType::PushOutOnly));
+}
+
+/// Korean Line Break Anywhere: new type has it off; the menu item turns it on for the paragraphs
+/// the Type tool's selection touches in one undo step, is unchecked while the selected paragraphs
+/// differ, turns it on for all of them then and off again once they all have it. Reset Panel turns
+/// it off.
+#[test]
+fn korean_line_break_anywhere_toggles_the_selected_paragraphs_in_one_undo_step() {
+    let (mut app, id) = editing_text("가나\n다라\n");
+    app.session.prefs.show_east_asian_options = true;
+    let flags = |app: &VectorcraftApp| {
+        let node = app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap();
+        let NodeKind::Text(text) = &node.kind else { panic!("text") };
+        (text.para_at(0).korean_line_break_anywhere, text.para_at(1).korean_line_break_anywhere)
+    };
+    assert_eq!(flags(&app), (false, false), "new type has it off");
+    select_range(&mut app, 0, 3);
+    let history = app.session.active().unwrap().history.undo.len();
+    toggle_korean_line_break_anywhere(&mut app);
+    assert_eq!(flags(&app), (true, false));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(shared_para(&app, |p| p.korean_line_break_anywhere), None, "mixed: unchecked");
+    toggle_korean_line_break_anywhere(&mut app);
+    assert_eq!(flags(&app), (true, true));
+    app.session.set_tool_option("selectAll", &json!(true));
+    toggle_korean_line_break_anywhere(&mut app);
+    assert_eq!(flags(&app), (false, false));
+    app.session.set_tool_option("selectAll", &json!(true));
+    toggle_korean_line_break_anywhere(&mut app);
+    app.session.set_tool_option("selectAll", &json!(true));
+    reset_panel(&mut app);
+    assert_eq!(flags(&app), (false, false), "Reset Panel turns it off");
+}
+
+/// Bunri-Kinshi: new type has it off; the menu item turns it on for the paragraphs the Type tool's
+/// selection touches in one undo step, is unchecked while the selected paragraphs differ, and is
+/// unavailable while any of them has kinsoku None, which keeps the setting. Reset Panel turns it off.
+#[test]
+fn bunri_kinshi_toggle_follows_kinsoku_and_the_selected_paragraphs() {
+    let (mut app, id) = editing_text("あ——い\nう……え\n");
+    app.session.prefs.show_east_asian_options = true;
+    let flags = |app: &VectorcraftApp| {
+        let node = app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap();
+        let NodeKind::Text(text) = &node.kind else { panic!("text") };
+        (text.para_at(0).bunri_kinshi, text.para_at(1).bunri_kinshi)
+    };
+    assert_eq!(flags(&app), (false, false), "new type has it off");
+    select_range(&mut app, 0, 3);
+    assert_eq!(bunri_kinshi_item(&app), (true, false));
+    let history = app.session.active().unwrap().history.undo.len();
+    toggle_bunri_kinshi(&mut app);
+    assert_eq!(flags(&app), (true, false));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
+    assert_eq!(bunri_kinshi_item(&app), (true, true));
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(bunri_kinshi_item(&app), (true, false), "mixed: unchecked");
+    toggle_bunri_kinshi(&mut app);
+    assert_eq!(flags(&app), (true, true));
+    // Kinsoku None on one paragraph: the item is unavailable and the setting stays.
+    let second = "あ——い\n".len();
+    app.run("text.setFormat", json!({"id": id, "start": second, "end": second, "kinsoku": "none"})).unwrap();
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(bunri_kinshi_item(&app), (false, true));
+    assert_eq!(flags(&app), (true, true));
+    app.run("text.setFormat", json!({"id": id, "kinsoku": "soft"})).unwrap();
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(bunri_kinshi_item(&app), (true, true));
+    toggle_bunri_kinshi(&mut app);
+    assert_eq!(flags(&app), (false, false));
+    app.session.set_tool_option("selectAll", &json!(true));
+    toggle_bunri_kinshi(&mut app);
+    app.session.set_tool_option("selectAll", &json!(true));
+    reset_panel(&mut app);
+    assert_eq!(flags(&app), (false, false), "Reset Panel turns it off");
+}
+
+/// Kurikaeshi Moji Shori: new type has it off; the menu item turns it on for the paragraphs the Type
+/// tool's selection touches in one undo step, a click while the selected paragraphs differ turns it
+/// on for all of them, and a click while all have it turns it off. Reset Panel turns it off.
+#[test]
+fn kurikaeshi_moji_shori_toggle_follows_the_selected_paragraphs() {
+    let (mut app, id) = editing_text("時々\nすゝ\n");
+    app.session.prefs.show_east_asian_options = true;
+    let flags = |app: &VectorcraftApp| {
+        let node = app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap();
+        let NodeKind::Text(text) = &node.kind else { panic!("text") };
+        (text.para_at(0).kurikaeshi_moji_shori, text.para_at(1).kurikaeshi_moji_shori)
+    };
+    assert_eq!(flags(&app), (false, false), "new type has it off");
+    select_range(&mut app, 0, 3);
+    let history = app.session.active().unwrap().history.undo.len();
+    toggle_kurikaeshi_moji_shori(&mut app);
+    assert_eq!(flags(&app), (true, false));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
+    app.session.set_tool_option("selectAll", &json!(true));
+    toggle_kurikaeshi_moji_shori(&mut app);
+    assert_eq!(flags(&app), (true, true), "mixed: a click turns it on for all");
+    app.session.set_tool_option("selectAll", &json!(true));
+    toggle_kurikaeshi_moji_shori(&mut app);
+    assert_eq!(flags(&app), (false, false), "all on: a click turns it off");
+    app.session.set_tool_option("selectAll", &json!(true));
+    toggle_kurikaeshi_moji_shori(&mut app);
+    app.session.set_tool_option("selectAll", &json!(true));
+    reset_panel(&mut app);
+    assert_eq!(flags(&app), (false, false), "Reset Panel turns it off");
 }
 
 #[test]
@@ -564,6 +786,50 @@ fn convert_to_text_keeps_the_caret_by_its_character_in_threaded_type() {
     assert_eq!(super::super::character::text_editing(&app).map(|(id, _, _)| id), Some(NodeId(a)));
 }
 
+/// With the Selection tool, Convert to Text takes the same story as Apply Numbers: the numbers
+/// of every frame of the selected story, its locked and hidden frames included, become characters
+/// of the text in one undo step, and other type keeps its list.
+#[test]
+fn selection_tool_convert_to_text_takes_every_frame_of_the_story() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+    let story = "The quick brown fox jumps over the lazy dog.\n".repeat(12);
+    let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+    let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+    let c = app.run("text.thread.add", json!({"from": b, "rect": [400, 10, 150, 200]})).unwrap()["id"].as_u64().unwrap();
+    let other = app.run("text.create", json!({"x": 10, "y": 250, "text": "Other", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    app.run("text.setFormat", json!({"ids": [other], "list": "bullet"})).unwrap();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("object.lock", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    app.run("object.hide", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    let frame = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (t.plain_text(), (0..t.paragraph_count()).map(|i| t.para_at(i).list.is_some()).collect::<Vec<_>>()),
+        _ => panic!("not text"),
+    };
+    let undo_steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    app.run("type.applyNumbers", json!({})).unwrap();
+    for id in [a, b, c] {
+        let (_, lists) = frame(&app, id);
+        assert!(!lists.is_empty() && lists.iter().all(|l| *l), "Apply Numbers numbers frame {id}");
+    }
+    let before = frame(&app, c);
+
+    let steps = undo_steps(&app);
+    app.run("type.convertListToText", json!({})).unwrap();
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+    for id in [a, b, c] {
+        let (plain, lists) = frame(&app, id);
+        assert!(lists.iter().all(|l| !*l), "frame {id} leaves the list");
+        assert!(plain.contains(".\tThe quick"), "frame {id} holds its numbers as text: {plain:?}");
+    }
+    assert_eq!(frame(&app, other), ("Other".to_string(), vec![true]), "other type keeps its list");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(frame(&app, c), before, "undo restores the hidden frame");
+}
+
 /// Reset Panel turns Hyphenate and Roman Hanging Punctuation off and sets the Hyphenation and
 /// Justification options back to their defaults in every paragraph it acts on, so the paragraphs
 /// save neither.
@@ -634,9 +900,12 @@ fn control_bar_nodes(ctx: &egui::Context, app: &mut VectorcraftApp, width: f32, 
     nodes
 }
 
-/// The control named `name` (a button's or link's label, a label's text).
+/// The control named `name`: a button's or link's label, else a label's text. A link's text run
+/// carries the same text as its value, and the update lists the nodes in no set order, so the
+/// label is looked for first.
 fn control_bar_node(nodes: &Nodes, name: &str) -> Option<egui::accesskit::Node> {
-    nodes.iter().find(|(_, n)| n.label() == Some(name) || n.value() == Some(name)).map(|(_, n)| n.clone())
+    let labeled = nodes.iter().find(|(_, n)| n.label() == Some(name));
+    labeled.or_else(|| nodes.iter().find(|(_, n)| n.value() == Some(name))).map(|(_, n)| n.clone())
 }
 
 /// Where the control named `name` ends, if it shows.
@@ -698,11 +967,43 @@ fn the_control_bar_shows_the_paragraph_alignment_of_the_selected_type() {
     assert!(control_bar_node(&nodes, "Justify all lines").is_none(), "a second click closes it");
 }
 
+/// The Control bar's Character and Paragraph groups hold the type controls; each off leaves the
+/// other, and with Paragraph off the Align buttons fit a narrower window.
+#[test]
+fn the_character_and_paragraph_groups_hold_the_type_controls() {
+    let ctx = control_bar_ctx();
+    let mut app = control_bar_app(&[json!({"x": 20, "y": 50, "text": "Point"})]);
+    let set = |app: &mut VectorcraftApp, group: &str, visible: bool| {
+        app.run("window.control.options", json!({ "group": group, "visible": visible })).unwrap();
+    };
+    // The narrowest window, in steps of 10 points, whose bar shows the Align buttons.
+    let narrowest = |app: &mut VectorcraftApp| {
+        (40..=240).map(|w| w as f32 * 10.0).find(|&w| control_bar_node(&control_bar_nodes(&ctx, app, w, vec![]), "Horizontal Align Left").is_some())
+    };
+    let nodes = control_bar_nodes(&ctx, &mut app, 1920.0, vec![]);
+    for name in ["Character:", "Paragraph:", "Align left"] {
+        assert!(control_bar_node(&nodes, name).is_some(), "{name} shows");
+    }
+    let all = narrowest(&mut app).expect("the Align buttons show in a wide window");
+    set(&mut app, "paragraph", false);
+    let nodes = control_bar_nodes(&ctx, &mut app, 1920.0, vec![]);
+    assert!(control_bar_node(&nodes, "Paragraph:").is_none() && control_bar_node(&nodes, "Align left").is_none(), "Paragraph is off");
+    assert!(control_bar_node(&nodes, "Character:").is_some(), "Character stays");
+    let fewer = narrowest(&mut app).expect("the Align buttons show without Paragraph");
+    assert!(fewer < all, "the Align buttons fit {fewer} wide without Paragraph, {all} with it");
+    set(&mut app, "paragraph", true);
+    set(&mut app, "character", false);
+    let nodes = control_bar_nodes(&ctx, &mut app, 1920.0, vec![]);
+    assert!(control_bar_node(&nodes, "Character:").is_none(), "Character is off");
+    assert!(control_bar_node(&nodes, "Paragraph:").is_some(), "Paragraph stays");
+}
+
 /// #5372: at any width the Control bar trims itself from its right end, ending inside its margin.
-/// With type selected the inline X/Y/W/H fields go first, then the Distribute and Align buttons,
-/// area type's vertical alignment, the Paragraph buttons and last the Paragraph: link, while the
-/// Transform link keeps its room; a wider bar never leaves out what a narrower one showed. For one point
-/// type object, area type (its vertical alignment) and two objects (the Distribute buttons).
+/// With type selected the inline X/Y/W/H fields go first, then the Distribute buttons, the Align To
+/// menu and the Align buttons, area type's vertical alignment, the Paragraph buttons and last the
+/// Paragraph: link, while the Transform link keeps its room; a wider bar never leaves out what a
+/// narrower one showed. For one point type object, area type (its vertical alignment) and two
+/// objects (the Distribute buttons).
 #[test]
 fn the_control_bar_trims_its_paragraph_section_after_the_controls_to_its_right() {
     let ctx = control_bar_ctx();
@@ -717,12 +1018,13 @@ fn the_control_bar_trims_its_paragraph_section_after_the_controls_to_its_right()
             groups.push(("vertical alignment", VERTICAL.to_vec()));
         }
         groups.push(("Align", vec!["Horizontal Align Left", "Vertical Align Bottom"]));
+        groups.push(("Align To", vec!["Align To:"]));
         if case == "two objects" {
             groups.push(("Distribute", vec!["Vertical Distribute Top", "Horizontal Distribute Right"]));
         }
         groups.push(("X/Y/W/H", vec!["X:", "H:"]));
         let mut seen = vec![false; groups.len()];
-        for width in (600..=2400).step_by(10) {
+        for width in (600..=2600).step_by(10) {
             let nodes = control_bar_nodes(&ctx, &mut app, width as f32, vec![]);
             let inside = |x: f64| x <= f64::from(width) - 10.0;
             let shown: Vec<bool> = groups
@@ -869,7 +1171,9 @@ fn reset_panel_leaves_an_undo_group_open_in_another_document() {
     // The second document is open before the group begins, so switching to it opens no group in it.
     app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
     assert_eq!(app.session.active_index(), Some(1));
-    app.run("text.create", json!({"x": 20, "y": 50, "text": "B"})).unwrap();
+    let b = app.run("text.create", json!({"x": 20, "y": 50, "text": "B"})).unwrap()["id"].clone();
+    // A reset that changes nothing records no step, so B starts away from the panel's defaults.
+    app.run("text.setFormat", json!({"id": b, "mojikumi": "none"})).unwrap();
     app.session.set_active(0);
     app.run("edit.undoGroup.begin", json!({"label": "Batch"})).unwrap();
     app.run("text.setFormat", json!({"id": a, "mojikumi": "none"})).unwrap();
@@ -887,4 +1191,59 @@ fn reset_panel_leaves_an_undo_group_open_in_another_document() {
     app.run("text.setFormat", json!({"id": a, "mojikumi": "lineEndHalf"})).unwrap();
     app.run("edit.undoGroup.end", json!({})).unwrap();
     assert_eq!(steps(app.session.active().unwrap()), a_steps, "the later edit is part of the Batch step");
+}
+
+/// With the Selection tool a selected frame of a threaded story stands for the whole story: the
+/// Paragraph panel's changes and Reset Panel reach its locked and hidden frames, each in one undo
+/// step, other type keeps its paragraphs, and the alignment buttons read every frame.
+#[test]
+fn selection_tool_paragraph_changes_reach_every_frame_of_the_story() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+    let story = "The quick brown fox jumps over the lazy dog.\n".repeat(12);
+    let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+    let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+    let c = app.run("text.thread.add", json!({"from": b, "rect": [400, 10, 150, 200]})).unwrap()["id"].as_u64().unwrap();
+    let other = app.run("text.create", json!({"x": 10, "y": 250, "text": "Other", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("object.lock", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    app.run("object.hide", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    let paragraphs = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (0..t.paragraph_count()).map(|i| t.para_at(i).clone()).collect::<Vec<_>>(),
+        _ => panic!("not text"),
+    };
+    let undo_steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    for id in [a, b, c] {
+        assert!(!paragraphs(&app, id).is_empty(), "frame {id} holds text");
+    }
+
+    let steps = undo_steps(&app);
+    format(&mut app, json!({"spaceBefore": 4}));
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+    for id in [a, b, c] {
+        assert!(paragraphs(&app, id).iter().all(|p| (p.space_before - 4.0).abs() < 1e-9), "frame {id} takes the space");
+    }
+    assert!(paragraphs(&app, other).iter().all(|p| p.space_before.abs() < 1e-9), "other type keeps its paragraphs");
+    assert_eq!(shared_para_field(&app, |p| p.space_before), Some(4.0));
+
+    align(&mut app, "center").unwrap();
+    for id in [a, b, c] {
+        assert!(paragraphs(&app, id).iter().all(|p| p.justify == Justify::Center), "frame {id} is centered");
+    }
+    assert!(paragraphs(&app, other).iter().all(|p| p.justify != Justify::Center));
+    assert_eq!(selected_alignment(&app, &ParaStyle::default()), Some(Justify::Center));
+    // A hidden frame aligned otherwise leaves no alignment button on.
+    app.run("text.setStyle", json!({"ids": [c], "justify": "right"})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(selected_alignment(&app, &ParaStyle::default()), None);
+
+    let steps = undo_steps(&app);
+    reset_panel(&mut app);
+    assert_eq!(undo_steps(&app), steps + 1, "Reset Panel is one undo step");
+    for id in [a, b, c] {
+        assert!(paragraphs(&app, id).iter().all(|p| p.space_before.abs() < 1e-9 && p.justify == Justify::Auto), "frame {id} is reset");
+    }
 }

@@ -60,6 +60,18 @@ fn harmony_refuses_steps_or_amount_that_is_not_a_number() {
     assert_eq!(r["grid"][0].as_array().unwrap().len(), 9, "a null is read as a key left out");
 }
 
+/// The Color Guide refuses a `rule` or `variation` that is not a string; a `variation` such as 5
+/// would otherwise be dropped and the default variation used.
+#[test]
+fn harmony_refuses_rule_or_variation_that_is_not_a_string() {
+    let mut s = Session::new();
+    for p in [json!({"color": "#ff0000", "rule": 5}), json!({"color": "#ff0000", "rule": "triad", "variation": 5})] {
+        let e = s.execute("color.harmony", &p).unwrap_err().to_string();
+        assert!(e.contains("must be a string"), "{p}: {e}");
+    }
+    s.execute("color.harmony", &json!({"color": "#ff0000", "rule": "triad", "variation": null})).unwrap();
+}
+
 #[test]
 fn new_swatch_saves_several_colours_in_one_step() {
     let mut s = session();

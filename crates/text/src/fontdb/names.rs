@@ -7,7 +7,16 @@ pub(super) struct SysFallback {
     pub(super) misses: std::collections::HashSet<char>,
     /// Counts the scans of the font folders: a search that a scan overtook doesn't record its miss.
     pub(super) scans: u64,
+    /// Characters that went on to read every cataloged font file (and found nothing, or a face).
+    /// Each such search rereads the catalog, so only [`MAX_FILE_SEARCHES`] are made per scan.
+    pub(super) file_searches: u32,
 }
+
+/// The most characters searched for in the font files themselves between two scans of the font
+/// folders. Real text has a few uncovered characters; a document of thousands of distinct
+/// private-use code points would reread the whole catalog for each.
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) const MAX_FILE_SEARCHES: u32 = 1024;
 
 /// Fonts made for Thai, tried first (when installed) for Thai the font in use lacks: Windows
 /// (Leelawadee UI; Tahoma before Windows 8), macOS (Thonburi, Sukhumvit Set) and Linux (Noto,
@@ -44,6 +53,7 @@ pub(super) fn script_families(c: char) -> &'static [&'static str] {
             "Lohit Devanagari",
             "Mangal",
         ],
+        Script::Gujarati => &["Gujarati Sangam MN", "GujaratiMT", "Nirmala UI", "Shruti", "Noto Sans Gujarati", "Noto Sans Gujarati UI"],
         _ => &[],
     }
 }
@@ -153,6 +163,13 @@ mod tests {
         assert_eq!(script_families('ह').first(), Some(&"Nirmala UI"));
         assert!(script_families('ह').contains(&"Noto Sans Devanagari"));
         assert!(script_families('a').is_empty());
+    }
+
+    /// Gujarati takes a font that draws it (macOS Gujarati Sangam MN, Windows Nirmala UI or Shruti).
+    #[test]
+    fn gujarati_prefers_fonts_made_for_it() {
+        assert_eq!(script_families('ગ').first(), Some(&"Gujarati Sangam MN"));
+        assert!(script_families('ગ').contains(&"Nirmala UI"));
     }
 
     #[test]

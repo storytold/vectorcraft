@@ -1,6 +1,6 @@
 //! File (document-level) and Edit commands, plus document queries.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -9,11 +9,11 @@ use vectorcraft_geom::{Affine, Point, Vec2};
 
 use super::clipboard::SwatchChoices;
 use super::{
-    CommandSpec, Result, Session, always, bad, bool_or, can_clear_history, can_redo, can_undo, checked_ids_param, clock_date, cmd, date_param,
-    f64_or, f64_req, finite_numbers, has_clipboard, has_doc, has_selection, has_selection_guides_or_artboard_tool, has_selection_or_guides, id_param,
-    index, ok, point_param, str_param, switch_or,
+    CommandSpec, Result, Session, always, bad, can_clear_history, can_redo, can_undo, check_numbers, checked_ids_param, clock_date, cmd, date_param,
+    f64_req, finite_numbers, has_clipboard, has_doc, has_selection, has_selection_guides_or_artboard_tool, has_selection_or_guides, index, number_or,
+    object_param, ok, point_param, str_param, switch_or, u64_req,
 };
-use crate::{Clipboard, EngineError, inspect};
+use crate::{Clipboard, EngineError, SourceLayer, inspect};
 
 /// Register editing commands, including document-to-document artwork drops and their parameter contracts.
 pub fn specs() -> Vec<CommandSpec> {
@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New…",
             ["File"],
             None,
-            "{preset?: a name from file.newPresets (start from it; the other params change it), name?|title?: document name (default Untitled-N), width?: pt=612|\"210 mm\", height?: pt=792, units?: \"Pixels\"|\"Points\"|\"Picas\"|\"Inches\"|\"Millimeters\"|\"Centimeters\"|\"Feet\"|\"Yards\"|\"Meters\"|\"Feet & Inches\" (default: prefs unitsGeneral, as print presets; screen presets: Pixels), orientation?: \"portrait\"|\"landscape\" (swaps width and height to match), artboards?: n (1–1000), artboardLayout?: {layout?: \"gridByRow\"|\"gridByColumn\"|\"row\"|\"column\", columns?: n (default: all in one row), spacing?: pt=20, rightToLeft?: bool}, bleed?: pt|[top, bottom, left, right]|{top?, …} (0–72 pt), backgroundContents?: \"transparent\"|\"white\" (a white artboard background, not an object), colorMode?: \"rgb\"|\"cmyk\" (a CMYK document starts with CMYK swatches and stores the colours applied to it as CMYK), rasterEffectsPpi?: 72|150|300 (1–2400), previewMode?: \"default\"|\"pixel\"|\"overprint\" (overprint turns Overprint Preview on, pixel Pixel Preview in the app; default leaves both), created?: Unix seconds|null (File Info's created date; default now, recorded in the journal so a replay matches), size?: a preset's size label (a preset file.newPresets lists can be passed back; ignored)} → {index, previewMode}; the size is remembered in file.newPresets' Recent",
+            "{preset?: a name from file.newPresets (start from it; the other params change it), name?|title?: document name (default Untitled-N), width?: pt=612|\"210 mm\", height?: pt=792 (each more than 0 and at most 3,999,856 pt, as artboard.new takes them), units?: \"Pixels\"|\"Points\"|\"Picas\"|\"Inches\"|\"Millimeters\"|\"Centimeters\"|\"Feet\"|\"Yards\"|\"Meters\"|\"Feet & Inches\" (default: prefs unitsGeneral, as print presets; screen presets: Pixels), orientation?: \"portrait\"|\"landscape\" (swaps width and height to match), artboards?: n (1–1000), artboardLayout?: {layout?: \"gridByRow\"|\"gridByColumn\"|\"row\"|\"column\", columns?: n (default: all in one row), spacing?: pt=20, rightToLeft?: bool}, bleed?: pt|[top, bottom, left, right]|{top?, …} (0–72 pt), backgroundContents?: \"transparent\"|\"white\" (a white artboard background, not an object), colorMode?: \"rgb\"|\"cmyk\" (a CMYK document starts with CMYK swatches and stores the colours applied to it as CMYK), rasterEffectsPpi?: 72|150|300 (1–2400), previewMode?: \"default\"|\"pixel\"|\"overprint\" (overprint turns Overprint Preview on, pixel Pixel Preview in the app; default leaves both), alignNewObjectsToPixelGrid?: bool (Advanced Options › Align New Objects to Pixel Grid: paths drawn in the document are pixel-aligned; default on for the Mobile and Web presets, else off; document.setup changes it later), profile?: a category of file.newPresets|null (the New Document profile the document starts from, see file.newProfiles; default: a built-in preset's category, kept by the saved and Recent presets made from it; null or no preset: the defaults), created?: Unix seconds|null (File Info's created date; default now, recorded in the journal so a replay matches), size?: a preset's size label (a preset file.newPresets lists can be passed back; ignored)} → {index, previewMode, profile?: the profile applied, warnings?: [text] (a color profile the profile's file carries that can't be used), profileError?: {profile, reason} (its file could not be read, was larger than 64 MiB or is not a native document, or the request may not read the profiles folder, a reason that leaves out the folder's path: the document has the defaults)}; the size is remembered in file.newPresets' Recent",
             always,
             super::newdoc::file_new
         ),
@@ -38,7 +38,7 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             doc_move
         ),
-        cmd!(query "document.inspect", "Inspect Document", [], None, "{depth?, childLimit?, ids?: [id…] (list just these nodes, of any level, in this order, under `nodes` in place of `layers`; an unknown id is an error; at most 10000), kind?: panel label such as Layer; Group; Path; Type or Image (exact, ignoring case; list every such node under `nodes`, each with `path`, its ancestor ids with the layer first, searching the subtrees of `ids` when given), limit?: at most this many entries of the list, offset?: entries skipped first (default 0; with `ids`, `kind`, `limit` or `offset` the reply adds `total`, the entries before paging)} → layer tree (each node: id, name, kind, visible, locked, bounds, opacity (0–1) and opacityPct (0–100 %, the scale object.setProps takes) when below 1, blend when not Normal, fill, stroke and strokeWidth of objects and compound paths; a compound path's members have compoundMember: true instead of paint, which is the compound's), artboards, selection, history (a sliced tree reports childCount); without the scope options the reply is the whole layer tree", has_doc, doc_inspect),
+        cmd!(query "document.inspect", "Inspect Document", [], None, "{depth?, childLimit?, ids?: [id…] (list just these nodes, of any level, in this order, under `nodes` in place of `layers`; an unknown id is an error; at most 10000), kind?: panel label such as Layer; Group; Path; Type or Image (exact, ignoring case; list every such node under `nodes`, each with `path`, its ancestor ids with the layer first, searching the subtrees of `ids` when given), limit?: at most this many entries of the list, offset?: entries skipped first (default 0; with `ids`, `kind`, `limit` or `offset` the reply adds `total`, the entries before paging)} → path (the document's file; null when automation read roots are in force and the file is outside them), layer tree (each node: id, name, kind, visible, locked, bounds, opacity (0–1) and opacityPct (0–100 %, the scale object.setProps takes) when below 1, blend when not Normal, fill, stroke and strokeWidth of objects and compound paths; a compound path's members have compoundMember: true instead of paint, which is the compound's), artboards, selection, history (a sliced tree reports childCount); without the scope options the reply is the whole layer tree", has_doc, doc_inspect),
         cmd!(query "document.node", "Inspect Object", [], None, "{id, summary?: compact summary, depth?: child levels in the summary (default all), childLimit?: children shown per node (default all; a level that shows fewer reports childCount)} → one object", has_doc, doc_node),
         cmd!(query "document.find", "Find Objects", [], None, "{name?: substring of the Layers panel name, kind?: panel label such as Group; Path; Type or Image (exact), text?: substring of type content, within?: [x, y, width, height] (an object's geometric bounds inside this rectangle, edges included; document points as document.inspect's bounds; layers never match this or the size filters), intersects?: [x, y, width, height] (bounds touching or overlapping it), minWidth?, maxWidth?, minHeight?, maxHeight?: pt (the bounds' size), minThickness?, maxThickness?: pt (the smaller of the bounds' width and height), minArea?, maxArea?: pt² (the bounds' width × height), minAnchors?, maxAnchors?: anchor points of a path (a compound path's members together; other objects never match), select?: bool (also select the matches, leaving out hidden and locked ones, those inside another match, and a compound path's members unless the compound path is isolated; Select > Reselect repeats it), limit?: max matches listed (default 100, 0 counts only)} → {matches: [{id, name, kind, path}], total, selected (with select: the count selected)}; at least one filter, all of them matching", has_doc, doc_find),
         cmd!(
@@ -50,7 +50,11 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             doc_compare
         ),
-        cmd!(query "document.json", "Document JSON", [], None, "{} → complete document model", has_doc, |s, _| Ok(serde_json::to_value(&*s.doc()?.doc).unwrap_or(Value::Null))),
+        cmd!(query "document.json", "Document JSON", [], None, "{} → complete document model (with automation read roots, a linked or placed file outside them is named by its file name alone, without its relative path, size or date, in brush art too, and so are a data set's image value and a linked JavaScript file in svg_scripts outside them (a URL is kept); a relative path that leads outside them is left out; a stored brush entry that does not read as a brush is left out; a folder outside them is left out of export_settings)", has_doc, |s, _| {
+            let st = s.doc()?;
+            let d = super::links::with_hidden_paths_named(&st.doc, super::links::LinkBase::of(st));
+            Ok(serde_json::to_value(&*d).unwrap_or(Value::Null))
+        }),
         cmd!(
             "document.setUnits",
             "Units",
@@ -157,7 +161,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cut",
             ["Edit"],
             Some("Cmd+X"),
-            "{selectedArtboards?: [n…], art?: bool, lockedAndHidden?: bool (the Artboard tool chosen, as artboard.cut)} (as edit.copy) (selected ruler guides go too; the Artboard tool chosen, or selectedArtboards given: artboard.cut); refused while an object of a symbol instance's art is selected",
+            "{selectedArtboards?: [n…], art?: bool, lockedAndHidden?: bool (the Artboard tool chosen, as artboard.cut)} (as edit.copy) removes the objects it copies, in one undo step: a compound-path member selected on its own leaves the compound's other members in the compound (selected ruler guides go too; the Artboard tool chosen, or selectedArtboards given: artboard.cut); refused while an object of a symbol instance's art is selected",
             has_selection_guides_or_artboard_tool,
             cut
         ),
@@ -166,7 +170,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Copy",
             ["Edit"],
             Some("Cmd+C"),
-            "{selectedArtboards?: [n…] (the artboards the Artboard tool had selected, which the journal records for a replay; it runs artboard.copy with any tool chosen), art?: bool (default: the Artboard tool's moveArt option; the journal records it beside selectedArtboards), lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy; with an object of a symbol instance's art selected, the instance is copied whole → {copied, guides}",
+            "{selectedArtboards?: [n…] (the artboards the Artboard tool had selected, which the journal records for a replay; it runs artboard.copy with any tool chosen), art?: bool (default: the Artboard tool's moveArt option; the journal records it beside selectedArtboards), lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses (a compound-path member selected on its own, whole or in part, with Direct or Group Selection, is copied as an ordinary path with the compound's paint, transparency, opacity mask, fill rule and graphic style link (while it has that style's look), a gradient keeping the compound's fit; the compound is copied when it is selected, or when every member is selected whole outside isolation mode), and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy; with an object of a symbol instance's art selected, the instance is copied whole → {copied, guides}",
             has_selection_guides_or_artboard_tool,
             copy
         ),
@@ -175,7 +179,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste",
             ["Edit"],
             Some("Cmd+V"),
-            "{center?: [x, y], artboardsAt?: [x, y], dx?, dy?, swatchConflict?} paste centred on `center` (the app passes the view centre), else offset by dx/dy (default: the Paste Offset preference). Pasting brings the image blobs, symbols, patterns, global and spot swatches (with the tint swatches of the tints used), gradient swatches, graphic styles, character and paragraph styles and brushes the objects use; one of the same name that differs comes in renamed. swatchConflict, for a swatch whose name the document gives another colour (clipboard.conflicts): \"merge\" (default: the objects take the document's swatch) | \"add\" (the pasted swatch comes in renamed) | {name: \"merge\"|\"add\"}. With Paste Remembers Layers on (layer.pasteRemembersLayers), objects go back into the layers they came from (by name; made when missing). Artboards copied with artboard.copy come with their art, together right of the last artboard as they lay, or centered on `artboardsAt` (the Artboard tool's canvas menu passes the right-click point; a value that is not [x, y] is an error) (the other paste commands but Paste on All Artboards: where they were), their art back in the layers it came from, and the Artboard tool, when chosen, selects them. In Draw Inside (view.drawMode) the objects go inside the object drawn into, as new art does, and Paste Remembers Layers doesn't apply; edit.pasteInPlace and edit.pasteOnAllArtboards do the same, and in Draw Behind they go behind the selection as edit.pasteInBack puts them; edit.pasteInFront and edit.pasteInBack ignore the drawing mode → {ids, artboard: the first new artboard's index or null, artboards: the new artboards' indices, added: resources added, merged: conflicts merged, renamed: [{kind, from, to}]}",
+            "{center?: [x, y], artboardsAt?: [x, y], dx?, dy?, swatchConflict?} paste centred on `center` (the app passes the view centre), else offset by dx/dy (default: the Paste Offset preference). Pasting brings the image blobs, symbols, patterns, global and spot swatches (with the tint swatches of the tints used), gradient swatches, graphic styles, character and paragraph styles and brushes the objects use; one of the same name that differs comes in renamed. swatchConflict, for a swatch whose name the document gives another colour (clipboard.conflicts): \"merge\" (default: the objects take the document's swatch; legend labels in a pie's wedges that it turns dark or light take a redraw's contrast, unless their fill is their own) | \"add\" (the pasted swatch comes in renamed) | {name: \"merge\"|\"add\"}. With Paste Remembers Layers on (layer.pasteRemembersLayers), objects go back into the layers and sublayers they came from (by the names of the layer and the layers around it in another document; a missing sublayer is made inside its layer; a hidden or locked one is an error and nothing is pasted). Artboards copied with artboard.copy come with their art, together right of the last artboard as they lay, or centered on `artboardsAt` (the Artboard tool's canvas menu passes the right-click point; a value that is not [x, y] is an error) (the other paste commands but Paste on All Artboards: where they were), their art back in the layers it came from, and the Artboard tool, when chosen, selects them. In Draw Inside (view.drawMode) the objects go inside the object drawn into, as new art does, and Paste Remembers Layers doesn't apply; edit.pasteInPlace and edit.pasteOnAllArtboards do the same, and in Draw Behind they go behind the selection as edit.pasteInBack puts them; edit.pasteInFront and edit.pasteInBack ignore the drawing mode → {ids, artboard: the first new artboard's index or null, artboards: the new artboards' indices, added: resources added, merged: conflicts merged, renamed: [{kind, from, to}]}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::Offset)
         ),
@@ -184,7 +188,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste in Front",
             ["Edit"],
             Some("Cmd+F"),
-            "{swatchConflict?, artboard?: index (the active artboard: the objects go where they were on the artboard they were copied from, on this one)} paste in place just above the top selected object, or on top of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
+            "{swatchConflict?, artboard?: index (the active artboard: the objects go where they were on the artboard they were copied from, on this one), artboards?: [index…] (a copy on each of these artboards, placed as on `artboard`, the copies in artboard order; `artboard` wins when both are given; default while the Artboard tool is chosen with several artboards selected: those; art copied from no artboard keeps its place on the first and its offset to it on the others; an index the document lacks, a repeated one or an empty list is an error)} paste in place just above the top selected object, or on top of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::Front)
         ),
@@ -193,7 +197,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste in Back",
             ["Edit"],
             Some("Cmd+B"),
-            "{swatchConflict?, artboard?: index (as edit.pasteInFront)} paste in place just below the bottom selected object, or at the bottom of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
+            "{swatchConflict?, artboard?: index, artboards?: [index…] (both as edit.pasteInFront)} paste in place just below the bottom selected object, or at the bottom of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::Back)
         ),
@@ -202,7 +206,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste in Place",
             ["Edit"],
             Some("Cmd+Shift+V"),
-            "{swatchConflict?, artboard?: index (as edit.pasteInFront)} paste where the objects were copied (resources, layers and drawing modes as edit.paste) → {ids, added, merged, renamed}",
+            "{swatchConflict?, artboard?: index, artboards?: [index…] (both as edit.pasteInFront)} paste where the objects were copied (resources, layers and drawing modes as edit.paste) → {ids, added, merged, renamed}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::InPlace)
         ),
@@ -220,7 +224,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear",
             ["Edit"],
             Some("Delete"),
-            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides); without ids, refused while an object of a symbol instance's art is selected",
+            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides; a compound-path member selected on its own is deleted alone, and a compound left with no members goes too); without ids, refused while an object of a symbol instance's art is selected",
             has_selection_or_guides,
             clear
         ),
@@ -237,7 +241,7 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 fn file_close(s: &mut Session, p: &Value) -> Result<Value> {
-    let i = p.get("index").and_then(Value::as_u64).map(index).or(s.active_index()).ok_or(EngineError::NoDocument)?;
+    let i = opt_u64(p, "file.close", "index")?.map(index).or(s.active_index()).ok_or(EngineError::NoDocument)?;
     if !s.close_document(i) {
         return Err(bad("file.close", "no such document"));
     }
@@ -245,7 +249,10 @@ fn file_close(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn doc_activate(s: &mut Session, p: &Value) -> Result<Value> {
-    let i = p.get("index").and_then(Value::as_u64).map(index).ok_or_else(|| bad("document.activate", "missing index"))?;
+    let i = match p.get("index") {
+        None | Some(Value::Null) => return Err(bad("document.activate", "missing index")),
+        Some(v) => v.as_u64().map(index).ok_or_else(|| bad("document.activate", "`index` must be a whole number"))?,
+    };
     if s.set_active(i) { ok() } else { Err(bad("document.activate", "no such document")) }
 }
 
@@ -258,7 +265,10 @@ fn doc_move(s: &mut Session, p: &Value) -> Result<Value> {
     if from >= n {
         return Err(bad("document.move", "no such document"));
     }
-    let to = p.get("to").and_then(Value::as_u64).map(index).ok_or_else(|| bad("document.move", "missing `to`: a non-negative integer"))?;
+    let to = match p.get("to") {
+        None | Some(Value::Null) => return Err(bad("document.move", "missing `to`: a non-negative integer")),
+        Some(v) => v.as_u64().map(index).ok_or_else(|| bad("document.move", "`to` must be a whole number"))?,
+    };
     let to = to.min(n.saturating_sub(1));
     if !s.move_document(from, to) {
         return Err(bad("document.move", "no such document"));
@@ -267,9 +277,9 @@ fn doc_move(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn doc_node(s: &mut Session, p: &Value) -> Result<Value> {
-    let id = id_param(p, "id").ok_or_else(|| bad("document.node", "missing id"))?;
+    let id = object_param(p, "id", "document.node")?.ok_or_else(|| bad("document.node", "missing id"))?;
     let mut opts = slice_opts(p, "document.node")?;
-    let summary = bool_or(p, "summary", false);
+    let summary = switch_or(p, "summary", false, "document.node")?;
     if !summary && (opts.depth.is_some() || opts.child_limit.is_some()) {
         // The full object JSON is never truncated: a slice without `summary` would
         // otherwise silently return the whole subtree.
@@ -558,12 +568,11 @@ fn switch_units(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "units": next.label() }))
 }
 
-/// The `artboard` param of the ruler origin commands: an artboard index, 0 when not given.
+/// The `artboard` param of the ruler origin commands: an artboard index, 0 when left out or null. A
+/// value that is not a whole number is "`artboard` must be a whole number"; one past the artboards
+/// is "index out of range".
 fn artboard_param(s: &Session, p: &Value, c: &str) -> Result<usize> {
-    let index = match p.get("artboard") {
-        None => 0,
-        Some(v) => v.as_u64().and_then(|n| usize::try_from(n).ok()).ok_or_else(|| bad(c, "index out of range"))?,
-    };
+    let index = super::index_opt(p, "artboard", c)?.unwrap_or(0);
     if index >= s.doc()?.doc.artboards.len() {
         return Err(bad(c, "index out of range"));
     }
@@ -573,14 +582,15 @@ fn artboard_param(s: &Session, p: &Value, c: &str) -> Result<usize> {
 fn ruler_origin(s: &mut Session, p: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     // A document without artboards measures from its global zero point.
-    let index = if d.artboards.is_empty() && p.get("artboard").is_none() { 0 } else { artboard_param(s, p, "document.rulerOrigin")? };
+    let index =
+        if d.artboards.is_empty() && p.get("artboard").is_none_or(Value::is_null) { 0 } else { artboard_param(s, p, "document.rulerOrigin")? };
     Ok(json!(s.doc()?.doc.ruler_origin_for(index)))
 }
 
 fn set_ruler_origin(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.setRulerOrigin";
     let origin = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
-    let index = if s.doc()?.doc.rulers == RulerMode::Global && p.get("artboard").is_none() { 0 } else { artboard_param(s, p, C)? };
+    let index = if s.doc()?.doc.rulers == RulerMode::Global && p.get("artboard").is_none_or(Value::is_null) { 0 } else { artboard_param(s, p, C)? };
     change_ruler_origin(s, index, Some(origin), "Ruler Origin")
 }
 
@@ -663,7 +673,8 @@ fn undo_group_begin(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn undo_group_end(s: &mut Session, p: &Value) -> Result<Value> {
-    s.end_undo_group(bool_or(p, "cancel", false));
+    let cancel = switch_or(p, "cancel", false, "edit.undoGroup.end")?;
+    s.end_undo_group(cancel);
     ok()
 }
 
@@ -672,10 +683,24 @@ fn undo_group_end(s: &mut Session, p: &Value) -> Result<Value> {
 /// the step before. As any new edit it ends the steps to redo, so Redo never swaps the document
 /// under an interaction that would then preview on, or cancel to, the document from before (#1719).
 /// A typing session also ends in the Type tool, whose caret and marked text (IME) must follow the
-/// document.
+/// document. A preview that Real-time Drawing off left unapplied is applied first, as the tool's own
+/// commit applies it; when it fails, the interaction is canceled. The applied preview's warning
+/// goes to the running command's result or the tool's status messages, as the tool's own commit
+/// reports it ([`Session::note_settled_warning`]).
 pub(crate) fn settle_interaction(s: &mut Session) -> Result<()> {
     let typing = typing_in_progress(s);
-    s.commit_interaction()?;
+    match s.unapplied_interaction_preview().filter(|_| !s.previewing) {
+        Some((cmd, p)) => match s.preview(&cmd, &p) {
+            Ok(v) => {
+                if let Some(w) = v.get("warning").and_then(Value::as_str) {
+                    s.note_settled_warning(w);
+                }
+                s.commit_interaction()?
+            }
+            Err(_) => s.cancel_interaction()?,
+        },
+        None => s.commit_interaction()?,
+    }
     if typing {
         s.set_tool_option("endTyping", &Value::Bool(true));
     }
@@ -783,11 +808,11 @@ fn new_document_from_state(s: &mut Session, p: &Value) -> Result<Value> {
     let created = date_param(p, "created", C)?;
     let st = s.doc()?;
     // The row as the panel lists it now: keeping an edit in progress below changes the rows.
-    let chosen = match p.get("index") {
-        None | Some(Value::Null) => None,
-        Some(v) => {
-            let state = v.as_u64().and_then(|row| st.history.state(&st.doc, index(row)));
-            Some(state.ok_or_else(|| bad(C, format!("no history state {v}")))?.clone())
+    let chosen = match super::index_opt(p, "index", C)? {
+        None => None,
+        Some(row) => {
+            let v = &p["index"];
+            Some(st.history.state(&st.doc, row).ok_or_else(|| bad(C, format!("no history state {v}")))?.clone())
         }
     };
     settle_interaction(s)?;
@@ -931,7 +956,11 @@ fn without_inner(doc: &Document, placed: Vec<(NodeId, Option<Vec<usize>>)>) -> i
     })
 }
 
-/// The direct-selection flag and resolved root nodes for Copy and Cut operations.
+/// The direct-selection flag and resolved root nodes for Copy and Cut operations. A compound-path
+/// member selected on its own (whole, with Direct or Group Selection, or by some of its anchors or
+/// segments) is taken as itself, so Copy copies it as an ordinary path and Cut removes it alone. The
+/// compound is taken whole when it is selected, or when every one of its members is selected whole
+/// outside isolation mode; in an isolated compound every member is taken as itself.
 fn copy_cut_targets(s: &Session) -> Result<(bool, Vec<NodeId>)> {
     let st = s.doc()?;
     // The Pen and the Curvature tool leave the anchor they placed or edited selected: Copy takes
@@ -940,9 +969,19 @@ fn copy_cut_targets(s: &Session) -> Result<(bool, Vec<NodeId>)> {
     let in_drawing_tool = matches!(s.tool_id(), "pen" | "curvature") && !picked;
     let direct = !in_drawing_tool && (!st.selection.anchors.is_empty() || !st.selection.segments.is_empty());
     let in_isolated_compound = st.isolation.is_some_and(|iso| st.doc.node(iso).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })));
-    let roots = roots_within(&st.doc, st.selection.in_paint_order(&st.doc), |_compound, member| {
-        in_isolated_compound || (direct && (st.selection.partial(member).is_some() || st.selection.segments.contains_key(&member)))
-    });
+    // A member counts as selected whole when Copy would take it unchanged: no anchors or segments
+    // of it are picked, the picked ones cover every segment, or a drawing tool's own anchor is
+    // all that is picked.
+    let selected: std::collections::HashSet<NodeId> = st.selection.objects.iter().copied().collect();
+    let whole = |m: &vectorcraft_doc::Node| selected.contains(&m.id) && (!direct || super::clipboard::copied_whole(m, &st.selection));
+    // Worked out once per compound: every selected member asks about its compound.
+    let checked = std::cell::RefCell::new(std::collections::HashMap::new());
+    let all_members_whole = |compound: NodeId| {
+        *checked.borrow_mut().entry(compound).or_insert_with(|| {
+            st.doc.node(compound).and_then(|n| n.children()).is_some_and(|members| !members.is_empty() && members.iter().all(|m| whole(m)))
+        })
+    };
+    let roots = roots_within(&st.doc, st.selection.in_paint_order(&st.doc), |compound, _member| in_isolated_compound || !all_members_whole(compound));
     Ok((direct, roots))
 }
 
@@ -977,8 +1016,8 @@ fn copy(s: &mut Session, p: &Value) -> Result<Value> {
         .selection
         .guides
         .iter()
-        .filter_map(|i| st.doc.guides.get(*i))
-        .map(|g| vectorcraft_doc::Guide { layer: None, artboard: None, ..g.clone() })
+        .filter_map(|i| st.doc.ruler_guide(*i))
+        .map(|g| vectorcraft_doc::Guide { layer: None, artboard: None, id: None, ..g })
         .collect();
     let roots = if st.selection.is_empty() && !guides.is_empty() { vec![] } else { targets };
     let mut clip = Clipboard::copy(st, &roots, direct);
@@ -990,7 +1029,7 @@ fn copy(s: &mut Session, p: &Value) -> Result<Value> {
     // Guides alone: the artboard the first one belongs to, or crosses, is where in-place pastes
     // measure from, as the objects' artboard is.
     if clip.nodes.is_empty()
-        && let Some(g) = st.selection.guides.first().and_then(|i| st.doc.guides.get(*i))
+        && let Some(g) = st.selection.guides.first().and_then(|i| st.doc.ruler_guide(*i))
     {
         let board = g.artboard.and_then(|id| st.doc.artboards.iter().find(|a| a.id == id)).or_else(|| {
             st.doc
@@ -1016,8 +1055,8 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
         copy(s, p)?;
         return clear(s, &json!({}));
     }
-    // Copy promotes a compound member to its compound. Cut must remove the same objects it
-    // copied, while Clear on its own deletes exactly the selected members.
+    // Cut removes the same objects Copy takes: a compound member selected on its own, or the
+    // whole compound when it is selected or every member is selected whole.
     let (direct, roots) = copy_cut_targets(s)?;
     let res = copy(s, p)?;
     if res.get("copied").and_then(Value::as_u64) == Some(0) {
@@ -1039,18 +1078,14 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
     s.edit("Cut", |d, selection| {
         // The selected ruler guides were copied too (#3226): they go in the same undo step.
         let gone = selection.guides.clone();
-        d.retain_guides(selection, |i, _| !gone.contains(&i));
+        d.retain_guides(selection, |g| !g.id.is_some_and(|id| gone.contains(&id)));
         let mut survivors = vec![];
         let mut pieces = super::pathops::Beside::replacing(d, roots);
         for id in roots {
             let Some(node) = d.node(*id) else { continue };
             let has_direct = sel.anchors.contains_key(id) || sel.segments.contains_key(id);
-            if !has_direct {
-                d.remove(*id)?;
-                continue;
-            }
-            if node.path_data().is_none() {
-                d.remove(*id)?;
+            if !has_direct || node.path_data().is_none() {
+                remove_leaving_no_empty_compound(d, *id)?;
                 continue;
             }
             let original = super::path::deletion_source(d, *id)?;
@@ -1067,19 +1102,13 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
                     subpaths.extend(super::path::without_segments(sp, &cuts));
                 } else {
                     // Picked anchors leave the path with their connections, as Clear removes them.
-                    let gone: BTreeSet<usize> = anchor_refs.into_iter().flatten().filter_map(|&(s, a)| (s == si).then_some(a)).collect();
+                    let gone: BTreeSet<usize> = anchor_refs.into_iter().flat_map(|refs| super::path::subpath_refs(refs, si)).collect();
                     subpaths.extend(super::path::without_anchors(sp, &gone));
                 }
             }
             subpaths.retain(|sp| sp.anchors.len() >= 2);
             if subpaths.is_empty() {
-                let parent = d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. })));
-                d.remove(*id)?;
-                if let Some(p) = parent
-                    && d.node(p).is_some_and(|n| n.children().is_some_and(|c| c.is_empty()))
-                {
-                    d.remove(p)?;
-                }
+                remove_leaving_no_empty_compound(d, *id)?;
             } else {
                 survivors.extend(super::path::replace_deleted_pieces(d, &mut pieces, original, subpaths)?);
             }
@@ -1091,6 +1120,19 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+/// Remove object `id`, and the compound path that held it when it was the compound's last member.
+/// A compound left with one member stays a compound path, as after Clear.
+fn remove_leaving_no_empty_compound(d: &mut Document, id: NodeId) -> Result<()> {
+    let parent = d.parent_of(id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. })));
+    d.remove(id)?;
+    if let Some(p) = parent
+        && d.node(p).is_some_and(|n| n.children().is_some_and(|c| c.is_empty()))
+    {
+        d.remove(p)?;
+    }
+    Ok(())
 }
 
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1136,7 +1178,7 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
         }
         if with_guides {
             let gone = sel.guides.clone();
-            d.retain_guides(sel, |i, _| !gone.contains(&i));
+            d.retain_guides(sel, |g| !g.id.is_some_and(|id| gone.contains(&id)));
         }
         if is_explicit {
             for id in &ids {
@@ -1154,8 +1196,7 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
 /// Document ids scope node ids: two tabs may contain objects with the same node id.
 fn drop_selection(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "edit.dropSelection";
-    let key = "sourceDocument";
-    let uid = p[key].as_u64().ok_or_else(|| bad(CMD, format!("missing integer `{key}`")))?;
+    let uid = u64_req(p, "sourceDocument", CMD)?;
     let point = |key: &str| finite_numbers::<2>(&p[key]).ok_or_else(|| bad(CMD, format!("{key} must be [x, y] with finite coordinates")));
     let grab = point("grab")?;
     let at = point("at")?;
@@ -1214,6 +1255,9 @@ impl PasteMode {
 
 fn paste(s: &mut Session, p: &Value, mode: PasteMode) -> Result<Value> {
     let choices = SwatchChoices::parse(mode.label(), p)?;
+    if mode == PasteMode::Offset {
+        check_numbers(p, &["dx", "dy"], "edit.paste")?;
+    }
     // Taken out of the session for the edit (and put back whatever happens).
     let clip = std::mem::take(&mut s.clipboard);
     let r = paste_clip(s, p, mode, &clip, &choices);
@@ -1229,15 +1273,84 @@ pub(crate) fn place_clip(s: &mut Session, clip: &Clipboard, center: vectorcraft_
     paste_clip(s, &json!({ "center": [center.x, center.y] }), PasteMode::Library, clip, &choices)
 }
 
-/// Paste in Place, in Front or in Back onto artboard `artboard` (the active one, #693): where the
-/// objects were on the artboard they were copied from, on that one; without it (or a copy from no
-/// artboard), where they were.
-fn onto_artboard(doc: &Document, p: &Value, clip: &Clipboard) -> Affine {
-    let target = p.get("artboard").and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok()).and_then(|i| doc.artboards.get(i));
-    match (target, clip.source_artboard) {
-        (Some(t), Some(src)) => Affine::translate(t.rect.origin() - src.origin()),
-        _ => Affine::IDENTITY,
+/// The artboards Paste in Place, in Front or in Back puts a copy on, in artboard order: `artboard`
+/// (the active one, #693), else `artboards`, else, while the Artboard tool is chosen with several
+/// artboards selected, those (noted in the journal as `artboards`, so a replay pastes on the same
+/// ones); `None` when none is named. A named value that is not a whole number (null included), a
+/// named index that is not an artboard of the document, a repeated one or an empty list is an
+/// error; every value is checked for its form before any is checked against the artboards.
+fn paste_targets(s: &mut Session, p: &Value, cmd: &str) -> Result<Option<Vec<usize>>> {
+    let n = s.doc()?.doc.artboards.len();
+    let single = p.get("artboard").map(|v| v.as_u64().map(index).ok_or_else(|| bad(cmd, "`artboard` must be a whole number"))).transpose()?;
+    let entries = match p.get("artboards") {
+        Some(v) => {
+            let list = v.as_array().filter(|a| !a.is_empty()).ok_or_else(|| bad(cmd, "`artboards` must be a list of artboard indices"))?;
+            let all = list.iter().map(|i| i.as_u64().map(index)).collect::<Option<Vec<usize>>>();
+            Some(all.ok_or_else(|| bad(cmd, "`artboards` must contain whole numbers"))?)
+        }
+        None => None,
+    };
+    if single.is_some_and(|i| i >= n) {
+        return Err(bad(cmd, "`artboard` must be the index of an artboard of the document"));
     }
+    let listed = match entries {
+        Some(mut all) => {
+            if all.iter().any(|i| *i >= n) {
+                return Err(bad(cmd, "`artboards` names an artboard the document does not have"));
+            }
+            all.sort_unstable();
+            if all.windows(2).any(|w| w[0] == w[1]) {
+                return Err(bad(cmd, "`artboards` names an artboard twice"));
+            }
+            Some(all)
+        }
+        None => None,
+    };
+    if let Some(i) = single {
+        return Ok(Some(vec![i]));
+    }
+    if listed.is_some() {
+        return Ok(listed);
+    }
+    let picked = artboard_tool_picks(s);
+    if picked.is_empty() {
+        return Ok(None);
+    }
+    s.note_journal("artboards", json!(picked));
+    Ok(Some(picked))
+}
+
+/// The artboards of the active document the Artboard tool has selected, in artboard order, while
+/// that tool is chosen with two or more of them selected; otherwise none. Indices the document
+/// does not have are left out.
+pub(crate) fn artboard_tool_picks(s: &Session) -> Vec<usize> {
+    if s.tool_id() != "artboard" {
+        return Vec::new();
+    }
+    let n = s.active().map_or(0, |d| d.doc.artboards.len());
+    let mut picked: Vec<usize> = s.tool_options_of("artboard")["selected"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|v| v.as_u64().and_then(|i| usize::try_from(i).ok()))
+        .filter(|i| *i < n)
+        .collect();
+    picked.sort_unstable();
+    picked.dedup();
+    if picked.len() < 2 {
+        picked.clear();
+    }
+    picked
+}
+
+/// Paste in Place, in Front or in Back onto artboards `targets`: one copy on each, where the objects
+/// were on the artboard they were copied from. A copy from no artboard keeps its place on the first
+/// target and its offset to that one on the others; without targets, the objects go where they were.
+fn onto_artboards(doc: &Document, targets: Option<&[usize]>, clip: &Clipboard) -> Vec<Affine> {
+    let rects: Vec<_> = targets.unwrap_or_default().iter().filter_map(|i| doc.artboards.get(*i)).map(|a| a.rect.origin()).collect();
+    let Some(first) = rects.first().copied() else { return vec![Affine::IDENTITY] };
+    let src = clip.source_artboard.map_or(first, |r| r.origin());
+    rects.iter().map(|o| Affine::translate(*o - src)).collect()
 }
 
 /// Insert clipboard resources atomically in the active editable context using the requested placement mode.
@@ -1249,6 +1362,12 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                 .filter(|c| v.as_array().is_some_and(|a| a.len() == 2) && c.x.is_finite() && c.y.is_finite())
                 .ok_or_else(|| bad("edit.paste", "`artboardsAt` must be [x, y]"))?,
         ),
+        _ => None,
+    };
+    let targets = match mode {
+        PasteMode::Front => paste_targets(s, p, "edit.pasteInFront")?,
+        PasteMode::Back => paste_targets(s, p, "edit.pasteInBack")?,
+        PasteMode::InPlace => paste_targets(s, p, "edit.pasteInPlace")?,
         _ => None,
     };
     let st = s.doc()?;
@@ -1281,6 +1400,9 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         && inside.is_none()
         && (st.doc.paste_remembers_layers || boards.is_some())
         && parent.is_some_and(|p| st.doc.node(p).is_some_and(Node::is_layer));
+    // Each object's remembered layer, found before anything is pasted: a hidden or locked one
+    // refuses the whole paste.
+    let remembered = if remember { remembered_layers(&st.doc, &clip.source_layers, same_doc)? } else { vec![] };
     // Front/back: relative to the selection (top-most / bottom-most selected object); with
     // nothing selected, the top / bottom of the current layer. Art other than paths goes beside
     // the compound path that holds the selected object, not into it.
@@ -1298,14 +1420,15 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         (_, Some((_, dv))) => vec![Affine::translate(dv)],
         (PasteMode::Offset | PasteMode::Library | PasteMode::Drag, None) => vec![match point_param(p, "center") {
             Some(c) => clip.bounds().map_or(Affine::IDENTITY, |b| Affine::translate(c - b.center())),
-            None => Affine::translate((f64_or(p, "dx", off), f64_or(p, "dy", off))),
+            None => Affine::translate((number_or(p, "dx", off, mode.label())?, number_or(p, "dy", off, mode.label())?)),
         }],
         (PasteMode::AllArtboards, None) => {
             let src = clip.source_artboard.or_else(|| st.doc.artboards.first().map(|a| a.rect)).map(|r| r.origin()).unwrap_or_default();
             st.doc.artboards.iter().map(|a| Affine::translate(a.rect.origin() - src)).collect()
         }
-        // In place, in front, in back: onto the active artboard when the UI names it.
-        _ => vec![onto_artboard(&st.doc, p, clip)],
+        // In place, in front, in back: onto the active artboard when the UI names it, or onto each
+        // artboard the Artboard tool has selected.
+        _ => onto_artboards(&st.doc, targets.as_deref(), clip),
     };
     // Guides alone don't follow a plain paste's offset or the view centre: they stay where they
     // were. With objects they move as the objects do.
@@ -1315,7 +1438,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         vec![Affine::IDENTITY]
     };
     let (ids, imported, artboards, into) = s.edit(mode.label(), |d, sel| {
-        let imported = clip.import_into(d, choices, same_doc);
+        let imported = clip.import_into(d, choices, same_doc)?;
         // Draw Inside: the clip group of the object drawn into, made on the first paste.
         let into = inside.map(|t| super::create::draw_inside_group(d, t)).transpose()?;
         let artboards: Vec<usize> = boards
@@ -1323,7 +1446,8 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
             .flat_map(|(all, dv)| all.iter().map(move |a| (a, dv)))
             .map(|(a, dv)| super::panelcmds::push_artboard_copy(d, a, a.rect + dv))
             .collect();
-        let mut layers: BTreeMap<&str, NodeId> = BTreeMap::new();
+        // The layers made for remembered layers the document lacks, by parent and name.
+        let mut made = HashMap::new();
         // Objects pasted into each parent so far (keeps their order in front and back pastes).
         let mut placed: BTreeMap<Option<NodeId>, usize> = BTreeMap::new();
         let mut new_ids = vec![];
@@ -1337,8 +1461,9 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                     // including the pattern phase, independently of transform-tool settings.
                     c.transform(xf, sc);
                 }
-                let layer = match clip.source_layers.get(k) {
-                    Some(Some(name)) if remember => Some(*layers.entry(name).or_insert_with(|| layer_named(d, name))),
+                let layer = match remembered.get(k) {
+                    Some(Some(Remembered::Layer(l))) => Some(*l),
+                    Some(Some(Remembered::Make { parent, names })) => make_layers(d, &mut made, *parent, names)?,
                     _ => None,
                 };
                 // In a clip group or a clipping layer the bottom child is the clipping path: art pasted
@@ -1421,8 +1546,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
             for g in &clip.guides {
                 let pos = g.pos + if g.vertical { dv.x } else { dv.y };
                 if pos.is_finite() {
-                    sel.guides.push(d.guides.len());
-                    d.guides.push(vectorcraft_doc::Guide { pos, layer: guide_layer, ..g.clone() });
+                    sel.guides.push(d.add_ruler_guide(&vectorcraft_doc::Guide { pos, layer: guide_layer, ..g.clone() }));
                 }
             }
         }
@@ -1458,23 +1582,117 @@ fn paste_anchor(doc: &Document, id: NodeId, can_enter_compound: bool) -> NodeId 
     }
 }
 
-/// The first unlocked layer or sublayer called `name` (topmost first), or a new top layer.
-fn layer_named(d: &mut Document, name: &str) -> NodeId {
-    let mut found = None;
-    for l in d.layers.iter().rev() {
-        l.walk(&mut |n| {
-            if found.is_none() && n.is_layer() && !n.locked && n.name.as_deref() == Some(name) {
-                found = Some(n.id);
+/// Where Paste Remembers Layers puts an object: a layer or sublayer of the document, or new
+/// layers `names`, each inside the one before, the first under `parent` (none: on top).
+#[derive(Clone, Debug, PartialEq)]
+enum Remembered {
+    Layer(NodeId),
+    Make { parent: Option<NodeId>, names: Vec<String> },
+}
+
+/// [`remembered_layer`] for each object's source layer, worked out once for each layer.
+fn remembered_layers(d: &Document, sources: &[Option<SourceLayer>], same_doc: bool) -> Result<Vec<Option<Remembered>>> {
+    let mut found: HashMap<&SourceLayer, Remembered> = HashMap::new();
+    sources
+        .iter()
+        .map(|src| {
+            let Some(src) = src else { return Ok(None) };
+            if let Some(r) = found.get(src) {
+                return Ok(Some(r.clone()));
             }
-        });
+            let r = remembered_layer(d, src, same_doc)?;
+            found.insert(src, r.clone());
+            Ok(Some(r))
+        })
+        .collect()
+}
+
+/// The layer `src` names in `d`. In the document it was copied from, the layer that held the
+/// object is kept while it is there with its name, wherever it was moved; else the layers around
+/// it still where they were (by id) are kept. Below them, and in another document from the top,
+/// each name is matched among the layers inside the one above (the topmost of the same name whose
+/// layers match the most names, a shown and unlocked one first). The names left unmatched are
+/// made. A matched layer that is hidden or locked, or inside one that is, is an error.
+fn remembered_layer(d: &Document, src: &SourceLayer, same_doc: bool) -> Result<Remembered> {
+    let held = |id: &NodeId| d.node(*id).is_some_and(|n| n.is_layer() && n.name.as_ref() == src.names.last());
+    let kept = if same_doc && src.ids.last().is_some_and(held) {
+        src.ids.len()
+    } else if same_doc {
+        (1..=src.ids.len())
+            .rev()
+            .find(|&j| d.node(src.ids[j - 1]).is_some_and(Node::is_layer) && d.ancestry(src.ids[j - 1]).is_some_and(|a| a == src.ids[..j]))
+            .unwrap_or(0)
+    } else {
+        0
+    };
+    let rest = &src.names[kept..];
+    let (end, matched, _) = named_chain(d, kept.checked_sub(1).map(|j| src.ids[j]), rest);
+    if let Some(l) = end
+        && !d.ancestry(l).is_some_and(|a| a.iter().all(|i| d.node(*i).is_some_and(|n| n.visible && !n.locked)))
+    {
+        return Err(EngineError::Other("the target layer is locked or hidden".into()));
     }
-    found.unwrap_or_else(|| d.add_layer(Some(name)))
+    Ok(match end {
+        Some(l) if matched == rest.len() => Remembered::Layer(l),
+        parent => Remembered::Make { parent, names: rest[matched..].to_vec() },
+    })
+}
+
+/// The deepest chain of layers inside `parent` (none: the top level) named `names` one inside the
+/// other: its last layer (`parent` when none matches), how many names it matched and whether all
+/// its layers are shown and unlocked. Of chains as deep, the topmost shown and unlocked one wins.
+fn named_chain(d: &Document, parent: Option<NodeId>, names: &[String]) -> (Option<NodeId>, usize, bool) {
+    let mut best = (parent, 0, true);
+    let Some((name, rest)) = names.split_first() else { return best };
+    let siblings = match parent {
+        None => Some(&d.layers),
+        Some(p) => d.node(p).and_then(Node::children),
+    };
+    for l in siblings.into_iter().flatten().rev().filter(|l| l.is_layer() && l.name.as_deref() == Some(name.as_str())) {
+        let (end, n, open) = named_chain(d, Some(l.id), rest);
+        let chain = (end, n + 1, open && l.visible && !l.locked);
+        if (chain.1, chain.2) > (best.1, best.2) {
+            best = chain;
+        }
+    }
+    best
+}
+
+/// Layers `names`, each inside the one before, the first under `parent` (none: on top); `made`
+/// keeps the ones a paste has made, by parent and name, so they are made once. The last one, or
+/// none when `names` is empty.
+fn make_layers(
+    d: &mut Document,
+    made: &mut HashMap<(Option<NodeId>, String), NodeId>,
+    parent: Option<NodeId>,
+    names: &[String],
+) -> Result<Option<NodeId>> {
+    let mut at = parent;
+    for name in names {
+        let key = (at, name.clone());
+        let id = match made.get(&key) {
+            Some(id) => *id,
+            None => {
+                let id = match at {
+                    None => d.add_layer(Some(name)),
+                    Some(p) => {
+                        let layer = super::layer::make_layer(d, Some(name));
+                        d.insert(Some(p), usize::MAX, layer)?
+                    }
+                };
+                made.insert(key, id);
+                id
+            }
+        };
+        at = Some(id);
+    }
+    Ok(at.filter(|_| !names.is_empty()))
 }
 
 fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
-    let dx = f64_or(p, "dx", 0.0);
-    let dy = f64_or(p, "dy", 0.0);
+    let dx = number_or(p, "dx", 0.0, "edit.duplicate")?;
+    let dy = number_or(p, "dy", 0.0, "edit.duplicate")?;
     let ids = s.edit("Duplicate", |d, sel| duplicate_in(d, sel, &roots, Affine::translate((dx, dy))))?;
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }

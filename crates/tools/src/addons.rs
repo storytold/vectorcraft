@@ -10,9 +10,11 @@ pub mod enclosing_lasso;
 pub mod extend_path;
 pub mod measure_inspect;
 pub mod parametric_shape;
+pub mod polygonal_lasso;
 pub mod shared_edge;
 pub mod slide_anchor;
 pub mod smart_pen;
+pub mod trim;
 
 use crate::{Tool, ToolInfo};
 
@@ -25,6 +27,7 @@ pub const PATH_TOOLS: &[ToolInfo] = &[
     ToolInfo { id: corner_tool::ID, label: "Corner Tool", shortcut: None, icon: "dc-rounded-rect" },
     ToolInfo { id: slide_anchor::ID, label: "Slide Anchor Along Path", shortcut: None, icon: "dc-anchor" },
     ToolInfo { id: shared_edge::ID, label: "Shared Edge Merge Tool", shortcut: None, icon: "dc-join" },
+    ToolInfo { id: trim::ID, label: "Trim at Crossings Tool", shortcut: None, icon: "dc-pf-trim" },
 ];
 
 /// Smart Pen's tool, a flyout group of its own.
@@ -36,13 +39,21 @@ pub const ENCLOSING_LASSO: &[ToolInfo] = &[ToolInfo { id: enclosing_lasso::ID, l
 
 pub const BOX_3D: &[ToolInfo] = &[ToolInfo { id: box3d::ID, label: "3D Box Tool", shortcut: None, icon: "box" }];
 
+pub const POLYGONAL_LASSO: &[ToolInfo] = &[ToolInfo { id: polygonal_lasso::ID, label: "Polygonal Lasso Tool", shortcut: None, icon: "tool-lasso" }];
+
 /// The add-ons' tool groups, after the toolbar's own ([`crate::TOOL_GROUPS`]), each with the
 /// heading the All Tools drawer lists it under (its add-on's name).
-const HEADED: &[(&[ToolInfo], &str)] =
-    &[(PATH_TOOLS, "Path Precision Tools"), (SMART_PEN, "Smart Pen"), (ENCLOSING_LASSO, "Enclosing Lasso"), (CONTOUR, "Contour"), (BOX_3D, "3D Box")];
+const HEADED: &[(&[ToolInfo], &str)] = &[
+    (PATH_TOOLS, "Path Precision Tools"),
+    (SMART_PEN, "Smart Pen"),
+    (ENCLOSING_LASSO, "Enclosing Lasso"),
+    (CONTOUR, "Contour"),
+    (BOX_3D, "3D Box"),
+    (POLYGONAL_LASSO, "Polygonal Lasso"),
+];
 
 /// The add-ons' tool groups, after the toolbar's own ([`crate::TOOL_GROUPS`]).
-pub const GROUPS: &[&[ToolInfo]] = &[PATH_TOOLS, SMART_PEN, ENCLOSING_LASSO, CONTOUR, BOX_3D];
+pub const GROUPS: &[&[ToolInfo]] = &[PATH_TOOLS, SMART_PEN, ENCLOSING_LASSO, CONTOUR, BOX_3D, POLYGONAL_LASSO];
 
 /// The heading the All Tools drawer lists tool `id` under: its add-on's name.
 pub fn heading(id: &str) -> Option<&'static str> {
@@ -60,9 +71,11 @@ pub fn create(id: &str) -> Option<Box<dyn Tool>> {
         shared_edge::ID => Box::new(shared_edge::SharedEdgeTool::default()),
         slide_anchor::ID => Box::new(slide_anchor::SlideAnchorTool::default()),
         smart_pen::ID => Box::new(smart_pen::SmartPenTool::default()),
+        trim::ID => Box::new(trim::TrimTool::default()),
         enclosing_lasso::ID => Box::new(enclosing_lasso::EnclosingLassoTool::default()),
         contour::ID => Box::new(contour::ContourTool::default()),
         box3d::ID => Box::new(box3d::Box3dTool::default()),
+        polygonal_lasso::ID => Box::new(polygonal_lasso::PolygonalLassoTool::default()),
         _ => return None,
     })
 }
@@ -85,6 +98,7 @@ mod tests {
         assert_eq!(heading(enclosing_lasso::ID), Some("Enclosing Lasso"));
         assert_eq!(heading(contour::ID), Some("Contour"));
         assert_eq!(heading(box3d::ID), Some("3D Box"));
+        assert_eq!(heading(polygonal_lasso::ID), Some("Polygonal Lasso"));
         assert_eq!(GROUPS.len(), HEADED.len());
         assert!(crate::catalog::all_tools().any(|t| t.id == extend_path::ID));
         assert!(create("pen").is_none() && heading("pen").is_none());

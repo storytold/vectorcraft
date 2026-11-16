@@ -166,6 +166,75 @@ fn css_escapes_names_and_writes_gradients() {
     assert!(read(&text, "x").is_err(), "CSS is written only");
 }
 
+/// A conic gradient swatch is a CSS conic gradient starting where its angle points (CSS turns
+/// clockwise from straight up); a mirrored one, which turns counterclockwise, has its stops mirrored
+/// about the seam so each color lies on the same side.
+#[test]
+fn css_writes_conic_gradient_swatches() {
+    let one = |name: &str, g: GradientPaint| SwatchLibrary {
+        name: "x".into(),
+        swatches: vec![Swatch { name: name.into(), paint: Paint::Gradient(Box::new(g)), global: false, spot: false }],
+        groups: vec![],
+    };
+    let mut conic = GradientPaint::new(Gradient { kind: GradientKind::Conic, ..Gradient::default() });
+    conic.angle = 90.0;
+    let text = written(&one("Sweep", conic.clone()), PaletteFormat::Css);
+    assert!(text.contains("--sweep: conic-gradient(from 0deg, #ffffff 0%, #000000 100%);"), "{text}");
+    conic.gradient.stops[0].offset = 0.2;
+    conic.geom = Some(crate::GradientGeom { start: kurbo::Point::ZERO, end: kurbo::Point::new(0.0, -10.0), aspect: -1.0, focal: None });
+    let text = written(&one("Back", conic), PaletteFormat::Css);
+    assert!(text.contains("--back: conic-gradient(from 0deg, #000000 0%, #ffffff 80%);"), "{text}");
+}
+
+/// A diamond gradient swatch (CSS has none) is four layered linear gradients, one a quarter of the
+/// box running from the center out to its corner, for the `background` shorthand.
+#[test]
+fn css_writes_diamond_gradient_swatches_as_four_corner_layers() {
+    let lib = SwatchLibrary {
+        name: "x".into(),
+        swatches: vec![Swatch {
+            name: "Gem".into(),
+            paint: Paint::Gradient(Box::new(GradientPaint::new(Gradient { kind: GradientKind::Diamond, ..Gradient::default() }))),
+            global: false,
+            spot: false,
+        }],
+        groups: vec![],
+    };
+    let text = written(&lib, PaletteFormat::Css);
+    // Diagonal angles, not `to <corner>`: on a box that isn't square, `to <corner>` would turn
+    // each layer's lines to run through the quarter's other two corners.
+    let layer = |corner: &str, deg: u32| format!("linear-gradient({deg}deg, #ffffff 0%, #000000 100%) {corner} / 50% 50% no-repeat");
+    let want =
+        format!("--gem: {}, {}, {}, {};", layer("top left", 315), layer("top right", 45), layer("bottom right", 135), layer("bottom left", 225));
+    assert!(text.contains(&want), "{text}");
+    // CSS's gradient line for a diagonal angle on a quarter box w × h is (w + h) / √2 long and
+    // starts at the quarter's corner at the box's center: the level at a point x, y from the
+    // center is (|x| + |y|) / (w + h), the level the diamond fitted to the whole box has there.
+    let (w, h) = (100.0f64, 50.0f64);
+    let length = (w + h) / std::f64::consts::SQRT_2;
+    let fit = crate::GradientGeom::fit(GradientKind::Diamond, kurbo::Rect::new(-w, -h, w, h), 0.0);
+    for (x, y) in [(0.0, -50.0), (-100.0, 0.0), (-30.0, -20.0), (-100.0, -50.0)] {
+        // The top-left quarter's layer runs toward (-1, -1).
+        let css = (-x - y) / std::f64::consts::SQRT_2 / length;
+        let model = fit.param_at(GradientKind::Diamond, kurbo::Point::new(x, y));
+        assert!((css - model).abs() < 1e-9, "({x}, {y}): {css} vs {model}");
+    }
+    // Turned a quarter or a half turn, it is the same diamond; turned 30 degrees, a circle stands
+    // in for it.
+    let turned = |angle: f64| {
+        let mut gp = GradientPaint::new(Gradient { kind: GradientKind::Diamond, ..Gradient::default() });
+        gp.angle = angle;
+        let lib = SwatchLibrary {
+            name: "x".into(),
+            swatches: vec![Swatch { name: "Gem".into(), paint: Paint::Gradient(Box::new(gp)), global: false, spot: false }],
+            groups: vec![],
+        };
+        written(&lib, PaletteFormat::Css)
+    };
+    assert!(turned(90.0).contains(&want) && turned(-180.0).contains(&want), "{}", turned(90.0));
+    assert!(turned(30.0).contains("--gem: radial-gradient(circle, #ffffff 0%, #000000 100%);"), "{}", turned(30.0));
+}
+
 #[test]
 fn css_preserves_fractional_gradient_stop_positions() {
     for kind in [GradientKind::Linear, GradientKind::Radial] {
@@ -189,6 +258,29 @@ fn css_preserves_fractional_gradient_stop_positions() {
         };
         let text = written(&lib, PaletteFormat::Css);
         assert!(text.contains("#000000 0%, #ff0000 12.5%, #ffffff 12.890625%, #0000ff 100%"), "{kind:?}: {text}");
+    }
+}
+
+/// A gradient swatch that repeats or reflects has its stops written that many times across the
+/// box, every other run backwards for Reflect.
+#[test]
+fn css_writes_spread_gradient_swatches_with_their_stops_repeated() {
+    for (spread, want) in [
+        (crate::GradientSpread::Repeat, "#ffffff 0%, #000000 50%, #ffffff 50%, #000000 100%"),
+        (crate::GradientSpread::Reflect, "#ffffff 0%, #000000 50%, #000000 50%, #ffffff 100%"),
+    ] {
+        let lib = SwatchLibrary {
+            name: "x".into(),
+            swatches: vec![Swatch {
+                name: "Bands".into(),
+                paint: Paint::Gradient(Box::new(GradientPaint::new(Gradient { spread, repeats: 2, ..Gradient::default() }))),
+                global: false,
+                spot: false,
+            }],
+            groups: vec![],
+        };
+        let text = written(&lib, PaletteFormat::Css);
+        assert!(text.contains(&format!("--bands: linear-gradient(90deg, {want});")), "{spread:?}: {text}");
     }
 }
 

@@ -1,7 +1,8 @@
 //! Artboard Options (double-click with the Artboard tool, double-click the tool, or the Artboards
 //! panel's options icon or menu): the artboard's fields, sizes parsed with units, its position
 //! from a reference point, its background color (`color`: a color as the paint commands take
-//! it, or null for none), Show Center Mark and Show Cross Hairs (`showCenterMark`,
+//! it, or null for none), its guide label (`guideLabel`: the color its own guides are drawn in, a
+//! layer color's name or `#rrggbb`, or null for none), Show Center Mark and Show Cross Hairs (`showCenterMark`,
 //! `showCrossHairs`), the display marks the canvas draws on the artboard
 //! (https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/modify-display-settings-of-artboards.html),
 //! and its video display options, Show Video Safe Areas and Video Ruler Pixel Aspect Ratio
@@ -15,7 +16,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
-use vectorcraft_doc::Unit;
+use vectorcraft_doc::{LAYER_COLORS, LayerColor, Unit};
 use vectorcraft_engine::cmd::color_value;
 use vectorcraft_geom::{Point, Rect};
 
@@ -32,7 +33,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     confirm,
     // A new artboard's dialog opens without these; its swatch, checkboxes and Video Ruler Pixel
     // Aspect Ratio field add them. The Global checkboxes' fields come from the preferences.
-    inputs: |_| &["color", "showCenterMark", "showCrossHairs", "showVideoSafeAreas", PIXEL_ASPECT, FADE, UPDATE_WHILE_DRAGGING],
+    inputs: |_| &["color", GUIDE_LABEL, "showCenterMark", "showCrossHairs", "showVideoSafeAreas", PIXEL_ASPECT, FADE, UPDATE_WHILE_DRAGGING],
     ..DialogSpec::FORM
 };
 
@@ -49,7 +50,7 @@ fn placed(d: &Dialog) -> Rect {
 /// as the Transform panel and the Control bar show an artboard's. A new Width or Height keeps the
 /// reference point where it was, as their sizes do.
 /// Then Background Color: the Fill list (None, White, Black; Custom for another color) and a swatch
-/// that picks a color of its own, the Show Center Mark, Show Cross Hairs and Show Video Safe Areas
+/// that picks a color of its own, the Guide Label row ([`guide_label_row`]), the Show Center Mark, Show Cross Hairs and Show Video Safe Areas
 /// checkboxes, and the Video Ruler Pixel Aspect Ratio field. Last, under Global, the Fade Region
 /// Outside Artboard and Update While Dragging checkboxes.
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
@@ -116,6 +117,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if let Some(c) = set {
         d.fields.insert("color".into(), c.as_ref().map_or(Value::Null, crate::panels::color_json));
     }
+    guide_label_row(ui, d);
     ui.add_space(8.0);
     form::check(ui, d, "showCenterMark", tl!("Show Center Mark"));
     form::check(ui, d, "showCrossHairs", tl!("Show Cross Hairs"));
@@ -135,6 +137,64 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     form::check(ui, d, FADE, tl!("Fade Region Outside Artboard"));
     form::check(ui, d, UPDATE_WHILE_DRAGGING, tl!("Update While Dragging"));
     false
+}
+
+/// The field of the guide label, as `artboard.setProps` and `artboard.new` take it: a layer
+/// color's name, `#rrggbb`, or null for none.
+pub(super) const GUIDE_LABEL: &str = "guideLabel";
+
+/// The size of the color chip before each name in the Guide Label list.
+const CHIP: egui::Vec2 = egui::vec2(16.0, 10.0);
+
+/// The Guide Label row: a list of None, the layer colors (each after a chip of its color) and
+/// Custom, and, while the artboard has a label, a swatch that picks a color of its own. Custom
+/// keeps the label's color as a `#rrggbb` value.
+fn guide_label_row(ui: &mut egui::Ui, d: &mut Dialog) {
+    let now = d.fields.get(GUIDE_LABEL).and_then(Value::as_str).and_then(LayerColor::from_label_text);
+    let shown = match now {
+        None => "None",
+        Some(LayerColor::Preset(i)) => LAYER_COLORS.get(usize::from(i)).map_or("Custom", |(n, _)| *n),
+        Some(LayerColor::Custom(_)) => "Custom",
+    };
+    let mut set = None;
+    ui.horizontal(|ui| {
+        let row = form::row_label(ui, tl!("Guide Label:"));
+        ui.label_inputs_by(row.id, |ui| {
+            let border = crate::theme::Tokens::get(ui.ctx()).input_border;
+            let rows = std::iter::once(("None", None)).chain(LAYER_COLORS.iter().map(|(n, c)| (*n, Some(*c)))).chain([("Custom", None)]);
+            let picked = crate::widgets::combo(ui, "ab-options-guide-label", tl!(shown), 140.0, |ui| {
+                let mut chosen = None;
+                for (i, (name, rgb)) in rows.enumerate() {
+                    let chip = egui::IdSalt::new(("ab-guide-label-chip", i));
+                    let r = egui::Button::selectable(name == shown, (egui::Atom::custom(chip, CHIP), tl!(name))).atom_ui(ui);
+                    if let (Some(rect), Some([cr, cg, cb])) = (r.rect(chip), rgb) {
+                        ui.painter().rect_filled(rect, 1.0, egui::Color32::from_rgb(cr, cg, cb));
+                        ui.painter().rect_stroke(rect, 1.0, egui::Stroke::new(1.0, border), egui::StrokeKind::Inside);
+                    }
+                    if r.response.clicked() {
+                        chosen = Some(i);
+                    }
+                }
+                chosen
+            });
+            match picked {
+                Some(0) => set = Some(None),
+                Some(i) if i <= LAYER_COLORS.len() => set = u8::try_from(i - 1).ok().map(|i| Some(LayerColor::Preset(i))),
+                Some(_) => set = Some(Some(LayerColor::Custom(now.map_or(LAYER_COLORS[0].1, LayerColor::rgb)))),
+                None => {}
+            }
+            if let Some(c) = now {
+                let mut rgb = c.rgb();
+                let swatch_name = format!("{} {}", tl!("Guide Label:"), tl!("Swatches"));
+                if ui.name_inputs(swatch_name, |ui| ui.color_edit_button_srgb(&mut rgb)).changed() {
+                    set = Some(Some(LayerColor::Custom(rgb)));
+                }
+            }
+        });
+    });
+    if let Some(c) = set {
+        d.fields.insert(GUIDE_LABEL.into(), c.map_or(Value::Null, |c| json!(c.label_text())));
+    }
 }
 
 /// The preference and field of Fade Region Outside Artboard: while the Artboard tool is active,
@@ -292,8 +352,10 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let a = st.doc.artboards.get(index).ok_or("no artboard")?;
     let r = a.rect;
     let color = a.color.as_ref().map(crate::panels::color_json);
+    let guide_label = a.guide_label.map(LayerColor::label_text);
     let fields = json!({
         "index": index, "name": a.name, "x": r.x0, "y": r.y0, "width": r.width(), "height": r.height(), "color": color,
+        GUIDE_LABEL: guide_label,
         "showCenterMark": a.show_center_mark, "showCrossHairs": a.show_cross_hairs,
         "showVideoSafeAreas": a.show_video_safe_areas, PIXEL_ASPECT: a.video_ruler_pixel_aspect_ratio,
     });
@@ -374,7 +436,7 @@ pub fn open_new(app: &mut VectorcraftApp) -> Result<Value, String> {
 }
 
 /// OK for a new artboard: `artboard.new` with the fields (an empty name gives the default one),
-/// the background color picked, the display marks ticked and the Video Ruler Pixel Aspect Ratio
+/// the background color and guide label picked, the display marks ticked and the Video Ruler Pixel Aspect Ratio
 /// typed, and the new artboard becomes the active one.
 fn confirm_new(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut p = json!({});
@@ -387,6 +449,9 @@ fn confirm_new(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     }
     if let Some(c) = d.fields.get("color") {
         p["color"] = c.clone();
+    }
+    if let Some(c) = d.fields.get(GUIDE_LABEL).filter(|c| !c.is_null()) {
+        p[GUIDE_LABEL] = c.clone();
     }
     for k in ["showCenterMark", "showCrossHairs", "showVideoSafeAreas"] {
         if d.bool(k) {

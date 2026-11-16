@@ -92,6 +92,11 @@ fn a_long_profile_stroke_keeps_its_widths_when_outlined_near_the_view() {
         let near = render(&mut renderer, &d, at);
         assert_eq!(renderer.strokes.values().any(|e| e.crop.is_some()), cropped, "{name}: crop choice");
         let full = whole(&d, at);
+        // The cropped outline fits cubics through the same samples, but its fit starts at the
+        // crop rather than at the subpath's end, so a cubic may put its control points
+        // differently (the same curve). The rasteriser then flattens it into a slightly
+        // different polygon, which shows as one level on an anti-aliased edge pixel. Anything
+        // more would be a wrong width.
         let mismatched: Vec<_> = near
             .pixels
             .as_chunks::<4>()
@@ -99,7 +104,7 @@ fn a_long_profile_stroke_keeps_its_widths_when_outlined_near_the_view() {
             .iter()
             .zip(full.pixels.as_chunks::<4>().0.iter())
             .enumerate()
-            .filter(|(_, (a, b))| a != b)
+            .filter(|(_, (a, b))| a.iter().zip(b.iter()).any(|(a, b)| a.abs_diff(*b) > 1))
             .take(8)
             .map(|(i, (a, b))| (i % SIZE as usize, i / SIZE as usize, a.to_vec(), b.to_vec()))
             .collect();

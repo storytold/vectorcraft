@@ -424,25 +424,103 @@ fn a_graphic_style_library_in_a_ai_file_without_layers_loads_its_styles() {
              /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n{xa}0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n;\n"
         )
     };
+    // Styles of one paint (`/SimpleStyle`): a red 2 pt stroke and no fill, and a fill with a gradient
+    // the file doesn't define, which is left out rather than listed with no paint.
+    let one_paint = |name: &str, paint: &str| format!("/KnownStyle :\n({name}) /Name ,\n/SimpleStyle :\n{paint}/Paint ;\n/Def ;\n");
     let styles = format!(
-        "%AI9_BeginArtStyles\n{}{}{}%AI9_EndArtStyles\n%AI9_BeginArtStyleList\n(Red)\n(Green)\n(Blue)\n%AI9_EndArtStyleList\n",
+        "%AI9_BeginArtStyles\n{}{}{}{}{}%AI9_EndArtStyles\n\
+         %AI9_BeginArtStyleList\n(Red)\n(Green)\n(Blue)\n(Red outline)\n(Sky fill)\n%AI9_EndArtStyleList\n",
         style("Blue", "0 0 0 0 0 0 1 Xa\n"),
         style("Green", "0 0 0 0 0 1 0 Xa\n"),
-        style("Red", "0 0 0 0 1 0 0 Xa\n")
+        style("Red", "0 0 0 0 1 0 0 Xa\n"),
+        one_paint("Red outline", "0 R\n0 1 1 0 K\n0 J 0 j 2 w 10 M []0 d\n1 0 Xd\n"),
+        one_paint("Sky fill", "0 O\n0 Bb\n2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n")
     );
     let data = ai::editing_data(200.0, 100.0, &styles);
     let file = ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f");
     let mut s = Session::new();
     let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file), "name": "fills.ai"});
     let r = s.execute("graphicStyle.loadLibrary", &p).unwrap();
-    assert_eq!((&r["name"], &r["count"]), (&json!("fills"), &json!(3)), "{r}");
-    let lib = s.execute("graphicStyle.library", &json!({"library": r["library"]})).unwrap();
+    assert_eq!((&r["name"], &r["count"]), (&json!("fills"), &json!(4)), "{r}");
+    let library = r["library"].clone();
+    let lib = s.execute("graphicStyle.library", &json!({"library": library})).unwrap();
     let names: Vec<&str> = lib["styles"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect();
-    assert_eq!(names, ["Red", "Green", "Blue"], "{lib}");
+    assert_eq!(names, ["Red", "Green", "Blue", "Red outline"], "{lib}");
+    // The outline style strokes a rectangle red, 2 pt wide, and leaves it unfilled.
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let id = NodeId(s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    let r = s.execute("graphicStyle.addFromLibrary", &json!({"library": library, "names": ["Red outline"], "apply": true, "ids": [id.0]})).unwrap();
+    assert_eq!(r["added"], json!(["Red outline"]), "{r}");
+    let doc = &s.doc().unwrap().doc;
+    let look = &doc.node(id).unwrap().appearance;
+    assert!(look.fill().is_none(), "{look:?}");
+    let strokes: Vec<_> = look.items.iter().filter(|i| matches!(i, vectorcraft_doc::AppearanceItem::Stroke(_))).collect();
+    assert_eq!(strokes.len(), 1, "{look:?}");
+    let stroke = look.stroke().unwrap();
+    assert_eq!((stroke.paint.color(), stroke.width), (Some(vectorcraft_color::Color::cmyk(0.0, 1.0, 1.0, 0.0)), 2.0), "{look:?}");
+    assert_eq!(doc.graphic_style("Red outline").map(|g| &g.appearance), Some(&**look));
     let r = open(&mut s, "fills.ai", &file, json!({})).unwrap();
     let doc = &s.doc().unwrap().doc;
     let styles: Vec<(&str, u32)> = doc.graphic_styles.iter().map(|g| (g.name.as_str(), g.id)).collect();
-    assert_eq!(styles, [("Red", 1), ("Green", 2), ("Blue", 3)], "{r}");
+    assert_eq!(styles, [("Red", 1), ("Green", 2), ("Blue", 3), ("Red outline", 4)], "{r}");
+}
+
+/// A `.ai` graphic style library's styles that paint with one of the file's gradients by name (a
+/// fill style's, and the fill or stroke of a style of one paint) load with that gradient at the
+/// style's angle, fitted to the bounds of each object the style is applied to; one naming a gradient
+/// the file doesn't define is left out.
+#[test]
+fn graphic_styles_in_a_ai_library_that_paint_with_a_named_gradient_load_with_it() {
+    let gradient =
+        "%AI5_BeginGradient: (Sky)\n(Sky) 0 2 Bd\n[\n%_0 0 0 0 0 1 0 2 1 6 50 0 Bs\n%_0 0 0 0 1 1 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let band = "/KnownStyle :\n(Sky band) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n\
+         0 Bb\n2 (Sky) 0 0 45 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n;\n";
+    let one_paint = |name: &str, paint: &str| format!("/KnownStyle :\n({name}) /Name ,\n/SimpleStyle :\n{paint}/Paint ;\n/Def ;\n");
+    let styles = format!(
+        "%AI9_BeginArtStyles\n{band}{}{}{}%AI9_EndArtStyles\n\
+         %AI9_BeginArtStyleList\n(Sky band)\n(Sky fill)\n(Sky outline)\n(Dusk fill)\n%AI9_EndArtStyleList\n",
+        one_paint("Sky fill", "0 O\n0 Bb\n2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n"),
+        one_paint("Sky outline", "0 R\n0 J 0 j 2 w 10 M []0 d\n1 Bb\n2 (Sky) 0 0 90 100 1 0 0 1 0 0 1 Bg\n0 BB\n1 0 Xd\n"),
+        one_paint("Dusk fill", "0 O\n0 Bb\n2 (Dusk) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n")
+    );
+    // A palette with the gradient's swatch, so the document opened from the file shows its gradient.
+    let palette = INKS_PALETTE.replace("0 0 Pb\n", "0 0 Pb\nBb\n2 (Sky) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Sky)\nPc\n");
+    let data = ai::editing_data(200.0, 100.0, &format!("{gradient}{palette}{styles}"));
+    let file = ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f");
+    let mut s = Session::new();
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file), "name": "skies.ai"});
+    let r = s.execute("graphicStyle.loadLibrary", &p).unwrap();
+    let library = r["library"].clone();
+    let lib = s.execute("graphicStyle.library", &json!({"library": library})).unwrap();
+    let names: Vec<&str> = lib["styles"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Sky band", "Sky fill", "Sky outline"], "{lib}");
+    // The file's gradient, as the document opened from it has its swatch.
+    open(&mut s, "skies.ai", &file, json!({})).unwrap();
+    let sky = match s.doc().unwrap().doc.swatch("Sky").map(|w| w.paint.clone()) {
+        Some(vectorcraft_color::Paint::Gradient(g)) => g.gradient,
+        other => panic!("{other:?}"),
+    };
+    // Applied to a small and a large rectangle, each gradient is fitted to the rectangle it paints.
+    s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+    for (style, (x, size)) in [("Sky band", (10, 20)), ("Sky fill", (40, 200)), ("Sky outline", (10, 120))] {
+        let rect = json!({"x": x, "y": x, "width": size, "height": size / 2});
+        let id = NodeId(s.execute("shape.rectangle", &rect).unwrap()["id"].as_u64().unwrap());
+        let r = s.execute("graphicStyle.addFromLibrary", &json!({"library": library, "names": [style], "apply": true, "ids": [id.0]})).unwrap();
+        assert_eq!(r["added"], json!([style]), "{r}");
+        let look = &s.doc().unwrap().doc.node(id).unwrap().appearance;
+        let (paint, angle, stroked) = match style {
+            "Sky outline" => (look.stroke().map(|st| &st.paint), 90.0, true),
+            "Sky band" => (look.fill().map(|f| &f.paint), 45.0, false),
+            _ => (look.fill().map(|f| &f.paint), 0.0, false),
+        };
+        let Some(vectorcraft_color::Paint::Gradient(g)) = paint else { panic!("{style}: {look:?}") };
+        assert_eq!((&g.gradient, g.geom, g.angle), (&sky, None, angle), "{style}");
+        assert_eq!(look.stroke().is_some(), stroked, "{style}: {look:?}");
+        if stroked {
+            assert!(look.fill().is_none() && look.stroke().is_some_and(|st| st.width == 2.0), "{look:?}");
+        }
+    }
 }
 
 /// A `.ai` symbol library (symbols and their list, no layers) opens with its symbols, and Other
@@ -888,7 +966,7 @@ fn an_ai_file_opens_its_variable_library() {
                 {"name": "v_file", "kind": "image", "bindings": 0},
                 {"name": "v_graph", "kind": "graph", "bindings": 0},
                 {"name": "v_unbound", "kind": "unknown", "bindings": 0},
-            ], "locked": true})
+            ], "locked": true, "sort": {"by": "none", "descending": false}})
         );
         let r = s.execute("dataset.list", &json!({})).unwrap();
         assert_eq!(r["active"], "ds_two", "{r}");
@@ -1080,6 +1158,91 @@ fn an_ai_file_saved_without_its_pdf_part_places_from_its_editing_data() {
     assert!(e.contains("without PDF compatibility") && e.contains("zlib"), "{e}");
     let e = s.execute("file.place", &json!({"name": "plain.ai", "dataBase64": plain})).unwrap_err().to_string();
     assert!(e.contains("placeholder"), "{e}");
+}
+
+/// `document.open` with `linkPages` refuses a `.ai` saved without PDF compatibility, whose page is
+/// only a placeholder, and opens a PDF-compatible one.
+#[test]
+fn link_pages_refuses_an_ai_file_saved_without_its_pdf_part() {
+    let d = std::env::temp_dir().join(format!("vc-ailinkpages-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let file = |name: &str, page: &str| {
+        let path = d.join(name);
+        std::fs::write(&path, ai::ai(&compressed(&ai::sample_data()), page)).unwrap();
+        path.to_string_lossy().to_string()
+    };
+    let (plain, compatible) = (file("plain.ai", PLACEHOLDER), file("compatible.ai", "0 g 10 10 40 40 re f"));
+    let mut s = Session::new();
+    let e = s.execute("document.open", &json!({"path": plain, "linkPages": true})).unwrap_err().to_string();
+    assert!(e.contains("isn't a PDF or a PDF-compatible .ai file"), "{e}");
+    assert!(s.documents().is_empty(), "nothing opened");
+    s.execute("document.open", &json!({"path": compatible, "linkPages": true})).unwrap();
+    assert!(s.doc().unwrap().doc.has_placed());
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// `document.open` with `linkPages` opens a PDF-compatible `.ai` asked for its crop box on its trim
+/// box, as it opens as art, showing its bleed box round the artboard, which is the document's bleed.
+#[test]
+fn link_pages_open_an_ai_file_on_its_trim_box_with_its_bleed() {
+    let d = std::env::temp_dir().join(format!("vc-ailinkpagestrim-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let path = d.join("trimmed.ai");
+    let boxes = "/TrimBox [10 10 190 90] /BleedBox [4 2 196 98]";
+    std::fs::write(&path, ai::ai_with(&compressed(&ai::sample_data()), "0 g 10 10 40 40 re f", boxes)).unwrap();
+    let path = path.to_string_lossy().to_string();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": path, "linkPages": true})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let board = doc.artboards[0].rect;
+    assert_eq!((board.width(), board.height()), (180.0, 80.0), "the trim box");
+    assert_eq!(doc.setup.bleed, [8.0, 8.0, 6.0, 6.0], "top, bottom, left, right");
+    // The page shows its bleed box, so the art in the bleed is kept.
+    let placed = doc.layers[0].children().unwrap()[0].clone();
+    let NodeKind::PlacedDocument(p) = &placed.kind else { panic!("{:?}", placed.kind) };
+    assert_eq!((p.width, p.height, p.page_box), (192.0, 96.0, vectorcraft_doc::PageBox::Bleed));
+    assert_eq!(p.xf.translation(), vectorcraft_geom::Vec2::new(-6.0, -8.0), "the trim box on the artboard");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn link_pages_on_their_trim_boxes_keep_the_bleed_between_the_artboards() {
+    // Two 100 pt trim boxes: the first with 60 pt of bleed on each side, the second with 80 pt on
+    // its left, more than the largest document bleed (72 pt).
+    let entries = format!("/PieceInfo << /Illustrator << /Private << /AIPrivateData1 {} 0 R /NumBlock 1 >> >> >>", first_extra(2));
+    let first = PdfPage {
+        bleed: Some([0.0, 0.0, 220.0, 220.0]),
+        trim: Some([60.0, 60.0, 160.0, 160.0]),
+        entries,
+        ..PdfPage::new(220.0, 220.0, "0 g 0 0 220 220 re f")
+    };
+    let second = PdfPage {
+        bleed: Some([0.0, 0.0, 240.0, 220.0]),
+        trim: Some([80.0, 60.0, 180.0, 160.0]),
+        ..PdfPage::new(240.0, 220.0, "0 g 0 0 240 220 re f")
+    };
+    let d = std::env::temp_dir().join(format!("vc-ailinkpagesgap-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let path = d.join("pages.ai");
+    std::fs::write(&path, pdf_with(&[first, second], &["<< /Length 4 >>\nstream\ndata\nendstream"], None)).unwrap();
+    let path = path.to_string_lossy().to_string();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": path, "linkPages": true})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(doc.setup.bleed, [60.0, 60.0, 72.0, 60.0], "top, bottom, left, right");
+    // The first page's bleed ends at 160; the second's starts 36 pt later, 80 pt left of its trim box.
+    let boards: Vec<(f64, f64)> = doc.artboards.iter().map(|a| (a.rect.x0, a.rect.x1)).collect();
+    assert_eq!(boards, [(0.0, 100.0), (276.0, 376.0)]);
+    let shown: Vec<f64> = doc
+        .layers
+        .iter()
+        .map(|l| match &l.children().unwrap()[0].kind {
+            NodeKind::PlacedDocument(p) => p.xf.translation().x,
+            k => panic!("{k:?}"),
+        })
+        .collect();
+    assert_eq!(shown, [-60.0, 196.0], "each page's bleed box round its artboard");
+    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// A page of text alone, as text-only art has in its PDF part: no path is painted.

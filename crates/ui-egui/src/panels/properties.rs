@@ -69,6 +69,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         objects_on_path_section(app, ui, &oop);
         divider(ui);
     }
+    graph::section(app, ui);
     if matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Text(_))) {
         type_sections(app, ui);
         divider(ui);
@@ -159,6 +160,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         crate::panels::image_trace::trace_button(app, ui, ui.available_width());
         actions.push((tl!("Crop Image"), "ui.cropImage"));
         actions.push((tl!("Mask"), "object.maskImage"));
+        // Remove Background at once with its defaults, as the reference app's Quick Actions do
+        // (<https://community.adobe.com/announcements-651/ai-powered-image-editing-features-in-illustrator-1624061>).
+        actions.push((tl!("Remove Background"), crate::addons::image::REMOVE_BACKGROUND));
     }
     // Object › Path's Offset Path and Simplify take paths: type alone could only fail, and offsets
     // live through the Appearance panel's Effect › Path › Offset Path (#2238).
@@ -353,7 +357,7 @@ fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(4.0);
     let w = (ui.available_width() - 6.0) / 2.0;
     let links = crate::panels::links::ID;
-    ui.horizontal(|ui| crate::place::link_buttons(app, ui, id, linked, &name, Some(w)));
+    ui.horizontal(|ui| crate::place::link_buttons(app, ui, id, linked, &name, crate::place::LinkButtons::Width(w)));
     ui.horizontal(|ui| {
         if app.services.pick_open.is_some() && widgets::flat_button(ui, tl!("Replace…"), w).clicked() {
             crate::panels::links::replace(app, vec![id]);
@@ -386,12 +390,15 @@ fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vect
     });
 }
 
-/// The Objects on Path groups selected with nothing else: their ids, and the Pivot and Rotate they
-/// share (`None` where they differ).
+/// The Objects on Path groups selected with nothing else: their ids, the Pivot and Rotate they
+/// share (`None` where they differ), and whether Detach can take an object off the path: one group,
+/// neither hidden nor locked, with an object chosen with its Select/Move widget that is neither
+/// hidden nor locked.
 struct ObjectsOnPathSelection {
     ids: Vec<u64>,
     pivot: Option<u8>,
     rotate: Option<f64>,
+    detachable: bool,
 }
 
 /// The selection as Objects on Path groups ([`ObjectsOnPathSelection`]), when every selected
@@ -402,7 +409,11 @@ fn selected_objects_on_path(app: &VectorcraftApp) -> Option<ObjectsOnPathSelecti
     for id in &st.selection.objects {
         let rec = st.doc.node(*id)?.extras().objects_on_path.as_deref()?;
         match &mut out {
-            None => out = Some(ObjectsOnPathSelection { ids: vec![id.0], pivot: Some(rec.pivot), rotate: Some(rec.rotate) }),
+            None => {
+                let chosen = st.selection.on_path_member.filter(|m| st.selection.objects.len() == 1 && rec.members.iter().any(|x| x.id == *m));
+                let detachable = chosen.is_some_and(|m| st.doc.is_editable(*id) && st.doc.is_editable(m));
+                out = Some(ObjectsOnPathSelection { ids: vec![id.0], pivot: Some(rec.pivot), rotate: Some(rec.rotate), detachable });
+            }
             Some(s) => {
                 s.ids.push(id.0);
                 if s.pivot != Some(rec.pivot) {
@@ -422,7 +433,8 @@ fn selected_objects_on_path(app: &VectorcraftApp) -> Option<ObjectsOnPathSelecti
 /// path, as the help page places them in the Properties panel
 /// (<https://helpx.adobe.com/illustrator/using/objects-on-path.html>). A change goes to every
 /// selected group in one undo step (`object.objectsOnPath.options`). Where the groups differ, no
-/// Pivot square is chosen and Rotate is blank.
+/// Pivot square is chosen and Rotate is blank. Detach takes the object chosen with its Select/Move
+/// widget off the path (`object.objectsOnPath.detach`), and is dimmed until one is chosen.
 fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop: &ObjectsOnPathSelection) {
     section_header(ui, tl!("Objects on Path Options"));
     let fw = super::field_width(ui);
@@ -449,6 +461,12 @@ fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop: &ObjectsO
         }
         ui.end_row();
     });
+    let w = ui.available_width();
+    if ui.add_enabled_ui(oop.detachable, |ui| widgets::flat_button(ui, tl!("Detach"), w)).inner.clicked()
+        && let Err(e) = app.run("object.objectsOnPath.detach", json!({}))
+    {
+        app.status(e);
+    }
 }
 
 /// Whether the selection uses more than one colour (`recolor.colors`), which offers the Recolor
@@ -614,7 +632,7 @@ fn artboard_size_controls_inner(
     let mut fit = None;
     ui.horizontal(|ui| {
         dim_label(ui, tl!("Preset:"));
-        preset = widgets::combo(ui, "ab-preset", &current, 140.0, |ui| {
+        preset = widgets::combo(ui, "ab-preset", &current, PRESET_MENU_WIDTH, |ui| {
             let mut chosen = None;
             if let Some(enabled) = fits {
                 for (selection, label) in [(false, tl!("Fit to Artwork Bounds")), (true, tl!("Fit to Selected Art"))] {
@@ -645,6 +663,19 @@ fn artboard_size_controls_inner(
         }
     });
     (preset.map(|(w, h)| ArtboardSizeChoice::Preset(w, h)).or_else(|| orientation.map(ArtboardSizeChoice::Orientation)), fit)
+}
+
+/// The width of the artboard size row's Preset menu.
+const PRESET_MENU_WIDTH: f32 = 140.0;
+
+/// The width of the artboard size row's Portrait and Landscape buttons, 26 points each, with the
+/// 2 points between them.
+const ORIENTATION_BUTTONS_WIDTH: f32 = 2.0 * 26.0 + 2.0;
+
+/// The widths of the parts of [`artboard_size_row`] in a row, as [`crate::chrome::Fit::room`] takes
+/// them: the Preset label, its menu, and the Portrait and Landscape buttons.
+pub(crate) fn artboard_size_row_widths(ui: &Ui) -> [f32; 3] {
+    [widgets::dim_label_width(ui, tl!("Preset:")), PRESET_MENU_WIDTH, ORIENTATION_BUTTONS_WIDTH]
 }
 
 /// Artboard `i`'s Fill, its background `color`: the chip shows it (the None paint when the artboard
@@ -1014,9 +1045,13 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
             });
         }
         super::paragraph::hyphenate_check(app, ui, &para);
+        // Area type: Dynamic Text's Block and its gaps.
+        dynamic_text::rows(app, ui);
     }
 }
 
+pub(crate) mod dynamic_text;
+pub(crate) mod graph;
 pub(crate) mod vertical_align;
 
 #[cfg(test)]

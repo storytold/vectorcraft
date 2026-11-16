@@ -345,3 +345,27 @@ fn scale_text_attributes_bakes_group_scale_and_undoes() {
     s.execute("edit.undo", &json!({})).unwrap();
     near(text(&s, id).runs[0].style.size, 12.0);
 }
+
+/// Scale Text Attributes bakes a horizontal stretch into the Horizontal Scale: tracked type stays
+/// where the stretch drew it, as tracking is measured in the em the Horizontal Scale draws
+/// (`vectorcraft_text::spacing_scale`). It used to lose the stretch's share of the tracking.
+#[test]
+fn scale_text_attributes_keeps_tracked_type_where_it_was() {
+    let mut s = session();
+    let id = create(&mut s, 20.0);
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "tracking": 300})).unwrap();
+    s.execute("object.scale", &json!({"sx": 200, "sy": 100})).unwrap();
+    let pens = |s: &Session| {
+        let t = text(s, id);
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+        lay.glyphs.iter().map(|g| t.xf * (g.xf * Point::ZERO)).collect::<Vec<_>>()
+    };
+    let before = pens(&s);
+    s.execute("type.scaleTextAttributes", &json!({})).unwrap();
+    near(text(&s, id).runs[0].style.h_scale, 200.0);
+    let after = pens(&s);
+    assert_eq!(before.len(), after.len());
+    for (b, a) in before.iter().zip(&after) {
+        assert!((*a - *b).hypot() < 1e-6, "{before:?} {after:?}");
+    }
+}

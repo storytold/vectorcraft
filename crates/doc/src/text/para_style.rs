@@ -17,21 +17,51 @@ pub enum Justify {
     JustifyAll,
 }
 
-/// Paragraph composer (Paragraph panel menu): how lines are broken.
+/// Paragraph composer (Paragraph panel menu): how lines are broken, and whether complex scripts
+/// (Indic, Arabic, Hebrew) are shaped. `SingleLine` and `EveryLine` are the Middle Eastern & South
+/// Asian composers: they shape complex scripts with the font's layout tables, as all type is set
+/// here, and are what documents saved before the four composers existed use. The `Standard`
+/// composers break lines the same way but set a complex script glyph by glyph as the font maps its
+/// characters, with no conjuncts, marks placed or joining forms: what fonts that keep a script's
+/// glyphs on Latin character codes (legacy ANSI Indic fonts) need.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Composer {
-    /// Break each line as soon as it is full.
+    /// Middle Eastern & South Asian Single-line Composer: break each line as soon as it is full.
     SingleLine,
-    /// Total fit over the whole paragraph (Illustrator's default): justified lines get even word
-    /// spacing, ragged lines an even rag.
+    /// Middle Eastern & South Asian Every-line Composer: total fit over the whole paragraph
+    /// (Illustrator's default): justified lines get even word spacing, ragged lines an even rag.
     #[default]
     EveryLine,
+    /// Standard Single-line Composer: [`Composer::SingleLine`]'s breaks, complex scripts not shaped.
+    StandardSingleLine,
+    /// Standard Every-line Composer: [`Composer::EveryLine`]'s breaks, complex scripts not shaped.
+    StandardEveryLine,
 }
 
 impl Composer {
     fn is_default(&self) -> bool {
         *self == Self::default()
+    }
+
+    /// Does this composer break lines one at a time (as opposed to a total fit)?
+    pub fn is_single_line(self) -> bool {
+        matches!(self, Self::SingleLine | Self::StandardSingleLine)
+    }
+
+    /// Does this composer shape complex scripts ([`Composer::SingleLine`], [`Composer::EveryLine`])?
+    pub fn shapes_complex_scripts(self) -> bool {
+        matches!(self, Self::SingleLine | Self::EveryLine)
+    }
+
+    /// The same shaping with the other line breaking (`single_line`: one line at a time).
+    pub fn with_breaking(self, single_line: bool) -> Self {
+        match (single_line, self.shapes_complex_scripts()) {
+            (true, true) => Self::SingleLine,
+            (true, false) => Self::StandardSingleLine,
+            (false, true) => Self::EveryLine,
+            (false, false) => Self::StandardEveryLine,
+        }
     }
 }
 
@@ -237,6 +267,13 @@ pub struct ParaStyle {
     /// Kinsoku Shori Type (Paragraph panel menu): how a line keeps those characters off its start
     /// and end, by pushing them in onto the line or out to the next one. No effect without kinsoku.
     pub kinsoku_type: KinsokuShoriType,
+    /// Bunri-Kinshi (Paragraph panel menu): a line never breaks inside an inseparable pair (two em
+    /// dashes, two ellipses, two two-dot leaders, a vertical kana repeat mark's two halves). Kept
+    /// with kinsoku None, where it has no effect. Off by default.
+    pub bunri_kinshi: bool,
+    /// Kurikaeshi Moji Shori (Paragraph panel menu): a repeat mark (々, ゝ, ゞ, ヽ or ヾ) that starts
+    /// a line is drawn as the character it repeats, and the text keeps the mark. Off by default.
+    pub kurikaeshi_moji_shori: bool,
     /// Roman Hanging Punctuation (Paragraph panel menu): quotation marks, hyphens, full stops and
     /// commas starting or ending a line hang outside the margin, and asterisks, tildes, ellipses,
     /// dashes, colons and semicolons hang by half. East Asian punctuation hangs by burasagari.
@@ -244,9 +281,21 @@ pub struct ParaStyle {
     /// Insert Kashidas (Paragraph panel): justified lines lengthen their Arabic words with
     /// kashidas before they widen their word spaces.
     pub kashida: Kashida,
+    /// Korean Line Break Anywhere (Paragraph panel menu): a line may break between any two Hangul
+    /// syllables. Off, a Korean word (the characters between spaces, when any of them is Hangul)
+    /// breaks only at its spaces and punctuation, or where it is wider than the line. New type and
+    /// imported text have it off; paragraphs saved before it existed open with it on, the line
+    /// breaks they were laid out with.
+    pub korean_line_break_anywhere: bool,
 }
 
 impl ParaStyle {
+    /// The attributes a text object saved without `para` reads with: the defaults, with Korean
+    /// Line Break Anywhere on, as a saved paragraph without that field reads.
+    pub(crate) fn omitted() -> Self {
+        Self { korean_line_break_anywhere: true, ..Self::default() }
+    }
+
     /// Keeps the indents and the space before and after to -[`crate::MAX_COORD`] to
     /// [`crate::MAX_COORD`], and the tab stop positions to 0 to 100,000 pt, the range
     /// `text.tabs.set` takes. A value outside its range becomes the nearer end, and one that is
@@ -327,9 +376,17 @@ struct ParaStyleFile {
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     kinsoku_type: KinsokuShoriType,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    bunri_kinshi: bool,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    kurikaeshi_moji_shori: bool,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     roman_hanging: bool,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     kashida: Kashida,
+    /// Written only when off: a paragraph saved without it was laid out breaking between Hangul
+    /// syllables.
+    #[serde(default = "crate::yes", skip_serializing_if = "crate::skip::is_true")]
+    korean_line_break_anywhere: bool,
 }
 
 impl From<ParaStyle> for ParaStyleFile {
@@ -359,8 +416,11 @@ impl From<ParaStyle> for ParaStyleFile {
             burasagari,
             kinsoku,
             kinsoku_type,
+            bunri_kinshi,
+            kurikaeshi_moji_shori,
             roman_hanging,
             kashida,
+            korean_line_break_anywhere,
             ..
         } = p;
         Self {
@@ -384,8 +444,11 @@ impl From<ParaStyle> for ParaStyleFile {
             burasagari,
             kinsoku,
             kinsoku_type,
+            bunri_kinshi,
+            kurikaeshi_moji_shori,
             roman_hanging,
             kashida,
+            korean_line_break_anywhere,
         }
     }
 }
@@ -413,8 +476,11 @@ impl From<ParaStyleFile> for ParaStyle {
             burasagari,
             kinsoku,
             kinsoku_type,
+            bunri_kinshi,
+            kurikaeshi_moji_shori,
             roman_hanging,
             kashida,
+            korean_line_break_anywhere,
             ..
         } = f;
         Self {
@@ -437,8 +503,11 @@ impl From<ParaStyleFile> for ParaStyle {
             burasagari,
             kinsoku,
             kinsoku_type,
+            bunri_kinshi,
+            kurikaeshi_moji_shori,
             roman_hanging,
             kashida,
+            korean_line_break_anywhere,
         }
     }
 }
@@ -478,6 +547,21 @@ pub enum Mojikumi {
     /// Consecutive punctuation shares one half-em space (JLREQ 3.1.4), and a closing bracket,
     /// comma or full stop ending a line is set half width.
     LineEndHalf,
+    /// YakumonoHankaku: every opening and closing bracket, comma and full stop is set half width,
+    /// a middle dot loses a quarter em on each side, and a quarter em separates Japanese and Latin
+    /// letters or digits.
+    YakumonoHankaku,
+    /// GyomatsuYakumonoHankaku: punctuation keeps its full width, except that an opening bracket
+    /// starting a line is set flush with the line's start, a closing bracket, comma or full stop
+    /// ending a line is set half width and a middle dot ending a line loses the quarter em after
+    /// it; a quarter em separates Japanese and Latin letters or digits.
+    GyomatsuYakumonoHankaku,
+    /// GyomatsuYakumonoZenkaku: punctuation keeps its full width at a line's end too; a quarter em
+    /// separates Japanese and Latin letters or digits.
+    GyomatsuYakumonoZenkaku,
+    /// YakumonoZenkaku: punctuation keeps its full width, with no added space between Japanese and
+    /// Latin text.
+    YakumonoZenkaku,
 }
 
 impl Mojikumi {

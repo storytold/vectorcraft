@@ -138,6 +138,27 @@ fn menu_items_are_on_for_the_statuses_present_and_shift_adds() {
     assert!(on("Select Embedded"));
 }
 
+/// A missing link kept only in a symbol's art can't be selected: Select Missing stays off and
+/// the dialog does not list it.
+#[test]
+fn links_inside_a_symbol_are_left_out_of_selecting_by_status() {
+    let dir = Folder::new("symbol");
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let path = dir.file("inside.png", &png(30, 20));
+    let id = app.run("file.place", json!({"path": path, "at": [100, 100]})).unwrap()["ids"][0].as_u64().unwrap();
+    app.run("symbol.new", json!({"name": "Mark", "ids": [id]})).unwrap();
+    app.run("edit.clear", json!({})).unwrap();
+    std::fs::remove_file(&path).unwrap();
+    let list = app.run("links.list", json!({})).unwrap();
+    assert_eq!(list["missing"], 1, "{list}");
+    refresh(&mut app, 0.0);
+    let entries = menus::menu_entries(&app);
+    let missing = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Selection Tools"] && e.label == "Select Missing").unwrap();
+    assert!(!missing.enabled);
+    assert_eq!(super::fields(&mut app)["__rows"], json!([]));
+}
+
 #[test]
 fn the_links_panel_menu_lists_the_select_items() {
     let dir = Folder::new("flyout");

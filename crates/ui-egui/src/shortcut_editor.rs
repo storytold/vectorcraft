@@ -358,6 +358,9 @@ pub struct Entry {
     /// Menu path ("Object › Arrange") or "Tools".
     pub group: String,
     pub is_tool: bool,
+    /// Keyboard Shortcuts adds the key to the entry's name: another entry has the same group and
+    /// label ([`distinct_names`]).
+    pub shows_key: bool,
 }
 
 /// The editor's entries, the Effect menu's effect items and Object › Plug-ins' filter items while
@@ -374,35 +377,79 @@ pub(crate) struct Snapshot {
 /// a live-effect or filter plug-in installed later has its row, and one removed has none.
 pub(crate) fn snapshot() -> Arc<Snapshot> {
     static LAST: Mutex<Option<Arc<Snapshot>>> = Mutex::new(None);
-    let revision = menus::plugin_revision();
+    let mut revision = menus::plugin_revision();
     let last = LAST.lock().unwrap_or_else(|e| e.into_inner()).clone();
-    if let Some(s) = last.filter(|s| s.revision == revision) {
+    // A test's walk hook runs even when a snapshot of this revision is already stored.
+    #[cfg(test)]
+    let hooked = {
+        let f = tests::WHILE_WALKING.take();
+        let hooked = f.is_some();
+        tests::WHILE_WALKING.set(f);
+        hooked
+    };
+    #[cfg(not(test))]
+    let hooked = false;
+    if let Some(s) = last.filter(|s| s.revision == revision && !hooked) {
         return s;
     }
+    // When a plug-in is installed or removed during the walk, the entries may not match
+    // `revision`, and the keymap cached for it would lack rows or hold extra ones. The menus are
+    // walked again at the new revision, and a snapshot that still doesn't match is not cached.
+    let mut s = build_snapshot(revision);
+    for _ in 0..8 {
+        let now = menus::plugin_revision();
+        if now == revision {
+            let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+            // A newer snapshot another thread stored meanwhile stays.
+            if last.as_ref().is_none_or(|l| l.revision <= revision) {
+                *last = Some(s.clone());
+            }
+            return s;
+        }
+        revision = now;
+        s = build_snapshot(revision);
+    }
+    s
+}
+
+/// The snapshot of the menus as they are now, under plug-in revision `revision`.
+fn build_snapshot(revision: u64) -> Arc<Snapshot> {
     // Built without the lock held: the Effect menu is walked anew.
+    #[cfg(test)]
+    if let Some(f) = tests::WHILE_WALKING.take() {
+        f();
+    }
     let effects: Arc<[EffectItem]> = build_effect_items().into();
     let filters: Arc<[FilterItem]> = build_filter_items().into();
     let (head, tail) = fixed_entries();
-    let entries: Arc<[Entry]> = head
+    let mut entries: Vec<Entry> = head
         .iter()
         .cloned()
-        .chain(effects.iter().map(|e| Entry { key: format!("effect:{}", e.effect), label: e.label.clone(), group: e.group.clone(), is_tool: false }))
-        .chain(filters.iter().map(|f| Entry { key: format!("plugin:{}", f.id), label: f.label.clone(), group: f.group.clone(), is_tool: false }))
+        .chain(effects.iter().map(|e| Entry {
+            key: format!("effect:{}", e.effect),
+            label: e.label.clone(),
+            group: e.group.clone(),
+            is_tool: false,
+            shows_key: false,
+        }))
+        .chain(filters.iter().map(|f| Entry {
+            key: format!("plugin:{}", f.id),
+            label: f.label.clone(),
+            group: f.group.clone(),
+            is_tool: false,
+            shows_key: false,
+        }))
         .chain(vectorcraft_engine::cmd::plugin::command_specs().into_iter().map(|c| Entry {
             key: c.id.into(),
             label: c.label.into(),
             group: c.menu.join(" › "),
             is_tool: false,
+            shows_key: false,
         }))
         .chain(tail.iter().cloned())
         .collect();
-    let s = Arc::new(Snapshot { revision, effects, filters, entries });
-    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
-    // A newer snapshot another thread stored meanwhile stays.
-    if last.as_ref().is_none_or(|l| l.revision <= revision) {
-        *last = Some(s.clone());
-    }
-    s
+    distinct_names(&mut entries);
+    Arc::new(Snapshot { revision, effects, filters, entries: entries.into() })
 }
 
 /// Every tool, command and panel the editor can give a shortcut; [`listed`] says which it lists.
@@ -416,39 +463,65 @@ fn fixed_entries() -> &'static (Vec<Entry>, Vec<Entry>) {
     static E: OnceLock<(Vec<Entry>, Vec<Entry>)> = OnceLock::new();
     E.get_or_init(|| {
         let mut v: Vec<Entry> = vectorcraft_tools::catalog::all_tools()
-            .map(|t| Entry { key: format!("tool:{}", t.id), label: t.label.to_string(), group: "Tools".into(), is_tool: true })
+            .map(|t| Entry { key: format!("tool:{}", t.id), label: t.label.to_string(), group: "Tools".into(), is_tool: true, shows_key: false })
             .collect();
         let mut seen = HashSet::new();
+        // The commands listed only because an item of the menu bar runs them as a key press would
+        // (Set Corners…).
+        let mut by_the_menu_bar = HashSet::new();
         for c in vectorcraft_engine::command_specs() {
-            // Commands outside the menus (panel menu items) are
-            // listed when a key alone can run them; queries and aliases never are.
-            let listed = if c.menu.is_empty() {
-                c.shortcut.is_some() || (c.journal && !vectorcraft_engine::cmd::is_alias(c.id) && runs_without_params(c.params))
-            } else {
-                true
-            };
-            if !listed || !seen.insert(c.id) {
+            let own = listed_on_its_own(c);
+            if !(own || a_menu_bar_item_runs(c.id, c.params)) || !seen.insert(c.id) {
                 continue;
             }
+            if !own {
+                by_the_menu_bar.insert(c.id);
+            }
             let group = if c.menu.is_empty() { id_group(c.id) } else { c.menu.join(" › ") };
-            v.push(Entry { key: c.id.into(), label: c.label.into(), group, is_tool: false });
+            v.push(Entry { key: c.id.into(), label: c.label.into(), group, is_tool: false, shows_key: false });
         }
         v.extend(crate::state::all_panels().map(|(id, label)| Entry {
             key: format!("panel:{id}"),
             label: label.to_string(),
             group: "Window".into(),
             is_tool: false,
+            shows_key: false,
         }));
         // Each effect of the Effect menu comes next, by its own key (#3296): see [`snapshot`].
         let mut tail = vec![];
         for (id, label, sc, params) in menus::UI_COMMANDS {
-            // Rename has no default key, and a key press names the selection: it needs no `id`.
-            let key_runs_it = !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path") || *id == "ui.rename";
-            if !seen.insert(id) || !key_runs_it {
+            let own = ui_listed_on_its_own(id, sc, params);
+            if !seen.insert(id) || !(own || a_menu_bar_item_runs(id, params)) {
                 continue;
             }
-            tail.push(Entry { key: id.to_string(), label: label.to_string(), group: id_group(id), is_tool: false });
+            if !own {
+                by_the_menu_bar.insert(id);
+            }
+            tail.push(Entry { key: id.to_string(), label: label.to_string(), group: id_group(id), is_tool: false, shows_key: false });
         }
+        // A command listed only because an item of the menu bar runs it can have the group and
+        // label of another entry. When that entry is an engine command that no item of the menu bar
+        // runs, the command the item runs keeps the name and the other entry is shown in the group
+        // of its id: File › Export Selection… runs `file.exportSelection`, as the menu item does,
+        // and `document.exportSelection` shows as Document › Export Selection…. Otherwise the
+        // command is left out: Window › Learn stays the Learn panel's entry. Entries that still
+        // have the same name, plug-ins included, are given names of their own by
+        // [`distinct_names`].
+        let name = |e: &Entry| (e.group.clone(), e.label.clone());
+        let new_names: HashSet<_> = v.iter().chain(&tail).filter(|e| by_the_menu_bar.contains(e.key.as_str())).map(name).collect();
+        for e in v.iter_mut().chain(tail.iter_mut()) {
+            if new_names.contains(&name(e))
+                && !by_the_menu_bar.contains(e.key.as_str())
+                && vectorcraft_engine::find_command(&e.key).is_some()
+                && !menu_bar_items().contains_key(e.key.as_str())
+            {
+                e.group = id_group(&e.key);
+            }
+        }
+        let names: HashSet<_> = v.iter().chain(&tail).filter(|e| !by_the_menu_bar.contains(e.key.as_str())).map(name).collect();
+        let keep = |e: &Entry| !by_the_menu_bar.contains(e.key.as_str()) || !names.contains(&name(e));
+        v.retain(keep);
+        tail.retain(keep);
         (v, tail)
     })
 }
@@ -568,9 +641,21 @@ pub(crate) fn shown_group(group: &str) -> String {
     group.split(" › ").map(|s| tl!(s)).collect::<Vec<_>>().join(" › ")
 }
 
-/// How Keyboard Shortcuts names entry `e`: a tool by its label, the others after their menu.
+/// How Keyboard Shortcuts names entry `e`: a tool by its label, the others after their menu, and
+/// an entry that [`Entry::shows_key`] with its key after the name.
 pub(crate) fn shown_name(e: &Entry) -> String {
-    if e.is_tool || e.group.is_empty() { shown_label(e).to_string() } else { format!("{} › {}", shown_group(&e.group), shown_label(e)) }
+    name_of(e, &shown_group(&e.group), shown_label(e))
+}
+
+/// [`shown_name`] in English, for a status or error message, which is translated when shown.
+fn english_name(e: &Entry) -> String {
+    name_of(e, &e.group, &e.label)
+}
+
+/// Entry `e`'s name with its group and label as `group` and `label`.
+fn name_of(e: &Entry, group: &str, label: &str) -> String {
+    let name = if e.is_tool || e.group.is_empty() { label.to_string() } else { format!("{group} › {label}") };
+    if e.shows_key { format!("{name} ({})", e.key) } else { name }
 }
 
 /// The group of a command no menu holds: the first part of its id, capitalised (`edit.x` → "Edit").
@@ -579,12 +664,111 @@ fn id_group(id: &str) -> String {
     c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default()
 }
 
-/// Does a command's params doc (`{a?, b?} …`) say it runs with no params, as a shortcut runs it?
+/// Gives entries that have the same group and label names of their own, and leaves the others as
+/// they are. It runs on the whole snapshot, plug-ins included, after [`fixed_entries`] has shown an
+/// engine command in the group of its id or left out a command listed only because an item of the
+/// menu bar runs it:
+/// 1. A command that an item of the menu bar runs, as a key press would run it, is shown under
+///    that item's menu path ([`menu_bar_path`]): the four Other Library… commands go under Window ›
+///    Swatch Libraries, Brush Libraries, Graphic Style Libraries and Symbol Libraries.
+/// 2. A command whose id is another command's id with one more part is shown under that command's
+///    label: Reset Panel goes under Character Style Options and Paragraph Style Options.
+/// 3. Entries that still have the same name show their key after it ([`Entry::shows_key`]), except
+///    the one entry an item of the menu bar runs: File › New… stays the New Document dialog's
+///    entry, and `file.new` shows as File › New… (file.new). An entry whose name is then the name
+///    another entry has with its key (a plug-in named "Blur (plugin:a)") shows its key too.
+fn distinct_names(entries: &mut [Entry]) {
+    // The entries of each name that more than one entry has.
+    fn shared(entries: &[Entry]) -> Vec<Vec<usize>> {
+        let mut by_name: HashMap<String, Vec<usize>> = HashMap::new();
+        for (i, e) in entries.iter().enumerate() {
+            by_name.entry(english_name(e)).or_default().push(i);
+        }
+        by_name.into_values().filter(|list| list.len() > 1).collect()
+    }
+    for i in shared(entries).into_iter().flatten() {
+        let Some(e) = entries.get_mut(i).filter(|e| !e.is_tool) else { continue };
+        if let Some(path) = menu_bar_path(&e.key) {
+            e.group = path.to_string();
+        } else if let Some((parent, _)) = e.key.rsplit_once('.').and_then(|(parent, _)| command_doc(parent)) {
+            e.group = parent.trim_end_matches('…').to_string();
+        }
+    }
+    // A pass gives every entry of a shared name but one its key, so a name is shared again only by
+    // an entry whose label ends with another entry's key; one pass per entry is enough.
+    for _ in 0..entries.len() {
+        let lists = shared(entries);
+        if lists.is_empty() {
+            break;
+        }
+        for list in lists {
+            let plain: Vec<usize> = list.iter().copied().filter(|&i| entries.get(i).is_some_and(|e| !e.shows_key)).collect();
+            let on_the_menu_bar: Vec<usize> =
+                plain.iter().copied().filter(|&i| entries.get(i).is_some_and(|e| !e.is_tool && menu_bar_path(&e.key).is_some())).collect();
+            // The entry an item of the menu bar runs keeps the plain name, unless another entry
+            // already shows that name with its key.
+            let keeps = on_the_menu_bar.first().copied().filter(|_| on_the_menu_bar.len() == 1 && plain.len() == list.len());
+            for i in plain {
+                if let Some(e) = entries.get_mut(i)
+                    && keeps != Some(i)
+                {
+                    e.shows_key = true;
+                }
+            }
+        }
+    }
+}
+
+/// The (label, params doc) of engine or UI command `id`.
+fn command_doc(id: &str) -> Option<(&'static str, &'static str)> {
+    vectorcraft_engine::find_command(id).map(|c| (c.label, c.params)).or_else(|| menus::UI_COMMANDS.iter().find(|c| c.0 == id).map(|c| (c.1, c.3)))
+}
+
+/// The (menu path, params) of each item of the menu bar that [`menu_bar_items`] reads, by command
+/// id: "Window › Swatch Libraries" for Window › Swatch Libraries › Other Library….
+fn menu_bar_paths() -> &'static HashMap<&'static str, Vec<(String, Value)>> {
+    fn walk(items: &[menus::Item], path: &mut Vec<String>, out: &mut HashMap<&'static str, Vec<(String, Value)>>) {
+        for it in items {
+            match it {
+                menus::Item::Cmd(label, id, p) if on_the_bar(id, label, p) => out.entry(*id).or_default().push((path.join(" › "), p.clone())),
+                menus::Item::Sub(name, children) => {
+                    path.push(name.to_string());
+                    walk(children, path, out);
+                    path.pop();
+                }
+                _ => {}
+            }
+        }
+    }
+    static PATHS: OnceLock<HashMap<&'static str, Vec<(String, Value)>>> = OnceLock::new();
+    PATHS.get_or_init(|| {
+        let mut out = HashMap::new();
+        for (name, items) in menus::menu_tree() {
+            walk(&items, &mut vec![name.to_string()], &mut out);
+        }
+        out
+    })
+}
+
+/// The menu path of the item of the menu bar that runs command `id` as a key press runs it
+/// ([`a_menu_bar_item_runs`]): the first item that runs it with no params, or else the first item,
+/// whose params all its items give.
+fn menu_bar_path(id: &str) -> Option<&'static str> {
+    let (_, params) = command_doc(id)?;
+    let items = menu_bar_paths().get(id).filter(|_| a_menu_bar_item_runs(id, params))?;
+    chosen_path(items)
+}
+
+/// The menu path [`menu_bar_path`] takes from a command's (menu path, params) items: the first
+/// item with no params, or else the first item.
+fn chosen_path(items: &[(String, Value)]) -> Option<&str> {
+    items.iter().find(|(_, p)| is_bare(p)).or(items.first()).map(|(path, _)| path.as_str())
+}
+
+/// Does a command's params doc (`{a?, b?: bool} …`) say it runs with no params, as a shortcut runs
+/// it? It does when it starts with `{` and [`names_a_required_field`] finds no field a call must give.
 fn runs_without_params(params: &str) -> bool {
-    params
-        .strip_prefix('{')
-        .and_then(|r| r.split_once('}'))
-        .is_some_and(|(fields, _)| fields.split(',').all(|f| f.trim().is_empty() || f.trim_end().ends_with('?')))
+    params.starts_with('{') && !names_a_required_field(params)
 }
 
 /// Does the editor list `e` under `overrides`? An entry that [`needs_a_value`] is listed only while
@@ -597,8 +781,13 @@ fn listed(overrides: &Overrides, e: &Entry) -> bool {
 /// with none, and that no item of the menu bar runs: Transparency and Opacity Mask Options need
 /// a value to set, Align and Distribute a direction, Delete Swatch and Move Swatch a swatch name,
 /// and the library, data set, text style and SVG filter loaders a file, which their menu items ask
-/// for.
-const NEEDS_A_PARAM: [&str; 20] = [
+/// for. The commands after them have no menu path: the setters of panels and dialogs (Fill, Stroke
+/// Options, Character, Set Bounds), the exports and saves that give the file back without a `path`
+/// (Save Document gives the file back when the document has no file yet; File › Save takes a key
+/// instead), the undo group's begin and end, and the commands that need a point, a value or a name
+/// (Create Dimension, Edit Freeform Point, Select by Color, Move Brush, Paintbrush). New Symbol is left out
+/// because the Symbols panel runs it through the Symbol Options dialog.
+const NEEDS_A_PARAM: [&str; 75] = [
     "transparency.set",
     "transparency.setOpacityMask",
     "stroke.set",
@@ -619,27 +808,94 @@ const NEEDS_A_PARAM: [&str; 20] = [
     "paraStyle.load",
     "textStyle.loadAll",
     "svgFilter.import",
+    "addon.pathtools.setAnchor",
+    "addon.shapes.configure",
+    "appearance.addEffect",
+    "artboard.align",
+    "artboard.distribute",
+    "assets.export",
+    "assets.export3D",
+    "assets.settings.set",
+    "attributes.set",
+    "brush.freehand",
+    "brush.move",
+    "css.export",
+    "dimension.create",
+    "document.export",
+    "document.exportDxf",
+    "document.exportEps",
+    "document.exportForWeb",
+    "document.exportPdf",
+    "document.save",
+    "document.setup",
+    "edit.undoGroup.begin",
+    "edit.undoGroup.end",
+    "eyedropper.setOptions",
+    "file.package",
+    "library.createGroup",
+    "links.placementOptions",
+    "links.unembed",
+    "livePaint.gapOptions",
+    "object.blend.createSpine",
+    "object.blend.setEasing",
+    "object.intertwine.arrange",
+    "object.objectsOnPath.options",
+    "object.puppetWarp.pins",
+    "object.setBounds",
+    "object.setLiveShape",
+    "object.setOverprint",
+    "object.setProps",
+    "object.slice.select",
+    "paint.freeform.setPoint",
+    "paint.setFill",
+    "paint.setGradientGeom",
+    "paint.setStroke",
+    "perspective.grid.define",
+    "perspective.grid.set",
+    "perspective.plane.move",
+    "print.setup",
+    "select.color",
+    "select.globalEditOptions",
+    "stroke.setAdvanced",
+    "symbol.new",
+    "symbol.options",
+    "text.setFormat",
+    "text.setRangeStyle",
+    "text.setStyle",
+    "type.ruby",
 ];
 
 /// The (label, params) of each menu bar item, by command id.
 fn menu_bar_items() -> &'static HashMap<&'static str, Vec<(&'static str, Value)>> {
+    static ITEMS: OnceLock<HashMap<&'static str, Vec<(&'static str, Value)>>> = OnceLock::new();
+    ITEMS.get_or_init(|| bar_items(&menus::menu_tree()))
+}
+
+/// The (label, params) of each item of the menus `tree`, by command id. Items that list an
+/// installed plug-in ([`menus::lists_plugin`]) or show a name that is user data
+/// ([`menus::shows_a_name`]: a custom toolbar, a script, a recent file, a saved selection) are left
+/// out: [`menu_bar_items`] is built once, and such items come and go after that.
+fn bar_items(tree: &[(&'static str, Vec<menus::Item>)]) -> HashMap<&'static str, Vec<(&'static str, Value)>> {
     fn walk(items: &[menus::Item], out: &mut HashMap<&'static str, Vec<(&'static str, Value)>>) {
         for it in items {
             match it {
-                menus::Item::Cmd(label, id, p) => out.entry(*id).or_default().push((*label, p.clone())),
+                menus::Item::Cmd(label, id, p) if on_the_bar(id, label, p) => out.entry(*id).or_default().push((*label, p.clone())),
                 menus::Item::Sub(_, children) => walk(children, out),
                 _ => {}
             }
         }
     }
-    static ITEMS: OnceLock<HashMap<&'static str, Vec<(&'static str, Value)>>> = OnceLock::new();
-    ITEMS.get_or_init(|| {
-        let mut out = HashMap::new();
-        for (_, items) in menus::menu_tree() {
-            walk(&items, &mut out);
-        }
-        out
-    })
+    let mut out = HashMap::new();
+    for (_, items) in tree {
+        walk(items, &mut out);
+    }
+    out
+}
+
+/// Is the menu item with `label` that runs command `id` with params `p` one [`bar_items`] reads: it
+/// lists no installed plug-in and shows no name that is user data?
+fn on_the_bar(id: &str, label: &str, p: &Value) -> bool {
+    !menus::lists_plugin(id, p) && !menus::shows_a_name(id, label)
 }
 
 fn is_bare(p: &Value) -> bool {
@@ -656,6 +912,25 @@ pub(crate) fn menu_target(id: &str) -> Option<(String, Value)> {
     items.iter().all(|(_, q)| q == p).then(|| menus::click_target(label, id, p))
 }
 
+/// What a command search pick, or a shortcut without params, of command `id` runs now: `Ok` with
+/// what a click on its menu bar item runs ([`menu_target`]), or `None` when no such item gives it
+/// params. While that item is dimmed ([`menus::enabled`]), no dialog opens for it: `Err` holds the
+/// status line ([`dimmed`]), as for Remove Background… with no image selected.
+pub(crate) fn menu_target_now(app: &VectorcraftApp, id: &str) -> Option<Result<(String, Value), String>> {
+    let target = menu_target(id)?;
+    Some(if menus::enabled(app, id) { Ok(target) } else { dimmed(app, id) })
+}
+
+/// What [`menu_target_now`] gives for command `id` while its menu bar item is dimmed: the status
+/// line, with the engine's reason when it gives one. The app's own rules ([`menus::enabled`]) dim
+/// UI commands, and some commands the engine would run, without giving a reason.
+fn dimmed(app: &VectorcraftApp, id: &str) -> Result<(String, Value), String> {
+    let Some(why) = vectorcraft_engine::find_command(id).and_then(|c| (c.enabled)(&app.session).err()) else {
+        return Err(format!("command `{id}` is not available right now"));
+    };
+    Err(vectorcraft_engine::EngineError::Disabled(id.to_string(), why).to_string())
+}
+
 /// Is `key` a command with no default shortcut that a key press can't run: no item of the menu
 /// bar runs it without params or with one set of params ([`menu_target`]), it opens no dialog when
 /// run without them (as the Variables panel's commands do), and it is a query, whose answer a key
@@ -664,17 +939,11 @@ pub(crate) fn menu_target(id: &str) -> Option<(String, Value)> {
 fn needs_a_value(key: &str) -> bool {
     static KEYS: OnceLock<HashSet<&'static str>> = OnceLock::new();
     KEYS.get_or_init(|| {
-        // A menu item that runs the command itself with params of its own counts only when the
-        // params doc names no required field: Edit › Find Next gives `find` empty, which it rejects.
-        let runs = |c: &vectorcraft_engine::CommandSpec| {
-            menu_bar_items().get(c.id).is_some_and(|ps| ps.iter().any(|(_, p)| is_bare(p)))
-                || menu_target(c.id).is_some_and(|(id, _)| id != c.id || !names_a_required_field(c.params))
-        };
         vectorcraft_engine::command_specs()
             .iter()
             .filter(|c| {
                 c.shortcut.is_none()
-                    && !runs(c)
+                    && !a_menu_bar_item_runs(c.id, c.params)
                     && !crate::dialogs::variables::opens(c.id)
                     && (!c.journal || NEEDS_A_PARAM.contains(&c.id) || (!c.menu.is_empty() && names_a_required_field(c.params)))
             })
@@ -682,6 +951,31 @@ fn needs_a_value(key: &str) -> bool {
             .collect()
     })
     .contains(key)
+}
+
+/// Does an item of the menu bar run command `id`, whose params doc is `params`, as a key press runs
+/// it: with no params, or with the one set of params all its items give ([`menu_target`])? A menu
+/// item that runs the command itself with params of its own counts only when the params doc names
+/// no required field: Edit › Find Next gives `find` empty, which it rejects.
+fn a_menu_bar_item_runs(id: &str, params: &str) -> bool {
+    menu_bar_items().get(id).is_some_and(|ps| ps.iter().any(|(_, p)| is_bare(p)))
+        || menu_target(id).is_some_and(|(target, _)| target != id || !names_a_required_field(params))
+}
+
+/// Is engine command `c` listed in Edit › Keyboard Shortcuts whether or not an item of the menu bar
+/// runs it? A command with a menu path of its own is. One without (a panel menu item) is when a key
+/// alone can run it: it has a default key, or it is an undoable command, not an alias, whose params
+/// doc names no field a call must give ([`runs_without_params`]).
+fn listed_on_its_own(c: &vectorcraft_engine::CommandSpec) -> bool {
+    !c.menu.is_empty() || c.shortcut.is_some() || (c.journal && !vectorcraft_engine::cmd::is_alias(c.id) && runs_without_params(c.params))
+}
+
+/// Is UI command `id` (default key `sc`, params doc `params`) listed in Edit › Keyboard Shortcuts
+/// whether or not an item of the menu bar runs it? It is when it has a default key or a params doc
+/// of `{}` or `{path…}`. Rename has no default key, and a key press names the selection: it needs
+/// no `id`.
+fn ui_listed_on_its_own(id: &str, sc: &str, params: &str) -> bool {
+    !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path") || id == "ui.rename"
 }
 
 /// Does a menu bar item run the command with no params, so that it does what its label says and opens
@@ -833,7 +1127,7 @@ pub fn assign_in(km: &mut Keymap, key: &str, chord: Option<&str>, force: bool) -
                 .iter()
                 .map(|h| {
                     let k = entry_key(&h.command);
-                    entry(&k).map_or(k, |e| e.label.clone())
+                    entry(&k).map_or(k, |e| english_name(&e))
                 })
                 .collect();
             Err(format!("{} is already used by {}", menus::pretty_shortcut(&vc_format(&chord)), names.join(", ")))
@@ -890,7 +1184,7 @@ pub fn export_text(set: &str, overrides: &Overrides) -> String {
     let snapshot = snapshot();
     let km = crate::keymap::keymap_in(&snapshot, overrides);
     let backtick = backtick_text();
-    let shown_set = if PRESETS.contains(&set) || set == CUSTOM { tl!(set) } else { set };
+    let shown_set = shown_set_name(set);
     let mut out = format!("{}\n{} {shown_set}\n", tl!("Keyboard Shortcuts"), tl!("Set:"));
     for (tools, heading) in [(true, "Tools"), (false, "Menu Commands")] {
         out += &format!("\n{}\n", tl!(heading));
@@ -901,6 +1195,139 @@ pub fn export_text(set: &str, overrides: &Overrides) -> String {
         }
     }
     out
+}
+
+/// A set's name as the dialog shows it: the presets and Custom in the UI language.
+fn shown_set_name(set: &str) -> &str {
+    if PRESETS.contains(&set) || set == CUSTOM { tl!(set) } else { set }
+}
+
+/// Export Text's file formats.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextFormat {
+    /// [`export_text`]'s text file.
+    Text,
+    /// The printable shortcut sheet as a PDF ([`crate::shortcut_sheet::sheet_pdf`]).
+    Sheet,
+    /// A CSV file of [`export_sections`] ([`crate::shortcut_sheet::csv`]).
+    Csv,
+}
+
+impl TextFormat {
+    pub const ALL: [Self; 3] = [Self::Text, Self::Sheet, Self::Csv];
+
+    /// The `format` param's value.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Sheet => "sheet",
+            Self::Csv => "csv",
+        }
+    }
+
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Text => "txt",
+            Self::Sheet => "pdf",
+            Self::Csv => "csv",
+        }
+    }
+
+    /// The save dialog's file type.
+    fn filter(self) -> crate::FileFilter {
+        let label = match self {
+            Self::Text => "Text",
+            Self::Sheet => "Shortcut sheet",
+            Self::Csv => "CSV",
+        };
+        crate::FilePick::filter(label, &[self.extension()])
+    }
+
+    fn file_name(self) -> String {
+        format!("VectorCraft Shortcuts.{}", self.extension())
+    }
+
+    /// `path` with `format`'s extension: kept when it has it in any letter case, the extension of
+    /// another of these formats replaced, and the extension added to any other path.
+    fn with_extension(path: &str, format: Self) -> String {
+        let ext = vectorcraft_engine::cmd::fileio::extension(path);
+        if ext.eq_ignore_ascii_case(format.extension()) {
+            path.to_string()
+        } else if Self::ALL.iter().any(|f| f.extension().eq_ignore_ascii_case(&ext)) {
+            std::path::Path::new(path).with_extension(format.extension()).to_string_lossy().into_owned()
+        } else {
+            format!("{path}.{}", format.extension())
+        }
+    }
+
+    /// The format a save dialog's answer picked: the file type it reports, else the extension of
+    /// `path`; text for any other.
+    fn picked(path: &str, file_type: Option<&str>) -> Self {
+        let ext = file_type.map_or_else(|| vectorcraft_engine::cmd::fileio::extension(path), str::to_string);
+        Self::ALL.into_iter().find(|f| f.extension().eq_ignore_ascii_case(ext.trim_start_matches('.'))).unwrap_or(Self::Text)
+    }
+}
+
+/// The section name for menu commands no menu holds, as Export Text's heading has it.
+const MENU_COMMANDS: &str = "Menu Commands";
+
+/// Export Text's rows in sections, for the shortcut sheet and the CSV file: Tools, then one section
+/// per top-level menu in the order the dialog first lists a command of it, with the names and
+/// shortcuts as the dialog shows them, each name without its top-level menu. Every row the dialog
+/// lists is there, with an empty shortcut when it has none.
+pub fn export_sections(overrides: &Overrides) -> Vec<crate::shortcut_sheet::Section> {
+    use crate::shortcut_sheet::{Row, Section};
+    let snapshot = snapshot();
+    let km = crate::keymap::keymap_in(&snapshot, overrides);
+    let backtick = backtick_text();
+    let mut tools = Section { title: tl!("Tools").to_string(), rows: vec![] };
+    let mut menus: Vec<Section> = vec![];
+    for e in snapshot.entries.iter().filter(|e| listed(km.overrides(), e)) {
+        let shortcut = dialog_shortcuts_with(&km, &e.key, backtick.as_deref()).unwrap_or_default();
+        if e.is_tool {
+            tools.rows.push(Row { name: shown_name(e), shortcut });
+            continue;
+        }
+        let group = shown_group(&e.group);
+        let (top, rest) = group.split_once(" › ").unwrap_or((group.as_str(), ""));
+        let top = if top.is_empty() { tl!(MENU_COMMANDS) } else { top };
+        let label = shown_label(e);
+        let inner = if rest.is_empty() { label.to_string() } else { format!("{rest} › {label}") };
+        let name = if e.shows_key { format!("{inner} ({})", e.key) } else { inner };
+        match menus.iter_mut().find(|s| s.title == top) {
+            Some(s) => s.rows.push(Row { name, shortcut }),
+            None => menus.push(Section { title: top.to_string(), rows: vec![Row { name, shortcut }] }),
+        }
+    }
+    std::iter::once(tools).chain(menus).collect()
+}
+
+/// The file `format` writes for `set` with `overrides`: the sheet on `page`.
+fn export_text_file(format: TextFormat, set: &str, overrides: &Overrides, page: crate::shortcut_sheet::PageSize) -> Result<Vec<u8>, String> {
+    match format {
+        TextFormat::Text => Ok(export_text(set, overrides).into_bytes()),
+        TextFormat::Sheet => {
+            let title = format!("{} · {}", tl!("Keyboard Shortcuts"), shown_set_name(set));
+            crate::shortcut_sheet::sheet_pdf(&title, &export_sections(overrides), page)
+        }
+        TextFormat::Csv => Ok(crate::shortcut_sheet::csv(&export_sections(overrides), ["Group", "Command", "Shortcut"]).into_bytes()),
+    }
+}
+
+/// The sheet's paper when `pageSize` is left out: A4 when the current document prints on A4 (its
+/// print settings, or, with none saved, a first artboard of A4 size either way up), else Letter.
+fn default_sheet_page(app: &VectorcraftApp) -> crate::shortcut_sheet::PageSize {
+    use crate::shortcut_sheet::PageSize;
+    let Some(st) = app.session.active() else { return PageSize::Letter };
+    let a4 = match st.doc.print_setup.clone().and_then(|v| serde_json::from_value::<vectorcraft_pdf::PrintSettings>(v).ok()) {
+        Some(settings) => settings.media == vectorcraft_pdf::Media::A4,
+        None => st.doc.artboards.first().is_some_and(|a| {
+            let (w, h) = PageSize::A4.landscape();
+            let (long, short) = (a.rect.width().max(a.rect.height()), a.rect.width().min(a.rect.height()));
+            (long - w).abs() < 1.0 && (short - h).abs() < 1.0
+        }),
+    };
+    if a4 { PageSize::A4 } else { PageSize::Letter }
 }
 
 // ---------- UI commands ----------
@@ -1035,19 +1462,75 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
                     return Some(Err(format!("`{key}` must be a string")));
                 }
             };
-            let text = export_text(&app.ui.shortcut_set, &app.ui.shortcut_overrides);
-            let pick =
-                crate::FilePick { filters: vec![crate::FilePick::filter("Text", &["txt"])], ..crate::FilePick::named("VectorCraft Shortcuts.txt") };
-            match path.or_else(|| crate::picks::save(app, &pick)) {
+            let format = match s("format") {
+                Ok(None) => None,
+                Ok(Some(f)) => match TextFormat::ALL.into_iter().find(|t| t.name() == f) {
+                    Some(t) => Some(t),
+                    None => {
+                        let key = "format";
+                        return Some(Err(format!("`{key}` must be one of {}", TextFormat::ALL.map(TextFormat::name).join(", "))));
+                    }
+                },
+                Err(e) => return Some(Err(e)),
+            };
+            let page = match s("pageSize") {
+                Ok(None) => default_sheet_page(app),
+                Ok(Some(n)) => match crate::shortcut_sheet::PageSize::parse(&n) {
+                    Some(page) => page,
+                    None => {
+                        let key = "pageSize";
+                        return Some(Err(format!(
+                            "`{key}` must be one of {}",
+                            crate::shortcut_sheet::PageSize::ALL.map(crate::shortcut_sheet::PageSize::name).join(", ")
+                        )));
+                    }
+                },
+                Err(e) => return Some(Err(e)),
+            };
+            // A given path is written as text unless `format` says otherwise; a save dialog offers
+            // every format (text first) unless `format` names one, and its answer picks the format.
+            let (path, format) = match path {
+                Some(path) => (Some(path), format.unwrap_or(TextFormat::Text)),
+                None => {
+                    let shown = format.unwrap_or(TextFormat::Text);
+                    let filters = format.map_or_else(|| TextFormat::ALL.map(TextFormat::filter).to_vec(), |f| vec![f.filter()]);
+                    let pick = crate::FilePick { filters, ..crate::FilePick::named(&shown.file_name()) };
+                    match crate::picks::save_with_type(app, &pick) {
+                        Some((answer, file_type)) => {
+                            let picked = format.unwrap_or_else(|| TextFormat::picked(&answer, file_type.as_deref()));
+                            // The format that `format` names, or that a dialog reports as the type
+                            // picked, gives the name its extension. A file already at a path
+                            // changed that way, which the dialog did not check, is replaced only
+                            // after asking.
+                            let typed = format.is_some() || file_type.is_some();
+                            let path = if typed { TextFormat::with_extension(&answer, picked) } else { answer.clone() };
+                            let request = crate::picks::PickRequest::Save(pick.clone());
+                            if path != answer && crate::picks::ask_to_replace(app, request, &answer, file_type.as_deref(), &path) {
+                                return Some(Err("cancelled".into()));
+                            }
+                            (Some(path), picked)
+                        }
+                        None => (None, shown),
+                    }
+                }
+            };
+            // Its save dialog is open: the file is made and written when it answers.
+            if path.is_none() && app.file_dialog_open() {
+                return Some(Err("cancelled".into()));
+            }
+            let bytes = match export_text_file(format, &app.ui.shortcut_set, &app.ui.shortcut_overrides, page) {
+                Ok(bytes) => bytes,
+                Err(e) => return Some(Err(e)),
+            };
+            match path {
                 Some(path) => match app.services.write.as_mut() {
-                    Some(w) => w(&path, text.as_bytes()).map(|_| json!({"path": path})),
+                    Some(w) => w(&path, &bytes).map(|_| json!({"path": path})),
                     None => Err("no file writer".into()),
                 },
-                // Its save dialog is open: the file is written when it answers.
-                None if app.file_dialog_open() => Err("cancelled".into()),
                 None => match app.services.download.as_mut() {
-                    Some(dl) => dl("VectorCraft Shortcuts.txt", text.as_bytes()).map(|()| Value::Null),
-                    None => Ok(json!({"text": text})),
+                    Some(dl) => dl(&format.file_name(), &bytes).map(|()| Value::Null),
+                    None if format == TextFormat::Sheet => Ok(json!({"pdf": vectorcraft_svg::base64_encode(&bytes)})),
+                    None => Ok(json!({"text": String::from_utf8_lossy(&bytes)})),
                 },
             }
         }
@@ -1265,12 +1748,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         Cow::Borrowed(_) => view.texts.get(i).cloned().flatten(),
                         Cow::Owned(km) => dialog_shortcuts_with(km, &e.key, view.backtick.as_deref()),
                     };
-                    let matches = e.label.to_lowercase().contains(&q)
-                        || shown_label(e).to_lowercase().contains(&q)
-                        || e.group.to_lowercase().contains(&q)
-                        || shown_group(&e.group).to_lowercase().contains(&q)
-                        || sc.as_deref().is_some_and(|s| s.to_lowercase().contains(&q));
-                    if !q.is_empty() && !matches {
+                    if !q.is_empty() && !row_matches(e, &q, sc.as_deref()) {
                         continue;
                     }
                     let row = ui.horizontal(|ui| {
@@ -1448,6 +1926,18 @@ fn drop_hidden(d: &mut Dialog, overrides: &Overrides) {
     }
 }
 
+/// Does the search text `q` (lowercase) find entry `e`, whose shortcut text is `sc`? It does when
+/// `e`'s label or group, in English or as shown, the key it shows ([`Entry::shows_key`]) or its
+/// shortcut contains `q`.
+fn row_matches(e: &Entry, q: &str, sc: Option<&str>) -> bool {
+    e.label.to_lowercase().contains(q)
+        || shown_label(e).to_lowercase().contains(q)
+        || e.group.to_lowercase().contains(q)
+        || shown_group(&e.group).to_lowercase().contains(q)
+        || (e.shows_key && e.key.to_lowercase().contains(q))
+        || sc.is_some_and(|s| s.to_lowercase().contains(q))
+}
+
 /// Apply a recorded chord to `key` in the working set, warning about (and resolving) conflicts.
 fn record(d: &mut Dialog, km: &mut Keymap, key: &str, chord: &str) {
     d.fields.insert("__recording".into(), json!(""));
@@ -1455,7 +1945,7 @@ fn record(d: &mut Dialog, km: &mut Keymap, key: &str, chord: &str) {
         Ok(removed) => {
             d.fields.insert("set".into(), json!(CUSTOM));
             if let Some(first) = removed.first() {
-                let names: Vec<String> = removed.iter().map(|k| entry(k).map(|e| e.label.clone()).unwrap_or(k.clone())).collect();
+                let names: Vec<String> = removed.iter().map(|k| entry(k).map(|e| shown_name(&e)).unwrap_or(k.clone())).collect();
                 d.fields.insert(
                     "__message".into(),
                     json!(crate::i18n::fmt(
@@ -1494,6 +1984,39 @@ mod tests {
             }
         }
         panic!("the installed plug-ins kept changing");
+    }
+
+    thread_local! {
+        /// Run by [`snapshot`] on this thread once, after it reads the plug-in revision and before
+        /// it walks the menus.
+        pub(super) static WHILE_WALKING: std::cell::Cell<Option<Box<dyn FnOnce()>>> = const { std::cell::Cell::new(None) };
+    }
+
+    /// A plug-in installed while the menus are walked doesn't leave a snapshot under the revision
+    /// read before the walk: the keymap built for that revision would then lack the plug-in's row.
+    #[test]
+    fn a_plugin_installed_while_the_menus_are_walked_gets_a_new_snapshot() {
+        use vectorcraft_plugins::wat as tpl;
+        let install = |id: &str| {
+            let manifest = format!(r#"{{"id":"{id}","name":"{id}","version":"1","kind":"filter","params":{{}}}}"#);
+            vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+        };
+        let (before, during) = ("test.ui.walk-before", "test.ui.walk-during");
+        install(before);
+        // Stores the snapshot of this revision, as another test thread may already have done.
+        snapshot();
+        WHILE_WALKING.set(Some(Box::new(move || {
+            // Another caller builds the snapshot and keymap of the revision read before the walk.
+            crate::keymap::template_for(&snapshot());
+            install(during);
+        })));
+        let s = snapshot();
+        let keys: Vec<&str> = s.entries.iter().map(|e| e.key.as_str()).collect();
+        let catalog = crate::keymap::template_for(&s).catalog().len();
+        vectorcraft_plugins::registry::remove(before);
+        vectorcraft_plugins::registry::remove(during);
+        assert!(keys.contains(&"plugin:test.ui.walk-during"), "the walk lists the plug-in");
+        assert_eq!(catalog, s.entries.len(), "the keymap of the snapshot's revision has every entry");
     }
 
     #[test]
@@ -1756,7 +2279,7 @@ mod tests {
     /// An Export Text line: the row's name as the dialog shows it, a tab and `shortcut`.
     fn text_row(key: &str, shortcut: &str) -> String {
         let e = entry(key).unwrap_or_else(|| panic!("no entry {key}"));
-        if e.is_tool || e.group.is_empty() { format!("{}\t{shortcut}", e.label) } else { format!("{} › {}\t{shortcut}", e.group, e.label) }
+        format!("{}\t{shortcut}", english_name(&e))
     }
 
     /// Export Text writes the set's name, then the Tools and the Menu Commands rows in the dialog's
@@ -1769,11 +2292,7 @@ mod tests {
             let text = export_text("VectorCraft Defaults", &ov);
             let km = keymap_with(&ov);
             let names = |tools: bool| -> Vec<String> {
-                entries()
-                    .iter()
-                    .filter(|e| e.is_tool == tools && listed(km.overrides(), e))
-                    .map(|e| if e.is_tool || e.group.is_empty() { format!("{}\t", e.label) } else { format!("{} › {}\t", e.group, e.label) })
-                    .collect()
+                entries().iter().filter(|e| e.is_tool == tools && listed(km.overrides(), e)).map(|e| format!("{}\t", english_name(e))).collect()
             };
             let rows = (names(true), names(false));
             (text, km, rows.0, rows.1)
@@ -1839,6 +2358,169 @@ mod tests {
         assert_eq!(path, "/sets/Studio.txt");
         assert!(text.starts_with("Keyboard Shortcuts\nSet: Studio\n\nTools\n"), "{text}");
         assert_eq!(*text, expected);
+    }
+
+    /// The sheet's sections: Tools first, then each top-level menu once, in the
+    /// order the dialog first lists a command of it, holding every row the dialog lists with its
+    /// shortcut, the command named without its top-level menu.
+    #[test]
+    fn export_sections_hold_every_listed_row_once_by_top_level_menu() {
+        let mut ov = Overrides::new();
+        crate::keymap::set_override(&mut ov, "edit.preferences", "Ctrl+Alt+Shift+9");
+        let (sections, listed_rows, tops) = with_steady_plugins(|| {
+            let km = keymap_with(&ov);
+            let listed: Vec<Entry> = entries().iter().filter(|e| listed(km.overrides(), e)).cloned().collect();
+            let mut tops: Vec<String> = vec![];
+            for e in listed.iter().filter(|e| !e.is_tool) {
+                let top = e.group.split(" › ").next().filter(|t| !t.is_empty()).unwrap_or(MENU_COMMANDS).to_string();
+                if !tops.contains(&top) {
+                    tops.push(top);
+                }
+            }
+            (export_sections(&ov), listed.len(), tops)
+        });
+        let titles: Vec<&str> = sections.iter().map(|s| s.title.as_str()).collect();
+        assert_eq!(titles[0], "Tools");
+        assert_eq!(titles[1..], tops.iter().map(String::as_str).collect::<Vec<_>>()[..], "one section per top-level menu");
+        for menu in ["File", "Edit", "Object", "Type", "Select", "Effect", "View", "Window", "Help"] {
+            assert!(titles.contains(&menu), "no {menu} section: {titles:?}");
+        }
+        assert_eq!(sections.iter().map(|s| s.rows.len()).sum::<usize>(), listed_rows, "every listed row once");
+        let prefs = entry("edit.preferences").expect("the Preferences row");
+        let top = prefs.group.split(" › ").next().unwrap_or_default().to_string();
+        let name = shown_name(&prefs).strip_prefix(&format!("{top} › ")).map(str::to_string).expect("Preferences is in a menu");
+        let section = sections.iter().find(|s| s.title == top).expect("its menu's section");
+        assert!(section.rows.iter().any(|r| r.name == name && r.shortcut.ends_with('9')), "{name} in {:?}", section.rows);
+        let pen = sections[0].rows.iter().find(|r| r.shortcut == menus::pretty_shortcut(default_of("tool:pen").unwrap_or_default()));
+        assert!(pen.is_some(), "the Pen tool's row");
+    }
+
+    /// `format` picks the file: text (the default, the same bytes as before) or the PDF sheet. A
+    /// given path is written as text whatever its extension, and a bad `format` or `pageSize` is an
+    /// error that writes nothing.
+    #[test]
+    fn export_text_command_writes_text_or_a_sheet() {
+        type Files = std::rc::Rc<std::cell::RefCell<Vec<(String, Vec<u8>)>>>;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let written: Files = Default::default();
+        let w = written.clone();
+        app.services.write = Some(Box::new(move |path: &str, b: &[u8]| {
+            w.borrow_mut().push((path.to_string(), b.to_vec()));
+            Ok(())
+        }));
+        let (files, text) = with_steady_plugins(|| {
+            written.borrow_mut().clear();
+            app.run("shortcuts.exportText", json!({"path": "/a/plain.txt"})).unwrap();
+            app.run("shortcuts.exportText", json!({"path": "/a/named.txt", "format": "text"})).unwrap();
+            app.run("shortcuts.exportText", json!({"path": "/a/as-text.pdf"})).unwrap();
+            app.run("shortcuts.exportText", json!({"path": "/a/sheet.pdf", "format": "sheet", "pageSize": "a4"})).unwrap();
+            app.run("shortcuts.exportText", json!({"path": "/a/sheet.txt", "format": "sheet"})).unwrap();
+            (written.borrow().clone(), export_text(&app.ui.shortcut_set, &app.ui.shortcut_overrides))
+        });
+        let [plain, named, as_text, sheet, sheet_as_named] = files.as_slice() else { panic!("{} files", files.len()) };
+        for f in [plain, named, as_text] {
+            assert_eq!(f.1, text.as_bytes(), "{}", f.0);
+        }
+        assert!(sheet.1.starts_with(b"%PDF-"), "{}", sheet.0);
+        assert_eq!(sheet_as_named.0, "/a/sheet.txt", "a path is written as given");
+        assert!(sheet_as_named.1.starts_with(b"%PDF-"));
+        written.borrow_mut().clear();
+        let mut err = |p: Value| app.run("shortcuts.exportText", p);
+        assert_eq!(err(json!({"path": "/a/x", "format": "xlsx"})), Err("`format` must be one of text, sheet, csv".to_string()));
+        assert_eq!(err(json!({"path": "/a/x", "format": "Sheet"})), Err("`format` must be one of text, sheet, csv".to_string()));
+        assert_eq!(err(json!({"path": "/a/x", "format": 3})), Err("`format` must be a string".to_string()));
+        assert_eq!(err(json!({"path": "/a/x", "pageSize": "legal"})), Err("`pageSize` must be one of letter, a4".to_string()));
+        assert_eq!(err(json!({"path": "/a/x", "pageSize": "A4"})), Err("`pageSize` must be one of letter, a4".to_string()));
+        assert!(written.borrow().is_empty());
+    }
+
+    /// `format: "csv"` writes the CSV file: the `Group,Command,Shortcut` header, then a record per
+    /// row the dialog lists, every group and row of [`export_sections`] once. Without a file it
+    /// comes back under `text`.
+    #[test]
+    fn export_text_command_writes_a_csv_file() {
+        type Files = std::rc::Rc<std::cell::RefCell<Vec<(String, Vec<u8>)>>>;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let written: Files = Default::default();
+        let (returned, files, sections) = with_steady_plugins(|| {
+            app.services.write = None;
+            written.borrow_mut().clear();
+            let returned = app.run("shortcuts.exportText", json!({"format": "csv"}));
+            let w = written.clone();
+            app.services.write = Some(Box::new(move |path: &str, b: &[u8]| {
+                w.borrow_mut().push((path.to_string(), b.to_vec()));
+                Ok(())
+            }));
+            app.run("shortcuts.exportText", json!({"path": "/a/list.csv", "format": "csv"})).unwrap();
+            (returned, written.borrow().clone(), export_sections(&app.ui.shortcut_overrides))
+        });
+        let [(path, bytes)] = files.as_slice() else { panic!("{} files", files.len()) };
+        assert_eq!(path, "/a/list.csv");
+        let text = String::from_utf8(bytes.clone()).unwrap();
+        assert_eq!(returned.unwrap()["text"].as_str(), Some(text.as_str()), "the same file without a writer");
+        assert_eq!(text, crate::shortcut_sheet::csv(&sections, ["Group", "Command", "Shortcut"]));
+        assert!(text.starts_with("\u{feff}Group,Command,Shortcut\r\nTools,"), "{text}");
+        let records = text.matches("\r\n").count();
+        assert_eq!(records, 1 + sections.iter().map(|s| s.rows.len()).sum::<usize>(), "a header and a record per row");
+        for s in &sections {
+            assert!(text.contains(&format!("\r\n{},", s.title)), "no {} group", s.title);
+        }
+    }
+
+    /// With no `pageSize` the sheet is on A4 when the current document prints on A4: its print
+    /// settings say so, or, with none saved, its first artboard is A4 either way up; else Letter.
+    #[test]
+    fn the_sheet_is_on_a4_when_the_document_prints_on_a4() {
+        use crate::shortcut_sheet::PageSize;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        assert_eq!(default_sheet_page(&app), PageSize::Letter, "no document");
+        app.session.add_document(vectorcraft_doc::Document::new(612.0, 792.0), None);
+        assert_eq!(default_sheet_page(&app), PageSize::Letter, "a Letter artboard");
+        app.session.add_document(vectorcraft_doc::Document::new(595.28, 841.89), None);
+        assert_eq!(default_sheet_page(&app), PageSize::A4, "an A4 artboard");
+        let printing = |w, h, media| {
+            let mut doc = vectorcraft_doc::Document::new(w, h);
+            doc.print_setup = serde_json::to_value(vectorcraft_pdf::PrintSettings { media, ..Default::default() }).ok();
+            doc
+        };
+        app.session.add_document(printing(595.28, 841.89, vectorcraft_pdf::Media::Letter), None);
+        assert_eq!(default_sheet_page(&app), PageSize::Letter, "an A4 artboard printing on Letter");
+        app.session.add_document(printing(612.0, 792.0, vectorcraft_pdf::Media::A4), None);
+        assert_eq!(default_sheet_page(&app), PageSize::A4, "printing on A4");
+    }
+
+    /// Without a path, a file writer or a download, `shortcuts.exportText` returns the file: the
+    /// text file under `text` and the sheet as base64 under `pdf`.
+    #[test]
+    fn export_text_without_a_file_returns_it() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let (text, sheet) =
+            with_steady_plugins(|| (app.run("shortcuts.exportText", json!({})), app.run("shortcuts.exportText", json!({"format": "sheet"}))));
+        let text = text.unwrap();
+        assert!(text["text"].as_str().unwrap_or_default().starts_with("Keyboard Shortcuts\n"), "{text}");
+        let sheet = sheet.unwrap();
+        // "%PDF-" in base64.
+        assert!(sheet["pdf"].as_str().unwrap_or_default().starts_with("JVBERi0"), "{}", sheet.to_string().len());
+    }
+
+    /// The save dialog's answer picks the format: the file type it reports, else the extension
+    /// typed; text for any other.
+    #[test]
+    fn the_save_dialogs_answer_picks_the_export_text_format() {
+        assert_eq!(TextFormat::picked("/a/sheet.PDF", None), TextFormat::Sheet);
+        assert_eq!(TextFormat::picked("/a/list", Some("pdf")), TextFormat::Sheet);
+        assert_eq!(TextFormat::picked("/a/list.pdf", Some("txt")), TextFormat::Text);
+        assert_eq!(TextFormat::picked("/a/list.txt", None), TextFormat::Text);
+        assert_eq!(TextFormat::picked("/a/list", None), TextFormat::Text);
+        assert_eq!(TextFormat::picked("/a/list.json", None), TextFormat::Text);
+        assert_eq!(TextFormat::with_extension("/a/list", TextFormat::Sheet), "/a/list.pdf");
+        assert_eq!(TextFormat::with_extension("/a/list.txt", TextFormat::Sheet), "/a/list.pdf");
+        assert_eq!(TextFormat::with_extension("/a/list", TextFormat::Text), "/a/list.txt");
+        assert_eq!(TextFormat::picked("/a/list.CSV", None), TextFormat::Csv);
+        assert_eq!(TextFormat::picked("/a/list", Some("csv")), TextFormat::Csv);
+        assert_eq!(TextFormat::with_extension("/a/list.pdf", TextFormat::Csv), "/a/list.csv");
+        assert_eq!(TextFormat::with_extension("/a/list.PDF", TextFormat::Sheet), "/a/list.PDF");
+        assert_eq!(TextFormat::with_extension("/a/v1.2", TextFormat::Sheet), "/a/v1.2.pdf");
     }
 
     /// The dialog's Import… leaves an action its function key when the imported set gives the key
@@ -1994,7 +2676,7 @@ mod tests {
             return;
         }
         for (alias, edit) in [("F2", "edit.cut"), ("F3", "edit.copy"), ("F4", "edit.paste")] {
-            let label = entry(edit).map(|e| e.label.clone()).unwrap();
+            let label = entry(edit).map(|e| english_name(&e)).unwrap();
             assert_eq!(conflicts_with(&Overrides::new(), alias, "tool:pen"), vec![edit.to_string()], "{alias}");
             let mut ov = Overrides::new();
             let err = assign(&mut ov, "tool:pen", Some(alias), false).unwrap_err();
@@ -2037,10 +2719,38 @@ mod tests {
         for id in ["brush.duplicate", "path.convertAnchors", "document.json", "prefs.list"] {
             assert!(entry(id).is_none(), "{id}");
         }
-        for (doc, bare) in
-            [("{}", true), ("{dx?, dy?} x", true), ("{id?|ids?, clip?}", true), ("{name, newName?}", false), ("{a?: {b}}", false), ("same as", false)]
-        {
+        // The Symbols panel runs New Symbol through Symbol Options, so it waits for a key the user gives it.
+        assert!(entry("symbol.new").is_some_and(|e| !listed(&Overrides::new(), &e)));
+        for (doc, bare) in [
+            ("{}", true),
+            ("{dx?, dy?} x", true),
+            ("{id?|ids?, clip?}", true),
+            ("{name, newName?}", false),
+            ("{a?: {b}}", true),
+            ("{ids?|id?, on?: bool} turn it on or off", true),
+            ("{ids?: [id…] (the selection), anchors?: [index…]}", true),
+            ("{format?: a|b, size?: 1|3|5}", true),
+            ("{artboard?: index=0}", true),
+            ("{mode: a|b, on?: bool}", false),
+            ("same as", false),
+        ] {
             assert_eq!(runs_without_params(doc), bare, "{doc}");
+        }
+        // Panel menu commands whose params doc gives each optional field a type are listed too.
+        let none = Overrides::new();
+        for id in [
+            "type.fractionalWidths",
+            "type.systemLayout",
+            "object.setPixelAligned",
+            "links.embed",
+            "links.update",
+            "object.slice.delete",
+            "artboard.switchOrientation",
+            "appearance.targetContents",
+            "paint.invert",
+            "artboard.distributeSpacing",
+        ] {
+            assert!(entry(id).is_some_and(|e| listed(&none, &e)), "{id}");
         }
         let mut ov = Overrides::new();
         assert!(assign(&mut ov, "symbol.breakLink", Some("Cmd+Alt+Shift+F9"), true).is_ok());
@@ -2207,6 +2917,47 @@ mod tests {
         assert_eq!(menu_target("edit.undo"), None, "runs without params");
     }
 
+    /// The menu bar items a shortcut or a command search pick reads leave out items that list an
+    /// installed plug-in (a File › Open With importer, an Object › Plug-ins filter) or show a name
+    /// that is user data (a custom toolbar, a script of the Scripts folder), which come and go after
+    /// the items are read; the other items stay.
+    #[test]
+    fn menu_bar_items_leave_out_installed_plug_ins_and_user_data() {
+        let tree = vec![(
+            "File",
+            vec![
+                menus::Item::Sub("Open With", vec![menus::Item::Cmd("Spins…", "file.openWith", json!({"importer": "plugin.test.spins"}))]),
+                menus::Item::Cmd("Filter…", "plugin.dialog", json!({"id": "test.filter"})),
+                menus::Item::Cmd("Mine", "window.toolbar.custom", json!({"name": "Mine"})),
+                menus::Item::Cmd("tidy.js", crate::scripts_menu::COMMAND, json!({"path": "/scripts/tidy.js"})),
+                menus::Item::Cmd("Clean Up…", "object.path.cleanUp", json!({"strayPoints": true})),
+            ],
+        )];
+        let items = bar_items(&tree);
+        assert!(!items.contains_key("file.openWith"), "{items:?}");
+        assert!(!items.contains_key("plugin.dialog"), "{items:?}");
+        assert!(!items.contains_key("window.toolbar.custom"), "{items:?}");
+        assert!(!items.contains_key(crate::scripts_menu::COMMAND), "{items:?}");
+        assert_eq!(items.get("object.path.cleanUp"), Some(&vec![("Clean Up…", json!({"strayPoints": true}))]));
+    }
+
+    /// While a menu item is dimmed, a pick or a shortcut gets a status line and no target: with the
+    /// engine's reason when it gives one, and without one when the app's own rules dim the item (an
+    /// Appearance command with nothing targeted, a UI command).
+    #[test]
+    fn a_dimmed_item_gives_a_status_line_with_or_without_a_reason() {
+        use vectorcraft_testkit::fixtures::Fixture;
+        let none = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        assert!(!menus::enabled(&none, "edit.findReplace"));
+        assert_eq!(dimmed(&none, "edit.findReplace"), Err("command `edit.findReplace` is not available right now: no document open".into()));
+        let empty = VectorcraftApp::new(Fixture::Empty.session(), crate::Services::default());
+        for id in ["appearance.addFill", "ui.cropImage"] {
+            assert!(!menus::enabled(&empty, id), "{id}");
+            assert!(vectorcraft_engine::find_command(id).is_none_or(|c| (c.enabled)(&empty.session).is_ok()), "{id}: the engine gives no reason");
+            assert_eq!(dimmed(&empty, id), Err(format!("command `{id}` is not available right now")));
+        }
+    }
+
     /// Every command the editor lists, run as a key press runs it on a document with one or with
     /// several objects selected, reports no missing param.
     #[test]
@@ -2245,6 +2996,175 @@ mod tests {
         let mut ov = Overrides::new();
         assign(&mut ov, "object.isolate", Some("Cmd+Alt+Shift+F11"), false).unwrap();
         assert_eq!(effective_in(&ov, "object.isolate").as_deref(), Some("Cmd+Alt+Shift+F11"));
+    }
+
+    /// Every engine or UI command that an item of the menu bar runs as a key press runs it (without
+    /// params, or with the one set of params all its items give) is listed in Edit › Keyboard
+    /// Shortcuts, also when the command has no menu path of its own: Set Corners…, whose params doc
+    /// names a field a call must give, the Perspective Grid toggles, Edit Custom Dictionary…, a
+    /// query, and Recolor Artwork…, a UI command. Such a command is listed in the group of its id,
+    /// next to the commands of its family that were listed before. A shortcut given to one survives
+    /// a saved set's round trip. Find Next is left out: its menu item gives `find` empty, which the
+    /// command rejects. When another entry has the same group and label, the command the menu item
+    /// runs keeps the name if no menu item runs the other: File › Export Selection… is
+    /// `file.exportSelection`, and `document.exportSelection` moves to Document. Otherwise the
+    /// command is left out: Window › Learn is the Learn panel's entry, not `window.learn`.
+    #[test]
+    fn every_command_the_menu_bar_runs_can_be_given_a_shortcut() {
+        let none = Overrides::new();
+        let mut missing: Vec<&str> = menu_bar_items()
+            .iter()
+            .filter(|(id, items)| items.iter().any(|(_, p)| is_bare(p)) || menu_target(id).is_some())
+            .map(|(id, _)| *id)
+            .filter(|id| *id != "edit.findNext" && *id != "window.learn")
+            .filter(|id| vectorcraft_engine::find_command(id).is_some() || menus::UI_COMMANDS.iter().any(|c| c.0 == *id))
+            .filter(|id| !entry(id).is_some_and(|e| listed(&none, &e)))
+            .collect();
+        missing.sort_unstable();
+        assert!(missing.is_empty(), "{missing:?}");
+        assert!(entry("window.learn").is_none(), "Window › Learn is the Learn panel's entry");
+        let shown = |id: &str| entry(id).map(|e| (e.group, e.label));
+        assert_eq!(shown("file.exportSelection"), Some(("File".into(), "Export Selection…".into())));
+        assert_eq!(shown("document.exportSelection"), Some(("Document".into(), "Export Selection…".into())));
+        // No command listed only because an item of the menu bar runs it shares its group and label
+        // with another entry.
+        let own = |k: &str| {
+            vectorcraft_engine::command_specs()
+                .iter()
+                .find(|c| c.id == k)
+                .map(listed_on_its_own)
+                .or_else(|| menus::UI_COMMANDS.iter().find(|c| c.0 == k).map(|(id, _, sc, p)| ui_listed_on_its_own(id, sc, p)))
+                .unwrap_or(true)
+        };
+        let (v, tail) = fixed_entries();
+        let mut names: HashMap<(&str, &str), Vec<&str>> = HashMap::new();
+        for e in v.iter().chain(tail) {
+            names.entry((e.group.as_str(), e.label.as_str())).or_default().push(e.key.as_str());
+        }
+        let shared: Vec<_> = names.iter().filter(|(_, keys)| keys.len() > 1 && keys.iter().any(|k| !own(k))).collect();
+        assert!(shared.is_empty(), "{shared:?}");
+        for (id, group) in [
+            (crate::addons::pathtools::set_corners::COMMAND, "Addon"),
+            ("perspective.grid.snap", "Perspective"),
+            (crate::dialogs::custom_dictionary::COMMAND, "Text"),
+            ("ui.recolorDialog", "Ui"),
+        ] {
+            let e = entry(id).unwrap_or_else(|| panic!("{id} is listed"));
+            assert_eq!(e.group, group, "{id}");
+        }
+        for id in
+            [crate::addons::pathtools::set_corners::COMMAND, "perspective.grid.lock", crate::dialogs::custom_dictionary::COMMAND, "ui.recolorDialog"]
+        {
+            let mut ov = Overrides::new();
+            assign(&mut ov, id, Some("Cmd+Alt+Shift+F11"), false).unwrap();
+            let (_, back) = import_json(&export_json("Mine", &ov)).unwrap();
+            assert_eq!(effective_in(&back, id).as_deref(), Some("Cmd+Alt+Shift+F11"), "{id}");
+        }
+    }
+
+    /// No two entries of Keyboard Shortcuts have the same English name. A command that an item of
+    /// the menu bar runs takes that item's menu path (Window › Swatch Libraries › Other Library…), a
+    /// command whose id extends another command's id takes that command's label (Character Style
+    /// Options › Reset Panel), and the other entries that would share a name show their key, except
+    /// the one an item of the menu bar runs: File › New… is the New Document dialog's entry, and
+    /// `file.new` is File › New… (file.new). An entry whose name no other entry has keeps its group.
+    /// The search finds an entry by the key it shows, and a conflict, in `shortcuts.set` and in the
+    /// dialog, names the entry that has the shortcut by its whole name.
+    #[test]
+    fn no_two_entries_have_the_same_name() {
+        let all = entries();
+        let mut by_name: HashMap<String, Vec<&str>> = HashMap::new();
+        for e in all.iter() {
+            by_name.entry(english_name(e)).or_default().push(e.key.as_str());
+        }
+        let shared: Vec<_> = by_name.into_iter().filter(|(_, keys)| keys.len() > 1).collect();
+        assert!(shared.is_empty(), "{shared:?}");
+        let shown = |id: &str| entry(id).map(|e| (e.group, e.label, e.shows_key));
+        for (id, group) in [
+            ("window.brushLibrary.other", "Window › Brush Libraries"),
+            ("window.graphicStyleLibrary.other", "Window › Graphic Style Libraries"),
+            ("window.swatchLibrary.other", "Window › Swatch Libraries"),
+            ("window.symbolLibrary.other", "Window › Symbol Libraries"),
+        ] {
+            assert_eq!(shown(id), Some((group.into(), "Other Library…".into(), false)), "{id}");
+        }
+        assert_eq!(shown("ui.charStyleOptions.resetPanel"), Some(("Character Style Options".into(), "Reset Panel".into(), false)));
+        assert_eq!(shown("ui.paraStyleOptions.resetPanel"), Some(("Paragraph Style Options".into(), "Reset Panel".into(), false)));
+        assert_eq!(shown("file.newDialog"), Some(("File".into(), "New…".into(), false)));
+        assert_eq!(shown("file.new"), Some(("File".into(), "New…".into(), true)));
+        assert_eq!(shown("text.fitHeadline"), Some(("Type".into(), "Fit Headline".into(), false)));
+        assert_eq!(shown("type.fitHeadline"), Some(("Type".into(), "Fit Headline".into(), true)));
+        for id in ["file.exportInBackground", "file.openInBackground"] {
+            assert_eq!(shown(id), Some(("File".into(), "Continue in Background".into(), true)), "{id}");
+        }
+        assert_eq!(shown("file.cancelExport"), Some(("File".into(), "Cancel Export".into(), false)));
+        let e = entry("type.fitHeadline").unwrap();
+        assert!(shown_name(&e).ends_with("Fit Headline (type.fitHeadline)"), "{}", shown_name(&e));
+        assert!(row_matches(&e, "type.fitheadline", None));
+        let e = entry("text.fitHeadline").unwrap();
+        assert!(shown_name(&e).ends_with("Fit Headline"), "{}", shown_name(&e));
+        assert!(!row_matches(&e, "text.fitheadline", None));
+        let mut ov = Overrides::new();
+        assign(&mut ov, "window.swatchLibrary.other", Some("Cmd+Alt+Shift+F11"), false).unwrap();
+        let err = assign(&mut ov, "window.brushLibrary.other", Some("Cmd+Alt+Shift+F11"), false).unwrap_err();
+        assert!(err.ends_with("is already used by Window › Swatch Libraries › Other Library…"), "{err}");
+        assign(&mut ov, "type.fitHeadline", Some("Cmd+Alt+Shift+F10"), false).unwrap();
+        let err = assign(&mut ov, "text.fitHeadline", Some("Cmd+Alt+Shift+F10"), false).unwrap_err();
+        assert!(err.ends_with("is already used by Type › Fit Headline (type.fitHeadline)"), "{err}");
+        let mut d = Dialog::new("shortcuts", json!({}));
+        let mut km = keymap_with(&Overrides::new());
+        record(&mut d, &mut km, "type.fitHeadline", "Cmd+Alt+Shift+F10");
+        record(&mut d, &mut km, "text.fitHeadline", "Cmd+Alt+Shift+F10");
+        assert!(d.str("__message").contains("was already used by Type › Fit Headline (type.fitHeadline) "), "{}", d.str("__message"));
+    }
+
+    /// Two filter plug-ins with the same name in the same menu show their ids, and a third whose
+    /// name is one of those names with the id stays apart from it. A filter with that name in
+    /// another menu, or with a label that differs by its "…", shows no id.
+    #[test]
+    fn a_plugin_named_like_another_row_with_its_key_stays_apart() {
+        let row = |key: &str, label: &str, group: &str| Entry {
+            key: key.into(),
+            label: label.into(),
+            group: group.into(),
+            is_tool: false,
+            shows_key: false,
+        };
+        let menu = "Object › Plug-ins";
+        let mut rows = vec![
+            row("plugin:a", "Foo", menu),
+            row("plugin:b", "Foo", menu),
+            row("plugin:c", "Foo (plugin:a)", menu),
+            row("plugin:d", "Bar", menu),
+            row("plugin:e", "Foo", "Object › Plug-ins › Other"),
+            row("plugin:f", "Foo…", menu),
+        ];
+        distinct_names(&mut rows);
+        let names: Vec<String> = rows.iter().map(english_name).collect();
+        assert_eq!(
+            names,
+            [
+                "Object › Plug-ins › Foo (plugin:a)",
+                "Object › Plug-ins › Foo (plugin:b)",
+                "Object › Plug-ins › Foo (plugin:a) (plugin:c)",
+                "Object › Plug-ins › Bar",
+                "Object › Plug-ins › Other › Foo",
+                "Object › Plug-ins › Foo…"
+            ]
+        );
+    }
+
+    /// A command with items in more than one menu is shown under the path of its first item with
+    /// no params, or else of its first item: Recolor Artwork… under Edit › Edit Colors, not Edit ›
+    /// Edit Colors › Recolor with Preset.
+    #[test]
+    fn a_command_on_several_items_takes_the_path_of_its_item_with_no_params() {
+        let item = |path: &str, p: Value| (path.to_string(), p);
+        let items = [item("A › B", json!({"x": 1})), item("A › C", Value::Null), item("A › D", json!({}))];
+        assert_eq!(chosen_path(&items), Some("A › C"));
+        assert_eq!(chosen_path(&[item("A › B", json!({"x": 1})), item("A › C", json!({"x": 2}))]), Some("A › B"));
+        assert_eq!(chosen_path(&[]), None);
+        assert_eq!(menu_bar_path("ui.recolorDialog"), Some("Edit › Edit Colors"));
     }
 
     /// `shortcuts.set`, `shortcuts.list` and `shortcuts.preset` reject a supplied param of the wrong

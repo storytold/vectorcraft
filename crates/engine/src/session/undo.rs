@@ -160,6 +160,14 @@ impl Session {
                 *n -= below(*n);
             }
         }
+        // The shared budget, which waits while an undo group is open, applies again once none is.
+        if self.depth == 0 {
+            self.trim_histories();
+        }
+        // A canceled group's Assign Profile is undone with it.
+        if cancel {
+            self.sync_front_profiles();
+        }
     }
 
     /// When journal entry `n` is a `command.batch` with `steps` noted in canceled undo groups and
@@ -276,5 +284,7 @@ impl Session {
             g.journal.retain(|&(n, _)| n < scope.journal);
             g.steps.retain(|&(n, _)| n < scope.journal);
         }
+        // A canceled scope's Assign Profile is undone with it.
+        self.sync_front_profiles();
     }
 }

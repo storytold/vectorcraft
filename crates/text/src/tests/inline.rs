@@ -71,6 +71,10 @@ fn shift_tracking_and_missing_symbols() {
     let mut t = text("A", art(1.0), "B", 20.0);
     t.runs[1].style.tracking = 100.0;
     assert!((inline_glyph(&layout(db(), &t)).advance - 42.0).abs() < 1e-6);
+    // At 50% Horizontal Scale the tracking adds half as much, as after a glyph; the art keeps its
+    // width.
+    t.runs[1].style.h_scale = 50.0;
+    assert!((inline_glyph(&layout(db(), &t)).advance - 41.0).abs() < 1e-6);
     // Unresolved (missing symbol): a square of the height, nothing to draw.
     let t = text("A", InlineArt::new("gone"), "B", 20.0);
     let l = layout(db(), &t);

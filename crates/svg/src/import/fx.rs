@@ -61,8 +61,10 @@ impl Source {
 
 /// Each `<filter>` element with an id, as written, by id, with the document's style sheets read
 /// once for all of them. A source is checked and read by usvg only when art uses it, once.
-/// `markers` is the text with its data URLs left out ([`super::depth::prescan`]).
-pub(super) fn sources(xml: &roxmltree::Document, markers: &str) -> HashMap<String, Source> {
+/// `markers` is the text with its data URLs left out ([`super::depth::prescan`]). `href` gives the
+/// href, as written, of each key the prepass wrote in place of an `<feImage>` href
+/// ([`super::files::Files::data_href`]): the source holds that href.
+pub(super) fn sources(xml: &roxmltree::Document, markers: &str, href: impl Fn(&str) -> Option<Arc<str>>) -> HashMap<String, Source> {
     if !markers.contains("<filter") && !markers.contains(":filter") {
         return HashMap::new();
     }
@@ -74,11 +76,38 @@ pub(super) fn sources(xml: &roxmltree::Document, markers: &str) -> HashMap<Strin
         .filter_map(|(order, n)| {
             let id = n.attribute("id")?.to_string();
             let primitives = n.children().filter(roxmltree::Node::is_element).map(|p| p.tag_name().name().to_string()).collect();
-            let xml = vectorcraft_effects::svg_filter::element_xml(n, text)?;
+            let xml = hrefs_as_written(n, vectorcraft_effects::svg_filter::element_xml(n, text)?, &href);
             let styled = vectorcraft_effects::svg_filter::depends_on_styles(n, &styles);
             Some((id, Source { xml, primitives, order, styled, ..Default::default() }))
         })
         .collect()
+}
+
+/// `xml`, the text of filter `n` ([`vectorcraft_effects::svg_filter::element_xml`]), with each
+/// `<feImage>` href that `href` gives a written href for put back as written, XML-escaped.
+fn hrefs_as_written(n: roxmltree::Node, mut xml: String, href: &impl Fn(&str) -> Option<Arc<str>>) -> String {
+    // `element_xml` adds namespace declarations to the start tag only, ahead of every child.
+    let (start, end) = (n.range().start, n.range().end);
+    let Some(shift) = xml.len().checked_sub(end - start) else { return xml };
+    let mut written: Vec<_> = n
+        .descendants()
+        .filter(|p| p.is_element() && p.tag_name().name() == "feImage")
+        .flat_map(|p| p.attributes())
+        .filter(|a| a.name() == "href" && matches!(a.namespace(), None | Some("http://www.w3.org/1999/xlink")))
+        .filter_map(|a| {
+            let r = a.range_value();
+            // A value written through an entity lies outside the element's text: it stays.
+            (r.start > start && r.end < end).then_some(())?;
+            Some((r.start - start + shift..r.end - start + shift, a.value(), href(a.value())?))
+        })
+        .collect();
+    written.sort_by_key(|(r, ..)| std::cmp::Reverse(r.start));
+    for (r, key, h) in written {
+        if xml.get(r.clone()) == Some(key) {
+            xml.replace_range(r, &crate::xml_escape(&h));
+        }
+    }
+    xml
 }
 
 /// The element name of primitive `k` (`feGaussianBlur`).
@@ -113,19 +142,22 @@ fn source_of<'a>(filter: &Filter, sources: &'a HashMap<String, Source>) -> Optio
 /// XML from `sources` ([`sources`]), in user space mapped to the document by `ts`. `None` when one
 /// isn't there, looks different outside the document, or isn't a filter the effect draws
 /// ([`vectorcraft_effects::svg_filter::check`]), or
-/// when `ts` turns or skews the user space or scales it past what the effect measures (0.001 to
-/// 1000 points to a unit). Where `ts` moves the user space is the effect's `origin`.
+/// when `ts` scales the user space past what the effect measures (0.001 to 1000 points to a unit,
+/// as the square root of its area scale) or stretches its axes past what the effect's `axes` hold.
+/// Where `ts` moves the user space is the effect's `origin`; a user space that `ts` turns, skews
+/// or scales unevenly keeps those directions in the effect's `axes`, so the filter runs in the
+/// element's own user space as SVG 1.1 defines it (<https://www.w3.org/TR/SVG11/filters.html#FilterEffectsRegion>).
 pub(super) fn kept(filters: &[Arc<Filter>], ts: Affine, sources: &HashMap<String, Source>) -> Option<Vec<Effect>> {
-    let [a, b, c, d, e, f] = ts.as_coeffs();
-    if b != 0.0 || c != 0.0 || !(0.001..=1000.0).contains(&a) || (a - d).abs() > 1e-9 * a.abs().max(1.0) || !e.is_finite() || !f.is_finite() {
-        return None;
-    }
+    let space = vectorcraft_effects::svg_filter::user_space(ts)?;
     filters
         .iter()
         .map(|filter| {
             // A filter styled by the document is left out rather than drawn differently.
             let source = source_of(filter, sources).filter(|s| !s.styled)?;
-            let params = json!({ "name": source.name()?, "xml": source.xml, "scale": a, "origin": [e, f] });
+            let mut params = json!({ "name": source.name()?, "xml": source.xml, "scale": space.scale, "origin": space.origin });
+            if let Some(axes) = space.axes {
+                params["axes"] = json!(axes);
+            }
             Some(Effect { id: vectorcraft_effects::SVG_FILTER.into(), params, visible: true })
         })
         .collect()
@@ -283,9 +315,51 @@ impl V {
     }
 }
 
-/// σ of a blur with standard deviations `x`, `y` (their mean: the effects blur evenly).
-fn sd(x: f32, y: f32) -> f64 {
-    (x as f64 + y as f64) / 2.0
+/// σ of a blur with standard deviations `x`, `y` in a user space the document scales by the same
+/// amount in every direction when `even` (turned, flipped or scaled alike along both axes). The
+/// effects blur evenly: `None` when the blur differs by direction in the document, unless `blurs`
+/// is [`Blurs::Nearest`], which takes the mean.
+fn sd(x: f32, y: f32, even: bool, blurs: Blurs) -> Option<f64> {
+    let uneven = (x > 0.0 || y > 0.0) && (x != y || !even);
+    (blurs == Blurs::Nearest || !uneven).then_some((x as f64 + y as f64) / 2.0)
+}
+
+/// How [`effects`] reads a blur that differs by direction in the document, which the effects
+/// draw the same in every direction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Blurs {
+    /// Not as an effect: the filter is left for an SVG Filters effect ([`kept`]), which draws it.
+    Exact,
+    /// As the even blur of the mean standard deviation.
+    Nearest,
+}
+
+/// Whether the linear part of `ts` scales every direction by the same amount (a turn, a flip and
+/// an even scale), so an even blur stays even in the document.
+fn even_space(ts: Affine) -> bool {
+    let [a, b, c, d, _, _] = ts.as_coeffs();
+    let tol = 1e-9 * ts.determinant().abs().sqrt().max(1.0);
+    let near = |p: f64, q: f64| (p - q).abs() <= tol;
+    (near(a, d) && near(b, -c)) || (near(a, -d) && near(b, c))
+}
+
+/// `filters` (in the order they apply) imported in user space mapped to the document by `ts`: as
+/// the live effects they draw as ([`effects`]), else as SVG Filters effects that keep their XML
+/// ([`kept`]), else as the live effects nearest them (a blur that differs by direction drawn as
+/// an even one). With whether they are live effects. `None` when none of these takes them.
+pub(super) fn imported(
+    filters: &[Arc<Filter>],
+    ts: Affine,
+    blends: &HashMap<String, String>,
+    sources: &HashMap<String, Source>,
+) -> Option<(Vec<Effect>, bool)> {
+    if let Some(fx) = effects(filters, ts, blends, Blurs::Exact) {
+        return Some((fx, true));
+    }
+    if let Some(fx) = kept(filters, ts, sources) {
+        return Some((fx, false));
+    }
+    effects(filters, ts, blends, Blurs::Nearest).map(|fx| (fx, true))
 }
 
 fn color(c: usvg::Color) -> Color {
@@ -332,9 +406,10 @@ fn transferred(v: V, [r, g, b, a]: [&TransferFunction; 4], srgb: bool) -> Option
     }
 }
 
-/// Evaluate one filter's primitives, `k` the scale from its user space to the document.
+/// Evaluate one filter's primitives, `k` the scale from its user space to the document, `even`
+/// when that scale is the same in every direction ([`even_space`]), blurs read as `blurs` says.
 /// `None` when one does something the effects cannot represent.
-fn eval(f: &Filter, k: f64) -> Option<V> {
+fn eval(f: &Filter, k: f64, even: bool, blurs: Blurs) -> Option<V> {
     let mut results: HashMap<&str, V> = HashMap::new();
     let mut last = V::Graphic;
     for p in f.primitives() {
@@ -348,7 +423,7 @@ fn eval(f: &Filter, k: f64) -> Option<V> {
         let v = match p.kind() {
             Kind::GaussianBlur(b) => {
                 let linear = p.color_interpolation() == ColorInterpolation::LinearRGB;
-                input(b.input())?.blur(sd(b.std_dev_x().get(), b.std_dev_y().get()), linear)?
+                input(b.input())?.blur(sd(b.std_dev_x().get(), b.std_dev_y().get(), even, blurs)?, linear)?
             }
             Kind::Offset(o) => input(o.input())?.offset(o.dx() as f64, o.dy() as f64)?,
             Kind::Flood(fl) => V::Flood(color(fl.color()), fl.opacity().get()),
@@ -418,8 +493,8 @@ fn eval(f: &Filter, k: f64) -> Option<V> {
                 }
             }
             Kind::DropShadow(d) if matches!(input(d.input())?, V::Graphic) => {
-                let shape =
-                    Shape { sd: sd(d.std_dev_x().get(), d.std_dev_y().get()), dx: d.dx() as f64, dy: d.dy() as f64, moved: true, inverted: false };
+                let sd = sd(d.std_dev_x().get(), d.std_dev_y().get(), even, blurs)?;
+                let shape = Shape { sd, dx: d.dx() as f64, dy: d.dy() as f64, moved: true, inverted: false };
                 V::Stack(vec![V::Paint { shape, color: color(d.color()), opacity: d.opacity().get(), clipped: false }, V::Graphic])
             }
             _ => return None,
@@ -431,10 +506,12 @@ fn eval(f: &Filter, k: f64) -> Option<V> {
 }
 
 /// The live effects `filters` (in the order they apply) stand for, in user space mapped to the
-/// document by `ts`; `blends`: the modes our export recorded ([`blends`]). `None` when one of
-/// them isn't an effect the canvas draws.
-pub(super) fn effects(filters: &[Arc<Filter>], ts: Affine, blends: &HashMap<String, String>) -> Option<Vec<Effect>> {
+/// document by `ts`; `blends`: the modes our export recorded ([`blends`]); `blurs`: how a blur
+/// that differs by direction reads ([`Blurs`]). `None` when one of them isn't an effect the
+/// canvas draws.
+fn effects(filters: &[Arc<Filter>], ts: Affine, blends: &HashMap<String, String>, blurs: Blurs) -> Option<Vec<Effect>> {
     let k = ts.determinant().abs().sqrt();
+    let even = even_space(ts);
     let [a, b, c, d, _, _] = ts.as_coeffs();
     let along = |dx: f64, dy: f64| Vec2::new(a * dx + c * dy, b * dx + d * dy);
     let num = |v: f64| (v * 1000.0).round() / 1000.0;
@@ -443,7 +520,7 @@ pub(super) fn effects(filters: &[Arc<Filter>], ts: Affine, blends: &HashMap<Stri
         let blur = |sd: f64| num(2.0 * sd * k);
         let mode = blends.get(f.id()).map_or("normal", String::as_str);
         let paint = |c: Color, o: f32| (c.to_hex(), num(o as f64 * 100.0));
-        let (id, params) = match eval(f, k)? {
+        let (id, params) = match eval(f, k, even, blurs)? {
             V::Graphic => continue,
             // SVG blurs in linear light unless the filter asks for sRGB (`color-interpolation-filters`).
             V::Blurred(sd, true) => ("blur.gaussian", json!({ "radius": blur(sd), "linear": true })),

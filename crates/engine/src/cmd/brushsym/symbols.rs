@@ -47,27 +47,35 @@ fn export_type_param(p: &Value, cmd: &str) -> Result<Option<SymbolExportType>> {
 }
 
 /// `nineSlice` (bool) and `nineSliceGuides` ([left, top, right, bottom] fractions of the natural
-/// size): `None` leaves the symbol alone, `Some(None)` turns 9-slice off, `Some(Some(g))` turns it
-/// on with guides `g` (the symbol's current ones, else a quarter in from each edge, when none are
-/// given).
+/// size, below 0 or above 1 for a guide outside the art): `None` leaves the symbol alone,
+/// `Some(None)` turns 9-slice off, `Some(Some(g))` turns it on with guides `g` (the symbol's
+/// current ones, else a quarter in from each edge, when none are given).
 fn nine_slice_param(p: &Value, cmd: &str, current: Option<SymbolNineSlice>) -> Result<Option<Option<SymbolNineSlice>>> {
     let on = match p.get("nineSlice") {
         None | Some(Value::Null) => None,
         Some(v) => Some(v.as_bool().ok_or_else(|| bad(cmd, "nineSlice must be true or false"))?),
     };
-    let guides =
-        match p.get("nineSliceGuides") {
-            None | Some(Value::Null) => None,
-            Some(v) => Some(SymbolNineSlice::from_value(v).ok_or_else(|| {
-                bad(cmd, "nineSliceGuides must be [left, top, right, bottom], each 0..1, with left + right < 1 and top + bottom < 1")
-            })?),
-        };
+    let guides = match p.get("nineSliceGuides") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(SymbolNineSlice::from_value(v).ok_or_else(|| {
+            bad(cmd, "nineSliceGuides must be [left, top, right, bottom], each -16..16, with left + right < 1 and top + bottom < 1")
+        })?),
+    };
     Ok(match (on, guides) {
         (Some(false), _) => Some(None),
         (None, None) => None,
         (_, Some(g)) => Some(Some(g)),
         (Some(true), None) => Some(Some(current.unwrap_or_default())),
     })
+}
+
+/// `alignToPixelGrid` (Symbol Options › Align to Pixel Grid): `None` when it is not given; any
+/// value other than true or false, null included, is an error.
+fn pixel_grid_param(p: &Value, cmd: &str) -> Result<Option<bool>> {
+    match p.get("alignToPixelGrid") {
+        None => Ok(None),
+        Some(v) => v.as_bool().map(Some).ok_or_else(|| bad(cmd, "alignToPixelGrid must be true or false")),
+    }
 }
 
 fn nine_slice_json(d: &Document, name: &str) -> Value {
@@ -115,6 +123,8 @@ fn art_symbols(n: &Node, out: &mut Vec<String>) {
         if let NodeKind::SymbolInstance { symbol, .. } = &m.kind {
             out.push(symbol.clone());
         }
+        // A graphic on a 3D object draws its symbol's art too.
+        out.extend(vectorcraft_render::effects::graphic_symbols(m));
     });
 }
 
@@ -129,6 +139,8 @@ pub(super) fn symbol_unused(s: &mut Session, _: &Value) -> Result<Value> {
     let patterns = d.patterns.iter().chain(d.pattern_edit.iter().filter_map(|pe| pe.original.as_ref()));
     let trees = d.layers.iter().map(|l| &**l).chain(d.graph_designs.iter().map(|g| &*g.art));
     trees.chain(patterns.flat_map(|p| p.art.iter().map(|n| &**n))).chain(lib.iter().flat_map(|b| b.art())).for_each(|n| art_symbols(n, &mut todo));
+    // A graphic in a graphic style draws its symbol's art wherever the style is applied.
+    todo.extend(d.graphic_styles.iter().flat_map(|g| vectorcraft_render::effects::appearance_graphic_symbols(&g.appearance)));
     let mut used = std::collections::BTreeSet::new();
     while let Some(name) = todo.pop() {
         if !used.contains(&name) {
@@ -138,6 +150,27 @@ pub(super) fn symbol_unused(s: &mut Session, _: &Value) -> Result<Value> {
     }
     let names: Vec<&str> = d.symbols.iter().map(|sym| sym.name.as_str()).filter(|n| !used.contains(*n)).collect();
     Ok(json!({ "names": names }))
+}
+
+/// `symbol.sortByName`: the symbols in name order, ignoring case; a stable sort, so names that
+/// differ only in case keep their order. The current symbol is stored by name first, so a document
+/// whose current symbol is its first one keeps that symbol current. Nothing is changed, and no undo
+/// step is added, when the symbols are already in order.
+pub(super) fn symbol_sort(s: &mut Session, _: &Value) -> Result<Value> {
+    let key = |sym: &Symbol| sym.name.to_lowercase();
+    let d = &s.doc()?.doc;
+    if d.symbols.is_sorted_by_key(key) {
+        return ok();
+    }
+    let current = current_symbol(d).or_else(|| symbol_names(d).into_iter().next());
+    s.edit("Sort by Name", |d, _| {
+        if let Some(name) = current {
+            d.unknown.insert(CURRENT_SYMBOL.into(), json!(name));
+        }
+        d.symbols.sort_by_cached_key(key);
+        Ok(())
+    })?;
+    ok()
 }
 
 fn symbol_names(d: &Document) -> Vec<String> {
@@ -163,6 +196,7 @@ pub(super) fn symbol_list(s: &mut Session, _: &Value) -> Result<Value> {
                 "exportType": d.symbol_export_type(&sym.name).id(),
                 "nineSlice": nine_slice_json(d, &sym.name),
                 "type": type_id(sym.dynamic),
+                "alignToPixelGrid": d.symbol_pixel_aligned(&sym.name),
             })
         })
         .collect();
@@ -215,6 +249,7 @@ pub(super) fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
     let export = export_type_param(p, C)?.unwrap_or_default();
     let nine = nine_slice_param(p, C, None)?.flatten();
     let dynamic = type_param(p, C)?.unwrap_or(false);
+    let pixel = pixel_grid_param(p, C)?.unwrap_or(false);
     // Keep the art where it was: the geometric centre stays at `c`, whatever the registration is.
     let place = place_xf(c + reg.offset_from_center(size.0, size.1), size, reg);
     let id = s.edit("New Symbol", |d, sel| {
@@ -225,6 +260,7 @@ pub(super) fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
         d.set_symbol_registration(&name, reg);
         d.set_symbol_export_type(&name, export);
         d.set_symbol_nine_slice(&name, nine);
+        d.set_symbol_pixel_aligned(&name, pixel);
         let id = instance_in_place(d, &ids, &name, place)?;
         sel.set([id]);
         Ok(id)
@@ -236,6 +272,7 @@ pub(super) fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
         "exportType": export.id(),
         "nineSlice": nine.map_or(Value::Null, SymbolNineSlice::to_value),
         "type": type_id(dynamic),
+        "alignToPixelGrid": pixel,
     }))
 }
 
@@ -246,9 +283,15 @@ pub(super) fn symbol_options(s: &mut Session, p: &Value) -> Result<Value> {
     let reg = registration_param(p, C)?;
     let nine = nine_slice_param(p, C, s.doc()?.doc.symbol_nine_slice(&name))?;
     let dynamic = type_param(p, C)?;
+    let pixel = pixel_grid_param(p, C)?;
     let new_name = str_param(p, "newName").map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
     if new_name.is_none() && export.is_none() && reg.is_none() && nine.is_none() && dynamic.is_none() {
-        return Err(bad(C, "pass newName, registration, exportType, nineSlice and/or type"));
+        match pixel {
+            None => return Err(bad(C, "pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid")),
+            // Align to Pixel Grid alone, already as asked: nothing changes and no undo step is added.
+            Some(on) if on == s.doc()?.doc.symbol_pixel_aligned(&name) => return Ok(options_json(&s.doc()?.doc, &name)),
+            Some(_) => {}
+        }
     }
     if let Some(ref n) = new_name
         && n != &name
@@ -269,10 +312,38 @@ pub(super) fn symbol_options(s: &mut Session, p: &Value) -> Result<Value> {
                     *symbol = n.clone();
                 }
             }
+            // The graphics mapped onto 3D objects follow the new name: in the layers, the art of
+            // symbols, patterns, graph designs and brushes, their opacity masks, and graphic styles.
+            let patterns = d.patterns.iter_mut().chain(d.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()));
+            let trees = d
+                .layers
+                .iter_mut()
+                .chain(d.symbols.iter_mut().map(|sym| &mut sym.art))
+                .chain(d.graph_designs.iter_mut().map(|g| &mut g.art))
+                .chain(patterns.flat_map(|p| p.art.iter_mut()));
+            for art in trees.filter(|art| vectorcraft_render::effects::names_graphic_symbol(art, &name)) {
+                vectorcraft_render::effects::rename_graphic_symbol_in(Arc::make_mut(art), &name, n);
+            }
+            let styled = |g: &vectorcraft_doc::GraphicStyle| vectorcraft_render::effects::appearance_graphic_symbols(&g.appearance).contains(&name);
+            if d.graphic_styles.iter().any(styled) {
+                for style in d.graphic_styles.iter_mut() {
+                    vectorcraft_render::effects::rename_appearance_graphic_symbol(&mut style.appearance, &name, n);
+                }
+            }
+            // The brush library is stored again only when a brush's art changed.
+            let mut lib = brush::library(d);
+            let mut brushes = false;
+            for art in lib.iter_mut().flat_map(|b| b.art_mut()) {
+                brushes |= vectorcraft_render::effects::rename_graphic_symbol_in(art, &name, n);
+            }
+            if brushes {
+                brush::store(d, &lib);
+            }
             rename_natural_size(d, &name, n);
             d.rename_symbol_registration(&name, n);
             d.rename_symbol_export_type(&name, n);
             d.rename_symbol_nine_slice(&name, n);
+            d.rename_symbol_pixel_aligned(&name, n);
             if d.unknown.get(CURRENT_SYMBOL).and_then(Value::as_str) == Some(name.as_str()) {
                 d.unknown.insert(CURRENT_SYMBOL.into(), json!(n));
             }
@@ -301,16 +372,26 @@ pub(super) fn symbol_options(s: &mut Session, p: &Value) -> Result<Value> {
             sym.dynamic = dynamic;
             fit_overrides(d, &instances_of(d, Some(&final_name)));
         }
+        // Turning it on snaps the art and the instances at actual size when the edit ends
+        // (`object::refresh_pixel_aligned`).
+        if let Some(on) = pixel {
+            d.set_symbol_pixel_aligned(&final_name, on);
+        }
         Ok(())
     })?;
-    let d = &s.doc()?.doc;
-    Ok(json!({
-        "name": final_name,
-        "registration": d.symbol_registration(&final_name).0,
-        "exportType": d.symbol_export_type(&final_name).id(),
-        "nineSlice": nine_slice_json(d, &final_name),
-        "type": type_id(d.symbols.iter().any(|x| x.name == final_name && x.dynamic)),
-    }))
+    Ok(options_json(&s.doc()?.doc, &final_name))
+}
+
+/// What `symbol.options` answers for symbol `name`.
+fn options_json(d: &Document, name: &str) -> Value {
+    json!({
+        "name": name,
+        "registration": d.symbol_registration(name).0,
+        "exportType": d.symbol_export_type(name).id(),
+        "nineSlice": nine_slice_json(d, name),
+        "type": type_id(d.symbols.iter().any(|x| x.name == name && x.dynamic)),
+        "alignToPixelGrid": d.symbol_pixel_aligned(name),
+    })
 }
 
 fn resolve_symbol(d: &Document, p: &Value, cmd: &str) -> Result<String> {
@@ -342,8 +423,10 @@ pub(super) fn symbol_place(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The plain art of instance `inst` in document space (fresh ids), with the instance's own
 /// appearance changes to a dynamic symbol's art when `own`, placed through its symbol's 9-slice
-/// guides when it has them. The instance's opacity mask goes on the art, or on a group around it
-/// when the art has a mask of its own.
+/// guides when it has them. The art's bounding boxes turn with the instance's own box, so after
+/// Reset Bounding Box they stand as the instance's box does. The instance's opacity mask goes on
+/// the art, or on a group around it when the art has a mask of its own; a group added around the
+/// art takes the instance's box angle.
 fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
     let NodeKind::SymbolInstance { symbol, xf } = &inst.kind else { return None };
     let sym = d.symbols.iter().find(|s| &s.name == symbol)?;
@@ -351,12 +434,17 @@ fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
     if let Some((color, amount)) = brush::stain(inst) {
         brush::tint_node(&mut art, &color, amount);
     }
-    let art = d.place_symbol_art(symbol, &art, *xf)?;
+    let mut art = d.place_symbol_art(symbol, &art, *xf)?;
+    let turn = vectorcraft_doc::orient::placed_turn(inst.bbox_angle, *xf);
+    if turn != 0.0 {
+        art.turn_boxes(turn);
+    }
     let mut art = d.reid(&art);
     if inst.opacity < 1.0 || inst.blend != vectorcraft_color::BlendMode::Normal {
         if !matches!(art.kind, NodeKind::Group { .. }) {
             let id = d.alloc_id();
             art = Node::group(id, vec![Arc::new(art)]);
+            art.bbox_angle = inst.bbox_angle;
         }
         art.opacity *= inst.opacity;
         art.blend = inst.blend;
@@ -365,6 +453,7 @@ fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
         if art.extras().mask.is_some() {
             let id = d.alloc_id();
             art = Node::group(id, vec![Arc::new(art)]);
+            art.bbox_angle = inst.bbox_angle;
         }
         art.extras_mut().mask = Some(mask.clone());
     }
@@ -390,10 +479,11 @@ fn expanded_bound(d: &Document, inst: &Node, own: bool) -> u64 {
     most.saturating_add(1).saturating_add(mask)
 }
 
-/// Replace instances `ids` with their art ([`expanded_instance`], `own` as there). Returns the
-/// art's ids. Fails before any edit when the instances together would make more than
+/// Replace instances `ids` with their art ([`expanded_instance`], `own` as there). A hidden or
+/// locked instance's art stays hidden or locked. Returns each replaced instance's id with its art's
+/// id. Fails before any edit when the instances together would make more than
 /// [`MAX_EXPAND_NODES`] objects.
-fn break_links(d: &mut Document, ids: &[NodeId], own: bool) -> Result<Vec<NodeId>> {
+fn break_links(d: &mut Document, ids: &[NodeId], own: bool) -> Result<Vec<(NodeId, NodeId)>> {
     let total = ids.iter().filter_map(|id| d.node(*id)).fold(0u64, |sum, n| sum.saturating_add(expanded_bound(d, n, own)));
     if total > MAX_EXPAND_NODES as u64 {
         return Err(EngineError::Other("Too many pieces to make at once".into()));
@@ -401,12 +491,14 @@ fn break_links(d: &mut Document, ids: &[NodeId], own: bool) -> Result<Vec<NodeId
     let mut out = vec![];
     for id in ids {
         let Some(inst) = d.node(*id).cloned() else { continue };
-        let Some(art) = expanded_instance(d, &inst, own) else { continue };
+        let Some(mut art) = expanded_instance(d, &inst, own) else { continue };
         let (par, idx, _) = d.position(*id).ok_or(EngineError::NoNode(*id))?;
+        art.visible &= inst.visible;
+        art.locked |= inst.locked;
         let aid = art.id;
         d.remove(*id)?;
         d.insert(par, idx, art)?;
-        out.push(aid);
+        out.push((*id, aid));
     }
     Ok(out)
 }
@@ -491,10 +583,22 @@ pub(super) fn symbol_break_link(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(EngineError::Other("no symbol instances selected".into()));
     }
+    let iso = s.doc()?.isolation;
     let out = s.edit("Break Link to Symbol", |d, sel| {
-        let out = break_links(d, &ids, true)?;
-        sel.set(out.iter().copied());
-        Ok(out)
+        let fresh = d.new_art.get();
+        let made = break_links(d, &ids, true)?;
+        // Art that is hidden or locked, or in a hidden or locked group or layer, is left out of the
+        // selection, as is art on a locked artboard unless the instance it replaces was new art.
+        let locks = d.locked_artboards();
+        sel.set(made.iter().filter_map(|(inst, art)| {
+            let keep = if fresh.contains(inst) {
+                crate::cmd::select::is_selectable_on_any_artboard(d, iso, *art)
+            } else {
+                crate::cmd::select::is_selectable(d, iso, &locks, *art)
+            };
+            keep.then_some(*art)
+        }));
+        Ok(made.into_iter().map(|(_, art)| art).collect::<Vec<_>>())
     })?;
     Ok(json!({ "ids": ids_json(&out) }))
 }
@@ -628,6 +732,7 @@ pub(super) fn symbol_delete(s: &mut Session, p: &Value) -> Result<Value> {
             d.set_symbol_registration(name, SymbolRegistration::CENTER);
             d.clear_symbol_export_type(name);
             d.set_symbol_nine_slice(name, None);
+            d.set_symbol_pixel_aligned(name, false);
             if d.unknown.get(CURRENT_SYMBOL).and_then(Value::as_str) == Some(name.as_str()) {
                 d.unknown.remove(CURRENT_SYMBOL);
             }
@@ -651,6 +756,7 @@ pub(super) fn symbol_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     let reg = d.symbol_registration(&name);
     let export = d.symbol_export_type(&name);
     let nine = d.symbol_nine_slice(&name);
+    let pixel = d.symbol_pixel_aligned(&name);
     s.edit("Duplicate Symbol", |d, _| {
         let art = d.reid(&sym.art);
         d.symbols.push(Symbol { dynamic: sym.dynamic, name: new.clone(), art: Arc::new(art) });
@@ -658,6 +764,7 @@ pub(super) fn symbol_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
         d.set_symbol_registration(&new, reg);
         d.set_symbol_export_type(&new, export);
         d.set_symbol_nine_slice(&new, nine);
+        d.set_symbol_pixel_aligned(&new, pixel);
         Ok(())
     })?;
     Ok(json!({ "name": new, "registration": reg.0, "exportType": export.id(), "nineSlice": nine.map_or(Value::Null, SymbolNineSlice::to_value) }))

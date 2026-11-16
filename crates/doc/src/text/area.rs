@@ -167,6 +167,15 @@ pub struct AreaOptions {
     /// How the frame and its text fit each other (Auto Size, Shrink Text to Fit).
     #[serde(skip_serializing_if = "crate::skip::is_default")]
     pub fit: AreaFit,
+    /// Dynamic Text's Block ([`super::TextObject::dynamic_text`] on area type): the Desired word
+    /// spacing the layout sets every paragraph with ([`super::TextObject::layout_justification`]), in
+    /// percent of a word space (100, the default, is left out when saved).
+    #[serde(skip_serializing_if = "AreaOptions::is_default_word_gap")]
+    pub word_gap: f64,
+    /// Dynamic Text's Block: the points added to each character's size to give its leading (0, the
+    /// default, is left out when saved).
+    #[serde(skip_serializing_if = "crate::skip::is_default")]
+    pub line_gap: f64,
 }
 
 impl Default for AreaOptions {
@@ -182,6 +191,8 @@ impl Default for AreaOptions {
             vertical_align: VerticalAlign::Top,
             flow: TextFlow::Columns,
             fit: AreaFit::None,
+            word_gap: Self::DEFAULT_WORD_GAP,
+            line_gap: 0.0,
         }
     }
 }
@@ -189,6 +200,21 @@ impl Default for AreaOptions {
 impl AreaOptions {
     /// The most rows, and the most columns, area type can have.
     pub const MAX_ROWS_COLUMNS: usize = 100;
+    /// Block's word gap range (percent of a word space), the Justification word spacing range.
+    pub const WORD_GAP: (f64, f64) = (0.0, 1000.0);
+    /// Block's word gap new type starts with: the font's own word space.
+    pub const DEFAULT_WORD_GAP: f64 = 100.0;
+    /// Block's line gap range in points.
+    pub const LINE_GAP: (f64, f64) = (-1296.0, 1296.0);
+    fn is_default_word_gap(v: &f64) -> bool {
+        *v == Self::DEFAULT_WORD_GAP
+    }
+    /// Block's gaps kept within their ranges; a gap that is not a number gives its default.
+    pub fn block_gaps(&self) -> (f64, f64) {
+        let word = if self.word_gap.is_finite() { self.word_gap.clamp(Self::WORD_GAP.0, Self::WORD_GAP.1) } else { Self::DEFAULT_WORD_GAP };
+        let line = if self.line_gap.is_finite() { self.line_gap.clamp(Self::LINE_GAP.0, Self::LINE_GAP.1) } else { 0.0 };
+        (word, line)
+    }
 }
 
 /// [`AreaOptions::rows`] or [`AreaOptions::columns`], read as a `u64` and clamped to

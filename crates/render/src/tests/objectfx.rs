@@ -439,7 +439,7 @@ fn transforms_of(t: &Node) -> [(Value, Affine); 3] {
 /// A 100×100 document holding `content` in an envelope that leaves it as it is (an arc with no
 /// bend), with Distort Appearance on or off.
 fn envelope_doc(content: Node, distort_appearance: bool) -> Document {
-    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true };
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
     let options = vectorcraft_doc::live::EnvelopeOptions { distort_appearance, ..Default::default() };
     let envelope = NodeKind::Envelope {
         content: vec![Arc::new(content)],
@@ -769,6 +769,27 @@ fn rasterize_on_an_image_takes_in_its_strokes_shape() {
     d.node_mut(id).unwrap().appearance.effects.push(fx("rasterize", json!({"useDocumentResolution": false, "resolution": 72})));
     let img = render(&d);
     assert_eq!((lum(img.pixel(8, 35)), lum(img.pixel(12, 35)), img.pixel(35, 35)), (WHITE, 0, [255, 0, 0, 255]));
+}
+
+#[test]
+fn an_images_outline_object_stroke_follows_new_pixels_under_the_same_key() {
+    // The opaque image's stroke runs along its frame, from 18 to 22.
+    let mut d = stroked_image_doc(vec![fx("path.outlineObject", json!({}))], false);
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let img = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!((lum(img.pixel(19, 35)), img.pixel(26, 35)), (0, [255, 0, 0, 255]));
+    // New pixels under the same key, as Update Link stores them, with the node unchanged: an
+    // opaque disc of radius 8 pixels in the middle. The stroke follows its edge at 26.5.
+    let disc = image::RgbaImage::from_fn(30, 30, |x, y| {
+        let r = (f64::from(x) + 0.5 - 15.0).hypot(f64::from(y) + 0.5 - 15.0);
+        image::Rgba([255, 0, 0, if r <= 8.0 { 255 } else { 0 }])
+    });
+    let mut png = vec![];
+    disc.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    d.images.insert("red".into(), ImageBlob::new("image/png", png));
+    let img = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!((lum(img.pixel(19, 35)), lum(img.pixel(26, 35))), (WHITE, 0));
 }
 
 /// A 40 pt square filled with `fill` carrying effect `id`, in a 100×100 document.
@@ -1156,4 +1177,149 @@ fn symbol_instances_with_effects_are_charged_to_the_symbol_budget() {
     assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
     assert!(!r.charge_fx_instance(&d, &inst), "the next does not");
     assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
+}
+
+/// A closed path of 30,000 curves along the x axis, 2 pt apart: drawn with about 420,000 lines,
+/// and with more than the effect budget's 8 million once scaled 1000 times.
+fn wavy() -> vectorcraft_geom::PathData {
+    use vectorcraft_geom::{Anchor, PathData, SubPath};
+    let anchors = (0..=30_000)
+        .map(|i| {
+            let x = 2.0 * f64::from(i);
+            Anchor::with_handles(Point::new(x, 0.0), Point::new(x - 0.5, -20.0), Point::new(x + 0.5, 20.0))
+        })
+        .collect();
+    PathData::single(SubPath::new(anchors, true))
+}
+
+/// A Transform effect left out past the effect budget leaves the art where it is, and the drop
+/// shadow before it (the object's, or the fill's before the fill's own Transform effect) reaches
+/// as far as it is drawn: by its own offset, not by a thousand times it.
+#[test]
+fn a_shadow_before_a_skipped_transform_reaches_as_far_as_it_is_drawn() {
+    let shadow = fx("stylize.dropShadow", json!({"x": 10, "y": 5, "blur": 0}));
+    let big = fx("distort.transform", json!({"scaleH": 100000, "scaleV": 100000}));
+    let path = wavy();
+    let art = path.bounds().unwrap();
+    let mut object = Node::path(NodeId(1), path.clone(), Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0));
+    let mut fill = object.clone();
+    object.appearance.effects = vec![shadow.clone(), big.clone()];
+    if let Some(item) = fill.appearance.items.first_mut() {
+        *item.effects_mut() = vec![shadow, big];
+    }
+    let d = Document::new(100.0, 100.0);
+    let symbols = d.symbol_boxes();
+    // Within the shadow's 10 pt on every side (the visual bounds grow each side by the most any
+    // side reaches).
+    let within = |b: Rect| b.x0 >= art.x0 - 11.0 && b.y0 >= art.y0 - 11.0 && b.x1 <= art.x1 + 11.0 && b.y1 <= art.y1 + 11.0;
+    for (what, n) in [("object", &object), ("fill", &fill)] {
+        let b = crate::fx::visual_bounds(&symbols, n).unwrap();
+        assert!(within(b), "{what}: visual {b:?} for art {art:?}");
+        let b = crate::fx::painted_reach(&symbols, n).unwrap();
+        assert!(within(b), "{what}: painted {b:?} for art {art:?}");
+    }
+}
+
+/// Each copy of a Transform effect draws the drop shadow listed before the effect under itself,
+/// scaled with it: the red square (10..30) and its copy scaled 200 % and moved 60 pt down (0..40
+/// across, 60..100 down) each have a green shadow to their right, 20 pt for the square and 40 pt
+/// for the copy. The bounds reach as far as the copy's shadow.
+#[test]
+fn each_copy_of_a_transform_effect_draws_its_own_shadow() {
+    let shadow = fx("stylize.dropShadow", json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"}));
+    let copies = fx("distort.transform", json!({"scaleH": 200, "scaleV": 200, "moveV": 60, "copies": 1}));
+    let red = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let mut n = Node::path(NodeId(0), shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), red);
+    n.appearance.effects = vec![shadow, copies];
+    let d = doc_with(Document::new(100.0, 100.0), n);
+    let img = render(&d);
+    assert_eq!(img.pixel(20, 20), [255, 0, 0, 255], "the square");
+    assert_eq!(img.pixel(45, 20), [0, 255, 0, 255], "the square's shadow");
+    assert_eq!(img.pixel(20, 80), [255, 0, 0, 255], "the copy");
+    assert_eq!(img.pixel(70, 80), [0, 255, 0, 255], "the copy's shadow, 40 pt to its right");
+    assert_eq!(img.pixel(85, 80), [255, 255, 255, 255], "past the copy's shadow");
+    let n = &d.layers[0].children().unwrap()[0];
+    let b = crate::fx::visual_bounds(&d.symbol_boxes(), n).unwrap();
+    assert!(b.x1 >= 80.0 - 1e-9, "{b:?}");
+}
+
+/// Each copy of a fill's own Transform effect, and each copy of its object's Transform effect,
+/// draws the fill's drop shadow under itself, scaled with it: as for the object's own shadow
+/// above, the copy's green shadow is 40 pt to its right. A 4 pt stroke's own Transform effect
+/// gives each copy the shadow of its stroke: the copy's right edge (38..42 across) casts it at
+/// 78..82. The bounds reach as far as the copy's shadow.
+#[test]
+fn each_copy_of_a_fills_or_strokes_transform_draws_its_own_shadow() {
+    let shadow = || fx("stylize.dropShadow", json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"}));
+    let copies = || fx("distort.transform", json!({"scaleH": 200, "scaleV": 200, "moveV": 60, "copies": 1}));
+    let square = |item: AppearanceItem| {
+        Node::path(NodeId(0), shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), Appearance { items: vec![item], ..Default::default() })
+    };
+    let mut red = FillLayer::new(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    red.effects = vec![shadow(), copies()];
+    let own = square(AppearanceItem::Fill(red.clone()));
+    red.effects = vec![shadow()];
+    let mut owner = square(AppearanceItem::Fill(red));
+    owner.appearance.effects = vec![copies()];
+    for (what, n) in [("own", own), ("object's", owner)] {
+        let d = doc_with(Document::new(100.0, 100.0), n);
+        let img = render(&d);
+        assert_eq!(img.pixel(20, 20), [255, 0, 0, 255], "{what}: the square");
+        assert_eq!(img.pixel(45, 20), [0, 255, 0, 255], "{what}: the square's shadow");
+        assert_eq!(img.pixel(20, 80), [255, 0, 0, 255], "{what}: the copy");
+        assert_eq!(img.pixel(70, 80), [0, 255, 0, 255], "{what}: the copy's shadow, 40 pt to its right");
+        assert_eq!(img.pixel(85, 80), [255, 255, 255, 255], "{what}: past the copy's shadow");
+        let n = &d.layers[0].children().unwrap()[0];
+        let b = crate::fx::visual_bounds(&d.symbol_boxes(), n).unwrap();
+        assert!(b.x1 >= 80.0 - 1e-9, "{what}: {b:?}");
+    }
+    let mut blue = StrokeLayer::new(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 4.0);
+    blue.effects = vec![shadow(), copies()];
+    let d = doc_with(Document::new(100.0, 100.0), square(AppearanceItem::Stroke(blue)));
+    let img = render(&d);
+    assert_eq!(img.pixel(50, 20), [0, 255, 0, 255], "the square's stroke shadow");
+    assert_eq!(img.pixel(80, 80), [0, 255, 0, 255], "the copy's stroke shadow, 40 pt to the right of its edge");
+    assert_eq!(img.pixel(60, 80), [255, 255, 255, 255], "inside the copy's stroke shadow");
+}
+
+/// Each copy of an image's Transform effect draws the drop shadow listed before the effect under
+/// itself, scaled with it: the red image (20..50) has its green shadow 10 pt to its right, and its
+/// copy scaled 50 % and moved 40 pt down (27.5..42.5 across, 67.5..82.5 down) has its own 5 pt to
+/// its right.
+#[test]
+fn each_copy_of_an_images_transform_effect_draws_its_own_shadow() {
+    let shadow = fx("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"}));
+    let copies = fx("distort.transform", json!({"scaleH": 50, "scaleV": 50, "moveV": 40, "copies": 1}));
+    let img = render(&image_doc(vec![shadow, copies]));
+    assert_eq!(img.pixel(35, 35), [255, 0, 0, 255], "the image");
+    assert_eq!(img.pixel(55, 35), [0, 255, 0, 255], "the image's shadow");
+    assert_eq!(img.pixel(35, 75), [255, 0, 0, 255], "the copy");
+    assert_eq!(img.pixel(45, 75), [0, 255, 0, 255], "the copy's shadow, 5 pt to its right");
+    assert_eq!(img.pixel(50, 75), [255, 255, 255, 255], "past the copy's shadow");
+}
+
+/// Each copy of a symbol instance's Transform effect draws the drop shadow listed before the effect
+/// under itself, scaled with it: the black square (40..60) has its green shadow 10 pt to its right,
+/// and its copy scaled 150 % and moved 30 pt down (35..65 across, 65..95 down) has its own 15 pt to
+/// its right. The bounds reach as far as the copy's shadow, and as far as a shadow listed after the
+/// Transform effect paints below all of them.
+#[test]
+fn each_copy_of_a_symbol_instances_transform_effect_draws_its_own_shadow() {
+    let shadow = fx("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"}));
+    let copies = fx("distort.transform", json!({"scaleH": 150, "scaleV": 150, "moveV": 30, "copies": 1}));
+    let below = fx("stylize.dropShadow", json!({"x": 0, "y": 20, "blur": 0, "opacity": 100, "mode": "normal", "color": "#0000ff"}));
+    let d = symbol_doc(vec![shadow.clone(), copies.clone(), below]);
+    let n = &d.layers[0].children().unwrap()[0];
+    let b = crate::brush_fx::cull_bounds(&d.symbol_boxes(), n).unwrap();
+    assert!(b.x1 >= 80.0 - 1e-9 && b.y1 >= 115.0 - 1e-9, "{b:?}");
+    let d = symbol_doc(vec![shadow, copies]);
+    let img = render(&d);
+    assert_eq!(img.pixel(50, 50), [0, 0, 0, 255], "the instance");
+    assert_eq!(img.pixel(65, 50), [0, 255, 0, 255], "the instance's shadow");
+    assert_eq!(img.pixel(50, 80), [0, 0, 0, 255], "the copy");
+    assert_eq!(img.pixel(77, 80), [0, 255, 0, 255], "the copy's shadow, 15 pt to its right");
+    assert_eq!(img.pixel(85, 80), [255, 255, 255, 255], "past the copy's shadow");
+    let n = &d.layers[0].children().unwrap()[0];
+    let b = crate::brush_fx::cull_bounds(&d.symbol_boxes(), n).unwrap();
+    assert!(b.x1 >= 80.0 - 1e-9, "{b:?}");
 }

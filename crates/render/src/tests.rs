@@ -5,6 +5,7 @@ use vectorcraft_geom::shapes;
 
 mod adjust;
 mod alternate;
+mod arearesize;
 mod bitmapglyphs;
 mod blend;
 mod changed;
@@ -24,8 +25,10 @@ mod knockout;
 mod layeropts;
 mod longstroke;
 mod memory;
+mod meshwarp;
 mod movedstroke;
 mod objectfx;
+mod paintedbrush;
 mod placed_document;
 mod rasterize;
 mod setup;
@@ -423,6 +426,29 @@ fn an_instance_is_culled_by_the_art_nested_9_slice_guides_move() {
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Holder".into(), xf })).unwrap();
     let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
     assert_eq!(img.pixel(95, 50), [255, 0, 0, 255]);
+}
+
+#[test]
+fn an_instance_that_only_moves_is_culled_by_the_art_its_9_slice_guides_move() {
+    // A symbol made in the app: art in the 20 × 20 square, a natural size of 2 × 2, and guides a
+    // quarter in. An instance that only moves draws it at 20 × 20, ten times its natural size. The
+    // bar from x −9.9 to 0.1 crosses the left guide and is placed by the middle column's map,
+    // x → 1.9x: moved 115 pt right, it draws from x 96.19 to 115.19 while its art box starts at
+    // x 105, out of view.
+    let mut d = Document::new(100.0, 100.0);
+    let bar = rect_node(&mut d, Rect::new(-9.9, -1.0, 0.1, 1.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Bar".into(), art: Arc::new(bar) });
+    let frame = rect_node(&mut d, Rect::new(-10.0, -10.0, 10.0, 10.0), Paint::None, Paint::None, 0.0);
+    let inner = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Bar".into(), xf: Affine::IDENTITY });
+    let art = Node::group(d.alloc_id(), vec![Arc::new(frame), Arc::new(inner)]);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(art) });
+    d.unknown.insert(vectorcraft_doc::SYMBOL_SIZES.into(), serde_json::json!({ "Panel": [2.0, 2.0] }));
+    d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let (id, l) = (d.alloc_id(), d.layers[0].id);
+    let xf = Affine::translate((115.0, 50.0));
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Panel".into(), xf })).unwrap();
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert_eq!(img.pixel(98, 50), [255, 0, 0, 255]);
 }
 
 #[test]
@@ -952,6 +978,43 @@ fn node_renders_follow_the_anti_alias_option() {
     assert!(drawn(&thumb) && !partial(&thumb), "render_node_thumbnail_with: every alpha is 0 or 255");
 }
 
+/// Node renders follow `supersample` and `precise` as a page render does: two rectangles that meet
+/// at x = 50.37 leave no seam when supersampled, and a node render gives the pixels of a page
+/// render of the same art with the same options.
+#[test]
+fn node_renders_follow_the_supersample_and_precise_options() {
+    let mut d = Document::new(100.0, 100.0);
+    let left = rect_node(&mut d, Rect::new(10.0, 10.0, 50.37, 90.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
+    let right = rect_node(&mut d, Rect::new(50.37, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(0.2, 0.6, 0.9)), Paint::None, 0.0);
+    // Blended at half opacity over both, so the group composites offscreen.
+    let mut over = rect_node(&mut d, Rect::new(30.0, 60.0, 70.0, 80.0), Paint::solid(Color::rgb(0.9, 0.7, 0.1)), Paint::None, 0.0);
+    over.opacity = 0.5;
+    over.blend = vectorcraft_color::BlendMode::Multiply;
+    let group = Node::group(d.alloc_id(), vec![Arc::new(left), Arc::new(right), Arc::new(over)]);
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, group.clone()).unwrap();
+    let node = Arc::new(group.clone());
+    let page = |opts: &RenderOptions| RenderOptions { background: None, artboards: false, ..opts.clone() };
+    let mut r = Renderer::new();
+    for (supersample, precise) in [(false, false), (true, false), (false, true), (true, true)] {
+        let opts = RenderOptions { supersample, precise, ..Default::default() };
+        let case = format!("supersample {supersample}, precise {precise}");
+        let img = r.render_node_with(&d, &node, 100, 100, Affine::IDENTITY, &opts).unwrap();
+        let whole = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &page(&opts));
+        assert!(img.pixels == whole.pixels, "{case}: render_node_with draws as a page render does");
+        // Pixel column 50 at row 50: the black rectangle covers 37% of it and the blue one the rest.
+        let seam = img.pixels[(50 * 100 + 50) * 4 + 3];
+        assert_eq!(seam == 255, supersample, "{case}: render_node_with seam alpha {seam}");
+        // A 37-pixel thumbnail draws 0.4375 pixels a point, the seam at x = 18.66.
+        let thumb = r.render_node_thumbnail_with(&d, &group, 37, None, &opts).unwrap();
+        let view = Affine::translate((18.5, 18.5)) * Affine::scale(0.4375) * Affine::translate((-50.0, -50.0));
+        let whole = Renderer::new().render(&d, 37, 37, view, &page(&opts));
+        assert!(thumb.pixels == whole.pixels, "{case}: the thumbnail draws as a page render does");
+        let seam = thumb.pixels[(18 * 37 + 18) * 4 + 3];
+        assert_eq!(seam == 255, supersample, "{case}: thumbnail seam alpha {seam}");
+    }
+}
+
 #[test]
 fn opacity_mask_with_undecodable_image_leaves_out_object() {
     use vectorcraft_doc::{Effect, ImageBlob, ImageObject, NodeKind, OpacityMask};
@@ -1197,6 +1260,45 @@ fn undecodable_image_in_nested_opacity_mask_leaves_out_outer_object() {
     let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
     let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
     assert_eq!(img.pixel(70, 70), [255, 255, 255, 255], "the incomplete inner mask invalidates the outer mask");
+}
+
+/// The drop shadows of a blend's steps draw under an opacity mask with Clip off, where the mask
+/// art leaves them uncovered, as they draw without the mask; with Clip on they are hidden.
+#[test]
+fn blend_step_shadows_draw_under_an_unclipped_opacity_mask() {
+    use vectorcraft_doc::live::{BlendSpacing, BlendSpec};
+    use vectorcraft_doc::{NodeKind, OpacityMask};
+
+    let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 15, "y": 15, "blur": 0}), visible: true };
+    let blend = |d: &mut Document, mask: Option<bool>| {
+        let end = |d: &mut Document, x: f64| {
+            let mut n = rect_node(d, Rect::new(x, 10.0, x + 10.0, 20.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+            n.appearance.effects.push(shadow.clone());
+            Arc::new(n)
+        };
+        let ends = vec![end(d, 10.0), end(d, 70.0)];
+        let spec = BlendSpec { spacing: BlendSpacing::Steps(2), ..Default::default() };
+        let mut n = Node::new(d.alloc_id(), NodeKind::Blend { children: ends, spec: Box::new(spec) });
+        if let Some(clip) = mask {
+            let white = rect_node(d, Rect::new(0.0, 0.0, 5.0, 5.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+            n.extras_mut().mask = Some(Box::new(OpacityMask::new(white, clip)));
+        }
+        n
+    };
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let draw = |mask: Option<bool>| {
+        let mut d = Document::new(120.0, 60.0);
+        let n = blend(&mut d, mask);
+        d.insert(Some(d.layers[0].id), 0, n).unwrap();
+        Renderer::new().render(&d, 120, 60, Affine::IDENTITY, &opts)
+    };
+    let (plain, unclipped, clipped) = (draw(None), draw(Some(false)), draw(Some(true)));
+    for (x, y) in [(30, 30), (90, 32)] {
+        assert!(plain.pixel(x, y)[0] < 128, "the shadow draws at ({x}, {y}) without a mask: {:?}", plain.pixel(x, y));
+        assert_eq!(unclipped.pixel(x, y), plain.pixel(x, y), "the shadow draws at ({x}, {y}) under the unclipped mask");
+        assert_eq!(clipped.pixel(x, y), [255, 255, 255, 255], "the clipped mask hides the shadow at ({x}, {y})");
+    }
+    assert_eq!(unclipped.pixel(15, 15), plain.pixel(15, 15), "the first end draws under the unclipped mask");
 }
 
 /// #3580: each opacity mask is rendered over its object's pixels, not over the whole frame. 300
@@ -1781,14 +1883,14 @@ fn a_png_past_the_allowance_draws_at_reduced_size() {
     assert_eq!((pm.width(), pm.height(), [c.r, c.g, c.b, c.a]), (300, 300, [200, 40, 40, 255]));
     // A row is read only while the reader's buffers fit the allowance, counting the stream buffer
     // three times for the moment it grows. Below 4,096 columns of 16-bit RGBA they take 516,103
-    // bytes and 60 a column: 1,398 columns take 599,983 bytes, within 600,000, and 1,399 columns
-    // take 600,043 and are not decoded (their samples, 8 bytes a pixel, are past it too).
+    // bytes plus 64 bytes a column: 1,310 columns take 599,943 bytes, within 600,000, and 1,311
+    // columns take 600,007 and are not decoded (their samples, 8 bytes a pixel, are past it too).
     let wide = |w: u32| {
         let img = image::ImageBuffer::<image::Rgba<u16>, _>::from_pixel(w, 60, image::Rgba([51400, 10280, 10280, 65535]));
         encoded(image::DynamicImage::ImageRgba16(img), image::ImageFormat::Png)
     };
-    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1398))), Some((1398, 60)));
-    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1399))), None);
+    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1310))), Some((1310, 60)));
+    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1311))), None);
     // An image of more pixels than the allowance has bytes is not read: 1,000 × 400 8-bit gray
     // pixels are drawn at 500 × 200 within 400,000 bytes, and 1,000 × 401 are not.
     let gray = |h: u32| encoded(image::DynamicImage::ImageLuma8(image::GrayImage::from_pixel(1000, h, image::Luma([90]))), image::ImageFormat::Png);
@@ -1836,13 +1938,13 @@ fn a_reduced_decode_counts_what_reading_takes_beside_the_images_paints_hold() {
     // Decoded whole: 14,400 bytes of RGB and a 16-row band of 8,960 bytes, beside a 73 × 54 result
     // of 15,768 bytes.
     let jpeg = encoded(image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(80, 60, image::Rgb([30, 120, 200]))), image::ImageFormat::Jpeg);
-    // Read a row at a time: 540,103 bytes in the reader's buffers for 400 columns of 16-bit RGBA,
+    // Read a row at a time: 541,703 bytes in the reader's buffers for 400 columns of 16-bit RGBA,
     // beside a 387 × 387 result of 599,076 bytes.
     let png = encoded(
         image::DynamicImage::ImageRgba16(image::ImageBuffer::from_pixel(400, 400, image::Rgba([51400, 10280, 10280, 65535]))),
         image::ImageFormat::Png,
     );
-    for (bytes, allowance, room, size) in [(&jpeg, 16_000, 15_768 + 14_400 + 8_960, (73, 54)), (&png, 600_000, 599_076 + 540_103, (387, 387))] {
+    for (bytes, allowance, room, size) in [(&jpeg, 16_000, 15_768 + 14_400 + 8_960, (73, 54)), (&png, 600_000, 599_076 + 541_703, (387, 387))] {
         let failed = decode_failures();
         let none = with_allowance(allowance, || with_room(room - 1, || paint::decode_pixmap_or_why(bytes)));
         assert_eq!(none.err(), Some(paint::Undecoded::NoRoom), "not decoded with a byte too few, and tried again later");

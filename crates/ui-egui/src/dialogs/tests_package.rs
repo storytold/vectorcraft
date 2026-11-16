@@ -181,7 +181,7 @@ fn a_dirty_documents_save_is_written_before_its_package() {
     let (mut app, files) = saved_with_worker(&dir, &gate);
     let (doc, out) = (dir.path("card.vectorcraft"), dir.path("out"));
     // With Background Export on, the save and the package both run in the background, and the
-    // worker writes the save first.
+    // package starts once the save is written.
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
     package_dialog(&mut app, &out);
     // A thread opens the gate after 10 s at the latest, so a confirm that waits for the save ends.
@@ -191,7 +191,7 @@ fn a_dirty_documents_save_is_written_before_its_package() {
         opener.open();
     });
     assert_eq!(confirm(&mut app).unwrap()["background"], true);
-    assert_eq!(app.background.jobs.len(), 2, "the save and the package");
+    assert_eq!(app.background.jobs.len(), 1, "the save; the package waits for it");
     gate.open();
     background::wait_all(&mut app);
     let paths = written(&files);
@@ -214,6 +214,67 @@ fn a_dirty_documents_save_is_written_before_its_package() {
     assert_eq!(written(&files), [doc]);
     assert!(app.background.jobs.is_empty() && !app.session.active().unwrap().is_dirty());
     assert!(app.ui.status.starts_with("Packaged 3 files in "), "the package's status came last: {}", app.ui.status);
+}
+
+/// A save before packaging that fails writes no package, with Background Export on or off.
+#[test]
+fn a_failed_save_before_packaging_writes_no_package() {
+    let dir = Folder::new("failed-save");
+    let (doc, out) = (dir.path("card.vectorcraft"), dir.path("out"));
+    let root = std::path::Path::new(&out).join("card Folder");
+    for background_export in [true, false] {
+        let mut app = saved(&dir);
+        let (files, refused) = (Files::default(), doc.clone());
+        let recorded = files.clone();
+        app.services.write_shared = Some(Arc::new(move |p: &str, b: &[u8]| {
+            if p == refused {
+                return Err("Access is denied. (os error 5)".into());
+            }
+            recorded.lock().unwrap().push((p.to_string(), b.to_vec()));
+            Ok(())
+        }));
+        app.session.execute("prefs.set", &json!({"values": {"backgroundExport": background_export}})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+        package_dialog(&mut app, &out);
+        let r = confirm(&mut app);
+        background::wait_all(&mut app);
+        assert!(written(&files).is_empty(), "Background Export {background_export}: {:?}", written(&files));
+        assert!(!root.exists(), "Background Export {background_export}: no package folder");
+        assert!(app.session.active().unwrap().is_dirty(), "the save failed");
+        match r {
+            Ok(r) => assert!(background_export && r["background"] == true, "{r}"),
+            Err(e) => assert!(!background_export && e.contains("Access is denied"), "{e}"),
+        }
+    }
+}
+
+/// A package that an automation request confined to its roots asks for, started once the
+/// document's background save is written, is still confined to those roots, though the save's
+/// result arrives outside the request.
+#[test]
+fn a_package_started_after_its_save_keeps_the_automation_roots() {
+    let (dir, elsewhere) = (Folder::new("scope"), Folder::new("scope-elsewhere"));
+    let (doc, out) = (dir.path("card.vectorcraft"), elsewhere.path("out"));
+    let root = std::path::Path::new(&out).join("card Folder");
+    let mut app = saved(&dir);
+    let files = Files::default();
+    let recorded = files.clone();
+    app.services.write_shared = Some(Arc::new(move |p: &str, b: &[u8]| {
+        vectorcraft_engine::file_access::check_write(p)?;
+        recorded.lock().unwrap().push((p.to_string(), b.to_vec()));
+        Ok(())
+    }));
+    let roots = AutomationRoots::new(&[dir.0.as_path()], &[dir.0.as_path()]).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    package_dialog(&mut app, &out);
+    let r = vectorcraft_engine::file_access::confine(roots.as_ref(), || confirm(&mut app)).unwrap();
+    assert_eq!(r["background"], true, "{r}");
+    // The save's result is applied outside the request, as the next frame does.
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), [doc], "only the save, inside the roots");
+    assert!(!root.exists(), "no package folder outside the roots");
+    assert!(!app.session.active().unwrap().is_dirty(), "the save was written");
+    assert!(app.ui.status.contains("failed"), "the package was refused: {}", app.ui.status);
 }
 
 #[test]

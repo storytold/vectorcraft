@@ -10,6 +10,7 @@ pub mod gif;
 pub mod jpeg;
 pub mod png;
 pub mod psd;
+mod psd_type;
 pub mod quantize;
 pub mod tga;
 pub mod tiff;
@@ -248,7 +249,7 @@ fn drawn_bounds_with(symbols: &SymbolBoxes, n: &Node, held: Option<&Arc<Node>>, 
         return None;
     }
     match &n.kind {
-        NodeKind::Layer { template: true, .. } | NodeKind::Path { guide: true, .. } => None,
+        NodeKind::Layer { template: true, .. } | NodeKind::Path { guide: true, .. } | NodeKind::RulerGuide { .. } => None,
         NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } if !fx::has_object_fx(n) => children
             .iter()
             .skip(usize::from(n.extras().shaper.is_some()))
@@ -289,7 +290,7 @@ fn without_undrawn(n: &Node) -> Option<Node> {
     if keeps_all || !matches!(n.kind, NodeKind::Layer { clip: false, .. } | NodeKind::Group { clip: false, .. }) {
         return None;
     }
-    let undrawn = |c: &Node| !c.visible || matches!(c.kind, NodeKind::Layer { template: true, .. } | NodeKind::Path { guide: true, .. });
+    let undrawn = |c: &Node| !c.visible || c.is_guide() || c.is_template();
     let mut changed = false;
     let kept: Vec<Arc<Node>> = n
         .children()?

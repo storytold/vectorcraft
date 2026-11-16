@@ -4,7 +4,8 @@
 //! `tool.setOption {tool: "livePaintBucket", values}`.
 //!
 //! Fields: `paintFills` and `paintStrokes` (the faces and the edges of Live Paint groups),
-//! `highlight` (whether the face or edge under the pointer is outlined), `color` (the highlight
+//! `cursorSwatchPreview` (whether the active paint and the color swatches beside it show above the
+//! pointer), `highlight` (whether the face or edge under the pointer is outlined), `color` (the highlight
 //! color: `#rrggbb`, or a layer color's name such as "Red") and `width` (the width of a face's
 //! highlight in screen pixels; an edge's highlight is half as wide).
 
@@ -25,7 +26,7 @@ pub const KIND: &str = "livePaintBucketOptions";
 const TOOL: &str = "livePaintBucket";
 
 /// The options the dialog edits.
-const KEYS: [&str; 5] = ["paintFills", "paintStrokes", "highlight", "color", "width"];
+const KEYS: [&str; 6] = ["paintFills", "paintStrokes", "cursorSwatchPreview", "highlight", "color", "width"];
 
 /// Width of the label column.
 const LABEL_W: f32 = 60.0;
@@ -48,6 +49,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
 fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     form::check(ui, d, "paintFills", tl!("Paint Fills"));
     form::check(ui, d, "paintStrokes", tl!("Paint Strokes"));
+    form::check(ui, d, "cursorSwatchPreview", tl!("Cursor Swatch Preview"));
     ui.add_space(6.0);
     form::check(ui, d, "highlight", tl!("Highlight"));
     let color = resolve(&d.str("color")).unwrap_or(Color::BLACK);
@@ -120,17 +122,18 @@ mod tests {
 
         crate::toolbar::open_options(&mut app, TOOL).unwrap();
         let text = painted(&mut app);
-        for label in ["Live Paint Bucket Options", "Paint Fills", "Paint Strokes", "Highlight", "Color:", "Width:"] {
+        for label in ["Live Paint Bucket Options", "Paint Fills", "Paint Strokes", "Cursor Swatch Preview", "Highlight", "Color:", "Width:"] {
             assert!(text.contains(label), "{label} in {text}");
         }
         let d = app.ui.dialog.as_mut().unwrap();
         assert_eq!(d.kind, KIND);
         assert_eq!(
-            (d.bool("paintFills"), d.bool("paintStrokes"), d.bool("highlight"), d.str("color"), d.f64("width", 0.0)),
-            (true, false, true, "#ff2a2a".to_string(), 4.0)
+            (d.bool("paintFills"), d.bool("paintStrokes"), d.bool("cursorSwatchPreview"), d.bool("highlight"), d.str("color"), d.f64("width", 0.0)),
+            (true, false, true, true, "#ff2a2a".to_string(), 4.0)
         );
         d.fields.insert("paintFills".into(), json!(false));
         d.fields.insert("paintStrokes".into(), json!(true));
+        d.fields.insert("cursorSwatchPreview".into(), json!(false));
         d.fields.insert("color".into(), json!("Green"));
         d.fields.insert("width".into(), json!(8));
         super::super::confirm(&mut app).unwrap();
@@ -141,10 +144,13 @@ mod tests {
         // They last while another tool is chosen, and the dialog opens on them again.
         app.select_tool("selection");
         let o = app.session.tool_options_of(TOOL);
-        assert_eq!((o["paintFills"].as_bool(), o["paintStrokes"].as_bool(), o["color"].as_str()), (Some(false), Some(true), Some("#4fff4f")));
+        assert_eq!(
+            (o["paintFills"].as_bool(), o["paintStrokes"].as_bool(), o["cursorSwatchPreview"].as_bool(), o["color"].as_str()),
+            (Some(false), Some(true), Some(false), Some("#4fff4f"))
+        );
         app.run("tool.options", json!({"tool": TOOL})).unwrap();
         let d = app.ui.dialog.as_mut().unwrap();
-        assert_eq!((d.bool("paintStrokes"), d.str("color")), (true, "#4fff4f".to_string()));
+        assert_eq!((d.bool("paintStrokes"), d.bool("cursorSwatchPreview"), d.str("color")), (true, false, "#4fff4f".to_string()));
         // Highlight off: the tool outlines nothing under the pointer.
         d.fields.insert("highlight".into(), json!(false));
         super::super::confirm(&mut app).unwrap();

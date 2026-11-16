@@ -1,5 +1,6 @@
 //! Artboards panel: numbered list with inline rename (double-click the name, or the panel menu's
-//! Rename; while several artboards are selected, the name typed goes to all of them, numbered),
+//! Rename; while several artboards are selected, the name typed goes to all of them, numbered), a
+//! row menu (right-click) whose Rename opens the Rename dialog for the selected artboards,
 //! move up / down (or drag a row above or below another), new
 //! (Alt-click: Artboard Options for the new artboard first), delete; a row dragged onto New
 //! Artboard duplicates its artboard (as Duplicate Artboards does, with
@@ -40,6 +41,13 @@ fn art_option_boxes(app: &mut VectorcraftApp, ui: &mut Ui, compact: bool) {
     }
 }
 
+/// The widths [`art_option_boxes`] gives Move and Scale Artwork with Artboard, or with `compact` the
+/// boxes alone.
+fn art_option_widths(ui: &Ui, compact: bool) -> [f32; 2] {
+    let label = |text: &str| widgets::choice_width(ui, if compact { "" } else { text });
+    [label(tl!("Move Artwork with Artboard")), label(tl!("Scale Artwork with Artboard"))]
+}
+
 /// The room Move and Scale Artwork with Artboard need with their labels in the Control bar; with
 /// less, the boxes show alone.
 const ART_OPTIONS_WIDTH: f32 = 370.0;
@@ -55,14 +63,18 @@ const NAME_FIELD_ROOM: f32 = 330.0;
 /// The Control bar while the Artboard tool is in use, in place of the object controls: the active
 /// artboard's preset and orientation, New Artboard and Delete Artboard, its name (in a narrower
 /// field when the bar is short of room), Artboard Options, Rearrange All Artboards and the Transform
-/// link (the Transform panel in a popover), which all fit in the narrowest window, left of the bar's
-/// panel menu button; then Move and Scale Artwork with Artboard (the boxes alone, with their
-/// names in tooltips, when the bar is short of room) and, while the bar has room, the reference
-/// point the Transform panel also uses with the artboard's X and Y, and its W and H with the
-/// Constrain Width and Height Proportions link. Each control runs the command its Properties panel
-/// or Transform panel counterpart runs. Returns false, and draws nothing, while another tool is in
-/// use.
-pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
+/// link (the Transform panel in a popover), left of the bar's panel menu button; then Move and Scale
+/// Artwork with Artboard (the boxes alone, with their names in tooltips, when the bar is short of
+/// room) and, while the bar has room, the reference point the Transform panel also uses with the
+/// artboard's X and Y, and its W and H with the Constrain Width and Height Proportions link. Each
+/// control, and each label with its field or menu, shows only while the row has room for it, with
+/// the Transform link's room left after the controls ahead of the link, and the controls after one
+/// left out are left out too, except the Transform link, which shows whenever it fits. Each control runs the command its Properties panel or Transform panel
+/// counterpart runs. With `options` false (the bar's panel menu has its Artboard Options group off),
+/// the controls other than the Transform link and the fields are left out; with `transform` false
+/// (its Transform group off), the Transform link and the fields are. Returns false, and draws
+/// nothing, while another tool is in use.
+pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, options: bool, transform: bool) -> bool {
     if app.session.tool_id() != "artboard" {
         return false;
     }
@@ -71,35 +83,63 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     let i = selected(app, n);
     let Some(ab) = app.session.active().and_then(|d| d.doc.artboards.get(i)).cloned() else { return true };
     let r = ab.rect;
-    super::properties::artboard_size_row(app, ui, i, r.width(), r.height());
-    if widgets::icon_button(ui, "dc-new-item", tl!("New Artboard"), false, 24.0).clicked() {
-        add_new(app);
+    let mut fit = crate::chrome::Fit::new(if transform { crate::chrome::link_reserve(ui) } else { 0.0 });
+    if options {
+        if fit.room(ui, &super::properties::artboard_size_row_widths(ui)) {
+            super::properties::artboard_size_row(app, ui, i, r.width(), r.height());
+        }
+        if fit.room(ui, &[24.0]) && widgets::icon_button(ui, "dc-new-item", tl!("New Artboard"), false, 24.0).clicked() {
+            add_new(app);
+        }
+        if fit.room(ui, &[24.0]) && widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Artboard"), false, n > 1, 24.0).clicked() {
+            delete_selected(app);
+        }
+        fit.separator(ui);
+        // The field shows the name as it is (names are never translated). A new name is applied on Enter
+        // or a click elsewhere, and an empty field or Escape keeps the old one, as in the Properties panel.
+        let label = egui::RichText::new(tl!("Name:")).size(12.0).color(t.text);
+        let label_width = widgets::text_width(ui, label.clone());
+        // The room after the label decides the field's width.
+        let width = if ui.available_width() - label_width - ui.spacing().item_spacing.x < NAME_FIELD_ROOM { 100.0 } else { 120.0 };
+        if fit.room(ui, &[label_width, width]) {
+            ui.label(label);
+            if let Some(name) =
+                widgets::text_field_named(ui, ("cb-ab", "name"), Some(tl!("Name:")), Some(&ab.name), width, 1).filter(|n| !n.is_empty())
+            {
+                app.run("artboard.setProps", json!({"index": i, "name": name})).ok();
+            }
+        }
+        if fit.room(ui, &[24.0]) && widgets::icon_button(ui, "dc-artboard-options", tl!("Artboard Options"), false, 24.0).clicked() {
+            app.run("tool.options", json!({"tool": "artboard"})).ok();
+        }
+        if fit.room(ui, &[24.0]) && widgets::icon_button_enabled(ui, "dc-rearrange", tl!("Rearrange All Artboards"), false, n > 1, 24.0).clicked() {
+            open_rearrange(app);
+        }
+        fit.separator(ui);
     }
-    if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Artboard"), false, n > 1, 24.0).clicked() {
-        delete_selected(app);
+    fit.set_reserve(0.0);
+    // The link is its own group: it shows whenever it fits, even after an option was left out.
+    if transform && crate::chrome::Fit::new(0.0).room(ui, &[super::transform::link_width(ui)]) {
+        super::transform::link(app, ui);
+        crate::chrome::group_separator(ui);
     }
-    ui.separator();
-    // The field shows the name as it is (names are never translated). A new name is applied on Enter
-    // or a click elsewhere, and an empty field or Escape keeps the old one, as in the Properties panel.
-    ui.label(egui::RichText::new(tl!("Name:")).size(12.0).color(t.text));
-    let width = if ui.available_width() < NAME_FIELD_ROOM { 100.0 } else { 120.0 };
-    if let Some(name) = widgets::text_field_named(ui, ("cb-ab", "name"), Some(tl!("Name:")), Some(&ab.name), width, 1).filter(|n| !n.is_empty()) {
-        app.run("artboard.setProps", json!({"index": i, "name": name})).ok();
+    if options {
+        let full = art_option_widths(ui, false);
+        let spacing = ui.spacing().item_spacing.x;
+        let compact = ui.available_width() < ART_OPTIONS_WIDTH || ui.available_width() < full.iter().map(|w| w + spacing).sum::<f32>();
+        // The fields after the boxes need far more room than the spacing after them, so the boxes
+        // can end the row.
+        if fit.room_at_end(ui, &if compact { art_option_widths(ui, true) } else { full }) {
+            art_option_boxes(app, ui, compact);
+        }
     }
-    if widgets::icon_button(ui, "dc-artboard-options", tl!("Artboard Options"), false, 24.0).clicked() {
-        app.run("tool.options", json!({"tool": "artboard"})).ok();
-    }
-    if widgets::icon_button_enabled(ui, "dc-rearrange", tl!("Rearrange All Artboards"), false, n > 1, 24.0).clicked() {
-        open_rearrange(app);
-    }
-    ui.separator();
-    super::transform::link(app, ui);
-    ui.separator();
-    art_option_boxes(app, ui, ui.available_width() < ART_OPTIONS_WIDTH);
-    if ui.available_width() < INLINE_FIELDS_WIDTH {
+    // With no room left for a control above, the fields after it are left out too.
+    if !transform || !fit.room(ui, &[]) || ui.available_width() < INLINE_FIELDS_WIDTH {
         return true;
     }
-    ui.separator();
+    if options {
+        ui.separator();
+    }
     let units = app.session.general_unit();
     let origin = app.ruler_origin();
     let refi = super::transform::reference_index(ui);
@@ -531,7 +571,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let scrolled = scroll.show(ui, |ui| {
             for (i, name) in abs.iter().enumerate() {
                 let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click_and_drag());
-                if resp.drag_started() {
+                // Only the primary button drags a row; a right-button drag reorders nothing.
+                if resp.drag_started_by(egui::PointerButton::Primary) {
                     egui::DragAndDrop::set_payload(ui.ctx(), RowDrag(i));
                 }
                 if all.contains(&i) {
@@ -638,6 +679,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 } else if resp.double_clicked() {
                     start_rename(ui.ctx(), app, i);
                 }
+                // A right-click on a row that isn't selected makes its artboard the active one and
+                // the only selected one ([`select`] sets the Artboard tool's `active` option, which
+                // clears the rest of its selection); on a selected row the selection stays. The row
+                // menu then acts on the selection.
+                if resp.secondary_clicked() && !picked(app, abs.len()).contains(&i) {
+                    select(app, i);
+                }
+                resp.context_menu(|ui| row_menu(app, ui));
                 // Another row dragged over this one lands above or below it by the pointer's half,
                 // a line showing where.
                 if let Some(from) = resp.dnd_hover_payload::<RowDrag>().map(|d| d.0).filter(|from| *from != i) {
@@ -695,6 +744,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             delete_selected(app);
         }
     });
+}
+
+/// A row's menu: Rename opens the Rename dialog for the selected artboards ([`picked`]), whose OK
+/// runs `artboard.rename` in one undo step, numbering the name when there are several.
+fn row_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if menu_item(ui, tl!("Rename"), true, false) {
+        crate::menus::invoke(app, "artboard.rename", json!({}));
+    }
 }
 
 /// Open Rearrange All Artboards (#681).

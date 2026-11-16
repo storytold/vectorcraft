@@ -201,6 +201,13 @@ pub struct FontFace {
     pub(super) colour_layers: bool,
     /// Has an `SVG ` table: OpenType SVG glyphs ([`FontDb::glyph_colour`]).
     pub(super) svg_glyphs: bool,
+    /// What the `GSUB` table substitutes ([`Self::substitutions`]), read the first time it is asked
+    /// for.
+    pub(super) gsub: std::sync::OnceLock<super::gsub::GsubIndex>,
+    /// [`Self::unencoded_glyphs`], read once.
+    pub(super) unencoded: std::sync::OnceLock<std::sync::Arc<[u32]>>,
+    /// [`Self::name_owner`]'s glyph names to characters, read once.
+    pub(super) named_chars: std::sync::OnceLock<std::collections::HashMap<String, char>>,
 }
 
 /// Where the ideographic character face (ICF) lies inside the ideographic em box: its distance
@@ -348,6 +355,11 @@ impl FontFace {
     /// when the font has no OS/2 value).
     pub fn x_height(&self) -> f64 {
         self.x_height
+    }
+    /// The height of the capital letters in font units, positive (estimated from the ascent when
+    /// the font has no OS/2 value).
+    pub fn cap_height(&self) -> f64 {
+        self.cap_height
     }
     /// The line gap the font asks for between lines, in font units (from the same table as
     /// [`vertical_metrics`](Self::vertical_metrics); 0 when it has none).

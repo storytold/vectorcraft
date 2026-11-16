@@ -1,9 +1,35 @@
+use std::cell::Cell;
+
 use super::build::segment_distance;
-use super::rings::{MAX_PLANE_POINTS, contains, left, rings, signed_area};
+use super::rings::{MAX_PLANE_POINTS, TOO_COMPLEX_SURFACE, left, rings, signed_area};
 use super::{FillRule, PathData, Point, Rect, Vec2};
 
+/// Most entries the edge index of one inflated shape holds: one for each bucket an edge's bounds
+/// cover (64 MiB).
+pub(super) const MAX_EDGE_ENTRIES: usize = 1 << 24;
+
+/// Most work the grid of one inflated shape takes: the index's entries, the edges its queries
+/// look at, the crossings of the rows it fills and the ring points its cells clip, together.
+pub(super) const MAX_GRID_WORK: usize = 1 << 28;
+
+#[cfg(test)]
+thread_local! {
+    /// The grid work the next edge indexes of this thread may take, for the tests.
+    pub(super) static GRID_BUDGET: Cell<usize> = const { Cell::new(MAX_GRID_WORK) };
+}
+
+/// The grid work a new edge index may take.
+fn grid_budget() -> usize {
+    #[cfg(test)]
+    return GRID_BUDGET.with(Cell::get);
+    #[cfg(not(test))]
+    MAX_GRID_WORK
+}
+
 /// The edges of `rings` filed in a grid of square buckets, so the nearest edge to a point is
-/// found among the buckets around it rather than among all the edges.
+/// found among the buckets around it rather than among all the edges. It also counts the work
+/// done with it (see [`MAX_GRID_WORK`]): once that is spent, its buckets read as empty, and the
+/// caller refuses the shape.
 pub(super) struct Edges {
     edges: Vec<(Point, Point)>,
     normals: Vec<(Vec2, Vec2)>,
@@ -11,10 +37,14 @@ pub(super) struct Edges {
     size: f64,
     n: usize,
     buckets: Vec<Vec<u32>>,
+    work: Cell<usize>,
+    budget: usize,
 }
 
 impl Edges {
-    pub(super) fn new(rings: &[Vec<Point>]) -> Self {
+    /// The index of `rings`' edges; an error when it would hold more than [`MAX_EDGE_ENTRIES`]
+    /// entries, counted before any is filed.
+    pub(super) fn new(rings: &[Vec<Point>]) -> Result<Self, String> {
         const N: usize = 64;
         let edges: Vec<(Point, Point)> =
             rings.iter().flat_map(|r| r.iter().zip(r.iter().cycle().skip(1)).take(r.len()).map(|(a, b)| (*a, *b))).collect();
@@ -37,16 +67,48 @@ impl Edges {
         let size = (bounds.width().max(bounds.height()) / N as f64).max(1e-9);
         let mut buckets = vec![vec![]; N * N];
         let index = |v: f64, o: f64| (((v - o) / size).floor().max(0.0) as usize).min(N - 1);
-        for (k, (a, b)) in edges.iter().enumerate() {
-            let (i0, i1) = (index(a.x.min(b.x), bounds.x0), index(a.x.max(b.x), bounds.x0));
-            let (j0, j1) = (index(a.y.min(b.y), bounds.y0), index(a.y.max(b.y), bounds.y0));
+        let spans = |(a, b): &(Point, Point)| {
+            ((index(a.x.min(b.x), bounds.x0), index(a.x.max(b.x), bounds.x0)), (index(a.y.min(b.y), bounds.y0), index(a.y.max(b.y), bounds.y0)))
+        };
+        let entries = edges.iter().map(spans).fold(0usize, |sum, ((i0, i1), (j0, j1))| sum.saturating_add((i1 - i0 + 1) * (j1 - j0 + 1)));
+        if entries > MAX_EDGE_ENTRIES {
+            return Err(TOO_COMPLEX_SURFACE.into());
+        }
+        for (k, e) in edges.iter().enumerate() {
+            let ((i0, i1), (j0, j1)) = spans(e);
             for j in j0..=j1 {
                 for i in i0..=i1 {
                     buckets[j * N + i].push(k as u32);
                 }
             }
         }
-        Self { edges, normals, origin: bounds.origin(), size, n: N, buckets }
+        Ok(Self { edges, normals, origin: bounds.origin(), size, n: N, buckets, work: Cell::new(entries), budget: grid_budget() })
+    }
+
+    /// Has the work done with the index gone past its budget?
+    pub(super) fn spent(&self) -> bool {
+        self.work.get() > self.budget
+    }
+
+    /// The work done with the index so far.
+    #[cfg(test)]
+    pub(super) fn work(&self) -> usize {
+        self.work.get()
+    }
+
+    /// Count `amount` more work; `false` once the budget is spent, when the work is not to be done.
+    pub(super) fn charge(&self, amount: usize) -> bool {
+        if self.spent() {
+            return false;
+        }
+        self.work.set(self.work.get().saturating_add(amount));
+        !self.spent()
+    }
+
+    /// The edges filed in bucket (`i`, `j`), counted as work; none once the budget is spent.
+    fn bucket(&self, i: isize, j: isize) -> &[u32] {
+        let bucket = self.buckets.get((j * self.n as isize + i) as usize).map_or(&[][..], Vec::as_slice);
+        if self.charge(bucket.len()) { bucket } else { &[] }
     }
 
     /// The bucket row or column of coordinate `v`, from the grid's origin `o` on that axis.
@@ -58,15 +120,11 @@ impl Edges {
     /// looked at.
     pub(super) fn near(&self, p: Point, tolerance: f64) -> bool {
         self.touch(Rect::new(p.x - tolerance, p.y - tolerance, p.x + tolerance, p.y + tolerance)) && {
-            let n = self.n as isize;
             let (i0, i1) = (self.cell(p.x - tolerance, self.origin.x), self.cell(p.x + tolerance, self.origin.x));
             let (j0, j1) = (self.cell(p.y - tolerance, self.origin.y), self.cell(p.y + tolerance, self.origin.y));
             (j0..=j1).any(|j| {
                 (i0..=i1).any(|i| {
-                    self.buckets[(j * n + i) as usize]
-                        .iter()
-                        .filter_map(|k| self.edges.get(*k as usize))
-                        .any(|(a, b)| segment_distance(p, *a, *b) <= tolerance)
+                    self.bucket(i, j).iter().filter_map(|k| self.edges.get(*k as usize)).any(|(a, b)| segment_distance(p, *a, *b) <= tolerance)
                 })
             })
         }
@@ -75,10 +133,9 @@ impl Edges {
     /// Call `f` with each edge whose bounding box overlaps `r` (an edge in several of the
     /// buckets `r` covers comes more than once).
     fn each(&self, r: Rect, mut f: impl FnMut(Point, Point)) {
-        let n = self.n as isize;
         for j in self.cell(r.y0, self.origin.y)..=self.cell(r.y1, self.origin.y) {
             for i in self.cell(r.x0, self.origin.x)..=self.cell(r.x1, self.origin.x) {
-                for (a, b) in self.buckets[(j * n + i) as usize].iter().filter_map(|k| self.edges.get(*k as usize)) {
+                for (a, b) in self.bucket(i, j).iter().filter_map(|k| self.edges.get(*k as usize)) {
                     if a.x.min(b.x) <= r.x1 && a.x.max(b.x) >= r.x0 && a.y.min(b.y) <= r.y1 && a.y.max(b.y) >= r.y0 {
                         f(*a, *b);
                     }
@@ -89,12 +146,11 @@ impl Edges {
 
     /// Does any edge pass through `r` (its bounding box, at least, overlapping it)?
     pub(super) fn touch(&self, r: Rect) -> bool {
-        let n = self.n as isize;
         let (i0, i1) = (self.cell(r.x0, self.origin.x), self.cell(r.x1, self.origin.x));
         let (j0, j1) = (self.cell(r.y0, self.origin.y), self.cell(r.y1, self.origin.y));
         (j0..=j1).any(|j| {
             (i0..=i1).any(|i| {
-                self.buckets[(j * n + i) as usize]
+                self.bucket(i, j)
                     .iter()
                     .filter_map(|k| self.edges.get(*k as usize))
                     .any(|(a, b)| a.x.min(b.x) <= r.x1 && a.x.max(b.x) >= r.x0 && a.y.min(b.y) <= r.y1 && a.y.max(b.y) >= r.y0)
@@ -122,12 +178,15 @@ impl Edges {
         let mut best = f64::INFINITY;
         let mut nearest = (p, Vec2::ZERO);
         for r in 0..n {
+            if self.spent() {
+                break;
+            }
             for j in (cj - r)..=(cj + r) {
                 for i in (ci - r)..=(ci + r) {
                     if (j - cj).abs() != r && (i - ci).abs() != r || i < 0 || j < 0 || i >= n || j >= n {
                         continue;
                     }
-                    for k in &self.buckets[(j * n + i) as usize] {
+                    for k in self.bucket(i, j) {
                         if let Some((a, b)) = self.edges.get(*k as usize) {
                             let d = *b - *a;
                             let t = if d.hypot2() < 1e-18 { 0.0 } else { ((p - *a).dot(d) / d.hypot2()).clamp(0.0, 1.0) };
@@ -152,9 +211,24 @@ impl Edges {
     }
 }
 
-/// Is `p` filled by `rings` (nonzero winding, as they are oriented)?
-pub(super) fn filled(rings: &[Vec<Point>], p: Point) -> bool {
-    rings.iter().filter(|r| contains(r, p)).count() % 2 == 1
+/// Where the edges of `rings` cross the line through `y`, in order: the points of the line
+/// filled by `rings` (nonzero winding, as they are oriented) are those with an odd number of
+/// crossings to their right ([`filled`]). An edge crosses where one end is above the line and
+/// the other is not, as [`super::rings::contains`] counts it.
+pub(super) fn crossings(rings: &[Vec<Point>], y: f64) -> Vec<f64> {
+    let mut xs: Vec<f64> = rings
+        .iter()
+        .flat_map(|r| r.iter().zip(r.iter().cycle().skip(1)).take(r.len()))
+        .filter(|(a, b)| (a.y > y) != (b.y > y))
+        .map(|(a, b)| a.x + (y - a.y) / (b.y - a.y) * (b.x - a.x))
+        .collect();
+    xs.sort_by(f64::total_cmp);
+    xs
+}
+
+/// Is `x` filled on the line whose [`crossings`] are `xs`?
+pub(super) fn filled(xs: &[f64], x: f64) -> bool {
+    (xs.len() - xs.partition_point(|v| *v <= x)) % 2 == 1
 }
 
 /// `ring` cut to the rectangle `cell` (Sutherland–Hodgman: the rectangle is convex, the ring
@@ -203,13 +277,17 @@ impl Membrane {
     pub(super) fn solve(rings: &[Vec<Point>], edges: &Edges, origin: Point, step: f64, nx: usize, ny: usize) -> Self {
         let node = |i: usize, j: usize| Point::new(origin.x + i as f64 * step, origin.y + j as f64 * step);
         let idx = |i: usize, j: usize| j * nx + i;
-        // A node on the outline itself is held at zero with the outside.
-        let inside: Vec<bool> = (0..nx * ny)
-            .map(|k| {
-                let p = node(k % nx, k / nx);
-                filled(rings, p) && !edges.near(p, 1e-6 * step)
-            })
-            .collect();
+        // A node on the outline itself is held at zero with the outside. Each row of nodes is
+        // tested against the crossings of its line.
+        let points = rings.iter().map(Vec::len).fold(0usize, usize::saturating_add);
+        let mut inside = Vec::with_capacity(nx * ny);
+        for j in 0..ny {
+            let xs = if edges.charge(points) { crossings(rings, node(0, j).y) } else { vec![] };
+            inside.extend((0..nx).map(|i| {
+                let p = node(i, j);
+                filled(&xs, p.x) && !edges.near(p, 1e-6 * step)
+            }));
+        }
         // The nearest crossing of the outline from `p` along (dx, dy), within one step.
         let crossing = |p: Point, dx: f64, dy: f64| -> f64 {
             let mut best = step;

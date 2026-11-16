@@ -22,6 +22,10 @@ craft-vectorcraft-format = { workspace = true }
 sha2 = { version = "0.10", default-features = false }
 thiserror = { workspace = true }
 wasmi = { workspace = true }
+# The monotonic clock of run deadlines and the first-view budget: `std::time::Instant` on the
+# desktop, the page's `performance.now()` in the web build. It is MIT OR Apache-2.0 and already in
+# the build through eframe.
+web-time = "1"
 
 [dev-dependencies]
 wat = { workspace = true }

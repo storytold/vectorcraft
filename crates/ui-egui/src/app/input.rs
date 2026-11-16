@@ -16,6 +16,7 @@ impl VectorcraftApp {
         native_menu::run(self, ctx);
         if self.fonts_ready {
             tools_float::cancel_move_on_escape(self, ctx);
+            crate::custom_toolbars::cancel_move_on_escape(self, ctx);
             shortcuts::handle(self, ctx);
         }
         // A Copy taken in this UI phase (an egui copy event, or a command it runs) is published in

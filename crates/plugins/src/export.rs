@@ -24,8 +24,7 @@ use crate::{Error, Kind, Limits, Plugin, Result, registry};
 /// document: 200 times a filter's base budget.
 pub const FUEL: u64 = 10_000_000_000;
 
-/// Wall-clock budget of one export, in milliseconds (native builds; the web build has no clock,
-/// and the instruction budget alone bounds it there).
+/// Wall-clock budget of one export, in milliseconds.
 pub const WALL_TIME_MS: u64 = 300_000;
 
 /// Most warnings an export reports.

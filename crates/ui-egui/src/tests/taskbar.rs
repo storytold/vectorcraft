@@ -1,7 +1,10 @@
 //! The Contextual Task Bar's actions for each kind of selection: open paths offer Join and Edit
 //! Path, compound paths and clipping masks their Release, images selected with vector art Make
 //! Clipping Mask, type converts between point and area type, type on a path opens its options, and
-//! a basic shape shows its properties in place of Lock.
+//! a basic shape shows its properties in place of Lock. The basic shape tools show Edit Path, Fill,
+//! Stroke and Shape Properties for the shape they draw, and the Smooth tool its Fidelity and Tool
+//! Options… for a path it can smooth. Type, and the Type tools while they edit it,
+//! show the font family, font style and Font Size controls.
 
 use egui::{Event, PointerButton, Pos2, Rect, vec2};
 use serde_json::json;
@@ -52,6 +55,42 @@ fn click(app: &mut VectorcraftApp, label: &str) {
     frame(app, &ctx, vec![press(false)]);
     frame(app, &ctx, vec![]);
 }
+
+/// The names and places of the buttons the task bar draws, from the accessibility tree: an
+/// icon-only button is named by its hover text.
+fn buttons(app: &mut VectorcraftApp) -> (egui::Context, Vec<(String, Rect)>) {
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    frame(app, &ctx, vec![]);
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 700.0));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| canvas::show(app, ui));
+    out.textures_delta.clear();
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    let named = nodes
+        .iter()
+        .filter(|(_, n)| n.role() == egui::accesskit::Role::Button)
+        .filter_map(|(_, n)| {
+            let b = n.bounds()?;
+            Some((n.label()?.to_string(), Rect::from_min_max(Pos2::new(b.x0 as f32, b.y0 as f32), Pos2::new(b.x1 as f32, b.y1 as f32))))
+        })
+        .collect();
+    (ctx, named)
+}
+
+/// Click the task bar's button named `name` (its label, or an icon-only button's hover text).
+fn click_button(app: &mut VectorcraftApp, name: &str) {
+    let (ctx, named) = buttons(app);
+    let p = named.iter().find(|(n, _)| n == name).unwrap_or_else(|| panic!("no button named {name:?} in {named:?}")).1.center();
+    let press = |pressed| Event::PointerButton { pos: p, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(app, &ctx, vec![Event::PointerMoved(p)]);
+    frame(app, &ctx, vec![press(true)]);
+    frame(app, &ctx, vec![press(false)]);
+    frame(app, &ctx, vec![]);
+}
+
+const TO_CORNER: &str = "Convert Selected Anchor Points to Corner";
+const TO_SMOOTH: &str = "Convert Selected Anchor Points to Smooth";
 
 fn select(app: &mut VectorcraftApp, ids: &[u64]) {
     app.run("select.set", json!({"ids": ids})).unwrap();
@@ -121,12 +160,10 @@ fn an_image_with_vector_art_offers_make_clipping_mask() {
     image::RgbaImage::from_pixel(20, 20, image::Rgba([0, 128, 255, 255]))
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .unwrap();
-    let dir = std::env::temp_dir().join(format!("vectorcraft-ui-taskbar-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("blue.png");
-    std::fs::write(&path, &png).unwrap();
+    let dir = crate::tests_folder::Folder::new("ui-taskbar");
+    let path = dir.file("blue.png", &png);
     app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
-    app.run("file.place", json!({"path": path.to_string_lossy(), "link": false})).unwrap();
+    app.run("file.place", json!({"path": path, "link": false})).unwrap();
     let img = app.session.active().unwrap().selection.objects[0].0;
     assert!(matches!(kind(&app, img), NodeKind::Image(_)));
     let shape = id(app.run("shape.ellipse", json!({"x": 150, "y": 100, "width": 60, "height": 60})).unwrap());
@@ -184,10 +221,102 @@ fn type_on_a_path_offers_its_options() {
     assert_eq!(d.fields.get("effect"), Some(&json!("skew")));
 }
 
+/// Type on a path offers Dynamic Text, which turns it on and off; type in a thread does not.
+#[test]
+fn type_on_a_path_offers_dynamic_text() {
+    let mut app = app();
+    let path = id(app.run("path.create", json!({"d": "M60 150 L340 150"})).unwrap());
+    let t = id(app.run("text.createInPath", json!({"path": path, "mode": "onPath", "text": "Along", "at": [60, 150]})).unwrap());
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    select(&mut app, &[t]);
+    let dynamic = |app: &VectorcraftApp| matches!(kind(app, t), NodeKind::Text(ref t) if t.dynamic_text);
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Dynamic Text"), "{texts:?}");
+    click(&mut app, "Dynamic Text");
+    assert!(dynamic(&app));
+    click(&mut app, "Dynamic Text");
+    assert!(!dynamic(&app));
+    // Threaded, it is not offered.
+    let frame = id(app.run("shape.rectangle", json!({"x": 60, "y": 200, "width": 200, "height": 100})).unwrap());
+    select(&mut app, &[t, frame]);
+    app.run("text.thread.create", json!({})).unwrap();
+    select(&mut app, &[t]);
+    let (_, texts) = bar(&mut app);
+    assert!(!has(&texts, "Dynamic Text"), "{texts:?}");
+}
+
+/// Type on a closed path offers Center on Top and Center on Bottom; type on an open path does not.
+#[test]
+fn type_on_a_closed_path_offers_center_on_top_and_bottom() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let line = id(app.run("path.create", json!({"d": "M60 150 L340 150"})).unwrap());
+    let open = id(app.run("text.createInPath", json!({"path": line, "mode": "onPath", "text": "Along", "at": [60, 150]})).unwrap());
+    select(&mut app, &[open]);
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Type on a Path Options") && !has(&texts, "Center on Top") && !has(&texts, "Center on Bottom"), "{texts:?}");
+    let circle = id(app.run("path.create", json!({"d": "M100 300 A100 100 0 1 1 300 300 A100 100 0 1 1 100 300 Z"})).unwrap());
+    let t = id(app.run("text.createInPath", json!({"path": circle, "mode": "onPath", "text": "Round", "at": [90, 300]})).unwrap());
+    select(&mut app, &[t]);
+    let start = |app: &VectorcraftApp| match kind(app, t) {
+        NodeKind::Text(t) => match t.kind {
+            TextKind::OnPath { start, .. } => start,
+            k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    };
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Center on Top") && has(&texts, "Center on Bottom"), "{texts:?}");
+    click(&mut app, "Center on Top");
+    assert!((start(&app) - 0.75).abs() < 1e-3, "{}", start(&app));
+    click(&mut app, "Center on Bottom");
+    assert!((start(&app) - 0.25).abs() < 1e-3, "{}", start(&app));
+}
+
+/// Area type offers Dynamic Text beside Convert To Point Type, which turns Block on and off; area
+/// type in a thread does not.
+#[test]
+fn area_type_offers_dynamic_text() {
+    let mut app = app();
+    let t = id(app.run("text.create", json!({"x": 60, "y": 80, "area": {"width": 200, "height": 100}, "text": "Fit me"})).unwrap());
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    select(&mut app, &[t]);
+    let dynamic = |app: &VectorcraftApp| matches!(kind(app, t), NodeKind::Text(ref t) if t.dynamic_text);
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Convert To Point Type") && has(&texts, "Dynamic Text"), "{texts:?}");
+    click(&mut app, "Dynamic Text");
+    assert!(dynamic(&app));
+    click(&mut app, "Dynamic Text");
+    assert!(!dynamic(&app));
+    // Threaded, it is not offered.
+    let frame = id(app.run("shape.rectangle", json!({"x": 60, "y": 300, "width": 200, "height": 100})).unwrap());
+    select(&mut app, &[t, frame]);
+    app.run("text.thread.create", json!({})).unwrap();
+    select(&mut app, &[t]);
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Convert To Point Type") && !has(&texts, "Dynamic Text"), "{texts:?}");
+}
+
+/// Point type offers Dynamic Text beside Convert To Area Type, which turns it into area type with
+/// Block on; the bar then offers what area type does.
+#[test]
+fn point_type_offers_dynamic_text() {
+    let mut app = app();
+    let t = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Fit\nme in a frame"})).unwrap());
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    select(&mut app, &[t]);
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Convert To Area Type") && has(&texts, "Dynamic Text"), "{texts:?}");
+    click(&mut app, "Dynamic Text");
+    assert!(matches!(kind(&app, t), NodeKind::Text(ref t) if t.dynamic_text && matches!(t.kind, TextKind::Area { .. })));
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Convert To Point Type") && has(&texts, "Dynamic Text"), "{texts:?}");
+}
+
 /// The path's anchors (its first subpath).
 fn anchors(app: &VectorcraftApp, id: u64) -> Vec<vectorcraft_geom::Anchor> {
     match kind(app, id) {
-        NodeKind::Path { path, .. } => path.subpaths[0].anchors.clone(),
+        NodeKind::Path { path, .. } => path.subpaths[0].anchors.to_vec(),
         k => panic!("not a path: {k:?}"),
     }
 }
@@ -202,27 +331,67 @@ fn direct_selection_of_a_whole_path_offers_its_anchor_actions() {
     click(&mut app, "Edit Path");
     assert_eq!(app.session.tool_id(), "directSelection");
     assert!(app.session.active().unwrap().selection.anchors.is_empty(), "the path is selected whole");
+    let (_, named) = buttons(&mut app);
+    let names: Vec<&str> = named.iter().map(|(n, _)| n.as_str()).collect();
+    for name in ["Connect", TO_CORNER, TO_SMOOTH, "Simplify", "Smooth", "Duplicate"] {
+        assert!(names.contains(&name), "{name}: {names:?}");
+    }
+    for name in ["Edit Path", "Offset Path", "Join", "Remove Anchor Points", "Cut Path"] {
+        assert!(!names.contains(&name), "{name}: {names:?}");
+    }
+    // The convert buttons show their icons alone: the bar draws no convert text, and one "Smooth".
     let (_, texts) = bar(&mut app);
-    for label in ["Connect", "Corner", "Smooth", "Simplify", "Duplicate"] {
-        assert!(has(&texts, label), "{label}: {texts:?}");
-    }
-    for label in ["Edit Path", "Offset Path", "Join", "Remove Anchor Points", "Cut Path"] {
-        assert!(!has(&texts, label), "{label}: {texts:?}");
-    }
-    // Smooth and Corner convert every anchor of the path, one undo step each.
-    click(&mut app, "Smooth");
+    assert!(!has(&texts, "Corner") && !texts.iter().any(|(t, _)| t.starts_with("Convert")), "{texts:?}");
+    assert_eq!(texts.iter().filter(|(t, _)| t == "Smooth").count(), 1, "{texts:?}");
+    // The convert buttons convert every anchor of the path, one undo step each.
+    click_button(&mut app, TO_SMOOTH);
     let a = anchors(&app, line);
     assert_eq!(a[1].kind, vectorcraft_geom::AnchorKind::Smooth, "{a:?}");
     assert!(a[1].has_in() && a[1].has_out(), "{a:?}");
-    click(&mut app, "Corner");
+    click_button(&mut app, TO_CORNER);
     assert!(anchors(&app, line).iter().all(|a| !a.has_in() && !a.has_out()), "{:?}", anchors(&app, line));
     app.run("edit.undo", json!({})).unwrap();
     assert!(anchors(&app, line)[1].has_in(), "Corner undoes in one step");
     // Connect closes the open path; a closed one isn't offered it.
     click(&mut app, "Connect");
     assert!(matches!(kind(&app, line), NodeKind::Path { path, .. } if path.is_closed()));
-    let (_, texts) = bar(&mut app);
-    assert!(!has(&texts, "Connect") && has(&texts, "Corner"), "{texts:?}");
+    let (_, named) = buttons(&mut app);
+    assert!(!named.iter().any(|(n, _)| n == "Connect") && named.iter().any(|(n, _)| n == TO_CORNER), "{named:?}");
+}
+
+/// With the Direct Selection tool, the bar's Smooth smooths the path's curvature: it opens the
+/// Smooth slider, as Object › Path › Smooth… does, and changes nothing until the slider is
+/// confirmed (#6784). Simplify opens its slider in the same way.
+#[test]
+fn direct_selection_smooth_opens_the_smooth_slider() {
+    for (name, kind) in [("Smooth", crate::dialogs::smooth_slider::KIND), ("Simplify", crate::dialogs::simplify_slider::KIND)] {
+        let mut app = app();
+        // A jagged line of 40 anchor points, which Smooth changes at its opening level.
+        let anchors_in: Vec<_> = (0..40).map(|i| json!({"x": 50 + i * 5, "y": 150 + (i % 2) * 6})).collect();
+        let line = id(app.run("path.create", json!({"anchors": anchors_in})).unwrap());
+        app.run("tool.select", json!({"tool": "directSelection"})).unwrap();
+        select(&mut app, &[line]);
+        let before = anchors(&app, line);
+        let undo = app.session.active().unwrap().history.undo.len();
+        click_button(&mut app, name);
+        let d = app.ui.dialog.as_ref().unwrap_or_else(|| panic!("{name} opens its slider: {}", app.ui.status));
+        assert_eq!(d.kind, kind, "{name}");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "{name} adds no undo step before it is confirmed");
+        crate::dialogs::cancel(&mut app);
+        assert_eq!(anchors(&app, line), before, "{name}: canceling leaves the path as it was");
+        if name != "Smooth" {
+            continue;
+        }
+        // Confirmed, the slider smooths the path as one undo step, which is not the anchor convert.
+        click_button(&mut app, name);
+        crate::dialogs::confirm(&mut app).unwrap();
+        let history = &app.session.active().unwrap().history.undo;
+        assert_eq!(history.len(), undo + 1, "one undo step");
+        assert_ne!(history.last().unwrap().label, "Convert Anchor Points");
+        assert_ne!(anchors(&app, line), before, "Smooth changes the path's curvature");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(anchors(&app, line), before, "undo restores the path");
+    }
 }
 
 /// Anchors picked out with the Direct Selection tool keep the full set: Remove and Cut need them.
@@ -232,11 +401,12 @@ fn direct_selected_anchors_still_offer_remove_and_cut() {
     let line = id(app.run("path.create", json!({"anchors": [{"x": 50, "y": 200}, {"x": 150, "y": 80}, {"x": 250, "y": 200}]})).unwrap());
     app.run("tool.select", json!({"tool": "directSelection"})).unwrap();
     app.run("select.anchors", json!({"id": line, "anchors": [[0, 1]]})).unwrap();
-    let (_, texts) = bar(&mut app);
-    for label in ["Remove Anchor Points", "Connect", "Cut Path", "Corner", "Smooth"] {
-        assert!(has(&texts, label), "{label}: {texts:?}");
+    let (_, named) = buttons(&mut app);
+    let names: Vec<&str> = named.iter().map(|(n, _)| n.as_str()).collect();
+    for name in ["Remove Anchor Points", "Connect", "Cut Path", TO_CORNER, TO_SMOOTH] {
+        assert!(names.contains(&name), "{name}: {names:?}");
     }
-    assert!(!has(&texts, "Edit Path"), "{texts:?}");
+    assert!(!names.contains(&"Edit Path"), "{names:?}");
 }
 
 /// Click the task bar's button left of More Options (Lock, or a basic shape's Shape Properties),
@@ -403,6 +573,235 @@ fn other_selections_keep_lock() {
     }
 }
 
+/// The basic shape tools: the tool ids, and the Shape Properties heading each tool's shape shows
+/// (none for the star, a plain path).
+const SHAPE_TOOLS: [(&str, Option<&str>); 5] = [
+    ("rectangle", Some("Rectangle Properties:")),
+    ("roundedRectangle", Some("Rectangle Properties:")),
+    ("ellipse", Some("Ellipse Properties:")),
+    ("polygon", Some("Polygon Properties:")),
+    ("star", None),
+];
+
+/// Draw with `tool` by dragging across the canvas from the document point `from` to `to`, and return
+/// whether the task bar showed partway through the drag.
+fn drag_with(app: &mut VectorcraftApp, tool: &str, from: (f64, f64), to: (f64, f64)) -> bool {
+    app.run("tool.select", json!({ "tool": tool })).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(app, &ctx, vec![]);
+    frame(app, &ctx, vec![]);
+    let xf = canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let (a, b) = (xf.to_screen(vectorcraft_geom::Point::new(from.0, from.1)), xf.to_screen(vectorcraft_geom::Point::new(to.0, to.1)));
+    let press = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(app, &ctx, vec![Event::PointerMoved(a), press(a, true)]);
+    frame(app, &ctx, vec![Event::PointerMoved(a + (b - a) / 2.0)]);
+    frame(app, &ctx, vec![Event::PointerMoved(b)]);
+    let shown_mid_drag = canvas::task_bar_rect(&ctx).is_some();
+    frame(app, &ctx, vec![press(b, false)]);
+    frame(app, &ctx, vec![]);
+    shown_mid_drag
+}
+
+fn names(named: &[(String, Rect)]) -> Vec<&str> {
+    named.iter().map(|(n, _)| n.as_str()).collect()
+}
+
+/// Each basic shape tool, just after it draws a shape, shows Edit Path, Fill and Stroke for it, and
+/// Shape Properties for a live rectangle, rounded rectangle, ellipse or polygon. The bar leaves out
+/// the selection tools' Duplicate, Offset Path, Simplify, Recolor Artwork and Lock, and shows
+/// nothing during the drag that draws the shape.
+#[test]
+fn shape_tools_show_edit_path_paint_and_properties_after_drawing() {
+    let mut app = app();
+    for (i, (tool, heading)) in SHAPE_TOOLS.into_iter().enumerate() {
+        let x = 30.0 + 70.0 * i as f64;
+        let shown_mid_drag = drag_with(&mut app, tool, (x, 60.0), (x + 50.0, 120.0));
+        assert!(!shown_mid_drag, "{tool}: no bar while the shape is dragged out");
+        assert_eq!(app.session.tool_id(), tool);
+        let st = app.session.active().unwrap();
+        assert_eq!(st.selection.objects.len(), 1, "{tool} drew and selected a shape");
+        let shape = st.selection.objects[0].0;
+        let (_, named) = buttons(&mut app);
+        let names = names(&named);
+        for name in ["Edit Path", "Fill", "Stroke", "More Options"] {
+            assert!(names.contains(&name), "{tool}: {name} in {names:?}");
+        }
+        assert_eq!(names.contains(&"Shape Properties"), heading.is_some(), "{tool}: {names:?}");
+        for name in ["Duplicate", "Offset Path", "Simplify", "Recolor Artwork", "Lock (⌘2)"] {
+            assert!(!names.contains(&name), "{tool}: {name} is left out of {names:?}");
+        }
+        if let Some(heading) = heading {
+            let (_, texts) = click_lock_slot(&mut app);
+            assert!(has(&texts, heading), "{tool}: {heading} in {texts:?}");
+            assert!(!locked(&app, shape), "{tool}: the button doesn't lock the shape");
+        }
+    }
+}
+
+/// With a basic shape tool in use, the bar shows only for one closed path selected whole: not with
+/// nothing selected, several objects, a group, an open path, type or picked-out anchors. The Line
+/// Segment tool shows no bar for a selected rectangle.
+#[test]
+fn shape_tools_have_no_shape_bar_without_a_single_shape() {
+    let mut app = app();
+    let a = id(app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 30, "height": 30})).unwrap());
+    let b = id(app.run("shape.ellipse", json!({"x": 60, "y": 20, "width": 30, "height": 30})).unwrap());
+    let c = id(app.run("shape.rectangle", json!({"x": 20, "y": 250, "width": 30, "height": 30})).unwrap());
+    let d = id(app.run("shape.rectangle", json!({"x": 60, "y": 250, "width": 30, "height": 30})).unwrap());
+    select(&mut app, &[c, d]);
+    let group = id(app.run("object.group", json!({})).unwrap());
+    let line = id(app.run("shape.line", json!({"x1": 150, "y1": 50, "x2": 300, "y2": 120})).unwrap());
+    let text = id(app.run("text.create", json!({"x": 150, "y": 200, "text": "Type"})).unwrap());
+    let cases: [(&str, Vec<u64>); 5] =
+        [("nothing", vec![]), ("several", vec![a, b]), ("a group", vec![group]), ("an open path", vec![line]), ("type", vec![text])];
+    for (tool, _) in SHAPE_TOOLS {
+        app.run("tool.select", json!({ "tool": tool })).unwrap();
+        for (what, ids) in &cases {
+            select(&mut app, ids);
+            let (ctx, _) = bar(&mut app);
+            assert!(canvas::task_bar_rect(&ctx).is_none(), "{tool} with {what}: no bar");
+        }
+        app.run("select.anchors", json!({"id": a, "anchors": [[0, 1]]})).unwrap();
+        let (ctx, _) = bar(&mut app);
+        assert!(canvas::task_bar_rect(&ctx).is_none(), "{tool} with anchors: no bar");
+        select(&mut app, &[a]);
+        let (ctx, _) = bar(&mut app);
+        assert!(canvas::task_bar_rect(&ctx).is_some(), "{tool} with the rectangle: the bar");
+    }
+    app.run("tool.select", json!({"tool": "lineSegment"})).unwrap();
+    select(&mut app, &[a]);
+    let (ctx, _) = bar(&mut app);
+    assert!(canvas::task_bar_rect(&ctx).is_none(), "the Line Segment tool: no bar");
+}
+
+/// A basic shape tool's bar follows the selection: Shape Properties shows the shape drawn last,
+/// edits it with Undo restoring it, and after an Undo of the drawing shows the shape selected
+/// then. Fill makes the Fill active, Stroke the Stroke, and Edit Path switches to the Direct
+/// Selection tool.
+#[test]
+fn shape_tool_bar_retargets_after_another_shape_and_undo() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "ellipse"})).unwrap();
+    let rect = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60, "radius": 10})).unwrap());
+    let (ctx, texts) = click_lock_slot(&mut app);
+    assert!(has(&texts, "Rectangle Properties:"), "{texts:?}");
+    type_into(&mut app, &ctx, &texts, "10 pt", "20");
+    let corners = |app: &VectorcraftApp| match live(app, rect) {
+        vectorcraft_doc::LiveShape::Rectangle { radii, .. } => radii,
+        l => panic!("{l:?}"),
+    };
+    assert_eq!(corners(&app), [20.0; 4]);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(corners(&app), [10.0; 4]);
+
+    let ellipse = id(app.run("shape.ellipse", json!({"x": 200, "y": 40, "width": 80, "height": 60})).unwrap());
+    let (_, texts) = click_lock_slot(&mut app);
+    assert!(has(&texts, "Ellipse Properties:") && !has(&texts, "Rectangle Properties:"), "{texts:?}");
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(app.session.active().unwrap().doc.node(NodeId(ellipse)).is_none(), "the ellipse is undone");
+    let selected: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|i| i.0).collect();
+    let (ctx, texts) = bar(&mut app);
+    assert!(!has(&texts, "Ellipse Properties:"), "{texts:?}");
+    if selected == [rect] {
+        assert!(canvas::task_bar_rect(&ctx).is_some(), "the rectangle selected again: the bar");
+    } else {
+        assert!(canvas::task_bar_rect(&ctx).is_none(), "{selected:?}: no bar");
+        select(&mut app, &[rect]);
+    }
+    let (_, texts) = click_lock_slot(&mut app);
+    assert!(has(&texts, "Rectangle Properties:"), "{texts:?}");
+
+    app.session.fill_active = false;
+    click_button(&mut app, "Fill");
+    assert!(app.session.fill_active, "Fill makes the Fill active");
+    click_button(&mut app, "Stroke");
+    assert!(!app.session.fill_active, "Stroke makes the Stroke active");
+    assert_eq!(app.session.tool_id(), "ellipse");
+    click_button(&mut app, "Edit Path");
+    assert_eq!(app.session.tool_id(), "directSelection");
+}
+
+/// Where the text the bar draws just right of `label`, on the same row, centers: the field after
+/// the label.
+fn field_after(texts: &[(String, Rect)], label: &str) -> Pos2 {
+    let l = texts.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("no `{label}` in {texts:?}")).1;
+    texts
+        .iter()
+        .filter(|(_, r)| r.left() > l.right() && (r.center().y - l.center().y).abs() < 8.0)
+        .min_by(|a, b| a.1.left().total_cmp(&b.1.left()))
+        .unwrap_or_else(|| panic!("no field after `{label}` in {texts:?}"))
+        .1
+        .center()
+}
+
+/// The Smooth tool, with a path it can smooth selected, shows its Fidelity field and Tool Options…,
+/// and none of the selection tools' actions or chips. A value typed in the field sets the tool's
+/// Fidelity, and Tool Options… opens the tool's options with that value.
+#[test]
+fn the_smooth_tool_shows_fidelity_and_tool_options_for_a_path() {
+    let mut app = app();
+    let path = id(app.run("shape.ellipse", json!({"x": 60, "y": 60, "width": 120, "height": 80})).unwrap());
+    select(&mut app, &[path]);
+    app.run("tool.select", json!({"tool": "smooth"})).unwrap();
+    let (_, named) = buttons(&mut app);
+    let names = names(&named);
+    for name in ["Tool Options…", "More Options"] {
+        assert!(names.contains(&name), "{name} in {names:?}");
+    }
+    for name in ["Fill", "Stroke", "Recolor Artwork", "Lock (⌘2)", "Duplicate", "Edit Path", "Offset Path", "Simplify", "Smooth"] {
+        assert!(!names.contains(&name), "{name} is left out of {names:?}");
+    }
+    let (ctx, texts) = bar(&mut app);
+    let p = field_after(&texts, "Fidelity:");
+    let press = |pressed| Event::PointerButton { pos: p, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![Event::PointerMoved(p), press(true), press(false)]);
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![Event::Text("7".into())]);
+    let enter = Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![enter]);
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.session.tool_options()["fidelity"].as_f64(), Some(7.0));
+    assert_eq!(app.session.tool_id(), "smooth");
+    assert_eq!(app.session.active().unwrap().selection.objects, [NodeId(path)], "the selection is kept");
+    click_button(&mut app, "Tool Options…");
+    let d = app.ui.dialog.as_ref().expect("the Smooth tool's options");
+    assert_eq!((d.kind.as_str(), d.str("tool").as_str()), (crate::dialogs::freehand::KIND, "smooth"));
+    assert_eq!(d.f64("fidelity", 0.0), 7.0);
+}
+
+/// The Smooth tool shows no bar without a selected path it can smooth: with nothing selected, a
+/// straight line or type. With a selection tool the bar has the selection's actions again, without
+/// Fidelity.
+#[test]
+fn the_smooth_tool_shows_no_bar_without_a_path_to_smooth() {
+    let mut app = app();
+    let path = id(app.run("shape.ellipse", json!({"x": 60, "y": 60, "width": 120, "height": 80})).unwrap());
+    let line = id(app.run("shape.line", json!({"x1": 150, "y1": 200, "x2": 300, "y2": 240})).unwrap());
+    let text = id(app.run("text.create", json!({"x": 220, "y": 60, "text": "Type"})).unwrap());
+    app.run("tool.select", json!({"tool": "smooth"})).unwrap();
+    for (what, ids) in [("nothing", vec![]), ("a straight line", vec![line]), ("type", vec![text])] {
+        select(&mut app, &ids);
+        let (ctx, _) = bar(&mut app);
+        assert!(canvas::task_bar_rect(&ctx).is_none(), "{what}: no bar");
+    }
+    select(&mut app, &[path, line]);
+    let (ctx, texts) = bar(&mut app);
+    assert!(canvas::task_bar_rect(&ctx).is_some() && has(&texts, "Fidelity:"), "a path with a line: the bar, {texts:?}");
+    // On one canvas the bar follows each change of the selection.
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    for (ids, shown) in [(vec![path], true), (vec![line], false), (vec![], false), (vec![path], true)] {
+        select(&mut app, &ids);
+        frame(&mut app, &ctx, vec![]);
+        frame(&mut app, &ctx, vec![]);
+        assert_eq!(canvas::task_bar_rect(&ctx).is_some(), shown, "{ids:?}");
+    }
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Duplicate") && !has(&texts, "Fidelity:"), "{texts:?}");
+}
+
 /// A compound path under the Direct Selection tool isn't offered Edit Path, which would only switch
 /// to the tool already in use; the Selection tool still offers it.
 #[test]
@@ -443,6 +842,495 @@ fn the_task_bar_follows_the_active_document() {
     let (_, texts) = click_lock_slot(&mut app);
     assert!(has(&texts, "Rectangle Properties:"), "{texts:?}");
     assert!(!locked(&app, rect), "the button doesn't lock the shape");
+}
+
+/// A blank canvas, a new document with a selection tool in use, offers Draw (Pencil) and Place
+/// Image centered under the active artboard (under the canvas's center when the artboard is out of
+/// view), with the handle and More Options but none of a selection's actions or its Fill, Stroke,
+/// Recolor Artwork and Lock. Other tools, artwork in the document and a selection each leave the
+/// blank canvas actions out; ruler guides do not count as artwork.
+#[test]
+fn a_blank_canvas_offers_draw_and_place_image() {
+    let mut app = app();
+    let board = app.session.active().unwrap().doc.artboards[0].rect;
+    // The artboard at 50% in the middle of the window, after the first frame fits it in.
+    bar(&mut app);
+    let view = app.view_mut().unwrap();
+    (view.center, view.zoom) = (board.center(), 0.5);
+    for tool in ["selection", "directSelection", "groupSelection"] {
+        app.run("tool.select", json!({ "tool": tool })).unwrap();
+        let (ctx, texts) = bar_texts(&mut app);
+        assert!(at(&texts, "Draw (Pencil)").x < at(&texts, "Place Image").x, "{tool}: {texts:?}");
+        let shown = canvas::task_bar_rect(&ctx).unwrap();
+        let xf = canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let bottom = xf.quad(board).iter().map(|c| c.y).fold(f32::NEG_INFINITY, f32::max);
+        let middle = xf.to_screen(board.center()).x;
+        assert!(shown.top() > bottom && (shown.center().x - middle).abs() < 2.0, "{tool}: {shown:?} centered under {board:?}");
+        assert!(app.canvas_rect.unwrap().contains_rect(shown), "{tool}: {shown:?} on the canvas");
+    }
+    // The artboard out of view: under the canvas's center.
+    app.view_mut().unwrap().center = board.center() + vectorcraft_geom::Vec2::new(5000.0, 5000.0);
+    let (ctx, _) = bar(&mut app);
+    let (shown, middle) = (canvas::task_bar_rect(&ctx).unwrap(), app.canvas_rect.unwrap().center());
+    assert!((shown.center().x - middle.x).abs() < 2.0 && shown.top() > middle.y && shown.top() < middle.y + 60.0, "{shown:?} under {middle:?}");
+    app.view_mut().unwrap().center = board.center();
+
+    let tree = crate::widgets::accessibility_tests::tree(|ui| canvas::show(&mut app, ui));
+    for label in ["Draw (Pencil)", "Place Image", "More Options"] {
+        assert_eq!(crate::widgets::accessibility_tests::named(&tree, label).role(), egui::accesskit::Role::Button, "{label}");
+    }
+    let named = |label: &str| tree.iter().any(|n| n.label().is_some_and(|l| l.starts_with(label)));
+    for label in ["Fill", "Stroke", "Recolor Artwork", "Lock", "Duplicate"] {
+        assert!(!named(label), "{label} is left out");
+    }
+
+    for tool in ["pen", "rectangle", "type", "artboard"] {
+        app.run("tool.select", json!({ "tool": tool })).unwrap();
+        let (_, texts) = bar_texts(&mut app);
+        assert!(!has(&texts, "Draw (Pencil)") && !has(&texts, "Place Image"), "{tool}: {texts:?}");
+    }
+
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let rect = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60})).unwrap());
+    select(&mut app, &[rect]);
+    let (_, texts) = bar_texts(&mut app);
+    assert!(has(&texts, "Duplicate") && !has(&texts, "Draw (Pencil)"), "{texts:?}");
+    select(&mut app, &[]);
+    let (ctx, _) = bar(&mut app);
+    assert!(canvas::task_bar_rect(&ctx).is_none(), "artwork with nothing selected: no bar");
+    select(&mut app, &[rect]);
+    app.run("edit.clear", json!({})).unwrap();
+    app.run("guide.add", json!({"pos": 50})).unwrap();
+    assert!(has(&bar_texts(&mut app).1, "Draw (Pencil)"), "a ruler guide is not artwork");
+}
+
+/// Draw (Pencil) switches to the Pencil tool. Place Image picks files for the Place dialog;
+/// canceling the pick leaves the document as it was.
+#[test]
+fn the_blank_canvas_bar_draws_with_the_pencil_and_places_an_image() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    click(&mut app, "Draw (Pencil)");
+    assert_eq!(app.session.tool_id(), "pencil");
+
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    app.services.pick_open = Some(Box::new(|_: &crate::FilePick| None));
+    click(&mut app, "Place Image");
+    assert!(app.ui.dialog.is_none(), "canceled: no Place dialog");
+    assert!(app.session.active().unwrap().doc.layers.iter().all(|l| l.children().is_none_or(|c| c.is_empty())), "nothing placed");
+
+    let path = std::env::temp_dir().join("vectorcraft-task-bar-place.png").to_string_lossy().into_owned();
+    let picked = path.clone();
+    app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(picked.clone())));
+    click(&mut app, "Place Image");
+    let d = app.ui.dialog.take().expect("the Place dialog");
+    assert_eq!((d.kind.as_str(), &d.fields["files"]), (crate::dialogs::place::KIND, &json!([{ "path": path }])));
+}
+
+/// On a canvas too narrow for one row, the blank canvas bar's actions wrap onto a second row and the
+/// bar stays whole on the canvas.
+#[test]
+fn the_blank_canvas_bar_wraps_on_a_narrow_canvas() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let (texts, r, canvas) = bar_texts_on_screen(&mut app, &ctx, vec2(240.0, 400.0), 3);
+    assert!(canvas.contains_rect(r), "{r:?} on {canvas:?}");
+    let (draw, place) = (at(&texts, "Draw (Pencil)"), at(&texts, "Place Image"));
+    assert!(place.y > draw.y + 20.0, "Place Image wraps under Draw (Pencil): {draw:?} {place:?}");
+}
+
+/// The Type tools whose bar shows the font and Fill controls.
+const TYPE_TOOLS: [&str; 6] = ["type", "areaType", "typeOnPath", "verticalType", "verticalAreaType", "verticalTypeOnPath"];
+
+/// The labels drawn inside the task bar (none while it isn't shown), with the context.
+fn bar_texts(app: &mut VectorcraftApp) -> (egui::Context, Vec<(String, Rect)>) {
+    let (ctx, texts) = bar(app);
+    let Some(r) = canvas::task_bar_rect(&ctx) else { return (ctx, vec![]) };
+    (ctx, texts.into_iter().filter(|(_, t)| r.contains(t.center())).collect())
+}
+
+/// Point type "Hello" at 20 pt, made with `tool` and edited by it as after a click with it.
+fn edited_type(app: &mut VectorcraftApp, tool: &str) -> u64 {
+    app.run("tool.select", json!({ "tool": tool })).unwrap();
+    let t = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello", "size": 20})).unwrap());
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    assert!(crate::panels::character::text_editing(app).is_some(), "{tool} edits the type");
+    t
+}
+
+/// The font family and style of type `t`'s first character.
+fn font_of(app: &VectorcraftApp, t: u64) -> (String, String) {
+    match kind(app, t) {
+        NodeKind::Text(t) => (t.first_style().font_family, t.first_style().font_style),
+        k => panic!("{k:?}"),
+    }
+}
+
+/// The size of each run of type `t`, with its text.
+fn sizes(app: &VectorcraftApp, t: u64) -> Vec<(String, f64)> {
+    match kind(app, t) {
+        NodeKind::Text(t) => t.runs.iter().map(|r| (r.text.clone(), r.style.size)).collect(),
+        k => panic!("{k:?}"),
+    }
+}
+
+/// Each Type tool that adds or edits type shows the font family, font style and Font Size controls
+/// and the Fill, without the selection tools' object actions, the Stroke chip or Lock.
+#[test]
+fn the_type_tools_show_font_and_fill_controls() {
+    for tool in TYPE_TOOLS {
+        let mut app = app();
+        let t = edited_type(&mut app, tool);
+        let (family, style) = font_of(&app, t);
+        let (_, texts) = bar_texts(&mut app);
+        for label in [family.as_str(), style.as_str(), "20 pt"] {
+            assert!(has(&texts, label), "{tool}: {label} in {texts:?}");
+        }
+        for label in ["Create Outlines", "Convert To Area Type", "Dynamic Text", "Duplicate"] {
+            assert!(!has(&texts, label), "{tool}: {label} in {texts:?}");
+        }
+        let tree = crate::widgets::accessibility_tests::tree(|ui| canvas::show(&mut app, ui));
+        let named = |label: &str| tree.iter().any(|n| n.label().is_some_and(|l| l.starts_with(label)));
+        assert!(named("Fill"), "{tool}: the Fill shows");
+        for label in ["Stroke", "Recolor Artwork", "Lock"] {
+            assert!(!named(label), "{tool}: {label} is left out");
+        }
+    }
+}
+
+/// A Type tool shows no bar before it adds type, nor with other art selected; the Touch Type tool
+/// shows none with type selected.
+#[test]
+fn the_type_tools_show_no_bar_without_type() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "type"})).unwrap();
+    let (ctx, _) = bar(&mut app);
+    assert!(canvas::task_bar_rect(&ctx).is_none(), "nothing to format");
+    let rect = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60})).unwrap());
+    select(&mut app, &[rect]);
+    app.run("tool.select", json!({"tool": "type"})).unwrap();
+    let (ctx, _) = bar(&mut app);
+    assert!(canvas::task_bar_rect(&ctx).is_none(), "a rectangle is not type");
+    let t = id(app.run("text.create", json!({"x": 60, "y": 180, "text": "Hello", "size": 20})).unwrap());
+    app.run("tool.select", json!({"tool": "touchType"})).unwrap();
+    select(&mut app, &[t]);
+    let (ctx, _) = bar(&mut app);
+    assert!(canvas::task_bar_rect(&ctx).is_none(), "Touch Type has its own handles");
+}
+
+/// Selected type keeps its actions and gains the font controls, for one type object or several;
+/// type selected with other art does not.
+#[test]
+fn selected_type_shows_font_controls_beside_its_actions() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let a = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello", "size": 20})).unwrap());
+    let b = id(app.run("text.create", json!({"x": 60, "y": 160, "text": "World", "size": 20})).unwrap());
+    let rect = id(app.run("shape.rectangle", json!({"x": 200, "y": 40, "width": 80, "height": 60})).unwrap());
+    let (family, _) = font_of(&app, a);
+    select(&mut app, &[a]);
+    let (_, texts) = bar_texts(&mut app);
+    for label in ["Create Outlines", "Convert To Area Type", "Duplicate", family.as_str(), "20 pt"] {
+        assert!(has(&texts, label), "{label} in {texts:?}");
+    }
+    select(&mut app, &[a, b]);
+    let (_, texts) = bar_texts(&mut app);
+    assert!(has(&texts, family.as_str()) && has(&texts, "20 pt"), "{texts:?}");
+    select(&mut app, &[a, rect]);
+    let (_, texts) = bar_texts(&mut app);
+    assert!(has(&texts, "Group") && !has(&texts, family.as_str()) && !has(&texts, "20 pt"), "{texts:?}");
+    select(&mut app, &[rect]);
+    let (_, texts) = bar_texts(&mut app);
+    assert!(!has(&texts, family.as_str()) && !has(&texts, "20 pt"), "{texts:?}");
+}
+
+/// The bar's Font Size sets the characters a Type tool selects, one undo step; with type selected
+/// it sets every selected type object, as the Character panel's does.
+#[test]
+fn the_task_bars_font_size_sets_what_the_character_panel_would() {
+    let mut app = app();
+    let t = edited_type(&mut app, "type");
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 2}));
+    let (ctx, texts) = bar_texts(&mut app);
+    type_into(&mut app, &ctx, &texts, "20 pt", "30");
+    assert_eq!(sizes(&app, t), [("He".to_string(), 30.0), ("llo".to_string(), 20.0)]);
+    // Mixed sizes leave the field blank, as in the Character panel.
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 5}));
+    let (_, texts) = bar_texts(&mut app);
+    assert!(!has(&texts, "20 pt") && !has(&texts, "30 pt"), "{texts:?}");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(sizes(&app, t), [("Hello".to_string(), 20.0)]);
+
+    let mut app = self::app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let a = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello", "size": 20})).unwrap());
+    let b = id(app.run("text.create", json!({"x": 60, "y": 160, "text": "World", "size": 20})).unwrap());
+    select(&mut app, &[a, b]);
+    let (ctx, texts) = bar_texts(&mut app);
+    type_into(&mut app, &ctx, &texts, "20 pt", "14");
+    assert_eq!(sizes(&app, a), [("Hello".to_string(), 14.0)]);
+    assert_eq!(sizes(&app, b), [("World".to_string(), 14.0)]);
+}
+
+/// At a caret, with no characters selected, the bar's Font Size sets the edited type as the
+/// Character panel's does, and the characters typed next take it.
+#[test]
+fn the_task_bars_font_size_at_a_caret_sets_what_is_typed_next() {
+    let mut app = app();
+    let t = edited_type(&mut app, "type");
+    app.session.set_tool_option("select", &json!({"start": 5, "end": 5}));
+    assert_eq!(crate::panels::character::text_editing(&app), Some((NodeId(t), 5, 5)), "a caret after the type");
+    let (ctx, texts) = bar_texts(&mut app);
+    type_into(&mut app, &ctx, &texts, "20 pt", "30");
+    app.session.tool_typed_text("!", app.view_info()).unwrap();
+    assert_eq!(sizes(&app, t), [("Hello!".to_string(), 30.0)]);
+}
+
+/// The Type tool's Fill chip makes the Fill active and brings up the Swatches panel.
+#[test]
+fn the_type_tools_fill_chip_activates_the_fill() {
+    let mut app = app();
+    edited_type(&mut app, "type");
+    app.session.fill_active = false;
+    let (ctx, _) = bar_texts(&mut app);
+    let r = canvas::task_bar_rect(&ctx).expect("the task bar shows");
+    // Right to left: the frame's margin, More Options, then the Fill chip.
+    let p = Pos2::new(r.right() - 8.0 - 30.0 - 6.0 - 13.0, r.center().y);
+    let press = |pressed| Event::PointerButton { pos: p, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![Event::PointerMoved(p)]);
+    frame(&mut app, &ctx, vec![press(true)]);
+    frame(&mut app, &ctx, vec![press(false)]);
+    assert!(app.session.fill_active, "the Fill is active");
+    assert!(crate::panels::character::text_editing(&app).is_some(), "the type is still edited");
+}
+
+/// Screen readers name the Type tool bar's controls, and the bar stays on the canvas for type at
+/// its lower right corner.
+#[test]
+fn the_type_tools_bar_is_named_and_stays_on_the_canvas() {
+    use crate::widgets::accessibility_tests::{named, tree};
+    let mut app = app();
+    edited_type(&mut app, "type");
+    let tree = tree(|ui| canvas::show(&mut app, ui));
+    for label in ["Font Family", "Style", "Font Size", "Fill"] {
+        named(&tree, label);
+    }
+    let mut app = self::app();
+    app.run("tool.select", json!({"tool": "type"})).unwrap();
+    app.run("text.create", json!({"x": 380, "y": 290, "text": "Corner", "size": 20})).unwrap();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    // The type near the canvas's lower edge, so the bar's place under it is off the canvas.
+    let view = app.view_mut().unwrap();
+    (view.center, view.zoom) = (vectorcraft_geom::Point::new(200.0, 20.0), 1.0);
+    let (ctx, _) = bar(&mut app);
+    let r = canvas::task_bar_rect(&ctx).expect("the task bar shows");
+    let canvas = app.canvas_rect.expect("the canvas is laid out");
+    assert!(canvas.contains_rect(r), "{r:?} in {canvas:?}");
+}
+
+/// The task bar's rect after a few frames on a `width` by 700 screen, and the canvas's rect.
+fn bar_on_screen(app: &mut VectorcraftApp, width: f32) -> (Rect, Rect) {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(width, 700.0));
+    for _ in 0..3 {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| canvas::show(app, ui));
+        out.textures_delta.clear();
+    }
+    (canvas::task_bar_rect(&ctx).expect("the task bar shows"), app.canvas_rect.expect("the canvas is laid out"))
+}
+
+/// On a canvas narrower than one row of the bar, the font controls go on a second row, narrowed to
+/// fit, and the bar stays whole on the canvas: selected type's actions, and a Type tool's Fill.
+#[test]
+fn selected_types_font_controls_take_a_second_row_on_a_narrow_canvas() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let t = id(app.run("text.create", json!({"x": 20, "y": 60, "text": "Hello", "size": 20})).unwrap());
+    select(&mut app, &[t]);
+    let (r, canvas) = bar_on_screen(&mut app, 760.0);
+    assert!(canvas.contains_rect(r), "{r:?} in {canvas:?}");
+    assert!(r.height() > 60.0, "the font controls take a second row: {r:?}");
+
+    let mut app = self::app();
+    app.run("tool.select", json!({"tool": "type"})).unwrap();
+    app.run("text.create", json!({"x": 20, "y": 60, "text": "Hello", "size": 20})).unwrap();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    // Narrower than the font controls at their full widths too.
+    let (r, canvas) = bar_on_screen(&mut app, 300.0);
+    assert!(canvas.contains_rect(r), "{r:?} in {canvas:?}");
+    assert!(r.height() > 60.0, "the font controls take a second row: {r:?}");
+    let (r, _) = bar_on_screen(&mut app, 1000.0);
+    assert!(r.height() < 60.0, "one row where it fits: {r:?}");
+    // The Type tool's bar has only the Fill and More Options beside the controls: one row fits.
+    let (r, canvas) = bar_on_screen(&mut app, 460.0);
+    assert!(canvas.contains_rect(r) && r.height() < 60.0, "one row on a 460 px screen: {r:?} in {canvas:?}");
+    // Too narrow for the controls at their narrowest: the bar leaves them out.
+    let (r, canvas) = bar_on_screen(&mut app, 160.0);
+    assert!(canvas.contains_rect(r) && r.height() < 60.0, "no font controls on a 160 px screen: {r:?} in {canvas:?}");
+}
+
+/// The labels drawn inside the task bar after `frames` frames on a screen `size` points in `ctx`,
+/// with the bar's rect and the canvas's.
+fn bar_texts_on_screen(app: &mut VectorcraftApp, ctx: &egui::Context, size: egui::Vec2, frames: usize) -> (Vec<(String, Rect)>, Rect, Rect) {
+    let screen = Rect::from_min_size(Pos2::ZERO, size);
+    let mut texts = vec![];
+    for _ in 0..frames {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| canvas::show(app, ui));
+        out.textures_delta.clear();
+        texts = shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>());
+    }
+    let r = canvas::task_bar_rect(ctx).expect("the task bar shows");
+    (texts.into_iter().filter(|(_, t)| r.contains(t.center())).collect(), r, app.canvas_rect.expect("the canvas is laid out"))
+}
+
+/// On a canvas narrower than one row of the bar's actions, the actions wrap onto more rows, in
+/// order, and the bar stays whole on the canvas, also on the first frame after the canvas narrows.
+#[test]
+fn a_task_bars_actions_wrap_on_a_narrow_canvas() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let circle = id(app.run("path.create", json!({"d": "M100 300 A100 100 0 1 1 300 300 A100 100 0 1 1 100 300 Z"})).unwrap());
+    let t = id(app.run("text.createInPath", json!({"path": circle, "mode": "onPath", "text": "Round", "at": [90, 300]})).unwrap());
+    select(&mut app, &[t]);
+    let actions = ["Create Outlines", "Type on a Path Options", "Center on Top", "Center on Bottom", "Dynamic Text", "Duplicate"];
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let (texts, r, canvas) = bar_texts_on_screen(&mut app, &ctx, vec2(1800.0, 700.0), 3);
+    assert!(canvas.contains_rect(r) && r.height() < 60.0, "one row where it fits: {r:?} in {canvas:?}");
+    // The first frame after the canvas narrows, then once the bar settles.
+    for frames in [1, 3] {
+        let (texts, r, canvas) = bar_texts_on_screen(&mut app, &ctx, vec2(760.0, 700.0), frames);
+        assert!(canvas.contains_rect(r), "{frames} frames: {r:?} in {canvas:?}");
+        let ys: Vec<f32> = actions.iter().map(|label| at(&texts, label).y).collect();
+        assert!(ys.windows(2).all(|w| w[0] <= w[1]), "{frames} frames: the actions keep their order: {ys:?}");
+        assert!(ys[0] < ys[ys.len() - 1], "{frames} frames: the actions take more than one row: {texts:?}");
+    }
+    assert!(actions.iter().all(|label| has(&texts, label)), "{texts:?}");
+}
+
+/// On a canvas too narrow for an action's button, or too short for the rows the actions would
+/// wrap onto, More Options lists those actions, and the chips take rows after the actions when they
+/// don't fit beside the handle and More Options. Narrower than the handle and More Options, the bar
+/// doesn't show.
+#[test]
+fn a_task_bar_action_wider_than_the_canvas_goes_in_more_options() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let a = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 120, "height": 100})).unwrap());
+    let b = id(app.run("shape.ellipse", json!({"x": 70, "y": 60, "width": 50, "height": 50})).unwrap());
+    select(&mut app, &[a, b]);
+    app.run("object.compoundPath.make", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let (texts, r, canvas) = bar_texts_on_screen(&mut app, &ctx, vec2(160.0, 700.0), 3);
+    assert!(canvas.contains_rect(r), "{r:?} in {canvas:?}");
+    assert!(has(&texts, "Edit Path") && has(&texts, "Duplicate") && !has(&texts, "Release Compound Path"), "{texts:?}");
+    // More Options, after the frame's margin and the handle on the first row.
+    let more = r.min + vec2(9.0 + 4.0 + 6.0 + 15.0, 7.0 + 15.0);
+    let click = |app: &mut VectorcraftApp, p: Pos2| {
+        let press = |pressed| Event::PointerButton { pos: p, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(160.0, 700.0));
+        let mut texts = vec![];
+        for events in [vec![Event::PointerMoved(p)], vec![press(true)], vec![press(false)], vec![]] {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| canvas::show(app, ui));
+            out.textures_delta.clear();
+            texts = shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>());
+        }
+        texts
+    };
+    let texts = click(&mut app, more);
+    // Menu items are drawn after a space for the check mark.
+    let item = |label: &str| texts.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center());
+    assert!(item("Hide Bar").is_some(), "More Options opens: {texts:?}");
+    let release = item("Release Compound Path").unwrap_or_else(|| panic!("More Options lists the action: {texts:?}"));
+    click(&mut app, release);
+    let st = app.session.active().unwrap();
+    assert_eq!(st.selection.objects.len(), 2, "the paths come apart, selected");
+    assert!(st.selection.objects.iter().all(|i| matches!(st.doc.node(*i).unwrap().kind, NodeKind::Path { .. })));
+
+    // On a canvas too short for the rows the actions would wrap onto, More Options lists them, in
+    // order: the bar keeps at most the first.
+    let (texts, r, canvas) = bar_texts_on_screen(&mut app, &ctx, vec2(160.0, 150.0), 3);
+    assert!(canvas.contains_rect(r), "{r:?} in {canvas:?}");
+    let shown = ["Group", "Unite", "Duplicate"].map(|label| has(&texts, label));
+    assert!(!shown[1] && !shown[2], "{texts:?}");
+
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(60.0, 700.0));
+    for _ in 0..3 {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| canvas::show(&mut app, ui));
+        out.textures_delta.clear();
+    }
+    assert!(canvas::task_bar_rect(&ctx).is_none(), "no room for the handle and More Options: no bar");
+}
+
+/// When the canvas narrows so far that the bar leaves its font controls out, the font family
+/// field it drew before no longer takes the mouse wheel.
+#[test]
+fn a_task_bar_without_its_font_controls_leaves_their_wheel() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "type"})).unwrap();
+    app.run("text.create", json!({"x": 20, "y": 60, "text": "Hello", "size": 20})).unwrap();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let draw = |app: &mut VectorcraftApp, width: f32| {
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(width, 700.0));
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| canvas::show(app, ui));
+            out.textures_delta.clear();
+        }
+    };
+    draw(&mut app, 1000.0);
+    let bar = canvas::task_bar_rect(&ctx).expect("the task bar shows");
+    let viewport = egui::ViewportId::ROOT;
+    let points = (0..(bar.width() / 4.0) as usize).flat_map(|x| (0..(bar.height() / 4.0) as usize).map(move |y| (x, y)));
+    let field = points
+        .map(|(x, y)| bar.min + vec2(x as f32 * 4.0, y as f32 * 4.0))
+        .find(|p| crate::font_menu::wheel_field_layer_for_test(&ctx, viewport, *p).is_some())
+        .expect("the bar's font family field takes the wheel");
+    draw(&mut app, 160.0);
+    assert!(canvas::task_bar_rect(&ctx).is_some(), "the bar still shows, without its font controls");
+    crate::font_menu::sync_wheel_target(&app, &ctx, viewport);
+    assert!(crate::font_menu::wheel_field_layer_for_test(&ctx, viewport, field).is_none(), "the left-out field at {field:?} still takes the wheel");
+
+    // Hiding the bar (Window › Contextual Task Bar) releases the field before the next layout.
+    draw(&mut app, 1000.0);
+    assert!(crate::font_menu::wheel_field_layer_for_test(&ctx, viewport, field).is_some(), "the field is back");
+    app.run("window.taskBar", json!({})).unwrap();
+    crate::font_menu::sync_wheel_target(&app, &ctx, viewport);
+    assert!(
+        crate::font_menu::wheel_field_layer_for_test(&ctx, viewport, field).is_none(),
+        "the hidden bar's field at {field:?} still takes the wheel"
+    );
+}
+
+/// While a Type tool edits type, the Fill chip shows the selected characters' fill, and "?" where
+/// their fills differ.
+#[test]
+fn the_type_tools_fill_chip_shows_the_edited_characters_fill() {
+    let mut app = app();
+    let t = edited_type(&mut app, "type");
+    app.session.set_tool_option("select", &json!({"start": 2, "end": 5}));
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    let fills: Vec<_> = match kind(&app, t) {
+        NodeKind::Text(t) => t.runs.iter().map(|r| (r.text.clone(), r.style.fill.clone())).collect(),
+        k => panic!("{k:?}"),
+    };
+    let [(he, he_fill), (llo, llo_fill)] = &fills[..] else { panic!("{fills:?}") };
+    assert_eq!((he.as_str(), llo.as_str()), ("He", "llo"));
+    assert_ne!(he_fill, llo_fill);
+    let ctx = egui::Context::default();
+    let (fill, _, mixed, _) = canvas::chip_paints(&app, &ctx);
+    assert!(fill == *llo_fill && !mixed, "{fill:?} {mixed}");
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 2}));
+    let (fill, _, mixed, _) = canvas::chip_paints(&app, &ctx);
+    assert!(fill == *he_fill && !mixed, "{fill:?} {mixed}");
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 5}));
+    let (_, _, mixed, _) = canvas::chip_paints(&app, &ctx);
+    assert!(mixed, "the fills differ");
 }
 
 /// The task bar shows the selection as it is after an edit and after Undo: Join leaves once the

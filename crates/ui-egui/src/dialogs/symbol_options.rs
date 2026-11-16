@@ -4,9 +4,11 @@
 //! (`symbol.options`).
 //!
 //! Fields: `name`, `nineSlice` (bool) with `sliceLeft` / `sliceTop` / `sliceRight` / `sliceBottom`
-//! (percent of the symbol's size), `exportType` (`movieClip` | `graphic`), `type` (`dynamic` |
+//! (percent of the symbol's size, -1600..1600: below 0 or above 100 for a guide outside the art),
+//! `exportType` (`movieClip` | `graphic`), `type` (`dynamic` |
 //! `static`; a new symbol is dynamic), `registration` (0..8, the 9-point grid;
-//! 4 = centre), `__edit` (true when editing an existing symbol). Help:
+//! 4 = centre), `alignToPixelGrid` (bool, off for a new symbol), `__edit` (true when editing an
+//! existing symbol). Help:
 //! <https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/create-and-place-symbols.html>.
 
 use serde_json::{Map, Value, json};
@@ -26,20 +28,39 @@ const SLICE_KEYS: [&str; 4] = ["sliceLeft", "sliceTop", "sliceRight", "sliceBott
 /// A guide field's value when the dialog has none: a quarter of the symbol's size, in percent.
 const DEFAULT_SLICE_PERCENT: f64 = 25.0;
 
-/// The 9-slice dialog fields for `guides` (percent of the symbol's size; a quarter each when off).
+/// The field that keeps the guides the dialog opened with, as fractions, in `[left, top, right,
+/// bottom]` order.
+const SLICE_OPENED: &str = "__sliceOpened";
+
+/// The range of a guide field, in percent: a guide may lie outside the art, up to
+/// [`vectorcraft_doc::MAX_GUIDE_FRACTION`] times its size from its edge.
+const SLICE_PERCENT_RANGE: std::ops::RangeInclusive<f64> = -vectorcraft_doc::MAX_GUIDE_FRACTION * 100.0..=vectorcraft_doc::MAX_GUIDE_FRACTION * 100.0;
+
+/// The 9-slice dialog fields for `guides` (percent of the symbol's size, unrounded; a quarter each
+/// when off).
 fn slice_fields(guides: Option<vectorcraft_doc::SymbolNineSlice>) -> Map<String, Value> {
     let g = guides.unwrap_or_default();
     let mut m = Map::new();
     m.insert("nineSlice".into(), json!(guides.is_some()));
-    for (key, v) in SLICE_KEYS.iter().zip([g.left, g.top, g.right, g.bottom]) {
-        m.insert((*key).to_string(), json!((v * 100.0).round()));
+    let opened = [g.left, g.top, g.right, g.bottom];
+    for (key, v) in SLICE_KEYS.iter().zip(opened) {
+        m.insert((*key).to_string(), json!(v * 100.0));
     }
+    m.insert(SLICE_OPENED.into(), json!(opened));
     m
 }
 
-/// The guides the dialog's fields describe, as the `nineSlice` / `nineSliceGuides` params.
+/// The guides the dialog's fields describe, as the `nineSlice` / `nineSliceGuides` params. A field
+/// still showing the guide it opened with gives that guide exactly.
 fn slice_params(d: &Dialog) -> Value {
-    let [l, t, r, b] = SLICE_KEYS.map(|key| d.f64(key, DEFAULT_SLICE_PERCENT) / 100.0);
+    let opened = d.fields.get(SLICE_OPENED).and_then(Value::as_array);
+    let [l, t, r, b] = std::array::from_fn(|i| {
+        let percent = d.f64(SLICE_KEYS[i], DEFAULT_SLICE_PERCENT);
+        match opened.and_then(|a| a.get(i)).and_then(Value::as_f64) {
+            Some(g) if g * 100.0 == percent => g,
+            _ => percent / 100.0,
+        }
+    });
     if d.bool("nineSlice") { json!({ "nineSlice": true, "nineSliceGuides": [l, t, r, b] }) } else { json!({ "nineSlice": false }) }
 }
 
@@ -55,7 +76,8 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         return Err("nothing selected".into());
     }
     let name = st.doc.unique_symbol_name("New Symbol");
-    let mut fields = json!({ "name": name, "exportType": "movieClip", "type": "dynamic", "registration": 4, "__edit": false });
+    let mut fields =
+        json!({ "name": name, "exportType": "movieClip", "type": "dynamic", "registration": 4, "alignToPixelGrid": false, "__edit": false });
     if let Some(o) = fields.as_object_mut() {
         o.extend(slice_fields(None));
     }
@@ -87,6 +109,7 @@ pub fn open_edit(app: &mut VectorcraftApp, name: Option<&str>) -> Result<Value, 
         "exportType": export,
         "type": kind,
         "registration": registration,
+        "alignToPixelGrid": st.doc.symbol_pixel_aligned(&name),
         "__edit": true,
         "__from": name,
     });
@@ -134,12 +157,15 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             for (key, text) in SLICE_KEYS.into_iter().zip([tl!("Left:"), tl!("Top:"), tl!("Right:"), tl!("Bottom:")]) {
                 label(ui, text);
                 let v = d.f64(key, DEFAULT_SLICE_PERCENT);
-                if let Some(n) = widgets::range_field(ui, ("dlg-field", key), v, 0.0..=100.0, "%", 0, 64.0) {
+                if let Some(n) = widgets::range_field(ui, ("dlg-field", key), v, SLICE_PERCENT_RANGE, "%", 3, 64.0) {
                     d.fields.insert(key.into(), json!(n));
                 }
                 ui.end_row();
             }
         }
+        label(ui, "");
+        form::check(ui, d, "alignToPixelGrid", tl!("Align to Pixel Grid"));
+        ui.end_row();
     });
     false
 }
@@ -155,16 +181,17 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let kind = d.str("type");
     let registration = d.fields.get("registration").and_then(Value::as_u64).unwrap_or(4);
     let edit = d.fields.get("__edit").and_then(Value::as_bool).unwrap_or(false);
+    let pixel = d.bool("alignToPixelGrid");
     let r = if edit {
         let from = d.fields.get("__from").and_then(Value::as_str).unwrap_or(name);
-        let mut params = json!({ "name": from, "exportType": export, "type": kind, "registration": registration });
+        let mut params = json!({ "name": from, "exportType": export, "type": kind, "registration": registration, "alignToPixelGrid": pixel });
         merge(&mut params, slice_params(d));
         if from != name {
             params["newName"] = json!(name);
         }
         app.run("symbol.options", params)
     } else {
-        let mut params = json!({ "name": name, "exportType": export, "type": kind, "registration": registration });
+        let mut params = json!({ "name": name, "exportType": export, "type": kind, "registration": registration, "alignToPixelGrid": pixel });
         merge(&mut params, slice_params(d));
         app.run("symbol.new", params)
     };

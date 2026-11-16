@@ -7,6 +7,9 @@ use super::{
 
 /// Most bytes one filter or image reads.
 pub(super) const MAX_DATA: usize = 1 << 28;
+
+/// Most data sources one image may name (a DeviceN space has up to 32 components).
+const MAX_SOURCES: usize = 32;
 /// The longest chain of filters over one pending file (real programs stack two or three).
 const MAX_FILTER_CHAIN: usize = 64;
 
@@ -389,6 +392,25 @@ impl Interp<'_> {
     /// Decode the filters a file waits to run over the data the program reads, from where it is
     /// now in the file they were made over: a file being run, or the program's own file.
     pub(in super::super) fn materialize(&mut self, f: &Rc<RefCell<Stream>>) -> Res {
+        let input = match &*f.borrow() {
+            Stream::Pending { from: Some(r), .. } => match &*r.borrow() {
+                Stream::Buf { data, pos, .. } => data.len().saturating_sub(*pos),
+                _ => 0,
+            },
+            Stream::Pending { from: None, .. } => self.lex.data().len(),
+            _ => return Ok(()),
+        };
+        let r = self.decode_pending(f);
+        // A decode that failed is over: the stream is empty from now on, and the work it did is
+        // charged, so a program that catches the error can't have it run again and again.
+        if r.is_err() && matches!(&*f.borrow(), Stream::Pending { .. }) {
+            *f.borrow_mut() = Stream::Buf { data: vec![], pos: 0, rgb: None };
+            self.spend_bytes(input)?;
+        }
+        r
+    }
+
+    fn decode_pending(&mut self, f: &Rc<RefCell<Stream>>) -> Res {
         let (chain, from) = match &*f.borrow() {
             Stream::Pending { chain, from } => (chain.clone(), from.clone()),
             _ => return Ok(()),
@@ -663,6 +685,8 @@ impl Interp<'_> {
         let multi = get("MultipleDataSources").is_some_and(|o| matches!(o, Obj::Bool(true)));
         let sources = match (get("DataSource"), multi) {
             (None, _) => vec![],
+            // An image has a data source for each of its components, so many more is no image: refused before any copy.
+            (Some(Obj::Array { items, exec: false }), true) if items.len() > MAX_SOURCES => return ps_err("rangecheck", "DataSource"),
             (Some(Obj::Array { items, exec: false }), true) => items.borrow().iter().map(source).collect::<Res<Vec<_>>>()?,
             (Some(src), _) => vec![source(&src)?],
         };

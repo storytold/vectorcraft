@@ -478,6 +478,101 @@ fn an_opened_file_measures_its_type_in_its_own_composite_fonts() {
     assert_eq!(actual.cached_bounds, Some(expected));
 }
 
+/// The label of dimension `id` in `doc`.
+fn label(doc: &vectorcraft_doc::Document, id: u64) -> vectorcraft_doc::TextObject {
+    let node = doc.node(NodeId(id)).unwrap();
+    node.children().unwrap().iter().find_map(|n| if let NodeKind::Text(t) = &n.kind { Some((**t).clone()) } else { None }).unwrap()
+}
+
+/// The center of label `t`'s measured box on the page.
+fn label_center(t: &vectorcraft_doc::TextObject) -> vectorcraft_geom::Point {
+    t.xf * t.cached_bounds.unwrap().center()
+}
+
+/// Whether every character of label `t` is filled in CMYK.
+fn label_in_cmyk(t: &vectorcraft_doc::TextObject) -> bool {
+    !t.runs.is_empty() && t.runs.iter().all(|r| matches!(r.style.fill.color(), Some(vectorcraft_color::Color::Cmyk { .. })))
+}
+
+/// The native file of a CMYK document whose composite font `name` sets Roman at full size, with a
+/// dimension whose label is set in it and whose label's characters are saved in RGB, so opening
+/// the file draws the dimension again → (the file, the dimension's id, the center of its label as
+/// drawn in the document's own composite font).
+fn dimension_file(name: &str) -> (Vec<u8>, u64, vectorcraft_geom::Point) {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400, "colorMode": "cmyk"})).unwrap();
+    let mut full = font(name);
+    full["parts"]["roman"]["size"] = json!(100);
+    s.execute("type.compositeFonts.set", &json!({"fonts": [full]})).unwrap();
+    let line = s.execute("shape.line", &json!({"x1": 100, "y1": 100, "x2": 172, "y2": 100})).unwrap()["id"].as_u64().unwrap();
+    let id = s
+        .execute(
+            "dimension.create",
+            &json!({"source": {"kind": "segment", "edge": {"node": line, "subpath": 0, "segment": 0}},
+                    "options": {"units": "in", "precision": 2, "fontFamily": name, "fontSize": 20}}),
+        )
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let mut doc = (*s.doc().unwrap().doc).clone();
+    let drawn = label(&doc, id);
+    assert!(label_in_cmyk(&drawn));
+    let center = label_center(&drawn);
+    let mut label_id = None;
+    doc.node(NodeId(id)).unwrap().walk(&mut |n| {
+        if matches!(n.kind, NodeKind::Text(_)) {
+            label_id = Some(n.id);
+        }
+    });
+    if let Some(NodeKind::Text(t)) = doc.node_mut(label_id.unwrap()).map(|n| &mut n.kind) {
+        for r in &mut t.runs {
+            r.style.fill = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb8(0, 0, 0));
+        }
+    }
+    (vectorcraft_format::save_file(&doc), id, center)
+}
+
+/// A file whose dimensions are drawn again when it opens (their art is not in the document's color
+/// mode) draws their labels in its own composite fonts, not in those of the front document, which
+/// defines the label's font name with Roman at half size: each label stays centered on its anchor.
+#[test]
+fn an_opened_file_draws_its_dimension_labels_in_its_own_composite_fonts() {
+    let (bytes, id, center) = dimension_file("CF Dimension");
+    let mut s = session();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Dimension")]})).unwrap();
+    let file = crate::cmd::fileio::read_for_open("dimension.vectorcraft", &bytes, None, &json!({}), false, false).unwrap();
+    crate::cmd::fileio::open_read(&mut s, file).unwrap();
+    let opened = label(&s.doc().unwrap().doc, id);
+    assert!(label_in_cmyk(&opened));
+    assert!((label_center(&opened) - center).hypot() < 1e-6, "{:?} vs {center:?}", label_center(&opened));
+}
+
+/// Threaded type read from a file flows through its frames in the file's own composite fonts, when
+/// no open document defines them.
+#[test]
+fn an_opened_file_flows_its_threads_in_its_own_composite_fonts() {
+    let mut s = session();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Threaded")]})).unwrap();
+    let story = "The quick brown fox jumps over the lazy dog and keeps running. ".repeat(4);
+    let a = s
+        .execute("text.create", &json!({"x": 10, "y": 10, "text": story, "size": 20, "font": "CF Threaded", "area": {"width": 150, "height": 60}}))
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 300})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let first = text(&s, a).plain_text();
+    assert!(!first.is_empty() && first.len() < story.len());
+    let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
+    // A new front document without the font: the font database no longer holds it.
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    assert!(vectorcraft_text::FontDb::global().composite_font("CF Threaded").is_none());
+    let file = crate::cmd::fileio::read_for_open("threaded.vectorcraft", &bytes, None, &json!({}), false, false).unwrap();
+    crate::cmd::fileio::open_read(&mut s, file).unwrap();
+    assert_eq!(text(&s, a).plain_text(), first);
+}
+
 /// A document replaced while in the back (File › Revert) is measured in its own composite fonts
 /// when it comes to the front, not in the front document's.
 #[test]
@@ -508,6 +603,123 @@ fn a_document_replaced_in_the_back_is_measured_when_the_front_one_closes() {
     assert!((actual.cached_bounds.unwrap().width() - width).abs() < 1e-6);
     let expected = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &actual).bounds;
     assert_eq!(actual.cached_bounds, Some(expected));
+}
+
+/// A document replaced in front (File › Revert) whose dimensions are drawn again draws their labels
+/// in its new composite fonts, not in those it had before.
+#[test]
+fn a_document_replaced_in_front_draws_its_dimension_labels_in_its_own_composite_fonts() {
+    let (bytes, id, center) = dimension_file("CF Reverted");
+    let mut s = session();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Reverted")]})).unwrap();
+    assert!(s.replace_document(0, vectorcraft_format::load(&bytes).unwrap()));
+    let replaced = label(&s.doc().unwrap().doc, id);
+    assert!(label_in_cmyk(&replaced));
+    assert!((label_center(&replaced) - center).hypot() < 1e-6, "{:?} vs {center:?}", label_center(&replaced));
+}
+
+/// A document replaced in the back draws its dimension labels in its own composite fonts, while the
+/// front document keeps its definition of the same name registered; the labels stay where they are
+/// when the document comes to the front.
+#[test]
+fn a_document_replaced_in_the_back_draws_its_dimension_labels_in_its_own_composite_fonts() {
+    let (bytes, id, center) = dimension_file("CF Back Dimension");
+    let mut s = session();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Back Dimension")]})).unwrap();
+    assert!(s.replace_document(0, vectorcraft_format::load(&bytes).unwrap()));
+    assert_eq!(s.active_index(), Some(1));
+    let front = vectorcraft_text::FontDb::global().composite_font("CF Back Dimension").unwrap();
+    assert_eq!(front.parts.get(vectorcraft_doc::CharClass::Roman).size, 50.0);
+    let replaced = label(&s.documents()[0].doc, id);
+    assert!(label_in_cmyk(&replaced));
+    assert!((label_center(&replaced) - center).hypot() < 1e-6, "{:?} vs {center:?}", label_center(&replaced));
+    assert!(s.set_active(0));
+    let shown = label(&s.doc().unwrap().doc, id);
+    assert!((label_center(&shown) - center).hypot() < 1e-6, "{:?} vs {center:?}", label_center(&shown));
+}
+
+/// The type of document `index` with id `id`, wherever its tab is.
+fn text_in(s: &Session, index: usize, id: u64) -> vectorcraft_doc::TextObject {
+    match &s.documents()[index].doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("not text"),
+    }
+}
+
+/// A document replaced while in the back has its type measured in its own composite fonts at once,
+/// while the front document stays in front with its own definition registered; coming to the front
+/// does not measure that type again.
+#[test]
+fn a_document_replaced_in_the_back_is_measured_before_it_comes_to_the_front() {
+    let (bytes, id, width) = full_roman_file("CF Pane");
+    let mut s = session();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Pane")]})).unwrap();
+    assert!(s.replace_document(0, vectorcraft_format::load(&bytes).unwrap()));
+    assert_eq!(s.active_index(), Some(1));
+    let front = vectorcraft_text::FontDb::global().composite_font("CF Pane").unwrap();
+    assert_eq!(front.parts.get(vectorcraft_doc::CharClass::Roman).size, 50.0);
+    let measured = text_in(&s, 0, id);
+    assert!((measured.cached_bounds.unwrap().width() - width).abs() < 1e-6);
+    let node = s.documents()[0].doc.node(NodeId(id)).unwrap().geometric_bounds().unwrap();
+    assert!((node.width() - width).abs() < 1e-6);
+    let doc = std::sync::Arc::as_ptr(&s.documents()[0].doc);
+    assert!(s.set_active(0));
+    assert!(std::ptr::eq(doc, std::sync::Arc::as_ptr(&s.documents()[0].doc)));
+    assert_eq!(text(&s, id).cached_bounds, measured.cached_bounds);
+}
+
+/// Type a document replaced in the back sets in a composite font that only the front document
+/// defines is measured as missing, though the front one is registered, also when the replaced
+/// document defines no composite font, and still as missing when it comes to the front.
+#[test]
+fn a_document_replaced_in_the_back_measures_a_font_it_lacks_as_missing() {
+    let db = vectorcraft_text::FontDb::global();
+    let mut s = session();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Ab12", "size": 20, "font": "CF Lacked"})).unwrap()["id"].as_u64().unwrap();
+    let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Lacked")]})).unwrap();
+    assert!(s.replace_document(0, vectorcraft_format::load(&bytes).unwrap()));
+    let back = text_in(&s, 0, id);
+    assert!(s.documents()[0].doc.composite_fonts.is_empty());
+    let in_front = vectorcraft_text::layout(db, &back).bounds;
+    // The same type set in a family nothing defines.
+    let mut nowhere = back.clone();
+    for r in &mut nowhere.runs {
+        r.style.font_family = "No Such Family CF Lacked".into();
+    }
+    let missing = vectorcraft_text::layout(db, &nowhere).bounds;
+    assert!((in_front.width() - missing.width()).abs() > 1e-6, "the front document's font draws otherwise");
+    assert_eq!(back.cached_bounds, Some(missing));
+    assert!(s.set_active(0));
+    assert!(vectorcraft_text::FontDb::global().composite_font("CF Lacked").is_none());
+    let actual = text(&s, id);
+    let expected = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &actual).bounds;
+    assert_eq!(actual.cached_bounds, Some(expected));
+}
+
+/// Text holding an inline graphic whose symbol's art is type in a composite font, in a document
+/// replaced in the back, is measured with the graphic at the size the document's own definition
+/// gives it before it comes to the front.
+#[test]
+fn a_document_replaced_in_the_back_measures_inline_graphics_in_its_own_definition() {
+    let mut s = session();
+    let mut full = font("CF Back Inline");
+    full["parts"]["roman"]["size"] = json!(100);
+    s.execute("type.compositeFonts.set", &json!({"fonts": [full]})).unwrap();
+    let art =
+        s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Ab12", "size": 20, "font": "CF Back Inline"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("symbol.new", &json!({"name": "CF Back Inline Mark", "ids": [art]})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 150, "text": "x", "size": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.insertInline", &json!({"id": id, "at": 0, "symbol": "CF Back Inline Mark"})).unwrap();
+    let width = text(&s, id).cached_bounds.unwrap().width();
+    let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Back Inline")]})).unwrap();
+    assert!(s.replace_document(0, vectorcraft_format::load(&bytes).unwrap()));
+    assert!((text_in(&s, 0, id).cached_bounds.unwrap().width() - width).abs() < 1e-6);
 }
 
 /// A failed batch takes back the composite fonts it set, in the font database too.
@@ -643,4 +855,128 @@ fn composite_fonts_export_and_import() {
     assert!(s.execute("type.compositeFonts.export", &json!({"fonts": []})).is_err());
     assert!(s.execute("type.compositeFonts.export", &json!({"path": " "})).is_err());
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `font(name)` with two custom character sets: "Marks" (x and A) in Inter at 150%, and "A only"
+/// (A) in Source Sans 3, which sets A since it comes later.
+fn font_with_sets(name: &str) -> Value {
+    let mut v = font(name);
+    v["custom"] = json!([
+        {"name": " Marks ", "characters": "xA", "font": "Inter", "size": 150, "hScale": 90},
+        {"name": "A only", "characters": "A"},
+    ]);
+    v
+}
+
+/// Custom character sets are set with the font as one undo step, take values they leave out from
+/// the Kanji part, set the characters they list ahead of their class (the later set winning), are
+/// saved with the document, and measure type again when they change.
+#[test]
+fn custom_character_sets_set_their_characters() {
+    let mut s = session();
+    let before = steps(&s);
+    let r = s.execute("type.compositeFonts.set", &json!({"fonts": [font_with_sets("CF Sets")]})).unwrap();
+    assert_eq!(r["fonts"][0]["custom"][0]["name"], "Marks");
+    assert_eq!(steps(&s), before + 1);
+    let f = s.doc().unwrap().doc.composite_fonts[0].clone();
+    assert_eq!(f.custom.len(), 2);
+    assert_eq!((f.custom[0].part.font.as_str(), f.custom[0].part.size, f.custom[0].part.h_scale), ("Inter", 150.0, 90.0));
+    assert_eq!((f.custom[1].part.font.as_str(), f.custom[1].part.size), ("Source Sans 3", 100.0));
+    // The same sets again change nothing.
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font_with_sets("CF Sets")]})).unwrap();
+    assert_eq!(steps(&s), before + 1);
+    let back = vectorcraft_format::load(&vectorcraft_format::save_file(&s.doc().unwrap().doc)).unwrap();
+    assert_eq!(*back.composite_fonts, *s.doc().unwrap().doc.composite_fonts);
+
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "xAB", "size": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setStyle", &json!({"ids": [id], "font": "CF Sets"})).unwrap();
+    let db = vectorcraft_text::FontDb::global();
+    let face = |family: &str| db.face(family, "Regular").unwrap().id();
+    let lay = vectorcraft_text::layout(db, &text(&s, id));
+    let fonts: Vec<u32> = lay.glyphs.iter().map(|g| g.font_id).collect();
+    assert_eq!(fonts, [face("Inter"), face("Source Sans 3"), face("JetBrains Mono")]);
+    // Taking x out of Marks sets it in its class's font again, measured in the same step.
+    let wide = text(&s, id).cached_bounds.unwrap().width();
+    let mut fewer = font_with_sets("CF Sets");
+    fewer["custom"][0]["characters"] = json!("A");
+    s.execute("type.compositeFonts.set", &json!({"fonts": [fewer]})).unwrap();
+    assert!(text(&s, id).cached_bounds.unwrap().width() < wide - 1.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!((text(&s, id).cached_bounds.unwrap().width() - wide).abs() < 1e-6);
+}
+
+/// Bad custom character sets are refused with an error and no undo step.
+#[test]
+fn bad_custom_character_sets_are_refused() {
+    let mut s = session();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font_with_sets("CF Sets Base")]})).unwrap();
+    let before = steps(&s);
+    let with = |f: &dyn Fn(&mut Value)| {
+        let mut v = font_with_sets("CF Sets Refused");
+        f(&mut v);
+        json!({"fonts": [v]})
+    };
+    let many: String = (0x4E00u32..).filter_map(char::from_u32).take(8193).collect();
+    let sets: Vec<Value> = (0..65).map(|i| json!({"name": format!("S{i}")})).collect();
+    for bad in [
+        with(&|v| v["custom"] = json!("Marks")),
+        with(&|v| v["custom"] = Value::Null),
+        with(&|v| v["custom"][0]["characters"] = Value::Null),
+        with(&|v| v["custom"][0] = json!("Marks")),
+        with(&|v| v["custom"][0]["name"] = json!("  ")),
+        with(&|v| {
+            v["custom"][0].as_object_mut().unwrap().remove("name");
+        }),
+        with(&|v| v["custom"][1]["name"] = json!("marks")),
+        with(&|v| v["custom"][0]["characters"] = json!(["※"])),
+        with(&|v| v["custom"][0]["characters"] = json!("※※")),
+        with(&|v| v["custom"][0]["characters"] = json!("A\n")),
+        with(&|v| v["custom"][0]["characters"] = json!("😀")),
+        with(&|v| v["custom"][0]["characters"] = json!(many.clone())),
+        with(&|v| v["custom"] = json!(sets.clone())),
+        with(&|v| v["custom"][0]["size"] = json!(5)),
+        with(&|v| v["custom"][0]["size"] = json!("50")),
+        with(&|v| v["custom"][0]["scaleAtCenter"] = json!(true)),
+        with(&|v| v["custom"][0]["scaleAtCenter"] = json!(false)),
+        with(&|v| v["custom"][0]["font"] = json!("")),
+        with(&|v| v["custom"][0]["font"] = json!("CF Sets Base")),
+        with(&|v| v["custom"][0]["width"] = json!(3)),
+    ] {
+        let e = s.execute("type.compositeFonts.set", &bad);
+        assert!(e.is_err(), "accepted {bad}");
+        assert_eq!(names(&s), ["CF Sets Base"]);
+        assert_eq!(steps(&s), before);
+    }
+    // A set without characters is kept: it sets nothing.
+    let ok = with(&|v| v["custom"][0]["characters"] = json!(""));
+    s.execute("type.compositeFonts.set", &ok).unwrap();
+    assert_eq!(s.doc().unwrap().doc.composite_fonts[0].custom[0].characters, "");
+}
+
+/// Export writes the custom character sets and Import reads them back; a file whose set is bad is
+/// refused.
+#[test]
+fn custom_character_sets_export_and_import() {
+    let mut s = session();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font_with_sets("CF Sets IO")]})).unwrap();
+    let data = s.execute("type.compositeFonts.export", &json!({})).unwrap();
+    let mut t = session();
+    t.execute("type.compositeFonts.import", &json!({"data": data["data"]})).unwrap();
+    assert_eq!(*t.doc().unwrap().doc.composite_fonts, *s.doc().unwrap().doc.composite_fonts);
+    let text = data["data"].as_str().unwrap().replace("\"A only\"", "\"marks\"");
+    let mut u = session();
+    assert!(u.execute("type.compositeFonts.import", &json!({"data": text})).is_err());
+    assert!(names(&u).is_empty());
+    // Fonts whose file would be larger than Import reads are refused.
+    let full: String = (0x4E00u32..).filter_map(char::from_u32).take(8192).collect();
+    let sets: Vec<Value> = (0..64).map(|i| json!({"name": format!("S{i}"), "characters": full})).collect();
+    let big: Vec<Value> = (0..3)
+        .map(|i| {
+            let mut f = font(&format!("CF Sets Big {i}"));
+            f["custom"] = json!(sets);
+            f
+        })
+        .collect();
+    let e = s.execute("type.compositeFonts.export", &json!({"fonts": big})).unwrap_err();
+    assert!(e.to_string().contains("4 MB"), "{e}");
 }

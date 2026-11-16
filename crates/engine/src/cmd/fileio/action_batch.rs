@@ -11,7 +11,9 @@ use serde_json::json;
 
 use super::super::{Result, Session, bad};
 #[cfg(not(target_arch = "wasm32"))]
-use super::super::{bool_or, find_command, str_param};
+use super::super::{check_switches, find_command, switch_or, text_param};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::EngineError;
 
 #[cfg(target_arch = "wasm32")]
 pub(super) fn action_batch(_: &mut Session, _: &Value) -> Result<Value> {
@@ -58,6 +60,10 @@ pub(super) fn action_batch(s: &mut Session, p: &Value) -> Result<Value> {
         if id == "command.batch" || id == "action.batch" {
             return Err(bad(C, "batches cannot nest"));
         }
+        // `command.batch` refuses the batch when it reaches this step, which would fail every file or data set it plays.
+        if id == "prefs.import" {
+            return Err(bad(C, format!("commands[{i}]: `prefs.import` runs on its own, not as a batch step")));
+        }
         if find_command(id).is_none() {
             return Err(bad(
                 C,
@@ -68,12 +74,24 @@ pub(super) fn action_batch(s: &mut Session, p: &Value) -> Result<Value> {
             ));
         }
     }
-    let source = str_param(p, "source").unwrap_or("folder");
-    let destination = str_param(p, "destination").unwrap_or("none");
+    // Every option is checked before the destination folder is made.
+    let source = text_param(p, "source", C)?.unwrap_or("folder");
+    if !matches!(source, "folder" | "datasets") {
+        return Err(bad(C, "`source` must be `folder` or `datasets`"));
+    }
+    let destination = text_param(p, "destination", C)?.unwrap_or("none");
     if !matches!(destination, "none" | "saveAndClose" | "folder") {
         return Err(bad(C, "`destination` must be `none`, `saveAndClose` or `folder`"));
     }
-    let dest_folder = str_param(p, "destinationFolder").map(absolute_path);
+    let dest_folder = text_param(p, "destinationFolder", C)?.map(absolute_path);
+    text_param(p, "folder", C)?;
+    let label = text_param(p, "label", C)?.unwrap_or("Batch").to_string();
+    let dataset_file_naming = text_param(p, "datasetFileNaming", C)?.unwrap_or("fileDataSetName");
+    let override_open = switch_or(p, "overrideOpen", true, C)?;
+    let stop_on_error = switch_or(p, "stopOnError", true, C)?;
+    let override_save = switch_or(p, "overrideSave", true, C)?;
+    let override_export = switch_or(p, "overrideExport", true, C)?;
+    check_switches(p, &["includeSubdirs"], C)?;
     if destination == "folder" {
         let Some(ref folder) = dest_folder else {
             return Err(bad(C, "`destinationFolder` is required when destination is `folder`"));
@@ -81,17 +99,15 @@ pub(super) fn action_batch(s: &mut Session, p: &Value) -> Result<Value> {
         may_write(folder)?;
         std::fs::create_dir_all(folder).map_err(|e| bad(C, format!("{folder}: {e}")))?;
     }
-    let label = str_param(p, "label").unwrap_or("Batch").to_string();
-    let override_open = bool_or(p, "overrideOpen", true);
     let run = Run {
         label: &label,
         steps: cmds,
-        stop_on_error: bool_or(p, "stopOnError", true),
-        override_save: bool_or(p, "overrideSave", true),
-        override_export: bool_or(p, "overrideExport", true),
+        stop_on_error,
+        override_save,
+        override_export,
         destination,
         dest_folder: dest_folder.as_deref(),
-        dataset_file_naming: p.get("datasetFileNaming").map_or("fileDataSetName", |v| v.as_str().unwrap_or("")),
+        dataset_file_naming,
     };
     match source {
         "folder" => batch_folder(s, C, p, override_open, &run),
@@ -186,9 +202,9 @@ fn retargeting_save(c: &Value, redirected: bool) -> bool {
 fn batch_folder(s: &mut Session, cmd: &str, p: &Value, override_open: bool, run: &Run<'_>) -> Result<Value> {
     use super::{absolute_path, may_read};
 
-    let folder = str_param(p, "folder").map(absolute_path).ok_or_else(|| bad(cmd, "missing `folder`"))?;
+    let folder = text_param(p, "folder", cmd)?.map(absolute_path).ok_or_else(|| bad(cmd, "missing `folder`"))?;
     may_read(&folder)?;
-    let include_subdirs = bool_or(p, "includeSubdirs", false);
+    let include_subdirs = switch_or(p, "includeSubdirs", false, cmd)?;
     let files = collect_files(&folder, include_subdirs, 0)?;
     if files.len() > MAX_BATCH_FILES {
         return Err(bad(cmd, format!("more than {MAX_BATCH_FILES} files")));
@@ -203,7 +219,7 @@ fn batch_folder(s: &mut Session, cmd: &str, p: &Value, override_open: bool, run:
     // open, so its artboard files count ([`dataset_output_paths`]). No output takes the name of a
     // source file in the destination folder, other than that file's own output, or of a subfolder
     // of the destination folder that holds source files.
-    let steps = filter_steps(run.steps, override_open, false);
+    let (steps, places) = filter_steps(run.steps, override_open, false);
     let run = Run { steps: &steps, ..*run };
     let in_dest: Vec<Option<(String, bool)>> = files.iter().map(|path| name_in_folder(path, run.dest_folder)).collect();
     let mut picker =
@@ -218,7 +234,7 @@ fn batch_folder(s: &mut Session, cmd: &str, p: &Value, override_open: bool, run:
             let outputs = dataset_output_extensions(&run, doc, &ext);
             picker.pick(&base, |stem| output_names(run.dest_folder, stem, &outputs, doc), own.as_deref())
         };
-        match process_one_file(s, &run, path, &ext, pick) {
+        match process_one_file(s, &run, &places, path, &ext, pick) {
             Ok(row) => processed.push(row),
             Err(e) => {
                 failed += 1;
@@ -256,12 +272,12 @@ fn batch_datasets(s: &mut Session, cmd: &str, run: &Run<'_>) -> Result<Value> {
     }
     let doc_stem = st.path.as_deref().and_then(|p| std::path::Path::new(p).file_stem().and_then(|s| s.to_str())).unwrap_or("Untitled").to_string();
     let stems = dataset_stems(&names, &doc_stem, run.dataset_file_naming, run, &st.doc)?;
-    let steps = filter_steps(run.steps, true, false);
+    let (steps, places) = filter_steps(run.steps, true, false);
     let run = Run { steps: &steps, ..*run };
     let mut processed = Vec::new();
     let mut failed = 0usize;
     for (name, stem) in names.iter().zip(&stems) {
-        match process_one_dataset(s, &run, name, stem) {
+        match process_one_dataset(s, &run, &places, name, stem) {
             Ok(row) => processed.push(row),
             Err(e) => {
                 failed += 1;
@@ -337,11 +353,13 @@ impl StemPicker {
     }
 }
 
-/// Drop Open (and optionally Close) steps when the batch supplies the file itself.
+/// Drop Open (and optionally Close) steps when the batch supplies the file itself → the steps that
+/// stay, and the index of each in `cmds`.
 #[cfg(not(target_arch = "wasm32"))]
-fn filter_steps(cmds: &[Value], drop_open: bool, drop_close: bool) -> Vec<Value> {
+fn filter_steps(cmds: &[Value], drop_open: bool, drop_close: bool) -> (Vec<Value>, Vec<usize>) {
     cmds.iter()
-        .filter(|c| {
+        .enumerate()
+        .filter(|(_, c)| {
             let id = c.get("command").and_then(Value::as_str).unwrap_or("");
             if drop_open && matches!(id, "document.open" | "file.open") {
                 return false;
@@ -351,14 +369,44 @@ fn filter_steps(cmds: &[Value], drop_open: bool, drop_close: bool) -> Vec<Value>
             }
             true
         })
-        .cloned()
-        .collect()
+        .map(|(i, c)| (c.clone(), i))
+        .unzip()
+}
+
+/// Plays `commands`, the steps of `run` with their paths rewritten, as one `command.batch`. When a
+/// step fails, the error names it by its place in the caller's `commands`, from 1, counting the Open
+/// steps the batch skipped (`places` gives the index there of each step of `run`):
+/// ``action step 3 (`object.move`) failed: …``. Any other error, such as one about the whole batch,
+/// stays as it is.
+#[cfg(not(target_arch = "wasm32"))]
+fn play_steps(s: &mut Session, run: &Run<'_>, places: &[usize], commands: Vec<Value>) -> Result<Value> {
+    s.execute("command.batch", &json!({"label": run.label, "commands": commands})).map_err(|e| {
+        let text = e.to_string();
+        let Some((n, id, reason)) = batch_step_failure(&text) else { return e };
+        let same = run.steps.get(n).and_then(|c| c.get("command")).and_then(Value::as_str) == Some(id);
+        match places.get(n) {
+            Some(place) if same => EngineError::Other(format!("action step {} (`{id}`) failed: {reason}", place + 1)),
+            _ => e,
+        }
+    })
+}
+
+/// The step number, command id and reason in the error `command.batch` gives when one of its steps
+/// fails (``batch step 2 (`object.move`) failed: …``); none for any other error.
+#[cfg(not(target_arch = "wasm32"))]
+fn batch_step_failure(e: &str) -> Option<(usize, &str, &str)> {
+    let rest = e.strip_prefix("batch step ")?;
+    let digits = rest.find(|c: char| !c.is_ascii_digit())?;
+    let n = rest[..digits].parse().ok()?;
+    let (id, reason) = rest[digits..].strip_prefix(" (`")?.split_once("`) failed: ")?;
+    Some((n, id, reason))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 fn process_one_file(
     s: &mut Session,
     run: &Run<'_>,
+    places: &[usize],
     path: &str,
     ext: &str,
     stem_for: impl FnOnce(&vectorcraft_doc::Document) -> String,
@@ -366,17 +414,17 @@ fn process_one_file(
     s.execute("document.open", &json!({"path": path}))?;
     let stem = stem_for(&s.doc()?.doc);
     let rewritten = rewrite_paths(run.steps, run.override_save, run.override_export, run.dest_folder, &stem, ext);
-    let batch = s.execute("command.batch", &json!({"label": run.label, "commands": rewritten}))?;
+    let batch = play_steps(s, run, places, rewritten)?;
     // Folder sources open a file per pass: close after Save and Close / Folder.
     finish_destination(s, run, &stem, ext, path, true)?;
     Ok(json!({"path": path, "result": batch}))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn process_one_dataset(s: &mut Session, run: &Run<'_>, name: &str, stem: &str) -> Result<Value> {
+fn process_one_dataset(s: &mut Session, run: &Run<'_>, places: &[usize], name: &str, stem: &str) -> Result<Value> {
     s.execute("dataset.select", &json!({"name": name}))?;
     let rewritten = rewrite_paths(run.steps, run.override_save, run.override_export, run.dest_folder, stem, "vectorcraft");
-    let batch = s.execute("command.batch", &json!({"label": run.label, "commands": rewritten}))?;
+    let batch = play_steps(s, run, places, rewritten)?;
     // Data sets share one open document: write each row out but leave it open for the next.
     finish_destination(s, run, stem, "vectorcraft", "", false)?;
     Ok(json!({"dataset": name, "result": batch}))
@@ -526,6 +574,7 @@ fn dataset_output_extensions(run: &Run<'_>, doc: &vectorcraft_doc::Document, def
                                 | "dxf"
                                 | "emf"
                                 | "wmf"
+                                | "hpgl"
                                 | "ai"
                         )
                 };
@@ -716,6 +765,11 @@ fn collect_files(folder: &str, include_subdirs: bool, depth: usize) -> Result<Ve
         }
     }
     files.sort();
+    // Names that are not valid text come back lossily, so different names can give one path: each
+    // folder is listed once.
+    files.dedup();
+    subdirs.sort();
+    subdirs.dedup();
     for sub in subdirs {
         let mut nested = collect_files(&sub, true, depth + 1)?;
         files.append(&mut nested);
@@ -747,6 +801,22 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn folders_whose_names_alias_after_lossy_conversion_are_listed_once() {
+        use std::os::unix::ffi::OsStrExt;
+        let root = tmp("alias");
+        // `a\u{FFFD}` is a real folder; two others with bytes that aren't text give the same name.
+        let real = root.join("a\u{FFFD}");
+        std::fs::create_dir_all(&real).unwrap();
+        write_svg(&real, "x.svg", "red");
+        for bad in [b"a\xFF", b"a\xFE"] {
+            let _ = std::fs::create_dir_all(root.join(std::ffi::OsStr::from_bytes(bad)));
+        }
+        let files = collect_files(&root.to_string_lossy(), true, 0).unwrap();
+        assert_eq!(files.len(), 1, "{files:?}");
     }
 
     fn write_svg(dir: &std::path::Path, name: &str, fill: &str) -> std::path::PathBuf {
@@ -787,6 +857,46 @@ mod tests {
         assert_eq!(r["failed"], 0);
         assert!(dest.join("a.svg").is_file(), "a.svg written");
         assert!(dest.join("b.svg").is_file(), "b.svg written");
+    }
+
+    #[test]
+    fn batch_refuses_options_of_the_wrong_type_before_it_writes() {
+        let src = tmp("types-src");
+        let dest = tmp("types-dest");
+        write_svg(&src, "a.svg", "#f00");
+        let mut s = Session::new();
+        let cases = [
+            ("stopOnError", json!("false"), "`stopOnError` must be true or false"),
+            ("overrideOpen", json!(0), "`overrideOpen` must be true or false"),
+            ("overrideSave", json!("true"), "`overrideSave` must be true or false"),
+            ("overrideExport", json!([]), "`overrideExport` must be true or false"),
+            ("includeSubdirs", json!(1), "`includeSubdirs` must be true or false"),
+            ("source", json!(1), "`source` must be a string"),
+            ("source", json!("files"), "`source` must be `folder` or `datasets`"),
+            ("destination", json!(true), "`destination` must be a string"),
+            ("folder", json!(5), "`folder` must be a string"),
+            ("label", json!(5), "`label` must be a string"),
+            ("datasetFileNaming", json!(3), "`datasetFileNaming` must be a string"),
+        ];
+        for (key, value, message) in cases {
+            let out = dest.join(key);
+            let mut p = json!({
+                "folder": src.to_string_lossy(),
+                "destination": "folder",
+                "destinationFolder": out.to_string_lossy(),
+                "commands": [{"command": "object.unlockAll", "params": {}}],
+            });
+            p[key] = value;
+            let e = s.execute("action.batch", &p).unwrap_err().to_string();
+            assert!(e.contains(message), "{key}: {e}");
+            assert!(!out.exists(), "{key}: the destination folder was created");
+        }
+        let e = s
+            .execute("action.batch", &json!({"folder": src.to_string_lossy(), "destination": "folder", "destinationFolder": 7, "commands": [{"command": "object.unlockAll"}]}))
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("`destinationFolder` must be a string"), "{e}");
+        assert!(s.active().is_none(), "no file was opened");
     }
 
     #[cfg(unix)]
@@ -1012,6 +1122,65 @@ mod tests {
         assert_eq!(r["failed"], 0, "{r}");
         assert_eq!(file_names(&dest), ["a", "a-2"], "{r}");
         for (folder, fill) in [("a", "#ff0000"), ("a-2", "#00ff00")] {
+            assert_eq!(file_names(&dest.join(folder)), ["Artboard-1.svg"], "{r}");
+            let svg = std::fs::read_to_string(dest.join(folder).join("Artboard-1.svg")).unwrap();
+            assert!(svg.contains(fill), "{folder}: {svg}");
+        }
+    }
+
+    /// Source file names that differ only in case (`a.svg` and `sub/A.svg`) get Export for Screens
+    /// folders of their own: names are compared without case, so the second folder is numbered,
+    /// since Windows and macOS would make `a` and `A` one folder.
+    #[test]
+    fn batch_override_export_numbers_folders_that_differ_only_in_case() {
+        let src = tmp("screens-case-src");
+        std::fs::create_dir_all(src.join("sub")).unwrap();
+        write_svg(&src, "a.svg", "#f00");
+        write_svg(&src.join("sub"), "A.svg", "#0f0");
+        let dest = tmp("screens-case-out");
+        let mut s = Session::new();
+        let r = s
+            .execute(
+                "action.batch",
+                &json!({
+                    "folder": src.to_string_lossy(),
+                    "includeSubdirs": true,
+                    "destinationFolder": dest.to_string_lossy(),
+                    "commands": [{"command": "document.exportForScreens", "params": {"formats": [{"format": "svg"}]}}]
+                }),
+            )
+            .unwrap();
+        assert_eq!(r["failed"], 0, "{r}");
+        assert_eq!(file_names(&dest), ["A-2", "a"], "{r}");
+        for (folder, fill) in [("a", "#ff0000"), ("A-2", "#00ff00")] {
+            assert_eq!(file_names(&dest.join(folder)), ["Artboard-1.svg"], "{r}");
+            let svg = std::fs::read_to_string(dest.join(folder).join("Artboard-1.svg")).unwrap();
+            assert!(svg.contains(fill), "{folder}: {svg}");
+        }
+    }
+
+    /// A source file with nothing left of its name without its extension (` .svg`) gets the folder
+    /// `file`, numbered before a source file named `file.svg` takes it.
+    #[test]
+    fn batch_override_export_names_the_folder_of_an_empty_name_file() {
+        let src = tmp("screens-empty-src");
+        write_svg(&src, " .svg", "#f00");
+        write_svg(&src, "file.svg", "#0f0");
+        let dest = tmp("screens-empty-out");
+        let mut s = Session::new();
+        let r = s
+            .execute(
+                "action.batch",
+                &json!({
+                    "folder": src.to_string_lossy(),
+                    "destinationFolder": dest.to_string_lossy(),
+                    "commands": [{"command": "document.exportForScreens", "params": {"formats": [{"format": "svg"}]}}]
+                }),
+            )
+            .unwrap();
+        assert_eq!(r["failed"], 0, "{r}");
+        assert_eq!(file_names(&dest), ["file", "file-2"], "{r}");
+        for (folder, fill) in [("file", "#ff0000"), ("file-2", "#00ff00")] {
             assert_eq!(file_names(&dest.join(folder)), ["Artboard-1.svg"], "{r}");
             let svg = std::fs::read_to_string(dest.join(folder).join("Artboard-1.svg")).unwrap();
             assert!(svg.contains(fill), "{folder}: {svg}");
@@ -1296,6 +1465,43 @@ mod tests {
         assert_eq!(r["failed"], 0, "{r}");
         let written: Vec<_> = std::fs::read_dir(&dest).unwrap().filter_map(|e| e.ok()).map(|e| e.file_name()).collect();
         assert_eq!(written.len(), 2, "{written:?}");
+    }
+
+    /// A Data Sets batch whose Save step has no path saves the document's own file. When that file is
+    /// outside the client's read and write roots, each row's error keeps the write root and names the
+    /// file by its file name, with Stop on Error on and off. A source folder the client gives stays
+    /// whole in the error.
+    #[test]
+    fn dataset_batch_step_error_hides_document_path() {
+        use crate::file_access::{AutomationRoots, confine};
+
+        let base = tmp("roots-error");
+        let (inside, outside) = (base.join("in"), base.join("kept-out"));
+        for f in [&inside, &outside] {
+            std::fs::create_dir_all(f).unwrap();
+        }
+        let mut s = with_data_sets(&["Alpha", "Beta"]);
+        let own = outside.join("doc.vectorcraft").to_string_lossy().into_owned();
+        s.execute("document.save", &json!({"path": own})).unwrap();
+        let roots = AutomationRoots::new(&[inside.as_path()], &[inside.as_path()]).unwrap();
+        let root = crate::cmd::findfiles::plain(std::fs::canonicalize(&inside).unwrap()).display().to_string();
+        let hidden = outside.to_string_lossy().into_owned();
+        for (stop, rows) in [(true, 1), (false, 2)] {
+            let p = json!({"source": "datasets", "stopOnError": stop, "commands": [{"command": "document.save", "params": {}}]});
+            let r = confine(roots.as_ref(), || s.execute("action.batch", &p)).unwrap();
+            assert_eq!((r["failed"].as_u64(), r["processed"].as_array().map(Vec::len)), (Some(rows), Some(rows as usize)), "{r}");
+            for row in r["processed"].as_array().unwrap() {
+                let e = row["error"].as_str().unwrap_or_default();
+                let want =
+                    format!("action step 1 (`document.save`) failed: automation path rejected: outside the write root {root}: doc.vectorcraft");
+                assert_eq!(e, want, "{r}");
+            }
+            assert!(!r.to_string().contains(&hidden), "{r}");
+        }
+        let p = json!({"source": "folder", "folder": hidden, "commands": [{"command": "object.unlockAll", "params": {}}]});
+        let e = confine(roots.as_ref(), || s.execute("action.batch", &p)).unwrap_err().to_string();
+        assert!(e.contains(&hidden), "{e}");
+        let _ = std::fs::remove_dir_all(base);
     }
 
     /// The names of the files in `dir`, sorted.
@@ -2056,5 +2262,145 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    /// The steps of the step-number tests: an Open the batch skips, a step that works, and one that
+    /// fails (an Align with nothing selected).
+    fn open_then_failing_align() -> Value {
+        json!([
+            {"command": "document.open", "params": {"path": "/no/such/file.svg"}},
+            {"command": "object.unlockAll", "params": {}},
+            {"command": "object.align", "params": {}}
+        ])
+    }
+
+    /// The step a source's error names, after `action step ` and before ` failed: `.
+    fn named_step(r: &Value, row: usize) -> String {
+        let e = r["processed"][row]["error"].as_str().unwrap_or_default();
+        assert!(!e.contains("batch step"), "{r}");
+        e.strip_prefix("action step ").and_then(|e| e.split_once(" failed: ")).map(|(step, _)| step.to_string()).unwrap_or_else(|| e.to_string())
+    }
+
+    /// A failed step of a folder batch is named by its place in the `commands` sent, from 1, with the
+    /// Open step that Override Open skips counted; the reason follows unchanged.
+    #[test]
+    fn a_folder_batch_error_names_the_step_in_the_commands_sent() {
+        let src = tmp("step-number-src");
+        write_svg(&src, "a.svg", "#f00");
+        write_svg(&src, "b.svg", "#0f0");
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 100, "height": 80})).unwrap();
+        // `command.batch` itself still numbers its steps from 0.
+        let reason = s
+            .execute(
+                "command.batch",
+                &json!({"commands": [{"command": "object.unlockAll", "params": {}}, {"command": "object.align", "params": {}}]}),
+            )
+            .unwrap_err()
+            .to_string();
+        let reason = reason.strip_prefix("batch step 1 (`object.align`) failed: ").unwrap_or_else(|| panic!("{reason}")).to_string();
+        for (stop, rows) in [(true, 1), (false, 2)] {
+            let r = s
+                .execute("action.batch", &json!({"folder": src.to_string_lossy(), "stopOnError": stop, "commands": open_then_failing_align()}))
+                .unwrap();
+            assert_eq!(r["failed"], rows, "{r}");
+            for row in 0..rows {
+                assert_eq!(r["processed"][row]["error"], format!("action step 3 (`object.align`) failed: {reason}"), "{r}");
+            }
+        }
+    }
+
+    /// With Override Open off, a recorded Open step runs, and its failure is named as the first step.
+    #[test]
+    fn a_recorded_open_that_fails_is_the_first_step() {
+        let src = tmp("step-number-open-src");
+        write_svg(&src, "a.svg", "#f00");
+        let mut s = Session::new();
+        let r = s
+            .execute("action.batch", &json!({"folder": src.to_string_lossy(), "overrideOpen": false, "commands": open_then_failing_align()}))
+            .unwrap();
+        assert_eq!(named_step(&r, 0), "1 (`document.open`)", "{r}");
+    }
+
+    /// A data set batch, which always skips Open steps, names a failed step by its place in the
+    /// `commands` sent for every data set it fails on.
+    #[test]
+    fn a_data_set_batch_error_names_the_step_in_the_commands_sent() {
+        let mut s = with_data_sets(&["Alpha", "Beta"]);
+        for (stop, rows) in [(true, 1), (false, 2)] {
+            let r = s.execute("action.batch", &json!({"source": "datasets", "stopOnError": stop, "commands": open_then_failing_align()})).unwrap();
+            assert_eq!(r["failed"], rows, "{r}");
+            for row in 0..rows {
+                assert_eq!(named_step(&r, row), "3 (`object.align`)", "{r}");
+            }
+        }
+    }
+
+    /// A recorded export that Override Export points into the destination folder keeps its place in
+    /// the `commands` sent when it fails.
+    #[test]
+    fn a_redirected_export_that_fails_keeps_its_place() {
+        let src = tmp("step-number-export-src");
+        write_svg(&src, "a.svg", "#f00");
+        let dest = tmp("step-number-export-out");
+        // A file where the export's folder goes, so the export cannot write its files.
+        std::fs::write(dest.join("a"), "taken").unwrap();
+        let mut s = Session::new();
+        let r = s
+            .execute(
+                "action.batch",
+                &json!({
+                    "folder": src.to_string_lossy(),
+                    "destinationFolder": dest.to_string_lossy(),
+                    "commands": [
+                        {"command": "document.open", "params": {"path": "/no/such/file.svg"}},
+                        {"command": "object.unlockAll", "params": {}},
+                        {"command": "document.exportForScreens", "params": {"formats": [{"format": "svg"}]}}
+                    ]
+                }),
+            )
+            .unwrap();
+        assert_eq!(r["failed"], 1, "{r}");
+        assert_eq!(named_step(&r, 0), "3 (`document.exportForScreens`)", "{r}");
+    }
+
+    /// A source file that does not open, which the batch opens itself, gives the open's own error
+    /// with no step number.
+    #[test]
+    fn a_source_that_does_not_open_names_no_step() {
+        let src = tmp("step-number-bad-src");
+        std::fs::write(src.join("a.svg"), "not an svg").unwrap();
+        let mut s = Session::new();
+        let r = s.execute("action.batch", &json!({"folder": src.to_string_lossy(), "commands": open_then_failing_align()})).unwrap();
+        assert_eq!(r["failed"], 1, "{r}");
+        let e = r["processed"][0]["error"].as_str().unwrap_or_default();
+        assert!(!e.is_empty() && !e.contains("action step") && !e.contains("batch step"), "{r}");
+    }
+
+    /// A `prefs.import` step, which `command.batch` does not run, is refused before any file opens.
+    #[test]
+    fn a_prefs_import_step_is_refused_before_any_file_opens() {
+        let src = tmp("step-number-prefs-src");
+        write_svg(&src, "a.svg", "#f00");
+        let mut s = Session::new();
+        let p = json!({"folder": src.to_string_lossy(), "commands": [{"command": "object.unlockAll"}, {"command": "prefs.import", "params": {}}]});
+        let e = s.execute("action.batch", &p).unwrap_err().to_string();
+        assert!(e.contains("commands[1]: `prefs.import` runs on its own, not as a batch step"), "{e}");
+        assert!(s.active().is_none(), "no file was opened");
+    }
+
+    /// Only the error `command.batch` gives for a failed step is read as one.
+    #[test]
+    fn batch_step_failure_reads_only_a_step_error() {
+        assert_eq!(batch_step_failure("batch step 12 (`object.move`) failed: no selection"), Some((12, "object.move", "no selection")));
+        for e in [
+            "batch step (`object.move`) failed: no selection",
+            "batch step 99999999999999999999999 (`object.move`) failed: x",
+            "batch step 1 `object.move` failed: x",
+            "invalid parameters for `command.batch`: batches cannot nest",
+            "batch step 1",
+        ] {
+            assert_eq!(batch_step_failure(e), None, "{e}");
+        }
     }
 }

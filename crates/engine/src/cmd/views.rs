@@ -1,5 +1,6 @@
 //! View → New View… / Edit Views…: saved views stored in the document; per-document view
-//! toggles (Show Transparency Grid); the Character panel's Snap to Glyph options.
+//! toggles (Show Transparency Grid); the Character panel's Snap to Glyph options; the Pixel
+//! Snapping Options.
 
 use serde_json::{Value, json};
 use vectorcraft_apischema::{Bound, Param, ParamSchema, Type, Writes};
@@ -23,7 +24,9 @@ static NEW_VIEW: ParamSchema = ParamSchema::new(
         Param::new("name", Type::String).default_note("the first free \"View N\"").null_omitted(),
         Param::new("center", Type::Point),
         Param::new("zoom", Type::Number { min: Some(Bound::Exclusive(0.0)), max: None, unit: None }).doc("1 = 100%"),
-        Param::new("rotation", Type::Number { min: None, max: None, unit: Some("deg") }).defaults_to("0"),
+        Param::new("rotation", Type::Number { min: None, max: None, unit: Some("deg") })
+            .defaults_to("0")
+            .doc("clockwise on screen, as view.rotate turns the view"),
     ],
     "save a view in the document (the app fills in the current one; at most 25, names up to 255 characters, each name once)",
 )
@@ -46,7 +49,8 @@ static EDIT_VIEWS: ParamSchema = ParamSchema::new(
     "rename or delete saved views, all in one undo step; names are those before the edit and must stay unique; no params → {views}",
 );
 
-static LIST_VIEWS: ParamSchema = ParamSchema::new(&[], "").returns("{views: [{name, center, zoom, rotation}]}").writes(Writes::Nothing);
+static LIST_VIEWS: ParamSchema =
+    ParamSchema::new(&[], "").returns("{views: [{name, center, zoom, rotation (degrees clockwise)}]}").writes(Writes::Nothing);
 
 static TRANSPARENCY_GRID: ParamSchema = ParamSchema::new(
     &[Param::new("on", Type::Boolean).default_note("toggle").null_omitted()],
@@ -69,6 +73,18 @@ static GLYPH_SNAP: ParamSchema = ParamSchema::new(
 .returns("the options")
 .writes(Writes::Preferences);
 
+static PIXEL_SNAP: ParamSchema = ParamSchema::new(
+    &[
+        Param::new("drawing", Type::Boolean).optional(),
+        Param::new("moving", Type::Boolean).optional(),
+        Param::new("scaling", Type::Boolean).optional(),
+    ],
+    "the Pixel Snapping Options, kept in the preferences (the pixelSnap group, all on by default): which edits View › Snap to Pixel lands on whole pixels: drawing (the points the drawing tools place, the rulers' origin and measured points), moving (the selection, its anchors and segments, artboards and ruler guides moved, and the Rotate, Reflect and Shear tools' drags) and scaling (the edges a bounding-box, Free Transform, artboard or slice handle drags, and the Scale tool's drag); an edit whose option is off snaps as it does with Snap to Pixel off; {} reads them",
+)
+.returns("the options")
+.writes(Writes::Preferences)
+.since(4);
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -86,7 +102,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New View…",
             ["View"],
             None,
-            "{name?: string (default: the first free \"View N\"), center: [x, y], zoom: number > 0 (1 = 100%), rotation?: number deg (default: 0)} save a view in the document (the app fills in the current one; at most 25, names up to 255 characters, each name once) → {name, index}",
+            "{name?: string (default: the first free \"View N\"), center: [x, y], zoom: number > 0 (1 = 100%), rotation?: number deg (default: 0) (clockwise on screen, as view.rotate turns the view)} save a view in the document (the app fills in the current one; at most 25, names up to 255 characters, each name once) → {name, index}",
             has_doc,
             new_view,
             schema: &NEW_VIEW
@@ -101,7 +117,7 @@ pub fn specs() -> Vec<CommandSpec> {
             edit_views,
             schema: &EDIT_VIEWS
         ),
-        cmd!(query "view.saved.list", "Saved Views", [], None, "{} → {views: [{name, center, zoom, rotation}]}", has_doc, list_views, schema: &LIST_VIEWS),
+        cmd!(query "view.saved.list", "Saved Views", [], None, "{} → {views: [{name, center, zoom, rotation (degrees clockwise)}]}", has_doc, list_views, schema: &LIST_VIEWS),
         cmd!(
             query "view.transparencyGrid",
             "Show Transparency Grid",
@@ -122,12 +138,27 @@ pub fn specs() -> Vec<CommandSpec> {
             glyph_snap_options,
             schema: &GLYPH_SNAP
         ),
+        cmd!(
+            query "view.snapToPixel.options",
+            "Pixel Snapping Options",
+            [],
+            None,
+            "{drawing?: bool, moving?: bool, scaling?: bool} the Pixel Snapping Options, kept in the preferences (the pixelSnap group, all on by default): which edits View › Snap to Pixel lands on whole pixels: drawing (the points the drawing tools place, the rulers' origin and measured points), moving (the selection, its anchors and segments, artboards and ruler guides moved, and the Rotate, Reflect and Shear tools' drags) and scaling (the edges a bounding-box, Free Transform, artboard or slice handle drags, and the Scale tool's drag); an edit whose option is off snaps as it does with Snap to Pixel off; {} reads them → the options",
+            always,
+            pixel_snap_options,
+            schema: &PIXEL_SNAP
+        ),
     ]
 }
 
 fn glyph_snap_options(s: &mut Session, p: &Value) -> Result<Value> {
     s.prefs.glyph_snap = s.prefs.glyph_snap.merged(p).map_err(|e| bad("view.snapToGlyph.options", e))?;
     Ok(json!(s.prefs.glyph_snap))
+}
+
+fn pixel_snap_options(s: &mut Session, p: &Value) -> Result<Value> {
+    s.prefs.pixel_snap = s.prefs.pixel_snap.merged(p).map_err(|e| bad("view.snapToPixel.options", e))?;
+    Ok(json!(s.prefs.pixel_snap))
 }
 
 fn caps_lock(s: &mut Session, p: &Value) -> Result<Value> {
@@ -376,15 +407,17 @@ mod tests {
             ("view.saved.list", json!({"all": true}), "`all`"),
             ("view.transparencyGrid", json!({"on": 1}), "`on`"),
             ("view.snapToGlyph.options", json!({"bounds": "off"}), "`bounds`"),
+            ("view.snapToPixel.options", json!({"moving": "off"}), "`moving`"),
+            ("view.snapToPixel.options", json!({"drawing": false, "rotating": false}), "`rotating`"),
         ] {
             let st = s.doc().unwrap();
             let doc = (st.doc.views.clone(), st.history.undo.len(), st.is_dirty());
-            let (grid, caps, snap) = (st.transparency_grid, s.caps_lock, s.prefs.glyph_snap);
+            let (grid, caps, snap, pixel) = (st.transparency_grid, s.caps_lock, s.prefs.glyph_snap, s.prefs.pixel_snap);
             let e = s.execute(id, &params).unwrap_err().to_string();
             assert!(e.contains(id) && e.contains(named), "{id} {params}: {e}");
             let st = s.doc().unwrap();
             assert_eq!((&st.doc.views, st.history.undo.len(), st.is_dirty()), (&doc.0, doc.1, doc.2), "{id} {params}");
-            assert_eq!((st.transparency_grid, s.caps_lock, s.prefs.glyph_snap), (grid, caps, snap), "{id} {params}");
+            assert_eq!((st.transparency_grid, s.caps_lock, s.prefs.glyph_snap, s.prefs.pixel_snap), (grid, caps, snap, pixel), "{id} {params}");
         }
     }
 

@@ -209,7 +209,9 @@ fn reshaped_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nod
             Some(area) => Some(reshaped(&area, n, doc)),
             None => {
                 let mut m = crate::reshape::outlined_members_with(None, doc, n, outline, nodes);
-                let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, doc);
+                // The members' own effects run first, as on the canvas.
+                members_as_drawn(doc, &mut m);
+                let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, &n.appearance.effects, doc);
                 // The group's own fills and strokes follow the effects as its members do.
                 if carry.moves(&m.appearance) {
                     carry.apply(&mut m.appearance);
@@ -225,7 +227,8 @@ fn reshaped_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nod
             let art = h(n).filter(|art| nodes.charge(art))?;
             let mut art = crate::reshape::symbol_art_with(&art, h, nodes, symbol);
             crate::reshape::outline_nested_text(doc, &mut art, false);
-            let carry = crate::reshape::reshape_leaves_carrying(&mut art, &fx, doc);
+            members_as_drawn(doc, &mut art);
+            let carry = crate::reshape::reshape_leaves_carrying(&mut art, &fx, &n.appearance.effects, doc);
             // The art's own fills and strokes follow the effects as its members do.
             if carry.moves(&art.appearance) {
                 carry.apply(&mut art.appearance);
@@ -257,6 +260,18 @@ fn reshaped(src: &Node, n: &Node, doc: Option<&Document>) -> Node {
         if carry.moves(&m.appearance) {
             carry.apply(&mut m.appearance);
         }
+        // So do the raster effects of its fills and strokes, by `n`'s Transform effects
+        // ([`crate::follow_items`]) that moved the outline.
+        let mut owner = std::borrow::Cow::Borrowed(n.appearance.effects.as_slice());
+        if carry.skipped() {
+            carry.hide_skipped(owner.to_mut());
+            if m.appearance.effects == n.appearance.effects {
+                let mut ap = (*m.appearance).clone();
+                ap.effects = owner.to_vec();
+                m.appearance = ap.into();
+            }
+        }
+        crate::raster::follow_items_of(&mut m, &owner);
     }
     without_geometry_effects(&mut m);
     m
@@ -265,7 +280,7 @@ fn reshaped(src: &Node, n: &Node, doc: Option<&Document>) -> Node {
 fn without_geometry_effects(n: &mut Node) {
     if n.appearance.effects.iter().any(|e| crate::is_geometry(&e.id)) {
         let mut ap = (*n.appearance).clone();
-        ap.effects.retain(|e| !crate::is_geometry(&e.id));
+        ap.effects = crate::raster::without_geometry(&ap.effects);
         n.appearance = ap.into();
     }
 }
@@ -352,9 +367,14 @@ fn compound_shape_art_in(doc: Option<&Document>, n: &Node, hook: Option<OutlineH
 fn styled(src: &Node, path: PathData, outline: bool) -> Node {
     let mut appearance = Appearance { items: src.appearance.items.clone(), ..Default::default() };
     if outline {
-        let fill = src.appearance.fill_paint();
-        let paint = if fill.is_none() { src.appearance.stroke_paint() } else { fill };
-        appearance = Appearance { items: vec![AppearanceItem::Stroke(StrokeLayer::new(paint, 1.0))], ..Default::default() };
+        // The edges take the paint, opacity, blend mode and overprint of the top fill that paints,
+        // or of the top stroke that paints when no fill does.
+        let layer = top_painting_fill(&src.appearance).or_else(|| src.appearance.items.iter().rev().find(|i| paints(i)));
+        let mut stroke = StrokeLayer::new(layer.map_or(Paint::None, |i| i.paint().clone()), 1.0);
+        if let Some(i) = layer {
+            (stroke.opacity, stroke.blend, stroke.overprint) = (i.opacity(), i.blend(), i.overprint());
+        }
+        appearance = Appearance { items: vec![AppearanceItem::Stroke(stroke)], ..Default::default() };
     }
     let mut n = Node::path(src.id, path, appearance);
     n.opacity = src.opacity;
@@ -455,6 +475,17 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
         return None;
     }
     let source: &[Arc<Node>] = group.children()?;
+    // A layer's ruler guides take no part in the operation: they stay above its result.
+    let art = Node::guide_run_start(source);
+    if art < source.len() {
+        let mut without = group.clone();
+        if let Some(ch) = without.children_mut() {
+            ch.truncate(art);
+        }
+        let mut out = pathfinder_children(doc, &without, hook)?;
+        out.extend(source.iter().skip(art).cloned());
+        return Some(out);
+    }
     let mut stack: Vec<Arc<Node>> = if group.is_compound_shape() {
         // The group's own appearance paints the area ([`evaluate_container`]), so the art has none.
         match compound_shape_area(doc, group, hook) {
@@ -478,7 +509,8 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
                 .iter()
                 .filter_map(|l| {
                     let (path, rule) = geometry(l)?;
-                    Some((l.id, crate::trap::TrapSource { path, rule, fill: l.appearance.fill_paint() }))
+                    let fill = top_painting_fill(&l.appearance).map_or(Paint::None, |i| i.paint().clone());
+                    Some((l.id, crate::trap::TrapSource { path, rule, fill }))
                 })
                 .unzip();
             let made = crate::trap::traps(&srcs, &crate::trap::TrapOptions::from_params(&e.params));
@@ -554,7 +586,8 @@ fn mixing_rate(params: &Value) -> f64 {
 }
 
 fn fill_cmyk(src: &Node) -> Option<[f32; 4]> {
-    let paint = src.appearance.fill_paint();
+    // The top fill that paints: a hidden fill adds no color.
+    let paint = top_painting_fill(&src.appearance)?.paint().clone();
     let color = paint.color()?;
     let tinted = match paint {
         Paint::Solid { tint, .. } => color.tinted(tint),
@@ -611,6 +644,11 @@ fn is_container(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. })
 }
 
+/// The top fill of `a` that paints: hidden fills and fills of no paint are skipped.
+fn top_painting_fill(a: &Appearance) -> Option<&AppearanceItem> {
+    a.items.iter().rev().find(|i| i.is_fill() && paints(i))
+}
+
 /// Does `item` paint anything?
 pub fn paints(item: &AppearanceItem) -> bool {
     item.visible()
@@ -635,8 +673,9 @@ pub fn has_container_appearance(n: &Node) -> bool {
 /// The regions a group's or layer's own fills and strokes paint, in document space, each with its
 /// fill rule: every visible member path and compound path, type as its glyph outlines and live
 /// objects evaluated; a compound shape as its area, with the symbol instances among its members
-/// as their symbols' art from `doc`; the members of a clip group or clipping layer without its
-/// clipping path. Images, other symbol instances and guides add nothing. A Repeat counts the
+/// as their symbols' art from `doc`; a clip group or clipping layer (`n` itself or one among its
+/// members) as the region its clipping path clips to ([`crate::clip::clip_outline`]), so members
+/// it hides add nothing. Images, other symbol instances and guides add nothing. A Repeat counts the
 /// Repeats in the art of `doc`'s symbols that its instances show toward its instance budget.
 pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRule)> {
     fn push(doc: Option<&Document>, n: &Node, out: &mut Vec<(PathData, FillRule)>) {
@@ -664,8 +703,14 @@ pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRul
         }
     }
     fn members(doc: Option<&Document>, n: &Node, out: &mut Vec<(PathData, FillRule)>) {
-        let clip = usize::from(n.clips());
-        for c in n.children().into_iter().flatten().skip(clip) {
+        // A clip group shows its members only inside its clipping path: its outline is that
+        // region, not the clipped members' own shapes, which may reach far outside it (#7289).
+        if n.clips() {
+            let clip = n.children().and_then(|ch| ch.first());
+            out.extend(clip.and_then(|c| crate::clip::clip_outline(c)).map(|(bp, rule)| (PathData::from_bezpath(&bp), rule)));
+            return;
+        }
+        for c in n.children().into_iter().flatten() {
             push(doc, c, out);
         }
     }
@@ -675,7 +720,7 @@ pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRul
 }
 
 /// A path node of `id` on `path` (filled under `rule`) painted by `ap`.
-fn shape_node(id: NodeId, path: PathData, rule: FillRule, ap: Appearance) -> Node {
+pub(crate) fn shape_node(id: NodeId, path: PathData, rule: FillRule, ap: Appearance) -> Node {
     let mut n = Node::path(id, path, ap);
     if let NodeKind::Path { rule: r, .. } = &mut n.kind {
         *r = rule;
@@ -708,8 +753,80 @@ fn item_art(id: NodeId, item: &AppearanceItem, shapes: &[(PathData, FillRule)], 
     Some(g)
 }
 
+/// The members of a container that [`take_held_guides`] visits, by index, each with the same for
+/// its own members. A ruler guide's entry is empty, whether its container is a layer or a group; a
+/// container's is not.
+#[derive(Default)]
+struct HeldGuides(Vec<(usize, HeldGuides)>);
+
+/// The members of `n` that are ruler guides (`is_guide`), and those holding one at any depth, in
+/// order. Every member at every depth is looked at once: a sublayer or group with no guide of its
+/// own is still looked into, and a guide directly in a group counts as one in a layer does. A
+/// member holding no guide gets no entry.
+fn held_guides(n: &Node, is_guide: &impl Fn(&Node) -> bool) -> HeldGuides {
+    let mut held = vec![];
+    for (i, c) in n.children().into_iter().flatten().enumerate() {
+        if is_guide(c) {
+            held.push((i, HeldGuides::default()));
+            continue;
+        }
+        let inner = held_guides(c, is_guide);
+        if !inner.0.is_empty() {
+            held.push((i, inner));
+        }
+    }
+    HeldGuides(held)
+}
+
+/// Move the ruler guides of `n` and of its members that [`held_guides`] found (`held`) to `out`:
+/// those of `n` first, in order, then those of each member in turn. A guide taken from a hidden or
+/// locked container, or from one inside such a container, is hidden or locked itself. Only the
+/// containers in `held` are copied, and only those are visited.
+fn take_held_guides(n: &mut Node, held: HeldGuides, out: &mut Vec<Arc<Node>>, hidden: bool, locked: bool) {
+    let Some(ch) = n.children_mut() else { return };
+    let (mut own, mut deeper) = (vec![], vec![]);
+    for (i, inner) in held.0 {
+        if inner.0.is_empty() {
+            own.push(i);
+            continue;
+        }
+        let Some(c) = ch.get_mut(i) else { continue };
+        let c = Arc::make_mut(c);
+        let (hidden, locked) = (hidden || !c.visible, locked || c.locked);
+        take_held_guides(c, inner, &mut deeper, hidden, locked);
+    }
+    if !own.is_empty() {
+        let mut own = own.into_iter().peekable();
+        for (i, mut c) in std::mem::take(ch).into_iter().enumerate() {
+            if own.next_if_eq(&i).is_none() {
+                ch.push(c);
+                continue;
+            }
+            if hidden || locked {
+                let g = Arc::make_mut(&mut c);
+                g.visible &= !hidden;
+                g.locked |= locked;
+            }
+            out.push(c);
+        }
+    }
+    out.append(&mut deeper);
+}
+
+/// Move the ruler guides of `n` and those held at any depth by the sublayers and groups among its
+/// members to `out`, in order: a container's own guides, then those of its members. A sublayer or
+/// group with no guide of its own still gives up those of its members. A guide taken from a hidden
+/// or locked sublayer or group, or from one inside such a container, is hidden or locked itself.
+/// Each member at every depth is looked at once (`is_guide`), and only containers holding a guide
+/// are copied.
+fn take_sublayer_guides(n: &mut Node, out: &mut Vec<Arc<Node>>, is_guide: &impl Fn(&Node) -> bool) {
+    let held = held_guides(n, is_guide);
+    take_held_guides(n, held, out, false, false);
+}
+
 /// `n`, a group or layer, as plain art: its Pathfinder effects evaluated, its geometry effects
-/// reshaping all its members as one piece (the whole art's bounds as their reference box), and its
+/// reshaping all its members as one piece (the whole art's bounds as their reference box) after
+/// the members' own geometry and Pathfinder effects ([`members_as_drawn`]), and its
 /// own fills and strokes turned into art painting the members' geometry ([`member_shapes`]) below
 /// the members (after a clipping path) or above them, as its contents slot says. Its
 /// transparency, opacity mask and raster effects stay. `None` when it has none of these. Live
@@ -727,9 +844,19 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
         return None;
     }
     let mut m = n.clone();
+    // Its ruler guides take no part: they go back above the evaluated art at the end. With effects
+    // that replace or copy the art, so do its guides among the art and those in its sublayers and
+    // groups, which would otherwise go with that art: they stay on `n`, in order, hidden and
+    // locked as their containers were.
+    let mut guides = vec![];
+    if pathfinder || !fx.is_empty() {
+        take_sublayer_guides(&mut m, &mut guides, &Node::is_ruler_guide);
+    } else if let Some(ch) = m.children_mut() {
+        guides = ch.split_off(Node::guide_run_start(ch));
+    }
     if pathfinder {
         let hook = |c: &Node| crate::outline_object(doc, c);
-        let result = pathfinder_children(doc, n, Some(&hook)).unwrap_or_default();
+        let result = pathfinder_children(doc, &m, Some(&hook)).unwrap_or_default();
         if let Some(ch) = m.children_mut() {
             *ch = result;
         }
@@ -738,14 +865,20 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     if !fx.is_empty() {
         m = crate::reshape::outlined_members(doc, &m);
-        let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, doc);
+        {
+            // The members' raster effects then follow the group's own Transform effects as well.
+            let _later = crate::raster::LaterGroups::enter(&n.appearance.effects);
+            members_as_drawn(doc, &mut m);
+        }
+        let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, &n.appearance.effects, doc);
         // The group's own fills and strokes paint the members as a whole: their gradients follow
         // the effects as the members' do.
         if paint && carry.moves(&m.appearance) {
             carry.apply(&mut m.appearance);
         }
     }
-    m.appearance.effects.retain(|e| !is_pathfinder(&e.id) && !crate::is_geometry(&e.id));
+    m.appearance.effects = crate::raster::without_geometry(&m.appearance.effects);
+    m.appearance.effects.retain(|e| !is_pathfinder(&e.id));
     if paint {
         let shapes = member_shapes(doc, &m);
         let bounds = m.geometric_bounds();
@@ -762,7 +895,99 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     m.appearance.items.clear();
     m.appearance.contents_index = None;
+    if let Some(ch) = m.children_mut() {
+        ch.extend(guides);
+    }
     Some(m)
+}
+
+/// Replace each visible member of `n` with geometry or Pathfinder effects of its own, at every
+/// depth of its groups and layers, by the art it draws ([`evaluate_container`],
+/// [`crate::reshape::own_effects_art`]), so the geometry effects of `n` reshape what its members
+/// draw. A clip group's clipping path only takes the geometry effects in it into its geometry
+/// ([`crate::clip::with_clip_effects_applied_while`]), and the members of a clipping group or
+/// compound path count toward the limit below. A group or layer in a clipping path that has
+/// geometry effects of its own is walked twice, once for its members' effects and once for its
+/// own, and its members count each time. Images, symbol instances and the other objects
+/// that `own_effects_art` leaves alone stay as they are, and so does a group or layer with a 3D
+/// effect with everything in it. Calls nested in one another, through the
+/// groups and layers it walks and the art it evaluates (symbol art and Pathfinder members
+/// included), stop at [`vectorcraft_doc::depth::MAX_DEPTH`] deep, and together they replace at
+/// most [`crate::SYMBOL_ART_MAX_NODES`] members: past either limit, members stay as they are.
+pub(crate) fn members_as_drawn(doc: Option<&Document>, n: &mut Node) {
+    let Some(_frame) = DrawnFrame::enter() else { return };
+    let clip = usize::from(n.clips());
+    let Some(ch) = n.children_mut() else { return };
+    // The clipping path's own geometry effects shape it before the effects around it do.
+    if clip == 1
+        && let Some(first) = ch.first_mut()
+        && let Some(applied) = crate::clip::with_clip_effects_applied_while(first, DrawnFrame::take_member)
+    {
+        *first = Arc::new(applied);
+    }
+    for c in ch.iter_mut().skip(clip).filter(|c| c.visible) {
+        if !DrawnFrame::take_member() {
+            return;
+        }
+        // A group or layer with a 3D effect stays whole: the geometry effects listed after its 3D
+        // effect reshape its 3D art.
+        if is_container(c) && (crate::has_solid(c) || crate::has_revolve(c)) {
+            continue;
+        }
+        let art = if !is_container(c) {
+            crate::reshape::own_effects_art(doc, c)
+        } else if has_pathfinder(c) || !crate::reshape::geometry_effects(c).is_empty() {
+            evaluate_container(doc, c)
+        } else {
+            None
+        };
+        match art {
+            Some(a) => *c = Arc::new(a),
+            None if is_container(c) => members_as_drawn(doc, Arc::make_mut(c)),
+            None => {}
+        }
+    }
+}
+
+thread_local! {
+    /// How many [`members_as_drawn`] calls are running, one inside another, and how many members
+    /// they have visited since the outermost one started.
+    static DRAWN: std::cell::Cell<(usize, u64)> = const { std::cell::Cell::new((0, 0)) };
+}
+
+/// One running [`members_as_drawn`] call, counted in [`DRAWN`] until it is dropped.
+struct DrawnFrame;
+
+impl DrawnFrame {
+    /// Count one more call; `None` when [`vectorcraft_doc::depth::MAX_DEPTH`] are running. The
+    /// outermost call starts the count of members again.
+    fn enter() -> Option<Self> {
+        let (frames, members) = DRAWN.with(|d| d.get());
+        if frames >= vectorcraft_doc::depth::MAX_DEPTH {
+            return None;
+        }
+        DRAWN.with(|d| d.set((frames + 1, if frames == 0 { 0 } else { members })));
+        Some(DrawnFrame)
+    }
+
+    /// Count one more member visited; `false` once [`crate::SYMBOL_ART_MAX_NODES`] have been.
+    fn take_member() -> bool {
+        let (frames, members) = DRAWN.with(|d| d.get());
+        if members >= crate::SYMBOL_ART_MAX_NODES {
+            return false;
+        }
+        DRAWN.with(|d| d.set((frames, members + 1)));
+        true
+    }
+}
+
+impl Drop for DrawnFrame {
+    fn drop(&mut self) {
+        DRAWN.with(|d| {
+            let (frames, members) = d.get();
+            d.set((frames.saturating_sub(1), members));
+        });
+    }
 }
 
 #[cfg(test)]

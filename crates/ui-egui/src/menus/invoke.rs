@@ -2,11 +2,12 @@ use super::state::{SUBJECT_COMMANDS, enabled, has_subject, waits_for_ime};
 use super::{Value, VectorcraftApp, json};
 
 /// What a menu click runs: items whose label ends with "…" and that carry default params open a
-/// generic parameter dialog (fields = the defaults) instead of running immediately.
+/// generic parameter dialog (fields = the defaults) instead of running immediately. A script of the
+/// Scripts folder runs, whatever its name ends with.
 pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
     let dialog = label.ends_with('…')
         && p.as_object().is_some_and(|o| !o.is_empty())
-        && !matches!(id, "effect.dialog" | "window.panel" | "window.brightness" | "view.screenMode" | "plugin.dialog");
+        && !matches!(id, "effect.dialog" | "window.panel" | "window.brightness" | "view.screenMode" | "plugin.dialog" | crate::scripts_menu::COMMAND);
     if dialog {
         return ("ui.paramDialog".into(), json!({"command": id, "label": label.trim_end_matches('…'), "params": p}));
     }
@@ -28,12 +29,13 @@ pub(crate) fn with_held_keys(target: (String, Value), held: egui::Modifiers) -> 
 
 /// The dialog of command `id` that shows the selection's current values (its query): its heading
 /// and the queried values it doesn't show. Type on a Path Options leaves the brackets where they
-/// are.
+/// are. Color Mask opens on the selected image's mask settings (the defaults without one).
 fn queried_dialog(id: &str) -> Option<(&'static str, &'static [&'static str])> {
     Some(match id {
         // Whether the text overflows, and Shrink Text's factor, are read-only facts.
         "text.areaOptions" => ("Area Type Options", &["overflow", "fitScale"]),
         "type.pathOptions" => ("Type on a Path Options", &["start", "end"]),
+        crate::addons::image::COLOR_MASK => ("Color Mask", &["masked"]),
         _ => return None,
     })
 }
@@ -75,12 +77,17 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
             (crate::addons::pathtools::set_corners::KIND, crate::addons::pathtools::set_corners::fields(app))
         }
         crate::addons::pathtools::dashes::COMMAND => (crate::addons::pathtools::dashes::KIND, crate::addons::pathtools::dashes::fields()),
+        crate::addons::pathtools::tangent_circle::COMMAND => {
+            (crate::addons::pathtools::tangent_circle::KIND, crate::addons::pathtools::tangent_circle::fields(app))
+        }
         crate::addons::color::nearest::COMMAND => (crate::addons::color::nearest::KIND, crate::addons::color::nearest::fields()),
         crate::addons::color::legend::COMMAND => (crate::addons::color::legend::KIND, crate::addons::color::legend::fields()),
         crate::addons::typetools::COMMAND => (crate::addons::typetools::KIND, crate::addons::typetools::fields(app)),
         crate::addons::select::COMMAND => (crate::addons::select::KIND, crate::addons::select::fields(app)),
         "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::open_fields(app)),
         "artboard.rename" => (crate::dialogs::rename_artboards::KIND, crate::dialogs::rename_artboards::open_fields(app)),
+        // Smart Punctuation opens on the fields it was last confirmed with.
+        "type.smartPunctuation" => (crate::dialogs::smart_punctuation::KIND, crate::dialogs::smart_punctuation::fields(app)),
         _ => return None,
     })
 }
@@ -129,9 +136,7 @@ pub(crate) fn graph_dialog(app: &mut VectorcraftApp, id: &str) -> Result<Value, 
     if id == "graph.setData" {
         return crate::dialogs::graph_data::open(app);
     }
-    let v = app.session.execute(id, &json!({})).map_err(|e| e.to_string())?;
-    let (label, fields) = ("Graph Type", v);
-    app.run("ui.paramDialog", json!({"command": id, "label": label, "params": fields})).map(|_| json!({ "dialog": "command" }))
+    crate::dialogs::graph_type::open(app)
 }
 
 pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
@@ -176,10 +181,7 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     // Object → Align aligns to what the align buttons align to, unless the call names `to`. With
     // anchors selected (Direct Selection) it sends its params unchanged, and the points align to
     // their own bounds.
-    let follows_align_to = id == "object.align"
-        && p.as_object().is_some_and(|o| !o.contains_key("to"))
-        && app.session.active().is_some_and(|st| st.selection.anchors.is_empty());
-    let p = if follows_align_to { crate::panels::align::with_align_to(app, p) } else { p };
+    let p = if id == "object.align" { crate::panels::align::menu_align_params(app, p) } else { p };
     // Image Trace traces off the UI thread, with its progress (#3098).
     if matches!(id, "imageTrace.make" | "imageTrace.makeAndExpand") {
         if let Err(e) = crate::trace_runs::start(app, id, p, false) {
@@ -204,7 +206,7 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     }
 }
 
-/// The dialogs the Envelope, Variables, Pathfinder, Repeat, type, graph and View commands open when called without
+/// The dialogs the Envelope, Variables, Pathfinder, Pixel Snapping, Repeat, type, graph and View commands open when called without
 /// params; whether `id` was one of them.
 fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Envelope Distort: Warp Options, Envelope Mesh and Envelope Options, from the selection.
@@ -222,6 +224,11 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Pathfinder Options: a dialog with the current options.
     if id == "object.pathfinder.options" && p.as_object().is_none_or(|o| o.is_empty()) {
         crate::dialogs::pathfinder_options::open(app);
+        return true;
+    }
+    // Pixel Snapping Options: a dialog with the current options.
+    if id == "view.snapToPixel.options" && p.as_object().is_none_or(|o| o.is_empty()) {
+        crate::dialogs::pixel_snap_options::open(app);
         return true;
     }
     // Repeat Options: a dialog with the selected repeat's current values.
@@ -283,6 +290,20 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Composite Fonts…: the document's composite fonts, to edit before OK sets them.
     if id == crate::dialogs::composite_fonts::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::composite_fonts::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Edit Custom Dictionary…: the custom dictionary's words in a list, to add, delete or change.
+    if id == crate::dialogs::custom_dictionary::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::custom_dictionary::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Check Spelling…: dialog to walk through unknown words.
+    if id == crate::dialogs::check_spelling::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::check_spelling::open(app) {
             app.status(e);
         }
         return true;

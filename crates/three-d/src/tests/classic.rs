@@ -94,3 +94,32 @@ fn surfaces_round_trip_through_their_ids() {
     assert_eq!(ClassicSurface::parse("glossy"), None);
     assert_eq!(ClassicSurface::default(), ClassicSurface::Plastic);
 }
+
+#[test]
+fn revolve_facets_keep_each_face_normal_turned_to_the_viewer() {
+    // A cylinder of radius 30 about the left edge, with closed ends, tipped toward the viewer.
+    let mut b = BezPath::new();
+    b.move_to((100.0, 0.0));
+    b.line_to((130.0, 0.0));
+    b.line_to((130.0, 100.0));
+    b.line_to((100.0, 100.0));
+    let path = PathData::from_bezpath(&b);
+    let options = Revolve { rotation_x: -30.0, shade: false, smooth_shading: false, ..Revolve::default() };
+    let faces = revolve(&path, path.bounds().unwrap(), options).unwrap();
+    let facets = revolve_facets(&path, path.bounds().unwrap(), options).unwrap();
+    assert_eq!(facets.len(), faces.len());
+    for (facet, face) in facets.iter().zip(&faces) {
+        let [x, y, z] = facet.normal;
+        assert!(((x * x + y * y + z * z).sqrt() - 1.0).abs() < 1e-9, "unit length: {:?}", facet.normal);
+        assert!(z >= 0.0, "turned to the viewer: {:?}", facet.normal);
+        assert_eq!((facet.depth, facet.side), (face.depth, !face.cap));
+    }
+    // Tipped 30°, the wall faces nearest the viewer turn 30° down from it, and the flat top and bottom
+    // (the profile's horizontal edges swept round) face up and out at 30°.
+    let (s, c) = 30f64.to_radians().sin_cos();
+    assert!(facets.iter().any(|f| f.normal[2] > c - 0.01 && (f.normal[1] - s).abs() < 0.01), "{facets:?}");
+    assert!(facets.iter().any(|f| (f.normal[1] + c).abs() < 1e-6 && (f.normal[2] - s).abs() < 1e-6), "{facets:?}");
+    // Moved off the axis, the profile's open ends close with caps, which are ends rather than sides.
+    let ring = revolve_facets(&path, path.bounds().unwrap(), Revolve { offset: 10.0, ..options }).unwrap();
+    assert!(ring.iter().any(|f| !f.side && (f.normal[1] + c).abs() < 1e-6 && (f.normal[2] - s).abs() < 1e-6));
+}

@@ -842,6 +842,36 @@ fn a_torn_off_strip_or_a_new_toolbar_leaves_the_palette_windows_shown() {
     assert_eq!(take_palette_commands(&h, viewport).0, [false], "still shown: the drawer hides them again");
 }
 
+/// A panel floated while the palette windows are hidden opens hidden too, and shows with the others
+/// once the drawer or the dialog over them closes.
+#[test]
+fn a_panel_floated_while_the_palette_windows_are_hidden_opens_hidden() {
+    let mut h = Harness::new();
+    let navigator = h.float("navigator");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    h.frames(2);
+    take_palette_commands(&h, navigator);
+    h.app.run("window.editToolbar", json!({"open": true})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, navigator).0, [false], "hidden under the drawer");
+    let layers = h.float("layers");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    assert!(h.app.ui.tools_drawer, "the drawer stays open");
+    let (shown, levels) = take_palette_commands(&h, layers);
+    assert_eq!(shown, [false], "the new palette window is hidden under the drawer");
+    assert_eq!(levels, [egui::WindowLevel::Normal], "and out of the top level");
+    h.app.run("window.editToolbar", json!({"open": false})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, layers).0, [true], "shown when the drawer closes");
+
+    h.app.ui.palette_open = true;
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, layers).0, [false], "hidden under the command palette");
+    let swatches = h.float("swatches");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    assert_eq!(take_palette_commands(&h, swatches).0, [false], "a panel floated under it is hidden too");
+}
+
 /// The frame in which a click elsewhere closes a flyout or the drawer shows the palette windows, as
 /// no later frame need come while the app is idle.
 #[test]
@@ -1009,6 +1039,9 @@ fn ui_docking_leaves_out_the_controls_of_os_windows() {
 #[test]
 fn wheel_over_a_floating_character_font_field_changes_the_font() {
     let mut h = Harness::new();
+    // The later turns step to whichever families the process has loaded, test fonts without Latin
+    // glyphs included. Missing glyph protection would keep the text in its previous font.
+    h.app.run("prefs.set", json!({"key": "missingGlyphProtection", "value": false})).unwrap();
     h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
     let viewport = h.float("character");
     let field = h

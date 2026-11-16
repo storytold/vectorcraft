@@ -114,7 +114,7 @@ fn a_hollow_circle_head_is_empty_inside() {
 fn heads_are_drawn_where_the_shared_geometry_puts_them_and_never_past_the_tip() {
     for align in [ArrowAlign::Extend, ArrowAlign::Tip] {
         for kind in Arrowhead::ALL {
-            let d = arrow_doc(kind, align, 1.0, |s| s.cap = LineCap::Round);
+            let d = arrow_doc(kind.clone(), align, 1.0, |s| s.cap = LineCap::Round);
             let h = head_of(&d);
             if align == ArrowAlign::Tip {
                 assert_eq!(h.tip, Point::new(80.0, 50.0));

@@ -81,6 +81,29 @@ fn junk_is_rejected() {
     assert_eq!(s.doc().unwrap().doc.metadata, DocMetadata { created: s.doc().unwrap().doc.metadata.created, ..Default::default() });
 }
 
+/// A control character inside a value is refused with the field's rule: Description and Copyright
+/// Notice take line breaks and tabs, the other text fields and each keyword in a list take none.
+#[test]
+fn control_characters_are_refused_with_the_field_rule() {
+    let mut s = session();
+    for (params, msg) in [
+        (json!({"description": "a\u{7}b"}), "description has control characters"),
+        (json!({"copyrightNotice": "a\u{0}b"}), "copyrightNotice has control characters"),
+        (json!({"title": "a\nb"}), "title has control characters or line breaks"),
+        (json!({"author": "a\rb"}), "author has control characters or line breaks"),
+        (json!({"authorTitle": "a\tb"}), "authorTitle has control characters or line breaks"),
+        (json!({"copyrightUrl": "a\u{7}b"}), "copyrightUrl has control characters or line breaks"),
+        (json!({"keywords": ["ok", "a\nb"]}), "keywords has control characters or line breaks"),
+    ] {
+        match s.execute("file.info", &params) {
+            Err(EngineError::BadParams { cmd, msg: got }) => assert_eq!((cmd.as_str(), got.as_str()), ("file.info", msg), "{params}"),
+            other => panic!("{params}: {other:?}"),
+        }
+    }
+    s.execute("file.info", &json!({"description": "two\nlines\tand a tab", "copyrightNotice": "a\r\nb"})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.metadata.description, "two\nlines\tand a tab");
+}
+
 #[test]
 fn file_info_round_trips_and_old_files_load() {
     let mut s = session();
@@ -161,7 +184,8 @@ fn an_exported_pdf_opens_with_its_file_info() {
     assert_eq!(back["description"], "A poster\nfor the fair");
     assert_eq!(back["keywords"], json!(["fair", "Poster", "print"]));
     assert!(back["created"].as_str().is_some_and(|c| c.ends_with('Z')), "the file's creation date: {}", back["created"]);
-    assert_eq!(back["title"], "poster.pdf", "the title stays the file name");
+    assert_eq!(back["title"], "Poster", "File Info shows the title the PDF carries");
+    assert_eq!(s.doc().unwrap().title(), "poster.pdf", "the document stays named after the file");
     assert_eq!(back["copyrightStatus"], "copyrighted");
     assert_eq!(back["copyrightNotice"], "(c) 2026 Ada");
     assert_eq!(back["copyrightUrl"], "https://example.com/rights");
@@ -277,6 +301,192 @@ fn a_pdf_compatible_ai_opens_with_the_file_info_of_its_xmp_packet() {
     assert_eq!(m.copyright_url, "");
 }
 
+/// A one-page PDF whose trailer names an information dictionary with the entries `info`, and whose
+/// catalog has a metadata stream holding an XMP `dc:title` of `xmp_title`.
+fn pdf_titled(info: Option<&str>, xmp_title: Option<&str>) -> Vec<u8> {
+    use vectorcraft_testkit::pdf::{PdfPage, first_extra, pdf_with_catalog};
+    let first = first_extra(1);
+    let mut objects = vec![];
+    let mut catalog = String::new();
+    if let Some(t) = xmp_title {
+        let xmp = format!(
+            "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\
+             <rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\
+             <dc:title><rdf:Alt><rdf:li xml:lang=\"de\">Zugangswege</rdf:li><rdf:li xml:lang=\"x-default\">{t}</rdf:li></rdf:Alt></dc:title>\
+             </rdf:Description></rdf:RDF></x:xmpmeta>"
+        );
+        objects.push(format!("<< /Type /Metadata /Subtype /XML /Length {} >>\nstream\n{xmp}\nendstream", xmp.len()));
+        catalog = format!("/Metadata {first} 0 R ");
+    }
+    let info_at = first + objects.len();
+    if let Some(i) = info {
+        objects.push(format!("<< {i} >>"));
+    }
+    let refs: Vec<&str> = objects.iter().map(String::as_str).collect();
+    let bytes = pdf_with_catalog(&[PdfPage::new(100.0, 100.0, "0 0 1 rg 10 10 50 50 re f")], &refs, &catalog, None);
+    if info.is_none() {
+        return bytes;
+    }
+    // The trailer follows the cross-reference table, so a longer trailer moves no object.
+    String::from_utf8(bytes).unwrap().replacen("/Root 1 0 R", &format!("/Root 1 0 R /Info {info_at} 0 R"), 1).into_bytes()
+}
+
+/// A document called `name` with content `bytes` opened (as `document.open` with no path: the tab
+/// shows the document's name), `s` holding it.
+fn open_named(s: &mut Session, name: &str, bytes: &[u8]) -> Value {
+    s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(bytes)})).unwrap()
+}
+
+/// The document's name (its tab) and its File Info title.
+fn titles(s: &mut Session) -> [String; 2] {
+    let info = s.execute("file.info", &json!({})).unwrap();
+    [s.doc().unwrap().title(), info["title"].as_str().unwrap().to_string()]
+}
+
+/// What opening `bytes` as a file called `name` gives: the document's name and its File Info title.
+fn opened(name: &str, bytes: &[u8]) -> [String; 2] {
+    let mut s = Session::new();
+    let r = open_named(&mut s, name, bytes);
+    let t = titles(&mut s);
+    assert_eq!((r["title"].as_str(), r["fileInfoTitle"].as_str()), (Some(t[0].as_str()), Some(t[1].as_str())), "the open reply");
+    assert_eq!(s.doc().unwrap().doc.title, t[0], "the tab is the document's title");
+    t
+}
+
+fn svg_titled(inner: &str) -> String {
+    format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\">{inner}<rect width=\"5\" height=\"5\"><title>Tooltip</title></rect></svg>"
+    )
+}
+
+#[test]
+fn import_puts_the_files_own_title_in_file_info_only() {
+    // SVG: the root's `<title>`, its white space made single spaces (not a shape's tooltip), is the
+    // File Info title; the document keeps the file's name, with its extension.
+    assert_eq!(opened("box.svg", svg_titled("<title>\n  Access\n  paths </title>").as_bytes()), ["box.svg", "Access paths"]);
+    assert_eq!(
+        opened("/work/box.svg", svg_titled("<title>Zugangswege Rechenzentrum – Prüfdiagramm</title>").as_bytes()),
+        ["box.svg", "Zugangswege Rechenzentrum – Prüfdiagramm"]
+    );
+    // PDF: the XMP `dc:title` (its `x-default` item) beats the Info `Title`; the Info `Title` stands alone.
+    assert_eq!(opened("plan.pdf", &pdf_titled(Some("/Title (Info title)"), Some("XMP title"))), ["plan.pdf", "XMP title"]);
+    assert_eq!(opened("plan.pdf", &pdf_titled(None, Some("XMP title"))), ["plan.pdf", "XMP title"]);
+    assert_eq!(opened("plan.pdf", &pdf_titled(Some("/Title (Info title)"), None)), ["plan.pdf", "Info title"]);
+    assert_eq!(opened("plan.ai", &pdf_titled(Some("/Title (Info title)"), None)), ["plan.ai", "Info title"]);
+    // Compressed SVG too.
+    let svgz = |inner: &str| vectorcraft_svg::compress(&svg_titled(inner));
+    assert_eq!(opened("box.svgz", &svgz("<title>Access paths</title>")), ["box.svgz", "Access paths"]);
+    // A file that gives none (or a blank one) gives File Info the document's name.
+    assert_eq!(opened("box.svg", svg_titled("").as_bytes()), ["box.svg", "box.svg"]);
+    assert_eq!(opened("box.svg", svg_titled("<title>  </title>").as_bytes()), ["box.svg", "box.svg"]);
+    assert_eq!(opened("plan.pdf", &pdf_titled(None, None)), ["plan.pdf", "plan.pdf"]);
+    assert_eq!(opened("plan.pdf", &pdf_titled(Some("/Author (Ada)"), None)), ["plan.pdf", "plan.pdf"]);
+    // The Untitled-N name New gives is no title (a document that never had one writes it).
+    assert_eq!(opened("plan.pdf", &pdf_titled(Some("/Title (Untitled-2)"), None)), ["plan.pdf", "plan.pdf"]);
+    // A template opens as a new untitled document, whatever title its file gave.
+    let [name, info] = opened("plan.ait", &pdf_titled(Some("/Title (Info title)"), None));
+    assert!(name.starts_with("Untitled-") && info == name, "{name} / {info}");
+}
+
+#[test]
+fn imported_svg_titles_are_filtered_and_bounded() {
+    for (raw, expected) in [
+        ("Untitled-2".to_string(), None),
+        ("\u{7f}".to_string(), None),
+        ("Re\u{7f}lease  Plan".to_string(), Some("Release Plan".to_string())),
+        ("λ".repeat(65_537), Some("λ".repeat(65_536))),
+    ] {
+        let svg = svg_titled(&format!("<title>{raw}</title>"));
+        for format in ["svg", "svgz"] {
+            let name = format!("box.{format}");
+            let bytes = if format == "svgz" { vectorcraft_svg::compress(&svg) } else { svg.as_bytes().to_vec() };
+            assert_eq!(opened(&name, &bytes), [name.clone(), expected.clone().unwrap_or(name)], "{format}");
+        }
+    }
+}
+
+#[test]
+fn a_file_with_a_title_opened_from_a_path_is_named_after_the_file() {
+    let dir = std::env::temp_dir().join(format!("vc-infotitle-open-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("box.svg");
+    std::fs::write(&path, svg_titled("<title>Access paths</title>")).unwrap();
+    let mut s = Session::new();
+    let r = s.execute("document.open", &json!({"path": path.to_str().unwrap()})).unwrap();
+    assert_eq!((r["title"].as_str(), r["fileInfoTitle"].as_str()), (Some("box.svg"), Some("Access paths")));
+    let r = s.execute("document.inspect", &json!({"depth": 0})).unwrap();
+    assert_eq!((r["title"].as_str(), r["fileInfoTitle"].as_str()), (Some("box.svg"), Some("Access paths")));
+    // The default names of what the document exports are made from the file's name, not its title.
+    assert_eq!(s.doc().unwrap().doc.title, "box.svg");
+    assert_eq!(crate::cmd::fileio::default_name(&s.doc().unwrap().doc, "png"), "box.png");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn file_info_edits_a_files_own_title_and_the_document_follows() {
+    let mut s = Session::new();
+    open_named(&mut s, "box.svg", svg_titled("<title>Access paths</title>").as_bytes());
+    // The dialog sends back the title it was given: nothing changes (no undo step).
+    let before = s.doc().unwrap().revision;
+    let shown = s.execute("file.info", &json!({})).unwrap();
+    s.execute("file.info", &shown).unwrap();
+    assert_eq!(s.doc().unwrap().revision, before, "the title it gave is no edit");
+    assert_eq!(titles(&mut s), ["box.svg", "Access paths"]);
+    // Another title is the document's own, as ever, and the file's is gone.
+    let r = s.execute("file.info", &json!({"title": "Plan B"})).unwrap();
+    assert_eq!(r["title"], "Plan B");
+    assert_eq!(titles(&mut s), ["Plan B", "Plan B"]);
+    assert_eq!(s.doc().unwrap().doc.metadata.title, None);
+    // Undo brings the file's title back, and the name.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(titles(&mut s), ["box.svg", "Access paths"]);
+}
+
+#[test]
+fn restored_file_info_title_keeps_authored_spaces() {
+    let mut s = session();
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).metadata.title = Some("Release  Plan".into());
+    for format in ["vectorcraft", "svg", "pdf"] {
+        let bytes = b64(&s.execute("document.export", &json!({"format": format, "preserveEditing": true})).unwrap());
+        let mut reopened = Session::new();
+        let reply = open_named(&mut reopened, &format!("again.{format}"), &bytes);
+        assert_eq!(reply["restored"], format != "vectorcraft", "{format}");
+        assert_eq!(reopened.doc().unwrap().doc.metadata.title.as_deref(), Some("Release  Plan"), "{format}");
+        assert_eq!(titles(&mut reopened)[1], "Release  Plan", "{format}");
+    }
+}
+
+#[test]
+fn the_files_own_title_is_kept_by_saves_and_written_by_exports() {
+    let mut s = Session::new();
+    open_named(&mut s, "box.svg", svg_titled("<title>Access paths</title>").as_bytes());
+    // The native file: its own title is the document's name, the File Info title survives.
+    let native = b64(&s.execute("document.export", &json!({"format": "vectorcraft"})).unwrap());
+    let mut t = Session::new();
+    open_named(&mut t, "other.vectorcraft", &native);
+    assert_eq!(titles(&mut t), ["box.svg", "Access paths"]);
+    // An SVG with the editing data it carries, reopened under another name.
+    let svg = s.execute("document.serialize", &json!({"format": "svg", "preserveEditing": true, "metadata": true})).unwrap()["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(svg.contains("<title>Access paths</title>") && svg.contains("<dc:title>Access paths</dc:title>"), "{svg}");
+    let mut u = Session::new();
+    let r = open_named(&mut u, "again.svg", svg.as_bytes());
+    assert_eq!(r["restored"], true);
+    assert_eq!(titles(&mut u), ["again.svg", "Access paths"]);
+    // PDF: the Info `Title` and the XMP `dc:title`, shown by the viewer.
+    for pdf in pdf_texts(&mut s) {
+        assert!(pdf.contains("/Title(Access paths)") && xmp_title(&pdf).contains("Access paths"), "{}", xmp_title(&pdf));
+        assert!(pdf.contains("/ViewerPreferences<</DisplayDocTitle true>>"), "{pdf}");
+    }
+    // PNG text.
+    let png = b64(&s.execute("document.export", &json!({"format": "png"})).unwrap());
+    assert!(crate::cmd::fileio::pngtext::text(&png).iter().any(|(k, v)| k == "Title" && v == "Access paths"));
+    // The default file names are made from the document's name.
+    assert_eq!(crate::cmd::fileio::default_name(&s.doc().unwrap().doc, "pdf"), "box.pdf");
+}
+
 #[test]
 fn png_exports_carry_text_chunks() {
     let mut s = session();
@@ -371,4 +581,234 @@ fn an_untitled_document_saved_to_a_file_exports_titled_after_it() {
         assert!(pdf.contains("/ViewerPreferences<</DisplayDocTitle true>>"), "{pdf}");
     }
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A session whose metadata templates folder is `dir/Metadata Templates`, with a document titled
+/// Poster.
+fn template_session(dir: &std::path::Path) -> Session {
+    let mut s = session();
+    s.attach_metadata_templates_dir(dir.join("Metadata Templates"));
+    s
+}
+
+#[test]
+fn a_saved_metadata_template_is_listed_and_applies_to_another_document() {
+    let dir = vectorcraft_testkit::TempDir::new("fileinfo-template");
+    let mut s = template_session(&dir);
+    assert_eq!(s.execute("file.info.templates", &json!({})).unwrap()["templates"], json!([]), "no folder yet");
+    s.execute("file.info", &info()).unwrap();
+    let r = s.execute("file.info.saveTemplate", &json!({"name": " Studio "})).unwrap();
+    assert_eq!(r["name"], "Studio");
+    let path = dir.join("Metadata Templates").join("Studio.xmp");
+    assert!(path.is_file(), "saved into the folder: {r}");
+    let listed = s.execute("file.info.templates", &json!({})).unwrap();
+    assert_eq!(listed["templates"][0]["name"], "Studio");
+    assert_eq!(listed["templates"].as_array().map(Vec::len), Some(1));
+    // A name that isn't a usable file name as it is is refused, so `a/b` and `a?b` never share a file.
+    for name in ["a/b", "a?b", "CON", "Studio.", "x\u{1}"] {
+        assert!(s.execute("file.info.saveTemplate", &json!({"name": name})).is_err(), "{name}");
+    }
+    assert_eq!(s.execute("file.info.templates", &json!({})).unwrap()["templates"].as_array().map(Vec::len), Some(1));
+    // Saving is not an edit of the document.
+    assert_eq!(s.doc().unwrap().history.undo.len(), 1);
+    // Into a new document, by name, in one undo step.
+    s.execute("file.new", &json!({"width": 100, "height": 80})).unwrap();
+    let r = s.execute("file.info.applyTemplate", &json!({"name": "Studio", "mode": "keep"})).unwrap();
+    assert_eq!(r["changed"], true);
+    let m = &s.doc().unwrap().doc.metadata;
+    assert_eq!((m.author.as_str(), m.author_title.as_str(), m.rating), ("Ada Lovelace", "Designer", 4));
+    assert_eq!(m.keywords, ["fair", "Poster", "print"]);
+    assert_eq!((m.copyright_status, m.copyright_notice.as_str()), (CopyrightStatus::Copyrighted, "(c) 2026 Ada"));
+    assert_eq!(m.description, "A poster\nfor the fair");
+    assert_eq!(r["title"], "Poster", "the template carries the title of its own");
+    assert_eq!(s.doc().unwrap().history.undo.len(), 1);
+    // Applied again, nothing changes and nothing is recorded.
+    let r = s.execute("file.info.applyTemplate", &json!({"path": path.to_str().unwrap(), "mode": "keep"})).unwrap();
+    assert_eq!(r["changed"], false);
+    assert_eq!(s.doc().unwrap().history.undo.len(), 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.metadata.author, "");
+    // The same name replaces the template.
+    s.execute("file.info.saveTemplate", &json!({"name": "Studio", "fields": {"author": "Grace"}})).unwrap();
+    let back = vectorcraft_pdf::read_template(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(back.author.as_deref(), Some("Grace"));
+    assert_eq!(back.title, None, "an Untitled-N title is not written");
+}
+
+#[test]
+fn a_metadata_template_merges_in_three_modes() {
+    let mut s = session();
+    s.execute("file.info", &json!({"author": "Ada", "keywords": ["fair"], "rating": 2, "copyrightUrl": "https://example.com/a"})).unwrap();
+    let template = vectorcraft_pdf::metadata_template(&vectorcraft_pdf::FileInfo {
+        author: Some("Grace".into()),
+        description: Some("From the template".into()),
+        keywords: Some(vec!["print".into(), "Fair".into()]),
+        rating: Some(5),
+        copyrighted: Some(false),
+        ..Default::default()
+    });
+    let merged =
+        |s: &mut Session, mode: &str| s.execute("file.info.applyTemplate", &json!({"data": template, "mode": mode, "apply": false})).unwrap();
+    // Clear and replace: the fields the template lacks are cleared; the title stays.
+    let r = merged(&mut s, "replace");
+    assert_eq!((r["author"].as_str(), r["description"].as_str(), r["rating"].as_u64()), (Some("Grace"), Some("From the template"), Some(5)));
+    assert_eq!(
+        (r["keywords"].clone(), r["copyrightUrl"].as_str(), r["copyrightStatus"].as_str()),
+        (json!(["print", "Fair"]), Some(""), Some("publicDomain"))
+    );
+    assert_eq!(r["title"], "Poster");
+    // Keep and replace: the template's fields replace those it has; the others stay.
+    let r = merged(&mut s, "keep");
+    assert_eq!((r["author"].as_str(), r["rating"].as_u64(), r["copyrightUrl"].as_str()), (Some("Grace"), Some(5), Some("https://example.com/a")));
+    assert_eq!(r["keywords"], json!(["print", "Fair"]));
+    // Keep and append: keywords are added (each once), and only empty fields are filled.
+    let r = merged(&mut s, "append");
+    assert_eq!((r["author"].as_str(), r["rating"].as_u64(), r["description"].as_str()), (Some("Ada"), Some(2), Some("From the template")));
+    assert_eq!((r["keywords"].clone(), r["copyrightStatus"].as_str()), (json!(["fair", "print"]), Some("publicDomain")));
+    // `apply: false` changed nothing; `base` merges into the given fields instead.
+    assert_eq!(s.doc().unwrap().history.undo.len(), 1);
+    assert_eq!(s.doc().unwrap().doc.metadata.author, "Ada");
+    let r = s.execute("file.info.applyTemplate", &json!({"data": template, "mode": "append", "apply": false, "base": {"author": ""}})).unwrap();
+    assert_eq!(r["author"], "Grace");
+    // Applied: one undo step.
+    s.execute("file.info.applyTemplate", &json!({"data": template, "mode": "replace"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), 2);
+    assert_eq!(s.doc().unwrap().doc.metadata.copyright_url, "");
+}
+
+#[test]
+fn metadata_template_errors() {
+    let dir = vectorcraft_testkit::TempDir::new("fileinfo-template-errors");
+    let mut s = template_session(&dir);
+    let xmp = vectorcraft_pdf::metadata_template(&vectorcraft_pdf::FileInfo { author: Some("Ada".into()), ..Default::default() });
+    let not_xmp = dir.join("note.xmp");
+    std::fs::write(&not_xmp, "<note>not metadata</note>").unwrap();
+    let big = dir.join("big.xmp");
+    std::fs::write(&big, vec![b' '; vectorcraft_pdf::MAX_TEMPLATE_BYTES + 1]).unwrap();
+    let e = s.execute("file.info.applyTemplate", &json!({"path": big.to_str().unwrap(), "mode": "keep"})).unwrap_err();
+    assert!(e.to_string().contains("larger than 8 MB"), "{e}");
+    let e = s.execute("file.info.applyTemplate", &json!({"data": " ".repeat(vectorcraft_pdf::MAX_TEMPLATE_BYTES + 1), "mode": "keep"})).unwrap_err();
+    assert!(e.to_string().contains("larger than 8 MB"), "{e}");
+    for bad in [
+        json!({"data": xmp, "mode": "merge"}),
+        json!({"data": xmp}),
+        json!({"data": xmp, "mode": 3}),
+        json!({"mode": "keep"}),
+        json!({"data": xmp, "path": not_xmp.to_str().unwrap(), "mode": "keep"}),
+        json!({"path": dir.join("missing.xmp").to_str().unwrap(), "mode": "keep"}),
+        json!({"path": not_xmp.to_str().unwrap(), "mode": "keep"}),
+        json!({"path": big.to_str().unwrap(), "mode": "keep"}),
+        json!({"name": "missing", "mode": "keep"}),
+        json!({"data": "Ada Lovelace", "mode": "keep"}),
+        json!({"data": xmp, "mode": "keep", "apply": "yes"}),
+        json!({"data": xmp, "mode": "keep", "base": [1]}),
+        json!({"data": xmp, "mode": "keep", "base": {"rating": 9}}),
+    ] {
+        assert!(s.execute("file.info.applyTemplate", &bad).is_err(), "{bad}");
+    }
+    for bad in [json!({"name": "a", "path": "b.xmp"}), json!({"name": "  "}), json!({"fields": {"rating": 9}}), json!({"fields": "x"})] {
+        assert!(s.execute("file.info.saveTemplate", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), 0);
+    assert!(!dir.join("Metadata Templates").exists(), "no failed save made the folder");
+    // A link in the folder is not followed, by its name or its file name.
+    #[cfg(unix)]
+    {
+        let outside = dir.join("outside.xmp");
+        std::fs::write(&outside, &xmp).unwrap();
+        std::fs::create_dir_all(dir.join("Metadata Templates")).unwrap();
+        std::os::unix::fs::symlink(&outside, dir.join("Metadata Templates").join("Linked.xmp")).unwrap();
+        for name in ["Linked", "Linked.xmp"] {
+            assert!(s.execute("file.info.applyTemplate", &json!({"name": name, "mode": "keep"})).is_err(), "{name}");
+        }
+        let e = s.execute("file.info.applyTemplate", &json!({"name": "Linked", "mode": "keep"})).unwrap_err();
+        assert!(e.to_string().contains("not a file"), "{e}");
+        assert_eq!(s.execute("file.info.templates", &json!({})).unwrap()["templates"], json!([]));
+        // A save by that name leaves the linked file as it was.
+        let e = s.execute("file.info.saveTemplate", &json!({"name": "Linked", "fields": {"author": "Grace"}})).unwrap_err();
+        assert!(e.to_string().contains("not a file"), "{e}");
+        assert_eq!(std::fs::read_to_string(&outside).unwrap(), xmp);
+        std::fs::remove_dir_all(dir.join("Metadata Templates")).unwrap();
+    }
+    // Without a folder (runs without preferences), a name is an error, the data comes back, and
+    // the list is empty.
+    let mut s = session();
+    assert!(s.execute("file.info.saveTemplate", &json!({"name": "Studio"})).is_err());
+    let data = s.execute("file.info.saveTemplate", &json!({"fields": {"author": "Ada"}})).unwrap()["data"].as_str().unwrap().to_string();
+    assert_eq!(vectorcraft_pdf::read_template(data.as_bytes()).unwrap().author.as_deref(), Some("Ada"));
+    assert_eq!(s.execute("file.info.templates", &json!({"create": true})).unwrap(), json!({"templates": []}));
+}
+
+#[test]
+fn the_templates_folder_lists_only_xmp_files_and_can_be_made() {
+    let dir = vectorcraft_testkit::TempDir::new("fileinfo-template-list");
+    let mut s = template_session(&dir);
+    let r = s.execute("file.info.templates", &json!({"create": true})).unwrap();
+    let folder = dir.join("Metadata Templates");
+    assert!(folder.is_dir());
+    assert_eq!(r["folder"], folder.to_str().unwrap());
+    for f in ["b.XMP", "a.xmp", "notes.txt", ".xmp"] {
+        std::fs::write(folder.join(f), "x").unwrap();
+    }
+    std::fs::create_dir(folder.join("c.xmp")).unwrap();
+    // Other files, however many, leave the templates listed.
+    for i in 0..1000 {
+        std::fs::write(folder.join(format!("{i:04}.txt")), "").unwrap();
+    }
+    let names: Vec<String> = s.execute("file.info.templates", &json!({})).unwrap()["templates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(names, ["a", "b"]);
+    // A listed name opens whatever the case of its extension.
+    let xmp = vectorcraft_pdf::metadata_template(&vectorcraft_pdf::FileInfo { author: Some("Grace".into()), ..Default::default() });
+    std::fs::write(folder.join("b.XMP"), xmp).unwrap();
+    let r = s.execute("file.info.applyTemplate", &json!({"name": "b", "mode": "keep"})).unwrap();
+    assert_eq!(r["author"], "Grace");
+    // Its listed file name opens it too.
+    let listed = s.execute("file.info.templates", &json!({})).unwrap();
+    assert_eq!(listed["templates"][1]["file"], "b.XMP");
+    let r = s.execute("file.info.applyTemplate", &json!({"name": "b.XMP", "mode": "replace", "apply": false})).unwrap();
+    assert_eq!(r["author"], "Grace");
+    // A listed file name is taken before the name with `.xmp` added.
+    let ada = vectorcraft_pdf::metadata_template(&vectorcraft_pdf::FileInfo { author: Some("Ada".into()), ..Default::default() });
+    std::fs::write(folder.join("b.XMP.xmp"), ada).unwrap();
+    let r = s.execute("file.info.applyTemplate", &json!({"name": "b.XMP", "mode": "replace", "apply": false})).unwrap();
+    assert_eq!(r["author"], "Grace");
+    let r = s.execute("file.info.applyTemplate", &json!({"name": "b.XMP.xmp", "mode": "replace", "apply": false})).unwrap();
+    assert_eq!(r["author"], "Ada");
+    // A name that is not a file name never opens the template its safe form names.
+    let grace = vectorcraft_pdf::metadata_template(&vectorcraft_pdf::FileInfo { author: Some("Grace".into()), ..Default::default() });
+    std::fs::write(folder.join("a-b.xmp"), grace).unwrap();
+    let r = s.execute("file.info.applyTemplate", &json!({"name": "a-b", "mode": "replace", "apply": false})).unwrap();
+    assert_eq!(r["author"], "Grace");
+    for name in ["a/b", "a\\b", "a:b"] {
+        let e = s.execute("file.info.applyTemplate", &json!({"name": name, "mode": "replace", "apply": false})).unwrap_err();
+        assert!(e.to_string().contains("isn't usable as a file name"), "{name}: {e}");
+    }
+}
+
+#[test]
+fn the_largest_file_info_saves_a_template_that_imports() {
+    let mut s = session();
+    let text = "\"&".repeat(32_768);
+    let keywords: Vec<String> = (0..1000).map(|i| format!("{i:04}{}", "\"".repeat(252))).collect();
+    let fields = json!({
+        "author": text, "authorTitle": text, "description": text, "copyrightNotice": text,
+        "copyrightUrl": format!("https://example.com/{}", "&".repeat(2000)), "keywords": keywords, "rating": 5, "copyrightStatus": "copyrighted",
+    });
+    let data = s.execute("file.info.saveTemplate", &json!({"fields": fields})).unwrap()["data"].as_str().unwrap().to_string();
+    assert!(data.len() > 1 << 20, "{} bytes", data.len());
+    let r = s.execute("file.info.applyTemplate", &json!({"data": data, "mode": "replace"})).unwrap();
+    assert_eq!((r["author"].as_str(), r["keywords"].as_array().map(Vec::len)), (Some(text.as_str()), Some(1000)));
+}
+
+#[test]
+fn a_pdf_opens_with_the_rating_and_author_title_its_packet_gives() {
+    let mut m = DocMetadata::default();
+    let f = vectorcraft_pdf::FileInfo { author_title: Some("Editor".into()), rating: Some(3), ..Default::default() };
+    crate::cmd::fileinfo::read_pdf(&mut m, f);
+    assert_eq!((m.author_title.as_str(), m.rating), ("Editor", 3));
 }

@@ -6,8 +6,9 @@
 //! also holds the action's function key and color, as New Action does (`key`, `cmd`, `shift`,
 //! `color`, see [`super::action_new`]). OK adds the set and makes it the current
 //! one, renames the set, or changes the action's name, function key and color
-//! (`ui.action.options`). An invalid `set`, `action` or function key is an error. OK then changes no set or
-//! action, and the dialog stays open.
+//! (`ui.action.options`). An invalid `set`, `action` or function key is an error, and so is a name
+//! that would give the set a file that Load Actions… refuses (larger than 8 MiB). OK then changes no
+//! set or action, and the dialog stays open.
 
 use serde_json::{Value, json};
 
@@ -83,10 +84,17 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         p["name"] = json!(name);
         app.run(crate::panels::actions::ACTION_OPTIONS, p)?;
     } else if let Some(set) = d.fields.get("set") {
-        let s = set.as_u64().and_then(|i| usize::try_from(i).ok()).and_then(|i| app.ui.action_sets.get_mut(i)).ok_or("no such action set")?;
-        s.name = name;
+        let i = set.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|&i| i < app.ui.action_sets.len()).ok_or("no such action set")?;
+        let mut edited = app.ui.action_sets[i].clone();
+        edited.name = name;
+        crate::panels::actions::edit_keeps_set_loadable(app, Some(i), &edited)?;
+        app.ui.action_sets[i] = edited;
+        // A recording into the set measures its file again.
+        app.ui.recording_base = None;
     } else {
-        app.ui.action_sets.push(crate::panels::actions::ActionSet::new(name, vec![]));
+        let set = crate::panels::actions::ActionSet::new(name, vec![]);
+        crate::panels::actions::edit_keeps_set_loadable(app, None, &set)?;
+        app.ui.action_sets.push(set);
         app.ui.action_set = Some(app.ui.action_sets.len() - 1);
     }
     app.ui.dialog = None;

@@ -1,7 +1,8 @@
 //! VectorCraft desktop app.
 //!
 //! Usage: `vectorcraft [--control <port> [--automation-read-root <dir>]... [--automation-write-root <dir>]...]
-//! [--in-window-menus] [--new-instance] [--safe-mode] [--] [files…]`, `vectorcraft --version`, `vectorcraft --help` (or `-h`)
+//! [--in-window-menus] [--new-instance] [--safe-mode] [--present-mode <mode>] [--frame-latency <frames>] [--] [files…]`,
+//! `vectorcraft --version`, `vectorcraft --help` (or `-h`)
 //!
 //! Any other argument starting with '-' (not `-` alone) is an error; after `--`, every argument is
 //! a file.
@@ -19,6 +20,9 @@
 //! `--automation-write-root` (or `VECTORCRAFT_AUTOMATION_READ_ROOT` / `_WRITE_ROOT`) confine the
 //! files its requests read and write (`vectorcraft_engine::file_access`); the person at the
 //! keyboard isn't confined.
+//!
+//! `--present-mode` and `--frame-latency` (or `VECTORCRAFT_PRESENT_MODE` / `_FRAME_LATENCY`) change
+//! how the window's frames reach the display (`presentation`).
 #![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
 
 mod automation_args;
@@ -28,8 +32,12 @@ mod clipboard;
 mod compositor_gpu;
 mod control_server;
 mod cursor_theme;
+mod display_profile;
 #[cfg(feature = "wgpu")]
 mod gpu;
+mod hang_watch;
+#[cfg(target_os = "linux")]
+mod linux_screen_color;
 #[cfg(target_os = "linux")]
 mod linux_stylus;
 mod logging;
@@ -50,10 +58,15 @@ mod mac_tablet;
 mod mac_window;
 #[cfg(target_os = "macos")]
 mod open_documents;
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+mod portal_request;
 #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", test))]
 mod portal_save;
 mod prefs_dir;
+mod presentation;
 mod printing;
+#[cfg(not(any(target_os = "macos", windows)))]
+mod quit_windows;
 #[cfg(not(target_os = "macos"))]
 mod single_instance;
 #[cfg(windows)]
@@ -99,7 +112,7 @@ use titlebar::opted_into_system_title_bar;
 #[cfg(windows)]
 use titlebar::set_taskbar_icon;
 #[cfg(all(test, feature = "wgpu"))]
-use titlebar::{app_draws_frame, opted_into_app_title_bar, start_frame, system_title_bar_applies};
+use titlebar::{app_draws_frame, caption_layout_from, opted_into_app_title_bar, start_frame, system_title_bar_applies};
 use titlebar::{custom_titlebar, native_options, titlebar_from_env};
 
 struct App {
@@ -113,7 +126,8 @@ struct App {
     frames: u64,
     /// Keeps the custom title bar's window borderless (Windows, #1758).
     window_frame: Option<window_frame::WindowFrameFn>,
-    /// The main window; used to read and set maximized state the UI layer does not see on Linux (#3635).
+    /// The main window; used to read and set maximized state the UI layer does not see on Linux (#3635),
+    /// and to take the window off screen on quit before the clipboard handles let go (`quit_windows`).
     winit_window: Option<std::sync::Arc<winit::window::Window>>,
     /// A saved or fitted geometry asked for maximize once the window is mapped (Linux).
     pending_maximize: bool,
@@ -123,6 +137,10 @@ struct App {
     held_files: Vec<String>,
     /// The time and UI zoom of the last monitor list ([`window::monitors_due`]).
     monitors_listed: Option<(f64, f32)>,
+    /// Reads the profile of the display that shows the main window, for the canvas.
+    display_profile: display_profile::Reader,
+    /// When this frame's input hook started, for the hang report's frame times (`hang_watch`).
+    frame_start: Option<std::time::Instant>,
 }
 
 /// `vectorcraft --help`. Headless work (convert, run, MCP) is `vectorcraft-cli`'s.
@@ -145,6 +163,14 @@ Options:
   --safe-mode                    Start without plug-ins: none loads or runs until
                                  VectorCraft starts normally (Help › Safe Mode); the
                                  files open in a new window, as with --new-instance
+  --present-mode <mode>          How frames reach the display: fifo (vsync),
+                                 autovsync (the default; relaxed vsync where the
+                                 driver offers it) or novsync
+                                 (or VECTORCRAFT_PRESENT_MODE)
+  --frame-latency <frames>       Frames the display may queue, 1 to 3 (the default
+                                 is 1) (or VECTORCRAFT_FRAME_LATENCY); with either
+                                 one set, the files open in a new window, as with
+                                 --new-instance
   --version                     Print the version and exit
   -h, --help                     Print this help and exit
   --                             Treat every argument after it as a file
@@ -164,13 +190,16 @@ struct CommandLine {
     safe_mode: bool,
 }
 
-/// Reads the arguments after the program name. The automation roots and the control port go into
-/// `roots_args` and `control`. `Err` is the exit code when the process ends here: `--version` and
-/// `--help` print and succeed; a bad automation option or an unknown option prints an error and fails.
+/// Reads the arguments after the program name. The automation roots, the control port and the
+/// presentation overrides (with `VECTORCRAFT_PRESENT_MODE` and `VECTORCRAFT_FRAME_LATENCY` filling
+/// what the flags leave unset) go into `roots_args`, `control` and `presentation`. `Err` is the exit code
+/// when the process ends here: `--version` and `--help` print and succeed; a bad automation or
+/// presentation option or an unknown option prints an error and fails.
 fn read_command_line(
     mut args: impl Iterator<Item = String>,
     control: &mut automation_args::ControlArg,
     roots_args: &mut automation_args::AutomationArgs,
+    presentation: &mut presentation::Overrides,
 ) -> Result<CommandLine, std::process::ExitCode> {
     let mut files = Vec::new();
     let mut in_window_menus = std::env::var_os("VECTORCRAFT_IN_WINDOW_MENUS").is_some_and(|v| !v.is_empty() && v != "0");
@@ -183,7 +212,11 @@ fn read_command_line(
             files.extend(args.by_ref());
             break;
         }
-        match roots_args.consume(&a, &mut args).and_then(|root| if root { Ok(true) } else { control.consume(&a, &mut args) }) {
+        match roots_args
+            .consume(&a, &mut args)
+            .and_then(|root| if root { Ok(true) } else { control.consume(&a, &mut args) })
+            .and_then(|taken| if taken { Ok(true) } else { presentation.consume(&a, &mut args) })
+        {
             Ok(true) => continue,
             Ok(false) => {}
             Err(e) => {
@@ -222,6 +255,14 @@ fn read_command_line(
         eprintln!("vectorcraft: unknown option {a}; see vectorcraft --help, or put -- before a file whose name starts with '-'");
         return Err(std::process::ExitCode::FAILURE);
     }
+    // After the arguments: the flags, `--version` and `--help` win over a bad environment value.
+    match presentation.with_env(std::env::var_os("VECTORCRAFT_PRESENT_MODE"), std::env::var_os("VECTORCRAFT_FRAME_LATENCY")) {
+        Ok(overrides) => *presentation = overrides,
+        Err(e) => {
+            eprintln!("vectorcraft: {e}");
+            return Err(std::process::ExitCode::FAILURE);
+        }
+    }
     Ok(CommandLine { files, in_window_menus, new_instance, safe_mode })
 }
 
@@ -240,8 +281,9 @@ fn main() -> std::process::ExitCode {
     let root_env = |name: &str| std::env::var_os(name).filter(|v| !v.is_empty()).map(std::path::PathBuf::from);
     let mut roots_args =
         automation_args::AutomationArgs::new(root_env("VECTORCRAFT_AUTOMATION_READ_ROOT"), root_env("VECTORCRAFT_AUTOMATION_WRITE_ROOT"));
+    let mut presentation = presentation::Overrides::default();
     let CommandLine { files, in_window_menus, new_instance, safe_mode: safe_mode_flag } =
-        match read_command_line(std::env::args().skip(1), &mut control, &mut roots_args) {
+        match read_command_line(std::env::args().skip(1), &mut control, &mut roots_args, &mut presentation) {
             Ok(command_line) => command_line,
             Err(code) => return code,
         };
@@ -262,7 +304,8 @@ fn main() -> std::process::ExitCode {
     // Files opened from the file manager while VectorCraft runs open in its window (#4892). Before
     // the log file is attached: a launch that hands its files over leaves the running app's log be.
     #[cfg(not(target_os = "macos"))]
-    match single_instance::start(control_port.is_some(), new_instance, safe_mode_flag, &files) {
+    // A launch that sets the presentation runs as its own app: a running app keeps its own surface.
+    match single_instance::start(control_port.is_some(), new_instance || presentation.is_set(), safe_mode_flag, &files) {
         single_instance::Start::Forwarded => return std::process::ExitCode::SUCCESS,
         single_instance::Start::Running(primary) => single_instance::hold(primary),
     }
@@ -292,6 +335,11 @@ fn main() -> std::process::ExitCode {
             },
             None => logger.no_file(),
         }
+    }
+    // The report a session left when it was closed while it did not answer (`hang_watch`).
+    let previous_hang = log_dir().filter(|_| prefs_enabled()).and_then(|dir| hang_watch::take_previous(&dir));
+    if let Some(report) = &previous_hang {
+        log::warn!("the last session was closed while it did not answer; its report:\n{}", report.trim_end());
     }
     // The roots confine the control channel: a bad one keeps the app from starting rather than
     // leaving agents unconfined. Without a control port there is nothing to confine.
@@ -349,17 +397,20 @@ fn main() -> std::process::ExitCode {
     };
     #[cfg(feature = "wgpu")]
     let crash = left_out.crash.clone();
-    let custom_titlebar = custom_titlebar(saved.as_ref());
+    let (custom_titlebar, caption_layout) = custom_titlebar(saved.as_ref());
     let options = native_options(custom_titlebar);
     // winit picks Wayland whenever `WAYLAND_DISPLAY` is set; Preferences › Performance › Linux
     // Display Server › X11 opens the window through XWayland instead, where file drops work (#1151),
     // and the other choices do so when a pen is attached, where the pen draws (#2028, #4967).
+    #[cfg(target_os = "linux")]
+    let mut forced_to_x11 = false;
     #[cfg(target_os = "linux")]
     let options = {
         let mut options = options;
         let pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("linuxDisplayServer")).and_then(serde_json::Value::as_str);
         if xwayland::wanted(pref, |name| std::env::var_os(name), xwayland::pen_attached) {
             if xwayland::x11_libraries_found() {
+                forced_to_x11 = true;
                 if pref != Some("x11") {
                     log::info!("pen found: opening the window through XWayland, where the pen works (VECTORCRAFT_NATIVE_WAYLAND=1 keeps Wayland)");
                 } else {
@@ -375,6 +426,11 @@ fn main() -> std::process::ExitCode {
         }
         options
     };
+    #[cfg(not(target_os = "linux"))]
+    let forced_to_x11 = false;
+    // Preferences › User Interface notes under System Title Bar when the desktop draws the frame
+    // with it on or off.
+    let desktop_keeps_frame = titlebar::desktop_keeps_frame(forced_to_x11);
     // With Windows Ink, winit reports a pen as a touch and drops its barrel button and which end
     // is down; the message hook notes each pointer contact and whether it starts with the barrel
     // button held, and writes the pen's end into the pen feed (`windows_stylus`). It also notes the
@@ -392,12 +448,19 @@ fn main() -> std::process::ExitCode {
         }));
         options
     };
+    // Quitting takes the X11 windows of floating panels and documents off screen with the main
+    // window, so eframe's windows are recorded as it makes and drops them (`quit_windows`).
+    #[cfg(target_os = "linux")]
+    let options = eframe::NativeOptions { viewport_hooks: Some(std::sync::Arc::new(quit_windows::Hooks)), ..options };
     #[cfg(feature = "wgpu")]
     let options = {
         let mut options = options;
         // One frame queued, not two: the canvas is rasterized on the CPU and the GPU only
         // composites it, so the window answers the pointer a frame sooner (#444).
-        options.wgpu_options.surface = eframe::egui_wgpu::SurfaceConfig::LOW_LATENCY;
+        // `--present-mode` and `--frame-latency` change it for a launch (`presentation`).
+        options.wgpu_options.surface = presentation.apply(eframe::egui_wgpu::SurfaceConfig::LOW_LATENCY);
+        // What the app asks for: the driver picks novsync's mode and may clamp the latency.
+        log::info!("requested window surface: {}", presentation::describe(&options.wgpu_options.surface, &presentation));
         // Only adapters that can show the window, in the order `gpu` gives (#306, #502).
         if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
             create.native_adapter_selector = Some(gpu::selector(power, displays, compositor, left_out.adapters.clone(), startup.clone()));
@@ -428,6 +491,10 @@ fn main() -> std::process::ExitCode {
         }
         options
     };
+    #[cfg(not(feature = "wgpu"))]
+    if presentation != presentation::Overrides::default() {
+        log::warn!("--present-mode and --frame-latency set the wgpu renderer's window surface: ignored without it");
+    }
     #[cfg(feature = "wgpu")]
     gpu::watch_panics();
     #[cfg(feature = "wgpu")]
@@ -437,6 +504,9 @@ fn main() -> std::process::ExitCode {
     open_documents::install();
     #[cfg(feature = "wgpu")]
     let created = startup.clone();
+    // For the hang report (`hang_watch`).
+    #[cfg(feature = "wgpu")]
+    let requested_surface = options.wgpu_options.surface;
     // A panic that ends the window (egui-wgpu's own, #502) is caught here: never a crash.
     let run = |options: eframe::NativeOptions, app_creator: eframe::AppCreator<'_>| {
         #[cfg(target_os = "linux")]
@@ -456,11 +526,18 @@ fn main() -> std::process::ExitCode {
                 let mut session = Session::new();
                 // The profiles loaded before come back before the preferences name any of them.
                 prefs_dir::attach_profile_store(&mut session);
+                // Then Edit › Color Settings, which may name one of those profiles.
+                prefs_dir::attach_color_settings(&mut session);
                 // Before any plug-in loads: this launch's marker in the Launch folder next to the
                 // preferences (none for runs without preferences), and Safe Mode.
                 let launch_dir = prefs_path().filter(|_| prefs_enabled()).and_then(|p| Some(p.parent()?.join("Launch")));
                 let stopped = safe_mode::begin_launch(launch_dir.as_deref(), safe_mode_flag);
                 prefs_dir::attach_plugin_store(&mut session);
+                // File › Scripts lists the scripts of the Scripts folder next to the preferences.
+                prefs_dir::attach_scripts_dir(&mut session);
+                // File Info's metadata templates live in their own folder next to the preferences.
+                prefs_dir::attach_metadata_templates_dir(&mut session);
+                prefs_dir::attach_new_doc_profiles(&mut session);
                 let mut app = VectorcraftApp::new(session, services(cc.winit_window().cloned(), cc.egui_ctx.clone()));
                 app.set_startup_update_check(true);
                 load_prefs(&mut app, saved);
@@ -470,6 +547,8 @@ fn main() -> std::process::ExitCode {
                 prefs_dir::attach_pdf_preset_store(&mut app.session);
                 // The custom dictionary's words, kept in their own file next to the preferences.
                 prefs_dir::attach_custom_dictionary(&mut app.session);
+                // The custom arrowheads, kept in their own file next to the preferences.
+                prefs_dir::attach_arrowheads(&mut app.session);
                 // Fit the window to its monitor, or put it back where it was (still hidden).
                 let winit_window = cc.winit_window().cloned();
                 if let Some(w) = &winit_window {
@@ -533,9 +612,41 @@ fn main() -> std::process::ExitCode {
                     let (loss, ctx) = (graphics_loss.clone(), cc.egui_ctx.clone());
                     rs.device.set_device_lost_callback(move |reason, msg| loss.report(&ctx, format!("{reason:?}: {msg}")));
                 }
+                // The hang report and Help › Copy Troubleshooting Info (`hang_watch`).
+                // The surface settings the options asked for; the driver resolves the present mode.
+                #[cfg(feature = "wgpu")]
+                let surface = cc
+                    .wgpu_render_state
+                    .as_ref()
+                    .map(|_| (format!("{:?}", requested_surface.present_mode), requested_surface.desired_maximum_frame_latency));
+                #[cfg(not(feature = "wgpu"))]
+                let surface = None;
+                let hang = std::sync::Arc::new(hang_watch::Shared {
+                    facts: hang_watch::Facts::new(
+                        |name| std::env::var(name).ok(),
+                        std::path::Path::new("/.flatpak-info").exists(),
+                        hang_watch::window_system(winit_window.as_deref()),
+                        app.graphics_adapter.clone(),
+                        hang_watch::surface(surface),
+                    ),
+                    started: std::time::Instant::now(),
+                    last: std::sync::Mutex::new(None),
+                    previous: previous_hang.clone(),
+                });
+                vectorcraft_ui_egui::hang_beacon::watch_input(&vectorcraft_ui_egui::hang_beacon::BEACON, &cc.egui_ctx);
+                hang_watch::start(log_dir().filter(|_| prefs_enabled()), hang.clone());
+                app.services.troubleshooting = Some(Box::new(move || {
+                    hang_watch::troubleshooting(&hang, &vectorcraft_ui_egui::hang_beacon::BEACON, std::time::SystemTime::now())
+                }));
+                // A message about the graphics processor, or a stopped plug-in, comes first.
+                if previous_hang.is_some() && app.ui.status.is_empty() {
+                    vectorcraft_ui_egui::troubleshooting::last_session_stopped(&mut app);
+                }
                 app.titlebar_from_env = titlebar_from_env();
                 app.custom_titlebar = custom_titlebar;
+                app.caption_layout = caption_layout;
                 app.desktop_frame = !custom_titlebar;
+                app.desktop_keeps_frame = desktop_keeps_frame;
                 if let Some(port) = control_port {
                     let rx = control_server::start(port, cc.egui_ctx.clone());
                     app = app.with_control(rx).with_automation_roots(roots.clone());
@@ -579,6 +690,8 @@ fn main() -> std::process::ExitCode {
                     maximize_tries: 8,
                     held_files,
                     monitors_listed: None,
+                    display_profile: Default::default(),
+                    frame_start: None,
                 }))
             }),
         )

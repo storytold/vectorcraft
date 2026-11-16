@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Print Setup",
             [],
             None,
-            "{preset?: name ([Default] or a saved print preset, any case: print.presets.list; its settings replace the document's, as choosing it in the Print dialog does), settings?: {copies: 1 (1–999), collate: true, reverse, artboards: all|range|ignore (all the art as one page), range: \"1-3, 5\" (1-based, with artboards: range), skipBlank (leave out artboards with no art that prints), media: letter|legal|tabloid|a3|a4|a5|a6|b4|b5|b4 (jis)|b5 (jis)|b6 (jis)|japanese postcard|japanese double postcard|japanese envelope #3|japanese envelope #4|kaku #2|kaku #3|yonroku-ban|custom (a paper is named by its id or its dialog label, any case and spacing, so `B5 (JIS)` works; b4 and b5 stay the ISO 216 sizes, 250 × 353 and 176 × 250 mm, and the JIS sizes are b4 (jis) 257 × 364 mm, b5 (jis) 182 × 257 mm and b6 (jis) 128 × 182 mm), width, height (custom paper, 72–14400 pt), orientation: portrait|landscape|portraitFlipped|landscapeFlipped, autoRotate: true (turn the paper to each artboard; orientation ignored), transverse (the page a quarter turn on the paper), printLayers: visiblePrintable|visible|all (template layers never print), placement: {origin: topLeft|top|topRight|left|center|right|bottomLeft|bottom|bottomRight (the point of the printed area, the artboard with its bleed and marks, on the same point of the imageable area), x, y (pt, right and down)}, scaling: none|fit|custom|tileFull|tileImageable, scale: {width: 100, height: 100} (% with custom and tiling), overlap: 0 (pt between tiles), tileRange: \"\" (1-based tiles across then down; empty: all), copiesPerSheet: false (not with tiling: as many copies of each artboard, with its bleed and marks, as fit the imageable area, across then down, not turned; the placement places the grid; an artboard that doesn't fit prints one copy per sheet, with a warning), gutter: 0 (pt between copies, 0–720), margin: 0 (pt the device can't print around the paper: the imageable area is inside it), marks: {trim, registration, colorBars, pageInfo, kind: roman|japanese, weight: 0.25, offset: 6} (as document.exportPdf, at the paper's scale; page information adds the tile and the ink), bleed: {useDocument: true (the document's bleed, document.setup), top, bottom, left, right} (pt), output: {mode: composite|separations (one grey page per ink that prints), emulsion: up|down (down mirrors), image: positive|negative, spotsToProcess, inks: [{name: \"Cyan\"|…|a spot swatch, print: true, frequency (lpi, default 60), angle (default C 15, M 75, Y 0, K 45, spots 45)}]}, graphics: {autoFlatness: true, flatness: 1 (0.2–100), fonts: none|subset|complete}, color: {intent: perceptual|relativeColorimetric|saturation|absoluteColorimetric, preserveNumbers: true (CMYK colours keep their values), profile: \"\" (the printer profile, an RGB or CMYK one: composite PDF colours are converted to it with the intent, separations separate with a CMYK one; empty: as they are)}, advanced: {printAsBitmap (composite pages print as one image each, at the document's raster effects resolution), overprints: preserve|discard|simulate (composite output; preserve writes them to overprint (/OP), simulate prints them as Overprint Preview shows them; separations always keep them), flattenerPreset: \"\" (a flattener preset, built-in or saved: transparency is flattened before printing; empty: it prints live; PostScript defaults to medium)}, tileOrigin: {placed: false, x, y} (where the Print Tiling tool put the pages: print.tiling.set)}} store the print settings with the document, over the ones it has or the preset's (null keeps a value), as one undo step; no settings or preset → {settings} (the current ones, defaults if never set up)",
+            "{preset?: name ([Default] or a saved print preset, any case: print.presets.list; its settings replace the document's, as choosing it in the Print dialog does), settings?: {copies: 1 (1–999), collate: true, reverse, artboards: all|range|ignore (all the art as one page), range: \"1-3, 5\" (1-based, with artboards: range), skipBlank (leave out artboards with no art that prints), media: letter|legal|tabloid|a3|a4|a5|a6|b4|b5|b4 (jis)|b5 (jis)|b6 (jis)|japanese postcard|japanese double postcard|japanese envelope #3|japanese envelope #4|kaku #2|kaku #3|yonroku-ban|custom (a paper is named by its id or its dialog label, any case and spacing, so `B5 (JIS)` works; b4 and b5 stay the ISO 216 sizes, 250 × 353 and 176 × 250 mm, and the JIS sizes are b4 (jis) 257 × 364 mm, b5 (jis) 182 × 257 mm and b6 (jis) 128 × 182 mm), width, height (custom paper, 72–14400 pt), orientation: portrait|landscape|portraitFlipped|landscapeFlipped, autoRotate: true (turn the paper to each artboard; orientation ignored), transverse (the page a quarter turn on the paper), printLayers: visiblePrintable|visible|all (template layers never print), placement: {origin: topLeft|top|topRight|left|center|right|bottomLeft|bottom|bottomRight (the point of the printed area, the artboard with its bleed and marks, on the same point of the imageable area), x, y (pt, right and down)}, scaling: none|fit|custom|tileFull|tileImageable, scale: {width: 100, height: 100} (% with custom and tiling), overlap: 0 (pt between tiles), tileRange: \"\" (1-based tiles across then down; empty: all), copiesPerSheet: false (not with tiling: as many copies of each artboard, with its bleed and marks, as fit the imageable area, across then down, not turned; the placement places the grid; an artboard that doesn't fit prints one copy per sheet, with a warning), gutter: 0 (pt between copies, 0–720), margin: 0 (pt the device can't print around the paper: the imageable area is inside it), marks: {trim, registration, colorBars, pageInfo, kind: roman|japanese, weight: 0.25, offset: 6} (as document.exportPdf, at the paper's scale; page information adds the tile and the ink), bleed: {useDocument: true (the document's bleed, document.setup), top, bottom, left, right} (pt), output: {mode: composite|separations (one grey page per ink that prints), emulsion: up|down (down mirrors), image: positive|negative, spotsToProcess, inks: [{name: \"Cyan\"|…|a spot swatch, print: true, frequency (lpi, default 60), angle (screen angle, degrees counter-clockwise as PostScript setscreen takes it; default C 15, M 75, Y 0, K 45, spots 45)}]}, graphics: {autoFlatness: true, flatness: 1 (0.2–100), fonts: none|subset|complete}, color: {intent: perceptual|relativeColorimetric|saturation|absoluteColorimetric, preserveNumbers: true (CMYK colours keep their values), profile: \"\" (the printer profile, an RGB or CMYK one: composite PDF colours are converted to it with the intent, separations separate with a CMYK one; empty: as they are)}, advanced: {printAsBitmap (composite pages print as one image each, at the document's raster effects resolution, or lower for a page larger than 64 Mpx or 32,768 px a side), overprints: preserve|discard|simulate (composite output; preserve writes them to overprint (/OP), simulate prints them as Overprint Preview shows them; separations always keep them), flattenerPreset: \"\" (a flattener preset, built-in or saved: transparency is flattened before printing; empty: it prints live; PostScript defaults to medium)}, tileOrigin: {placed: false, x, y} (where the Print Tiling tool put the pages: print.tiling.set)}} store the print settings with the document, over the ones it has or the preset's (null keeps a value), as one undo step; no settings or preset → {settings} (the current ones, defaults if never set up)",
             has_doc,
             setup
         ),
@@ -112,6 +112,9 @@ fn preview(s: &mut Session, p: &Value) -> Result<Value> {
     super::printadvanced::flattener(C, &set, &s.prefs.flattener_presets)?;
     let mut pv = vectorcraft_pdf::preview(doc, &set).map_err(|e| pdf_error(C, e))?;
     pv.warnings.extend(type_warnings(doc, set.print_layers, &areas(&pv)));
+    // What the job loses comes first, then the notes on the options.
+    let settings = std::mem::take(&mut pv.setting_notes);
+    pv.warnings.extend(settings);
     let mut v = serde_json::to_value(pv).map_err(|e| EngineError::Other(e.to_string()))?;
     v["settings"] = to_json(&set)?;
     Ok(v)
@@ -199,7 +202,9 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
         let mut r =
             vectorcraft_pdf::print(printed, &PrintOptions { settings: set, for_printer: bool_or(p, "forPrinter", false), ..Default::default() })
                 .map_err(|e| pdf_error(PRINT, e))?;
+        // What the job loses comes first, then the notes on the options.
         r.warnings.extend(typed);
+        r.warnings.extend(r.setting_notes);
         return write_or_return(path, &r.bytes, json!({ "pages": r.pages, "format": "pdf", "warnings": r.warnings }));
     }
     let level = match p.get("level").filter(|v| !v.is_null()) {
@@ -209,12 +214,13 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
         }
         None => Level::default(),
     };
-    let mut warnings = vec![];
+    // What the job loses, then the notes on the options: a reply lists them in that order.
+    let (mut warnings, mut setting_notes) = (vec![], vec![]);
     if !bitmap && (tile_images || doc.layers.iter().any(|l| l.shows_transparency())) {
         warnings.push("transparency is flattened into opaque art and images (PostScript has none): see flattenerPreset".to_string());
     }
     if !set.color.profile.trim().is_empty() && set.output.mode == vectorcraft_pdf::OutputMode::Composite {
-        warnings.push("the printer profile converts the colours of PDF output: PostScript prints the document's colours".to_string());
+        setting_notes.push("the printer profile converts the colours of PDF output: PostScript prints the document's colours".to_string());
     }
     let flatness = (!set.graphics.auto_flatness).then_some(set.graphics.flatness);
     let plan = vectorcraft_pdf::plan(prepared.as_ref().unwrap_or(doc), &PrintOptions { settings: set, postscript: true, ..Default::default() })
@@ -244,5 +250,11 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let areas: Vec<Rect> = plan.sheets.iter().filter_map(|sh| on_page(sh.area, sh.view * sh.place, sh.size)).collect();
     warnings.extend(type_warnings(&full, which, &areas));
+    for w in plan.setting_notes.iter().chain(&out.setting_notes) {
+        if !warnings.contains(w) && !setting_notes.contains(w) {
+            setting_notes.push(w.clone());
+        }
+    }
+    warnings.extend(setting_notes);
     write_or_return(path, &out.bytes, json!({ "pages": plan.order.len(), "format": "postscript", "warnings": warnings }))
 }

@@ -3,7 +3,7 @@ use vectorcraft_doc::{Appearance, Node};
 use vectorcraft_geom::shapes;
 
 use super::png::{PngOptions, encode_indexed};
-use super::quantize::{Dither, Indexed, PaletteOptions, Reduction, quantize};
+use super::quantize::{Dither, Indexed, PaletteOptions, Reduction, quantize, quantize_to};
 use super::*;
 
 /// A `w`×`h` opaque image of `f(x, y)` colours.
@@ -91,6 +91,22 @@ fn fixed_palettes() {
     assert!(gray.palette.iter().all(|[r, g, b]| r == g && g == b) && gray.palette.len() <= 8);
     let bw = quantize(&px, 32, 32, &PaletteOptions { reduction: Reduction::BlackWhite, ..Default::default() });
     assert_eq!(bw.palette, [[0, 0, 0], [255, 255, 255]]);
+}
+
+#[test]
+fn a_given_palette_keeps_the_entries_pixels_use() {
+    let px: Vec<u8> = [[250, 10, 10, 255], [10, 10, 240, 255], [0, 0, 0, 40], [240, 20, 30, 255]].concat();
+    let given = [[0, 255, 0], [255, 0, 0], [0, 0, 255], [255, 255, 255]];
+    let o = PaletteOptions { dither: Dither::None, matte: None, ..Default::default() };
+    let ix = quantize_to(&px, 4, 1, &o, &given);
+    assert_eq!(ix.transparent, Some(0));
+    assert_eq!(ix.palette[1..], [[255, 0, 0], [0, 0, 255]], "unused entries left out, the order kept");
+    assert_eq!(ix.indices, [1, 2, 0, 1]);
+    // At most 255 of the given colors are used, leaving room for the transparent entry.
+    let many: Vec<[u8; 3]> = (0..300u32).map(|i| [(i % 256) as u8, (i / 256) as u8, 0]).collect();
+    let all = image(256, 2, |x, y| [x as u8, y as u8, 0]);
+    let ix = quantize_to(&all, 256, 2, &o, &many);
+    assert!(ix.palette.len() <= 255 && ix.palette.iter().all(|c| many[..255].contains(c)), "{}", ix.palette.len());
 }
 
 #[test]

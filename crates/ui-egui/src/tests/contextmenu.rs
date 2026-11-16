@@ -248,6 +248,96 @@ fn the_menu_follows_the_selection() {
     assert!(items.windows(2).all(|w| !matches!(w, [Item::Sep, Item::Sep])));
 }
 
+/// A closed path of 60 jagged anchors around (150, 150), filled so that a right-click inside it
+/// hits it, with nothing selected.
+fn jagged(app: &mut VectorcraftApp) -> NodeId {
+    let anchors: Vec<_> = (0..60)
+        .map(|i| {
+            let a = f64::from(i) * std::f64::consts::TAU / 60.0;
+            let r = 60.0 + f64::from(i % 2) * 4.0;
+            json!({"x": 150.0 + r * a.cos(), "y": 150.0 + r * a.sin()})
+        })
+        .collect();
+    let id = NodeId(app.run("path.create", json!({"anchors": anchors, "closed": true})).unwrap()["id"].as_u64().unwrap());
+    app.run("paint.setFill", json!({"color": "#ff8010"})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    id
+}
+
+/// The anchor points of every path in the document.
+fn anchor_total(app: &VectorcraftApp) -> usize {
+    let mut n = 0;
+    app.session.active().unwrap().doc.walk(|node| {
+        if let NodeKind::Path { path, .. } = &node.kind {
+            n += path.anchor_count();
+        }
+    });
+    n
+}
+
+/// A right-click on a path lists Object › Path › Smooth… after Join and Average…. Smooth… opens
+/// the Smooth slider at Auto-Smooth's level and adds no undo step while it is open; OK keeps the
+/// smoothed path as one undo step.
+#[test]
+fn right_click_on_a_path_opens_the_smooth_slider() {
+    let mut app = app();
+    let id = jagged(&mut app);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let p = screen(&app, 150.0, 150.0);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert_eq!(app.session.active().unwrap().selection.objects, [id], "the path right-clicked is selected");
+    let y = |label| at(&texts, label).y;
+    assert!(y("Join") < y("Average…") && y("Average…") < y("Smooth…"), "{texts:?}");
+    let (undo, before) = (app.session.active().unwrap().history.undo.len(), anchor_total(&app));
+    let after = click(&mut app, &ctx, at(&texts, "Smooth…"), PointerButton::Primary);
+    assert!(!has(&after, "Arrange"), "choosing Smooth… closes the menu");
+    let open = app.ui.dialog.as_ref().map(|d| (d.kind.clone(), d.f64("level", -1.0)));
+    assert_eq!(open, Some((crate::dialogs::smooth_slider::KIND.to_string(), vectorcraft_engine::SMOOTH_AUTO_LEVEL)));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "no undo step while the slider is open");
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+    let st = app.session.active().unwrap();
+    assert_eq!(st.history.undo.len(), undo + 1, "OK keeps the result as one undo step");
+    assert!(anchor_total(&app) < before, "the path was smoothed: {} anchor points from {before}", anchor_total(&app));
+}
+
+/// Smooth… is listed while the selection holds a path: a path, a group of paths, a compound path,
+/// a path with type, and anchors selected with Direct Selection (whose Remove Anchor Points
+/// stays). It is left out with nothing, only type or a group of type selected.
+#[test]
+fn smooth_follows_the_selections_paths() {
+    let mut app = app();
+    let (a, b) = (rect(&mut app, 0.0, 0.0), rect(&mut app, 150.0, 0.0));
+    let t = NodeId(app.run("text.create", json!({"x": 10, "y": 250, "text": "Type"})).unwrap()["id"].as_u64().unwrap());
+    let smooth = |app: &VectorcraftApp| labels(&menus::context_items(app)).contains(&"Smooth…");
+    app.run("select.none", json!({})).unwrap();
+    assert!(!smooth(&app), "nothing selected");
+    app.run("select.set", json!({"ids": [t.0]})).unwrap();
+    assert!(!smooth(&app), "only type selected");
+    let u = NodeId(app.run("text.create", json!({"x": 10, "y": 300, "text": "More"})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.set", json!({"ids": [t.0, u.0]})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    assert!(!smooth(&app), "a group of type only");
+    app.run("object.ungroup", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a.0]})).unwrap();
+    assert!(smooth(&app), "a path");
+    app.run("select.set", json!({"ids": [a.0, t.0]})).unwrap();
+    assert!(smooth(&app), "a path and type");
+    app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    assert!(smooth(&app), "a group of paths");
+    app.run("object.ungroup", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
+    app.run("object.compoundPath.make", json!({})).unwrap();
+    assert!(smooth(&app), "a compound path");
+    app.run("object.compoundPath.release", json!({})).unwrap();
+    app.select_tool("directSelection");
+    app.run("select.anchors", json!({"id": a.0, "anchors": [[0, 1]]})).unwrap();
+    assert!(smooth(&app), "an anchor point direct-selected");
+    assert!(labels(&menus::context_items(&app)).contains(&"Remove Anchor Points"), "the anchor entries stay");
+}
+
 /// Selected type has Bullets and Numbering › Apply Bullets in the context menu and the Type menu,
 /// which makes its paragraphs a bulleted list; other art has no such item.
 #[test]
