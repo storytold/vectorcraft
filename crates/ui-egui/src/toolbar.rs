@@ -543,35 +543,80 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) 
 /// The width of Mirror & Cut's Axis and Keep menus in the Control bar.
 const MIRROR_DROPDOWN_WIDTH: f32 = 96.0;
 
-/// Crop Image's box: its centre (X, Y) and size (W, H) in the general unit, set through the tool's
-/// `rect` option, then Apply (Enter) and Cancel (Escape), each while the row has room for it and
-/// `reserve` after it.
+/// Crop Image's cropping options: the cropped image's resolution (PPI: a list, with the
+/// resolutions above what the image allows disabled, or a typed value), the reference point, the
+/// box's X and Y (that point) and size (W, H) in the general unit with the link that keeps their
+/// proportions, all set through the tool's options; then Apply (Enter) and Cancel (Escape), each
+/// while the row has room for it and `reserve` after it.
 fn crop_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
-    let set = app.session.tool_options()["rect"].as_array().and_then(|v| match v.iter().filter_map(Value::as_f64).collect::<Vec<_>>()[..] {
+    use vectorcraft_tools::cropimage::{self as crop, PPI_CHOICES};
+    let opts = app.session.tool_options();
+    let set = opts["rect"].as_array().and_then(|v| match v.iter().filter_map(Value::as_f64).collect::<Vec<_>>()[..] {
         [x, y, w, h] => Some(vectorcraft_geom::Rect::new(x, y, x + w, y + h)),
         _ => None,
     });
-    let Some((_, _, r)) = app.session.active().and_then(|st| vectorcraft_tools::cropimage::crop_box(&st.doc, &st.selection, set)) else { return };
+    let Some((r, image, own, max)) = app.session.active().and_then(|st| {
+        let (id, image, r) = crop::crop_box(&st.doc, &st.selection, set)?;
+        let vectorcraft_doc::NodeKind::Image(im) = &st.doc.node(id)?.kind else { return None };
+        let (own, max) = crop::image_ppi(im);
+        Some((r, image, own, max.min(2400.0)))
+    }) else {
+        return;
+    };
+    let reference = opts["reference"].as_u64().filter(|v| *v <= 8).map_or(crop::CENTER, |v| v as usize);
+    let linked = opts["linked"].as_bool().unwrap_or(false);
     let t = Tokens::get(ui.ctx());
-    let units = app.session.general_unit();
-    let c = r.center();
+    let set_option = |app: &mut VectorcraftApp, key: &str, value: Value| {
+        app.run("tool.setOption", json!({ "key": key, "value": value })).ok();
+    };
+    // Resolution: the list's choices above the image's limit are disabled; a typed value is held to it.
+    let ppi = opts["ppi"].as_f64().unwrap_or(own);
+    let label = |v: f64| crate::i18n::fill_once(tl!("{n} ppi"), &[("n", &format!("{}", (v * 100.0).round() / 100.0))]);
+    let labels: Vec<String> = PPI_CHOICES.iter().map(|v| label(*v)).collect();
+    let names: Vec<&str> = labels.iter().map(String::as_str).collect();
     let mut fit = crate::chrome::Fit::new(reserve);
-    for (k, lbl, v) in [("x", "X:", c.x), ("y", "Y:", c.y), ("width", "W:", r.width()), ("height", "H:", r.height())] {
+    let text = egui::RichText::new(tl!("PPI")).size(12.0).color(t.text_dim);
+    if fit.room(ui, &[widgets::text_width(ui, text.clone()), 80.0, 56.0]) {
+        widgets::field_label(ui, text);
+        let current = label(ppi);
+        if let Some(v) =
+            widgets::dropdown_with(ui, ("cb-crop", "ppi-list"), &current, &names, 80.0, |i| PPI_CHOICES.get(i).is_some_and(|v| *v <= max + 1e-6))
+                .and_then(|i| PPI_CHOICES.get(i))
+        {
+            set_option(app, "ppi", json!(v));
+        }
+        // An image's own resolution above the limit (a linked image's, or one past 2400 ppi) still
+        // shows as it is; an edit there sets at most the limit.
+        if let Some(v) = widgets::range_field(ui, ("cb-crop", "ppi"), ppi, 1.0..=max.max(ppi).max(1.0), "", 2, 56.0) {
+            set_option(app, "ppi", json!(v.min(max.max(1.0))));
+        }
+    }
+    fit.separator(ui);
+    // The reference point locator is 23 pt square.
+    if fit.room(ui, &[23.0])
+        && let Some(i) = widgets::reference_point(ui, reference)
+    {
+        set_option(app, "reference", json!(i));
+    }
+    let units = app.session.general_unit();
+    let p = vectorcraft_geom::reference_point(r, reference);
+    for (k, lbl, v) in [("x", "X:", p.x), ("y", "Y:", p.y), ("width", "W:", r.width()), ("height", "H:", r.height())] {
         let text = egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim);
-        if !fit.room(ui, &[widgets::text_width(ui, text.clone()), 80.0]) {
+        let widths =
+            if k == "height" { vec![22.0, widgets::text_width(ui, text.clone()), 80.0] } else { vec![widgets::text_width(ui, text.clone()), 80.0] };
+        if !fit.room(ui, &widths) {
             break;
         }
+        if k == "height"
+            && widgets::icon_button(ui, if linked { "link" } else { "unlink" }, tl!("Constrain Width and Height Proportions"), linked, 22.0).clicked()
+        {
+            set_option(app, "linked", json!(!linked));
+        }
         widgets::field_label(ui, text);
-        if let Some(nv) = widgets::num_field(ui, ("cb-crop", k), Some(v), units, 80.0) {
-            let (mut c, mut w, mut h) = (c, r.width(), r.height());
-            match k {
-                "x" => c.x = nv,
-                "y" => c.y = nv,
-                "width" => w = nv.max(0.0),
-                _ => h = nv.max(0.0),
-            }
-            let rect = [c.x - w / 2.0, c.y - h / 2.0, w, h];
-            app.run("tool.setOption", json!({ "key": "rect", "value": rect })).ok();
+        if let Some(nv) = widgets::num_field(ui, ("cb-crop", k), Some(v), units, 80.0)
+            && let Some(b) = crop::edited_box(r, image, reference, linked, k, nv)
+        {
+            set_option(app, "rect", json!([b.x0, b.y0, b.width(), b.height()]));
         }
     }
     fit.separator(ui);
