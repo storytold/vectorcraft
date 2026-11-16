@@ -400,7 +400,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.run("symbol.breakLink", json!({})).ok();
         }
         ui.add_space((ui.available_width() - 2.0 * 28.0).max(0.0));
-        if widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Symbol"), false, has_sel, 24.0).clicked() {
+        let new = widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Symbol"), false, has_sel, 24.0);
+        // A symbol dragged from the panel and dropped on New Symbol is duplicated, with or without
+        // art selected.
+        if let Some(name) = symbol_dropped(ui, &new, &names, uid) {
+            if let Err(e) = app.run("symbol.duplicate", json!({ "name": name })) {
+                app.status(e);
+            }
+        } else if new.clicked() {
             // Alt skips Symbol Options: the symbol is made under the default name, dynamic as the
             // dialog's default.
             let (cmd, p) = if ui.input(|i| i.modifiers.alt) { ("symbol.new", json!({"type": "dynamic"})) } else { ("ui.symbolOptions", json!({})) };
@@ -484,6 +491,19 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Save Symbol Library…"), has_symbols, false) {
         save_library(app, sel.into_iter().collect());
     }
+}
+
+/// The symbol of the active document (`uid`, whose symbols are `names`) dragged from the panel and
+/// released on `button` this frame, if any; `button` is outlined while one is held over it. A
+/// symbol dragged from another document is ignored.
+fn symbol_dropped(ui: &Ui, button: &egui::Response, names: &[String], uid: Option<u64>) -> Option<String> {
+    let held = button.dnd_hover_payload::<PanelDrag>()?;
+    let PanelDrag::Symbol { document, name } = &*held else { return None };
+    if !names.contains(name) || Some(*document) != uid {
+        return None;
+    }
+    widgets::drop_target_outline(ui, button.rect);
+    button.dnd_release_payload::<PanelDrag>().map(|_| name.clone())
 }
 
 /// The panel state key of the symbols Select All Unused picked.
@@ -1895,6 +1915,133 @@ mod tests {
         menu_frame(&menu_ctx, &mut app, vec![]);
         assert_eq!(app.run_count, commands, "the panel menu");
         assert_eq!(current(&app).as_deref(), Some("Dot"));
+    }
+
+    /// The rectangle of the panel's button labeled `label`, enabled or not.
+    fn button_rect(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str) -> Rect {
+        ctx.enable_accesskit();
+        let out = frame_held(ctx, app, vec![], egui::Modifiers::NONE);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let b = nodes.iter().filter(|(_, n)| n.label().is_some_and(|l| l.trim() == label)).find_map(|(_, n)| n.bounds());
+        let b = b.unwrap_or_else(|| panic!("a {label} button"));
+        Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32))
+    }
+
+    /// Whether `out` draws the drop outline around `rect`.
+    fn outlined(out: &egui::FullOutput, rect: Rect) -> bool {
+        out.shapes.iter().any(|c| match &c.shape {
+            egui::Shape::Rect(r) => r.rect.center().distance(rect.center()) < 0.5 && (r.stroke.width - 1.5).abs() < 0.01,
+            _ => false,
+        })
+    }
+
+    /// A symbol dragged from the panel, in Thumbnail View or a list view, and dropped on New Symbol
+    /// is duplicated as Duplicate Symbol does it: a copy of the dragged symbol, not the current one,
+    /// is added under its default name in one undo step, with no dialog and no placed instance, and
+    /// the selection and the current symbol stay as they were, with art selected or none (when the
+    /// button is disabled for clicks). The button is outlined while the symbol is held over it.
+    #[test]
+    fn symbol_dropped_on_new_button_duplicates_the_dragged_symbol_in_both_views() {
+        for (view, select) in [("thumbnail", false), ("smallList", true)] {
+            let mut app = leaf_and_dot();
+            app.run("ui.panelView", json!({"panel": "symbols", "view": view})).unwrap();
+            if select {
+                let leaf = instance_of(&app, "Leaf").expect("a Leaf instance");
+                app.run("select.set", json!({"ids": [leaf.0]})).unwrap();
+            }
+            let selection = app.session.active().unwrap().selection.clone();
+            let undo = app.session.active().unwrap().history.undo.len();
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            let new = button_rect(&ctx, &mut app, "New Symbol");
+            let from = if select { panel_labels(&ctx, &mut app, &["Leaf"])[0].1 } else { pos2(26.0, 26.0) };
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(from), button(from, true)]);
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(from + vec2(40.0, 40.0))]);
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(from + vec2(80.0, 80.0))]);
+            let document = uid(&app).expect("an active document");
+            assert_eq!(
+                egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(),
+                Some(&PanelDrag::Symbol { document, name: "Leaf".into() }),
+                "{view}"
+            );
+            let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(new.center())], egui::Modifiers::NONE);
+            assert!(outlined(&out, new), "{view}: outlined while Leaf is held over it");
+            frame(&ctx, &mut app, vec![button(new.center(), false)]);
+            assert_eq!(symbols(&mut app), ["Leaf", "Dot", "Leaf copy"], "{view}");
+            let d = app.session.active().unwrap();
+            assert_eq!(d.history.undo.len(), undo + 1, "{view}: one undo step");
+            assert_eq!(d.selection, selection, "{view}: the selection is unchanged");
+            let (leaf, copy) = (&d.doc.symbols[0], &d.doc.symbols[2]);
+            assert!(!Arc::ptr_eq(&leaf.art, &copy.art) && leaf.dynamic == copy.dynamic, "{view}: an independent copy of Leaf");
+            assert_eq!(d.doc.symbol_registration("Leaf copy"), d.doc.symbol_registration("Leaf"), "{view}");
+            assert_eq!(dialog_kind(&app), None, "{view}: no Symbol Options");
+            assert_eq!(art(&app, "Leaf copy").0, 0, "{view}: no instance placed");
+            assert_eq!(current(&app).as_deref(), Some("Dot"), "{view}: Dot stays current");
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "{view}: undo removes only the copy");
+        }
+    }
+
+    /// New Symbol takes only a symbol of the document's: a library symbol, art, a symbol name the
+    /// document does not have and a symbol released elsewhere make no symbol and no undo step, and
+    /// the button is not outlined for them.
+    #[test]
+    fn new_symbol_button_ignores_other_drops_and_releases_outside() {
+        let mut app = leaf_and_dot();
+        let leaf = instance_of(&app, "Leaf").expect("a Leaf instance");
+        let undo = app.session.active().unwrap().history.undo.len();
+        let ctx = egui::Context::default();
+        // The payloads are set directly, as if dragged from this document's panel.
+        let document = uid(&app).expect("an active document");
+        let new = button_rect(&ctx, &mut app, "New Symbol");
+        let elsewhere = new.center() - vec2(0.0, 60.0);
+        let cases = [
+            ("a library symbol", PanelDrag::LibrarySymbol { library: "basic-shapes".into(), name: "Leaf".into() }, new.center()),
+            ("art", PanelDrag::Art(vec![leaf]), new.center()),
+            ("a stale name", PanelDrag::Symbol { document, name: "Gone".into() }, new.center()),
+            ("a symbol released elsewhere", PanelDrag::Symbol { document, name: "Leaf".into() }, elsewhere),
+        ];
+        for (case, drag, at) in cases {
+            egui::DragAndDrop::set_payload(&ctx, drag);
+            let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::NONE);
+            assert!(!outlined(&out, new), "{case}: not outlined");
+            frame(&ctx, &mut app, vec![button(at, false)]);
+            assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "{case}");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "{case}: no undo step");
+            assert_eq!(dialog_kind(&app), None, "{case}");
+            egui::DragAndDrop::clear_payload(&ctx);
+        }
+    }
+
+    /// A symbol dragged from one document's panel and dropped on New Symbol after another document
+    /// with a symbol of the same name became active is duplicated in neither document, and the
+    /// button is not outlined for it.
+    #[test]
+    fn a_symbol_dragged_from_another_document_is_not_duplicated() {
+        let mut app = leaf_and_dot();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let tile = pos2(26.0, 26.0);
+        frame(&ctx, &mut app, vec![]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
+        let document = uid(&app).expect("an active document");
+        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol { document, name: "Leaf".into() }));
+        // While Leaf is held, a new document with a Leaf of its own becomes active.
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+        app.run("symbol.new", json!({"name": "Leaf"})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let new = button_rect(&ctx, &mut app, "New Symbol");
+        let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(new.center())], egui::Modifiers::NONE);
+        assert!(!outlined(&out, new), "not outlined");
+        frame(&ctx, &mut app, vec![button(new.center(), false)]);
+        assert_eq!(symbols(&mut app), ["Leaf"], "no copy in the active document");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "no undo step");
+        assert_eq!(dialog_kind(&app), None);
+        assert!(app.session.set_active(0));
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "no copy in the first document");
     }
 
     /// CPU time of this thread in nanoseconds where the system reports it (Linux), else `None`.
