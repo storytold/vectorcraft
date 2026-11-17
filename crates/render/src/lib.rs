@@ -57,6 +57,11 @@ type MeasuredArt = (Arc<Node>, Arc<Node>, Option<u64>);
 /// raster effects resolution (its bits) with a brush library (its key).
 type ThreeDArt = (std::sync::Weak<Node>, Option<((u64, u64), Option<Rect>)>);
 
+/// A node whose Rasterize image the Transform effects after it place ([`fx::rasterize_stage`]):
+/// the node, the node it draws its image from, the maps that place the image, and the frame it
+/// was last drawn in.
+type FxStage = (Arc<Node>, Arc<Node>, Arc<[Affine]>, u64);
+
 /// Reusable renderer (keeps the render context, geometry and glyph caches between frames; decoded
 /// images are shared by all renderers, see [`set_image_cache_budget`]).
 pub struct Renderer {
@@ -126,9 +131,11 @@ pub struct Renderer {
     /// Live-effect geometry per node ([`fx::FxGeom`]), keyed by `Arc` identity like `geom`.
     fx_geom: PtrMap<usize, fx::FxGeom>,
     /// Per node whose Rasterize image moves with the Transform effects after it, keyed by `Arc`
-    /// identity like `fx_geom`: the node, the node it draws its image from and the map that moves
-    /// the image ([`fx::rasterize_stage`]), and the frame it was last drawn in.
-    fx_stages: PtrMap<usize, (Arc<Node>, Arc<Node>, Affine, u64)>,
+    /// identity like `fx_geom` ([`FxStage`]).
+    fx_stages: PtrMap<usize, FxStage>,
+    /// While one of several placements of a path's Rasterize image is drawn: the first cache slot
+    /// of that placement's rasters and where the image is kept for all of them ([`fx::Kept`]).
+    fx_placement: Option<(usize, std::rc::Rc<fx::Kept>)>,
     stamp: u64,
     /// Opacity folded into paint alpha for the leaf being drawn (avoids a compositing layer).
     alpha: f32,

@@ -2665,3 +2665,64 @@ fn outline_view_marquees_measure_a_clip_group_by_its_plain_clipping_path() {
     assert_eq!(marquee(true), vec![Action::Exec("select.set".into(), json!({"ids": [g.0]}))]);
     assert_eq!(marquee(false), vec![Action::Exec("select.set".into(), json!({"ids": []}))]);
 }
+
+/// Objects selected inside a group (with Group Selection, say) stay selected when the Selection
+/// tool presses on one of them: the press shows the move pointer and a drag moves only them, not
+/// the group around them. A press on a member that is not selected still selects the whole group.
+#[test]
+fn a_press_on_a_selected_member_of_a_group_moves_the_selected_members() {
+    use vectorcraft_doc::{Appearance, Document, Node};
+    use vectorcraft_geom::shapes;
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let (outer, inner, a, b, c) = (d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let path = |id: NodeId, x: f64| Node::path(id, shapes::rectangle(Rect::new(x, 100.0, x + 50.0, 150.0)), Appearance::default_art());
+    d.insert(Some(l), 0, Node::group(outer, vec![])).unwrap();
+    d.insert(Some(outer), 0, Node::group(inner, vec![])).unwrap();
+    d.insert(Some(inner), 0, path(a, 100.0)).unwrap();
+    d.insert(Some(inner), 1, path(b, 200.0)).unwrap();
+    d.insert(Some(outer), 1, path(c, 300.0)).unwrap();
+    let p = paint();
+    let is_select = |out: &[Action]| out.iter().any(|a| matches!(a, Action::Exec(id, _) if id.starts_with("select.")));
+    for picked in [vec![a], vec![a, b], vec![inner]] {
+        let mut s = Selection::default();
+        s.set(picked.iter().copied());
+        let c = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        assert_eq!(t.cursor(&c, Point::new(125.0, 125.0), Mods::default()), Cursor::Move, "{picked:?}");
+        let down = t.pointer(&c, &ev(PointerKind::Down, 125.0, 125.0));
+        assert!(!is_select(&down), "{picked:?}: {down:?}");
+        let drag = t.pointer(&c, &ev(PointerKind::Drag, 145.0, 125.0));
+        assert!(drag.iter().any(|a| matches!(a, Action::Preview(c, _) if c == "object.transform")), "{picked:?}: {drag:?}");
+        // Shift: a drag moves the selected members, constrained, and a click takes the member
+        // pressed (or the selected group holding it) out of the selection, not the outer group.
+        let shift = |kind, x, y| ev(kind, x, y).with_mods(Mods { shift: true, ..Mods::default() });
+        let mut t = SelectionTool::default();
+        let down = t.pointer(&c, &shift(PointerKind::Down, 125.0, 125.0));
+        assert!(!is_select(&down), "Shift, {picked:?}: {down:?}");
+        let drag = t.pointer(&c, &shift(PointerKind::Drag, 145.0, 125.0));
+        assert!(drag.iter().any(|a| matches!(a, Action::Preview(c, _) if c == "object.transform")), "Shift, {picked:?}: {drag:?}");
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &shift(PointerKind::Down, 125.0, 125.0));
+        let up = t.pointer(&c, &shift(PointerKind::Up, 125.0, 125.0));
+        assert_eq!(up, vec![Action::Exec("select.toggle".into(), json!({"id": picked[0].0}))], "Shift-click, {picked:?}");
+        // Alt over a selected member measures no Distance Guides to the group holding it.
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &alt(PointerKind::Move, 125.0, 125.0));
+        assert!(distances(&t, &c).0.is_empty(), "Alt over a selected member, {picked:?}");
+    }
+    // A member that is not selected: the press selects the outermost group.
+    let mut s = Selection::default();
+    s.set([a]);
+    let c = cx(&d, &s, &p);
+    let down = SelectionTool::default().pointer(&c, &ev(PointerKind::Down, 325.0, 125.0));
+    assert_eq!(down, vec![Action::Exec("select.set".into(), json!({"ids": [outer.0]}))]);
+    // A member with only some anchors selected (a Direct Selection marquee) is not selected whole:
+    // the press selects the outermost group, as before.
+    let mut s = Selection::default();
+    s.set([a]);
+    s.anchors.insert(a, [(0, 0)].into_iter().collect());
+    let c = cx(&d, &s, &p);
+    let down = SelectionTool::default().pointer(&c, &ev(PointerKind::Down, 125.0, 125.0));
+    assert_eq!(down, vec![Action::Exec("select.set".into(), json!({"ids": [outer.0]}))]);
+}

@@ -444,8 +444,8 @@ pub fn export(doc: &Document, opts: &DxfOptions) -> Result<DxfOutput, String> {
         return Err("the export region is not finite".into());
     }
     // Symbols' art is placed without clipping, as the scene places it.
-    let baked =
-        vectorcraft_effects::bake_document_placing_symbols(doc, false, vectorcraft_effects::WrittenLayers { hidden: true, non_printing: true });
+    let layers = vectorcraft_effects::WrittenLayers { hidden: true, non_printing: true, hidden_objects: false };
+    let baked = vectorcraft_effects::bake_document_placing_symbols(doc, false, layers);
     let doc = baked.as_ref().unwrap_or(doc);
     Ok(scene::Scene::new(doc, opts).run())
 }

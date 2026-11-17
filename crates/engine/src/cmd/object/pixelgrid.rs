@@ -166,15 +166,18 @@ const ACTUAL_SIZE_TOLERANCE: f64 = 1e-9;
 /// (while it is edited, the art snaps as the editing layer is written back to it). Every instance
 /// of such a symbol then goes to whole points ([`snap_instance`]), and so does each instance of a
 /// pixel-aligned symbol in an object the edit changed or added, the art of opacity masks included.
-/// An instance in another symbol's art is placed by that symbol's instances and is left as it is.
-/// A document without pixel-aligned symbols is not walked.
+/// An instance in another symbol's art, the art on the symbol editing layer included, is placed by
+/// that symbol's instances and is left as it is. A document without pixel-aligned symbols is not walked.
 fn refresh_symbols(before: &Document, doc: &mut Document) {
     let aligned = doc.pixel_aligned_symbols();
     if aligned.is_empty() {
         return;
     }
     let was = before.pixel_aligned_symbols();
+    // The symbol whose editing mode this edit ended, if any.
     let edited_before = before.symbol_edit.as_ref().map(|e| e.symbol.as_str());
+    let edited_now = doc.symbol_edit.as_ref().map(|e| e.symbol.as_str());
+    let edit_ended = edited_before.filter(|b| edited_now != Some(*b)).map(str::to_owned);
     let mut every = false;
     for name in &aligned {
         let art_before = before.symbols.iter().find(|s| &s.name == name).map(|s| &s.art);
@@ -184,22 +187,29 @@ fn refresh_symbols(before: &Document, doc: &mut Document) {
             _ => true,
         };
         let size_changed = before.symbol_natural_xf(name) != doc.symbol_natural_xf(name);
-        if !was.contains(name) || edited_before == Some(name.as_str()) || art_changed || size_changed {
+        if !was.contains(name) || edit_ended.as_deref() == Some(name.as_str()) || art_changed || size_changed {
             snap_symbol_art(doc, name);
             every = true;
         }
     }
     let natural: HashMap<String, Affine> = aligned.iter().map(|name| (name.clone(), doc.symbol_natural_xf(name))).collect();
+    // The symbol editing layer holds another symbol's art.
+    let editing = doc.symbol_edit.as_ref().map(|e| e.layer);
     if every {
         for layer in doc.layers.iter_mut() {
-            if holds_instance(layer, &natural) {
+            if Some(layer.id) != editing && holds_instance(layer, &natural) {
                 snap_instances_in(Arc::make_mut(layer), &natural);
             }
         }
         return;
     }
     let (mut ids, mut masked) = (vec![], vec![]);
-    changed_instances(&before.layers, &doc.layers, &natural, &mut ids, &mut masked);
+    if let Some(layer) = editing {
+        let outside = |layers: &[Arc<Node>]| layers.iter().filter(|l| l.id != layer).cloned().collect::<Vec<_>>();
+        changed_instances(&outside(&before.layers), &outside(&doc.layers), &natural, &mut ids, &mut masked);
+    } else {
+        changed_instances(&before.layers, &doc.layers, &natural, &mut ids, &mut masked);
+    }
     for id in ids {
         if let Some(n) = doc.node_mut(id) {
             snap_instance(n, &natural);
@@ -358,9 +368,10 @@ fn snap_mask(n: &mut Node) -> bool {
 
 /// Move symbol instance `n` to whole points when its transform places its symbol's art at the
 /// symbol's natural size (`natural`, by symbol name), reflected across one axis or not. A scaled,
-/// rotated (a half turn included) or sheared instance stays where it is.
+/// rotated (a half turn included) or sheared instance stays where it is. The instance moves as any
+/// move moves it ([`Node::transform`]), so the art of a linked opacity mask moves with it.
 fn snap_instance(n: &mut Node, natural: &HashMap<String, Affine>) {
-    let NodeKind::SymbolInstance { symbol, xf } = &mut n.kind else { return };
+    let NodeKind::SymbolInstance { symbol, xf } = &n.kind else { return };
     let Some(nat) = natural.get(symbol.as_str()) else { return };
     let [a, b, c, d, e, f] = xf.as_coeffs();
     let [na, _, _, nd, _, _] = nat.as_coeffs();
@@ -373,7 +384,12 @@ fn snap_instance(n: &mut Node, natural: &HashMap<String, Affine>) {
         return;
     }
     let (x, y) = (e.round(), f.round());
-    if x != e || y != f {
+    if x == e && y == f {
+        return;
+    }
+    n.transform(Affine::translate((x - e, y - f)), Scaling::default());
+    // Whole points exactly, which adding the offset to the old position need not give.
+    if let NodeKind::SymbolInstance { xf, .. } = &mut n.kind {
         *xf = Affine::new([a, b, c, d, x, y]);
     }
 }

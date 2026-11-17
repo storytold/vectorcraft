@@ -12,6 +12,7 @@ pub mod image;
 pub mod packaging;
 pub mod pathtools;
 pub mod pen;
+pub mod polygonal_lasso;
 pub mod select;
 pub mod shapes;
 pub mod typetools;
@@ -33,6 +34,7 @@ pub fn plugin_menu() -> Vec<Item> {
         Item::Sub("Image Tools", image::menu()),
         Item::Sub("Packaging Tools", packaging::menu()),
         Item::Sub("Path Precision Tools", pathtools::menu()),
+        Item::Sub("Polygonal Lasso", polygonal_lasso::menu()),
         Item::Sub("Selection Tools", select::menu()),
         Item::Sub("Smart Pen", pen::menu()),
         Item::Sub("Type Tools", typetools::menu()),

@@ -50,10 +50,10 @@ pub struct Selection {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key_guide: Option<NodeId>,
     /// The key anchor for Align: one of two or more anchor points selected with Direct Selection,
-    /// the last one a Shift-click added (path, anchor in [`Self::anchors`]). Align and Distribute
-    /// move the other selected points relative to it, and it stays in place. Never set with `key`
-    /// or `key_guide`; [`Self::prune`] clears it when the point is no longer a selected anchor, or
-    /// fewer than two points are selected.
+    /// designated by clicking an already-selected anchor point without modifiers (path, anchor in
+    /// [`Self::anchors`]). Align and Distribute move the other selected points relative to it, and
+    /// it stays in place. Never set with `key` or `key_guide`; [`Self::prune`] clears it when the
+    /// point is no longer a selected anchor, or fewer than two points are selected.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key_anchor: Option<(NodeId, AnchorRef)>,
     /// The new art on a locked artboard that this selection keeps editable
@@ -311,7 +311,7 @@ impl Selection {
         let anchor_kept = self.key_anchor.is_some_and(|(id, (si, ai))| {
             self.objects.contains(&id)
                 && !self.segments.contains_key(&id)
-                && self.anchors.get(&id).is_some_and(|set| set.contains(&(si, ai)))
+                && (self.anchors.get(&id).is_some_and(|set| set.contains(&(si, ai))) || !self.anchors.contains_key(&id))
                 && found
                     .get(&id)
                     .and_then(|p| doc.node_at(p))
