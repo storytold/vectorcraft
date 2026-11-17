@@ -3581,7 +3581,7 @@ digits	Malayalam	Malayalam
 	Show Vivid/Muted	Afficher vives/atténuées
 	Show Warm/Cool	Afficher chaudes/froides
 	Show {kind} Brushes	Afficher les formes de type {kind}
-	Show/hide plate (Alt-click: only this plate)	Afficher/masquer la plaque (Alt+clic : cette plaque uniquement)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Afficher/masquer la plaque (Alt+clic : cette plaque uniquement, puis à nouveau toutes les plaques)
 	Show:	Afficher :
 	Shown with the optimised preview.	Affiché avec l’aperçu optimisé.
 	Side 1:	Côté 1 :

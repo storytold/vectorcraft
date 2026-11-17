@@ -3625,7 +3625,7 @@ digits	Malayalam	Малаялам
 	Show Vivid/Muted	Показать яркие/приглушённые
 	Show Warm/Cool	Показать тёплые/холодные
 	Show {kind} Brushes	Показать кисти {kind}
-	Show/hide plate (Alt-click: only this plate)	Показать/скрыть пластину (Alt+щелчок: только эту пластину)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Показать/скрыть пластину (Alt+щелчок: только эту пластину; повторный Alt+щелчок: все пластины)
 	Show:	Показать:
 	Shown with the optimised preview.	Показано с оптимизированным просмотром.
 	Side 1:	Сторона 1:

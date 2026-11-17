@@ -3428,7 +3428,7 @@ mark-style	Japanese	日本式
 	Show all plates	すべての版を表示
 	Show handles when multiple anchors are selected	複数のアンカーを選択したときにハンドルを表示
 	Show {kind} Brushes	{kind}ブラシを表示
-	Show/hide plate (Alt-click: only this plate)	版の表示／非表示 (Alt+クリック: この版のみ)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	版の表示／非表示 (Alt+クリック: この版のみ、もう一度 Alt+クリック: すべての版)
 	Show:	表示:
 	Shown with the optimised preview.	最適化プレビューで表示されます。
 	Side 1:	辺 1:
