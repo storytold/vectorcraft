@@ -20,7 +20,7 @@ use vectorcraft_geom::Point;
 use super::{hit_anchor, hit_segment, insert_anchor, remove_anchor};
 use crate::direct::hit_handle;
 use crate::guides::{DrawSnap, HandleSnap};
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, PixelOp, Tool, ToolContext, ToolKey};
+use crate::{Action, Cursor, Mods, Overlay, PixelOp, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 use vectorcraft_geom::constrain_angle_from;
 
 #[derive(Clone, Copy, Debug)]
@@ -157,8 +157,12 @@ impl AnchorTool {
     /// still supplies alignment and intersection guides; pixel and grid snapping keep precedence.
     fn resolve_scissors_snap(&mut self, cx: &ToolContext, raw: Point, snapped: Point) -> Point {
         let eligible = |p| hit_anchor(cx, p, 0.0).is_some() || hit_segment(cx, p, cx.pick_tol()).is_some();
-        let fallback =
-            (cx.smart_guides || cx.snap_to_point) && !cx.snaps_to_pixel(PixelOp::Drawing) && !cx.snap_to_grid && snapped != raw && !eligible(snapped) && eligible(raw);
+        let fallback = (cx.smart_guides || cx.snap_to_point)
+            && !cx.snaps_to_pixel(PixelOp::Drawing)
+            && !cx.snap_to_grid
+            && snapped != raw
+            && !eligible(snapped)
+            && eligible(raw);
         let snapped = if fallback {
             self.scissors_snap.clear();
             raw
