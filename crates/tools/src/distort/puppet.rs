@@ -422,7 +422,7 @@ impl Tool for PuppetWarpTool {
                 }
                 None => vec![],
             },
-            PointerKind::DoubleClick => vec![],
+            PointerKind::DoubleClick | PointerKind::TripleClick => vec![],
         }
     }
     /// Delete/Backspace remove the selected pins; with none selected they are the shortcut's

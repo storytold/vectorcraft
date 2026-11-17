@@ -299,6 +299,9 @@ impl Tool for BrushPaintTool {
     fn busy(&self) -> bool {
         self.inner.busy()
     }
+    fn readout(&self, cx: &ToolContext) -> Option<crate::Readout> {
+        Some(crate::Readout::Brush { name: self.brush_name(cx) })
+    }
     fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         let acts = self.inner.deactivate(cx);
         self.map(cx, acts)

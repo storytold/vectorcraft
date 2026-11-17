@@ -42,8 +42,10 @@ fn drag_id() -> Id {
     Id::unique("revolve-gizmo-drag")
 }
 
+/// Is a rotation or light gesture in progress, on the artboard or on the classic 3D effects' track
+/// cube?
 pub(crate) fn dragging(ctx: &egui::Context) -> bool {
-    ctx.data(|m| m.get_temp::<Drag>(drag_id())).is_some()
+    ctx.data(|m| m.get_temp::<Drag>(drag_id())).is_some() || super::three_d_classic::cube_dragging(ctx)
 }
 
 pub(super) fn clear(ctx: &egui::Context) {
@@ -186,13 +188,13 @@ struct Drag {
     fields: serde_json::Map<String, serde_json::Value>,
 }
 
-fn wrap(n: f64, snap: bool) -> f64 {
+pub(super) fn wrap(n: f64, snap: bool) -> f64 {
     let n = if snap { (n / 15.0).round() * 15.0 } else { n };
     (n + 180.0).rem_euclid(360.0) - 180.0
 }
 
 /// A Height, 0° to 90°, on 15° steps with Shift.
-fn snap_height(height: f64, snap: bool) -> f64 {
+pub(super) fn snap_height(height: f64, snap: bool) -> f64 {
     (if snap { (height / 15.0).round() * 15.0 } else { height }).clamp(0.0, 90.0)
 }
 

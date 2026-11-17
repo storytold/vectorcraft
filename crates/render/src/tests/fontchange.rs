@@ -117,6 +117,24 @@ fn variable_font_settings_are_not_highlighted_as_substituted_glyphs() {
     assert!(g.alternate_glyphs(&t).elements().is_empty());
 }
 
+/// Type in a missing font that starts before its open path: only the characters drawn on the path
+/// are highlighted as substituted.
+#[test]
+fn characters_before_an_open_path_are_not_highlighted() {
+    let _steady = fonts_steady();
+    let style = CharStyle { size: 20.0, font_family: "No Such Family 5932".into(), ..Default::default() };
+    let mut t = TextObject::point(Point::ZERO, "MMMM", style);
+    let mut line = vectorcraft_geom::BezPath::new();
+    line.move_to((0.0, 50.0));
+    line.line_to((500.0, 50.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let whole = text_geom(&t).substituted_fonts;
+    assert!(!whole.elements().is_empty());
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: -0.9, end: None };
+    let g = text_geom(&t);
+    assert!(g.all.elements().is_empty() && g.substituted_fonts.elements().is_empty(), "{:?}", g.substituted_fonts);
+}
+
 /// Type in a composite font draws each class of character in its part's face, which is not a
 /// substitute: Document Setup's highlight of substituted glyphs leaves it alone.
 #[test]
@@ -127,7 +145,7 @@ fn composite_font_parts_are_not_highlighted_as_substituted_glyphs() {
     let mut parts = CompositeParts::all(CompositePart::new("Source Sans 3", "Regular"));
     parts.roman = CompositePart::new("JetBrains Mono", "Regular");
     parts.numerals = CompositePart::new("Inter", "Regular");
-    db.set_composite_font(&CompositeFont { name: "CF Highlight".into(), parts });
+    db.set_composite_font(&CompositeFont { name: "CF Highlight".into(), parts, custom: Vec::new() });
     let style = CharStyle { size: 40.0, font_family: "CF Highlight".into(), ..Default::default() };
     let t = TextObject::point(Point::new(10.0, 60.0), "Ab12", style);
     let g = text_geom(&t);
@@ -157,7 +175,7 @@ fn a_documents_own_composite_font_draws_without_being_registered() {
     let (mut composite, id) = typed(NAME);
     let mut parts = CompositeParts::all(CompositePart::new("Source Sans 3", "Regular"));
     parts.roman = CompositePart::new("JetBrains Mono", "Regular");
-    composite.composite_fonts.push(CompositeFont { name: NAME.into(), parts });
+    composite.composite_fonts.push(CompositeFont { name: NAME.into(), parts, custom: Vec::new() });
     let (plain, plain_id) = typed("JetBrains Mono");
     assert!(db.composite_font(NAME).is_none());
     let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
@@ -218,7 +236,7 @@ fn a_placed_document_draws_its_own_definition_of_a_name_the_page_defines() {
     let definition = |roman: &str| {
         let mut parts = CompositeParts::all(CompositePart::new("Source Sans 3", "Regular"));
         parts.roman = CompositePart::new(roman, "Regular");
-        CompositeFont { name: NAME.into(), parts }
+        CompositeFont { name: NAME.into(), parts, custom: Vec::new() }
     };
     let typed = |family: &str| {
         let mut d = Document::new(300.0, 150.0);
@@ -301,7 +319,7 @@ fn a_document_draws_type_in_another_documents_composite_font_as_missing() {
     };
     let mut parts = CompositeParts::all(CompositePart::new("Source Sans 3", "Regular"));
     parts.roman = CompositePart::new("JetBrains Mono", "Regular");
-    db.set_composite_font(&CompositeFont { name: NAME.into(), parts });
+    db.set_composite_font(&CompositeFont { name: NAME.into(), parts, custom: Vec::new() });
     let (drawn, as_missing, in_front) = (draw(&back, id), draw(&missing, missing_id), draw(&plain, plain_id));
     db.remove_composite_font(NAME);
     assert!(drawn.0 != in_front.0, "not in the front document's definition");

@@ -1061,8 +1061,8 @@ impl Writer<'_> {
                     (self.xf, self.instance_xf) = saved;
                     return;
                 }
-                if let Some(def) = self.symbol_use(sym, n, *xf) {
-                    let m = self.xf * *xf;
+                let m = self.xf * *xf;
+                if let Some(def) = self.symbol_use(sym, n, m) {
                     let tr = if m == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(m)) };
                     self.line(&format!("<use{id} xlink:href=\"#{def}\"{tr}{a}/>"));
                     return;
@@ -1103,7 +1103,8 @@ impl Writer<'_> {
         }
     }
 
-    /// The id of the `<symbol>` def instance `inst` (transform `xf`) can `<use>`, written on first
+    /// The id of the `<symbol>` def instance `inst` can `<use>` with transform `xf` (the `<use>`'s
+    /// own: the instance's transform after those of the instances it sits in), written on first
     /// use. `None` when the instance needs its own copy of the art: stained by its fill, or moved
     /// by a transform under which the def would not look as the canvas paints it ([`Reuse`]).
     fn symbol_use(&mut self, sym: &vectorcraft_doc::Symbol, inst: &Node, xf: Affine) -> Option<String> {

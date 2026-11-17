@@ -173,6 +173,10 @@ pub struct PatternDef {
     /// Size Tile to Art: the tile is the art bounds grown by the spacing.
     #[serde(default)]
     pub size_tile_to_art: bool,
+    /// Move Tile with Art: in pattern editing mode, a move of all of the tile art moves the tile by
+    /// the same offset.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub move_tile_with_art: bool,
     #[serde(default)]
     pub h_spacing: f64,
     #[serde(default)]
@@ -202,6 +206,7 @@ impl PatternDef {
             art,
             overlap: Overlap::default(),
             size_tile_to_art: false,
+            move_tile_with_art: false,
             h_spacing: 0.0,
             v_spacing: 0.0,
             copies: 5,

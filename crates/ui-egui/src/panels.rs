@@ -190,6 +190,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         learn::ID => learn::show(app, ui),
         crate::addons::cleanup::ID => crate::addons::cleanup::show(app, ui),
         crate::addons::color::ID => crate::addons::color::show(app, ui),
+        crate::addons::packaging::ID => crate::addons::packaging::show(app, ui),
         crate::addons::pathtools::ID => crate::addons::pathtools::show(app, ui),
         crate::addons::pathtools::shape::ID => crate::addons::pathtools::shape::show(app, ui),
         crate::addons::pen::ID => crate::addons::pen::show(app, ui),
@@ -245,6 +246,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) -> bool
         variables::ID => variables::menu(app, ui),
         script_console::ID => script_console::menu(app, ui),
         "actions" => actions::menu(app, ui),
+        crate::addons::packaging::ID => crate::addons::packaging::panel_menu(app, ui),
         id if library_panel::parse(id).is_some() => library_panel::menu(app, ui, id),
         _ => return false,
     }
@@ -265,7 +267,7 @@ pub fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, rect: Rect) {
     let resp = menu_button(ui, id, rect);
     egui::Popup::menu(&resp).show(|ui| {
         crate::widgets::menu_scroll(ui, |ui| {
-            ui.set_min_width(220.0);
+            crate::widgets::menu_min_width(ui, 220.0);
             if panel_menu_items(app, ui, id) {
                 ui.separator();
             }
@@ -514,6 +516,42 @@ pub(crate) fn set_pstate<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, 
     ctx.data_mut(|d| d.insert_temp(egui::Id::unique(("panel-state", key)), v));
 }
 
+/// `ui.panelView {panel, view?}`: set the view of the Swatches, Graphic Styles or Symbols panel
+/// (`panel`: swatches, graphicStyles or symbols), as the view items of its panel menu do; without
+/// `view`, answer the current one. An unknown panel or view is an error, and then nothing changes.
+/// → {panel, view}
+pub(crate) fn set_view(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    fn given<T: serde::de::DeserializeOwned>(p: &Value, err: &str) -> Result<Option<T>, String> {
+        match p.get("view") {
+            None | Some(Value::Null) => Ok(None),
+            Some(v) => serde_json::from_value(v.clone()).map(Some).map_err(|_| err.to_string()),
+        }
+    }
+    let ui = &mut app.ui;
+    let (panel, view) = match p.get("panel").and_then(Value::as_str) {
+        Some("swatches") => {
+            if let Some(v) = given(p, "`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList")? {
+                ui.swatches_view = v;
+            }
+            ("swatches", json!(ui.swatches_view))
+        }
+        Some("graphicStyles") => {
+            if let Some(v) = given(p, "`view` is thumbnail, smallList or largeList")? {
+                ui.graphic_styles_view = v;
+            }
+            ("graphicStyles", json!(ui.graphic_styles_view))
+        }
+        Some("symbols") => {
+            if let Some(v) = given(p, "`view` is thumbnail, smallList or largeList")? {
+                ui.symbols_view = v;
+            }
+            ("symbols", json!(ui.symbols_view))
+        }
+        _ => return Err("`panel` is swatches, graphicStyles or symbols".to_string()),
+    };
+    Ok(json!({ "panel": panel, "view": view }))
+}
+
 /// Whether the panel whose state is `key` has the keyboard for its rows (Delete and Backspace
 /// remove its highlighted rows): it took it with a click on a row ([`set_row_keys`]) and kept it in
 /// every frame since, so it lapses when the panel isn't drawn.
@@ -580,13 +618,16 @@ pub(crate) fn label_or_name(s: &str, built_in: bool) -> &str {
     crate::i18n::label_or_name(crate::i18n::current(), s, built_in)
 }
 
-/// "Recent Colors" header + rows of chips (the Session's recent colours, which every paint
-/// command feeds), wrapped onto as many rows as the panel's width needs; returns the one clicked,
-/// for the caller to apply. A chip drags its color as a solid paint, which the Swatches panel
-/// makes a swatch of.
-pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui) -> Option<Color> {
+/// Rows of chips (the Session's recent colors, which every paint command feeds), wrapped onto as
+/// many rows as the panel's width needs, under a "Recent Colors" header when `heading` is set;
+/// returns the one clicked, for the caller to apply. The chips sit in a group that, without the
+/// header, screen readers name "Recent Colors". A chip drags its color as a solid paint, which
+/// the Swatches panel makes a swatch of.
+pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui, heading: bool) -> Option<Color> {
     let t = Tokens::get(ui.ctx());
-    crate::widgets::subheader(ui, tl!("Recent Colors"));
+    if heading {
+        crate::widgets::subheader(ui, tl!("Recent Colors"));
+    }
     let width = ui.available_width();
     let colors = &app.session.recent_colors;
     // Chips are 16 px on a 19 px pitch, inset 3 px, with 2 px kept clear of the right edge.
@@ -594,11 +635,22 @@ pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui) -> Option<Col
     let rows = colors.len().div_ceil(per_row).max(1);
     let (r, _) = ui.allocate_exact_size(vec2(width, 3.0 + rows as f32 * 19.0), Sense::hover());
     ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+    // The chips go in a child `Ui` over the box, so screen readers find them inside its group;
+    // their ids stay under the caller's scope.
+    let scope = ui.scope_id();
+    let mut builder = egui::UiBuilder::new().max_rect(r).accessibility_role(egui::accesskit::Role::Group);
+    if !heading {
+        builder = builder.accessibility_label(tl!("Recent Colors"));
+    }
+    let ui = &mut ui.new_child(builder);
+    ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
+        node.set_bounds(egui::accesskit::Rect { x0: r.min.x.into(), y0: r.min.y.into(), x1: r.max.x.into(), y1: r.max.y.into() });
+    });
     let mut chosen = None;
     for (i, c) in colors.iter().enumerate() {
         let (row, col) = (i / per_row, i % per_row);
         let cell = Rect::from_min_size(r.min + vec2(3.0 + col as f32 * 19.0, 3.0 + row as f32 * 19.0), vec2(16.0, 16.0));
-        let resp = ui.interact(cell, ui.scope_id().with(("recent", i)), Sense::click_and_drag());
+        let resp = ui.interact(cell, scope.with(("recent", i)), Sense::click_and_drag());
         crate::widgets::drag_source(ui, &resp, || crate::widgets::PanelDrag::paint(Paint::solid(*c)));
         crate::widgets::swatch_tile(ui, cell, &Paint::solid(*c), false, resp.hovered());
         if resp.on_hover_text(c.to_hex()).clicked() {

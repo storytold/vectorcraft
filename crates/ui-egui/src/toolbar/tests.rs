@@ -147,9 +147,9 @@ fn more_tools_open_their_options() {
     assert!(open_options(&mut app, "pieGraph").is_err());
     assert!(app.ui.dialog.is_none());
     app.run("graph.create", json!({"type": "column", "x": 0, "y": 0, "width": 200, "height": 150})).unwrap();
-    assert_eq!(open_options(&mut app, "pieGraph").unwrap()["dialog"], "command");
+    assert_eq!(open_options(&mut app, "pieGraph").unwrap()["dialog"], "graphType");
     let d = app.ui.dialog.take().unwrap();
-    assert_eq!((d.str("__command"), d.str("type")), ("graph.setType".to_string(), "column".to_string()));
+    assert_eq!((d.kind.as_str(), d.str("type")), (crate::dialogs::graph_type::KIND, "column".to_string()));
     // The Magic Wand panel opens, and stays open on a second double-click.
     open_options(&mut app, "magicWand").unwrap();
     assert!(crate::panel_docking::showing(&app.ui, "magicWand"));

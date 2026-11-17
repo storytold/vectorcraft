@@ -103,6 +103,38 @@ pub fn ellipse(r: Rect) -> PathData {
     PathData::single(SubPath::new(anchors, true))
 }
 
+/// Ellipse inscribed in `r` with `n` smooth anchors (at least 2) spaced evenly by angle, clockwise
+/// on screen from the left one, as [`ellipse`] runs. Each segment is a cubic whose handles are
+/// 4/3·tan(θ/4) of the tangent at its ends (θ = 360°/`n`), scaled along each axis; the path is then
+/// fitted to `r`, so its bounds are `r` whatever the count. 4 anchors give [`ellipse`].
+pub fn ellipse_with_anchors(r: Rect, n: u32) -> PathData {
+    let n = n.max(2);
+    let r = r.abs();
+    let c = r.center();
+    let (rx, ry) = (r.width() / 2.0, r.height() / 2.0);
+    let step = TAU / f64::from(n);
+    let k = 4.0 / 3.0 * (step / 4.0).tan();
+    let anchors = (0..n)
+        .map(|i| {
+            // From the left anchor (angle π). With y down, sin is negative just past π, so the next
+            // anchor is above the centre: left, then top, then right, as `ellipse` runs.
+            let a = PI + step * f64::from(i);
+            let p = Point::new(c.x + rx * a.cos(), c.y + ry * a.sin());
+            let d = Vec2::new(-rx * a.sin(), ry * a.cos()) * k;
+            Anchor { p, h_in: p - d, h_out: p + d, kind: AnchorKind::Smooth }
+        })
+        .collect();
+    let path = PathData::single(SubPath::new(anchors, true));
+    // Between anchors a curve can reach a little past the ellipse or stop short of it (0.15% of
+    // the height with 3 anchors): fit the bounds to `r` along each axis that has a size.
+    let Some(b) = path.bounds() else { return path };
+    let fit = |want: f64, got: f64| if want > 0.0 && got > 0.0 { want / got } else { 1.0 };
+    let (sx, sy) = (fit(r.width(), b.width()), fit(r.height(), b.height()));
+    path.transformed(
+        kurbo::Affine::translate(r.origin().to_vec2()) * kurbo::Affine::scale_non_uniform(sx, sy) * kurbo::Affine::translate(-b.origin().to_vec2()),
+    )
+}
+
 /// How an ellipse or shape arc is closed or left open when cut between start and end angles.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -294,6 +326,33 @@ fn contour_with_rounding(pts: &[Point], rounded: f64) -> PathData {
         anchors.push(Anchor { p, h_in, h_out, kind: AnchorKind::Smooth });
     }
     PathData::single(SubPath::new(anchors, true))
+}
+
+/// The circle through the points `a`, `b` and `c`: its center and radius. `None` when two of the
+/// points are the same or the three lie on one line, which this takes to be when twice the
+/// triangle's area is at most 10⁻¹⁰ of its longest side squared.
+pub fn circle_through(a: Point, b: Point, c: Point) -> Option<(Point, f64)> {
+    // The corner opposite the longest side is the origin, so the two shorter sides are used.
+    let (ab, bc, ca) = ((b - a).hypot2(), (c - b).hypot2(), (a - c).hypot2());
+    let (o, p, q, longest) = if bc >= ab && bc >= ca {
+        (a, b, c, bc)
+    } else if ca >= ab {
+        (b, c, a, ca)
+    } else {
+        (c, a, b, ab)
+    };
+    let (u, v) = (p - o, q - o);
+    let cross = u.cross(v);
+    // Not a number, or nearly zero: no circle (a not-a-number side fails the finite check below).
+    if cross.is_nan() || cross.abs() <= 1e-10 * longest {
+        return None;
+    }
+    let (uu, vv) = (u.hypot2(), v.hypot2());
+    let d = 2.0 * cross;
+    let offset = Vec2::new((v.y * uu - u.y * vv) / d, (u.x * vv - v.x * uu) / d);
+    let center = o + offset;
+    let radius = offset.hypot();
+    (center.is_finite() && radius.is_finite()).then_some((center, radius))
 }
 
 /// Regular polygon with `sides` (≥ 3), first vertex straight up from the centre.
@@ -670,6 +729,47 @@ mod tests {
         assert!(ellipse_pie(r, f64::NAN, 10.0).anchor_count() == 4, "not a number: the whole ellipse");
     }
 
+    /// The circle through three points against the closed form: (0, 0), (8, 0) and (0, 6) lie on
+    /// the circle with the hypotenuse (8, 0)–(0, 6) as its diameter, center (4, 3) and radius 5.
+    #[test]
+    fn the_circle_through_three_points_has_the_closed_form_center_and_radius() {
+        let (o, a, b) = (Point::ORIGIN, Point::new(8.0, 0.0), Point::new(0.0, 6.0));
+        for (p, q, r) in [(o, a, b), (a, b, o), (b, o, a), (b, a, o)] {
+            let (c, radius) = circle_through(p, q, r).unwrap();
+            assert!(c.distance(Point::new(4.0, 3.0)) < 1e-12 && (radius - 5.0).abs() < 1e-12, "{c:?} {radius}");
+        }
+        // Moved far from the origin, the answer moves with the points.
+        let far = Vec2::new(3.0e6, -2.0e6);
+        let (c, radius) = circle_through(o + far, a + far, b + far).unwrap();
+        assert!(c.distance(Point::new(4.0, 3.0) + far) < 1e-6 && (radius - 5.0).abs() < 1e-6, "{c:?} {radius}");
+    }
+
+    /// Two points that are the same, or three on one line, give no circle.
+    #[test]
+    fn coincident_or_collinear_points_give_no_circle() {
+        let (a, b) = (Point::new(1.0, 2.0), Point::new(5.0, 7.0));
+        assert_eq!(circle_through(a, a, b), None);
+        assert_eq!(circle_through(a, b, b), None);
+        assert_eq!(circle_through(a, a, a), None);
+        assert_eq!(circle_through(a, b, a.midpoint(b)), None);
+        assert_eq!(circle_through(a, b, a + (b - a) * 3.0), None);
+        assert_eq!(circle_through(a, b, Point::new(f64::NAN, 0.0)), None);
+    }
+
+    /// Nearly on one line: a point 10⁻⁴ off a chord 2000 long still gives the circle (its sagitta
+    /// formula `r = (h² + (L/2)²) / 2h`), and its center sits on the chord's perpendicular
+    /// bisector; a point 10⁻¹² off it does not.
+    #[test]
+    fn nearly_collinear_points_give_a_stable_circle() {
+        let (a, b) = (Point::new(-1000.0, 0.0), Point::new(1000.0, 0.0));
+        let h = 1e-4;
+        let (c, radius) = circle_through(a, b, Point::new(0.0, h)).unwrap();
+        let want = (h * h + 1000.0 * 1000.0) / (2.0 * h);
+        assert!((radius - want).abs() / want < 1e-9, "{radius} vs {want}");
+        assert!(c.x.abs() < 1e-6 && (c.y - (h - want)).abs() / want < 1e-9, "{c:?}");
+        assert_eq!(circle_through(a, b, Point::new(0.0, 1e-12)), None);
+    }
+
     #[test]
     fn rect_is_4_corners_clockwise() {
         let p = rectangle(Rect::new(0.0, 0.0, 100.0, 50.0));
@@ -691,6 +791,29 @@ mod tests {
         assert!((b.width() - 100.0).abs() < 1e-6 && (b.height() - 60.0).abs() < 1e-6);
         let area = p.subpaths[0].area().abs();
         assert!((area - PI * 50.0 * 30.0).abs() / area < 0.001);
+    }
+
+    #[test]
+    fn ellipse_with_four_anchors_is_the_ellipse_and_others_fit_the_box() {
+        let r = Rect::new(10.0, 20.0, 110.0, 80.0);
+        let (four, plain) = (ellipse_with_anchors(r, 4), ellipse(r));
+        for (a, b) in four.subpaths[0].anchors.iter().zip(&plain.subpaths[0].anchors) {
+            assert!(a.p.distance(b.p) < 1e-9 && a.h_in.distance(b.h_in) < 1e-9 && a.h_out.distance(b.h_out) < 1e-9, "{a:?} {b:?}");
+        }
+        for n in [2, 3, 5, 7, 9, 1000] {
+            let p = ellipse_with_anchors(r, n);
+            assert_eq!(p.anchor_count(), n as usize);
+            let b = p.bounds().unwrap();
+            assert!(
+                (b.x0 - r.x0).abs() < 1e-9 && (b.y0 - r.y0).abs() < 1e-9 && (b.x1 - r.x1).abs() < 1e-9 && (b.y1 - r.y1).abs() < 1e-9,
+                "{n}: {b:?}"
+            );
+            let area = p.subpaths[0].area().abs();
+            assert!((area - PI * 50.0 * 30.0).abs() / area < if n == 2 { 0.1 } else { 0.01 }, "{n}: {area}");
+        }
+        // A box with no height leaves the path flat rather than dividing by zero.
+        let flat = ellipse_with_anchors(Rect::new(0.0, 5.0, 40.0, 5.0), 6);
+        assert!(flat.subpaths[0].anchors.iter().all(|a| a.p.y == 5.0 && a.p.x.is_finite()));
     }
 
     #[test]
@@ -814,7 +937,7 @@ mod tests {
         for decay in [20.0, 30.0, 50.0, 80.0, 95.0] {
             for clockwise in [true, false] {
                 let p = spiral(center, 100.0, decay, 8, clockwise);
-                let anchors = &p.subpaths[0].anchors;
+                let anchors = &p.subpaths[0].anchors.to_vec();
                 let k = (decay / 100.0_f64).ln() / TAU;
                 let mut worst = 0.0_f64;
                 for pair in anchors.windows(2) {

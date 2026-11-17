@@ -49,6 +49,13 @@ pub struct Selection {
     /// it when no object is selected to align to it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key_guide: Option<NodeId>,
+    /// The key anchor for Align: one of two or more anchor points selected with Direct Selection,
+    /// designated by clicking an already-selected anchor point without modifiers (path, anchor in
+    /// [`Self::anchors`]). Align and Distribute move the other selected points relative to it, and
+    /// it stays in place. Never set with `key` or `key_guide`; [`Self::prune`] clears it when the
+    /// point is no longer a selected anchor, or fewer than two points are selected.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key_anchor: Option<(NodeId, AnchorRef)>,
     /// The new art on a locked artboard that this selection keeps editable
     /// ([`Document::new_art`]). Undo, Redo and a failed batch restore it with the selection, and
     /// the engine then sets the document's from it. Editing state, never saved.
@@ -98,6 +105,7 @@ impl Selection {
         self.slices.clear();
         self.guides.clear();
         self.key_guide = None;
+        self.key_anchor = None;
         self.symbol_part = None;
         self.on_path_member = None;
     }
@@ -113,9 +121,15 @@ impl Selection {
         self.set([instance]);
         self.symbol_part = Some(SymbolPart { instance, path });
     }
-    /// Is there a key for Align: an object or a guide?
+    /// Is there a key for Align: an object, a guide or an anchor point?
     pub fn has_key(&self) -> bool {
-        self.key.is_some() || self.key_guide.is_some()
+        self.key.is_some() || self.key_guide.is_some() || self.key_anchor.is_some()
+    }
+    /// Where the key anchor ([`Self::key_anchor`]) is. `None` without one, or when the point is
+    /// gone from its path.
+    pub fn key_anchor_point(&self, doc: &Document) -> Option<vectorcraft_geom::Point> {
+        let (id, (si, ai)) = self.key_anchor?;
+        Some(doc.node(id)?.path_data()?.subpaths.get(si)?.anchors.get(ai)?.p)
     }
     pub fn set(&mut self, ids: impl IntoIterator<Item = NodeId>) {
         self.clear();
@@ -143,6 +157,9 @@ impl Selection {
         if self.key == Some(id) {
             self.key = None;
         }
+        if self.key_anchor.is_some_and(|(k, _)| k == id) {
+            self.key_anchor = None;
+        }
     }
     /// [`Self::remove`] for each of `ids`, going through the selected objects once.
     pub fn remove_all(&mut self, ids: impl IntoIterator<Item = NodeId>) {
@@ -161,6 +178,9 @@ impl Selection {
         }
         if self.key.is_some_and(|k| ids.contains(&k)) {
             self.key = None;
+        }
+        if self.key_anchor.is_some_and(|(k, _)| ids.contains(&k)) {
+            self.key_anchor = None;
         }
     }
     /// Select slices `ids` (see [`Selection::slices`]) and nothing else.
@@ -271,6 +291,40 @@ impl Selection {
         if self.key.is_some() || self.objects.is_empty() || self.key_guide.is_some_and(|k| !self.guides.contains(&k)) {
             self.key_guide = None;
         }
+        // A key anchor needs its point on its path and selected as an anchor point (not as a
+        // selected segment's end), with another point selected too: another anchor, or a path
+        // selected whole (Align and Distribute act on path points only). It takes the place of a
+        // key object or key guide.
+        let path_of = |o: &NodeId| found.get(o).and_then(|p| doc.node_at(p)).and_then(|n| n.path_data());
+        let whole_path = |o: &NodeId| !self.anchors.contains_key(o) && path_of(o).is_some_and(|path| path.anchors().next().is_some());
+        // Selected anchor points that are on their paths, counted up to two.
+        let points = || {
+            self.anchors
+                .iter()
+                .flat_map(|(o, set)| {
+                    let path = path_of(o);
+                    set.iter().filter(move |&&(si, ai)| path.is_some_and(|p| p.subpaths.get(si).is_some_and(|sp| ai < sp.anchors.len())))
+                })
+                .take(2)
+                .count()
+        };
+        let anchor_kept = self.key_anchor.is_some_and(|(id, (si, ai))| {
+            self.objects.contains(&id)
+                && !self.segments.contains_key(&id)
+                && (self.anchors.get(&id).is_some_and(|set| set.contains(&(si, ai))) || !self.anchors.contains_key(&id))
+                && found
+                    .get(&id)
+                    .and_then(|p| doc.node_at(p))
+                    .and_then(|n| n.path_data())
+                    .is_some_and(|path| path.subpaths.get(si).is_some_and(|sp| ai < sp.anchors.len()))
+                && (points() >= 2 || self.objects.iter().any(whole_path))
+        });
+        if anchor_kept {
+            self.key = None;
+            self.key_guide = None;
+        } else {
+            self.key_anchor = None;
+        }
         // A selected part needs its instance selected alone, with no guides, its symbol dynamic
         // and the object still in the symbol's art as a path, compound path or type, where neither
         // it nor a group or layer around it is hidden, locked or a template.
@@ -347,6 +401,9 @@ impl Selection {
         self.segments.retain(|id, _| !gone.contains(id));
         if self.key.is_some_and(|k| gone.contains(&k)) {
             self.key = None;
+        }
+        if self.key_anchor.is_some_and(|(k, _)| gone.contains(&k)) {
+            self.key_anchor = None;
         }
     }
     /// Target `id` (see [`Selection::target`]): a layer gets its visible, unlocked art selected

@@ -15,6 +15,7 @@ use vectorcraft_pathops::BoolOp;
 use crate::ai_ops::{self, unit};
 use crate::ps;
 
+mod blends;
 mod brushes;
 mod envelopes;
 mod images;
@@ -25,18 +26,24 @@ mod texts;
 mod variables;
 
 #[cfg(test)]
+pub(super) use blends::BLENDS;
+pub(super) use blends::unbaked_blends;
+#[cfg(test)]
 pub(super) use brushes::BRUSHES;
 #[cfg(test)]
 pub(super) use envelopes::ENVELOPES;
-pub(super) use styles::{LARGE_CANVAS_STYLES, style_links, styled_objects};
+pub(super) use styles::{LARGE_CANVAS_STYLES, style_links, styled_definitions, styled_objects};
 #[cfg(test)]
 pub(super) use styles::{PANEL_EMPTY, PANEL_STYLES, STYLE_LINKS, WARPED_IMAGES, same_appearance};
+pub(super) use texts::wraps_held;
 
 pub(super) use images::PAYLOAD;
 #[cfg(test)]
 pub(super) use images::{IMAGE_DEPTH, IMAGES, LINKS_EMBEDDED};
 #[cfg(test)]
-pub(super) use paints::{GRADIENT_HUE, GRADIENT_MIX, GRADIENT_SHAPES, GRADIENTS, STOP_LINKS, SWATCH_PLACEMENT, free_gradient_name};
+pub(super) use paints::{
+    GRADIENT_DITHER, GRADIENT_HUE, GRADIENT_PERCEPTUAL, GRADIENT_SHAPES, GRADIENTS, STOP_LINKS, SWATCH_PLACEMENT, free_gradient_name,
+};
 #[cfg(test)]
 pub(super) use symbols::{MISSING_SYMBOL, SYMBOL_ART, SYMBOL_COUNT, SYMBOL_OPTIONS};
 #[cfg(test)]
@@ -49,13 +56,13 @@ pub(super) use variables::{ACTIVE, BINDINGS, LIMITS, VALUES};
 /// [`vectorcraft_doc::MAX_DEPTH`].
 pub(super) const MAX_NEST: u32 = 8;
 
-pub(super) const TYPE: &str = "type in opacity masks, pattern tiles, symbols and art cut to a clipping object, mirrored type, area type and type on a path that is turned or unevenly scaled or whose frame or path has several parts, area type in an open frame, type on an open path whose ends meet, area type that flows around a text wrap, type of only white space, threads of type on a path, threads whose frames differ in orientation or hold a frame written as outlines, type of sizes past what the reader reads, stories past what the reader reads (1,048,576 bytes a story, 16,777,216 bytes in all, and the size of text document it reads), and type with inline graphics, ruby, gradient or pattern paint, or fills, strokes, effects or an opacity mask of the object's own, is written as its outlines in the editing data for other apps";
+pub(super) const TYPE: &str = "type in opacity masks, pattern tiles, symbols and art cut to a clipping object, mirrored type, area type and type on a path that is turned or unevenly scaled or whose frame or path has several parts, area type in an open frame, type on an open path whose ends meet, area type whose text wrap cannot be preserved from the saved objects, type of only white space, threads of type on a path, threads whose frames differ in orientation or hold a frame written as outlines, type of sizes past what the reader reads, stories past what the reader reads (1,048,576 bytes a story, 16,777,216 bytes in all, and the size of text document it reads), and type with inline graphics, ruby, gradient or pattern paint, or fills, strokes, effects or an opacity mask of the object's own, is written as its outlines in the editing data for other apps";
 pub(super) const PATTERNS: &str = "pattern fills whose tiles aren't a grid or whose art reaches past the tile, pattern fills in another pattern's tile or in a symbol, and pattern fills nested more than 8 deep are written as their tiles cut to the shape in the editing data for other apps";
 pub(super) const PATTERN_TILES: &str = "pattern fills with more tiles than a fill places are written filled gray in the editing data for other apps";
 pub(super) const CLIPPING: &str = "clipping groups and clipping layers whose clipping object isn't a path, and the clipping groups inside them, are written as their art cut to that object in the editing data for other apps";
 pub(super) const CLIP_PAINT: &str = "the fills and strokes of clipping paths that a plain fill and line can't draw are written as paths of their own inside the clipping (fills under the clipped art, strokes over it) in the editing data for other apps";
 pub(super) const CLIP_PAINT_MASKS: &str = "the opacity masks of clipping paths whose fills and strokes are written as paths of their own stay on the clipping path, not on those paths, in the editing data for other apps";
-pub(super) const LIVE: &str = "blends, meshes, repeats, placed documents and intertwines are written as their art in the editing data for other apps";
+pub(super) const LIVE: &str = "meshes, repeats, placed documents and intertwines are written as their art in the editing data for other apps";
 pub(super) const GRAPHS: &str = "graphs are written as their art, without their data or settings, in the editing data for other apps";
 pub(super) const STROKES: &str = "strokes a plain line can't draw (inside or outside the path, variable width, dots, dashes fitted to corners, gradients, patterns, arrowheads) are written as filled outlines, and brushed strokes as their brush's art, in the editing data for other apps";
 pub(super) const ITEM_TRANSPARENCY: &str =
@@ -133,6 +140,10 @@ struct Charges {
     kept_objects: usize,
     kept_symbol_nodes: u64,
     left_out: usize,
+    /// The objects written with the graphic style they are linked to, and those of them in the
+    /// definitions written.
+    links: usize,
+    kept_links: usize,
 }
 
 pub(super) struct Writer<'a> {
@@ -171,6 +182,8 @@ pub(super) struct Writer<'a> {
     definition_objects: usize,
     /// The objects of symbol art in those definitions ([`Self::symbol_nodes`]).
     definition_symbol_nodes: u64,
+    /// The objects in those definitions written with the graphic style they are linked to.
+    definition_links: usize,
     /// The most objects written ([`Self::take_objects`]): the most the reader reads,
     /// [`crate::import::MAX_EDITING_OBJECTS`].
     pub(super) max_objects: usize,
@@ -204,6 +217,12 @@ pub(super) struct Writer<'a> {
     /// The `hidden` and `nest` values at which the objects of the opacity mask's art being written
     /// are written: objects there may be written with their art styles.
     mask_level: Option<(u32, u32)>,
+    /// The `hidden` and `nest` values at which the objects of the envelope contents being written
+    /// are written ([`Self::envelope`]): type there may be written as type. With them, whether the
+    /// contents are in the envelope's dictionary, where the reader reads a copy of each text object.
+    contents_level: Option<(u32, u32, bool)>,
+    /// How many text objects were written as their outlines ([`Self::text`]).
+    outlined: usize,
     /// The image just written was written as a placed file.
     placed: bool,
     /// The image being written is the copy of a styled object on the layers, on `%_` lines: linked,
@@ -216,6 +235,10 @@ pub(super) struct Writer<'a> {
     bound: Vec<(vectorcraft_doc::NodeId, String, Vec<String>)>,
     /// The text document: the stories of the type written as text.
     pub(super) texts: texts::TextDoc,
+    /// The area type with wrap shapes that may be written as type ([`texts::wraps_held`]).
+    pub(super) wraps_held: HashSet<NodeId>,
+    /// Area type with wrap shapes was written as type.
+    wrapped_typed: bool,
     /// Symbol instances on the layers may be written as instances ([`Self::live_instance`]); false
     /// on a large canvas, where they are written as their art.
     pub(super) symbols_live: bool,
@@ -262,6 +285,12 @@ pub(super) struct Writer<'a> {
     /// The objects that may be written with an art style, as they were before baking, by id
     /// ([`styles::styled_objects`]).
     pub(super) styled: HashMap<NodeId, Arc<Node>>,
+    /// The objects of the opacity masks' art in each symbol's art and each pattern's tile art that
+    /// may be written with an art style, by the symbol's or pattern's name
+    /// ([`styles::styled_definitions`]). [`Self::define_symbol`] and [`Self::define_pattern`] write
+    /// a definition's art with its own as [`Self::styled`].
+    pub(super) symbol_styled: HashMap<String, styles::StyledMap>,
+    pub(super) pattern_styled: HashMap<String, styles::StyledMap>,
     /// The art styles written ([`styles`]).
     styles: styles::Styles,
     /// An object's drawn look is being written: no object in it is written with a style, and its
@@ -271,7 +300,8 @@ pub(super) struct Writer<'a> {
     /// brushed stroke's pieces) the art being written is in. Text wrap options are written only
     /// outside them, since only the document's own objects wrap type.
     drawn: u32,
-    /// The type just written as outlines has its text wrap options on the rectangle of its bounds
+    /// The type just written as outlines, or the symbol instance or live object just written as a
+    /// group of its art, has its text wrap options on the rectangle of its bounds
     /// ([`Self::wrap_bounds`]), not in the group's dictionary.
     wrap_moved: bool,
     /// The brushes written ([`brushes`]).
@@ -295,6 +325,21 @@ pub(super) struct Writer<'a> {
     shown: Vec<vectorcraft_geom::BezPath>,
     /// The copy of an image that the last [`Self::image`] wrote as a window, when it did.
     windowed: Option<images::Windowed>,
+    /// Writing a graph's art with its records ([`Self::graph_records`]): a graph inside it is written
+    /// as its art.
+    in_graph: bool,
+    /// The `Go` line the next object, a graph's series group, is followed by.
+    series_tag: Option<String>,
+    /// Where the `Go` lines of the graph being written start in [`Self::body`].
+    graph_tags: Vec<usize>,
+    /// Blends may be written live; false on a large canvas, where they are written as their steps.
+    pub(super) blends_live: bool,
+    /// How many more objects the reader's blends may lay out ([`crate::import::BLEND_BUDGET`]).
+    blend_budget: usize,
+    /// The entries naming a blend's key object in its dictionary, and the key's id.
+    blend_role: Option<(NodeId, String)>,
+    /// The blends baking left as they are ([`blends::unbaked_blends`]); only these are written live.
+    pub(super) unbaked_blends: HashSet<NodeId>,
 }
 
 impl<'a> Writer<'a> {
@@ -315,11 +360,15 @@ impl<'a> Writer<'a> {
             payloads: vec![],
             hidden: 0,
             mask_level: None,
+            contents_level: None,
+            outlined: 0,
             placed: false,
             styled_copy: false,
             typed: false,
             bound: vec![],
             texts: texts::TextDoc::default(),
+            wraps_held: HashSet::new(),
+            wrapped_typed: false,
             cms: vectorcraft_color::cms::active(),
             body: String::new(),
             warnings: vec![],
@@ -350,6 +399,8 @@ impl<'a> Writer<'a> {
             symbol_scales: HashMap::new(),
             root_entries: None,
             styled: HashMap::new(),
+            symbol_styled: HashMap::new(),
+            pattern_styled: HashMap::new(),
             styles: styles::Styles::default(),
             in_look: false,
             drawn: 0,
@@ -361,13 +412,27 @@ impl<'a> Writer<'a> {
             objects: 0,
             left_out: 0,
             definition_objects: 0,
+            definition_links: 0,
             definition_symbol_nodes: 0,
             max_objects: crate::import::MAX_EDITING_OBJECTS,
             last_samples: None,
             whole_images: HashMap::new(),
             shown: vec![],
             windowed: None,
+            in_graph: false,
+            series_tag: None,
+            graph_tags: vec![],
+            blends_live: true,
+            blend_budget: crate::import::BLEND_BUDGET,
+            blend_role: None,
+            unbaked_blends: HashSet::new(),
         }
+    }
+
+    /// Was area type with wrap shapes written as type, and art left out at the object limit
+    /// ([`Self::take_objects`])? The reader may then wrap that type by fewer objects than it had.
+    pub(super) fn wrapped_type_cut(&self) -> bool {
+        self.wrapped_typed && self.left_out > 0
     }
 
     /// Whether `count` more objects may be written: the objects written so far, counted as the
@@ -416,6 +481,8 @@ impl<'a> Writer<'a> {
             kept_objects: self.definition_objects,
             kept_symbol_nodes: self.definition_symbol_nodes,
             left_out: self.left_out,
+            links: self.styles.links_written,
+            kept_links: self.definition_links,
         }
     }
 
@@ -429,15 +496,18 @@ impl<'a> Writer<'a> {
     fn keep_since(&mut self, c: Charges) {
         self.definition_objects = c.kept_objects + (self.objects - c.objects);
         self.definition_symbol_nodes = c.kept_symbol_nodes + (self.symbol_nodes - c.symbol_nodes);
+        self.definition_links = c.kept_links + (self.styles.links_written - c.links);
     }
 
-    /// Art written since `c` as `lines` is not used: the objects and symbol art charged since are
-    /// given back, except those of the definitions written since, and the images `lines` marks
+    /// Art written since `c` as `lines` is not used: the objects and symbol art charged since, and
+    /// the objects counted as written with their graphic style, are given back, except those of the
+    /// definitions written since, and the images `lines` marks
     /// are emptied (the others keep their indices). An image whose whole copy is among them is no
     /// longer written whole ([`Self::whole_images`]).
     fn give_back(&mut self, c: Charges, lines: &str) {
         self.objects = c.objects + (self.definition_objects - c.kept_objects);
         self.symbol_nodes = c.symbol_nodes + (self.definition_symbol_nodes - c.kept_symbol_nodes);
+        self.styles.links_written = c.links + (self.definition_links - c.kept_links);
         let mut emptied = HashSet::new();
         for index in lines.split(PAYLOAD).skip(1).step_by(2) {
             if let Some((i, p)) = index.parse::<usize>().ok().and_then(|i| Some((i, self.payloads.get_mut(i)?))) {
@@ -642,6 +712,7 @@ impl<'a> Writer<'a> {
 
     /// One object: its state before it, its transparency, and its name and opacity mask after it.
     fn node(&mut self, n: &Node) {
+        let tag = self.series_tag.take();
         if let NodeKind::Layer { .. } = n.kind {
             return self.write_layer(n, &[]);
         }
@@ -652,15 +723,15 @@ impl<'a> Writer<'a> {
         if self.in_symbol {
             self.wrote_fixed |= symbols::redrawn(n);
         }
-        if n.extras().graph.is_some() && !self.in_look {
+        let graph = if n.extras().graph.is_some() && !self.in_look { self.graph_records(n) } else { None };
+        if n.extras().graph.is_some() && !self.in_look && graph.is_none() {
             self.warn(GRAPHS);
         }
-        // On the layers or in an opacity mask's art, outside art cut to a clipping object: with its
-        // art style, when it has one.
+        // On the layers or in an opacity mask's art (a symbol's and a pattern tile's included),
+        // outside art cut to a clipping object: with its art style, when it has one.
         if !self.in_look
-            && ((self.hidden == 0 && self.nest == 0) || self.mask_level == Some((self.hidden, self.nest)))
+            && ((self.hidden == 0 && self.nest == 0 && !self.in_symbol) || self.mask_level == Some((self.hidden, self.nest)))
             && self.clip.is_none()
-            && !self.in_symbol
             && let Some(orig) = self.styled.get(&n.id).cloned()
             && self.check_left(&orig)
             && let Some(name) = self.object_style(n, &orig)
@@ -680,14 +751,18 @@ impl<'a> Writer<'a> {
         let start = self.body.len();
         // An image's copy written as the part that its opacity mask, among other regions, shows.
         let mut mask_window = None;
+        let charged = self.charges();
         match &n.kind {
             NodeKind::Layer { .. } => {}
             NodeKind::Group { children, clip: true } => self.clip_group(children, xy),
             NodeKind::Group { children, clip: false } => {
                 if self.open_group("u") {
+                    self.in_graph |= graph.is_some();
                     for c in children {
+                        self.series_tag = graph.as_ref().and_then(|g| g.tags.get(&c.id).cloned());
                         self.node(c);
                     }
+                    self.in_graph &= graph.is_none();
                     self.end_group("U", xy);
                 }
             }
@@ -730,6 +805,8 @@ impl<'a> Writer<'a> {
                 if !self.open_group("u") {
                     return;
                 }
+                let state = self.state;
+                let moved = self.wrap_on_bounds(n, state);
                 // The canvas places an instance inside a symbol's art where the outer instance puts
                 // it (9-slice guides, stains and patterns included), and this art doesn't move with it.
                 self.wrote_fixed |= self.in_symbol;
@@ -774,12 +851,15 @@ impl<'a> Writer<'a> {
                         self.warn(SYMBOL_LIMIT);
                     }
                 }
+                self.wrap_moved = moved;
                 self.end_group("U", xy);
             }
             NodeKind::Envelope { .. } if self.envelope(n, xy) => {}
-            NodeKind::Envelope { .. } => self.drawn_art(n, xy, Some(envelopes::ENVELOPES)),
-            NodeKind::Blend { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_) | NodeKind::Intertwine { .. } => {
-                self.drawn_art(n, xy, Some(LIVE));
+            NodeKind::Envelope { .. } => self.drawn_art(n, xy, Some(envelopes::ENVELOPES), true),
+            NodeKind::Blend { .. } if self.blend(n, xy) => {}
+            NodeKind::Blend { .. } => self.drawn_art(n, xy, Some(blends::BLENDS), true),
+            NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_) | NodeKind::Intertwine { .. } => {
+                self.drawn_art(n, xy, Some(LIVE), true);
             }
             // Ruler guides are kept in the document's native copy only.
             NodeKind::RulerGuide { .. } => {}
@@ -790,6 +870,11 @@ impl<'a> Writer<'a> {
             // A group's dictionary goes between its end and its state block.
             let block = (self.block_end == self.body.len() && self.block_start >= start).then(|| self.body.split_off(self.block_start));
             self.block_end = usize::MAX;
+            // A graph's series group is tagged right after its end, before its dictionary.
+            if let Some(t) = tag {
+                self.graph_tags.push(self.body.len());
+                self.line(&t);
+            }
             let mask_written = self.dictionary(n);
             if let Some(b) = block {
                 self.body.push_str(&b);
@@ -803,16 +888,55 @@ impl<'a> Writer<'a> {
         if deform {
             self.line(&envelopes::plugin_line());
         }
+        if let Some(g) = graph {
+            self.graph_end(g, start, charged);
+        }
+    }
+
+    /// The records of graph `n` ([`crate::ai_graph::records`]) when it is written as a graph: on the
+    /// layers, outside art cut to a clipping object, symbols' art, live objects' art and another
+    /// graph, and without an art style anywhere in it. `None` when it is written as its art.
+    fn graph_records(&self, n: &Node) -> Option<crate::ai_graph::Records> {
+        fn has_style(n: &Node, styled: &HashMap<NodeId, Arc<Node>>) -> bool {
+            styled.contains_key(&n.id) || n.children().is_some_and(|c| c.iter().any(|c| has_style(c, styled)))
+        }
+        let placed = self.hidden == 0 && self.nest == 0 && self.drawn == 0 && self.clip.is_none() && !self.in_symbol && !self.in_graph;
+        if !placed || has_style(n, &self.styled) {
+            return None;
+        }
+        crate::ai_graph::records(n, self.to_art)
+    }
+
+    /// The graph whose art was written from `start` on, charged from `charged`, ends: its records go
+    /// before the art and `%_GS` after it, or, when art in it was left out ([`Self::take_objects`]),
+    /// its `Go` lines are taken out and it stays its art, with a warning.
+    fn graph_end(&mut self, records: crate::ai_graph::Records, start: usize, charged: Charges) {
+        let tags = std::mem::take(&mut self.graph_tags);
+        if self.body.len() > start && !self.left_out_since(charged) {
+            self.body.insert_str(start, &records.head);
+            self.line(crate::ai_graph::END);
+            return;
+        }
+        for at in tags.into_iter().rev() {
+            if let Some(len) = self.body.get(at..).and_then(|rest| rest.find('\n')) {
+                self.body.replace_range(at..=at + len, "");
+            }
+        }
+        self.warn(GRAPHS);
     }
 
     /// Live object `n`, of transparency `xy`, as a group of its art, with `warning` when it is given.
-    fn drawn_art(&mut self, n: &Node, xy: Xy, warning: Option<&str>) {
+    /// With `bounds`, `n`'s text wrap options go on the rectangle of its bounds, the group's first
+    /// member ([`Self::wrap_on_bounds`]); without it, in the group's dictionary.
+    fn drawn_art(&mut self, n: &Node, xy: Xy, warning: Option<&str>, bounds: bool) {
         if !self.open_group("u") {
             return;
         }
+        let state = self.state;
         if let Some(w) = warning {
             self.warn(w);
         }
+        let moved = bounds && self.wrap_on_bounds(n, state);
         if self.nest < MAX_NEST {
             let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
             self.nest += 1;
@@ -823,15 +947,36 @@ impl<'a> Writer<'a> {
             self.drawn -= 1;
             self.nest -= 1;
         }
+        self.wrap_moved = moved;
         self.end_group("U", xy);
+    }
+
+    /// In the group that object `n` is written as, when the group's dictionary would hold `n`'s text
+    /// wrap options: the rectangle of `n`'s bounds with them ([`Self::wrap_bounds`]), then lock and
+    /// hidden state `state` again. True when the group's dictionary is to leave the options out
+    /// ([`Self::wrap_moved`]), so the group wraps type by `n`'s bounds, as `n` does
+    /// ([`vectorcraft_doc::text::resolve_wrap`]), not by its members. Written before the group's
+    /// members, the rectangle is below any area type among them and does not wrap it. False,
+    /// writing nothing, when `n` has no finite bounds, and the group's dictionary keeps the options.
+    fn wrap_on_bounds(&mut self, n: &Node, state: Option<(bool, bool)>) -> bool {
+        let Some(w) = n.extras().wrap.filter(|_| self.drawn == 0 && !self.in_look) else { return false };
+        if finite_bounds(n).is_none() {
+            return false;
+        }
+        self.wrap_bounds(n, w);
+        if let Some((locked, hidden)) = state {
+            self.state(locked, hidden);
+        }
+        true
     }
 
     /// `n`'s `/ArtDictionary`, after it, when it has a name (`AI10_ArtUID`, see [`Self::take_id`]),
     /// is bound to variables ([`Self::bound_variables`]; without a name, it gets an XML id and an
     /// empty `AIArtName`), has text wrap options ([`Self::text_wrap`]), has an opacity mask
-    /// (`AI9_Mask`, see [`Self::mask`]), or is a symbol's art (its symbol's entries first, see
-    /// [`Self::define_symbol`]). False when `n` has an opacity mask that is left out: nested too
-    /// deep, or its art doesn't fit.
+    /// (`AI9_Mask`, see [`Self::mask`]), is a symbol's art (its symbol's entries first, see
+    /// [`Self::define_symbol`]), or is a blend's key object (its part and id after the name, see
+    /// [`blends`]). False when `n` has an opacity mask that is left out: nested too deep, or its art
+    /// doesn't fit.
     fn dictionary(&mut self, n: &Node) -> bool {
         let name = n.name.as_deref().filter(|s| !s.is_empty());
         let moved = std::mem::take(&mut self.wrap_moved);
@@ -851,7 +996,11 @@ impl<'a> Writer<'a> {
             Some((id, _)) if *id == n.id => self.root_entries.take().map(|(_, e)| e),
             _ => None,
         };
-        if name.is_none() && mask.is_none() && bound.is_empty() && entries.is_none() && wrap.is_none() {
+        let role = match &self.blend_role {
+            Some((id, _)) if *id == n.id => self.blend_role.take().map(|(_, e)| e),
+            _ => None,
+        };
+        if name.is_none() && mask.is_none() && bound.is_empty() && entries.is_none() && wrap.is_none() && role.is_none() {
             return mask_written;
         }
         let start = self.body.len();
@@ -872,6 +1021,10 @@ impl<'a> Writer<'a> {
                 self.bound.push((n.id, id, bound));
             }
         }
+        let has_role = role.is_some();
+        if let Some(r) = role {
+            self.body.push_str(&r);
+        }
         if let Some(w) = wrap {
             self.text_wrap(w);
         }
@@ -879,7 +1032,7 @@ impl<'a> Writer<'a> {
         if let Some(m) = mask
             && !self.mask(m)
         {
-            if !has_id && !has_entries && wrap.is_none() {
+            if !has_id && !has_entries && wrap.is_none() && !has_role {
                 self.body.truncate(start);
                 return false;
             }
@@ -1107,26 +1260,25 @@ impl<'a> Writer<'a> {
     }
 
     /// A container's members, the first one's outline cutting the others: its fills painted
-    /// behind them (cut to the region outside too), its strokes over them, not cut by it. Its text
-    /// wrap options are written once: with its fills, or with its strokes when no fill object is
-    /// written (it has no fills, or the region outside leaves nothing of them).
+    /// behind them (cut to the region outside too), its strokes over them, not cut by it. Its name,
+    /// variables and text wrap options are written once, under them all, with its opacity mask
+    /// ([`Self::object_carrier`]), and not with its fills or strokes, which may be cut or left out
+    /// and keep only the opacity mask they are drawn through.
     fn clip_contents(&mut self, children: &[Arc<Node>]) {
         let Some((first, rest)) = children.split_first() else { return };
+        self.object_carrier(first);
         // Nothing to clip by hides the clipped art.
         let Some((outline, rule)) = vectorcraft_effects::clip_outline(first) else { return };
         let mut paint = first.clip_paint();
+        for part in [&mut paint.fill, &mut paint.stroke].into_iter().flatten() {
+            part.extras_mut().wrap = None;
+            part.name = None;
+        }
         let outer = self.clip.clone();
         let region = self.cut(&PathData::from_bezpath(&outline), rule);
         self.clip = Some(region);
         if let Some(fill) = &paint.fill {
-            let objects = self.objects;
             self.node(fill);
-            if self.objects > objects
-                && let Some(stroke) = &mut paint.stroke
-                && stroke.extras().wrap.is_some()
-            {
-                stroke.extras_mut().wrap = None;
-            }
         }
         for c in rest {
             self.node(c);
@@ -1134,6 +1286,48 @@ impl<'a> Writer<'a> {
         self.clip = outer;
         if let Some(stroke) = &paint.stroke {
             self.node(stroke);
+        }
+    }
+
+    /// The dictionary of clipping object `first` ([`Self::dictionary`]: its name, visibility
+    /// variables, text wrap options and opacity mask), when it has one, on an unpainted path (a
+    /// compound path for several subpaths), uncut, locked and hidden as `first` is. The path is the
+    /// outline area type wraps around when `first` has text wrap options
+    /// ([`vectorcraft_doc::text::wrap_outline`]); else, and without the options when that outline is
+    /// empty, `first`'s clipping outline, or the rectangle of its bounds when it has none. Nothing
+    /// is written without such a path, or without room for the path ([`Self::take_objects`]), or
+    /// when the dictionary would be empty (an opacity mask left out with nothing else in it).
+    fn object_carrier(&mut self, first: &Node) {
+        let points = |p: &PathData| p.subpaths.iter().any(|sp| !sp.anchors.is_empty());
+        let wrap = first.extras().wrap.filter(|_| self.drawn == 0 && !self.in_look);
+        let wrap_outline = wrap.map(|_| vectorcraft_doc::text::wrap_outline(first)).filter(points);
+        let named = first.name.as_deref().is_some_and(|s| !s.is_empty());
+        let bound = !self.bound_variables(first, false, false).is_empty();
+        if wrap_outline.is_none() && !named && !bound && first.extras().mask.is_none() {
+            return;
+        }
+        let wrapped = wrap_outline.is_some();
+        let outline = wrap_outline
+            .or_else(|| vectorcraft_effects::clip_outline(first).map(|(o, _)| PathData::from_bezpath(&o)).filter(points))
+            .or_else(|| finite_bounds(first).map(shapes::rectangle));
+        let Some(outline) = outline else { return };
+        let (start, state, gs, objects) = (self.body.len(), self.state, self.gs, self.objects);
+        self.state(first.locked, !first.visible);
+        self.plain_object(&outline, FillRule::NonZero, None, None, Xy::of(first).object());
+        if self.objects == objects {
+            // Without the path, its lock and hidden lines are taken out too, and no dictionary follows.
+            self.body.truncate(start);
+            self.state = state;
+            return;
+        }
+        self.block_end = usize::MAX;
+        let path_end = self.body.len();
+        // Text wrap options go only on the outline area type wraps around.
+        self.wrap_moved = !wrapped;
+        self.dictionary(first);
+        if self.body.len() == path_end {
+            self.body.truncate(start);
+            (self.state, self.gs, self.objects) = (state, gs, objects);
         }
     }
 
@@ -1358,9 +1552,10 @@ impl<'a> Writer<'a> {
     // ---------- type ----------
 
     /// Type `n`: a text object stub naming its story in the text document ([`texts`]) when the
-    /// text document can hold it, outside opacity masks, pattern tiles, symbols' art and art cut to
-    /// a clipping object; else its outlines ([`Self::outlined_text`]). A frame of threaded area type
-    /// names the story of its thread, which its first frame holds.
+    /// text document can hold it, on the layers or in an envelope's contents, outside opacity
+    /// masks, pattern tiles, symbols' art and art cut to a clipping object; else its outlines
+    /// ([`Self::outlined_text`]). A frame of threaded area type names the story of its thread,
+    /// which its first frame holds.
     fn text(&mut self, n: &Node, xy: Xy) {
         let NodeKind::Text(t) = &n.kind else { return };
         // Dynamic Text is written as the sizes its layout draws the type at.
@@ -1368,19 +1563,26 @@ impl<'a> Writer<'a> {
         let t = fitted.as_deref().unwrap_or(&**t);
         let doc = self.doc;
         let thread = doc.text_threads.iter().find(|th| th.contains(&n.id));
+        let contents = self.contents_level.filter(|(hidden, nest, _)| (*hidden, *nest) == (self.hidden, self.nest));
         // Type that can't be a stub is written as its outlines, which count their own objects.
-        if self.hidden > 0 || self.clip.is_some() || self.in_symbol || (thread.is_none() && !texts::holds(n, t)) {
+        if (self.hidden > 0 && contents.is_none())
+            || self.clip.is_some()
+            || self.in_symbol
+            || (thread.is_none() && !texts::holds(n, t, self.wraps_held.contains(&n.id)))
+        {
+            self.outlined += 1;
             return self.outlined_text(n, xy);
         }
-        // The stub's objects ([`texts::stub_objects`], [`Self::take_objects`]); without room for
-        // them, the type is left out before its story goes into the text document.
-        let stub = texts::stub_objects(t);
+        // The stub's objects ([`texts::stub_objects`], [`Self::take_objects`]), and the copy the
+        // reader reads of it in an envelope's dictionary; without room for them, the type is left
+        // out before its story goes into the text document.
+        let stub = texts::stub_objects(t) + usize::from(contents.is_some_and(|(.., copied)| copied));
         if !self.take_objects(stub) {
             return;
         }
         let placed = if let Some(thread) = thread {
             // A thread is checked for what it loses, in every frame, when its story is written.
-            let placed = self.texts.thread(doc, thread, n.id, self.canvas, &|id| !cut_to_clipping_object(doc, id));
+            let placed = self.texts.thread(doc, thread, n.id, self.canvas, &|id| !cut_to_clipping_object(doc, id), &self.wraps_held);
             placed.map(|p| (p, self.texts.take_lost()))
         } else {
             self.texts.add(t, self.canvas).map(|story| ((story, 0), texts::loses(t)))
@@ -1388,9 +1590,11 @@ impl<'a> Writer<'a> {
         let Some(((story, frame), lost)) = placed else {
             // The text document can't hold it: the outlines count their own objects.
             self.objects -= stub;
+            self.outlined += 1;
             return self.outlined_text(n, xy);
         };
         self.typed = true;
+        self.wrapped_typed |= !t.wrap.is_empty();
         if lost {
             self.warn(texts::TYPE_ATTRIBUTES);
         }
@@ -1467,23 +1671,20 @@ impl<'a> Writer<'a> {
         for c in over {
             self.node(c);
         }
-        // Type wraps by its bounds: its text wrap options go on a rectangle of its bounds, the
-        // group's last member, and the group's dictionary leaves them out.
-        if let Some(w) = n.extras().wrap.filter(|_| self.drawn == 0 && !self.in_look) {
-            self.wrap_bounds(n, w);
-            self.wrap_moved = true;
-        }
+        // Type wraps by its bounds.
+        self.wrap_moved = self.wrap_on_bounds(n, state);
         if let Some((locked, hidden)) = state {
             self.state(locked, hidden);
         }
         self.end_group("U", xy);
     }
 
-    /// An unpainted closed rectangle at the geometric bounds of type `n`, the region its text wraps
-    /// around, with `n`'s lock and hidden state and text wrap options `w` in its dictionary. Nothing
+    /// An unpainted closed rectangle at the geometric bounds of type, a symbol instance or a live
+    /// object `n`, the region its text wraps around ([`vectorcraft_doc::text::resolve_wrap`]), with
+    /// `n`'s lock and hidden state and text wrap options `w` in its dictionary. Nothing
     /// when `n` has no finite bounds, or without room for it ([`Self::take_objects`]).
     fn wrap_bounds(&mut self, n: &Node, w: TextWrap) {
-        let Some(b) = n.geometric_bounds().filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite())) else { return };
+        let Some(b) = finite_bounds(n) else { return };
         self.state(n.locked, !n.visible);
         let objects = self.objects;
         self.plain_object(&shapes::rectangle(b), FillRule::NonZero, None, None, Xy::PLAIN);
@@ -1670,6 +1871,11 @@ impl<'a> Writer<'a> {
             })
             .collect()
     }
+}
+
+/// `n`'s geometric bounds, when they are finite.
+fn finite_bounds(n: &Node) -> Option<vectorcraft_geom::Rect> {
+    n.geometric_bounds().filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite()))
 }
 
 /// The gradient of paint `p`, when it has one.

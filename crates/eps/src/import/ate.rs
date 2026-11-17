@@ -2,8 +2,9 @@
 //!
 //! The editing copy of a file keeps the characters of its text objects, with their fonts, sizes,
 //! colours and where they sit, in one text document of its own: between `%AI11_BeginTextDocument`
-//! and `%AI11_EndTextDocument`, ASCII85 of nested dictionaries with numbers for keys. A text object
-//! in a layer is only a stub naming its story in it (`/StoryIndex`).
+//! and `%AI11_EndTextDocument`, ASCII85 of nested dictionaries with numbers for keys (names in files
+//! saved for version 11, and for keys newer than the version a file is saved for: see [`names`]).
+//! A text object in a layer is only a stub naming its story in it (`/StoryIndex`).
 //!
 //! The format isn't documented. Most of what is read here was worked out from the files of the
 //! project's users, used locally and never committed, by comparing it with the type their pages
@@ -31,6 +32,8 @@ use vectorcraft_doc::{
     ParaDirection, ParaStyle, PathAlign, PathEffect, TabAlign, TabStop, TextKind, TextObject, TextRun,
 };
 use vectorcraft_geom::{Affine, PathData, Point, Rect};
+
+mod names;
 
 /// Longest story read (bytes).
 pub(crate) const MAX_STORY: usize = 1 << 20;
@@ -573,6 +576,12 @@ impl DocFont {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many times [`Texts::read`] has read a text document on this thread.
+    pub(super) static TEXTS_READS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 /// The text document of an editing copy.
 pub(super) struct Texts {
     stories: Vec<Val>,
@@ -612,6 +621,8 @@ impl Texts {
         fn find(h: &[u8], n: &[u8], from: usize) -> Option<usize> {
             h.get(from..)?.windows(n.len()).position(|w| w == n).map(|p| p + from)
         }
+        #[cfg(test)]
+        TEXTS_READS.set(TEXTS_READS.get() + 1);
         let start = find(data, b"%AI11_BeginTextDocument", 0)?;
         let from = find(data, b"/ASCII85Decode", start)? + b"/ASCII85Decode".len();
         let end = find(data, b"~>", from)? + 2;
@@ -631,7 +642,7 @@ impl Texts {
         if bytes.len() > MAX_BYTES {
             return None;
         }
-        let doc = read(&bytes)?;
+        let doc = names::numbered(read(&bytes)?);
         let fonts = doc
             .get("0")?
             .get("1")?

@@ -69,6 +69,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         objects_on_path_section(app, ui, &oop);
         divider(ui);
     }
+    graph::section(app, ui);
     if matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Text(_))) {
         type_sections(app, ui);
         divider(ui);
@@ -356,7 +357,7 @@ fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(4.0);
     let w = (ui.available_width() - 6.0) / 2.0;
     let links = crate::panels::links::ID;
-    ui.horizontal(|ui| crate::place::link_buttons(app, ui, id, linked, &name, Some(w)));
+    ui.horizontal(|ui| crate::place::link_buttons(app, ui, id, linked, &name, crate::place::LinkButtons::Width(w)));
     ui.horizontal(|ui| {
         if app.services.pick_open.is_some() && widgets::flat_button(ui, tl!("Replace…"), w).clicked() {
             crate::panels::links::replace(app, vec![id]);
@@ -631,7 +632,7 @@ fn artboard_size_controls_inner(
     let mut fit = None;
     ui.horizontal(|ui| {
         dim_label(ui, tl!("Preset:"));
-        preset = widgets::combo(ui, "ab-preset", &current, 140.0, |ui| {
+        preset = widgets::combo(ui, "ab-preset", &current, PRESET_MENU_WIDTH, |ui| {
             let mut chosen = None;
             if let Some(enabled) = fits {
                 for (selection, label) in [(false, tl!("Fit to Artwork Bounds")), (true, tl!("Fit to Selected Art"))] {
@@ -662,6 +663,19 @@ fn artboard_size_controls_inner(
         }
     });
     (preset.map(|(w, h)| ArtboardSizeChoice::Preset(w, h)).or_else(|| orientation.map(ArtboardSizeChoice::Orientation)), fit)
+}
+
+/// The width of the artboard size row's Preset menu.
+const PRESET_MENU_WIDTH: f32 = 140.0;
+
+/// The width of the artboard size row's Portrait and Landscape buttons, 26 points each, with the
+/// 2 points between them.
+const ORIENTATION_BUTTONS_WIDTH: f32 = 2.0 * 26.0 + 2.0;
+
+/// The widths of the parts of [`artboard_size_row`] in a row, as [`crate::chrome::Fit::room`] takes
+/// them: the Preset label, its menu, and the Portrait and Landscape buttons.
+pub(crate) fn artboard_size_row_widths(ui: &Ui) -> [f32; 3] {
+    [widgets::dim_label_width(ui, tl!("Preset:")), PRESET_MENU_WIDTH, ORIENTATION_BUTTONS_WIDTH]
 }
 
 /// Artboard `i`'s Fill, its background `color`: the chip shows it (the None paint when the artboard
@@ -1001,11 +1015,13 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
         dim_label(ui, tl!("Select a text object"));
         return;
     };
-    let NodeKind::Text(tx) = &n.kind else {
+    let NodeKind::Text(_) = &n.kind else {
         dim_label(ui, tl!("Select a text object"));
         return;
     };
-    let s = tx.first_style();
+    // The style of the Type tool's selection (or caret) when it edits text, else of the selected
+    // text's first run, as the Character panel shows it (#8189).
+    let Some((s, para)) = super::character::text_style(app) else { return };
     section_header(ui, tl!("Character"));
     // The font, Font Size, Leading, Kerning and Tracking as in the Character panel.
     let w = ui.available_width();
@@ -1015,28 +1031,27 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     section_header(ui, tl!("Paragraph"));
     // As in the Paragraph panel: the seven alignments and Hyphenate (#775), and area type's
     // vertical alignment (#3759); the rest is there.
-    if let Some((_, para)) = super::character::text_style(app) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 3.0;
+        super::paragraph::alignment_buttons(app, ui, &para, 24.0);
+        if widgets::icon_button(ui, "ellipsis", tl!("More Paragraph options"), false, 24.0).clicked() {
+            app.ui.open_panel = Some("paragraph".into());
+        }
+    });
+    // Area type: its vertical alignment in the frame (#3759).
+    if vertical_align::shown(app).is_some() {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 3.0;
-            super::paragraph::alignment_buttons(app, ui, &para, 24.0);
-            if widgets::icon_button(ui, "ellipsis", tl!("More Paragraph options"), false, 24.0).clicked() {
-                app.ui.open_panel = Some("paragraph".into());
-            }
+            vertical_align::buttons(app, ui, 24.0);
         });
-        // Area type: its vertical alignment in the frame (#3759).
-        if vertical_align::shown(app).is_some() {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 3.0;
-                vertical_align::buttons(app, ui, 24.0);
-            });
-        }
-        super::paragraph::hyphenate_check(app, ui, &para);
-        // Area type: Dynamic Text's Block and its gaps.
-        dynamic_text::rows(app, ui);
     }
+    super::paragraph::hyphenate_check(app, ui, &para);
+    // Area type: Dynamic Text's Block and its gaps.
+    dynamic_text::rows(app, ui);
 }
 
 pub(crate) mod dynamic_text;
+pub(crate) mod graph;
 pub(crate) mod vertical_align;
 
 #[cfg(test)]

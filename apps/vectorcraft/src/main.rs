@@ -1,7 +1,8 @@
 //! VectorCraft desktop app.
 //!
 //! Usage: `vectorcraft [--control <port> [--automation-read-root <dir>]... [--automation-write-root <dir>]...]
-//! [--in-window-menus] [--new-instance] [--safe-mode] [--] [files…]`, `vectorcraft --version`, `vectorcraft --help` (or `-h`)
+//! [--in-window-menus] [--new-instance] [--safe-mode] [--present-mode <mode>] [--frame-latency <frames>] [--] [files…]`,
+//! `vectorcraft --version`, `vectorcraft --help` (or `-h`)
 //!
 //! Any other argument starting with '-' (not `-` alone) is an error; after `--`, every argument is
 //! a file.
@@ -19,6 +20,9 @@
 //! `--automation-write-root` (or `VECTORCRAFT_AUTOMATION_READ_ROOT` / `_WRITE_ROOT`) confine the
 //! files its requests read and write (`vectorcraft_engine::file_access`); the person at the
 //! keyboard isn't confined.
+//!
+//! `--present-mode` and `--frame-latency` (or `VECTORCRAFT_PRESENT_MODE` / `_FRAME_LATENCY`) change
+//! how the window's frames reach the display (`presentation`).
 #![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
 
 mod automation_args;
@@ -59,6 +63,7 @@ mod portal_request;
 #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", test))]
 mod portal_save;
 mod prefs_dir;
+mod presentation;
 mod printing;
 #[cfg(not(any(target_os = "macos", windows)))]
 mod quit_windows;
@@ -72,6 +77,7 @@ mod window_frame;
 mod windows_alt_codes;
 #[cfg(windows)]
 mod windows_cores;
+mod windows_screen_color;
 mod windows_stylus;
 mod xwayland;
 
@@ -158,6 +164,14 @@ Options:
   --safe-mode                    Start without plug-ins: none loads or runs until
                                  VectorCraft starts normally (Help › Safe Mode); the
                                  files open in a new window, as with --new-instance
+  --present-mode <mode>          How frames reach the display: fifo (vsync),
+                                 autovsync (the default; relaxed vsync where the
+                                 driver offers it) or novsync
+                                 (or VECTORCRAFT_PRESENT_MODE)
+  --frame-latency <frames>       Frames the display may queue, 1 to 3 (the default
+                                 is 1) (or VECTORCRAFT_FRAME_LATENCY); with either
+                                 one set, the files open in a new window, as with
+                                 --new-instance
   --version                     Print the version and exit
   -h, --help                     Print this help and exit
   --                             Treat every argument after it as a file
@@ -177,13 +191,16 @@ struct CommandLine {
     safe_mode: bool,
 }
 
-/// Reads the arguments after the program name. The automation roots and the control port go into
-/// `roots_args` and `control`. `Err` is the exit code when the process ends here: `--version` and
-/// `--help` print and succeed; a bad automation option or an unknown option prints an error and fails.
+/// Reads the arguments after the program name. The automation roots, the control port and the
+/// presentation overrides (with `VECTORCRAFT_PRESENT_MODE` and `VECTORCRAFT_FRAME_LATENCY` filling
+/// what the flags leave unset) go into `roots_args`, `control` and `presentation`. `Err` is the exit code
+/// when the process ends here: `--version` and `--help` print and succeed; a bad automation or
+/// presentation option or an unknown option prints an error and fails.
 fn read_command_line(
     mut args: impl Iterator<Item = String>,
     control: &mut automation_args::ControlArg,
     roots_args: &mut automation_args::AutomationArgs,
+    presentation: &mut presentation::Overrides,
 ) -> Result<CommandLine, std::process::ExitCode> {
     let mut files = Vec::new();
     let mut in_window_menus = std::env::var_os("VECTORCRAFT_IN_WINDOW_MENUS").is_some_and(|v| !v.is_empty() && v != "0");
@@ -196,7 +213,11 @@ fn read_command_line(
             files.extend(args.by_ref());
             break;
         }
-        match roots_args.consume(&a, &mut args).and_then(|root| if root { Ok(true) } else { control.consume(&a, &mut args) }) {
+        match roots_args
+            .consume(&a, &mut args)
+            .and_then(|root| if root { Ok(true) } else { control.consume(&a, &mut args) })
+            .and_then(|taken| if taken { Ok(true) } else { presentation.consume(&a, &mut args) })
+        {
             Ok(true) => continue,
             Ok(false) => {}
             Err(e) => {
@@ -235,6 +256,14 @@ fn read_command_line(
         eprintln!("vectorcraft: unknown option {a}; see vectorcraft --help, or put -- before a file whose name starts with '-'");
         return Err(std::process::ExitCode::FAILURE);
     }
+    // After the arguments: the flags, `--version` and `--help` win over a bad environment value.
+    match presentation.with_env(std::env::var_os("VECTORCRAFT_PRESENT_MODE"), std::env::var_os("VECTORCRAFT_FRAME_LATENCY")) {
+        Ok(overrides) => *presentation = overrides,
+        Err(e) => {
+            eprintln!("vectorcraft: {e}");
+            return Err(std::process::ExitCode::FAILURE);
+        }
+    }
     Ok(CommandLine { files, in_window_menus, new_instance, safe_mode })
 }
 
@@ -253,8 +282,9 @@ fn main() -> std::process::ExitCode {
     let root_env = |name: &str| std::env::var_os(name).filter(|v| !v.is_empty()).map(std::path::PathBuf::from);
     let mut roots_args =
         automation_args::AutomationArgs::new(root_env("VECTORCRAFT_AUTOMATION_READ_ROOT"), root_env("VECTORCRAFT_AUTOMATION_WRITE_ROOT"));
+    let mut presentation = presentation::Overrides::default();
     let CommandLine { files, in_window_menus, new_instance, safe_mode: safe_mode_flag } =
-        match read_command_line(std::env::args().skip(1), &mut control, &mut roots_args) {
+        match read_command_line(std::env::args().skip(1), &mut control, &mut roots_args, &mut presentation) {
             Ok(command_line) => command_line,
             Err(code) => return code,
         };
@@ -275,7 +305,8 @@ fn main() -> std::process::ExitCode {
     // Files opened from the file manager while VectorCraft runs open in its window (#4892). Before
     // the log file is attached: a launch that hands its files over leaves the running app's log be.
     #[cfg(not(target_os = "macos"))]
-    match single_instance::start(control_port.is_some(), new_instance, safe_mode_flag, &files) {
+    // A launch that sets the presentation runs as its own app: a running app keeps its own surface.
+    match single_instance::start(control_port.is_some(), new_instance || presentation.is_set(), safe_mode_flag, &files) {
         single_instance::Start::Forwarded => return std::process::ExitCode::SUCCESS,
         single_instance::Start::Running(primary) => single_instance::hold(primary),
     }
@@ -427,7 +458,10 @@ fn main() -> std::process::ExitCode {
         let mut options = options;
         // One frame queued, not two: the canvas is rasterized on the CPU and the GPU only
         // composites it, so the window answers the pointer a frame sooner (#444).
-        options.wgpu_options.surface = eframe::egui_wgpu::SurfaceConfig::LOW_LATENCY;
+        // `--present-mode` and `--frame-latency` change it for a launch (`presentation`).
+        options.wgpu_options.surface = presentation.apply(eframe::egui_wgpu::SurfaceConfig::LOW_LATENCY);
+        // What the app asks for: the driver picks novsync's mode and may clamp the latency.
+        log::info!("requested window surface: {}", presentation::describe(&options.wgpu_options.surface, &presentation));
         // Only adapters that can show the window, in the order `gpu` gives (#306, #502).
         if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
             create.native_adapter_selector = Some(gpu::selector(power, displays, compositor, left_out.adapters.clone(), startup.clone()));
@@ -458,6 +492,10 @@ fn main() -> std::process::ExitCode {
         }
         options
     };
+    #[cfg(not(feature = "wgpu"))]
+    if presentation != presentation::Overrides::default() {
+        log::warn!("--present-mode and --frame-latency set the wgpu renderer's window surface: ignored without it");
+    }
     #[cfg(feature = "wgpu")]
     gpu::watch_panics();
     #[cfg(feature = "wgpu")]
@@ -498,6 +536,8 @@ fn main() -> std::process::ExitCode {
                 prefs_dir::attach_plugin_store(&mut session);
                 // File › Scripts lists the scripts of the Scripts folder next to the preferences.
                 prefs_dir::attach_scripts_dir(&mut session);
+                // File Info's metadata templates live in their own folder next to the preferences.
+                prefs_dir::attach_metadata_templates_dir(&mut session);
                 prefs_dir::attach_new_doc_profiles(&mut session);
                 let mut app = VectorcraftApp::new(session, services(cc.winit_window().cloned(), cc.egui_ctx.clone()));
                 app.set_startup_update_check(true);

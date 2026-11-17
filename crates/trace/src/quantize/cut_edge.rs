@@ -594,12 +594,15 @@ pub(super) fn compact(mut labels: Vec<u16>, palette: Vec<[u8; 3]>) -> Quantized 
 /// when one of the fully opaque pixels it reaches has it, or when its color is a blend of none of
 /// them, as with a thin semi-transparent outline of another color. Pixels outside the image do not
 /// count as transparent. With `gray` (Grayscale), a pixel's color is its gray (see [`luma`]).
-pub(crate) fn settle_cut_edges(q: &mut Quantized, img: &Raster, gray: bool) {
+/// Returns which cut-edge pixels are a blend of the color of a fully opaque pixel they reach (see
+/// [`edge_blend_of`]), whether or not they took that color (empty when `q` does not match `img`).
+pub(crate) fn settle_cut_edges(q: &mut Quantized, img: &Raster, gray: bool) -> Vec<bool> {
     let (w, h) = (img.width as usize, img.height as usize);
     let px = img.rgba.as_chunks::<4>().0;
     if q.labels.len() != w * h || px.len() != w * h {
-        return;
+        return Vec::new();
     }
+    let mut blended = vec![false; w * h];
     let color = |p: &[u8; 4]| if gray { [luma(*p); 3] } else { [p[0], p[1], p[2]] };
     let edge = cut_edge(img);
     let mut changed = false;
@@ -627,6 +630,7 @@ pub(crate) fn settle_cut_edges(q: &mut Quantized, img: &Raster, gray: bool) {
                 }
             }
         });
+        blended[i] = !near.is_empty();
         if keep || near.is_empty() {
             continue;
         }
@@ -641,6 +645,7 @@ pub(crate) fn settle_cut_edges(q: &mut Quantized, img: &Raster, gray: bool) {
     if changed {
         *q = compact(std::mem::take(&mut q.labels), std::mem::take(&mut q.palette));
     }
+    blended
 }
 
 /// Calls `visit` with the index of each fully opaque pixel of `img` within two pixels of the pixel
