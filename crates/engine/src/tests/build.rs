@@ -4762,6 +4762,279 @@ fn live_paint_refuses_type_and_images_and_changes_nothing() {
     assert!(!vectorcraft_tools::builder::live_paint_takes(&node(&s, text_group)));
 }
 
+/// A horizontal open path across [`live`]'s group at `y`, drawn with the Pen's defaults.
+fn line_across(s: &mut Session, y: f64) -> NodeId {
+    let r = s.execute("path.create", &json!({"anchors": [{"x": -10, "y": y}, {"x": 160, "y": y}]})).unwrap();
+    NodeId(r["id"].as_u64().unwrap())
+}
+
+/// Paths drawn in an isolated Live Paint group join it when isolation mode ends: they go among its
+/// sources and cut the faces they cross, which take their sources' fill, a painted face they do not
+/// cross keeps its fill, and the whole addition is one undo step, which Undo takes back to the
+/// drawn paths in the group and Redo makes again.
+#[test]
+fn live_paint_isolation_adds_drawn_paths_on_exit() {
+    use vectorcraft_tools::builder::{face_at, faces, sources};
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [125, 50], "color": "#00ff00"})).unwrap();
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    // Two lines from left of the group that end in its right face, so they cut only the other two.
+    let line = |s: &mut Session, y: f64| {
+        let r = s.execute("path.create", &json!({"anchors": [{"x": -10, "y": y}, {"x": 105, "y": y}]})).unwrap();
+        NodeId(r["id"].as_u64().unwrap())
+    };
+    let (a, b) = (line(&mut s, 30.0), line(&mut s, 70.0));
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(g), "a path drawn in isolation goes into the group");
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    let d = s.doc().unwrap();
+    assert_eq!(d.isolation, None);
+    assert_eq!(d.history.undo.len(), steps + 1, "both paths join in one undo step");
+    assert_eq!(d.selection.objects, vec![g]);
+    let n = node(&s, g);
+    let src = sources(&n).unwrap();
+    assert_eq!(src.children().unwrap().len(), 4);
+    for id in [a, b] {
+        assert_eq!(s.doc().unwrap().doc.parent_of(id), Some(src.id), "{id} joined the sources");
+    }
+    assert_eq!(faces(&n).len(), 7, "two lines cut each of the two faces they cross in three");
+    assert_eq!(face_at(&n, Point::new(125.0, 50.0)).unwrap().appearance.fill_paint(), green, "the face the lines do not cross keeps its fill");
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    for y in [15.0, 85.0] {
+        assert_eq!(face_at(&n, Point::new(25.0, y)).unwrap().appearance.fill_paint(), red, "a new face takes its source's fill");
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    let n = node(&s, g);
+    assert_eq!(faces(&n).len(), 3);
+    assert_eq!(sources(&n).unwrap().children().unwrap().len(), 2);
+    for id in [a, b] {
+        assert_eq!(s.doc().unwrap().doc.parent_of(id), Some(g), "Undo puts {id} back in the group as drawn");
+    }
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(faces(&node(&s, g)).len(), 7);
+}
+
+/// Leaving isolation mode in a Live Paint group with nothing drawn in it records no undo step and
+/// leaves the document as it is. Type, and a path that is hidden, stay in the group as they are,
+/// while a group of paths drawn beside them joins it.
+#[test]
+fn live_paint_isolation_adds_only_paths_it_takes() {
+    use vectorcraft_tools::builder::{faces, sources};
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let before = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc == before.0, "an exit with nothing drawn changes nothing");
+    assert_eq!(s.doc().unwrap().history.undo.len(), before.1, "and records no undo step");
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let text = NodeId(s.execute("text.create", &json!({"x": 20, "y": 20, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+    let hidden = line_across(&mut s, 50.0);
+    s.edit("t", |d, _| {
+        d.node_mut(hidden).unwrap().visible = false;
+        Ok(())
+    })
+    .unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "type and a hidden path add nothing");
+    assert_eq!(faces(&node(&s, g)).len(), 3);
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let (a, b) = (line_across(&mut s, 30.0), line_across(&mut s, 70.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let paths = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(s.doc().unwrap().doc.parent_of(paths), Some(g));
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    let n = node(&s, g);
+    assert_eq!(faces(&n).len(), 9, "the group of paths joined");
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.parent_of(paths), Some(sources(&n).unwrap().id));
+    for id in [text, hidden] {
+        assert_eq!(d.parent_of(id), Some(g), "{id} stays in the group");
+        assert!(d.node(id).is_some());
+    }
+}
+
+/// A group drawn in an isolated Live Paint group that holds a locked path stays in it as it is when
+/// isolation mode ends, as a locked path drawn there does.
+#[test]
+fn live_paint_isolation_leaves_a_group_holding_a_locked_path() {
+    use vectorcraft_tools::builder::faces;
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let (a, b) = (line_across(&mut s, 30.0), line_across(&mut s, 70.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let paths = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.edit("t", |d, _| {
+        d.node_mut(b).unwrap().locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    assert_eq!(s.doc().unwrap().doc.parent_of(paths), Some(g));
+    assert_eq!(faces(&node(&s, g)).len(), 3);
+}
+
+/// Type drawn in an isolated Live Paint group stays in it when Gap Options or Merge make the group's
+/// faces and edges again, including type in a Live Paint group merged into another, and Release
+/// puts it beside the released paths.
+#[test]
+fn live_paint_keeps_type_drawn_in_it_through_gap_options_merge_and_release() {
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let text = NodeId(s.execute("text.create", &json!({"x": 20, "y": 20, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    s.execute("livePaint.gapOptions", &json!({"ids": [g.0], "detect": true})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(text), Some(g), "Gap Options keeps the type");
+    let c = rect(&mut s, 120.0, 20.0, 100.0, 20.0);
+    s.execute("livePaint.merge", &json!({"ids": [g.0, c.0]})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(text), Some(g), "Merge keeps the type");
+    let other = rect(&mut s, 300.0, 300.0, 50.0, 50.0);
+    let h = NodeId(s.execute("livePaint.make", &json!({"ids": [other.0]})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.isolate", &json!({"id": h.0})).unwrap();
+    let text2 = NodeId(s.execute("text.create", &json!({"x": 310, "y": 320, "text": "Yo"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    s.execute("livePaint.merge", &json!({"ids": [g.0, h.0]})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(text2), Some(g), "the type of the merged group moves with its paths");
+    s.execute("livePaint.release", &json!({"ids": [g.0]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    for id in [text, text2] {
+        assert_eq!(d.parent_of(id), d.default_layer(), "Release keeps {id}");
+    }
+}
+
+/// Art drawn in an isolated Live Paint group and named like one of the group's parts is not taken
+/// for one: type named "Live Paint Sources" stays in the group through Gap Options, and a group of
+/// paths named "Face" joins the group when isolation mode ends.
+#[test]
+fn live_paint_isolation_keeps_art_named_like_its_parts() {
+    use vectorcraft_tools::builder::{SOURCES_NAME, faces, sources};
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let text = NodeId(s.execute("text.create", &json!({"x": 20, "y": 20, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.setProps", &json!({"id": text.0, "name": SOURCES_NAME})).unwrap();
+    let (a, b) = (line_across(&mut s, 30.0), line_across(&mut s, 70.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let paths = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.setProps", &json!({"id": paths.0, "name": "Face"})).unwrap();
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    let n = node(&s, g);
+    assert_eq!(faces(&n).len(), 9, "the group named Face joined");
+    assert_eq!(s.doc().unwrap().doc.parent_of(paths), Some(sources(&n).unwrap().id));
+    s.execute("livePaint.gapOptions", &json!({"ids": [g.0], "detect": true})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(text), Some(g), "Gap Options keeps the type named like the sources");
+}
+
+/// Type drawn in an isolated Live Paint group under the name of a face, an edge or the sources
+/// group is not one of the group's parts: Gap Options, Info and Make count only the faces and edges
+/// Live Paint made, and Expand keeps the type.
+#[test]
+fn live_paint_does_not_count_art_named_like_its_parts() {
+    use vectorcraft_tools::builder::{EDGE_NAME, FACE_NAME, SOURCES_NAME};
+    let mut s = session();
+    let g = live(&mut s);
+    let edges = s.execute("livePaint.info", &json!({"group": g.0})).unwrap()["edges"].as_array().unwrap().len();
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let mut texts = vec![];
+    for (i, name) in [FACE_NAME, EDGE_NAME, SOURCES_NAME].into_iter().enumerate() {
+        let r = s.execute("text.create", &json!({"x": 20 + 20 * i, "y": 20, "text": "Hi"})).unwrap();
+        let t = NodeId(r["id"].as_u64().unwrap());
+        s.execute("object.setProps", &json!({"id": t.0, "name": name})).unwrap();
+        texts.push(t);
+    }
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    let r = s.execute("livePaint.gapOptions", &json!({"ids": [g.0], "detect": true})).unwrap();
+    assert_eq!(r["faces"], 3, "Gap Options counts the faces Live Paint made");
+    let info = s.execute("livePaint.info", &json!({"group": g.0})).unwrap();
+    assert_eq!(info["faces"].as_array().unwrap().len(), 3);
+    assert_eq!(info["edges"].as_array().unwrap().len(), edges);
+    let r = s.execute("livePaint.make", &json!({"ids": [g.0]})).unwrap();
+    assert_eq!((r["faces"].as_u64(), r["edges"].as_u64()), (Some(3), Some(edges as u64)));
+    s.execute("livePaint.expand", &json!({"ids": [g.0]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    for t in texts {
+        assert_eq!(d.parent_of(t), Some(g), "Expand keeps {t}");
+    }
+}
+
+/// With Real-time Drawing and Editing off, a rectangle still being drawn in a Live Paint group
+/// isolated in a pattern tile is drawn first when Exit Isolation Mode leaves pattern editing, and
+/// joins the group with the tile saved.
+#[test]
+fn live_paint_in_a_pattern_tile_adds_a_shape_still_being_drawn_on_exit() {
+    use vectorcraft_tools::builder::{is_live_paint, sources};
+    let mut s = session();
+    two(&mut s);
+    s.execute("object.pattern.make", &json!({"name": "P"})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    s.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": false})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("rectangle", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 10.0, 10.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 40.0, 40.0), v).unwrap();
+    assert!(s.interaction_unapplied());
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    assert!(st.doc.pattern_edit.is_none());
+    let art = &st.doc.pattern("P").unwrap().art;
+    let n = art.iter().find(|n| is_live_paint(n)).expect("the tile holds the Live Paint group");
+    assert_eq!(sources(n).unwrap().children().unwrap().len(), 3, "the rectangle joined the sources");
+}
+
+/// Isolating a level outside an isolated Live Paint group, as the isolation bar's back arrow does,
+/// leaves the group and adds the paths drawn in it; isolating a path drawn in it does not.
+#[test]
+fn live_paint_isolation_adds_drawn_paths_when_isolating_a_level_outside() {
+    use vectorcraft_tools::builder::{faces, sources};
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let a = line_across(&mut s, 50.0);
+    s.execute("object.isolate", &json!({"id": a.0})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(g), "the path is still being drawn in the group");
+    assert_eq!(faces(&node(&s, g)).len(), 3);
+    let layer = s.doc().unwrap().doc.parent_of(g).unwrap();
+    s.execute("object.isolate", &json!({"id": layer.0})).unwrap();
+    assert_eq!(s.doc().unwrap().isolation, Some(layer));
+    let n = node(&s, g);
+    assert_eq!(faces(&n).len(), 6);
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(sources(&n).unwrap().id));
+}
+
+/// A group of paths drawn in an isolated Live Paint group and then isolated itself joins the Live
+/// Paint group when isolation mode ends, or when a level outside the Live Paint group is isolated.
+#[test]
+fn live_paint_isolation_adds_a_drawn_group_isolated_inside_it() {
+    use vectorcraft_tools::builder::{faces, sources};
+    for to_layer in [false, true] {
+        let mut s = session();
+        let g = live(&mut s);
+        s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+        let (a, b) = (line_across(&mut s, 30.0), line_across(&mut s, 70.0));
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        let paths = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+        s.execute("object.isolate", &json!({"id": paths.0})).unwrap();
+        assert_eq!(faces(&node(&s, g)).len(), 3, "isolating the drawn group stays in the Live Paint group");
+        if to_layer {
+            let layer = s.doc().unwrap().doc.parent_of(g).unwrap();
+            s.execute("object.isolate", &json!({"id": layer.0})).unwrap();
+        } else {
+            s.execute("object.exitIsolation", &json!({})).unwrap();
+        }
+        let n = node(&s, g);
+        assert_eq!(faces(&n).len(), 9, "the drawn group joined (to the layer: {to_layer})");
+        assert_eq!(s.doc().unwrap().doc.parent_of(paths), Some(sources(&n).unwrap().id));
+    }
+}
+
 /// Give Live Paint group `g` a lock, hidden state, appearance, knockout, opacity mask and
 /// graphic style link, and return it as it then is.
 fn dress_live_group(s: &mut Session, g: NodeId) -> Node {

@@ -713,12 +713,12 @@ type FileClip = (PathData, FillRule);
 
 /// The clipping path the file of image content `blob` draws it through, in its pixel space, as it
 /// was kept when the file was read: a DCS file's ([`ImageBlob::separated_clip`]) or a PSD or PSB
-/// file's ([`fileio::png_clip`]).
+/// file's ([`fileio::image_clip`]).
 fn file_clip(blob: &ImageBlob) -> Option<FileClip> {
     if let Some(path) = blob.separated_clip() {
         return Some((path, FillRule::NonZero));
     }
-    (blob.mime == "image/png").then(|| fileio::png_clip(&blob.bytes)).flatten().map(|path| (path, FillRule::EvenOdd))
+    fileio::image_clip(blob).map(|path| (path, FillRule::EvenOdd))
 }
 
 /// What happens to the clip of an object a link update remakes.
