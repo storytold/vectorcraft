@@ -8622,7 +8622,16 @@ documents every field:
   `orientation`, `autoRotate` (on by default: the paper turns to each artboard), `transverse`; `printLayers:
   visiblePrintable|visible|all` (template layers never print); `placement: {origin, x, y}` places the printed area
   (artboard, bleed and marks) on the imageable area (the paper inside `margin`); `scaling: none|fit|custom|tileFull|
-  tileImageable` with `scale: {width, height}` (%), `overlap` and `tileRange` (tiles numbered across then down).
+  tileImageable` with `scale: {width, height, linked}` (1–1000 %), `overlap` and `tileRange` (tiles numbered across
+  then down).
+- `scale.linked` keeps the custom scale's width and height equal, as the link by Custom's width and height does on
+  [the help page](https://helpx.adobe.com/illustrator/desktop/save-and-export/export-files-to-different-formats/print-documents-in-illustrator.html),
+  where turning it off scales the two apart. The rest is VectorCraft's own rule. New settings have it on, and a saved
+  `scale` without `linked` reads it as false, so settings and presets saved before it print as they did. While it is
+  on, a request that gives one percentage sets the other, turning it on sets the height to the width, and a width and
+  height that differ are an error. A request that gives a different width and height without `linked` turns it off;
+  `linked: null` keeps the saved link, as `null` does for every setting. The Print dialog shows it as the link button after Scale W and H, dimmed with them unless Scaling is Custom or a
+  tiling choice.
 - Copies per sheet: with `copiesPerSheet: true` (off by default; not with tiling) each sheet holds as many copies of
   the artboard as fit the imageable area, each with its bleed and marks, across then down, `gutter` pt apart (0–720,
   default 0). The copies are not turned, and the placement places the whole grid. An artboard that doesn't fit prints
@@ -8631,10 +8640,19 @@ documents every field:
   them all.
 - `marks` and `bleed` as `document.exportPdf` takes them (the bleed is the document's unless `useDocument: false`),
   drawn around the artboard at the paper's scale; the page information adds the tile and the ink with its screen.
-- `output: {mode: composite|separations, emulsion: up|down, image: positive|negative, spotsToProcess, inks: [{name,
-  print, frequency, angle}]}`: separations print one page per ink in the grey of its coverage (images too;
-  overprinting fills and strokes don't knock out), Registration on every plate; emulsion down mirrors the page and a
-  negative inverts it.
+- `output: {mode: composite|separations, emulsion: up|down, image: positive|negative, spotsToProcess, overprintBlack,
+  inks: [{name, print, frequency, angle}]}`: separations print one page per ink in the gray of its coverage (images
+  too; overprinting fills, strokes and characters don't knock out), Registration on every plate; emulsion down mirrors
+  the page and a negative inverts it.
+- `output.overprintBlack` (default false) makes black ink overprint in separations, as the Output step of
+  [Print color separations](https://helpx.adobe.com/illustrator/using/printing-color-separations.html) describes:
+  black art leaves the inks under it on the other plates. Which paints count as black is VectorCraft's own rule: a
+  fill, stroke or character paint of solid 100% process K or 100% gray, or a gradient whose every stop is (every
+  color point of a freeform gradient), each to within half a percent (99.5% K counts, and so does 0.4% cyan beside
+  it). Rich black, RGB and Lab black, tints below 99.5% and colors linked to a spot swatch or to Registration still
+  knock out. A symbol instance's art is judged with the paints the instance prints it in, its own fill and stroke
+  changes and its fill's stain included. Only the printed copy is marked: the document and its own overprint settings do not change. Composite
+  output ignores the option, and the Print dialog's Overprint Black checkbox is disabled unless Mode is Separations.
 - `graphics: {autoFlatness, flatness, fonts}` and `color: {intent, preserveNumbers}` (the intent colours separate
   with; without preserveNumbers CMYK colours are separated again).
 
