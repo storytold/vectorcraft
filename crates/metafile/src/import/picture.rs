@@ -212,6 +212,18 @@ struct Pending {
     path: BezPath,
 }
 
+/// What `craft_metafile` counted as not read or not played as the file asks.
+struct Lost {
+    /// Records of kinds it doesn't read.
+    skipped: u32,
+    /// Images, and pattern brushes (a pen's included), whose bitmap it couldn't read.
+    images: u32,
+    /// Clip changes it didn't apply as the file sets them.
+    clips: u32,
+    /// Raster operations drawn as a plain copy or left out.
+    rops: u32,
+}
+
 /// Clip paths already made, by address (the `Arc` keeps the address from being reused); None for
 /// one that clips nothing in the picture.
 type MadeClips = HashMap<*const ClipPath, (Arc<ClipPath>, Option<Arc<Clip>>)>;
@@ -701,7 +713,12 @@ impl Mapper {
         }
         let n = lost.images;
         if n > 0 {
-            self.warnings.push(format!("{n} image{} that couldn't be read {} left out", s(n), was(n)));
+            self.warnings.push(format!(
+                "{n} image{} or pattern brush{} that couldn't be read {} left out",
+                s(n),
+                if n == 1 { "" } else { "es" },
+                was(n)
+            ));
         }
         let n = lost.clips;
         if n > 0 {
@@ -966,30 +983,17 @@ pub(crate) fn import(bytes: &[u8]) -> Result<Imported, String> {
         craft_metafile::Error::BadHeader => format!("the {} header is damaged", kind.id().to_uppercase()),
         craft_metafile::Error::NoRecords => format!("the {} file holds no records", kind.id().to_uppercase()),
     })?;
-    let craft_metafile::Picture { width, height, items, skipped_records, truncated, dropped_images, ignored_clips, unplayed_raster_ops } = pic;
     let k = unit(bytes, kind);
-    let mut m = Mapper::new(f64::from(width), f64::from(height), k);
+    let mut m = Mapper::new(f64::from(pic.width), f64::from(pic.height), k);
     if ends_early(bytes, kind) {
         m.warn(ENDS_EARLY);
     }
-    if truncated {
+    if pic.truncated {
         m.warn(AT_LIMIT);
     }
-    for item in items {
+    let lost = Lost { skipped: pic.skipped_records, images: pic.dropped_images, clips: pic.ignored_clips, rops: pic.unplayed_raster_ops };
+    for item in pic.items {
         m.item(item);
     }
-    let lost = Lost { skipped: skipped_records, images: dropped_images, clips: ignored_clips, rops: unplayed_raster_ops };
     Ok(m.finish(kind, lost))
-}
-
-/// What `craft_metafile` counted as not read or not played as the file asks.
-struct Lost {
-    /// Records of kinds it doesn't read.
-    skipped: u32,
-    /// Images it couldn't read.
-    images: u32,
-    /// Clip changes it didn't apply as the file sets them.
-    clips: u32,
-    /// Raster operations drawn as a plain copy or left out.
-    rops: u32,
 }

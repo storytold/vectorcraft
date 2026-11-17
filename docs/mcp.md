@@ -8798,6 +8798,9 @@ starts a new point type object at the position the advance gives, and an underli
 of the last character's advance. Type on more than one line is placed a line at a time: each line is aligned by its own advances and
 split as a single line is. An EMF that
 draws with EMF+ records is read from them. Hatched and pattern brushes fill with their average color. Records VectorCraft doesn't read are skipped with one warning.
+Each of these adds one warning, with a count: a file, or a metafile image inside it, cut short by one of the reader's
+limits; images and pattern brushes whose bitmap can't be read, which are left out; clips that can't be applied as the
+file sets them; and raster operations other than a plain copy, drawn as a plain copy or left out.
 `clipboard.importEmf {dataBase64, center?}` loads an EMF or WMF picture into the clipboard for `edit.paste`; the app
 pastes `image/emf` from the system clipboard ahead of text and bitmaps when the platform's clipboard service offers it
 (the Windows desktop service doesn't read metafiles yet).

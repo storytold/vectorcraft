@@ -209,7 +209,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load Metafile into Clipboard",
             [],
             None,
-            "{dataBase64 (EMF or WMF bytes), center?: [x, y]} replace the clipboard with the picture's objects (paths, clipping groups, images, point type; the images they use), centred on `center` (default: the first artboard) → {count, warnings}; records VectorCraft doesn't read are skipped with one warning; then run edit.paste",
+            "{dataBase64 (EMF or WMF bytes), center?: [x, y]} replace the clipboard with the picture's objects (paths, clipping groups, images, point type; the images they use), centred on `center` (default: the first artboard) → {count, warnings}; records VectorCraft doesn't read are skipped with one warning; a picture cut short by a reader limit, images and pattern brushes that can't be read, clips that can't be applied and raster operations other than a plain copy each add a warning; then run edit.paste",
             has_doc,
             import_emf
         ),

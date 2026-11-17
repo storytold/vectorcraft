@@ -555,9 +555,28 @@ fn a_file_cut_short_by_another_limit_says_so() {
 fn images_the_reader_does_not_read_are_counted() {
     let records = vec![(81, png_stretch_dibits(&png_claiming(1 << 13, 1 << 13))); 2];
     let back = import(&hand_emf(5000, 3000, &records)).unwrap();
-    assert_eq!(back.warnings, vec!["2 images that couldn't be read were left out".to_string()]);
+    assert_eq!(back.warnings, vec!["2 images or pattern brushes that couldn't be read were left out".to_string()]);
     let back = import(&hand_emf(5000, 3000, &records[..1])).unwrap();
-    assert_eq!(back.warnings, vec!["1 image that couldn't be read was left out".to_string()]);
+    assert_eq!(back.warnings, vec!["1 image or pattern brush that couldn't be read was left out".to_string()]);
+}
+
+#[test]
+fn a_wmf_reports_unread_pattern_brushes_and_raster_operations() {
+    let records = vec![
+        // DIBCREATEPATTERNBRUSH (style 5, usage 0) whose bitmap header can't be read.
+        (0x0142, [le16(&[5, 0]), vec![0xFF; 8]].concat()),
+        // A bitmap-less DIBBITBLT with DSTINVERT (0x00550009): rop, ySrc, xSrc, reserved, height,
+        // width, yDest, xDest.
+        (0x0940, le16(&[0x0009, 0x0055, 0, 0, 0, 100, 100, 0, 0])),
+    ];
+    let back = import(&hand_wmf(1440, 1440, &records)).unwrap();
+    assert_eq!(
+        back.warnings,
+        vec![
+            "1 image or pattern brush that couldn't be read was left out".to_string(),
+            "1 raster operation other than a plain copy (masks, inversions) was drawn as a plain copy or left out".to_string(),
+        ]
+    );
 }
 
 #[test]
