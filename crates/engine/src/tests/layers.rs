@@ -213,6 +213,117 @@ fn the_selection_column_selects_a_rows_art_and_shift_adds_or_removes_it() {
     assert_eq!(ids_sel(&run(&mut s, "layer.target", json!({"id": layer.0}))), vec![c, a, g]);
 }
 
+/// The rows of [`column_start`]: [`tree`]'s, plus a rectangle `o` on a second layer and an empty
+/// third layer `e`.
+#[derive(Clone, Copy)]
+struct Column {
+    layer: NodeId,
+    sub: NodeId,
+    a: NodeId,
+    g: NodeId,
+    b: NodeId,
+    c: NodeId,
+    o: NodeId,
+    e: NodeId,
+}
+
+fn column_start() -> (Session, Column) {
+    let mut s = session();
+    let (layer, sub, a, g, b, c) = tree(&mut s);
+    run(&mut s, "layer.setCurrent", json!({"id": layer.0}));
+    let other = id(&run(&mut s, "layer.new", json!({})));
+    let o = rect(&mut s, 200.0);
+    let e = id(&run(&mut s, "layer.new", json!({})));
+    run(&mut s, "select.none", json!({}));
+    let top: Vec<NodeId> = s.doc().unwrap().doc.layers.iter().map(|l| l.id).collect();
+    assert!(top.contains(&other) && top.contains(&e) && parent(&s, o) == Some(other), "{top:?}");
+    (s, Column { layer, sub, a, g, b, c, o, e })
+}
+
+type Prep = dyn Fn(&mut Session, Column);
+
+/// A Shift-click in the selection column of `row` (whose art is `art`) after `prep` gives the
+/// same selection, reply, current layer, highlighted rows and revision as removing or adding each
+/// id of `art` one at a time. Returns the session the click ran in.
+fn shift_column_matches_each_id(prep: &Prep, row: impl Fn(Column) -> NodeId, art: impl Fn(Column) -> Vec<NodeId>) -> (Session, Column) {
+    let (mut new, t) = column_start();
+    prep(&mut new, t);
+    let row = row(t);
+    let before = new.doc().unwrap().selection.clone();
+    let reply = run(&mut new, "layer.selectAll", json!({"id": row.0, "add": true}));
+    let (mut old, t) = column_start();
+    prep(&mut old, t);
+    let ids = art(t);
+    let st = old.doc().unwrap();
+    let all_selected = !ids.is_empty() && ids.iter().all(|i| st.selection.contains(*i));
+    let rows = st.layer_rows.clone();
+    old.select(|_, sel| {
+        for i in &ids {
+            if all_selected { sel.remove(*i) } else { sel.add(*i) }
+        }
+    })
+    .unwrap();
+    old.doc_mut().unwrap().layer_rows = rows;
+    let (n, o) = (new.doc().unwrap(), old.doc().unwrap());
+    assert_eq!(n.selection, o.selection, "row {row:?} from {before:?}");
+    assert_eq!(ids_sel(&reply), o.selection.objects);
+    assert_eq!(n.active_layer, o.active_layer);
+    assert_eq!(n.highlighted_rows(), o.highlighted_rows());
+    assert_eq!(n.revision, o.revision);
+    assert_eq!(undos(&new), undos(&old));
+    (new, t)
+}
+
+#[test]
+fn a_shift_click_in_the_selection_column_matches_adding_or_removing_each_id() {
+    // `o` outside the layer is selected first and is the key object and the target; `a` is
+    // selected by one anchor, which is the key anchor.
+    let partly: &Prep = &|s, t| {
+        run(s, "layer.setCurrent", json!({"id": t.sub.0}));
+        let sel = &mut s.doc_mut().unwrap().selection;
+        sel.objects = vec![t.o, t.a];
+        sel.anchors.insert(t.a, [(0, 1)].into());
+        sel.key = Some(t.o);
+        sel.key_anchor = Some((t.a, (0, 1)));
+        sel.target = Some(t.o);
+    };
+    let layer_art = |t: Column| vec![t.c, t.a, t.g];
+    // Some of the layer's art is selected: the rest is added after what was selected.
+    let (s, t) = shift_column_matches_each_id(partly, |t| t.layer, layer_art);
+    let sel = &s.doc().unwrap().selection;
+    assert_eq!(sel.objects, vec![t.o, t.a, t.c, t.g]);
+    assert_eq!(sel.anchors.len(), 1, "the picked anchor stays picked");
+    assert!(sel.target.is_none());
+    // All of it is selected, `a` as the key object: it is removed, with its anchors, key and key
+    // anchor.
+    let all: &Prep = &|s, t| {
+        partly(s, t);
+        let sel = &mut s.doc_mut().unwrap().selection;
+        sel.objects.extend([t.c, t.g]);
+        sel.key = Some(t.a);
+    };
+    let (s, t) = shift_column_matches_each_id(all, |t| t.layer, layer_art);
+    let sel = &s.doc().unwrap().selection;
+    assert_eq!(sel.objects, vec![t.o]);
+    assert!(sel.anchors.is_empty() && sel.key.is_none() && sel.key_anchor.is_none());
+    // An object row, a group row and an empty layer's row.
+    shift_column_matches_each_id(all, |t| t.c, |t| vec![t.c]);
+    shift_column_matches_each_id(partly, |t| t.g, |t| vec![t.g]);
+    shift_column_matches_each_id(partly, |t| t.e, |_| vec![]);
+    // A locked sublayer's row, and rows outside and inside the isolated group.
+    let locked: &Prep = &|s, t| {
+        partly(s, t);
+        run(s, "layer.setProps", json!({"id": t.sub.0, "locked": true}));
+    };
+    shift_column_matches_each_id(locked, |t| t.sub, |_| vec![]);
+    let isolated: &Prep = &|s, t| {
+        partly(s, t);
+        s.doc_mut().unwrap().isolation = Some(t.g);
+    };
+    shift_column_matches_each_id(isolated, |t| t.c, |_| vec![]);
+    shift_column_matches_each_id(isolated, |t| t.b, |t| vec![t.b]);
+}
+
 fn ids_sel(v: &Value) -> Vec<NodeId> {
     v["selected"].as_array().unwrap().iter().map(|i| NodeId(i.as_u64().unwrap())).collect()
 }
