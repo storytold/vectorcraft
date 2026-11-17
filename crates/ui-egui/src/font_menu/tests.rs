@@ -1468,3 +1468,89 @@ fn the_recently_added_filter_lists_a_font_installed_just_now() {
     assert!(st.rows.is_empty(), "31 days later: {:?}", st.rows);
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+/// While the samples are shown, a row under the filters offers Font Preview Size's Small, Medium
+/// and Large at every size of the rows: a click on one asks for that size ([`super::apply_preview_size`]
+/// leaves the rows' own size as it is). Without samples the row is not drawn.
+#[test]
+fn the_preview_size_row_asks_for_the_size_clicked() {
+    // The bundled fonts alone: fonts that tests running alongside add stay out of the rows.
+    let db = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut st = super::MenuState::default();
+    for size in ["small", "medium", "large"] {
+        let look = super::MenuLook { row: super::preview_row(size), ..Default::default() };
+        let shapes = settle_menu_of(&ctx, &db, &mut st, look, vec![]);
+        assert!(text_at(&shapes, |t| t == "Font Preview Size").is_some(), "the row is drawn at {size}");
+        let mut click = |label: &str| {
+            let shapes = settle_menu_of(&ctx, &db, &mut st, look, vec![]);
+            let at = text_at(&shapes, |t| t == label).unwrap_or_else(|| panic!("{label} is drawn at {size}"));
+            let button =
+                |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            settle_menu_of(&ctx, &db, &mut st, look, vec![egui::Event::PointerMoved(at), button(true)]);
+            settle_menu_of(&ctx, &db, &mut st, look, vec![button(false)]);
+            ctx.data_mut(|d| d.remove_temp::<&'static str>(super::preview_size_id()))
+        };
+        assert_eq!(click("Large"), Some("large"), "at {size}");
+        assert_eq!(click("Small"), Some("small"), "at {size}");
+        assert_eq!(click("Medium"), Some("medium"), "at {size}");
+    }
+    let look = super::MenuLook { row: super::preview_row("medium"), ..Default::default() };
+    let shapes = settle_menu_of(&ctx, &db, &mut st, super::MenuLook { samples: false, ..look }, vec![]);
+    assert!(text_at(&shapes, |t| t == "Font Preview Size").is_none(), "without samples the row is not drawn");
+    super::wait_for_samples(&ctx);
+}
+
+/// The size a font menu's button asked for becomes Font Preview Size, which sizes every font
+/// menu's rows, and the host is asked to write the preferences file. The document is left as it
+/// was: a font previewed on the selected type stays previewed, and the change adds no undo step.
+#[test]
+fn a_preview_size_asked_for_sets_the_preference_and_keeps_the_preview() {
+    let ctx = egui::Context::default();
+    let mut app = app_with_type(&[]);
+    let id = app.run("text.create", serde_json::json!({"x": 20, "y": 90, "text": "Size", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", serde_json::json!({"ids": [id]})).unwrap();
+    let font = |app: &crate::VectorcraftApp| match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+        vectorcraft_doc::NodeKind::Text(t) => t.first_style().font_family,
+        _ => String::new(),
+    };
+    super::apply(&mut app, &ctx, super::FontPick::Preview("Source Serif 4".into(), None));
+    assert_eq!(font(&app), "Source Serif 4");
+    assert_eq!(super::MenuLook::of(&app).row, super::preview_row("medium"));
+    assert!(!app.take_prefs_changed(), "nothing to write yet");
+    let undo_depth = |app: &crate::VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let depth = undo_depth(&app);
+    // The rows' own size: nothing changes.
+    ctx.data_mut(|d| d.insert_temp(super::preview_size_id(), "medium"));
+    super::apply_preview_size(&mut app, &ctx);
+    assert_eq!(app.session.prefs.font_preview_size, "medium");
+    assert!(!app.take_prefs_changed(), "nothing to write for the size the rows have");
+    ctx.data_mut(|d| d.insert_temp(super::preview_size_id(), "large"));
+    super::apply_preview_size(&mut app, &ctx);
+    assert_eq!(app.session.prefs.font_preview_size, "large");
+    assert_eq!(undo_depth(&app), depth, "the size is not an undo step");
+    assert_eq!(super::MenuLook::of(&app).row, super::preview_row("large"));
+    assert!(app.take_prefs_changed(), "the host is asked to write the preferences file");
+    assert_eq!(app.ui.engine_prefs["fontPreviewSize"], "large");
+    assert!(app.session.in_interaction(), "the preview is still open");
+    assert_eq!(font(&app), "Source Serif 4", "the preview stays on the type");
+    // Asked for once, applied once.
+    super::apply_preview_size(&mut app, &ctx);
+    assert_eq!(app.session.prefs.font_preview_size, "large");
+    assert!(!app.take_prefs_changed(), "nothing more to write");
+    // A saved value that is none of the sizes draws Medium's rows, and Medium replaces it.
+    app.session.prefs.font_preview_size = "huge".into();
+    assert_eq!(super::MenuLook::of(&app).row, super::preview_row("medium"));
+    ctx.data_mut(|d| d.insert_temp(super::preview_size_id(), "medium"));
+    super::apply_preview_size(&mut app, &ctx);
+    assert_eq!(app.session.prefs.font_preview_size, "medium");
+    assert!(app.take_prefs_changed(), "the replaced value is written");
+    super::apply(&mut app, &ctx, super::FontPick::EndPreview);
+    assert_eq!(font(&app), "Inter");
+    app.run("edit.undo", serde_json::json!({})).unwrap();
+    assert!(
+        app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).is_none(),
+        "undo takes the type away: no step was added for the size"
+    );
+}

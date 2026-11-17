@@ -576,6 +576,7 @@ impl VectorcraftApp {
         self.ime_caret_rect = None;
         scrub::begin_frame(self, &ctx);
         font_menu::end_stale_preview(self, &ctx);
+        font_menu::apply_preview_size(self, &ctx);
         tools_float::track(self, &ctx);
         // A selection move released over a panel ends before any panel sees the release (#2826).
         canvas::release_over_panel(self, &ctx);
