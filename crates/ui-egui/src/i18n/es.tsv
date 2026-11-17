@@ -8191,16 +8191,11 @@ breakText	Glyphs	Glifos
 @msg	an XPath step is missing	falta un paso XPath
 @msg	an image couldn't be decoded and is missing from the picture	no se pudo descodificar una imagen y falta en la imagen resultante
 @msg	an image of {w} × {h} pixels is too large to convert (at most {_1} pixels)	una imagen de {w} × {h} píxeles es demasiado grande para convertirla (como máximo {_1} píxeles)
-@msg	apply was called on a value that is not a function	se llamó a apply con un valor que no es una función
 @msg	area type in a thread cannot use Dynamic Text: {frames}	el texto de área en un enlace no puede usar Texto dinámico: {frames}
-@msg	array literal too long	literal de matriz demasiado largo
-@msg	assignment to a constant binding	asignación a un enlace constante
 @msg	at least one row that isn't excluded needs a weight above 0	al menos una fila que no esté excluida necesita un peso mayor que 0
 @msg	blend must be a mode name	blend debe ser el nombre de un modo
 @msg	both sides of an XPath | must select nodes	ambos lados de un | de XPath deben seleccionar nodos
 @msg	canceled	cancelado
-@msg	cannot convert the object to a primitive value	no se puede convertir el objeto en un valor primitivo
-@msg	cannot convert undefined or null to an object	no se puede convertir undefined o null en un objeto
 @msg	character dimensions cannot be represented with the source text transform	las dimensiones de los caracteres no se pueden representar con la transformación del texto de origen
 @msg	character dimensions cannot be represented with the target text transform	las dimensiones de los caracteres no se pueden representar con la transformación del texto de destino
 @msg	continuation must be an array of path chunks	continuation debe ser una lista de fragmentos de trazado
@@ -8218,7 +8213,6 @@ breakText	Glyphs	Glifos
 @msg	give `xml`, one SVG <filter> element	indica `xml`, un elemento SVG <filter>
 @msg	give exactly one of `path`, `data` and `dataBase64`	indica exactamente uno de `path`, `data` y `dataBase64`
 @msg	give index or indexes, not both	indica index o indexes, no ambos
-@msg	give one <filter> element	indica un elemento <filter>
 @msg	give opacity or blend	indica opacity o blend
 @msg	handler at {_1} expects {_2} values but its range starts with {d}	el controlador en {_1} espera {_2} valores, pero su rango empieza con {d}
 @msg	handler depth too large	profundidad de controlador demasiado grande
@@ -8233,7 +8227,6 @@ breakText	Glyphs	Glifos
 @msg	instruction out of range	instrucción fuera de rango
 @msg	instruction {pc} ({op}) pops below the stack	la instrucción {pc} ({op}) extrae por debajo de la pila
 @msg	instruction {pc} reached with stack depths {seen} and {d}	se llegó a la instrucción {pc} con profundidades de pila {seen} y {d}
-@msg	invalid array length	longitud de matriz no válida
 @msg	invalid group	grupo no válido
 @msg	invalid object id {v}: expected a non-negative integer	id de objeto no válido {v}: se esperaba un entero no negativo
 @msg	invalid regular expression flag '{_1}'	indicador de expresión regular no válido '{_1}'
@@ -8327,7 +8320,6 @@ breakText	Glyphs	Glifos
 @msg	the XPath name functions need a node-set	las funciones de nombre de XPath necesitan un conjunto de nodos
 @msg	the XPath prefix {shown} is not bound to a namespace	el prefijo XPath {shown} no está vinculado a un espacio de nombres
 @msg	the XPath variable ${shown} is not bound	la variable XPath ${shown} no está vinculada
-@msg	the argument list is not an object	la lista de argumentos no es un objeto
 @msg	the artwork is too large for EPS: what follows 256 MB of PostScript was left out	la ilustración es demasiado grande para EPS: se omitió lo que sigue a 256 MB de PostScript
 @msg	the bitmaps hold more pixels than one file may	los mapas de bits contienen más píxeles de los que puede tener un archivo
 @msg	the code runs past its last instruction	el código continúa más allá de su última instrucción
@@ -8342,7 +8334,6 @@ breakText	Glyphs	Glifos
 @msg	the document's swatches hold {_1} colors; the document reduction takes at most 255	las muestras del documento contienen {_1} colores; la reducción del documento acepta como máximo 255
 @msg	the file isn't valid SVG: {e}	el archivo no es un SVG válido: {e}
 @msg	the file names no plate	el archivo no nombra ninguna plancha
-@msg	the function's prototype is not an object	el prototipo de la función no es un objeto
 @msg	the guide is hidden or locked	la guía está oculta o bloqueada
 @msg	the library's file is outside the read roots	el archivo de la biblioteca está fuera de las raíces de lectura
 @msg	the method needs an XML value	el método necesita un valor XML
@@ -8353,14 +8344,10 @@ breakText	Glyphs	Glifos
 @msg	the position table does not match the instructions	la tabla de posiciones no coincide con las instrucciones
 @msg	the prompt's text is longer than {MAX_PROMPT_BYTES} bytes	el texto del prompt ocupa más de {MAX_PROMPT_BYTES} bytes
 @msg	the radix must be between 2 and 36	la base debe estar entre 2 y 36
-@msg	the right side of 'in' is not an object	el lado derecho de 'in' no es un objeto
-@msg	the right side of 'instanceof' is not a function	el lado derecho de 'instanceof' no es una función
 @msg	the selected art is nested more than {MAX_DEPTH} levels deep	la ilustración seleccionada está anidada a más de {MAX_DEPTH} niveles de profundidad
 @msg	the selected art is too large to measure	la ilustración seleccionada es demasiado grande para medirla
 @msg	the selection has no outlines to weed around	la selección no tiene contornos alrededor de los que pelar
 @msg	the value bind was called on is not a function	el valor con el que se llamó a bind no es una función
-@msg	the value is not a constructor	el valor no es un constructor
-@msg	the value is not a function	el valor no es una función
 @msg	the value is not a valid XML name	el valor no es un nombre XML válido
 @msg	the value is not an XML attribute name	el valor no es un nombre de atributo XML
 @msg	the value is not an XML name	el valor no es un nombre XML
@@ -8382,7 +8369,6 @@ breakText	Glyphs	Glifos
 @msg	toSource: the value has too many entries	toSource: el valor tiene demasiadas entradas
 @msg	toSource: the value is nested too deep	toSource: el valor está anidado a demasiada profundidad
 @msg	toString is not a function	toString no es una función
-@msg	too many arguments	demasiados argumentos
 @msg	too many quantifiers	demasiados cuantificadores
 @msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	función OpenType desconocida `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; antepón - para desactivarla; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom y aalt aceptan el número de una alternativa como `tag=N` con N entre 0 y {_1}, como `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	tramado desconocido `{d}` (diffusion, pattern, noise o none)
@@ -8860,7 +8846,6 @@ breakText	Glyphs	Glifos
 @msg	composer must be "singleLine" or "everyLine"	composer debe ser "singleLine" o "everyLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	las formas compuestas aceptan trazados, trazados compuestos, grupos, formas compuestas, texto, fusiones y envolventes
 @msg	compound {_1} must contain exactly one open path to join	el compuesto {_1} debe contener exactamente un trazado abierto para unir
-@msg	connect end must be "start" or "end"	el extremo de connect debe ser "start" o "end"
 @msg	connect needs a path other than the one extended	connect necesita un trazado distinto del que se extiende
 @msg	connect needs id	connect necesita id
 @msg	connect path has no open end	el trazado de connect no tiene ningún extremo abierto
