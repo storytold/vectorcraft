@@ -78,6 +78,14 @@ impl TextObject {
         // Character strokes are drawn in text space: widen them by the vertical scale we remove.
         self.scale_char_strokes(1.0 / sy);
         self.xf *= Affine::scale_non_uniform(1.0 / sx, 1.0 / sy);
+        // An area's frame and a path type's path are drawn through `xf` too: give them the scale
+        // `xf` loses, so the frame (and so the line breaks) and the path stay where they were.
+        let grow = Affine::scale_non_uniform(sx, sy);
+        match &mut self.kind {
+            TextKind::Area { frame } => frame.transform(grow),
+            TextKind::OnPath { path, .. } => path.transform(grow),
+            TextKind::Point => {}
+        }
         self.cached_bounds = None;
         self.cached_baselines.clear();
         self.cached_ink = None;
