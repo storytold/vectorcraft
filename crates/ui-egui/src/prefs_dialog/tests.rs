@@ -1799,10 +1799,10 @@ fn a_row_without_a_description_leaves_the_line_empty() {
 }
 
 /// Every setting the General, Selection & Anchor Display, Guides & Grid, Smart Guides, Slices,
-/// Hyphenation, Plug-ins & Scratch Disks and User Interface categories show on this platform, the
-/// Smart Guides box included, has exactly one sentence, and no key has two.
+/// Hyphenation, Plug-ins & Scratch Disks, User Interface and Performance categories show on this
+/// platform, the Smart Guides box included, has exactly one sentence, and no key has two.
 #[test]
-fn every_general_selection_guides_smart_guides_slices_hyphenation_plugins_and_user_interface_setting_has_one_description() {
+fn every_general_selection_guides_smart_guides_slices_hyphenation_plugins_user_interface_and_performance_setting_has_one_description() {
     let mut bad = vec![];
     let categories = [
         "General",
@@ -1813,6 +1813,7 @@ fn every_general_selection_guides_smart_guides_slices_hyphenation_plugins_and_us
         "Hyphenation",
         "Plug-ins & Scratch Disks",
         "User Interface",
+        "Performance",
     ];
     for s in settings().filter(|s| categories.contains(&s.category)) {
         match descriptions::DESCRIPTIONS.iter().filter(|(k, _)| *k == s.key).count() {
@@ -2264,6 +2265,97 @@ fn keyboard_focus_on_a_user_interface_row_shows_its_description() {
         None
     };
     for key in ["uiBrightness", "uiColorScheme", "uiAccent", "canvasColor", "autoCollapseIconPanels"] {
+        let sentence = descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"));
+        let described = tab_to(sentence).unwrap_or_else(|| panic!("Tab reaches the `{key}` control and its sentence shows"));
+        assert!(described.iter().any(|d| d == sentence), "the focused `{key}` control carries the sentence: {described:?}");
+    }
+}
+
+/// Linux Display Server, which only Linux shows, and Use Monitor Profile for Canvas, which the
+/// web version does not show, have a sentence on every platform.
+#[test]
+fn the_display_server_and_monitor_profile_settings_have_a_description_on_every_platform() {
+    for key in ["linuxDisplayServer", "monitorProfileDisplay"] {
+        assert!(PREF_SPECS.iter().any(|s| s.key == key && s.category == "Performance"), "`{key}` is a Performance setting");
+        assert!(descriptions::description(key).is_some(), "`{key}` has a sentence");
+    }
+}
+
+/// The pointer over each Performance row this platform shows, from GPU Performance to Use Monitor
+/// Profile for Canvas on the desktop, shows that row's sentence and no other row's.
+#[test]
+fn hovering_a_performance_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Performance"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    // The GPU Performance section's heading has the checkbox's label too: the checkbox comes after it.
+    let row = |texts: &[(String, egui::Rect)], label: &str| {
+        texts.iter().rev().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
+    };
+    let mut rows = vec![
+        ("GPU Performance", "gpuPerformance"),
+        ("Animated Zoom", "animatedZoom"),
+        ("Graphics Processor:", "gpuPreference"),
+        ("History States:", "historyStates"),
+        ("Real-time Drawing and Editing", "realTimeDrawing"),
+        ("Render Threads (-1 = Automatic):", "renderThreads"),
+    ];
+    if cfg!(target_os = "linux") {
+        rows.push(("Linux Display Server:", "linuxDisplayServer"));
+    }
+    if !cfg!(target_arch = "wasm32") {
+        rows.push(("Use Monitor Profile for Canvas", "monitorProfileDisplay"));
+    }
+    let sentences: Vec<_> = rows.iter().map(|(_, key)| descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"))).collect();
+    // The last rows can be under the bottom of the list: the wheel scrolls them into view.
+    let wheel = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(0.0, -40.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    let mut texts = texts;
+    for (i, (label, _)) in rows.iter().enumerate() {
+        for _ in 0..20 {
+            if texts.iter().any(|(t, _)| t == label) {
+                break;
+            }
+            texts = description_frame(&mut a, &ctx, vec![wheel.clone()]).0;
+        }
+        description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, label))]);
+        let (after, _) = description_frame(&mut a, &ctx, vec![]);
+        for (j, sentence) in sentences.iter().enumerate() {
+            assert_eq!(painted(&after, sentence), i == j, "pointer over `{label}`, sentence {j}: {after:?}");
+        }
+    }
+}
+
+/// Tab from the search field reaches the GPU Performance checkbox, then Animated Zoom, the
+/// Graphics Processor menu and the History States field: the line shows each one's sentence in
+/// turn, and a screen reader gets it as the focused control's description.
+#[test]
+fn keyboard_focus_on_a_performance_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Performance"));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    description_frame(&mut a, &ctx, vec![]);
+    let mut tab_to = |sentence: &str| {
+        for _ in 0..40 {
+            let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
+            if painted(&texts, sentence) {
+                return Some(described);
+            }
+        }
+        None
+    };
+    for key in ["gpuPerformance", "animatedZoom", "gpuPreference", "historyStates"] {
         let sentence = descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"));
         let described = tab_to(sentence).unwrap_or_else(|| panic!("Tab reaches the `{key}` control and its sentence shows"));
         assert!(described.iter().any(|d| d == sentence), "the focused `{key}` control carries the sentence: {described:?}");

@@ -3076,6 +3076,14 @@ digits	Malayalam	马拉雅拉姆数字
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	放大或缩小界面；在相同缩放比例下，画布上的图稿保持原有大小。
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft 绘制的工具指针随界面缩放一起变大变小；关闭此项后，指针保持原有大小。
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	界面的语言；“自动”使用系统的语言。选择一种语言后，对话框会立即切换到该语言。
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	只有开启此项时，动画缩放才会起作用；关闭此项后，动画缩放显示为灰色，缩放不带动画。
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	用滚轮缩放时会平滑过渡，缩放工具在你向侧面拖动或按住不放时进行缩放；关闭此项后，缩放工具缩放到你拖过的区域。
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	从下次启动起，桌面版使用这类图形处理器绘制；“自动”优先使用驱动显示器的图形处理器。Web 版不使用此项。
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	每个文档保留的最大撤销步骤数；调低后，单击“确定”时会删除最早的步骤。步骤占用过多内存时也可能更早被删除。
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	拖动时显示图稿的变化；关闭此项后，由轮廓跟随拖动，松开后图稿才改变。标尺参考线在拖动时总是跟着移动。
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	绘制图稿的工作线程数；-1 使用比 VectorCraft 可用核心数少一个的线程，最多 8 个，0 则不使用。Web 版始终不使用。
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	从下次启动起，在 Wayland 桌面上，X11 (XWayland) 通过 XWayland 打开窗口；其他选项仅在连接了笔时才这样做。
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	在系统尚未进行转换时，将画布上的图稿和画板转换为显示器的颜色配置文件；关闭此项后，画布以 sRGB 绘制。
 	Reset all preferences to their defaults?	将所有首选项重置为默认值？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在首选项中点击确定后才会应用默认值。在那里点击取消会保留当前首选项。
 	Restore Recovered Documents	恢复已恢复的文档

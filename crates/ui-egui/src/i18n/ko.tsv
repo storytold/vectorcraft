@@ -3191,6 +3191,14 @@ mark-style	Japanese	일본식
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	인터페이스를 크게 또는 작게 만듭니다. 같은 확대/축소에서 캔버스의 아트는 크기가 그대로입니다.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft가 그리는 도구 포인터가 UI 배율에 따라 커지고 작아집니다. 끄면 크기가 그대로 유지됩니다.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	인터페이스의 언어입니다. 자동은 시스템 언어를 사용합니다. 언어를 고르면 대화 상자가 바로 그 언어로 바뀝니다.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	애니메이션 확대/축소는 이 옵션이 켜져 있을 때만 작동합니다. 끄면 애니메이션 확대/축소가 흐리게 표시되고 확대/축소에 애니메이션이 없습니다.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	휠로 확대/축소하면 부드럽게 움직이고, 확대/축소 도구는 옆으로 드래그하거나 누르고 있으면 확대/축소합니다. 끄면 확대/축소 도구는 드래그한 영역으로 확대합니다.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	다음 시작부터 데스크톱 버전은 이 종류의 그래픽 프로세서로 그립니다. 자동은 디스플레이를 구동하는 프로세서를 우선합니다. 웹 버전은 사용하지 않습니다.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	각 문서가 보관하는 실행 취소 단계의 최대 수입니다. 낮추면 확인을 클릭할 때 가장 오래된 단계가 삭제됩니다. 메모리를 너무 많이 쓰면 단계가 더 일찍 삭제될 수도 있습니다.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	드래그하는 동안 아트가 바뀌는 모습을 보여 줍니다. 끄면 윤곽선이 드래그를 따라가고 놓을 때 아트가 바뀝니다. 눈금자 안내선은 드래그하는 동안 항상 움직입니다.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	아트를 그리는 작업자 스레드 수입니다. -1은 VectorCraft가 쓸 수 있는 코어보다 하나 적게(최대 8개) 쓰고, 0은 하나도 쓰지 않습니다. 웹 버전은 항상 쓰지 않습니다.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	다음 시작부터 Wayland 데스크톱에서 X11 (XWayland)은 창을 XWayland를 통해 엽니다. 다른 선택은 펜이 연결되어 있을 때만 그렇게 합니다.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	시스템이 아직 하지 않는 경우 캔버스의 아트와 아트보드를 디스플레이의 색상 프로필로 변환합니다. 끄면 캔버스는 sRGB로 그려집니다.
 	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
 	Restored documents open unsaved: save them to keep them.	복원된 문서는 저장되지 않은 상태로 열립니다. 보존하려면 저장하세요.

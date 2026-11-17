@@ -205,6 +205,36 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ("uiScaling", "Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom."),
     ("scaleCursorWithUi", "The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size."),
     ("interfaceLanguage", "The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one."),
+    // Performance
+    ("gpuPerformance", "Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate."),
+    (
+        "animatedZoom",
+        "The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.",
+    ),
+    (
+        "gpuPreference",
+        "From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.",
+    ),
+    (
+        "historyStates",
+        "The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.",
+    ),
+    (
+        "realTimeDrawing",
+        "Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.",
+    ),
+    (
+        "renderThreads",
+        "How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.",
+    ),
+    (
+        "linuxDisplayServer",
+        "From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.",
+    ),
+    (
+        "monitorProfileDisplay",
+        "Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.",
+    ),
 ];
 
 /// The sentence that describes the setting `key`, in English, or `None` when it has none yet.
