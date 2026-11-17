@@ -701,13 +701,14 @@ impl CommandUses {
     }
 }
 
-/// Reads saved [`CommandUses`], keeping what is readable: an entry that is not a pair of counts is
-/// dropped, a count above 999 reads as 999, and of more than [`MAX_COUNTED_COMMANDS`] ids the
-/// ones picked most recently are kept. Anything else reads as no picks.
+/// Serde reader for the saved pick counts ([`crate::UiState::command_uses`]): an entry that is not
+/// a pair of counts is dropped, a count above 999 reads as 999, and of more than
+/// [`MAX_COUNTED_COMMANDS`] ids the ones picked most recently are kept. Anything else reads as no
+/// picks, so an unknown value doesn't lose the rest of the preferences.
 pub fn deserialize_command_uses<'de, D: serde::Deserializer<'de>>(d: D) -> Result<CommandUses, D::Error> {
+    use std::cmp::Reverse;
     let v = <serde_json::Value as serde::Deserialize>::deserialize(d)?;
     let number = |v: Option<&serde_json::Value>| v.and_then(serde_json::Value::as_u64).map(|n| u32::try_from(n).unwrap_or(u32::MAX));
-    use std::cmp::Reverse;
     // The heap holds at most MAX_COUNTED_COMMANDS + 1 entries, the least recent pick on top (of
     // equal picks, the id that sorts last), so a long saved list is not collected whole.
     let mut kept: std::collections::BinaryHeap<Reverse<(u32, Reverse<&String>, u32)>> = std::collections::BinaryHeap::new();
@@ -1668,7 +1669,7 @@ mod tests {
     fn a_command_picked_often_ranks_first_among_results_that_match_as_well() {
         let (tool, effect) = ("tool:rectangle", "effect:convertToShape.rectangle");
         let mut open = Open::new("rect", egui::vec2(1200.0, 900.0));
-        // With nothing selected the effect is dimmed and its pick is refused, so it is not counted.
+        // The fixture has art selected, so the effect is not dimmed and its pick is counted.
         open.app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
         open.app.ui.palette_open = true;
         open.app.ui.palette_query = "rect".into();
