@@ -432,7 +432,7 @@ Inflate and Rotate has a **Shadows** switch with those three settings below it.
 
 | Option | |
 |---|---|
-| Shadows | Off by default. On, the first light casts a hard-edged shadow of the solid, drawn behind it. |
+| Shadows | Off by default. On, the first light casts a shadow of the solid, drawn behind it: hard-edged at the light's Softness 0 %, blurred above it. |
 | Position | **Behind Object** (the default): on a plane square to the view, behind the object. **Below Object**: on the floor under the object, square to its own vertical axis and turned with it. |
 | Distance from Object | 0–100 %, default 0 %: how far the plane is from the object, as a share of the object's largest size. |
 | Shadow Bounds | 10–400 %, default 100 %: how far the plane reaches. At 100 % it is a square four times the object's largest size across, about the foot of the object's center; the shadow is cut at its edges. |
@@ -449,14 +449,19 @@ Our reading:
   Intensity is 0 %, or when it does not reach the plane: a light behind the object casts none behind it, and a
   light from under the floor casts none below it. A fill, stroke or group member at 0 % opacity casts none. With no X rotation the floor is seen edge-on, so a
   shadow below draws nothing until the object is tilted (the default Off-Axis Front position shows it).
-- Softness is not applied to the shadow, and only the first light casts one.
+- The first light's Softness blurs the shadow with a Gaussian Blur: at 0 % it stays the hard-edged path, and above
+  it the blur radius is Softness × the object's largest size × (5 % + 20 % × Distance from Object), at most
+  1,000 pt. At 100 % Softness a 100 pt object casts a shadow blurred by 5 pt on a plane that touches it and by
+  25 pt at 100 % Distance. This mapping is our own. The blur scales with the object, and it draws, takes room and
+  exports as a Gaussian Blur effect does. Only the first light casts a
+  shadow.
 - A shadow is cast from at most 327,680 faces, the solids of one object together (our own limit). Past it, a
   command is refused with "The 3D shadow is too complex; turn Shadows off or simplify the art", and a loaded
   file draws the source path. A command checks the shadow from the same builds that check the solids, as
   drawing casts it, so each solid is built once. A stroke whose solid is left out of the art (past its own
   limits) casts no shadow.
-- Canvas, SVG and PDF exports draw the shadow, the art's bounds take it in, and Expand Appearance keeps it as a
-  path below the faces. Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) have no shadow.
+- Canvas, SVG and PDF exports draw the shadow, the art's bounds take it in (with its blur), and Expand Appearance
+  keeps it below the faces: a hard shadow as a path, a blurred one as an image. Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) have no shadow.
 
 ## Graphics
 
@@ -562,10 +567,10 @@ and [Create 3D objects](https://helpx.adobe.com/illustrator/desktop/special-effe
 pages, and the archived Extrude & Bevel option list (depth 0–2,000, cap on/off, bevel height, bevel extent in or
 out, perspective). No Adobe software, assets, presets or bevel shapes were used.
 
-- **Materials** (base and Adobe Substance), graphics on Inflate and on Extrude & Bevel's walls and bevels, soft
-  shadows, shadows of lights after the first, and **ray-traced rendering** are not built: shading uses directional
+- **Materials** (base and Adobe Substance), graphics on Inflate and on Extrude & Bevel's walls and bevels,
+  shadows of lights after the first, and **ray-traced rendering** are not built: shading uses directional
   lights, in the paint of the fill or stroke the solid is built for ([Fills and strokes](#fills-and-strokes)), and
-  the shadow is hard-edged ([Shadows](#shadows)). Graphics map onto planar faces and Revolve's side only
+  only the first light casts a shadow ([Shadows](#shadows)). Graphics map onto planar faces and Revolve's side only
   ([Graphics](#graphics)).
 - The bevel shapes and their names are our own; custom bevel paths are not supported.
 - Visibility is a painter's algorithm: faces of a closed solid turned away are left out, and the rest are drawn

@@ -2008,6 +2008,10 @@ antiAlias	Sharp	शार्प
 	Font List	फ़ॉन्ट सूची
 	Show Similar Fonts	समान फ़ॉन्ट दिखाएँ
 	Clear Similar Fonts	समान फ़ॉन्ट साफ़ करें
+	Fonts used in this document	इस डॉक्यूमेंट में उपयोग किए गए फ़ॉन्ट
+	This document uses no available fonts	यह डॉक्यूमेंट कोई उपलब्ध फ़ॉन्ट उपयोग नहीं करता
+	Recently Added	हाल में जोड़े गए
+	Fonts added in the last 30 days	पिछले 30 दिनों में जोड़े गए फ़ॉन्ट
 	Font Preview Size	फ़ॉन्ट प्रीव्यू साइज़
 	Font Size	फ़ॉन्ट साइज़
 	Font Size:	फ़ॉन्ट साइज़:
@@ -2509,6 +2513,7 @@ antiAlias	Sharp	शार्प
 	Isolate Blending	ब्लेंडिंग अलग करें
 	Isolate Group	अलग समूह
 	Isolate Selected Group	सिलेक्टेड समूह अलग करें
+	Isolate Selected Path	सिलेक्टेड पाथ अलग करें
 	Isolate Selected Object	सिलेक्टेड ऑब्जेक्ट को अलग करें
 	Isometric Bottom	आइसोमेट्रिक बॉटम
 	Isometric Left	आइसोमेट्रिक लेफ्ट
@@ -2757,6 +2762,10 @@ antiAlias	Sharp	शार्प
 	Live Shape	लाइव आकार
 	Live Shape Properties	लाइव शेप प्रॉपर्टीज़
 	Load Actions…	एक्शन्स लोड करें…
+	Reset Actions	एक्शन्स रीसेट करें
+	Replace the current actions with the default set?	मौजूदा एक्शन्स को डिफ़ॉल्ट सेट से बदलें?
+	Append adds the default set after the current sets instead.	जोड़ें इसके बजाय डिफ़ॉल्ट सेट को मौजूदा सेट के बाद जोड़ता है।
+	Append	जोड़ें
 	Load Color Profile…	लोड कलर प्रोफ़ाइल…
 	Load EPS into Clipboard	ईपीएस को क्लिपबोर्ड में लोड करें
 	Load Image into Clipboard	क्लिपबोर्ड में इमेज लोड करें
@@ -3683,6 +3692,8 @@ antiAlias	Sharp	शार्प
 	Polygon	बहुभुज
 	Polygon Properties:	बहुभुज प्रॉपर्टीज़:
 	Polygon Tool	पॉलीगोन टूल
+	Polygonal Lasso	बहुभुज लैस्सो
+	Polygonal Lasso Tool	बहुभुज लैस्सो टूल
 	Portrait	पोर्ट्रेट
 	Portrait (flipped)	पोर्ट्रेट (फ्लिप)
 	Portuguese	पुर्तगाली
@@ -4461,8 +4472,12 @@ antiAlias	Sharp	शार्प
 	Search	खोजें
 	Search All	सभी खोजें
 	Search artboards	खोज आर्टबोर्ड
-	Search commands and tools	खोज आदेश और टूल
-	Search commands and tools…	आदेश और टूल खोजें…
+	Search commands, tools, panels and effects	आदेश, टूल, पैनल्स और इफ़ेक्ट्स खोजें
+	Search commands, tools, panels and effects…	आदेश, टूल, पैनल्स और इफ़ेक्ट्स खोजें…
+	No commands match	कोई आदेश मेल नहीं खाता
+	{pos} of {total}: {name}	{total} में से {pos}: {name}
+@plural	{n} result|{n} results	{n} परिणाम|{n} परिणाम
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।|{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।
 	Recent Commands	हाल के आदेश
 	No recent commands	कोई हाल का आदेश नहीं
 	Search Commands…	कमांड खोजें…
@@ -4686,6 +4701,11 @@ antiAlias	Sharp	शार्प
 	Show Center Mark	शो सेंटर मार्क
 	Show Code	कोड दिखाएं
 	Show color bars	रंग सलाखों दिखाएँ
+	Show brightness and hue on wheel	व्हील पर ब्राइटनेस और ह्यू दिखाएँ
+	Show saturation and hue on wheel	व्हील पर सैचुरेशन और ह्यू दिखाएँ
+	Add Color Tool	रंग जोड़ें टूल
+	Remove Color Tool	रंग हटाएँ टूल
+	Remove Color	रंग हटाएँ
 	Find the selected colors in the artwork	चयनित रंगों को आर्टवर्क में खोजें
 	Show Color Groups	रंग समूह दिखाएँ
 	Show Color Swatches	रंग स्वॉचेस दिखाएँ
@@ -5506,6 +5526,7 @@ antiAlias	Sharp	शार्प
 	Unlock Variables	वेरिएबल्स अनलॉक करें
 	Unnamed Objects	नामरहित ऑब्जेक्टएं
 	Unpainted Objects	अनपेक्षित ऑब्जेक्टएं
+	Empty Text Paths	खाली टेक्स्ट पाथ
 	Unprintable margin:	अनप्रिंटेबल मार्जिन:
 	Unselected Artwork	अनसिलेक्टेड आर्टवर्क
 	Unsharp Mask	अनशार्प मास्क
@@ -5523,6 +5544,11 @@ antiAlias	Sharp	शार्प
 	Update Modified Links	अद्यतन संशोधित लिंक
 	Update Selection	अद्यतन सिलेक्शन
 	UPPERCASE	अपरकैस
+	Sanskrit	संस्कृत
+	Nepali	नेपाली
+	Assamese	असमिया
+	Konkani	कोंकणी
+	Sindhi	सिंधी
 	Urdu	उर्दू
 	URL:	यूआरएल:
 	Use 	उपयोग 
@@ -7514,6 +7540,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no active document	कोई सक्रिय डॉक्यूमेंट
 @msg	no active perspective plane	कोई सक्रिय पर्सपेक्टिव विमान नहीं
 @msg	no anchor points selected	कोई एंकर पॉइंट सिलेक्ट नहीं है
+@msg	`points` must be three [x, y] pairs of numbers	`points` में संख्याओं के तीन [x, y] जोड़े होने चाहिए
+@msg	direct-select three anchor points, or give `points`	तीन एंकर पॉइंट्स डायरेक्ट-सिलेक्ट करें, या `points` दें
+@msg	no circle passes through these points: two are the same or all three lie on one line	इन पॉइंट्स से होकर कोई वृत्त नहीं गुज़रता: दो एक जैसे हैं या तीनों एक ही रेखा पर हैं
 @msg	no app to open files here	यहां फ़ाइलों को ओपन करने के लिए कोई ऐप नहीं है
 @msg	no appearance item {index}	कोई उपस्थिति आइटम {index}
 @msg	no artboard	कोई आर्टबोर्ड नहीं
@@ -8297,6 +8326,25 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	ग्रुप के फ़िल या स्ट्रोक पर 3D इफ़ेक्ट कुछ नहीं बनाता
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ग्रुप के फ़िल या स्ट्रोक पर 3D इफ़ेक्ट एक्सपोर्ट करने लायक कुछ नहीं बनाता
 @msg	The 3D object is too complex to export	3D ऑब्जेक्ट एक्सपोर्ट करने के लिए बहुत जटिल है
+@msg	give one <filter> element	एक <filter> एलिमेंट दें
+@msg	the <filter> element needs an id, the filter's name	<filter> एलिमेंट को एक id चाहिए, जो फ़िल्टर का नाम है
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG फ़िल्टर की id अधिकतम {MAX_NAME} वर्णों की होती है
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> SVG फ़िल्टर का एलिमेंट नहीं है
+@msg	an SVG filter has no event attributes such as {_1}	SVG फ़िल्टर में {_1} जैसे इवेंट एट्रिब्यूट नहीं होते
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG फ़िल्टर की इमेज PNG, JPEG, GIF या WebP data: URL होती हैं
+@msg	the SVG filter isn't valid XML: {e}	SVG फ़िल्टर मान्य XML नहीं है: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence का numOctaves अधिकतम {MAX_OCTAVES} होता है
+@msg	{what} is at most {max}	{what} अधिकतम {max} होता है
+@msg	feConvolveMatrix's order	feConvolveMatrix का order
+@msg	feMorphology's radius	feMorphology का radius
+@msg	a blur's stdDeviation	ब्लर का stdDeviation
+@msg	the SVG filter has no primitives	SVG फ़िल्टर में कोई प्रिमिटिव नहीं है
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG फ़िल्टर में अधिकतम {MAX_PRIMITIVES} प्रिमिटिव होते हैं
+@msg	the SVG filter is too large once its attributes are written out	एट्रिब्यूट लिखे जाने के बाद SVG फ़िल्टर बहुत बड़ा हो जाता है
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG फ़िल्टर की इमेज में कुल मिलाकर अधिकतम {MAX_IMAGE_PIXELS} पिक्सेल होते हैं
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG फ़िल्टर बनाया नहीं जा सकता: उसके प्रिमिटिव और उनके इनपुट जाँचें
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG फ़िल्टर के एलिमेंट अधिकतम {MAX_DEPTH} स्तर तक नेस्ट होते हैं
+@msg	an SVG filter is at most {_1} KB	SVG फ़िल्टर अधिकतम {_1} KB का होता है
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	ऑब्जेक्ट पर कोई 3D इफ़ेक्ट नहीं है (एक्सट्रूडेड और बेवेल, रिवॉल्व, फुलाएँ या घुमाव)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` केवल `mode` वाला ऑब्जेक्ट होना चाहिए, जिसका मान shaded या wireframe हो
 @msg	its 3D effect builds no solid	इसका 3D इफ़ेक्ट कोई ठोस नहीं बनाता
@@ -9344,3 +9392,23 @@ theme	Appearance	अपीयरेंस
 	No objects are selected.	कोई ऑब्जेक्ट सिलेक्ट नहीं है।
 	Open a document to mark its fold lines.	फ़ोल्ड लाइनें मार्क करने के लिए कोई डॉक्यूमेंट ओपन करें।
 	Remove Fold Line Role	लाइन प्रकार हटाएँ
+	Check	चेक करें
+	Check Fold Lines	फ़ोल्ड लाइनें चेक करें
+@msg	No cut lines are in the selection.	सिलेक्शन में कोई कट लाइन नहीं है।
+@msg	No cut lines are in the document.	डॉक्यूमेंट में कोई कट लाइन नहीं है।
+@msg	The cut lines do not enclose an area.	कट लाइनें कोई एरिया नहीं घेरतीं।
+@msg	A cut line ends without meeting another cut line.	एक कट लाइन किसी दूसरी कट लाइन से मिले बिना खत्म हो जाती है।
+@msg	A gap between cut lines was closed.	कट लाइनों के बीच का गैप बंद कर दिया गया।
+@msg	The fold lines are too complex to check.	फ़ोल्ड लाइनें चेक करने के लिए बहुत जटिल हैं।
+@msg	A cut line and a crease lie on top of each other.	एक कट लाइन और एक क्रीज़ लाइन एक-दूसरे के ऊपर हैं।
+@msg	No cut lines are among the given objects.	दिए गए ऑब्जेक्ट में कोई कट लाइन नहीं है।
+@msg	Two fold lines lie on top of each other.	दो फ़ोल्ड लाइनें एक-दूसरे के ऊपर हैं।
+@msg	A crease ends inside a panel.	एक क्रीज़ लाइन किसी पैनल के अंदर खत्म होती है।
+@msg	A crease does not divide two panels.	एक क्रीज़ लाइन दो पैनलों को अलग नहीं करती।
+@msg	A crease lies outside the cut outline, wholly or in part.	एक क्रीज़ लाइन पूरी तरह या आंशिक रूप से कट आउटलाइन के बाहर है।
+@msg	The pieces of a hinge are not on one straight line.	एक हिंज के हिस्से एक सीधी लाइन पर नहीं हैं।
+@msg	A gap between cut lines is too narrow to tell apart.	कट लाइनों के बीच का गैप पहचानने के लिए बहुत पतला है।
+@msg	A cut-out area holds other fold lines or another blank.	एक कट-आउट एरिया में दूसरी फ़ोल्ड लाइनें या दूसरा ब्लैंक है।
+@msg	A panel is not joined to the rest by a crease.	कोई पैनल किसी क्रीज़ लाइन से बाकी से जुड़ा नहीं है।
+@msg	A fold line is on a non-printing layer.	एक फ़ोल्ड लाइन नॉन-प्रिंटिंग लेयर पर है।
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	पैनल: {panels}, हिंज: {hinges}, एरर: {errors}, वॉर्निंग: {warnings}
