@@ -72,8 +72,9 @@ pub(crate) struct Index {
     initials_text: String,
     /// Each result's offset and length in `initials_text`.
     initials: Vec<(u32, u16)>,
-    /// Each word of a group of words with the same meaning ([`super::words::GROUPS`], and the
-    /// words the UI language's catalog adds), with the group's place in the table.
+    /// Each word of a group of words with the same meaning ([`super::words::GROUPS`], the words the
+    /// UI language's catalog adds, and the English words' stem forms), with the group's place in the
+    /// table.
     synonyms: HashMap<Box<str>, u16>,
 }
 
@@ -84,8 +85,10 @@ pub(crate) fn is_one_word(w: &str) -> bool {
 }
 
 /// The words of each group of [`super::words::GROUPS`], with the words `search_row` gives for the
-/// group's catalog row ([`super::words::row_key`]) in the UI language. A word the catalog gives
-/// that is not a single word, or that is already a word of a group, is left out.
+/// group's catalog row ([`super::words::row_key`]) in the UI language, and the English stem forms
+/// ([`stems`]) of the group's English words (`setting` of settings). A word the catalog gives that
+/// is not a single word, or that is already a word of a group, is left out, and so is a stem form
+/// that is already a word of a group.
 fn synonym_groups(search_row: impl Fn(&str) -> Option<String>) -> HashMap<Box<str>, u16> {
     let mut out: HashMap<Box<str>, u16> = HashMap::new();
     let groups = super::words::GROUPS.iter().enumerate().filter_map(|(g, words)| u16::try_from(g).ok().map(|g| (g, words)));
@@ -94,12 +97,17 @@ fn synonym_groups(search_row: impl Fn(&str) -> Option<String>) -> HashMap<Box<st
             out.insert(w.into(), g);
         }
     }
-    for (g, words) in groups {
+    for (g, words) in groups.clone() {
         let Some(text) = search_row(&super::words::row_key(words)) else { continue };
         for (w, single) in super::words::row_words(&text) {
             if single {
                 out.entry(w.into()).or_insert(g);
             }
+        }
+    }
+    for (g, words) in groups {
+        for form in words.iter().flat_map(|w| stems(w)) {
+            out.entry(form.into()).or_insert(g);
         }
     }
     out.shrink_to_fit();
@@ -1104,8 +1112,9 @@ mod tests {
 
     /// A query word finds a result whose label or menu path holds another word of its group of words
     /// with the same meaning: below a result whose label holds the word itself, above one whose menu
-    /// path holds the word, and with a menu path word of the group last. A stem form of the query word
-    /// and of a result's word meet the group too; ids, word starts and words of no group do not.
+    /// path holds the word, and with a menu path word of the group last. A stem form of the query word,
+    /// of a result's word and of a group's word meet the group too; ids, word starts and words of no
+    /// group do not.
     #[test]
     fn a_word_with_the_same_meaning_finds_the_result() {
         let c = synthetic(vec![
@@ -1121,6 +1130,10 @@ mod tests {
         let c = synthetic(vec![entry("Zz Unite", "a.one"), entry("Zz Merge", "b.two")]);
         assert_eq!(ranked(&c, "merge"), ["b.two"], "merge is in no group");
         assert_eq!(ranked(&c, "combine"), ["a.one"]);
+        // The stem form of a plural word of a group is in the group too: "setting" meets settings.
+        let c = synthetic(vec![entry("Zz Preferences", "a.one"), entry("Zz Other", "b.two")]);
+        assert_eq!(ranked(&c, "setting zz"), ["a.one"], "a stem form of a group's word");
+        assert_eq!(ranked(&c, "settings zz"), ["a.one"]);
         // Among results that match equally well, the whole query read with the word of the same
         // meaning ("colour" as "color") puts the label Color first, but never above a label that
         // holds the query word itself.
@@ -1164,6 +1177,7 @@ mod tests {
         assert!(place(&c, "unite", "object.slice.combine").is_some(), "{:?}", ranked(&c, "unite"));
         assert!(place(&c, "delete", "view.guides.clear").is_some(), "{:?}", ranked(&c, "delete"));
         assert!(place(&c, "settings", "edit.preferences").is_some(), "{:?}", ranked(&c, "settings"));
+        assert!(place(&c, "setting", "edit.preferences").is_some(), "{:?}", ranked(&c, "setting"));
         let merge = ranked(&c, "merge");
         let unite = merge.iter().position(|id| id == "object.pathfinder.unite");
         let named = |id: &String| c.list.iter().any(|e| &e.id == id && split_name(&e.shown).0 == "Merge");

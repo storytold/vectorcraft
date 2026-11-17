@@ -569,16 +569,21 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // closed it focused another widget, such as a field in a window above the backdrop.
     let focus_id = egui::Id::unique("palette-focus-before");
     let field_id = egui::Id::unique("palette-field");
+    // The Recent Commands rows drawn in the last frame, so a pick with the keyboard, which leaves the
+    // focus on its row, gives the focus back too.
+    let rows_id = egui::Id::unique("palette-recent-rows");
     if !app.ui.palette_open {
-        let field = ctx.data_mut(|d| {
+        let (field, rows) = ctx.data_mut(|d| {
             let field = d.get_temp::<egui::Id>(field_id);
             d.remove::<egui::Id>(field_id);
-            field
+            let rows = d.get_temp::<Vec<egui::Id>>(rows_id).unwrap_or_default();
+            d.remove::<Vec<egui::Id>>(rows_id);
+            (field, rows)
         });
         let now = ctx.memory(|m| m.focused());
         if let Some(Some(before)) = ctx.data_mut(|d| d.remove_temp::<Option<egui::Id>>(focus_id))
             && app.ui.dialog.is_none()
-            && (now.is_none() || now == field)
+            && (now.is_none() || now == field || now.is_some_and(|n| rows.contains(&n)))
         {
             ctx.memory_mut(|m| m.request_focus(before));
         }
@@ -701,12 +706,14 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     if !list_open && !history_focused {
                         r.request_focus();
                     }
+                    let mut rows = Vec::new();
                     egui::Popup::menu(&button).id(recent_list_id()).show(|ui| {
                         if recent.is_empty() {
                             ui.add_enabled(false, egui::Button::new(tl!("No recent commands")));
                         }
                         for (i, e) in recent.iter().enumerate() {
                             let row = ui.add(egui::Button::new(e.shown.as_str()).shortcut_text(menus::shown_shortcut(&e.shortcut)));
+                            rows.push(row.id);
                             if i == rsel {
                                 row.request_focus();
                             }
@@ -715,6 +722,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                             }
                         }
                     });
+                    ui.ctx().data_mut(|d| d.insert_temp(rows_id, rows));
                     r
                 })
                 .inner;
@@ -2332,6 +2340,44 @@ mod tests {
         frame(&mut app, false, vec![]);
         frame(&mut app, false, vec![]);
         assert_eq!(ctx.memory(|m| m.focused()), Some(above), "the clicked field keeps the focus");
+    }
+
+    /// A pick with the keyboard from Recent Commands that opens no dialog gives the focus back to
+    /// the widget that had it when the palette opened, though the picked row had the keyboard.
+    #[test]
+    fn a_pick_from_recent_commands_gives_the_focus_back() {
+        let ctx = egui::Context::default();
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        app.ui.recent_commands = vec!["paint.swap".into()];
+        let mut text = String::new();
+        let field = egui::Id::unique("other field");
+        let mut frame = |app: &mut VectorcraftApp, focus: bool, events: Vec<egui::Event>| {
+            ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+                let r = ui.add(egui::TextEdit::singleline(&mut text).id(field));
+                if focus {
+                    r.request_focus();
+                }
+                show(app, ui.ctx());
+            })
+            .textures_delta
+            .clear();
+        };
+        frame(&mut app, true, vec![]);
+        frame(&mut app, false, vec![]);
+        app.ui.palette_open = true;
+        frame(&mut app, false, vec![]);
+        egui::Popup::open_id(&ctx, recent_list_id());
+        frame(&mut app, false, vec![]);
+        frame(&mut app, false, vec![]);
+        assert!(recent_list_open(&ctx), "the list is open");
+        assert_ne!(ctx.memory(|m| m.focused()), Some(field), "the row has the keyboard");
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        frame(&mut app, false, vec![enter]);
+        assert!(!app.ui.palette_open, "the pick closes the palette");
+        assert!(app.ui.dialog.is_none(), "{}", app.ui.status);
+        frame(&mut app, false, vec![]);
+        frame(&mut app, false, vec![]);
+        assert_eq!(ctx.memory(|m| m.focused()), Some(field));
     }
 
     /// The whole window, with a document whose rectangle is selected, drawn a frame at a time in
