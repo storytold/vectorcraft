@@ -4279,6 +4279,19 @@ antiAlias	Sharp	शार्प
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	डेस्कटॉप संस्करण में, इस फ़ोल्डर के .wasm प्लग-इन शुरू होने पर और यहाँ नया फ़ोल्डर देकर ठीक है पर क्लिक करने पर लोड होते हैं, सुरक्षित मोड को छोड़कर; वेब संस्करण उन्हें लोड नहीं करता।
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	पहला स्क्रैच डिस्क विकल्प: Startup, None या फ़ोल्डर पाथ; VectorCraft इसे सहेजता है, पर अभी स्क्रैच डिस्क का उपयोग नहीं करता।
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	दूसरा स्क्रैच डिस्क विकल्प: Startup, None या फ़ोल्डर पाथ; VectorCraft इसे सहेजता है, पर अभी स्क्रैच डिस्क का उपयोग नहीं करता।
+	How light or dark the interface is.	इंटरफ़ेस कितना हल्का या गहरा है।
+	The set of colors the interface is drawn in.	रंगों का वह सेट जिसमें इंटरफ़ेस बनाया जाता है।
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	चालू, चुने गए या फ़ोकस वाले कंट्रोल का रंग; जब तक रंग योजना का अपना एक्सेंट रंग हो, मेनू धुंधला रहता है।
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	आर्टबोर्ड्स के आसपास के कैनवास का रंग; उपयोगकर्ता इंटरफ़ेस चमक मैच इसे ब्राइटनेस से लेता है। रूपरेखा व्यू इसे हमेशा सफ़ेद दिखाता है।
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	अपने आइकन से खोला गया पैनल Esc दबाने या उसके बाहर क्लिक करने पर बंद हो जाता है; बंद होने पर, यह तब तक खुला रहता है जब तक आप किसी आइकन पर क्लिक न करें।
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	टूलबार में हर टूल ग्रुप का नाम उसके टूल्स के ऊपर दिखाता है; बंद होने पर, ग्रुप बिना किसी अंतर के एक के बाद एक आते हैं।
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	अब से आप जो डॉक्यूमेंट ओपन करते या बनाते हैं, वे टैब के रूप में खुलते हैं; बंद होने पर, हर एक फ़्लोटिंग विंडो में खुलता है। पहले से खुले डॉक्यूमेंट जहाँ हैं वहीं रहते हैं।
+	Makes the document tabs taller and their names larger.	डॉक्यूमेंट टैब को ऊँचा और उनके नाम बड़े बनाता है।
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	अगली शुरुआत से, जहाँ VectorCraft अन्यथा अपना टाइटल बार बनाता, वहाँ सिस्टम विंडो का टाइटल बार बनाता है।
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	अगली शुरुआत से, VectorCraft विंडो का टाइटल बार वहाँ भी बनाता है जहाँ डेस्कटॉप उसे बनाता, जब तक सिस्टम टाइटल बार चालू न हो।
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	इंटरफ़ेस को बड़ा या छोटा करता है; उसी ज़ूम पर कैनवास का आर्टवर्क अपना आकार बनाए रखता है।
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft जो टूल पॉइंटर बनाता है, वे यूआई स्केलिंग के साथ बड़े और छोटे होते हैं; बंद होने पर, वे अपना आकार बनाए रखते हैं।
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	इंटरफ़ेस की भाषा; स्वचालित सिस्टम की भाषा इस्तेमाल करता है। आप कोई भाषा चुनते ही डायलॉग उस भाषा में बदल जाता है।
 	Reset all preferences to their defaults?	सभी प्रेफ़रेंसेज़ को उनके डिफ़ॉल्ट पर रीसेट करें?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	डिफ़ॉल्ट तब लागू होते हैं जब आप प्रेफ़रेंसेज़ में ठीक है पर क्लिक करते हैं। वहाँ रद्द करें आपकी मौजूदा प्रेफ़रेंसेज़ बनाए रखता है।
 	Restore Recovered Documents	पुनर्स्थापना डॉक्यूमेंट

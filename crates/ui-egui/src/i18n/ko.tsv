@@ -3178,6 +3178,19 @@ mark-style	Japanese	일본식
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	데스크톱 버전에서는 이 폴더의 .wasm 플러그인이 시작할 때와 여기에 새 폴더를 지정하고 확인을 클릭할 때 로드됩니다(안전 모드 제외). 웹 버전은 로드하지 않습니다.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	첫 번째 스크래치 디스크 선택: Startup, None 또는 폴더 경로. VectorCraft는 이 값을 저장하지만 아직 스크래치 디스크를 사용하지 않습니다.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	두 번째 스크래치 디스크 선택: Startup, None 또는 폴더 경로. VectorCraft는 이 값을 저장하지만 아직 스크래치 디스크를 사용하지 않습니다.
+	How light or dark the interface is.	인터페이스를 얼마나 밝게 또는 어둡게 표시할지입니다.
+	The set of colors the interface is drawn in.	인터페이스를 그리는 색의 조합입니다.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	켜져 있거나 선택되었거나 포커스가 있는 컨트롤의 색입니다. 색 구성표에 자체 강조 색상이 있는 동안에는 메뉴가 흐리게 표시됩니다.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	아트보드 주변 캔버스의 색입니다. 사용자 인터페이스 밝기에 맞춤은 밝기에서 색을 가져옵니다. 윤곽선 보기에서는 항상 흰색으로 표시됩니다.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	아이콘에서 연 패널은 Esc 키를 누르거나 패널 바깥을 클릭하면 닫힙니다. 끄면 아이콘을 클릭할 때까지 열려 있습니다.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	도구 모음에서 각 도구 그룹의 이름을 해당 도구 위에 표시합니다. 끄면 그룹 사이에 아무것도 없이 이어집니다.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	지금부터 열거나 만드는 문서는 탭으로 열립니다. 끄면 각 문서가 플로팅 창에서 열립니다. 이미 열린 문서는 그대로 있습니다.
+	Makes the document tabs taller and their names larger.	문서 탭을 더 높게, 이름을 더 크게 표시합니다.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	다음 시작부터는 VectorCraft가 자체 제목 표시줄을 그렸을 곳에서 시스템이 창의 제목 표시줄을 그립니다.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	다음 시작부터는 데스크톱이 제목 표시줄을 그리는 곳에서도 VectorCraft가 창의 제목 표시줄을 그립니다. 단, 시스템 제목 표시줄이 켜져 있으면 그렇지 않습니다.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	인터페이스를 크게 또는 작게 만듭니다. 같은 확대/축소에서 캔버스의 아트는 크기가 그대로입니다.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft가 그리는 도구 포인터가 UI 배율에 따라 커지고 작아집니다. 끄면 크기가 그대로 유지됩니다.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	인터페이스의 언어입니다. 자동은 시스템 언어를 사용합니다. 언어를 고르면 대화 상자가 바로 그 언어로 바뀝니다.
 	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
 	Restored documents open unsaved: save them to keep them.	복원된 문서는 저장되지 않은 상태로 열립니다. 보존하려면 저장하세요.

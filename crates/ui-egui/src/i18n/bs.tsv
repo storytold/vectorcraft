@@ -4516,6 +4516,19 @@ font-technology	Variable	Varijabilni
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	U desktop verziji .wasm dodaci iz ove mape učitavaju se pri pokretanju i kada kliknete U redu s novom mapom ovdje, osim u sigurnom načinu rada; web verzija ih ne učitava.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Prvi izbor radnog diska: Startup, None ili putanja do mape; VectorCraft ga sprema, ali još ne koristi radne diskove.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Drugi izbor radnog diska: Startup, None ili putanja do mape; VectorCraft ga sprema, ali još ne koristi radne diskove.
+	How light or dark the interface is.	Koliko je interfejs svijetao ili taman.
+	The set of colors the interface is drawn in.	Skup boja kojima se iscrtava interfejs.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	Boja kontrola koje su uključene, odabrane ili u fokusu; meni je zatamnjen dok Shema boja ima vlastitu boju naglaska.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	Boja platna oko radnih ploča; Uskladi sa svjetlinom korisničkog interfejsa uzima je iz Svjetline. Prikaz Obris uvijek ga prikazuje bijelim.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	Panel otvoren sa svoje ikone zatvara se kada pritisnete Esc ili kliknete izvan njega; isključeno, ostaje otvoren dok ne kliknete ikonu.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Prikazuje naziv svake grupe alata iznad njenih alata na traci s alatima; isključeno, grupe slijede jedna za drugom bez ičega između njih.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Od sada se dokumenti koje otvorite ili kreirate otvaraju kao kartice; isključeno, svaki se otvara u plutajućem prozoru. Već otvoreni dokumenti ostaju gdje jesu.
+	Makes the document tabs taller and their names larger.	Kartice dokumenata čini višim, a njihove nazive većim.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Od sljedećeg pokretanja sistem iscrtava naslovnu traku prozora tamo gdje bi VectorCraft inače iscrtao svoju.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Od sljedećeg pokretanja VectorCraft iscrtava naslovnu traku prozora čak i tamo gdje bi je iscrtala radna površina, osim ako je Sistemska naslovna traka uključena.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Povećava ili smanjuje interfejs; crtež na platnu zadržava veličinu pri istom zumu.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Pokazivači alata koje VectorCraft iscrtava rastu i smanjuju se sa Skaliranjem interfejsa; isključeno, zadržavaju svoju veličinu.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Jezik interfejsa; Automatski koristi jezik sistema. Dijalog mijenja jezik čim ga odaberete.
 	Reset all preferences to their defaults?	Vratiti sve postavke na zadane vrijednosti?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Zadane vrijednosti primjenjuju se kada kliknete U redu u Postavkama. Otkaži tamo zadržava vaše trenutne postavke.
 	Smaller ↔ Larger	Manje ↔ veće

@@ -3519,6 +3519,19 @@ mark-style	Japanese	Kiểu Nhật
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Trong phiên bản máy tính, các plug-in .wasm trong thư mục này được tải khi khởi động và khi bạn bấm OK với một thư mục mới ở đây, trừ trong Chế độ an toàn; phiên bản web không tải chúng.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Lựa chọn đĩa tạm thứ nhất: Startup, None hoặc đường dẫn thư mục; VectorCraft lưu lựa chọn này nhưng chưa dùng đĩa tạm.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Lựa chọn đĩa tạm thứ hai: Startup, None hoặc đường dẫn thư mục; VectorCraft lưu lựa chọn này nhưng chưa dùng đĩa tạm.
+	How light or dark the interface is.	Mức sáng hoặc tối của giao diện.
+	The set of colors the interface is drawn in.	Tập hợp màu dùng để vẽ giao diện.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	Màu của các điều khiển đang bật, được chọn hoặc có tiêu điểm; menu bị làm mờ khi Bảng phối màu có màu nhấn riêng.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	Màu của vùng vẽ quanh các bảng vẽ; Khớp độ sáng giao diện người dùng lấy màu từ Độ sáng. Chế độ xem Đường bao luôn hiển thị nó màu trắng.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	Bảng được mở từ biểu tượng của nó sẽ đóng khi bạn nhấn Esc hoặc bấm bên ngoài; khi tắt, bảng vẫn mở cho đến khi bạn bấm vào một biểu tượng.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Hiện tên của từng nhóm công cụ phía trên các công cụ của nhóm trong thanh công cụ; khi tắt, các nhóm nối tiếp nhau mà không có gì ở giữa.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Từ giờ, tài liệu bạn mở hoặc tạo sẽ mở dưới dạng tab; khi tắt, mỗi tài liệu mở trong một cửa sổ nổi. Tài liệu đã mở vẫn ở nguyên chỗ.
+	Makes the document tabs taller and their names larger.	Làm cho tab tài liệu cao hơn và tên của chúng lớn hơn.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Từ lần khởi động tới, hệ thống vẽ thanh tiêu đề của cửa sổ ở nơi mà nếu không thì VectorCraft sẽ tự vẽ.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Từ lần khởi động tới, VectorCraft vẽ thanh tiêu đề của cửa sổ ngay cả ở nơi môi trường màn hình nền sẽ vẽ nó, trừ khi Thanh tiêu đề hệ thống đang bật.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Phóng to hoặc thu nhỏ giao diện; hình vẽ trên vùng vẽ giữ nguyên kích thước ở cùng mức thu phóng.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Con trỏ công cụ do VectorCraft vẽ to lên và nhỏ lại theo Tỷ lệ giao diện; khi tắt, chúng giữ nguyên kích thước.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Ngôn ngữ của giao diện; Tự động dùng ngôn ngữ của hệ thống. Hộp thoại đổi ngôn ngữ ngay khi bạn chọn một ngôn ngữ.
 	Reset all preferences to their defaults?	Đặt lại tất cả tùy chọn về mặc định?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Giá trị mặc định được áp dụng khi bạn nhấn OK trong Tùy chọn. Hủy ở đó giữ nguyên các tùy chọn hiện tại của bạn.
 	Restore Recovered Documents	Khôi phục tài liệu đã phục hồi

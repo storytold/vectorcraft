@@ -4620,6 +4620,19 @@ font-technology	Variable	Variabilní
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	V desktopové verzi se zásuvné moduly .wasm z této složky načtou při spuštění a po klepnutí na OK s novou složkou zde, kromě nouzového režimu; webová verze je nenačítá.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	První volba odkládacího disku: Startup, None nebo cesta ke složce; VectorCraft ji uloží, ale odkládací disky zatím nepoužívá.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Druhá volba odkládacího disku: Startup, None nebo cesta ke složce; VectorCraft ji uloží, ale odkládací disky zatím nepoužívá.
+	How light or dark the interface is.	Jak světlé nebo tmavé je rozhraní.
+	The set of colors the interface is drawn in.	Sada barev, kterými se rozhraní vykresluje.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	Barva ovládacích prvků, které jsou zapnuté, zvolené nebo mají fokus; nabídka je ztlumená, dokud má Barevné schéma vlastní barvu zvýraznění.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	Barva plátna kolem pracovních ploch; Odpovídat jasu uživatelského rozhraní ji přebírá z Jasu. Zobrazení Obrys ho vždy ukazuje bílé.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	Panel otevřený ze své ikony se zavře, když stisknete Esc nebo kliknete mimo něj; při vypnutí zůstane otevřený, dokud nekliknete na ikonu.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Zobrazuje název každé skupiny nástrojů nad jejími nástroji v panelu nástrojů; při vypnutí skupiny následují jedna za druhou bez ničeho mezi nimi.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Dokumenty, které od teď otevřete nebo vytvoříte, se otevírají jako karty; při vypnutí se každý otevře v plovoucím okně. Už otevřené dokumenty zůstanou, kde jsou.
+	Makes the document tabs taller and their names larger.	Karty dokumentů budou vyšší a jejich názvy větší.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Od příštího spuštění kreslí záhlaví okna systém tam, kde by jinak VectorCraft kreslil své vlastní.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Od příštího spuštění kreslí VectorCraft záhlaví okna i tam, kde by ho kreslilo pracovní prostředí, pokud není zapnuté Systémové záhlaví okna.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Zvětší nebo zmenší rozhraní; kresba na plátně si při stejném zvětšení zachová velikost.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Ukazatele nástrojů, které kreslí VectorCraft, se zvětšují a zmenšují s Měřítkem rozhraní; při vypnutí si zachovají velikost.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Jazyk rozhraní; Automaticky použije jazyk systému. Dialog přepne jazyk, jakmile nějaký zvolíte.
 	Reset all preferences to their defaults?	Obnovit všechny předvolby na výchozí hodnoty?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Výchozí hodnoty se použijí po klepnutí na OK v Předvolbách. Zrušit tam zachová vaše současné předvolby.
 	Smaller ↔ Larger	Menší ↔ Větší

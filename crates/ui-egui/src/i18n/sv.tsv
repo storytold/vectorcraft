@@ -3099,6 +3099,19 @@ digits	Malayalam	Malayalam
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	I skrivbordsversionen läses .wasm-plugins i den här mappen in vid start och när du klickar på OK med en ny mapp här, utom i felsäkert läge; webbversionen läser inte in dem.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Det första valet av arbetsdisk: Startup, None eller en mappsökväg; VectorCraft sparar det men använder ännu inte arbetsdiskar.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Det andra valet av arbetsdisk: Startup, None eller en mappsökväg; VectorCraft sparar det men använder ännu inte arbetsdiskar.
+	How light or dark the interface is.	Hur ljust eller mörkt gränssnittet är.
+	The set of colors the interface is drawn in.	Den uppsättning färger som gränssnittet ritas med.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	Färgen på kontroller som är på, valda eller har fokus; menyn är nedtonad så länge Färgschema har en egen accentfärg.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	Färgen på arbetsytan runt ritytorna; Matcha gränssnittets ljusstyrka hämtar den från Ljusstyrka. Konturvy visar den alltid vit.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	En panel som öppnats från sin ikon stängs när du trycker på Esc eller klickar utanför den; avstängt förblir den öppen tills du klickar på en ikon.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Visar varje verktygsgrupps namn ovanför dess verktyg i verktygsfältet; avstängt följer grupperna på varandra utan något emellan.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Från och med nu öppnas dokument som du öppnar eller skapar som flikar; avstängt öppnas vart och ett i ett flytande fönster. Dokument som redan är öppna stannar där de är.
+	Makes the document tabs taller and their names larger.	Gör dokumentflikarna högre och deras namn större.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Från nästa start ritar systemet fönstrets namnlist där VectorCraft annars skulle rita sin egen.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Från nästa start ritar VectorCraft fönstrets namnlist även där skrivbordsmiljön skulle rita den, om inte Systemets namnlist är på.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Gör gränssnittet större eller mindre; bilder på arbetsytan behåller sin storlek vid samma zoom.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Verktygspekarna som VectorCraft ritar växer och krymper med Gränssnittsskalning; avstängt behåller de sin storlek.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Gränssnittets språk; Auto använder systemets språk. Dialogrutan byter språk så fort du väljer ett.
 	Reset all preferences to their defaults?	Återställa alla inställningar till standard?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Standardvärdena verkställs när du klickar på OK i Inställningar. Avbryt där behåller dina nuvarande inställningar.
 	Restore Recovered Documents	Återställ återskapade dokument

@@ -1799,12 +1799,21 @@ fn a_row_without_a_description_leaves_the_line_empty() {
 }
 
 /// Every setting the General, Selection & Anchor Display, Guides & Grid, Smart Guides, Slices,
-/// Hyphenation and Plug-ins & Scratch Disks categories show, the Smart Guides box included, has
-/// exactly one sentence, and no key has two.
+/// Hyphenation, Plug-ins & Scratch Disks and User Interface categories show on this platform, the
+/// Smart Guides box included, has exactly one sentence, and no key has two.
 #[test]
-fn every_general_selection_guides_smart_guides_slices_hyphenation_and_plugins_setting_has_one_description() {
+fn every_general_selection_guides_smart_guides_slices_hyphenation_plugins_and_user_interface_setting_has_one_description() {
     let mut bad = vec![];
-    let categories = ["General", "Selection & Anchor Display", "Guides & Grid", "Smart Guides", "Slices", "Hyphenation", "Plug-ins & Scratch Disks"];
+    let categories = [
+        "General",
+        "Selection & Anchor Display",
+        "Guides & Grid",
+        "Smart Guides",
+        "Slices",
+        "Hyphenation",
+        "Plug-ins & Scratch Disks",
+        "User Interface",
+    ];
     for s in settings().filter(|s| categories.contains(&s.category)) {
         match descriptions::DESCRIPTIONS.iter().filter(|(k, _)| *k == s.key).count() {
             1 => {}
@@ -2172,6 +2181,95 @@ fn keyboard_focus_on_a_plugins_and_scratch_disks_row_shows_its_description() {
     }
 }
 
+/// System Title Bar and VectorCraft Title Bar on Every Desktop, which only some platforms show,
+/// have a sentence on every platform.
+#[test]
+fn the_title_bar_settings_have_a_description_on_every_platform() {
+    for key in ["systemTitleBar", "appTitleBar"] {
+        assert!(PREF_SPECS.iter().any(|s| s.key == key && s.category == "User Interface"), "`{key}` is a User Interface setting");
+        assert!(descriptions::description(key).is_some(), "`{key}` has a sentence");
+    }
+}
+
+/// The pointer over each User Interface row that every platform shows, from Brightness to
+/// Language, shows that row's sentence and no other row's.
+#[test]
+fn hovering_a_user_interface_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("User Interface"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    let row = |texts: &[(String, egui::Rect)], label: &str| {
+        texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
+    };
+    let rows = [
+        ("Brightness:", "uiBrightness"),
+        ("Color Scheme:", "uiColorScheme"),
+        ("Accent Color:", "uiAccent"),
+        ("Canvas Color:", "canvasColor"),
+        ("Auto-Collapse Iconic Panels", "autoCollapseIconPanels"),
+        ("Show Tool Group Labels", "toolGroupLabels"),
+        ("Open Documents As Tabs", "openDocumentsAsTabs"),
+        ("Large Tabs", "largeTabs"),
+        ("Scale:", "uiScaling"),
+        ("Scale Cursor Proportional to UI", "scaleCursorWithUi"),
+        ("Language:", "interfaceLanguage"),
+    ];
+    let sentences: Vec<_> = rows.iter().map(|(_, key)| descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"))).collect();
+    // The Language row is under the bottom of the list: the wheel scrolls it into view.
+    let wheel = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(0.0, -40.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    let mut texts = texts;
+    for (i, (label, _)) in rows.iter().enumerate() {
+        for _ in 0..20 {
+            if texts.iter().any(|(t, _)| t == label) {
+                break;
+            }
+            texts = description_frame(&mut a, &ctx, vec![wheel.clone()]).0;
+        }
+        description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, label))]);
+        let (after, _) = description_frame(&mut a, &ctx, vec![]);
+        for (j, sentence) in sentences.iter().enumerate() {
+            assert_eq!(painted(&after, sentence), i == j, "pointer over `{label}`, sentence {j}: {after:?}");
+        }
+    }
+}
+
+/// Tab from the search field reaches the Brightness menu, then Color Scheme, Accent Color, Canvas
+/// Color and Auto-Collapse Iconic Panels: the line shows each one's sentence in turn, and a screen
+/// reader gets it as the focused control's description.
+#[test]
+fn keyboard_focus_on_a_user_interface_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("User Interface"));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    description_frame(&mut a, &ctx, vec![]);
+    let mut tab_to = |sentence: &str| {
+        for _ in 0..40 {
+            let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
+            if painted(&texts, sentence) {
+                return Some(described);
+            }
+        }
+        None
+    };
+    for key in ["uiBrightness", "uiColorScheme", "uiAccent", "canvasColor", "autoCollapseIconPanels"] {
+        let sentence = descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"));
+        let described = tab_to(sentence).unwrap_or_else(|| panic!("Tab reaches the `{key}` control and its sentence shows"));
+        assert!(described.iter().any(|d| d == sentence), "the focused `{key}` control carries the sentence: {described:?}");
+    }
+}
+
 /// A sentence shown when the dialog closed does not come back when it opens again with the
 /// pointer away from the rows.
 #[test]
@@ -2213,8 +2311,9 @@ fn the_description_line_keeps_the_fields_column_height() {
     }
 }
 
-/// Each sentence describes a setting the dialog shows, and every complete catalog translates it
-/// into at most the three lines the description line holds.
+/// Each sentence describes a setting the dialog shows on this platform or, like System Title Bar,
+/// on another one, and every complete catalog translates it into at most the three lines the
+/// description line holds.
 #[test]
 fn every_description_names_a_setting_and_fits_in_every_language() {
     let ctx = egui::Context::default();
@@ -2222,7 +2321,7 @@ fn every_description_names_a_setting_and_fits_in_every_language() {
     let mut bad = vec![];
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
         for (key, sentence) in descriptions::DESCRIPTIONS {
-            if !settings().any(|s| s.key == *key) {
+            if !settings().any(|s| s.key == *key) && !PREF_SPECS.iter().any(|s| s.key == *key) {
                 bad.push(format!("`{key}` is not a setting the dialog shows"));
             }
             for lang in crate::i18n::Lang::all() {

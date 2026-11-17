@@ -3243,6 +3243,19 @@
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	ડેસ્કટોપ સંસ્કરણમાં, આ ફોલ્ડરના .wasm પ્લગ-ઇન્સ શરૂઆતમાં અને અહીં નવા ફોલ્ડર સાથે ઠીક પર ક્લિક કરો ત્યારે લોડ થાય છે, સેફ મોડ સિવાય; વેબ સંસ્કરણ તેમને લોડ કરતું નથી.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	પ્રથમ સ્ક્રેચ ડિસ્ક પસંદગી: Startup, None અથવા ફોલ્ડરનો પાથ; VectorCraft તેને સાચવે છે, પરંતુ હજી સ્ક્રેચ ડિસ્કનો ઉપયોગ કરતું નથી.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	બીજી સ્ક્રેચ ડિસ્ક પસંદગી: Startup, None અથવા ફોલ્ડરનો પાથ; VectorCraft તેને સાચવે છે, પરંતુ હજી સ્ક્રેચ ડિસ્કનો ઉપયોગ કરતું નથી.
+	How light or dark the interface is.	ઇન્ટરફેસ કેટલું આછું કે ઘેરું છે.
+	The set of colors the interface is drawn in.	ઇન્ટરફેસ જે રંગોના સમૂહમાં દોરાય છે તે.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	ચાલુ, પસંદ કરેલા અથવા ફોકસવાળા નિયંત્રણોનો રંગ; રંગ યોજનામાં પોતાનો ઍક્સેન્ટ રંગ હોય ત્યાં સુધી મેનૂ ઝાંખું રહે છે.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	આર્ટબોર્ડની આસપાસના કેનવાસનો રંગ; યુઝર ઇન્ટરફેસની તેજસ્વિતા સરખી કરો તેને તેજમાંથી લે છે. આઉટલાઇન દૃશ્ય તેને હંમેશાં સફેદ બતાવે છે.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	આઇકનમાંથી ખોલેલી પેનલ તમે Esc દબાવો અથવા તેની બહાર ક્લિક કરો ત્યારે બંધ થાય છે; બંધ હોય ત્યારે, તમે કોઈ આઇકન પર ક્લિક ન કરો ત્યાં સુધી તે ખુલ્લી રહે છે.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	ટૂલબારમાં દરેક ટૂલ ગ્રૂપનું નામ તેના ટૂલ્સની ઉપર બતાવે છે; બંધ હોય ત્યારે, ગ્રૂપ વચ્ચે કંઈ રાખ્યા વિના એક પછી એક આવે છે.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	હવેથી તમે ખોલો કે બનાવો તે દસ્તાવેજો ટેબ તરીકે ખૂલે છે; બંધ હોય ત્યારે, દરેક એક ફ્લોટિંગ વિન્ડોમાં ખૂલે છે. પહેલેથી ખુલ્લા દસ્તાવેજો જ્યાં છે ત્યાં જ રહે છે.
+	Makes the document tabs taller and their names larger.	દસ્તાવેજના ટૅબને ઊંચા અને તેમનાં નામ મોટાં બનાવે છે.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	આગલી શરૂઆતથી, જ્યાં VectorCraft અન્યથા પોતાનો ટાઇટલ બાર દોરે ત્યાં સિસ્ટમ વિન્ડોનો ટાઇટલ બાર દોરે છે.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	આગલી શરૂઆતથી, ડેસ્કટોપ વિન્ડોનો ટાઇટલ બાર દોરે ત્યાં પણ VectorCraft તેને દોરે છે, સિવાય કે સિસ્ટમ ટાઇટલ બાર ચાલુ હોય.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	ઇન્ટરફેસને મોટું કે નાનું બનાવે છે; સમાન ઝૂમ પર કેનવાસ પરની આર્ટ પોતાનું કદ જાળવે છે.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft જે ટૂલ પોઇન્ટર દોરે છે તે UI સ્કેલિંગ સાથે મોટા અને નાના થાય છે; બંધ હોય ત્યારે, તે પોતાનું કદ જાળવે છે.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	ઇન્ટરફેસની ભાષા; ઑટો સિસ્ટમની ભાષા વાપરે છે. તમે ભાષા પસંદ કરો કે તરત જ ડાયલોગ તે ભાષામાં બદલાય છે.
 	Restored documents open unsaved: save them to keep them.	પુનઃસ્થાપિત દસ્તાવેજો અસાચવેલા ખુલશે: તેમને રાખવા માટે સાચવો.
 	Restrict printing, editing and other tasks	છાપકામ, સંપાદન અને અન્ય કાર્યો પર પ્રતિબંધ મૂકો
 	Reticulation…	રેટિક્યુલેશન…

@@ -3063,6 +3063,19 @@ digits	Malayalam	马拉雅拉姆数字
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	在桌面版中，此文件夹中的 .wasm 增效工具会在启动时以及在此处指定新文件夹并单击“确定”时载入，安全模式除外；Web 版不会载入它们。
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第一个暂存盘选择：Startup、None 或文件夹路径；VectorCraft 会存储它，但尚未使用暂存盘。
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第二个暂存盘选择：Startup、None 或文件夹路径；VectorCraft 会存储它，但尚未使用暂存盘。
+	How light or dark the interface is.	界面的明暗程度。
+	The set of colors the interface is drawn in.	绘制界面所用的一组颜色。
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	处于开启、选中或焦点状态的控件的颜色；当配色方案带有自己的强调色时，此菜单显示为灰色。
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	画板周围画布的颜色；“匹配用户界面亮度”取用亮度对应的颜色。轮廓视图始终将其显示为白色。
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	从图标打开的面板会在按 Esc 或单击其外部时关闭；关闭此项后，面板会一直保持打开，直到单击某个图标。
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	在工具栏中把每个工具组的名称显示在其工具上方；关闭此项后，各组依次排列，中间没有任何内容。
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	从现在起，打开或新建的文档以标签页打开；关闭此项后，每个文档在浮动窗口中打开。已打开的文档保持原位。
+	Makes the document tabs taller and their names larger.	让文档标签页更高，标签上的名称更大。
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	从下次启动起，在 VectorCraft 原本会自行绘制标题栏的地方，改由系统绘制窗口的标题栏。
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	从下次启动起，即使桌面会绘制窗口的标题栏，VectorCraft 也会自行绘制，除非开启了系统标题栏。
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	放大或缩小界面；在相同缩放比例下，画布上的图稿保持原有大小。
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft 绘制的工具指针随界面缩放一起变大变小；关闭此项后，指针保持原有大小。
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	界面的语言；“自动”使用系统的语言。选择一种语言后，对话框会立即切换到该语言。
 	Reset all preferences to their defaults?	将所有首选项重置为默认值？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在首选项中点击确定后才会应用默认值。在那里点击取消会保留当前首选项。
 	Restore Recovered Documents	恢复已恢复的文档

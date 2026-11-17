@@ -179,6 +179,32 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ),
     ("scratchPrimary", "The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet."),
     ("scratchSecondary", "The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet."),
+    // User Interface
+    ("uiBrightness", "How light or dark the interface is."),
+    ("uiColorScheme", "The set of colors the interface is drawn in."),
+    ("uiAccent", "The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own."),
+    (
+        "canvasColor",
+        "The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.",
+    ),
+    (
+        "autoCollapseIconPanels",
+        "A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.",
+    ),
+    ("toolGroupLabels", "Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them."),
+    (
+        "openDocumentsAsTabs",
+        "From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.",
+    ),
+    ("largeTabs", "Makes the document tabs taller and their names larger."),
+    ("systemTitleBar", "From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own."),
+    (
+        "appTitleBar",
+        "From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.",
+    ),
+    ("uiScaling", "Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom."),
+    ("scaleCursorWithUi", "The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size."),
+    ("interfaceLanguage", "The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one."),
 ];
 
 /// The sentence that describes the setting `key`, in English, or `None` when it has none yet.

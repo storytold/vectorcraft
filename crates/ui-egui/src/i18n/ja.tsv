@@ -3189,6 +3189,19 @@ mark-style	Japanese	日本式
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	デスクトップ版では、このフォルダーの .wasm プラグインが起動時と、ここに新しいフォルダーを指定して OK をクリックしたときに読み込まれます (セーフモードを除く)。Web 版では読み込まれません。
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	1 つ目の仮想記憶ディスクの選択です。Startup、None またはフォルダーのパスを指定します。VectorCraft は保存しますが、仮想記憶ディスクはまだ使用しません。
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	2 つ目の仮想記憶ディスクの選択です。Startup、None またはフォルダーのパスを指定します。VectorCraft は保存しますが、仮想記憶ディスクはまだ使用しません。
+	How light or dark the interface is.	インターフェイスをどの程度明るく、または暗く表示するかです。
+	The set of colors the interface is drawn in.	インターフェイスの描画に使う色の組み合わせです。
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	オン、選択中、またはフォーカスのあるコントロールの色です。配色に独自のアクセントカラーがある間、メニューは淡色表示になります。
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	アートボードの周囲のカンバスの色です。「ユーザーインターフェイスの明るさに合わせる」では明るさから色を取ります。アウトライン表示では常に白で表示されます。
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	アイコンから開いたパネルは、Esc キーを押すかパネルの外側をクリックすると閉じます。オフの場合は、アイコンをクリックするまで開いたままです。
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	ツールバーで、各ツールグループの名前をそのツールの上に表示します。オフの場合、グループは間に何も入らずに続けて並びます。
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	今後開くまたは作成するドキュメントをタブで開きます。オフの場合は、それぞれフローティングウィンドウで開きます。すでに開いているドキュメントはそのままです。
+	Makes the document tabs taller and their names larger.	ドキュメントのタブを高くし、名前を大きく表示します。
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	次回の起動から、VectorCraft が独自のタイトルバーを描画する場所で、代わりにシステムがウィンドウのタイトルバーを描画します。
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	次回の起動から、デスクトップがタイトルバーを描画する場所でも VectorCraft がウィンドウのタイトルバーを描画します。ただし、システムのタイトルバーがオンの場合を除きます。
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	インターフェイスを拡大または縮小します。同じズームでは、カンバス上のアートワークのサイズは変わりません。
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft が描画するツールのポインターを UI のスケーリングに合わせて拡大・縮小します。オフの場合はサイズを保ちます。
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	インターフェイスの言語です。自動ではシステムの言語を使います。言語を選ぶとすぐにダイアログの表示が切り替わります。
 	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	初期値は環境設定で OK をクリックすると適用されます。そこでキャンセルすると現在の環境設定が保たれます。
 	Restored documents open unsaved: save them to keep them.	復元したドキュメントは未保存の状態で開きます。保存して残してください。
