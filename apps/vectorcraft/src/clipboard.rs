@@ -3326,7 +3326,7 @@ mod mac {
     pub fn write(flavours: &[Flavour]) -> Option<isize> {
         autoreleasepool(|_| {
             let pasteboard = NSPasteboard::generalPasteboard();
-            pasteboard.clearContents();
+            let count = pasteboard.clearContents();
             let mut wrote = false;
             for f in flavours {
                 if f.mime == TEXT {
@@ -3342,7 +3342,10 @@ mod mac {
                     wrote |= pasteboard.setData_forType(Some(&NSData::with_bytes(&f.data)), &NSString::from_str(t));
                 }
             }
-            wrote.then(|| pasteboard.changeCount())
+            // `clearContents()`'s own count is the one this write's ownership acquired: a
+            // `changeCount()` call here instead could race another app's copy landing in
+            // between, and return that app's count as if it were ours.
+            wrote.then_some(count)
         })
     }
 
