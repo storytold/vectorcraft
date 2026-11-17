@@ -1215,6 +1215,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-plotter"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=9101c4fc226f5f111b5a890a6c5c19bf3991fd76#9101c4fc226f5f111b5a890a6c5c19bf3991fd76"
+dependencies = [
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "craft-print"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=a499742a9389f47d10cdc61e4cdbf4e5f07f48cd#a499742a9389f47d10cdc61e4cdbf4e5f07f48cd"
@@ -6710,6 +6718,7 @@ version = "0.24.1"
 dependencies = [
  "craft-dxf",
  "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=a499742a9389f47d10cdc61e4cdbf4e5f07f48cd)",
+ "craft-plotter",
  "image",
  "kurbo 0.13.1",
  "serde_json",
