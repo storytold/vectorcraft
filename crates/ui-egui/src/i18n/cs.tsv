@@ -6400,6 +6400,19 @@ mark-style	Japanese	Japonské
 	Transform Objects	Transformovat objekty
 @msg	unknown parameter `{key}`; did you mean `{near}`?	neznámý parametr `{key}`; mysleli jste `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	neznámý parametr `{key}`; příkaz nemá žádné parametry
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	neznámý parametr `{key}`; `{object}` přijímá: {keys}
+@msg	unknown parameter `{key}`; {why_not}	neznámý parametr `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	žádný formát jej nepřijímá (viz document.formats)
+@msg	no save format takes it (see file.formatOptions)	žádný formát pro ukládání jej nepřijímá (viz file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF jej nepřijímá (viz document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS jej nepřijímá (viz document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF jej nepřijímá (viz document.formats)
+@msg	{name} must be {range} (got {v})	{name} musí být {range} (zadáno {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Grafický procesor zkoušený jako první nedokázal zobrazit okno, proto se VectorCraft znovu spustil na {summary} (Nastavení › Výkon › Grafický procesor › Automaticky použije ten, který obsluhuje váš displej)
+@msg	Sent “{title}” to {to}	“{title}” odesláno do {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” odesláno do {to}. Odpověď tiskové fronty: {note}
+@msg	the default printer	výchozí tiskárny
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	rastrové efekty na objektu {object}: požadováno {requested} ppi, dosaženo {achieved} ppi kvůli limitu 64 milionů pixelů
 @msg	unknown parameter `{key}`; the command takes: {keys}	neznámý parametr `{key}`; příkaz přijímá: {keys}
 @msg	the params must be an object, not {got}	parametry musí být objekt, nikoli {got}
 @msg	unknown parameter `{path}`; the object takes no keys	neznámý parametr `{path}`; objekt nepřijímá žádné klíče
@@ -9713,8 +9726,6 @@ breakText	Glyphs	Glyfy
 @msg	unknown panel	neznámý panel
 @msg	unknown panel `{panel}`	neznámý panel `{panel}`
 @msg	unknown parameter `{key}`	neznámý parametr `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	neznámý parametr `{within}settings.{format}`; {why}
-@msg	unknown parameter `{within}{key}`; {why}	neznámý parametr `{within}{key}`; {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	neznámé pieLegend `{v}` (none, standard nebo wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	neznámé piePosition `{v}` (even, ratio nebo stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	neznámé pieSort `{v}` (none, all nebo first)
@@ -9842,7 +9853,6 @@ breakText	Glyphs	Glyfy
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} je vestavěné a nelze ho odstranit
 @msg	{name} must be a number	{name} musí být číslo
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} musí být {lo}–{hi}{unit} (zadáno {v})
 @msg	{name}: CRC or size mismatch	{name}: nesouhlasí CRC nebo velikost
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: z tohoto souboru Affinity šlo přečíst jen vložený náhled; pomocí Soubor › Otevřít ho zobrazíte s varováním, nebo před umístěním exportujte SVG či PDF z Affinity
 @msg	{name}: {e}	{name}: {e}

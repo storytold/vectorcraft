@@ -6384,6 +6384,19 @@ liquify-list-end	{0}, {1}	{0} és {1}
 	Transform Objects	Objektumok transzformálása
 @msg	unknown parameter `{key}`; did you mean `{near}`?	ismeretlen paraméter: `{key}`; erre gondolt: `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	ismeretlen paraméter: `{key}`; a parancsnak nincs paramétere
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	ismeretlen paraméter: `{key}`; a(z) `{object}` ezeket fogadja el: {keys}
+@msg	unknown parameter `{key}`; {why_not}	ismeretlen paraméter: `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	egyik formátum sem fogadja el (lásd: document.formats)
+@msg	no save format takes it (see file.formatOptions)	egyik mentési formátum sem fogadja el (lásd: file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	a PDF nem fogadja el (lásd: document.formats)
+@msg	EPS doesn't take it (see document.formats)	az EPS nem fogadja el (lásd: document.formats)
+@msg	DXF doesn't take it (see document.formats)	a DXF nem fogadja el (lásd: document.formats)
+@msg	{name} must be {range} (got {v})	a(z) {name} értéke {range} lehet (kapott érték: {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Az először kipróbált grafikus processzor nem tudta megjeleníteni az ablakot, ezért a VectorCraft újraindult ezen: {summary} (Beállítások › Teljesítmény › Grafikus processzor › Automatikus: azt használja, amelyik a kijelzőt hajtja)
+@msg	Sent “{title}” to {to}	“{title}” elküldve ide: {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” elküldve ide: {to}. A nyomtatási sor válasza: {note}
+@msg	the default printer	alapértelmezett nyomtató
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	raszteres effektusok a(z) {object} objektumon: kért felbontás {requested} ppi, elért felbontás {achieved} ppi a 64 millió képpontos korlát miatt
 @msg	unknown parameter `{key}`; the command takes: {keys}	ismeretlen paraméter: `{key}`; a parancs ezeket fogadja el: {keys}
 @msg	the params must be an object, not {got}	a paramétereknek objektumnak kell lenniük, nem ez: {got}
 @msg	unknown parameter `{path}`; the object takes no keys	ismeretlen paraméter: `{path}`; az objektum nem fogad el kulcsokat
@@ -9583,8 +9596,6 @@ breakText	Glyphs	Glifák
 @msg	unknown panel	ismeretlen panel
 @msg	unknown panel `{panel}`	ismeretlen panel: `{panel}`
 @msg	unknown parameter `{key}`	ismeretlen paraméter: `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	ismeretlen paraméter: `{within}settings.{format}`; {why}
-@msg	unknown parameter `{within}{key}`; {why}	ismeretlen paraméter: `{within}{key}`; {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	ismeretlen pieLegend: `{v}` (none, standard vagy wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	ismeretlen piePosition: `{v}` (even, ratio vagy stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	ismeretlen pieSort: `{v}` (none, all vagy first)
@@ -9712,7 +9723,6 @@ breakText	Glyphs	Glifák
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name}: beépített elem, nem törölhető
 @msg	{name} must be a number	{name}: szám kell
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name}: {lo}–{hi}{unit} kell (kapott érték: {v})
 @msg	{name}: CRC or size mismatch	{name}: a CRC vagy a méret nem egyezik
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: ennek az Affinity-fájlnak csak a beágyazott előnézete volt olvasható; a Fájl › Megnyitás paranccsal megnézheted a figyelmeztetésével együtt, vagy az elhelyezés előtt exportálj SVG-t vagy PDF-et az Affinityből
 @msg	{name}: {e}	{name}: {e}
