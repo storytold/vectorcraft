@@ -1500,6 +1500,9 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     let prefs = &app.session.prefs;
     if d.kind == "shortcuts" && (on != prefs.hold_shortcuts || delay != prefs.key_hold_delay()) {
         app.run("prefs.set", json!({"values": {"holdShortcuts": on, "keyHoldDelay": delay}})).map_err(|e| e.to_string())?;
+        // Saved as OK in Preferences saves them.
+        crate::prefs_dialog::snapshot(app);
+        app.prefs_changed = true;
     }
     app.ui.shortcut_overrides = dialog_overrides(&d);
     app.ui.shortcut_holds = dialog_holds(&d);
@@ -3741,8 +3744,8 @@ mod tests {
     }
 
     /// Hold Shortcuts is off by default: the dialog shows its checkbox and no Hold column. Turned
-    /// on, the dialog shows the column and the delay, and OK turns hold shortcuts on; Cancel keeps
-    /// them off.
+    /// on, the dialog shows the column and the delay, and OK turns hold shortcuts on and asks the
+    /// host to write the preferences file; Cancel keeps them off.
     #[test]
     fn the_hold_shortcuts_checkbox_shows_the_hold_column() {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
@@ -3756,6 +3759,7 @@ mod tests {
         assert!(on.iter().any(|t| t == "Hold") && on.iter().any(|t| t == "Hold Shortcut Delay"), "{on:?}");
         app.ui.dialog = None;
         assert!(!app.session.prefs.hold_shortcuts, "Cancel keeps them off");
+        assert!(!app.take_prefs_changed(), "nothing to write after Cancel");
         open(&mut app);
         let d = app.ui.dialog.as_mut().unwrap();
         d.fields.insert("holdShortcuts".into(), json!(true));
@@ -3763,6 +3767,9 @@ mod tests {
         confirm(&mut app).unwrap();
         assert!(app.session.prefs.hold_shortcuts);
         assert_eq!(app.session.prefs.key_hold_delay, 0.5);
+        assert!(app.take_prefs_changed(), "OK asks the host to write the preferences file");
+        assert_eq!(app.ui.engine_prefs["holdShortcuts"], json!(true));
+        assert_eq!(app.ui.engine_prefs["keyHoldDelay"], json!(0.5));
     }
 
     /// The info button shows how hold shortcuts work.
