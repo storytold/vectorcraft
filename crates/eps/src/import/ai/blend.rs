@@ -31,7 +31,7 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::blend::{blend_expand, blend_steps};
 use vectorcraft_doc::live::{BlendOrientation, BlendSpacing, BlendSpec};
 use vectorcraft_doc::{AppearanceItem, Node, NodeId, NodeKind};
-use vectorcraft_geom::{PathData, Point, SubPath};
+use vectorcraft_geom::{ParamCurve, PathData, Point, SubPath};
 
 /// The plugin that writes blends.
 pub(super) const PLUGIN: &str = "Adobe Path Blends"; // brand-ok: the plugin name the files use
@@ -311,12 +311,21 @@ fn outline(n: &Node) -> Option<PathData> {
     (!subpaths.is_empty()).then(|| PathData::new(subpaths))
 }
 
-/// Do two outlines draw the same line: each anchor of one within `tolerance` of the other's
-/// outline? Where a path starts and how many anchors it has on a straight or curved stretch don't
-/// count.
+/// Do two outlines draw the same line: each anchor of one, and the points a quarter, half and three
+/// quarters along each of its segments (which show how a curved side bends), within `tolerance` of
+/// the other's outline? Where a path starts and how many anchors it has on a straight or curved
+/// stretch don't count.
 fn same_outline(a: &PathData, b: &PathData, tolerance: f64) -> bool {
-    let on =
-        |from: &PathData, to: &PathData| from.subpaths.iter().flat_map(|s| &s.anchors).all(|p| to.nearest(p.p).is_some_and(|(.., d)| d <= tolerance));
+    let near = |to: &PathData, p: Point| to.nearest(p).is_some_and(|(.., d)| d <= tolerance);
+    let on = |from: &PathData, to: &PathData| {
+        from.subpaths.iter().all(|s| {
+            s.anchors.iter().all(|p| near(to, p.p))
+                && (0..s.segment_count()).all(|i| {
+                    let c = s.segment(i);
+                    [0.25, 0.5, 0.75].into_iter().all(|t| near(to, c.eval(t)))
+                })
+        })
+    };
     on(a, b) && on(b, a)
 }
 
@@ -619,6 +628,25 @@ mod tests {
         // So does the same triangle drawn with another anchor on one of its sides.
         let split = |x: f64| polygon(&[Point::new(x, 0.0), Point::new(x, 5.0), Point::new(x, 10.0), Point::new(x + 10.0, 5.0)]);
         assert!(check(&laid, &[split(0.0), split(50.0)], true).is_some());
+        // A square with its top side bent inward has the same corners as its half turn, whose bent
+        // side is at the bottom: the points along its sides tell them apart.
+        let bent = |x: f64, turn: f64| {
+            let (tl, tr) = (Point::new(x, 0.0), Point::new(x + 10.0, 0.0));
+            let anchors = vec![
+                vectorcraft_geom::Anchor::with_handles(tl, tl, Point::new(x + 3.0, 4.0)),
+                vectorcraft_geom::Anchor::with_handles(tr, Point::new(x + 7.0, 4.0), tr),
+                vectorcraft_geom::Anchor::corner(Point::new(x + 10.0, 10.0)),
+                vectorcraft_geom::Anchor::corner(Point::new(x, 10.0)),
+            ];
+            let mut n = Node::path(NodeId(0), PathData::single(SubPath::new(anchors, true)), Default::default());
+            n.transform(vectorcraft_geom::Affine::rotate_about(turn, Point::new(x + 5.0, 5.0)), false);
+            n
+        };
+        let upright = [bent(0.0, 0.0), bent(50.0, 0.0)];
+        assert!(check(&upright, &[bent(0.0, 0.0), bent(50.0, 0.0)], true).is_some());
+        let half = std::f64::consts::PI;
+        assert!(check(&upright, &[bent(0.0, half), bent(50.0, half)], false).is_some());
+        assert!(check(&upright, &[bent(0.0, half), bent(50.0, half)], true).is_none(), "the bent side at the bottom");
         // A compound path matches with its contours in another order, and not turned a half turn.
         let pair = |x: f64, flip: bool, turn: f64| {
             let a = SubPath::polyline(&[Point::new(x, 0.0), Point::new(x, 4.0), Point::new(x + 10.0, 2.0)], true);
