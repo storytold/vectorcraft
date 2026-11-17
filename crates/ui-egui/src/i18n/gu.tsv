@@ -123,6 +123,7 @@
 	Add Anchor Point Tool	એન્કર બિંદુ ઉમેરો ટૂલ
 	Add Anchor Points	એન્કર બિંદુઓ ઉમેરો
 	Add Anchors…	એન્કર ઉમેરો…
+	Add Around	ઑબ્જેક્ટની આસપાસ ઉમેરો
 	Add Content	કન્ટેન્ટ ઉમેરો
 	Add Effect	ઇફેક્ટ ઉમેરો
 	Add Event	ઇવેન્ટ ઉમેરો
@@ -230,6 +231,7 @@
 	Angled Strokes…	ત્રાંસા સ્ટ્રોક…
 	Angles	ખૂણા
 	Animated Zoom	ઍનિમેટેડ ઝૂમ
+	Anti Alias	એન્ટિ-એલિયાસિંગ
 	Anti-Alias	એન્ટિ-એલિયાસ
 	Anti-alias	એન્ટિ-એલિયાસ
 	Anti-alias Rasters	રાસ્ટર એન્ટિ-એલિયાસ
@@ -633,6 +635,7 @@
 	Color Library…	રંગ લાઇબ્રેરી…
 	Color Mode	રંગ મોડ
 	Color Mode:	રંગ મોડ:
+	Color Model	રંગ મોડેલ
 	Color Model:	રંગ મોડેલ:
 	Color Models	રંગ મોડેલ
 	Color Panel Options	રંગ પેનલ વિકલ્પો
@@ -3123,6 +3126,7 @@
 	Resize Artboard	આર્ટબોર્ડનું માપ બદલો
 	Resize Slice	સ્લાઇસનું માપ બદલો
 	Resize Type Area	ટાઇપ એરિયાનું માપ બદલો
+	Resolution	રિઝોલ્યુશન
 	Resolution:	રિઝોલ્યુશન:
 	Responsive	રિસ્પોન્સિવ
 	Restore	પુનઃસ્થાપિત કરો

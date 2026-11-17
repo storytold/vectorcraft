@@ -119,6 +119,7 @@
 	Add Anchor Point	Agregar punto de ancla
 	Add Anchor Point Tool	Herramienta Agregar punto de ancla
 	Add Anchor Points	Agregar puntos de ancla
+	Add Around	Agregar alrededor del objeto
 	Add Effect	Agregar efecto
 	Add Freeform Line	Agregar línea libre
 	Add Freeform Point	Agregar punto libre
@@ -196,6 +197,7 @@
 	Angle:	Ángulo:
 	Angles	Ángulos
 	Animated Zoom	Zoom animado
+	Anti Alias	Suavizado
 	Anti-alias	Suavizado
 	Anti-Alias	Suavizado
 	Anti-alias Rasters	Suavizar imágenes ráster
@@ -554,6 +556,7 @@ font-technology	Variable	Variables
 	Color Mixer (Shift-click the chip)	Mezclador de colores (Shift+clic en la muestra)
 	Color Mode	Modo de color
 	Color Mode:	Modo de color:
+	Color Model	Modelo de color
 	Color Model:	Modelo de color:
 	Color Models	Modelos de color
 	Color Picker	Selector de color
@@ -3056,6 +3059,7 @@ digits	Malayalam	Malayálam
 	Reshape Segment	Remodelar segmento
 	Reshape Tool	Herramienta Remodelar
 	Reshape Type Area	Remodelar área de texto
+	Resolution	Resolución
 	Resolution:	Resolución:
 	Responsive	Adaptable
 	Restore	Restaurar

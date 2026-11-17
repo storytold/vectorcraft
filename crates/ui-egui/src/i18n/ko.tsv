@@ -1040,6 +1040,7 @@ digits	Malayalam	말라얄람어
 	Add Anchor (Pen)	앵커 추가(펜)
 	Add Anchor Point	앵커 포인트 추가
 	Add Anchor Point Tool	앵커 포인트 추가 도구
+	Add Around	개체 주위에 추가
 	Add Effect	효과 추가
 	Add Freeform Line	자유형 선 추가
 	Add Freeform Point	자유형 점 추가
@@ -1101,6 +1102,7 @@ digits	Malayalam	말라얄람어
 	Angle:	각도:
 	Angles	각도
 	Animated Zoom	애니메이션 확대/축소
+	Anti Alias	안티 앨리어싱
 	Anti-Alias	안티 앨리어싱
 	Anti-alias	안티 앨리어싱
 	Anti-alias Rasters	래스터 안티 앨리어싱
@@ -1323,6 +1325,7 @@ antiAlias	Sharp	날카롭게
 	Color Guide Options…	색상 가이드 옵션…
 	Color Mode	색상 모드
 	Color Mode:	색상 모드:
+	Color Model	색상 모델
 	Color Model:	색상 모델:
 	Color Models	색상 모델
 	Color Picker	색상 피커
@@ -3062,6 +3065,7 @@ mark-style	Japanese	일본식
 	Reshape Segment	세그먼트 모양 다듬기
 	Reshape Tool	모양 다듬기 도구
 	Reshape Type Area	문자 영역 모양 다듬기
+	Resolution	해상도
 	Resolution:	해상도:
 	Responsive	반응형
 	Restore	복원

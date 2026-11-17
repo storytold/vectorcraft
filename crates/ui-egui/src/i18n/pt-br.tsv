@@ -126,6 +126,7 @@
 	Add Anchor Point	Adicionar Ponto de Ancoragem
 	Add Anchor Point Tool	Ferramenta Adicionar Ponto de Ancoragem
 	Add Anchor Points	Adicionar Pontos de Ancoragem
+	Add Around	Adicionar ao Redor do Objeto
 	Add Effect	Adicionar Efeito
 	Add Freeform Line	Adicionar Linha Livre
 	Add Freeform Point	Adicionar Ponto Livre
@@ -195,6 +196,7 @@
 	Angle:	Ângulo:
 	Angles	Ângulos
 	Animated Zoom	Zoom Animado
+	Anti Alias	Suavização
 	Anti-Alias	Suavização de Serrilhado
 	Anti-alias	Suavizar bordas
 	Anti-alias Rasters	Suavizar Rasters
@@ -501,6 +503,7 @@ antiAlias	Sharp	Nítido
 	Color Library…	Biblioteca de Cores…
 	Color Mode	Modo de Cor
 	Color Mode:	Modo de Cor:
+	Color Model	Modelo de Cor
 	Color Model:	Modelo de Cor:
 	Color Models	Modelos de Cor
 	Color Picker	Seletor de Cores
@@ -2547,6 +2550,7 @@ digits	Malayalam	Malaiala
 	Reshape Segment	Remodelar Segmento
 	Reshape Tool	Ferramenta Remodelar
 	Reshape Type Area	Remodelar Área de Texto
+	Resolution	Resolução
 	Resolution:	Resolução:
 	Responsive	Responsivo
 	Restore	Restaurar

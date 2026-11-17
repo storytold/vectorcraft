@@ -183,6 +183,7 @@
 	Add Anchor Point	Horgonypont hozzáadása
 	Add Anchor Point Tool	Horgonypont hozzáadása
 	Add Anchor Points	Horgonypontok hozzáadása
+	Add Around	Hozzáadás az objektum körül
 	Add Content	Tartalom hozzáadása
 	Add Effect	Effektus hozzáadása
 	Add Font Files	Betűtípusfájlok hozzáadása
@@ -277,6 +278,7 @@
 	Angled Strokes…	Ferde vonások…
 	Angles	Szögek
 	Animated Zoom	Animált nagyítás
+	Anti Alias	Élsimítás
 	Anti-alias	Élsimítás
 	Anti-Alias	Élsimítás
 	Anti-alias Rasters	Raszterek élsimítása
@@ -734,6 +736,7 @@ font-technology	Variable	Változó
 	Color Mixer (Shift-click the chip)	Színkeverő (Shift+kattintás a színmezőre)
 	Color Mode	Színmód
 	Color Mode:	Színmód:
+	Color Model	Színmodell
 	Color Model:	Színmodell:
 	Color Models	Színmodellek
 	Color Picker	Színválasztó
@@ -3637,6 +3640,7 @@ mark-style	Japanese	Japán
 	Resize	Átméretezés
 	Resize panel window	Panelablak átméretezése
 	Resize panels	Panelek átméretezése
+	Resolution	Felbontás
 	Resolution:	Felbontás:
 	Responsive	Reszponzív
 	Restore	Visszaállít

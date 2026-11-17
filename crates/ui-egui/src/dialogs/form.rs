@@ -503,7 +503,9 @@ pub(super) fn param_fields(
                         }
                     }
                     Value::Number(n) => {
-                        if let Some(x) = crate::widgets::plain_field(ui, ("fx-num", &k), n.as_f64().unwrap_or(0.0), "", 3, 140.0) {
+                        // A resolution (Object › Rasterize's `ppi`) shows its unit in the UI language.
+                        let suffix = if k == "ppi" { crate::i18n::fill_once(tl!("{n} ppi"), &[("n", "")]) } else { String::new() };
+                        if let Some(x) = crate::widgets::plain_field(ui, ("fx-num", &k), n.as_f64().unwrap_or(0.0), &suffix, 3, 140.0) {
                             d.fields.insert(k.clone(), typed_number(x));
                             changed = true;
                         }
@@ -798,6 +800,7 @@ pub(crate) fn humanize(k: &str) -> String {
         }
     }
     match s.as_str() {
+        "Ppi" => "Resolution:".into(),
         "Dx" => "Horizontal".into(),
         "Dy" => "Vertical".into(),
         "Sx" => "Horizontal %".into(),

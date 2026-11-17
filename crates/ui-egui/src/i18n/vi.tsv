@@ -128,6 +128,7 @@
 	Add Anchor Point	Thêm điểm neo
 	Add Anchor Point Tool	Công cụ Thêm điểm neo
 	Add Anchor Points	Thêm các điểm neo
+	Add Around	Thêm xung quanh đối tượng
 	Add Content	Thêm nội dung
 	Add Effect	Thêm hiệu ứng
 	Add Font Files	Thêm tệp phông chữ
@@ -213,6 +214,7 @@
 	Angled Strokes…	Nét xiên góc…
 	Angles	Các góc
 	Animated Zoom	Thu phóng có hiệu ứng
+	Anti Alias	Khử răng cưa
 	Anti-alias	Khử răng cưa
 	Anti-Alias	Khử răng cưa
 	Anti-alias Rasters	Khử răng cưa ảnh raster
@@ -646,6 +648,7 @@ font-technology	Variable	Biến thiên
 	Color Mixer (Shift-click the chip)	Trộn màu (Shift-bấm chip màu)
 	Color Mode	Chế độ màu
 	Color Mode:	Chế độ màu:
+	Color Model	Mô hình màu
 	Color Model:	Mô hình màu:
 	Color Models	Các mô hình màu
 	Color Picker	Bộ chọn màu
@@ -3404,6 +3407,7 @@ mark-style	Japanese	Kiểu Nhật
 	Resize	Thay đổi kích thước
 	Resize panel window	Thay đổi kích thước cửa sổ bảng
 	Resize panels	Thay đổi kích thước bảng
+	Resolution	Độ phân giải
 	Resolution:	Độ phân giải:
 	Responsive	Đáp ứng
 	Restore	Khôi phục

@@ -99,6 +99,7 @@
 	Add Anchor Point	Προσθήκη σημείου αγκύρωσης
 	Add Anchor Point Tool	Εργαλείο προσθήκης σημείου αγκύρωσης (Add Anchor Point Tool)
 	Add Anchor Points	Προσθήκη σημείων αγκύρωσης
+	Add Around	Προσθήκη γύρω από το αντικείμενο
 	Add Effect	Προσθήκη εφέ
 	Add Freeform Line	Προσθήκη ελεύθερης γραμμής
 	Add Freeform Point	Προσθήκη ελεύθερου σημείου
@@ -176,6 +177,7 @@
 	Angle:	Γωνία:
 	Angles	Γωνίες
 	Animated Zoom	Κινούμενη μεγέθυνση
+	Anti Alias	Εξομάλυνση ακμών
 	Anti-alias	Εξομάλυνση ακμών
 	Anti-Alias	Εξομάλυνση ακμών
 	Anti-alias Rasters	Εξομάλυνση ακμών εικόνων ράστερ
@@ -514,6 +516,7 @@ font-technology	Variable	Μεταβλητές
 	Color Mixer (Shift-click the chip)	Μείκτης χρωμάτων (Shift-κλικ στο δείγμα)
 	Color Mode	Λειτουργία χρώματος
 	Color Mode:	Λειτουργία χρώματος:
+	Color Model	Μοντέλο χρώματος
 	Color Model:	Μοντέλο χρώματος:
 	Color Models	Μοντέλα χρώματος
 	Color Picker	Επιλογέας χρώματος
@@ -2089,6 +2092,7 @@ font-technology	Variable	Μεταβλητές
 	Search Preferences	Αναζήτηση στις προτιμήσεις
 	No settings found	Δεν βρέθηκαν ρυθμίσεις
 	Reset to Default	Επαναφορά προεπιλογής
+	Resolution	Ανάλυση
 	Resolution:	Ανάλυση:
 	Restore	Επαναφορά
 	Revert	Επαναφορά αποθηκευμένης έκδοσης

@@ -213,6 +213,7 @@
 	Add Anchor Point	एंकर पॉइंट जोड़ें
 	Add Anchor Point Tool	ऐड एंकर पॉइंट टूल
 	Add Anchor Points	एंकर पॉइंट जोड़ें
+	Add Around	ऑब्जेक्ट के चारों ओर जोड़ें
 	Add Anchors	एंकर जोड़ें
 	Add Anchors…	एंकर जोड़ें…
 	Add as Effect	इफ़ेक्ट के रूप में जोड़ें
@@ -343,6 +344,7 @@
 	Angular	कोणीय
 	Angular Guides	कोणीय गाइड्स
 	Animated Zoom	एनिमेटेड ज़ूम
+	Anti Alias	एंटी-एलियासिंग
 	Anti-alias	एंटी-एलियास
 	Anti-Alias	एंटी-एलियास
 	Anti-alias Rasters	रास्टर एंटी-एलियास करें
@@ -936,6 +938,7 @@ antiAlias	Sharp	शार्प
 	Color Mixer (Shift-click the chip)	कलर मिक्सर (रंग चिप पर Shift-क्लिक करें)
 	Color Mode	रंग मोड
 	Color Mode:	रंग मोड:
+	Color Model	रंग मॉडल
 	Color Model:	रंग मॉडल:
 	Color Models	रंग मॉडल
 	Color Panel Options	रंग पैनल ऑप्शन्स
@@ -4166,6 +4169,7 @@ antiAlias	Sharp	शार्प
 	Resize panels	पैनलों का साइज़ बदलें
 	Resize Slice	स्लाइस का आकार
 	Resize Type Area	टाइप एरिया का आकार बदलें
+	Resolution	रिज़ॉल्यूशन
 	Resolution:	रिज़ॉल्यूशन:
 	Responsive	उत्तरदायी
 	Restore	पुनर्स्थापित करें

@@ -94,6 +94,7 @@
 	Add Anchor Point	Ankerpunkt hinzufügen
 	Add Anchor Point Tool	Ankerpunkt-hinzufügen-Werkzeug
 	Add Anchor Points	Ankerpunkte hinzufügen
+	Add Around	Um das Objekt hinzufügen
 	Add Effect	Effekt hinzufügen
 	Add Freeform Line	Freiformlinie hinzufügen
 	Add Freeform Point	Freiformpunkt hinzufügen
@@ -171,6 +172,7 @@
 	Angle:	Winkel:
 	Angles	Winkel
 	Animated Zoom	Animierter Zoom
+	Anti Alias	Glättung
 	Anti-alias	Glätten
 	Anti-Alias	Glätten
 	Anti-alias Rasters	Pixelbilder glätten
@@ -532,6 +534,7 @@ font-technology	Variable	Variabel
 	Color Mixer (Shift-click the chip)	Farbmischer (Shift-Klick auf das Farbfeld)
 	Color Mode	Farbmodus
 	Color Mode:	Farbmodus:
+	Color Model	Farbmodell
 	Color Model:	Farbmodell:
 	Color Models	Farbmodelle
 	Color Picker	Farbwähler
@@ -3016,6 +3019,7 @@ digits	Malayalam	Malayalam
 	Reshape Segment	Segmentform ändern
 	Reshape Tool	Form-ändern-Werkzeug
 	Reshape Type Area	Form der Textfläche ändern
+	Resolution	Auflösung
 	Resolution:	Auflösung:
 	Responsive	Responsiv
 	Restore	Wiederherstellen

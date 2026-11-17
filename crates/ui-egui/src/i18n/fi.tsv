@@ -2940,9 +2940,13 @@ digits	Malayalam	Malajalam
 	Around Object	Objektin ympärillä
 	Background:	Tausta:
 	Changing these settings changes how raster effects look when exported, flattened or expanded.	Näiden asetusten muuttaminen vaikuttaa rasteritehosteiden ulkoasuun vietäessä, litistettäessä tai laajennettaessa.
+	Add Around	Lisää objektin ympärille
+	Anti Alias	Reunanpehmennys
+	Color Model	Värijärjestelmä
 	Color Model:	Värijärjestelmä:
 	Create Clipping Mask	Luo leikkausmaski
 	Preserve Spot Colors	Säilytä spottivärit
+	Resolution	Tarkkuus
 	Resolution:	Tarkkuus:
 	Transparent	Läpinäkyvä
 	Layout Order:	Asettelujärjestys:
