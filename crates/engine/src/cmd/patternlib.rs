@@ -89,9 +89,11 @@ pub fn swatch_source(w: &Swatch) -> Option<Arc<Document>> {
 /// painted with it does: the same pattern there already is used, and a name another pattern or
 /// swatch has gets a number → the pattern's name in `d`, and the swatches the import added for
 /// the pattern's art: (the swatch's name in `lib`, its name in `d`), pattern swatches left out.
+/// A global or spot color whose name `d` gives another color comes in under a free name, as Add
+/// to Swatches adds such a color, so that the pattern keeps the library's colors.
 pub(crate) fn import(d: &mut Document, lib: &Document, name: &str) -> Result<(String, Vec<(String, String)>)> {
     let had: std::collections::HashSet<String> = d.swatches_iter().map(|w| w.name.clone()).collect();
-    let imported = gather(lib, name).import_into(d, &SwatchChoices::default(), false)?;
+    let imported = gather(lib, name).import_into(d, &SwatchChoices::add_all(), false)?;
     let from = |to: &str| {
         let renamed = imported.renamed.iter().find(|r| r["kind"] == "swatch" && r["to"] == to).and_then(|r| r["from"].as_str());
         renamed.unwrap_or(to).to_string()
@@ -144,7 +146,7 @@ pub(crate) fn present_pattern(d: &Document, lib: &Document, name: &str) -> Optio
         return None;
     }
     let mut probe = d.clone();
-    let imported = gathered.import_into(&mut probe, &SwatchChoices::default(), false).ok()?;
+    let imported = gathered.import_into(&mut probe, &SwatchChoices::add_all(), false).ok()?;
     (imported.added == 0).then(|| imported_name(&imported, name))
 }
 

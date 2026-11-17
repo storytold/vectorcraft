@@ -4931,7 +4931,9 @@ them as process colors; `.acb` files are read, never written. A file in the user
 same extension and bytes as one there, loads as that User Defined library (category `user`).
 From a document, such as a `.ai` or `.eps` swatch library, it reads the colors, tints, gradients and pattern swatches
 in the document's order and color groups; `swatch.library.add` brings a pattern swatch's pattern, with its tile and
-art, into the document as a pattern swatch under the library swatch's name and in its color group. A document with
+art, into the document as a pattern swatch under the library swatch's name and in its color group. A global or spot
+color the pattern's art links to keeps the library's color: when the document gives its name another color, it comes
+in under a numbered name ("Ink 2") and the pattern links to that. A document with
 no swatches, and a `.ai`, `.eps` or PostScript file whose swatches are only the default ones, are refused with
 "`<file>` has no swatches of its own". The Swatch Libraries filter of Other Library… lists `.ai`, `.ait` and `.eps`
 (`.epsf`) files as well as the library files.
