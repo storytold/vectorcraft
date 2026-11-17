@@ -7108,6 +7108,7 @@ dependencies = [
 name = "vectorcraft-text"
 version = "0.24.1"
 dependencies = [
+ "craft-proof",
  "harfrust 0.13.3",
  "icu_segmenter",
  "kurbo 0.13.1",
@@ -7116,6 +7117,7 @@ dependencies = [
  "subsetter",
  "unicode-bidi",
  "unicode-general-category",
+ "unicode-normalization",
  "unicode-script",
  "unicode-segmentation",
  "vectorcraft-doc",
