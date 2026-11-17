@@ -36,6 +36,8 @@ use crate::ps;
 
 pub(crate) use blend::{MAX_BLEND_OBJECTS, MAX_KEYS as MAX_BLEND_KEYS, PLUGIN as BLEND_PLUGIN, blend_reads};
 pub(crate) use brush::{BrushesRead, MANAGER_NAME as BRUSH_MANAGER, brushes_kept, plugin_name as brush_plugin_name, read_brush_object};
+#[cfg(test)]
+pub(crate) use envelope::DASH_CHECKS_MADE;
 pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
 pub(crate) use envelope::TYPE_DRAWN as ENVELOPE_TYPE_DRAWN;
 pub(crate) use envelope::{GridPoint as EnvelopeGridPoint, PLUGIN as DEFORM_PLUGIN, outline as envelope_outline, upright as envelope_upright};

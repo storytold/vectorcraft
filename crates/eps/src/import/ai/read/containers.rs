@@ -16,6 +16,9 @@ impl<'a> Reader<'a> {
         if matches!(kind, Kind::Layer(_)) {
             self.ensure_space();
             self.check_symbols();
+            if self.defs_only {
+                (self.envelope_checks, self.dash_checks) = (0, 0);
+            }
         }
         let base = if matches!(kind, Kind::Obj(_)) { self.stack.len() } else { self.frames.last().map_or(0, |f| f.base) };
         self.frames.push(Frame {

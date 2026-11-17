@@ -855,6 +855,8 @@ impl<'a> Reader<'a> {
             Some(ap) if aligns_dashes(&ap) => {
                 let alike = self.dash_checks > 0 && {
                     self.dash_checks -= 1;
+                    #[cfg(test)]
+                    crate::import::ai::DASH_CHECKS_MADE.set(crate::import::ai::DASH_CHECKS_MADE.get() + 1);
                     let layer = self.doc.alloc_id();
                     let shared = crate::import::ai::envelope::Shared { patterns: &self.doc.patterns, images: &self.doc.images };
                     let mut spent = crate::import::ai::envelope::Spent::default();

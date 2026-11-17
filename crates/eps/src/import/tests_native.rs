@@ -7289,6 +7289,31 @@ fn dashes_aligned_to_corners_past_their_checks_keep_the_look() {
     assert_eq!(looks, 1);
 }
 
+/// The reads of a file apart from its layers check no stroke with dashes aligned to corners in its
+/// layers against its look: the import's checks ([`crate::import::ai::MAX_DASH_CHECKS`]) are its
+/// layers' reader's, though those reads go over all of the data. Its artboards and variable library
+/// are read with no checks at all, and its swatches (and so its brushes, styles and symbols, read
+/// the same way) with none once their reader reaches the layers. The layers' reader still checks
+/// the one such stroke.
+#[test]
+fn the_reads_apart_from_the_layers_check_no_aligned_dashes() {
+    use vectorcraft_testkit::ai::{sample_variable_sets, variable_library_data};
+    let library = variable_library_data(&sample_variable_sets("variableAndTypes", &[]));
+    let own = "%_0 0 0 1 0 0 0 XA\n%_2 w\n%_20 80 m\n%_80 80 L\n%_80 30 L\n%_S\n";
+    let one = format!("u\n{}\nU\n9 () XW\n{own}1 (Dashed) XW\n", aligned_dash_look(true));
+    let data = native(&(library + &aligned_dash_style() + &layer("Art", true, &one)));
+    let checks = |f: &dyn Fn()| {
+        crate::import::ai::DASH_CHECKS_MADE.set(0);
+        f();
+        crate::import::ai::DASH_CHECKS_MADE.get()
+    };
+    let names = crate::import::ai::Names::default;
+    assert_eq!(checks(&|| drop(crate::ai_alone(&private(&data)))), 1);
+    assert_eq!(checks(&|| drop(crate::import::ai::artboards(data.as_bytes(), &mut names()))), 0);
+    assert_eq!(checks(&|| assert!(crate::import::ai::variables(data.as_bytes(), &mut names()).present)), 0);
+    assert_eq!(checks(&|| drop(crate::import::ai::palette(data.as_bytes(), &[], &mut names()))), 0);
+}
+
 /// Type under a style with dashes aligned to corners keeps its drawn look, as before, and takes no
 /// such stroke: the look check isn't made for type.
 #[test]

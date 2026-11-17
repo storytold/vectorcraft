@@ -62,6 +62,13 @@ pub(crate) const MAX_CHECKED: usize = 256;
 /// The most strokes with dashes aligned to corners one import draws to check against their drawn
 /// looks (apart from [`MAX_CHECKED`]); more keep their drawn looks.
 pub(crate) const MAX_DASH_CHECKS: usize = 256;
+
+#[cfg(test)]
+thread_local! {
+    /// How many strokes with dashes aligned to corners have been drawn on this thread to check them
+    /// against their looks.
+    pub(crate) static DASH_CHECKS_MADE: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
 /// The most rows or columns of a mesh read (Make with Mesh's own limit).
 const MAX_GRID: u32 = 50;
 /// How far, in points over width and height together, a saved size may lie from the contents'
