@@ -336,11 +336,26 @@ pub fn twist(path: &PathData, b: Rect, angle: f64, max: usize) -> PathData {
     }
     let c = b.center();
     let r = diag(b) / 2.0;
+    let half = Vec2::new(b.width() * 0.5, b.height() * 0.5);
+    let boundary = move |p: Point, length: f64| {
+        if length == r {
+            return true;
+        }
+        if !r.is_finite() || (length - r).abs() > 8.0 * f64::EPSILON * r {
+            return false;
+        }
+        // A bounds-relative distance identifies boundary points affected by center rounding.
+        (Vec2::new(p.x - b.x0, p.y - b.y0) - half).hypot() == r
+    };
     let f = move |q: Point| {
         let d = q - c;
-        let t = (1.0 - d.hypot() / r).max(0.0);
+        let length = d.hypot();
+        let t = (1.0 - length / r).max(0.0);
         // y runs down, so a positive turn is clockwise on the page.
         let a = ang * t;
+        if a == 0.0 {
+            return q;
+        }
         let (s, co) = a.sin_cos();
         c + Vec2::new(d.x * co - d.y * s, d.x * s + d.y * co)
     };
@@ -354,8 +369,9 @@ pub fn twist(path: &PathData, b: Rect, angle: f64, max: usize) -> PathData {
         let length = d.hypot();
         let radial = if length > 0.0 { (d / length).dot(v) } else { 0.0 };
         // The clamped rotation has different inward and outward derivatives at the circle.
-        let gradient = if length < r || (length == r && radial < 0.0) { -ang / r * radial } else { 0.0 };
-        let tangent = v + Vec2::new(-d.y, d.x) * gradient;
+        let inside = if boundary(p, length) { radial < 0.0 } else { length < r };
+        let gradient = if inside { -ang / r * radial } else { 0.0 };
+        let tangent = if gradient == 0.0 { v } else { v + Vec2::new(-d.y, d.x) * gradient };
         let a = ang * (1.0 - length / r).max(0.0);
         let (s, co) = a.sin_cos();
         f(p) + Vec2::new(tangent.x * co - tangent.y * s, tangent.x * s + tangent.y * co)

@@ -564,7 +564,8 @@ fn map_pieces_within(path: &PathData, max_piece: f64, max: usize, f: &impl Fn(Po
                 let c = seg_cubic(sp, i);
                 let k = pieces(poly_len(&c), max_piece, MAX_PIECES);
                 for j in 0..k {
-                    let sub = c.subsegment((j as f64 / k as f64)..((j + 1) as f64 / k as f64));
+                    // Evaluating an unchanged curve can overflow even when its control points are finite.
+                    let sub = if k == 1 { c } else { c.subsegment((j as f64 / k as f64)..((j + 1) as f64 / k as f64)) };
                     if let Some(last) = res.last_mut() {
                         last.h_out = handle(sub.p0, sub.p1);
                     }
@@ -628,6 +629,17 @@ pub(super) fn resample(poly: &[Point], m: usize) -> Vec<Point> {
 #[cfg(test)]
 mod handle_tests {
     use super::*;
+
+    #[test]
+    fn an_unsplit_curve_keeps_its_finite_control_points() {
+        let start = Point::new(1e308, 0.0);
+        let end = Point::new(1.03e308, 0.0);
+        let path = PathData::new(vec![SubPath::new(
+            vec![Anchor::with_handles(start, start, Point::new(1.01e308, 1.0)), Anchor::with_handles(end, Point::new(1.02e308, 1.0), end)],
+            false,
+        )]);
+        assert_eq!(map_handles_within(&path, 1.0, 2, |p| p, |_, h| h), path);
+    }
 
     #[test]
     fn rounded_samples_preserve_a_smooth_interior_join() {
