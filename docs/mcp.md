@@ -4865,8 +4865,9 @@ when Recolor Artwork is not open. VectorCraft's own rules: the dialog's history 
 history, which changes when OK records the recolor as one undo step and when a color group is saved (below); Cancel
 discards the history with the edits. A change is one step once the pointer is released, so a drag on the wheel, a
 slider or the Prominent Colors bar is one step, and an action that changes none of those fields is no step. Fields set
-with `ui.dialog.set` become a step at the dialog's next frame or the next `ui.recolorUndo` or `ui.recolorRedo`, so
-fields set before either are one step together. Reset is a step of its own, which Undo
+with `ui.dialog.set` become a step at the dialog's next frame with the pointer up or the next `ui.recolorUndo` or
+`ui.recolorRedo`, so fields set before either are one step together, also across frames drawn while the pointer is
+down. Reset is a step of its own, which Undo
 Changes reverses. A new edit after Undo Changes leaves nothing to redo. Switching tabs, displays or slider modes,
 selecting rows, Find and Preview make no step. The dialog keeps at most 64 steps and 4 MiB of them as JSON, dropping
 the oldest first. A button with no step to go to is disabled. Save All Colors and Save Prominent Colors add a color

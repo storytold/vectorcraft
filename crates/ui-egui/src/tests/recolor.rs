@@ -1766,16 +1766,18 @@ fn an_edit_with_the_pointer_down_from_the_first_frame_is_a_step() {
     assert_eq!((field(&app, "colors"), field(&app, "rows")), (Value::Null, start));
 }
 
-/// Rows set before the first frame, which the art's reduction then replaces, are no step: Undo
-/// Changes is not available and changes nothing.
+/// Rows or weights set before the first frame, which the art's reduction then replaces or drops,
+/// are no step: Undo Changes is not available and changes nothing.
 #[test]
-fn rows_set_before_the_art_is_read_are_no_step() {
-    let mut app = app();
-    art(&mut app, &["#ff0000", "#0000ff"]);
-    app.run("ui.recolorDialog", json!({})).unwrap();
-    set(&mut app, "rows", json!([{"to": "#123456"}]));
-    assert!(!dialogs::recolor::can_step(&app, true), "Undo Changes is not available");
-    let r = app.run("ui.recolorUndo", json!({})).unwrap();
-    assert_eq!(r, json!({"changed": false, "canUndo": false, "canRedo": false}));
-    assert_eq!(field(&app, "rows").as_array().unwrap().len(), 2, "the rows of the art");
+fn rows_and_weights_set_before_the_art_is_read_are_no_step() {
+    for (k, v) in [("rows", json!([{"to": "#123456"}])), ("weights", json!([25, 75]))] {
+        let mut app = app();
+        art(&mut app, &["#ff0000", "#0000ff"]);
+        app.run("ui.recolorDialog", json!({})).unwrap();
+        set(&mut app, k, v);
+        assert!(!dialogs::recolor::can_step(&app, true), "{k}: Undo Changes is not available");
+        let r = app.run("ui.recolorUndo", json!({})).unwrap();
+        assert_eq!(r, json!({"changed": false, "canUndo": false, "canRedo": false}), "{k}");
+        assert_eq!(field(&app, "rows").as_array().unwrap().len(), 2, "{k}: the rows of the art");
+    }
 }
