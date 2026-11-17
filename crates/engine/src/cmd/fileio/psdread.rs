@@ -500,6 +500,48 @@ pub(super) fn to_rgb(h: &Header<'_>, v: impl Fn(usize) -> f32, cmyk: &impl Fn([f
     }
 }
 
+/// An opaque CMYK composite as its original 8- or 16-bit ink samples. Other modes,
+/// composites with transparency, and images beyond the native CMYK pixel or allocation limit return `None`.
+pub(super) fn decode_cmyk(bytes: &[u8], max_alloc: u64) -> Result<Option<craft_image_codecs::Image>, String> {
+    use craft_image_codecs::{ChannelLayout, Image, SampleType};
+    let mut r = Reader::new(bytes);
+    let h = header(&mut r)?;
+    if h.mode != Mode::Cmyk || (h.channels > 4 && merged_alpha(h.layers, h.psb)) {
+        return Ok(None);
+    }
+    let pixels = u64::from(h.width) * u64::from(h.height);
+    if pixels > vectorcraft_doc::cmyk::MAX_CMYK_PIXELS {
+        return Ok(None);
+    }
+    let sample_bytes = usize::from(h.depth / 8);
+    let samples = pixels * 4 * sample_bytes as u64;
+    let icc = resources(h.resources, false)
+        .find(|(id, _, _)| *id == 1039)
+        .map(|(_, _, data)| data)
+        .filter(|data| data.len() <= 16 << 20 && vectorcraft_doc::cmyk::icc_color_space(data) == Some(*b"CMYK"));
+    if samples.saturating_mul(2).saturating_add(icc.map_or(0, |p| p.len() as u64)) > max_alloc {
+        return Ok(None);
+    }
+    let count = pixels as usize;
+    let data = channel_data(r.rest(), &h, 4, row_bytes(h.width as usize, h.depth))?;
+    let mut out = Vec::with_capacity(samples as usize);
+    for i in 0..count {
+        for channel in 0..4 {
+            let at = (channel * count + i) * sample_bytes;
+            if h.depth == 8 {
+                out.push(255 - data.get(at).copied().ok_or(TRUNCATED)?);
+            } else {
+                let pair = data.get(at..at + 2).ok_or(TRUNCATED)?.try_into().map_err(|_| TRUNCATED)?;
+                out.extend((65535 - u16::from_be_bytes(pair)).to_ne_bytes());
+            }
+        }
+    }
+    let sample = if h.depth == 16 { SampleType::U16 } else { SampleType::U8 };
+    let mut image = Image::from_raw(h.width, h.height, ChannelLayout::Cmyk, sample, out).map_err(|e| e.to_string())?;
+    image.icc = icc.map(<[u8]>::to_vec);
+    Ok(Some(image))
+}
+
 /// A Photoshop document's merged image as straight RGBA. CMYK converts through `cmyk` (ink
 /// amounts 0..1 → sRGB). Fails, without allocating, when the image would need more than
 /// `max_alloc` bytes.

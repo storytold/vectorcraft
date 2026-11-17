@@ -46,6 +46,15 @@ pub fn specs() -> Vec<CommandSpec> {
             preview
         ),
         cmd!(
+            query "webExport.optimizeToFileSize",
+            "Optimize to File Size",
+            [],
+            None,
+            "{desiredK: the desired file size in K (1024 bytes; above 0, at most 1048576), startWith?: current (default: the format given, its JPEG quality or GIF/PNG-8 colors lowered; GIF then takes lossy 100)|auto (GIF for art with transparency or at most 256 colors (blended over the matte without transparency), else JPEG; the other one when the first can't reach the size and the art is opaque), use?: allSlices (default: the image, or the image slices' files together)|eachSlice (every image slice's file)|currentSlice (the `slice` given, else the selected image slice, else the first), slice?: n (1-based, from slice.list), preset?, …the settings of document.exportForWeb} the settings whose files fit in the size, searched by encoding at most 32 trial settings (each one encodes every image it measures); slices share one setting, which every scope changes → {targetBytes, achieved (false: no setting tried fits, and settings are the smallest one found), bytes (as use measures them), format, settings, trials, images, warnings}; writes nothing and changes no remembered setting",
+            has_doc,
+            optimize_to_file_size
+        ),
+        cmd!(
             query "webExport.settings",
             "Save for Web Settings",
             [],
@@ -1052,6 +1061,297 @@ fn preview(s: &mut Session, p: &Value) -> Result<Value> {
         out["dataBase64"] = json!(vectorcraft_format::base64_encode(&o.bytes));
     }
     Ok(out)
+}
+
+// ---------- Optimize to File Size ----------
+
+/// The most trial settings `webExport.optimizeToFileSize` encodes. Each trial encodes every image
+/// it measures once.
+pub const OPTIMIZE_TRIALS: usize = 32;
+/// The largest desired file size, in K (1 GiB).
+pub const MAX_DESIRED_K: f64 = 1_048_576.0;
+
+/// Where Optimize to File Size starts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StartWith {
+    /// The current format, with its JPEG quality or palette colors lowered.
+    Current,
+    /// GIF or JPEG, by the image's content.
+    Auto,
+}
+
+/// The pixels `px` (`[x0, y0, x1, y1]`) of `r` as an image: borrowed when `px` is the whole render,
+/// else a copy.
+fn file_pixels(r: &WebRender, px: [u32; 4]) -> std::borrow::Cow<'_, [u8]> {
+    if px == [0, 0, r.width, r.height] { std::borrow::Cow::Borrowed(r.rgba.as_slice()) } else { std::borrow::Cow::Owned(crop(r, px)) }
+}
+
+/// The settings Optimize to File Size found.
+#[derive(Clone, Debug)]
+pub struct SizeFit {
+    pub settings: WebSettings,
+    /// The size the settings give the measured images.
+    pub bytes: usize,
+    /// Whether `bytes` is within the target.
+    pub achieved: bool,
+    /// The trial settings encoded.
+    pub trials: usize,
+}
+
+/// The files a search measures and the trials it has left.
+struct Trials<'a> {
+    doc: &'a Document,
+    r: &'a WebRender,
+    /// The pixels (`[x0, y0, x1, y1]`) of each file in `r`.
+    files: &'a [[u32; 4]],
+    /// Measure the largest file (else the files together).
+    each: bool,
+    left: usize,
+    used: usize,
+}
+
+impl Trials<'_> {
+    /// The size `s` gives the files, encoded one at a time; `None` when no trial is left.
+    fn size(&mut self, s: &WebSettings) -> std::result::Result<Option<usize>, String> {
+        if self.left == 0 {
+            return Ok(None);
+        }
+        self.left -= 1;
+        self.used += 1;
+        let mut out = 0usize;
+        for &px in self.files {
+            let n = optimize(self.doc, &file_pixels(self.r, px), px[2] - px[0], px[3] - px[1], s)?.bytes.len();
+            out = if self.each { out.max(n) } else { out.saturating_add(n) };
+        }
+        Ok(Some(out))
+    }
+}
+
+/// `(settings, bytes)` of a trial.
+pub type Trial = (WebSettings, usize);
+
+/// Keep `(s, n)` in `smallest` when it is the smallest trial so far.
+fn keep_smallest(smallest: &mut Option<Trial>, s: WebSettings, n: usize) {
+    if smallest.as_ref().is_none_or(|(_, b)| n < *b) {
+        *smallest = Some((s, n));
+    }
+}
+
+/// The values [`highest_within`] measures spread over its range before it narrows a step.
+pub const OPTIMIZE_SAMPLES: u16 = 6;
+
+/// Measures the size a setting gives; `None` when no trial is left.
+pub type MeasureSize<'a> = dyn FnMut(&WebSettings) -> std::result::Result<Option<usize>, String> + 'a;
+
+/// The highest value in `lo..hi` that `set` gives `start` whose size is within `target`, when the
+/// value `hi` is over it. A lower value can give a larger file, so the search measures up to
+/// [`OPTIMIZE_SAMPLES`] values spread over the range, from `hi - 1` down, stops at the first that
+/// fits, and halves the step between it and the measured value above it, keeping the highest value
+/// measured within `target`. `None` when no value measured fits or no trial is left; the trials over
+/// the target go to `smallest`.
+pub fn highest_within(
+    size: &mut MeasureSize,
+    start: &WebSettings,
+    (lo, hi): (u16, u16),
+    set: fn(&mut WebSettings, u16),
+    target: usize,
+    smallest: &mut Option<Trial>,
+) -> std::result::Result<Option<Trial>, String> {
+    let with = |v: u16| {
+        let mut s = start.clone();
+        set(&mut s, v);
+        s
+    };
+    if lo >= hi {
+        return Ok(None);
+    }
+    let span = u32::from(hi - lo);
+    let samples = u32::from(OPTIMIZE_SAMPLES).min(span);
+    let (mut above, mut found) = (hi, None);
+    for i in (0..samples).rev() {
+        let step = if samples == 1 { 0 } else { (span - 1) * i / (samples - 1) };
+        let v = lo.saturating_add(u16::try_from(step).unwrap_or(0));
+        let s = with(v);
+        let Some(n) = size(&s)? else { return Ok(None) };
+        if n <= target {
+            found = Some((v, (s, n)));
+            break;
+        }
+        keep_smallest(smallest, s, n);
+        above = v;
+    }
+    let Some((mut lo, mut best)) = found else { return Ok(None) };
+    let mut hi = above;
+    while hi - lo > 1 {
+        let mid = lo + (hi - lo) / 2;
+        let s = with(mid);
+        let Some(n) = size(&s)? else { break };
+        if n <= target {
+            lo = mid;
+            best = (s, n);
+        } else {
+            keep_smallest(smallest, s, n);
+            hi = mid;
+        }
+    }
+    Ok(Some(best))
+}
+
+/// Sets the JPEG quality, for [`highest_within`].
+pub fn set_quality(s: &mut WebSettings, v: u16) {
+    s.quality = u8::try_from(v).unwrap_or(100);
+}
+
+/// Sets the palette colors, for [`highest_within`].
+pub fn set_colors(s: &mut WebSettings, v: u16) {
+    s.colors = v;
+}
+
+/// The best settings of `start`'s format within `target`: `start` when it fits, else the highest
+/// JPEG quality or the most palette colors [`highest_within`] finds that fit, and for GIF, when none
+/// is found, lossy 100 with the most colors that fit. When nothing tried fits, the smallest trial, not achieved.
+/// `None` when no trial is left.
+fn search_format(t: &mut Trials, start: &WebSettings, target: usize) -> std::result::Result<Option<SizeFit>, String> {
+    let fit = |(settings, bytes): Trial, achieved: bool| SizeFit { settings, bytes, achieved, trials: 0 };
+    let Some(n) = t.size(start)? else { return Ok(None) };
+    if n <= target {
+        return Ok(Some(fit((start.clone(), n), true)));
+    }
+    let mut smallest = Some((start.clone(), n));
+    let found = match start.format {
+        WebFormat::Jpg => highest_within(&mut |s: &WebSettings| t.size(s), start, (1, u16::from(start.quality)), set_quality, target, &mut smallest)?,
+        WebFormat::Gif | WebFormat::Png8 => {
+            match highest_within(&mut |s: &WebSettings| t.size(s), start, (2, start.colors), set_colors, target, &mut smallest)? {
+                None if start.format == WebFormat::Gif && start.lossy < 100 => {
+                    let lossy = WebSettings { lossy: 100, ..start.clone() };
+                    match t.size(&lossy)? {
+                        Some(n) if n <= target => Some((lossy, n)),
+                        Some(n) => {
+                            keep_smallest(&mut smallest, lossy.clone(), n);
+                            highest_within(&mut |s: &WebSettings| t.size(s), &lossy, (2, lossy.colors), set_colors, target, &mut smallest)?
+                        }
+                        None => None,
+                    }
+                }
+                found => found,
+            }
+        }
+        WebFormat::Png24 => None,
+    };
+    Ok(match (found, smallest) {
+        (Some(f), _) => Some(fit(f, true)),
+        (None, Some(s)) => Some(fit(s, false)),
+        (None, None) => None,
+    })
+}
+
+/// The format Auto Select GIF/JPEG starts with, and whether the files (`[x0, y0, x1, y1]` of `r`)
+/// are opaque: GIF for files with transparent pixels (when `transparency` keeps them) or at most
+/// 256 colors, else JPEG. The colors counted are the ones the files are written with: without
+/// `transparency`, the pixels blended over `matte`.
+fn auto_format(r: &WebRender, files: &[[u32; 4]], transparency: bool, matte: [u8; 3]) -> (WebFormat, bool) {
+    let stride = r.width as usize * 4;
+    let row =
+        move |y: u32, x0: u32, x1: u32| r.rgba.get(y as usize * stride + x0 as usize * 4..y as usize * stride + x1 as usize * 4).unwrap_or_default();
+    let pixels = || files.iter().flat_map(move |&[x0, y0, x1, y1]| (y0..y1).flat_map(move |y| row(y, x0, x1).as_chunks::<4>().0.iter()));
+    let opaque = !transparency || pixels().all(|p| p[3] == 255);
+    if !opaque {
+        return (WebFormat::Gif, false);
+    }
+    let mut seen = HashSet::new();
+    // An opaque pixel blends to itself.
+    let few = pixels().all(|p| {
+        seen.insert(flatten(p, matte).next().unwrap_or_default());
+        seen.len() <= 256
+    });
+    (if few { WebFormat::Gif } else { WebFormat::Jpg }, true)
+}
+
+/// Optimize to File Size: the settings, from `s`, whose files (the pixels `[x0, y0, x1, y1]` of
+/// `r`) fit in `target` bytes, measured together, or with `each` the largest one. At most
+/// [`OPTIMIZE_TRIALS`] trial settings are encoded, and a trial encodes the files one at a time.
+pub fn optimize_to_size(
+    doc: &Document,
+    r: &WebRender,
+    files: &[[u32; 4]],
+    s: &WebSettings,
+    start: StartWith,
+    each: bool,
+    target: usize,
+) -> std::result::Result<SizeFit, String> {
+    let mut t = Trials { doc, r, files, each, left: OPTIMIZE_TRIALS, used: 0 };
+    let with = |format: WebFormat| WebSettings { format, ..s.clone() };
+    let found = match start {
+        _ if files.is_empty() => None,
+        StartWith::Current => search_format(&mut t, s, target)?,
+        StartWith::Auto => {
+            let (first, opaque) = auto_format(r, files, s.transparency, s.matte_rgb()?.unwrap_or([255; 3]));
+            let other = if first == WebFormat::Gif { WebFormat::Jpg } else { WebFormat::Gif };
+            match search_format(&mut t, &with(first), target)? {
+                Some(a) if !a.achieved && opaque => match search_format(&mut t, &with(other), target)? {
+                    Some(b) if b.achieved || b.bytes < a.bytes => Some(b),
+                    _ => Some(a),
+                },
+                a => a,
+            }
+        }
+    };
+    let mut best = found.ok_or("Optimize to File Size: there is no image to measure")?;
+    best.trials = t.used;
+    Ok(best)
+}
+
+fn optimize_to_file_size(s: &mut Session, p: &Value) -> Result<Value> {
+    const O: &str = "webExport.optimizeToFileSize";
+    let k = p
+        .get("desiredK")
+        .and_then(Value::as_f64)
+        .filter(|k| k.is_finite() && *k > 0.0 && *k <= MAX_DESIRED_K)
+        .ok_or_else(|| bad(O, "give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576"))?;
+    let target = ((k * 1024.0).floor() as usize).max(1);
+    let start = match p.get("startWith").map(Value::as_str) {
+        None | Some(Some("current")) => StartWith::Current,
+        Some(Some("auto")) => StartWith::Auto,
+        Some(_) => return Err(bad(O, "`startWith` is `current` or `auto`")),
+    };
+    let scope = match p.get("use").map(Value::as_str) {
+        None if p.get("slice").is_some() => "currentSlice",
+        None => "allSlices",
+        Some(Some(u @ ("allSlices" | "eachSlice" | "currentSlice"))) => u,
+        Some(_) => return Err(bad(O, "`use` is `allSlices`, `eachSlice` or `currentSlice`")),
+    };
+    let slice = match p.get("slice").map(|v| v.as_u64().filter(|n| *n >= 1 && scope == "currentSlice")) {
+        None => None,
+        Some(Some(n)) => Some(n),
+        Some(None) => return Err(bad(O, "`slice` is a slice number from `slice.list`, with `use: currentSlice`")),
+    };
+    let settings = s.web_settings(p).map_err(|e| bad(O, e))?;
+    let st = s.doc()?;
+    let doc = &st.doc;
+    let failed = vectorcraft_render::decode_failures();
+    let r = render(doc, &settings).map_err(|e| bad(O, e))?;
+    let warnings = undecoded(failed);
+    let areas = doc.slice_layout();
+    let selected = super::slices::selected_slices(doc, &st.selection);
+    let cells = cells(&areas, &selected, &settings, &r).map_err(|e| bad(O, e))?;
+    let image_cells: Vec<&Cell> =
+        cells.iter().filter(|c| c.area.id.and_then(|id| doc.slice_options(id)).is_none_or(|o| o.kind == SliceKind::Image)).collect();
+    let picked: Vec<&Cell> = match (scope, slice) {
+        ("currentSlice", Some(n)) => {
+            let c = image_cells.iter().find(|c| c.area.number as u64 == n);
+            vec![*c.ok_or_else(|| bad(O, format!("no slice {n} in the image (see slice.list)")))?]
+        }
+        ("currentSlice", None) => {
+            image_cells.iter().find(|c| c.area.id.is_some_and(|id| selected.contains(&id))).or(image_cells.first()).copied().into_iter().collect()
+        }
+        _ => image_cells,
+    };
+    let files: Vec<[u32; 4]> = if cells.is_empty() { vec![[0, 0, r.width, r.height]] } else { picked.iter().map(|c| c.px).collect() };
+    let fit = optimize_to_size(doc, &r, &files, &settings, start, scope == "eachSlice", target).map_err(|e| bad(O, e))?;
+    Ok(json!({
+        "targetBytes": target, "achieved": fit.achieved, "bytes": fit.bytes, "format": fit.settings.format.id(),
+        "settings": fit.settings.to_json(), "trials": fit.trials, "images": files.len(), "warnings": warnings,
+    }))
 }
 
 fn settings(s: &mut Session, p: &Value) -> Result<Value> {
