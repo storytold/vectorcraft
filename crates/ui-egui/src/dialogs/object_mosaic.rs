@@ -266,6 +266,18 @@ fn switch(d: &Dialog, key: &str) -> Value {
     d.fields.get(key).cloned().unwrap_or(json!(false))
 }
 
+/// `constrain` as the command takes it: null with Constrain Ratio off, else the side the field
+/// holds (the width when it holds none), and any other value as it is, for the command to refuse.
+fn constrained_side(d: &Dialog) -> Value {
+    if !d.bool("lock") {
+        return Value::Null;
+    }
+    match d.fields.get("constrain") {
+        None | Some(Value::Null) => json!("width"),
+        Some(v) => v.clone(),
+    }
+}
+
 /// `object.createObjectMosaic` parameters from the fields. With Constrain Ratio on, the side it
 /// sets is left out while it holds the size Constrain Ratio gives it: the command works it out from
 /// the kept side and grows both in proportion to its 0.1 pt minimum. Any other value set on that
@@ -275,7 +287,7 @@ fn params(d: &Dialog) -> Value {
     let mut p = json!({
         "columns": number(d, "columns", 10.0), "rows": number(d, "rows", 10.0),
         "width": number(d, "width", 100.0), "height": number(d, "height", 100.0), "percentages": switch(d, "percentages"),
-        "constrain": if d.bool("lock") { json!(if keeps_width(d) { "width" } else { "height" }) } else { Value::Null },
+        "constrain": constrained_side(d),
         "spacingX": number(d, "spacingX", 0.0), "spacingY": number(d, "spacingY", 0.0),
         "gray": switch(d, "gray"), "deleteRaster": switch(d, "deleteRaster"),
     });
@@ -374,7 +386,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 }
 
 /// OK: the new size worked out against the image's size as it is now, as a frame would show it.
+/// A Constrain Ratio (`lock`) that is not true or false is refused, and the dialog stays open.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    if d.fields.get("lock").is_some_and(|v| !v.is_boolean() && !v.is_null()) {
+        return Err("`lock` must be true or false".into());
+    }
     let mut d = d.clone();
     read_image(image_size(app), &mut d);
     follow_ratio(&mut d);
@@ -708,6 +724,24 @@ mod tests {
         set(&mut app, "percentages", json!(true));
         let d = app.ui.dialog.as_ref().unwrap();
         assert_eq!((d.f64("width", 0.0), d.bool("percentages"), d.str(form::REFUSED)), (100.0, true, String::new()));
+    }
+
+    /// A Constrain Ratio side other than width or height, or a Constrain Ratio that is not true or
+    /// false, set by `ui.dialog.set`, is refused on OK and makes no mosaic.
+    #[test]
+    fn a_constrain_ratio_value_the_command_refuses_is_refused() {
+        for (field, value, also) in [("constrain", json!("both"), Some(("lock", json!(true)))), ("lock", json!("yes"), None)] {
+            let mut app = app_with_image();
+            open(&mut app, &json!({})).unwrap();
+            let d = app.ui.dialog.as_mut().unwrap();
+            if let Some((k, v)) = also {
+                crate::dialogs::set_field(d, k.into(), v);
+            }
+            crate::dialogs::set_field(d, field.into(), value.clone());
+            let e = crate::dialogs::confirm(&mut app).unwrap_err();
+            assert!(e.contains(field), "{value}: {e}");
+            assert_eq!(mosaic(&app), None, "{value}");
+        }
     }
 
     /// True or false set after a Resize Using Percentages value the command refuses replaces it: the
