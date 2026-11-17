@@ -1640,9 +1640,13 @@ fn insert_at_type_caret(s: &mut Session, text: &str) -> Result<Option<Value>> {
         s.set_tool_option("commitTyping", &Value::Bool(true));
         s.commit_interaction()?;
     }
+    // The frame's place in the story once the edit has cleared the frames in `clear`.
+    let start: usize =
+        super::panelcmds::story_frames(s, id).iter().take_while(|(f, _)| *f != id).filter(|(f, _)| !clear.contains(&f.0)).map(|(_, n)| n).sum();
     let r = super::textedit::edit_range(s, &json!({"id": id.0, "start": a, "end": b, "insert": text, "clear": clear}))?;
-    let caret = r.get("caret").cloned().unwrap_or(Value::Null);
-    s.set_tool_option("select", &json!({"start": caret, "end": caret}));
+    let caret = r.get("caret").and_then(Value::as_u64).map_or(a + text.len(), |c| c as usize);
+    // Threaded text re-flows in the edit: the caret goes to the frame its place moved to.
+    super::panelcmds::select_story_range(s, id, start + caret, start + caret)?;
     Ok(Some(ids_json(&[id])))
 }
 
