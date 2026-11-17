@@ -406,6 +406,7 @@ pub(super) fn exit_isolation(s: &mut Session, p: &Value) -> Result<Value> {
     };
     if let Some(leave_mode) = leave_mode {
         if let Some(i) = st.isolation {
+            crate::cmd::settle_interaction(s)?;
             add_drawn_live_paint(s, i, None)?;
             crate::cmd::distortcmds::finish_edit_text(s.doc_mut()?, i);
         }
