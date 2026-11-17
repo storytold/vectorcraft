@@ -310,6 +310,19 @@ fn loaded_text(p: &mut Ink, o: Pos2) {
     }
 }
 
+/// Loaded text over an object a click threads it into: the loaded text's block with a link
+/// badge (two chain rings) below right.
+fn loaded_text_link(p: &mut Ink, o: Pos2) {
+    loaded_text(p, o);
+    let rings = [o + vec2(13.0, 17.0), o + vec2(18.0, 17.0)];
+    for c in rings {
+        p.circle_stroke(c, 3.2, Stroke::new(3.2, HALO));
+    }
+    for c in rings {
+        p.circle_stroke(c, 3.2, Stroke::new(1.3, INK));
+    }
+}
+
 /// The gradient annotator's stop cursors: the arrow with a plus (add a stop) or minus (delete it)
 /// badge.
 fn stop_badge(p: &mut Ink, o: Pos2, add: bool) {
@@ -554,7 +567,7 @@ fn magnifier(p: &mut Ink, o: Pos2, out: bool) {
 
 /// Every cursor with a glyph: its own, drawn here, or the one it borrows.
 #[cfg(test)]
-const GLYPHS: [Cursor; 98] = [
+const GLYPHS: [Cursor; 99] = [
     Cursor::Hand,
     Cursor::HandGrab,
     Cursor::ZoomIn,
@@ -603,6 +616,7 @@ const GLYPHS: [Cursor; 98] = [
     Cursor::PathBracket,
     Cursor::TypeWidget,
     Cursor::LoadedText,
+    Cursor::LoadedTextLink,
     Cursor::ShapeBuilder,
     Cursor::ShapeBuilderErase,
     Cursor::Lasso,
@@ -744,6 +758,7 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::PathBracket => path_bracket(ink, p),
         Cursor::TypeWidget => type_widget(ink, p),
         Cursor::LoadedText => loaded_text(ink, p),
+        Cursor::LoadedTextLink => loaded_text_link(ink, p),
         Cursor::ShapeBuilder => shape_builder(ink, p, false),
         Cursor::ShapeBuilderErase => shape_builder(ink, p, true),
         Cursor::LivePaintBucket => paint_bucket(ink, p, false),
