@@ -1,8 +1,8 @@
 use super::{
     Appearance, AppearanceItem, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId,
-    PathData, Point, Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite,
-    fit_to_old_edge, ids_json, is_live_paint, json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids,
-    source_nodes, source_shapes, switch_or,
+    PathData, Point, Rect, Result, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, fit_to_old_edge, ids_json,
+    is_live_paint, json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes,
+    switch_or,
 };
 
 /// `options` as stored on a Live Paint group: none for the defaults.
@@ -306,10 +306,12 @@ pub(super) fn lp_expand(s: &mut Session, p: &Value) -> Result<Value> {
                 e.trace = None;
                 e.live_paint_gaps = None;
             }
+            // Objects drawn in the group ([`others_in`]) stay, whatever they are named.
+            let src = b::sources(n).map(|c| c.id);
             if let Some(ch) = n.children_mut() {
                 ch.retain(|c| match c.name.as_deref() {
-                    Some(SOURCES_NAME) => false,
-                    Some(FACE_NAME | EDGE_NAME) => draws(c),
+                    _ if Some(c.id) == src => false,
+                    Some(FACE_NAME | EDGE_NAME) if c.path_data().is_some() => draws(c),
                     _ => true,
                 });
             }

@@ -4932,6 +4932,63 @@ fn live_paint_isolation_keeps_art_named_like_its_parts() {
     assert_eq!(s.doc().unwrap().doc.parent_of(text), Some(g), "Gap Options keeps the type named like the sources");
 }
 
+/// Type drawn in an isolated Live Paint group under the name of a face, an edge or the sources
+/// group is not one of the group's parts: Gap Options, Info and Make count only the faces and edges
+/// Live Paint made, and Expand keeps the type.
+#[test]
+fn live_paint_does_not_count_art_named_like_its_parts() {
+    use vectorcraft_tools::builder::{EDGE_NAME, FACE_NAME, SOURCES_NAME};
+    let mut s = session();
+    let g = live(&mut s);
+    let edges = s.execute("livePaint.info", &json!({"group": g.0})).unwrap()["edges"].as_array().unwrap().len();
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let mut texts = vec![];
+    for (i, name) in [FACE_NAME, EDGE_NAME, SOURCES_NAME].into_iter().enumerate() {
+        let r = s.execute("text.create", &json!({"x": 20 + 20 * i, "y": 20, "text": "Hi"})).unwrap();
+        let t = NodeId(r["id"].as_u64().unwrap());
+        s.execute("object.setProps", &json!({"id": t.0, "name": name})).unwrap();
+        texts.push(t);
+    }
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    let r = s.execute("livePaint.gapOptions", &json!({"ids": [g.0], "detect": true})).unwrap();
+    assert_eq!(r["faces"], 3, "Gap Options counts the faces Live Paint made");
+    let info = s.execute("livePaint.info", &json!({"group": g.0})).unwrap();
+    assert_eq!(info["faces"].as_array().unwrap().len(), 3);
+    assert_eq!(info["edges"].as_array().unwrap().len(), edges);
+    let r = s.execute("livePaint.make", &json!({"ids": [g.0]})).unwrap();
+    assert_eq!((r["faces"].as_u64(), r["edges"].as_u64()), (Some(3), Some(edges as u64)));
+    s.execute("livePaint.expand", &json!({"ids": [g.0]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    for t in texts {
+        assert_eq!(d.parent_of(t), Some(g), "Expand keeps {t}");
+    }
+}
+
+/// With Real-time Drawing and Editing off, a rectangle still being drawn in a Live Paint group
+/// isolated in a pattern tile is drawn first when Exit Isolation Mode leaves pattern editing, and
+/// joins the group with the tile saved.
+#[test]
+fn live_paint_in_a_pattern_tile_adds_a_shape_still_being_drawn_on_exit() {
+    use vectorcraft_tools::builder::{is_live_paint, sources};
+    let mut s = session();
+    two(&mut s);
+    s.execute("object.pattern.make", &json!({"name": "P"})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    s.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": false})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("rectangle", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 10.0, 10.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 40.0, 40.0), v).unwrap();
+    assert!(s.interaction_unapplied());
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    assert!(st.doc.pattern_edit.is_none());
+    let art = &st.doc.pattern("P").unwrap().art;
+    let n = art.iter().find(|n| is_live_paint(n)).expect("the tile holds the Live Paint group");
+    assert_eq!(sources(n).unwrap().children().unwrap().len(), 3, "the rectangle joined the sources");
+}
+
 /// Isolating a level outside an isolated Live Paint group, as the isolation bar's back arrow does,
 /// leaves the group and adds the paths drawn in it; isolating a path drawn in it does not.
 #[test]
