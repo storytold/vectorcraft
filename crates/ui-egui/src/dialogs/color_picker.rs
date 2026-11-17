@@ -282,6 +282,7 @@ pub(super) fn over_effect(parent: &Dialog, field: &str, colour: Color) -> Dialog
     );
     d.fields.insert(super::PARENT.into(), serde_json::to_value(parent).unwrap_or_default());
     store(&mut d, &Picked::of(colour));
+    d.fields.insert(crate::screen_color::PICKER_ID.into(), json!(crate::screen_color::picker_id()));
     d
 }
 

@@ -799,6 +799,27 @@ mod tests {
         assert_eq!((d.kind.as_str(), dialog_grid(d)), (super::KIND, ["#ffffff", "#00ff00"].map(hex).to_vec()));
     }
 
+    /// The screen color sampler works in the Color Picker of a grid color: the color sampled goes
+    /// to that picker, and its OK sets the grid color.
+    #[test]
+    fn the_grid_color_picker_takes_a_screen_sampled_color() {
+        let (mut app, ctx) = transparency_tab();
+        let (tx, rx) = std::sync::mpsc::channel::<crate::screen_color::Answer>();
+        let mut rx = Some(rx);
+        app.services.screen_color = Some(Box::new(move || rx.take().ok_or_else(|| "shown twice".to_string())));
+        click_grid_box(&mut app, &ctx, 0);
+        assert_picker_over_setup(&app, LIGHT[0], "before sampling");
+        app.run("ui.sampleScreenColor", json!({"picker": true})).unwrap();
+        tx.send(Ok(Some([0.0, 0.5, 1.0]))).unwrap();
+        crate::screen_color::poll(&mut app, &ctx);
+        let sampled = app.ui.dialog.as_ref().unwrap().fields.get("color").and_then(vectorcraft_engine::cmd::color_value).unwrap();
+        assert_ne!(sampled.to_hex(), LIGHT[0]);
+        crate::dialogs::confirm(&mut app).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        let grid: Vec<String> = dialog_grid(d).iter().map(Color::to_hex).collect();
+        assert_eq!((d.kind.as_str(), grid), (super::KIND, vec![sampled.to_hex(), LIGHT[1].to_string()]));
+    }
+
     /// Clicks the hex field that shows `digits` and types `typed` over its text, leaving the edit
     /// pending; returns the field's id.
     fn type_into_hex_field(app: &mut VectorcraftApp, ctx: &egui::Context, digits: &str, typed: &str) -> egui::Id {
