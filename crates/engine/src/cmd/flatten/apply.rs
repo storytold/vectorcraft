@@ -756,16 +756,14 @@ pub(crate) fn flatten_document(doc: &Document, o: &FlattenOptions) -> Result<Opt
     Ok(flatten_expanded(expanded.as_ref().unwrap_or(doc), o)?.or(expanded))
 }
 
+fn has_layer_container_transparency(n: &Node) -> bool {
+    !n.has_default_transparency() || n.children().into_iter().flatten().any(|c| c.is_layer() && has_layer_container_transparency(c))
+}
+
 /// [`flatten_document`] for `doc` whose pattern tile images were expanded already
 /// ([`expand_transparent_tile_images`]).
 pub(crate) fn flatten_expanded(doc: &Document, o: &FlattenOptions) -> Result<Option<Document>> {
     let outlining = o.text_to_outlines || o.strokes_to_outlines || !o.preserve_overprints;
-    let has_layer_container_transparency = |n: &Node| -> bool {
-        fn check(n: &Node) -> bool {
-            !n.has_default_transparency() || n.children().into_iter().flatten().any(|c| c.is_layer() && check(c))
-        }
-        check(n)
-    };
     let needs_flatten = outlining
         || doc.layers.iter().any(|l| {
             (o.no_transparency.is_some() && has_layer_container_transparency(l)) || o.shows_transparency(doc, l) || o.draws_see_through_image(l)
@@ -774,7 +772,7 @@ pub(crate) fn flatten_expanded(doc: &Document, o: &FlattenOptions) -> Result<Opt
         return Ok(None);
     }
     let mut d = doc.clone();
-    let changed = normalize_layer_transparency(&mut d, o);
+    let changed = o.no_transparency.is_some() && normalize_layer_transparency(&mut d, o);
     let mut roots = vec![];
     for l in d.layers.iter().filter(|l| l.visible && !matches!(l.kind, NodeKind::Layer { template: true, .. })) {
         let children = l.children().map_or(&[][..], Vec::as_slice);
@@ -804,16 +802,29 @@ pub(crate) fn flatten_expanded(doc: &Document, o: &FlattenOptions) -> Result<Opt
 /// Flatten and normalize container-level transparency (on layers and sublayers) into groups
 /// so that the flattener's plan includes them and leaves no container transparency behind.
 fn normalize_layer_transparency(d: &mut Document, o: &FlattenOptions) -> bool {
+    if o.no_transparency.is_none() {
+        return false;
+    }
     let mut changed = false;
     let mut layers = std::mem::take(&mut d.layers);
     for l in &mut layers {
-        changed |= normalize_node_transparency(d, Arc::make_mut(l), o);
+        changed |= normalize_node_transparency(d, Arc::make_mut(l));
     }
     d.layers = layers;
     changed
 }
 
-fn normalize_node_transparency(d: &mut Document, n: &mut Node, o: &FlattenOptions) -> bool {
+fn clear_transparency(n: &mut Node) {
+    n.opacity = 1.0;
+    n.blend = BlendMode::Normal;
+    n.isolate = false;
+    n.knockout = Knockout::Neutral;
+    n.knockout_shape = false;
+    n.extras_mut().mask = None;
+    n.appearance = Appearance::default().into();
+}
+
+fn normalize_node_transparency(d: &mut Document, n: &mut Node) -> bool {
     let mut changed = false;
     let is_layer = n.is_layer();
     let clips = n.clips();
@@ -821,7 +832,7 @@ fn normalize_node_transparency(d: &mut Document, n: &mut Node, o: &FlattenOption
     if let Some(children) = n.children_mut() {
         for c in children.iter_mut() {
             if c.is_layer() {
-                changed |= normalize_node_transparency(d, Arc::make_mut(c), o);
+                changed |= normalize_node_transparency(d, Arc::make_mut(c));
             }
         }
     }
@@ -833,13 +844,7 @@ fn normalize_node_transparency(d: &mut Document, n: &mut Node, o: &FlattenOption
         let (guides, art): (Vec<_>, Vec<_>) = children.iter().cloned().partition(|c| c.is_ruler_guide());
 
         if art.is_empty() {
-            n.opacity = 1.0;
-            n.blend = BlendMode::Normal;
-            n.isolate = false;
-            n.knockout = Knockout::Neutral;
-            n.knockout_shape = false;
-            n.extras_mut().mask = None;
-            n.appearance = Appearance::default().into();
+            clear_transparency(n);
             n.set_clips(false);
             changed = true;
         } else {
@@ -856,12 +861,7 @@ fn normalize_node_transparency(d: &mut Document, n: &mut Node, o: &FlattenOption
             g.extras_mut().mask = n.extras_mut().mask.take();
 
             n.set_clips(false);
-            n.opacity = 1.0;
-            n.blend = BlendMode::Normal;
-            n.isolate = false;
-            n.knockout = Knockout::Neutral;
-            n.knockout_shape = false;
-            n.appearance = Appearance::default().into();
+            clear_transparency(n);
 
             let mut new_children = vec![Arc::new(g)];
             new_children.extend(guides);
@@ -870,14 +870,8 @@ fn normalize_node_transparency(d: &mut Document, n: &mut Node, o: &FlattenOption
             }
             changed = true;
         }
-    } else if is_layer && o.no_transparency.is_some() && !n.visible {
-        n.opacity = 1.0;
-        n.blend = BlendMode::Normal;
-        n.isolate = false;
-        n.knockout = Knockout::Neutral;
-        n.knockout_shape = false;
-        n.extras_mut().mask = None;
-        n.appearance = Appearance::default().into();
+    } else if is_layer && !n.visible {
+        clear_transparency(n);
     }
 
     changed
@@ -885,15 +879,7 @@ fn normalize_node_transparency(d: &mut Document, n: &mut Node, o: &FlattenOption
 
 fn sanitize_container_transparency(n: &mut Node) {
     if n.is_container() {
-        n.opacity = 1.0;
-        n.blend = BlendMode::Normal;
-        n.isolate = false;
-        n.knockout = Knockout::Neutral;
-        n.knockout_shape = false;
-        if let Some(m) = n.extras_mut().mask.as_mut() {
-            m.disabled = true;
-        }
-        n.extras_mut().mask = None;
+        clear_transparency(n);
         if let Some(children) = n.children_mut() {
             for c in children.iter_mut() {
                 if c.is_container() {

@@ -886,3 +886,22 @@ fn pdfx_flattens_layer_and_sublayer_transparency() {
         assert!(!text.contains(no), "PDF 1.3: forbidden token '{no}' found in text");
     }
 }
+
+#[test]
+fn pdf_outlining_does_not_wrap_layer_transparency_into_groups() {
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let layer1 = s.doc().unwrap().doc.layers[0].id.0;
+    run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 80, "height": 80}));
+    run(&mut s, "transparency.set", json!({"ids": [layer1], "opacity": 60}));
+
+    let o = crate::cmd::FlattenOptions { text_to_outlines: true, ..Default::default() };
+    let doc = s.doc().unwrap().doc.clone();
+    let flattened = crate::cmd::flatten::flatten_expanded(&doc, &o).unwrap();
+    let resulting_doc = flattened.as_ref().unwrap_or(&doc);
+    assert_eq!(resulting_doc.layers.len(), 1);
+    let l = &resulting_doc.layers[0];
+    assert_eq!(l.opacity, 0.6);
+    assert!(!matches!(l.children().unwrap()[0].kind, vectorcraft_doc::NodeKind::Group { .. }));
+}
