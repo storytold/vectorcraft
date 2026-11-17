@@ -2177,7 +2177,11 @@ pub fn solid_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
                     Arc::make_mut(&mut art).appearance.effects = later.clone();
                     art
                 };
-                shadows.extend(shadow.into_iter().map(with_later));
+                // A shadow keeps its own blur (the light's Softness) below the later effects.
+                shadows.extend(shadow.into_iter().map(|mut art| {
+                    Arc::make_mut(&mut art).appearance.effects.extend(later.iter().cloned());
+                    art
+                }));
                 children.extend(surfaces.into_iter().map(with_later));
             } else {
                 let flat = Appearance { items: vec![item.clone()], ..Default::default() };

@@ -914,7 +914,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.sampleScreenColor",
         "Sample Color from Screen",
         "",
-        "{} or {stroke?: bool (default: the active proxy), picker?: bool (the open Color Picker instead)} show the system's color sampler (macOS; Linux through the XDG desktop portal's PickColor; browsers with an EyeDropper) and answer at once; the color the person picks anywhere on the screen then runs paint.setFill / paint.setStroke (one undo step) or becomes the Color Picker's color (field `color`), converted from display sRGB into the working RGB space; a cancel (Escape on macOS and in browsers) leaves the colors as they were. ui.inspect reports `screenSampler: true` until it answers; on Linux, a session without a portal that has PickColor, a portal that does not return from the call within 25 seconds (VectorCraft's own limit) or leaves the bus before it answers, and a portal that ends the request another way end the wait with a status message. An error without a sampler, while one is open, or with `picker` and no Color Picker open",
+        "{} or {stroke?: bool (default: the active proxy), picker?: bool (the open Color Picker instead)} show the system's color sampler (macOS; Linux through the XDG desktop portal's PickColor; Windows, a still copy of every monitor under a crosshair; browsers with an EyeDropper) and answer at once; the color the person picks anywhere on the screen then runs paint.setFill / paint.setStroke (one undo step) or becomes the Color Picker's color (field `color`), converted from display sRGB into the working RGB space; a cancel (Escape on macOS, Windows and in browsers; also a click of another mouse button or switching to another window on Windows) leaves the colors as they were. ui.inspect reports `screenSampler: true` until it answers; on Windows, a screen that can't be copied ends the wait with a status message; on Linux, a session without a portal that has PickColor, a portal that does not return from the call within 25 seconds (VectorCraft's own limit) or leaves the bus before it answers, and a portal that ends the request another way end the wait with a status message. An error without a sampler, while one is open, or with `picker` and no Color Picker open",
     ),
     (
         "ui.newBrush",
@@ -1337,7 +1337,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.dialogReset",
         "Reset",
         "",
-        "{} the open dialog's Reset, which its Cancel button reads while Alt (Option on macOS) is held (Flare Tool Options, dialog `flareOptions`): its fields go back to their defaults and the dialog stays open, so OK applies them → the dialog; an error when no dialog is open or the open one has no Reset",
+        "{} the open dialog's Reset, which its Cancel button reads while Alt (Option on macOS) is held (Flare Tool Options, dialog `flareOptions`; Save PDF, dialog `savePdf`): its fields go back to their defaults (Save PDF: the chosen preset's settings, with the path and artboards kept) and the dialog stays open, so OK applies them → the dialog; an error when no dialog is open, the open one has no Reset, or Save PDF's chosen preset was deleted (the fields stay as they are)",
     ),
     (
         "ui.justification",
@@ -1391,7 +1391,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "file.exportAs",
         "Export As…",
         "",
-        "{format?, useArtboards?, range?} opens Export As (then the format's options); with {path, …document.export options} writes the file(s) → {path, warnings, files?}; exportSelection: true writes the selection alone, cropped to it, as document.exportSelection writes it (artboard options are not used); under automation read roots, an SVG or SVGZ is refused while the document links a JavaScript file outside them, or while the file would name a linked image's file outside them, as document.export refuses it",
+        "{format?, useArtboards?, range?} opens Export As (then the format's options); with {path, …document.export options} writes the file(s) → {path, warnings, files?}; exportSelection: true writes the selection alone, cropped to it, as document.exportSelection writes it (artboard options are not used); under automation read roots, an SVG or SVGZ, or a file that carries the native document, is refused while the document links a JavaScript file outside them, or while the file would name a linked image's file outside them, as document.export refuses it",
     ),
     (
         "ui.fileInfoDialog",
@@ -1647,6 +1647,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Duplicate Action or Action Set",
         "",
         "{set?: index, action?: index} copy the Actions panel's action at action in set (0 is the top set) to right after it in the same set; without action, copy set with all its actions to right after it (default: the current set). The copy is named after the original with \" copy\" added, a copied set gets an id of its own, and the copy is selected. The panel menu's Duplicate runs this for the selected action, else the current set. An index past the last set or action, or a copy that would give its set more than 1,000 actions or an action set file larger than 8 MiB, is an error and copies nothing → {set, action?}",
+    ),
+    (
+        crate::panels::actions::RESET,
+        "Reset Actions",
+        "",
+        "{mode?: \"replace\" | \"append\"} Reset Actions. replace (the default) replaces every set in the Actions panel with a new copy of the built-in Default Actions set, makes it current and selected, clears the panel's selected action and step and its expanded actions, and closes an open Set Options, New Action, Batch or step dialog that names a set; when the panel already shows only the built-in set as it comes in that state, nothing changes, the sets keep their ids and changed is false. append adds a new copy of the built-in set after the sets there are, with the next free number when its name is in use (Default Actions 2), and keeps the current set and the selection. Omitted params count as {}. Params of another type, another key, another mode, or a reset while an action records or plays (also while it waits at a stop) is an error and changes nothing. No undo step is recorded. The panel menu's Reset Actions asks first (dialog `resetActions`): OK runs this with replace, Append with append → {changed, mode, set: the first built-in set's index}",
     ),
     ("file.showPackage", "Show Package", "", "{folder} show a package folder (file.package's folder) in the file manager → {folder}"),
     (

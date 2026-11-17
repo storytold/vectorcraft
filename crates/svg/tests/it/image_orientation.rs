@@ -49,9 +49,14 @@ fn folder(name: &str) -> PathBuf {
 /// A 16 × 8 JPEG, red on the left half, with an EXIF segment giving Orientation `orientation`
 /// when there is one.
 fn jpeg(orientation: Option<u16>) -> Vec<u8> {
-    let rgb = image::RgbImage::from_fn(16, 8, |x, _| if x < 8 { image::Rgb([220, 0, 0]) } else { image::Rgb([255, 255, 255]) });
-    let mut jpg = Vec::new();
-    image::DynamicImage::ImageRgb8(rgb).write_to(&mut std::io::Cursor::new(&mut jpg), image::ImageFormat::Jpeg).unwrap();
+    let mut rgb = Vec::with_capacity(16 * 8 * 3);
+    for _ in 0..8 {
+        for x in 0..16 {
+            rgb.extend_from_slice(&if x < 8 { [220, 0, 0] } else { [255, 255, 255] });
+        }
+    }
+    let raw = craft_image_codecs::Image::from_raw(16, 8, craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, rgb).unwrap();
+    let jpg = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Jpeg, &craft_image_codecs::EncodeOptions::default()).unwrap();
     let Some(orientation) = orientation else { return jpg };
     let o = orientation.to_le_bytes();
     let exif: Vec<u8> =
@@ -151,7 +156,9 @@ fn near(a: Rect, b: Rect) -> bool {
 
 /// The stored pixels of `im`, as RGB.
 fn pixels(d: &Document, im: &ImageObject) -> image::RgbImage {
-    image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_rgb8()
+    let decoded = craft_image_codecs::decode(&d.images[&im.key].bytes).unwrap();
+    let rgba = image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap();
+    image::DynamicImage::ImageRgba8(rgba).into_rgb8()
 }
 
 fn red(p: &image::Rgb<u8>) -> bool {
@@ -215,7 +222,9 @@ fn a_turned_tiff_imports_upright() {
         let what = &href[..href.len().min(20)];
         assert_eq!((im.width, im.height), (2, 4), "{what}: turned a quarter");
         assert!(near(placed(&im), Rect::new(0.0, 0.0, 20.0, 40.0)), "{what}: {:?}", placed(&im));
-        let px = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_luma8();
+        let decoded = craft_image_codecs::decode(&d.images[&im.key].bytes).unwrap();
+        let px =
+            image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap()).into_luma8();
         assert_eq!((px.get_pixel(0, 0)[0], px.get_pixel(1, 1)[0], px.get_pixel(0, 3)[0]), (0, 0, 255), "{what}: the left half is on top");
     }
 }
@@ -250,7 +259,8 @@ fn a_gray_tiff_with_alpha_imports_turned_or_not() {
         let href = format!("data:image/tiff;base64,{}", base64_encode(&tiff(4, 2, 2, &data, orientation)));
         let (d, im) = import_one(&format!(r#"<image href="{href}" width="20" height="40"/>"#), None);
         assert_eq!((im.width, im.height), size, "orientation {orientation}");
-        let px = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_rgba8();
+        let decoded = craft_image_codecs::decode(&d.images[&im.key].bytes).unwrap();
+        let px = image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap();
         assert_eq!(px.get_pixel(black_at.0, black_at.1).0, [0, 0, 0, 255], "orientation {orientation}: black");
         assert_eq!(px.get_pixel(clear_at.0, clear_at.1)[3], 0, "orientation {orientation}: clear");
     }

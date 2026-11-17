@@ -15,6 +15,9 @@ use super::{CONIC, CONIC_WEDGES, DIAMOND, GRAPHS, HUE_STOPS, SPREAD, SPREAD_CAPP
 thread_local! {
     /// How many times [`Writer::coverage`] has worked out an image's coverage on this thread.
     pub(super) static COVERAGE_RUNS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Whether [`Numbered::take`] numbers names on this thread by searching the names given so
+    /// far, one number at a time, for each number it tries.
+    pub(super) static SCANNED_NAMES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// An image's coverage ([`ImageBlob::coverage`]): its width, its height and one byte a pixel.
@@ -66,6 +69,10 @@ pub(super) struct Writer<'a> {
     whole_images: std::collections::HashMap<usize, Arc<Vec<u8>>>,
     /// Writing a graph's art with its records: a graph inside it is written as its art.
     in_graph: bool,
+    /// The names of [`Self::gradients`].
+    gradient_names: Numbered,
+    /// The names spot colors are written with ([`Self::spot`]).
+    spot_written: Numbered,
 }
 
 impl<'a> Writer<'a> {
@@ -94,6 +101,8 @@ impl<'a> Writer<'a> {
             last_coverage: None,
             whole_images: std::collections::HashMap::new(),
             in_graph: false,
+            gradient_names: Numbered::default(),
+            spot_written: Numbered::default(),
         }
     }
 
@@ -155,12 +164,7 @@ impl<'a> Writer<'a> {
             Some((_, w)) => w.clone(),
             None => {
                 let base = self.latin_name(name, TITLE_AND_COLOR_NAMES);
-                let mut written = base.clone();
-                let mut i = 1;
-                while self.spot_names.iter().any(|(_, w)| *w == written) {
-                    i += 1;
-                    written = format!("{base} {i}");
-                }
+                let written = self.spot_written.take(base);
                 self.spot_names.push((name.to_string(), written.clone()));
                 written
             }
@@ -823,14 +827,8 @@ impl<'a> Writer<'a> {
         if let Some((name, _)) = self.gradients.iter().find(|(_, d)| d == g) {
             return name.clone();
         }
-        let taken = |n: &str, defs: &[(String, Gradient)]| defs.iter().any(|(m, _)| m == n);
         let base = self.latin_name(swatch.filter(|s| !s.is_empty()).unwrap_or("Gradient"), TITLE_AND_COLOR_NAMES);
-        let mut name = base.clone();
-        let mut i = 1;
-        while taken(&name, &self.gradients) {
-            i += 1;
-            name = format!("{base} {i}");
-        }
+        let name = self.gradient_names.take(base);
         self.gradients.push((name.clone(), g.clone()));
         name
     }
@@ -1183,7 +1181,17 @@ impl<'a> Writer<'a> {
         {
             return img.clone();
         }
-        let img = image::load_from_memory(&blob.bytes).ok().map(Arc::new);
+        let too_large = |w: u32, h: u32| w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_IMAGE_PIXELS;
+        let img = if vectorcraft_doc::header_size(&blob.bytes).is_some_and(|(w, h)| too_large(w, h)) {
+            None
+        } else {
+            vectorcraft_doc::decode::decode_within(&blob.bytes, MAX_IMAGE_PIXELS.saturating_mul(8))
+                .ok()
+                .flatten()
+                .map(|(img, _)| img)
+                .filter(|img| !too_large(img.width(), img.height()))
+        }
+        .map(Arc::new);
         self.last_image = Some((blob.clone(), img.clone()));
         self.last_coverage = None;
         img
@@ -1232,5 +1240,48 @@ impl<'a> Writer<'a> {
         let _ = writeln!(s, "] {operands} XI");
         s.push_str(&hex);
         s.push_str("%AI5_EndRaster\nF\n");
+    }
+}
+
+/// Names kept apart: a name already given is numbered, as the first free `name 2`, `name 3`…
+#[derive(Default)]
+pub(super) struct Numbered {
+    taken: std::collections::HashSet<String>,
+    /// The number to try first for each name already given, after the numbers it was given.
+    next: std::collections::HashMap<String, usize>,
+    /// The names given, in order, for [`SCANNED_NAMES`].
+    #[cfg(test)]
+    given: Vec<String>,
+}
+
+impl Numbered {
+    /// `base`, or the first free `base 2`, `base 3`… when `base` is taken; it is then taken.
+    pub(super) fn take(&mut self, base: String) -> String {
+        #[cfg(test)]
+        if SCANNED_NAMES.with(std::cell::Cell::get) {
+            let mut name = base.clone();
+            let mut i = 1;
+            while self.given.contains(&name) {
+                i += 1;
+                name = format!("{base} {i}");
+            }
+            self.given.push(name.clone());
+            return name;
+        }
+        let name = if self.taken.contains(&base) {
+            // Names are never given back, so every number below `from` is still taken. Of the
+            // numbers `from..=tries`, at least one is free.
+            let from = self.next.get(&base).copied().unwrap_or(2);
+            let tries = from.saturating_add(self.taken.len());
+            let i = (from..tries).find(|i| !self.taken.contains(&format!("{base} {i}"))).unwrap_or(tries);
+            self.next.insert(base.clone(), i.saturating_add(1));
+            format!("{base} {i}")
+        } else {
+            base
+        };
+        self.taken.insert(name.clone());
+        #[cfg(test)]
+        self.given.push(name.clone());
+        name
     }
 }
