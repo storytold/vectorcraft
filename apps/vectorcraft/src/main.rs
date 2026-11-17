@@ -33,6 +33,8 @@ mod compositor_gpu;
 mod control_server;
 mod cursor_theme;
 mod display_profile;
+#[cfg(windows)]
+mod file_drag;
 #[cfg(feature = "wgpu")]
 mod gpu;
 mod hang_watch;
@@ -672,6 +674,10 @@ fn main() -> std::process::ExitCode {
                     single_instance::set_ui(&cc.egui_ctx);
                 }
                 app.services.native_input_hook = native_input_hook(&app);
+                #[cfg(windows)]
+                {
+                    app.services.native_file_drag_position = file_drag::service(winit_window.as_ref());
+                }
                 let held_files = file_access::unconfined(|| open_or_hold(&mut app, files));
                 // The first frame is due from now (`gpu::watch_first_frame`).
                 #[cfg(feature = "wgpu")]

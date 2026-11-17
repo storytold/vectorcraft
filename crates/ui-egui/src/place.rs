@@ -12,6 +12,8 @@ use vectorcraft_geom::Point;
 use crate::theme::{self, Tokens};
 use crate::{VectorcraftApp, io, widgets};
 
+mod drop_preview;
+
 /// The loaded place cursor's thumbnail size (px on the longer side).
 const THUMB: u32 = 64;
 /// Where the thumbnail sits from the pointer (points).
@@ -60,6 +62,8 @@ pub fn is_document(name: &str) -> bool {
 /// The app's Place state (not saved with the preferences).
 #[derive(Default)]
 pub struct PlaceState {
+    /// Read-only PDF hover preview; independent of the loaded place cursor and undo history.
+    drop_preview: drop_preview::Preview,
     /// Web: the bytes of the files picked for the Place dialog, by name.
     pub(crate) picked: Vec<(String, Vec<u8>)>,
     /// The loaded cursor's thumbnails by file name.
@@ -106,6 +110,7 @@ struct Thumb {
 impl PlaceState {
     /// The UI moved to a new egui context: the thumbnails are uploaded again when drawn.
     pub(crate) fn forget_textures(&mut self) {
+        self.drop_preview.forget_texture();
         for (_, th) in &mut self.thumbs {
             th.tex = None;
         }
@@ -115,6 +120,11 @@ impl PlaceState {
     #[cfg(test)]
     pub(crate) fn thumbnails(&self) -> Vec<&str> {
         self.thumbs.iter().map(|(n, _)| n.as_str()).collect()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn wait_for_drop_preview(&mut self) {
+        self.drop_preview.wait();
     }
 }
 
@@ -655,8 +665,8 @@ pub fn paint_cursor(app: &mut VectorcraftApp, ctx: &egui::Context, painter: &egu
 impl VectorcraftApp {
     /// Where file `name` dropped with the pointer at `pos` (screen points) goes: as in Illustrator,
     /// onto the canvas of the open document (Shift embeds it), else opened. Where the platform
-    /// doesn't say (`None`: desktop drags carry no position), a document opens as a tab of its
-    /// own and a picture or text is placed in the middle of the view. A library, a presets file, a
+    /// doesn't say (`None`: no native drag-position service), other vector documents open as
+    /// their own tabs; a PDF, picture or text is placed in the middle of the view. A library, a presets file, a
     /// plug-in, a shortcut set, a script or a file only an importer plug-in reads opens wherever it
     /// is dropped, as File → Open opens it ([`io::opens_as`], [`fileio::opens_with_importer`]).
     pub fn drop_target(&self, name: &str, pos: Option<egui::Pos2>, shift: bool) -> DropTarget {
@@ -665,19 +675,29 @@ impl VectorcraftApp {
             _ if io::opens_as(name).is_some() || fileio::opens_with_importer(name) => return DropTarget::Open,
             Some(p) if !rect.contains(p) => return DropTarget::Open,
             Some(p) => crate::canvas::Xf::at(rect, v, self.canvas_ui_zoom).to_doc(p),
-            None if is_document(name) => return DropTarget::Open,
+            None if is_document(name) && fileio::extension(name) != "pdf" => return DropTarget::Open,
             None => v.center,
         };
         DropTarget::Place(DropAt { doc: st.uid, reverts: st.reverts, at, embed: shift })
     }
 }
 
-/// Where the pointer is during a file drag over the window, as far as egui knows: nowhere on the
-/// desktop, whose drags carry no position (the one egui had before is stale; files dropped there
-/// go by their kind, see [`VectorcraftApp::drop_target`]). On the web, egui's own position (for
-/// the highlight: the web host follows its drags itself for drops).
-pub fn drag_pos(ctx: &egui::Context) -> Option<egui::Pos2> {
-    if cfg!(target_arch = "wasm32") { ctx.input(|i| i.pointer.latest_pos()) } else { None }
+/// Current drag coordinates: the browser's pointer, or a fresh native client-position sample.
+/// Desktop pointer events from before the OS drag are stale and must not be used as a fallback.
+pub fn drag_pos(app: &VectorcraftApp, ctx: &egui::Context) -> Option<egui::Pos2> {
+    if cfg!(target_arch = "wasm32") {
+        return ctx.input(|i| i.pointer.latest_pos());
+    }
+    if ctx.viewport_id() != egui::ViewportId::ROOT {
+        return None;
+    }
+    let [x, y] = app.services.native_file_drag_position.as_ref()?()?;
+    let scale = f64::from(ctx.pixels_per_point());
+    if !scale.is_finite() || scale <= 0.0 {
+        return None;
+    }
+    let pos = egui::pos2((x / scale) as f32, (y / scale) as f32);
+    pos.is_finite().then_some(pos)
 }
 
 /// A file dropped on the window: its name, path (when it has one) and bytes.
@@ -699,6 +719,12 @@ pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile
                 };
                 p["at"] = json!([at.x, at.y]);
                 p["link"] = json!(!embed);
+                if fileio::extension(&name) == "pdf" {
+                    // A drop is a placement, not a request to edit the PDF or import all pages.
+                    // Encrypted files can still ask for their password through the existing path.
+                    p["showImportOptions"] = json!(false);
+                    p["page"] = json!(1);
+                }
                 p[DROPPED] = json!({ "doc": doc, "reverts": reverts });
                 place_file(app, &p, Read::ForUser { dropped: true }).map(|_| ())
             }
@@ -744,12 +770,14 @@ pub fn drain(app: &mut VectorcraftApp) {
 /// the browser gives a dragged file's type but not its name, so the canvas is outlined for any
 /// file dragged over it, including libraries, presets, plug-ins and shortcut sets, which open when
 /// dropped.
-pub fn paint_drop_highlight(app: &VectorcraftApp, ctx: &egui::Context, painter: &egui::Painter, rect: egui::Rect) {
-    let pos = drag_pos(ctx);
+pub fn paint_drop_highlight(app: &mut VectorcraftApp, ctx: &egui::Context, painter: &egui::Painter, rect: egui::Rect) {
+    let pos = if ctx.input(|i| i.raw.hovered_files.is_empty()) { None } else { drag_pos(app, ctx) };
+    drop_preview::paint(app, ctx, painter, rect, pos);
     let placed = ctx.input(|i| {
         i.raw.hovered_files.iter().any(|f| {
             let name = f.path.as_deref().map(|p| p.to_string_lossy()).unwrap_or_default();
-            app.drop_target(&name, pos, false) != DropTarget::Open
+            let at = if cfg!(target_arch = "wasm32") || fileio::extension(&name) == "pdf" { pos } else { None };
+            app.drop_target(&name, at, false) != DropTarget::Open
         })
     });
     if !placed {

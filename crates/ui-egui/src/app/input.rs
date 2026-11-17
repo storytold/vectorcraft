@@ -34,7 +34,10 @@ impl VectorcraftApp {
     #[cfg(not(target_arch = "wasm32"))]
     fn take_dropped_files(&mut self, ctx: &egui::Context) {
         let (dropped, shift) = ctx.input(|i| (i.raw.dropped_files.clone(), i.modifiers.shift));
-        self.open_dropped_files(dropped, place::drag_pos(ctx), shift);
+        if dropped.is_empty() {
+            return;
+        }
+        self.open_dropped_files(dropped, place::drag_pos(self, ctx), shift);
     }
 
     /// Files dropped on the main window or on a floating panel's own OS window, opened or placed
@@ -47,18 +50,25 @@ impl VectorcraftApp {
         let mut files = vec![];
         for f in dropped {
             let path = Some(f.path().to_string_lossy().to_string()).filter(|s| !s.is_empty());
-            let name = path.as_deref().map_or_else(|| "dropped".into(), vectorcraft_engine::cmd::fileio::file_name);
+            let mut name = path.as_deref().map_or_else(|| "dropped".into(), vectorcraft_engine::cmd::fileio::file_name);
             // Native file drops usually carry a path. Use the same file reader as File → Open
             // (and File → Place), even if the drop handle can't supply the bytes itself.
             let bytes = if path.is_some() && self.services.read.is_some() { Ok(vec![]) } else { f.bytes() };
             match bytes {
                 Ok(bytes) => {
                     // A backend may give bytes without a path or extension. Sniff their format
-                    // before deciding: an SVG opens as a document, a raster image is placed.
-                    let target = if path.is_none() && fileio::detect(&name, &bytes).is_none_or(|f| !f.raster) {
+                    // before deciding: an SVG opens as a document; a PDF or raster image is placed.
+                    let detected = fileio::detect(&name, &bytes);
+                    let pdf = detected.is_some_and(|f| f.id == "pdf");
+                    if path.is_none() && pdf {
+                        name = "dropped.pdf".into();
+                    }
+                    let target = if path.is_none() && !pdf && detected.is_none_or(|f| !f.raster) {
                         place::DropTarget::Open
                     } else {
-                        self.drop_target(&name, pos, shift)
+                        // Only PDF drops opt into the new native coordinates. Other formats
+                        // retain their existing desktop open/center-of-view drop behavior.
+                        self.drop_target(&name, if fileio::extension(&name) == "pdf" { pos } else { None }, shift)
                     };
                     files.push((target, (name, path, bytes)));
                 }

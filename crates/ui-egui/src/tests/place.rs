@@ -151,8 +151,8 @@ fn a_drop_with_a_position_places_on_the_canvas_and_opens_off_it() {
     }
 }
 
-/// Desktop drags carry no position (#472): a dropped document opens as a tab of its own, a
-/// picture or text is placed in the middle of the view.
+/// Where no current native drag position is available, PDFs, pictures and text are placed in
+/// the view center. Other documents still open as their own tab (#472).
 #[test]
 fn a_drop_without_a_position_opens_documents_and_places_pictures() {
     let mut app = app();
@@ -160,11 +160,153 @@ fn a_drop_without_a_position_opens_documents_and_places_pictures() {
     laid_out(&mut app, &ctx);
     let center = app.view().unwrap().center;
     let uid = app.session.active().unwrap().uid;
-    for name in ["a.svg", "a.svgz", "a.pdf", "a.ai", "a.eps", "a.vectorcraft", "a.drawcraft", "a.vctemplate", "a.dxf", "a.emf"] {
+    for name in ["a.svg", "a.svgz", "a.ai", "a.eps", "a.vectorcraft", "a.drawcraft", "a.vctemplate", "a.dxf", "a.emf"] {
         assert_eq!(app.drop_target(name, None, false), DropTarget::Open, "{name}");
     }
-    for name in ["a.png", "a.jpg", "a.tiff", "a.webp", "a.txt"] {
+    for name in ["a.pdf", "a.PDF", "a.png", "a.jpg", "a.tiff", "a.webp", "a.txt"] {
         assert_eq!(app.drop_target(name, None, false), DropTarget::Place(DropAt { doc: uid, reverts: 0, at: center, embed: false }), "{name}");
+    }
+}
+
+#[test]
+fn pdf_drop_places_first_page_in_existing_document_and_undo() {
+    for positioned in [false, true] {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        let canvas = laid_out(&mut app, &ctx);
+        let uid = app.session.active().unwrap().uid;
+        let before = app.session.active().unwrap().doc.clone();
+        let pos = canvas.center() + vec2(50.0, -25.0);
+        let want = if positioned { Xf::new(canvas, app.view().unwrap()).to_doc(pos) } else { app.view().unwrap().center };
+        if positioned {
+            let scale = f64::from(ctx.pixels_per_point());
+            app.services.native_file_drag_position = Some(Arc::new(move || Some([f64::from(pos.x) * scale, f64::from(pos.y) * scale])));
+        }
+        let dir = Folder::new("ui-pdf-drop");
+        let pages = [PdfPage::new(100.0, 80.0, "1 0 0 rg 0 0 100 80 re f"), PdfPage::new(300.0, 200.0, "0 g 0 0 300 200 re f")];
+        let path = dir.file("figure.PDF", &pdf(&pages, None));
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(Pos2::new(5.0, 5.0))], &[&path], false);
+        assert_eq!(app.session.documents().len(), 1, "a PDF drop does not open another tab");
+        assert_eq!(app.session.active().unwrap().uid, uid);
+        assert!(app.ui.dialog.is_none(), "a drop takes the first page without an import dialog");
+        let st = app.session.active().unwrap();
+        let n = st.doc.node(st.selection.objects[0]).unwrap().clone();
+        assert!(matches!(n.kind, NodeKind::PlacedDocument(_)), "a linked PDF retains its vector document");
+        let b = n.geometric_bounds().unwrap();
+        assert!((b.width() - 100.0).abs() < 0.01 && (b.height() - 80.0).abs() < 0.01, "first page: {b:?}");
+        assert!((b.center() - want).length() < 0.001, "at the fresh pointer, not the stale egui pointer: {b:?} vs {want:?}");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(*app.session.active().unwrap().doc, *before, "one undo removes the drop");
+        app.run("edit.redo", json!({})).unwrap();
+        assert!(!app.session.active().unwrap().selection.objects.is_empty());
+    }
+}
+
+#[test]
+fn pdf_drop_without_a_path_is_detected_and_places_but_no_document_still_opens() {
+    let data = pdf(&[PdfPage::new(90.0, 60.0, "0 0 1 rg 0 0 90 60 re f")], None);
+    let handle = || Arc::new(MockDrop { path: "".into(), bytes: Ok(data.clone()) }) as egui::DroppedFileHandle;
+    let mut app = app();
+    let ctx = egui::Context::default();
+    laid_out(&mut app, &ctx);
+    frame_files(&mut app, &ctx, vec![], vec![handle()], true);
+    assert_eq!(app.session.documents().len(), 1);
+    let st = app.session.active().unwrap();
+    let placed = st.doc.node(st.selection.objects[0]).unwrap();
+    assert!((placed.geometric_bounds().unwrap().width() - 90.0).abs() < 0.01, "embedded vector art, not another document");
+    let mut empty = VectorcraftApp::new(Session::new(), crate::Services::default());
+    assert_eq!(empty.drop_target("figure.pdf", None, false), DropTarget::Open);
+    empty.open_dropped_files(vec![handle()], None, false);
+    let mut opened = VectorcraftApp::new(Session::new(), crate::Services::default());
+    crate::io::open_bytes(&mut opened, "dropped.pdf", &data, None).unwrap();
+    assert_eq!(empty.session.documents().len(), opened.session.documents().len());
+    assert_eq!(dialog_kind(&empty), dialog_kind(&opened), "no document: use the normal PDF-open flow");
+}
+
+#[test]
+fn pdf_drop_native_coordinates_scale_and_reject_invalid_samples() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    ctx.set_pixels_per_point(2.0);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |_| {});
+    out.textures_delta.clear();
+    app.services.native_file_drag_position = Some(Arc::new(|| Some([600.0, 400.0])));
+    assert_eq!(crate::place::drag_pos(&app, &ctx), Some(Pos2::new(300.0, 200.0)));
+    app.services.native_file_drag_position = Some(Arc::new(|| Some([f64::NAN, 100.0])));
+    assert_eq!(crate::place::drag_pos(&app, &ctx), None);
+    app.services.native_file_drag_position = None;
+    assert_eq!(crate::place::drag_pos(&app, &ctx), None, "do not reuse an old pointer on desktop");
+}
+
+/// Only the overlay is painted here: a textured mesh is the PDF ghost, and its center follows
+/// the live service even though egui receives no PointerMoved while the OS owns the drag.
+#[test]
+fn pdf_drop_preview_follows_pointer_and_cancels_without_editing() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    let canvas = laid_out(&mut app, &ctx);
+    let dir = Folder::new("ui-pdf-drop-preview");
+    let path = dir.file("preview.pdf", &pdf(&[PdfPage::new(100.0, 80.0, "1 0 0 rg 0 0 100 80 re f")], None));
+    let before = app.session.active().unwrap().doc.clone();
+    let position = Arc::new(std::sync::Mutex::new(canvas.center()));
+    let live = position.clone();
+    app.services.native_file_drag_position = Some(Arc::new(move || {
+        let p = *live.lock().unwrap();
+        Some([f64::from(p.x), f64::from(p.y)])
+    }));
+    let paint = |app: &mut VectorcraftApp, hovered: bool| {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+            hovered_files: if hovered { vec![egui::HoveredFile { path: Some(path.clone().into()), ..Default::default() }] } else { vec![] },
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| crate::place::paint_drop_highlight(app, ui.ctx(), ui.painter(), canvas));
+        out.textures_delta.clear();
+        out
+    };
+    let meshes = |out: &egui::FullOutput| {
+        out.shapes
+            .iter()
+            .filter_map(|s| match &s.shape {
+                Shape::Mesh(m) => Some((s.clip_rect, m.calc_bounds())),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    paint(&mut app, true);
+    app.place.wait_for_drop_preview();
+    let first = meshes(&paint(&mut app, true));
+    assert_eq!(first.len(), 1, "the actual PDF thumbnail is drawn");
+    assert!((first[0].1.center() - canvas.center()).length() < 0.01);
+    assert_eq!(first[0].0, canvas, "the ghost is clipped to the canvas");
+    *position.lock().unwrap() += vec2(25.0, -15.0);
+    let next = meshes(&paint(&mut app, true));
+    assert!((next[0].1.center() - first[0].1.center() - vec2(25.0, -15.0)).length() < 0.01);
+    assert!(meshes(&paint(&mut app, false)).is_empty(), "cancel clears the preview");
+    assert_eq!(*app.session.active().unwrap().doc, *before, "hovering never edits the document");
+    assert_eq!(images(&app, 0), 0);
+
+    // Optional local visual QA of the real app frame; captures are never committed as assets.
+    if let Some(dir) = std::env::var_os("VECTORCRAFT_PDF_DROP_CAPTURE_DIR") {
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(800.0, 600.0)).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                ui.input_mut(|i| i.raw.hovered_files = vec![egui::HoveredFile { path: Some(path.clone().into()), ..Default::default() }]);
+                app.logic(ui.ctx());
+                app.ui(ui);
+            },
+            app,
+        );
+        h.run_steps(4);
+        h.state_mut().place.wait_for_drop_preview();
+        h.run_steps(2);
+        let dir = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        h.render().unwrap().save(dir.join("pdf-drop-preview.png")).unwrap();
     }
 }
 
@@ -307,7 +449,9 @@ fn a_native_svg_drop_uses_file_open_even_with_a_path_only_handle() {
     let path = dir.file("path-only.svg", SVG.as_bytes());
     let mut dropped = app();
     let ctx = egui::Context::default();
-    laid_out(&mut dropped, &ctx);
+    let canvas = laid_out(&mut dropped, &ctx);
+    let pos = canvas.center();
+    dropped.services.native_file_drag_position = Some(Arc::new(move || Some([f64::from(pos.x), f64::from(pos.y)])));
     let handle = Arc::new(MockDrop { path: path.clone().into(), bytes: Err("only a path".into()) }) as egui::DroppedFileHandle;
     frame_files(&mut dropped, &ctx, vec![], vec![handle], false);
 
