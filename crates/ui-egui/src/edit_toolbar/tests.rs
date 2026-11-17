@@ -92,6 +92,20 @@ fn cell_at(shown: &[(String, Pos2, Color32)], drawer: Rect, name: &str) -> (Pos2
         .unwrap_or_else(|| panic!("no {name} in the drawer {drawer:?}"))
 }
 
+/// The WCAG contrast ratio of `c` drawn on `bg`, between 1 and 21.
+fn contrast(c: Color32, bg: Color32) -> f32 {
+    fn channel(v: u8) -> f32 {
+        let v = f32::from(v) / 255.0;
+        if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+    }
+    fn lum(c: Color32) -> f32 {
+        0.2126 * channel(c.r()) + 0.7152 * channel(c.g()) + 0.0722 * channel(c.b())
+    }
+    let (a, b) = (lum(c), lum(bg));
+    let (hi, lo) = if a > b { (a, b) } else { (b, a) };
+    (hi + 0.05) / (lo + 0.05)
+}
+
 /// The drawer frames each flyout group whole, under the heading most of its tools have: every
 /// tool once, the Pencil's group (led by the Shaper) under Draw.
 #[test]
@@ -335,7 +349,8 @@ fn edit_toolbar_opens_a_drawer_beside_the_toolbar() {
     assert!(!app.ui.tools_drawer && app.session.tool_id() == "artboard");
 }
 
-/// The drawer dims the tools the toolbar holds.
+/// The drawer dims the tools the toolbar holds, in the dim text colour, which stays readable
+/// against the panel; the disabled colour, at the drawer's 12.5 px, does not (#8294).
 #[test]
 fn tools_in_the_toolbar_are_dimmed_in_the_drawer() {
     let mut app = app();
@@ -344,9 +359,18 @@ fn tools_in_the_toolbar_are_dimmed_in_the_drawer() {
     frame(&mut app, &ctx, 0.0, vec![]);
     let shown = frame(&mut app, &ctx, 0.1, vec![]);
     let drawer = drawer_rect(&ctx).unwrap();
-    let dim = Tokens::get(&ctx).text_disabled;
-    assert_eq!(cell_at(&shown, drawer, "Ellipse Tool").1, dim);
+    let t = Tokens::get(&ctx);
+    let dim = t.text_dim;
+    let (_, color) = cell_at(&shown, drawer, "Ellipse Tool");
+    assert_eq!(color, dim);
+    assert!(
+        contrast(color, t.panel) >= 4.5,
+        "a dimmed tool's name must stay readable: {color:?} on {:?} is {:.2}:1",
+        t.panel,
+        contrast(color, t.panel)
+    );
     assert_ne!(cell_at(&shown, drawer, "Artboard Tool").1, dim);
+    assert_ne!(cell_at(&shown, drawer, "Artboard Tool").1, t.text_disabled, "the disabled colour is unreadable at the drawer's size");
     app.run("toolbar.addTool", json!({"tool": "artboard"})).unwrap();
     app.run("toolbar.removeTool", json!({"tool": "ellipse"})).unwrap();
     let shown = frame(&mut app, &ctx, 0.2, vec![]);
@@ -430,7 +454,7 @@ fn a_new_toolbar_fills_from_the_drawer_beside_it() {
     // The Tools panel's tools aren't dimmed: they aren't in this toolbar. The Show section, for
     // the controls under the Tools panel's tools, is left out.
     assert!(!shown.iter().any(|(s, p, _)| s == "Show:" && drawer.contains(*p)));
-    let dim = Tokens::get(&ctx).text_disabled;
+    let dim = Tokens::get(&ctx).text_dim;
     assert_ne!(cell_at(&shown, drawer, "Ellipse Tool").1, dim);
     // Dragged onto the blank toolbar, a tool is added to it.
     let (ellipse, _) = cell_at(&shown, drawer, "Ellipse Tool");

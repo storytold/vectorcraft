@@ -696,11 +696,13 @@ fn row(ui: &mut Ui, t: &Tokens, tool: &'static ToolInfo, on: bool, dimmed: bool)
     } else if resp.hovered() {
         ui.painter().rect_filled(fill, 2.0, t.hover);
     }
-    // The active tool's row is lit, dimmed or not.
+    // The active tool's row is lit, dimmed or not. A tool the toolbar holds is drawn in the dim
+    // text colour, not the disabled colour: at the drawer's 12.5 px the disabled colour is
+    // unreadable against the panel (#8294).
     let color = if on {
         t.text_strong
     } else if dimmed {
-        t.text_disabled
+        t.text_dim
     } else {
         t.text
     };
@@ -709,13 +711,7 @@ fn row(ui: &mut Ui, t: &Tokens, tool: &'static ToolInfo, on: bool, dimmed: bool)
     let painter = ui.painter().with_clip_rect(rect);
     let shortcut = crate::shortcut_editor::tool_shortcut(tool.id).map(crate::shortcut_editor::as_typed);
     let keys_w = shortcut.as_ref().map_or(0.0, |k| {
-        let keys = if on {
-            t.text_strong
-        } else if dimmed {
-            t.text_disabled
-        } else {
-            t.text_dim
-        };
+        let keys = if on { t.text_strong } else { t.text_dim };
         let g = painter.layout_no_wrap(k.to_string(), egui::FontId::proportional(11.5), keys);
         let w = g.size().x;
         painter.galley(pos2(rect.right() - 10.0 - w, rect.center().y - g.size().y / 2.0), g, keys);
