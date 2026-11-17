@@ -27,7 +27,7 @@ use crate::import_scan::{FontNames, MAX_NESTING, Ocgs, Scan, TextOverprint, Walk
 use crate::import_shading::{
     FunctionBudget, FunctionPaint, clipped, extend_clip, fold_stop_opacity, function_paint, gradient_shape, mesh_shading, shading_gradient,
 };
-use crate::import_text::{Families, LineFacts, Look, Placement, TextLine, Upright};
+use crate::import_text::{Families, LineFacts, Look, Placement, TextLine, TypeStroke, Upright};
 use crate::{CropTo, ImportOptions, ImportReport, PdfError, TextAs};
 
 mod actual_text;

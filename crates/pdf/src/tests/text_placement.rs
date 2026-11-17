@@ -758,3 +758,19 @@ fn perf_text_heavy_open() {
         println!("4000 lines: {n} text objects in {took:?} (as outlines: {:?})", start.elapsed());
     }
 }
+
+/// Vertical type filled, then stroked (fill and stroke rendering draws a whole operator's glyphs
+/// filled before it strokes them): one column, each glyph filled and stroked (#8015).
+#[test]
+fn a_vertical_column_filled_then_stroked_is_one_filled_and_stroked_type() {
+    for mode in ["2", "6"] {
+        let content = format!("0 0 1 RG 1 0 0 rg 2 w BT {mode} Tr /F6 24 Tf 150 180 Td {} Tj 0 Tr ET", gids("§±×"));
+        let t = texts(&open_as(&page(&content, ""), TextAs::Text));
+        assert_eq!(t.len(), 1, "{content}: {t:#?}");
+        assert_eq!(t[0].plain_text(), "§±×");
+        for r in &t[0].runs {
+            assert!(!r.style.fill.is_none() && !r.style.stroke.is_none(), "{content}: {:?}", t[0].runs);
+            assert!((r.style.stroke_width - 2.0).abs() < 1e-6, "{content}");
+        }
+    }
+}

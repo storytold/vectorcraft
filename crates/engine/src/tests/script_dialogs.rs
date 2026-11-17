@@ -120,6 +120,18 @@ fn missing_or_mismatched_answer_rolls_back() {
     assert_eq!(s.script_report().unwrap()["dialogs"][0]["answer"], "missing");
 }
 
+/// The error about answers left over names their count with the matching noun.
+#[test]
+fn unused_answers_are_counted_in_the_singular_and_the_plural() {
+    let mut s = one_doc();
+    let ok = json!({"kind": "alert", "value": "ok"});
+    for (extra, says) in [(1, "`answers` has 1 answer the script did not use"), (2, "`answers` has 2 answers the script did not use")] {
+        let given = Value::Array(vec![ok.clone(); extra + 1]);
+        let e = headless(&mut s, "alert('x');", given).unwrap_err().to_string();
+        assert!(e.contains(says), "{e}");
+    }
+}
+
 #[test]
 fn invalid_answers_are_rejected_before_run() {
     let mut s = one_doc();

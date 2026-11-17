@@ -558,7 +558,41 @@ fn the_eyedropper_takes_an_image_pixel_into_the_working_rgb_space() {
     let mut s = session();
     let img = image::RgbaImage::from_raw(1, 1, vec![83, 170, 223, 255]).unwrap();
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.edit("Place", |d, _| {
         d.images.insert("px".into(), ImageBlob::png(png));
         let l = d.layers[0].id;
@@ -653,7 +687,24 @@ fn freeform_rgb_points_mix_in_the_working_rgb_space() {
     let canvas = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts).pixel(50, 50);
     let svg = vectorcraft_svg::export_full(&d, &vectorcraft_svg::ExportOptions::default(), None).svg;
     let data = svg.split("data:image/png;base64,").nth(1).unwrap().split('"').next().unwrap();
-    let png = image::load_from_memory(&vectorcraft_testkit::format::base64_decode(data).unwrap()).unwrap().to_rgba8();
+    let png = craft_image_codecs::decode(&vectorcraft_testkit::format::base64_decode(data).unwrap())
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     let written = png.get_pixel(png.width() / 2, png.height() / 2).0;
     let want = Color::rgb(0.5, 0.15, 0.5).to_rgba8(1.0);
     let display = f.field(spread_scale(box_)).sample(Point::new(50.5, 50.5)).0.map(|v| (v * 255.0).round() as u8);
@@ -823,7 +874,13 @@ fn color_settings_come_back_in_the_next_session() {
     a.execute("edit.colorSettings", &json!({})).unwrap();
     assert!(!file.exists(), "nothing to keep before the settings change");
     a.execute("edit.colorSettings", &json!({"rgb": loaded, "cmyk": cms::DEVICE_CMYK, "intent": "perceptual", "bpc": false})).unwrap();
-    let chosen = cms::ColorSettings { rgb: loaded.into(), cmyk: cms::DEVICE_CMYK.into(), intent: cms::Intent::Perceptual, bpc: false };
+    let chosen = cms::ColorSettings {
+        rgb: loaded.into(),
+        cmyk: cms::DEVICE_CMYK.into(),
+        intent: cms::Intent::Perceptual,
+        bpc: false,
+        ..cms::ColorSettings::default()
+    };
     assert_eq!(cms::active_settings(), chosen);
 
     // The next start begins with the defaults and without the loaded profile, which the profile
@@ -864,4 +921,164 @@ fn saved_color_settings_that_cannot_be_used_leave_the_defaults() {
         let saved: cms::ColorSettings = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
         assert!(!saved.bpc && saved.cmyk == cms::GENERIC_CMYK, "written over by the next change: {saved:?}");
     }
+}
+
+/// Edit › Color Settings' color management policies decide what opening a document tagged with
+/// profiles other than the working spaces does with them: Preserve Embedded Profiles keeps them,
+/// Off and Preserve Numbers take them off and keep the color numbers, and Convert to Working Space
+/// converts the colors into the working spaces, keeping how they look, and takes them off. A
+/// document a policy changed opens with unsaved changes, and the open reply names each profile.
+/// A profile that is the working space stays, and File › Revert and File › New from Template apply
+/// the policies too.
+#[test]
+fn color_management_policies_keep_take_off_or_convert_a_tagged_profile() {
+    let _g = settings();
+    let dir = fresh_dir("policies");
+    let _reset = ColorSettingsReset { profile: None, paths: vec![dir.clone()] };
+    std::fs::create_dir_all(&dir).unwrap();
+    let tagged = dir.join("tagged.vectorcraft");
+    let mut s = session();
+    let (blue, ink) = (rect(&mut s, 0.0, 0.0, 10.0, 10.0), rect(&mut s, 20.0, 0.0, 10.0, 10.0));
+    exec(&mut s, "paint.setFill", json!({"ids": [blue.0], "color": "#3366cc"}));
+    exec(&mut s, "paint.setFill", json!({"ids": [ink.0], "color": {"c": 20, "m": 40, "y": 60, "k": 10}}));
+    exec(&mut s, "edit.assignProfile", json!({"rgb": cms::WIDE_GAMUT_RGB, "cmyk": cms::DEVICE_CMYK}));
+    // An artboard background, a character style's fill and a freeform gradient swatch, colors
+    // outside the art.
+    let paper = vectorcraft_color::Color::Rgb { r: 0.9, g: 0.8, b: 0.6 };
+    let free = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    select(&mut s, &[free]);
+    exec(&mut s, "paint.setFill", json!({"gradient": {"kind": "freeform"}}));
+    exec(&mut s, "paint.freeform.setPoint", json!({"index": 0, "color": "#e6cc99", "stroke": false}));
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        d.artboards[0].color = Some(paper);
+        let mut style = vectorcraft_doc::TextStyleDef { name: "Inked".into(), attrs: Default::default() };
+        style.attrs.insert("fill".into(), serde_json::to_value(vectorcraft_color::Paint::solid(paper)).unwrap());
+        d.char_styles.push(style);
+        let paint = d.node(free).unwrap().appearance.fill().unwrap().paint.clone();
+        d.swatches.push(vectorcraft_color::Swatch { name: "Free".into(), paint, global: false, spot: false });
+    }
+    exec(&mut s, "file.saveAs", json!({"path": tagged.to_str().unwrap()}));
+    let settings_colors = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        let style = serde_json::from_value::<vectorcraft_color::Paint>(d.char_styles[0].attrs["fill"].clone()).unwrap();
+        (d.artboards[0].color.unwrap(), style.color().unwrap())
+    };
+    // The first point of the freeform swatch and of the freeform fill.
+    let free_points = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        let first = |p: &vectorcraft_color::Paint| match p {
+            vectorcraft_color::Paint::Gradient(g) => g.freeform.as_ref().map(|f| f.points[0].color),
+            _ => None,
+        };
+        let swatch = d.swatches.iter().find(|w| w.name == "Free").and_then(|w| first(&w.paint)).unwrap();
+        (swatch, first(&d.node(free).unwrap().appearance.fill().unwrap().paint).unwrap())
+    };
+    let (free0, _) = free_points(&s);
+    let fill = |s: &Session, id| s.doc().unwrap().doc.node(id).and_then(|n| n.appearance.fill()).and_then(|f| f.paint.color()).unwrap();
+    let (blue0, ink0) = (fill(&s, blue), fill(&s, ink));
+    let source = cms::for_document(Some(cms::WIDE_GAMUT_RGB), Some(cms::DEVICE_CMYK));
+    let notes = |r: &serde_json::Value| r["warnings"].as_array().unwrap().iter().filter(|w| w.as_str().unwrap().contains("profile")).count();
+    // A session that opened the file under the policies, and the open reply.
+    let open = |rgb: &str, cmyk: &str| {
+        let mut s = session();
+        exec(&mut s, "edit.colorSettings", json!({"rgbPolicy": rgb, "cmykPolicy": cmyk}));
+        let r = exec(&mut s, "document.open", json!({"path": tagged.to_str().unwrap()}));
+        (r, s)
+    };
+
+    let (r, kept) = open("preserveEmbedded", "preserveEmbedded");
+    assert_eq!(doc_profiles(&kept.doc().unwrap().doc), (Some(cms::WIDE_GAMUT_RGB.into()), Some(cms::DEVICE_CMYK.into())));
+    assert_eq!((fill(&kept, blue), fill(&kept, ink), notes(&r)), (blue0, ink0, 0));
+    assert!(!kept.doc().unwrap().is_dirty());
+
+    for (rgb, cmyk) in [("off", "off"), ("off", "preserveNumbers")] {
+        let (r, off) = open(rgb, cmyk);
+        assert_eq!(doc_profiles(&off.doc().unwrap().doc), (None, None), "{cmyk}");
+        assert_eq!((fill(&off, blue), fill(&off, ink), notes(&r)), (blue0, ink0, 2), "{cmyk}: the numbers stay");
+        assert!(off.doc().unwrap().is_dirty(), "{cmyk}: the document changed");
+    }
+
+    let (r, converted) = open("convert", "convert");
+    assert_eq!(doc_profiles(&converted.doc().unwrap().doc), (None, None));
+    assert_eq!(notes(&r), 2);
+    let working = cms::working();
+    let (blue1, ink1) = (fill(&converted, blue), fill(&converted, ink));
+    assert!(blue1 != blue0 && ink1 != ink0, "the numbers change: {blue1:?} {ink1:?}");
+    assert!(cms::delta_e2000(source.lab(&blue0), working.lab(&blue1)) < 1.0, "{blue0:?} → {blue1:?}");
+    assert!(cms::delta_e2000(source.lab(&ink0), working.lab(&ink1)) < 3.0, "{ink0:?} → {ink1:?}");
+    assert!(converted.doc().unwrap().is_dirty());
+    let (board, styled) = settings_colors(&converted);
+    assert_eq!(board, styled, "the artboard and the style convert alike");
+    assert!(board != paper && cms::delta_e2000(source.lab(&paper), working.lab(&board)) < 1.0, "{paper:?} → {board:?}");
+    assert_eq!(settings_colors(&kept), (paper, paper), "kept with the profile");
+    let (swatch_point, fill_point) = free_points(&converted);
+    assert_eq!(swatch_point, fill_point, "the freeform swatch and fill convert alike");
+    assert!(swatch_point != free0 && cms::delta_e2000(source.lab(&free0), working.lab(&swatch_point)) < 1.0, "{free0:?} → {swatch_point:?}");
+
+    // A color mode asked for on open converts the colors the policy converted, through the working
+    // spaces, also when the document in front draws through another profile.
+    let mut s2 = session();
+    exec(&mut s2, "edit.assignProfile", json!({"rgb": cms::DISPLAY_P3}));
+    exec(&mut s2, "edit.colorSettings", json!({"rgbPolicy": "convert", "cmykPolicy": "convert"}));
+    exec(&mut s2, "document.open", json!({"path": tagged.to_str().unwrap(), "colorMode": "cmyk"}));
+    let intent = working.settings().intent;
+    let want = working.convert(&blue1, cms::Model::Cmyk, intent);
+    let got = fill(&s2, blue);
+    assert!(cms::delta_e2000(working.lab(&want), working.lab(&got)) < 0.01, "{want:?} vs {got:?}");
+
+    // A profile that is the working space is kept whatever the policy.
+    exec(&mut s, "edit.colorSettings", json!({"rgb": cms::WIDE_GAMUT_RGB}));
+    let (r, same) = open("off", "off");
+    assert_eq!(doc_profiles(&same.doc().unwrap().doc), (Some(cms::WIDE_GAMUT_RGB.into()), None));
+    assert_eq!(notes(&r), 1);
+    exec(&mut s, "edit.colorSettings", json!({"rgb": cms::SRGB}));
+
+    // File › Revert reads the file again under the policies.
+    let (_, mut reverted) = open("preserveEmbedded", "preserveEmbedded");
+    exec(&mut reverted, "paint.setFill", json!({"ids": [blue.0], "color": "#ff0000"}));
+    exec(&mut reverted, "edit.colorSettings", json!({"cmykPolicy": "preserveNumbers"}));
+    let r = exec(&mut reverted, "file.revert", json!({"confirmed": true}));
+    assert_eq!(doc_profiles(&reverted.doc().unwrap().doc), (Some(cms::WIDE_GAMUT_RGB.into()), None));
+    assert_eq!((fill(&reverted, blue), notes(&r)), (blue0, 1));
+
+    // File › New from Template applies the policies as opening does.
+    let mut from_template = session();
+    exec(&mut from_template, "edit.colorSettings", json!({"rgbPolicy": "convert", "cmykPolicy": "off"}));
+    let r = exec(&mut from_template, "file.newFromTemplate", json!({"path": tagged.to_str().unwrap()}));
+    assert_eq!(doc_profiles(&from_template.doc().unwrap().doc), (None, None));
+    assert_eq!(notes(&r), 2);
+    assert_eq!(fill(&from_template, ink), ink0, "Off keeps the CMYK numbers");
+    let blue2 = fill(&from_template, blue);
+    assert!(blue2 != blue0 && cms::delta_e2000(source.lab(&blue0), working.lab(&blue2)) < 1.0, "{blue0:?} → {blue2:?}");
+    assert!(from_template.doc().unwrap().is_dirty());
+}
+
+/// The policies are checked, come back in the reply and in `Color Settings.json`, and a saved file
+/// that gives the RGB policy Preserve Numbers, a CMYK policy only, leaves the defaults.
+#[test]
+fn color_management_policies_are_checked_and_kept() {
+    let _g = settings();
+    let dir = fresh_dir("policies-kept");
+    let _reset = ColorSettingsReset { profile: None, paths: vec![dir.clone()] };
+    let file = dir.join("Color Settings.json");
+    let mut s = session();
+    s.attach_color_settings(file.clone());
+    for bad in [json!({"rgbPolicy": "preserveNumbers"}), json!({"cmykPolicy": "keep"}), json!({"rgbPolicy": 1})] {
+        assert!(s.execute("edit.colorSettings", &bad).is_err(), "{bad}");
+    }
+    assert!(!file.exists(), "a refused change keeps nothing");
+    let r = exec(&mut s, "edit.colorSettings", json!({"rgbPolicy": "convert", "cmykPolicy": "preserveNumbers"}));
+    assert_eq!((r["rgbPolicy"].as_str(), r["cmykPolicy"].as_str()), (Some("convert"), Some("preserveNumbers")));
+    let saved: cms::ColorSettings = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    assert_eq!((saved.rgb_policy, saved.cmyk_policy), (cms::Policy::Convert, cms::Policy::PreserveNumbers));
+    cms::set_active(&cms::ColorSettings::default()).unwrap();
+    std::fs::write(
+        &file,
+        json!({"rgb": cms::SRGB, "cmyk": cms::GENERIC_CMYK, "intent": "relative", "bpc": true, "rgbPolicy": "preserveNumbers"}).to_string(),
+    )
+    .unwrap();
+    let mut next = Session::new();
+    next.attach_color_settings(file);
+    assert_eq!(cms::active_settings(), cms::ColorSettings::default());
 }

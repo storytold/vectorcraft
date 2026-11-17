@@ -495,7 +495,8 @@ pub(crate) fn sync(before: &Document, d: &mut Document) -> Result<()> {
     let (old, old_group) = match before.symbol_edit.as_ref().filter(|b| b.layer == se.layer) {
         None => return Ok(()),
         Some(b) => match art_of(before) {
-            Some(old) if same(&old) => return Ok(()),
+            // Turning on Align to Pixel Grid writes the art back too, so the layer shows it snapped.
+            Some(old) if same(&old) && (before.symbol_pixel_aligned(&se.symbol) || !d.symbol_pixel_aligned(&se.symbol)) => return Ok(()),
             old => (old.unwrap_or_default(), b.group),
         },
     };
@@ -529,6 +530,24 @@ pub(crate) fn sync(before: &Document, d: &mut Document) -> Result<()> {
     };
     d.symbols[index].art = Arc::new(new_art);
     follow_objects(d, &se.symbol, (&old, old_group), (&art, group));
+    // A pixel-aligned symbol stores its art on the pixel grid while it is edited too, and the
+    // editing layer shows the snapped art.
+    if d.symbol_pixel_aligned(&se.symbol) && super::object::snap_symbol_art(d, &se.symbol) {
+        let stored = &d.symbols[index].art;
+        let snapped: Vec<Arc<Node>> = if group { stored.children().map(|c| c.to_vec()).unwrap_or_default() } else { vec![stored.clone()] };
+        let mut snapped = snapped.into_iter().map(|n| {
+            let mut n = (*n).clone();
+            n.transform(se.xf, false);
+            Arc::new(n)
+        });
+        if let Some(ch) = d.node_mut(se.layer).and_then(Node::children_mut) {
+            for c in ch.iter_mut().filter(|c| !c.is_ruler_guide()) {
+                if let Some(n) = snapped.next() {
+                    *c = n;
+                }
+            }
+        }
+    }
     if let Some(e) = d.symbol_edit.as_mut() {
         e.changed = true;
         e.group = group;

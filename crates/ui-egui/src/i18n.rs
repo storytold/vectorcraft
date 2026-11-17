@@ -681,31 +681,102 @@ const MESSAGE_DEPTH: usize = 5;
 
 /// Translate a status or error message for display (see the module docs). Unknown messages, and
 /// parts of them (file names, numbers, a reason with no entry, a JSON object or array such as
-/// `{"objects": [...]}`, a value the message quotes in `"…"`, `“…”` or backticks, such as a
-/// symbol's name), stay as they are. A part that starts with `{` or `[` is translated only
-/// when it is a whole message with an exact entry, such as `[x, y] (two numbers)`.
+/// `{"objects": [...]}`, a value the message quotes in `"…"`, `“…”`, `'…'` or backticks, such as a
+/// symbol's or a script property's name, and an `{ident}` placeholder's value, a script identifier),
+/// stay as they are. A part that starts with `{` is translated only when it is a whole message with
+/// an exact entry. A part that starts with `[` is translated when it has an exact entry, such as
+/// `[x, y] (two numbers)`, or when it fits a template that starts with `[` and an index of digits,
+/// such as an effect's refusal ``[0] `id`: {why}``.
 pub fn message(lang: Lang, s: &str) -> String {
     message_at(lang, s, MESSAGE_DEPTH)
 }
 
 fn message_at(lang: Lang, s: &str, depth: usize) -> String {
-    let Some((forms, caps)) = lang.catalog().message_forms(s) else { return s.to_string() };
+    fill_message(lang, s, lang.catalog().message_forms(s), depth)
+}
+
+/// `s` shown through the catalog entry `found` matched for it, its placeholder values translated
+/// in turn while `depth` lasts.
+fn fill_message(lang: Lang, s: &str, found: Option<(&[String], catalog::Captures<'_, '_>)>, depth: usize) -> String {
+    let Some((forms, caps)) = found else { return s.to_string() };
     let count = caps.iter().find(|(k, _)| *k == "n").and_then(|(_, v)| v.parse::<u64>().ok());
     let form = count.map_or(forms.len().saturating_sub(1), |n| (lang.0.plural)(n).min(forms.len().saturating_sub(1)));
     let Some(template) = forms.get(form) else { return s.to_string() };
-    let quoted = |v: &str| [('"', '"'), ('“', '”'), ('`', '`')].iter().any(|(a, b)| s.contains(&format!("{a}{v}{b}")));
+    // A value is quoted when quotes surround it at its own place in `s`. The same text quoted at
+    // another place in `s` (a property named like the reason given for it) does not count.
+    let quoted = |v: &str| {
+        let at = (v.as_ptr() as usize).checked_sub(s.as_ptr() as usize);
+        let Some((before, after)) = at.and_then(|at| Some((s.get(..at)?, s.get(at + v.len()..)?))) else { return false };
+        [('"', '"'), ('“', '”'), ('\'', '\''), ('`', '`')].iter().any(|(a, b)| before.ends_with(*a) && after.starts_with(*b))
+    };
     let nested = |v: &str| {
-        if depth <= 1 || quoted(v) {
+        if depth <= 1 || v.is_empty() || quoted(v) {
             v.to_string()
-        } else if v.starts_with(['{', '[']) {
+        } else if v.starts_with('{') {
             exact_translation(lang.catalog(), v).unwrap_or_else(|| v.to_string())
+        } else if v.starts_with('[') {
+            fill_message(lang, v, lang.catalog().indexed_message_forms(v), depth - 1)
         } else {
             message_at(lang, v, depth - 1)
         }
     };
-    let values: Vec<(&str, String)> = caps.into_iter().map(|(k, v)| (k, nested(v))).collect();
+    let liquify = liquify_skip_values(lang, s, &caps);
+    let values: Vec<(&str, String)> = caps
+        .into_iter()
+        .map(|(k, v)| match (&liquify, k) {
+            (Some((tool, _)), "_1") => (k, tool.clone()),
+            (Some((_, kinds)), "_2") => (k, kinds.clone()),
+            (_, "ident") => (k, v.to_string()),
+            _ => (k, nested(v)),
+        })
+        .collect();
     let args: Vec<(&str, &str)> = values.iter().map(|(k, v)| (*k, v.as_str())).collect();
     fill_once(template, &args)
+}
+
+/// The tool labels in Liquify's warning about the objects under the brush that it left as they
+/// were, each translated by its `liquify-tool` row.
+const LIQUIFY_TOOLS: [&str; 7] = ["Warp", "Twirl", "Pucker", "Bloat", "Scallop", "Crystallize", "Wrinkle"];
+
+/// The kinds of object that warning lists (the engine's `not_liquified` in
+/// `crates/engine/src/cmd/distortcmds.rs`), each translated by its `liquify-kind` row.
+const LIQUIFY_KINDS: [&str; 9] = ["graphs", "type", "symbols", "images", "meshes", "envelopes", "repeats", "placed documents", "blends"];
+
+/// The tool and the list of kinds in `lang` when `s` is Liquify's warning about the objects under
+/// the brush that it left as they were and `caps` are its captures. The kinds keep their order and
+/// are joined with the `liquify-list-two` row for two, and the `liquify-list-middle` and
+/// `liquify-list-end` rows for more; a missing row leaves its part in English. `None` for any
+/// other message, or a tool or kind that is not one of Liquify's.
+fn liquify_skip_values(lang: Lang, s: &str, caps: &[(&str, &str)]) -> Option<(String, String)> {
+    let cap = |name: &str| caps.iter().find(|(k, _)| *k == name).map(|(_, v)| *v);
+    let (tool, n, kinds) = (cap("_1")?, cap("n")?, cap("_2")?);
+    let english = if n == "1" {
+        format!("{tool} left {n} object under the brush as it was ({kinds}): it reshapes paths only")
+    } else {
+        format!("{tool} left {n} objects under the brush as they were ({kinds}): it reshapes paths only")
+    };
+    if caps.len() != 3 || english != s || !LIQUIFY_TOOLS.contains(&tool) {
+        return None;
+    }
+    let catalog = lang.catalog();
+    let words = kinds
+        .split(", ")
+        .map(|k| LIQUIFY_KINDS.contains(&k).then(|| catalog.contextual("liquify-kind", k).unwrap_or(k)))
+        .collect::<Option<Vec<&str>>>()?;
+    let join = |context: &str, a: &str, b: &str| {
+        let pattern = "{0}, {1}";
+        fill_once(catalog.contextual(context, pattern).unwrap_or(pattern), &[("0", a), ("1", b)])
+    };
+    let list = match words.as_slice() {
+        [] => return None,
+        [one] => (*one).to_string(),
+        [a, b] => join("liquify-list-two", a, b),
+        [first, middle @ .., last] => {
+            let head = middle.iter().fold((*first).to_string(), |acc, w| join("liquify-list-middle", &acc, w));
+            join("liquify-list-end", &head, last)
+        }
+    };
+    Some((catalog.contextual("liquify-tool", tool).unwrap_or(tool).to_string(), list))
 }
 
 /// The translation of a message with an exact `@msg` row in `catalog`, its `{{` and `}}` shown as

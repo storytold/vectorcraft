@@ -384,7 +384,7 @@ fn weather_icons() -> SymbolLibrary {
         Anchor { p: Point::new(5.0, 16.0), h_in: Point::new(-6.0, 16.0), h_out: Point::new(0.0, 8.0), kind: AnchorKind::Corner },
         Anchor { p: Point::new(-4.0, -1.0), h_in: Point::new(-4.0, 6.0), h_out: Point::new(-4.0, -8.0), kind: AnchorKind::Smooth },
     ];
-    let moon = PathData::single(SubPath { anchors: moon_anchors, closed: true });
+    let moon = PathData::single(SubPath::new(moon_anchors, true));
 
     // Helper for cloud contour
     let cloud_subpath = |offset_y: f64, scale: f64| -> SubPath {
@@ -499,12 +499,13 @@ fn instance(name: &str) -> Node {
 }
 
 /// Symbol `from`'s Symbol Options in `src` (natural size, registration, export type, 9-slice
-/// guides) given to symbol `to` of `d`.
+/// guides, Align to Pixel Grid) given to symbol `to` of `d`.
 fn copy_options(src: &Document, from: &str, d: &mut Document, to: &str) {
     set_natural_size(d, to, Some(natural_size(src, from)));
     d.set_symbol_registration(to, src.symbol_registration(from));
     d.set_symbol_export_type(to, src.symbol_export_type(from));
     d.set_symbol_nine_slice(to, src.symbol_nine_slice(from));
+    d.set_symbol_pixel_aligned(to, src.symbol_pixel_aligned(from));
 }
 
 fn builtin_info(b: &BuiltinSymbolLibrary) -> LibraryInfo {

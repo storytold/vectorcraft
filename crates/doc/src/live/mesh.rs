@@ -338,6 +338,31 @@ impl Coons {
         let end = |side: &[Point]| side.last().copied().unwrap_or_default();
         [self.top[0], end(&self.top), end(&self.bottom), self.bottom[0]]
     }
+
+    /// The places in `u` where the top or bottom side has a point, and the places in `v` where the
+    /// left or right side has one, rising from 0 to 1. Between two places next to each other, each
+    /// side runs straight, so [`Self::eval`] changes linearly in `u` and in `v` inside each cell of
+    /// the grid they make.
+    pub fn places(&self) -> [Vec<f64>; 2] {
+        let sides = [&self.top, &self.right, &self.bottom, &self.left];
+        let at = |which: usize| -> Vec<f64> {
+            match self.knots.as_deref().and_then(|k| k.get(which)) {
+                Some(knots) => knots.clone(),
+                None => {
+                    let last = sides[which].len().saturating_sub(1).max(1);
+                    (0..=last).map(|i| i as f64 / last as f64).collect()
+                }
+            }
+        };
+        let merge = |a: usize, b: usize| {
+            let mut v = at(a);
+            v.extend(at(b));
+            v.sort_by(f64::total_cmp);
+            v.dedup();
+            v
+        };
+        [merge(0, 2), merge(1, 3)]
+    }
 }
 
 /// The most points one side of [`Coons::from_top_object`] holds while it adds points between its

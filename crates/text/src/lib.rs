@@ -41,10 +41,10 @@ pub use features::{
     EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_FEATURE_VALUE, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by,
 };
 pub use fontdb::{
-    CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, GlyphAlternate, GlyphOrigin, IcfMargins, JoiningPosition,
-    LentCompositeFonts, PlatformFontFiles, StylisticSet, Substitution, SubstitutionKind, WantedFont, WantedFonts, app_font_dir, is_font_file,
-    is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined, style_weight, system_font_dirs,
-    user_font_dirs,
+    CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontLikeness, FontMatch, FontTraits, GlyphAlternate, GlyphCategory,
+    GlyphCategoryKind, GlyphOrigin, IcfMargins, JoiningPosition, LentCompositeFonts, PlatformFontFiles, RECENTLY_ADDED_WITHIN, RecentlyAdded,
+    StylisticSet, Substitution, SubstitutionKind, WantedFont, WantedFonts, app_font_dir, is_font_file, is_suitcase, set_app_font_dir,
+    set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined, style_weight, system_font_dirs, user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
 pub use layout::{envelope_ink, layout_inputs, register_envelope_ink};
@@ -54,7 +54,7 @@ pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 pub use kept::{KeptLayoutsFrame, LayoutStamp, keep_layout, take_kept_layout};
 use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
 pub use layout::{decorations, drawn, fit_first_line, fit_source_lines, layout, layout_with, scaled};
-pub use shape::{aki_space, inseparable, line_start_space, spacing_scale};
+pub use shape::{aki_space, inseparable, line_start_space, repeat_base, spacing_scale};
 pub use vectorcraft_doc::TextObject;
 
 pub use vectorcraft_doc::{AreaFit, FirstBaseline, TextFlow, VerticalAlign};
@@ -188,6 +188,12 @@ pub struct PositionedGlyph {
     /// line's baseline before Character Alignment moves the glyph (y down). It names the block
     /// line whatever the alignment of each character on it. 0 for any other glyph.
     pub warichu_line: f64,
+    /// Type on an open path that starts before the path: the glyph's middle falls before the
+    /// path's start, so it draws nothing (its `outline` is empty and it has no image or color
+    /// art), hit testing and Touch Type skip it while a glyph is drawn, and exports leave it out.
+    /// It stays in the layout for the caret, at the path's start with no advance or width, and its
+    /// ligature carets stand there too.
+    pub off_path: bool,
 }
 
 /// How a glyph on a path is bent along it: a point of its pen space (x along its advance from its
@@ -395,6 +401,10 @@ pub struct TextLayout {
     pub inlines: Vec<InlineGlyph>,
     /// List markers, in text order.
     pub markers: Vec<ListMarker>,
+    /// Kurikaeshi Moji Shori: the repeat marks drawn as the character they stand for, as (the
+    /// mark's byte offset in the plain text, the character drawn), in text order. Writers that put
+    /// characters in place of glyphs (live SVG text) write that character.
+    pub repeat_marks: Vec<(usize, char)>,
 }
 
 impl Default for TextLayout {
@@ -413,6 +423,7 @@ impl Default for TextLayout {
             path_fill: None,
             inlines: Vec::new(),
             markers: Vec::new(),
+            repeat_marks: Vec::new(),
         }
     }
 }
@@ -600,11 +611,15 @@ pub fn hit_byte(layout: &TextLayout, p: Point) -> usize {
                 .map(|(_, d)| (p - (g.origin + along * if g.rtl { g.advance - d } else { d })).hypot2())
                 .fold(mid, f64::min)
         };
-        let best = layout.glyphs.iter().enumerate().min_by(|(_, a), (_, b)| near(a).total_cmp(&near(b)));
+        // Glyphs before the start of an open path draw nothing: a click goes to a drawn one when
+        // there is one.
+        let drawn = layout.glyphs.iter().any(|g| !g.off_path);
+        let best = layout.glyphs.iter().enumerate().filter(|(_, g)| !(drawn && g.off_path)).min_by(|(_, a), (_, b)| near(a).total_cmp(&near(b)));
         let Some((i, g)) = best else { return layout.lines.first().map_or(0, |l| l.start) };
         // `first` and `last` are the first and last glyphs of the cluster. A click before the middle of
-        // the cluster, measured along the first glyph's direction, goes to the cluster's start.
-        let same = |o: &&PositionedGlyph| o.byte == g.byte && o.len == g.len;
+        // the cluster, measured along the first glyph's direction, goes to the cluster's start. A
+        // cluster's glyphs before an open path's start are left out when one of its glyphs is drawn.
+        let same = |o: &&PositionedGlyph| o.byte == g.byte && o.len == g.len && !(drawn && o.off_path);
         let first = layout.glyphs[..=i].iter().rev().take_while(same).last().unwrap_or(g);
         let last = layout.glyphs[i..].iter().take_while(same).last().unwrap_or(g);
         let along = dir(first.angle);

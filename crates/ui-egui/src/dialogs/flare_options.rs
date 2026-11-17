@@ -136,10 +136,11 @@ fn preview_command(app: &VectorcraftApp, d: &Dialog) -> Option<(String, Value)> 
 
 /// Reset (Cancel with Alt or Option held): every option goes back to the Flare tool's default
 /// (`FLARE_OPTIONS`, with Rays and Rings on). The dialog keeps a click's `x` and `y`, so OK still draws there.
-fn reset(_: &VectorcraftApp, d: &mut Dialog) {
+fn reset(_: &VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     if let Value::Object(defaults) = vectorcraft_tools::create("flare").options() {
         d.fields.extend(defaults);
     }
+    Ok(())
 }
 
 /// OK: set the tool's options; opened by a click, draw a flare there with them.

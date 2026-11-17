@@ -281,6 +281,210 @@ fn a_clipping_group_with_revolve_and_rotate_expands_the_art_revolve_cuts() {
     assert_eq!(both, alone);
 }
 
+/// The leaves `art` draws: each path with its fill and stroke.
+fn leaves(art: &Node) -> Vec<(PathData, bool, Option<StrokeLayer>)> {
+    let mut out = vec![];
+    art.walk(&mut |c| {
+        if let Some(p) = c.path_data() {
+            out.push((p.clone(), c.appearance.fill().is_some(), c.appearance.stroke().cloned()));
+        }
+    });
+    out
+}
+
+/// The art the canvas draws for `n`: Revolve's, else the other 3D effects'.
+fn drawn(n: &Node) -> Node {
+    crate::revolve_art(n).or_else(|| super::super::solid_art(n)).unwrap_or_else(|| panic!("no art for {n:?}"))
+}
+
+const WIRE: [&str; 4] = [super::super::EXTRUDE, crate::REVOLVE, super::super::INFLATE, ROTATE];
+
+/// Render Settings › Wireframe: each of the panel's four effects draws the edges Expand as
+/// Wireframes gives, each a 0.5 pt black stroke with round joins and no fill, in place of its
+/// shaded faces; shaded again, it draws filled faces.
+#[test]
+fn wireframe_mode_draws_the_expanded_edges_as_strokes() {
+    for id in WIRE {
+        let n = solid_square(id, json!({"render": {"mode": "wireframe"}}));
+        let art = leaves(&drawn(&n));
+        let wire = three_d_wireframe_in(None, &n).unwrap_or_else(|e| panic!("{id}: {e}"));
+        assert_eq!(art.len(), wire.len(), "{id}");
+        for ((path, filled, stroke), edge) in art.iter().zip(&wire) {
+            assert!(!filled, "{id}: an edge has no fill");
+            let stroke = stroke.as_ref().unwrap_or_else(|| panic!("{id}: an edge is stroked"));
+            assert_eq!((stroke.width, stroke.join, &stroke.paint), (WIRE_WEIGHT, LineJoin::Round, &Paint::solid(Color::BLACK)), "{id}");
+            assert_eq!(segments(std::slice::from_ref(path)), segments(std::slice::from_ref(edge)), "{id}");
+        }
+        let shaded = leaves(&drawn(&solid_square(id, json!({"render": {"mode": "shaded"}}))));
+        assert!(shaded.iter().any(|(_, filled, _)| *filled), "{id}: shaded faces are filled");
+    }
+    // The box turned off axis shows the nine edges of its three faces.
+    let n = solid_square(super::super::EXTRUDE, json!({"render": {"mode": "wireframe"}}));
+    let paths: Vec<PathData> = leaves(&drawn(&n)).into_iter().map(|(p, ..)| p).collect();
+    assert_eq!(segments(&paths).len(), 9);
+}
+
+/// The wireframe stays live: a deeper extrusion and a turned view redraw the edges.
+#[test]
+fn wireframe_mode_follows_the_effects_settings() {
+    let paths = |p: Value| -> Vec<PathData> { leaves(&drawn(&solid_square(super::super::EXTRUDE, p))).into_iter().map(|(p, ..)| p).collect() };
+    let flat = bounds(&paths(json!({"render": {"mode": "wireframe"}, "depth": 10.0})));
+    let deep = bounds(&paths(json!({"render": {"mode": "wireframe"}, "depth": 200.0})));
+    assert!(deep.width() > flat.width() + 1.0 || deep.height() > flat.height() + 1.0, "{flat:?} {deep:?}");
+    let turned = paths(json!({"render": {"mode": "wireframe"}, "rotationY": 60.0}));
+    assert_ne!(segments(&turned), segments(&paths(json!({"render": {"mode": "wireframe"}}))));
+}
+
+/// In wireframe mode no shadow and no graphic is drawn: only the edges.
+#[test]
+fn wireframe_mode_draws_no_shadow() {
+    for id in WIRE {
+        let n = solid_square(id, json!({"render": {"mode": "wireframe"}, "shadow": true}));
+        let art = leaves(&drawn(&n));
+        assert!(!art.is_empty() && art.iter().all(|(_, filled, stroke)| !filled && stroke.is_some()), "{id}");
+    }
+}
+
+/// The mode works where the effect is on a fill and on a group: the fill's solid and every member's
+/// solid draw as edges, and the geometry effects after a fill's effect still apply to them.
+#[test]
+fn wireframe_mode_on_a_fill_and_on_a_group() {
+    for id in WIRE {
+        let mut n = solid_square(id, json!({}));
+        let mut fx = n.appearance.effects.remove(0);
+        fx.params["render"] = json!({"mode": "wireframe"});
+        let fill = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Fill(_))).unwrap();
+        fill.effects_mut().push(fx.clone());
+        fill.effects_mut().push(crate::new_effect("distort.transform", &json!({"moveH": 500.0})).unwrap());
+        let art = leaves(&drawn(&n));
+        assert!(!art.is_empty() && art.iter().all(|(_, filled, stroke)| !filled && stroke.is_some()), "{id} on a fill");
+
+        let member = |x: f64, id: u64| {
+            Arc::new(Node::path(NodeId(id), square(x, 100.0, 50.0), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0)))
+        };
+        let mut g = Node::group(NodeId(1), vec![member(100.0, 2), member(200.0, 3)]);
+        g.appearance.effects.push(fx);
+        let art = leaves(&drawn(&g));
+        assert!(!art.is_empty() && art.iter().all(|(_, filled, stroke)| !filled && stroke.is_some()), "{id} on a group");
+        // Both members' edges are drawn.
+        let paths: Vec<PathData> = art.into_iter().map(|(p, ..)| p).collect();
+        assert!(bounds(&paths).width() > 100.0, "{id}");
+    }
+}
+
+/// The mesh shows every edge, as Expand as Wireframes gives them, whatever the opacity of the fill
+/// and the opacity masks of the group's members; the object's own opacity stays on the art. Two
+/// members that touch, one at 50% and one masked, draw their shared edge once: seven edges.
+#[test]
+fn the_mesh_shows_every_edge_whatever_the_members_transparency() {
+    let member = |x: f64, id: u64, opacity: f32| {
+        let mut n = Node::path(NodeId(id), square(x, 100.0, 50.0), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+        if let Some(AppearanceItem::Fill(f)) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Fill(_))) {
+            f.opacity = opacity;
+        }
+        n
+    };
+    let mut masked = member(150.0, 3, 1.0);
+    masked.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(member(0.0, 900, 1.0), true)));
+    let mut g = Node::group(NodeId(1), vec![Arc::new(member(100.0, 2, 0.5)), Arc::new(masked)]);
+    g.opacity = 0.75;
+    g.appearance.effects.push(crate::new_effect(ROTATE, &json!({"render": {"mode": "wireframe"}})).unwrap());
+    let art = drawn(&g);
+    assert_eq!(art.opacity, 0.75);
+    let paths: Vec<PathData> = leaves(&art).into_iter().map(|(p, ..)| p).collect();
+    assert_eq!(segments(&paths).len(), 7, "{paths:?}");
+    assert_eq!(segments(&paths).len(), segments(&three_d_wireframe_in(None, &g).unwrap()).len());
+    let mut scoped = 0;
+    for c in art.children().into_iter().flatten() {
+        c.walk(&mut |c| scoped += usize::from(c.extras().mask.is_some() || c.opacity < 1.0));
+    }
+    assert_eq!(scoped, 0, "no part of the mesh is masked or faded");
+    // A fill at 0% still shows its mesh.
+    for id in WIRE {
+        let mut n = solid_square(id, json!({"render": {"mode": "wireframe"}}));
+        if let Some(AppearanceItem::Fill(f)) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Fill(_))) {
+            f.opacity = 0.0;
+        }
+        assert!(!leaves(&drawn(&n)).is_empty(), "{id}");
+    }
+}
+
+/// Expand Appearance of a Revolve in wireframe mode gives the stroked edges, not the shaded faces.
+#[test]
+fn expanding_a_revolve_in_wireframe_mode_gives_the_edges() {
+    let n = solid_square(crate::REVOLVE, json!({"render": {"mode": "wireframe"}}));
+    let art = leaves(&crate::revolve::expand_revolve_art(&n).unwrap());
+    assert_eq!(art.len(), three_d_wireframe_in(None, &n).unwrap().len());
+    assert!(art.iter().all(|(_, filled, stroke)| !filled && stroke.as_ref().is_some_and(|s| s.width == WIRE_WEIGHT)));
+}
+
+/// `render` is checked before an edit: an object holding only `mode`, `shaded` or `wireframe`, and
+/// only on the panel's four effects.
+#[test]
+fn render_settings_are_validated() {
+    for id in WIRE {
+        for good in [json!({}), json!({"render": {}}), json!({"render": {"mode": "shaded"}}), json!({"render": {"mode": "wireframe"}})] {
+            assert_eq!(crate::validate_three_d_params(id, &good), Ok(()), "{id} {good}");
+        }
+        for bad in [
+            json!({"render": "wireframe"}),
+            json!({"render": null}),
+            json!({"render": {"mode": "raytrace"}}),
+            json!({"render": {"mode": true}}),
+            json!({"render": {"mode": "wireframe", "quality": "high"}}),
+        ] {
+            let e = crate::validate_three_d_params(id, &bad).unwrap_err();
+            assert_eq!(e, "`render` must be an object holding only `mode`, set to shaded or wireframe", "{id} {bad}");
+        }
+        // The command check on the object refuses it too.
+        let n = solid_square(id, json!({}));
+        assert!(crate::validate_three_d(&n, id, &json!({"render": {"mode": "x"}})).is_err(), "{id}");
+    }
+    for id in [super::super::CLASSIC_EXTRUDE, crate::CLASSIC_REVOLVE, super::super::CLASSIC_ROTATE] {
+        let e = crate::validate_three_d_params(id, &json!({"render": {"mode": "wireframe"}})).unwrap_err();
+        assert!(e.contains("`render`"), "{id}: {e}");
+    }
+}
+
+/// A Revolve whose shaded surface is past the budget of paint copies (a gradient with many stops) is
+/// refused shaded, but in wireframe mode, which draws only the black edges, it is accepted and drawn:
+/// on the object and on a fill.
+#[test]
+fn wireframe_mode_is_checked_against_the_edges_it_draws() {
+    use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let n = solid_square(crate::REVOLVE, json!({}));
+    let path = n.path_data().unwrap().clone();
+    let faces = vectorcraft_three_d::revolve(&path, path.bounds().unwrap(), crate::revolve::revolve_options(&json!({}))).unwrap().len();
+    let stops = crate::revolve::MAX_PAINT_COPIES / (faces * 4) / std::mem::size_of::<GradientStop>() + 1;
+    let stops = (0..stops).map(|i| GradientStop::new(i as f32 / stops as f32, Color::BLACK)).collect();
+    let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let mut n = n;
+    n.appearance = Appearance::basic(gradient, Paint::None, 0.0).into();
+    let shaded = json!({});
+    let wire = json!({"render": {"mode": "wireframe"}});
+    let refused = crate::validate_revolve(&n, &shaded).unwrap_err();
+    assert!(refused.contains("simplify the gradient"), "{refused}");
+    assert_eq!(crate::validate_revolve(&n, &wire), Ok(()));
+    n.appearance.effects.push(crate::new_effect(crate::REVOLVE, &wire).unwrap());
+    assert!(leaves(&drawn(&n)).iter().all(|(_, filled, stroke)| !filled && stroke.is_some()));
+    // On the fill.
+    let fx = n.appearance.effects.remove(0);
+    let at = n.appearance.items.iter().position(|i| matches!(i, AppearanceItem::Fill(_))).unwrap();
+    assert!(crate::revolve::validate_item_revolve(&n, &shaded, at, 0).is_err());
+    assert_eq!(crate::revolve::validate_item_revolve(&n, &wire, at, 0), Ok(()));
+    n.appearance.items[at].effects_mut().push(fx);
+    assert!(leaves(&drawn(&n)).iter().all(|(_, filled, stroke)| !filled && stroke.is_some()));
+}
+
+/// A 3D (Classic) effect ignores a `render` it does not take in a loaded file: it draws as before.
+#[test]
+fn a_classic_effect_is_not_drawn_as_a_render_wireframe() {
+    let mut n = solid_square(super::super::CLASSIC_EXTRUDE, json!({}));
+    n.appearance.effects[0].params["render"] = json!({"mode": "wireframe"});
+    assert!(!renders_wireframe(&n.appearance.effects[0]));
+    assert!(leaves(&drawn(&n)).iter().any(|(_, filled, _)| *filled));
+}
+
 #[test]
 fn an_object_without_a_visible_3d_effect_is_an_error() {
     let mut n = solid_square(super::super::EXTRUDE, json!({}));

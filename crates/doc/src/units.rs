@@ -156,7 +156,12 @@ impl Unit {
     /// before it (`3cm*50%` is 1.5 cm, `3cm/50%` is 6 cm). After `+` or `-`, it adds or takes away
     /// that share of everything before it (`50pt+25%` is 62.5 pt, `100pt+20pt-50%` is 60 pt). A
     /// percentage on its own (`50%`) reads as nothing.
+    ///
+    /// Text with more than 128 `+ - * /` signs reads as nothing.
     pub fn parse(self, s: &str) -> Option<f64> {
+        if s.chars().filter(|c| matches!(c, '+' | '-' | '*' | '/')).count() > MAX_MEASURE_OPERATORS {
+            return None;
+        }
         parse_measure(s, self).filter(|v| v.is_finite())
     }
     /// The value naming this unit in the Units preferences (`points`, `millimeters`,
@@ -206,6 +211,9 @@ impl Unit {
         format!("{} {}", s, self.suffix())
     }
 }
+
+/// The most `+ - * /` signs [`Unit::parse`] reads in one text.
+const MAX_MEASURE_OPERATORS: usize = 128;
 
 fn parse_measure(s: &str, default: Unit) -> Option<f64> {
     let s = s.trim();

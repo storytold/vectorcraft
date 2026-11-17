@@ -311,6 +311,7 @@ impl Tool for CornerTool {
                     None => vec![],
                 }
             }
+            PointerKind::TripleClick => vec![],
         }
     }
 

@@ -39,14 +39,15 @@ impl Exporter<'_> {
             cover(&mut ms, page, if m.clip { 0 } else { 255 }, 1.0);
         }
         // Mask art is a picture of its own: it takes no part in a knockout group around the object,
-        // and has no inks to overprint.
+        // and has no inks to overprint (its characters do not darken either).
         let knockout = std::mem::take(&mut self.knockout);
         let overprint = std::mem::take(&mut self.overprint);
+        let darken = std::mem::take(&mut self.darken_overprints);
         let image_left_out = self.image_left_out.replace(false);
         self.node(&mut ms, &m.art, page, true);
         let incomplete = self.image_left_out.unwrap_or(false);
         self.image_left_out = image_left_out.map(|outer| outer || incomplete);
-        (self.knockout, self.overprint) = (knockout, overprint);
+        (self.knockout, self.overprint, self.darken_overprints) = (knockout, overprint, darken);
         if incomplete {
             ms.pop();
             ms.finish();
@@ -611,6 +612,20 @@ impl Exporter<'_> {
         }
     }
 
+    /// [`Self::overprinting`] for a character fill or stroke, which has no blend mode of its own:
+    /// with [`Self::darken_overprints`] an overprinting one is drawn with Darken (not a white one
+    /// with Discard White Overprint).
+    pub(super) fn char_overprinting(&mut self, s: &mut Surface, overprints: bool, paint: &Paint, draw: impl FnOnce(&mut Self, &mut Surface)) {
+        let white = vectorcraft_doc::overprint::is_white(paint) && self.doc.setup.discard_white_overprint;
+        if overprints && self.darken_overprints && !paint.is_none() && !white {
+            s.push_blend_mode(krilla::blend::BlendMode::Darken);
+            self.overprinting(s, overprints, paint, draw);
+            s.pop();
+        } else {
+            self.overprinting(s, overprints, paint, draw);
+        }
+    }
+
     /// Is `p` a paint PDF has no paint for when it paints a fill (`fill`) or a stroke, which
     /// [`Self::area`] draws as art: a pattern swatch or a gradient drawn as pixels
     /// ([`vectorcraft_color::GradientPaint::draws_as_pixels`]), but not a Perceptual one of spot
@@ -859,7 +874,9 @@ impl Exporter<'_> {
 /// Opens the blend mode and the transparency group `n` is drawn with (`container` when it is a
 /// group or layer whose children `knockout` each other). Returns how many were opened, and
 /// whether the children are to be drawn in an isolated group of their own: the knockout group of
-/// an unclipped group's elements is its isolated group too.
+/// an unclipped group's elements is its isolated group too. An opaque knockout group in Normal
+/// mode that does not isolate opens no group: its elements are drawn on the art below it, in a
+/// knockout group without `/I` when there are several.
 fn transparency(s: &mut Surface, n: &Node, page: Rect, container: bool, knockout: bool) -> (usize, bool) {
     let mut pushes = 0;
     if n.blend != BlendMode::Normal {
@@ -876,6 +893,8 @@ fn transparency(s: &mut Surface, n: &Node, page: Rect, container: bool, knockout
         } else if n.opacity < 1.0 {
             s.push_opacity(norm(n.opacity));
             pushes += 1;
+        } else if knockout && !n.isolate && n.blend == BlendMode::Normal {
+            // A knockout group that does not isolate: its elements start from the art below it.
         } else if knockout && matches!(n.kind, NodeKind::Layer { clip: false, .. } | NodeKind::Group { clip: false, .. }) {
             isolated_children = true;
         } else {
