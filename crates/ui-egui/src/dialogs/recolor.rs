@@ -183,7 +183,8 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         None => String::new(),
     };
     // Without art the rows are the group's colours, as they are.
-    let start: Vec<Value> = if art { vec![] } else { assign.iter().map(|k| json!({"from": [k], "to": k})).collect() };
+    let mut start: Vec<Value> = if art { vec![] } else { assign.iter().map(|k| json!({"from": [k], "to": k})).collect() };
+    number_slots(&mut start);
     // The Preserve checkboxes as they were last confirmed (#2960).
     let kept = |k: &str, default: bool| app.ui.recolor_preserve.get(k).and_then(Value::as_bool).unwrap_or(default);
     let fields = json!({
@@ -243,6 +244,7 @@ fn sync(app: &mut VectorcraftApp, d: &mut Dialog) {
             for (row, to) in rows.iter_mut().zip(assign) {
                 row["to"] = to;
             }
+            number_slots(&mut rows);
             snap(app, d, &mut rows);
             d.fields.insert("rows".into(), Value::Array(rows));
             // Find dims the preserved colors with the rows that aren't selected.
@@ -630,7 +632,13 @@ fn apply_params(d: &Dialog) -> Value {
     let group = d.fields.get("group").and_then(Value::as_str).map(|g| {
         // A row made with New Row that holds no current colors gives the group no color; a color
         // added on the Edit tab (`added`) joins it after the others.
-        let took: Vec<&Value> = rs.iter().filter(|r| !no_current(r)).map(|r| if excluded(r) { &keep } else { &r["to"] }).collect();
+        // Each row takes the swatch at its place when the rows were made, so a row moved among the
+        // color bars keeps its swatch; rows that don't all carry a place go in row order.
+        let mut current: Vec<&Value> = rs.iter().filter(|r| !no_current(r)).collect();
+        if current.iter().all(|r| r[SLOT].is_u64()) {
+            current.sort_by_key(|r| r[SLOT].as_u64());
+        }
+        let took: Vec<&Value> = current.into_iter().map(|r| if excluded(r) { &keep } else { &r["to"] }).collect();
         let assign = d.fields.get("__assign").and_then(Value::as_array).filter(|_| d.bool("__art"));
         let rest = assign.map_or(&[][..], |a| a.get(took.len()..).unwrap_or_default());
         let added = rs.iter().filter(|r| no_current(r) && is_added(r) && !excluded(r)).map(|r| &r["to"]).filter(|c| !c.is_null());
@@ -1478,9 +1486,9 @@ fn separate(rows: &mut Vec<Value>, sel: &[usize]) {
             Some(a) if sel.contains(&i) && a.len() > 1 => {
                 let at = out.len();
                 out.extend(a.iter().map(|k| json!({"from": [k], "to": k})));
-                // A separated row's marks (the base color, a marker's tie, a color it follows) go
+                // A separated row's marks (the base color, a marker's tie, a color it follows, its place) go
                 // to the row of its first color.
-                for k in [BASE, TIE, FOLLOWS] {
+                for k in [BASE, TIE, FOLLOWS, SLOT] {
                     if let Some(v) = row.get(k) {
                         out[at][k] = v.clone();
                     }
@@ -1623,6 +1631,16 @@ const BASE: &str = "base";
 const TIE: &str = "tie";
 /// A row's mark as a color added on a marker's line: the marker's `tie`, which it moves with.
 const FOLLOWS: &str = "follows";
+/// A row's place when the rows were made (the group swatch it took), which it keeps when it moves.
+const SLOT: &str = "slot";
+
+/// Give each row its place in `rows` as its [`SLOT`].
+fn number_slots(rows: &mut [Value]) {
+    for (i, r) in rows.iter_mut().enumerate() {
+        r[SLOT] = json!(i);
+    }
+}
+
 /// The target of the wheel's right-click menu: `{marker, line, hs}` (row indexes and the hue and
 /// saturation clicked).
 const MENU_AT: &str = "__wheelMenu";
@@ -1681,7 +1699,7 @@ fn keep_marks(before: &[Value], after: &mut [Value]) {
         return;
     }
     for (a, b) in after.iter_mut().zip(before) {
-        for k in [BASE, TIE, FOLLOWS] {
+        for k in [BASE, TIE, FOLLOWS, SLOT] {
             if a.get(k).is_none()
                 && let Some(v) = b.get(k)
             {
@@ -1691,11 +1709,11 @@ fn keep_marks(before: &[Value], after: &mut [Value]) {
     }
 }
 
-/// `row` without the dialog's base, tie and follows marks.
+/// `row` without the dialog's base, tie, follows and place marks.
 fn without_marks(row: &Value) -> Value {
     let mut r = row.clone();
     if let Some(o) = r.as_object_mut() {
-        for k in [BASE, TIE, FOLLOWS] {
+        for k in [BASE, TIE, FOLLOWS, SLOT] {
             o.remove(k);
         }
     }
@@ -2309,6 +2327,36 @@ mod tests {
         let hex: Vec<String> = g.swatches.iter().map(|w| w.paint.color().unwrap().to_hex()).collect();
         assert_eq!(hex[0], "#2878f0", "{hex:?}");
         assert_ne!(hex[1], "#ff0000", "{hex:?}");
+    }
+
+    /// A row moved among the color bars keeps the group swatch it took when the rows were made, so
+    /// an excluded row's swatch stays as it is and the other swatches keep their places.
+    #[test]
+    fn a_moved_row_keeps_its_group_swatch() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "G", "colors": ["#ff0000", "#0000ff", "#00ff00"]})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "G"})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        let mut rs = super::rows(&d);
+        rs[1]["exclude"] = json!(true);
+        rs[2]["to"] = json!("#ffff00");
+        let active = active_rows(&rs);
+        assert_eq!(active, [0, 2]);
+        // Drag the last bar (green, now yellow) above the first (red).
+        assert_eq!(move_bar(&mut rs, &active, 1, 0), Some(0));
+        d.fields.insert("rows".into(), json!(rs));
+        let colors = &apply_params(&d)["groupColors"];
+        assert_eq!(colors[1], json!("keep"), "{colors}");
+        confirm(&mut app, &d).unwrap();
+        let g = app.session.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "G").unwrap();
+        let hex: Vec<String> = g.swatches.iter().map(|w| w.paint.color().unwrap().to_hex()).collect();
+        assert_eq!(hex, ["#ff0000", "#0000ff", "#ffff00"]);
+        // Rows reduced from art carry their place too, and `recolor.apply` gets none.
+        let mut rows = vec![json!({"from": ["rgb 255 0 0"], "to": "rgb 1 1 1"}), json!({"from": ["rgb 0 0 255"], "to": "rgb 2 2 2"})];
+        number_slots(&mut rows);
+        assert_eq!(rows.iter().map(|r| r[SLOT].clone()).collect::<Vec<_>>(), [json!(0), json!(1)]);
+        assert!(without_marks(&rows[0]).get(SLOT).is_none());
     }
 
     #[test]

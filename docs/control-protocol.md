@@ -290,7 +290,8 @@ luminosity}`, percent from -100 to 100, 0 by default). The dialog sends a non-ze
 colors; colors opened alone are saved as a group with the change. `display` sets how the Edit tab shows the new
 colors: `smooth` (the smooth wheel, also when unset; each opening starts there), `segmented` (a wheel of solid patches,
 24 hues by 5 saturations, whose markers move as freely) or `bars` (a solid bar per recolored color in row order; a click
-selects its row for the sliders and a drag moves the row without changing a color). `wheelTool` turns on a wheel tool
+selects its row for the sliders and a drag moves the row without changing a color; the moved row keeps the color group
+swatch it took). `wheelTool` turns on a wheel tool
 on either wheel: `add` (the Add Color tool) adds a click as a new color, the hue and saturation clicked at the selected
 color's brightness (the base color's when none is selected; the patch's color on the segmented wheel), in a new row with no current colors (`from: []`) and
 `added: true` that becomes the selected row; `remove` (the Remove Color tool) removes the color of the marker clicked.
