@@ -380,7 +380,10 @@ fn move_interpolating_handles(path: &mut PathData, set: &BTreeSet<AnchorRef>, d:
                 let v = h - a.p;
                 start + Vec2::new(v.x * re - v.y * im, v.x * im + v.y * re)
             };
-            let (h_out, h_in) = (map(a.h_out), map(b.h_in));
+            // A retracted handle goes to its anchor's new place exactly: mapped, it could land a
+            // rounding error away, which `line_up_handles` would read as a direction.
+            let h_out = if a.h_out == a.p { start } else { map(a.h_out) };
+            let h_in = if b.h_in == b.p { end } else { map(b.h_in) };
             if h_out.is_finite() && h_in.is_finite() {
                 placed.push((si, from, true, h_out));
                 placed.push((si, to, false, h_in));

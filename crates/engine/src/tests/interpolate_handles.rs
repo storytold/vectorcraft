@@ -419,6 +419,29 @@ fn a_smooth_anchor_keeps_its_handles_in_line() {
 }
 
 #[test]
+fn a_moved_smooth_anchor_keeps_a_retracted_handle_exactly_retracted() {
+    let mut s = session();
+    interpolate(&mut s, true);
+    let id = create(
+        &mut s,
+        json!([
+            {"x": 0, "y": 100, "out": [50, 100]},
+            {"x": 200, "y": 100, "in": [200, 100], "out": [250, 150], "smooth": true},
+            {"x": 400, "y": 100, "in": [350, 100]},
+        ]),
+    );
+    select(&mut s, id, json!([[0, 1]]));
+    s.execute("object.nudge", &json!({"dx": 20, "dy": 8.1})).unwrap();
+    let b = anchor(&s, id, 1);
+    assert_eq!(b.p, Point::new(220.0, 108.1));
+    // Re-mapping the retracted handle by its segment's map would leave it a rounding error away
+    // from the anchor, and lining the handles up would then turn the outgoing one by that error.
+    assert_eq!(b.h_in, b.p, "the retracted handle stays retracted");
+    // The chord to the third anchor goes from (200, 0) to (180, -8.1).
+    close(b.h_out, Point::new(267.025, 151.075));
+}
+
+#[test]
 fn transform_again_repeats_a_move_with_the_handles_re_mapped() {
     let twice = |again: bool| {
         let mut s = session();
