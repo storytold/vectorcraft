@@ -256,14 +256,15 @@ mod tests {
 
     /// Offers `release` and returns once its prompt is open. The updater reads the installed
     /// files for an offer on a thread of its own, which asks the context the updater keeps for a
-    /// repaint after it answers; the next tick opens the prompt. The updater must not have kept
-    /// another context, which its thread would ask instead. A copy the launcher manages ignores
-    /// the offer and fails the test.
+    /// repaint after it answers; the next tick opens the prompt. The observer sees every repaint
+    /// request, so each immediate one is followed by a tick until the prompt opens. The updater
+    /// must not have kept another context, which its thread would ask instead. A copy the
+    /// launcher manages ignores the offer and fails the test.
     #[cfg(not(target_arch = "wasm32"))]
     fn offer_and_wait(updater: &mut Updater, release: craft_update::Release) {
         let ctx = egui::Context::default();
         let (answered, wait) = std::sync::mpsc::channel();
-        ctx.set_request_repaint_callback(move |info| {
+        ctx.set_repaint_observer(move |info| {
             if info.delay.is_zero() {
                 let _ = answered.send(());
             }
@@ -273,11 +274,10 @@ mod tests {
         updater.offer(release);
         // `offer` reads the launcher's choice; a managed copy starts no inspection.
         assert!(updater.managed().is_none(), "the launcher manages this copy, so it ignored the offer");
-        if !updater.prompt_open() {
+        while !updater.prompt_open() {
             wait.recv().unwrap();
             updater.tick(&ctx);
         }
-        assert!(updater.prompt_open(), "the offer opened its prompt");
     }
 
     /// An app with one saved document holding a selected rectangle.
