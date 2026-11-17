@@ -707,24 +707,26 @@ impl CommandUses {
 pub fn deserialize_command_uses<'de, D: serde::Deserializer<'de>>(d: D) -> Result<CommandUses, D::Error> {
     let v = <serde_json::Value as serde::Deserialize>::deserialize(d)?;
     let number = |v: Option<&serde_json::Value>| v.and_then(serde_json::Value::as_u64).map(|n| u32::try_from(n).unwrap_or(u32::MAX));
-    let mut uses: Vec<(String, (u32, u32))> = v
-        .get("uses")
-        .and_then(serde_json::Value::as_object)
-        .map(|m| {
-            m.iter()
-                .filter_map(|(id, u)| {
-                    let n = number(u.get(0))?.min(HALVING_COUNT - 1);
-                    let last = number(u.get(1))?;
-                    (n > 0 && u.as_array().is_some_and(|a| a.len() == 2)).then(|| (id.clone(), (n, last)))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    uses.sort_by_key(|(_, (_, last))| std::cmp::Reverse(*last));
-    uses.truncate(MAX_COUNTED_COMMANDS);
+    use std::cmp::Reverse;
+    // The heap holds at most MAX_COUNTED_COMMANDS + 1 entries, the least recent pick on top (of
+    // equal picks, the id that sorts last), so a long saved list is not collected whole.
+    let mut kept: std::collections::BinaryHeap<Reverse<(u32, Reverse<&String>, u32)>> = std::collections::BinaryHeap::new();
+    for (id, u) in v.get("uses").and_then(serde_json::Value::as_object).into_iter().flatten() {
+        let (Some(n), Some(last)) = (number(u.get(0)), number(u.get(1))) else { continue };
+        if n == 0 || !u.as_array().is_some_and(|a| a.len() == 2) {
+            continue;
+        }
+        kept.push(Reverse((last, Reverse(id), n.min(HALVING_COUNT - 1))));
+        if kept.len() > MAX_COUNTED_COMMANDS {
+            kept.pop();
+        }
+    }
+    let uses: std::collections::BTreeMap<String, (u32, u32)> =
+        kept.into_iter().map(|Reverse((last, Reverse(id), n))| (id.clone(), (n, last))).collect();
     // The pick number stays above every saved last pick, so the next pick is the most recent.
-    let pick = number(v.get("pick")).unwrap_or(0).max(uses.first().map_or(0, |(_, (_, last))| *last));
-    Ok(CommandUses { pick, uses: uses.into_iter().collect() })
+    let newest = uses.values().map(|&(_, last)| last).max().unwrap_or(0);
+    let pick = number(v.get("pick")).unwrap_or(0).max(newest);
+    Ok(CommandUses { pick, uses })
 }
 
 /// The id of the Recent Commands list's popup.
