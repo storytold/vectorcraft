@@ -231,6 +231,14 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 || crate::dialogs::new_document_popup_open(d)
                 || crate::dialogs::export_artboard_name_editing(app, d)
         });
+        // Escape ends Brush Options' Key Color pick and leaves the dialog open: the Eyedropper
+        // switches back to the tool that armed it.
+        if !popup && pressed_anew(ctx, Key::Escape) && key_color_pick_armed(app) {
+            let view = app.view_info();
+            let r = app.session.tool_key(ToolKey::Escape, Mods::default(), view);
+            crate::canvas::apply_requests(app, r);
+            return;
+        }
         // Escape in Preferences' search field with text clears the field first.
         if !popup && pressed_anew(ctx, Key::Escape) && !crate::prefs_dialog::clear_search_on_escape(app, ctx) {
             crate::dialogs::cancel(app);
@@ -385,6 +393,12 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
 /// Did `key` go down in this frame? The key repeats of a held key do not count.
 pub(crate) fn pressed_anew(ctx: &egui::Context, key: Key) -> bool {
     ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Key { key: k, pressed: true, repeat: false, .. } if *k == key)))
+}
+
+/// Is Brush Options open with its Key Color eyedropper armed, waiting for a click on the art?
+fn key_color_pick_armed(app: &VectorcraftApp) -> bool {
+    let open = app.ui.dialog.as_ref().is_some_and(|d| d.kind == crate::dialogs::brush_options::KIND);
+    open && app.session.tool_id() == "eyedropper" && app.session.tool_options()["brushKeyColor"] == true
 }
 
 /// Takes this frame's repeats of `key` when the tool claims it: a press acts once, and they stay out

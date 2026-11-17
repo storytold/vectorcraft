@@ -2,6 +2,8 @@
 //! Magic Wand panel's (session state, kept across tool switches); the tool runs
 //! `select.magicWand` on click.
 
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
@@ -188,13 +190,14 @@ impl WandSettings {
     }
 }
 
-/// Paintable leaves (paths, compounds, text, images) that are visible and editable.
+/// Paintable leaves (paths, compounds, text, images) that are visible and editable, in the order
+/// of the document walk.
 fn paintable(doc: &Document) -> Vec<NodeId> {
     let mut out = vec![];
-    let mut compounds: Vec<NodeId> = vec![];
+    let mut compounds: HashSet<NodeId> = HashSet::new();
     doc.walk(|n| {
         if matches!(n.kind, NodeKind::Compound { .. }) {
-            compounds.push(n.id);
+            compounds.insert(n.id);
             out.push(n.id);
         } else if !n.is_container() && !n.is_ruler_guide() {
             out.push(n.id);
@@ -208,6 +211,18 @@ fn paintable(doc: &Document) -> Vec<NodeId> {
             && doc.node(*id).is_some_and(|n| n.visible)
     });
     out
+}
+
+/// Shift-click: the selected objects in their order, then each hit that isn't selected yet.
+fn added(selected: &[NodeId], hits: Vec<NodeId>) -> Vec<NodeId> {
+    let seen: HashSet<NodeId> = selected.iter().copied().collect();
+    selected.iter().copied().chain(hits.into_iter().filter(|h| !seen.contains(h))).collect()
+}
+
+/// Alt-click: the selected objects that aren't hits, in their order.
+fn subtracted(selected: &[NodeId], hits: Vec<NodeId>) -> Vec<NodeId> {
+    let hits: HashSet<NodeId> = hits.into_iter().collect();
+    selected.iter().copied().filter(|i| !hits.contains(i)).collect()
 }
 
 fn magic_wand(s: &mut Session, p: &Value) -> Result<Value> {
@@ -224,8 +239,8 @@ fn magic_wand(s: &mut Session, p: &Value) -> Result<Value> {
         .filter(|i| st.doc.node(*i).is_some_and(|n| w.matches(&reference, n, mode)))
         .collect();
     let ids: Vec<NodeId> = match str_param(p, "mode").unwrap_or("set") {
-        "add" => st.selection.objects.iter().copied().chain(hits.iter().copied().filter(|h| !st.selection.objects.contains(h))).collect(),
-        "subtract" => st.selection.objects.iter().copied().filter(|i| !hits.contains(i)).collect(),
+        "add" => added(&st.selection.objects, hits),
+        "subtract" => subtracted(&st.selection.objects, hits),
         "set" => hits,
         other => return Err(bad("select.magicWand", format!("unknown mode `{other}` (set, add, subtract)"))),
     };
@@ -421,6 +436,252 @@ mod tests {
         s.execute("document.activate", &json!({"index": 1})).unwrap();
         let o = s.execute("magicWand.set", &json!({"reset": true})).unwrap();
         assert_eq!((o["fillTolerance"].as_f64(), o["strokeTolerance"].as_f64()), (Some(32.0), Some(32.0)));
+    }
+
+    /// [`paintable`] with the compound paths kept in a list and searched for each object's parent.
+    fn paintable_by_search(doc: &Document) -> Vec<NodeId> {
+        let mut out = vec![];
+        let mut compounds: Vec<NodeId> = vec![];
+        doc.walk(|n| {
+            if matches!(n.kind, NodeKind::Compound { .. }) {
+                compounds.push(n.id);
+                out.push(n.id);
+            } else if !n.is_container() && !n.is_ruler_guide() {
+                out.push(n.id);
+            }
+        });
+        let editable = doc.editable();
+        out.retain(|id| {
+            !doc.parent_of(*id).is_some_and(|p| compounds.contains(&p))
+                && editable(*id)
+                && doc.is_visible(*id)
+                && doc.node(*id).is_some_and(|n| n.visible)
+        });
+        out
+    }
+
+    /// [`added`] with the selection searched for each hit.
+    fn added_by_search(selected: &[NodeId], hits: &[NodeId]) -> Vec<NodeId> {
+        selected.iter().copied().chain(hits.iter().copied().filter(|h| !selected.contains(h))).collect()
+    }
+
+    /// [`subtracted`] with the hits searched for each selected object.
+    fn subtracted_by_search(selected: &[NodeId], hits: &[NodeId]) -> Vec<NodeId> {
+        selected.iter().copied().filter(|i| !hits.contains(i)).collect()
+    }
+
+    /// A red fill for an even `k` and a blue one for an odd `k`, with a 1 pt black stroke.
+    fn bench_paint(k: usize) -> vectorcraft_doc::Appearance {
+        use vectorcraft_color::Color;
+        let fill = if k.is_multiple_of(2) { Color::rgb(1.0, 0.0, 0.0) } else { Color::rgb(0.0, 0.0, 1.0) };
+        vectorcraft_doc::Appearance::basic(Paint::solid(fill), Paint::solid(Color::BLACK), 1.0)
+    }
+
+    /// Path `k`: a 10 × 10 rectangle painted as [`bench_paint`]. Every 97th path is locked and
+    /// every 89th hidden.
+    fn bench_path(d: &mut Document, k: usize) -> Node {
+        use vectorcraft_geom::{Rect, shapes};
+        let (x, y) = ((k % 200) as f64 * 20.0, (k / 200) as f64 * 20.0);
+        let mut n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, y, x + 10.0, y + 10.0)), bench_paint(k));
+        n.locked = k % 97 == 5;
+        n.visible = k % 89 != 7;
+        n
+    }
+
+    /// A session whose document holds `blocks` × 200 paths on one layer. Each block has a group of
+    /// 10 paths, 25 compound paths of 2 paths each and 140 loose paths, with the group and the
+    /// compound paths among the loose paths. The compound paths alternate red and blue fills, and
+    /// a few are locked or hidden.
+    fn wand_session(blocks: usize) -> Session {
+        use std::sync::Arc;
+        use vectorcraft_geom::FillRule;
+        let mut d = Document::new(4000.0, 4000.0);
+        let mut k = 0;
+        let mut next = |d: &mut Document| {
+            k += 1;
+            bench_path(d, k - 1)
+        };
+        let mut art = vec![];
+        for slot in 0..blocks * 166 {
+            let node = match slot % 166 {
+                0 => {
+                    let members = (0..10).map(|_| Arc::new(next(&mut d))).collect();
+                    Node::group(d.alloc_id(), members)
+                }
+                c @ 1..=25 => {
+                    let members = (0..2).map(|_| Arc::new(next(&mut d))).collect();
+                    let mut n = Node::new(d.alloc_id(), NodeKind::Compound { children: members, rule: FillRule::NonZero });
+                    n.appearance = bench_paint(c).into();
+                    n.locked = slot % 1001 == 3;
+                    n.visible = slot % 1003 != 5;
+                    n
+                }
+                _ => next(&mut d),
+            };
+            art.push(Arc::new(node));
+        }
+        if let Some(ch) = Arc::make_mut(&mut d.layers[0]).children_mut() {
+            *ch = art;
+        }
+        let mut s = Session::new();
+        s.add_document(d, None);
+        s
+    }
+
+    /// The objects the wand picks when `reference` is clicked, found as before membership sets.
+    fn hits_by_search(s: &Session, reference: NodeId) -> Vec<NodeId> {
+        let st = s.doc().unwrap();
+        let r = st.doc.node(reference).unwrap();
+        let w = s.menu.wand.clone();
+        paintable_by_search(&st.doc).into_iter().filter(|i| w.matches(r, st.doc.node(*i).unwrap(), st.doc.color_mode)).collect()
+    }
+
+    #[test]
+    fn membership_sets_give_the_same_objects_in_the_same_order_as_searches() {
+        // 20,000 paths: 5,000 in 2,500 compound paths and 1,000 in 100 groups.
+        let mut s = wand_session(100);
+        let doc = &s.doc().unwrap().doc;
+        let all = paintable(doc);
+        assert!(all == paintable_by_search(doc), "paintable objects differ");
+        // Compound paths stay pickable unless locked or hidden, and their members never are.
+        let pickable: HashSet<NodeId> = all.iter().copied().collect();
+        let (mut compounds, mut skipped) = (0, 0);
+        doc.walk(|n| {
+            if let NodeKind::Compound { children, .. } = &n.kind {
+                compounds += 1;
+                skipped += usize::from(n.locked || !n.visible);
+                assert_eq!(pickable.contains(&n.id), n.visible && !n.locked, "compound path {}", n.id.0);
+                assert!(children.iter().all(|m| !pickable.contains(&m.id)), "a member of compound path {} is pickable", n.id.0);
+            }
+        });
+        assert_eq!(compounds, 2_500);
+        assert!(skipped > 0 && skipped < 100, "{skipped} locked or hidden compound paths");
+        let reference = all[0];
+        let hits = hits_by_search(&s, reference);
+        assert!(hits.len() > 5_000 && hits.len() < all.len() / 2 + 1_000, "{} hits", hits.len());
+        // A selection in another order than the document's: every third object from the end, both
+        // hits and objects that aren't hits.
+        let selected: Vec<NodeId> = all.iter().rev().step_by(3).copied().collect();
+        assert!(selected.iter().any(|i| hits.contains(i)) && selected.iter().any(|i| !hits.contains(i)));
+        assert!(added(&selected, hits.clone()) == added_by_search(&selected, &hits), "Shift-click differs");
+        assert!(subtracted(&selected, hits.clone()) == subtracted_by_search(&selected, &hits), "Alt-click differs");
+        // And through the command, in each mode.
+        let ids: Vec<u64> = selected.iter().map(|i| i.0).collect();
+        for (mode, want) in [("set", hits.clone()), ("add", added_by_search(&selected, &hits)), ("subtract", subtracted_by_search(&selected, &hits))]
+        {
+            s.execute("select.set", &json!({ "ids": ids })).unwrap();
+            assert!(s.doc().unwrap().selection.objects == selected, "select.set kept the order");
+            let r = s.execute("select.magicWand", &json!({"id": reference.0, "mode": mode})).unwrap();
+            assert_eq!(r["count"], json!(want.len()), "{mode}");
+            assert!(s.doc().unwrap().selection.objects == want, "{mode} selects other objects or another order");
+        }
+    }
+
+    /// Time the Magic Wand's paintable walk, Shift-click and Alt-click lists and a whole Shift-click
+    /// on documents of 2,000, 20,000 and 50,000 paths, with membership sets and with the searches
+    /// they replace, alternating 7 runs of each and giving the medians in ms. On Linux the times are
+    /// the thread's CPU time.
+    /// Run with `cargo test --release -p vectorcraft-engine --lib magic_wand_membership_timing -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "manual timing probe; performance depends on machine load"]
+    fn magic_wand_membership_timing() {
+        fn cpu_ns() -> Option<u64> {
+            std::fs::read_to_string("/proc/thread-self/schedstat").ok()?.split_whitespace().next()?.parse().ok()
+        }
+        /// The time of one call of `f`, averaged over `reps` calls.
+        fn time(reps: u32, f: &mut dyn FnMut()) -> f64 {
+            let start = (cpu_ns(), std::time::Instant::now());
+            for _ in 0..reps {
+                f();
+            }
+            let ms = match (start.0, cpu_ns()) {
+                (Some(a), Some(b)) => b.saturating_sub(a) as f64 / 1e6,
+                _ => start.1.elapsed().as_secs_f64() * 1000.0,
+            };
+            ms / f64::from(reps)
+        }
+        fn median(v: &mut [f64]) -> f64 {
+            v.sort_by(f64::total_cmp);
+            v[v.len() / 2]
+        }
+        /// Alternate `old` and `new` 7 times each and print their medians and every run. Each run
+        /// takes the mean of enough calls for about 100 ms.
+        fn compare(paths: usize, what: &str, old: &mut dyn FnMut(), new: &mut dyn FnMut()) {
+            let reps = (100.0 / time(1, old).max(0.1)).clamp(1.0, 200.0) as u32;
+            let (mut o, mut n) = (vec![], vec![]);
+            for _ in 0..7 {
+                o.push(time(reps, old));
+                n.push(time(reps, new));
+            }
+            let runs = format!("calls per run {reps}: {o:.3?} / {n:.3?}");
+            println!("| {paths} | {what} | {:.3} | {:.3} | {runs}", median(&mut o), median(&mut n));
+        }
+        println!("clock: {}", if cpu_ns().is_some() { "thread CPU time" } else { "wall clock" });
+        println!("| paths | step | searches (ms) | sets (ms) | runs");
+        for blocks in [10, 100, 250] {
+            let mut s = wand_session(blocks);
+            let paths = blocks * 200;
+            let st = s.doc().unwrap();
+            let all = paintable(&st.doc);
+            assert!(all == paintable_by_search(&st.doc));
+            let reference = all[0];
+            let hits = hits_by_search(&s, reference);
+            let selected: Vec<NodeId> = all.iter().rev().step_by(2).copied().collect();
+            assert!(added(&selected, hits.clone()) == added_by_search(&selected, &hits));
+            assert!(subtracted(&selected, hits.clone()) == subtracted_by_search(&selected, &hits));
+            let doc = &st.doc;
+            compare(
+                paths,
+                "paintable",
+                &mut || {
+                    std::hint::black_box(paintable_by_search(doc));
+                },
+                &mut || {
+                    std::hint::black_box(paintable(doc));
+                },
+            );
+            compare(
+                paths,
+                "Shift-click list",
+                &mut || {
+                    std::hint::black_box(added_by_search(&selected, &hits));
+                },
+                &mut || {
+                    std::hint::black_box(added(&selected, hits.clone()));
+                },
+            );
+            compare(
+                paths,
+                "Alt-click list",
+                &mut || {
+                    std::hint::black_box(subtracted_by_search(&selected, &hits));
+                },
+                &mut || {
+                    std::hint::black_box(subtracted(&selected, hits.clone()));
+                },
+            );
+            // A whole Shift-click after the selection is set: [`magic_wand`], and its steps with
+            // the searches.
+            let ids = json!({ "ids": selected.iter().map(|i| i.0).collect::<Vec<u64>>() });
+            let click = json!({"id": reference.0, "mode": "add"});
+            let s = std::cell::RefCell::new(&mut s);
+            compare(
+                paths,
+                "select.set, then Shift-click",
+                &mut || {
+                    let s = &mut **s.borrow_mut();
+                    s.execute("select.set", &ids).unwrap();
+                    let before = s.doc().unwrap().selection.objects.clone();
+                    let picked = added_by_search(&before, &hits_by_search(s, reference));
+                    s.select(|_, sel| sel.set(picked)).unwrap();
+                },
+                &mut || {
+                    let s = &mut **s.borrow_mut();
+                    s.execute("select.set", &ids).unwrap();
+                    magic_wand(s, &click).unwrap();
+                },
+            );
+        }
     }
 
     #[test]
