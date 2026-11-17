@@ -589,7 +589,8 @@ fn a_symbols_link_without_a_relative_path_follows_the_moved_file() {
 }
 
 /// Update Links gives a distorted image its file's new pixels between the same corners: its
-/// Placement Options' fill and clip do not move or clip it.
+/// Placement Options' fill and clip do not move or clip it. Its transform takes the new pixel size,
+/// and Link Info measures its scale at its middle.
 #[test]
 fn update_links_keeps_a_distorted_images_corners() {
     let dir = Folder::new("distorted-update");
@@ -603,6 +604,21 @@ fn update_links_keeps_a_distorted_images_corners() {
     let corners = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap();
     let before = corners(&s);
     assert!(s.doc().unwrap().doc.node(id).unwrap().is_distorted_image());
+    // The far corner of the pixels as the transform alone places them.
+    let far = |s: &Session| {
+        let NodeKind::Image(im) = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("an image") };
+        im.xf * vectorcraft_geom::Point::new(f64::from(im.width), f64::from(im.height))
+    };
+    let far_before = far(&s);
+    // Link Info measures the scale where the effective resolution is measured: at the middle.
+    let scale_matches_ppi = |s: &mut Session| {
+        let info = s.execute("links.info", &json!({"id": id.0})).unwrap();
+        for i in 0..2 {
+            let (scale, ppi, eff) = (info["scale"][i].as_f64().unwrap(), info["ppi"][i].as_f64().unwrap(), info["effectivePpi"][i].as_f64().unwrap());
+            assert!((scale - ppi / eff * 100.0).abs() < 1e-6, "{info}");
+        }
+    };
+    scale_matches_ppi(&mut s);
     // A copy in a symbol, distorted the same way, shows the same file.
     let copy = place(&mut s, &photo);
     s.execute("links.placementOptions", &json!({"ids": [copy.0], "preserve": "fill", "clip": true})).unwrap();
@@ -628,11 +644,15 @@ fn update_links_keeps_a_distorted_images_corners() {
     assert_eq!(corners(&s), before);
     let NodeKind::Image(im) = &n.kind else { panic!("an image") };
     assert_eq!((im.width, im.height), (60, 20));
+    // The transform takes the new pixel size, so a placement by the transform keeps the old size.
+    assert!(far(&s).distance(far_before) < 1e-9, "{:?} vs {far_before:?}", far(&s));
+    let d = &s.doc().unwrap().doc;
     assert!(!matches!(d.parent_of(id).and_then(|p| d.node(p)).map(|p| &p.kind), Some(NodeKind::Group { clip: true, .. })), "not clipped");
     let mut clipped = false;
     d.symbols[0].art.walk(&mut |n| clipped |= matches!(n.kind, NodeKind::Group { clip: true, .. }));
     assert!(!clipped, "the symbol's image is not clipped");
     assert_eq!(in_symbol(&s), [(true, (60, 20))]);
+    scale_matches_ppi(&mut s);
 }
 
 /// Update Links reads a changed file again for the images inside symbols, patterns and opacity

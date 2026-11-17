@@ -781,10 +781,15 @@ fn prepare(s: &Session, p: &Value) -> Result<PlaceJob> {
         (true, _) => return Err(bad(PLACE, "replace: select the one object to replace")),
     };
     let replaced = old.and_then(|id| st.doc.node(id)).cloned();
-    // Replace keeps the replaced image's transform, which a distortion's corners do not follow.
+    // Replace keeps the transform of the replaced image, or of an image alone in a clip group (the
+    // shape `replace_xf` measures), which a distortion's corners do not follow. Any other object
+    // is replaced where its bounds are, so a distorted image inside it is not refused.
     if let Some(n) = &replaced {
         let inner = match &n.kind {
-            NodeKind::Group { children, clip: true } => children.get(1).filter(|c| c.is_distorted_image()).map(|c| c.id),
+            NodeKind::Group { children, clip: true } => match &children[..] {
+                [path, image] if matches!(path.kind, NodeKind::Path { clipping: true, .. }) && image.is_distorted_image() => Some(image.id),
+                _ => None,
+            },
             _ => None,
         };
         if let Some(id) = n.is_distorted_image().then_some(n.id).or(inner) {

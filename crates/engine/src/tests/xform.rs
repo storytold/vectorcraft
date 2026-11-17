@@ -677,11 +677,13 @@ fn distort_moves_an_image_and_a_path_as_one() {
     let img = placed_image(&mut s);
     let path = rect(&mut s, 100.0, 0.0, 100.0, 100.0);
     s.execute("select.set", &json!({"ids": [img.0, path.0]})).unwrap();
-    s.execute("object.distort", &json!({"corners": [[40, 0], [160, 0], [200, 100], [0, 100]]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[0, 0], [200, 0], [200, 100], [50, 100]]})).unwrap();
     let d = &s.doc().unwrap().doc;
     let anchors: Vec<Point> = d.node(path).unwrap().path_data().unwrap().anchors().map(|(_, _, a)| a.p).collect();
     let q = corners(&s, img);
-    // The image's right edge and the path's left edge were one line, and stay one.
+    // The image's right edge and the path's left edge were one line, and stay one where the warp
+    // moves it.
+    assert!(q[2].distance(Point::new(100.0, 100.0)) > 1.0, "{q:?}");
     for p in [q[1], q[2]] {
         assert!(anchors.iter().any(|a| a.distance(p) < 1e-9), "{p:?} not in {anchors:?}");
     }
@@ -732,7 +734,8 @@ fn distort_refuses_a_folded_image_and_crop_and_trace_refuse_a_distorted_one() {
         ),
     ] {
         let e = s.execute(cmd, &params).unwrap_err().to_string();
-        assert!(e.contains("Perspective Distort or Free Distort"), "{cmd}: {e}");
+        // Every command gives the one shared refusal, which the complete-message catalogs translate.
+        assert!(e.contains("is an image changed by Perspective Distort or Free Distort, which this command does not work on"), "{cmd}: {e}");
     }
     assert!(s.doc().unwrap().doc.node(img).unwrap().is_distorted_image());
     assert_eq!(undo_len(&s), undo + 1);
@@ -900,7 +903,8 @@ fn image_info_measures_a_distorted_image_at_its_middle() {
         [out["ppi"][0].as_f64().unwrap(), out["ppi"][1].as_f64().unwrap()]
     };
     assert!((ppi(&mut s)[0] - 1.44).abs() < 1e-9);
-    // Corners squeezed to half the width at the middle row: twice the resolution across there.
+    // The top squeezed to half the width: the middle of the pixels spans less than 100 pt across,
+    // so the resolution across there is higher.
     s.execute("object.distort", &json!({ "corners": [[25, 0], [75, 0], [100, 100], [0, 100]] })).unwrap();
     let [x, _] = ppi(&mut s);
     assert!(x > 1.44 * 1.1, "{x}");

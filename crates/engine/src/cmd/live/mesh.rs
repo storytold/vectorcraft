@@ -33,14 +33,18 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &roots {
             let Some(n) = d.node(*id).cloned() else { continue };
             let m = if let NodeKind::Image(im) = &n.kind {
+                if n.is_distorted_image() {
+                    refused.get_or_insert_with(|| super::super::xform::distorted_image_error(C, *id));
+                    continue;
+                }
                 // An embedded image: the points take the picture's colours there.
-                match image_mesh(d, &n, im, rows, cols) {
+                match image_mesh(d, im, rows, cols) {
                     Ok(mut m) => {
                         m.highlight(app, highlight);
                         Some(m)
                     }
                     Err(why) => {
-                        refused.get_or_insert(why);
+                        refused.get_or_insert_with(|| bad(C, why));
                         continue;
                     }
                 }
@@ -60,7 +64,7 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
                 match m.add_lines_at(q, tol) {
                     Some(i) => index = Some(i),
                     None => {
-                        refused.get_or_insert("point is outside the object");
+                        refused.get_or_insert_with(|| bad(C, "point is outside the object"));
                         continue;
                     }
                 }
@@ -75,7 +79,7 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
             out.push(*id);
         }
         if out.is_empty() {
-            return Err(bad(C, refused.unwrap_or("select a path, a compound path or an embedded image")));
+            return Err(refused.unwrap_or_else(|| bad(C, "select a path, a compound path or an embedded image")));
         }
         sel.set(out.iter().copied());
         Ok((out, index))
@@ -89,12 +93,8 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Create Gradient Mesh on an embedded image: a `rows` × `cols` mesh over the picture's rectangle
 /// (placed with the image's transform), each point taking the average colour and opacity of the
-/// area around it. Linked images are refused: the documentation allows embedded ones only. So are
-/// images changed by Perspective Distort or Free Distort.
-fn image_mesh(d: &Document, n: &Node, im: &vectorcraft_doc::ImageObject, rows: u32, cols: u32) -> std::result::Result<GradientMesh, &'static str> {
-    if n.is_distorted_image() {
-        return Err("an image changed by Perspective Distort or Free Distort can't become a gradient mesh");
-    }
+/// area around it. Linked images are refused: the documentation allows embedded ones only.
+fn image_mesh(d: &Document, im: &vectorcraft_doc::ImageObject, rows: u32, cols: u32) -> std::result::Result<GradientMesh, &'static str> {
     if im.link.is_some() {
         return Err("a linked image can't become a gradient mesh: embed it first");
     }

@@ -1210,6 +1210,16 @@ pub(crate) fn set_image_from_path(d: &mut Document, id: NodeId, path: &str, doc_
     install(d, &[id], read, Some(Preserve::Bounds), None)
 }
 
+/// Distorted image `im` shows the file read for `link` (`img`) and keeps its corners and its
+/// clipping: the new pixels fill them. Its transform is scaled to the new pixel size, so a reader
+/// that places it by the transform still gives it its old size.
+fn refill_distorted(im: &mut ImageObject, link: &LinkInfo, img: &RasterImage) {
+    if (img.width, img.height) != (im.width, im.height) && img.width > 0 && img.height > 0 {
+        im.xf *= Affine::scale_non_uniform(f64::from(im.width) / f64::from(img.width), f64::from(im.height) / f64::from(img.height));
+    }
+    (im.key, im.width, im.height, im.link) = (img.key.clone(), img.width, img.height, Some(link.clone()));
+}
+
 /// Image objects `ids` (in the layers or outside them) show the file read for `link` (`img`), each
 /// placed as its Placement Options say (`force`: as that Preserve choice says, whatever they say);
 /// with `also` (a file's path and the content shown), so do the images outside the layer tree that
@@ -1235,12 +1245,11 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
             let mut n = n.clone();
             let mut clip = ClipTo::Keep;
             let distorted = n.is_distorted_image();
-            if let NodeKind::Image(im) = &mut n.kind
-                && distorted
-            {
-                // A distorted image keeps its corners and its clipping: the new pixels fill them.
-                (im.key, im.width, im.height, im.link) = (img.key.clone(), img.width, img.height, Some(link.clone()));
-            } else if let NodeKind::Image(im) = &mut n.kind {
+            if let NodeKind::Image(im) = &mut n.kind {
+                if distorted {
+                    refill_distorted(im, &link, &img);
+                    return (n, clip);
+                }
                 let o = PlacementOptions { preserve: force.unwrap_or(im.placement.preserve), ..im.placement };
                 let size = |w: u32, h: u32| (w as f64, h as f64);
                 let (old_pt, old_clip) = match old.get(&im.key) {
@@ -1256,12 +1265,11 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
         Nested { pick: &pick, make: &mut make, next: 0 }.run(d);
     }
     for id in ids {
-        // A distorted image keeps its corners and its clipping: the new pixels fill them.
         if d.node(*id).is_some_and(Node::is_distorted_image) {
             if let Some(n) = d.node_mut(*id)
                 && let NodeKind::Image(im) = &mut n.kind
             {
-                (im.key, im.width, im.height, im.link) = (img.key.clone(), img.width, img.height, Some(link.clone()));
+                refill_distorted(im, &link, &img);
             }
             continue;
         }
@@ -2846,7 +2854,9 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let (px, py) = file_pt(&st.doc, &im.key);
     out["effectivePpi"] = out["ppi"].take();
     out["ppi"] = json!([72.0 / px, 72.0 / py]);
-    (out["scale"], out["rotation"]) = scale_rotation(im.xf, (px, py));
+    // A distorted image is measured at its middle, as its effective resolution is.
+    let xf = stored(&doc, id).and_then(vectorcraft_doc::image_quad::nearest_affine).unwrap_or(im.xf);
+    (out["scale"], out["rotation"]) = scale_rotation(xf, (px, py));
     out["format"] = json!(format_label(&st.doc, im));
     out["placement"] = placement_json(im.placement);
     out["status"] = json!("embedded");
