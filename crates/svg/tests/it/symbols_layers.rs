@@ -4,6 +4,7 @@
 //! sublayers keep their names and nesting (a one-layer file's from its root element), and the
 //! editing data notices edits made elsewhere.
 
+use craft_svg::tree::draw::resvg;
 use std::sync::Arc;
 
 use vectorcraft_color::{Color, Paint};
@@ -66,6 +67,64 @@ fn three_instances_give_one_symbol_and_three_uses() {
     });
     assert_eq!(boxes.len(), 3, "{boxes:?}");
     assert!(boxes.iter().any(|b| (b.x0 - 90.0).abs() < 1e-3 && (b.y0 - 30.0).abs() < 1e-3), "{boxes:?}");
+}
+
+/// 2,000 symbols, then two named "Mark" (a red square with a black stroke, then a blue one) and
+/// "Holder", holding an instance of "Mark". Instances: "Mark" moved, "Mark" stretched (written as
+/// its own art) and "Holder". With `second` the blue square's symbol is named that instead.
+fn marks(second: &str) -> Document {
+    let mut d = Document::new(200.0, 120.0);
+    for i in 0..2000 {
+        let art = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        d.symbols.push(Symbol { dynamic: false, name: format!("Filler {i}"), art: Arc::new(art) });
+    }
+    for (name, color) in [("Mark", Color::rgb8(255, 0, 0)), (second, Color::rgb8(0, 0, 255))] {
+        let ap = Appearance::basic(Paint::solid(color), Paint::solid(Color::BLACK), 2.0);
+        let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)), ap);
+        d.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+    }
+    let held = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((5.0, 5.0)) });
+    let holder = Node::group(d.alloc_id(), vec![Arc::new(held)]);
+    d.symbols.push(Symbol { dynamic: false, name: "Holder".into(), art: Arc::new(holder) });
+    instance(&mut d, "Mark", Affine::translate((25.0, 25.0)));
+    instance(&mut d, "Mark", Affine::translate((80.0, 60.0)) * Affine::scale_non_uniform(2.0, 1.0));
+    instance(&mut d, "Holder", Affine::translate((150.0, 60.0)));
+    d
+}
+
+/// Instances among many symbols are written with the first symbol of their name, the same SVG as
+/// when no other symbol has that name.
+#[test]
+fn instances_are_written_with_the_first_symbol_of_their_name() {
+    let svg = export(&marks("Mark"), &ExportOptions::default());
+    assert_eq!(svg, export(&marks("Other"), &ExportOptions::default()));
+    assert!(svg.contains("#ff0000") && !svg.contains("#0000ff"), "{svg}");
+}
+
+/// An export of 300 instances with drop shadows, among 2,000 symbols, reads the symbol list once
+/// to find their symbols.
+#[test]
+fn an_export_reads_the_symbol_list_once() {
+    let mut d = marks("Other");
+    for i in 0..300 {
+        let xf = Affine::translate((f64::from(i % 20) * 10.0, f64::from(i / 20) * 8.0)) * Affine::scale(0.2);
+        let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf });
+        n.appearance.effects.push(vectorcraft_doc::Effect {
+            id: "stylize.dropShadow".into(),
+            params: serde_json::json!({"x": 1, "y": 1, "blur": 0}),
+            visible: true,
+        });
+        let l = d.layers[0].id;
+        d.insert(Some(l), usize::MAX, n).unwrap();
+    }
+    let before = vectorcraft_doc::symbols_read();
+    export(&d, &ExportOptions::default());
+    let read = vectorcraft_doc::symbols_read() - before;
+    assert!(read <= d.symbols.len(), "{read} symbols read, {} in the document", d.symbols.len());
 }
 
 /// A scaled instance of a symbol with 9-slice guides is written as the canvas draws it, with no
@@ -297,6 +356,109 @@ fn a_stained_instance_with_a_geometry_effect_keeps_its_stain() {
         assert!(!svg.to_ascii_lowercase().contains(&blue), "the symbol's own blue is stained: {svg}");
         assert_similar(&render_artboard(&d), &resvg_render(&svg, 200, 120), 24.0, 0.003);
     }
+}
+
+/// Symbol "Moved": a red square whose Transform effect moves it `dx` pt right.
+fn add_moved_symbol(d: &mut Document, square: Rect, dx: f64) {
+    let mut art = Node::path(d.alloc_id(), shapes::rectangle(square), Appearance::basic(Paint::solid(Color::rgb8(255, 0, 0)), Paint::None, 0.0));
+    art.appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": dx}), visible: true });
+    d.symbols.push(Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(art) });
+}
+
+/// Instances of a symbol whose art has a geometry effect are written as their art placed by the
+/// instance and then baked, where the canvas draws it: moved by the instance, doubled in width
+/// (the effect still moves it 100 pt, not 200 pt) and turned. They use no `<symbol>`, while the
+/// instances of a symbol without effects still share one.
+#[test]
+fn symbol_art_effects_are_written_where_the_canvas_draws_them() {
+    let mut d = symbol_doc(0.0, &[Affine::translate((30.0, 100.0)), Affine::translate((60.0, 100.0))]);
+    add_moved_symbol(&mut d, Rect::new(10.0, 10.0, 20.0, 20.0), 100.0);
+    instance(&mut d, "Moved", Affine::IDENTITY);
+    instance(&mut d, "Moved", Affine::translate((0.0, 20.0)) * Affine::scale_non_uniform(2.0, 1.0));
+    instance(&mut d, "Moved", Affine::translate((-60.0, 40.0)) * Affine::rotate(0.5));
+    let svg = export(&d, &ExportOptions::default());
+    assert_eq!((svg.matches("<symbol ").count(), svg.matches("<use ").count()), (1, 2), "{svg}");
+    assert!(!svg.contains("#Moved"), "{svg}");
+    let canvas = render_artboard(&d);
+    // The doubled square draws from x = 120 to 140 (its art placed from 20 to 40, then moved).
+    assert_eq!(canvas.pixel(130, 35), [255, 0, 0, 255], "the canvas draws the doubled square there");
+    assert_similar(&canvas, &resvg_render(&svg, 200, 120), 24.0, 0.002);
+
+    // Without an artboard, the picture's box is that of the art as drawn: the square moved onto
+    // x = 10 from x = -90.
+    let mut d = Document::new(200.0, 120.0);
+    add_moved_symbol(&mut d, Rect::new(-90.0, 10.0, -80.0, 20.0), 100.0);
+    instance(&mut d, "Moved", Affine::IDENTITY);
+    let svg = export(&d, &ExportOptions { artboard: None, ..Default::default() });
+    assert!(svg.contains("viewBox=\"0 0 10 10\""), "{svg}");
+    assert_eq!(resvg_render(&svg, 10, 10).pixel(5, 5), [255, 0, 0, 255], "{svg}");
+}
+
+/// A hidden instance of a symbol with a geometry effect, kept by Hidden Layers, is written hidden
+/// as its art with the effect applied, as a visible one is.
+#[test]
+fn a_kept_hidden_instance_is_written_with_its_symbols_effects() {
+    let mut d = Document::new(200.0, 120.0);
+    add_moved_symbol(&mut d, Rect::new(10.0, 10.0, 20.0, 20.0), 100.0);
+    let mut hidden = instance(&mut d, "Moved", Affine::IDENTITY);
+    hidden.visible = false;
+    let id = hidden.id;
+    *d.node_mut(id).unwrap() = hidden;
+    let svg = export(&d, &ExportOptions { hidden_layers: true, ..Default::default() });
+    assert!(!svg.contains("<use"), "{svg}");
+    let back = import(&svg).unwrap();
+    let mut boxes = vec![];
+    back.walk(|n| {
+        if !n.visible {
+            boxes.push(n.geometric_bounds());
+        }
+    });
+    assert_eq!(boxes.len(), 1, "{svg}");
+    assert!(boxes[0].is_some_and(|b| (b.x0 - 110.0).abs() < 1e-3 && (b.x1 - 120.0).abs() < 1e-3), "{boxes:?}: {svg}");
+}
+
+/// Named art in a symbol with a geometry effect takes no id in the instances written as their
+/// art, as in an instance that has its own copy of a symbol's art, so two instances do not write
+/// the same id. The instances keep their own names as ids.
+#[test]
+fn instances_written_as_their_art_give_its_names_no_id() {
+    let mut d = Document::new(200.0, 120.0);
+    add_moved_symbol(&mut d, Rect::new(10.0, 10.0, 20.0, 20.0), 100.0);
+    let mut art = (*d.symbols[0].art).clone();
+    art.name = Some("Spot".into());
+    d.symbols[0].art = Arc::new(art);
+    for (name, xf) in [("First", Affine::IDENTITY), ("Second", Affine::translate((0.0, 40.0)))] {
+        let mut n = instance(&mut d, "Moved", xf);
+        n.name = Some(name.into());
+        let id = n.id;
+        *d.node_mut(id).unwrap() = n;
+    }
+    let svg = export(&d, &ExportOptions::default());
+    let ids: Vec<&str> = svg.split(" id=\"").skip(1).filter_map(|s| s.split('"').next()).collect();
+    let unique: std::collections::HashSet<&str> = ids.iter().copied().collect();
+    assert_eq!(unique.len(), ids.len(), "{ids:?}: {svg}");
+    assert!(!svg.contains("Spot"), "{svg}");
+    assert!(ids.contains(&"First") && ids.contains(&"Second"), "{ids:?}: {svg}");
+}
+
+/// An instance nested in the art of a scaled instance that has its own copy of the art is
+/// written as its art too when the def can't stand for it under the outer scale: its stroke
+/// keeps its weight, as on the canvas, rather than doubling with a scaled `<use>`.
+#[test]
+fn a_nested_instance_is_shared_only_under_the_transform_it_is_drawn_with() {
+    let mut d = Document::new(200.0, 120.0);
+    let ring = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)),
+        Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 4.0),
+    );
+    d.symbols.push(Symbol { dynamic: false, name: "Ring".into(), art: Arc::new(ring) });
+    let inner = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Ring".into(), xf: Affine::IDENTITY });
+    d.symbols.push(Symbol { dynamic: false, name: "Holder".into(), art: Arc::new(inner) });
+    instance(&mut d, "Holder", Affine::translate((100.0, 60.0)) * Affine::scale(2.0));
+    let svg = export(&d, &ExportOptions::default());
+    assert_similar(&render_artboard(&d), &resvg_render(&svg, 200, 120), 24.0, 0.002);
+    assert!(!svg.contains("<use"), "{svg}");
 }
 
 #[test]

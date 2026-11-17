@@ -239,7 +239,7 @@ fn a_revolved_profile_is_a_closed_cylinder() {
 }
 
 #[test]
-fn a_partial_revolve_caps_its_ends_with_sectors() {
+fn a_partial_revolve_caps_its_ends_with_sectors_and_closes_its_cut_sides() {
     let mut b = BezPath::new();
     b.move_to((20.0, 0.0));
     b.line_to((20.0, 100.0));
@@ -247,8 +247,12 @@ fn a_partial_revolve_caps_its_ends_with_sectors() {
     let r = p.bounds().unwrap();
     let o = Revolve { angle: 90.0, offset: 10.0, segments: 64, ..Revolve::default() };
     let m = revolve_mesh(&p, FillRule::NonZero, r, o).unwrap();
-    let exact = 0.25 * (2.0 * std::f64::consts::PI * 10.0 * 100.0 + 2.0 * std::f64::consts::PI * 100.0);
+    // The side and the two end sectors, and the two cut sides, each 10 pt from the axis by 100 pt.
+    let exact = 0.25 * (2.0 * std::f64::consts::PI * 10.0 * 100.0 + 2.0 * std::f64::consts::PI * 100.0) + 2.0 * 10.0 * 100.0;
     assert!((area(&m) - exact).abs() / exact < 0.01, "{} vs {exact}", area(&m));
+    assert!(closed(&m), "the quarter of a cylinder is a closed solid");
+    let hollow = revolve_mesh(&p, FillRule::NonZero, r, Revolve { cap_ends: false, ..o }).unwrap();
+    assert!(!closed(&hollow));
 }
 
 #[test]

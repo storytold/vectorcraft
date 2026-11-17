@@ -1766,11 +1766,24 @@ fn a_colored_solid_face_on_its_own_keeps_the_composites_colors() {
     assert_eq!(ramps, one.iter().skip(1).collect::<Vec<_>>(), "the same light ramps");
     // The single face's clip holds its seam: the clip reaches past the facet by half the seam.
     let seam = (face.thickness() / 2.0).clamp(0.05, 0.75);
-    let widths: Vec<f64> = paints(&batch).into_iter().filter_map(|(_, w)| w).filter(|w| *w > 0.0 && *w != crate::lighting::UNDERLAY_SEAM).collect();
-    assert!(widths.len() == 3 && widths.iter().all(|w| (w - seam).abs() < 1e-12), "{widths:?}");
     let NodeKind::Group { children, .. } = &single.kind else { panic!("a clip group") };
     let (clip, facet) = (children[0].path_data().and_then(PathData::bounds).unwrap(), face.path().bounds().unwrap());
-    assert!((clip.x0 - (facet.x0 - seam / 2.0)).abs() < 0.1 && (clip.x1 - (facet.x1 + seam / 2.0)).abs() < 0.1, "{clip:?} {facet:?}");
+    let reaches = |b: Rect| (b.x0 - (facet.x0 - seam / 2.0)).abs() < 0.1 && (b.x1 - (facet.x1 + seam / 2.0)).abs() < 0.1;
+    assert!(reaches(clip), "{clip:?} {facet:?}");
+    // In the composite, the facet over the underlay is one fill of the facet and its seam in each
+    // channel: no seam stroke of its own, and a path that reaches past the facet by half the seam.
+    let widths: Vec<f64> = paints(&batch).into_iter().filter_map(|(_, w)| w).filter(|w| *w > 0.0 && *w != crate::lighting::UNDERLAY_SEAM).collect();
+    assert!(widths.is_empty(), "{widths:?}");
+    let mut seamed = vec![];
+    batch.walk(&mut |n| {
+        if let [AppearanceItem::Fill(f)] = n.appearance.items.as_slice()
+            && f.paint != Paint::solid(Color::BLACK)
+            && f.paint != paint
+        {
+            seamed.extend(n.path_data().and_then(PathData::bounds));
+        }
+    });
+    assert!(seamed.len() == 3 && seamed.iter().all(|b| reaches(*b)), "{seamed:?} {facet:?}");
 }
 
 /// `square_node` moved right by `dx`, with id `id` and fill `fill`.
@@ -1906,6 +1919,89 @@ fn classic_shading_color_blend_steps_and_lights() {
     assert!(one.iter().zip(&two).all(|(a, b)| b[0] >= a[0] - 1e-4) && one.iter().zip(&two).any(|(a, b)| b[0] > a[0] + 0.01));
     // Draw Hidden Faces keeps the faces turned away, drawn first.
     assert_eq!(with(json!({"drawHiddenFaces": true})).len(), 6);
+}
+
+/// The fills, then the strokes, of face `face`.
+fn layers_of(face: &Node) -> (Vec<&vectorcraft_doc::FillLayer>, Vec<&StrokeLayer>) {
+    let fills = face.appearance.items.iter().filter_map(|i| if let AppearanceItem::Fill(f) = i { Some(f) } else { None }).collect();
+    let strokes = face.appearance.items.iter().filter_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s) } else { None }).collect();
+    (fills, strokes)
+}
+
+/// The black over face `face` with Black Overprint, checked to be opaque and overprinting in
+/// both its fill (multiplied) and its seam stroke (Darken, so it does not darken the face twice);
+/// `None` when the face has none.
+fn overprinted_black(face: &Node) -> Option<f32> {
+    let (fills, strokes) = layers_of(face);
+    assert_eq!(fills.len(), strokes.len(), "each fill has its seam stroke");
+    let shadow = fills.get(1)?;
+    let Some(Color::Gray { k }) = shadow.paint.color() else { panic!("black shading: {:?}", shadow.paint) };
+    assert_eq!((shadow.blend, shadow.overprint, shadow.opacity), (BlendMode::Multiply, true, 1.0));
+    assert_eq!((strokes[1].paint.clone(), strokes[1].blend, strokes[1].overprint), (shadow.paint.clone(), BlendMode::Darken, true));
+    assert!(!fills[0].overprint && !strokes[0].overprint, "the paint itself knocks out");
+    Some(k)
+}
+
+/// Black Overprint keeps the paint on every face and draws the shading over it as black,
+/// overprinting, as strong as the darkening of the shading color Black; the
+/// highlight is not drawn, and No Shading adds no black.
+#[test]
+fn classic_black_overprint_keeps_the_paint_under_overprinting_black() {
+    let diffuse = json!({"surface": "diffuse", "ambient": 20});
+    let mut over = diffuse.clone();
+    over["shadingColor"] = json!("blackOverprint");
+    let darkened: Vec<[f32; 3]> = classic_faces(diffuse).iter().map(fill_rgb).collect();
+    let faces = classic_faces(over);
+    assert_eq!(faces.len(), darkened.len());
+    let mut shaded = 0;
+    for (face, rgb) in faces.iter().zip(&darkened) {
+        assert_eq!(layers_of(face).0[0].paint, Paint::solid(RED), "the paint is kept");
+        let k = overprinted_black(face).unwrap_or(0.0);
+        assert!((rgb[0] - 0.8 * (1.0 - k)).abs() < 1e-3, "black at {k} matches the darkened {rgb:?}");
+        shaded += usize::from(k > 0.0);
+    }
+    assert!(shaded > 0, "faces turned from the light get black");
+    // Plastic: no white layer for the highlight.
+    let shiny = json!({"shadingColor": "blackOverprint", "highlightIntensity": 100, "highlightSize": 100, "lightHeight": 60});
+    for face in classic_faces(shiny) {
+        let (fills, _) = layers_of(&face);
+        assert_eq!(fills[0].paint, Paint::solid(RED));
+        assert!(fills.len() <= 2 && overprinted_black(&face).is_none_or(|k| k > 0.0), "{fills:?}");
+    }
+    // No Shading: the paint alone.
+    for face in classic_faces(json!({"surface": "none", "shadingColor": "blackOverprint"})) {
+        assert_eq!(overprinted_black(&face), None);
+        assert_eq!(layers_of(&face).0[0].paint, Paint::solid(RED));
+    }
+}
+
+/// Black Overprint keeps a gradient fill on every face, with the black over it, and Rotate
+/// (Classic) draws its plane the same way.
+#[test]
+fn classic_black_overprint_keeps_gradients_and_shades_rotate() {
+    use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint};
+    let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(
+        GradientKind::Linear,
+        vec![vectorcraft_doc::color::GradientStop::new(0.0, RED), vectorcraft_doc::color::GradientStop::new(1.0, BLUE)],
+    ))));
+    let mut n = classic(json!({"shadingColor": "blackOverprint", "surface": "diffuse"}));
+    if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+        f.paint = gradient.clone();
+    }
+    let art = solid_art(&n).unwrap();
+    let mut shaded = 0;
+    for face in faces(&art) {
+        assert_eq!(layers_of(face).0[0].paint, gradient);
+        shaded += usize::from(overprinted_black(face).is_some());
+    }
+    assert!(shaded > 0);
+    // Rotate (Classic), turned from the light: red with black over it; facing it: red alone.
+    let turned = classic_rotate(json!({"rotationX": 0, "rotationY": 70, "rotationZ": 0, "lightHeight": 90, "shadingColor": "blackOverprint"}));
+    let face = &turned[0].children().unwrap()[0];
+    assert_eq!(layers_of(face).0[0].paint, Paint::solid(RED));
+    assert!(overprinted_black(face).is_some_and(|k| k > 0.05));
+    let lit = classic_rotate(json!({"rotationX": 0, "rotationY": 0, "rotationZ": 0, "lightHeight": 90, "shadingColor": "blackOverprint"}));
+    assert_eq!(overprinted_black(&lit[0].children().unwrap()[0]), None);
 }
 
 #[test]
@@ -2134,9 +2230,12 @@ fn classic_parameters_are_checked() {
     let check = |p: Value| validate_solid(&n, CLASSIC_EXTRUDE, &crate::merged_params(CLASSIC_EXTRUDE, &p));
     assert!(check(json!({})).is_ok());
     assert!(check(json!({"surface": "wireframe", "shadingColor": "custom", "shadingCustom": "#12aBcd", "blendSteps": 256, "bevel": "ogee"})).is_ok());
+    assert!(check(json!({"shadingColor": "blackOverprint"})).is_ok());
     for (p, says) in [
         (json!({"surface": "glossy"}), "`surface` must be one of wireframe, none, diffuse, plastic"),
-        (json!({"shadingColor": "red"}), "`shadingColor` must be one of black, custom, none"),
+        (json!({"shadingColor": "red"}), "`shadingColor` must be one of black, custom, none, blackOverprint"),
+        (json!({"shadingColor": "blackoverprint"}), "`shadingColor` must be one of"),
+        (json!({"shadingColor": true}), "`shadingColor` must be one of"),
         (json!({"shadingCustom": "blue"}), "`shadingCustom` must be a #rrggbb color"),
         (json!({"shadingCustom": "#fff"}), "`shadingCustom` must be a #rrggbb color"),
         (json!({"depth": 2001}), "`depth` must be between 0 and 2000 (got 2001)"),
@@ -2213,11 +2312,12 @@ fn classic_rotate_parameters_are_checked() {
     let check = |p: Value| validate_solid(&n, CLASSIC_ROTATE, &crate::merged_params(CLASSIC_ROTATE, &p));
     assert!(check(json!({})).is_ok());
     assert!(check(json!({"surface": "none", "shadingColor": "custom", "shadingCustom": "#12aBcd", "blendSteps": 1})).is_ok());
+    assert!(check(json!({"shadingColor": "blackOverprint"})).is_ok());
     for (p, says) in [
         (json!({"surface": "plastic"}), "`surface` must be one of none, diffuse"),
         (json!({"surface": "wireframe"}), "`surface` must be one of none, diffuse"),
         (json!({"surface": 2}), "`surface` must be one of"),
-        (json!({"shadingColor": "red"}), "`shadingColor` must be one of black, custom, none"),
+        (json!({"shadingColor": "red"}), "`shadingColor` must be one of black, custom, none, blackOverprint"),
         (json!({"shadingCustom": "#fff"}), "`shadingCustom` must be a #rrggbb color"),
         (json!({"rotationX": 181}), "`rotationX` must be between -180 and 180 (got 181)"),
         (json!({"perspectiveAngle": 161}), "`perspectiveAngle` must be between 0 and 160 (got 161)"),

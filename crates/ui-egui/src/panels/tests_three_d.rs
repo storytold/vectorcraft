@@ -1165,8 +1165,9 @@ fn export_3d_object_adds_the_selected_3d_objects_to_asset_export() {
     let mut app = app();
     assert!(painted_text(&mut app, show).contains("Export 3D Object"));
     let ctx = egui::Context::default();
-    // Without a 3D object: an error, nothing recorded, no asset.
+    // Without a 3D object: the button is dimmed, and an error, nothing recorded, no asset.
     let history = undo_len(&app);
+    assert!(!super::can_export_3d(&app));
     assert!(super::export_3d_object(&mut app, &ctx).is_err());
     assert_eq!((undo_len(&app), assets(&mut app).len()), (history, 0));
     let a = app.session.active().unwrap().selection.objects[0].0;
@@ -1178,9 +1179,10 @@ fn export_3d_object_adds_the_selected_3d_objects_to_asset_export() {
     let hidden = app.run("shape.rectangle", json!({"x": 100, "y": 250, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
     app.run("effect.setParams", json!({"index": 0, "item": null, "visible": false})).unwrap();
+    assert!(!super::can_export_3d(&app));
     assert!(super::export_3d_object(&mut app, &ctx).is_err());
     app.run("select.set", json!({"ids": [plain, a, hidden]})).unwrap();
-    assert_eq!(super::selected_3d_objects(&app), [a]);
+    assert!(super::can_export_3d(&app));
     assert!(!crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
     let history = undo_len(&app);
     super::export_3d_object(&mut app, &ctx).unwrap();
@@ -1217,7 +1219,44 @@ fn export_3d_object_leaves_out_a_3d_object_inside_another() {
     app.run("select.set", json!({"ids": [inner, group]})).unwrap();
     let selected: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
     assert!(selected.contains(&inner) && selected.contains(&group), "{selected:?}");
-    assert_eq!(super::selected_3d_objects(&app), [group]);
+    super::export_3d_object(&mut app, &egui::Context::default()).unwrap();
+    let list = assets(&mut app);
+    assert_eq!(list.iter().map(|a| a["nodes"].clone()).collect::<Vec<_>>(), [json!([group])]);
+}
+
+/// A 3D effect on a group's fill draws nothing to export: the button is dimmed for that group
+/// alone, and beside a 3D object the group is left out instead of refusing them both.
+#[test]
+fn export_3d_object_leaves_out_a_group_with_a_3d_fill() {
+    let mut app = app();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    let other = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [other]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    app.run("appearance.addFill", json!({})).unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude"})).unwrap();
+    // `effect.apply` puts a group's 3D effect on the group itself; a file can hold one on its fill.
+    app.session
+        .edit("fill", |d, _| {
+            let n = d.node_mut(vectorcraft_doc::NodeId(group)).unwrap();
+            let fx = n.appearance.effects.remove(0);
+            n.appearance.items[0].effects_mut().push(fx);
+            Ok(())
+        })
+        .unwrap();
+    assert!(
+        vectorcraft_effects::has_solid(app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(group)).unwrap()),
+        "the fill holds the effect"
+    );
+    assert!(!super::can_export_3d(&app));
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    set_type(&mut app, "extrude").unwrap();
+    app.run("select.set", json!({"ids": [a, group]})).unwrap();
+    assert!(super::can_export_3d(&app));
+    super::export_3d_object(&mut app, &egui::Context::default()).unwrap();
+    let list = assets(&mut app);
+    assert_eq!(list.iter().map(|a| a["nodes"].clone()).collect::<Vec<_>>(), [json!([a])]);
 }
 
 #[test]

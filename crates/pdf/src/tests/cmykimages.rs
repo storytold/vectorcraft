@@ -17,9 +17,9 @@ use crate::*;
 
 /// `inks` (four bytes a pixel) as a CMYK JPEG: Adobe's inverted samples, with its marker.
 fn cmyk_jpeg(inks: &[u8], w: u16, h: u16) -> Vec<u8> {
-    let mut out = Vec::new();
-    jpeg_encoder::Encoder::new(&mut out, 100).encode(inks, w, h, jpeg_encoder::ColorType::Cmyk).unwrap();
-    out
+    let img = craft_image_codecs::Image::from_u8(u32::from(w), u32::from(h), craft_image_codecs::ChannelLayout::Cmyk, inks.to_vec()).unwrap();
+    let opts = craft_image_codecs::EncodeOptions { jpeg_quality: 100, embed_icc: false, embed_metadata: false, ..Default::default() };
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Jpeg, &opts).unwrap()
 }
 
 fn flat(inks: [u8; 4], n: usize) -> Vec<u8> {
@@ -275,7 +275,24 @@ fn masked_cmyk_images_keep_their_inks_and_carry_the_mask_as_an_opacity_mask() {
         assert!(close(&blob.cmyk().unwrap().data, want, 0), "the inks as they were");
         let (mblob, mw, mh) = mask.expect("an opacity mask");
         assert_eq!((mw, mh), (2, 2));
-        let grey = image::load_from_memory(&mblob.bytes).unwrap().to_luma8();
+        let grey = craft_image_codecs::decode(&mblob.bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_luma8();
         assert_eq!(grey.into_raw(), alpha, "the mask's values");
     }
     // The mask art covers the image exactly.
@@ -406,6 +423,43 @@ fn a_dcs_spot_plate_printing_as_process_takes_the_documents_swatch() {
     assert_eq!(get(&own, "Yellow"), Some(vec![0, 0]));
 }
 
+/// A DCS image's spot plate converted to process on its own prints as the document's swatch of
+/// its ink, while its other spot plate keeps printing on its ink.
+#[test]
+fn a_dcs_image_converts_only_the_spot_ink_chosen() {
+    use vectorcraft_doc::separated::{InkPlate, Separated};
+    let plate = |name: &str, cmyk: [f32; 4], data: [u8; 2]| InkPlate { name: name.into(), cmyk, data: data.to_vec() };
+    let s = Separated::new(
+        2,
+        1,
+        vec![
+            plate("Cyan", [0.0; 4], [0, 0]),
+            plate("Spot Orange", [0.0, 0.6, 1.0, 0.0], [128, 0]),
+            plate("Spot Green", [0.0, 0.0, 1.0, 0.0], [0, 128]),
+        ],
+    )
+    .unwrap();
+    let mut d = image_doc(ImageBlob::separated_tiff(&s, None, &[]).unwrap(), 2, 1);
+    d.swatches.push(Swatch { name: "Spot Orange".into(), paint: Paint::solid(Color::cmyk(0.0, 0.6, 1.0, 0.0)), global: true, spot: true });
+    // The document's Spot Green is cyan, where its file says yellow.
+    d.swatches.push(Swatch { name: "Spot Green".into(), paint: Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)), global: true, spot: true });
+    let settings: PrintSettings =
+        serde_json::from_value(json!({"output": {"mode": "separations", "inks": [{"name": "Spot Green", "convertToProcess": true}]}})).unwrap();
+    let names: Vec<String> = print_inks(&d, &settings).0.into_iter().map(|i| i.name).collect();
+    assert_eq!(names, ["Cyan", "Magenta", "Yellow", "Black", "Spot Orange"]);
+    let job = plan(&d, &PrintOptions { settings, ..Default::default() }).unwrap();
+    let coverage = job.plates.iter().map(|p| {
+        let NodeKind::Image(im) = &p.layers[0].children().unwrap()[0].kind else { panic!("an image") };
+        p.image_blob(im).and_then(|b| b.coverage()).unwrap().2
+    });
+    let all: Vec<(String, Vec<u8>)> = names.into_iter().zip(coverage).collect();
+    let get = |name: &str| all.iter().find(|(n, _)| n == name).map(|(_, c)| c.clone());
+    assert_eq!(get("Cyan"), Some(vec![0, 128]), "the swatch's cyan");
+    assert_eq!(get("Yellow"), Some(vec![0, 0]), "not the file's yellow");
+    assert_eq!(get("Magenta"), Some(vec![0, 0]), "Spot Orange stays on its own plate");
+    assert_eq!(get("Spot Orange"), Some(vec![128, 0]));
+}
+
 #[test]
 fn the_output_settings_convert_cmyk_images_and_compression_recompresses_them_in_cmyk() {
     let ink = [0u8, 102, 255, 0];
@@ -439,7 +493,26 @@ fn the_output_settings_convert_cmyk_images_and_compression_recompresses_them_in_
     let (w, blob, _) = first(json!({"output": {"conversion": "destination", "destination": SRGB}}));
     assert_eq!(w.space, "DeviceRGB");
     let shown = source.cmyk_to_srgb(ink.map(|v| v as f32 / 255.0), false).map(|v| (v * 255.0).round() as u8);
-    let px = image::load_from_memory(&blob.bytes).unwrap().to_rgb8().get_pixel(0, 0).0;
+    let px = craft_image_codecs::decode(&blob.bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgb8()
+        .get_pixel(0, 0)
+        .0;
     assert!(close(&px, &shown, 3), "{px:?} vs {shown:?}");
     // JPEG compression: a CMYK JPEG (Adobe's inverted samples, undone by the Decode array).
     let (w, blob, warnings) = first(json!({"compression": {"color": {"compression": "jpeg", "quality": "maximum"}}}));
@@ -482,11 +555,10 @@ fn cmyk_profile(edit: impl FnOnce(&mut Vec<u8>)) -> Vec<u8> {
 
 /// `inks` (four bytes a pixel) as a CMYK JPEG carrying `icc` in its `ICC_PROFILE` segments.
 fn cmyk_jpeg_with(inks: &[u8], w: u16, h: u16, icc: &[u8]) -> Vec<u8> {
-    let mut out = Vec::new();
-    let mut e = jpeg_encoder::Encoder::new(&mut out, 100);
-    e.add_icc_profile(icc).unwrap();
-    e.encode(inks, w, h, jpeg_encoder::ColorType::Cmyk).unwrap();
-    out
+    let mut img = craft_image_codecs::Image::from_u8(u32::from(w), u32::from(h), craft_image_codecs::ChannelLayout::Cmyk, inks.to_vec()).unwrap();
+    img.icc = Some(icc.to_vec());
+    let opts = craft_image_codecs::EncodeOptions { jpeg_quality: 100, embed_icc: true, embed_metadata: false, ..Default::default() };
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Jpeg, &opts).unwrap()
 }
 
 /// A CMYK TIFF of `w` × `h` pixels of `ink` carrying `icc` as its tag 34675 (written as Open
@@ -908,7 +980,41 @@ fn export_smasks(d: &Document) -> (Vec<u8>, Vec<Option<Vec<u8>>>) {
 
 fn png(img: impl Into<image::DynamicImage>) -> Vec<u8> {
     let mut out = Vec::new();
-    img.into().write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -1185,7 +1291,24 @@ fn freeform_gradients_of_lab_points_are_written_as_their_lab_mix() {
     let out = export_with_report(&d, &opts(json!({}))).unwrap();
     assert_eq!(written(&out.bytes)[0].space, "DeviceRGB");
     let back = import(&out.bytes).unwrap();
-    let px = image::load_from_memory(&all_images(&back)[0].bytes).unwrap().to_rgba8();
+    let px = craft_image_codecs::decode(&all_images(&back)[0].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     let got = px.get_pixel(px.width() / 2, px.height() / 2).0;
     let want = Color::lab(60.0, 0.0, 0.0).to_rgba8(1.0);
     assert!(close(&got, &want, 6), "{got:?} vs {want:?}");

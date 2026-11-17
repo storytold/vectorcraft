@@ -450,6 +450,79 @@ pub fn inseparable(a: char, b: char) -> bool {
     )
 }
 
+/// Kurikaeshi Moji Shori: the last character of `text` that a repeat mark after it could stand for:
+/// the last one that is neither a repeat mark, a soft return (U+2028) nor a combining voicing mark
+/// (U+3099, U+309A), or None when there is none. The engine gives a threaded frame whose first
+/// paragraph continues from the frame before the result for the text before it
+/// (`TextObject::first_para_lead`).
+pub fn repeat_base(text: &str) -> Option<char> {
+    #[cfg(test)]
+    REPEAT_SCANNED.with(|c| c.set(c.get() + text.len()));
+    text.chars().rev().find(|&c| !matches!(c, '々' | 'ゝ' | 'ゞ' | 'ヽ' | 'ヾ' | '\u{2028}' | '\u{3099}' | '\u{309A}'))
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many bytes of text [`repeat_base`] was given on this thread.
+    static REPEAT_SCANNED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Tests: how many bytes of text [`repeat_base`] has been given on this thread.
+#[cfg(test)]
+pub(crate) fn repeat_scanned() -> usize {
+    REPEAT_SCANNED.get()
+}
+
+/// Kurikaeshi Moji Shori: the character the repeat mark `mark` stands for after the text `before`
+/// it, or None when `mark` is not a repeat mark or nothing before it fits. `lead` stands before
+/// `before` (the text of a threaded paragraph in the frames before). VectorCraft's rules: the
+/// repeated character is the last one before the mark that is neither a repeat mark, a soft return
+/// (U+2028) nor a combining voicing mark ([`repeat_base`]); 々 repeats a Han ideograph, ゝ and ゞ a
+/// hiragana and ヽ and ヾ a katakana. ゝ and ヽ give the kana without its voicing marks, and ゞ and
+/// ヾ its voiced form, or the plain kana when it has none.
+pub(crate) fn repeated_char(lead: Option<char>, before: &str, mark: char) -> Option<char> {
+    let script = match mark {
+        '々' => Script::Han,
+        'ゝ' | 'ゞ' => Script::Hiragana,
+        'ヽ' | 'ヾ' => Script::Katakana,
+        _ => return None,
+    };
+    let base = repeat_base(before).or(lead)?;
+    if base.script() != script || (script != Script::Han && !matches!(base as u32, 0x3041..=0x3096 | 0x30A1..=0x30F6)) {
+        return None;
+    }
+    if script == Script::Han {
+        return Some(base);
+    }
+    // Katakana from U+30A1 to U+30F6 lie 0x60 past their hiragana, so one table serves both.
+    let shift = if script == Script::Katakana { 0x60 } else { 0 };
+    let plain = unvoiced(base as u32 - shift);
+    let kana = if matches!(mark, 'ゞ' | 'ヾ') { voiced(plain).unwrap_or(plain) } else { plain };
+    char::from_u32(kana + shift)
+}
+
+/// The hiragana `h` (a code point) without its dakuten or handakuten.
+fn unvoiced(h: u32) -> u32 {
+    match h {
+        0x304C..=0x3062 if h.is_multiple_of(2) => h - 1,
+        0x3065 | 0x3067 | 0x3069 => h - 1,
+        0x3070..=0x307D => h - (h - 0x306F) % 3,
+        0x3094 => 0x3046,
+        _ => h,
+    }
+}
+
+/// The voiced form (with dakuten) of the plain hiragana `h`, if it has one.
+fn voiced(h: u32) -> Option<u32> {
+    match h {
+        0x304B..=0x3061 if !h.is_multiple_of(2) => Some(h + 1),
+        0x3064 | 0x3066 | 0x3068 => Some(h + 1),
+        0x306F..=0x307B if (h - 0x306F).is_multiple_of(3) => Some(h + 1),
+        0x3046 => Some(0x3094),
+        _ => None,
+    }
+}
+
 /// Is `c` Hangul: a syllable, a jamo or a compatibility jamo (full or half width)?
 pub(crate) fn is_hangul(c: char) -> bool {
     c.script() == Script::Hangul

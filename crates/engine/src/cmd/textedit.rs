@@ -270,7 +270,7 @@ fn range_of(p: &Value, len: usize, cmd: &str) -> Result<(usize, usize)> {
     Ok((a.min(b), a.max(b)))
 }
 
-fn edit_range(s: &mut Session, p: &Value) -> Result<Value> {
+pub(crate) fn edit_range(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.editRange";
     let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     let t = text_ref(s, id)?;
@@ -1830,6 +1830,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         para: super::create::new_type_para(),
         paras: Vec::new(),
         first_para_continues: false,
+        first_para_lead: None,
         area: Default::default(),
         path_effect: Default::default(),
         path_align: Default::default(),
@@ -2136,6 +2137,7 @@ fn headline_tracking(t: &TextObject, target: f64) -> Option<f64> {
             para: Default::default(),
             paras: Vec::new(),
             first_para_continues: false,
+            first_para_lead: None,
             area: Default::default(),
             path_effect: Default::default(),
             path_align: Default::default(),

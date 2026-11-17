@@ -772,3 +772,142 @@ fn whether_a_blend_has_a_spine_is_saved_and_old_blends_have_one() {
         assert!(!v.no_spine, "{odd}");
     }
 }
+
+fn undo_len(s: &Session) -> usize {
+    s.doc().unwrap().history.undo.len()
+}
+
+/// Two blends with different options, both selected: the first (Steps 3, along the path, Ease
+/// Out at 20%, Shift 10%) and the second (Distance 12 pt, along the page, Ease In Out at 60%,
+/// Shift -40%).
+fn two_different_blends(s: &mut Session) -> (NodeId, NodeId) {
+    let b1 = make(s, 0.0, json!({"spacing": "steps", "orientation": "path"}));
+    let b2 = make(s, 100.0, json!({"spacing": "distance", "value": 12, "orientation": "path"}));
+    s.execute("object.blend.setEasing", &json!({"id": b1.0, "easingType": "easeOut", "ramp": 20, "colorShift": 10})).unwrap();
+    s.execute("object.blend.setEasing", &json!({"id": b2.0, "easingType": "easeInOut", "ramp": 60, "colorShift": -40})).unwrap();
+    sel(s, &[b2]);
+    s.execute("object.blend.options", &json!({"orientation": "page"})).unwrap();
+    sel(s, &[b1, b2]);
+    (b1, b2)
+}
+
+#[test]
+fn options_on_several_blends_set_only_the_values_given() {
+    let mut s = session();
+    let (b1, b2) = two_different_blends(&mut s);
+    let (before1, before2) = (spec(&s, b1).1, spec(&s, b2).1);
+    assert_ne!(before1.spacing, before2.spacing);
+    // Each value given goes to every selected blend; each keeps its own for the others.
+    for (p, apply) in [
+        (json!({"colorShift": 30}), (|sp: &mut BlendSpec| sp.color_shift = 30.0) as fn(&mut BlendSpec)),
+        (json!({"ramp": 45}), |sp| sp.ease.ramp = 0.45),
+        (json!({"easingType": "easeOutIn"}), |sp| sp.ease.kind = vectorcraft_doc::BlendEaseType::OutIn),
+        (json!({"orientation": "path"}), |sp| sp.orientation = BlendOrientation::AlignToPath),
+        (json!({"spacing": "steps", "value": 7}), |sp| sp.spacing = BlendSpacing::Steps(7)),
+    ] {
+        let (mut want1, mut want2) = (spec(&s, b1).1, spec(&s, b2).1);
+        apply(&mut want1);
+        apply(&mut want2);
+        s.execute("object.blend.options", &p).unwrap();
+        assert_eq!((spec(&s, b1).1, spec(&s, b2).1), (want1, want2), "{p}");
+    }
+    // A spacing mode without a count keeps the count of a blend already in that mode; a blend in
+    // another mode takes the mode's starting count.
+    s.execute("object.blend.options", &json!({"id": b2.0, "spacing": "distance", "value": 12})).unwrap();
+    s.execute("object.blend.options", &json!({"spacing": "steps"})).unwrap();
+    assert_eq!((spec(&s, b1).1.spacing, spec(&s, b2).1.spacing), (BlendSpacing::Steps(7), BlendSpacing::Steps(5)));
+    s.execute("object.blend.options", &json!({"id": b2.0, "spacing": "steps", "value": 12})).unwrap();
+    s.execute("object.blend.options", &json!({"spacing": "steps"})).unwrap();
+    assert_eq!((spec(&s, b1).1.spacing, spec(&s, b2).1.spacing), (BlendSpacing::Steps(7), BlendSpacing::Steps(12)));
+    // The whole edit of both blends is one undo step.
+    let depth = undo_len(&s);
+    s.execute("object.blend.options", &json!({"colorShift": -5, "ramp": 5})).unwrap();
+    assert_eq!(undo_len(&s), depth + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((spec(&s, b1).1.color_shift, spec(&s, b2).1.color_shift), (30.0, 30.0));
+}
+
+#[test]
+fn options_with_an_id_edit_that_blend_alone() {
+    let mut s = session();
+    let (b1, b2) = two_different_blends(&mut s);
+    let before2 = spec(&s, b2).1;
+    let mut want1 = spec(&s, b1).1;
+    s.execute("object.blend.options", &json!({"id": b1.0, "spacing": "distance", "value": 15, "ramp": 50, "colorShift": -20})).unwrap();
+    want1.spacing = BlendSpacing::Distance(15.0);
+    want1.ease.ramp = 0.5;
+    want1.color_shift = -20.0;
+    assert_eq!(spec(&s, b1).1, want1, "only the values given change");
+    assert_eq!(spec(&s, b2).1, before2, "a selected blend that is not `id` stays as it was");
+    // `id` works with nothing selected, and does not set the options new blends start with.
+    s.execute("select.none", &json!({})).unwrap();
+    let defaults = s.execute("object.blend.info", &json!({})).unwrap();
+    s.execute("object.blend.options", &json!({"id": b2.0, "orientation": "path"})).unwrap();
+    assert_eq!(spec(&s, b2).1.orientation, BlendOrientation::AlignToPath);
+    assert_eq!(s.execute("object.blend.info", &json!({})).unwrap(), defaults);
+    // A hidden or locked blend and an object that is not a blend are errors that change nothing.
+    for (visible, locked) in [(false, false), (true, true)] {
+        s.edit("state", |d, _| {
+            let n = d.node_mut(b1).unwrap();
+            (n.visible, n.locked) = (visible, locked);
+            Ok(())
+        })
+        .unwrap();
+        let (before, depth) = (spec(&s, b1).1, undo_len(&s));
+        let error = s.execute("object.blend.options", &json!({"id": b1.0, "colorShift": 25})).unwrap_err().to_string();
+        assert!(error.contains("the object is hidden or locked"), "{error}");
+        assert_eq!((spec(&s, b1).1, undo_len(&s)), (before, depth));
+    }
+    let other = rect(&mut s, 300.0, 0.0, 10.0);
+    for id in [json!(other.0), json!(999_999)] {
+        let error = s.execute("object.blend.options", &json!({"id": id, "colorShift": 25})).unwrap_err().to_string();
+        assert!(error.contains("not a blend"), "{error}");
+    }
+    // The blend's own spine decides whether easing is allowed, whatever is selected.
+    s.execute("object.blend.createSpine", &json!({"mode": "never"})).unwrap();
+    let bare = make(&mut s, 300.0, json!({}));
+    sel(&mut s, &[b2]);
+    let error = s.execute("object.blend.options", &json!({"id": bare.0, "ramp": 30})).unwrap_err().to_string();
+    assert!(error.contains("the blend has no spine"), "{error}");
+    s.execute("object.blend.options", &json!({"id": b2.0, "ramp": 30})).unwrap();
+    assert_eq!(spec(&s, b2).1.ease.ramp, 0.3);
+}
+
+#[test]
+fn options_that_change_nothing_or_are_refused_record_no_undo_step() {
+    let mut s = session();
+    let (b1, b2) = two_different_blends(&mut s);
+    let before = (spec(&s, b1).1, spec(&s, b2).1);
+    let depth = undo_len(&s);
+    // Values the blends already have, and no values at all.
+    for p in [json!({}), json!({"smooth": false}), json!({"orientation": "page", "id": b2.0}), json!({"colorShift": 10, "id": b1.0})] {
+        s.execute("object.blend.options", &p).unwrap();
+        assert_eq!(undo_len(&s), depth, "{p}");
+    }
+    // An invalid value anywhere stops the whole call before anything changes.
+    for p in [
+        json!({"colorShift": 50, "ramp": 101}),
+        json!({"colorShift": 50, "ramp": -1}),
+        json!({"colorShift": 50, "ramp": "half"}),
+        json!({"ramp": 50, "colorShift": -101}),
+        json!({"ramp": 50, "easingType": "linear"}),
+        json!({"ramp": 50, "spacing": "steps", "value": 0}),
+        json!({"ramp": 50, "spacing": "distance", "value": -3}),
+        json!({"ramp": 50, "id": "b1"}),
+        json!({"ramp": 50, "orientation": "sideways"}),
+        json!({"ramp": 50, "orientation": 1}),
+        json!({"ramp": 50, "value": 3}),
+        json!({"ramp": 50, "spacing": 123}),
+    ] {
+        assert!(s.execute("object.blend.options", &p).is_err(), "{p}");
+        assert_eq!((spec(&s, b1).1, spec(&s, b2).1, undo_len(&s)), (before.0.clone(), before.1.clone(), depth), "{p}");
+    }
+    // Make and the options new blends start with refuse an unknown orientation too.
+    let error = s.execute("object.blend.make", &json!({"orientation": "sideways"})).unwrap_err().to_string();
+    assert!(error.contains("orientation must be page or path"), "{error}");
+    assert_eq!(undo_len(&s), depth);
+    s.execute("select.none", &json!({})).unwrap();
+    let defaults = s.execute("object.blend.info", &json!({})).unwrap();
+    assert!(s.execute("object.blend.options", &json!({"orientation": "sideways"})).is_err());
+    assert_eq!(s.execute("object.blend.info", &json!({})).unwrap(), defaults);
+}
