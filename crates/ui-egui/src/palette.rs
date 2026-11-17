@@ -938,6 +938,11 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     } else if outside {
         app.ui.palette_open = false;
     }
+    // The search icon can open the palette again before the next frame draws it, so a palette that
+    // closes here forgets its highlight now and opens again at its first row.
+    if !app.ui.palette_open {
+        ctx.data_mut(|d| d.remove::<Highlight>(sel_id));
+    }
 }
 
 #[cfg(test)]
@@ -1640,6 +1645,32 @@ mod tests {
         let top = shown.iter().find(|r| r.1).expect("a row is highlighted");
         assert_eq!(top.0, row_labels(&open.ctx, &[&first])[0], "{shown:?}");
         assert!(top.2 >= f64::from(open.popup().top()), "the first row is in view: {shown:?}");
+    }
+
+    /// A palette closed by a click outside it and opened again in the next frame, as the search
+    /// icon does, starts at its first row, so Enter on an empty search runs the last pick.
+    #[test]
+    fn the_palette_reopened_in_the_next_frame_starts_at_its_first_row() {
+        let mut open = Open::new("", WINDOW);
+        open.app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        open.app.ui.recent_commands = vec!["paint.swap".into(), "object.group".into()];
+        open.app.ui.palette_open = true;
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, 1);
+        assert_eq!(open.highlighted(), 1);
+        let at = egui::pos2(WINDOW.x - 4.0, WINDOW.y - 4.0);
+        let button =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        open.frame(vec![egui::Event::PointerMoved(at), button(true), button(false)]);
+        assert!(!open.app.ui.palette_open, "the click outside closes the palette");
+        open.app.ui.palette_open = true;
+        open.frame(vec![]);
+        assert_eq!(open.highlighted(), 0);
+        let before = open.app.session.active().unwrap().history.undo.len();
+        open.press(egui::Key::Enter, 1);
+        assert!(!open.app.ui.palette_open, "the palette closes");
+        assert_eq!(open.app.session.active().unwrap().history.undo.len(), before + 1, "{}", open.app.ui.status);
+        assert_eq!(open.app.ui.recent_commands, ["paint.swap", "object.group"]);
     }
 
     /// A pick of the palette's own toggle is not recorded, and one saved earlier is not listed, so
