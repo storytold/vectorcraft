@@ -311,6 +311,12 @@ pub fn properties_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         changed |= color(ui, &mut f, "lineColor");
     });
     ui.horizontal(|ui| changed |= choose(ui, &mut f, "arrowStyle", "Arrow Style:", ARROWS));
+    widgets::section_header(ui, tl!("Extension Lines"));
+    ui.horizontal(|ui| {
+        changed |= number(ui, &mut f, "extensionWeight", "Line Weight:", (0.1, 100.0), "pt");
+        changed |= color(ui, &mut f, "extensionColor");
+    });
+    widgets::section_header(ui, tl!("Dimension Text"));
     ui.horizontal(|ui| {
         changed |= number(ui, &mut f, "fontSize", "Font Size:", (1.0, 1000.0), "pt");
         changed |= color(ui, &mut f, "textColor");
