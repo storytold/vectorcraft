@@ -596,7 +596,7 @@ fn group_action(app: &mut VectorcraftApp, d: &mut Dialog, action: &Value) -> Res
             let mut colors: Vec<Value> = filled
                 .iter()
                 .enumerate()
-                .filter_map(|(i, r)| if excluded(r) { kept_color(&assign, i, r).cloned() } else { saved_color(app, d, r) })
+                .filter_map(|(i, r)| if excluded(r) { Some(kept_color(&assign, i)) } else { saved_color(app, d, r) })
                 .chain(group_colors(app, d, rest.iter()))
                 .collect();
             // With art in a color of the group, the group keeps its swatch order: a swatch whose row
@@ -818,10 +818,10 @@ fn swatch_row<'a>(d: &Dialog, rs: &'a [Value], own: &[Value], i: usize) -> Optio
 }
 
 /// The color an excluded row leaves its swatch, the row being the `i`th of the rows with current
-/// colors: the swatch's own color in `assign` (the group's colors), else the row's first current
-/// color.
-fn kept_color<'a>(assign: &'a [Value], i: usize, row: &'a Value) -> Option<&'a Value> {
-    assign.get(i).or_else(|| row["from"].as_array().and_then(|f| f.first()))
+/// colors: the swatch's own color in `assign` (the group's colors), else `null`, which adds no
+/// swatch past the group's, as OK's `"keep"` does.
+fn kept_color(assign: &[Value], i: usize) -> Value {
+    assign.get(i).cloned().unwrap_or(Value::Null)
 }
 
 /// Refuse a `groupAction` other than `save`, `new` or `delete`, `save` or `delete` with no group
@@ -1201,7 +1201,9 @@ fn find_entry(k: &Value) -> Option<FindEntry> {
 
 /// The first of `rows` that lists the color entry `k`, as `recolor.apply` reads entries: rows that
 /// list it as an exact color (by key, whatever its case or spacing) come before rows whose
-/// "#rrggbb" entry matches it by its hex.
+/// "#rrggbb" entry matches it by its hex. Rows that give the color a new color (not excluded, `to`
+/// not `null`) come first, since `recolor.apply` maps the color with them; an excluded row or one
+/// that removes the color is found only when no such row lists it.
 fn row_listing<'a>(rows: &'a [Value], k: &Value) -> Option<&'a Value> {
     let want = find_entry(k)?;
     let hex = |e: &FindEntry| e.as_ref().map_or_else(Clone::clone, |k| k.color().to_hex());
@@ -1213,7 +1215,8 @@ fn row_listing<'a>(rows: &'a [Value], k: &Value) -> Option<&'a Value> {
             })
         })
     };
-    rows.iter().find(|r| lists(r, false)).or_else(|| rows.iter().find(|r| lists(r, true)))
+    let find = |live: bool, by_hex: bool| rows.iter().filter(|r| !live || (!excluded(r) && !r["to"].is_null())).find(|r| lists(r, by_hex));
+    find(true, false).or_else(|| find(true, true)).or_else(|| find(false, false)).or_else(|| find(false, true))
 }
 
 /// While Find is on, on the Assign tab with art and rows selected: what the art previews instead of
@@ -2657,6 +2660,24 @@ mod tests {
         assert_eq!(row_listing(&rs, &json!("cmyk 0 0 0 0")), None);
     }
 
+    /// A row that gives a color a new color comes before an earlier row that removes it or is
+    /// excluded, exact or by hex, as `recolor.apply` maps the color with it; those rows are found
+    /// only when no such row lists the color.
+    #[test]
+    fn a_row_giving_a_color_a_new_color_comes_before_one_removing_it() {
+        let rs = [
+            json!({"from": ["rgb 0 0 255"], "to": null}),
+            json!({"from": ["rgb 0 0 255"], "to": "rgb 0 0 0", "exclude": true}),
+            json!({"from": ["#0000ff"], "to": "rgb 0 255 0"}),
+            json!({"from": ["rgb 0 0 255"], "to": "rgb 255 0 0"}),
+            json!({"from": ["rgb 255 255 0"], "to": null}),
+        ];
+        assert_eq!(row_listing(&rs, &json!("rgb 0 0 255")), Some(&rs[3]));
+        assert_eq!(row_listing(&rs[..3], &json!("rgb 0 0 255")), Some(&rs[2]), "by hex");
+        assert_eq!(row_listing(&rs[..2], &json!("rgb 0 0 255")), Some(&rs[0]));
+        assert_eq!(row_listing(&rs, &json!("rgb 255 255 0")), Some(&rs[4]));
+    }
+
     #[test]
     fn next_seed_holds_at_the_largest() {
         assert_eq!(next_seed(&Dialog::new("recolor", json!({}))), 1);
@@ -4015,6 +4036,36 @@ mod tests {
         assert_eq!(p["groupColors"][0], "keep", "so the Global Adjust leaves it as it is too: {p}");
         act(&mut app, &ctx, 0.1, "save").unwrap();
         assert_eq!(group_hex(&app, "Plain"), Some(vec!["#ff0000".into(), "#0000ff".into()]), "so does Save Changes");
+    }
+
+    /// With art in more colors than the group has swatches, an excluded row past the swatches adds
+    /// no color at Save Changes, as at OK.
+    #[test]
+    fn saving_a_group_with_art_adds_no_color_for_an_excluded_row_past_its_swatches() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        app.run("file.new", json!({"width": 300, "height": 100})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "Plain", "colors": ["#ff0000"], "keepModel": true})).unwrap();
+        let (blue, yellow) = (square(&mut app, 10.0, "#0000ff"), square(&mut app, 40.0, "#ffff00"));
+        app.run("select.set", json!({"ids": [blue, yellow]})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "Plain"})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("method".into(), json!(Method::Exact.id()));
+        d.fields.insert("colors".into(), json!(2));
+        d.fields.remove(REDUCED);
+        frame(&mut app, &ctx, 0.0, vec![], 0);
+        let d = app.ui.dialog.as_mut().unwrap();
+        let mut rs = super::rows(d);
+        assert_eq!(rs.len(), 2, "a row for each color of the art: {rs:?}");
+        for r in &mut rs {
+            r["exclude"] = json!(true);
+        }
+        d.fields.insert("rows".into(), Value::Array(rs));
+        // `recolor.apply` adds nothing for a "keep" past the group's swatches.
+        assert_eq!(apply_params(app.ui.dialog.as_ref().unwrap())["groupColors"], json!(["keep", "keep"]), "OK adds no color");
+        act(&mut app, &ctx, 0.1, "save").unwrap();
+        assert_eq!(group_hex(&app, "Plain"), Some(vec!["#ff0000".into()]), "Save Changes adds none either");
     }
 
     /// Without art, a row excluded after Save Changes gave its swatch a new color leaves the swatch
