@@ -1287,6 +1287,8 @@ antiAlias	Sharp	날카롭게
 	Choose a folder	폴더 선택
 	Choose…	선택…
 	Circle	원
+	Circle Tool	점 기준 원 도구
+	Circle too large	원이 너무 큽니다
 	Clear All Tabs	모든 탭 지우기
 	Above Text	문자 위
 	Position Panel Above Text	패널을 문자 위에 배치
@@ -4770,8 +4772,8 @@ theme	Appearance	외관
 @msg	image would be too large; lower the resolution	이미지가 너무 커집니다. 해상도를 낮추세요
 @msg	clipboard is empty	클립보드가 비어 있습니다
 @msg	no anchor points selected	선택한 앵커 포인트가 없습니다
-@msg	`points` must be three [x, y] pairs of numbers	`points`는 숫자 쌍 [x, y] 세 개여야 합니다
-@msg	direct-select three anchor points, or give `points`	앵커 포인트 세 개를 직접 선택하거나 `points`를 지정하세요
+@msg	`points` must be two or three [x, y] pairs of numbers	`points`는 숫자 쌍 [x, y] 두 개 또는 세 개여야 합니다
+@msg	direct-select two or three anchor points, or give `points`	앵커 포인트 두 개 또는 세 개를 직접 선택하거나 `points`를 지정하세요
 @msg	no circle passes through these points: two are the same or all three lie on one line	이 점들을 지나는 원이 없습니다: 두 점이 같거나 세 점이 모두 한 직선 위에 있습니다
 @msg	select at least two objects	개체를 두 개 이상 선택하세요
 @msg	exit isolation mode first	먼저 격리 모드를 종료하세요

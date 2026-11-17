@@ -475,6 +475,8 @@ font-technology	Variable	Варіативні
 	Choose a folder	Виберіть папку
 	Choose…	Вибрати…
 	Circle	Коло
+	Circle Tool	Інструмент «Коло»
+	Circle too large	Коло завелике
 	Classic Defaults	Класичні значення за промовчанням
 	Clean Up…	Очистити…
 	Clear	Очистити
@@ -5033,8 +5035,8 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no active document	немає активного документа
 @msg	no active perspective plane	немає активної площини перспективи
 @msg	no anchor points selected	опорні точки не виділені
-@msg	`points` must be three [x, y] pairs of numbers	`points` має містити три пари чисел [x, y]
-@msg	direct-select three anchor points, or give `points`	виділіть три опорні точки прямим виділенням або задайте `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` має містити дві або три пари чисел [x, y]
+@msg	direct-select two or three anchor points, or give `points`	виділіть дві або три опорні точки прямим виділенням або задайте `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	через ці точки не проходить жодне коло: дві точки збігаються або всі три лежать на одній прямій
 @msg	no app to open files here	тут немає програми для відкриття файлів
 @msg	no artboard	немає монтажної області

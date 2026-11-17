@@ -557,6 +557,8 @@ font-technology	Variable	Biến thiên
 	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	Chọn tệp để liên kết lại từng tệp liên kết. Các tệp có kích thước và nội dung đã lưu cùng liên kết được hiển thị trước.
 	Choose…	Chọn…
 	Circle	Hình tròn
+	Circle Tool	Công cụ Hình tròn
+	Circle too large	Hình tròn quá lớn
 	Classic	Cổ điển
 	Classic Defaults	Mặc định cổ điển
 	Clean Up…	Dọn dẹp…
@@ -5365,8 +5367,8 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	no active document	không có tài liệu đang hoạt động
 @msg	no active perspective plane	không có mặt phẳng phối cảnh đang hoạt động
 @msg	no anchor points selected	chưa chọn điểm neo
-@msg	`points` must be three [x, y] pairs of numbers	`points` phải là ba cặp số [x, y]
-@msg	direct-select three anchor points, or give `points`	hãy chọn trực tiếp ba điểm neo hoặc cung cấp `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` phải là hai hoặc ba cặp số [x, y]
+@msg	direct-select two or three anchor points, or give `points`	hãy chọn trực tiếp hai hoặc ba điểm neo hoặc cung cấp `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	không có đường tròn nào đi qua các điểm này: hai điểm trùng nhau hoặc cả ba điểm thẳng hàng
 @msg	no app to open files here	không có ứng dụng để mở tệp ở đây
 @msg	no artboard	không có bảng vẽ

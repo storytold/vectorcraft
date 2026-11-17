@@ -4280,6 +4280,8 @@ font-technology	Variable	Variabel
 	Couldn't paste from the clipboard: {e}	Tidak dapat menempel dari papan klip: {e}
 	Channel	Saluran
 	Circle	Lingkaran
+	Circle Tool	Alat lingkaran
+	Circle too large	Lingkaran terlalu besar
 	Clip to Art	Pangkas ke karya seni
 	Colorize	Warnai
 	Gamma	Gamma

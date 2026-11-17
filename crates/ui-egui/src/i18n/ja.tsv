@@ -1297,6 +1297,8 @@ antiAlias	Sharp	シャープ
 	Choose a folder	フォルダーを選択
 	Choose…	選択…
 	Circle	円
+	Circle Tool	円ツール
+	Circle too large	円が大きすぎます
 	Clear All Tabs	すべてのタブを消去
 	Above Text	テキストの上
 	Position Panel Above Text	テキストの上にパネルを配置
@@ -4843,8 +4845,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	image would be too large; lower the resolution	画像が大きくなりすぎるため、解像度を下げてください
 @msg	clipboard is empty	クリップボードが空です
 @msg	no anchor points selected	アンカーポイントが選択されていません
-@msg	`points` must be three [x, y] pairs of numbers	`points` は 3 組の数値 [x, y] にしてください
-@msg	direct-select three anchor points, or give `points`	アンカーポイントを 3 つダイレクト選択するか、`points` を指定してください
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` は 2 組または 3 組の数値 [x, y] にしてください
+@msg	direct-select two or three anchor points, or give `points`	アンカーポイントを 2 つまたは 3 つダイレクト選択するか、`points` を指定してください
 @msg	no circle passes through these points: two are the same or all three lie on one line	これらの点を通る円はありません: 2 つの点が同じか、3 点すべてが一直線上にあります
 @msg	select at least two objects	オブジェクトを 2 つ以上選択してください
 @msg	exit isolation mode first	先に分離モードを終了してください

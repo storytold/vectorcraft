@@ -456,6 +456,8 @@ font-technology	Variable	Variabel
 	Choose a folder	Ordner wählen
 	Choose…	Wählen…
 	Circle	Kreis
+	Circle Tool	Kreis-Werkzeug
+	Circle too large	Kreis zu groß
 	Classic Defaults	Klassische Standardwerte
 	Clean Up…	Aufräumen…
 	Clear	Löschen
@@ -4915,8 +4917,8 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	no active document	kein aktives Dokument
 @msg	no active perspective plane	keine aktive Perspektivebene
 @msg	no anchor points selected	keine Ankerpunkte ausgewählt
-@msg	`points` must be three [x, y] pairs of numbers	`points` muss aus drei Zahlenpaaren [x, y] bestehen
-@msg	direct-select three anchor points, or give `points`	wählen Sie drei Ankerpunkte direkt aus oder geben Sie `points` an
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` muss aus zwei oder drei Zahlenpaaren [x, y] bestehen
+@msg	direct-select two or three anchor points, or give `points`	wählen Sie zwei oder drei Ankerpunkte direkt aus oder geben Sie `points` an
 @msg	no circle passes through these points: two are the same or all three lie on one line	durch diese Punkte verläuft kein Kreis: zwei sind gleich oder alle drei liegen auf einer Linie
 @msg	no app to open files here	hier gibt es keine App zum Öffnen von Dateien
 @msg	no artboard	keine Zeichenfläche
