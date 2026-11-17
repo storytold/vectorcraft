@@ -88,8 +88,30 @@ fn reason(code: &str) -> &str {
 /// All locating actions go through commands. Resource findings name a visible canvas owner.
 fn locate(app: &mut VectorcraftApp, finding: &Value) {
     let ids = finding["ids"].as_array().cloned().unwrap_or_default();
-    if !ids.is_empty() && app.run("select.set", json!({ "ids": ids })).is_ok() {
-        app.run(crate::addons::arrange::ZOOM, json!({})).ok();
+    if ids.is_empty() {
+        return;
+    }
+    let selected = match app.run("select.set", json!({ "ids": ids })) {
+        Ok(result) => result,
+        Err(error) => {
+            app.ui.status = error;
+            return;
+        }
+    };
+    // Selection can succeed while dropping artwork protected by a locked artboard.
+    let selected: std::collections::HashSet<_> = selected["ids"].as_array().into_iter().flatten().filter_map(Value::as_u64).collect();
+    let found = ids.iter().filter_map(Value::as_u64).filter(|id| selected.contains(id)).count();
+    if found > 0
+        && let Err(error) = app.run(crate::addons::arrange::ZOOM, json!({}))
+    {
+        app.ui.status = error;
+        return;
+    }
+    let warning = tl!("Some affected artwork could not be selected. Unlock it or its artboard, or leave isolation mode, then try again.");
+    if found < ids.len() {
+        app.ui.status = warning.to_string();
+    } else if app.ui.status == warning {
+        app.ui.status.clear();
     }
 }
 

@@ -99,9 +99,10 @@ fn check(s: &mut Session, p: &Value) -> Result<Value> {
             resolution_unchecked += 1;
             continue;
         };
+        // Inverting the placed-size transform can round an exact threshold slightly down.
         if ppi.iter().any(|n| !n.is_finite() || *n <= 0.0) {
             resolution_unchecked += 1;
-        } else if ppi.iter().any(|n| *n < min_ppi) {
+        } else if ppi.iter().any(|n| *n < min_ppi * (1.0 - 1e-9)) {
             let mut f = finding("resolution", "lowResolution", owner, &doc);
             f["effectivePpi"] = json!(ppi);
             f["threshold"] = json!(min_ppi);

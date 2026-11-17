@@ -113,6 +113,25 @@ fn preflight_resolution_follows_placed_size_and_both_axes() {
 }
 
 #[test]
+fn preflight_resolution_accepts_the_exact_threshold_but_rejects_a_real_shortfall() {
+    let dir = Folder::new("preflight-resolution-boundary");
+    let path = dir.file("picture.png");
+    std::fs::write(&path, png(40, 40, [200, 50, 10])).unwrap();
+    let mut s = new();
+    s.execute("file.place", &json!({ "path": path, "link": false, "at": [200, 200] })).unwrap();
+    for threshold in [31.0, 59.0, 300.0, 600.0, 9600.0] {
+        let size = 40.0 * 72.0 / threshold;
+        s.execute("object.setBounds", &json!({ "width": size, "height": size })).unwrap();
+        let exact = s.execute("document.preflight", &json!({ "minPpi": threshold })).unwrap();
+        assert!(!codes(&exact).contains(&"lowResolution"), "exactly {threshold} ppi: {exact}");
+        s.execute("object.setBounds", &json!({ "width": size * 1.000001, "height": size })).unwrap();
+        let below = s.execute("document.preflight", &json!({ "minPpi": threshold })).unwrap();
+        let f = below["findings"].as_array().unwrap().iter().find(|f| f["code"] == "lowResolution").unwrap();
+        assert_eq!(f["threshold"], threshold);
+    }
+}
+
+#[test]
 fn preflight_resolution_includes_the_print_jobs_scale() {
     let dir = Folder::new("preflight-print-scale");
     let path = dir.file("picture.png");

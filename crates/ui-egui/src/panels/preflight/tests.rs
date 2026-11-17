@@ -61,6 +61,49 @@ fn clicking_a_preflight_finding_selects_and_zooms_to_its_artwork() {
 }
 
 #[test]
+fn clicking_a_preflight_finding_on_a_locked_artboard_reports_the_problem() {
+    let (mut app, id) = app();
+    app.run("select.set", json!({ "ids": [] })).unwrap();
+    app.run("artboard.setProps", json!({ "index": 0, "locked": true })).unwrap();
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+    let before_view = *app.view().unwrap();
+    let before_doc = app.session.active().unwrap().doc.clone();
+    app.ui.status.clear();
+    let ctx = egui::Context::default();
+    let rows = frame(&ctx, &mut app, 1.0, vec![]);
+    let at = text_rect(&rows, "Delivery headline\nText past the frame will be left out").center();
+    let event = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    frame(&ctx, &mut app, 1.1, vec![egui::Event::PointerMoved(at), event(true)]);
+    frame(&ctx, &mut app, 1.2, vec![event(false)]);
+    assert!(app.ui.status.contains("could not be selected"), "{}", app.ui.status);
+    assert!(app.session.active().unwrap().selection.objects.is_empty());
+    assert_eq!(app.view().unwrap().zoom, before_view.zoom);
+    assert_eq!(*app.session.active().unwrap().doc, *before_doc);
+    app.run("artboard.setProps", json!({ "index": 0, "locked": false })).unwrap();
+    locate(&mut app, &json!({ "ids": [id] }));
+    assert!(app.ui.status.is_empty(), "successful navigation clears its previous warning: {}", app.ui.status);
+    assert!(app.view().unwrap().fitted);
+}
+
+#[test]
+fn preflight_navigation_reports_partial_selection_and_zooms_to_selectable_artwork() {
+    let (mut app, locked) = app();
+    app.run("artboard.new", json!({ "x": 600, "y": 0, "width": 500, "height": 400 })).unwrap();
+    let free = app.run("text.create", json!({ "x": 610, "y": 30, "text": "Free", "font": "Preflight UI Missing 917" })).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [] })).unwrap();
+    app.run("artboard.setProps", json!({ "index": 0, "locked": true })).unwrap();
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+    let report = app.session.execute("document.preflight", &json!({})).unwrap();
+    let finding = report["findings"].as_array().unwrap().iter().find(|f| f["code"] == "missingFont").unwrap();
+    assert!(finding["ids"].as_array().unwrap().contains(&locked));
+    locate(&mut app, finding);
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(free.as_u64().unwrap())]);
+    assert!(app.view().unwrap().fitted);
+    assert!(app.view().unwrap().zoom > 1.0);
+    assert!(app.ui.status.contains("could not be selected"), "{}", app.ui.status);
+}
+
+#[test]
 fn preflight_panel_does_not_present_stale_results_during_a_drag() {
     let (mut app, _) = app();
     let ctx = egui::Context::default();

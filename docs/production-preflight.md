@@ -15,7 +15,9 @@ The panel checks:
 
 Click a finding to select and zoom to the affected artwork. A font finding can select several
 objects. A finding inside a symbol, pattern, brush or opacity mask locates its first visible
-canvas owner. **Find Font…**, **Relink…** and **Update Link** open the existing repair workflows;
+canvas owner. If some artwork cannot be selected, the status bar reports it; any selectable
+objects are still located without unlocking artwork or artboards. **Find Font…**, **Relink…** and
+**Update Link** open the existing repair workflows;
 they do not apply an automatic font substitution or change artwork just by checking it.
 
 Results refresh after document edits, Undo/Redo, document switches and changes to the panel's
@@ -75,8 +77,23 @@ WebAssembly Clippy run also encounters existing target-specific lints in unchang
 (`drop_non_drop`) and `font_menu.rs` (`unnecessary_lazy_evaluations`); the WebAssembly typecheck and
 the native Clippy run above pass without source changes for those findings.
 
+### Review follow-up on `main` at `ee60c51fd`
+
+The exact-threshold and locked-artboard regressions were first run against the original
+implementation and failed. After the fixes and merge-conflict resolution:
+
+- All 10 engine preflight tests and 7 panel tests passed. The optional GPU preview also passed
+  and was visually inspected.
+- The boundary regression checks several exact PPI thresholds and a real shortfall on one axis.
+- Navigation regressions cover a locked artboard, retry after unlocking, and partial selection
+  that still zooms to the selectable artwork. Finding navigation never unlocks artwork.
+- Formatting, native workspace Clippy with warnings denied, engine/UI WebAssembly typecheck,
+  layering and PDF dependency checks passed. The complete workspace CI suite remains incomplete; the unchanged UI command catalog
+  still fails its separate drift check.
+
 ## Revision history
 
 | Date | Change |
 |---|---|
+| 2026-11-18 | Review follow-up: tolerate PPI rounding at the minimum, report incomplete finding selection, and retain main's symbol lookup improvements when resolving merge conflicts. |
 | 2026-11-18 | Initial Production Preflight panel and command. |
