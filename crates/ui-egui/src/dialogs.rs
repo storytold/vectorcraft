@@ -597,7 +597,8 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 /// Options setting set this way for several rows is sent to every row (Template also sets Lock
 /// and Dim Images, as its checkbox does). A DXF Options preset set this way sets its fields, as
 /// one picked from its menu does, and the preset it shows follows the DXF options set this way.
-/// A Graph Data Column Width set this way sets every column, as Cell Style's does.
+/// A Graph Data Column Width set this way sets every column, as Cell Style's does. A Pathfinder
+/// effect's precision set this way replaces a stored precision out of range, the bound included.
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
@@ -613,6 +614,11 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     }
     if d.kind == new_document::KIND || new_document::popup_open(d) {
         new_document::note_set(d, &field);
+    }
+    // A Pathfinder effect's precision set this way replaces a stored one out of range, as one
+    // entered in its field does.
+    if d.kind == "effect" && field == "precision" {
+        d.fields.remove(effect::OPENED_PRECISION);
     }
     let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
     let graph = (d.kind == graph_data::KIND).then(|| field.clone());

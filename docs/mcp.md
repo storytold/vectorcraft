@@ -5338,9 +5338,12 @@ fills the ones `params` leave out from the current Pathfinder Options, and the v
 saved without them evaluates with precision 0.01 and both switches off, as before effects kept them. `effect.setParams
 {index, params: {precision?, removeRedundantPoints?, removeUnpainted?}}` edits them as one undo step; values the
 effect already evaluates with record no undo step and return `{ids: []}`. A precision out of range, or a switch that
-isn't true or false, is refused with an error and nothing changes. In the app, a Pathfinder effect's name or a
-double-click on its row in the Appearance panel opens Pathfinder Options for it (Soft Mix's dialog also has Mixing
-Rate).
+isn't true or false, is refused with an error and nothing changes. Scale Strokes & Effects scales `precision` with the
+object (0.01 when it is missing), and the stored value may then pass 10 or fall below 0.001; the effect evaluates at
+the nearest bound, and setting a precision that differs from the stored one is an edit, the bound included. In the app,
+a Pathfinder effect's name or a double-click on its row in the Appearance panel opens Pathfinder Options for it (Soft
+Mix's dialog also has Mixing Rate). A stored precision out of range opens at the bound, and OK keeps the stored value
+unless Precision is set.
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"params":{"precision":1,"removeRedundantPoints":true}}}}

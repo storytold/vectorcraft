@@ -175,7 +175,10 @@ fn has_only_pathfinder_options(id: &str) -> bool {
 
 /// A Pathfinder effect's Pathfinder Options in `fields`, where they are missing: for a new effect
 /// (`fresh`) the Pathfinder panel's current options, as `effect.apply` takes them; for an applied
-/// one saved without them, the values it evaluates with.
+/// one saved without them, the values it evaluates with. A precision out of range (one that Scale
+/// Strokes & Effects took past it) or not a number opens at the value it evaluates with, kept in
+/// `__openedPrecision`: OK leaves that value out unless the user enters a precision, so the stored
+/// one stays until the user changes it.
 fn fill_pathfinder_options(app: &VectorcraftApp, id: &str, fields: &mut Map<String, Value>, fresh: bool) {
     if !vectorcraft_effects::takes_pathfinder_options(id) {
         return;
@@ -185,7 +188,16 @@ fn fill_pathfinder_options(app: &VectorcraftApp, id: &str, fields: &mut Map<Stri
     for (key, v) in options.as_object().into_iter().flatten() {
         fields.entry(key.clone()).or_insert_with(|| v.clone());
     }
+    if fields.get("precision").is_some_and(|v| !v.as_f64().is_some_and(|p| vectorcraft_effects::PATHFINDER_EFFECT_PRECISION.contains(&p))) {
+        let evaluated = vectorcraft_effects::PathfinderEffectOptions::from_params(&json!({"precision": fields["precision"]})).precision;
+        fields.insert("precision".into(), json!(evaluated));
+        fields.insert(OPENED_PRECISION.into(), json!(evaluated));
+    }
 }
+
+/// The precision a Pathfinder effect's dialog opened at in place of a stored one out of range,
+/// until the user enters a precision.
+pub(super) const OPENED_PRECISION: &str = "__openedPrecision";
 
 /// A Pathfinder effect's fields: Soft Mix's Mixing Rate as the other effects show their
 /// parameters, then the Pathfinder Options. Returns whether the values changed.
@@ -1075,6 +1087,12 @@ fn command(d: &Dialog) -> (&'static str, Value) {
         p["index"] = index.clone();
         p["item"] = item.unwrap_or(Value::Null);
         p["params"] = params;
+        // A precision the dialog opened at in place of a stored one out of range keeps the stored one.
+        if let (Some(opened), Some(Value::Object(m))) = (d.fields.get(OPENED_PRECISION).and_then(Value::as_f64), p.get_mut("params"))
+            && m.get("precision").and_then(Value::as_f64) == Some(opened)
+        {
+            m.remove("precision");
+        }
         let id = d.str("__effect");
         // Each target keeps the map its own Warp draws with: the dialog's `version` is the first
         // target's.
@@ -1609,6 +1627,47 @@ mod tests {
         let text = paint(&mut app);
         assert!(text.contains("Mixing Rate") && text.lines().any(|l| l == "Remove Redundant Points"), "{text}");
         assert_eq!(app.ui.dialog.as_ref().unwrap().fields["removeUnpainted"], json!(true));
+    }
+
+    /// A Pathfinder effect whose precision Scale Strokes & Effects took past the range opens at the
+    /// bound it evaluates at. OK with nothing changed records no step, OK with another option
+    /// changed keeps the stored precision, and a precision the user sets replaces it.
+    #[test]
+    fn a_pathfinder_precision_scaled_past_its_range_opens_at_the_bound_and_ok_keeps_it() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+        app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 50, "height": 50})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("effect.apply", json!({"effect": "pathfinder.add", "params": {"precision": 8}})).unwrap();
+        let g = app.session.doc().unwrap().selection.objects[0];
+        app.run("object.scale", json!({"sx": 200, "strokes": true})).unwrap();
+        let params = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(g).unwrap().appearance.effects[0].params.clone();
+        assert_eq!(params(&app)["precision"].as_f64(), Some(16.0));
+        let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+        let open = |app: &mut VectorcraftApp| {
+            app.run("effect.dialog", json!({"effect": "pathfinder.add", "index": 0, "item": null})).unwrap();
+            assert_eq!(app.ui.dialog.as_ref().unwrap().fields["precision"].as_f64(), Some(10.0));
+        };
+        open(&mut app);
+        let before = steps(&app);
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!((steps(&app), params(&app)["precision"].as_f64()), (before, Some(16.0)), "OK with nothing changed");
+        open(&mut app);
+        app.ui.dialog.as_mut().unwrap().fields.insert("removeRedundantPoints".into(), json!(true));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!((params(&app)["precision"].as_f64(), &params(&app)["removeRedundantPoints"]), (Some(16.0), &json!(true)));
+        open(&mut app);
+        app.ui.dialog.as_mut().unwrap().fields.insert("precision".into(), json!(2.5));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(params(&app)["precision"].as_f64(), Some(2.5));
+        // Setting the bound itself (`ui.dialog.set`, or the Precision field) replaces a stored value past it.
+        app.run("object.scale", json!({"sx": 800, "strokes": true})).unwrap();
+        assert_eq!(params(&app)["precision"].as_f64(), Some(20.0));
+        open(&mut app);
+        super::super::set_field(app.ui.dialog.as_mut().unwrap(), "precision".into(), json!(10.0));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(params(&app)["precision"].as_f64(), Some(10.0));
     }
 
     /// A Radial Blur whose saved Blur Center lies outside the object's bounds (a document written

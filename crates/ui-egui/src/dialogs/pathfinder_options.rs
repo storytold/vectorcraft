@@ -68,6 +68,8 @@ pub(super) fn fields(ui: &mut egui::Ui, d: &mut Dialog) {
         let v = d.f64("precision", vectorcraft_engine::PathfinderOptions::default().precision);
         if let Some(v) = widgets::range_field(ui, "pathfinder-precision", v, range, " pt", 3, 80.0) {
             d.fields.insert("precision".into(), json!(v));
+            // An entered precision replaces a stored one out of range, the bound included.
+            d.fields.remove(super::effect::OPENED_PRECISION);
         }
         ui.end_row();
     });
