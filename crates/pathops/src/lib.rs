@@ -30,8 +30,8 @@ pub use fit::{fit_cubics, fit_cubics_through};
 pub use offset::{Cap, Join, MAX_OFFSET_SEGMENT_PAIRS, offset_path, outline_stroke, stroke_region, try_offset_path};
 pub use pathfinder::{FaceMerger, PathfinderOp, Region, Shape, merge_regions, pathfinder, pathfinder_with, region_at, regions, regions_within};
 pub use planar::{
-    BuilderArrangement, SHAPE_BUILDER_MAX_GAP, SHAPE_BUILDER_MAX_SEGMENTS, cut_out, encloses_area, find_gaps, has_open_path, interior_point,
-    live_paint, live_paint_with_gaps, run_around, shape_builder, shape_builder_with_gap,
+    Adjacency, BuilderArrangement, MapEdge, MapFace, MapOutline, SHAPE_BUILDER_MAX_GAP, SHAPE_BUILDER_MAX_SEGMENTS, adjacency, cut_out,
+    encloses_area, find_gaps, has_open_path, interior_point, live_paint, live_paint_with_gaps, run_around, shape_builder, shape_builder_with_gap,
 };
 pub use trap::{TRAP_HEIGHT_WIDTH_RANGE, TRAP_MAX_WIDTH, TRAP_MIN_WIDTH, trap_band};
 

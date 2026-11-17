@@ -5198,6 +5198,137 @@ fn live_paint_bucket_drag_rejects_invalid_points_atomically() {
     }
 }
 
+/// The edge of `g` through (`x`, 25), halfway up the squares of [`live_squares`].
+fn vertical_edge(s: &Session, g: NodeId, x: f64) -> NodeId {
+    vectorcraft_tools::builder::edge_near(&node(s, g), Point::new(x, 25.0), 0.5).map(|e| e.id).unwrap_or_else(|| panic!("an edge at x {x}"))
+}
+
+/// A Shift-drag from an edge strokes every visible edge of that group the drag crosses, between
+/// pointer events and on the release too, as one undo step that Escape cancels; hidden edges and
+/// another group's edges keep their strokes.
+#[test]
+fn live_paint_bucket_drag_strokes_crossed_edges_as_one_undo() {
+    for cancel in [false, true] {
+        let mut s = session();
+        let g = live_squares(&mut s, &[0.0, 50.0, 100.0, 150.0, 200.0]);
+        let other = live_squares(&mut s, &[300.0]);
+        let black = Paint::solid(Color::rgb(0.0, 0.0, 0.0));
+        let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+        let all: Vec<NodeId> = [g, other].iter().flat_map(|g| edges_in(&s, *g, Rect::new(-1.0, -1.0, 351.0, 51.0))).collect();
+        paint_parts(&mut s, &all, &black, &[]);
+        let hidden = vertical_edge(&s, g, 100.0);
+        s.edit("t", |d, _| {
+            d.node_mut(hidden).unwrap().visible = false;
+            Ok(())
+        })
+        .unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let depth = s.doc().unwrap().history.undo.len();
+        let v = ViewInfo::default();
+        s.select_tool("livePaintBucket", v).unwrap();
+        s.paint.stroke = green.clone();
+        s.paint.stroke_width = 3.0;
+        let shift = Mods { shift: true, ..Default::default() };
+        s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 25.0).with_mods(shift), v).unwrap();
+        // Past the hidden edge and the edge at 150, then back across it, between pointer events.
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 160.0, 25.0).with_mods(shift), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 140.0, 30.0).with_mods(shift), v).unwrap();
+        if cancel {
+            assert!(s.tool_busy());
+            s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+            assert!(!s.tool_busy());
+        }
+        // The release crosses the edges at 200 and 250 and goes on into the other group.
+        s.pointer(&PointerEvent::new(PointerKind::Up, 325.0, 25.0).with_mods(shift), v).unwrap();
+        if cancel {
+            assert!(s.doc().unwrap().doc == before, "Escape cancels the whole drag");
+            assert_eq!(s.doc().unwrap().history.undo.len(), depth);
+            continue;
+        }
+        let stroke = |s: &Session, id: NodeId| {
+            let n = node(s, id);
+            (n.appearance.stroke_paint(), n.appearance.stroke().map(|st| st.width))
+        };
+        for x in [50.0, 150.0, 200.0, 250.0] {
+            assert_eq!(stroke(&s, vertical_edge(&s, g, x)), (green.clone(), Some(3.0)), "edge at {x}");
+        }
+        for (group, x) in [(g, 0.0), (g, 100.0), (other, 300.0), (other, 350.0)] {
+            assert_eq!(stroke(&s, vertical_edge(&s, group, x)), (black.clone(), Some(1.0)), "edge at {x}");
+        }
+        for e in edges_in(&s, g, Rect::new(-1.0, -1.0, 201.0, 1.0)) {
+            assert_eq!(stroke(&s, e).0, black, "a top edge is not crossed");
+        }
+        assert_eq!(s.doc().unwrap().history.undo.len(), depth + 1, "one undo step");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(s.doc().unwrap().doc == before, "one Undo restores every edge");
+    }
+}
+
+/// A stroke drag over edges that already have the stroke records no undo step and keeps the redo
+/// steps.
+#[test]
+fn live_paint_bucket_stroke_drag_no_op_keeps_history() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0]);
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 101.0, 51.0));
+    paint_parts(&mut s, &all, &green, &[]);
+    paint_parts(&mut s, &all, &green, &[]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let (undo, redo) = (s.doc().unwrap().history.undo.len(), s.doc().unwrap().history.redo.len());
+    assert_eq!(redo, 1);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.stroke = green;
+    s.paint.stroke_width = 1.0;
+    let shift = Mods { shift: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, 0.0, 25.0).with_mods(shift), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 60.0, 25.0).with_mods(shift), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 110.0, 25.0).with_mods(shift), v).unwrap();
+    assert!(s.doc().unwrap().doc == before);
+    assert_eq!((s.doc().unwrap().history.undo.len(), s.doc().unwrap().history.redo.len()), (undo, redo));
+}
+
+/// `livePaint.strokeEdge` with `points` paints the crossed edges, counting the edge at the point;
+/// a malformed path or a scope other than "one" with `points` is an error that changes nothing.
+#[test]
+fn live_paint_stroke_drag_rejects_invalid_points_atomically() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0, 100.0]);
+    let before = s.doc().unwrap().doc.clone();
+    let stroke = |s: &mut Session, extra: Value| {
+        let mut p = json!({"group": g.0, "point": [50.0, 25.0], "color": "#00ff00"});
+        for (k, v) in extra.as_object().unwrap() {
+            p[k] = v.clone();
+        }
+        s.execute("livePaint.strokeEdge", &p)
+    };
+    for points in
+        [json!([]), json!([[51.0, 25.0]]), json!([[50.0, 25.0], [null, 0]]), json!([[50.0, 25.0], [1e30, 0]]), json!(vec![[50.0, 25.0]; 4097])]
+    {
+        assert!(stroke(&mut s, json!({ "points": points })).is_err(), "{points}");
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+    for continuation in [json!(null), json!([[[51.0, 25.0], [125.0, 25.0]]]), json!([vec![[50.0, 25.0]; 4097]])] {
+        assert!(stroke(&mut s, json!({ "points": [[50.0, 25.0]], "continuation": continuation })).is_err(), "{continuation}");
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+    assert!(stroke(&mut s, json!({ "continuation": [[[50.0, 25.0]]] })).is_err());
+    for scope in ["connected", "samePaint"] {
+        assert!(stroke(&mut s, json!({ "points": [[50.0, 25.0], [125.0, 25.0]], "scope": scope })).is_err(), "{scope}");
+    }
+    assert_eq!(s.doc().unwrap().doc, before);
+    // A path in two chunks reaches the edges at 50, 100 and 150, not the one at 0.
+    let r = stroke(&mut s, json!({ "points": [[50.0, 25.0], [90.0, 25.0]], "continuation": [[[90.0, 25.0], [160.0, 25.0]]] })).unwrap();
+    assert_eq!(r["count"], 3);
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    for x in [50.0, 100.0, 150.0] {
+        assert_eq!(node(&s, vertical_edge(&s, g, x)).appearance.stroke_paint(), green, "edge at {x}");
+    }
+    assert_ne!(node(&s, vertical_edge(&s, g, 0.0)).appearance.stroke_paint(), green);
+}
+
 #[test]
 fn live_paint_bucket_tool_fills_face() {
     let mut s = session();
@@ -5391,7 +5522,41 @@ fn live_paint_bucket_alt_image_samples_fill_and_clears_stroke() {
     let mut s = session();
     let img = image::RgbaImage::from_raw(1, 1, vec![0, 255, 0, 255]).unwrap();
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.edit("Place", |d, _| {
         d.images.insert("px".into(), ImageBlob::png(png));
         let id = d.alloc_id();
