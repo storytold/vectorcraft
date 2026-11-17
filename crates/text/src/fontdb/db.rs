@@ -16,7 +16,7 @@ use super::scan::{file_face_names, is_font_file};
 #[cfg(test)]
 use super::traits::faces_published;
 #[cfg(not(target_arch = "wasm32"))]
-use super::traits::{Alias, FaceStyle};
+use super::traits::{Alias, FaceStyle, regular_rank};
 use super::{Arc, AtomicU64, FontDb, FontPaths, HashMap, Mutex, Ordering, Path, PathBuf, RwLock, StringId};
 #[cfg(not(target_arch = "wasm32"))]
 use super::{ScanStamp, modified};
@@ -74,6 +74,7 @@ impl FontDb {
             stamp: Mutex::new(None),
             instances: Mutex::new(Instances::default()),
             composites: RwLock::new(HashMap::new()),
+            custom_classes: Mutex::new(HashMap::new()),
         }
     }
 
@@ -418,6 +419,8 @@ impl FontDb {
             if !named && !is_font_file(&p) && !crate::suitcase::is_suitcase(&p) {
                 continue;
             }
+            // The file's creation time, once for all its faces (a collection holds several).
+            let created = std::fs::metadata(&p).and_then(|m| m.created()).ok();
             for FaceStyle { family, native_family, style, keys, weight, italic, traits, .. } in file_face_names(&p) {
                 for (k, a) in Alias::of(&family, &style, &keys) {
                     aliases.entry(k).or_default().push(a);
@@ -429,6 +432,9 @@ impl FontDb {
                 let entry = catalog.entry(family.to_ascii_lowercase()).or_default();
                 let kind = entry.traits.get_or_insert(traits);
                 kind.variable |= traits.variable;
+                if regular_rank(&traits.likeness) < regular_rank(&kind.likeness) {
+                    kind.likeness = traits.likeness;
+                }
                 if entry.name.is_empty() {
                     entry.name = family;
                 }
@@ -436,7 +442,7 @@ impl FontDb {
                     entry.native = native_family;
                 }
                 let (weight, italic) = (weight.unwrap_or_else(|| style_weight(&style)), italic || style_italic(&style));
-                entry.faces.push(CatalogFace { style, path: p.clone(), weight, italic });
+                entry.faces.push(CatalogFace { style, path: p.clone(), weight, italic, created });
                 n += 1;
             }
         }

@@ -101,6 +101,7 @@
 //! rotation and style names).
 #![forbid(unsafe_code)]
 
+use craft_svg::tree::usvg;
 mod css;
 mod entities;
 mod export;
@@ -533,7 +534,10 @@ pub fn svg_filters(svg: &str, room: usize, taken: impl Fn(&str) -> bool) -> Resu
 }
 
 pub use glyph::glyph_art;
-pub use import::{MAX_ELEMENT_DEPTH, MAX_FOREIGN, MAX_FOREIGN_VALUE, MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, MAX_NESTED_SVG_TEXT, MAX_NODES};
+pub use import::{
+    MAX_DATA_URL_BYTES, MAX_ELEMENT_DEPTH, MAX_FOREIGN, MAX_FOREIGN_VALUE, MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, MAX_NESTED_SVG_TEXT,
+    MAX_NODES,
+};
 
 /// Import an SVG document reading the files it links to as `opts` says, also returning warnings.
 pub fn import_with(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<String>), SvgError> {
@@ -588,17 +592,8 @@ fn fnv1a_from(h: u64, bytes: &[u8]) -> u64 {
 
 /// Standard base64 (RFC 4648, with padding).
 pub fn base64_encode(data: &[u8]) -> String {
-    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
-    for c in data.chunks(3) {
-        let b = [c[0], *c.get(1).unwrap_or(&0), *c.get(2).unwrap_or(&0)];
-        let n = (b[0] as u32) << 16 | (b[1] as u32) << 8 | b[2] as u32;
-        out.push(T[(n >> 18) as usize & 63] as char);
-        out.push(T[(n >> 12) as usize & 63] as char);
-        out.push(if c.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' });
-        out.push(if c.len() > 2 { T[n as usize & 63] as char } else { '=' });
-    }
-    out
+    // SVG data URLs need one unwrapped line, not MIME's folded base64_lines variant.
+    craft_mime::transfer::base64(data)
 }
 
 /// Escape text for XML content and attribute values.
@@ -698,6 +693,19 @@ mod tests {
         assert_eq!(base64_encode(b"fo"), "Zm8=");
         assert_eq!(base64_encode(b"foo"), "Zm9v");
         assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
+    }
+
+    #[test]
+    fn base64_binary_payload_stays_standard_padded_and_unwrapped() {
+        let data: Vec<u8> = (0..=255).collect();
+        assert_eq!(
+            base64_encode(&data),
+            "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/w=="
+        );
+        assert_eq!(base64_encode(&[0xfb, 0xff, 0xff]), "+///");
+        assert_eq!(base64_encode(&[0xfb]), "+w==");
+        assert_eq!(base64_encode(&[0xfb, 0xff]), "+/8=");
+        assert_eq!(base64_encode(&[0; 60]), "A".repeat(80));
     }
 
     #[test]

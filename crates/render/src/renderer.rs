@@ -56,6 +56,8 @@ impl Renderer {
             fx_owner: None,
             live_root: None,
             fx_geom: PtrMap::default(),
+            fx_stages: PtrMap::default(),
+            fx_placement: None,
             stamp: 0,
             alpha: 1.0,
             contexts: Vec::new(),
@@ -229,6 +231,9 @@ impl Renderer {
         }
         if self.fx_geom.len() > 256 {
             self.fx_geom.retain(|_, e| g - e.stamp <= 3);
+        }
+        if self.fx_stages.len() > 256 {
+            self.fx_stages.retain(|_, e| g - e.3 <= 3);
         }
         // Filtered rasters are large: only those of the last frame stay.
         self.pixel_fx.retain(|_, e| e.stamp == g);

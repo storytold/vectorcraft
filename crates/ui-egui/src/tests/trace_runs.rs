@@ -16,7 +16,41 @@ fn app() -> VectorcraftApp {
     app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
     let img = image::RgbaImage::from_fn(40, 40, |x, y| image::Rgba(if x < 20 && y < 30 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let data = vectorcraft_format::base64_encode(&png);
     app.run("file.place", json!({"name": "half.png", "dataBase64": data, "link": false})).unwrap();
     app.trace_runs.off_the_ui_thread = true;
@@ -160,6 +194,23 @@ fn a_trace_needs_its_image_as_it_was() {
     wait(&mut app);
     assert_eq!(undos(&app), before, "nothing changes");
     assert!(app.ui.status.contains("changed meanwhile: trace it again"), "{}", app.ui.status);
+}
+
+/// A trace started before File › Revert doesn't apply after it, even when the document was
+/// reverted to the same image: nothing changes, and the status bar says why.
+#[test]
+fn a_trace_started_before_a_revert_does_not_apply() {
+    let mut app = app();
+    let i = app.session.active_index().unwrap();
+    let copy = (*app.session.doc().unwrap().doc).clone();
+    let [img] = app.session.doc().unwrap().selection.objects[..] else { panic!("the image is selected") };
+    crate::menus::invoke(&mut app, "imageTrace.make", json!({"preset": "Default"}));
+    assert!(app.session.replace_document(i, copy));
+    wait(&mut app);
+    assert_eq!(undos(&app), 0, "nothing changes");
+    let st = app.session.doc().unwrap();
+    assert!(matches!(st.doc.node(img).unwrap().kind, vectorcraft_doc::NodeKind::Image(_)), "the image is not traced");
+    assert_eq!(app.ui.status, "Image Trace finished, but its document was reverted: trace it again");
 }
 
 /// The progress window opens after its delay with Cancel and Continue in Background; Continue in

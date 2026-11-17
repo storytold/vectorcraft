@@ -1,20 +1,20 @@
 use super::{
     AppearanceItem, Arc, BTreeSet, Bristle, Brush, BrushKind, Color, Document, EngineError, Node, NodeId, NodeKind, Paint, Result, Session, Value,
-    anchor, bad, brush, check_numbers, find_command, id_param, ids_json, json, name_param, names_param, ok, roots, selection_art, set_unknown,
-    str_param,
+    anchor, bad, brush, check_numbers, find_command, ids_json, json, name_param, names_param, ok, roots, selection_art, set_unknown, str_param,
 };
 
 // ---------- brushes ----------
 
-/// Brushable nodes (paths and compound paths) under `ids`.
+/// Brushable nodes (paths and compound paths) under `ids`, in walk order, each listed once where it is first reached.
 pub(crate) fn brush_targets(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
     let mut out = vec![];
+    let mut seen = std::collections::HashSet::new();
     for id in ids {
         let Some(n) = d.node(*id) else { continue };
         n.walk(&mut |c| {
             let own = matches!(c.kind, NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. });
             let in_compound = d.parent_of(c.id).and_then(|p| d.node(p)).is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. }));
-            if own && !in_compound && !out.contains(&c.id) {
+            if own && !in_compound && seen.insert(c.id) {
                 out.push(c.id);
             }
         });
@@ -729,9 +729,10 @@ pub(super) fn expand_brush(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids_json(&out) }))
 }
 
-/// Paints a `path.freehand` stroke with the brush `brush` names. A `brush` left out or null draws
-/// the plain path; a `brush` that is not a string or names no brush in the document, and a `style`
-/// other than "pencil" or "brush", is an error before anything is drawn.
+/// Paints a `path.freehand` stroke with the brush `brush` names, in one undo step with the path.
+/// A `brush` left out or null draws the plain path; a `brush` that is not a string or names no
+/// brush in the document, a `style` other than "pencil" or "brush", and a `brush` for a path with
+/// no stroke are errors before anything is drawn.
 pub(super) fn brush_freehand(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "brush.freehand";
     let name = match crate::cmd::text_param(p, "brush", C)? {
@@ -745,13 +746,95 @@ pub(super) fn brush_freehand(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) => return Err(bad(C, format!("`style` must be \"pencil\" or \"brush\", not {v}"))),
     }
     let spec = find_command("path.freehand").ok_or_else(|| EngineError::UnknownCommand("path.freehand".into()))?;
-    let r = crate::cmd::run_checked(s, spec, p)?;
-    let (Some(name), Some(id)) = (name, id_param(&r, "id")) else { return Ok(r) };
-    s.edit("Paintbrush", |d, _| {
-        if let Some(st) = d.node_mut(id).and_then(|n| n.appearance.stroke_mut()) {
-            st.brush = Some(name.clone());
+    let checked = crate::schemas::check(spec, p, s.replaying())?;
+    crate::cmd::draw2::freehand_brushed(s, checked.as_ref().unwrap_or(p), name.as_deref())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vectorcraft_doc::Appearance;
+    use vectorcraft_geom::PathData;
+
+    /// The collector with a linear search of its output, kept to compare results with.
+    fn listed_targets(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
+        let mut out = vec![];
+        for id in ids {
+            let Some(n) = d.node(*id) else { continue };
+            n.walk(&mut |c| {
+                let own = matches!(c.kind, NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. });
+                let in_compound = d.parent_of(c.id).and_then(|p| d.node(p)).is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. }));
+                if own && !in_compound && !out.contains(&c.id) {
+                    out.push(c.id);
+                }
+            });
         }
-        Ok(())
-    })?;
-    Ok(r)
+        out
+    }
+
+    fn path(d: &mut Document) -> Node {
+        Node::path(d.alloc_id(), PathData::default(), Appearance::default())
+    }
+
+    fn compound(d: &mut Document, children: Vec<Node>) -> Node {
+        Node::new(d.alloc_id(), NodeKind::Compound { children: children.into_iter().map(Arc::new).collect(), rule: Default::default() })
+    }
+
+    fn add(d: &mut Document, node: Node) -> NodeId {
+        let layer = d.layers.first().map(|l| l.id);
+        d.insert(layer, usize::MAX, node).unwrap()
+    }
+
+    #[test]
+    fn brush_targets_list_each_target_once_in_first_reached_order() {
+        let mut d = Document::new(400.0, 300.0);
+        let a = path(&mut d);
+        let a = add(&mut d, a);
+        let mut guide = path(&mut d);
+        if let NodeKind::Path { guide: g, .. } = &mut guide.kind {
+            *g = true;
+        }
+        let guide = add(&mut d, guide);
+        let mut clip = path(&mut d);
+        if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+            *clipping = true;
+        }
+        let clip = add(&mut d, clip);
+        // A group holding a path and a compound path of two members.
+        let p1 = path(&mut d);
+        let p1_id = p1.id;
+        let (m1, m2) = (path(&mut d), path(&mut d));
+        let m1_id = m1.id;
+        let cp1 = compound(&mut d, vec![m1, m2]);
+        let cp1_id = cp1.id;
+        let group = Node::group(d.alloc_id(), vec![Arc::new(p1), Arc::new(cp1)]);
+        let group = add(&mut d, group);
+        // A compound path holding a compound path.
+        let m3 = path(&mut d);
+        let cp3 = compound(&mut d, vec![m3]);
+        let cp3_id = cp3.id;
+        let cp2 = compound(&mut d, vec![cp3]);
+        let cp2 = add(&mut d, cp2);
+
+        let ids = [cp1_id, a, group, p1_id, a, guide, clip, m1_id, cp2, cp3_id, NodeId(u64::MAX)];
+        let got = brush_targets(&d, &ids);
+        assert_eq!(got, [cp1_id, a, p1_id, cp2], "repeats keep their first place; guides, clipping paths and compound members are left out");
+        assert_eq!(got, listed_targets(&d, &ids));
+        assert!(brush_targets(&d, &[]).is_empty());
+
+        // Many paths in groups, each group listed with some of its members.
+        let mut ids = vec![];
+        for _ in 0..50 {
+            let members: Vec<Node> = (0..20).map(|_| path(&mut d)).collect();
+            let member_ids: Vec<NodeId> = members.iter().map(|m| m.id).collect();
+            let g = Node::group(d.alloc_id(), members.into_iter().map(Arc::new).collect());
+            let g = add(&mut d, g);
+            ids.push(member_ids[7]);
+            ids.push(g);
+            ids.push(member_ids[3]);
+        }
+        let got = brush_targets(&d, &ids);
+        assert_eq!(got.len(), 50 * 20);
+        assert_eq!(got, listed_targets(&d, &ids));
+    }
 }

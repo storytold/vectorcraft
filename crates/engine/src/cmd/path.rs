@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Scaling, Selection};
-use vectorcraft_geom::{Anchor, AnchorKind, PathData, Point, SubPath, Vec2};
+use vectorcraft_geom::{Anchor, AnchorKind, Anchors, PathData, Point, SubPath, Vec2};
 
 use super::create::anchor_from_json;
 use super::draw2::usize_opt;
@@ -149,7 +149,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cut Path at Selected Anchor Points",
             [],
             None,
-            "{} cut the paths at their direct-selected anchors (one undo step): a closed path opens there, an open one becomes one path per piece; one of each cut's two coincident anchors stays selected → {ids}",
+            "{} cut the paths at their direct-selected anchors (one undo step): a closed path opens there, an open one becomes one path per piece; one of each cut's two coincident anchors stays selected; the paths keep the source's fill and stroke settings except that every stroke's alignment becomes Center (in a path of several subpaths, the other subpaths' strokes too) → {ids}",
             has_anchors,
             cut_at_anchors
         ),
@@ -544,10 +544,12 @@ fn merge_coincident(sp: &mut SubPath, picked: impl Fn(usize) -> bool, join_kind:
         && before > 2
         && picked(0)
         && picked(before - 1)
-        && let [first, .., last] = sp.anchors.as_mut_slice()
-        && same(first, last)
+        && let (Some(&first), Some(&last)) = (sp.anchors.first(), sp.anchors.last())
+        && same(&first, &last)
     {
-        first.h_in = last.h_in;
+        if let Some(first) = sp.anchors.first_mut() {
+            first.h_in = last.h_in;
+        }
         sp.anchors.pop();
         if let Some(smooth) = join_kind {
             join_point(sp, 0, smooth);
@@ -565,10 +567,12 @@ fn merge_coincident(sp: &mut SubPath, picked: impl Fn(usize) -> bool, join_kind:
     for i in (1..len).rev() {
         if picked(i - 1)
             && picked(i)
-            && let Some([a, b]) = anchors.get_mut(i - 1..=i)
-            && same(a, b)
+            && let (Some(&a), Some(&b)) = (anchors.get(i - 1), anchors.get(i))
+            && same(&a, &b)
         {
-            a.h_out = b.h_out;
+            if let Some(a) = anchors.get_mut(i - 1) {
+                a.h_out = b.h_out;
+            }
             if let Some(slot) = gone.get_mut(i) {
                 *slot = true;
             }
@@ -603,7 +607,7 @@ fn merge_coincident(sp: &mut SubPath, picked: impl Fn(usize) -> bool, join_kind:
 }
 
 /// [`join_point`] on anchor `ai` of `anchors` with its neighbors given by index.
-fn join_point_between(anchors: &mut [Anchor], ai: usize, prev: Option<usize>, next: Option<usize>, smooth: bool) {
+fn join_point_between(anchors: &mut Anchors, ai: usize, prev: Option<usize>, next: Option<usize>, smooth: bool) {
     let at = |j: Option<usize>| j.and_then(|j| anchors.get(j)).map(|a| a.p);
     let (prev, next) = (at(prev), at(next));
     if let Some(a) = anchors.get_mut(ai) {
@@ -1565,7 +1569,7 @@ enum Stretch {
 /// anchor, so the two handles of a smooth anchor stay in line with it. That share is below 0 or
 /// above 1 for a handle long enough beside the span. A closed subpath with no anchor that stays
 /// moves whole when it has a focal point.
-fn stretch_weights(anchors: &[Anchor], closed: bool, roles: &[Stretch]) -> Vec<[f64; 3]> {
+fn stretch_weights(anchors: &Anchors, closed: bool, roles: &[Stretch]) -> Vec<[f64; 3]> {
     let n = anchors.len();
     let mut shares = vec![[0.0; 3]; n];
     let role = |i: usize| match roles.get(i) {
@@ -1854,6 +1858,8 @@ fn cut_at_anchors(s: &mut Session, _: &Value) -> Result<Value> {
         let (mut all, mut picked) = (vec![], vec![]);
         let mut cut = Beside::replacing(d, &cuts.iter().map(|(id, ..)| *id).collect::<Vec<_>>());
         for (id, subs, starts) in cuts {
+            // The paths a cut makes keep the source's appearance with every stroke centered.
+            super::draw2::center_strokes(d, id);
             // A path of one subpath becomes one path per piece (the first keeps the id); the
             // pieces of a compound shape stay subpaths of it.
             if d.node(id).and_then(|n| n.path_data()).is_some_and(|pd| pd.subpaths.len() == 1) {
@@ -1868,19 +1874,84 @@ fn cut_at_anchors(s: &mut Session, _: &Value) -> Result<Value> {
         }
         cut.finish(d)?;
         // Each cut leaves one of its two coincident anchors selected, so a drag pulls the ends apart.
-        sel.clear();
-        for (id, a) in picked {
-            sel.add(id);
-            sel.anchors.entry(id).or_default().insert(a);
-        }
+        select_cut_ends(sel, &picked);
         Ok(all)
     })?;
     Ok(super::draw2::ids_json(&ids))
 }
 
+/// Replaces the selection with the anchors in `picked`: each id once, in the order it first
+/// appears, with every anchor listed for it. An empty `picked` clears the selection.
+fn select_cut_ends(sel: &mut Selection, picked: &[(NodeId, (usize, usize))]) {
+    sel.set(picked.iter().map(|(id, _)| *id));
+    for (id, a) in picked {
+        sel.anchors.entry(*id).or_default().insert(*a);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `select_cut_ends` by clearing the selection and adding each id in turn, kept as the
+    /// reference the one-call version must match.
+    fn select_cut_ends_one_by_one(sel: &mut Selection, picked: &[(NodeId, (usize, usize))]) {
+        sel.clear();
+        for (id, a) in picked {
+            sel.add(*id);
+            sel.anchors.entry(*id).or_default().insert(*a);
+        }
+    }
+
+    /// A selection with every field set, the art made since the last deselect included.
+    fn busy_selection() -> Selection {
+        Selection {
+            objects: vec![NodeId(90), NodeId(91)],
+            anchors: [(NodeId(90), [(0, 3)].into())].into(),
+            segments: [(NodeId(91), [(0, 1)].into())].into(),
+            key: Some(NodeId(90)),
+            target: Some(NodeId(91)),
+            slices: vec![NodeId(92)],
+            guides: vec![NodeId(93)],
+            key_guide: Some(NodeId(93)),
+            key_anchor: Some((NodeId(90), (0, 3))),
+            symbol_part: Some(vectorcraft_doc::SymbolPart { instance: NodeId(94), path: vec![0, 2] }),
+            on_path_member: Some(NodeId(95)),
+            new_art: Arc::new([NodeId(90), NodeId(97)].into()),
+        }
+    }
+
+    /// The cut ends of open paths, of an opened closed path, of a path of several subpaths (one id
+    /// with several anchors, first seen before other ids), long lists and an empty one give the
+    /// same selection, every field, as clearing it and adding each id in turn.
+    #[test]
+    fn selecting_cut_ends_matches_adding_them_one_by_one() {
+        let n = NodeId;
+        let mut cases: Vec<Vec<(NodeId, (usize, usize))>> = vec![
+            vec![],
+            vec![(n(1), (0, 0)), (n(2), (0, 0))],
+            vec![(n(5), (0, 0))],
+            vec![(n(7), (0, 0)), (n(3), (1, 0)), (n(8), (0, 0)), (n(3), (2, 0)), (n(7), (0, 0)), (n(3), (0, 0))],
+        ];
+        let mut rng = Lcg(11);
+        for len in [50, 2_000] {
+            cases.push((0..len).map(|_| (n(rng.below(300) + 1), (rng.below(4) as usize, 0))).collect());
+        }
+        for picked in &cases {
+            for start in [Selection::default(), busy_selection()] {
+                let (mut ours, mut theirs) = (start.clone(), start.clone());
+                select_cut_ends(&mut ours, picked);
+                select_cut_ends_one_by_one(&mut theirs, picked);
+                assert_eq!(ours, theirs, "{picked:?}");
+                assert_eq!(ours.new_art, start.new_art);
+            }
+        }
+        let mut sel = busy_selection();
+        select_cut_ends(&mut sel, &cases[3]);
+        assert_eq!(sel.objects, [n(7), n(3), n(8)]);
+        assert_eq!(sel.anchors[&n(3)].iter().collect::<Vec<_>>(), [&(0, 0), &(1, 0), &(2, 0)]);
+        assert_eq!((sel.anchors.len(), sel.key, sel.target, sel.symbol_part.is_some()), (3, None, None, false));
+    }
 
     /// `merge_coincident` removing each merged anchor from the vector straight away, kept as the
     /// reference the one-pass version must match.
@@ -1891,10 +1962,10 @@ mod tests {
             && before > 2
             && picked(0)
             && picked(before - 1)
-            && let [first, .., last] = sp.anchors.as_mut_slice()
-            && same(first, last)
+            && let (Some(&first), Some(&last)) = (sp.anchors.first(), sp.anchors.last())
+            && same(&first, &last)
         {
-            first.h_in = last.h_in;
+            sp.anchors[0].h_in = last.h_in;
             sp.anchors.pop();
             if let Some(smooth) = join_kind {
                 join_point(sp, 0, smooth);
@@ -1903,10 +1974,10 @@ mod tests {
         for i in (1..sp.anchors.len()).rev() {
             if picked(i - 1)
                 && picked(i)
-                && let Some([a, b]) = sp.anchors.get_mut(i - 1..=i)
-                && same(a, b)
+                && let (Some(&a), Some(&b)) = (sp.anchors.get(i - 1), sp.anchors.get(i))
+                && same(&a, &b)
             {
-                a.h_out = b.h_out;
+                sp.anchors[i - 1].h_out = b.h_out;
                 sp.anchors.remove(i);
                 if let Some(smooth) = join_kind {
                     join_point(sp, i - 1, smooth);

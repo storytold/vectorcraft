@@ -42,7 +42,7 @@ pub use cursor::{HOVER_STILL_SECS, STILL_SECS, ViewKey};
 use cursor::{cursor_icon, hover_cursor, hover_wait, still_wait};
 use drag::drag_id;
 pub use drag::{apply_requests, dispatch, mods};
-pub(crate) use drag::{end_document_drag, pose_on_page, release_art_in_window, release_over_panel};
+pub(crate) use drag::{art_out, end_art_move, end_document_drag, pose_on_page, release_art_in_window, release_over_panel};
 #[cfg(test)]
 use drag::{frame_moves, tool_drag_doc_id, tool_drag_moved, tool_frame_moves, tool_press_doc_id};
 pub use fill::Fill;
@@ -67,8 +67,8 @@ use overlays::{
     HandleLook, blend_widgets_overlay, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, overlay_hover_text, selection_overlay,
 };
 pub use panes::Panes;
-pub(crate) use panes::{consolidate, pane, tile, tiled_area};
-use raster::{changed_pixels, pixel_region, upload};
+pub(crate) use panes::{consolidate, note_drop, noted_cursor, pane, release_on_noted, tile, tiled_area};
+use raster::{changed_pixels, frame_ppp, pixel_region, upload};
 pub(crate) use raster::{color_image, color_image_owned, render_job};
 pub use selection_marks::SelectionMarks;
 #[cfg(test)]
@@ -80,7 +80,7 @@ use tool_overlays::{DIAL_RADIUS, HiddenMarks};
 pub use tool_overlays::{HiddenChars, SpellingMarks};
 use tool_overlays::{
     grid_repeat_overlay, hidden_chars_overlay, live_paint_gap_overlays, mirror_axis_overlay, nine_slice_overlay, original_path_overlay,
-    print_tiling_overlay, rotate_view_dial, shaper_widget_overlay, slice_overlay, spelling_overlay, thread_overlays,
+    print_tiling_overlay, radial_repeat_overlay, rotate_view_dial, shaper_widget_overlay, slice_overlay, spelling_overlay, thread_overlays,
 };
 pub(crate) use view::animated_zoom;
 pub(crate) use view::drag_rotation;
@@ -328,7 +328,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 
     // Artwork raster.
-    let ppp = ui.ctx().pixels_per_point();
+    let device_ppp = ui.ctx().pixels_per_point();
+    let max_side = ui.ctx().input(|i| i.max_texture_side);
+    let ppp = frame_ppp(rect.size(), device_ppp, max_side);
     // Match Renderer::render_as before recording the cache extent or building its view.
     let (w, h) = (
         ((rect.width() * ppp).round().max(1.0) as u32).min(u32::from(u16::MAX)),
@@ -336,7 +338,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     );
     // View › Pixel Preview: the art as it rasterizes, one pixel per point, while a document pixel
     // is bigger than a screen pixel (below that the screen render already shows it).
-    let pixel = (app.ui.view.pixel_preview && xf.zoom * ppp as f64 > 1.0).then(|| pixel_region(&xf)).flatten();
+    let pixel = (app.ui.view.pixel_preview && xf.zoom * device_ppp as f64 > 1.0).then(|| pixel_region(&xf, max_side)).flatten();
     // File Handling › Display Bitmaps as Anti-aliased Images in Pixel Preview: off, images show
     // their pixels as they rasterize, hard-edged.
     let smooth_images = pixel.is_none() || app.session.prefs.anti_aliased_bitmaps;
@@ -423,6 +425,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, selection_marks, hover_still), revolve_edit, view_info);
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs), &mut shared_paths);
         app.canvas.shared_paths = shared_paths;
+        crate::panels::tabs::paint_stop_guide(app, &painter, &xf);
         overlay_hover_text(ui, &xf, &overlays, ui.data(|d| d.get_temp::<Drag>(drag_id())).is_some());
         if !revolve_edit {
             shaper_widget_overlay(app, &painter, &xf);
@@ -1348,6 +1351,7 @@ fn selection_visuals(
         draw_inside_overlay(app, painter, xf);
         mirror_axis_overlay(app, painter, xf);
         grid_repeat_overlay(app, painter, xf);
+        radial_repeat_overlay(app, painter, xf);
         if app.ui.view.text_threads {
             // Under the tools' overlays: a selected frame's own ports are drawn over its thread's.
             let mut threads = thread_overlays(app, xf.zoom);

@@ -1588,6 +1588,235 @@ fn crop_image_to_a_rect_between_pixels_keeps_the_rect() {
     assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 60.0) && close(b.height(), 40.0), "{b:?}");
 }
 
+/// Crop Image's `ppi` resamples the cut pixels to that resolution; the image keeps the box's size.
+#[test]
+fn crop_image_resamples_the_cut_to_the_resolution_asked_for() {
+    let (mut s, img, px) = busy_image_at_two_points_a_pixel();
+    // The image is 36 ppi (2 pt a pixel); 18 ppi halves the cut's 30 × 20 pixels.
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": 18})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (15, 10), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 20.0) && close(b.y0, 10.0) && close(b.width(), 60.0) && close(b.height(), 40.0), "{b:?}");
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    let cut = image::imageops::crop_imm(&px, 10, 5, 30, 20).to_image();
+    // Resampled in 16 bits a channel: within a level of the 8-bit resampling.
+    let want = image::imageops::resize(&cut, 15, 10, image::imageops::FilterType::Lanczos3);
+    assert_eq!(out.dimensions(), want.dimensions());
+    assert!(out.as_raw().iter().zip(want.as_raw()).all(|(a, b)| a.abs_diff(*b) <= 1));
+}
+
+/// Resampling weights colors by their alpha: the color hidden in fully transparent pixels does not
+/// tint the partly transparent edge of what is opaque.
+#[test]
+fn crop_image_resampling_keeps_hidden_colors_out_of_the_edges() {
+    // Opaque white on the left half, fully transparent red on the right.
+    let px = image::RgbaImage::from_fn(40, 20, |x, _| if x < 20 { image::Rgba([255, 255, 255, 255]) } else { image::Rgba([255, 0, 0, 0]) });
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "edge.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let img = selected(&s)[0];
+    s.execute("object.scale", &json!({"sx": 200, "origin": [0, 0]})).unwrap();
+    // 36 ppi to 15 ppi over pixels 5 to 35 across: the edge pixels mix white and clear.
+    s.execute("object.cropImage", &json!({"rect": [10, 0, 60, 40], "ppi": 15})).unwrap();
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    assert!(out.pixels().any(|p| p[3] > 0 && p[3] < 255), "the edge is partly transparent");
+    for p in out.pixels().filter(|p| p[3] > 0) {
+        assert!(p[1] >= 250 && p[2] >= 250, "white, not tinted red: {p:?}");
+    }
+}
+
+/// Resampling keeps the color of pixels that are nearly transparent: a uniform color at the lowest
+/// alpha comes out as that color, not black.
+#[test]
+fn crop_image_resampling_keeps_the_color_of_nearly_transparent_pixels() {
+    let px = image::RgbaImage::from_pixel(100, 80, image::Rgba([100, 50, 25, 1]));
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "faint.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let img = selected(&s)[0];
+    s.execute("object.scale", &json!({"sx": 200, "origin": [0, 0]})).unwrap();
+    s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": 18})).unwrap();
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    for p in out.pixels() {
+        let near = |a: u8, b: u8| a.abs_diff(b) <= 1;
+        assert!(p[3] == 1 && near(p[0], 100) && near(p[1], 50) && near(p[2], 25), "{p:?}");
+    }
+}
+
+/// A box between pixels drawn at a resolution asked for holds what is inside the box only, at its
+/// place: the edge of the image's content lands where it was in the box.
+#[test]
+fn crop_image_between_pixels_keeps_the_content_at_its_place() {
+    // White pixels 0 to 49 across, black from 50: at 2 pt a pixel, the edge is at x = 100 pt.
+    let px = image::RgbaImage::from_fn(100, 80, |x, _| if x < 50 { image::Rgba([255, 255, 255, 255]) } else { image::Rgba([0, 0, 0, 255]) });
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "edge.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let img = selected(&s)[0];
+    s.execute("object.scale", &json!({"sx": 200, "origin": [0, 0]})).unwrap();
+    // 101 × 31 pt from (21, 11), off the pixel grid, at 35 ppi: 49 × 15 px. The edge is 79 pt into
+    // the 101 pt box, so each row holds 49 × 79 / 101 pixels' worth of white.
+    let r = s.execute("object.cropImage", &json!({"rect": [21, 11, 101, 31], "ppi": 35})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (49, 15), "{r}");
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    let white: f64 = out.pixels().map(|p| f64::from(p[1]) / 255.0).sum::<f64>() / f64::from(out.height());
+    let want = 49.0 * 79.0 / 101.0;
+    assert!((white - want).abs() < 0.1, "{white} pixels of white a row, want {want}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 101.0) && close(b.height(), 31.0), "{b:?}");
+}
+
+/// A box between pixels is drawn at the resolution asked for, and lands on the box.
+#[test]
+fn crop_image_between_pixels_draws_at_the_resolution_asked_for() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    let r = s.execute("object.cropImage", &json!({"rect": [21, 11, 60, 40], "ppi": 18})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (15, 10), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 60.0) && close(b.height(), 40.0), "{b:?}");
+    // 100 × 30 pt at 20 ppi is 27.8 × 8.3 px: the 28 × 8 px drawn are fitted to the box.
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    let r = s.execute("object.cropImage", &json!({"rect": [21, 11, 100, 30], "ppi": 20})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (28, 8), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 100.0) && close(b.height(), 30.0), "{b:?}");
+}
+
+/// A box over the whole image with a new resolution resamples it; with the image's own there is
+/// nothing to do.
+#[test]
+fn crop_image_over_the_whole_image_only_resamples_it() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    let before = undo_len(&s);
+    let r = s.execute("object.cropImage", &json!({"rect": [0, 0, 200, 160], "ppi": 36}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "nothing to crop"), "{r:?}");
+    assert_eq!(undo_len(&s), before);
+    let r = s.execute("object.cropImage", &json!({"rect": [0, 0, 200, 160], "ppi": 9})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (25, 20), "{r}");
+    assert_eq!(undo_len(&s), before + 1, "one undo step");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 0.0) && close(b.y0, 0.0) && close(b.width(), 200.0) && close(b.height(), 160.0), "{b:?}");
+}
+
+/// An image scaled more down than across is resampled on both sides at the resolution of its denser
+/// side, so its pixels come out square.
+#[test]
+fn crop_image_resamples_pixels_that_are_not_square() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    // 2 pt a pixel across (36 ppi) and 1 pt a pixel down (72 ppi), 200 × 80 pt.
+    s.execute("object.scale", &json!({"sx": 100, "sy": 50, "origin": [0, 0]})).unwrap();
+    let r = s.execute("object.cropImage", &json!({"rect": [0, 0, 200, 80], "ppi": 72})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (200, 80), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 0.0) && close(b.y0, 0.0) && close(b.width(), 200.0) && close(b.height(), 80.0), "{b:?}");
+}
+
+/// Crop Image refuses a resolution that isn't a positive number, one above the image's own, and one
+/// with trim; the image stays as it was.
+#[test]
+fn crop_image_refuses_a_resolution_it_cannot_give() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    let before = (undo_len(&s), node(&s, img));
+    let refused = |s: &mut Session, p: Value, want: &str| {
+        let r = s.execute("object.cropImage", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == want), "{p}: {r:?}");
+    };
+    for v in [json!(0), json!(-72), json!("high"), json!(true)] {
+        refused(&mut s, json!({"rect": [20, 10, 60, 40], "ppi": v}), &format!("ppi must be a positive number, not {v}"));
+    }
+    for v in [0.5, 1e-310, 2401.0] {
+        refused(&mut s, json!({"rect": [20, 10, 60, 40], "ppi": v}), "ppi must be between 1 and 2400");
+    }
+    refused(&mut s, json!({"rect": [20, 10, 60, 40], "ppi": 72}), "ppi can't be more than 36 for this image");
+    refused(&mut s, json!({"trim": true, "ppi": 18}), "trim keeps the image's pixels as they are: leave out ppi");
+    assert_eq!((undo_len(&s), node(&s, img)), before);
+    // A null ppi keeps the image's own, as a missing one does.
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": null})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (30, 20), "{r}");
+}
+
+/// A turned image keeps its own resolution as the limit (not the density across its bounding box),
+/// and its drawn cut is resampled to the box's size at the resolution asked for.
+#[test]
+fn crop_image_of_a_turned_image_resamples_its_drawing() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let b = bounds(&s, img);
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0 + 40.0, b.y0 + 40.0, 72, 36], "ppi": 37}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "ppi can't be more than 36 for this image"), "{r:?}");
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0 + 40.0, b.y0 + 40.0, 72, 36], "ppi": 18})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (18, 9), "{r}");
+    let c = bounds(&s, img);
+    assert!(close(c.x0, b.x0 + 40.0) && close(c.y0, b.y0 + 40.0) && close(c.width(), 72.0) && close(c.height(), 36.0), "{c:?}");
+}
+
+/// A turned image cropped at its own resolution, asked for, gets that resolution, not the lower
+/// density of the box around it.
+#[test]
+fn crop_image_of_a_turned_image_at_its_own_resolution_keeps_it() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    s.execute("object.rotate", &json!({"angle": 45})).unwrap();
+    let b = bounds(&s, img);
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0 + 40.0, b.y0 + 40.0, 72, 36], "ppi": 36})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (36, 18), "{r}");
+    // Over the whole box around it, its own resolution draws it square to the page.
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    s.execute("object.rotate", &json!({"angle": 45})).unwrap();
+    let b = bounds(&s, img);
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0, b.y0, b.width(), b.height()], "ppi": 36})).unwrap();
+    assert_eq!(r["width"].as_u64().unwrap(), (b.width() / 2.0).round() as u64, "{r}");
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0, b.y0, b.width(), b.height()]}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "nothing to crop"), "{r:?}");
+}
+
+/// A linked image can be cropped to up to 300 ppi, even above its own; the crop embeds it.
+#[test]
+fn crop_image_takes_a_linked_image_up_to_300_ppi() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    s.edit("Link", |d, _| {
+        let NodeKind::Image(im) = &mut d.node_mut(img).unwrap().kind else { panic!("not an image") };
+        im.link = Some(vectorcraft_doc::LinkInfo::new("art.png"));
+        Ok(())
+    })
+    .unwrap();
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": 301}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "ppi can't be more than 300 for this image"), "{r:?}");
+    // 72 ppi: a pixel a point.
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": 72})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (60, 40), "{r}");
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    assert!(im.link.is_none());
+}
+
+/// `tool.setOption` refuses a Crop Image resolution, reference point or link it can't use, and
+/// changes nothing.
+#[test]
+fn crop_image_tool_options_refuse_values_they_cannot_use() {
+    let (mut s, _, _) = busy_image_at_two_points_a_pixel();
+    s.select_tool("cropImage", ViewInfo::default()).unwrap();
+    s.set_tool_option_cmd(&json!({"values": {"ppi": 18, "reference": 0, "linked": true}})).unwrap();
+    // 72 ppi is above the selected 36 ppi image's own.
+    for (key, value) in
+        [("ppi", json!("high")), ("ppi", json!(-1)), ("ppi", json!(0.5)), ("ppi", json!(72)), ("reference", json!(9)), ("linked", json!(1))]
+    {
+        assert!(s.set_tool_option_cmd(&json!({"key": key, "value": value})).is_err(), "{key}: {value}");
+    }
+    let o = s.tool_options();
+    assert_eq!((o["ppi"].clone(), o["reference"].clone(), o["linked"].clone()), (json!(18.0), json!(0), json!(true)), "{o}");
+    s.set_tool_option_cmd(&json!({"key": "ppi", "value": null})).unwrap();
+    assert!(s.tool_options().get("ppi").is_none());
+}
+
 /// Crop Image refuses a `rect` that is not an array, such as text, and the image stays as it was; a
 /// null `rect` crops to the artboard as a missing one does.
 #[test]
@@ -2789,6 +3018,73 @@ fn select_same_fill_keeps_live_paint_faces_to_their_group() {
     }
 }
 
+/// Select Similar Objects (`select.similar`) runs the Select > Same command of the attribute it is
+/// given and keeps that attribute for its next run without one; `all`, the attribute until one is
+/// given, matches the fill and stroke colours, the stroke weight, the opacity and the blending mode
+/// together. An unknown attribute is an error that keeps the selection and the kept attribute.
+#[test]
+fn select_similar_selects_by_the_kept_attribute() {
+    let mut s = session();
+    let [a, b, faded, heavy, multiplied, blue] = [0.0, 20.0, 40.0, 60.0, 80.0, 100.0].map(|x| rect(&mut s, x, 0.0, 10.0, 10.0));
+    for id in [a, b, faded, heavy, multiplied] {
+        fill(&mut s, id, "#ff0000");
+    }
+    fill(&mut s, blue, "#0000ff");
+    s.execute("transparency.set", &json!({"ids": [faded.0], "opacity": 50, "item": null})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [multiplied.0], "blend": "multiply", "item": null})).unwrap();
+    sel(&mut s, &[heavy]);
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    let similar = |s: &mut Session, p: Value| {
+        sel(s, &[a]);
+        let r = s.execute("select.similar", &p).unwrap();
+        let mut v = selected(s);
+        v.sort();
+        assert_eq!(r["count"], v.len(), "{p}");
+        (r["by"].as_str().unwrap().to_string(), v)
+    };
+    assert_eq!(s.select_similar, "all");
+    assert_eq!(similar(&mut s, json!({})), ("all".into(), vec![a, b]));
+    assert_eq!(similar(&mut s, json!({"by": "fillColor"})), ("fillColor".into(), vec![a, b, faded, heavy, multiplied]));
+    assert_eq!(similar(&mut s, json!({})), ("fillColor".into(), vec![a, b, faded, heavy, multiplied]));
+    // The journal, and an action recorded around it, keep the attribute used.
+    let last = s.journal.last().unwrap();
+    assert_eq!((last.0.as_str(), &last.1), ("select.similar", &json!({"by": "fillColor"})));
+    assert_eq!(similar(&mut s, json!({"by": "opacity"})), ("opacity".into(), vec![a, b, heavy, multiplied, blue]));
+    assert_eq!(similar(&mut s, json!({"by": "blendingMode"})), ("blendingMode".into(), vec![a, b, faded, heavy, blue]));
+    assert_eq!(similar(&mut s, json!({"by": "strokeWeight"})), ("strokeWeight".into(), vec![a, b, faded, multiplied, blue]));
+    assert_eq!(similar(&mut s, json!({"by": "all"})).1, vec![a, b]);
+    // Select > Reselect repeats `all`, whichever attribute is kept by then.
+    s.select_similar = "fillColor";
+    s.execute("select.reselect", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![a, b]);
+    // Every attribute names a command that runs. A path with no graphic style has none to match,
+    // which is an error that keeps the attribute as it was.
+    for (by, _) in crate::cmd::SIMILAR {
+        sel(&mut s, &[a]);
+        let was = s.select_similar;
+        let r = s.execute("select.similar", &json!({ "by": by }));
+        if by == "graphicStyle" {
+            assert!(r.is_err(), "{r:?}");
+            assert_eq!(s.select_similar, was);
+        } else {
+            r.unwrap_or_else(|e| panic!("{by}: {e:?}"));
+            assert_eq!(s.select_similar, by);
+        }
+    }
+    // An unknown or malformed attribute changes nothing.
+    s.select_similar = "opacity";
+    for bad in [json!("color"), json!(""), json!("FillColor"), json!(3), json!(true), json!(["all"])] {
+        sel(&mut s, &[a]);
+        let r = s.execute("select.similar", &json!({ "by": bad }));
+        assert!(matches!(r, Err(EngineError::BadParams { .. })), "{bad}: {r:?}");
+        assert_eq!((selected(&s), s.select_similar), (vec![a], "opacity"), "{bad}");
+    }
+    // With nothing selected it does not run, and keeps the attribute.
+    sel(&mut s, &[]);
+    assert!(s.execute("select.similar", &json!({"by": "fillColor"})).is_err());
+    assert_eq!(s.select_similar, "opacity");
+}
+
 /// Select by Color needs no object to start from: it matches fills and strokes as
 /// `document.inspect` reports them, `#rrggbb`.
 #[test]
@@ -2862,6 +3158,27 @@ fn direction_handles_leave_out_hidden_and_locked_paths() {
     sel(&mut s, &[g]);
     assert_eq!(s.execute("select.object.directionHandles", &json!({})).unwrap()["anchors"], 4);
     assert_eq!(selected(&s), vec![a]);
+}
+
+#[test]
+fn direction_handles_select_many_paths_in_groups_and_layers_in_paint_order() {
+    let mut s = session();
+    let mut paths: Vec<NodeId> = (0..60).map(|i| rect(&mut s, (i % 20) as f64 * 12.0, (i / 20) as f64 * 12.0, 10.0, 10.0)).collect();
+    sel(&mut s, &paths[10..40]);
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("layer.new", &json!({})).unwrap();
+    paths.extend((0..60).map(|i| rect(&mut s, (i % 20) as f64 * 12.0, 100.0 + (i / 20) as f64 * 12.0, 10.0, 10.0)));
+    s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(s.execute("select.object.directionHandles", &json!({})).unwrap()["anchors"], 4 * paths.len());
+    let st = s.doc().unwrap();
+    let mut want = vectorcraft_doc::Selection::default();
+    for id in st.doc.paint_order(paths.iter().copied()) {
+        want.add(id);
+        want.anchors.insert(id, (0..4).map(|i| (0, i)).collect());
+    }
+    want.new_art = st.selection.new_art.clone();
+    assert_eq!(st.selection.objects.len(), paths.len());
+    assert_eq!(st.selection, want);
 }
 
 #[test]
@@ -3230,6 +3547,32 @@ fn select_all_on_artboard_refuses_an_artboard_past_u32() {
     s.execute("select.none", &json!({})).unwrap();
     assert!(s.execute("select.allOnArtboard", &json!({"artboard": 1u64 << 32})).is_err());
     assert!(selected(&s).is_empty());
+}
+
+/// All on Active Artboard refuses an `artboard` that is not a whole number, naming the parameter,
+/// and leaves the selection as it was; a whole number past the last artboard is `no such
+/// artboard`. Left out or null, it takes the first artboard.
+#[test]
+fn select_all_on_artboard_refuses_an_artboard_that_is_not_a_whole_number() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 2, "artboardLayout": {"layout": "row", "spacing": 0}})).unwrap();
+    let (first, second) = (rect(&mut s, 10.0, 10.0, 20.0, 20.0), rect(&mut s, 110.0, 10.0, 20.0, 20.0));
+    for bad in [json!("1"), json!(-1), json!(1.5), json!(true), json!([1]), json!({})] {
+        s.execute("select.none", &json!({})).unwrap();
+        let err = s.execute("select.allOnArtboard", &json!({"artboard": bad})).unwrap_err().to_string();
+        assert_eq!(err, "invalid parameters for `select.allOnArtboard`: `artboard` must be a whole number", "{bad}");
+        assert!(selected(&s).is_empty(), "{bad}");
+    }
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(s.execute("select.allOnArtboard", &json!({"artboard": 9})).unwrap_err().to_string(), "no such artboard");
+    assert!(selected(&s).is_empty());
+    for p in [json!({}), json!({"artboard": null}), json!({"artboard": 0})] {
+        s.execute("select.none", &json!({})).unwrap();
+        s.execute("select.allOnArtboard", &p).unwrap();
+        assert_eq!(selected(&s), vec![first], "{p}");
+    }
+    s.execute("select.allOnArtboard", &json!({"artboard": 1})).unwrap();
+    assert_eq!(selected(&s), vec![second]);
 }
 
 #[test]
@@ -4538,6 +4881,27 @@ fn artboard_guides_go_with_their_artboard() {
     assert_eq!((guides(&s).len(), selected_guides(&s)), (3, vec![0, 1]));
 }
 
+/// `guide.add` refuses an `artboard` that is not a whole number, naming the parameter, and adds no
+/// guide; a whole number past the last artboard is `no such artboard`. Null makes a canvas guide,
+/// and a whole number an artboard guide.
+#[test]
+fn guide_add_refuses_an_artboard_that_is_not_a_whole_number() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 900, "y": 0, "width": 400, "height": 300})).unwrap();
+    let add = |s: &mut Session, artboard: Value| s.execute("guide.add", &json!({"vertical": true, "pos": 10, "artboard": artboard}));
+    for bad in [json!("1"), json!(-1), json!(1.5), json!(true), json!([1]), json!({})] {
+        let err = add(&mut s, bad.clone()).unwrap_err().to_string();
+        assert_eq!(err, "invalid parameters for `guide.add`: `artboard` must be a whole number", "{bad}");
+    }
+    assert_eq!(add(&mut s, json!(9)).unwrap_err().to_string(), "no such artboard");
+    assert!(s.doc().unwrap().doc.ruler_guides().is_empty());
+    add(&mut s, Value::Null).unwrap();
+    add(&mut s, json!(1)).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let boards: Vec<_> = d.ruler_guides().iter().map(|g| g.artboard).collect();
+    assert_eq!(boards, [None, Some(d.artboards[1].id)]);
+}
+
 /// #451: a guide dragged out of a ruler snaps (to the art's corners, side midpoints and anchors,
 /// the artboards' edges and centres) and is made in one undo step where it is released over the
 /// canvas; with the Artboard tool it is an artboard guide of the active artboard.
@@ -5215,6 +5579,22 @@ fn crop_image_trim_checks_the_rgba_size_before_decoding() {
     // One column fewer is within the allowance: it is decoded, and its missing rows can't be read.
     let within = trim(23_170, 23_170);
     assert!(within.contains("the image's pixels can't be read"), "{within}");
+}
+
+#[test]
+fn crop_image_resampling_is_held_to_the_raster_allowance() {
+    use crate::cmd::menucmds::check_resample_size;
+    let max = crate::cmd::fileio::MAX_RASTER_ALLOC;
+    // 40 bytes a pixel resampled to the same size (12 + 16 + 12).
+    let side = ((max / 40) as f64).sqrt() as u32;
+    assert!(check_resample_size(side, side, side, side).is_ok());
+    let e = check_resample_size(side + 1, side + 1, side + 1, side + 1).unwrap_err().to_string();
+    assert!(e.contains(&format!("an image of {0} × {0} pixels is too large to resample", side + 1)), "{e}");
+    // A large source counts even when the result is small.
+    let wide = ((max / 12) as f64).sqrt() as u32 + 1;
+    assert!(check_resample_size(wide, wide, 1, 1).is_err());
+    assert!(check_resample_size(u32::MAX, u32::MAX, u32::MAX, u32::MAX).is_err());
+    assert!(check_resample_size(100, 100, 50, 50).is_ok());
 }
 
 #[test]

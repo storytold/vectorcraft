@@ -1120,8 +1120,170 @@ fn bucket_click_fills_face_and_shift_click_strokes_edge() {
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 75.0, 25.0)), vec![Action::Commit]);
     let shift = Mods { shift: true, ..Default::default() };
     let acts = t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(shift));
-    let Action::Exec(id, _) = &acts[0] else { panic!() };
+    let [Action::Begin(_), Action::Preview(id, _)] = acts.as_slice() else { panic!("{acts:?}") };
     assert_eq!(id, "livePaint.strokeEdge");
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 51.0, 25.0).with_mods(shift)), vec![Action::Commit]);
+}
+
+/// A drag reaches the visible edges its path crosses or passes within 0.0001 pt of, including the
+/// middle of a curved edge it runs past without crossing; a hidden edge and an edge farther away are
+/// not reached.
+#[test]
+fn visible_edges_along_finds_crossed_and_near_edges() {
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let mut arc = BezPath::new();
+    arc.move_to((100.0, 0.0));
+    // Farthest right at (130, 50), where it runs straight down.
+    arc.curve_to((140.0, 0.0), (140.0, 100.0), (100.0, 100.0));
+    let mut kids = vec![empty_sources(&mut d)];
+    let mut ids = vec![];
+    for (path, visible) in [
+        (shapes::line(Point::new(0.0, 0.0), Point::new(0.0, 100.0)), true),
+        (shapes::line(Point::new(50.0, 0.0), Point::new(50.0, 100.0)), false),
+        (vectorcraft_geom::PathData::from_bezpath(&arc), true),
+        (shapes::line(Point::new(0.0, 200.0), Point::new(100.0, 200.0)), true),
+    ] {
+        let id = d.alloc_id();
+        let mut edge = Node::path(id, path, Appearance::default());
+        edge.name = Some(EDGE_NAME.into());
+        edge.visible = visible;
+        kids.push(Arc::new(edge));
+        ids.push(id);
+    }
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    d.insert(Some(l), 0, g).unwrap();
+    let group = d.node(gid).unwrap();
+    let reached = |x: f64| {
+        let chunks = vec![
+            vec![Point::new(-10.0, 50.0), Point::new(60.0, 50.0), Point::new(60.0, -20.0)],
+            vec![Point::new(60.0, -20.0), Point::new(x, -20.0), Point::new(x, 60.0)],
+        ];
+        visible_edges_along(group, &chunks).iter().map(|e| e.id).collect::<Vec<_>>()
+    };
+    assert_eq!(reached(130.00005), vec![ids[0], ids[2]]);
+    assert_eq!(reached(130.001), vec![ids[0]]);
+}
+
+/// A drag that passes 0.0002 pt before the start of a long curved edge does not reach it, although
+/// the curve extended a tiny step past its start meets the drag.
+#[test]
+fn visible_edges_along_skips_an_edge_the_drag_meets_only_past_its_end() {
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let mut curve = BezPath::new();
+    curve.move_to((0.0, 0.0));
+    curve.curve_to((100000.0, 0.0), (200000.0, 100.0), (300000.0, 100.0));
+    let id = d.alloc_id();
+    let mut edge = Node::path(id, vectorcraft_geom::PathData::from_bezpath(&curve), Appearance::default());
+    edge.name = Some(EDGE_NAME.into());
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, vec![empty_sources(&mut d), Arc::new(edge)]);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    d.insert(Some(l), 0, g).unwrap();
+    let group = d.node(gid).unwrap();
+    let reached = |x: f64| visible_edges_along(group, &[vec![Point::new(x, -1.0), Point::new(x, 1.0)]]).iter().map(|e| e.id).collect::<Vec<_>>();
+    assert_eq!(reached(-0.0002), Vec::<NodeId>::new());
+    assert_eq!(reached(-0.00005), vec![id]);
+    assert_eq!(reached(0.0002), vec![id]);
+}
+
+/// A double-click on an edge after a press whose drag stroked another edge of the line joins
+/// through that edge as the stroke paint it had before the drag.
+#[test]
+fn bucket_edge_double_click_joins_through_an_edge_the_first_drag_stroked() {
+    let black = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 0.0));
+    let green = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 1.0, 0.0));
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let mut kids = vec![empty_sources(&mut d)];
+    let mut ids = vec![];
+    for (x0, x1) in [(0.0, 30.0), (30.0, 70.0), (70.0, 100.0)] {
+        let id = d.alloc_id();
+        let mut a = Appearance::default();
+        a.set_stroke(black.clone());
+        let mut edge = Node::path(id, shapes::line(Point::new(x0, 100.0), Point::new(x1, 100.0)), a);
+        edge.name = Some(EDGE_NAME.into());
+        kids.push(Arc::new(edge));
+        ids.push(id);
+    }
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    d.insert(Some(l), 0, g).unwrap();
+    let mut later = d.clone();
+    for id in &ids[1..] {
+        later.node_mut(*id).unwrap().appearance.set_stroke(green.clone());
+    }
+    let s = Selection::default();
+    let p = paint();
+    let (cx, later) = (cx(&d, &s, &p), cx(&later, &s, &p));
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = LivePaintBucketTool::default();
+    // The first press strokes the right edge and its drag crosses the middle one.
+    for (k, x, y) in
+        [(PointerKind::Down, 85.0, 100.0), (PointerKind::Drag, 85.0, 110.0), (PointerKind::Drag, 50.0, 110.0), (PointerKind::Up, 50.0, 90.0)]
+    {
+        t.pointer(&cx, &ev(k, x, y).with_mods(shift));
+    }
+    t.pointer(&later, &ev(PointerKind::Down, 85.0, 100.0).with_mods(shift));
+    t.pointer(&later, &ev(PointerKind::Up, 85.0, 100.0).with_mods(shift));
+    let like = serde_json::to_value(&black).unwrap();
+    assert_eq!(
+        t.pointer(&later, &ev(PointerKind::DoubleClick, 85.0, 100.0).with_mods(shift)),
+        vec![Action::Exec(
+            "livePaint.strokeEdge".into(),
+            json!({ "group": gid.0, "point": [85.0, 100.0], "tolerance": 4.0, "scope": "connected", "through": [ids[1].0], "match": like })
+        )]
+    );
+}
+
+/// A drag from an edge previews `livePaint.strokeEdge` with the drag's path as it goes and commits
+/// once on the release; Escape cancels it, and what the drag paints is fixed at the press.
+#[test]
+fn bucket_edge_drag_previews_points_and_commits_once() {
+    let (d, gid, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Default::default() };
+    let stroke = |points: Value| {
+        let mut v = json!({ "group": gid.0, "point": [51.0, 25.0], "tolerance": 4.0 });
+        if !points.is_null() {
+            v["points"] = points;
+        }
+        Action::Preview("livePaint.strokeEdge".into(), v)
+    };
+    let mut t = LivePaintBucketTool::default();
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(shift)),
+        vec![Action::Begin("Live Paint Bucket".into()), stroke(Value::Null)]
+    );
+    assert!(t.busy());
+    // Shift let go during the drag: the drag still paints edges.
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Drag, 75.0, 25.0)), vec![stroke(json!([[51.0, 25.0], [75.0, 25.0]]))]);
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 120.0, 25.0)), vec![stroke(json!([[51.0, 25.0], [75.0, 25.0], [120.0, 25.0]])), Action::Commit]);
+    assert!(!t.busy());
+    // Escape before the release cancels the drag, and the release then commits nothing.
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(shift)),
+        vec![Action::Begin("Live Paint Bucket".into()), stroke(Value::Null)]
+    );
+    t.pointer(&cx, &ev(PointerKind::Drag, 75.0, 25.0).with_mods(shift));
+    assert!(t.claims_key(&cx, ToolKey::Escape));
+    assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 120.0, 25.0).with_mods(shift)).is_empty());
+    // With both options on, a drag from a face fills faces, even across an edge.
+    t.set_option("paintStrokes", &json!(true));
+    let acts = t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0));
+    let [Action::Begin(_), Action::Preview(id, _)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert_eq!(id, "livePaint.fill");
+    let acts = t.pointer(&cx, &ev(PointerKind::Drag, 51.0, 25.0));
+    let [Action::Preview(id, _)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert_eq!(id, "livePaint.fill");
+    t.pointer(&cx, &ev(PointerKind::Up, 51.0, 25.0));
 }
 
 /// A double-click runs a click's command with `scope: "connected"` and a triple-click with
@@ -1386,6 +1548,39 @@ fn bucket_triple_click_with_a_click_on_another_face_between_matches_the_first_fi
     );
 }
 
+/// A triple-click whose second press the view tools take (held Space) matches the fill the face had
+/// before the first click: that press counts as one that paints nothing. The pointer leaving the
+/// canvas between three clicks adds no press.
+#[test]
+fn bucket_triple_click_with_a_view_tool_press_between_matches_the_first_fill() {
+    use vectorcraft_color::{Color, Paint};
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let (d, gid, f2, _) = live_group_doc();
+    let mut painted = d.clone();
+    painted.node_mut(f2).unwrap().appearance.set_fill(red.clone());
+    let s = Selection::default();
+    let p = paint();
+    let (cx, later) = (cx(&d, &s, &p), cx(&painted, &s, &p));
+    let own = serde_json::to_value(d.node(f2).unwrap().appearance.fill_paint()).unwrap();
+    assert_ne!(own, serde_json::to_value(&red).unwrap());
+    let want = vec![Action::Exec("livePaint.fill".into(), json!({ "group": gid.0, "point": [75.0, 25.0], "scope": "samePaint", "match": own }))];
+    fn click(t: &mut LivePaintBucketTool, ctx: &ToolContext) {
+        t.pointer(ctx, &ev(PointerKind::Down, 75.0, 25.0));
+        t.pointer(ctx, &ev(PointerKind::Up, 75.0, 25.0));
+    }
+    let mut t = LivePaintBucketTool::default();
+    click(&mut t, &cx);
+    t.press_elsewhere();
+    click(&mut t, &later);
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0)), want, "a view tool's press between");
+    let mut t = LivePaintBucketTool::default();
+    click(&mut t, &cx);
+    click(&mut t, &later);
+    t.hover_ended(&later);
+    click(&mut t, &later);
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0)), want, "the pointer leaving between");
+}
+
 /// With Space held for the view tools, the pointer outlines no face or edge, as a press there
 /// paints nothing.
 #[test]
@@ -1451,7 +1646,12 @@ fn bucket_options_choose_what_a_click_paints() {
     let fill = |x: f64| {
         vec![Action::Begin("Live Paint Bucket".into()), Action::Preview("livePaint.fill".into(), json!({ "group": gid.0, "point": [x, 25.0] }))]
     };
-    let stroke = |x: f64| vec![Action::Exec("livePaint.strokeEdge".into(), json!({ "group": gid.0, "point": [x, 25.0], "tolerance": 4.0 }))];
+    let stroke = |x: f64| {
+        vec![
+            Action::Begin("Live Paint Bucket".into()),
+            Action::Preview("livePaint.strokeEdge".into(), json!({ "group": gid.0, "point": [x, 25.0], "tolerance": 4.0 })),
+        ]
+    };
     let click = |t: &mut LivePaintBucketTool, x: f64, m: Mods| {
         let acts = t.pointer(&cx, &ev(PointerKind::Down, x, 25.0).with_mods(m));
         t.pointer(&cx, &ev(PointerKind::Up, x, 25.0).with_mods(m));
@@ -1772,9 +1972,15 @@ fn bucket_alt_shift_samples_gradient_image_and_stroke_color() {
 
     let mut d = Document::new(500.0, 500.0);
     let l = d.layers[0].id;
-    let img = image::RgbaImage::from_raw(3, 1, [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255]].concat()).unwrap();
-    let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let img = craft_image_codecs::Image::from_raw(
+        3,
+        1,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        vec![255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255],
+    )
+    .unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
     d.images.insert("px".into(), vectorcraft_doc::ImageBlob::png(png));
     let im = vectorcraft_doc::ImageObject {
         key: "px".into(),
@@ -2573,20 +2779,219 @@ fn live_paint_selection_double_click_selects_connected_faces_or_edges() {
     assert!(dbl(&mut t, 25.0, 1.0, alt).is_empty());
 }
 
+/// A triple-click on a face selects every face of its group with that face's fill, joined to it or
+/// not; on an edge (Alt), every edge of its group that draws with that edge's stroke paint. Shift
+/// toggles them. Hidden parts, other groups and parts with another paint are left out.
 #[test]
-fn live_paint_selection_triple_click_adds_nothing_to_its_clicks() {
+fn live_paint_selection_triple_click_selects_every_part_of_the_same_paint() {
     let mut d = Document::new(500.0, 500.0);
-    let (_, [a, ..], _) = live_strip(&mut d);
+    let (_, [a, b, c], [ab, bc, top_a, top_b, top_c, bottom]) = live_strip(&mut d);
+    let (other, [_, other_top, ..]) = live_square(&mut d, Rect::new(200.0, 0.0, 300.0, 100.0));
+    let other_face = faces(d.node(other).unwrap())[0].id;
+    let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    let blue = Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0));
+    // A and C are red and B is blue; the other group's face is red and its top edge black, too.
+    for (id, fill) in [(a, &red), (b, &blue), (c, &red), (other_face, &red)] {
+        d.node_mut(id).unwrap().appearance.set_fill(fill.clone());
+    }
+    d.node_mut(other_top).unwrap().appearance.set_stroke(Paint::solid(vectorcraft_color::Color::BLACK));
+    let s = Selection::default();
+    let p = paint();
+    let set = |ids: &[NodeId]| vec![Action::Exec("select.set".into(), json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))];
+    let toggle = |ids: &[NodeId]| vec![Action::Exec("select.toggle".into(), json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))];
+    let alt = Mods { alt: true, ..Default::default() };
+    let shift = Mods { shift: true, ..Default::default() };
+    let tri = |d: &Document, t: &mut LivePaintSelectionTool, x: f64, y: f64, m: Mods| {
+        let cx = cx(d, &s, &p);
+        t.pointer(&cx, &ev(PointerKind::TripleClick, x, y).with_mods(m))
+    };
+    let mut t = LivePaintSelectionTool::default();
+    // A face: every face of its group with its fill, even across the stroked edge BC; the clicked face first.
+    assert_eq!(tri(&d, &mut t, 125.0, 25.0, Mods::default()), set(&[c, a]));
+    assert_eq!(tri(&d, &mut t, 75.0, 25.0, Mods::default()), set(&[b]));
+    // An edge: every edge of its group that draws with its stroke paint, joined to it or not.
+    assert_eq!(tri(&d, &mut t, 25.0, 1.0, alt), set(&[top_a, top_b, bottom]));
+    assert_eq!(tri(&d, &mut t, 125.0, 1.0, alt), set(&[top_c, bc]));
+    assert_eq!(tri(&d, &mut t, 50.0, 25.0, alt), set(&[ab]));
+    // With Shift held, the parts leave the selection or join it.
+    assert_eq!(tri(&d, &mut t, 25.0, 25.0, shift), toggle(&[a, c]));
+    assert_eq!(tri(&d, &mut t, 125.0, 1.0, Mods { alt: true, shift: true, ..Default::default() }), toggle(&[top_c, bc]));
+    // Away from the group, a triple-click adds nothing to what its clicks did.
+    assert!(tri(&d, &mut t, 400.0, 400.0, Mods::default()).is_empty());
+    // A hidden face of the same fill is left out.
+    d.node_mut(c).unwrap().visible = false;
+    assert_eq!(tri(&d, &mut t, 25.0, 25.0, Mods::default()), set(&[a]));
+    // On the other group, a triple-click selects that group's parts alone.
+    assert_eq!(tri(&d, &mut t, 250.0, 50.0, Mods::default()), set(&[other_face]));
+    assert_eq!(tri(&d, &mut t, 250.0, 1.0, alt), set(&[other_top]));
+    // Select Fills off: the triple-click picks the edge nearest the pointer; both off: nothing.
+    t.set_option("selectFills", &json!(false));
+    assert_eq!(tri(&d, &mut t, 25.0, 1.0, Mods::default()), set(&[top_a, top_b, bottom]));
+    t.set_option("selectStrokes", &json!(false));
+    assert!(tri(&d, &mut t, 25.0, 25.0, Mods::default()).is_empty());
+    assert!(tri(&d, &mut t, 25.0, 1.0, alt).is_empty());
+}
+
+/// The whole event series of a triple-click (three presses and releases, the double-click after
+/// the second release and the triple-click after the third), applied to a selection: without
+/// Shift the selection ends as the parts with the clicked part's paint, and with Shift as the
+/// selection from before the clicks with those parts toggled, whatever the double-click reached.
+#[test]
+fn live_paint_selection_triple_click_series_ends_with_the_same_paint_parts() {
+    let mut d = Document::new(500.0, 500.0);
+    let (_, [a, b, c], [_, bc, top_a, top_b, top_c, bottom]) = live_strip(&mut d);
+    let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    let blue = Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0));
+    // A and C are red and B is blue; a double-click on A also reaches B across the unstroked edge AB.
+    for (id, fill) in [(a, &red), (b, &blue), (c, &red)] {
+        d.node_mut(id).unwrap().appearance.set_fill(fill.clone());
+    }
     let s = Selection::default();
     let p = paint();
     let cx = cx(&d, &s, &p);
+    let apply = |sel: &mut Vec<u64>, acts: Vec<Action>| {
+        for act in acts {
+            let Action::Exec(cmd, args) = act else { panic!("{act:?}") };
+            let ids: Vec<u64> = match (args.get("ids"), args.get("id")) {
+                (Some(v), _) => v.as_array().unwrap().iter().map(|i| i.as_u64().unwrap()).collect(),
+                (None, Some(i)) => vec![i.as_u64().unwrap()],
+                (None, None) => vec![],
+            };
+            match cmd.as_str() {
+                "select.set" => *sel = ids,
+                "select.none" => sel.clear(),
+                "select.toggle" => {
+                    for i in ids {
+                        match sel.iter().position(|x| *x == i) {
+                            Some(k) => {
+                                sel.remove(k);
+                            }
+                            None => sel.push(i),
+                        }
+                    }
+                }
+                other => panic!("{other}"),
+            }
+        }
+    };
+    // The first click at `first`, every later event at (`x`, `y`).
+    let series = |t: &mut LivePaintSelectionTool, sel: &mut Vec<u64>, first: (f64, f64), x: f64, y: f64, m: Mods| {
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            apply(sel, t.pointer(&cx, &ev(kind, first.0, first.1).with_mods(m)));
+        }
+        for kind in [PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick, PointerKind::Down, PointerKind::Up, PointerKind::TripleClick] {
+            apply(sel, t.pointer(&cx, &ev(kind, x, y).with_mods(m)));
+        }
+    };
+    let sorted = |ids: &[NodeId]| {
+        let mut v: Vec<u64> = ids.iter().map(|i| i.0).collect();
+        v.sort_unstable();
+        v
+    };
+    let alt = Mods { alt: true, ..Default::default() };
+    let shift = Mods { shift: true, ..Default::default() };
     let mut t = LivePaintSelectionTool::default();
-    // The third click's press and release select the face under the pointer, as a click does.
-    assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 25.0, 25.0)), vec![Action::Exec("select.set".into(), json!({ "ids": [a.0] }))]);
-    for m in [Mods::default(), Mods { alt: true, ..Default::default() }, Mods { shift: true, ..Default::default() }] {
-        assert!(t.pointer(&cx, &ev(PointerKind::TripleClick, 25.0, 25.0).with_mods(m)).is_empty());
-        assert!(t.pointer(&cx, &ev(PointerKind::TripleClick, 25.0, 1.0).with_mods(m)).is_empty());
+    for (start, first, x, y, m, want) in [
+        (vec![], (25.0, 25.0), 25.0, 25.0, Mods::default(), sorted(&[a, c])),
+        (vec![top_c.0], (25.0, 25.0), 25.0, 25.0, Mods::default(), sorted(&[a, c])),
+        (vec![], (25.0, 25.0), 25.0, 25.0, shift, sorted(&[a, c])),
+        (vec![top_c.0, c.0], (25.0, 25.0), 25.0, 25.0, shift, sorted(&[a, top_c])),
+        (vec![], (25.0, 1.0), 25.0, 1.0, Mods { alt: true, shift: true, ..Default::default() }, sorted(&[top_a, top_b, bottom])),
+        (vec![bc.0], (125.0, 1.0), 125.0, 1.0, alt, sorted(&[top_c, bc])),
+        // The first click on A and the rest on B, beside it: B alone has B's fill.
+        (vec![], (49.0, 25.0), 51.0, 25.0, shift, sorted(&[b])),
+        (vec![c.0], (49.0, 25.0), 51.0, 25.0, shift, sorted(&[b, c])),
+    ] {
+        let mut sel = start.clone();
+        series(&mut t, &mut sel, first, x, y, m);
+        sel.sort_unstable();
+        assert_eq!(sel, want, "from {start:?} at {first:?} then ({x}, {y}) with {m:?}");
     }
+    // Shift first held at the third click: the two clicks and the double-click select A and B, and
+    // the parts with A's fill are toggled from that selection.
+    let mut sel = vec![top_c.0];
+    for (kind, m) in [
+        (PointerKind::Down, Mods::default()),
+        (PointerKind::Up, Mods::default()),
+        (PointerKind::Down, Mods::default()),
+        (PointerKind::Up, Mods::default()),
+        (PointerKind::DoubleClick, Mods::default()),
+        (PointerKind::Down, shift),
+        (PointerKind::Up, shift),
+        (PointerKind::TripleClick, shift),
+    ] {
+        apply(&mut sel, t.pointer(&cx, &ev(kind, 25.0, 25.0).with_mods(m)));
+    }
+    sel.sort_unstable();
+    assert_eq!(sel, sorted(&[b, c]));
+    // A Shift-click on C, then a click on A without Shift, which selects A alone, and Shift held
+    // from the double-click on: the parts with A's fill are toggled from that selection.
+    let mut sel = vec![];
+    for (kind, x, m) in [
+        (PointerKind::Down, 125.0, shift),
+        (PointerKind::Up, 125.0, shift),
+        (PointerKind::Down, 25.0, Mods::default()),
+        (PointerKind::Up, 25.0, Mods::default()),
+        (PointerKind::DoubleClick, 25.0, shift),
+        (PointerKind::Down, 25.0, shift),
+        (PointerKind::Up, 25.0, shift),
+        (PointerKind::TripleClick, 25.0, shift),
+    ] {
+        apply(&mut sel, t.pointer(&cx, &ev(kind, x, 25.0).with_mods(m)));
+    }
+    assert_eq!(sel, vec![c.0]);
+}
+
+/// A Shift-triple-click on a face whose double-click already reaches a joined face of the same
+/// fill selects every face with that fill: the joined face the double-click toggled on is not
+/// toggled off again.
+#[test]
+fn live_paint_selection_shift_triple_click_keeps_joined_faces_of_the_same_fill() {
+    let mut d = Document::new(500.0, 500.0);
+    let (_, [a, b, c], _) = live_strip(&mut d);
+    let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    // A and B are joined across the unstroked edge AB; C is parted from them by the stroked edge BC.
+    for id in [a, b, c] {
+        d.node_mut(id).unwrap().appearance.set_fill(red.clone());
+    }
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = LivePaintSelectionTool::default();
+    let mut sel: Vec<u64> = vec![];
+    for kind in [
+        PointerKind::Down,
+        PointerKind::Up,
+        PointerKind::Down,
+        PointerKind::Up,
+        PointerKind::DoubleClick,
+        PointerKind::Down,
+        PointerKind::Up,
+        PointerKind::TripleClick,
+    ] {
+        for act in t.pointer(&cx, &ev(kind, 25.0, 25.0).with_mods(shift)) {
+            let Action::Exec(cmd, args) = act else { panic!("{act:?}") };
+            assert_eq!(cmd, "select.toggle");
+            let ids: Vec<u64> = match (args.get("ids"), args.get("id")) {
+                (Some(v), _) => v.as_array().unwrap().iter().map(|i| i.as_u64().unwrap()).collect(),
+                (None, Some(i)) => vec![i.as_u64().unwrap()],
+                (None, None) => vec![],
+            };
+            for i in ids {
+                match sel.iter().position(|x| *x == i) {
+                    Some(k) => {
+                        sel.remove(k);
+                    }
+                    None => sel.push(i),
+                }
+            }
+        }
+    }
+    sel.sort_unstable();
+    let mut want = vec![a.0, b.0, c.0];
+    want.sort_unstable();
+    assert_eq!(sel, want);
 }
 
 #[test]
@@ -2857,8 +3262,13 @@ fn live_paint_edges_outside_the_faces_come_from_the_nearest_visible_group() {
         bucket.set_option("cursorSwatchPreview", &json!(false));
         bucket.pointer(&cx, &ev(PointerKind::Move, x, y).with_mods(shift));
         assert_eq!(edge_x(&bucket.overlays(&cx)), want.map(|w| w.2));
-        let stroked = want.map(|(g, ..)| Action::Exec("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": [x, y], "tolerance": 4.0 })));
-        assert_eq!(bucket.pointer(&cx, &ev(PointerKind::Down, x, y).with_mods(shift)), stroked.into_iter().collect::<Vec<_>>());
+        let stroked = want.map(|(g, ..)| {
+            vec![
+                Action::Begin("Live Paint Bucket".into()),
+                Action::Preview("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": [x, y], "tolerance": 4.0 })),
+            ]
+        });
+        assert_eq!(bucket.pointer(&cx, &ev(PointerKind::Down, x, y).with_mods(shift)), stroked.unwrap_or_default());
     };
     check(&d, Some((back, back_right, 100.0)));
     // A hidden group's edges are not highlighted or picked.
@@ -2901,8 +3311,13 @@ fn live_paint_tools_skip_hidden_edges() {
         bucket.set_option("cursorSwatchPreview", &json!(false));
         bucket.pointer(&cx, &ev(PointerKind::Move, x, 50.0).with_mods(shift));
         assert_eq!(edge_x(&bucket.overlays(&cx)), want.map(|w| w.2), "x {x}");
-        let stroked = want.map(|(g, ..)| Action::Exec("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": [x, 50.0], "tolerance": 4.0 })));
-        assert_eq!(bucket.pointer(&cx, &ev(PointerKind::Down, x, 50.0).with_mods(shift)), stroked.into_iter().collect::<Vec<_>>(), "x {x}");
+        let stroked = want.map(|(g, ..)| {
+            vec![
+                Action::Begin("Live Paint Bucket".into()),
+                Action::Preview("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": [x, 50.0], "tolerance": 4.0 })),
+            ]
+        });
+        assert_eq!(bucket.pointer(&cx, &ev(PointerKind::Down, x, 50.0).with_mods(shift)), stroked.unwrap_or_default(), "x {x}");
     }
 }
 

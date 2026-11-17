@@ -551,6 +551,26 @@ fn svg_export_keeps_a_measured_region_only_on_the_object_alone() {
     assert!(after.contains("<image") && !after.contains("<feOffset dx=\"3\""), "{after}");
 }
 
+/// SVG export keeps a filter live only in a user space SVG import stores again: `scale` 1000 with
+/// `axes` that double it scales the user space 2000 times, past what import holds, so the object is
+/// written as an image instead of a filter that would be left out when the file is opened.
+#[test]
+fn svg_export_writes_an_image_for_a_user_space_import_cannot_store() {
+    let hue = r#"<filter id="Hue"><feColorMatrix type="hueRotate" values="90"/></filter>"#;
+    for (scale, axes, live) in [(2.0, json!([2, 0, 0, 2]), true), (1000.0, json!([2, 0, 0, 2]), false)] {
+        let mut s = session();
+        let a = rect(&mut s, 10.0);
+        run(&mut s, "effect.apply", json!({"effect": "svg.filter", "ids": [a.0], "params": {"xml": hue, "scale": scale, "axes": axes}}));
+        let out = svg(&mut s);
+        assert_eq!((out.contains("<feColorMatrix"), out.contains("<image")), (live, !live), "scale {scale}: {out}");
+        let (back, warnings) = vectorcraft_svg::import_with_report(&out).unwrap();
+        assert!(warnings.is_empty(), "scale {scale}: {warnings:?}");
+        let mut kept = 0;
+        back.walk(|n| kept += n.appearance.effects.iter().filter(|e| e.id == "svg.filter").count());
+        assert_eq!(kept, usize::from(live), "scale {scale}: {out}");
+    }
+}
+
 /// SVG export writes a filter rebuilt from its filter elements and filter attributes, not the XML
 /// the effect holds.
 #[test]
@@ -573,6 +593,23 @@ fn moving_the_object_moves_the_filters_origin() {
     run(&mut s, "object.move", json!({"ids": [a.0], "dx": 5, "dy": -2}));
     let p = &s.doc().unwrap().doc.node(a).unwrap().appearance.effects[0].params;
     assert_eq!(p["origin"], json!([8.0, 2.0]));
+}
+
+/// `axes` turns or skews the filter's user space; a move moves only its origin. Axes the effect
+/// can't measure are refused.
+#[test]
+fn axes_turn_the_filters_user_space_and_bad_axes_are_refused() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "effect.apply", json!({"effect": "svg.filter", "ids": [a.0], "params": {"xml": SHIFT, "axes": [0, 1, -1, 0]}}));
+    run(&mut s, "object.move", json!({"ids": [a.0], "dx": 5, "dy": -2}));
+    let p = &s.doc().unwrap().doc.node(a).unwrap().appearance.effects[0].params;
+    assert_eq!((&p["axes"], &p["origin"]), (&json!([0, 1, -1, 0]), &json!([5.0, -2.0])));
+    for axes in [json!([0, 0, 0, 0]), json!([1, 0, 0]), json!([1, 0, 0, "1"]), json!([1001, 0, 0, 1]), json!(null), json!("x")] {
+        let e = err(&mut s, "effect.apply", json!({"effect": "svg.filter", "ids": [a.0], "params": {"xml": SHIFT, "axes": axes}}));
+        assert!(e.contains("`axes` must be [a, b, c, d]"), "{axes}: {e}");
+    }
+    assert!(err(&mut s, "effect.setParams", json!({"ids": [a.0], "index": 0, "params": {"axes": [0.01, 0, 0, 0.01]}})).contains("`axes` must be"));
 }
 
 #[test]
