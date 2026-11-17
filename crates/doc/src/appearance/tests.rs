@@ -314,7 +314,7 @@ fn profile_presets_round_trip_their_ids() {
 #[test]
 fn arrowhead_names_are_stable_and_every_one_is_listed_once() {
     // Saved files store these names: they may only ever be appended to.
-    const SAVED: [&str; 41] = [
+    const SAVED: [&str; 42] = [
         "Triangle",
         "TriangleOpen",
         "Circle",
