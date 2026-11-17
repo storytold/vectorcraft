@@ -233,8 +233,9 @@ fn type_into(ctx: &egui::Context, app: &mut VectorcraftApp, draw: fn(&mut Vector
 }
 
 /// The panel menu's Transform Object Only, Transform Pattern Only and Transform Both, one
-/// checked: a new X typed in the panel (or the Properties panel's Transform section) moves the
-/// pattern-filled rectangle and leaves its tiles, moves its tiles alone, or moves both. Until
+/// checked: a new X typed in the panel (or the Properties panel's Transform section, or the
+/// Control bar) moves the pattern-filled rectangle and leaves its tiles, moves its tiles alone, or
+/// moves both. Until
 /// one is chosen the panels do as General › Transform Pattern Tiles says, as they did before
 /// the menu acted, and the menu checks Transform Both while it is on, Transform Object Only
 /// while it is off; a choice overrides it, and resetting the preferences returns to it.
@@ -248,7 +249,7 @@ fn the_menu_chooses_whether_the_object_its_pattern_or_both_transform() {
     let labels = ["Transform Object Only", "Transform Pattern Only", "Transform Both"];
     let modes = ["object", "pattern", "both"];
     let checked = |shown: &[String]| -> Vec<usize> { (0..3).filter(|i| shown.contains(&format!("✓ {}", labels[*i]))).collect() };
-    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section, crate::chrome::control_bar] {
         for general in [false, true] {
             for pick in [None, Some(0), Some(1), Some(2)] {
                 let case = format!("General › Transform Pattern Tiles {general}, menu choice {pick:?}");
@@ -333,12 +334,12 @@ fn the_menu_choice_also_applies_to_rotation_and_shear() {
     }
 }
 
-/// Use Registration Point for Symbol: with one symbol instance selected, the panel and the
-/// Properties panel's Transform section show and set X and Y at its symbol's registration point
-/// (here the top-left one) instead of the reference point (the centre).
+/// Use Registration Point for Symbol: with one symbol instance selected, the panel, the
+/// Properties panel's Transform section and the Control bar show and set X and Y at its symbol's
+/// registration point (here the top-left one) instead of the reference point (the center).
 #[test]
 fn use_registration_point_for_symbol_measures_an_instance_from_its_registration_point() {
-    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section, crate::chrome::control_bar] {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
         app.run("shape.rectangle", json!({"x": 100, "y": 50, "width": 80, "height": 40})).unwrap();
@@ -363,6 +364,47 @@ fn use_registration_point_for_symbol_measures_an_instance_from_its_registration_
         app.run("shape.rectangle", json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap();
         let rect = shown(&mut app);
         assert!(rect.iter().any(|t| t == "210 pt") && !rect.iter().any(|t| t == "200 pt"), "the centre: {rect:?}");
+    }
+}
+
+/// The Control bar's X, Y, W and H use the reference point the Transform panel's locator chose:
+/// X and Y show that point of the selection's box and a new X or Y moves it there, a new W or H
+/// keeps it in place, and choosing another point changes what the fields show without editing the
+/// art. Each field edit is one undo step.
+#[test]
+fn the_control_bar_fields_use_the_shared_reference_point() {
+    use crate::panels::tests_appearance::frame_events;
+    let draw = crate::chrome::control_bar as fn(&mut VectorcraftApp, &mut Ui);
+    // The reference point (top-left, center, bottom-right): X/Y shown for the rectangle at
+    // (10, 20), 100 × 50; the box after X becomes `x`, and after W becomes 200 and H 100.
+    let cases = [
+        (0usize, ("10 pt", "20 pt"), "30", Rect::new(30.0, 20.0, 130.0, 70.0), Rect::new(30.0, 20.0, 230.0, 120.0)),
+        (4, ("60 pt", "45 pt"), "80", Rect::new(30.0, 20.0, 130.0, 70.0), Rect::new(-20.0, -5.0, 180.0, 95.0)),
+        (8, ("110 pt", "70 pt"), "130", Rect::new(30.0, 20.0, 130.0, 70.0), Rect::new(-70.0, -30.0, 130.0, 70.0)),
+    ];
+    for (refi, (x, y), new_x, moved, sized) in cases {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 100, "height": 50})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let revision = |app: &VectorcraftApp| app.session.active().unwrap().revision;
+        let shown = |app: &mut VectorcraftApp| frame_events(&ctx, app, vec![], draw).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+        shown(&mut app);
+        let before = revision(&app);
+        ctx.data_mut(|d| d.insert_temp(egui::Id::unique("refpt"), refi));
+        let texts = shown(&mut app);
+        assert!(texts.iter().any(|t| t == x) && texts.iter().any(|t| t == y), "reference {refi}: X {x}, Y {y} in {texts:?}");
+        assert_eq!(revision(&app), before, "reference {refi}: choosing the point leaves the art");
+        type_into(&ctx, &mut app, draw, x, new_x);
+        assert_eq!(app.selection_box().unwrap().rect, moved, "reference {refi}: X");
+        assert_eq!(revision(&app), before + 1, "reference {refi}: one undo step");
+        type_into(&ctx, &mut app, draw, "100 pt", "200");
+        type_into(&ctx, &mut app, draw, "50 pt", "100");
+        assert_eq!(app.selection_box().unwrap().rect, sized, "reference {refi}: W and H");
+        app.run("edit.undo", json!({})).unwrap();
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.selection_box().unwrap().rect, moved, "reference {refi}: undo");
     }
 }
 
