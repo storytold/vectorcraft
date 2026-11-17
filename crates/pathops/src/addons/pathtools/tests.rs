@@ -725,3 +725,58 @@ fn a_slice_of_a_curve_keeps_its_shape_and_the_anchors_it_runs_through() {
     assert!(slice(&circle, (2.0, 1.0)).anchors.is_empty());
     assert!(slice(&circle, (f64::NAN, 1.0)).anchors.is_empty());
 }
+
+#[test]
+fn an_open_end_a_hair_off_another_path_still_meets_it() {
+    // A bow from (0, 0) to (100, 100), and where a line across at y = 50 crosses it.
+    let bow = PathData::single(SubPath::new(
+        vec![Anchor { h_out: pt(0.0, 55.0), ..Anchor::corner(pt(0.0, 0.0)) }, Anchor { h_in: pt(45.0, 100.0), ..Anchor::corner(pt(100.0, 100.0)) }],
+        false,
+    ));
+    let across = PathData::single(line(&[(-50.0, 50.0), (150.0, 50.0)], false));
+    let at = crossings_on(&across, &[&bow]).unwrap();
+    assert_eq!(at.len(), 1);
+    let p = across.subpaths[0].segment(0).eval(at[0].2);
+    // A line ending 0.00005 pt short of the bow, or past it, as a line cut where the bow crosses it
+    // can: the bow is crossed there, on both searches.
+    let on_bow = |l: &PathData| crossings_on(&bow, &[l]).unwrap().iter().map(|q| bow.subpaths[0].segment(q.1).eval(q.2)).collect::<Vec<_>>();
+    for off in [-5e-5, 5e-5] {
+        let stub = PathData::single(line(&[(-50.0, 50.0), (p.x + off, 50.0)], false));
+        let found = on_bow(&stub);
+        assert!(found.len() == 1 && found[0].distance(p) < 1e-3, "{off}: {found:?}");
+        let both = crossings(&[&stub, &bow], false).unwrap();
+        assert_eq!((both[0].len(), both[1].len()), (1, 1), "{off}: {both:?}");
+    }
+    // 0.01 pt short is not on it.
+    assert!(on_bow(&PathData::single(line(&[(-50.0, 50.0), (p.x - 0.01, 50.0)], false))).is_empty());
+    // The bow's own open end 0.00005 pt short of an upright meets it there.
+    let upright = PathData::single(line(&[(100.00005, 50.0), (100.00005, 150.0)], false));
+    let found = crossings_on(&upright, &[&bow]).unwrap();
+    assert!(found.len() == 1 && near(upright.subpaths[0].segment(0).eval(found[0].2).y, 100.0, 1e-3), "{found:?}");
+    // Two ends that each stop 0.0009 pt short of a corner lie 0.0013 pt apart: they don't meet.
+    let flat = PathData::single(line(&[(0.0, 0.0), (99.9991, 0.0)], false));
+    let post = PathData::single(line(&[(100.0, 0.0009), (100.0, 50.0)], false));
+    assert!(crossings_on(&flat, &[&post]).unwrap().is_empty() && crossings_on(&post, &[&flat]).unwrap().is_empty());
+    // Two ends that each stop 0.0004 pt short of a corner lie 0.0006 pt apart: they meet.
+    let flat = PathData::single(line(&[(0.0, 0.0), (99.9996, 0.0)], false));
+    let post = PathData::single(line(&[(100.0, 0.0004), (100.0, 50.0)], false));
+    assert_eq!((crossings_on(&flat, &[&post]).unwrap().len(), crossings_on(&post, &[&flat]).unwrap().len()), (1, 1));
+    // A level line that crosses a quarter circle near its top, where the two meet at under 3
+    // degrees, cut 0.0015 pt short along its length: its end lies under 0.0001 pt from the arc and
+    // meets it there.
+    use kurbo::ParamCurveNearest;
+    let arc = PathData::single(quarter());
+    let level = PathData::single(line(&[(50.0, 99.9), (-50.0, 99.9)], false));
+    let at = crossings_on(&level, &[&arc]).unwrap();
+    assert_eq!(at.len(), 1);
+    let end = level.subpaths[0].segment(0).eval(at[0].2) + Vec2::new(0.0015, 0.0);
+    assert!(arc.subpaths[0].segment(0).nearest(end, 1e-12).distance_sq.sqrt() < 1e-4);
+    let stub = PathData::single(line(&[(50.0, 99.9), (end.x, end.y)], false));
+    let found = crossings_on(&arc, &[&stub]).unwrap();
+    assert!(found.len() == 1 && arc.subpaths[0].segment(0).eval(found[0].2).distance(end) < 1e-3, "{found:?}");
+    assert_eq!(crossings(&[&stub, &arc], false).unwrap().iter().map(Vec::len).collect::<Vec<_>>(), [1, 1]);
+    // A corner of a closed path as near a line is not an open end: it doesn't reach the line.
+    let wedge = PathData::single(line(&[(180.0, 0.0), (220.0, 0.0), (200.0, 49.99995)], true));
+    let floor = PathData::single(line(&[(150.0, 50.0), (250.0, 50.0)], false));
+    assert!(crossings_on(&floor, &[&wedge]).unwrap().is_empty() && crossings_on(&wedge, &[&floor]).unwrap().is_empty());
+}
