@@ -446,3 +446,91 @@ fn placed_carried_fonts_survive_break_link_and_older_version_save() {
         assert!(!s.doc().unwrap().doc.has_placed(), "the reopened art is editable, not a linked source");
     }
 }
+
+/// A page of the glyphs of `a`, `b` and `a` again on three lines (40, 100 and 160 pt from the top),
+/// set in a font the file carries that no machine has, each glyph named `a` by the font's ToUnicode
+/// map: two different glyphs of one embedded font for one character.
+fn two_glyphs_for_one_character_pdf() -> Vec<u8> {
+    let data = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/fonts/SourceSerif4-Regular.ttf")).unwrap();
+    let face = vectorcraft_text::FontDb::global().face("Source Serif 4", "Regular").unwrap();
+    let widths: Vec<String> =
+        (32u8..=126).map(|c| format!("{:.0}", face.advance(face.glyph_for(char::from(c))) * 1000.0 / face.units_per_em())).collect();
+    let hex: String = data.iter().map(|b| format!("{b:02x}")).collect();
+    let n = first_extra(1);
+    let content = "BT /F1 30 Tf 20 160 Td (a) Tj ET BT /F1 30 Tf 20 100 Td (b) Tj ET BT /F1 30 Tf 20 40 Td (a) Tj ET";
+    let page = PdfPage { resources: format!("/Font << /F1 {n} 0 R >>"), ..PdfPage::new(400.0, 200.0, content) };
+    let font = format!(
+        "<< /Type /Font /Subtype /TrueType /BaseFont /ABCDEF+Zyxwvu-Serif /FirstChar 32 /LastChar 126 /Widths [{}] /Encoding /WinAnsiEncoding /FontDescriptor {} 0 R /ToUnicode {} 0 R >>",
+        widths.join(" "),
+        n + 1,
+        n + 3
+    );
+    let descriptor = format!(
+        "<< /Type /FontDescriptor /FontName /ABCDEF+Zyxwvu-Serif /Flags 34 /FontBBox [-500 -300 1500 1000] /ItalicAngle 0 /Ascent 900 /Descent -300 /CapHeight 660 /StemV 80 /FontFile2 {} 0 R >>",
+        n + 2
+    );
+    let file = format!("<< /Length {} /Filter /ASCIIHexDecode >>\nstream\n{hex}>\nendstream", hex.len() + 1);
+    let cmap = "/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /Adobe-Identity-UCS def /CMapType 2 def 1 begincodespacerange <00> <FF> endcodespacerange 2 beginbfchar <61> <0061> <62> <0061> endbfchar endcmap CMapName currentdict /CMap defineresource pop end end";
+    let tounicode = format!("<< /Length {} >>\nstream\n{cmap}\nendstream", cmap.len() + 1);
+    pdf_with(&[page], &[&font, &descriptor, &file, &tounicode], None)
+}
+
+/// The ink box of the glyph on each of the three lines of [`two_glyphs_for_one_character_pdf`] as the
+/// active document draws it: type laid out, and outline paths (an import may merge them into one
+/// path, so their subpaths are told apart by the line they lie on).
+fn glyph_ink(s: &Session) -> Vec<kurbo::Rect> {
+    use kurbo::Shape;
+    let db = vectorcraft_text::FontDb::global();
+    let mut lines: [Option<kurbo::Rect>; 3] = [None; 3];
+    let mut add = |path: &kurbo::BezPath| {
+        let els = path.elements();
+        let mut start = 0;
+        for end in (1..=els.len()).filter(|&e| e == els.len() || matches!(els[e], kurbo::PathEl::MoveTo(_))) {
+            let ink = kurbo::BezPath::from_vec(els[start..end].to_vec()).bounding_box();
+            let line = usize::from(ink.center().y > 70.0) + usize::from(ink.center().y > 130.0);
+            lines[line] = Some(lines[line].map_or(ink, |l| l.union(ink)));
+            start = end;
+        }
+    };
+    s.doc().unwrap().doc.walk(|n| match &n.kind {
+        NodeKind::Text(t) => vectorcraft_text::layout(db, t).glyphs.iter().for_each(|g| add(&(t.xf * g.outline.clone()))),
+        NodeKind::Path { path, .. } => add(&path.to_bezpath()),
+        _ => {}
+    });
+    lines.into_iter().flatten().collect()
+}
+
+/// Two different glyphs of a carried font for one character can't both go into the font kept with
+/// the document, which has one glyph per character, so the line with the other glyph is outlines.
+/// Opened, saved in the native format and opened again, each glyph is still the one the file draws,
+/// where it draws it: the same page opened as outlines is the reference.
+#[test]
+fn two_glyphs_for_one_character_survive_a_native_save_and_reopen() {
+    let bytes = two_glyphs_for_one_character_pdf();
+    let mut reference_session = Session::new();
+    open(&mut reference_session, &bytes, json!({"textAs": "outlines"})).unwrap();
+    let reference = glyph_ink(&reference_session);
+    assert_eq!(reference.len(), 3, "the file draws three glyphs: {reference:?}");
+    assert!((reference[0].height() - reference[1].height()).abs() > 2.0, "the file's two glyphs differ in shape: {reference:?}");
+    assert!((reference[0].height() - reference[2].height()).abs() < 0.01, "the first and third are the same glyph: {reference:?}");
+
+    let mut s = Session::new();
+    open(&mut s, &bytes, json!({})).unwrap();
+    assert!(
+        live_texts(&s).iter().any(|t| t == "a") && live_texts(&s).len() < 3,
+        "some glyphs stay type, the other is outlines: {:?}",
+        live_texts(&s)
+    );
+    let close = |s: &Session, what: &str| {
+        let got = glyph_ink(s);
+        assert_eq!(got.len(), reference.len(), "{what}: {got:?}");
+        for (got, want) in got.iter().zip(&reference) {
+            let off = (got.x0 - want.x0).abs().max((got.x1 - want.x1).abs()).max((got.y0 - want.y0).abs()).max((got.y1 - want.y1).abs());
+            assert!(off < 0.25, "{what}: {got:?} is {off} pt from the file's {want:?}");
+        }
+    };
+    close(&s, "opened");
+    let native = s.execute("document.serialize", &json!({"format": "vectorcraft"})).unwrap()["dataBase64"].as_str().unwrap().to_string();
+    s.execute("document.open", &json!({"name": "kept.vectorcraft", "dataBase64": native})).unwrap();
+    close(&s, "saved and reopened");
+}

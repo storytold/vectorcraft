@@ -249,10 +249,10 @@ fn glyph_ink(db: &FontDb, d: &Document) -> Vec<Rect> {
 /// Two different glyphs of the embedded font that map to one character (a normal and an alternate
 /// `a`, here the glyphs of `a` and `b` both named `a` by the ToUnicode map) can't both go into the
 /// font kept with the document, which has one glyph per character: the line with the other glyph is
-/// kept as outlines. Saved in the native format and opened again, each glyph is still the one the
-/// file draws, where it draws it: the outlines of the same page imported as outlines are the reference.
+/// kept as outlines. Each glyph is the one the file draws, where it draws it: the outlines of the same page
+/// imported as outlines are the reference (the save and reopen half is `two_glyphs_for_one_character_survive_a_native_save_and_reopen` in the engine).
 #[test]
-fn two_glyphs_for_one_character_both_survive_import_and_save() {
+fn two_glyphs_for_one_character_both_survive_import() {
     let db = FontDb::global();
     let bytes = two_glyphs_pdf();
     let reference = glyph_ink(db, &import_with_report(&bytes, &ImportOptions { text_as: TextAs::Outlines, ..Default::default() }).unwrap().document);
@@ -273,7 +273,4 @@ fn two_glyphs_for_one_character_both_survive_import_and_save() {
         }
     };
     close(&glyph_ink(db, &imported), "imported");
-    let mut reopened = vectorcraft_format::load(&vectorcraft_format::save_file(&imported)).unwrap();
-    db.bind_document_file_fonts(&mut reopened);
-    close(&glyph_ink(db, &reopened), "saved and reopened");
 }
