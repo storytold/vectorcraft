@@ -238,6 +238,25 @@ fn a_dialog_or_presentation_mode_ends_the_wait() {
     }
 }
 
+/// A dialog opened while a key waits does not get the key's repeat, or the text it types, from the
+/// frame that also lets the key go.
+#[test]
+fn a_dialog_that_ends_the_wait_gets_no_repeat_from_the_frame_of_the_release() {
+    let mut app = erolka_x(true);
+    let keys = Keyboard::new();
+    keys.press(&mut app, 0.0, Key::X, "x");
+    assert!(app.hold_keys.pending.is_some());
+    app.ui.dialog = Some(crate::state::Dialog::new("preferences", json!({})));
+    let mut events = press(Key::X, "x", Modifiers::NONE);
+    events.push(release(Key::X));
+    let left = keys.frame_left(&mut app, 0.1, events);
+    assert!(app.hold_keys.pending.is_none(), "the dialog ends the wait");
+    assert!(
+        !left.iter().any(|e| matches!(e, egui::Event::Text(_) | egui::Event::Key { pressed: true, .. })),
+        "neither the repeat nor its text reaches the dialog: {left:?}"
+    );
+}
+
 /// A new wait does not drop a wait left in another viewport unseen: that wait ends, and its key's
 /// repeats stay held back in its viewport.
 #[test]

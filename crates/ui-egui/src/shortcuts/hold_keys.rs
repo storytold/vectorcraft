@@ -90,11 +90,13 @@ pub(super) fn guard(app: &mut VectorcraftApp, ctx: &egui::Context, focused: bool
         app.hold_keys.swallowed.retain(|s| s.viewport != viewport);
         return;
     }
+    let mut held: Vec<(Key, Option<Key>)> = app.hold_keys.swallowed.iter().filter(|s| s.viewport == viewport).map(|s| (s.key, s.physical)).collect();
+    held.extend(app.hold_keys.pending.as_ref().filter(|p| p.viewport == viewport).map(|p| (p.key, p.physical)));
+    // A wait that ends here still drops this frame's repeats of its key, also when the frame lets
+    // the key go.
     if app.hold_keys.pending.as_ref().is_some_and(|p| p.viewport == viewport) && (blocked(app, ctx) || !app.session.prefs.hold_shortcuts) {
         cancel(app, ctx);
     }
-    let mut held: Vec<(Key, Option<Key>)> = app.hold_keys.swallowed.iter().filter(|s| s.viewport == viewport).map(|s| (s.key, s.physical)).collect();
-    held.extend(app.hold_keys.pending.as_ref().filter(|p| p.viewport == viewport).map(|p| (p.key, p.physical)));
     if held.is_empty() {
         return;
     }
