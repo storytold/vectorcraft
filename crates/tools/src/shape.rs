@@ -492,7 +492,11 @@ impl ShapeTool {
             PointerKind::Up => match self.widget.take() {
                 Some(WidgetDrag::Corner(c)) => c.finish(),
                 Some(WidgetDrag::Pie(d)) => d.finish(),
-                Some(WidgetDrag::Sides(d)) => d.finish(),
+                Some(WidgetDrag::Sides(mut d)) => {
+                    let mut out = d.drag(cx, ev.pos);
+                    out.extend(d.finish());
+                    out
+                }
                 None => vec![],
             },
             _ => vec![],
@@ -675,6 +679,17 @@ impl Tool for ShapeTool {
     /// gesture in progress.
     fn busy(&self) -> bool {
         self.start.is_some() || self.widget.is_some() || self.selection.is_some()
+    }
+    /// Switching tools during a polygon's side widget drag cancels it, as Escape does: the count
+    /// goes back.
+    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        match self.widget.take() {
+            Some(WidgetDrag::Sides(d)) => d.cancel(),
+            other => {
+                self.widget = other;
+                vec![]
+            }
+        }
     }
     /// A widget or selection drag takes the pointer; otherwise a press draws, unless it lands on a
     /// handle of the selection's box, its centre point or the rotate zone just outside its box's

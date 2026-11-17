@@ -900,11 +900,13 @@ impl Tool for SelectionTool {
         out
     }
 
-    /// Switching tools during a blend widget's drag cancels it, as Escape does: its value goes back.
+    /// Switching tools during a blend widget's or a polygon's side widget's drag cancels it, as
+    /// Escape does: its value goes back.
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         match std::mem::take(&mut self.state) {
             State::BlendWidget(d) if d.adjusting() => vec![Action::Cancel],
             State::BlendWidget(_) => vec![],
+            State::Sides(d) => d.cancel(),
             other => {
                 self.state = other;
                 vec![]
@@ -1136,9 +1138,11 @@ impl Tool for SelectionTool {
                 self.state = State::Sides(d);
                 out
             }
-            (PointerKind::Up, State::Sides(d)) => {
+            (PointerKind::Up, State::Sides(mut d)) => {
                 self.state = State::Idle;
-                d.finish()
+                let mut out = d.drag(cx, p);
+                out.extend(d.finish());
+                out
             }
             (PointerKind::Drag, State::BlendWidget(mut d)) => {
                 let out = d.drag(cx, p);

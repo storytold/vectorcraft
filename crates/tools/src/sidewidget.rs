@@ -357,4 +357,48 @@ mod tests {
         assert!(!t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { .. })));
         assert!(t.pointer(&c, &ev(PointerKind::Up, w.at)).is_empty());
     }
+
+    /// Switching tools during a drag puts the count back, as Escape does; a press that changed
+    /// nothing sends nothing.
+    #[test]
+    fn switching_tools_cancels_a_side_widget_drag() {
+        let (d, _, s) = polygon_doc(5, Affine::translate((300.0, 300.0)));
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let (w, _) = SideWidget::for_tool(&c).unwrap();
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, w.at));
+        assert_eq!(sides_of(&t.pointer(&c, &ev(PointerKind::Drag, w.at + vectorcraft_geom::Vec2::new(0.0, 30.0)))), [7]);
+        assert_eq!(t.deactivate(&c), vec![Action::Cancel]);
+        assert!(!t.busy() && !t.transforming());
+        t.pointer(&c, &ev(PointerKind::Down, w.at));
+        assert!(t.pointer(&c, &ev(PointerKind::Drag, w.at + vectorcraft_geom::Vec2::new(0.0, 6.0))).is_empty());
+        assert!(t.deactivate(&c).is_empty());
+        assert!(!t.busy() && !t.transforming());
+    }
+
+    /// The release is read where it happens, with or without a drag event there first: back at the
+    /// start the polygon keeps its count with no undo step, and further down it takes the new count.
+    #[test]
+    fn the_release_position_sets_the_sides() {
+        let (d, id, s) = polygon_doc(5, Affine::translate((300.0, 300.0)));
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let (w, _) = SideWidget::for_tool(&c).unwrap();
+        let at = |px: f64| w.at + vectorcraft_geom::Vec2::new(0.0, px);
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, w.at));
+        assert_eq!(sides_of(&t.pointer(&c, &ev(PointerKind::Drag, at(12.0)))), [6]);
+        assert_eq!(
+            t.pointer(&c, &ev(PointerKind::Up, w.at)),
+            vec![Action::Preview("object.setLiveShape".into(), json!({ "id": id.0, "sides": 5 })), Action::Cancel]
+        );
+        assert!(!t.busy() && !t.transforming());
+        t.pointer(&c, &ev(PointerKind::Down, w.at));
+        assert_eq!(sides_of(&t.pointer(&c, &ev(PointerKind::Drag, at(12.0)))), [6]);
+        assert_eq!(
+            t.pointer(&c, &ev(PointerKind::Up, at(24.0))),
+            vec![Action::Preview("object.setLiveShape".into(), json!({ "id": id.0, "sides": 7 })), Action::Commit]
+        );
+    }
 }
