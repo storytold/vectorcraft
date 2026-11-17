@@ -98,9 +98,6 @@ pub(super) const MAX_AXES: usize = 64;
 
 pub(super) const MAX_INSTANCES: usize = 512;
 
-/// The most shaping plans a face keeps ([`FontFace::shape_plan`]); past it the oldest is dropped.
-const MAX_PLANS: usize = 32;
-
 /// One axis of a variable font's design space, as its `fvar` table lists it: the tag (`wght`), its
 /// name in the font's name table (`Weight`; the tag when it has none) and its range and default,
 /// in the axis's own units.
@@ -135,12 +132,6 @@ pub(super) type InstanceKey = (u32, Vec<([u8; 4], u32)>);
 /// How many instanced faces [`Instances::live`] holds at most.
 pub(crate) const MAX_LIVE_INSTANCES: usize = 256;
 
-#[derive(Clone)]
-pub(super) enum FontBytes {
-    Static(&'static [u8]),
-    Owned(Arc<Vec<u8>>),
-}
-
 /// One loaded font face.
 pub struct FontFace {
     /// Every name the face answers to (normalized), in every language its name table has.
@@ -161,8 +152,7 @@ pub struct FontFace {
     /// usWeightClass-style weight (400 = regular).
     pub weight: f32,
     pub italic: bool,
-    pub(super) bytes: FontBytes,
-    pub(super) index: u32,
+    pub(super) data: craft_font_catalog::FaceData,
     /// The file the face was read from (cataloged system fonts); `None` for the bundled fonts and
     /// fonts added as bytes.
     pub(super) path: Option<std::path::PathBuf>,
@@ -188,7 +178,7 @@ pub struct FontFace {
     /// [`Self::variations`] for the shaper (advances, kerning, feature variations).
     pub(crate) instance: Option<harfrust::ShaperInstance>,
     /// The shaping plans made for this face, newest last ([`Self::shape_plan`]).
-    pub(super) plans: std::sync::Mutex<Vec<Arc<harfrust::ShapePlan>>>,
+    pub(super) plans: craft_font_catalog::ShapePlanCache,
     /// [`Self::ideographic_centre`], read once: layout asks for it per glyph.
     pub(super) ideographic_centre: std::sync::OnceLock<f64>,
     /// [`Self::icf_margins`], read once.
@@ -249,20 +239,17 @@ impl std::fmt::Debug for FontFace {
 
 impl FontFace {
     pub(crate) fn data(&self) -> &[u8] {
-        match &self.bytes {
-            FontBytes::Static(b) => b,
-            FontBytes::Owned(v) => v.as_slice(),
-        }
+        self.data.bytes()
     }
     pub(crate) fn skrifa(&self) -> Option<skrifa::FontRef<'_>> {
-        skrifa::FontRef::from_index(self.data(), self.index).ok()
+        self.data.skrifa()
     }
     pub(crate) fn hb(&self) -> Option<harfrust::FontRef<'_>> {
-        harfrust::FontRef::from_index(self.data(), self.index).ok()
+        self.data.harfrust()
     }
     /// The shaping plan for a buffer of `direction`, `script` and `language` shaped with
     /// `features` by `shaper` (made from this face at [`Self::instance`]): the plan made earlier for
-    /// the same properties, else a new one, which the face keeps for later (at most [`MAX_PLANS`]).
+    /// the same properties, else a new one, which the face keeps for later (at most 32).
     /// A plan depends on these properties alone, so text shaped with it comes out as with a plan
     /// made for it.
     pub(crate) fn shape_plan(
@@ -277,31 +264,16 @@ impl FontFace {
         if !crate::test_fonts::keeps_shape_plans() {
             return Arc::new(harfrust::ShapePlan::new(shaper, direction, script, language, features));
         }
-        let key = harfrust::ShapePlanKey::new(script, direction).language(language).instance(self.instance.as_ref()).features(features);
-        let kept = |plans: &[Arc<harfrust::ShapePlan>]| plans.iter().rev().find(|p| key.matches(p)).cloned();
-        if let Some(plan) = kept(&self.plans.lock().unwrap_or_else(|e| e.into_inner())) {
-            return plan;
-        }
-        // Made without the lock held: other threads keep shaping with this face meanwhile.
-        let plan = Arc::new(harfrust::ShapePlan::new(shaper, direction, script, language, features));
-        let mut plans = self.plans.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(made) = kept(&plans) {
-            return made;
-        }
-        if plans.len() >= MAX_PLANS {
-            plans.remove(0);
-        }
-        plans.push(plan.clone());
-        plan
+        self.plans.get_or_create(shaper, self.instance.as_ref(), direction, script, language, features)
     }
     /// Tests: how many shaping plans the face holds.
     #[cfg(test)]
     pub(crate) fn plans_kept(&self) -> usize {
-        self.plans.lock().unwrap_or_else(|e| e.into_inner()).len()
+        self.plans.len()
     }
     /// The face's index in its font file (collections hold several).
     pub(crate) fn index(&self) -> u32 {
-        self.index
+        self.data.index()
     }
     /// Where in a variable font's design space the face's outlines and metrics are taken (the
     /// default location for a static face).
@@ -694,7 +666,7 @@ impl FontFace {
     }
     /// The face's index in its font file ([`Self::file_data`]; collections hold several).
     pub fn face_index(&self) -> u32 {
-        self.index
+        self.data.index()
     }
     /// The face's PostScript name, as PostScript files name fonts (`SourceSans3-Bold`): name ID 6;
     /// for a named instance of a variable font (whose name ID 6 is the default instance's), its
