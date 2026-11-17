@@ -1829,6 +1829,7 @@ antiAlias	Sharp	シャープ
 	Files	ファイル
 	Files of a PDF standard can't be password-protected.	PDF 規格のファイルにはパスワードを設定できません。
 	Files of this standard tag their colours with ICC profiles.	この規格のファイルでは、カラーに ICC プロファイルが付けられます。
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	この規格のファイルでは、カラーに ICC プロファイルが付けられます。ただし、出力インテントのプロファイルの CMYK カラーは DeviceCMYK として書き出されます。
 	Fill	塗り
 	Fill New Type Objects With Placeholder Text	新規テキストオブジェクトをダミーテキストで埋める
 	Start Lists From Typed Markers	入力した記号からリストを開始

@@ -3171,6 +3171,7 @@ antiAlias	Sharp	Ostré
 	Every option matches {base}.	Všechny možnosti odpovídají: {base}.
 	Files of a PDF standard can't be password-protected.	Soubory podle standardu PDF nelze chránit heslem.
 	Files of this standard tag their colours with ICC profiles.	Soubory tohoto standardu označují své barvy profily ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Soubory tohoto standardu označují své barvy profily ICC, kromě barev CMYK v profilu výstupního záměru, které se zapisují jako DeviceCMYK.
 	Flattener preset:	Přednastavení sloučení:
 	General › Thumbnails	Obecné › Miniatury
 	Grayscale images	Obrazy ve stupních šedi

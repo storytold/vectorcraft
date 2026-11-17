@@ -1193,6 +1193,7 @@ font-technology	Variable	Μεταβλητές
 	Files	Αρχεία
 	Files of a PDF standard can't be password-protected.	Τα αρχεία αυτού του προτύπου PDF δεν μπορούν να προστατεύονται με κωδικό.
 	Files of this standard tag their colours with ICC profiles.	Τα αρχεία αυτού του προτύπου χαρακτηρίζουν τα χρώματά τους με προφίλ ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Τα αρχεία αυτού του προτύπου χαρακτηρίζουν τα χρώματά τους με προφίλ ICC, εκτός από τα χρώματα CMYK στο προφίλ προορισμού εξόδου, τα οποία γράφονται ως DeviceCMYK.
 	Fill	Γέμισμα
 	Fill & Stroke	Γέμισμα και περίγραμμα
 	Fill (X), double-click for the Color Picker	Γέμισμα (X), διπλό κλικ για τον επιλογέα χρώματος

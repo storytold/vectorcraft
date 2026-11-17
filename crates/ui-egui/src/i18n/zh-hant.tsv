@@ -1229,6 +1229,7 @@ font-technology	Variable	可變
 	Files	檔案
 	Files of a PDF standard can't be password-protected.	PDF 標準的檔案無法設定密碼保護。
 	Files of this standard tag their colours with ICC profiles.	此標準的檔案會以 ICC 描述檔標記顏色。
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	此標準的檔案會以 ICC 描述檔標記顏色，但輸出目的描述檔中的 CMYK 顏色會寫為 DeviceCMYK。
 	Fill	填色
 	Fill & Stroke	填色與筆畫
 	Fill (X), double-click for the Color Picker	填色 (X)，按兩下開啟檢色器

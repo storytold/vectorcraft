@@ -1195,6 +1195,7 @@ antiAlias	Sharp	锐利
 	Files	文件
 	Files of a PDF standard can't be password-protected.	PDF 标准的文件无法设置密码保护。
 	Files of this standard tag their colours with ICC profiles.	此标准的文件会以 ICC 配置文件标记颜色。
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	此标准的文件会以 ICC 配置文件标记颜色，但输出意图配置文件中的 CMYK 颜色会写为 DeviceCMYK。
 	Fill	填色
 	Fill & Stroke	填色和描边
 	Fill (X), double-click for the Color Picker	填色 (X)，双击打开拾色器
