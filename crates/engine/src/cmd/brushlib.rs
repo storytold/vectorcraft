@@ -258,6 +258,15 @@ fn arrows() -> BrushLibrary {
         black(polygon(&[(24.0, -7.0), (0.0, 0.0), (24.0, 7.0), (18.0, 0.0)])),
     ]);
     let chevrons = group(vec![shaft(), head(), black(polygon(&[(53.0, -5.0), (66.0, 0.0), (53.0, 5.0), (56.0, 0.0)]))]);
+    let dashed = group(
+        (0..5)
+            .map(|i| {
+                let x = f64::from(i) * 16.0;
+                black(shapes::rectangle(Rect::new(x, -1.0, x + 10.0, 1.0)))
+            })
+            .chain(std::iter::once(head()))
+            .collect(),
+    );
     built(
         "Arrows",
         Document::new(100.0, 100.0),
@@ -266,6 +275,7 @@ fn arrows() -> BrushLibrary {
             arrow_art("Open Arrow", outline, 0.0),
             arrow_art("Double Arrow", double, 0.24),
             arrow_art("Chevron Arrow", chevrons, 0.0),
+            arrow_art("Dashed Arrow", dashed, 0.0),
         ],
     )
 }

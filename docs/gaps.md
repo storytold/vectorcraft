@@ -671,7 +671,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   [import](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/apply-and-edit-strokes/import-brushes-from-brush-libraries-or-other-files.html)):
   Window › Brush Libraries and the Brushes panel's Brush Libraries Menu open each library in a library panel of
   its own (eleven original libraries generated in code: Art Ribbons, Ink and Wash, Calligraphic Nibs, Bristle Brushes (one
-  bristle brush for each tip shape), Pattern Borders, Scatter Shapes, Game Trails, Energy Beams, Dry Media (grainy chalk, pencil, crayon and charcoal art brushes), Tech Circuit (Circuit Trace, Bus Lines and Terminal Nodes), and Arrows (Solid, Open, Double and Chevron Arrow); User Defined; Other Library… reads the brushes of any document VectorCraft opens); a
+  bristle brush for each tip shape), Pattern Borders, Scatter Shapes, Game Trails, Energy Beams, Dry Media (grainy chalk, pencil, crayon and charcoal art brushes), Tech Circuit (Circuit Trace, Bus Lines and Terminal Nodes), and Arrows (Solid, Open, Double, Chevron and Dashed Arrow); User Defined; Other Library… reads the brushes of any document VectorCraft opens); a
   click adds a
   brush to the document's Brushes with the patterns, symbols and other resources its art uses, as one undo
   step (applied to the selected paths in the same step), dragging one onto a path adds and applies it and

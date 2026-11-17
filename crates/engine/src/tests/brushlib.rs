@@ -148,9 +148,9 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
     let arrows = run(&mut s, "brush.library", json!({"library": "Arrows"}));
     assert_eq!(
         arrows["brushes"].as_array().unwrap().iter().map(|b| (b["name"].as_str().unwrap(), b["type"].as_str().unwrap())).collect::<Vec<_>>(),
-        [("Solid Arrow", "art"), ("Open Arrow", "art"), ("Double Arrow", "art"), ("Chevron Arrow", "art")]
+        [("Solid Arrow", "art"), ("Open Arrow", "art"), ("Double Arrow", "art"), ("Chevron Arrow", "art"), ("Dashed Arrow", "art")]
     );
-    assert_eq!((libs[10]["name"].as_str(), libs[10]["count"].as_u64()), (Some("Arrows"), Some(4)));
+    assert_eq!((libs[10]["name"].as_str(), libs[10]["count"].as_u64()), (Some("Arrows"), Some(5)));
     run(&mut s, "file.new", json!({"width": 200, "height": 200}));
     let id = run(&mut s, "shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 8}))["id"].as_u64().unwrap();
     let added = run(&mut s, "brush.addFromLibrary", json!({"library": "energy-beams", "name": "Laser Bolt", "apply": true, "ids": [id]}));
@@ -231,11 +231,11 @@ fn arrows_library_lists_renders_and_applies_original_brushes() {
     let mut s = session();
     let listed = run(&mut s, "brush.libraries", json!({}));
     let entry = listed["libraries"].as_array().unwrap().iter().find(|l| l["id"] == "arrows").unwrap();
-    assert_eq!((entry["name"].as_str(), entry["category"].as_str(), entry["count"].as_u64()), (Some("Arrows"), Some("builtIn"), Some(4)));
+    assert_eq!((entry["name"].as_str(), entry["category"].as_str(), entry["count"].as_u64()), (Some("Arrows"), Some("builtIn"), Some(5)));
     let (_, lib) = cmd::brushlib::library(&s, "Arrows").unwrap();
     assert_eq!(
         lib.brushes.iter().map(|b| (b.name.as_str(), b.kind.type_id())).collect::<Vec<_>>(),
-        [("Solid Arrow", "art"), ("Open Arrow", "art"), ("Double Arrow", "art"), ("Chevron Arrow", "art")]
+        [("Solid Arrow", "art"), ("Open Arrow", "art"), ("Double Arrow", "art"), ("Chevron Arrow", "art"), ("Dashed Arrow", "art")]
     );
     for b in &lib.brushes {
         for length in [2.0, 200.0] {
@@ -255,6 +255,30 @@ fn arrows_library_lists_renders_and_applies_original_brushes() {
     assert!(vectorcraft_brush::find(doc(&s), "Double Arrow").is_none());
     run(&mut s, "edit.redo", json!({}));
     assert_eq!(brush(&s, "Double Arrow"), lib.brushes[2]);
+}
+
+#[test]
+fn dashed_arrow_keeps_separate_dashes_and_survives_library_save() {
+    let mut s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "Arrows").unwrap();
+    let b = lib.brush("Dashed Arrow").unwrap();
+    let mut curve = line_to(40.0);
+    curve.curve_to((60.0, -40.0), (140.0, 40.0), (200.0, 0.0));
+    for path in [line_to(2.0), line_to(200.0), curve] {
+        let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &path, &black_stroke());
+        let pts = anchors(&pieces.iter().collect::<Vec<_>>());
+        assert!(!pts.is_empty() && pts.iter().all(|p| p.x.is_finite() && p.y.is_finite()));
+    }
+    let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(200.0), &black_stroke());
+    let children = pieces[0].children().unwrap();
+    assert_eq!(children.len(), 6, "five separate dashes and one head");
+    let bounds: Vec<_> = children.iter().map(|n| n.geometric_bounds().unwrap()).collect();
+    assert!(bounds.windows(2).all(|p| p[0].x1 < p[1].x0), "the dashes and head remain separated");
+    run(&mut s, "brush.addFromLibrary", json!({"library": "arrows", "name": "Dashed Arrow"}));
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": ["Dashed Arrow"]}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(vectorcraft_brush::find(&reopened, "Dashed Arrow").unwrap(), *b);
 }
 
 /// Original circuit art and repeat tiles survive adding, applying and saving a library.
