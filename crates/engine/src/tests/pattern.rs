@@ -266,6 +266,34 @@ fn cancel_new_pattern_forgets_group_swatch_and_outside_fills_and_strokes() {
     assert!(matches!(n.appearance.stroke_paint(), Paint::Solid { .. }), "the stroke stays");
 }
 
+/// The tile art can't be painted with the pattern being edited, directly or through another
+/// pattern: Done would store a pattern painting its own tile, which draws without end and is
+/// refused as too deep, leaving the mode stuck (#7095). Done then saves the tile as it was.
+#[test]
+fn the_tile_cant_be_painted_with_its_own_pattern() {
+    let mut s = session();
+    make_dots(&mut s);
+    let other = rect(&mut s, 100.0, 100.0, 10.0, 10.0);
+    s.execute("paint.setFill", &json!({"ids": [other.0], "swatch": "Dots"})).unwrap();
+    sel(&mut s, &[other]);
+    s.execute("object.pattern.make", &json!({"name": "Holds dots"})).unwrap();
+    s.execute("object.pattern.done", &json!({})).unwrap();
+    s.execute("object.pattern.edit", &json!({"name": "Dots"})).unwrap();
+    let layer = doc(&s).pattern_edit.as_ref().unwrap().layer;
+    let tile = doc(&s).node(layer).unwrap().children().unwrap()[0].id;
+    for swatch in ["Dots", "Holds dots"] {
+        let e = s.execute("paint.setFill", &json!({"ids": [tile.0], "swatch": swatch})).unwrap_err();
+        assert!(e.to_string().contains("can't paint its own tile"), "{swatch}: {e}");
+    }
+    s.execute("paint.setFill", &json!({"ids": [tile.0], "color": "#0000ff"})).unwrap();
+    s.execute("object.pattern.done", &json!({})).unwrap();
+    let d = doc(&s);
+    assert!(d.pattern_edit.is_none());
+    let art = &d.pattern("Dots").unwrap().art;
+    assert_eq!(art.len(), 1);
+    assert!(matches!(art[0].appearance.fill_paint(), Paint::Solid { .. }), "the tile keeps its color fill");
+}
+
 /// Save a Copy keeps the copy as its own pattern when the new pattern is canceled, and the copy's
 /// tile art loses its paints of the canceled pattern.
 #[test]
@@ -276,7 +304,9 @@ fn cancel_new_pattern_forgets_its_paints_in_a_saved_copy() {
     s.execute("object.pattern.make", &json!({"name": "Tiles"})).unwrap();
     let layer = doc(&s).pattern_edit.as_ref().unwrap().layer;
     let tile = doc(&s).node(layer).unwrap().children().unwrap()[0].id;
-    s.execute("paint.setFill", &json!({"ids": [tile.0], "swatch": "Tiles"})).unwrap();
+    // (Painting the tile with its own pattern is refused as an edit, so it is set directly: the
+    // copy's art may still hold such a paint, as a file's may.)
+    doc_mut(&mut s).node_mut(tile).unwrap().appearance.set_fill(pattern_paint("Tiles"));
     assert_eq!(s.execute("object.pattern.saveCopy", &json!({})).unwrap()["name"], "Tiles copy");
     s.execute("object.pattern.cancel", &json!({})).unwrap();
     let d = doc(&s);
