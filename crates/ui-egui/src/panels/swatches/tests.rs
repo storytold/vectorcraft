@@ -518,10 +518,10 @@ fn list_view_rows_take_double_clicks_and_folder_clicks_select_the_group() {
     assert_eq!(describe(&Paint::solid(Color::gray(0.5)), true, true), "Spot Color, Grayscale");
 }
 
-/// A double-click on a pattern swatch, its clicks on frames of their own as a pointer makes them:
-/// the first click paints the selected art with the pattern, and the second opens pattern editing
-/// on that pattern without painting the tile art, which editing selects, with the pattern itself
-/// (#7095).
+/// The test sends each click on its own frame, as a real pointer does. The first click paints the
+/// selected art with the pattern. The second click opens pattern editing on that pattern, which
+/// selects the tile art. Neither the second click nor quick clicks after it paint the tile art
+/// with the pattern itself (#7095).
 #[test]
 fn double_clicking_a_pattern_edits_it_without_painting_its_tile() {
     let mut app = app();
@@ -530,6 +530,9 @@ fn double_clicking_a_pattern_edits_it_without_painting_its_tile() {
     app.run("object.pattern.done", json!({})).unwrap();
     let art = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
     for view in [View::SmallThumb, View::SmallList] {
+        // A solid fill each time, so the first click must paint the art in this view too.
+        app.run("paint.setFill", json!({"ids": [art], "color": "#2050a0"})).unwrap();
+        app.run("select.set", json!({"ids": [art]})).unwrap();
         app.ui.swatches_view = view;
         let ctx = context();
         // Only the pattern shows, so its row is on screen in the list view too.
@@ -538,19 +541,23 @@ fn double_clicking_a_pattern_edits_it_without_painting_its_tile() {
         frame(&mut app, &ctx, vec![], 0.0, show);
         let at = tile_center(&ctx, "Dots");
         let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
-        for (i, e) in [Event::PointerMoved(at), button(true), button(false), button(true), button(false)].into_iter().enumerate() {
+        // Four quick clicks: a double-click, then two more that count as triple clicks.
+        let mut events = vec![Event::PointerMoved(at)];
+        for _ in 0..4 {
+            events.extend([button(true), button(false)]);
+        }
+        for (i, e) in events.into_iter().enumerate() {
             frame(&mut app, &ctx, vec![e], 1.0 + i as f64 * 0.05, show);
         }
         let d = &app.session.doc().unwrap().doc;
         let pe = d.pattern_edit.as_ref().unwrap_or_else(|| panic!("{view:?}: the double-click opens pattern editing"));
         assert_eq!(pe.pattern, "Dots");
         let fill = d.node(vectorcraft_doc::NodeId(art)).unwrap().appearance.fill_paint();
-        assert!(matches!(fill, Paint::Pattern { pattern, .. } if pattern == "Dots"), "the first click paints the art");
+        assert!(matches!(fill, Paint::Pattern { pattern, .. } if pattern == "Dots"), "{view:?}: the first click paints the art");
         for n in d.node(pe.layer).unwrap().children().unwrap() {
             assert!(!matches!(n.appearance.fill_paint(), Paint::Pattern { .. }), "{view:?}: the tile keeps its own fill: {}", app.ui.status);
         }
         app.run("object.pattern.done", json!({})).unwrap();
-        app.run("select.set", json!({"ids": [art]})).unwrap();
     }
 }
 
