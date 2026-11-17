@@ -128,8 +128,8 @@ fn the_notched_arrow_is_slender_with_concave_sides_and_a_v_notch() {
         assert_eq!(h.outline.winding(at(2.1, side * 0.6)), 0, "side {side}");
         assert_ne!(h.outline.winding(at(2.1, side * 0.45)), 0, "side {side}");
         // Slender: 2.4 units across at the barbs, not the 4 of the other arrows.
-        assert_eq!(h.outline.winding(at(3.9, side * 1.3)), 0, "side {side}");
-        assert_ne!(h.outline.winding(at(3.9, side * 1.0)), 0, "side {side}");
+        assert_eq!(h.outline.winding(at(3.9, side * 1.2)), 0, "side {side}");
+        assert_ne!(h.outline.winding(at(3.9, side * 1.1)), 0, "side {side}");
     }
     // Open in the notch, solid in front of it.
     assert_eq!(h.outline.winding(at(3.5, 0.0)), 0);
