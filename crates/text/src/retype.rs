@@ -106,6 +106,10 @@ impl RetypeIndex {
             let mut gids: Vec<(u32, char)> = by_gid.into_iter().collect();
             gids.sort_unstable();
             for (gid, ch) in gids {
+                // The budget holds inside a face too: no glyph is loaded past it.
+                if entries.len() >= MAX_GLYPHS {
+                    break;
+                }
                 let outline = db.outline(face, gid);
                 if let Some(sig) = signature(&outline) {
                     entries.push(Entry { face: fi, gid, ch, sig });

@@ -118,3 +118,51 @@ fn craft_fonts_glyphs_retype_too() {
     assert_eq!(r["texts"], json!(["漢字です"]), "{r}");
     assert_eq!(r["fonts"][0]["family"], json!(f.family));
 }
+
+fn children_of(s: &Session, g: u64) -> Vec<u64> {
+    s.doc().unwrap().doc.node(NodeId(g)).unwrap().children().unwrap().iter().map(|c| c.id.0).collect()
+}
+
+#[test]
+fn a_shape_between_glyphs_ends_the_line_so_paint_order_holds() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "AB", "size": 40}));
+    let rect = s.execute("shape.rectangle", &json!({"x": 30, "y": 60, "width": 80, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    // The rectangle goes between A and B, inside the outlines' group.
+    s.edit("test", |d, _| {
+        let n = d.node(NodeId(rect)).unwrap().clone();
+        d.remove(NodeId(rect))?;
+        d.insert(Some(NodeId(g)), 1, n)?;
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["A", "B"]), "{r}");
+    assert_eq!(r["unmatched"], json!([rect]));
+    let ids: Vec<u64> = r["ids"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    assert_eq!(children_of(&s, g), vec![ids[0], rect, ids[1]], "A under the rectangle, B over it");
+}
+
+#[test]
+fn glyphs_of_different_groups_and_transparency_stay_apart() {
+    let mut s = session();
+    let a = outlined(&mut s, json!({"x": 40, "y": 100, "text": "ab", "size": 20}));
+    let b = outlined(&mut s, json!({"x": 120, "y": 100, "text": "cd", "size": 20}));
+    let first_d = children_of(&s, b)[1];
+    s.edit("test", |d, _| {
+        d.node_mut(NodeId(b)).unwrap().opacity = 0.5;
+        d.node_mut(NodeId(first_d)).unwrap().opacity = 0.25;
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["ab", "c", "d"]), "same baseline, other group; d has its own opacity: {r}");
+    let ids: Vec<u64> = r["ids"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    let d = &s.doc().unwrap().doc;
+    assert!(d.node(NodeId(a)).is_none(), "a plain group gives way to its type");
+    assert_eq!(d.node(NodeId(b)).unwrap().opacity, 0.5, "the half-transparent group stays");
+    assert_eq!(children_of(&s, b), vec![ids[1], ids[2]]);
+    assert_eq!(s.doc().unwrap().doc.node(NodeId(ids[2])).unwrap().opacity, 0.25, "the glyph's own opacity carries over");
+}

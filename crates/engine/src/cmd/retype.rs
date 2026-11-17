@@ -47,23 +47,28 @@ pub fn specs() -> Vec<CommandSpec> {
 /// A shape to match: a path or compound path, in document space.
 struct Piece {
     id: NodeId,
+    /// The group holding it (`None` for a selected shape at the top): glyphs of different
+    /// groups, which may composite differently, never share a line.
+    parent: Option<NodeId>,
     path: BezPath,
     appearance: Appearance,
+    /// The shape's own transparency, which the new type takes.
+    opacity: f32,
+    blend: vectorcraft_color::BlendMode,
 }
 
-fn collect(n: &Node, depth: usize, out: &mut Vec<Piece>) {
+fn collect(n: &Node, parent: Option<NodeId>, depth: usize, out: &mut Vec<Piece>) {
     if out.len() >= MAX_PIECES || depth > MAX_DEPTH {
         return;
     }
+    let piece = |path: BezPath| Piece { id: n.id, parent, path, appearance: (*n.appearance).clone(), opacity: n.opacity, blend: n.blend };
     match &n.kind {
         NodeKind::Group { children, clip: false } => {
             for c in children {
-                collect(c, depth + 1, out);
+                collect(c, Some(n.id), depth + 1, out);
             }
         }
-        NodeKind::Path { path, clipping: false, guide: false, .. } => {
-            out.push(Piece { id: n.id, path: path.to_bezpath(), appearance: (*n.appearance).clone() })
-        }
+        NodeKind::Path { path, clipping: false, guide: false, .. } => out.push(piece(path.to_bezpath())),
         NodeKind::Compound { children, .. } => {
             let mut path = BezPath::new();
             for c in children {
@@ -71,7 +76,7 @@ fn collect(n: &Node, depth: usize, out: &mut Vec<Piece>) {
                     path.extend(p.to_bezpath());
                 }
             }
-            out.push(Piece { id: n.id, path, appearance: (*n.appearance).clone() });
+            out.push(piece(path));
         }
         _ => {}
     }
@@ -111,6 +116,9 @@ struct Line {
     origin: Point,
     end: Point,
     appearance: Appearance,
+    parent: Option<NodeId>,
+    opacity: f32,
+    blend: vectorcraft_color::BlendMode,
 }
 
 impl Line {
@@ -118,13 +126,18 @@ impl Line {
         Vec2::new(self.angle.cos(), self.angle.sin())
     }
 
-    /// Does glyph `m` continue this line (same font, size and turn, on its baseline, after its end)?
-    fn continues(&self, m: &GlyphMatch) -> bool {
+    /// Does glyph `m` of shape `pc` continue this line (same group, paint and transparency, same
+    /// font, size and turn, on its baseline, after its end)?
+    fn continues(&self, pc: &Piece, m: &GlyphMatch) -> bool {
         let size = self.scale * self.face.units_per_em();
         let d = m.origin - self.origin;
         let dir = self.dir();
         let across = d.cross(dir).abs();
-        m.face.id() == self.face.id()
+        pc.parent == self.parent
+            && pc.appearance == self.appearance
+            && pc.opacity == self.opacity
+            && pc.blend == self.blend
+            && m.face.id() == self.face.id()
             && (m.scale - self.scale).abs() <= self.scale * 0.005
             && (m.angle - self.angle).abs() < 1e-3
             && across < size * 0.05
@@ -150,17 +163,20 @@ fn space_advance(face: &vectorcraft_text::FontFace) -> f64 {
     face.mapped_chars().iter().find(|(c, _)| *c == ' ').map(|(_, g)| face.advance(*g)).unwrap_or(0.0)
 }
 
-fn new_line(id: NodeId, m: &GlyphMatch, appearance: &Appearance) -> Line {
+fn new_line(pc: &Piece, m: &GlyphMatch) -> Line {
     let dir = Vec2::new(m.angle.cos(), m.angle.sin());
     Line {
-        pieces: vec![id],
+        pieces: vec![pc.id],
         text: m.ch.to_string(),
         face: m.face.clone(),
         scale: m.scale,
         angle: m.angle,
         origin: m.origin,
         end: m.origin + dir * (m.face.advance(m.gid) * m.scale),
-        appearance: appearance.clone(),
+        appearance: pc.appearance.clone(),
+        parent: pc.parent,
+        opacity: pc.opacity,
+        blend: pc.blend,
     }
 }
 
@@ -180,7 +196,7 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
         let mut pieces = vec![];
         for r in &roots {
             if let Some(n) = d.node(*r) {
-                collect(n, 0, &mut pieces);
+                collect(n, None, 0, &mut pieces);
             }
         }
         if pieces.is_empty() {
@@ -200,17 +216,21 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
         let rank = |face: u32| votes.iter().find(|(f, _)| *f == face).map_or(0, |v| v.1);
         let mut lines: Vec<Line> = vec![];
         let mut unmatched = vec![];
+        // An unmatched shape between glyphs ends the line: the type after it is painted after it.
+        let mut open = false;
         for (pc, ms) in pieces.iter().zip(&found) {
             // Earlier matches win ties: they are the closer fits.
             let best = ms.iter().enumerate().max_by_key(|(i, m)| (rank(m.face.id()), std::cmp::Reverse(*i))).map(|(_, m)| m);
             let Some(m) = best else {
                 unmatched.push(pc.id);
+                open = false;
                 continue;
             };
             match lines.last_mut() {
-                Some(l) if l.continues(m) => l.push(pc.id, m),
-                _ => lines.push(new_line(pc.id, m, &pc.appearance)),
+                Some(l) if open && l.continues(pc, m) => l.push(pc.id, m),
+                _ => lines.push(new_line(pc, m)),
             }
+            open = true;
         }
         (lines, unmatched)
     };
@@ -227,6 +247,8 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
             let style = CharStyle {
                 font_family: l.face.family.clone(),
                 font_style: l.face.style.clone(),
+                // The version that matched, when two of the family and style are loaded.
+                font_version: (!l.face.version.is_empty()).then(|| l.face.version.clone()),
                 size: l.scale * l.face.units_per_em(),
                 fill: l.appearance.fill_paint(),
                 stroke: l.appearance.stroke_paint(),
@@ -241,7 +263,11 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
             t.system_layout = system_layout;
             super::typecmd::refresh_bounds(&mut t);
             let id = d.alloc_id();
-            d.insert(par, idx, Node::new(id, NodeKind::Text(Box::new(t))))?;
+            let mut node = Node::new(id, NodeKind::Text(Box::new(t)));
+            // The glyphs' own transparency (the group's, kept, still applies over it).
+            node.opacity = l.opacity;
+            node.blend = l.blend;
+            d.insert(par, idx, node)?;
             for pc in &l.pieces {
                 if let Some((Some(parent), _, _)) = d.position(*pc) {
                     emptied.push(parent);
