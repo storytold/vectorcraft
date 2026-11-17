@@ -1707,11 +1707,18 @@ impl<'a> Scene<'a> {
 
     /// Image `blob` as RGBA pixels; `None` (with a warning) when it can't be written.
     fn decode_image(&mut self, blob: Option<&ImageBlob>) -> Option<image::RgbaImage> {
-        let Some(img) = blob.and_then(|blob| image::load_from_memory(&blob.bytes).ok()) else {
+        let too_large = |w: u32, h: u32| w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_IMAGE_PIXELS;
+        if blob.is_some_and(|b| vectorcraft_doc::header_size(&b.bytes).is_some_and(|(w, h)| too_large(w, h))) {
+            self.warn(LARGE_IMAGE);
+            return None;
+        }
+        let Some(img) = blob.and_then(|blob| {
+            vectorcraft_doc::decode::decode_within(&blob.bytes, MAX_IMAGE_PIXELS.saturating_mul(8)).ok().flatten().map(|(img, _)| img)
+        }) else {
             self.warn(UNDECODED);
             return None;
         };
-        if u64::from(img.width()) * u64::from(img.height()) > MAX_IMAGE_PIXELS {
+        if too_large(img.width(), img.height()) {
             self.warn(LARGE_IMAGE);
             return None;
         }

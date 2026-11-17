@@ -94,8 +94,10 @@ fn the_xmp_packet_gives_file_info() {
         FileInfo {
             title: Some("Poster".into()),
             author: Some("Ada Lovelace, Charles Babbage".into()),
+            author_title: None,
             description: Some("A poster\nfor the fair".into()),
             keywords: Some(vec!["fair".into(), "print".into()]),
+            rating: None,
             copyright_notice: Some("(c) 2026 Ada".into()),
             copyright_url: Some("https://example.com/rights".into()),
             copyrighted: Some(false),
@@ -269,4 +271,49 @@ fn a_written_pdf_gives_its_copyright_back() {
     (d.metadata.author, d.metadata.copyright_notice) = ("Ada".into(), "(c)\u{1} Ada\u{FFFF}".into());
     let f = file_info(&export(&d, &PdfOptions::uncompressed()).unwrap(), None).unwrap();
     assert_eq!((f.author.as_deref(), f.copyright_notice.as_deref()), (Some("Ada"), Some("(c) Ada")));
+}
+
+#[test]
+fn a_metadata_template_gives_its_file_info_back() {
+    let f = FileInfo {
+        title: Some("Fair poster".into()),
+        author: Some("Ada & <Lovelace>".into()),
+        author_title: Some("Designer, \"lead\"".into()),
+        description: Some("A poster\r\nfor the fair".into()),
+        keywords: Some(vec!["fair".into(), "print, large".into()]),
+        rating: Some(4),
+        copyright_notice: Some("(c) 2026 Ada".into()),
+        copyright_url: Some("https://example.com/rights?a=1&b=2".into()),
+        copyrighted: Some(true),
+        ..Default::default()
+    };
+    let xmp = metadata_template(&f);
+    assert!(xmp.starts_with("<?xpacket begin=") && xmp.trim_end().ends_with("<?xpacket end=\"w\"?>"), "{xmp}");
+    assert_eq!(read_template(xmp.as_bytes()), Some(f));
+    // A public-domain status writes Marked False; fields without a value and the dates are left out.
+    let f = FileInfo { copyrighted: Some(false), author: Some("  ".into()), created: Some(CREATED), ..Default::default() };
+    let xmp = metadata_template(&f);
+    assert!(!xmp.contains("dc:creator") && !xmp.contains("CreateDate") && xmp.contains("<xmpRights:Marked>False</xmpRights:Marked>"), "{xmp}");
+    assert_eq!(read_template(xmp.as_bytes()), Some(FileInfo { copyrighted: Some(false), ..Default::default() }));
+    // The template is the PDF packet's format: a PDF whose metadata stream holds one reads the same.
+    let f = FileInfo { author: Some("Ada".into()), author_title: Some("Editor".into()), rating: Some(2), ..Default::default() };
+    let read = file_info(&pdf(None, Some(&metadata_template(&f))), None).unwrap();
+    assert_eq!((read.author, read.author_title, read.rating), (f.author, f.author_title, f.rating));
+}
+
+#[test]
+fn a_metadata_template_reads_ratings_and_refuses_what_is_not_xmp() {
+    let rated = |r: &str| read_template(packet(&description(&format!("xmp:Rating=\"{r}\""), "")).as_bytes()).unwrap().rating;
+    assert_eq!([rated("0"), rated("5"), rated("3.0"), rated(" 2 ")], [Some(0), Some(5), Some(3), Some(2)]);
+    // A rejected file's -1, fractions, ratings past 5 and words are left out.
+    assert_eq!([rated("-1"), rated("2.5"), rated("6"), rated("high")], [None; 4]);
+    // XML without `rdf:RDF`, text and a packet that isn't well-formed are not templates.
+    assert_eq!(read_template(b"<root><title>Poster</title></root>"), None);
+    assert_eq!(read_template(b"Ada Lovelace"), None);
+    assert_eq!(read_template(packet("<rdf:Description>").as_bytes()), None);
+    // An XMP packet with no File Info is a template with no fields.
+    assert_eq!(read_template(packet("").as_bytes()), Some(FileInfo::default()));
+    // Longer than the longest template read, it is refused without being parsed.
+    let long = packet(&description("", &" ".repeat(MAX_TEMPLATE_BYTES)));
+    assert_eq!(read_template(long.as_bytes()), None);
 }

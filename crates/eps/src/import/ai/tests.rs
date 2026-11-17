@@ -2676,7 +2676,27 @@ fn pixels(doc: &Document) -> (image::RgbaImage, kurbo::Affine) {
     let a = art(doc);
     let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
     let blob = doc.images.get(&im.key).unwrap();
-    (image::load_from_memory(&blob.bytes).unwrap().to_rgba8(), im.xf)
+    (
+        craft_image_codecs::decode(&blob.bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8(),
+        im.xf,
+    )
 }
 
 /// A 1-bit image's row holds each pixel's channels in turn, one bit each, padded to whole bytes;
@@ -3073,7 +3093,24 @@ fn cmyk_images_keep_their_ink_amounts() {
     assert!(m.clip);
     let NodeKind::Image(mi) = &m.art.kind else { panic!("{:?}", m.art.kind) };
     assert_eq!((mi.width, mi.height, mi.xf), (3, 1, im.xf), "the mask covers the image");
-    let gray = image::load_from_memory(&doc.images[&mi.key].bytes).unwrap().to_luma8();
+    let gray = craft_image_codecs::decode(&doc.images[&mi.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_luma8();
     assert_eq!(gray.into_raw(), [255, 128, 0]);
     // An alpha channel that hides nothing adds no mask.
     let data = [&inks[..], &[255; 3]].concat();
@@ -5215,6 +5252,62 @@ fn an_image_in_a_symbols_art_is_placed_from_the_canvas() {
 }
 
 #[test]
+fn a_mesh_in_a_symbols_art_is_placed_from_the_canvas() {
+    // The template box's center is (100.5, 50.5): art space's origin is at canvas (8091, 8242). A
+    // mesh's corners in a symbol's art are in the canvas's space turned y up about that point, as an
+    // image's matrix there is: (-8096, 8244.5) is (-5, -2.5) in the symbol's art.
+    let corners: String = [(-8096.0, 8244.5), (-8096.0, 8239.5), (-8086.0, 8239.5), (-8086.0, 8244.5)]
+        .iter()
+        .map(|(x, y)| format!("%_[0.5 1 {x} {y} {x} {y} 1 {x} {y} 1] /N X#\n"))
+        .collect();
+    let mesh = format!(
+        "/Mesh X!\n%_2 /Version X#\n%_/Cartesian /Type X#\n%_[1 1] /Size X#\n%_/Data X#\n%_[0 0] /P X#\n%_/DeviceGray /CS X#\n{corners}%_/E X#\n/End X!\n"
+    );
+    let doc = read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&symbol("Patch", &mesh, 5)), layer(""))).doc;
+    assert_eq!(doc.symbols.len(), 1);
+    let mut found = vec![];
+    let mut stack = vec![doc.symbols[0].art.clone()];
+    while let Some(n) = stack.pop() {
+        match &n.kind {
+            NodeKind::Mesh(m) => found.push(m.points.iter().map(|p| p.p).collect::<Vec<_>>()),
+            _ => stack.extend(n.children().into_iter().flatten().cloned()),
+        }
+    }
+    assert_eq!(found.len(), 1, "{:?}", doc.symbols[0].art);
+    let want = [Point::new(-5.0, -2.5), Point::new(5.0, -2.5), Point::new(-5.0, 2.5), Point::new(5.0, 2.5)];
+    assert!(want.iter().all(|w| found[0].iter().any(|p| (*p - *w).hypot() < 1e-9)), "{:?}", found[0]);
+    // Without a template box the mesh can't be placed, as an image there can't: the symbol isn't read
+    // whole and its instance comes in as the page draws it.
+    let group = format!("0 Ae\nu\n{}{RED}{}f\nU\n", instance("Patch", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]), rect_path(10.0, 0.0, 14.0, 4.0));
+    let r = read_ok(&(symbols(&symbol("Patch", &mesh, 5)) + &layer(&group)));
+    assert!(r.doc.symbols.is_empty(), "{:?}", r.doc.symbols.iter().map(|s| &s.name).collect::<Vec<_>>());
+    assert!(!r.unread.is_empty(), "{:?}", r.warnings);
+}
+
+#[test]
+fn an_envelope_in_a_symbols_art_is_read_from_the_canvas() {
+    // An envelope's grid in a symbol's art is read in the space a gradient mesh's corners are read
+    // in there. A grid and contents written in the symbol's own space, as earlier VectorCraft builds
+    // wrote them, don't meet there: the envelope opens as the art it draws.
+    let drawn = format!("{RED}{}f\n", rect_path(30.0, 10.0, 170.0, 90.0));
+    let env = envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &drawn);
+    let doc = read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&symbol("Bent", &env, 5)), layer(""))).doc;
+    assert_eq!(doc.symbols.len(), 1);
+    let mut envelopes = 0;
+    doc.symbols[0].art.walk(&mut |n| envelopes += usize::from(matches!(n.kind, NodeKind::Envelope { .. })));
+    assert_eq!(envelopes, 0, "{:?}", doc.symbols[0].art);
+    let mut paths = 0;
+    doc.symbols[0].art.walk(&mut |n| paths += usize::from(matches!(n.kind, NodeKind::Path { .. })));
+    assert!(paths > 0, "{:?}", doc.symbols[0].art);
+    // Without a template box the grid can't be placed, as a gradient mesh there can't: the symbol
+    // isn't read whole and its instance comes in as the page draws it.
+    let group = format!("0 Ae\nu\n{}{RED}{}f\nU\n", instance("Bent", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]), rect_path(10.0, 0.0, 14.0, 4.0));
+    let r = read_ok(&(symbols(&symbol("Bent", &env, 5)) + &layer(&group)));
+    assert!(r.doc.symbols.is_empty(), "{:?}", r.doc.symbols.iter().map(|s| &s.name).collect::<Vec<_>>());
+    assert!(!r.unread.is_empty(), "{:?}", r.warnings);
+}
+
+#[test]
 fn an_instance_keeps_its_hide_lock_transparency_and_clip() {
     let m = [1.0, 0.0, 0.0, -1.0, 20.0, 50.0];
     let art_ = format!(
@@ -6425,6 +6518,30 @@ fn a_brushs_opacity_mask_art_takes_ids_of_the_document() {
     assert_eq!(unique.len(), all.len(), "{all:?}");
 }
 
+/// An Art brush's art is turned over with the art of its opacity mask, whether the mask moves with
+/// its object or not: the mask's art stays over the part of the object it is over in the section.
+#[test]
+fn an_art_brushs_opacity_mask_art_turns_over_with_its_object() {
+    let mut read = vec![];
+    for linked in [true, false] {
+        let mask_art: String = format!("1 g\n{}f\n", rect_path(0.0, 0.0, 40.0, 3.0)).lines().map(|l| format!("%_{l}\n")).collect();
+        let options = format!("%_1 /Bool (Clipping) ,\n%_{} /Bool (Linked) ,\n", u8::from(linked));
+        let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n{options}%_; (AI9_Mask) ,\n%_;\n");
+        let section = format!("%AI8_BeginBrushPattern\n(Ribbon art)\n0 A\n0 g\n{}f\n{mask}%AI8_EndBrushPattern\n", rect_path(0.0, 0.0, 40.0, 8.0));
+        let shape = format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0));
+        let r = read_ok(&format!("{section}{}{}", plugin_object(ART_BRUSH, "Ribbon", RIBBON), layer(&shape)));
+        let lib = vectorcraft_brush::library(&r.doc);
+        let vectorcraft_brush::BrushKind::Art(brush) = brush_named(&lib, "Ribbon") else { panic!("art: {:?}", r.warnings) };
+        let m = brush.art.extras().mask.as_deref().unwrap_or_else(|| panic!("the mask is read: {:#?}", brush.art));
+        assert_eq!(m.linked, linked);
+        let (object, over) = (brush.art.geometric_bounds().unwrap(), m.art.geometric_bounds().unwrap());
+        assert!((object.height() - 8.0).abs() < 1e-6 && (over.height() - 3.0).abs() < 1e-6, "linked {linked}: {over:?} over {object:?}");
+        assert!(over.y0 > object.y0 - 1e-6 && over.y1 < object.y1 + 1e-6, "linked {linked}: {over:?} over {object:?}");
+        read.push((object, over));
+    }
+    assert_eq!(read[0], read[1], "a mask is in the same place whether it moves with its object or not");
+}
+
 /// An art styles section inside a symbol's, a pattern's or a brush's art is skipped: the file's own
 /// art styles still style the layers' objects read after the definition.
 #[test]
@@ -7426,6 +7543,92 @@ fn twist_is_read_on_straight_paths_and_compound_paths_up_to_half_a_turn() {
         ("a square twisted two turns", read(720.0, &square)),
         ("a square twisted ten turns", read(3600.0, &square)),
         ("a straight compound path twisted a full turn", read(360.0, &frame)),
+    ] {
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert!(a[0].appearance.effects.is_empty(), "{what}: the drawn look: {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+    }
+}
+
+#[test]
+fn transform_and_free_distort_keep_the_drawn_look_where_a_guide_reaches_past_the_rest_of_the_art() {
+    // GUARDS: a compound path or group whose guides reach past the rest of its art was read with a
+    // live Transform that scales, turns or reflects (or, on a group, a live Free Distort) measured from
+    // bounds that take in those guides. Such an object keeps its drawn look.
+    let hide = |s: String| s.replace('\n', "\n%_");
+    // A compound path of a square and `rest`, under its drawn look.
+    let compound = |rest: &str| {
+        format!(
+            "0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{}0 BB\n1 (Bent) XW\n",
+            rect_path(16.0, 16.0, 64.0, 54.0),
+            hide(format!("*u\n{}f\n{rest}*U\n", rect_path(20.0, 20.0, 60.0, 50.0)))
+        )
+    };
+    // A group of a red square and `rest`, under its drawn look.
+    let group = |rest: &str| {
+        format!(
+            "0 Ae\nu\n{RED}{}f\nU\n%_0 Ae\n%_u\n%_{}U\n1 (Bent) XW\n",
+            rect_path(16.0, 16.0, 64.0, 54.0),
+            hide(format!("{RED}{}f\n{rest}", rect_path(20.0, 20.0, 60.0, 50.0)))
+        )
+    };
+    let guide = |from: (f64, f64), to: (f64, f64)| format!("{} {} m\n{} {} L\n(N) *\n", from.0, from.1, to.0, to.1);
+    let inside = guide((25.0, 25.0), (35.0, 35.0));
+    let past = guide((30.0, 30.0), (70.0, 40.0));
+    let nested = format!("0 Ae\nu\n{past}U\n");
+    let transform = |keys: &str| format!("{keys}0 /Bool (transformPatterns) ,\n");
+    let scale = transform("0.5 /Real (scaleH_Factor) ,\n0.5 /Real (scaleV_Factor) ,\n0 /Bool (scaleLines) ,\n");
+    let turn = transform("0.5 /Real (rotate_Radians) ,\n");
+    let reflect = transform("1 /Bool (reflectX) ,\n");
+    let moved = transform("5 /Real (moveH_Pts) ,\n");
+    let scale_in_place = transform("0.5 /Real (scaleH_Factor) ,\n0 /Bool (scaleLines) ,\n0 /Bool (transformObjects) ,\n");
+    // Transform Objects off and Transform Patterns on: only a pattern moves, and a solid fill has none.
+    let scale_patterns = "0.5 /Real (scaleH_Factor) ,\n0 /Bool (scaleLines) ,\n0 /Bool (transformObjects) ,\n1 /Bool (transformPatterns) ,\n";
+    let slanted = free_distort_keys([[25.0, 50.0], [65.0, 50.0], [20.0, 20.0], [60.0, 20.0]]);
+    let read = |name: &str, keys: &str, paint, art_: &str| read_ok(&format!("{}{}", distort_styles(name, keys, paint), layer(art_)));
+    let tr = "Adobe Transform";
+    let fd = "Adobe Free Distort";
+    for (what, r, id) in [
+        ("a compound path scaled, its guide inside", read(tr, &scale, BLUE_FILL, &compound(&inside)), "distort.transform"),
+        ("a compound path moved, its guide past", read(tr, &moved, BLUE_FILL, &compound(&past)), "distort.transform"),
+        ("a compound path distorted, its guide past", read(fd, &slanted, BLUE_FILL, &compound(&past)), "distort.freeDistort"),
+        ("a group scaled, its guide inside", read(tr, &scale, None, &group(&inside)), "distort.transform"),
+        ("a group moved, its guide past", read(tr, &moved, None, &group(&past)), "distort.transform"),
+        ("a group scaled with Transform Objects off, its guide past", read(tr, &scale_in_place, None, &group(&past)), "distort.transform"),
+        (
+            "a compound path scaled with Transform Objects off and Transform Patterns on, its guide past",
+            read(tr, scale_patterns, BLUE_FILL, &compound(&past)),
+            "distort.transform",
+        ),
+        ("a group distorted, its guide inside", read(fd, &slanted, None, &group(&inside)), "distort.freeDistort"),
+        ("a group distorted with no corner moved, its guide past", read(fd, "", None, &group(&past)), "distort.freeDistort"),
+        // A hidden member is measured too, and this one takes in the guide.
+        (
+            "a group scaled, its guide past the square and inside a hidden member",
+            read(tr, &scale, None, &group(&format!("1 Xw\n{RED}{}f\n0 Xw\n{past}", rect_path(10.0, 10.0, 80.0, 60.0)))),
+            "distort.transform",
+        ),
+    ] {
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert!(a[0].children().map_or(0, |c| c.len()) >= 2, "{what}: the object, not its look: {a:#?}");
+        let [e] = a[0].appearance.effects.as_slice() else { panic!("{what}: {:?}", a[0].appearance) };
+        assert_eq!(e.id, id, "{what}");
+    }
+    for (what, r) in [
+        ("a compound path scaled, its guide past", read(tr, &scale, BLUE_FILL, &compound(&past))),
+        ("a compound path turned, its guide past", read(tr, &turn, BLUE_FILL, &compound(&past))),
+        ("a compound path reflected, its guide past", read(tr, &reflect, BLUE_FILL, &compound(&past))),
+        ("a group scaled, its guide past", read(tr, &scale, None, &group(&past))),
+        ("a group turned, its guide past", read(tr, &turn, None, &group(&past))),
+        ("a group distorted, its guide past", read(fd, &slanted, None, &group(&past))),
+        ("a group scaled, its guide past in a group in it", read(tr, &scale, None, &group(&nested))),
+        (
+            "a group scaled, its guide past in a compound path in it",
+            read(tr, &scale, None, &group(&format!("*u\n{RED}{}f\n{past}*U\n", rect_path(25.0, 25.0, 35.0, 35.0)))),
+        ),
     ] {
         let a = art(&r.doc);
         assert_eq!(a.len(), 1, "{what}: {a:#?}");
@@ -9317,8 +9520,10 @@ fn a_blend_comes_in_as_a_live_blend() {
 }
 
 /// A blend whose spine was never edited has no spine written, only its keys: its spine is the
-/// straight line between the keys' centres, in the record's order (here the left key, named `B`,
-/// first), and the blend comes in live.
+/// straight line between the keys' centers, in the record's order, and the blend comes in live.
+/// With the record naming the keys in their order (here the left key, named `B`, first) the blend
+/// has no spine of its own, which runs the same way; in the other order its spine is that line,
+/// from the right key to the left one.
 #[test]
 fn a_blend_with_no_spine_written_runs_straight_between_its_keys() {
     let spine_part = format!("%_N\n{}", blend_part("S", None));
@@ -9328,12 +9533,20 @@ fn a_blend_with_no_spine_written_runs_straight_between_its_keys() {
     let NodeKind::Blend { children, spec } = &blend.kind else { panic!("a live blend: {:?} {warnings:?}", blend.kind) };
     assert!(!warnings.iter().any(|w| w == super::blend::DRAWN), "{warnings:?}");
     assert_eq!(spec.spacing, vectorcraft_doc::live::BlendSpacing::Steps(3));
-    let spine = spec.spine.as_ref().and_then(|p| p.subpaths.first()).expect("a spine");
-    let points: Vec<(f64, f64)> = spine.anchors.iter().map(|a| (a.p.x, a.p.y)).collect();
+    assert_eq!((&spec.spine, &spec.key_anchors), (&None, &vec![]), "a blend with no spine of its own");
+    let (spine, _) = vectorcraft_doc::blend::blend_spine(children, spec).expect("a spine");
+    let points: Vec<(f64, f64)> = spine.subpaths[0].anchors.iter().map(|a| (a.p.x, a.p.y)).collect();
     assert_eq!(points.len(), 2, "{points:?}");
     assert!((points[0].0 - 10.0).abs() < 0.01 && (points[1].0 - 110.0).abs() < 0.01, "from the left key to the right one: {points:?}");
-    assert_eq!(spec.key_anchors, vec![0, 1]);
     assert_eq!(vectorcraft_doc::blend::blend_expand(children, spec).len(), 5);
+
+    let body = blend_file("", [Some("B"), Some("A")], &blend_record(&['A', 'B']));
+    let (blend, warnings) = read_blend(&body.replace(&spine_part, ""));
+    let NodeKind::Blend { spec, .. } = &blend.kind else { panic!("a live blend: {:?} {warnings:?}", blend.kind) };
+    let spine = spec.spine.as_ref().and_then(|p| p.subpaths.first()).expect("a spine");
+    let points: Vec<(f64, f64)> = spine.anchors.iter().map(|a| (a.p.x, a.p.y)).collect();
+    assert!((points[0].0 - 110.0).abs() < 0.01 && (points[1].0 - 10.0).abs() < 0.01, "from the right key to the left one: {points:?}");
+    assert_eq!(spec.key_anchors, vec![1, 0]);
 }
 
 /// The tags after a blend's drawn steps are the live blend's.
@@ -11381,6 +11594,68 @@ fn a_graphs_type_and_settings_come_from_its_records() {
     assert!(art(&r.doc)[0].extras().graph.is_some());
 }
 
+/// A series of a line graph drawn with filled lines at `x`: a band filled with the series' color and
+/// outlined in a thin black line, and a marker filled alike with no outline.
+fn band_series(x: f64) -> String {
+    format!("0.5 0 0 0 k\n0 0 0 1 K\n0.25 w\n{}B\n1 w\n{}f\n", rect_path(x, 120.0, x + 40.0, 128.0), rect_path(x + 18.0, 122.0, x + 23.0, 127.0))
+}
+
+/// [`live_graph`] as a line graph with style record `style`, each series drawn by [`band_series`].
+fn band_graph(style: &str) -> String {
+    live_graph().replace(LIVE_STYLE, style).replace(&series_bar(110.0), &band_series(110.0)).replace(&series_bar(140.0), &band_series(140.0))
+}
+
+/// A line graph whose lines are drawn as shapes (`drawLinesAsShapes` 1 with `drawLines` 1) keeps
+/// Draw Filled Lines and its Line Width (`lineShapeWidth`, in points): 3 points is the graph's
+/// default. Its series keep their bands' fill, and the bands' thin black outline is not taken as the
+/// series' stroke. With `drawLines` 0 the flag is ignored, and the width is kept for later.
+#[test]
+fn a_line_graph_drawn_with_filled_lines_keeps_them_and_their_width() {
+    let live = |text: String| {
+        let r = read(stream7(&layer7("Graph", &text)).as_bytes()).unwrap();
+        assert!(r.warnings.is_empty(), "{text}: {:?}", r.warnings);
+        let a = art(&r.doc);
+        let g = a[0].extras().graph.clone().unwrap_or_else(|| panic!("{text}: a live graph"));
+        (g, live_graphs(&r.doc).1)
+    };
+    let (g, tagged) = live(band_graph("%_7 0 0 14 1 1 1 0 8 44 Gy\n"));
+    assert_eq!((g.kind, g.filled_lines, g.line_width, tagged), (GraphKind::Line, true, Some(8.0), 2));
+    let fill = Some(Paint::solid(Color::cmyk(0.5, 0.0, 0.0, 0.0)));
+    assert!(g.series_paints.iter().all(|p| p.fill == fill && p.stroke.is_none() && p.stroke_width.is_none()), "{:?}", g.series_paints);
+    assert_eq!(live(band_graph("%_7 0 0 14 1 1 1 0 3 44 Gy\n")).0.line_width, None, "3 pt");
+    assert_eq!(live(band_graph("%_7 0 0 14 1 1 1 0 6 44 Gy\n")).0.line_width, Some(6.0), "6 pt");
+    assert_eq!(live(band_graph("%_7 0 0 14 1 1 1 0 100 44 Gy\n")).0.line_width, Some(100.0), "100 pt");
+    assert_eq!(live(band_graph("%_7 0 0 14 1 1 1 0 0.01 44 Gy\n")).0.line_width, Some(0.01), "0.01 pt");
+    // Without filled lines, the series are drawn as the graph's columns are.
+    let (g, _) = live(live_graph().replace(LIVE_STYLE, "%_7 0 0 14 1 0 1 0 8 44 Gy\n"));
+    assert_eq!((g.connect_points, g.filled_lines, g.line_width), (false, false, Some(8.0)), "points not connected");
+    let (g, _) = live(live_graph().replace(LIVE_STYLE, "%_7 0 0 14 1 1 0 0 0 44 Gy\n"));
+    assert_eq!((g.filled_lines, g.line_width), (false, None), "lines not filled, 0 pt");
+}
+
+/// A graph with filled lines whose Line Width the model doesn't hold (0, under 0.01 points, or out of
+/// the records' 0 to 100), or with a lines-as-shapes value other than 0 and 1, keeps its drawn art
+/// as plain objects, with one note.
+#[test]
+fn filled_lines_of_a_width_the_model_cant_hold_stay_plain_art() {
+    for style in [
+        "%_7 0 0 14 1 1 1 0 0 44 Gy\n",
+        "%_7 0 0 14 1 1 1 0 0.001 44 Gy\n",
+        "%_7 0 0 14 1 1 1 0 101 44 Gy\n",
+        "%_7 0 0 14 1 1 1 0 -2 44 Gy\n",
+        "%_7 0 0 14 1 1 1 0 1e999 44 Gy\n",
+        "%_7 0 0 14 1 1 0 0 101 44 Gy\n",
+        "%_7 0 0 14 1 1 2 0 8 44 Gy\n",
+    ] {
+        let r = read(stream7(&layer7("Graph", &band_graph(style))).as_bytes()).unwrap_or_else(|e| panic!("{style}: {e}"));
+        assert_eq!(r.warnings, [GRAPH_PLAIN], "{style}");
+        assert_eq!(live_graphs(&r.doc), (vec![], 0), "{style}");
+        let mut kept = false;
+        r.doc.walk(|n| kept |= n.children().is_some_and(|c| c.len() == 3));
+        assert!(kept, "{style}: the drawn art is kept");
+    }
+}
+
 /// A graph keeps its drawn art and stays plain, with one note, when a record has a shape or value
 /// appendix A doesn't give, sets what the model doesn't keep, or the table, the series tags or the
 /// art don't fit the graph.
@@ -11396,7 +11671,7 @@ fn graphs_the_model_cant_keep_stay_plain_art() {
         ("type 11", live_graph().replace("%_5 0 0 14", "%_11 0 0 14")),
         ("legends in wedges", live_graph().replace("%_5 0 0 14", "%_5 0 0 15")),
         ("the right axis", live_graph().replace("6 44 Gy", "6 45 Gy")),
-        ("lines as shapes", live_graph().replace("%_5 0 0 14 0 1 0", "%_5 0 0 14 0 1 1")),
+        ("lines as shapes 0 pt wide", live_graph().replace("%_5 0 0 14 0 1 0 0 6", "%_5 0 0 14 0 1 1 0 0")),
         ("both axes alike", live_graph().replace(LIVE_DIALOG, "%_10 2 0 1 90 80 0 Gd\n")),
         ("a subscription", live_graph().replace(LIVE_DIALOG, &format!("{LIVE_DIALOG}%_0 0 1 1 1 Gj\n"))),
         ("a customization", live_graph().replace("GC\n", "GC\n%_2 Gt\n%_(Bars) GD\n%_GT\n")),

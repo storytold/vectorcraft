@@ -504,6 +504,62 @@ fn bunri_kinshi_is_set_per_paragraph_and_saved_only_when_on() {
     assert!(!text(&s).para_at(0).bunri_kinshi && !text(&s).para_at(1).bunri_kinshi);
 }
 
+/// Paragraph panel menu › Kurikaeshi Moji Shori: off for new type and for a paragraph saved before
+/// it, and saved only when on; `text.setFormat {kurikaeshiMojiShori}` sets it per paragraph in one
+/// undo step, records nothing when the paragraphs already have the value, refuses a value that is
+/// not true or false, and paragraph styles carry it. The text keeps its repeat marks.
+#[test]
+fn kurikaeshi_moji_shori_is_set_per_paragraph_and_saved_only_when_on() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "size": 20, "text": "時々\nすゝ"})).unwrap()["id"].as_u64().unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    assert!(!text(&s).para_at(0).kurikaeshi_moji_shori, "new type has it off");
+    assert!(serde_json::to_value(text(&s).para_at(0)).unwrap().get("kurikaeshi_moji_shori").is_none());
+    let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
+    assert!(!old.kurikaeshi_moji_shori, "saved before the option: off");
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    // Only the second paragraph.
+    let second = "時々\n".len();
+    s.execute("text.setFormat", &json!({"kurikaeshiMojiShori": true, "start": second, "end": second})).unwrap();
+    assert!(!text(&s).para_at(0).kurikaeshi_moji_shori && text(&s).para_at(1).kurikaeshi_moji_shori);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    assert_eq!(text(&s).plain_text(), "時々\nすゝ", "the text keeps its marks");
+    // The same value again records nothing.
+    s.execute("text.setFormat", &json!({"kurikaeshiMojiShori": true, "start": second, "end": second})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    let saved = serde_json::to_value(text(&s).para_at(1)).unwrap();
+    assert_eq!(saved["kurikaeshi_moji_shori"], true);
+    let back: vectorcraft_doc::ParaStyle = serde_json::from_value(saved).unwrap();
+    assert!(back.kurikaeshi_moji_shori);
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    assert!(!back.para_at(0).kurikaeshi_moji_shori && back.para_at(1).kurikaeshi_moji_shori, "the file keeps it per paragraph");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!text(&s).para_at(1).kurikaeshi_moji_shori);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(text(&s).para_at(1).kurikaeshi_moji_shori);
+    for bad in [json!("yes"), json!(1)] {
+        assert!(s.execute("text.setFormat", &json!({"ids": [id], "kurikaeshiMojiShori": bad, "kinsoku": "none"})).is_err(), "{bad}");
+    }
+    assert!(s.execute("text.setRangeStyle", &json!({"id": id, "kurikaeshiMojiShori": false})).is_err());
+    assert!(
+        text(&s).para_at(1).kurikaeshi_moji_shori && text(&s).para_at(1).kinsoku != vectorcraft_doc::Kinsoku::None,
+        "a refused call changes nothing"
+    );
+    // A paragraph style carries it.
+    s.execute("paraStyle.new", &json!({"name": "Repeats", "attrs": {"kurikaeshi_moji_shori": true}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Repeats", "id": id})).unwrap();
+    assert!(text(&s).para_at(0).kurikaeshi_moji_shori && text(&s).para_at(1).kurikaeshi_moji_shori);
+    s.execute("paraStyle.new", &json!({"name": "Marks", "attrs": {"kurikaeshi_moji_shori": false}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Marks", "id": id})).unwrap();
+    assert!(!text(&s).para_at(0).kurikaeshi_moji_shori && !text(&s).para_at(1).kurikaeshi_moji_shori);
+}
+
 /// Paragraph panel › Insert Kashidas: `text.setFormat {kashida}` sets it per paragraph in one
 /// undo step, the paragraph is saved with it only when it is not None and opens with it, an
 /// unknown value changes nothing, and paragraph styles carry it.

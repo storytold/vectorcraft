@@ -4272,15 +4272,26 @@ fn live_paint_bucket_double_click_across_a_junction_paints_the_joined_edges() {
         s.pointer(&PointerEvent::new(kind, x, 50.0).with_mods(shift), v).unwrap();
     }
     assert_eq!(middle.iter().map(|e| node(&s, *e).appearance.stroke_paint()).collect::<Vec<_>>(), [green.clone(), green.clone(), green]);
-    // `through` takes edge ids, with scope "connected" only.
+    // `through` takes the group's edge ids, each once, with scope "connected" only; a face's id, an
+    // unknown id or an edge given twice is refused and changes nothing.
+    let face = vectorcraft_tools::builder::faces(&node(&s, g)).first().map(|f| f.id).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let depth = s.doc().unwrap().history.undo.len();
     for p in [
         json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": "x"}),
         json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": [-1]}),
         json!({"group": g.0, "point": [15, 50], "scope": "samePaint", "through": []}),
         json!({"group": g.0, "point": [15, 50], "through": []}),
+        json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": [face.0]}),
+        json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": [999_999_999]}),
+        json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": [middle[1].0, middle[1].0]}),
     ] {
         assert!(s.execute("livePaint.strokeEdge", &p).is_err(), "{p}");
     }
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth);
+    let r = s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": [middle[1].0]})).unwrap();
+    assert_eq!(r["count"], 3, "an edge of the group is taken");
 }
 
 /// A double-click whose second press lands on the next joined edge and is released back on the
@@ -4316,6 +4327,32 @@ fn live_paint_bucket_double_click_released_back_on_the_first_edge_paints_the_joi
         s.pointer(&PointerEvent::new(kind, x, 50.0).with_mods(shift), v).unwrap();
     }
     assert_eq!(middle.iter().map(|e| node(&s, *e).appearance.stroke_paint()).collect::<Vec<_>>(), [green.clone(), green.clone(), green]);
+}
+
+/// With Paint Fills and Paint Strokes both on, a double-click on an edge after a click that filled
+/// a face whose fill was the edge's stroke paint paints the joined edges: the face is not sent as
+/// an edge to join through.
+#[test]
+fn live_paint_bucket_edge_double_click_after_filling_a_face_paints_the_joined_edges() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0]);
+    let [a, b] = faces_at(&s, g, &[(25.0, 25.0), (75.0, 25.0)])[..] else { panic!("two faces") };
+    let black = Paint::solid(Color::rgb(0.0, 0.0, 0.0));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 101.0, 51.0));
+    paint_parts(&mut s, &all, &black, &[(a, black.clone()), (b, black.clone())]);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.set_tool_option("paintStrokes", &json!(true));
+    s.paint.fill = green.clone();
+    s.paint.stroke = green.clone();
+    for (kind, x) in [(PointerKind::Down, 25.0), (PointerKind::Up, 25.0), (PointerKind::Down, 50.0), (PointerKind::Up, 50.0)] {
+        s.pointer(&PointerEvent::new(kind, x, 25.0), v).unwrap();
+    }
+    assert_eq!(fill_of(&s, a), green, "the first click fills the face");
+    s.pointer(&PointerEvent::new(PointerKind::DoubleClick, 50.0, 25.0), v).unwrap();
+    assert!(all.iter().all(|e| node(&s, *e).appearance.stroke_paint() == green), "every joined edge is painted");
+    assert_eq!(fill_of(&s, b), black);
 }
 
 /// A triple-click whose second press holds Cmd (it goes to the selection tool Cmd lends) matches
@@ -4723,6 +4760,279 @@ fn live_paint_refuses_type_and_images_and_changes_nothing() {
     assert_eq!(NodeId(r["id"].as_u64().unwrap()), g);
     assert!(vectorcraft_tools::builder::live_paint_takes(&node(&s, g)));
     assert!(!vectorcraft_tools::builder::live_paint_takes(&node(&s, text_group)));
+}
+
+/// A horizontal open path across [`live`]'s group at `y`, drawn with the Pen's defaults.
+fn line_across(s: &mut Session, y: f64) -> NodeId {
+    let r = s.execute("path.create", &json!({"anchors": [{"x": -10, "y": y}, {"x": 160, "y": y}]})).unwrap();
+    NodeId(r["id"].as_u64().unwrap())
+}
+
+/// Paths drawn in an isolated Live Paint group join it when isolation mode ends: they go among its
+/// sources and cut the faces they cross, which take their sources' fill, a painted face they do not
+/// cross keeps its fill, and the whole addition is one undo step, which Undo takes back to the
+/// drawn paths in the group and Redo makes again.
+#[test]
+fn live_paint_isolation_adds_drawn_paths_on_exit() {
+    use vectorcraft_tools::builder::{face_at, faces, sources};
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [125, 50], "color": "#00ff00"})).unwrap();
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    // Two lines from left of the group that end in its right face, so they cut only the other two.
+    let line = |s: &mut Session, y: f64| {
+        let r = s.execute("path.create", &json!({"anchors": [{"x": -10, "y": y}, {"x": 105, "y": y}]})).unwrap();
+        NodeId(r["id"].as_u64().unwrap())
+    };
+    let (a, b) = (line(&mut s, 30.0), line(&mut s, 70.0));
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(g), "a path drawn in isolation goes into the group");
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    let d = s.doc().unwrap();
+    assert_eq!(d.isolation, None);
+    assert_eq!(d.history.undo.len(), steps + 1, "both paths join in one undo step");
+    assert_eq!(d.selection.objects, vec![g]);
+    let n = node(&s, g);
+    let src = sources(&n).unwrap();
+    assert_eq!(src.children().unwrap().len(), 4);
+    for id in [a, b] {
+        assert_eq!(s.doc().unwrap().doc.parent_of(id), Some(src.id), "{id} joined the sources");
+    }
+    assert_eq!(faces(&n).len(), 7, "two lines cut each of the two faces they cross in three");
+    assert_eq!(face_at(&n, Point::new(125.0, 50.0)).unwrap().appearance.fill_paint(), green, "the face the lines do not cross keeps its fill");
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    for y in [15.0, 85.0] {
+        assert_eq!(face_at(&n, Point::new(25.0, y)).unwrap().appearance.fill_paint(), red, "a new face takes its source's fill");
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    let n = node(&s, g);
+    assert_eq!(faces(&n).len(), 3);
+    assert_eq!(sources(&n).unwrap().children().unwrap().len(), 2);
+    for id in [a, b] {
+        assert_eq!(s.doc().unwrap().doc.parent_of(id), Some(g), "Undo puts {id} back in the group as drawn");
+    }
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(faces(&node(&s, g)).len(), 7);
+}
+
+/// Leaving isolation mode in a Live Paint group with nothing drawn in it records no undo step and
+/// leaves the document as it is. Type, and a path that is hidden, stay in the group as they are,
+/// while a group of paths drawn beside them joins it.
+#[test]
+fn live_paint_isolation_adds_only_paths_it_takes() {
+    use vectorcraft_tools::builder::{faces, sources};
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let before = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc == before.0, "an exit with nothing drawn changes nothing");
+    assert_eq!(s.doc().unwrap().history.undo.len(), before.1, "and records no undo step");
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let text = NodeId(s.execute("text.create", &json!({"x": 20, "y": 20, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+    let hidden = line_across(&mut s, 50.0);
+    s.edit("t", |d, _| {
+        d.node_mut(hidden).unwrap().visible = false;
+        Ok(())
+    })
+    .unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "type and a hidden path add nothing");
+    assert_eq!(faces(&node(&s, g)).len(), 3);
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let (a, b) = (line_across(&mut s, 30.0), line_across(&mut s, 70.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let paths = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(s.doc().unwrap().doc.parent_of(paths), Some(g));
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    let n = node(&s, g);
+    assert_eq!(faces(&n).len(), 9, "the group of paths joined");
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.parent_of(paths), Some(sources(&n).unwrap().id));
+    for id in [text, hidden] {
+        assert_eq!(d.parent_of(id), Some(g), "{id} stays in the group");
+        assert!(d.node(id).is_some());
+    }
+}
+
+/// A group drawn in an isolated Live Paint group that holds a locked path stays in it as it is when
+/// isolation mode ends, as a locked path drawn there does.
+#[test]
+fn live_paint_isolation_leaves_a_group_holding_a_locked_path() {
+    use vectorcraft_tools::builder::faces;
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let (a, b) = (line_across(&mut s, 30.0), line_across(&mut s, 70.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let paths = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.edit("t", |d, _| {
+        d.node_mut(b).unwrap().locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    assert_eq!(s.doc().unwrap().doc.parent_of(paths), Some(g));
+    assert_eq!(faces(&node(&s, g)).len(), 3);
+}
+
+/// Type drawn in an isolated Live Paint group stays in it when Gap Options or Merge make the group's
+/// faces and edges again, including type in a Live Paint group merged into another, and Release
+/// puts it beside the released paths.
+#[test]
+fn live_paint_keeps_type_drawn_in_it_through_gap_options_merge_and_release() {
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let text = NodeId(s.execute("text.create", &json!({"x": 20, "y": 20, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    s.execute("livePaint.gapOptions", &json!({"ids": [g.0], "detect": true})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(text), Some(g), "Gap Options keeps the type");
+    let c = rect(&mut s, 120.0, 20.0, 100.0, 20.0);
+    s.execute("livePaint.merge", &json!({"ids": [g.0, c.0]})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(text), Some(g), "Merge keeps the type");
+    let other = rect(&mut s, 300.0, 300.0, 50.0, 50.0);
+    let h = NodeId(s.execute("livePaint.make", &json!({"ids": [other.0]})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.isolate", &json!({"id": h.0})).unwrap();
+    let text2 = NodeId(s.execute("text.create", &json!({"x": 310, "y": 320, "text": "Yo"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    s.execute("livePaint.merge", &json!({"ids": [g.0, h.0]})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(text2), Some(g), "the type of the merged group moves with its paths");
+    s.execute("livePaint.release", &json!({"ids": [g.0]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    for id in [text, text2] {
+        assert_eq!(d.parent_of(id), d.default_layer(), "Release keeps {id}");
+    }
+}
+
+/// Art drawn in an isolated Live Paint group and named like one of the group's parts is not taken
+/// for one: type named "Live Paint Sources" stays in the group through Gap Options, and a group of
+/// paths named "Face" joins the group when isolation mode ends.
+#[test]
+fn live_paint_isolation_keeps_art_named_like_its_parts() {
+    use vectorcraft_tools::builder::{SOURCES_NAME, faces, sources};
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let text = NodeId(s.execute("text.create", &json!({"x": 20, "y": 20, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.setProps", &json!({"id": text.0, "name": SOURCES_NAME})).unwrap();
+    let (a, b) = (line_across(&mut s, 30.0), line_across(&mut s, 70.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let paths = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.setProps", &json!({"id": paths.0, "name": "Face"})).unwrap();
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    let n = node(&s, g);
+    assert_eq!(faces(&n).len(), 9, "the group named Face joined");
+    assert_eq!(s.doc().unwrap().doc.parent_of(paths), Some(sources(&n).unwrap().id));
+    s.execute("livePaint.gapOptions", &json!({"ids": [g.0], "detect": true})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(text), Some(g), "Gap Options keeps the type named like the sources");
+}
+
+/// Type drawn in an isolated Live Paint group under the name of a face, an edge or the sources
+/// group is not one of the group's parts: Gap Options, Info and Make count only the faces and edges
+/// Live Paint made, and Expand keeps the type.
+#[test]
+fn live_paint_does_not_count_art_named_like_its_parts() {
+    use vectorcraft_tools::builder::{EDGE_NAME, FACE_NAME, SOURCES_NAME};
+    let mut s = session();
+    let g = live(&mut s);
+    let edges = s.execute("livePaint.info", &json!({"group": g.0})).unwrap()["edges"].as_array().unwrap().len();
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let mut texts = vec![];
+    for (i, name) in [FACE_NAME, EDGE_NAME, SOURCES_NAME].into_iter().enumerate() {
+        let r = s.execute("text.create", &json!({"x": 20 + 20 * i, "y": 20, "text": "Hi"})).unwrap();
+        let t = NodeId(r["id"].as_u64().unwrap());
+        s.execute("object.setProps", &json!({"id": t.0, "name": name})).unwrap();
+        texts.push(t);
+    }
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    let r = s.execute("livePaint.gapOptions", &json!({"ids": [g.0], "detect": true})).unwrap();
+    assert_eq!(r["faces"], 3, "Gap Options counts the faces Live Paint made");
+    let info = s.execute("livePaint.info", &json!({"group": g.0})).unwrap();
+    assert_eq!(info["faces"].as_array().unwrap().len(), 3);
+    assert_eq!(info["edges"].as_array().unwrap().len(), edges);
+    let r = s.execute("livePaint.make", &json!({"ids": [g.0]})).unwrap();
+    assert_eq!((r["faces"].as_u64(), r["edges"].as_u64()), (Some(3), Some(edges as u64)));
+    s.execute("livePaint.expand", &json!({"ids": [g.0]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    for t in texts {
+        assert_eq!(d.parent_of(t), Some(g), "Expand keeps {t}");
+    }
+}
+
+/// With Real-time Drawing and Editing off, a rectangle still being drawn in a Live Paint group
+/// isolated in a pattern tile is drawn first when Exit Isolation Mode leaves pattern editing, and
+/// joins the group with the tile saved.
+#[test]
+fn live_paint_in_a_pattern_tile_adds_a_shape_still_being_drawn_on_exit() {
+    use vectorcraft_tools::builder::{is_live_paint, sources};
+    let mut s = session();
+    two(&mut s);
+    s.execute("object.pattern.make", &json!({"name": "P"})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    s.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": false})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("rectangle", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 10.0, 10.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 40.0, 40.0), v).unwrap();
+    assert!(s.interaction_unapplied());
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    assert!(st.doc.pattern_edit.is_none());
+    let art = &st.doc.pattern("P").unwrap().art;
+    let n = art.iter().find(|n| is_live_paint(n)).expect("the tile holds the Live Paint group");
+    assert_eq!(sources(n).unwrap().children().unwrap().len(), 3, "the rectangle joined the sources");
+}
+
+/// Isolating a level outside an isolated Live Paint group, as the isolation bar's back arrow does,
+/// leaves the group and adds the paths drawn in it; isolating a path drawn in it does not.
+#[test]
+fn live_paint_isolation_adds_drawn_paths_when_isolating_a_level_outside() {
+    use vectorcraft_tools::builder::{faces, sources};
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let a = line_across(&mut s, 50.0);
+    s.execute("object.isolate", &json!({"id": a.0})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(g), "the path is still being drawn in the group");
+    assert_eq!(faces(&node(&s, g)).len(), 3);
+    let layer = s.doc().unwrap().doc.parent_of(g).unwrap();
+    s.execute("object.isolate", &json!({"id": layer.0})).unwrap();
+    assert_eq!(s.doc().unwrap().isolation, Some(layer));
+    let n = node(&s, g);
+    assert_eq!(faces(&n).len(), 6);
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(sources(&n).unwrap().id));
+}
+
+/// A group of paths drawn in an isolated Live Paint group and then isolated itself joins the Live
+/// Paint group when isolation mode ends, or when a level outside the Live Paint group is isolated.
+#[test]
+fn live_paint_isolation_adds_a_drawn_group_isolated_inside_it() {
+    use vectorcraft_tools::builder::{faces, sources};
+    for to_layer in [false, true] {
+        let mut s = session();
+        let g = live(&mut s);
+        s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+        let (a, b) = (line_across(&mut s, 30.0), line_across(&mut s, 70.0));
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        let paths = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+        s.execute("object.isolate", &json!({"id": paths.0})).unwrap();
+        assert_eq!(faces(&node(&s, g)).len(), 3, "isolating the drawn group stays in the Live Paint group");
+        if to_layer {
+            let layer = s.doc().unwrap().doc.parent_of(g).unwrap();
+            s.execute("object.isolate", &json!({"id": layer.0})).unwrap();
+        } else {
+            s.execute("object.exitIsolation", &json!({})).unwrap();
+        }
+        let n = node(&s, g);
+        assert_eq!(faces(&n).len(), 9, "the drawn group joined (to the layer: {to_layer})");
+        assert_eq!(s.doc().unwrap().doc.parent_of(paths), Some(sources(&n).unwrap().id));
+    }
 }
 
 /// Give Live Paint group `g` a lock, hidden state, appearance, knockout, opacity mask and
@@ -5161,6 +5471,137 @@ fn live_paint_bucket_drag_rejects_invalid_points_atomically() {
     }
 }
 
+/// The edge of `g` through (`x`, 25), halfway up the squares of [`live_squares`].
+fn vertical_edge(s: &Session, g: NodeId, x: f64) -> NodeId {
+    vectorcraft_tools::builder::edge_near(&node(s, g), Point::new(x, 25.0), 0.5).map(|e| e.id).unwrap_or_else(|| panic!("an edge at x {x}"))
+}
+
+/// A Shift-drag from an edge strokes every visible edge of that group the drag crosses, between
+/// pointer events and on the release too, as one undo step that Escape cancels; hidden edges and
+/// another group's edges keep their strokes.
+#[test]
+fn live_paint_bucket_drag_strokes_crossed_edges_as_one_undo() {
+    for cancel in [false, true] {
+        let mut s = session();
+        let g = live_squares(&mut s, &[0.0, 50.0, 100.0, 150.0, 200.0]);
+        let other = live_squares(&mut s, &[300.0]);
+        let black = Paint::solid(Color::rgb(0.0, 0.0, 0.0));
+        let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+        let all: Vec<NodeId> = [g, other].iter().flat_map(|g| edges_in(&s, *g, Rect::new(-1.0, -1.0, 351.0, 51.0))).collect();
+        paint_parts(&mut s, &all, &black, &[]);
+        let hidden = vertical_edge(&s, g, 100.0);
+        s.edit("t", |d, _| {
+            d.node_mut(hidden).unwrap().visible = false;
+            Ok(())
+        })
+        .unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let depth = s.doc().unwrap().history.undo.len();
+        let v = ViewInfo::default();
+        s.select_tool("livePaintBucket", v).unwrap();
+        s.paint.stroke = green.clone();
+        s.paint.stroke_width = 3.0;
+        let shift = Mods { shift: true, ..Default::default() };
+        s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 25.0).with_mods(shift), v).unwrap();
+        // Past the hidden edge and the edge at 150, then back across it, between pointer events.
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 160.0, 25.0).with_mods(shift), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 140.0, 30.0).with_mods(shift), v).unwrap();
+        if cancel {
+            assert!(s.tool_busy());
+            s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+            assert!(!s.tool_busy());
+        }
+        // The release crosses the edges at 200 and 250 and goes on into the other group.
+        s.pointer(&PointerEvent::new(PointerKind::Up, 325.0, 25.0).with_mods(shift), v).unwrap();
+        if cancel {
+            assert!(s.doc().unwrap().doc == before, "Escape cancels the whole drag");
+            assert_eq!(s.doc().unwrap().history.undo.len(), depth);
+            continue;
+        }
+        let stroke = |s: &Session, id: NodeId| {
+            let n = node(s, id);
+            (n.appearance.stroke_paint(), n.appearance.stroke().map(|st| st.width))
+        };
+        for x in [50.0, 150.0, 200.0, 250.0] {
+            assert_eq!(stroke(&s, vertical_edge(&s, g, x)), (green.clone(), Some(3.0)), "edge at {x}");
+        }
+        for (group, x) in [(g, 0.0), (g, 100.0), (other, 300.0), (other, 350.0)] {
+            assert_eq!(stroke(&s, vertical_edge(&s, group, x)), (black.clone(), Some(1.0)), "edge at {x}");
+        }
+        for e in edges_in(&s, g, Rect::new(-1.0, -1.0, 201.0, 1.0)) {
+            assert_eq!(stroke(&s, e).0, black, "a top edge is not crossed");
+        }
+        assert_eq!(s.doc().unwrap().history.undo.len(), depth + 1, "one undo step");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(s.doc().unwrap().doc == before, "one Undo restores every edge");
+    }
+}
+
+/// A stroke drag over edges that already have the stroke records no undo step and keeps the redo
+/// steps.
+#[test]
+fn live_paint_bucket_stroke_drag_no_op_keeps_history() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0]);
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 101.0, 51.0));
+    paint_parts(&mut s, &all, &green, &[]);
+    paint_parts(&mut s, &all, &green, &[]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let (undo, redo) = (s.doc().unwrap().history.undo.len(), s.doc().unwrap().history.redo.len());
+    assert_eq!(redo, 1);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.stroke = green;
+    s.paint.stroke_width = 1.0;
+    let shift = Mods { shift: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, 0.0, 25.0).with_mods(shift), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 60.0, 25.0).with_mods(shift), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 110.0, 25.0).with_mods(shift), v).unwrap();
+    assert!(s.doc().unwrap().doc == before);
+    assert_eq!((s.doc().unwrap().history.undo.len(), s.doc().unwrap().history.redo.len()), (undo, redo));
+}
+
+/// `livePaint.strokeEdge` with `points` paints the crossed edges, counting the edge at the point;
+/// a malformed path or a scope other than "one" with `points` is an error that changes nothing.
+#[test]
+fn live_paint_stroke_drag_rejects_invalid_points_atomically() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0, 100.0]);
+    let before = s.doc().unwrap().doc.clone();
+    let stroke = |s: &mut Session, extra: Value| {
+        let mut p = json!({"group": g.0, "point": [50.0, 25.0], "color": "#00ff00"});
+        for (k, v) in extra.as_object().unwrap() {
+            p[k] = v.clone();
+        }
+        s.execute("livePaint.strokeEdge", &p)
+    };
+    for points in
+        [json!([]), json!([[51.0, 25.0]]), json!([[50.0, 25.0], [null, 0]]), json!([[50.0, 25.0], [1e30, 0]]), json!(vec![[50.0, 25.0]; 4097])]
+    {
+        assert!(stroke(&mut s, json!({ "points": points })).is_err(), "{points}");
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+    for continuation in [json!(null), json!([[[51.0, 25.0], [125.0, 25.0]]]), json!([vec![[50.0, 25.0]; 4097]])] {
+        assert!(stroke(&mut s, json!({ "points": [[50.0, 25.0]], "continuation": continuation })).is_err(), "{continuation}");
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+    assert!(stroke(&mut s, json!({ "continuation": [[[50.0, 25.0]]] })).is_err());
+    for scope in ["connected", "samePaint"] {
+        assert!(stroke(&mut s, json!({ "points": [[50.0, 25.0], [125.0, 25.0]], "scope": scope })).is_err(), "{scope}");
+    }
+    assert_eq!(s.doc().unwrap().doc, before);
+    // A path in two chunks reaches the edges at 50, 100 and 150, not the one at 0.
+    let r = stroke(&mut s, json!({ "points": [[50.0, 25.0], [90.0, 25.0]], "continuation": [[[90.0, 25.0], [160.0, 25.0]]] })).unwrap();
+    assert_eq!(r["count"], 3);
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    for x in [50.0, 100.0, 150.0] {
+        assert_eq!(node(&s, vertical_edge(&s, g, x)).appearance.stroke_paint(), green, "edge at {x}");
+    }
+    assert_ne!(node(&s, vertical_edge(&s, g, 0.0)).appearance.stroke_paint(), green);
+}
+
 #[test]
 fn live_paint_bucket_tool_fills_face() {
     let mut s = session();
@@ -5354,7 +5795,41 @@ fn live_paint_bucket_alt_image_samples_fill_and_clears_stroke() {
     let mut s = session();
     let img = image::RgbaImage::from_raw(1, 1, vec![0, 255, 0, 255]).unwrap();
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.edit("Place", |d, _| {
         d.images.insert("px".into(), ImageBlob::png(png));
         let id = d.alloc_id();
@@ -5810,9 +6285,10 @@ fn add_image(s: &mut Session, r: &vectorcraft_trace::Raster, xf: Affine) -> Node
     .unwrap()
 }
 
-/// The traced paths of an Image Trace object: its children but the image and the seam fills.
+/// The traced paths of an Image Trace object: its children but the image and the seam fills'
+/// clip group (a trace makes no other clip group).
 fn traced_paths(n: &Node) -> Vec<Arc<Node>> {
-    n.children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_)) && c.name.as_deref() != Some("Seam Fills")).cloned().collect()
+    n.children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_) | NodeKind::Group { clip: true, .. })).cloned().collect()
 }
 
 #[test]
@@ -6513,7 +6989,12 @@ fn image_trace_abutting_seam_fills_sit_under_the_paths() {
     assert!(matches!(kids[0].kind, NodeKind::Image(_)));
     let group = seams(&n).unwrap();
     assert!(Arc::ptr_eq(&group, &kids[1]), "the seam fills come under the paths");
-    let strokes = group.children().unwrap();
+    assert!(matches!(group.kind, NodeKind::Group { clip: true, .. }), "{group:?}");
+    // The two paths cover the image, so the strokes are clipped to its box.
+    let (clip, strokes) = group.children().unwrap().split_first().unwrap();
+    assert!(matches!(clip.kind, NodeKind::Path { clipping: true, .. }), "{clip:?}");
+    let cb = outline(clip).0.bounds().unwrap();
+    assert!([cb.x0, cb.y0, cb.x1 - 80.0, cb.y1 - 40.0].iter().all(|v| v.abs() < 1e-9), "{cb:?}");
     assert_eq!(strokes.len(), 1);
     assert_eq!(strokes[0].appearance.fill_paint(), Paint::None);
     let AppearanceItem::Stroke(layer) = &strokes[0].appearance.items[0] else { panic!("{:?}", strokes[0].appearance) };
@@ -6531,6 +7012,14 @@ fn image_trace_abutting_seam_fills_sit_under_the_paths() {
     assert_eq!(names.len(), 3, "{names:?}");
     assert_eq!(names[0], "Edges", "{names:?}");
     assert_eq!(n.children().unwrap()[0].id, group.id);
+    // Above a path, the seam fills' group is refused by name, not as an Auto Grouping group.
+    let (mut s, _, r) = made("abutting", "imageTrace.make", false);
+    let g = NodeId(r["id"].as_u64().unwrap());
+    let kids = node(&s, g).children().unwrap().clone();
+    s.execute("object.arrange.bringToFront", &json!({"ids": [kids[1].id.0]})).unwrap();
+    assert_eq!(node(&s, g).children().unwrap().last().map(|c| c.id), Some(kids[1].id));
+    let e = s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap_err().to_string();
+    assert!(e.contains("seam fills") && !e.contains("Auto Grouping"), "{e}");
     let (mut s, img, _) = made("abutting", "imageTrace.make", false);
     assert_eq!(ids(&s.execute("imageTrace.release", &json!({})).unwrap()), vec![img]);
     // Make and Expand by color too.
@@ -6540,13 +7029,126 @@ fn image_trace_abutting_seam_fills_sit_under_the_paths() {
     // Overlapping paths are stacked: no seam fills.
     let (s, _, r) = made("overlapping", "imageTrace.make", false);
     assert!(seams(&node(&s, NodeId(r["id"].as_u64().unwrap()))).is_none());
-    // An image stretched 3× across and squeezed to half height: 1.5 pixels at the larger scale.
+}
+
+/// With white left out, the seam fills are clipped to the image's box within the traced paths'
+/// box, so the expanded trace measures as its paths do, also on a turned image.
+#[test]
+fn image_trace_seam_fills_stay_within_the_traced_paths_box() {
+    let seams = |n: &Node| n.children().unwrap().iter().find(|c| c.name.as_deref() == Some("Seam Fills")).cloned();
+    let band = vectorcraft_trace::Raster::from_fn(24, 16, |x, y| match ((4..12).contains(&y), x < 12) {
+        (false, _) => [255; 4],
+        (true, true) => [200, 30, 30, 255],
+        (true, false) => [30, 30, 200, 255],
+    });
+    for xf in [Affine::IDENTITY, Affine::translate((100.0, 100.0)) * Affine::rotate(0.5)] {
+        let mut s = session();
+        add_image(&mut s, &band, xf);
+        let r = s
+            .execute(
+                "imageTrace.makeAndExpand",
+                &json!({"params": {"mode": "color", "palette": "limited", "colors": 3, "method": "abutting", "ignoreWhite": true}}),
+            )
+            .unwrap();
+        assert_eq!(r["paths"], 2, "{r}");
+        let n = node(&s, NodeId(r["id"].as_u64().unwrap()));
+        let group = seams(&n).unwrap();
+        let clip = &group.children().unwrap()[0];
+        assert!(matches!(clip.kind, NodeKind::Path { clipping: true, .. }), "{clip:?}");
+        let cb = outline(clip).0.bounds().unwrap();
+        let paths = n.children().unwrap()[1..].iter().filter_map(|c| c.geometric_bounds()).reduce(|a, b| a.union(b)).unwrap();
+        assert_eq!(n.geometric_bounds(), Some(paths), "{xf:?}");
+        assert!(cb.x0 >= paths.x0 - 1e-9 && cb.y0 >= paths.y0 - 1e-9 && cb.x1 <= paths.x1 + 1e-9 && cb.y1 <= paths.y1 + 1e-9, "{xf:?}: {cb:?}");
+        if xf == Affine::IDENTITY {
+            assert!([cb.x0, cb.y0 - 4.0, cb.x1 - 24.0, cb.y1 - 12.0].iter().all(|v| v.abs() < 1e-9), "{cb:?}");
+        }
+    }
+}
+
+/// On an image stretched more one way than another, the seam fills are the strokes' outlines in
+/// image pixels, filled: on an image stretched 20× across, the one along a horizontal edge covers
+/// 0.75 image pixels on each side of it, as on an image scaled alike both ways, and does not reach
+/// across the transparent rows above the edge.
+#[test]
+fn image_trace_seam_fills_on_a_stretched_image_stay_near_their_edge() {
+    // Red beside blue, the edge between them anti-aliased, on an image stretched 3× across and
+    // squeezed to half height: the outline is 1.5 pixels (4.5 points) across the vertical edge.
+    let art = vectorcraft_trace::Raster::from_fn(40, 20, |x, _| {
+        let share = (16.4 - f64::from(x)).clamp(0.0, 1.0);
+        let mix = |a: f64, b: f64| (a * share + b * (1.0 - share)).round() as u8;
+        [mix(200.0, 30.0), mix(40.0, 90.0), mix(50.0, 200.0), 255]
+    });
     let mut s = session();
     add_image(&mut s, &art, Affine::scale_non_uniform(3.0, 0.5));
     let r = s.execute("imageTrace.make", &json!({"params": {"mode": "color", "palette": "limited", "colors": 2, "method": "abutting"}})).unwrap();
-    let group = seams(&node(&s, NodeId(r["id"].as_u64().unwrap()))).unwrap();
-    let AppearanceItem::Stroke(layer) = &group.children().unwrap()[0].appearance.items[0] else { panic!("{group:?}") };
-    assert!((layer.width - 4.5).abs() < 1e-9, "{}", layer.width);
+    let n = node(&s, NodeId(r["id"].as_u64().unwrap()));
+    let kids = n.children().unwrap();
+    assert_eq!(kids[1].name.as_deref(), Some("Seam Fills"));
+    let fill = &kids[1].children().unwrap()[1];
+    assert_eq!(fill.appearance.stroke_paint(), Paint::None, "{:?}", fill.appearance);
+    assert_eq!(fill.appearance.fill_paint(), kids[2].appearance.fill_paint(), "the lower path's color");
+    let bb = outline(fill).0.bounds().unwrap();
+    assert!((bb.width() - 4.5).abs() < 0.05 && bb.y0.abs() < 1e-6 && (bb.y1 - 10.0).abs() < 1e-6, "{bb:?}");
+    // Rows 0 to 5 transparent, 5 to 10 red, 10 to 20 blue.
+    let art = vectorcraft_trace::Raster::from_fn(40, 20, |_, y| match y {
+        0..5 => [0, 0, 0, 0],
+        5..10 => [200, 30, 30, 255],
+        _ => [30, 30, 200, 255],
+    });
+    let mut s = session();
+    add_image(&mut s, &art, Affine::scale_non_uniform(20.0, 1.0));
+    let r = s.execute("imageTrace.make", &json!({"params": {"mode": "color", "palette": "limited", "colors": 2, "method": "abutting"}})).unwrap();
+    let n = node(&s, NodeId(r["id"].as_u64().unwrap()));
+    let group = n.children().unwrap().iter().find(|c| c.name.as_deref() == Some("Seam Fills")).cloned().unwrap();
+    let (_, members) = group.children().unwrap().split_first().unwrap();
+    assert!(!members.is_empty(), "{group:?}");
+    for m in members {
+        // What the member covers: its outline, grown by half its stroke's width.
+        let half = m.appearance.items.iter().fold(0.0_f64, |w, it| match it {
+            AppearanceItem::Stroke(l) => w.max(l.width / 2.0),
+            _ => w,
+        });
+        let bb = outline(m).0.bounds().unwrap();
+        let (y0, y1) = (bb.y0 - half, bb.y1 + half);
+        assert!(y0 > 9.25 - 1e-6 && y1 < 10.75 + 1e-6, "covers y {y0} to {y1}: {m:?}");
+    }
+    // Renamed, the group of filled outlines is still the seam fills: Expand by color keeps it under
+    // every color's group.
+    s.execute("layer.setProps", &json!({"id": group.id.0, "name": "Edges"})).unwrap();
+    s.execute("imageTrace.expand", &json!({"id": n.id.0, "byColor": true})).unwrap();
+    assert_eq!(node(&s, n.id).children().unwrap()[0].id, group.id);
+}
+
+/// A trace made before the seam fills were clipped holds them in a group without a clip: Expand by
+/// color keeps that group under every color's group too, named or renamed.
+#[test]
+fn image_trace_expand_by_color_keeps_unclipped_seam_fills() {
+    let art = vectorcraft_trace::Raster::from_fn(40, 20, |x, _| {
+        let share = (16.4 - f64::from(x)).clamp(0.0, 1.0);
+        let mix = |a: f64, b: f64| (a * share + b * (1.0 - share)).round() as u8;
+        [mix(200.0, 30.0), mix(40.0, 90.0), mix(50.0, 200.0), 255]
+    });
+    for name in [Some("Seam Fills"), None] {
+        let mut s = session();
+        add_image(&mut s, &art, Affine::scale(2.0));
+        let r = s.execute("imageTrace.make", &json!({"params": {"mode": "color", "palette": "limited", "colors": 2, "method": "abutting"}})).unwrap();
+        let g = NodeId(r["id"].as_u64().unwrap());
+        // The seam fills as such a trace holds them: the strokes alone, in a plain group.
+        let seams = node(&s, g).children().unwrap()[1].clone();
+        let NodeKind::Group { clip: true, children } = &seams.kind else { panic!("{seams:?}") };
+        let mut legacy = Node::group(seams.id, children[1..].to_vec());
+        legacy.name = name.map(Into::into);
+        s.edit("legacy", |d, _| {
+            let NodeKind::Group { children, .. } = &mut d.node_mut(g).unwrap().kind else { panic!("trace group") };
+            children[1] = Arc::new(legacy);
+            Ok(())
+        })
+        .unwrap();
+        s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap();
+        let kids = node(&s, g).children().unwrap().clone();
+        assert_eq!(kids.len(), 3, "{name:?}: {kids:?}");
+        assert_eq!(kids[0].id, seams.id, "{name:?}");
+    }
 }
 
 /// Expand by color: each color's paths in a group of their own, named by the color, the groups
@@ -7606,6 +8208,51 @@ fn image_trace_views_draw_on_screen_only_and_expand_to_the_result() {
         let shapes: Vec<_> = node(&s, g).children().unwrap().iter().map(|c| (c.path_data().cloned(), c.appearance.clone())).collect();
         assert_eq!(*expanded.get_or_insert_with(|| shapes.clone()), shapes, "{view:?}: expanded");
         s.execute("edit.undo", &json!({})).unwrap();
+    }
+}
+
+/// Outline views draw the traced paths' outlines and leave out an Abutting trace's seam fills
+/// (their clipping box and strokes, or on a stretched image the strokes' filled outlines), renamed
+/// too.
+#[test]
+fn image_trace_outline_view_leaves_out_the_seam_fills() {
+    // Red beside blue in the middle of a transparent 60 × 40 image, placed at 50, 50 and scaled 2×,
+    // or 2× across and 2.5× down.
+    let art = vectorcraft_trace::Raster::from_fn(60, 40, |x, y| match ((10..50).contains(&x) && (10..30).contains(&y), x < 30) {
+        (false, _) => [0, 0, 0, 0],
+        (true, true) => [200, 30, 30, 255],
+        (true, false) => [30, 30, 200, 255],
+    });
+    for (scale, stretched) in [(Affine::scale(2.0), false), (Affine::scale_non_uniform(2.0, 2.5), true)] {
+        let mut s = session();
+        add_image(&mut s, &art, Affine::translate((50.0, 50.0)) * scale);
+        let r = s.execute("imageTrace.make", &json!({"params": {"mode": "color", "palette": "limited", "colors": 2, "method": "abutting"}})).unwrap();
+        let g = NodeId(r["id"].as_u64().unwrap());
+        let seams =
+            node(&s, g).children().unwrap().iter().find(|c| matches!(c.kind, NodeKind::Group { clip: true, .. })).cloned().expect("seam fills");
+        // Strokes, or on the stretched image their outlines, filled.
+        let members = &seams.children().unwrap()[1..];
+        assert!(!members.is_empty());
+        for m in members {
+            let (fill, stroke) = (m.appearance.fill_paint(), m.appearance.stroke_paint());
+            assert_eq!((fill != Paint::None, stroke != Paint::None), (stretched, !stretched), "{scale:?}: {fill:?}, {stroke:?}");
+        }
+        s.execute("imageTrace.setView", &json!({"id": g.0, "view": "outlines"})).unwrap();
+        let screen = render_doc(&s, true);
+        // The image's top edge (y = 50), away from the art: nothing drawn.
+        for x in [60, 110, 160] {
+            assert!(screen.pixel(x, 50)[0] > 245 && screen.pixel(x, 51)[0] > 245, "{scale:?}, x = {x}: {:?}", screen.pixel(x, 50));
+        }
+        // The art's left edge (x = 70) is outlined.
+        assert!((68..=72).any(|x| screen.pixel(x, 90)[0] < 128), "{scale:?}");
+        // Beside the red and blue paths' shared edge (x = 110), inside the seam band (1.5 units
+        // each side on the stretched image) but off the traced outlines (x = 109 and 110): nothing.
+        for x in [108, 111] {
+            assert!(screen.pixel(x, 100)[0] > 245, "{scale:?}, x = {x}: {:?}", screen.pixel(x, 100));
+        }
+        // Renamed, the group is still left out: the view draws as it did.
+        s.execute("layer.setProps", &json!({"id": seams.id.0, "name": "Edges"})).unwrap();
+        assert!(render_doc(&s, true).pixels == screen.pixels, "{scale:?}: renamed seam fills drawn");
     }
 }
 

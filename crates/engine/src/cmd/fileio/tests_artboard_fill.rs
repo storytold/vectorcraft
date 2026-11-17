@@ -32,7 +32,24 @@ fn with(mut p: Value, more: &Value) -> Value {
 /// The pixels of the PNG `document.export` writes of the active document with `p`, on transparency.
 fn png(s: &mut Session, p: Value) -> image::RgbaImage {
     let v = s.execute("document.export", &with(json!({"format": "png", "background": "transparent"}), &p)).unwrap();
-    image::load_from_memory(&b64(&v)).unwrap().to_rgba8()
+    craft_image_codecs::decode(&b64(&v))
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8()
 }
 
 /// The file `document.export` writes with `p`.
@@ -61,7 +78,26 @@ fn raster_exports_paint_the_color_behind_the_art() {
     assert_eq!(png(&mut s, json!({"artboard": 0, "includeArtboardFill": false})).get_pixel(2, 2)[3], 0, "left out");
     assert_eq!(png(&mut s, json!({"artboard": 1})).get_pixel(2, 2)[3], 0, "an artboard without a color");
     let jpg = file(&mut s, json!({"format": "jpg", "artboard": 0, "quality": 100}));
-    let px = image::load_from_memory(&jpg).unwrap().to_rgb8().get_pixel(2, 2).0;
+    let px = craft_image_codecs::decode(&jpg)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgb8()
+        .get_pixel(2, 2)
+        .0;
     assert!(px[0] > 240 && px[1] < 16 && px[2] < 16, "JPEG too: {px:?}");
     for bad in [json!("no"), json!(1)] {
         assert!(s.execute("document.export", &json!({"format": "png", "includeArtboardFill": bad})).is_err(), "{bad}");
@@ -163,7 +199,28 @@ fn export_for_screens_includes_the_fill_unless_unchecked() {
         let p = with(json!({"artboards": [0], "formats": [{"format": "png"}], "settings": {"png": {"background": "transparent"}}}), &more);
         s.execute("document.exportForScreens", &p).unwrap()
     };
-    let corner = |r: &Value| image::load_from_memory(&b64(&r["files"][0])).unwrap().to_rgba8().get_pixel(2, 2).0;
+    let corner = |r: &Value| {
+        craft_image_codecs::decode(&b64(&r["files"][0]))
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(2, 2)
+            .0
+    };
     assert_eq!(corner(&screens(&mut s, json!({}))), RED, "on by default");
     assert_eq!(corner(&screens(&mut s, json!({"includeArtboardFill": false})))[3], 0, "unchecked");
     assert_eq!(s.execute("document.exportSettings", &json!({})).unwrap()["settings"]["includeArtboardFill"], false, "remembered");

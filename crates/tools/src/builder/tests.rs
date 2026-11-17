@@ -1120,8 +1120,170 @@ fn bucket_click_fills_face_and_shift_click_strokes_edge() {
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 75.0, 25.0)), vec![Action::Commit]);
     let shift = Mods { shift: true, ..Default::default() };
     let acts = t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(shift));
-    let Action::Exec(id, _) = &acts[0] else { panic!() };
+    let [Action::Begin(_), Action::Preview(id, _)] = acts.as_slice() else { panic!("{acts:?}") };
     assert_eq!(id, "livePaint.strokeEdge");
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 51.0, 25.0).with_mods(shift)), vec![Action::Commit]);
+}
+
+/// A drag reaches the visible edges its path crosses or passes within 0.0001 pt of, including the
+/// middle of a curved edge it runs past without crossing; a hidden edge and an edge farther away are
+/// not reached.
+#[test]
+fn visible_edges_along_finds_crossed_and_near_edges() {
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let mut arc = BezPath::new();
+    arc.move_to((100.0, 0.0));
+    // Farthest right at (130, 50), where it runs straight down.
+    arc.curve_to((140.0, 0.0), (140.0, 100.0), (100.0, 100.0));
+    let mut kids = vec![empty_sources(&mut d)];
+    let mut ids = vec![];
+    for (path, visible) in [
+        (shapes::line(Point::new(0.0, 0.0), Point::new(0.0, 100.0)), true),
+        (shapes::line(Point::new(50.0, 0.0), Point::new(50.0, 100.0)), false),
+        (vectorcraft_geom::PathData::from_bezpath(&arc), true),
+        (shapes::line(Point::new(0.0, 200.0), Point::new(100.0, 200.0)), true),
+    ] {
+        let id = d.alloc_id();
+        let mut edge = Node::path(id, path, Appearance::default());
+        edge.name = Some(EDGE_NAME.into());
+        edge.visible = visible;
+        kids.push(Arc::new(edge));
+        ids.push(id);
+    }
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    d.insert(Some(l), 0, g).unwrap();
+    let group = d.node(gid).unwrap();
+    let reached = |x: f64| {
+        let chunks = vec![
+            vec![Point::new(-10.0, 50.0), Point::new(60.0, 50.0), Point::new(60.0, -20.0)],
+            vec![Point::new(60.0, -20.0), Point::new(x, -20.0), Point::new(x, 60.0)],
+        ];
+        visible_edges_along(group, &chunks).iter().map(|e| e.id).collect::<Vec<_>>()
+    };
+    assert_eq!(reached(130.00005), vec![ids[0], ids[2]]);
+    assert_eq!(reached(130.001), vec![ids[0]]);
+}
+
+/// A drag that passes 0.0002 pt before the start of a long curved edge does not reach it, although
+/// the curve extended a tiny step past its start meets the drag.
+#[test]
+fn visible_edges_along_skips_an_edge_the_drag_meets_only_past_its_end() {
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let mut curve = BezPath::new();
+    curve.move_to((0.0, 0.0));
+    curve.curve_to((100000.0, 0.0), (200000.0, 100.0), (300000.0, 100.0));
+    let id = d.alloc_id();
+    let mut edge = Node::path(id, vectorcraft_geom::PathData::from_bezpath(&curve), Appearance::default());
+    edge.name = Some(EDGE_NAME.into());
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, vec![empty_sources(&mut d), Arc::new(edge)]);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    d.insert(Some(l), 0, g).unwrap();
+    let group = d.node(gid).unwrap();
+    let reached = |x: f64| visible_edges_along(group, &[vec![Point::new(x, -1.0), Point::new(x, 1.0)]]).iter().map(|e| e.id).collect::<Vec<_>>();
+    assert_eq!(reached(-0.0002), Vec::<NodeId>::new());
+    assert_eq!(reached(-0.00005), vec![id]);
+    assert_eq!(reached(0.0002), vec![id]);
+}
+
+/// A double-click on an edge after a press whose drag stroked another edge of the line joins
+/// through that edge as the stroke paint it had before the drag.
+#[test]
+fn bucket_edge_double_click_joins_through_an_edge_the_first_drag_stroked() {
+    let black = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 0.0));
+    let green = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 1.0, 0.0));
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let mut kids = vec![empty_sources(&mut d)];
+    let mut ids = vec![];
+    for (x0, x1) in [(0.0, 30.0), (30.0, 70.0), (70.0, 100.0)] {
+        let id = d.alloc_id();
+        let mut a = Appearance::default();
+        a.set_stroke(black.clone());
+        let mut edge = Node::path(id, shapes::line(Point::new(x0, 100.0), Point::new(x1, 100.0)), a);
+        edge.name = Some(EDGE_NAME.into());
+        kids.push(Arc::new(edge));
+        ids.push(id);
+    }
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    d.insert(Some(l), 0, g).unwrap();
+    let mut later = d.clone();
+    for id in &ids[1..] {
+        later.node_mut(*id).unwrap().appearance.set_stroke(green.clone());
+    }
+    let s = Selection::default();
+    let p = paint();
+    let (cx, later) = (cx(&d, &s, &p), cx(&later, &s, &p));
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = LivePaintBucketTool::default();
+    // The first press strokes the right edge and its drag crosses the middle one.
+    for (k, x, y) in
+        [(PointerKind::Down, 85.0, 100.0), (PointerKind::Drag, 85.0, 110.0), (PointerKind::Drag, 50.0, 110.0), (PointerKind::Up, 50.0, 90.0)]
+    {
+        t.pointer(&cx, &ev(k, x, y).with_mods(shift));
+    }
+    t.pointer(&later, &ev(PointerKind::Down, 85.0, 100.0).with_mods(shift));
+    t.pointer(&later, &ev(PointerKind::Up, 85.0, 100.0).with_mods(shift));
+    let like = serde_json::to_value(&black).unwrap();
+    assert_eq!(
+        t.pointer(&later, &ev(PointerKind::DoubleClick, 85.0, 100.0).with_mods(shift)),
+        vec![Action::Exec(
+            "livePaint.strokeEdge".into(),
+            json!({ "group": gid.0, "point": [85.0, 100.0], "tolerance": 4.0, "scope": "connected", "through": [ids[1].0], "match": like })
+        )]
+    );
+}
+
+/// A drag from an edge previews `livePaint.strokeEdge` with the drag's path as it goes and commits
+/// once on the release; Escape cancels it, and what the drag paints is fixed at the press.
+#[test]
+fn bucket_edge_drag_previews_points_and_commits_once() {
+    let (d, gid, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Default::default() };
+    let stroke = |points: Value| {
+        let mut v = json!({ "group": gid.0, "point": [51.0, 25.0], "tolerance": 4.0 });
+        if !points.is_null() {
+            v["points"] = points;
+        }
+        Action::Preview("livePaint.strokeEdge".into(), v)
+    };
+    let mut t = LivePaintBucketTool::default();
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(shift)),
+        vec![Action::Begin("Live Paint Bucket".into()), stroke(Value::Null)]
+    );
+    assert!(t.busy());
+    // Shift let go during the drag: the drag still paints edges.
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Drag, 75.0, 25.0)), vec![stroke(json!([[51.0, 25.0], [75.0, 25.0]]))]);
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 120.0, 25.0)), vec![stroke(json!([[51.0, 25.0], [75.0, 25.0], [120.0, 25.0]])), Action::Commit]);
+    assert!(!t.busy());
+    // Escape before the release cancels the drag, and the release then commits nothing.
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(shift)),
+        vec![Action::Begin("Live Paint Bucket".into()), stroke(Value::Null)]
+    );
+    t.pointer(&cx, &ev(PointerKind::Drag, 75.0, 25.0).with_mods(shift));
+    assert!(t.claims_key(&cx, ToolKey::Escape));
+    assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 120.0, 25.0).with_mods(shift)).is_empty());
+    // With both options on, a drag from a face fills faces, even across an edge.
+    t.set_option("paintStrokes", &json!(true));
+    let acts = t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0));
+    let [Action::Begin(_), Action::Preview(id, _)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert_eq!(id, "livePaint.fill");
+    let acts = t.pointer(&cx, &ev(PointerKind::Drag, 51.0, 25.0));
+    let [Action::Preview(id, _)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert_eq!(id, "livePaint.fill");
+    t.pointer(&cx, &ev(PointerKind::Up, 51.0, 25.0));
 }
 
 /// A double-click runs a click's command with `scope: "connected"` and a triple-click with
@@ -1484,7 +1646,12 @@ fn bucket_options_choose_what_a_click_paints() {
     let fill = |x: f64| {
         vec![Action::Begin("Live Paint Bucket".into()), Action::Preview("livePaint.fill".into(), json!({ "group": gid.0, "point": [x, 25.0] }))]
     };
-    let stroke = |x: f64| vec![Action::Exec("livePaint.strokeEdge".into(), json!({ "group": gid.0, "point": [x, 25.0], "tolerance": 4.0 }))];
+    let stroke = |x: f64| {
+        vec![
+            Action::Begin("Live Paint Bucket".into()),
+            Action::Preview("livePaint.strokeEdge".into(), json!({ "group": gid.0, "point": [x, 25.0], "tolerance": 4.0 })),
+        ]
+    };
     let click = |t: &mut LivePaintBucketTool, x: f64, m: Mods| {
         let acts = t.pointer(&cx, &ev(PointerKind::Down, x, 25.0).with_mods(m));
         t.pointer(&cx, &ev(PointerKind::Up, x, 25.0).with_mods(m));
@@ -1805,9 +1972,15 @@ fn bucket_alt_shift_samples_gradient_image_and_stroke_color() {
 
     let mut d = Document::new(500.0, 500.0);
     let l = d.layers[0].id;
-    let img = image::RgbaImage::from_raw(3, 1, [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255]].concat()).unwrap();
-    let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let img = craft_image_codecs::Image::from_raw(
+        3,
+        1,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        vec![255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255],
+    )
+    .unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
     d.images.insert("px".into(), vectorcraft_doc::ImageBlob::png(png));
     let im = vectorcraft_doc::ImageObject {
         key: "px".into(),
@@ -3089,8 +3262,13 @@ fn live_paint_edges_outside_the_faces_come_from_the_nearest_visible_group() {
         bucket.set_option("cursorSwatchPreview", &json!(false));
         bucket.pointer(&cx, &ev(PointerKind::Move, x, y).with_mods(shift));
         assert_eq!(edge_x(&bucket.overlays(&cx)), want.map(|w| w.2));
-        let stroked = want.map(|(g, ..)| Action::Exec("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": [x, y], "tolerance": 4.0 })));
-        assert_eq!(bucket.pointer(&cx, &ev(PointerKind::Down, x, y).with_mods(shift)), stroked.into_iter().collect::<Vec<_>>());
+        let stroked = want.map(|(g, ..)| {
+            vec![
+                Action::Begin("Live Paint Bucket".into()),
+                Action::Preview("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": [x, y], "tolerance": 4.0 })),
+            ]
+        });
+        assert_eq!(bucket.pointer(&cx, &ev(PointerKind::Down, x, y).with_mods(shift)), stroked.unwrap_or_default());
     };
     check(&d, Some((back, back_right, 100.0)));
     // A hidden group's edges are not highlighted or picked.
@@ -3133,8 +3311,13 @@ fn live_paint_tools_skip_hidden_edges() {
         bucket.set_option("cursorSwatchPreview", &json!(false));
         bucket.pointer(&cx, &ev(PointerKind::Move, x, 50.0).with_mods(shift));
         assert_eq!(edge_x(&bucket.overlays(&cx)), want.map(|w| w.2), "x {x}");
-        let stroked = want.map(|(g, ..)| Action::Exec("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": [x, 50.0], "tolerance": 4.0 })));
-        assert_eq!(bucket.pointer(&cx, &ev(PointerKind::Down, x, 50.0).with_mods(shift)), stroked.into_iter().collect::<Vec<_>>(), "x {x}");
+        let stroked = want.map(|(g, ..)| {
+            vec![
+                Action::Begin("Live Paint Bucket".into()),
+                Action::Preview("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": [x, 50.0], "tolerance": 4.0 })),
+            ]
+        });
+        assert_eq!(bucket.pointer(&cx, &ev(PointerKind::Down, x, 50.0).with_mods(shift)), stroked.unwrap_or_default(), "x {x}");
     }
 }
 
