@@ -6,7 +6,9 @@
 //! Fields: `width`, `height` (pt, or percentages of the image's size with `percentages`),
 //! `spacingX`, `spacingY` (pt), `columns`, `rows`, `lock` (Constrain Ratio on), `constrain`
 //! (`width` | `height`: the side Constrain Ratio and Use Ratio keep), `gray`, `percentages` and
-//! `deleteRaster`. `__imageW` and `__imageH` hold the image's size (pt).
+//! `deleteRaster`. `__imageW` and `__imageH` hold the image's size (pt), read again from the
+//! selected image each frame, before `ui.dialog.set` sets fields and on OK; `__noImage` is true
+//! while no image is selected.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
@@ -66,6 +68,36 @@ pub fn open(app: &mut VectorcraftApp, given: &Value) -> Result<Value, String> {
     });
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     Ok(json!({ "dialog": KIND }))
+}
+
+/// The field that is true while no image is selected.
+const NO_IMAGE: &str = "__noImage";
+
+/// What the dialog shows when Resize Using Percentages is switched with no image selected.
+const NO_IMAGE_WHY: &str = "select an image";
+
+/// The selected image's size `size` (from [`image_size`]) read into the dialog, so New Size is
+/// converted and constrained against the image as it is now, also after it was scaled while the
+/// dialog was open. With no image selected the last size read stays and `__noImage` is set.
+fn read_image(size: Option<(f64, f64)>, d: &mut Dialog) {
+    let Some((w, h)) = size else {
+        d.fields.insert(NO_IMAGE.into(), json!(true));
+        return;
+    };
+    if d.fields.remove(NO_IMAGE).is_some() && d.str(form::REFUSED) == NO_IMAGE_WHY {
+        d.fields.remove(form::REFUSED);
+    }
+    d.fields.insert("__imageW".into(), json!(w));
+    d.fields.insert("__imageH".into(), json!(h));
+}
+
+/// [`read_image`] on the open dialog when it is this one. `ui.dialog.set` runs it before it sets
+/// any field.
+pub(crate) fn refresh(app: &mut VectorcraftApp) {
+    let size = image_size(app);
+    if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == KIND) {
+        read_image(size, d);
+    }
 }
 
 /// The image's size (pt) the dialog holds.
@@ -142,8 +174,13 @@ fn derived(d: &Dialog) -> Option<(&'static str, f64)> {
 /// Resize Using Percentages turned on or off: the new size shown the other way, so it stays the
 /// same size. When a size field does not hold a number, or a size the command takes (all but the
 /// side Constrain Ratio sets) falls outside what the command accepts the other way, the fields and
-/// the mode stay as they are and the dialog shows why.
+/// the mode stay as they are and the dialog shows why. With no image selected, nothing changes and
+/// the dialog asks for one.
 fn switch_percentages(d: &mut Dialog, on: bool) {
+    if d.bool(NO_IMAGE) {
+        d.fields.insert(form::REFUSED.into(), json!(NO_IMAGE_WHY));
+        return;
+    }
     let (iw, ih) = image(d);
     let size = |key: &str| number(d, key, 100.0).as_f64().ok_or_else(|| format!("`{key}` must be a number (got {})", d.str(key)));
     let (w, h) = match (size("width"), size("height")) {
@@ -270,6 +307,7 @@ fn pair(ui: &mut egui::Ui, d: &mut Dialog, keys: [&str; 2], unit: vectorcraft_do
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let unit = app.session.general_unit();
+    read_image(image_size(app), d);
     let (iw, ih) = image(d);
     widgets::label_row(ui, tl!("Current Size:"), LABEL_W, |ui| {
         widgets::dim_label(ui, tl!("Width:"));
@@ -335,8 +373,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
+/// OK: the new size worked out against the image's size as it is now, as a frame would show it.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    run_and_close(app, COMMAND, params(d))
+    let mut d = d.clone();
+    read_image(image_size(app), &mut d);
+    follow_ratio(&mut d);
+    run_and_close(app, COMMAND, params(&d))
 }
 
 #[cfg(test)]
@@ -617,6 +659,55 @@ mod tests {
         let e = crate::dialogs::confirm(&mut app).unwrap_err();
         assert!(e.contains("width"), "{e}");
         assert_eq!(mosaic(&app), None);
+    }
+
+    /// The image scaled from 100 × 50 pt to 200 × 100 pt while the dialog is open: Current Size shows
+    /// the new size, and Resize Using Percentages, by `ui.dialog.set` or by its checkbox, converts
+    /// New Size against it, so OK makes the size shown. With no image selected, switching is refused.
+    #[test]
+    fn percentages_convert_against_the_image_scaled_while_the_dialog_is_open() {
+        let set = |app: &mut VectorcraftApp, field: &str, value: Value| {
+            let (req, _) = crate::control::ControlRequest::new("ui.dialog.set", json!({"field": field, "value": value}));
+            let crate::control::Outcome::Done(r) = crate::control::handle(app, &egui::Context::default(), &req) else {
+                panic!("expected an immediate reply")
+            };
+            r
+        };
+        let mut app = app_with_image();
+        open(&mut app, &json!({"width": 200, "height": 100})).unwrap();
+        app.run("object.scale", json!({"sx": 200, "sy": 200})).unwrap();
+        let ctx = context();
+        frame(&mut app, &ctx);
+        let texts = frame(&mut app, &ctx);
+        assert!(texts.iter().any(|t| t == "200 pt"), "Current Size shows the scaled image: {texts:?}");
+        let r = set(&mut app, "percentages", json!(true));
+        assert_eq!(r["ok"], json!(true), "{r}");
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.f64("width", 0.0), d.f64("height", 0.0), d.bool("percentages")), (100.0, 100.0, true));
+        app.run("object.scale", json!({"sx": 50, "sy": 50})).unwrap();
+        // The checkbox, after the image went back to 100 × 50 pt: 100% of it is 100 × 50 pt.
+        let size = image_size(&app);
+        let d = app.ui.dialog.as_mut().unwrap();
+        read_image(size, d);
+        switch_percentages(d, false);
+        assert_eq!((d.f64("width", 0.0), d.f64("height", 0.0)), (100.0, 50.0));
+        crate::dialogs::set_field(d, "percentages".into(), json!(true));
+        app.run("object.scale", json!({"sx": 200, "sy": 200})).unwrap();
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(mosaic(&app).map(|m| (m.0, m.1)), Some((200.0, 100.0)), "100% of the image as it is on OK");
+        app.run("edit.undo", json!({})).unwrap();
+        // No image selected: the mode and sizes stay and the dialog asks for an image.
+        app.run("select.set", json!({"ids": [image_id(&app)]})).unwrap();
+        open(&mut app, &json!({})).unwrap();
+        app.run("select.set", json!({"ids": []})).unwrap();
+        set(&mut app, "percentages", json!(true));
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.f64("width", 0.0), d.bool("percentages")), (200.0, false));
+        assert_eq!(d.str(form::REFUSED), NO_IMAGE_WHY);
+        app.run("select.set", json!({"ids": [image_id(&app)]})).unwrap();
+        set(&mut app, "percentages", json!(true));
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.f64("width", 0.0), d.bool("percentages"), d.str(form::REFUSED)), (100.0, true, String::new()));
     }
 
     /// True or false set after a Resize Using Percentages value the command refuses replaces it: the
