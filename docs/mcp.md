@@ -9770,7 +9770,7 @@ paragraphs a `start` / `end` range touches), in percent:
 
 The options are saved with the paragraph (`justification` in `para`) only when they differ from the defaults, and
 paragraph styles carry them (`paraStyle.new {attrs: {justification: {auto_leading: 150}}}`). Vertical type isn't glyph
-scaled, and type on a path doesn't use them. One undo step. `ui.justification` opens the Justification dialog on the
+scaled. Type on a path takes the Desired values and does not use Minimum or Maximum. One undo step. `ui.justification` opens the Justification dialog on the
 values the Paragraph panel shows, with Preview; OK sends the values that changed.
 
 ```json

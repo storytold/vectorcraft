@@ -420,6 +420,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Improved:** hanging punctuation (Roman Hanging Punctuation and Optical Margin Alignment) keeps its published amounts when justification scales glyphs, and Standard burasagari counts a hung line start as room; paragraph-level tests with both composers; estimate unchanged.
 - **Done:** Paragraph panel menu › Justification… (#2755): word and letter spacing, glyph scaling (Minimum, Desired,
   Maximum), Auto Leading and Single Word Justification per paragraph, used by both composers; estimate unchanged.
+- **Done:** type on a path takes each paragraph's Justification… Desired word spacing, letter spacing and glyph
+  scaling, as point and area type do; estimate unchanged.
 - **Done:** a paragraph's Auto Leading also sets the Leading the Character panel shows for Auto type, the leading the
   Alt+↑/↓ nudge steps from and the lines Fill with Placeholder Text counts; estimate unchanged.
 - **Missing:** CJK vertical
