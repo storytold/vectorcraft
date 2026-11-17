@@ -537,10 +537,7 @@ impl Mapper {
         let shape = if k > 1e-12 && k.is_finite() && linear.determinant().abs() > 1e-24 { Affine::scale(1.0 / k) * linear } else { Affine::IDENTITY };
         let f = &t.font;
         let h = f64::from(f.height);
-        // A negative height is the em; a positive one the cell (the em and the internal leading).
-        let em = if h < 0.0 { -h } else { h * 0.85 };
-        let size = if em > 0.0 && (em * k).is_finite() { (em * k).clamp(0.5, 5000.0) } else { 12.0 };
-        let mut style = CharStyle { size, fill: color(t.color), stroke: Paint::None, ..CharStyle::default() };
+        let mut style = CharStyle { fill: color(t.color), stroke: Paint::None, ..CharStyle::default() };
         if !f.family.trim().is_empty() {
             style.font_family = f.family.trim().to_string();
         }
@@ -551,6 +548,32 @@ impl Mapper {
             (false, false) => "Regular",
         }
         .into();
+        // The face layout draws the type in (the fallback face for a font that isn't installed).
+        let face = vectorcraft_text::FontDb::global().style_face(&style);
+        // A negative height is the em. A positive height is the character cell, and the em is
+        // the cell times unitsPerEm divided by the face's OS/2 usWinAscent plus usWinDescent
+        // (its own ascent plus descent when it has no OS/2 table).
+        let cell_em = face.as_ref().and_then(|face| {
+            let (a, d) = face.vertical_metrics();
+            Some(face.units_per_em() / face.win_cell_height().unwrap_or(a + d)).filter(|r| r.is_finite() && *r > 0.0)
+        });
+        let em = if h < 0.0 { -h } else { h * cell_em.unwrap_or(0.85) };
+        let sized = em > 0.0 && (em * k).is_finite();
+        let size = if sized { (em * k).clamp(0.5, 5000.0) } else { 12.0 };
+        style.size = size;
+        // An average character width, negative or positive, becomes Horizontal Scale: the face's
+        // own average width (OS/2 xAvgCharWidth) at the type size is stretched or narrowed to it,
+        // also when the size was held to its range. A width is ignored when the height is 0.
+        let width = f64::from(f.width).abs();
+        if width > 0.0
+            && sized
+            && let Some(avg) = face.as_ref().and_then(|face| Some(face.average_char_width()? / face.units_per_em()))
+        {
+            let h_scale = width * k / (avg * size) * 100.0;
+            if h_scale.is_finite() {
+                style.h_scale = h_scale.clamp(1.0, 10000.0);
+            }
+        }
         style.underline = f.underline;
         style.strikethrough = f.strike;
         // Where the baseline is below the reference point.

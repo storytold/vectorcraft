@@ -8724,6 +8724,14 @@ pattern brushes fill with their average color. Records VectorCraft doesn't read 
 pastes `image/emf` from the system clipboard ahead of text and bitmaps when the platform's clipboard service offers it
 (the Windows desktop service doesn't read metafiles yet).
 
+The type size comes from the font's height. A negative height is the em. A positive height is the character cell, and
+the em is the cell times the face's units per em divided by its OS/2 `usWinAscent` plus `usWinDescent` (its ascent
+plus descent when it has no OS/2 table). When the face gives an average width (OS/2 `xAvgCharWidth`), a font's average
+character width, negative or positive, becomes Horizontal Scale: the face's average width at the type size is
+stretched or narrowed to the font's width. VectorCraft's own rules are that a negative width is read as its absolute
+value and that the width is ignored when the height is 0. For a font the system doesn't have, both values are measured
+in the face VectorCraft draws the type in.
+
 ```json
 {"name":"export","arguments":{"path":"/tmp/logo.emf"}}
 {"name":"run_command","arguments":{"command":"document.export","params":{"format":"wmf","useArtboards":true,"path":"/tmp/icons.wmf"}}}

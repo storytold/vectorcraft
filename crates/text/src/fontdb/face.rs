@@ -368,6 +368,21 @@ impl FontFace {
     pub fn line_gap(&self) -> f64 {
         self.skrifa().map_or(0.0, |f| f64::from(f.metrics(Size::unscaled(), self.location()).leading)).max(0.0)
     }
+    /// The height of the face's character cell on Windows (the OS/2 table's `usWinAscent` plus
+    /// `usWinDescent`), in font units; `None` when the font has no OS/2 table or both are 0.
+    pub fn win_cell_height(&self) -> Option<f64> {
+        use skrifa::raw::TableProvider;
+        let o = self.skrifa()?.os2().ok()?;
+        let h = f64::from(o.us_win_ascent()) + f64::from(o.us_win_descent());
+        (h > 0.0).then_some(h)
+    }
+    /// The average width of the face's characters (the OS/2 table's `xAvgCharWidth`), in font
+    /// units; `None` when the font has no OS/2 table or gives no positive width.
+    pub fn average_char_width(&self) -> Option<f64> {
+        use skrifa::raw::TableProvider;
+        let w = f64::from(self.skrifa()?.os2().ok()?.x_avg_char_width());
+        (w > 0.0).then_some(w)
+    }
     /// Every mapped character and its glyph id, sorted by code point (the Glyphs panel).
     pub fn chars(&self) -> Vec<(char, u32)> {
         self.mapped_chars().to_vec()
