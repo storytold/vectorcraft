@@ -3239,6 +3239,9 @@ diagnostics	ui	felület
 	Polar Grid Tool	Polárrács
 	Polygon	Sokszög
 	Polygon Properties:	Sokszög tulajdonságai:
+	Line Properties:	Vonal tulajdonságai:
+	Line Length:	Vonal hossza:
+	Line Angle:	Vonal szöge:
 	Polygon Tool	Sokszög
 	Portrait	Álló
 	Portrait (flipped)	Álló (megfordítva)

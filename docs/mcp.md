@@ -6467,7 +6467,12 @@ polygon (Polygon Properties): `sides` (3–1000), `polygonAngle` (degrees counte
 at 0), `polygonRadius` (pt, centre to vertex), `sideLength` (pt, which sets the radius) and `makeSidesEqual: true`,
 which drops an uneven scale or shear (its sides then differ) and keeps its centre, angle and mean radius; a radius or
 length that isn't a number above 0 is an error. An ellipse (Ellipse Properties): `pieStart` and `pieEnd` (degrees
-counterclockwise from 3 o'clock; 0 to 360 is the whole ellipse) and `invertPie: true`, which swaps them. Each call is
+counterclockwise from 3 o'clock; 0 to 360 is the whole ellipse) and `invertPie: true`, which swaps them. A line drawn
+with the Line Segment tool (Line Properties): `lineLength` (pt, above 0; the line's first end stays in place) and
+`lineAngle` (degrees counterclockwise from 3 o'clock, from the first end to the second; the line turns about its
+midpoint; any finite value is brought into 0 to 360). With both, the length applies first. A line whose ends meet reads
+0° and keeps its place under `lineAngle`; `lineLength` points it to the right. A length that isn't a number above 0,
+and a line that would reach past the coordinate limit (±4,000,000 pt), are errors that change no line. Each call is
 one undo step.
 
 `object.setLiveShape` returns a parameter error, and leaves the document and its undo history as they were, for a key
@@ -6480,6 +6485,7 @@ below 3 or above 1000 counts as 3 or 1000, and a fractional or negative `sides` 
 ```json
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"sides":8,"polygonAngle":22.5,"sideLength":40}}}
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"makeSidesEqual":true}}}
+{"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"lineLength":72,"lineAngle":90}}}
 ```
 
 ## Align to Artboard

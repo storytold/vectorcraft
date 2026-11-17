@@ -416,10 +416,11 @@ fn pixel_aligned_ids(app: &VectorcraftApp) -> Vec<u64> {
     app.session.active().map(|st| st.selection.objects.iter().filter(|id| st.doc.node(**id).is_some()).map(|id| id.0).collect()).unwrap_or_default()
 }
 
-/// A live rectangle's, polygon's or ellipse's properties (Transform and Properties panels, and the
-/// Contextual Task Bar), their widget ids under `id`. `headed` adds the Rectangle and Polygon
-/// Properties headings; an ellipse's heading always shows. Returns false, drawing nothing, for
-/// other live shapes.
+/// A live rectangle's, polygon's, ellipse's or line's properties (Transform and Properties panels,
+/// and for the first three the Contextual Task Bar), their widget ids under `id`. `headed` adds
+/// the Rectangle and Polygon Properties headings; an ellipse's and a line's heading always show.
+/// Returns false, drawing nothing, for other live shapes, and for a line unless every selected
+/// object is one.
 pub(crate) fn live_shape_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live: &LiveShape, id: &str, headed: bool) -> bool {
     match live {
         LiveShape::Rectangle { .. } => {
@@ -438,7 +439,47 @@ pub(crate) fn live_shape_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, l
             widgets::subheader(ui, tl!("Ellipse Properties:"));
             pie_rows(app, ui, *pie, &format!("{id}-pie"));
         }
+        LiveShape::Line { .. } => return line_rows(app, ui, live, &format!("{id}-line")),
         _ => return false,
+    }
+    true
+}
+
+/// Whether every selected object is a live line (and one is selected).
+fn only_lines_selected(app: &VectorcraftApp) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    let line = |n: &Node| matches!(&n.kind, NodeKind::Path { live: Some(l), .. } if matches!(**l, LiveShape::Line { .. }));
+    !st.selection.objects.is_empty() && st.selection.objects.iter().all(|o| st.doc.node(*o).is_some_and(line))
+}
+
+/// A live line's Line Properties (Transform and Properties panels), under its heading: its length,
+/// end to end, and its angle (counterclockwise from 3 o'clock, from its first end to its second). A new length keeps each selected line's first end in place, and a
+/// new angle turns each one about its midpoint. Returns false, drawing nothing, unless every
+/// selected object is a live line.
+pub(crate) fn line_rows(app: &mut VectorcraftApp, ui: &mut Ui, live: &LiveShape, id: &str) -> bool {
+    if !only_lines_selected(app) {
+        return false;
+    }
+    let (units, fw) = (app.session.general_unit(), super::field_width(ui));
+    widgets::subheader(ui, tl!("Line Properties:"));
+    // The `object.setLiveShape` param an edited field sets.
+    let mut set = None;
+    egui::Grid::new((id, "grid")).num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
+        widgets::dim_label(ui, tl!("Line Length:"));
+        if let Some(l) = widgets::num_field_named(ui, (id, "length"), Some(tl!("Line Length:")), live.line_length(), units, fw) {
+            set = Some(("lineLength", json!(l)));
+        }
+        ui.end_row();
+        widgets::dim_label(ui, tl!("Line Angle:"));
+        if let Some(a) = widgets::plain_field_named(ui, (id, "angle"), Some(tl!("Line Angle:")), live.line_angle().unwrap_or(0.0), "°", 1, fw) {
+            set = Some(("lineAngle", json!(a)));
+        }
+        ui.end_row();
+    });
+    if let Some((key, v)) = set
+        && let Err(e) = app.run("object.setLiveShape", json!({ key: v }))
+    {
+        app.status(e);
     }
     true
 }

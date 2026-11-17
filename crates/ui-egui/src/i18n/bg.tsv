@@ -2599,6 +2599,9 @@ font-technology	Variable	Променливи
 	Polar Grid Tool	Инструмент „Полярна мрежа“
 	Polygon	Многоъгълник
 	Polygon Properties:	Свойства на многоъгълника:
+	Line Properties:	Свойства на линията:
+	Line Length:	Дължина на линията:
+	Line Angle:	Ъгъл на линията:
 	Polygon Tool	Инструмент „Многоъгълник“
 	Portrait	Портретна
 	Power Saving (integrated)	Пестене на енергия (интегрирано)
