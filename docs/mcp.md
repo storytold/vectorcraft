@@ -4810,7 +4810,9 @@ dialog runs it (OK with it set in the same request runs it first):
 `save` (Save Changes) runs `swatch.editGroup` on the selected group with the colors OK would give it and the name in
 `groupName`, `new` (New Color Group) saves the new colors of the rows that are not excluded as `swatch.newGroup` does,
 and `delete` (Delete) runs `swatch.delete` on the selected group. Each is its own undo step, and the art keeps its
-preview. An excluded row leaves its swatch its own color, with or without art. When the art has colors of the group,
+preview. An excluded row leaves its swatch its own color, with or without art, and an excluded row past the group's
+swatches adds none. When several rows list a swatch's color, the swatch follows a row that gives the color a new color
+before an excluded row or one that removes the color, as `recolor.apply` maps the art. When the art has colors of the group,
 `save` and OK keep the group's swatches in order: a swatch whose color a row lists, or to which an earlier `save` gave
 a row's new color, takes that row's new color (its own color when the row is
 excluded), so art linked to the swatch takes the color its row shows, and every other swatch keeps its color. A row whose color was removed (`to: null`) and is not excluded
