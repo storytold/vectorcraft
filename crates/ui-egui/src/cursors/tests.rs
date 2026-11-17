@@ -336,6 +336,34 @@ fn the_live_paint_bucket_shows_a_bucket_or_a_brush() {
     }
 }
 
+/// The Knife's cursor, which the Trim at Crossings Tool shows too, is drawn, not the crosshair: a
+/// knife with the blade's point on the hotspot, the white blade, then the black handle up-right.
+#[test]
+fn the_knife_shows_a_knife_with_its_point_on_the_hotspot() {
+    for ppp in [1.0f32, 2.0] {
+        let img = |c| rasterize(c, ppp).unwrap_or_else(|| panic!("{c:?} at {ppp}"));
+        let (cross, knife, brush) = (img(Cursor::Crosshair), img(Cursor::Knife), img(Cursor::LivePaintBucketEdge));
+        // The pixel nearest the point `u` points up-right of the hotspot and `v` down-right across.
+        let at = |img: &CustomCursorImage, u: f32, v: f32| {
+            let s = std::f32::consts::FRAC_1_SQRT_2;
+            let [hx, hy] = img.hotspot.map(f32::from);
+            let (x, y) = ((hx + (u + v) * s * ppp - 0.5).round(), (hy + (v - u) * s * ppp - 0.5).round());
+            let inside = x >= 0.0 && y >= 0.0 && x < f32::from(img.size[0]) && y < f32::from(img.size[1]);
+            if inside { pixel(img, x as usize, y as usize) } else { [0; 4] }
+        };
+        let inked = |p: [u8; 4]| p[3] > 200 && p[0] < 64;
+        let white = |p: [u8; 4]| p[3] > 200 && p[0] > 192;
+        assert!(at(&knife, 0.0, 0.0)[3] > 0, "the point covers the hotspot at {ppp}");
+        assert!(white(at(&knife, 8.0, 0.5)), "the white blade at {ppp}");
+        assert!(inked(at(&knife, 16.0, 0.2)), "the black handle at {ppp}");
+        assert!(!inked(at(&knife, -4.0, 0.0)), "nothing beyond the point at {ppp}");
+        assert!(Cursor::Knife.stand_in().is_none(), "the Knife is drawn");
+        assert_ne!(knife, cross, "the Knife is not the crosshair at {ppp}");
+        assert_ne!(knife, brush, "the Knife is not the Live Paint brush at {ppp}");
+        assert_eq!(rasterize(Cursor::Knife.precise(), ppp).as_ref(), Some(&cross), "with Use Precise Cursors at {ppp}");
+    }
+}
+
 /// Live Paint Selection's cursors are the solid arrow, its tip on the hotspot, with a badge at its
 /// lower right: a filled square over a face, a line between two anchor marks over an edge, and an x
 /// where a click selects nothing.
