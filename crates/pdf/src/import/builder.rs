@@ -748,8 +748,15 @@ impl<'p> Builder<'p> {
                 self.opaque.insert(mkey);
                 return None;
             };
-            let mut png = Vec::new();
-            image::GrayImage::from_raw(a.width, a.height, a.data)?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+            let raw = craft_image_codecs::Image::from_raw(
+                a.width,
+                a.height,
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U8,
+                a.data,
+            )
+            .ok()?;
+            let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
             let blob = ImageBlob::new("image/png", png);
             let k = blob.content_key();
             self.images.insert(k.clone(), blob);
@@ -984,7 +991,7 @@ impl<'p> Builder<'p> {
         self.flush_type3();
         if let (Some(s), Some(line)) = (&look.stroke, &mut self.text)
             && look.fill.is_none()
-            && line.stroke_last(font_key, at, s.clone(), overprint)
+            && line.stroke_filled(font_key, at, opacity, &text, s.clone(), overprint)
         {
             return true;
         }
@@ -1146,9 +1153,13 @@ impl<'p> Builder<'p> {
         // A stroke over the glyph just filled (fill and stroke rendering).
         if let (Some(s), Some(line)) = (&look.stroke, &mut self.text)
             && look.fill.is_none()
-            && line.stroke_last(key, at, s.clone(), overprint)
+            && line.stroke_filled(key, at, opacity, &text, s.clone(), overprint)
         {
-            self.keep_glyph(o, m, drawn, opacity, scale, overprint);
+            // Upright glyphs aren't kept as outlines (nor, below, are those filled only): a
+            // vertical line that came in as its outlines would lose the ones filled only.
+            if top.is_none() {
+                self.keep_glyph(o, m, drawn, opacity, scale, overprint);
+            }
             return true;
         }
         if !self.text.as_mut().is_some_and(place) {

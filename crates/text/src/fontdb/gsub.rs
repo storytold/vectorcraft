@@ -549,6 +549,13 @@ impl FontFace {
         self.gsub_index().by_input.get(&gid).cloned().unwrap_or_default()
     }
 
+    /// Do [`Self::substitutions`] of glyph `gid` give a glyph other than `gid` itself? It reads the
+    /// face's index without copying the substitutions, so the Glyphs panel asks it for each cell it
+    /// draws.
+    pub fn has_alternates(&self, gid: u32) -> bool {
+        self.gsub_index().by_input.get(&gid).is_some_and(|subs| subs.iter().any(|s| s.glyphs.iter().any(|&g| g != gid)))
+    }
+
     /// The feature of the `GSUB` table that gives glyph `gid` as a substitute (by a single,
     /// multiple, alternate or ligature substitution), a listed feature ([`Self::substitutions`])
     /// before another (`init`, `liga`), if any does. Not read through a contextual lookup.

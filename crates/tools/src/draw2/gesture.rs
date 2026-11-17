@@ -18,7 +18,8 @@
 //! gives there. The other tools
 //! collect the drag polyline (shown as an overlay) and run one command on release. With Shift
 //! held, the Blob Brush's points stay on the horizontal or
-//! vertical line through the press point. Alt held at the press, or before the Blob Brush's drag
+//! vertical line through the press point, and the Eraser's on the line from the press point at the
+//! nearest 45° step from the Constrain Angle. Alt held at the press, or before the Blob Brush's drag
 //! has moved, switches the Blob Brush to the Smooth tool: the drag smooths the selected paths.
 //! Alt held at a Paintbrush press with a selected path also smooths; Alt pressed after its stroke
 //! begins closes the path on release.
@@ -29,9 +30,11 @@
 //! line to 45° steps from the canvas axes.
 
 mod area;
+mod line;
 
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_brush::{Calligraphic, Variation};
@@ -43,6 +46,7 @@ use super::{FEEDBACK, blob_area, blob_tip, eraser_tip, points_json, polyline};
 use crate::guides::DrawSnap;
 use crate::{Action, Cursor, Mods, Overlay, PenPose, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 use area::{AreaKey, AreaPreview};
+use line::LinePreview;
 
 /// How far from its drag the Smooth tool smooths, in screen pixels. Alt smoothing with the
 /// Pencil, Paintbrush or Blob Brush uses the same radius.
@@ -80,6 +84,9 @@ const BAND_WORK_PER_CALL: usize = 20_000;
 const PREVIEW_FIDELITY_PX: f64 = 0.5;
 /// The Smooth tool's Fidelity (screen pixels) until Smooth Tool Options sets another.
 const SMOOTH_FIDELITY: f64 = 2.5;
+/// How far the pointer goes from the press point, in screen pixels, before a Shift-drag of the
+/// Eraser takes the 45° step it lies nearest to.
+const ERASER_SHIFT_PX: f64 = 3.0;
 
 /// The `fidelity` (points) the Pencil and the Paintbrush send `path.freehand` for `px` screen pixels
 /// at the current zoom, within the range the command takes
@@ -176,7 +183,8 @@ pub struct GestureTool {
     /// The straight line is not constrained to 45° steps: the Pencil's Alt line, whose end snaps to
     /// Smart Guides as a stroke's end does, or the Knife's line while Shift is up.
     unconstrained: bool,
-    /// Axis selected during the current uninterrupted Shift interval, in degrees.
+    /// Axis selected during the current uninterrupted Shift interval, in degrees: the Blob Brush's
+    /// horizontal or vertical, or the Eraser's 45° step.
     shift_line: Option<f64>,
     /// "Merge only with selection": a Blob Brush stroke merges only with selected paths.
     pub merge_only_selection: bool,
@@ -212,6 +220,8 @@ pub struct GestureTool {
     band: Cell<Option<SmoothBand>>,
     /// The band last shown does not cover the whole drag yet; the next call adds to it.
     band_pending: Cell<bool>,
+    /// The pieces of a long drag's line shown so far ([`LinePreview`]).
+    line: Cell<Option<LinePreview>>,
 }
 
 /// The band a smoothing drag smooths, for the drag's first `used` points at `radius`, kept as its
@@ -234,8 +244,8 @@ struct SmoothBand {
     dirty_long: BTreeSet<usize>,
     /// The band changed since `shown` was made.
     changed: bool,
-    /// The outline last finished.
-    shown: Option<BezPath>,
+    /// The outline last finished, shared with the overlays that show it until it is made again.
+    shown: Option<Arc<BezPath>>,
     /// The work done on long segments in the current call ([`BAND_WORK_PER_CALL`]).
     work: usize,
 }
@@ -491,7 +501,7 @@ impl SmoothBand {
     /// The band's outline: the last one finished. While the band has changed since, the parts it
     /// changed are made again, until [`BAND_WORK_PER_CALL`] is spent in the call; when all are
     /// made, the outline is joined from them ([`SmoothBand::make_outline`]).
-    fn outline(&mut self) -> Option<BezPath> {
+    fn outline(&mut self) -> Option<Arc<BezPath>> {
         while self.changed {
             if !self.dirty_tiles.is_empty() || !self.dirty_long.is_empty() {
                 if self.work >= BAND_WORK_PER_CALL {
@@ -511,7 +521,7 @@ impl SmoothBand {
                     }
                 }
             } else {
-                self.shown = Some(self.make_outline());
+                self.shown = Some(Arc::new(self.make_outline()));
                 self.changed = false;
             }
         }
@@ -898,6 +908,7 @@ impl GestureTool {
             area_pending: Cell::new(false),
             band: Cell::new(None),
             band_pending: Cell::new(false),
+            line: Cell::new(None),
         }
     }
 
@@ -1019,9 +1030,10 @@ impl GestureTool {
     }
 
     /// Constrain a straight Pencil line from the Constrain Angle, a straight Knife cut from the
-    /// canvas axes, or the current Blob Brush sample. Blob Brush chooses an
-    /// axis once per uninterrupted Shift interval; samples already drawn never move.
-    /// A smoothing drag follows the pointer without a Shift constraint.
+    /// canvas axes, or the current Blob Brush or Eraser sample. The Blob Brush chooses an axis,
+    /// and the Eraser a 45° step from the Constrain Angle, once per uninterrupted Shift interval;
+    /// samples already drawn never move. A smoothing drag follows the pointer without a Shift
+    /// constraint.
     fn constrained(&mut self, cx: &ToolContext, p: Point, m: Mods) -> Point {
         if self.straight && self.unconstrained {
             return p;
@@ -1032,10 +1044,21 @@ impl GestureTool {
             let origin = if self.id == "knife" { 0.0 } else { cx.constrain_angle };
             return start + vectorcraft_geom::constrain_angle_from(p - start, 45.0, origin);
         }
-        let Some(&start) = self.points.first().filter(|_| self.id == "blobBrush" && m.shift && !self.smoothing) else {
+        let shifts = (self.id == "blobBrush" && !self.smoothing) || self.id == "eraser";
+        let Some(&start) = self.points.first().filter(|_| shifts && m.shift) else {
             self.shift_line = None;
             return p;
         };
+        if self.id == "eraser" && self.shift_line.is_none() {
+            // The step is taken once the pointer is clear of the press point, in screen pixels at
+            // any zoom; until then the stroke waits at its last sample.
+            let v = p - start;
+            if v.hypot() * cx.zoom < ERASER_SHIFT_PX {
+                return self.points.last().copied().unwrap_or(start);
+            }
+            let c = vectorcraft_geom::constrain_angle_from(v, 45.0, cx.constrain_angle);
+            self.shift_line = Some(-c.y.atan2(c.x).to_degrees());
+        }
         if self.shift_line.is_none() {
             // Raw press-to-pointer displacement in logical screen pixels along the constraint
             // axes. Zoom changes the document distance, not the activation tolerance.
@@ -1053,6 +1076,16 @@ impl GestureTool {
             };
         }
         start + vectorcraft_geom::constrain_angle_from(p - start, 180.0, self.shift_line.unwrap_or(cx.constrain_angle))
+    }
+
+    /// [`Self::constrained`] for a drag to `p`: the Eraser's tip outline shows where its stroke
+    /// is, on the line of a Shift-drag.
+    fn constrained_drag(&mut self, cx: &ToolContext, p: Point, m: Mods) -> Point {
+        let p = self.constrained(cx, p, m);
+        if self.id == "eraser" && self.tip_at.is_some() {
+            self.tip_at = Some(p);
+        }
+        p
     }
 
     /// The Blob Brush's or the Eraser's tip at the pointer, before and while painting: its outline
@@ -1127,6 +1160,7 @@ impl GestureTool {
         self.area_pending.set(false);
         self.band.set(None);
         self.band_pending.set(false);
+        self.line.set(None);
     }
 
     /// The outline of the band a smoothing drag smooths: every point within `radius` of the drag,
@@ -1139,8 +1173,9 @@ impl GestureTool {
     /// outside the squares, and one whose outlines cannot be combined adds nothing. Either way the
     /// band goes on past it. The work on such long segments stops for the call once
     /// [`BAND_WORK_PER_CALL`] is spent, and the drag is added to the band only once the outline of
-    /// what it holds is finished.
-    fn smooth_band(&self, radius: f64) -> Option<BezPath> {
+    /// what it holds is finished. The outline is the same shared path from one call to the next
+    /// until the band changes.
+    fn smooth_band(&self, radius: f64) -> Option<Arc<BezPath>> {
         let pts = &self.points;
         let &first = pts.first()?;
         let mut b = self
@@ -1612,7 +1647,7 @@ impl Tool for GestureTool {
                 }
                 self.knife_shift(ev.mods);
                 self.moved |= self.points.first().is_some_and(|start| p.distance(*start) > vectorcraft_geom::EPS);
-                let p = self.constrained(cx, p, ev.mods);
+                let p = self.constrained_drag(cx, p, ev.mods);
                 let mut end = p;
                 if self.grid_snaps(cx) && !self.smoothing && !self.straight {
                     // Where the stroke would end on the grid or a pixel: taken on release.
@@ -1818,7 +1853,7 @@ impl Tool for GestureTool {
             && has_selected_smooth_path(cx)
             && let Some(path) = self.smooth_band(cx.tol(SMOOTH_RADIUS))
         {
-            o.push(Overlay::Path { path, color: FEEDBACK, width: 1.0, dashed: true });
+            o.push(Overlay::SharedPath { path, color: FEEDBACK, width: 1.0, dash: Some(0.0) });
         }
         // A Blob Brush drag that smooths shows the Smooth tool's thin line.
         let width = match self.id {
@@ -1851,17 +1886,34 @@ impl Tool for GestureTool {
             let sized = |[angle, roundness, size]: [f64; 3]| [angle, roundness, if size_varies { size } else { self.size }];
             area.step(&self.points, &|i| sized(self.tip_of_point(i)), &|j| sized(self.tip_between(j)));
             let paths = area.paths(&self.points);
-            o.extend(paths.settled.into_iter().map(|path| Overlay::SharedPath { path, color, width: 1.0 }));
+            o.extend(paths.settled.into_iter().map(|path| Overlay::SharedPath { path, color, width: 1.0, dash: None }));
             o.extend(paths.live.into_iter().map(|path| Overlay::Path { path, color, width: 1.0, dashed: false }));
             self.area_pending.set(area.pending(&self.points));
             self.area.set(Some(area));
         } else if size_varies {
             // With Size on a mode that follows the pen, each step of the drag shows as wide as the
-            // tip the pen gives at its ends.
-            for (j, seg) in self.points.windows(2).enumerate() {
-                let width = (self.tip_of_point(j)[2] + self.tip_of_point(j + 1)[2]) / 2.0 * cx.zoom;
-                o.push(Overlay::Path { path: polyline(seg), color, width: width as f32, dashed: false });
+            // tip the pen gives at its ends. A long drag's steps are kept from call to call
+            // ([`LinePreview::segments`]).
+            let width_of = |j: usize| ((self.tip_of_point(j)[2] + self.tip_of_point(j + 1)[2]) / 2.0 * cx.zoom) as f32;
+            if self.points.len() > line::PIECE_SEGMENTS + 1 {
+                let mut kept = self.line.take().unwrap_or_default();
+                for (j, path) in kept.segments(&self.points).into_iter().enumerate() {
+                    o.push(Overlay::SharedPath { path, color, width: width_of(j), dash: None });
+                }
+                self.line.set(Some(kept));
+            } else {
+                for (j, seg) in self.points.windows(2).enumerate() {
+                    o.push(Overlay::Path { path: polyline(seg), color, width: width_of(j), dashed: false });
+                }
             }
+        } else if self.points.len() > line::PIECE_SEGMENTS + 1 {
+            // A long drag's line shows in pieces kept from call to call ([`LinePreview::pieces`]).
+            let mut kept = self.line.take().unwrap_or_default();
+            let dashed = self.id == "knife";
+            for piece in kept.pieces(&self.points) {
+                o.push(Overlay::SharedPath { path: piece.path, color, width, dash: dashed.then_some(piece.along) });
+            }
+            self.line.set(Some(kept));
         } else {
             o.push(Overlay::Path { path: polyline(&self.points), color, width, dashed: self.id == "knife" });
         }

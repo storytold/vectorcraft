@@ -7,6 +7,7 @@ use super::{
     StrokeLayer, Vec2, fnv1a, fx, shapes, text, vector_effect,
 };
 use crate::SvgError;
+use craft_svg::tree::usvg;
 use kurbo::BezPath;
 use vectorcraft_color::GradientSpread;
 
@@ -206,9 +207,11 @@ impl Importer {
             None => {
                 let base = self.name_of(&sym).to_string();
                 let names = &self.symbol_names;
-                let name = unique_name(&base, &mut self.symbol_suffixes, |n| names.contains(n));
-                self.symbol_names.insert(name.clone());
-                let reuse = Reuse::of(&self.doc, &art);
+                let name = unique_name(&base, &mut self.symbol_suffixes, |n| names.contains_key(n));
+                let doc = &self.doc;
+                let find = |n: &str| names.get(n).and_then(|&i| doc.symbols.get(i)).filter(|s| s.name == n);
+                let reuse = Reuse::of(doc, &find, &art);
+                self.symbol_names.insert(name.clone(), self.doc.symbols.len());
                 let made = SymbolMade { name: name.clone(), art: without_ids(&art), reuse };
                 self.doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.clone(), art: Arc::new(art) });
                 self.symbols.insert(sym, made);
@@ -778,11 +781,7 @@ impl Importer {
             usvg::ImageKind::SVG(tree) => return self.svg_image(tree, acc),
         };
         let size = i.size();
-        let (pw, ph) = image::ImageReader::new(std::io::Cursor::new(&bytes[..]))
-            .with_guessed_format()
-            .ok()
-            .and_then(|r| r.into_dimensions().ok())
-            .unwrap_or((size.width().round().max(1.0) as u32, size.height().round().max(1.0) as u32));
+        let (pw, ph) = vectorcraft_doc::header_size(bytes).unwrap_or((size.width().round().max(1.0) as u32, size.height().round().max(1.0) as u32));
         // A turned CMYK image is stored as the CMYK TIFF of its inks, the size of the PNG usvg got.
         let cmyk = self.files.stored(i.kind());
         let (bytes, mime) = match &cmyk {
@@ -865,7 +864,7 @@ mod tests {
             hidden: HashSet::new(),
             uses: HashMap::new(),
             symbols: HashMap::new(),
-            symbol_names: HashSet::new(),
+            symbol_names: HashMap::new(),
             symbol_suffixes: HashMap::new(),
             pattern_suffixes: HashMap::new(),
             blends: HashMap::new(),
