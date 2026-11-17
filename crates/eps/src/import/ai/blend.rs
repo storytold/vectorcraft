@@ -260,9 +260,13 @@ fn centre(n: &Node) -> Option<Point> {
 /// The most anchors of an object's paths the check compares; an object with more is compared by its
 /// size alone.
 const MAX_MARK_ANCHORS: usize = 64;
-/// The most pairs of objects whose outlines one check compares; the rest are compared by their
-/// sizes alone (the orientation turns every step alike).
+/// The most drawn objects whose outlines one check compares, spread evenly from the first to the
+/// last; the rest are compared by their sizes alone (the orientation turns every step alike).
 const MAX_OUTLINE_CHECKS: usize = 16;
+/// The most outline comparisons one check makes (a drawn object compared can have more than one
+/// laid object in its place); past them, a drawn object whose outline is to be compared matches
+/// none.
+const MAX_OUTLINE_COMPARISONS: usize = 4 * MAX_OUTLINE_CHECKS;
 
 /// An object as the check compares it.
 #[derive(Clone, Copy, Debug)]
@@ -369,10 +373,11 @@ fn same_fill(a: Fill, b: Fill) -> bool {
 /// farthest, each drawn object matched to a laid one of its own within the tolerance (each laid
 /// one matches one drawn one: the nearest still free; through a grid of cells the tolerance wide,
 /// so each finds its neighbours without looking at them all), when they are as many and each
-/// matches in place and fill, and with `turned` also in width and height and, for the first
-/// [`MAX_OUTLINE_CHECKS`] pairs compared, in the outline of its paths (each within twice the
-/// tolerance), which turning an object changes; else `None` (also when that matching leaves one
-/// out).
+/// matches in place and fill, and with `turned` also in width and height and, for at most
+/// [`MAX_OUTLINE_CHECKS`] drawn objects spread from the first to the last, in the outline of its
+/// paths (each within twice the tolerance), which turning an object changes; else `None` (also when
+/// that matching leaves one out, and when it would take more than [`MAX_OUTLINE_COMPARISONS`]
+/// outline comparisons).
 fn how_far(laid: &[Node], drawn: &[Drawn], turned: bool) -> Option<f64> {
     if laid.len() != drawn.len() {
         return None;
@@ -384,15 +389,29 @@ fn how_far(laid: &[Node], drawn: &[Drawn], turned: bool) -> Option<f64> {
         grid.entry(cell(l.centre)).or_default().push(i);
     }
     let close = |a: Point, b: Point| (a.x - b.x).abs() <= 2.0 * PLACE_TOLERANCE && (a.y - b.y).abs() <= 2.0 * PLACE_TOLERANCE;
-    let outlines_checked = std::cell::Cell::new(0usize);
-    let same_turn = |l: &Drawn, d: &Drawn| {
+    // The drawn objects whose outlines are compared: all of them, or as many as the limit allows,
+    // spread evenly so that the first and the last are among them.
+    let mut compare_outline = vec![drawn.len() <= MAX_OUTLINE_CHECKS; drawn.len()];
+    if drawn.len() > MAX_OUTLINE_CHECKS {
+        for j in 0..MAX_OUTLINE_CHECKS {
+            if let Some(c) = compare_outline.get_mut(j * (drawn.len() - 1) / (MAX_OUTLINE_CHECKS - 1)) {
+                *c = true;
+            }
+        }
+    }
+    let outlines_compared = std::cell::Cell::new(0usize);
+    let same_turn = |l: &Drawn, d: &Drawn, compare: bool| {
         if !turned {
             return true;
         }
-        if !close(l.size, d.size) || outlines_checked.get() >= MAX_OUTLINE_CHECKS {
+        if !close(l.size, d.size) || !compare {
             return close(l.size, d.size);
         }
-        outlines_checked.set(outlines_checked.get() + 1);
+        // An outline that isn't compared doesn't count as the same.
+        if outlines_compared.get() >= MAX_OUTLINE_COMPARISONS {
+            return false;
+        }
+        outlines_compared.set(outlines_compared.get() + 1);
         match (outline(l.node), outline(d.node)) {
             (Some(a), Some(b)) => same_outline(&a, &b, 2.0 * PLACE_TOLERANCE),
             // Too many anchors, or no paths: compared by the size alone.
@@ -401,8 +420,9 @@ fn how_far(laid: &[Node], drawn: &[Drawn], turned: bool) -> Option<f64> {
     };
     let mut used = vec![false; laid.len()];
     let mut worst: f64 = 0.0;
-    for d in drawn {
+    for (k, d) in drawn.iter().enumerate() {
         let (c, f) = (d.centre, d.fill);
+        let compare = compare_outline.get(k).copied().unwrap_or(false);
         let (cx, cy) = cell(c);
         // Coordinates far out saturate the cells: the neighbours' keys saturate too.
         let (i, near) = (-1i64..=1)
@@ -411,7 +431,7 @@ fn how_far(laid: &[Node], drawn: &[Drawn], turned: bool) -> Option<f64> {
             .flatten()
             .filter(|&&i| !used.get(i).copied().unwrap_or(true))
             .filter_map(|&i| laid.get(i).map(|l| (i, l)))
-            .filter(|(_, l)| (l.centre - c).hypot() <= PLACE_TOLERANCE && same_fill(l.fill, f) && same_turn(l, d))
+            .filter(|(_, l)| (l.centre - c).hypot() <= PLACE_TOLERANCE && same_fill(l.fill, f) && same_turn(l, d, compare))
             .map(|(i, l)| (i, (l.centre - c).hypot()))
             .min_by(|a, b| a.1.total_cmp(&b.1))?;
         if let Some(u) = used.get_mut(i) {
@@ -647,6 +667,15 @@ mod tests {
         let half = std::f64::consts::PI;
         assert!(check(&upright, &[bent(0.0, half), bent(50.0, half)], false).is_some());
         assert!(check(&upright, &[bent(0.0, half), bent(50.0, half)], true).is_none(), "the bent side at the bottom");
+        // Past the limit of outlines compared, the last object is still among them.
+        let row = |last: Node| {
+            let mut row: Vec<Node> = (0..MAX_OUTLINE_CHECKS).map(|i| square(20.0 * i as f64)).collect();
+            row.push(last);
+            row
+        };
+        let end = 20.0 * MAX_OUTLINE_CHECKS as f64;
+        assert!(check(&row(bent(end, 0.0)), &row(bent(end, 0.0)), true).is_some());
+        assert!(check(&row(bent(end, 0.0)), &row(bent(end, half)), true).is_none(), "the last one turned");
         // A compound path matches with its contours in another order, and not turned a half turn.
         let pair = |x: f64, flip: bool, turn: f64| {
             let a = SubPath::polyline(&[Point::new(x, 0.0), Point::new(x, 4.0), Point::new(x + 10.0, 2.0)], true);
