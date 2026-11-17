@@ -2179,6 +2179,7 @@ font-technology	Variable	Променливи
 	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Черното става цвят на щриха, а бялото остава бяло. Другите цветове стават оттенъци на цвета на щриха и колкото по-светъл е един цвят, толкова по-светъл е оттенъкът му.
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Черното остава черно, а бялото остава бяло. Другите цветове стават тъмни нюанси на цвета на щриха, когато са тъмни, и негови оттенъци, когато са светли.
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Основният цвят става цвят на щриха. Другите цветове се завъртат по цветовото колело толкова, колкото и основният цвят, и запазват насищането и яркостта си.
+	Roundness	Закръгленост
 	Roundness:	Закръгленост:
 	Fixed	Фиксирано
 	Pressure	Натиск

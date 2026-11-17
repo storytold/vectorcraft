@@ -41,7 +41,7 @@ pub use color::{
     color_mesh, color_slider, color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32,
     hue_ring, region_texture, ring_square, segment_color, segment_color_on, segmented_wheel, stepped_area, wheel_of,
 };
-pub(crate) use color::{HEX_FIELD_CHARS, hex_text, pointer_phase};
+pub(crate) use color::{HEX_FIELD_CHARS, focus_by_pointer, hex_text, pointer_phase};
 pub use drag::{
     PanelDrag, RowClick, SwatchRows, apply_row_click, art_drop, doc_preview, drag_ghost, drag_source, drop_target_outline, ghost_row, row_click,
 };

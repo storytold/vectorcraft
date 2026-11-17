@@ -2195,6 +2195,7 @@ font-technology	Variable	Variabla
 	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Svart blir konturfärgen och vitt förblir vitt. Andra färger blir ljusare toner av konturfärgen, och ju ljusare en färg är, desto ljusare är dess ton.
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Svart förblir svart och vitt förblir vitt. Andra färger blir mörkare toner av konturfärgen när de är mörka och ljusare toner av den när de är ljusa.
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Nyckelfärgen blir konturfärgen. De andra färgerna flyttas lika långt runt färghjulet som nyckelfärgen och behåller sin mättnad och ljusstyrka.
+	Roundness	Rundhet
 	Roundness:	Rundhet:
 	Fixed	Fast
 	Pressure	Tryck

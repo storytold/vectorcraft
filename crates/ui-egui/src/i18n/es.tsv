@@ -2262,6 +2262,7 @@ font-technology	Variable	Variables
 	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	El negro pasa a ser el color del trazo y el blanco sigue siendo blanco. Los demás colores pasan a ser matices del color del trazo, y cuanto más claro es un color, más claro es su matiz.
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	El negro sigue siendo negro y el blanco sigue siendo blanco. Los demás colores pasan a ser sombras del color del trazo cuando son oscuros y matices de él cuando son claros.
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	El color clave pasa a ser el color del trazo. Los demás colores giran en la rueda de colores lo mismo que el color clave y conservan su saturación y su brillo.
+	Roundness	Redondez
 	Roundness:	Redondez:
 	Fixed	Fijo
 	Pressure	Presión

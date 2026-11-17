@@ -3430,6 +3430,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	黑色變為筆畫顏色，白色維持白色。其他顏色變為筆畫顏色的淺色，顏色越淺，淺色就越淺。
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	黑色維持黑色，白色維持白色。其他顏色較暗時變為筆畫顏色的暗色，較亮時變為筆畫顏色的淺色。
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	主要顏色變為筆畫顏色。其他顏色在色輪上移動與主要顏色相同的距離，並保留其飽和度和亮度。
+	Roundness	圓度
 	Roundness:	圓度：
 	Fixed	固定
 	Pressure	壓力
