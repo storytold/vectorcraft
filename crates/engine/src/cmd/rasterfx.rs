@@ -378,11 +378,12 @@ pub(crate) fn raster_pixels(d: &Document, n: &Node, below: bool, members: bool) 
 /// The image Object › Rasterize makes of `n` with the options of `n`'s Effect › Rasterize, when
 /// that is its only visible raster effect and is its own (not a fill's or a stroke's): made of `n`
 /// without that effect and without its transparency, which stays on the object. When Transform
-/// effects after the Rasterize effect move its image ([`vectorcraft_render::rasterize_stage`]),
-/// the image is made of the art before them and moved by them, as the canvas draws it. `None`
-/// otherwise, when those Transform effects flatten the image, or when the image can't be made.
+/// effects after the Rasterize effect move or copy its image ([`vectorcraft_render::rasterize_stage`]),
+/// the image is made of the art before them once and placed by each of their maps, as the canvas
+/// draws it: with copies, a group of the placements with the lowest first. `None` otherwise, when
+/// those Transform effects flatten every placement, or when the image can't be made.
 fn rasterize_effect_image(d: &mut Document, n: &Node) -> Option<Node> {
-    let (whole, r, map) = rasterize_effect_art(d, n)?;
+    let (whole, r, maps) = rasterize_effect_art(d, n)?;
     let p = json!({
         "ppi": r.ppi.unwrap_or(d.raster_effects_ppi),
         "colorModel": r.color_model.id(),
@@ -395,33 +396,58 @@ fn rasterize_effect_image(d: &mut Document, n: &Node) -> Option<Node> {
     // image's transparency would need one too; upgrade when CMYK images carry alpha.
     let image = super::menucmds::rasterize_art(d, vec![whole], &p, "object.rasterize", false).ok()?;
     let mut image = image.into_node(d);
-    if let Some(map) = map {
-        image.transform(map, false);
+    match maps.as_deref() {
+        None => Some(image),
+        Some([map]) => {
+            image.transform(*map, false);
+            Some(image)
+        }
+        Some(maps) => {
+            // Each placement is an object of its own on the one image's pixels.
+            let placed: Vec<Arc<Node>> = maps
+                .iter()
+                .map(|map| {
+                    let mut copy = d.reid(&image);
+                    copy.transform(*map, false);
+                    Arc::new(copy)
+                })
+                .collect();
+            Some(Node::group(d.alloc_id(), placed))
+        }
     }
-    Some(image)
 }
 
 /// What [`rasterize_effect_image`] makes its image of: `n`, or the art before the Transform effects
-/// that move the image, without the Rasterize effect and without its transparency; that effect's
-/// options; and the map those Transform effects move the image by. `None` when `n` has another
-/// raster effect, when the Rasterize effect is not its own, or when those Transform effects
-/// flatten the image.
-fn rasterize_effect_art(d: &Document, n: &Node) -> Option<(Node, effects::Rasterize, Option<Affine>)> {
+/// that move or copy the image, without the Rasterize effect and without its transparency; that
+/// effect's options; and the maps those Transform effects place the image by, the lowest first,
+/// without those that flatten it. `None` when `n` has another raster effect, when the Rasterize
+/// effect is not its own, or when those Transform effects flatten every placement.
+fn rasterize_effect_art(d: &Document, n: &Node) -> Option<(Node, effects::Rasterize, Option<Vec<Affine>>)> {
     let [RasterFx::Rasterize(r)] = raster_fx(n)[..] else { return None };
-    let staged = vectorcraft_render::rasterize_stage(d, n);
-    if let Some((_, map)) = &staged
-        && !(map.determinant().is_finite() && map.determinant().abs() > 1e-12)
-    {
-        return None;
-    }
-    let (stage, map) = staged.map_or((None, None), |(stage, map)| (Some(stage), Some(map)));
+    let (stage, maps) = match vectorcraft_render::rasterize_stage(d, n) {
+        Some((stage, maps)) => {
+            let maps: Vec<Affine> = maps.into_iter().filter(|m| places(*m)).collect();
+            if maps.is_empty() {
+                return None;
+            }
+            (Some(stage), Some(maps))
+        }
+        None => (None, None),
+    };
     let n = stage.as_ref().unwrap_or(n);
     let at = n.appearance.effects.iter().position(|e| e.visible && e.id == effects::RASTERIZE)?;
     let mut whole = n.clone();
     whole.appearance.effects.remove(at);
     (whole.opacity, whole.blend) = (1.0, Default::default());
     whole.extras_mut().mask = None;
-    Some((whole, r, map))
+    Some((whole, r, maps))
+}
+
+/// Does `map`, one of those a Rasterize image is placed by ([`vectorcraft_render::rasterize_stage`]),
+/// place it? Not when it flattens it to a line or a point: the canvas draws nothing there.
+fn places(map: Affine) -> bool {
+    let det = map.determinant();
+    det.is_finite() && det.abs() > 1e-12
 }
 
 /// `v` (an object without its raster effects) replaced by `image` of the object with them: the
@@ -658,27 +684,32 @@ fn walk_all(out: &mut Document, nodes: &[Arc<Node>], report: &mut FlattenReport)
         .then(|| nodes.iter().map(|n| walk(out, n, report).map(Arc::new).unwrap_or_else(|| n.clone())).collect())
 }
 
-/// `n` as an image when its Rasterize image moves with the Transform effects after it
-/// ([`vectorcraft_render::rasterize_stage`]): the image is made of the art before those Transform
-/// effects and moved by them, as the canvas draws it, which baking the geometry effects first would
-/// lose. A map that flattens the image leaves an empty group, as the canvas draws nothing. Inside
-/// groups, layers and opacity masks, the members are looked at the same way. `None` when nothing in
-/// `n` changes; hidden objects and template layers stay as they are.
+/// `n` as an image when its Rasterize image moves with the Transform effects after it, or as a
+/// group of that image's placements when they copy it ([`vectorcraft_render::rasterize_stage`]):
+/// the image is made of the art before those Transform effects and placed by them, as the canvas
+/// draws it, which baking the geometry effects first would lose. Maps that flatten every placement
+/// leave an empty group, as the canvas draws nothing. Inside groups, layers and opacity masks, the
+/// members are looked at the same way. `None` when nothing in `n` changes; hidden objects and
+/// template layers stay as they are.
 fn staged(out: &mut Document, n: &Node, report: &mut FlattenReport) -> Option<Node> {
     if !n.visible || matches!(n.kind, NodeKind::Layer { template: true, .. }) {
         return None;
     }
-    if let Some((_, map)) = vectorcraft_render::rasterize_stage(out, n) {
+    if let Some((_, maps)) = vectorcraft_render::rasterize_stage(out, n) {
         let mut v = n.clone();
         strip_raster(&mut v, false);
-        let det = map.determinant();
-        if !(det.is_finite() && det.abs() > 1e-12) {
+        if !maps.iter().any(|m| places(*m)) {
             v.appearance = Default::default();
             v.kind = NodeKind::Group { children: vec![], clip: false };
             return Some(v);
         }
         let image = raster_image(out, n, false, false)?;
-        report.record(n, &image);
+        // The placements share one image: its resolution is the first one's.
+        let first = match &image.kind {
+            NodeKind::Group { children, clip: false } => children.first().map_or(&image, |c| &**c),
+            _ => &image,
+        };
+        report.record(n, first);
         let mut m = replace_with_image(v, image);
         staged_mask(out, &mut m, report);
         return Some(m);

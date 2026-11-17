@@ -17,7 +17,41 @@ use crate::tests_folder::Folder;
 /// A `w`×`h` red PNG declaring `ppi`.
 fn png(w: u32, h: u32, ppi: f64) -> Vec<u8> {
     let mut out = vec![];
-    image::RgbaImage::from_pixel(w, h, image::Rgba([255, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(w, h, image::Rgba([255, 0, 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     vectorcraft_engine::cmd::fileio::ppi::with_png_resolution(&out, (ppi, ppi))
 }
 
@@ -722,21 +756,61 @@ fn the_place_dialog_links_a_pdf_page_and_embeds_it_with_link_off() {
 }
 
 #[test]
-fn the_place_dialog_does_not_offer_a_postscript_ai_as_a_locked_object() {
+fn the_place_dialog_offers_a_postscript_ai_and_an_eps_file_as_a_locked_object() {
     let mut app = app();
     let ps = b"%!PS-Adobe-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n1 0 0 setrgbcolor 10 10 50 50 rectfill\nshowpage\n%%EOF\n";
     let dir = Folder::new("ui-place-postscript");
-    let path = dir.file("legacy.ai", ps);
-    // file.place embeds a .ai saved without PDF compatibility, even with Link on.
-    let r = app.session.execute("file.place", &json!({"path": path, "link": true})).unwrap();
-    assert_eq!(r["linked"], json!(false), "{r}");
-    let st = app.session.active().unwrap();
-    assert!(!matches!(st.doc.node(st.selection.objects[0]).unwrap().kind, NodeKind::PlacedDocument(_)));
-    // So Link's tooltip does not promise one locked object for it.
+    for name in ["legacy.ai", "legacy.eps", "legacy.ps"] {
+        let path = dir.file(name, ps);
+        // With Link, file.place places a .ai saved without PDF compatibility, an EPS file and a
+        // PostScript file as one locked placed document.
+        let r = app.session.execute("file.place", &json!({"path": path, "link": true})).unwrap();
+        assert_eq!(r["linked"], json!(true), "{name}: {r}");
+        let st = app.session.active().unwrap();
+        assert!(matches!(st.doc.node(st.selection.objects[0]).unwrap().kind, NodeKind::PlacedDocument(_)), "{name}");
+        // So Link's tooltip promises one locked object for it.
+        place_picked(&mut app, &path);
+        let d = app.ui.dialog.as_ref().expect("the Place dialog");
+        assert!(d.bool("__documents") && !d.bool("__others"), "{name}: {:?}", d.fields);
+        assert!(crate::dialogs::place::link_tip(d).contains("locked object"), "{name}");
+        app.ui.dialog = None;
+    }
+    // Where the platform reads part of a file, only the file's start is read to tell.
+    let asked = std::rc::Rc::new(std::cell::Cell::new(0));
+    let seen = asked.clone();
+    app.services.read_head = Some(Box::new(move |p: &str, max: usize| {
+        seen.set(max);
+        std::fs::read(p).map(|b| b[..b.len().min(max)].to_vec()).map_err(|e| e.to_string())
+    }));
+    place_picked(&mut app, &dir.file("headed.eps", ps));
+    assert!(app.ui.dialog.as_ref().expect("the Place dialog").bool("__documents"));
+    assert_eq!(asked.get(), vectorcraft_engine::cmd::place::DCS_HEAD_BYTES + 1);
+    app.ui.dialog = None;
+    // A DCS file is placed as a linked image, from its start alone too: past the start the
+    // PostScript goes on longer than what is read.
+    let mut dcs = b"%!PS-Adobe-2.0 EPSF-1.2\n%%BoundingBox: 0 0 20 10\n%%CyanPlate: pic.C\n%%EndComments\n".to_vec();
+    dcs.resize(vectorcraft_engine::cmd::place::DCS_HEAD_BYTES + 100, b'\n');
+    // The same PostScript behind a binary EPS header (no preview).
+    let mut binary = vec![0xC5, 0xD0, 0xD3, 0xC6];
+    binary.extend(30u32.to_le_bytes());
+    binary.extend((dcs.len() as u32).to_le_bytes());
+    binary.resize(30, 0);
+    binary.extend(&dcs);
+    let files = [("plates.eps", &dcs, true), ("plates.ai", &dcs, true), ("binary.eps", &binary, true), ("binary.eps", &binary, false)];
+    for (name, bytes, head) in files {
+        if !head {
+            app.services.read_head = None;
+        }
+        place_picked(&mut app, &dir.file(name, bytes));
+        let d = app.ui.dialog.as_ref().expect("the Place dialog");
+        assert!(!d.bool("__documents") && d.bool("__others"), "{name}, head {head}: {:?}", d.fields);
+        app.ui.dialog = None;
+    }
+    // A file named .eps that isn't PostScript gets the tooltip for other files.
+    let path = dir.file("notes.eps", b"not PostScript");
     place_picked(&mut app, &path);
     let d = app.ui.dialog.as_ref().expect("the Place dialog");
     assert!(!d.bool("__documents") && d.bool("__others"), "{:?}", d.fields);
-    assert!(!crate::dialogs::place::link_tip(d).contains("locked object"));
 }
 
 /// Tool key `key` as the Control bar's Apply (Enter) and Cancel (Escape) send it.
@@ -1069,6 +1143,84 @@ fn the_place_cursors_files_ask_for_their_import_options_when_show_import_options
     app.run("file.place.queue", json!({"paths": [a, notes]})).unwrap();
     crate::place::place_from_cursor(&mut app, &click);
     assert_eq!(dialog_kind(&app), None);
+}
+
+/// A Shift-click of the place cursor asks for the current file's import options however the
+/// cursor was loaded; a file without import options, and a Shift-drag, place as before.
+#[test]
+fn a_shift_click_of_the_place_cursor_asks_for_the_files_import_options() {
+    let mut app = app();
+    let dir = Folder::new("ui-place-cursor-shift-click");
+    let a = dir.file("a.png", &png(10, 10, 72.0));
+    let notes = dir.file("notes.txt", NOTES);
+    let line = dir.file("line.dxf", LINE_DXF);
+    let shift = vectorcraft_tools::Mods { shift: true, ..Default::default() };
+    // A press at (10, 10) released at (`to`, 10) with `mods`, placed as the canvas places it.
+    let gesture = |app: &mut VectorcraftApp, mods: vectorcraft_tools::Mods, to: f64| {
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let view = app.view_info();
+        for (kind, x) in [(PointerKind::Down, 10.0), (PointerKind::Drag, to), (PointerKind::Up, to)] {
+            for r in app.session.pointer(&PointerEvent::new(kind, x, 10.0).with_mods(mods), view).unwrap() {
+                if let vectorcraft_engine::UiRequest::Place(p) = r {
+                    crate::place::place_from_cursor(app, &p);
+                }
+            }
+        }
+    };
+    let count = |app: &VectorcraftApp| app.session.tool_options()["count"].as_u64();
+    let load = |app: &mut VectorcraftApp, paths: Value, show: bool| {
+        app.run("file.place", json!({ "paths": paths })).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("showImportOptions".into(), json!(show));
+        crate::dialogs::confirm(app).unwrap();
+    };
+    // Show Import Options off: a Shift-click on a text file opens Text Import Options, whose OK
+    // places it.
+    load(&mut app, json!([notes, line, a]), false);
+    assert_eq!(count(&app), Some(3));
+    gesture(&mut app, shift, 10.0);
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::text_import::KIND));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(dialog_kind(&app), None);
+    assert!(selected_text(&app).contains("three"));
+    assert_eq!(count(&app), Some(2), "the cursor goes on to the next file");
+    // A DXF drawing opens DXF Import Options.
+    gesture(&mut app, shift, 10.0);
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::dxf_import::KIND));
+    app.ui.dialog = None;
+    // A PNG image has no import options: it is placed.
+    let placed = images(&app, 0);
+    gesture(&mut app, shift, 10.0);
+    assert_eq!((dialog_kind(&app), images(&app, 0)), (None, placed + 1));
+    // Show Import Options on: one dialog, not two.
+    load(&mut app, json!([notes, a]), true);
+    gesture(&mut app, shift, 10.0);
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::text_import::KIND));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(dialog_kind(&app), None);
+    // Off, a Shift-drag places at once, as a drag does.
+    load(&mut app, json!([notes, a]), false);
+    gesture(&mut app, shift, 200.0);
+    assert_eq!(dialog_kind(&app), None);
+    assert!(selected_text(&app).contains("three"));
+    // A plain click places at once.
+    let placed = images(&app, 0);
+    gesture(&mut app, vectorcraft_tools::Mods::default(), 10.0);
+    assert_eq!((dialog_kind(&app), images(&app, 0)), (None, placed + 1));
+    // A cursor loaded by file.place.queue with a `page`: the Shift-click still asks for the page.
+    let pages = [PdfPage::new(100.0, 100.0, "0 g 0 0 10 10 re f"), PdfPage::new(300.0, 100.0, "1 0 0 rg 0 0 30 30 re f")];
+    let two = dir.file("two.pdf", &pdf(&pages, None));
+    app.run("file.place.queue", json!({"paths": [two], "link": false, "page": 2})).unwrap();
+    gesture(&mut app, shift, 10.0);
+    assert_eq!(dialog_kind(&app), Some("importPdf"));
+    app.ui.dialog = None;
+    // A one-page PDF opens no dialog, and is placed with the options the cursor was loaded with.
+    let one = dir.file("one.pdf", &pdf(&pages[..1], None));
+    app.run("file.place.queue", json!({"paths": [one], "link": false, "crop": "bounding"})).unwrap();
+    gesture(&mut app, shift, 10.0);
+    assert_eq!(dialog_kind(&app), None);
+    let st = app.session.active().unwrap();
+    let b = st.doc.node(st.selection.objects[0]).unwrap().geometric_bounds().unwrap();
+    assert!((b.width() - 10.0).abs() < 0.01, "the bounding box: {}", b.width());
 }
 
 /// An encrypted PDF in the place cursor asks for its password when clicked, with Show Import

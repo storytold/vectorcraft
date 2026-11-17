@@ -925,3 +925,303 @@ fn switching_views_targets_the_artboard_the_view_shows() {
     show_window(&mut app, (0, 2));
     assert_eq!(app.session.tool_options()["active"], json!(1));
 }
+
+/// One headless frame as the app runs it: a Selection move released off the canvas ends first
+/// ([`crate::canvas::release_over_panel`]), then the tabs and the canvas or panes, then the floating
+/// document windows. → the cursor.
+fn app_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> egui::CursorIcon {
+    let raw = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
+        max_texture_side: Some(8192),
+        events,
+        ..Default::default()
+    };
+    let mut out = ctx.run_ui(raw, |ui| {
+        crate::canvas::release_over_panel(app, ui.ctx());
+        app.canvas_area(ui);
+        show(app, ui.ctx());
+    });
+    out.textures_delta.clear();
+    out.platform_output.cursor_icon
+}
+
+/// Two 400 × 300 pt documents on `ctx`: the first, current under its tab, holds a 50 pt square at
+/// 300, 230, and the second, in a floating window, a 50 pt square at 50, 50. The Selection tool is
+/// chosen.
+fn floating_pair(ctx: &egui::Context) -> VectorcraftApp {
+    let mut app = app_with(0);
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 300, "y": 230, "width": 50, "height": 50})).unwrap();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 50, "height": 50})).unwrap();
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.select_tool("selection");
+    app.ui.task_bar = false;
+    app_frame(&mut app, ctx, vec![]);
+    app_frame(&mut app, ctx, vec![]);
+    app
+}
+
+/// Press on document point `at` on the canvas, clear of document 1's window when it floats, and
+/// move the pointer 10 × 5 points: the Selection tool moves the art under it.
+fn grab(app: &mut VectorcraftApp, ctx: &egui::Context, at: vectorcraft_geom::Point) {
+    let p = crate::canvas::Xf::at(app.canvas_rect.unwrap(), app.view().unwrap(), 1.0).to_screen(at);
+    if app.session.documents().len() > 1 && app.session.active_index() != Some(1) && is_floating(app, 1) {
+        assert!(!window_of(app, ctx, 1).contains(p), "the art is clear of the floating window");
+    }
+    app_frame(app, ctx, vec![egui::Event::PointerMoved(p), button(p, true)]);
+    app_frame(app, ctx, vec![egui::Event::PointerMoved(p + vec2(10.0, 5.0))]);
+    assert!(app.session.in_interaction(), "the Selection tool moves the art");
+}
+
+/// The screen point that shows document point `at` in window `w`'s pane, which the last frame noted
+/// as a place to release artwork in.
+fn in_noted(app: &VectorcraftApp, w: Win, at: vectorcraft_geom::Point) -> Pos2 {
+    let k = key(app, w).unwrap();
+    let (_, area, _) = app.canvas.windows.drops.iter().find(|(s, _, _)| *s == k).unwrap();
+    crate::canvas::Xf::at(*area, view(app, w).unwrap(), 1.0).to_screen(at)
+}
+
+/// How many objects document `i`'s first layer holds.
+fn objects(app: &VectorcraftApp, i: usize) -> usize {
+    app.session.documents()[i].doc.layers[0].children().map_or(0, Vec::len)
+}
+
+/// The center of the one object selected in the current document.
+fn selected_center(app: &VectorcraftApp) -> vectorcraft_geom::Point {
+    let st = app.session.active().unwrap();
+    assert_eq!(st.selection.objects.len(), 1, "one object is selected");
+    st.doc.node(st.selection.objects[0]).unwrap().geometric_bounds().unwrap().center()
+}
+
+#[test]
+fn a_selection_drag_released_in_another_documents_floating_window_copies_the_art_there() {
+    let ctx = egui::Context::default();
+    let mut app = floating_pair(&ctx);
+    // The target's view differs from the source's: the grab point still lands under the pointer.
+    let v = view_mut(&mut app, (1, 1)).unwrap();
+    v.zoom *= 0.6;
+    v.rotation = 30.0;
+    app_frame(&mut app, &ctx, vec![]);
+    let source = app.session.documents()[0].doc.clone();
+    let source_undo = app.session.documents()[0].history.undo.len();
+    let target = app.session.documents()[1].doc.clone();
+    let target_undo = app.session.documents()[1].history.undo.len();
+    let clipboard = app.session.clipboard.clone();
+    grab(&mut app, &ctx, vectorcraft_geom::Point::new(325.0, 255.0));
+    let drop = in_noted(&app, (1, 1), vectorcraft_geom::Point::new(170.0, 120.0));
+    let cursor = app_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(drop)]);
+    assert_eq!(cursor, egui::CursorIcon::Copy, "over another document's window the art is copied");
+    assert_eq!(app.session.active_index(), Some(0), "holding the art over the window does not switch documents");
+    app_frame(&mut app, &ctx, vec![button(drop, false)]);
+    app_frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.session.active_index(), Some(1), "the window's document is the current one");
+    assert_eq!(objects(&app, 1), 2, "the copy joins the target's square");
+    let placed = selected_center(&app);
+    assert!((placed.x - 170.0).abs() < 0.01 && (placed.y - 120.0).abs() < 0.01, "{placed:?}");
+    assert_eq!(app.session.documents()[1].history.undo.len(), target_undo + 1, "one step to undo");
+    assert_eq!(app.session.documents()[0].doc, source, "the source keeps its art where it was");
+    assert_eq!(app.session.documents()[0].history.undo.len(), source_undo);
+    assert_eq!(app.session.clipboard, clipboard, "the drag leaves the clipboard alone");
+    assert!(!app.session.tool_busy());
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.documents()[1].doc, target);
+}
+
+#[test]
+fn a_release_in_the_first_frame_over_a_floating_window_still_copies_the_art() {
+    let ctx = egui::Context::default();
+    let mut app = floating_pair(&ctx);
+    let source = app.session.documents()[0].doc.clone();
+    grab(&mut app, &ctx, vectorcraft_geom::Point::new(325.0, 255.0));
+    let drop = in_noted(&app, (1, 1), vectorcraft_geom::Point::new(200.0, 150.0));
+    // The canvas has not handed the move over yet: the pane takes it before the canvas sees the
+    // release.
+    app_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(drop), button(drop, false)]);
+    app_frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.session.active_index(), Some(1));
+    assert_eq!(objects(&app, 1), 2);
+    let placed = selected_center(&app);
+    assert!((placed.x - 200.0).abs() < 0.01 && (placed.y - 150.0).abs() < 0.01, "{placed:?}");
+    assert_eq!(app.session.documents()[0].doc, source);
+}
+
+#[test]
+fn a_floating_window_drop_lands_where_the_button_went_up() {
+    let ctx = egui::Context::default();
+    let mut app = floating_pair(&ctx);
+    grab(&mut app, &ctx, vectorcraft_geom::Point::new(325.0, 255.0));
+    let drop = in_noted(&app, (1, 1), vectorcraft_geom::Point::new(200.0, 150.0));
+    let later = in_noted(&app, (1, 1), vectorcraft_geom::Point::new(120.0, 220.0));
+    app_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(drop)]);
+    // A pointer move later in the frame of the release does not move the drop.
+    app_frame(&mut app, &ctx, vec![button(drop, false), egui::Event::PointerMoved(later)]);
+    app_frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.session.active_index(), Some(1));
+    assert_eq!(objects(&app, 1), 2);
+    let placed = selected_center(&app);
+    assert!((placed.x - 200.0).abs() < 0.01 && (placed.y - 150.0).abs() < 0.01, "{placed:?}");
+}
+
+#[test]
+fn art_dragged_from_a_floating_window_drops_into_the_main_windows_document() {
+    let ctx = egui::Context::default();
+    let mut app = floating_pair(&ctx);
+    show_window(&mut app, (1, 1));
+    app_frame(&mut app, &ctx, vec![]);
+    app_frame(&mut app, &ctx, vec![]);
+    assert!(current_floats(&app), "the floating window holds the canvas");
+    let target = app.session.documents()[1].doc.clone();
+    grab(&mut app, &ctx, vectorcraft_geom::Point::new(75.0, 75.0));
+    // The main window draws document 0 as a pane; this point is clear of the floating window.
+    let at = vectorcraft_geom::Point::new(360.0, 40.0);
+    let drop = in_noted(&app, (0, 1), at);
+    assert!(!window_of(&app, &ctx, 1).contains(drop), "{drop:?}");
+    let cursor = app_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(drop)]);
+    assert_eq!(cursor, egui::CursorIcon::Copy);
+    app_frame(&mut app, &ctx, vec![button(drop, false)]);
+    app_frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.session.active_index(), Some(0), "the main window's document is the current one");
+    assert_eq!(objects(&app, 0), 2);
+    let placed = selected_center(&app);
+    assert!((placed.x - at.x).abs() < 0.01 && (placed.y - at.y).abs() < 0.01, "{placed:?}");
+    assert_eq!(app.session.documents()[1].doc, target, "the source in the floating window is untouched");
+}
+
+#[test]
+fn a_selection_drag_into_a_floating_view_of_its_document_moves_the_art() {
+    let ctx = egui::Context::default();
+    let mut app = app_with(0);
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 300, "y": 230, "width": 50, "height": 50})).unwrap();
+    app.run("window.newWindow", json!({})).unwrap();
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    show_window(&mut app, (0, 1));
+    app.select_tool("selection");
+    app.ui.task_bar = false;
+    app_frame(&mut app, &ctx, vec![]);
+    app_frame(&mut app, &ctx, vec![]);
+    assert!(floats(&app, (0, 2)) && current(&app) == Some((0, 1)));
+    let undo = app.session.documents()[0].history.undo.len();
+    grab(&mut app, &ctx, vectorcraft_geom::Point::new(325.0, 255.0));
+    let drop = in_noted(&app, (0, 2), vectorcraft_geom::Point::new(150.0, 100.0));
+    let cursor = app_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(drop)]);
+    assert_eq!(cursor, egui::CursorIcon::Move, "another view of the same document moves the art");
+    app_frame(&mut app, &ctx, vec![button(drop, false)]);
+    app_frame(&mut app, &ctx, vec![]);
+    assert_eq!(current(&app), Some((0, 2)), "the floating view is the current window");
+    assert_eq!(objects(&app, 0), 1, "the square moved, not copied");
+    let moved = selected_center(&app);
+    assert!((moved.x - 150.0).abs() < 0.01 && (moved.y - 100.0).abs() < 0.01, "{moved:?}");
+    assert_eq!(app.session.documents()[0].history.undo.len(), undo + 1);
+}
+
+#[test]
+fn a_drag_released_on_a_floating_windows_title_bar_or_after_escape_changes_nothing() {
+    for (case, escape) in [("title bar", false), ("art area after Escape", true)] {
+        let ctx = egui::Context::default();
+        let mut app = floating_pair(&ctx);
+        let docs: Vec<_> = app.session.documents().iter().map(|d| (d.doc.clone(), d.history.undo.len())).collect();
+        grab(&mut app, &ctx, vectorcraft_geom::Point::new(325.0, 255.0));
+        let (window, body) = (window_of(&app, &ctx, 1), body_of(&app, 1));
+        let at = if escape {
+            in_noted(&app, (1, 1), vectorcraft_geom::Point::new(200.0, 150.0))
+        } else {
+            pos2(window.left() + 60.0, (window.top() + body.top()) / 2.0)
+        };
+        app_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+        if escape {
+            let key = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+            app_frame(&mut app, &ctx, vec![key]);
+        }
+        app_frame(&mut app, &ctx, vec![button(at, false)]);
+        app_frame(&mut app, &ctx, vec![]);
+        assert_eq!(app.session.active_index(), Some(0), "{case}: the source stays current");
+        let after: Vec<_> = app.session.documents().iter().map(|d| (d.doc.clone(), d.history.undo.len())).collect();
+        assert!(after == docs, "{case}: neither document changes");
+        assert!(!app.session.in_interaction(), "{case}: the move ended");
+    }
+}
+
+#[test]
+fn a_tab_transfer_whose_source_changed_drops_nothing_in_a_floating_window() {
+    let ctx = egui::Context::default();
+    let mut app = floating_pair(&ctx);
+    app.run("file.new", json!({"width": 400, "height": 300, "name": "Third"})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.select_tool("selection");
+    app_frame(&mut app, &ctx, vec![]);
+    let tab = tab_at(&frame(&mut app, &ctx, vec![]), "Third");
+    grab(&mut app, &ctx, vectorcraft_geom::Point::new(325.0, 255.0));
+    // Held over the third document's tab, the drag becomes a transfer to that document.
+    app_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(tab)]);
+    for _ in 0..60 {
+        if app.session.active_index() == Some(2) {
+            break;
+        }
+        app_frame(&mut app, &ctx, vec![]);
+    }
+    assert_eq!(app.session.active_index(), Some(2), "the tab hover switched documents");
+    let drop = in_noted(&app, (1, 1), vectorcraft_geom::Point::new(200.0, 150.0));
+    app_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(drop)]);
+    // The source changes between frames, as a command from the control channel would change it.
+    app.session.set_active(0);
+    app.session.execute("shape.ellipse", &json!({"x": 20, "y": 20, "width": 30, "height": 30})).unwrap();
+    app.session.set_active(2);
+    let target = app.session.documents()[1].doc.clone();
+    let target_undo = app.session.documents()[1].history.undo.len();
+    app_frame(&mut app, &ctx, vec![button(drop, false)]);
+    app_frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.session.documents()[1].doc, target, "the floating window's document does not take the changed art");
+    assert_eq!(app.session.documents()[1].history.undo.len(), target_undo);
+    assert_eq!(app.session.active_index(), Some(2), "the window does not become current");
+}
+
+#[test]
+fn a_tab_transfer_whose_target_is_no_longer_current_drops_nothing_in_a_floating_window() {
+    let ctx = egui::Context::default();
+    let mut app = floating_pair(&ctx);
+    app.run("file.new", json!({"width": 400, "height": 300, "name": "Third"})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.select_tool("selection");
+    app_frame(&mut app, &ctx, vec![]);
+    let tab = tab_at(&frame(&mut app, &ctx, vec![]), "Third");
+    grab(&mut app, &ctx, vectorcraft_geom::Point::new(325.0, 255.0));
+    app_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(tab)]);
+    for _ in 0..60 {
+        if app.session.active_index() == Some(2) {
+            break;
+        }
+        app_frame(&mut app, &ctx, vec![]);
+    }
+    assert_eq!(app.session.active_index(), Some(2), "the tab hover switched documents");
+    let drop = in_noted(&app, (1, 1), vectorcraft_geom::Point::new(200.0, 150.0));
+    app_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(drop)]);
+    // Another document becomes current between frames, as a command from the control channel
+    // would make it.
+    app.session.set_active(0);
+    let target = app.session.documents()[1].doc.clone();
+    let target_undo = app.session.documents()[1].history.undo.len();
+    app_frame(&mut app, &ctx, vec![button(drop, false)]);
+    app_frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.session.documents()[1].doc, target, "the floating window's document does not take the art");
+    assert_eq!(app.session.documents()[1].history.undo.len(), target_undo);
+    assert_eq!(app.session.active_index(), Some(0), "the window does not become current");
+}
+
+#[test]
+fn an_os_windows_pane_is_not_a_place_to_release_art_in_the_main_windows_points() {
+    let _host = native_host();
+    let ctx = egui::Context::default();
+    ctx.set_embed_viewports(false);
+    if !native(&app_with(0), &ctx) {
+        // Wayland: the windows are inside the main window.
+        return;
+    }
+    let mut app = floating_pair(&ctx);
+    assert!(app.canvas.windows.drops.is_empty(), "the other document's OS window is not noted");
+    show_window(&mut app, (1, 1));
+    app_frame(&mut app, &ctx, vec![]);
+    assert!(app.canvas.windows.drops.is_empty(), "nor is the main window's pane while an OS window holds the canvas");
+}
