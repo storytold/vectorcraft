@@ -2993,6 +2993,9 @@ digits	Malayalam	Malayalam
 	Rotate View to Selection	Rotera vyn efter markeringen
 	Reset the rows to the artwork's colors	Återställ raderna till teckningens färger
 	Color Theme Picker	Färgtemaväljare
+	Undo Changes	Ångra ändringar
+	Redo Changes	Gör om ändringar
+@msg	Recolor Artwork is not open	Färga om grafik är inte öppet
 	Click or drag across the art to pick its colors; Shift adds more	Klicka eller dra över teckningen för att hämta dess färger; Skift lägger till fler
 	Prominent Colors	Framträdande färger
 	Save All Colors	Spara alla färger

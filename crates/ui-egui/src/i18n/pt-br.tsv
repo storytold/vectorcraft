@@ -2557,6 +2557,9 @@ digits	Malayalam	Malaiala
 	Rotate View to Selection	Girar Visualização para a Seleção
 	Reset the rows to the artwork's colors	Redefinir as linhas para as cores da arte
 	Color Theme Picker	Seletor de Tema de Cores
+	Undo Changes	Desfazer Alterações
+	Redo Changes	Refazer Alterações
+@msg	Recolor Artwork is not open	Recolorir Arte não está aberto
 	Click or drag across the art to pick its colors; Shift adds more	Clique ou arraste sobre a arte para pegar suas cores; Shift adiciona mais
 	Prominent Colors	Cores Proeminentes
 	Save All Colors	Salvar Todas as Cores

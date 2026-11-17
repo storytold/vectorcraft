@@ -707,6 +707,10 @@ pub fn cancel(app: &mut VectorcraftApp) {
             script_run::notice_cancel(app, &d);
         }
         missing_links::cancelled(app, &d);
+        // Cancel discards Recolor Artwork's own history of color edits with them.
+        if d.kind == recolor::KIND {
+            app.ui.recolor_history = Default::default();
+        }
         // Find Font's next open starts with an empty replacement search.
         if d.kind == "findFont"
             && let Some(ctx) = app.ui_ctx.clone()

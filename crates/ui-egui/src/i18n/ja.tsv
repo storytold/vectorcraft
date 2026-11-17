@@ -3087,6 +3087,9 @@ mark-style	Japanese	日本式
 	Reload Arrowheads	矢印を再読み込み
 	Reset the rows to the artwork's colors	行をアートワークのカラーにリセット
 	Color Theme Picker	カラーテーマピッカー
+	Undo Changes	変更を取り消し
+	Redo Changes	変更をやり直し
+@msg	Recolor Artwork is not open	「アートワークを再配色」が開いていません
 	Click or drag across the art to pick its colors; Shift adds more	アートワークをクリックまたはドラッグしてカラーを取得します。Shift キーで追加します
 	Prominent Colors	主要カラー
 	Save All Colors	すべてのカラーを保存

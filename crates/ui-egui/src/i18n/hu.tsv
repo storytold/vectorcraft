@@ -3630,6 +3630,9 @@ mark-style	Japanese	Japán
 	Rotate View to Selection	Nézet elforgatása a kijelöléshez
 	Reset the rows to the artwork's colors	Sorok visszaállítása a grafika színeire
 	Color Theme Picker	Színtéma-választó
+	Undo Changes	Módosítások visszavonása
+	Redo Changes	Módosítások újra
+@msg	Recolor Artwork is not open	A Grafika átszínezése nincs megnyitva
 	Click or drag across the art to pick its colors; Shift adds more	Kattintson vagy húzzon a grafikán a színei felvételéhez; a Shift továbbiakat ad hozzá
 	Prominent Colors	Domináns színek
 	Save All Colors	Összes szín mentése

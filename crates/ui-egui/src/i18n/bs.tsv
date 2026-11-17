@@ -2971,6 +2971,9 @@ digits	Malayalam	Malajalam
 	Recolor this row	Ponovo oboji ovaj red
 	Reset the rows to the artwork's colors	Vrati redove na boje crteža
 	Color Theme Picker	Birač teme boja
+	Undo Changes	Poništi promjene
+	Redo Changes	Ponovi promjene
+@msg	Recolor Artwork is not open	Ponovo oboji crtež nije otvoreno
 	Click or drag across the art to pick its colors; Shift adds more	Kliknite ili prevucite preko crteža da uzmete njegove boje; Shift dodaje još
 	Prominent Colors	Istaknute boje
 	Save All Colors	Sačuvaj sve boje

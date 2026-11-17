@@ -851,6 +851,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{colors?: n (an n-colour job: n rows, Scale Tints) | [colour] (new colours to assign, in order; with no art selected and no group they are the rows, and OK saves them as a new colour group, field `groupName`: the Color Guide's Edit or Apply Colors), library?: id or name; or \"document\" (Limit to Library; \"\" the first library), group?: colour group (Edit or Apply Color Group: OK rewrites the group with the new colours and recolours the selected art, if any)} open Recolor Artwork (dialog `recolor`; engine: recolor.reduce / recolor.apply)",
     ),
     (
+        "ui.recolorUndo",
+        "Undo Changes",
+        "",
+        "{} the open Recolor Artwork dialog goes back one of its own color edits (rows, Colors, Method, the Preserve options, Limit to Library, the harmony rule, Global Adjust, the Color Theme Picker's picks, the Prominent Colors weights): its fields and the preview return to their values before that edit; the document's undo history is unchanged, and OK still records one undo step → {changed, canUndo, canRedo}; an error when the dialog isn't open. Each opening starts with nothing to undo",
+    ),
+    (
+        "ui.recolorRedo",
+        "Redo Changes",
+        "",
+        "{} the open Recolor Artwork dialog restores the color edit ui.recolorUndo went back from last; a new edit after ui.recolorUndo leaves nothing to redo → {changed, canUndo, canRedo}; an error when the dialog isn't open",
+    ),
+    (
         "ui.cropImage",
         "Crop Image",
         "",

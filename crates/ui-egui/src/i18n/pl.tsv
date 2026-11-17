@@ -2964,6 +2964,9 @@ digits	Malayalam	Malajalam
 	Recolor this row	Zmień kolory tego wiersza
 	Reset the rows to the artwork's colors	Przywróć w wierszach kolory kompozycji
 	Color Theme Picker	Próbnik motywu kolorów
+	Undo Changes	Cofnij zmiany
+	Redo Changes	Ponów zmiany
+@msg	Recolor Artwork is not open	Okno Zmień kolory kompozycji nie jest otwarte
 	Click or drag across the art to pick its colors; Shift adds more	Kliknij lub przeciągnij po kompozycji, aby pobrać jej kolory; Shift dodaje kolejne
 	Prominent Colors	Dominujące kolory
 	Save All Colors	Zapisz wszystkie kolory

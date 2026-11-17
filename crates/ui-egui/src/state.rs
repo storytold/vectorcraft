@@ -818,6 +818,10 @@ pub struct UiState {
     /// `preserveGrays`; null: never used): its dialog opens with them (#2960).
     #[serde(default)]
     pub recolor_preserve: Value,
+    /// The open Recolor Artwork dialog's own history of color edits (Undo Changes and Redo
+    /// Changes), empty again each time the dialog opens.
+    #[serde(skip)]
+    pub recolor_history: crate::dialogs::recolor::History,
     /// The Simplify dialog's fields confirmed last with "Open this dialog with these settings next
     /// time" ticked (null: not ticked): Object › Path › Simplify opens the dialog on them instead
     /// of the Simplify slider.
@@ -1268,6 +1272,7 @@ impl Default for UiState {
             smart_punctuation: Value::Null,
             average_join: Value::Null,
             recolor_preserve: Value::Null,
+            recolor_history: Default::default(),
             simplify: Value::Null,
             move_options: Value::Null,
             transform_each: Value::Null,

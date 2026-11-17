@@ -4241,6 +4241,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Rotate View to Selection	依選取範圍旋轉檢視
 	Reset the rows to the artwork's colors	將各列重設為圖稿的顏色
 	Color Theme Picker	色彩主題選取器
+	Undo Changes	復原變更
+	Redo Changes	重做變更
+@msg	Recolor Artwork is not open	「重新上色圖稿」未開啟
 	Click or drag across the art to pick its colors; Shift adds more	按一下或拖過圖稿以選取其顏色；按住 Shift 可加入更多
 	Prominent Colors	主要顏色
 	Save All Colors	儲存所有顏色

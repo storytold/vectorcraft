@@ -3051,6 +3051,9 @@ digits	Malayalam	Malayalam
 	Rotate View to Selection	Faire pivoter l’affichage selon la sélection
 	Reset the rows to the artwork's colors	Réinitialiser les lignes avec les couleurs de l’illustration
 	Color Theme Picker	Sélecteur de thème de couleurs
+	Undo Changes	Annuler les modifications
+	Redo Changes	Rétablir les modifications
+@msg	Recolor Artwork is not open	Redéfinir les couleurs de l’illustration n’est pas ouvert
 	Click or drag across the art to pick its colors; Shift adds more	Cliquez ou faites glisser sur l’illustration pour prélever ses couleurs ; Maj en ajoute d’autres
 	Prominent Colors	Couleurs dominantes
 	Save All Colors	Enregistrer toutes les couleurs

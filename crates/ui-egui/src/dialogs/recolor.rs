@@ -54,6 +54,11 @@
 //! the most used color first and repeating when the rows outnumber them, and the art previews
 //! them; OK keeps them as one undo step. A new count of Colors keeps the picks: the new rows take them again.
 //!
+//! Undo Changes and Redo Changes beside the Color Theme Picker (`ui.recolorUndo`, `ui.recolorRedo`)
+//! step back and forward through the dialog's own color edits ([`History`]), not the document's
+//! undo history; Cancel discards them and OK still records one undo step. Each opening starts
+//! with nothing to undo.
+//!
 //! Fields (`ui.dialog.set`): `rows` ([{from: [keys], to: key, exclude?, tint?: percent of a spot
 //! color, added?}]; a row with no current colors, `from: []`, recolors no art, and with `added: true`
 //! (a color the Add Color tool added) adds its new color to the color group; `to: null`, no new color), `colors` (null: Auto, or a count), `method`, `preserveWhite`, `preserveBlack`,
@@ -188,6 +193,8 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let mut rs = rows(&d);
     snap(app, &d, &mut rs);
     d.fields.insert("rows".into(), Value::Array(rs));
+    // Undo Changes has nothing to undo on a new opening.
+    app.ui.recolor_history = History { opened: Some(snapshot(&d)), ..History::default() };
     app.ui.dialog = Some(d);
     Ok(Value::Null)
 }
@@ -735,11 +742,13 @@ fn find_params(d: &Dialog) -> Option<Value> {
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
+    seed(app, d);
     sync(app, d);
     sync_theme(app, d);
     sync_weights(app, d);
     let t = Tokens::get(ui.ctx());
     let picking = d.bool(THEME_PICKER);
+    let mut stepped = None;
     ui.horizontal(|ui| {
         let tab = d.str("tab");
         for (id, label) in [("assign", tl!("Assign")), ("edit", tl!("Edit"))] {
@@ -751,6 +760,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
         if widgets::icon_button(ui, "pipette", tl!("Color Theme Picker"), picking, 24.0).clicked() {
             d.fields.insert(THEME_PICKER.into(), json!(!picking));
         }
+        let h = &app.ui.recolor_history;
+        for (back, icon, tip) in [(true, "undo-2", tl!("Undo Changes")), (false, "redo-2", tl!("Redo Changes"))] {
+            if widgets::icon_button_enabled(ui, icon, tip, false, h.can(d, back), 24.0).clicked() {
+                stepped = Some(back);
+            }
+        }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             // The label is drawn after the menu (right-to-left), so it cannot name it by adjacency.
             if let Some(i) = widgets::dropdown_named(ui, "recolor-preset", Some(tl!("Preset:")), PRESETS[preset_of(d)], &PRESETS, 130.0) {
@@ -759,6 +774,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             ui.label(egui::RichText::new(tl!("Preset:")).color(t.text_dim));
         });
     });
+    if let Some(back) = stepped {
+        app.ui.recolor_history.step(d, back);
+    }
     widgets::divider(ui);
     ui.add_space(4.0);
     if d.bool(THEME_PICKER) {
@@ -793,6 +811,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
         });
     }
     sync(app, d);
+    // New rows take the picks now, so that a new count of Colors is one step.
+    sync_theme(app, d);
+    // A change is a step once the pointer is up: a drag is one step from press to release.
+    if !ui.input(|i| i.pointer.any_down()) {
+        app.ui.recolor_history.note(d);
+    }
     if d.bool("__art") {
         match find_params(d) {
             // Find shows the art so with Preview off too.
@@ -825,6 +849,145 @@ pub(super) fn with_new_color(app: &VectorcraftApp, mut d: Dialog, i: usize, c: C
     d
 }
 
+/// The fields a step of Undo Changes and Redo Changes restores: what the art is recolored with.
+const STEP_FIELDS: [&str; 11] =
+    ["rows", "colors", "method", "preserveWhite", "preserveBlack", "preserveGrays", "limitTo", "rule", "globalAdjust", THEME_PICKS, WEIGHTS];
+/// The fields that record which reduction, picks and weights the rows already took, restored with
+/// [`STEP_FIELDS`] so that the restored rows are not reduced, picked or weighed again.
+const STEP_MARKS: [&str; 4] = ["__reduced", THEME_DONE, WEIGHED, PRESERVED];
+/// VectorCraft's own limits on the steps Undo Changes keeps: at most this many, and at most this
+/// many bytes of them as JSON; the oldest go first.
+const MAX_STEPS: usize = 64;
+const MAX_STEP_BYTES: usize = 4 << 20;
+
+type Snapshot = serde_json::Map<String, Value>;
+
+/// The open dialog's own history of color edits: Undo Changes goes back one edit and Redo Changes
+/// forward one, without touching the document's undo history. A change of [`STEP_FIELDS`] is one
+/// step once the pointer is up, so a drag is one step; a new edit after Undo Changes ends what Redo
+/// Changes could restore.
+#[derive(Clone, Debug, Default)]
+pub struct History {
+    /// The fields the dialog opened with, before it read the art, until its first frame or command.
+    opened: Option<Snapshot>,
+    /// The fields after the last step (none before the dialog's first frame).
+    base: Option<Snapshot>,
+    undo: Vec<Snapshot>,
+    redo: Vec<Snapshot>,
+}
+
+/// The fields of `d` a step restores ([`STEP_FIELDS`] and [`STEP_MARKS`]).
+fn snapshot(d: &Dialog) -> Snapshot {
+    STEP_FIELDS.iter().chain(&STEP_MARKS).filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))).collect()
+}
+
+/// Before the first step is recorded: when fields were set after the dialog opened (with
+/// `ui.dialog.set`, before a frame drew it), the fields it opened with, as they read the art, are
+/// the step Undo Changes goes back to.
+fn seed(app: &mut VectorcraftApp, d: &Dialog) {
+    let Some(opened) = app.ui.recolor_history.opened.take() else { return };
+    if app.ui.recolor_history.base.is_some() || snapshot(d) == opened {
+        return;
+    }
+    let mut first = d.clone();
+    first.fields.remove(super::form::PREVIEWED);
+    for k in STEP_FIELDS.iter().chain(&STEP_MARKS) {
+        match opened.get(*k) {
+            Some(v) => first.fields.insert(k.to_string(), v.clone()),
+            None => first.fields.remove(*k),
+        };
+    }
+    sync(app, &mut first);
+    sync_theme(app, &mut first);
+    app.ui.recolor_history.base = Some(snapshot(&first));
+}
+
+impl History {
+    /// Whether the fields of `d` differ from those after the last step.
+    fn pending(&self, d: &Dialog) -> bool {
+        self.base.as_ref().is_some_and(|b| STEP_FIELDS.iter().any(|k| d.fields.get(*k) != b.get(*k)))
+    }
+
+    /// Record a change of `d`'s fields since the last step as a step.
+    fn note(&mut self, d: &Dialog) {
+        if self.base.is_some() && !self.pending(d) {
+            return;
+        }
+        if let Some(before) = self.base.replace(snapshot(d)) {
+            self.undo.push(before);
+            self.redo.clear();
+            self.trim();
+        }
+    }
+
+    /// Drop the oldest steps past [`MAX_STEPS`] and [`MAX_STEP_BYTES`] (all of them when the
+    /// current fields alone pass it).
+    fn trim(&mut self) {
+        let extra = self.undo.len().saturating_sub(MAX_STEPS);
+        self.undo.drain(..extra);
+        let size = |s: &Snapshot| serde_json::to_vec(s).map_or(0, |b| b.len());
+        let mut total: usize = self.base.iter().chain(&self.undo).map(size).sum();
+        let mut gone = 0;
+        while total > MAX_STEP_BYTES && gone < self.undo.len() {
+            total -= size(&self.undo[gone]);
+            gone += 1;
+        }
+        self.undo.drain(..gone);
+    }
+
+    fn can(&self, d: &Dialog, back: bool) -> bool {
+        if back { !self.undo.is_empty() || self.pending(d) } else { !self.redo.is_empty() && !self.pending(d) }
+    }
+
+    /// Undo Changes (`back`) or Redo Changes on `d`: give it the fields of the step before or after.
+    /// Returns false when there is none.
+    fn step(&mut self, d: &mut Dialog, back: bool) -> bool {
+        self.note(d);
+        let (from, to) = if back { (&mut self.undo, &mut self.redo) } else { (&mut self.redo, &mut self.undo) };
+        let Some(s) = from.pop() else { return false };
+        to.extend(self.base.take());
+        for k in STEP_FIELDS.iter().chain(&STEP_MARKS) {
+            match s.get(*k) {
+                Some(v) => d.fields.insert(k.to_string(), v.clone()),
+                None => d.fields.remove(*k),
+            };
+        }
+        // The rows hold no slider edit or drag, and the selection keeps to them.
+        for k in [COMPS, DRAG, BAR_DRAG, SHUFFLED] {
+            d.fields.remove(k);
+        }
+        let n = rows(d).len();
+        d.fields.insert("__sel".into(), json!(selection(d).into_iter().filter(|i| *i < n).collect::<Vec<_>>()));
+        self.base = Some(s);
+        true
+    }
+}
+
+/// Undo Changes (`ui.recolorUndo`, `back`) or Redo Changes (`ui.recolorRedo`) in the open Recolor
+/// Artwork dialog → {changed, canUndo, canRedo}.
+pub(crate) fn step(app: &mut VectorcraftApp, back: bool) -> Result<Value, String> {
+    if app.ui.dialog.as_ref().is_none_or(|d| d.kind != KIND) {
+        return Err("Recolor Artwork is not open".into());
+    }
+    let Some(mut d) = app.ui.dialog.take() else { return Err("Recolor Artwork is not open".into()) };
+    // Fields set since the last frame take effect first, as the next frame would give them.
+    seed(app, &d);
+    sync(app, &mut d);
+    sync_theme(app, &mut d);
+    sync_weights(app, &mut d);
+    let mut h = std::mem::take(&mut app.ui.recolor_history);
+    let changed = h.step(&mut d, back);
+    let r = json!({"changed": changed, "canUndo": h.can(&d, true), "canRedo": h.can(&d, false)});
+    app.ui.recolor_history = h;
+    app.ui.dialog = Some(d);
+    Ok(r)
+}
+
+/// Whether Undo Changes (`back`) or Redo Changes can run: Recolor Artwork is open with a step to go to.
+pub(crate) fn can_step(app: &VectorcraftApp, back: bool) -> bool {
+    app.ui.dialog.as_ref().filter(|d| d.kind == KIND).is_some_and(|d| app.ui.recolor_history.can(d, back))
+}
+
 /// OK: keep the previewed recolour as one undo step (or apply it, e.g. to a colour group only; or
 /// save colours opened alone as a new colour group).
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
@@ -834,9 +997,12 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     sync_weights(app, &mut d);
     if d.bool("__newGroup") {
         let colors = group_colors(app, &d, rows(&d).iter().filter(|r| in_group(r)));
-        return form::commit_preview(app, "swatch.newGroup", json!({"name": d.str("groupName"), "colors": colors, "keepModel": true}));
+        let r = form::commit_preview(app, "swatch.newGroup", json!({"name": d.str("groupName"), "colors": colors, "keepModel": true}))?;
+        app.ui.recolor_history = History::default();
+        return Ok(r);
     }
     let r = form::commit_preview(app, CMD, apply_params(&d))?;
+    app.ui.recolor_history = History::default();
     // The Preserve checkboxes (shown with art) open as confirmed here next time (#2960).
     if d.bool("__art") {
         app.ui.recolor_preserve =
@@ -2800,5 +2966,43 @@ mod tests {
         confirm(&mut app, &d).unwrap();
         let g = app.session.doc().unwrap().doc.swatch_groups.last().expect("a new color group");
         assert_eq!(g.swatches.iter().filter_map(|w| w.paint.color()).collect::<Vec<_>>(), [Color::rgb8(255, 128, 0)]);
+    }
+
+    /// Undo Changes keeps at most [`MAX_STEPS`] steps and [`MAX_STEP_BYTES`] of them, the oldest
+    /// going first; fields that change nothing make no step, and fields larger than the limit
+    /// leave nothing to undo.
+    #[test]
+    fn undo_changes_keeps_a_bounded_history() {
+        let mut d = Dialog::new(KIND, json!({"rows": [], "colors": null}));
+        let mut h = History::default();
+        h.note(&d);
+        h.note(&d);
+        assert!(h.undo.is_empty(), "no change, no step");
+        for n in 0..MAX_STEPS + 6 {
+            d.fields.insert("colors".into(), json!(n));
+            h.note(&d);
+        }
+        assert_eq!(h.undo.len(), MAX_STEPS, "the oldest steps go first");
+        assert_eq!(h.undo[0]["colors"], json!(5));
+        // Rows of 100 KiB each: the steps kept stay within the byte limit.
+        let big = |n: usize| json!([{"from": [format!("{n}{}", "x".repeat(100 << 10))], "to": null}]);
+        for n in 0..60 {
+            d.fields.insert("rows".into(), big(n));
+            h.note(&d);
+        }
+        let size = |s: &Snapshot| serde_json::to_vec(s).unwrap().len();
+        let total: usize = h.base.iter().chain(&h.undo).map(size).sum();
+        assert!(total <= MAX_STEP_BYTES, "{total}");
+        assert!(h.undo.len() < 60 && !h.undo.is_empty(), "{}", h.undo.len());
+        assert!(h.step(&mut d, true), "the newest step is kept");
+        assert_eq!(d.fields["rows"], big(58));
+        // Current fields past the limit alone: nothing is left to undo before them.
+        d.fields.insert("rows".into(), json!([{"from": ["x".repeat(MAX_STEP_BYTES)], "to": null}]));
+        h.note(&d);
+        assert!(h.undo.is_empty() && h.redo.is_empty());
+        assert!(!h.can(&d, true));
+        d.fields.insert("colors".into(), json!(1));
+        assert!(!h.step(&mut d, true), "a step of them is not kept either");
+        assert_eq!(d.fields["colors"], json!(1), "and the fields stay as they are");
     }
 }

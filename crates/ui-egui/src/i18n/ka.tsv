@@ -4943,6 +4943,9 @@ digits	Malayalam	მალაიალამური
 	Recolor this row	ამ სტრიქონის ხელახლა შეფერადება
 	Reset the rows to the artwork's colors	სტრიქონებისთვის ნახატის ფერების დაბრუნება
 	Color Theme Picker	ფერთა თემის ამრჩევი
+	Undo Changes	ცვლილებების გაუქმება
+	Redo Changes	ცვლილებების ხელახლა შესრულება
+@msg	Recolor Artwork is not open	„ნახატის ხელახლა შეფერადება“ გახსნილი არ არის
 	Click or drag across the art to pick its colors; Shift adds more	დაწკაპეთ ან გადაატარეთ ნახატზე მისი ფერების ასაღებად; Shift ამატებს კიდევ
 	Prominent Colors	გამოკვეთილი ფერები
 	Save All Colors	ყველა ფერის შენახვა
