@@ -208,12 +208,22 @@ fn tool_takes(app: &mut VectorcraftApp, key: Key, text: &str) -> bool {
     tool_key.is_some_and(|k| app.session.tool_claims_key(k, view))
 }
 
-/// Is there a press with Cmd, Ctrl or Alt before the event at `start` that no wait took?
-fn chord_before(events: &[egui::Event], start: usize, taken: &[usize]) -> bool {
-    events.iter().enumerate().take(start).any(|(k, e)| {
-        !taken.contains(&k)
-            && matches!(e, egui::Event::Key { key, pressed: true, modifiers: m, .. }
-                if !super::is_modifier(*key) && (m.command || m.ctrl || m.alt || m.mac_cmd))
+/// Is there a press before the event at `start` that no wait took and that the frame handles: one
+/// with Cmd, Ctrl or Alt, or one that typed a text of a key the active tool takes ([`tool_takes`])?
+fn chord_before(app: &mut VectorcraftApp, events: &[egui::Event], typed_by: &[Option<usize>], start: usize, taken: &[usize]) -> bool {
+    let mut before = events.iter().enumerate().take(start).filter(|(k, _)| !taken.contains(k));
+    before.any(|(k, e)| match e {
+        egui::Event::Key { key, pressed: true, modifiers: m, .. } if !super::is_modifier(*key) => {
+            m.command
+                || m.ctrl
+                || m.alt
+                || m.mac_cmd
+                || typed_by
+                    .iter()
+                    .enumerate()
+                    .any(|(t, by)| *by == Some(k) && matches!(events.get(t), Some(egui::Event::Text(text)) if tool_takes(app, *key, text)))
+        }
+        _ => false,
     })
 }
 
@@ -269,7 +279,8 @@ fn run_typed_before(
 /// its text from the frame, with the key's repeats that follow in the frame and their text. When a
 /// wait that started in this frame also ends in it, the keys typed before its key run first
 /// ([`run_typed_before`]), so they act in the order they went down; after a chord with Cmd, Ctrl
-/// or Alt before its key, the key goes back to the frame instead ([`chord_before`]). Then a wait
+/// or Alt, or a key the active tool takes, before its key, the key goes back to the frame instead
+/// ([`chord_before`]). Then a wait
 /// whose delay has passed with the key down runs the hold shortcut. True when a result opened a
 /// dialog or the palette: the rest of the frame's keys are dropped and no other shortcut runs.
 pub(super) fn intake(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
@@ -311,12 +322,12 @@ pub(super) fn intake(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
             if let Some((hold, down)) = ended {
                 let start = started.take();
                 // After a chord with Cmd, Ctrl or Alt pressed before it, which the frame's shortcuts
-                // run, the key goes back to the frame without waiting, so the frame handles it as it
-                // does with Hold Shortcuts off and its tap does not run before the chord. Its press,
-                // its repeats and their texts stay in the frame, and its later repeats reach later
-                // frames.
+                // run, or a key the active tool takes, the key goes back to the frame without
+                // waiting, so the frame handles it as it does with Hold Shortcuts off and its tap
+                // does not run before that key. Its press, its repeats and their texts stay in the
+                // frame, and its later repeats reach later frames.
                 if let Some((start, before)) = start
-                    && chord_before(&events, start, &taken)
+                    && chord_before(app, &events, &typed_by, start, &taken)
                 {
                     app.hold_keys.pending = None;
                     taken.truncate(before);

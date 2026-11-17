@@ -424,6 +424,27 @@ fn a_chord_before_a_wait_ended_in_its_frame_runs_first() {
     assert!(app.hold_keys.pending.is_none());
 }
 
+/// A key the active tool takes (E with the Extend Path tool), pressed before a wait that starts and
+/// ends in one frame, reaches the tool first: the key's tap, which chooses another tool, does not
+/// run before it, and the frame acts as it does with Hold Shortcuts off.
+#[test]
+fn a_tool_key_before_a_wait_ended_in_its_frame_reaches_the_tool_first() {
+    let frame = |app: &mut VectorcraftApp| {
+        app.select_tool(vectorcraft_tools::addons::extend_path::ID);
+        let mut events = press(Key::E, "e", Modifiers::NONE);
+        events.extend(press(Key::X, "x", Modifiers::NONE));
+        events.push(release(Key::X));
+        Keyboard::new().frame(app, 0.0, events);
+        (app.session.tool_id().to_string(), fill(app))
+    };
+    let off = frame(&mut erolka_x(false));
+    let mut app = erolka_x(true);
+    let on = frame(&mut app);
+    assert_eq!(on.0, "eyedropper", "X's tap chooses the Eyedropper after E reached the Extend Path tool");
+    assert_eq!(on, off);
+    assert!(app.hold_keys.pending.is_none());
+}
+
 /// After a command chord before a wait that starts and ends in one frame, the key's repeats in
 /// that frame and in later ones, and the text they type, reach the frame as with Hold Shortcuts
 /// off.
