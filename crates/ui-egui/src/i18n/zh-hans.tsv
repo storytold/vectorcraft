@@ -212,7 +212,7 @@ antiAlias	Sharp	锐利
 	Assign Profile…	指定配置文件…
 	Assign:	指定：
 	Attach to Active Plane	附加到活动平面
-	Attributes	属性
+	Attributes	特性
 	Author Title:	作者职务：
 	Author:	作者：
 	Auto	自动
@@ -552,6 +552,7 @@ antiAlias	Sharp	锐利
 	Consolidate All Windows	合并所有窗口
 	Constrain Angle	约束角度
 	Constrain Width and Height Proportions	约束宽高比例
+	Copy Width to Height	将宽度复制到高度
 	Construction Guides	构造参考线
 	Contextual Alternates	上下文替代
 	Contextual Task Bar	上下文任务栏
@@ -1303,6 +1304,10 @@ file-filter	Templates	模板
 	Font List	字体列表
 	Show Similar Fonts	显示相似字体
 	Clear Similar Fonts	清除相似字体
+	Fonts used in this document	此文档中使用的字体
+	This document uses no available fonts	此文档未使用任何可用字体
+	Recently Added	最近添加
+	Fonts added in the last 30 days	最近 30 天内添加的字体
 	Font Preview Size	字体预览大小
 	Font Size	字号
 	Variable Font	可变字体
@@ -1939,7 +1944,8 @@ file-filter	Templates	模板
 	Artboard Guides with Cmd/Ctrl + Ruler Drag	按住 Cmd/Ctrl 从标尺拖动创建画板参考线
 	Lock Slices	锁定切片
 	Lock Station Point	锁定基准点
-	Lossless (lossy WebP isn't available yet)	无失真 (尚未提供有失真的 WebP)
+	Lossless	无失真
+	Lossy	有失真
 	Lossy:	有损：
 	Low	低
 	lowercase	小写
@@ -2952,6 +2958,38 @@ digits	Malayalam	马拉雅拉姆数字
 	Responsive	响应式
 	Restore	恢复
 	Restore every preference to its default (applied on OK)	把所有首选项恢复为默认值 (点击确定后应用)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	在画布上显示针对所选对象或工具的命令栏；拖动时和演示模式下会隐藏。
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	按一次箭头键移动所选对象的距离；按住 Shift 时移动十倍距离。
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	箭头键沿其移动、Shift 将绘制和移动约束到的坐标轴角度。
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	圆角矩形工具绘制时使用的圆角半径；在绘制时更改半径也会更改此值。
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	未指定位置时（例如从脚本粘贴），粘贴将副本向右和向下移动的距离；在应用中粘贴会把副本放在视图中央。
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	阻止钢笔工具删除在所选路径上点击的锚点，或在点击路径段的位置添加锚点。
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	绘图工具显示十字指针而不是工具图标；Caps Lock 打开时效果相同。
+	Shows a tip when the pointer rests on a button or field that has one.	指针停在带有提示的按钮或字段上时显示提示。
+	Shows a warning before a script you choose runs.	在你选择的脚本运行前显示警告。
+	Smooths the edges of artwork on the canvas.	使画布上图稿的边缘平滑。
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	选择 › 相同 › 填色、描边颜色和填色和描边只匹配全局色板或专色色板的相同色调，而不是其任意色调。
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	没有打开文档时显示主页屏幕；关闭时，窗口保持空白，直到你点击主页。
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	在尺寸、位置和对齐中按对象的描边和改变形状的效果测量对象；阴影、发光和模糊不计入测量。
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	缩放为 100% 时，文档的一英寸占 96 个屏幕点，而不是 72 个。
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	用选择工具双击编组、路径或图像时，会在隔离模式中打开它。
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	图案填色和描边随图稿一起变换，除非变换命令或变换面板的菜单另有选择。
+	Live corner radii scale with the art, unless the scale chooses otherwise.	实时转角半径随图稿一起缩放，除非缩放命令另有选择。
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	描边粗细、虚线和效果距离随图稿一起缩放，除非缩放命令另有选择。
+	The mouse wheel zooms the canvas instead of scrolling it.	鼠标滚轮缩放画布，而不是滚动画布。
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	按住 Cmd/Ctrl 滚动鼠标滚轮会横向滚动画布。
+	Dragging sideways on a numeric field's label changes the field's value.	在数值字段的标签上横向拖动可更改字段的值。
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	在触控板上用双指旋转手势可旋转画布视图。
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快捷键时选择该工具，松开后重新选择之前的工具。
+	Shows the bounding box while you move the selection or draw a shape.	移动所选对象或绘制形状时显示定界框。
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	创建裁切标记绘制日式标记，而不是西式标记。
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	新图稿只采用所选对象的填色和描边；关闭时，采用所选对象的全部外观。
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	在变换面板、属性面板或控制栏中更改宽度或高度时，另一项按比例更改。
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	实时矩形的属性中为四个角显示一个圆角半径字段；关闭时，每个角都有自己的字段。
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	变换面板中的编辑所变换的内容：对象、其图案拼贴或两者；默认跟随变换图案拼贴。
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	选中一个符号实例时，变换面板使用符号的注册点作为参考点。
+	Darkens the canvas outside the artboards while the Artboard tool is active.	使用画板工具时调暗画板以外的画布。
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	调暗画板外的区域打开时，用画板工具拖动期间画板以外的区域保持变暗。
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	除像素尺寸外，以内置尺寸新建的文档和未记录单位的已打开文件使用此单位；在此选择并点击确定，也会更改当前文档的单位。
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	描边粗细、虚线和间隔以此单位显示，为其输入的数字也按此单位读取。
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	字号、行距和基线偏移以此单位显示，为其输入的数字也按此单位读取。
@@ -3161,6 +3199,7 @@ digits	Malayalam	马拉雅拉姆数字
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 个结果，显示 {shown} 个。继续输入以缩小范围。
 	Recent Commands	最近使用的命令
 	No recent commands	没有最近使用的命令
+	Search commands	搜索命令
 	Search Commands…	搜索命令…
 	Secondary	次要
 	Section Symbol	章节符号
@@ -3275,8 +3314,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Shear	倾斜
 	Shear Tool	倾斜工具
 	Shear…	倾斜…
-	Shell Lower…	下弧形…
-	Shell Upper…	上弧形…
+	Shell Lower…	下壳形…
+	Shell Upper…	上壳形…
 	Shift	Shift
 	Shift to Color…	偏移至颜色…
 	Shifts the tints of global and spot colors; other colors stay.	偏移全局色和专色的淡色；其他颜色保持不变。
@@ -4443,6 +4482,9 @@ imageTrace	Outline	轮廓
 @msg	image would be too large; lower the resolution	图像将过大；请降低分辨率
 @msg	clipboard is empty	剪贴板为空
 @msg	no anchor points selected	未选择锚点
+@msg	`points` must be three [x, y] pairs of numbers	`points` 必须是三对数字 [x, y]
+@msg	direct-select three anchor points, or give `points`	请直接选择三个锚点，或提供 `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	没有圆经过这些点：有两点相同，或三点共线
 @msg	select at least two objects	请至少选择两个对象
 @msg	exit isolation mode first	请先退出隔离模式
 @msg	no saved presets	没有已保存的预设
@@ -6099,6 +6141,24 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing	编组填色或描边上的 3D 效果不绘制任何内容
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	编组填色或描边上的 3D 效果没有可导出的内容
 @msg	The 3D object is too complex to export	3D 对象过于复杂，无法导出
+@msg	the <filter> element needs an id, the filter's name	<filter> 元素需要 id，即滤镜的名称
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 滤镜的 id 最多 {MAX_NAME} 个字符
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> 不是 SVG 滤镜的元素
+@msg	an SVG filter has no event attributes such as {_1}	SVG 滤镜不能有 {_1} 等事件属性
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG 滤镜的图像必须是 PNG、JPEG、GIF 或 WebP 格式的 data: URL
+@msg	the SVG filter isn't valid XML: {e}	SVG 滤镜不是有效的 XML：{e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence 的 numOctaves 最大为 {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what}最大为 {max}
+@msg	feConvolveMatrix's order	feConvolveMatrix 的 order
+@msg	feMorphology's radius	feMorphology 的 radius
+@msg	a blur's stdDeviation	模糊的 stdDeviation
+@msg	the SVG filter has no primitives	SVG 滤镜没有基元
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG 滤镜最多有 {MAX_PRIMITIVES} 个基元
+@msg	the SVG filter is too large once its attributes are written out	写出属性后，SVG 滤镜过大
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG 滤镜的图像总共最多 {MAX_IMAGE_PIXELS} 像素
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	无法绘制 SVG 滤镜：请检查其基元及其输入
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG 滤镜的元素最多嵌套 {MAX_DEPTH} 层
+@msg	an SVG filter is at most {_1} KB	SVG 滤镜最大为 {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	该对象没有 3D 效果（突出与斜角、回转、膨胀或旋转）
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` 必须是只含 `mode` 的对象，值为 shaded 或 wireframe
 @msg	its 3D effect builds no solid	其 3D 效果未生成任何实体
@@ -6956,6 +7016,7 @@ anchor	Points:	点：
 	Open a document to check it for issues.	打开文档以检查其中的问题。
 	Empty Text	空文本
 	Unpainted Objects	无上色对象
+	Empty Text Paths	空文本路径
 	Zero-Opacity Objects	不透明度为零的对象
 	Duplicate Objects	重复对象
 	Off-Artboard Art	画板外的图稿
@@ -9511,6 +9572,7 @@ breakText	Glyphs	字形
 @msg	Too many Revolve faces for visibility evaluation	回转的面过多，无法进行可见性计算
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft 最多从色板交换文件中读取 {ASE_MAX_ENTRIES} 个颜色和组，而此库有 {entries} 个
 @msg	WebP encoding failed: {e}	WebP 编码失败：{e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP 编码失败：图像太大，无法生成有失真 WebP：请降低分辨率或选择无失真
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`：{why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` 必须是 smallThumb、mediumThumb、largeThumb、smallList 或 largeList

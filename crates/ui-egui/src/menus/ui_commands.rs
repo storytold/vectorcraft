@@ -914,7 +914,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.sampleScreenColor",
         "Sample Color from Screen",
         "",
-        "{} or {stroke?: bool (default: the active proxy), picker?: bool (the open Color Picker instead)} show the system's color sampler (macOS; Linux through the XDG desktop portal's PickColor; browsers with an EyeDropper) and answer at once; the color the person picks anywhere on the screen then runs paint.setFill / paint.setStroke (one undo step) or becomes the Color Picker's color (field `color`), converted from display sRGB into the working RGB space; a cancel (Escape on macOS and in browsers) leaves the colors as they were. ui.inspect reports `screenSampler: true` until it answers; on Linux, a session without a portal that has PickColor, a portal that does not return from the call within 25 seconds (VectorCraft's own limit) or leaves the bus before it answers, and a portal that ends the request another way end the wait with a status message. An error without a sampler, while one is open, or with `picker` and no Color Picker open",
+        "{} or {stroke?: bool (default: the active proxy), picker?: bool (the open Color Picker instead)} show the system's color sampler (macOS; Linux through the XDG desktop portal's PickColor; Windows, a still copy of every monitor under a crosshair; browsers with an EyeDropper) and answer at once; the color the person picks anywhere on the screen then runs paint.setFill / paint.setStroke (one undo step) or becomes the Color Picker's color (field `color`), converted from display sRGB into the working RGB space; a cancel (Escape on macOS, Windows and in browsers; also a click of another mouse button or switching to another window on Windows) leaves the colors as they were. ui.inspect reports `screenSampler: true` until it answers; on Windows, a screen that can't be copied ends the wait with a status message; on Linux, a session without a portal that has PickColor, a portal that does not return from the call within 25 seconds (VectorCraft's own limit) or leaves the bus before it answers, and a portal that ends the request another way end the wait with a status message. An error without a sampler, while one is open, or with `picker` and no Color Picker open",
     ),
     (
         "ui.newBrush",
@@ -1337,7 +1337,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.dialogReset",
         "Reset",
         "",
-        "{} the open dialog's Reset, which its Cancel button reads while Alt (Option on macOS) is held (Flare Tool Options, dialog `flareOptions`): its fields go back to their defaults and the dialog stays open, so OK applies them → the dialog; an error when no dialog is open or the open one has no Reset",
+        "{} the open dialog's Reset, which its Cancel button reads while Alt (Option on macOS) is held (Flare Tool Options, dialog `flareOptions`; Save PDF, dialog `savePdf`): its fields go back to their defaults (Save PDF: the chosen preset's settings, with the path and artboards kept) and the dialog stays open, so OK applies them → the dialog; an error when no dialog is open, the open one has no Reset, or Save PDF's chosen preset was deleted (the fields stay as they are)",
     ),
     (
         "ui.justification",

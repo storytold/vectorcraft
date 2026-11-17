@@ -72,7 +72,7 @@
 	3D and Materials	3D ve Malzemeler
 	Plane	Düzlem
 	Extrude	Ekstrüzyon
-	Revolve	Döndür
+	Revolve	Eksen Etrafında Döndür
 	Inflate	Şişir
 	Select objects, then pick an object type to give them a 3D effect.	Nesneleri seçin, ardından onlara 3D efekti vermek için bir nesne türü seçin.
 	3D Ribbon	3D Şerit
@@ -587,6 +587,7 @@ font-technology	Variable	Değişken
 	Consolidate All Windows	Tüm Pencereleri Birleştir
 	Constrain Angle	Açıyı Sınırla
 	Constrain Width and Height Proportions	Genişlik ve Yükseklik Oranlarını Sınırla
+	Copy Width to Height	Genişliği Yüksekliğe Kopyala
 	Construction Guides	İnşaat Kılavuzları
 	Contextual Alternates	Bağlamsal Alternatifler
 	Contextual Task Bar	Bağlamsal Görev Çubuğu
@@ -1168,8 +1169,8 @@ font-technology	Variable	Değişken
 	Extrude & Bevel…	Ekstrüzyon ve Eğim…
 	3D (Classic)	3D (Klasik)
 	Extrude & Bevel (Classic)…	Ekstrüzyon ve Eğim (Klasik)…
-	Revolve (Classic)…	Döndür (Klasik)…
-	Rotate (Classic)…	Çevir (Klasik)…
+	Revolve (Classic)…	Eksen Etrafında Döndür (Klasik)…
+	Rotate (Classic)…	Döndür (Klasik)…
 	Surface	Yüzey
 	Wireframe	Tel Kafes
 	Render Settings	Oluşturma Ayarları
@@ -1304,6 +1305,10 @@ font-technology	Variable	Değişken
 	Font List	Yazı Tipi Listesi
 	Show Similar Fonts	Benzer Yazı Tiplerini Göster
 	Clear Similar Fonts	Benzer Yazı Tiplerini Temizle
+	Fonts used in this document	Bu belgede kullanılan yazı tipleri
+	This document uses no available fonts	Bu belge kullanılabilir hiçbir yazı tipini kullanmıyor
+	Recently Added	Son eklenenler
+	Fonts added in the last 30 days	Son 30 günde eklenen yazı tipleri
 	Font Preview Size	Yazı Tipi Önizleme Boyutu
 	Font Size	Yazı Tipi Boyutu
 	Font:	Yazı tipi:
@@ -1853,7 +1858,8 @@ font-technology	Variable	Değişken
 	Lock Others	Diğerlerini Kilitle
 	Lock Slices	Dilimleri Kilitle
 	Lock Station Point	Kilit İstasyon Noktası
-	Lossless (lossy WebP isn't available yet)	Kayıpsız (kayıplı WebP henüz mevcut değil)
+	Lossless	Kayıpsız
+	Lossy	Kayıplı
 	Lossy:	Kayıplı:
 	Low	Düşük
 	lowercase	küçük harf
@@ -2827,6 +2833,38 @@ digits	Malayalam	Malayalam
 	Responsive	duyarlı
 	Restore	Geri yükle
 	Restore every preference to its default (applied on OK)	Her tercihi varsayılana geri yükleyin (Tamam'a uygulanır)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Tuvalde seçim veya araç için bir komut çubuğu gösterir; sürüklerken ve Sunum Modu'nda gizlenir.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Bir ok tuşunun seçimi ne kadar taşıdığı; Shift ile on kat daha uzağa taşır.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	Ok tuşlarının boyunca taşıdığı ve Shift'in çizmeyi ve taşımayı sınırladığı eksenlerin açısı.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	Yuvarlatılmış Dikdörtgen aracının çizdiği köşe yarıçapı; çizerken yarıçapı değiştirmek bu değeri de değiştirir.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Bir komut dosyasından olduğu gibi konum verilmediğinde Yapıştır'ın kopyayı sağa ve aşağı ne kadar kaydırdığı; uygulamada Yapıştır kopyayı görünümün ortasına koyar.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Kalem aracının seçili bir yolda tıkladığınız bağlantı noktasını silmesini veya yolun bir parçasına tıkladığınız yere nokta eklemesini engeller.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Çizim araçları simgeleri yerine artı işaretli bir imleç gösterir; Caps Lock açıkken aynısını yapar.
+	Shows a tip when the pointer rests on a button or field that has one.	İmleç ipucu olan bir düğme veya alan üzerinde durduğunda ipucunu gösterir.
+	Shows a warning before a script you choose runs.	Seçtiğiniz bir komut dosyası çalışmadan önce uyarı gösterir.
+	Smooths the edges of artwork on the canvas.	Tuvaldeki resmin kenarlarını yumuşatır.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Seçim › Aynı › Dolgu Rengi, Kontur Rengi ve Doldur ve Konturla yalnızca genel veya spot renk örneğinin aynı tonunu bulur, herhangi bir tonunu değil.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Hiçbir belge açık değilken Ana Sayfa ekranını gösterir; kapalıyken siz Ana Sayfa'ya tıklayana kadar pencere boş kalır.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Nesneleri boyut, konum ve hizalama için konturları ve şekil değiştiren efektleriyle birlikte ölçer; gölgeler, parlamalar ve bulanıklaştırmalar ölçülmez.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	%100 yakınlaştırmada belgenin bir inçi 72 yerine 96 ekran noktası kaplar.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Seçim aracıyla bir gruba, yola veya görüntüye çift tıklamak onu yalıtım modunda açar.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Desen dolguları ve konturları, bir dönüşüm veya Dönüştür panelinin menüsü başka bir seçim yapmadıkça resimle birlikte dönüşür.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Canlı köşe yarıçapları, ölçekleme başka bir seçim yapmadıkça resimle birlikte ölçeklenir.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Kontur kalınlıkları, kesik çizgiler ve efekt mesafeleri, ölçekleme başka bir seçim yapmadıkça resimle birlikte ölçeklenir.
+	The mouse wheel zooms the canvas instead of scrolling it.	Fare tekerleği tuvali kaydırmak yerine yakınlaştırır.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl basılıyken fare tekerleği tuvali yana kaydırır.
+	Dragging sideways on a numeric field's label changes the field's value.	Sayısal bir alanın etiketi üzerinde yana sürüklemek alanın değerini değiştirir.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	İzleme dörtgeninde iki parmakla döndürme hareketi tuvalin görünümünü döndürür.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Bir aracın kısayol tuşunu basılı tutmak, tuşu bırakana kadar o aracı seçer, ardından önceki araç yeniden seçilir.
+	Shows the bounding box while you move the selection or draw a shape.	Seçimi taşırken veya bir şekil çizerken sınırlayıcı kutuyu gösterir.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Kesim İşaretleri Oluşturun, Roma tarzı yerine Japon tarzı işaretler çizer.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	Yeni resim yalnızca seçimin dolgusunu ve konturunu alır; kapalıyken seçili nesnenin tüm görünümünü alır.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Dönüştür panelinde, Özellikler panelinde veya Kontrol çubuğunda genişliği ya da yüksekliği değiştirmek diğerini orantılı olarak değiştirir.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Canlı bir dikdörtgenin özellikleri dört köşenin tümü için tek bir Köşe Yarıçapı alanı gösterir; kapalıyken her köşenin kendi alanı olur.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Dönüştür panelindeki düzenlemelerin neyi dönüştürdüğü: nesneyi, desen döşemelerini veya ikisini; Varsayılan, Desen Döşemelerini Dönüştür'ü izler.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Bir sembol örneği seçiliyken Dönüştür paneli, sembolün kayıt noktasını referans noktası olarak kullanır.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Çalışma Yüzeyi aracı etkinken çalışma yüzeylerinin dışındaki tuvali karartır.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Çalışma Yüzeyi Dışındaki Bölgeyi Karart açıkken, Çalışma Yüzeyi aracıyla sürüklerken çalışma yüzeylerinin dışındaki alan karanlık kalır.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Piksel boyutları dışındaki yerleşik boyutlardaki yeni belgelerin ve birim kaydetmeyen açılan dosyaların birimi; burada seçip Tamam'a tıkladığınızda etkin belgenin birimi de bu olur.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Kontur kalınlıkları, kısa çizgiler ve boşluklar bu birimde gösterilir ve bunlar için yazılan sayılar bu birimde okunur.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Yazı boyutları, satır aralığı ve taban çizgisi kayması bu birimde gösterilir ve bunlar için yazılan sayılar bu birimde okunur.
@@ -2849,7 +2887,7 @@ digits	Malayalam	Malayalam
 	Revert to the saved version of “{name}”?	“{name}”nin kayıtlı sürümüne dönülsün mü?
 	Replace “{name}”, the file this document was opened from?	Bu belgenin açıldığı dosya olan "{name}" değiştirilsin mi?
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Bunu açmak, VectorCraft'ın henüz okuyamadığı şeyi ({what}) dışarıda bıraktı, bu nedenle onu değiştirmek onu tamamen kaybeder. Saklamak için başka bir adla kaydedin.
-	Revolve…	Döndür…
+	Revolve…	Eksen Etrafında Döndür…
 	RGB Color	RGB Rengi
 	Right	Sağ
 	Right Grid:	Sağ Izgara:
@@ -3089,6 +3127,7 @@ digits	Malayalam	Malayalam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} sonuçtan {shown} tanesi. Daraltmak için yazmaya devam edin.
 	Recent Commands	Son komutlar
 	No recent commands	Son komut yok
+	Search commands	Komutları arayın
 	Search Commands…	Arama Komutları…
 	Secondary	İkincil
 	Section Symbol	Bölüm Sembolü
@@ -3747,7 +3786,7 @@ digits	Malayalam	Malayalam
 	Reverse Traps	Tuzakları Tersine Çevir
 	Precision	Hassasiyet
 	Remove Redundant Points	Gereksiz Noktaları Kaldır
-	Trim	Kırpma
+	Trim	Budama
 	Trim mark weight:	Trim işareti ağırlığı:
 	Trim marks	Kırpma işaretleri
 	Trim View	Görünümü Kırp
@@ -4635,6 +4674,9 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	no active document	etkin belge yok
 @msg	no active perspective plane	aktif perspektif düzlemi yok
 @msg	no anchor points selected	bağlantı noktası seçilmedi
+@msg	`points` must be three [x, y] pairs of numbers	`points` üç [x, y] sayı çifti olmalıdır
+@msg	direct-select three anchor points, or give `points`	üç bağlantı noktasını doğrudan seçin veya `points` verin
+@msg	no circle passes through these points: two are the same or all three lie on one line	bu noktalardan geçen bir çember yok: ikisi aynı ya da üçü de aynı doğru üzerinde
 @msg	no app to open files here	burada dosyaları açacak uygulama yok
 @msg	no artboard	çalışma yüzeyi yok
 @msg	no artboard {i} (0-based; the document has {_1})	çalışma yüzeyi yok {i} (0 tabanlı; belgede {_1} var)
@@ -5283,6 +5325,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa derinliği {_1}: piksel başına 16, 24 veya 32 bit olmalıdır
 @msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa kodlaması başarısız oldu: piksel arabelleği görüntü boyutuyla eşleşmiyor
 @msg	WebP encoding failed: {e}	WebP kodlaması başarısız oldu: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP kodlaması başarısız oldu: görüntü kayıplı WebP için çok büyük: çözünürlüğü düşürün veya Kayıpsız seçeneğini seçin
 @msg	the pixel buffer doesn't match the image size	piksel arabelleği görüntü boyutuyla eşleşmiyor
 @msg	too many layers for PSD (at most 32767)	PSD için çok fazla katman (en fazla 32767)
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} piksel GIF için çok büyük (kenar başına en fazla 65535 piksel): çözünürlüğü düşürün
@@ -5532,24 +5575,42 @@ lighting	Light	Işık
 @msg	{label} requires a shape with at least two anchors	{label} en az iki bağlantı noktasına sahip bir şekil gerektirir
 @msg	The shape is too complex for a 3D effect	Şekli 3 boyutlu bir efekt için fazla karmaşık
 @msg	Extrude & Bevel	Ekstrüzyon ve Eğim
-@msg	Revolve	Döndür
+@msg	Revolve	Eksen Etrafında Döndür
 @msg	Inflate	Şişir
 @msg	Rotate	Döndür
 @msg	Extrude & Bevel (Classic)	Ekstrüzyon ve Eğim (Klasik)
-@msg	Revolve (Classic)	Döndür (Klasik)
-@msg	Rotate (Classic)	Çevir (Klasik)
+@msg	Revolve (Classic)	Eksen Etrafında Döndür (Klasik)
+@msg	Rotate (Classic)	Döndür (Klasik)
 @msg	This effect	Bu efekt
 @msg	clipping paths	kırpma yolları
 @msg	other objects	diğer nesneler
 @msg	{label} requires a group holding a shape with at least two anchors	{label}, en az iki bağlantı noktasına sahip bir şekil içeren bir grup gerektirir
-@msg	Revolve requires a group holding a shape with at least two anchors	Döndür, en az iki bağlantı noktasına sahip bir şekil içeren bir grup gerektirir
-@msg	Revolve requires a shape with at least two anchors	Döndür, en az iki bağlantı noktasına sahip bir şekil gerektirir
+@msg	Revolve requires a group holding a shape with at least two anchors	Eksen Etrafında Döndür, en az iki bağlantı noktasına sahip bir şekil içeren bir grup gerektirir
+@msg	Revolve requires a shape with at least two anchors	Eksen Etrafında Döndür, en az iki bağlantı noktasına sahip bir şekil gerektirir
 @msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	Bir gruptaki {label}; yollar, bileşik yollar, metin, gruplar, kırpma grupları, karışımlar ve sembol örnekleri gerektirir: önce şunları serbest bırak veya genişlet: {what}.
 @msg	{label} on a group takes at most {MAX_MEMBERS} objects	Bir gruptaki {label} en fazla {MAX_MEMBERS} nesne alır
 @msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	Bir grup veya katmandaki 3 boyutlu efekt, dolgusuna veya konturuna değil, grubun kendisine uygulanır
 @msg	a 3D effect on a group's fill or stroke draws nothing	bir grubun dolgusundaki veya konturundaki 3 boyutlu efekt hiçbir şey çizmez
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	bir grubun dolgusundaki veya konturundaki 3 boyutlu efekt dışa aktarılacak hiçbir şey çizmez
 @msg	The 3D object is too complex to export	3 boyutlu nesne dışa aktarmak için çok karmaşık
+@msg	the <filter> element needs an id, the filter's name	<filter> öğesinin, filtrenin adı olan bir id değeri olmalıdır
+@msg	an SVG filter's id is at most {MAX_NAME} characters	bir SVG filtresinin id değeri en fazla {MAX_NAME} karakterdir
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> bir SVG filtresi öğesi değildir
+@msg	an SVG filter has no event attributes such as {_1}	bir SVG filtresinde {_1} gibi olay öznitelikleri olmaz
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	bir SVG filtresinin görüntüleri PNG, JPEG, GIF veya WebP data: URL'leridir
+@msg	the SVG filter isn't valid XML: {e}	SVG filtresi geçerli bir XML değil: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence için numOctaves en fazla {MAX_OCTAVES} olur
+@msg	{what} is at most {max}	{what} en fazla {max} olur
+@msg	feConvolveMatrix's order	feConvolveMatrix için order
+@msg	feMorphology's radius	feMorphology için radius
+@msg	a blur's stdDeviation	bir bulanıklaştırmanın stdDeviation değeri
+@msg	the SVG filter has no primitives	SVG filtresinde temel öğe yok
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	bir SVG filtresinde en fazla {MAX_PRIMITIVES} temel öğe olur
+@msg	the SVG filter is too large once its attributes are written out	SVG filtresi, öznitelikleri yazıldığında çok büyük oluyor
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	bir SVG filtresinin görüntüleri toplamda en fazla {MAX_IMAGE_PIXELS} pikseldir
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG filtresi çizilemiyor: temel öğelerini ve bunların girdilerini denetle
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	bir SVG filtresinin öğeleri en fazla {MAX_DEPTH} düzey iç içe geçer
+@msg	an SVG filter is at most {_1} KB	bir SVG filtresi en fazla {_1} KB olur
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	nesnenin 3 boyutlu efekti yok (Ekstrüzyon ve Eğim, Döndür, Şişir veya Döndür)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render`, yalnızca değeri shaded veya wireframe olan `mode` içeren bir nesne olmalıdır
 @msg	its 3D effect builds no solid	3 boyutlu efekti hiçbir katı oluşturmuyor
@@ -5559,9 +5620,9 @@ lighting	Light	Işık
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: kırpma yolu resmi kesmek için çok karmaşık
 @msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} en fazla {MAX_MEMBERS} nesne alır
 @msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1}, {MAX_DEPTH} düzeyden daha derin iç içe geçmiş resimden katı oluşturamaz
-@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Döndür boyası bu yüzey için çok karmaşık; Segmentler değerini azalt veya degradeyi basitleştir
-@msg	Revolve edge must be left or right	Döndür: edge, left veya right olmalıdır
-@msg	Revolve cap must be a boolean	Döndür: cap bir boole değeri olmalıdır
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Eksen Etrafında Döndür boyası bu yüzey için çok karmaşık; Segmentler değerini azalt veya degradeyi basitleştir
+@msg	Revolve edge must be left or right	Eksen Etrafında Döndür: edge, left veya right olmalıdır
+@msg	Revolve cap must be a boolean	Eksen Etrafında Döndür: cap bir boole değeri olmalıdır
 @msg	the revolved object has no fill or stroke	döndürülen nesnenin dolgusu veya konturu yok
 @msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor, #rrggbb biçiminde opak bir RGB rengi olmalıdır
 @msg	lights must contain one to ten lights	lights bir ile on arasında ışık içermelidir
@@ -5579,8 +5640,8 @@ lighting	Light	Işık
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` face değeri front veya back olmalıdır
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` {key} değeri {lo} ile {hi} arasında bir sayı olmalıdır
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` bir dizi olmalıdır
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafikler Düzlem, Ekstrüzyon ve Döndür nesne türlerine eşlenir
-@msg	Revolve maps graphics onto its side: map them onto the front	Döndür grafikleri yan yüzeyine eşler: onları ön yüze eşle
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafikler Düzlem, Ekstrüzyon ve Eksen Etrafında Döndür nesne türlerine eşlenir
+@msg	Revolve maps graphics onto its side: map them onto the front	Eksen Etrafında Döndür grafikleri yan yüzeyine eşler: onları ön yüze eşle
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafikler bu yüzey için çok karmaşık: sembollerin resmini basitleştir veya Segmentler değerini azalt
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` en fazla {MAX_GRAPHICS} grafik alır
 @msg	A plane has one face: map its graphics onto the front	Bir düzlemin tek yüzü vardır: grafiklerini ön yüze eşle
@@ -6030,7 +6091,7 @@ lighting	Light	Işık
 	▾ Default Actions	▾ Varsayılan Eylemler
 	⚠ {chord} was already used by {names} — it has been removed there.	⚠ {chord} zaten {names} tarafından kullanılmıştı — oradan kaldırıldı.
 @id	file.close	Kapat
-@id	pathfinder.add	Birleştir
+@id	pathfinder.add	Birleşim
 @msg	give corners of the path: anchors between two straight sides	yolun köşelerini verin: iki düz kenar arasındaki çapalar
 @msg	this kind of brush has no options dialog yet	bu tür bir fırçanın henüz seçenekler iletişim kutusu yok
 @plural	{n} PR|{n} PRs	{n} PR
@@ -8998,6 +9059,7 @@ anchor	Points:	Noktalar:
 	Open a document to check it for issues.	Sorunlar için denetlemek üzere bir belge açın.
 	Empty Text	Boş Metin
 	Unpainted Objects	Boyanmamış Nesneler
+	Empty Text Paths	Boş Metin Yolları
 	Zero-Opacity Objects	Sıfır Opaklıklı Nesneler
 	Duplicate Objects	Yinelenen Nesneler
 	Off-Artboard Art	Çalışma Yüzeyi Dışındaki Çizimler
