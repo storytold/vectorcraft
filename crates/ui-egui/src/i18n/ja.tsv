@@ -2815,6 +2815,7 @@ diagnostics	ui	UI
 	Line Properties:	線のプロパティ:
 	Line Length:	線の長さ:
 	Line Angle:	線の角度:
+	Constrain Pie Angle	扇形の角度を固定
 	Polygon Tool	多角形ツール
 	Portrait	縦置き
 	Portuguese	ポルトガル語

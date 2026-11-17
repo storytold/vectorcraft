@@ -392,6 +392,67 @@ fn an_ellipse_takes_pie_angles_and_inverts() {
     assert!(s.execute("object.setLiveShape", &json!({"pieStart": "half"})).is_err());
 }
 
+/// Constrain Pie Angle (`constrainPie`): a new Pie Start or End Angle moves the other angle by as
+/// much, so each selected ellipse keeps its own span, across 0° too; a whole ellipse stays whole;
+/// after Invert Pie the inverted span is kept; one undo step for all of them; the angle each
+/// already has records nothing; and `constrainPie` with both angles, with neither, with Invert Pie
+/// or as text is an error that changes nothing.
+#[test]
+fn constrain_pie_keeps_each_ellipses_span() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+    let id = |v: Value| NodeId(v["id"].as_u64().unwrap());
+    let [a, b, c] = [0, 100, 200].map(|y| id(s.execute("shape.ellipse", &json!({"x": 0, "y": y, "width": 200, "height": 80})).unwrap()));
+    run(&mut s, json!({"ids": [a.0], "pieStart": 300, "pieEnd": 60}));
+    run(&mut s, json!({"ids": [b.0], "pieStart": 0, "pieEnd": 90}));
+    let pies = |s: &Session| {
+        [a, b, c].map(|i| match &s.doc().unwrap().doc.node(i).unwrap().kind {
+            NodeKind::Path { live: Some(l), .. } => match &**l {
+                LiveShape::Ellipse { pie, .. } => *pie,
+                k => panic!("{k:?}"),
+            },
+            k => panic!("{k:?}"),
+        })
+    };
+    let near = |p: (f64, f64), q: (f64, f64)| (p.0 - q.0).abs() < 1e-9 && (p.1 - q.1).abs() < 1e-9;
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let n = undo(&s);
+    // 300° to 60° spans 120°, through 0°; 0° to 90° spans 90°; the third ellipse is whole.
+    run(&mut s, json!({"ids": [a.0, b.0, c.0], "pieStart": 350, "constrainPie": true}));
+    let [pa, pb, pc] = pies(&s);
+    assert!(near(pa, (350.0, 110.0)) && near(pb, (350.0, 80.0)), "{pa:?} {pb:?}");
+    assert!(near(pc, (350.0, 350.0)), "{pc:?}");
+    assert_eq!(s.doc().unwrap().doc.node(c).unwrap().path_data().unwrap().anchor_count(), 4, "the whole ellipse stays whole");
+    assert_eq!(undo(&s), n + 1, "one undo step");
+    run(&mut s, json!({"ids": [a.0, b.0], "pieEnd": 20, "constrainPie": true}));
+    let [pa, pb, _] = pies(&s);
+    assert!(near(pa, (260.0, 20.0)) && near(pb, (290.0, 20.0)), "{pa:?} {pb:?}");
+    let n = undo(&s);
+    run(&mut s, json!({"ids": [a.0, b.0], "pieEnd": 380, "constrainPie": true}));
+    assert_eq!(undo(&s), n, "the end each already has: no undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let [pa, pb, _] = pies(&s);
+    assert!(near(pa, (350.0, 110.0)) && near(pb, (350.0, 80.0)), "{pa:?} {pb:?}");
+    // Inverted, 80° to 350° spans 270°, and a linked edit keeps that.
+    run(&mut s, json!({"ids": [b.0], "invertPie": true}));
+    run(&mut s, json!({"ids": [b.0], "pieStart": 0, "constrainPie": true}));
+    assert!(near(pies(&s)[1], (0.0, 270.0)), "{:?}", pies(&s)[1]);
+    let before = (undo(&s), pies(&s));
+    for (p, want) in [
+        (json!({"ids": [b.0], "pieStart": 10, "pieEnd": 20, "constrainPie": true}), "needs one of"),
+        (json!({"ids": [b.0], "constrainPie": true}), "needs one of"),
+        (json!({"ids": [b.0], "pieStart": 10, "constrainPie": true, "invertPie": true}), "needs one of"),
+        (json!({"ids": [b.0], "pieStart": 10, "constrainPie": "yes"}), "`constrainPie` must be true or false"),
+    ] {
+        let r = s.execute("object.setLiveShape", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg.contains(want)), "{p}: {r:?}");
+        assert_eq!((undo(&s), pies(&s)), before, "{p}");
+    }
+    // Off, each angle is set on its own, as before.
+    run(&mut s, json!({"ids": [b.0], "pieStart": 90, "constrainPie": false}));
+    assert!(near(pies(&s)[1], (90.0, 270.0)), "{:?}", pies(&s)[1]);
+}
+
 /// Invert Pie and Make Sides Equal given as text or as another value that is not true or false are
 /// an error naming the key: the ellipse's pie, the polygon and the undo history stay as they were.
 /// True makes the change, and false and null leave the shape as it is.

@@ -2650,6 +2650,7 @@ diagnostics	ui	Oberfläche
 	Line Properties:	Linieneigenschaften:
 	Line Length:	Linienlänge:
 	Line Angle:	Linienwinkel:
+	Constrain Pie Angle	Winkel des Kreissegments beibehalten
 	Polygon Tool	Polygon-Werkzeug
 	Portrait	Hochformat
 	Power Saving (integrated)	Energiesparen (integriert)

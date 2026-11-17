@@ -2723,6 +2723,7 @@ diagnostics	ui	інтерфейс
 	Line Properties:	Властивості лінії:
 	Line Length:	Довжина лінії:
 	Line Angle:	Кут лінії:
+	Constrain Pie Angle	Зберігати кут сектора
 	Polygon Tool	Інструмент «Багатокутник»
 	Portrait	Книжкова
 	Power Saving (integrated)	Енергозбереження (вбудована)

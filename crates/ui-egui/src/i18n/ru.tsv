@@ -2718,6 +2718,7 @@ diagnostics	ui	интерфейс
 	Line Properties:	Свойства линии:
 	Line Length:	Длина линии:
 	Line Angle:	Угол линии:
+	Constrain Pie Angle	Сохранять угол сектора
 	Polygon Tool	Инструмент «Многоугольник»
 	Portrait	Книжная
 	Power Saving (integrated)	Энергосбережение (встроенная)

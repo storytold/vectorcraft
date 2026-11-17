@@ -125,6 +125,67 @@ fn an_ellipse_shows_its_pie_properties() {
     assert!(shown.iter().any(|s| s == "30°") && shown.iter().any(|s| s == "120°"), "{shown:?}");
 }
 
+/// Ellipse Properties' Constrain Pie Angle link, in the Transform panel and the Properties panel's
+/// Transform section: off at first, a click or Space with the keyboard on it toggles it, and while
+/// it is on a typed Pie Start or End Angle moves the other angle by as much, keeping the span, in
+/// one undo step. Off, each angle changes on its own.
+#[test]
+fn the_constrain_pie_angle_link_keeps_the_span() {
+    use egui_kittest::kittest::Queryable;
+    const LINK: &str = "Constrain Pie Angle";
+    let pie = |app: &VectorcraftApp| match &first_selected(app).unwrap().kind {
+        NodeKind::Path { live: Some(l), .. } => match **l {
+            LiveShape::Ellipse { pie, .. } => pie,
+            ref k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    };
+    let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.ellipse", json!({"x": 50, "y": 50, "width": 120, "height": 80})).unwrap();
+        app.run("object.setLiveShape", json!({"pieStart": 30, "pieEnd": 120})).unwrap();
+        assert!(!app.ui.constrain_pie_angle, "off at first");
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(320.0, 900.0)).with_accessibility_check(false).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                draw(app, ui);
+            },
+            app,
+        );
+        h.run_steps(3);
+        h.get_by_role_and_label(egui::accesskit::Role::Button, LINK).click();
+        h.run_steps(2);
+        assert!(h.state().ui.constrain_pie_angle, "a click turns it on");
+        h.get_by_role_and_label(egui::accesskit::Role::Button, LINK).focus();
+        h.run_steps(1);
+        h.key_press(egui::Key::Space);
+        h.run_steps(2);
+        assert!(!h.state().ui.constrain_pie_angle, "Space turns it off");
+        h.get_by_role_and_label(egui::accesskit::Role::Button, LINK).click();
+        h.run_steps(2);
+        assert!(h.state().ui.constrain_pie_angle);
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let n = undo(h.state());
+        type_into(&ctx, h.state_mut(), draw, "30°", "60");
+        assert_eq!(pie(h.state()), (60.0, 150.0));
+        assert_eq!(undo(h.state()), n + 1, "one undo step");
+        type_into(&ctx, h.state_mut(), draw, "150°", "200");
+        assert_eq!(pie(h.state()), (110.0, 200.0));
+        h.get_by_role_and_label(egui::accesskit::Role::Button, LINK).click();
+        h.run_steps(2);
+        assert!(!h.state().ui.constrain_pie_angle);
+        type_into(&ctx, h.state_mut(), draw, "110°", "100");
+        assert_eq!(pie(h.state()), (100.0, 200.0), "off, the end stays");
+    }
+}
+
 /// A live line shows its Line Properties in the Transform panel and the Properties panel's
 /// Transform section: a typed length keeps its first end in place and a typed angle turns it
 /// about its midpoint, each one undo step. A line with other objects selected, and a line after
