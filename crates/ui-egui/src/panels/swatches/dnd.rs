@@ -277,7 +277,12 @@ pub(super) fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
             ("swatch.edit", json!({"name": t, "paint": crate::panels::swatch_paint_params(&paint)}))
         }
         Drop::New { paint, target, spot, .. } => {
-            let mut p = crate::panels::swatch_paint_params(&paint);
+            // A new spot color is made from the color the drag showed, not from its base swatch as it is now.
+            let source = match paint.color() {
+                Some(c) if spot && !paint.is_registration() => Paint::solid(c),
+                _ => paint.clone(),
+            };
+            let mut p = crate::panels::swatch_paint_params(&source);
             if paint.color().is_some() {
                 if let Some(g) = target.and_then(|t| group_of(d, &t)) {
                     p["group"] = json!(g);
