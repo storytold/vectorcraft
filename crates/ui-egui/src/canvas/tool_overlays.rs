@@ -535,6 +535,38 @@ pub(super) fn grid_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter, x
     }
 }
 
+/// A selected radial repeat's circle with its radius handle and its splitter on it, and its
+/// instances handle below it, at the places the Selection tool's hit testing finds them. The
+/// splitter also has a short line across the circle.
+pub(super) fn radial_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    use vectorcraft_tools::repeat_radial::{HANDLE_RADIUS, RadialHandles, RadialPart};
+    if app.session.tool_id() != "selection" || !app.ui.view.bounding_box {
+        return;
+    }
+    let frame = app.selection_box();
+    let Some(st) = app.session.active() else { return };
+    let Some(h) = RadialHandles::of(&st.doc, &st.selection, frame, xf.zoom) else { return };
+    let t = Tokens::get(p.ctx());
+    // The circle the instances' centers sit on, while it is a sensible size on screen.
+    let (c, r) = (xf.to_screen(h.center), (h.radius * xf.zoom) as f32);
+    if c.is_finite() && r.is_finite() && r > 0.5 && r < 20_000.0 {
+        p.circle_stroke(c, r, Stroke::new(3.0, t.measure_bg));
+        p.circle_stroke(c, r, Stroke::new(1.0, t.selection));
+    }
+    for (part, at) in h.parts() {
+        let c = xf.to_screen(at);
+        let across = (c - xf.to_screen(h.center)).normalized() * (HANDLE_RADIUS + 4.0);
+        if part == RadialPart::Splitter && c.is_finite() && across.is_finite() {
+            p.line_segment([c - across, c + across], Stroke::new(3.0, t.measure_bg));
+            p.line_segment([c - across, c + across], Stroke::new(1.5, t.selection));
+        }
+        if c.is_finite() {
+            p.circle_filled(c, HANDLE_RADIUS, t.measure_bg);
+            p.circle_stroke(c, HANDLE_RADIUS, Stroke::new(2.0, t.selection));
+        }
+    }
+}
+
 /// The radius of the Rotate View dial, in screen points.
 pub(super) const DIAL_RADIUS: f32 = 40.0;
 

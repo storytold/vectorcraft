@@ -17,6 +17,7 @@ use crate::GlyphImage;
 use crate::colr::ColourContent;
 use vectorcraft_doc::color::Color;
 
+mod added;
 mod alternates;
 mod build;
 mod cache;
@@ -33,6 +34,9 @@ mod stylistic_sets;
 mod traits;
 mod wanted;
 
+#[cfg(test)]
+pub(crate) use added::recently_added_of;
+pub use added::{RECENTLY_ADDED_WITHIN, RecentlyAdded};
 pub use alternates::GlyphAlternate;
 pub(crate) use alternates::listed;
 pub use build::style_weight;
