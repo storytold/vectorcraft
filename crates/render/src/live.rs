@@ -249,6 +249,10 @@ fn mesh_level(m: &GradientMesh, bounds_px: f64) -> usize {
 /// of pixels per mesh and frame.
 const MESH_RASTER_MAX_PIXELS: usize = 4 << 20;
 
+/// The widest and tallest a gradient mesh's outline is in device pixels for [`draw_mesh_raster`]
+/// to flatten it (about 16.7 million pixels, far past any buffer it fills).
+const MESH_OUTLINE_MAX_EXTENT: f64 = (1u32 << 24) as f64;
+
 /// Draw a tessellated gradient mesh as one image: its quads are filled into a pixel buffer of the
 /// mesh's on-screen box by scanline (each pixel takes the quad its centre is in, so neighbouring
 /// quads meet without seams or overlap, and is shaded between the quad's corner colours, so the
@@ -262,7 +266,12 @@ const MESH_RASTER_MAX_PIXELS: usize = 4 << 20;
 fn draw_mesh_raster(ctx: &mut RenderContext, f: &Frame, m: &GradientMesh, quads: &[MeshQuad], alpha: f32) -> bool {
     let outline = m.outline().to_bezpath();
     let dev = f.view.transform_rect_bbox(vectorcraft_geom::Shape::bounding_box(&outline));
-    if ![dev.x0, dev.y0, dev.x1, dev.y1].iter().all(|v| v.is_finite()) {
+    // The outline is flattened whole in device pixels ([`grown_outline`]): one far past any
+    // buffer would make more segments than memory holds, so the caller draws the quads.
+    if ![dev.x0, dev.y0, dev.x1, dev.y1].iter().all(|v| v.is_finite())
+        || dev.width() > MESH_OUTLINE_MAX_EXTENT
+        || dev.height() > MESH_OUTLINE_MAX_EXTENT
+    {
         return false;
     }
     let (cw, ch) = (f64::from(ctx.width()), f64::from(ctx.height()));
