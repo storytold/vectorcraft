@@ -151,7 +151,7 @@ pub(crate) fn shows_a_name(id: &str, label: &str) -> bool {
 /// Effect › Plug-ins effect or a File › Open With importer) or one of its commands, by the plug-in's
 /// own text? Told by the item itself, so it holds while another thread installs or removes plug-ins.
 pub(crate) fn lists_plugin(id: &str, params: &Value) -> bool {
-    matches!(id, "plugin.dialog" | "file.openWith")
+    matches!(id, "plugin.dialog" | "file.openWith" | crate::plugin_bundles::RUN_FROM_MENU)
         || vectorcraft_engine::cmd::plugin::is_command_id(id)
         || params.get("effect").and_then(Value::as_str).and_then(vectorcraft_plugins::effect::plugin_id).is_some()
 }

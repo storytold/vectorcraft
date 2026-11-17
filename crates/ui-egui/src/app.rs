@@ -159,6 +159,7 @@ impl VectorcraftApp {
             background: Default::default(),
             opening: Default::default(),
             plugin_runs: Default::default(),
+            plugin_downloads: Default::default(),
             placing: Default::default(),
             trace_runs: Default::default(),
             recovery: Default::default(),
@@ -255,6 +256,7 @@ impl VectorcraftApp {
         background::poll(self);
         opening::poll(self);
         plugin_runs::poll(self);
+        crate::plugin_bundles::poll(self);
         trace_runs::poll(self);
         placing::poll(self);
     }

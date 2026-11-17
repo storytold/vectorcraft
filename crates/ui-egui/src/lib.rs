@@ -61,6 +61,7 @@ pub mod panels;
 pub mod picks;
 pub mod place;
 pub mod placing;
+pub mod plugin_bundles;
 pub mod plugin_runs;
 pub mod prefs_dialog;
 pub mod print;
@@ -287,6 +288,9 @@ pub struct VectorcraftApp {
     pub opening: opening::Opening,
     /// Heavy plug-in filters running off the UI thread ([`plugin_runs`]).
     pub plugin_runs: plugin_runs::PluginRuns,
+    /// Shared plug-in bundles downloading off the UI thread, and Manage Plug-ins' next command
+    /// ([`plugin_bundles`]).
+    pub plugin_downloads: plugin_bundles::Downloads,
     /// Files being read off the UI thread for Place ([`placing`]).
     pub placing: placing::Placing,
     /// Image Traces running off the UI thread ([`trace_runs`]).

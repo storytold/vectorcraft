@@ -434,6 +434,8 @@ registry! {
     PluginExport: [plugin::EXPORT_KIND] => plugin::EXPORT_SPEC,
     PluginImport: [plugin::IMPORT_KIND] => plugin::IMPORT_SPEC,
     PluginInstall: [plugin::INSTALL_KIND] => plugin::INSTALL_SPEC,
+    PluginManage: [crate::plugin_bundles::MANAGE_KIND] => crate::plugin_bundles::MANAGE_SPEC,
+    PluginCommand: [crate::plugin_bundles::PARAMS_KIND] => crate::plugin_bundles::PARAMS_SPEC,
     ScriptCheck: [script_check::KIND] => script_check::SPEC,
     ScriptRun: [script_run::KIND] => script_run::SPEC,
     ScriptGrowth: [script_run::GROWTH_KIND] => script_run::GROWTH_SPEC,

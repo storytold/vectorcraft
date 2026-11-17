@@ -193,25 +193,37 @@ fn pick_open(app: &mut VectorcraftApp, pick: &FilePick) -> Result<String, String
     crate::picks::open(app, pick).ok_or_else(|| "cancelled".into())
 }
 
+/// The extension of a shared plug-in bundle (`craft-plugin`), which Install Plug-in… also picks.
+const BUNDLE_EXT: &str = vectorcraft_engine::cmd::craftplugin::craft_plugin::BUNDLE_EXTENSION;
+
 /// Object › Plug-ins › Install Plug-in…: installs the module `p` gives (`path`, or `dataBase64`
 /// with `name`), else a picked `.wasm` (the web's file picker hands the file to [`open_bytes`],
-/// which installs it) → [`install_module`]'s result.
+/// which installs it) → [`install_module`]'s result. A `.craftplugin` bundle, a `repo` or a
+/// `catalog` with `id` installs through [`crate::plugin_bundles::install_bundle`].
 pub fn install_plugin(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let given = |k: &str| p.get(k).and_then(Value::as_str).is_some_and(|v| !v.is_empty());
+    // A shared `.craftplugin` bundle, a GitHub repository or a catalog's package (RFC-0041).
+    if crate::plugin_bundles::names_bundle(p) {
+        return crate::plugin_bundles::install_bundle(app, p);
+    }
     if given("path") || given("dataBase64") {
         return install_module(app, p.clone());
     }
     if app.services.open_async.is_some() {
         return open_dialog(app).map(|_| Value::Null);
     }
-    let path =
-        pick_open(app, &FilePick { filters: vec![FilePick::filter("Plug-ins", vectorcraft_engine::cmd::plugin::EXTS)], ..Default::default() })?;
-    install_module(app, json!({ "path": path }))
+    let exts: Vec<&str> = vectorcraft_engine::cmd::plugin::EXTS.iter().copied().chain([BUNDLE_EXT]).collect();
+    let path = pick_open(app, &FilePick { filters: vec![FilePick::filter("Plug-ins", &exts)], ..Default::default() })?;
+    let picked = json!({ "path": path });
+    if crate::plugin_bundles::names_bundle(&picked) {
+        return crate::plugin_bundles::install_bundle(app, &picked);
+    }
+    install_module(app, picked)
 }
 
 /// What permission `name` lets a plug-in do, in plain words in the UI language, with the ids of
 /// the `commands` it may call for `commands`; a name the app doesn't know is shown as it is.
-fn permission_words(name: &str, commands: &[String]) -> String {
+pub(crate) fn permission_words(name: &str, commands: &[String]) -> String {
     let words = match permissions::Permission::parse(name) {
         Some(permissions::Permission::Commands) => {
             return crate::i18n::fmt(tl!("Run these commands on the document: {ids}"), &[("ids", &commands.join(", "))]);

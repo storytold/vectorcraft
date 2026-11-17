@@ -534,6 +534,8 @@ fn main() -> std::process::ExitCode {
                 let launch_dir = prefs_path().filter(|_| prefs_enabled()).and_then(|p| Some(p.parent()?.join("Launch")));
                 let stopped = safe_mode::begin_launch(launch_dir.as_deref(), safe_mode_flag);
                 prefs_dir::attach_plugin_store(&mut session);
+                // Shared plug-ins install from catalogs and GitHub releases over the update client.
+                vectorcraft_ui_egui::plugin_bundles::attach_fetch(&mut session);
                 // File › Scripts lists the scripts of the Scripts folder next to the preferences.
                 prefs_dir::attach_scripts_dir(&mut session);
                 // File Info's metadata templates live in their own folder next to the preferences.

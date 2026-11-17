@@ -70,8 +70,8 @@ fn with_commands(plugin: &Plugin, own: Item) -> Item {
     Item::Sub(registry::intern(&permissions::display_text(m.name.trim(), permissions::MAX_SHOWN_NAME)), items)
 }
 
-/// Object › Plug-ins: the installed object filters (each with its commands, if it has any), then
-/// Install Plug-in… and Reload Plug-ins.
+/// Object › Plug-ins: the installed object filters (each with its commands, if it has any), the
+/// shared command plug-ins' commands, then Install Plug-in…, Manage Plug-ins… and Reload Plug-ins.
 pub fn object_menu() -> Vec<Item> {
     let mut items: Vec<Item> = registry::list()
         .iter()
@@ -81,9 +81,16 @@ pub fn object_menu() -> Vec<Item> {
     if items.is_empty() {
         items.push(Item::Header(NO_FILTERS));
     }
+    // The shared command plug-ins' commands (RFC-0041), then Manage Plug-ins….
+    let (shared, manage) = crate::plugin_bundles::menu_items();
+    if !shared.is_empty() {
+        items.push(Item::Sep);
+        items.extend(shared);
+    }
     items.extend([
         Item::Sep,
         Item::Cmd("Install Plug-in…", "ui.installPlugin", Value::Null),
+        manage,
         Item::Cmd("Reload Plug-ins", "plugin.reload", Value::Null),
     ]);
     items
