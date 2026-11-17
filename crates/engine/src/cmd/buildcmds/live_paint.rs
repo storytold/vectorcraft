@@ -1,8 +1,8 @@
 use super::{
     Appearance, AppearanceItem, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId,
-    PathData, Point, Rect, Result, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, fit_to_old_edge, ids_json,
-    is_live_paint, json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes,
-    switch_or,
+    PathData, Point, Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite,
+    fit_to_old_edge, ids_json, is_live_paint, json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids,
+    source_nodes, source_shapes, switch_or,
 };
 
 /// `options` as stored on a Live Paint group: none for the defaults.
@@ -187,11 +187,16 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
         .ok_or_else(|| EngineError::Other("Live Paint Merge: select a Live Paint group and the paths to add".into()))?;
     check_live_paint_takes(d, roots)?;
     let old = d.node(target).cloned().ok_or(EngineError::NoNode(target))?;
+    // The rows that join are children of the group already when Merge runs after a drag, and a joining
+    // path named like a face or an edge is not one of the group's parts.
+    let mut old_parts = old.clone();
+    if let Some(ch) = old_parts.children_mut() {
+        ch.retain(|c| !roots.contains(&c.id));
+    }
     // Paint to carry over: (point inside face, paint) for faces that draw; edges are matched to the
     // old edges below.
     let keep_faces: Vec<(Point, Carried)> =
-        b::faces(&old).iter().filter(|f| draws(f)).filter_map(|f| Some((po::interior_point(f.path_data()?)?, Carried::of(f)))).collect();
-    let old_parts = old.clone();
+        b::faces(&old_parts).iter().filter(|f| draws(f)).filter_map(|f| Some((po::interior_point(f.path_data()?)?, Carried::of(f)))).collect();
     let mut sources = source_nodes(&old);
     // The objects drawn in the other Live Paint groups besides their parts stay in the merged group.
     let mut others = vec![];
@@ -335,6 +340,9 @@ fn spot_in(d: &Document, parent: Option<NodeId>) -> Spot {
 pub(crate) struct LivePaintMove {
     /// The Live Paint group the rows go into, and for each row whether it joins the group's paths.
     join: Option<(NodeId, Vec<bool>)>,
+    /// The Live Paint group the rows go among the children of, with its sources group as it is
+    /// before the move.
+    keep_sources: Option<(NodeId, NodeId)>,
     /// The Live Paint groups whose paths change.
     rebuild: Vec<NodeId>,
 }
@@ -369,7 +377,11 @@ impl LivePaintMove {
         if to != Spot::Outside {
             check_live_paint_takes(d, &entering)?;
         }
-        Ok(Self { join, rebuild })
+        let keep_sources = match to {
+            Spot::In(g) => d.node(g).and_then(b::sources).map(|s| (g, s.id)),
+            _ => None,
+        };
+        Ok(Self { join, keep_sources, rebuild })
     }
 
     /// Whether rows join a Live Paint group, which makes the move a "Merge Live Paint" step.
@@ -382,6 +394,17 @@ impl LivePaintMove {
     /// joined a group to it. → `moved` with the joined rows replaced by their group, once, and
     /// without the faces and edges that were made again.
     pub(crate) fn finish(self, d: &mut Document, sel: &mut Selection, moved: &[NodeId]) -> Result<Vec<NodeId>> {
+        // A moved object named like the sources group may now sit before it, where a lookup by name
+        // finds the object first. The group's own sources group goes back in front.
+        if let Some((g, src)) = self.keep_sources {
+            let ch = d.children_mut(Some(g))?;
+            if let Some(at) = ch.iter().position(|c| c.id == src)
+                && ch[..at].iter().any(|c| c.name.as_deref() == Some(SOURCES_NAME))
+            {
+                let s = ch.remove(at);
+                ch.insert(0, s);
+            }
+        }
         if self.join.is_none() && self.rebuild.is_empty() {
             return Ok(moved.to_vec());
         }

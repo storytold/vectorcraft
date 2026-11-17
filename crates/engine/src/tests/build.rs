@@ -5198,6 +5198,64 @@ fn layers_drag_adds_paths_to_a_live_paint_group() {
     assert_eq!(faces(&node(&s, g)).len(), 7);
 }
 
+/// A path named like a Live Paint group's sources group joins the group when it is dragged in, in
+/// front of the sources group or behind it: the group keeps its own sources group and the path
+/// goes among its paths.
+#[test]
+fn layers_drag_of_a_path_named_like_the_sources_group_joins_a_live_paint_group() {
+    use vectorcraft_tools::builder::{SOURCES_NAME, faces, sources};
+    for index in [0, 99] {
+        let mut s = session();
+        let g = live(&mut s);
+        let a = line_to_right_face(&mut s, 30.0);
+        s.execute("object.setProps", &json!({"id": a.0, "name": SOURCES_NAME})).unwrap();
+        s.execute("node.move", &json!({"id": a.0, "parent": g.0, "index": index})).unwrap();
+        assert_eq!(undo_label(&s).as_deref(), Some("Merge Live Paint"), "index {index}");
+        let n = node(&s, g);
+        let src = sources(&n).unwrap();
+        assert!(src.children().is_some(), "index {index}: the sources group is a group");
+        assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(src.id), "index {index}: the path joined the sources");
+        assert_eq!(faces(&n).len(), 5, "index {index}");
+    }
+}
+
+/// An object drawn in a Live Paint group and named like its sources group can be moved ahead of the
+/// sources group: the group keeps its own sources group and stays a Live Paint group.
+#[test]
+fn layers_reorder_of_an_object_named_like_the_sources_group_keeps_the_live_paint_group() {
+    use vectorcraft_tools::builder::{SOURCES_NAME, is_live_paint, sources};
+    let mut s = session();
+    let g = live(&mut s);
+    let real = sources(&node(&s, g)).unwrap().id;
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let a = line_across(&mut s, 50.0);
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(g));
+    s.execute("object.setProps", &json!({"id": a.0, "name": SOURCES_NAME})).unwrap();
+    s.execute("node.move", &json!({"id": a.0, "parent": g.0, "index": 0})).unwrap();
+    let n = node(&s, g);
+    assert!(is_live_paint(&n));
+    assert_eq!(sources(&n).unwrap().id, real);
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(g), "the object stays where it was drawn");
+}
+
+/// A path named `Face` that is dragged into a Live Paint group is not one of its faces: the face it
+/// covers keeps its own fill.
+#[test]
+fn layers_drag_of_a_path_named_face_does_not_repaint_the_group() {
+    use vectorcraft_tools::builder::{face_at, faces};
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 50], "color": "#00ff00"})).unwrap();
+    let a = rect(&mut s, 0.0, 0.0, 50.0, 100.0);
+    set_fill(&mut s, a, Color::rgb(0.0, 0.0, 1.0));
+    s.execute("object.setProps", &json!({"id": a.0, "name": "Face"})).unwrap();
+    s.execute("node.move", &json!({"id": a.0, "parent": g.0, "index": 99})).unwrap();
+    let n = node(&s, g);
+    assert_eq!(faces(&n).len(), 3);
+    assert_eq!(face_at(&n, Point::new(25.0, 50.0)).unwrap().appearance.fill_paint(), green);
+}
+
 /// An Alt-drag into a Live Paint group adds a copy and leaves the path where it was; a drop above
 /// one of the group's faces, and `node.move` into the group, add the path the same way.
 #[test]
