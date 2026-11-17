@@ -167,7 +167,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let count = |k: &str| d.fields.get(k).and_then(Value::as_u64).unwrap_or(0);
-    widgets::dim_label(ui, &format!("{} × {} px · {}: {}", count("width"), count("height"), tl!("Layers"), count("layers")));
+    widgets::dim_label(ui, &format!("{} × {} px · {} {}", count("width"), count("height"), crate::i18n::colon(tl!("Layers")), count("layers")));
     // Offered only for a file with slices, with either conversion.
     let sliced = count("slices") > 0;
     ui.add_space(8.0);

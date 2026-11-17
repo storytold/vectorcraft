@@ -317,6 +317,13 @@ fn center_round(x: f64) -> f64 {
     (x * 1e4).round() / 1e4
 }
 
+/// The value screen readers give Blur Center at `c` (0 to 1 of the bounds): Horizontal and
+/// Vertical in percent, each label followed by the UI language's colon.
+pub(super) fn blur_center_value(c: [f64; 2]) -> String {
+    let percent = |v: f64| (v * 1000.0).round() / 10.0;
+    format!("{} {}%, {} {}%", crate::i18n::colon(tl!("Horizontal")), percent(c[0]), crate::i18n::colon(tl!("Vertical")), percent(c[1]))
+}
+
 /// Radial Blur's Blur Center: a box standing for the object's bounds, with the blur's pattern (rays
 /// for Zoom, rings for Spin) drawn about the center. A press or a drag in the box puts the center
 /// there; with the keyboard focus the arrow keys move it 1 % of the box (10 % with Shift). The
@@ -334,9 +341,8 @@ fn blur_center(ui: &mut egui::Ui, d: &mut Dialog) {
         let (rect, _) = ui.allocate_exact_size(egui::vec2(CENTER_BOX, CENTER_BOX), Sense::hover());
         let id = ui.scope_id().with("radial-blur-center");
         let resp = ui.interact(rect, id, Sense::click_and_drag());
-        let percent = |v: f64| (v * 1000.0).round() / 10.0;
         let name = tl!("Blur Center").to_string();
-        let value = format!("{}: {}%, {}: {}%", tl!("Horizontal"), percent(c[0]), tl!("Vertical"), percent(c[1]));
+        let value = blur_center_value(c);
         let enabled = ui.is_enabled();
         resp.widget_info(|| egui::WidgetInfo {
             current_text_value: Some(value.clone()),
@@ -391,7 +397,7 @@ fn blur_center(ui: &mut egui::Ui, d: &mut Dialog) {
         ui.vertical(|ui| {
             egui::Grid::new("blur-center-fields").num_columns(2).spacing([8.0, 8.0]).show(ui, |ui| {
                 for (i, label) in ["Horizontal", "Vertical"].into_iter().enumerate() {
-                    let row = ui.label(egui::RichText::new(format!("{}:", tl!(label))).color(t.text));
+                    let row = ui.label(egui::RichText::new(crate::i18n::colon(tl!(label))).color(t.text));
                     ui.label_inputs_by(row.id, |ui| {
                         if let Some(x) =
                             widgets::range_field_named(ui, ("blur-center", i), None, c[i] * 100.0, 0.0..=100.0, &form::unit_suffix("%"), 1, 72.0)

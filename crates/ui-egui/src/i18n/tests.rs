@@ -2041,6 +2041,17 @@ fn georgian_rows_have_no_mtavruli() {
     assert!(caps.is_empty(), "Mtavruli in ka.tsv: {caps:?}");
 }
 
+/// A field label's colon follows the catalog's ":" row: French puts a no-break space before it,
+/// Chinese and Japanese write a full-width colon, and English and German write a plain colon.
+#[test]
+fn label_colons_follow_the_language() {
+    for (code, want) in [("fr", "X\u{a0}:"), ("zh-hans", "X："), ("zh-hant", "X："), ("ja", "X："), ("de", "X:"), ("en", "X:")] {
+        set_current(Lang::from_code(code).expect("registered"));
+        assert_eq!(colon("X"), want, "{code}");
+    }
+    set_current(Lang::EN);
+}
+
 /// French rows follow the typography fr.tsv's header sets: a no-break space before : ; ? ! and inside
 /// « », and the typographic apostrophe ’ in elisions. Text in backticks is code and is not checked, and
 /// a straight apostrophe inside double quotes is a literal value.

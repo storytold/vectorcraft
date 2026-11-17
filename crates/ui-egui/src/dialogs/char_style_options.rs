@@ -1073,7 +1073,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                         ui.separator();
                         if let Ok(attrs) = edited_attrs(d) {
                             for (key, value) in attrs {
-                                ui.label(format!("{}: {}", super::humanize(&key), value));
+                                ui.label(super::form::attribute_line(&key, &value));
                             }
                         }
                     }

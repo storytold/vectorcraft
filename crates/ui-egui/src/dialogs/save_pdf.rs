@@ -871,7 +871,7 @@ pub(super) fn option_rows<'a>(ui: &mut egui::Ui, changed: impl IntoIterator<Item
             Value::String(s) => s.clone(),
             other => other.to_string(),
         };
-        ui.label(egui::RichText::new(format!("{}: {value}", label(c["option"].as_str().unwrap_or_default()))).color(t.text));
+        ui.label(egui::RichText::new(format!("{} {value}", crate::i18n::colon(&label(c["option"].as_str().unwrap_or_default())))).color(t.text));
     }
 }
 

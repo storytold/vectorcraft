@@ -75,7 +75,8 @@ impl Light {
     /// The name screen readers give the light at `index`: its number, Rotation, Height and side.
     fn name(self, index: usize) -> String {
         let side = if self.behind { format!(", {}", tl!("Light behind the object")) } else { String::new() };
-        format!("{} {}: {} {:.1}°, {} {:.1}°{side}", c3("Light"), index + 1, tl!("Rotation"), self.rotation, tl!("Height"), self.height)
+        let light = crate::i18n::colon(&format!("{} {}", c3("Light"), index + 1));
+        format!("{light} {} {:.1}°, {} {:.1}°{side}", tl!("Rotation"), self.rotation, tl!("Height"), self.height)
     }
 }
 

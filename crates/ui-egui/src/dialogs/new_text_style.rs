@@ -77,7 +77,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                     });
                     if let Ok(attrs) = super::char_style_options::edited_attrs(d) {
                         for (key, value) in attrs {
-                            ui.label(format!("{}: {}", super::humanize(&key), value));
+                            ui.label(super::form::attribute_line(&key, &value));
                         }
                     }
                 });

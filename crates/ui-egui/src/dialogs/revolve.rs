@@ -733,7 +733,7 @@ pub(super) fn reset_dot(ui: &mut egui::Ui, key: &str, changed: bool, default: &s
         ui.painter().rect_filled(r, 3.0, Tokens::get(ui.ctx()).hover);
     }
     dot(ui, r.center(), changed);
-    response.on_hover_text(format!("{}: {default}", tl!("Reset to default"))).clicked()
+    response.on_hover_text(format!("{} {default}", crate::i18n::colon(tl!("Reset to default")))).clicked()
 }
 
 #[cfg(test)]

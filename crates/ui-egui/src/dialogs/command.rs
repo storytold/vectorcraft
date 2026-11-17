@@ -36,7 +36,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
             let mut rows = v.as_str() == Some("rows");
             ui.add_space(4.0);
             egui::Grid::new("text-flow").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
-                let row = ui.label(egui::RichText::new(format!("{}:", tl!("Text Flow"))).color(Tokens::get(ui.ctx()).text));
+                let row = ui.label(egui::RichText::new(crate::i18n::colon(tl!("Text Flow"))).color(Tokens::get(ui.ctx()).text));
                 ui.label_inputs_by(row.id, |ui| {
                     ui.horizontal(|ui| {
                         if widgets::radio(ui, tl!("By Rows"), rows, true) {
