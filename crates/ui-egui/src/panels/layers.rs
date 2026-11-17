@@ -378,6 +378,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         drag_ghost(ui, &view, widgets::ghost_row(ids, grabbed), pos);
     }
+    let alt = ui.input(|i| i.modifiers.alt);
+    let over_list = ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| list_rect.contains(p));
+    if !released
+        && let Some(drag) = egui::DragAndDrop::payload::<LayersDrag>(ui.ctx())
+        && let Some(cursor) = drag_cursor(&drag, alt, over_list)
+    {
+        // The copy cursor is the panels' add cursor, which Windows can show (#8217, #8241).
+        if cursor == egui::CursorIcon::Copy {
+            crate::cursors::set_add_cursor(app, ui.ctx());
+        } else {
+            ui.ctx().set_cursor_icon(cursor);
+        }
+    }
     // Keyboard: Delete removes the highlighted rows while the panel has the keyboard (a row was
     // clicked last, not the canvas).
     // The panel keeps it while it is drawn ([`super::has_row_keys`]); the app's shortcuts leave
@@ -407,6 +420,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         super::set_row_keys(ui.ctx(), ROW_KEYS, false);
     }
     see_selection(app, ui, selected);
+}
+
+/// The cursor while `drag` is held (`alt` down, `over_list`: the pointer is over the rows): the
+/// copy cursor where a drop copies, as a drop in the list with Alt does, else the grabbing hand.
+/// The trash and New Layer ignore Alt, so outside the list the hand stays. Read every frame, as
+/// the drop reads Alt when it lands (#8217). None for guide rows, which never copy and set their
+/// own cursor.
+fn drag_cursor(drag: &LayersDrag, alt: bool, over_list: bool) -> Option<egui::CursorIcon> {
+    match drag {
+        LayersDrag::Rows(_) | LayersDrag::Art if alt && over_list => Some(egui::CursorIcon::Copy),
+        LayersDrag::Rows(_) | LayersDrag::Art => Some(egui::CursorIcon::Grabbing),
+        LayersDrag::Guides(_) => None,
+    }
 }
 
 /// The search typed into the Layers panel's Search All field, as the panel matches it.

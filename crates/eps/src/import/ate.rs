@@ -576,6 +576,12 @@ impl DocFont {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many times [`Texts::read`] has read a text document on this thread.
+    pub(super) static TEXTS_READS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 /// The text document of an editing copy.
 pub(super) struct Texts {
     stories: Vec<Val>,
@@ -615,6 +621,8 @@ impl Texts {
         fn find(h: &[u8], n: &[u8], from: usize) -> Option<usize> {
             h.get(from..)?.windows(n.len()).position(|w| w == n).map(|p| p + from)
         }
+        #[cfg(test)]
+        TEXTS_READS.set(TEXTS_READS.get() + 1);
         let start = find(data, b"%AI11_BeginTextDocument", 0)?;
         let from = find(data, b"/ASCII85Decode", start)? + b"/ASCII85Decode".len();
         let end = find(data, b"~>", from)? + 2;
