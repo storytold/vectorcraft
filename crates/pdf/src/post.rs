@@ -84,8 +84,9 @@ pub(crate) fn user_units(pdf: Vec<u8>, units: &[f64]) -> Result<Vec<u8>, PdfErro
 /// `pdf` dated as modified at `modified` (Unix seconds, UTC), its creation dates kept: the
 /// document information's `/ModDate` (a PDF date, ISO 32000-1 §7.9.4) and every `xmp:ModifyDate`,
 /// `xmp:MetadataDate` and `stEvt:when` of the catalog's XMP metadata (ISO 8601 dates), in UTC as
-/// the PDF writer writes the creation date. The writer gives `/ModDate`, `xmp:ModifyDate` and
-/// `stEvt:when` the creation date.
+/// the PDF writer writes the creation date. The writer gives `/ModDate`, `xmp:ModifyDate`,
+/// `stEvt:when` and, in a PDF/X-4 file, `xmp:MetadataDate` ([`crate::pdfx::xmp`]) the creation
+/// date.
 pub(crate) fn modification_date(pdf: Vec<u8>, modified: i64) -> Result<Vec<u8>, PdfError> {
     let failed = |why: &str| PdfError::Write(format!("can't write the file's modification date: {why}"));
     let Parsed { xref, objects, trailer, root, .. } = linearize::parse(&pdf).map_err(failed)?;
