@@ -423,7 +423,9 @@ nothing truncated the reply is the plain summary. Both must be non-negative inte
 (the full object JSON is never truncated); anything else is an error.
 
 In the summary an object reports its paint as `fill`, `stroke` (labels) and `strokeWidth`. So does a compound path,
-whose paint is its own: its member paths report `compoundMember: true` instead of a paint they don't have. Every
+whose paint is its own: its member paths report `compoundMember: true` instead of a paint they don't have. A clip
+group or clipping layer reports the id of its clipping path as `clippingPathId`, and the clipping path itself
+`clippingPath: true` (the Layers panel underlines its name), wherever it is among the members. Every
 node (layers and groups too) reports its opacity when it is below 1, in both scales: `opacity` is the 0–1 fraction
 the document stores and `opacityPct` the 0–100 % that `object.setProps`, `transparency.set`, `draw_path` and
 `draw_shape` take (so an agent passes `opacityPct` back, never `opacity`); and `blend` when it isn't Normal, as

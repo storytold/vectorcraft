@@ -567,3 +567,47 @@ fn a_copy_of_the_clipping_path_alone_is_a_plain_object() {
     assert_eq!(clips_by(&s, g), Some(donut));
     assert!(shows_the_ring(&s));
 }
+
+/// `document.inspect` and `document.node` name a clip's clipping path wherever it is among the
+/// members: the clip group reports its id as `clippingPathId`, and its own entry
+/// `clippingPath: true`, as the Layers panel underlines its name.
+#[test]
+fn inspect_names_the_clipping_path_wherever_it_is() {
+    let mut s = session();
+    let (art, donut) = art_and_donut(&mut s);
+    let small = id_of(&s.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap());
+    select(&mut s, &[donut]);
+    s.execute("object.arrange.bringToFront", &json!({})).unwrap();
+    select(&mut s, &[art, small, donut]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    s.execute("layer.move", &json!({"ids": [donut.0], "target": small.0, "place": "below"})).unwrap();
+    assert_eq!(child_ids(&s, g), [art, donut, small], "between the art");
+    fn find(v: &Value, id: NodeId) -> Option<&Value> {
+        match v {
+            Value::Object(o) if o.get("id").and_then(Value::as_u64) == Some(id.0) && o.contains_key("kind") => Some(v),
+            Value::Object(o) => o.values().find_map(|c| find(c, id)),
+            Value::Array(a) => a.iter().find_map(|c| find(c, id)),
+            _ => None,
+        }
+    }
+    let v = s.execute("document.inspect", &json!({})).unwrap();
+    let group = find(&v["layers"], g).unwrap();
+    assert_eq!(group["clippingPathId"], json!(donut.0));
+    let flagged: Vec<u64> =
+        group["children"].as_array().unwrap().iter().filter(|c| c["clippingPath"] == json!(true)).map(|c| c["id"].as_u64().unwrap()).collect();
+    assert_eq!(flagged, [donut.0], "only the clipping path says so");
+    // One node at a time, and listed by id.
+    let node = |s: &mut Session, id: NodeId| s.execute("document.node", &json!({"id": id.0, "summary": true})).unwrap();
+    assert_eq!(node(&mut s, donut)["clippingPath"], json!(true));
+    assert!(node(&mut s, art).get("clippingPath").is_none());
+    let listed = s.execute("document.inspect", &json!({"ids": [donut.0, small.0]})).unwrap();
+    let nodes = listed["nodes"].as_array().unwrap();
+    assert_eq!((nodes[0]["clippingPath"].clone(), nodes[1].get("clippingPath")), (json!(true), None));
+    // Released: neither.
+    select(&mut s, &[g]);
+    s.execute("object.clippingMask.release", &json!({})).unwrap();
+    let v = s.execute("document.inspect", &json!({})).unwrap();
+    let group = find(&v["layers"], g).unwrap();
+    assert!(group.get("clippingPathId").is_none());
+    assert!(group["children"].as_array().unwrap().iter().all(|c| c.get("clippingPath").is_none()));
+}
