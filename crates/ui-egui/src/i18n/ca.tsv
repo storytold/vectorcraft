@@ -8126,3 +8126,8 @@ breakText	Glyphs	Glifs
 @msg	A fold line is on a non-printing layer.	Una línia de plegat és en una capa que no s’imprimeix.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panells: {panels}, frontisses: {hinges}, errors: {errors}, avisos: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Pressure Sensitive	Sensible a la pressió
+	Flex Ribbon	Cinta flexible
+	Pulse Stroke	Traç pulsant
+	Round Flow	Flux rodó
+	Chisel Flow	Flux bisellat

@@ -9617,3 +9617,8 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
+	Pressure Sensitive	筆圧対応
+	Flex Ribbon	しなやかなリボン
+	Pulse Stroke	脈打つ線
+	Round Flow	丸筆の流れ
+	Chisel Flow	平筆の流れ
