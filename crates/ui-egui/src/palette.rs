@@ -1636,7 +1636,8 @@ mod tests {
         let label = entries.iter().find(|e| e.id == effect).map(row_label).unwrap();
         assert_eq!(field_description(&nodes), format!("1 of {}: {label}", after.len()));
         open.press(egui::Key::Enter, 1);
-        assert_eq!(open.app.ui.recent_commands, [effect], "Enter ran the effect again");
+        assert!(open.app.ui.dialog.is_some(), "Enter ran the effect again: {}", open.app.ui.status);
+        assert_eq!(open.app.ui.recent_commands, [effect]);
     }
 
     /// The kept ranking of a query is ranked again when the recent picks change, and a saved id
