@@ -205,6 +205,8 @@ antiAlias	Sharp	Nitido
 	Crisp	Definito
 	Strong	Forte
 	Anti-aliasing:	Anti-aliasing:
+	Art Optimized	Ottimizzato per la grafica
+	Type Optimized	Ottimizzato per il testo
 	Any Kind	Qualsiasi tipo
 	Font Technology	Tecnologia font
 font-technology	Variable	Variabili
@@ -607,6 +609,7 @@ font-technology	Variable	Variabili
 	Consolidate All Windows	Consolida tutte le finestre
 	Constrain Angle	Vincola angolo
 	Constrain Width and Height Proportions	Vincola proporzioni di larghezza e altezza
+	Copy Width to Height	Copia la larghezza nell’altezza
 	Construction Guides	Guide di costruzione
 	Contextual Alternates	Alternative contestuali
 	Contextual Task Bar	Barra attività contestuale
@@ -692,6 +695,9 @@ font-technology	Variable	Variabili
 	Create from Selection	Crea dalla selezione
 	Create From:	Crea da:
 	Create Gradient Mesh…	Crea trama sfumatura…
+	Flat	Piatto
+	To Center	Verso il centro
+	To Edge	Verso il bordo
 	Create Graph	Crea grafico
 	Create New Layer	Crea nuovo livello
 	Create New Sublayer	Crea nuovo sottolivello
@@ -1374,6 +1380,10 @@ file-filter	Templates	Modelli
 	Font List	Elenco font
 	Show Similar Fonts	Mostra font simili
 	Clear Similar Fonts	Cancella font simili
+	Fonts used in this document	Font usati in questo documento
+	This document uses no available fonts	Questo documento non usa font disponibili
+	Recently Added	Aggiunti di recente
+	Fonts added in the last 30 days	Font aggiunti negli ultimi 30 giorni
 	Font Preview Size	Dimensione anteprima font
 	Font Size	Dimensione font
 	Variable Font	Font variabile
@@ -2069,7 +2079,8 @@ file-filter	Templates	Modelli
 	Lock Others	Blocca altri
 	Lock Slices	Blocca sezioni
 	Lock Station Point	Blocca punto di osservazione
-	Lossless (lossy WebP isn't available yet)	Senza perdita (WebP con perdita non è ancora disponibile)
+	Lossless	Senza perdita
+	Lossy	Con perdita
 	Lossy:	Con perdita:
 	Low	Bassa
 	lowercase	minuscole
@@ -3101,6 +3112,38 @@ digits	Malayalam	Malayalam
 	Responsive	Adattivo
 	Restore	Ripristina
 	Restore every preference to its default (applied on OK)	Ripristina tutte le preferenze ai valori predefiniti (applicato con OK)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Mostra sull'area di lavoro una barra di comandi per la selezione o lo strumento; si nasconde durante il trascinamento e in modalità presentazione.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Di quanto un tasto freccia sposta la selezione; con Maiusc la sposta dieci volte di più.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	L'angolo degli assi lungo cui spostano i tasti freccia e a cui Maiusc vincola il disegno e lo spostamento.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	Il raggio d'angolo con cui disegna lo strumento Rettangolo arrotondato; cambiare il raggio durante il disegno cambia anche questo valore.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Di quanto Incolla sposta la copia a destra e in basso quando non riceve una posizione, come da uno script; Incolla nell'app la centra nella vista.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Impedisce allo strumento Penna di eliminare il punto di ancoraggio su cui fai clic in un tracciato selezionato o di aggiungerne uno dove fai clic sul suo segmento.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Gli strumenti di disegno mostrano un puntatore a croce invece della loro icona; Bloc Maiusc fa lo stesso finché è attivo.
+	Shows a tip when the pointer rests on a button or field that has one.	Mostra un suggerimento quando il puntatore si ferma su un pulsante o un campo che ne ha uno.
+	Shows a warning before a script you choose runs.	Mostra un avviso prima che venga eseguito uno script che scegli.
+	Smooths the edges of artwork on the canvas.	Smussa i bordi della grafica nell'area di lavoro.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Selezione › Uguale › Colore riempimento, Colore traccia e Riempimento e traccia trovano solo la stessa tinta di un campione globale o di un colore spot, non qualsiasi sua tinta.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Mostra la schermata Home quando nessun documento è aperto; se disattivata, la finestra resta vuota finché non fai clic su Home.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Misura gli oggetti con le tracce e gli effetti che ne cambiano la forma per dimensioni, posizione e allineamento; ombre, bagliori e sfocature non vengono misurati.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Allo zoom del 100%, un pollice del documento occupa 96 punti dello schermo invece di 72.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Un doppio clic su un gruppo, un tracciato o un'immagine con lo strumento Selezione lo apre in modalità isolamento.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	I riempimenti e le tracce con motivo si trasformano con la grafica, a meno che una trasformazione o il menu del pannello Trasforma scelga diversamente.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	I raggi degli angoli dinamici si ridimensionano con la grafica, a meno che il ridimensionamento scelga diversamente.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Spessori delle tracce, trattini e distanze degli effetti si ridimensionano con la grafica, a meno che il ridimensionamento scelga diversamente.
+	The mouse wheel zooms the canvas instead of scrolling it.	La rotellina del mouse esegue lo zoom dell'area di lavoro invece di scorrerla.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La rotellina del mouse con Cmd/Ctrl premuto scorre l'area di lavoro in orizzontale.
+	Dragging sideways on a numeric field's label changes the field's value.	Trascinare in orizzontale sull'etichetta di un campo numerico ne cambia il valore.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gesto di rotazione con due dita sul trackpad ruota la vista dell'area di lavoro.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Tenere premuta la scorciatoia di uno strumento lo sceglie finché non la rilasci, poi viene scelto di nuovo lo strumento precedente.
+	Shows the bounding box while you move the selection or draw a shape.	Mostra il riquadro di delimitazione mentre sposti la selezione o disegni una forma.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Crea segni di taglio disegna segni in stile giapponese invece di quelli romani.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	La nuova grafica prende solo il riempimento e la traccia della selezione; se disattivata, prende l'intero aspetto dell'oggetto selezionato.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Cambiare larghezza o altezza nel pannello Trasforma, nel pannello Proprietà o nel pannello Controllo cambia l'altra in proporzione.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Le proprietà di un rettangolo dinamico mostrano un solo campo Raggio angolo per tutti e quattro gli angoli; se disattivata, ogni angolo ha il proprio campo.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Cosa trasformano le modifiche nel pannello Trasforma: l'oggetto, i suoi tasselli motivo o entrambi; Predefinito segue Trasforma tasselli motivo.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Con un'istanza di simbolo selezionata, il pannello Trasforma usa il punto di registrazione del simbolo come punto di riferimento.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Scurisce l'area di lavoro fuori dalle tavole da disegno mentre lo strumento Tavola da disegno è attivo.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Con Attenua area esterna alla tavola da disegno attivo, l'area fuori dalle tavole da disegno resta scura mentre trascini con lo strumento Tavola da disegno.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	L'unità dei nuovi documenti nelle dimensioni predefinite, tranne quelle in pixel, e dei file aperti che non registrano alcuna unità; sceglierla qui e fare clic su OK la imposta anche per il documento attivo.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Gli spessori della traccia, i trattini e gli spazi sono mostrati in questa unità, e i numeri digitati per essi sono letti in questa unità.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Dimensioni del testo, interlinea e spostamento della linea di base sono mostrati in questa unità, e i numeri digitati per essi sono letti in questa unità.
@@ -3341,6 +3384,7 @@ digits	Malayalam	Malayalam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} di {n} risultato. Continua a digitare per restringerli.|{shown} di {n} risultati. Continua a digitare per restringerli.
 	Recent Commands	Comandi recenti
 	No recent commands	Nessun comando recente
+	Search commands	Cerca comandi
 	Search Commands…	Cerca comandi…
 	Secondary	Secondario
 	Section Symbol	Simbolo di sezione
@@ -4945,6 +4989,9 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	no active document	nessun documento attivo
 @msg	no active perspective plane	nessun piano prospettico attivo
 @msg	no anchor points selected	nessun punto di ancoraggio selezionato
+@msg	`points` must be three [x, y] pairs of numbers	`points` deve essere composto da tre coppie di numeri [x, y]
+@msg	direct-select three anchor points, or give `points`	seleziona con Selezione diretta tre punti di ancoraggio oppure indica `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	nessun cerchio passa per questi punti: due coincidono oppure tutti e tre sono allineati
 @msg	no app to open files here	nessuna app per aprire file qui
 @msg	no artboard	nessuna tavola da disegno
 @msg	no artboard {i} (0-based; the document has {_1})	nessuna tavola da disegno {i} (a partire da 0; il documento ne ha {_1})
@@ -5843,6 +5890,24 @@ lighting	Light	Luce
 @msg	a 3D effect on a group's fill or stroke draws nothing	un effetto 3D sul riempimento o sulla traccia di un gruppo non disegna nulla
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un effetto 3D sul riempimento o sulla traccia di un gruppo non disegna nulla da esportare
 @msg	The 3D object is too complex to export	L'oggetto 3D è troppo complesso per essere esportato
+@msg	the <filter> element needs an id, the filter's name	l'elemento <filter> richiede un id, il nome del filtro
+@msg	an SVG filter's id is at most {MAX_NAME} characters	l'id di un filtro SVG ha al massimo {MAX_NAME} caratteri
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> non è un elemento di un filtro SVG
+@msg	an SVG filter has no event attributes such as {_1}	un filtro SVG non ha attributi di evento come {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	le immagini di un filtro SVG sono URL data: PNG, JPEG, GIF o WebP
+@msg	the SVG filter isn't valid XML: {e}	il filtro SVG non è XML valido: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves di feTurbulence è al massimo {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} è al massimo {max}
+@msg	feConvolveMatrix's order	order di feConvolveMatrix
+@msg	feMorphology's radius	radius di feMorphology
+@msg	a blur's stdDeviation	stdDeviation di una sfocatura
+@msg	the SVG filter has no primitives	il filtro SVG non ha primitive
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	un filtro SVG ha al massimo {MAX_PRIMITIVES} primitive
+@msg	the SVG filter is too large once its attributes are written out	il filtro SVG è troppo grande una volta scritti i suoi attributi
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	le immagini di un filtro SVG hanno al massimo {MAX_IMAGE_PIXELS} pixel in tutto
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	impossibile disegnare il filtro SVG: controlla le sue primitive e i relativi input
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	gli elementi di un filtro SVG si annidano al massimo per {MAX_DEPTH} livelli
+@msg	an SVG filter is at most {_1} KB	un filtro SVG occupa al massimo {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l'oggetto non ha alcun effetto 3D (Estrusione e smusso, Rivoluzione, Gonfia o Ruota)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` deve essere un oggetto che contiene solo `mode`, con valore shaded o wireframe
 @msg	its 3D effect builds no solid	il suo effetto 3D non costruisce alcun solido
@@ -6739,6 +6804,7 @@ anchor	Points:	Punti:
 	Open a document to check it for issues.	Apri un documento per controllarne i problemi.
 	Empty Text	Testo vuoto
 	Unpainted Objects	Oggetti senza colore
+	Empty Text Paths	Tracciati di testo vuoti
 	Zero-Opacity Objects	Oggetti con opacità zero
 	Duplicate Objects	Oggetti duplicati
 	Off-Artboard Art	Grafica fuori dalle tavole da disegno
@@ -9280,6 +9346,7 @@ breakText	Glyphs	Glifi
 @msg	Too many Revolve faces for visibility evaluation	Troppe facce di Rivoluzione per il calcolo della visibilità
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft legge al massimo {ASE_MAX_ENTRIES} colori e gruppi da un file di scambio campioni, e questa libreria ne ha {entries}
 @msg	WebP encoding failed: {e}	Codifica WebP non riuscita: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Codifica WebP non riuscita: l'immagine è troppo grande per il WebP con perdita: riduci la risoluzione o scegli Senza perdita
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` è smallThumb, mediumThumb, largeThumb, smallList o largeList

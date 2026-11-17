@@ -127,7 +127,23 @@ private editing data. VectorCraft:
   on its stroke; other brushed strokes are
   written as their brush's art. A document that uses a new document's brushes writes none until a path keeps one on
   its stroke; then the brushes are written, and the file opens without the new document's Pattern and Bristle
-  brushes. Gradient meshes are written as meshes: each mesh point's place, color, opacity and handles, patch by
+  brushes. Blends are written live: their key objects, their spine when they have one of their own, their steps
+  drawn, and their spacing (Smooth Color, Specified Steps, Specified Distance) and orientation (Align to Page, Align to
+  Path); a replaced spine is written with an anchor where each key object sits, so it opens with those anchors and
+  lays out the same steps. Blends with easing, a color shift or start points, with effects, an appearance or an
+  opacity mask of their own, of objects other than paths, compound paths and groups, of clipping groups, of more than
+  62 key objects, with a hidden key object, holding another blend, of key objects with geometry or Pathfinder effects
+  or a group's own fills and strokes, of key objects the editing copy would change (empty paths or subpaths, paths and
+  compound path members of several subpaths, several fills or strokes, strokes a plain line can't draw, dashes of
+  more than 64 lengths, hidden fills or strokes, fills or strokes other than a color, in a Lab color or with
+  transparency or effects of their own, effects, opacity masks), where one key object has a fill or stroke of no paint
+  or a stroke of no width and another has one that draws, whose spine has more than one part, whose step count is
+  close to where rounding changes it, or that VectorCraft's reader wouldn't open with their settings or as they
+  are drawn, are written as their steps with a warning, as are blends inside objects with geometry or Pathfinder
+  effects or a group's own fills and strokes, blends in opacity masks, pattern tiles, symbols and art cut to a
+  clipping object or nested eight levels deep in art written in place of other objects (symbol instances, live
+  objects, brushed strokes), blends whose art would pass the most objects VectorCraft's reader reads, and every blend
+  on a large canvas. Gradient meshes are written as meshes: each mesh point's place, color, opacity and handles, patch by
   patch; a reflected mesh is written with its columns in reverse order, and opens with each row's points in reverse
   order. Meshes with a point in a Lab color, with
   more than 128 rows or columns, folded meshes (patches whose corners turn different ways), meshes VectorCraft's reader
@@ -151,8 +167,9 @@ private editing data. VectorCraft:
   type with inline graphics, ruby, gradient or pattern paint or an appearance or opacity mask of its own, other patterns, other clipping objects and other live
   objects (placed documents included) are written as plain filled and stroked paths, and freeform gradients, gradients along
   or across a stroke and gradients without stops, with more than 256 stops or without extent as their average
-  color, each with a warning. Gradients that dither or mix their colors perceptually are written as classic
-  gradients, and gradient stops linked to global process colors as their colors, each with a warning. The opacity
+  color, each with a warning. Gradients that dither are written without dither's noise, Perceptual gradients and
+  gradients mixed around the hue wheel as classic gradients of the stops on their curve in process colors (at most
+  256), and gradient stops linked to global process colors as their colors, each with a warning. The opacity
   and blending mode of single fills and strokes, opacity masks on layers, the placement of pattern swatches that
   move, turn or scale their pattern, and the effects of objects written without an art style, other than geometry
   effects, are left out.
@@ -307,7 +324,7 @@ Gradient meshes in the editing data keep each point's own color where a patch's 
 | PSD | open, place, export | yes (open: layers as layers, or the merged image with `layers: false`; place: merged image, or the layers embedded as a group of objects with `layers: true`; the merged image comes in clipped by the file's clipping path; every mode and depth; `.psd` and `.pdd`) | yes (layered, max editability, point type as editable type layers with `preserveText`; `tests_psd.rs`) | PSD Import Options on File › Open and on File › Place without Link (Convert Layers to Objects, Flatten Layers to a Single Image, Import Hidden Layers, Import Slices; `tests_psdlayers.rs`, `dialogs/psd_import.rs`); slices (image resource 1050, version 6 and the version 7 and 8 descriptor) open and embed as user slices with `importSlices` (`tests_psdslices.rs`); layer comps aren't read; the embedded ICC profile's tags are 4-byte aligned (#1584) |
 | PSB | open | yes (layers as layers, or the merged image; the merged image comes in clipped by the file's clipping path) | no | |
 | PNG / JPEG / GIF / BMP / TIFF / Targa | open, place, export | yes (PNG: `.png` and `.pns`; BMP: `.bmp`, `.dib` and `.rle`; Targa: `.tga`, `.vda`, `.icb` and `.vst`, raw or run-length encoded, with a 16-bit file's one-bit alpha) | yes; TIFF is also selectable in Export for Screens and Asset Export with its existing options | Targa: `tests_tiffbmp.rs`, `tests/links.rs`; TIFF: grayscale with an alpha channel or other extra channels reads (#1466 in part), and so do files that store each channel as its own plane (PlanarConfiguration 2), CMYK ones with their ink amounts, and 1-bit files compressed with CCITT Group 3 (Compression 2 and 3, one- and two-dimensional rows); the ICC profiles embedded in JPEG and TIFF have 4-byte aligned tags (#1584); PNG export marks its colours as sRGB (`embedIcc`, an `sRGB` chunk; no ICC profile is embedded, #2221) |
-| WebP | export (Export for Screens) | yes | yes (lossless only; lossy written lossless with a warning) | |
+| WebP | export (Export for Screens) | yes | yes (lossless by default; `lossless: false` writes lossy WebP at `quality` 0–100, default 90) | lossy files are `VP8 `, with an `ALPH` chunk when some pixels are not opaque; `tests_text.rs` |
 | JPEG XL `.jxl` | — | yes (first frame; 16-bit and floating-point samples as 8 bits, alpha kept; CMYK refused) | no | decoded with jxl-oxide; the size is checked from the header before decoding; container Exif resolution sizes opened and placed images; tests in `crates/engine/src/cmd/fileio/tests_jxlread.rs` and `crates/engine/tests/import_fuzz.rs` |
 | HEIC / HEIF | open, place | yes (HEVC-coded still images: single pictures and grids of tiles, 8 to 10 bits, with an alpha image; image sequences, other codings and grids of cropped tiles are refused) | no | `.heic`, `.heif`; decoded by heic-rs in the engine's default `heif` feature (a build without it refuses the files with a message); the container's rotation, mirror and crop are applied; without an `nclx` box the HEVC stream's video signal type gives the matrix and range; an RGB ICC profile, or Display P3 with the sRGB curve named by an `nclx` box or, without a color box, by the stream, is converted to sRGB; EXIF resolution tags size the image, or 72 ppi; bounded decoding; `tests_heifread.rs` |
 | PCX | open, place | yes (1 bit in the header palette's first two colors, black and white without them; 1 bit in two to four planes and 4 bits with up to 16 colors; 2 bits in the CGA colors the header's CGA palette settings pick; 8 bits with the 256-color palette, gray without one; 24-bit color in three planes) | no | the header's HDpi and VDpi size the image; a file of another depth or plane count, cut short or past the pixel allowance is refused with a message; tests in `crates/engine/src/cmd/fileio/tests_pcxread.rs` and `crates/engine/tests/import_fuzz.rs` |

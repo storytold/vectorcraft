@@ -245,6 +245,42 @@ fn crossings_are_found_on_both_paths() {
 }
 
 #[test]
+fn a_shallow_crossing_is_placed_where_the_curves_meet() {
+    // Lines square to the middle of a quarter circle of radius 100, just inside it: each crosses the
+    // arc twice, at under a degree for the nearest one.
+    let arc = PathData::single(quarter());
+    let k = std::f64::consts::FRAC_1_SQRT_2;
+    for gap in [0.5, 0.05, 0.005, 0.0005] {
+        let mid = pt((100.0 - gap) * k, (100.0 - gap) * k);
+        let (from, to) = (mid + Vec2::new(-k, k) * 60.0, mid + Vec2::new(k, -k) * 60.0);
+        let across = PathData::single(line(&[(from.x, from.y), (to.x, to.y)], false));
+        let exact: Vec<Point> = kurbo::PathSeg::Cubic(arc.subpaths[0].segment(0))
+            .intersect_line(kurbo::Line::new(from, to))
+            .iter()
+            .map(|x| from.lerp(to, x.line_t))
+            .collect();
+        assert_eq!(exact.len(), 2, "{gap}");
+        let on = |p: &PathData, other: &PathData| -> Vec<Point> {
+            crossings_on(p, &[other]).unwrap().iter().map(|q| p.subpaths[0].segment(q.1).eval(q.2)).collect()
+        };
+        let both = crossings(&[&arc, &across], false).unwrap();
+        let found = [
+            on(&arc, &across),
+            on(&across, &arc),
+            both[0].iter().map(|q| arc.subpaths[0].segment(q.1).eval(q.2)).collect(),
+            both[1].iter().map(|q| across.subpaths[0].segment(q.1).eval(q.2)).collect(),
+        ];
+        for places in found {
+            assert_eq!(places.len(), 2, "{gap}: {places:?}");
+            for x in &exact {
+                let off = places.iter().map(|p| p.distance(*x)).fold(f64::INFINITY, f64::min);
+                assert!(off < 1e-6, "{gap}: {off} pt from {x:?}");
+            }
+        }
+    }
+}
+
+#[test]
 fn insert_at_keeps_the_shape_and_names_the_new_anchors() {
     let sp = line(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0)], false);
     let (out, marks) = insert_at(&sp, &[(1, 0.5), (0, 0.25), (0, 0.75), (1, 1.0), (7, 0.5)]);

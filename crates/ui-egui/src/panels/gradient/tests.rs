@@ -711,6 +711,27 @@ fn the_stop_eyedropper_arms_the_eyedropper_for_the_stop() {
     assert_eq!((app.session.tool_id(), app.session.tool_options()), ("eyedropper", json!({"stop": "gradient", "brushKeyColor": false})));
 }
 
+/// #8024: Escape ends the stop eyedropper's pick and returns to the Gradient tool. The stop keeps
+/// its color, the selection stays, and a held Escape's repeats end nothing else.
+#[test]
+fn escape_ends_the_stop_eyedropper_and_returns_to_the_gradient_tool() {
+    let mut app = app(json!({"gradient": {}}));
+    crate::shortcut_editor::sync(&app.ui);
+    app.select_tool("gradient");
+    app.run("gradient.selectStop", json!({"index": 0})).unwrap();
+    let (paint, selected) = (current(&app), app.session.active().unwrap().selection.objects.clone());
+    stop_eyedropper(&mut app);
+    let key = |pressed, repeat| Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat, modifiers: Modifiers::NONE };
+    let ctx = egui::Context::default();
+    for events in [vec![key(true, false)], vec![key(true, true)], vec![key(false, false)]] {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| crate::shortcuts::handle(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+    }
+    assert_eq!(app.session.tool_id(), "gradient");
+    assert_eq!(current(&app), paint, "the stop keeps its color");
+    assert_eq!(app.session.active().unwrap().selection.objects, selected, "the selection stays");
+}
+
 /// The gradient panel names its Angle and Aspect Ratio inputs.
 #[test]
 fn angle_and_aspect_fields_are_named() {
@@ -893,4 +914,44 @@ fn a_stop_dragged_off_the_ramp_or_deleted_with_the_button_beside_it_goes() {
     p.frame(&mut app, vec![], Modifiers::NONE);
     p.click(&mut app, del.center());
     assert_eq!(hexes(&app), ["#ffffff", "#000000"]);
+}
+
+/// #8241: over the strip under the ramp, where a click adds a stop, the panel shows the white arrow
+/// with a plus. Where the window shows glyphs as OS cursors (Windows, X11), it hands the glyph to
+/// the OS, since winit shows the plain arrow for the system copy cursor there; elsewhere the
+/// system copy cursor. Over the ramp itself, which adds nothing, neither.
+#[test]
+fn the_strip_under_the_ramp_shows_the_add_cursor() {
+    let stops = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#000000"}]);
+    let mut app = app(json!({"gradient": {"stops": stops}}));
+    let mut p = Panel::new();
+    p.frame(&mut app, vec![], Modifiers::NONE);
+    let bar = p.widget("grad-bar");
+    let output = |p: &mut Panel, app: &mut VectorcraftApp, at: Pos2| {
+        p.time += 0.1;
+        let events = vec![Event::PointerMoved(at)];
+        let input = egui::RawInput {
+            time: Some(p.time),
+            events,
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(260.0, 600.0))),
+            ..Default::default()
+        };
+        let mut out = p.ctx.run_ui(input, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.platform_output
+    };
+    // Between the two stops, just under the ramp.
+    let under = output(&mut p, &mut app, pos2(bar.center().x, bar.bottom() + 10.0));
+    assert_eq!(under.cursor_icon, egui::CursorIcon::Copy);
+    // The same condition the panel uses (the build, Wayland, VECTORCRAFT_SYSTEM_CURSORS).
+    if crate::cursors::add_cursor_is_a_glyph(&app) {
+        let glyph = app.canvas.cursors.get(vectorcraft_tools::Cursor::GroupSelection, 1.0);
+        assert!(glyph.is_some());
+        assert_eq!(under.cursor_image, glyph, "the white arrow with a plus, as an OS cursor");
+    } else {
+        assert!(under.cursor_image.is_none(), "the system copy cursor alone");
+    }
+    let over = output(&mut p, &mut app, bar.center());
+    assert_ne!(over.cursor_icon, egui::CursorIcon::Copy);
+    assert!(over.cursor_image.is_none(), "over the ramp, no add cursor");
 }

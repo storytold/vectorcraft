@@ -179,6 +179,9 @@ use crate::{VectorcraftApp, widgets};
 
 type DialogResult = Result<Value, String>;
 
+/// A dialog's Reset ([`DialogSpec::reset`]).
+type ResetFn = fn(&VectorcraftApp, &mut Dialog) -> Result<(), String>;
+
 /// The shared dialog frame's inner margin, and the least room it leaves at the window's edges.
 const MARGIN: i8 = 22;
 const EDGE_GAP: f32 = 8.0;
@@ -219,8 +222,8 @@ pub(crate) struct DialogSpec {
     pub alternate: Option<(&'static str, &'static str)>,
     /// Puts the fields back to their defaults. While Alt (Option on macOS) is held, the Cancel
     /// button of a dialog with an `ok` reads Reset; Reset (or `ui.dialogReset`) runs this and the
-    /// dialog stays open.
-    pub reset: Option<fn(&VectorcraftApp, &mut Dialog)>,
+    /// dialog stays open. An error leaves the dialog as it was.
+    pub reset: Option<ResetFn>,
     pub min_width: f32,
     pub max_width: Option<f32>,
     /// The body runs a live preview interaction that Cancel rolls back.
@@ -704,6 +707,12 @@ pub fn cancel(app: &mut VectorcraftApp) {
             script_run::notice_cancel(app, &d);
         }
         missing_links::cancelled(app, &d);
+        // Find Font's next open starts with an empty replacement search.
+        if d.kind == "findFont"
+            && let Some(ctx) = app.ui_ctx.clone()
+        {
+            crate::find_font::clear_search(&ctx);
+        }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec
         // without a preview, yet previews some commands (Grid Repeat Options) when asked to.
@@ -722,12 +731,12 @@ pub(crate) fn can_reset(app: &VectorcraftApp) -> bool {
 }
 
 /// Reset (`ui.dialogReset`, or Cancel while Alt or Option is held): the open dialog's fields go
-/// back to their defaults and it stays open → the dialog; an error when no dialog is open or the
-/// open one has no Reset.
+/// back to their defaults and it stays open → the dialog; an error when no dialog is open, the
+/// open one has no Reset, or its Reset fails (the dialog is then left as it was).
 pub(crate) fn reset(app: &mut VectorcraftApp) -> DialogResult {
     let Some(mut d) = app.ui.dialog.clone() else { return Err("no dialog open".into()) };
     let Some(reset) = spec(&d.kind).reset else { return Err("the open dialog has no Reset".into()) };
-    reset(app, &mut d);
+    reset(app, &mut d)?;
     let out = serde_json::to_value(&d).unwrap_or_default();
     app.ui.dialog = Some(d);
     Ok(out)
