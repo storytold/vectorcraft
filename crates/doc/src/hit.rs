@@ -214,18 +214,7 @@ fn keep<T>(store: &'static Store<T>, doc: &Document, n: &Node, inputs: u64, art:
     if size > LIVE_KEPT_SIZE || holds_placed(doc, n) {
         return;
     }
-    let symbols = doc.symbols.iter().map(|s| (s.name.clone(), s.art.clone())).collect();
-    let e = Evaluated {
-        node: n.clone(),
-        symbols,
-        patterns: doc.patterns.clone(),
-        swatches: doc.swatches.clone(),
-        swatch_groups: doc.swatch_groups.clone(),
-        unknown: doc.unknown.clone(),
-        inputs,
-        art: art.clone(),
-        size,
-    };
+    let e = Evaluated::new(doc, n, inputs, art, size);
     store.with_borrow_mut(|kept| {
         kept.insert(0, e);
         kept.truncate(most);
@@ -238,6 +227,21 @@ fn keep<T>(store: &'static Store<T>, doc: &Document, n: &Node, inputs: u64, art:
 }
 
 impl<T> Evaluated<T> {
+    /// `art`, of size `size`, the evaluation of `n` in `doc` with inputs `inputs`, as they are now.
+    fn new(doc: &Document, n: &Node, inputs: u64, art: &Rc<T>, size: usize) -> Self {
+        Self {
+            node: n.clone(),
+            symbols: doc.symbols.iter().map(|s| (s.name.clone(), s.art.clone())).collect(),
+            patterns: doc.patterns.clone(),
+            swatches: doc.swatches.clone(),
+            swatch_groups: doc.swatch_groups.clone(),
+            unknown: doc.unknown.clone(),
+            inputs,
+            art: art.clone(),
+            size,
+        }
+    }
+
     /// Is this the evaluation of `n` in `doc`, with inputs `inputs`, as they are now?
     fn is_of(&self, doc: &Document, n: &Node, inputs: u64) -> bool {
         self.inputs == inputs
@@ -326,7 +330,7 @@ pub fn set_drawn_art(f: DrawnArt) {
 /// The art of an object found by [`drawn`] (none, or one object), with what it was found from, and
 /// the box round everything that art can paint.
 struct EvaluatedDrawn {
-    of: EvaluatedLive,
+    of: Evaluated<Vec<Node>>,
     reach: Option<Rect>,
 }
 
@@ -379,7 +383,8 @@ fn plain<T>(mask: bool, f: impl FnOnce() -> T) -> T {
 /// nothing is registered, while a [`DrawnOff`] guard lives, for objects whose art is not evaluated
 /// ([`evaluates`]), and when nothing in `n`, nor the art of a symbol an instance in it shows, has a
 /// visible effect ([`draws_effects`]). The art is evaluated again when `n`, a symbol of the
-/// document, its patterns, swatches or color groups, or the [`LiveInputs`] have changed since, and
+/// document or its 9-slice guides or natural size, its patterns, swatches or color groups, or the
+/// [`LiveInputs`] have changed since, and
 /// on every call while it holds a placed document ([`holds_placed`]). When the art kept is full, new
 /// art replaces as much other art as it needs room for, and art larger than [`LIVE_KEPT_SIZE`] is
 /// kept alone.
@@ -401,16 +406,7 @@ fn drawn(symbols: &SymbolBoxes, n: &Node) -> Option<(Rc<Vec<Node>>, Option<Rect>
     let art = Rc::new(art.into_iter().collect::<Vec<_>>());
     let size = art_size(&art).saturating_add(art_size(std::slice::from_ref(n)));
     if !holds_placed(doc, n) {
-        let of = EvaluatedLive {
-            node: n.clone(),
-            symbols: doc.symbols.iter().map(|s| (s.name.clone(), s.art.clone())).collect(),
-            patterns: doc.patterns.clone(),
-            swatches: doc.swatches.clone(),
-            swatch_groups: doc.swatch_groups.clone(),
-            inputs,
-            art: art.clone(),
-            size,
-        };
+        let of = Evaluated::new(doc, n, inputs, &art, size);
         DRAWN.with_borrow_mut(|(kept, total)| {
             if let Some(old) = kept.remove(&n.id) {
                 *total = total.saturating_sub(old.of.size);
